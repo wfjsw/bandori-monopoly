@@ -9,8 +9,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"向着顶点"#)
@@ -29,40 +29,22 @@ fn livehouses(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-/// C# `WhyNotBuildOn`'s 「RiNG 不能加盖房屋」: a RiNG deed is the buyable
-/// group-6 tile with no rent table, so `rent_of <= 0` is the test (the
-/// vocabulary has no `TileData.kind` query).
-fn is_deed(t: i32) -> bool {
-    ctx::rent_of(t) <= 0
-}
-
-/// C# `H.WhyNotBuildOn(i, t)` -- the checks the vocabulary can see.
+/// C# `H.WhyNotBuildOn(i, t)` -- the engine's own build gate, so every refusal
+/// the build step honours applies here too (`ctx::can_build_on` is that same
+/// question: own/buyable, the 「无法加盖房屋」 locks, mortgage, the rent-table
+/// level cap, full and the payer gate).
 fn why_not_build_on(player_id: i32, t: i32) -> Option<&'static str> {
-    if ctx::tile_owner(t) != player_id {
-        return Some("only_own");
+    // TODO(规则书)（为属于你的一个livehouse格子加盖一层房屋）: the sheet names no
+    //   RiNG exception, but 「所有RiNG不可升级」 keeps RiNGs unupgradeable
+    //   (OPEN-RING-BUILD, `docs/rulebook/spec/OPEN-QUESTIONS.md`) -- the C#
+    //   reading is taken, so `can_build_on` refuses a RiNG via its no-upgrade
+    //   check.
+    if ctx::can_build_on(player_id, t) {
+        None
+    } else {
+        Some("blocked")
     }
-    if is_deed(t) {
-        return Some("ring");
-    }
-    if ctx::mortgaged_of(t) {
-        return Some("mortgaged");
-    }
-    // C# `houses[t] >= rent.Length - 1` (「这块地已经盖满了」). The vocabulary has
-    // no rent-table length; every buildable tile in `data/board.json` holds 3.
-    if ctx::houses_of(t) >= MAX_HOUSES {
-        return Some("full");
-    }
-    if !rules_status::can_pay(player_id) {
-        return Some("cannot_pay");
-    }
-    None
-    // Not checked (no hook): `_turnCtx.NoBuild` (学生会的检查's build lock),
-    // the 「卡池BUG」 event, and `Fx.CanBuild`.
 }
-
-/// C# `tileData.rent.Length - 1` for the board's buildable tiles (all 4-step
-/// rent tables); a rent-length query would generalise this.
-const MAX_HOUSES: i32 = 3;
 
 /// C# `CardToThePeak.WhyNot`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -81,7 +63,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
             // `H.Moving` lets a `[停留]` player through when 「不可阻挡」 is up.
             return Some(Msg::new(key!("to_the_peak_stuck")));
         }
-        return None;
+        // 规则书: 「视为你的主要移动」 -- `H.MoveWhyNot`: the main move must still be
+        // available (own turn, not already moved, not skipped).
+        return rules_status::move_blocked(player_id);
     }
     // C# the build branch: `H.LiveHouses(i, t => owners[t] == i &&
     // H.WhyNotBuildOn(i, t) == null)` (no money check here -- that is in Play).
@@ -115,11 +99,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .unwrap_or(-1);
         // 规则书: 「移动到下一个可被购买的livehouse格子」 -- C# `H.Walk(i, Forward(pos, to),
         // resolve: true, null, "向着顶点")` = a forward walk of `Forward(pos, to)`
-        // steps that settles at the destination.
+        // steps that settles at the destination. `Forward` 0 (the only free tile
+        // is underfoot) is taken as a full lap, as in the `min_by_key` above.
         let num = ctx::tile_forward(pos, to);
         let num = if num == 0 { ctx::tile_count() } else { num };
         ctx::plan::set_steps(num);
         ctx::plan::set_resolve(true);
+        // 规则书: 「视为你的主要移动」 -- `card_move` runs the walk as the main move.
         ctx::card_move(player_id);
         ctx::log(
             player_id,
@@ -162,6 +148,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「加盖一层房屋」 -- C# `H.BuildRoutine(i, r.index, free: true, "向着顶点")`:
     // the pay above covers the 1.5x cost and the raise is free (`H.AddHouse`).
+    // TODO(规则书)（加盖一层房屋）: a 加盖 is a build and goes through the build
+    //   hooks -- the raw `ctx::add_house` below raises no `buildBefore` /
+    //   `buildAfter`, so 卡池BUG's belt, 奇迹's crystal and 修复公告's halving
+    //   never see it. `ctx::card_build` would run the build body but pays the
+    //   table cost only (`set_build_cost_pct` clamps at 100, so no 1.5x).
     if why_not_build_on(player_id, tile).is_none() {
         ctx::add_house(tile, 1);
         ctx::log(

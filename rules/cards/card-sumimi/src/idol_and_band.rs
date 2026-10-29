@@ -6,8 +6,8 @@
 //!
 //! money to 3,000.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const IDOL_AND_BAND: CardDef = CardDef::new(
     "Sumimi:兼顾偶像与乐队",
@@ -36,9 +36,11 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("idol_and_band_no_effect")));
         return Ok(());
     }
-    // 规则书: 「将你的资金重设为3000」
-    // C# H.Money(..., fixedAmount: true) -- the host's gain carries no such flag yet.
-    ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")))?;
+    // 规则书: 「将你的资金重设为3000」 -- a set, not a gain: the figure must
+    // land unbent, so this bypasses the paySplit* modifier stages and the
+    // `effect` [反击] window (`ctx::gain` would run both). C# `H.Money(...,
+    // fixedAmount: true)`.
+    ctx::adjust_money(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")));
     Ok(())
 }
 

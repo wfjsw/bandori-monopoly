@@ -4,13 +4,14 @@
 //! > 离心力，不为所动：
 //! > [反击]当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时，你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果
 //!
-//! hostile targeting between your turns cancels it and grants immunity.
+//! another player's card targeting between your turns cancels it and grants
+//! immunity.
 //!
 //! Counteraction-only (`Normal => false`).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, FilterKind, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
@@ -20,17 +21,31 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Effect],
+            // 规则书: 「当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时」
             // `chain_has(Target) && target == owner && by >= 0 && by != owner` is
             // the `target` effect entry, aimed at the owner, from another
             // player's card. 「第二次」 -- C# `H._targeted[seat] >= 2` --
             // `targeted_count(owner) >= 2` (a derived-list counter).
+            // TODO(规则书)（在两个你的回合之间（回合1结束，回合2开始））: the book counts
+            //   designations between your turns -- `targeted_count` counts since your
+            //   own turn start, so a targeting during your own turn counts too.
+            // TODO(规则书)（第二次成为其他角色技能或卡牌的目标时）: the book says the second
+            //   time -- `>= 2` keeps offering the card on every later targeting.
+            // TODO(规则书)（第二次成为其他角色技能或卡牌的目标）: the book counts the
+            //   second *targeting* -- a tile targeting opens the window but never
+            //   advances `targeted_count`, so it is offered off an unrelated count;
+            //   `tile_id < 0` would require a player target.
             "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
             None,
             counteract).counter_reason(key!("centrifugal_when")),
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
+        // TODO(规则书)（无效化你受到的所有效果）: the book says all effects you
+        //   receive -- `ImmuneAll` is only consulted for other players' effects, so
+        //   your own effects still land through the shield.
         On::Filter(Filter::ImmuneAll(card_sdk::pre::MINE, None, immune_all)),
+        // 规则书: 「直到下个你的回合开始时」
         On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -58,11 +73,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 /// `Fx.ImmuneAll` (C# `CardCentrifugal.ImmuneAll`): while placed, the owner is
-/// untouchable by other players' effects. The engine checks ImmuneAll before
-/// targeting, before abnormals, and before card-driven payments, so this one
-/// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`). The
+/// untouchable by other players' effects. The engine asks ImmuneAll at
+/// resolution -- after the designation was named and its chain formed, before
+/// the effect lands -- for targets, abnormals, and card-driven payments, so this
+/// one hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`). The
 /// "only our own seat" check is the entry's condition (`pre::MINE`).
 fn immune_all(_player_id: i32, mut g: GateValue) -> GateValue {
+    // 规则书: 「无效化你受到的所有效果」
     g.allowed = Some(false); // deny
     g
 }

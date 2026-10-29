@@ -16,6 +16,7 @@ use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 mod common;
 use common::data;
+use common::Pump;
 use game_core::strategy::{
     self, CardPlayParams, CounterParams, SkillParams, StrategyBook, StrategyEntry, StrategyParams,
     DEFAULT_COUNTERACT_PROPENSITY_MILLI, PARAMS_VERSION, POLICY_STANDARD, STRATEGY_BOOK_VERSION,
@@ -373,6 +374,22 @@ fn new_match(data: Arc<GameData>, seed: u64) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and stay `ai = false`; these tests
+    // exercise the engine policy, so keep the seats on the engine schedule.
+    // An answering routine re-runs from its pre-prompt snapshot (whose bits are
+    // off), so re-arm around the opening prompts too.
+    for _ in 0..20 {
+        for i in 1..=4 {
+            m.set_machine_seat(i, true);
+        }
+        if m.state().prompt.id == 0 && !m.state().busy {
+            break;
+        }
+        m.pump_tick(0.25);
+    }
+    for i in 1..=4 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 
@@ -382,7 +399,7 @@ fn buy_count(data: Arc<GameData>, seed: u64) -> usize {
     let mut last = 0;
     let mut buys = 0;
     while !m.ended() {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         let st = m.state();
         for e in m.events_since(last) {
             last = e.id;

@@ -60,7 +60,7 @@ fn add_token(t: &mut Table, who: usize, name: &str, value: i32) {
         name: name.into(),
         value,
         instance: None,
-            max: 0,
+        max: 0,
     });
 }
 
@@ -107,16 +107,17 @@ fn tritone_gains_amount_and_places_with_crystals() {
         t.field_ids(0)
     );
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(3));
+    // 「三回合后」 -- the face counts down from 3.
+    assert_eq!(turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"), 3);
 }
 
 #[test]
 fn tritone_countdown_discards_and_pays_back() {
     // 规则书: 「三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金」
-    // 「三回合后」 is three of the **owner's** turns (the countdown is keyed
-    // to the player the card sits at): an opponent's turn end does not tick
-    // the countdown. The harness's `end_quiet` re-rolls after the counteract
-    // (the player already rolled), so drive the turns by hand with
-    // `begin_turn` / `roll` / `end`.
+    // 「每回合结束时」 is every turn end, whoever's turn it is -- an opponent's
+    // turn end ticks the countdown too (it is not keyed to the owner). The
+    // harness's `end_quiet` re-rolls after the counteract (the player already
+    // rolled), so drive the turns by hand with `begin_turn` / `roll` / `end`.
     let mut t = Table::vanilla(2);
     t.own(1, &[7]);
     t.set_pos(0, 6);
@@ -126,11 +127,12 @@ fn tritone_countdown_discards_and_pays_back() {
     t.counteract(0, "Mor:迷茫之蝶们的三全音").unwrap();
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(3));
     // P0 already rolled this turn (the counteract answered its rent); end the
-    // turn without re-rolling. Owner turn-end #1: 3 -> 2.
+    // turn without re-rolling. Turn-end #1: 3 -> 2.
     t.end(0).unwrap();
     decline_all(&mut t);
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(2));
-    // P1's turn comes around; its end does not tick the owner's countdown.
+    assert_eq!(turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"), 2);
+    // P1's turn comes around; its end ticks the countdown too: 2 -> 1.
     t.begin_turn(1);
     t.dice(&[1]);
     t.roll(1).unwrap();
@@ -139,18 +141,15 @@ fn tritone_countdown_discards_and_pays_back() {
     decline_all(&mut t);
     assert_eq!(
         t.crystals(0, "Mor:迷茫之蝶们的三全音"),
-        Some(2),
-        "an opponent's turn end does not tick 「三回合后」"
+        Some(1),
+        "an opponent's turn end ticks 「每回合结束时移除1」"
     );
-    // Owner turn-end #2: 2 -> 1, still on the field.
-    t.begin_turn(0);
-    t.dice(&[1]);
-    t.roll(0).unwrap();
-    decline_all(&mut t);
-    t.end(0).unwrap();
-    decline_all(&mut t);
-    assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(1));
-    // Owner turn-end #3: 1 -> 0 -> 「弃置此卡并支付由此卡获得的资金」.
+    assert_eq!(
+        turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"),
+        1,
+        "the marker ticks on an opponent's end too"
+    );
+    // Turn-end #3: 1 -> 0 -> 「弃置此卡并支付由此卡获得的资金」.
     t.begin_turn(0);
     t.dice(&[1]);
     t.roll(0).unwrap();
@@ -220,6 +219,38 @@ fn light_move_starts_from_tsukinomori() {
     t.roll(0).unwrap();
     decline_all(&mut t);
     assert_eq!(t.pos(0), tsukinomori + 4, "start = 月之森, +4 steps");
+}
+
+#[test]
+fn light_play_survives_cant_move_but_the_start_waits() {
+    // 规则书: the only printed play condition is the 20-tile window
+    // (OPEN-移动起点: 「此次移动」 as the main move is unresolved); the play is
+    // not refused, the start arm is.
+    let mut t = Table::vanilla(2);
+    let tsukinomori = tile("月之森女子学院");
+    t.set_state(0, bandori_std::state_key::STAY, 1);
+    t.begin_turn(0);
+    t.set_pos(0, tsukinomori + 1);
+    let pos = t.pos(0);
+    t.give(0, &["Mor:你的光芒将照亮前路"]);
+    let mark = t.mark();
+    t.play(0, "Mor:你的光芒将照亮前路")
+        .map_err(|e| format!("play rejected under 无法移动: {e}"))
+        .unwrap();
+    decline_all(&mut t);
+    assert!(
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("your_light_start")),
+        "the start arm is shut while the move is closed: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(t.pos(0), pos, "nothing moved");
+    assert!(
+        !t.hand(0).contains(&"Mor:你的光芒将照亮前路".to_string()),
+        "the play still resolved: {:?}",
+        t.hand(0)
+    );
 }
 
 // --------------------------------------------------- 蝴蝶飞舞的星月夜
@@ -477,6 +508,8 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
     t.set_crystals(0, "Mor:（NNM）稍微努力了一下", 1);
+    // The press is gated on a mark being in hand (the skill's (3) body spends one).
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     decline_all(&mut t);
     assert!(
@@ -1232,6 +1265,68 @@ fn tsukushi_settle_is_optional() {
     assert_eq!(t.money(0), 10_000 + 100, "no rent paid");
     assert_eq!(t.money(1), 10_000);
     assert_eq!(t.pos(0), 21, "teleported one ahead of p1");
+}
+
+#[test]
+fn tsukushi_settles_after_the_move_and_logs_it_after() {
+    // 规则书: 「…传送到行动条上对应玩家前一格并视为主要移动…，可以选择是否
+    // 触发结算」 -- the choice comes after the move, about the tile entered.
+    let mut t = Table::new(&["二叶筑紫", "户山香澄", "花园多惠", "牛込里美", "山吹沙绫"]);
+    t.clean();
+    t.begin_turn(0);
+    t.own(1, &[21]); // the destination is owned: a yes settles and pays rent
+    t.set_pos(1, 20);
+    t.give(0, &["Mor:（筑紫）迷茫的庭园"]);
+    t.dice(&[2]);
+    let mark = t.mark();
+    t.play(0, "Mor:（筑紫）迷茫的庭园").unwrap();
+    // 交给班长吧（1） fires on the card's own 「获得100资金」; decline it.
+    t.decline();
+    let p = t.expect_prompt();
+    assert_eq!(p.options.len(), 2, "yes/no settle: {}", t.dump_prompt());
+    // The teleport already ran: the prompt is asked after the move.
+    assert_eq!(t.pos(0), 21, "the move must run before the settle prompt");
+    t.answer_one(0).unwrap(); // yes: settle the landed tile
+    decline_all(&mut t);
+    let events = t.events_since(mark);
+    let move_before = events
+        .iter()
+        .position(|e| e.r#type == "teleport")
+        .unwrap_or_else(|| panic!("no teleport event: {:?}", t.recent_keys(20)));
+    let keys = t.keys_since(mark);
+    let will_settle = keys
+        .iter()
+        .position(|k| k.contains("tsukushi_garden_will_settle"))
+        .unwrap_or_else(|| panic!("no will_settle: {:?}", t.recent_keys(20)));
+    assert!(
+        move_before < will_settle,
+        "the teleport must precede the settle log"
+    );
+    assert_eq!(t.money(0), 10_000 + 100 - 240, "settled the owned tile");
+    assert_eq!(t.money(1), 10_000 + 240);
+}
+
+#[test]
+fn tsukushi_gains_and_guards_even_under_cant_move() {
+    // 规则书: 「获得100资金。…直到下个你的回合开始时，你无法被异常移动」
+    // The book prints no whole-card play gate: with the main move closed the
+    // gain and the protection still happen, only the hop is refused (item 4).
+    let mut t = Table::new(&["二叶筑紫", "户山香澄", "花园多惠", "牛込里美", "山吹沙绫"]);
+    t.clean();
+    t.begin_turn(0);
+    t.m.world_mut().st.skip_move = true; // 無法移動
+    let pos = t.pos(0);
+    t.give(0, &["Mor:（筑紫）迷茫的庭园"]);
+    t.play(0, "Mor:（筑紫）迷茫的庭园")
+        .expect("the card must still be playable");
+    decline_all(&mut t);
+    assert_eq!(t.pos(0), pos, "no hop while the move is closed");
+    assert_eq!(t.money(0), 10_000 + 100, "the gain still lands");
+    assert_eq!(
+        t.state(0, bandori_std::state_key::UNSTOPPABLE),
+        1,
+        "the protection still lands"
+    );
 }
 
 #[test]

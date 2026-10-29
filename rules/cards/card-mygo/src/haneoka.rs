@@ -9,7 +9,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
@@ -51,8 +51,9 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「投掷1d20」
     // Windowed (`ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
-    // 「你的任意掷骰结算前」) rings on this card's own 1d20 -- the only way to
-    // reach the 「大于20」 / 「至少为20」 place branch (a plain d20 tops out at 20).
+    // 「你的任意掷骰结算前」) rings on this card's own 1d20 -- the only way past
+    // 20 (the sheet's place branch is 「至少为20」, so a natural 20 already
+    // reaches it; the window only pushes further).
     // It also honours a forced extreme (「以理论最大值或最小值结算」).
     let r = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
     if r < 10 {
@@ -74,18 +75,23 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     }
     if r >= 10 {
         // 规则书 (sheet 2026-10-06): 「若出目至少为10则在当前格子免费加盖一层房屋」
-        // The C# gate is `H.WhyNotBuildOn(seat, pos) == null || (own && rent &&
-        // under the rent-table cap && !mortgaged)`; the own + not-mortgaged arm
-        // is what we can check (`WhyNotBuildOn` and the `rent.Length - 1` cap
-        // have no query).
-        if ctx::tile_owner(pos) == player_id && !ctx::mortgaged_of(pos) {
-            let h = ctx::add_house(pos, 1);
+        // The build gate is the engine's own `WhyNotBuildOn` (`ctx::can_build_on`:
+        // own + buyable, and no NO_BUILD / NO_BUILD_ABOVE / mortgaged / house-cap
+        // veto). Only an actual layer rise is announced -- the count is clamped,
+        // so a tile that cannot take another house leaves it unchanged.
+        let before = ctx::houses_of(pos);
+        let after = if ctx::can_build_on(player_id, pos) {
+            ctx::add_house(pos, 1)
+        } else {
+            before
+        };
+        if after > before {
             ctx::log(
                 player_id,
                 &Msg::new(key!("haneoka_house"))
                     .player_id("who", player_id)
                     .tile("tile", pos)
-                    .i("n", h as i64)
+                    .i("n", after as i64)
                     .card("card", ID),
             );
         } else {

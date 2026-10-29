@@ -9,18 +9,20 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, RollPurpose};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const YOLO: CardDef = CardDef::new(
     "AG:Y.O.L.O",
-    // G4: kind (Roll|DiceRollValue) is the category; `mine` + the settled-roll
-    // clause are the condition. Residual guard deleted.
+    // G4: the two trigger kinds below are the category; `mine` + the
+    // settled-roll clause are the condition. Residual guard deleted.
+    // 规则书: 「你的任意掷骰结算前打出此卡」
     &[On::Counteract(
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
         "actor == owner && (move.roll != null || value >= 0)",
         None,
-        counteract)],
+        counteract,
+    )],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)])
 .meta(
@@ -28,7 +30,9 @@ pub const YOLO: CardDef = CardDef::new(
         .name(r#"Y.O.L.O"#)
         .raw_name(r#"Y.O.L.O"#)
         .tags(&[])
-        .text(CardText::para(r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#))
+        .text(CardText::para(
+            r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#,
+        ))
         // sheet cell C3
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]),
 );
@@ -39,6 +43,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // Opening 「掷骰结算前」 here nests this same counteract (and Eve's) on the
     // boost and double-applies them (cross_move `m03_eve_then_yolo`).
     // Still honours a forced extreme (「以理论最大值或最小值结算」).
+    // 规则书: 「使结果增加1d4结果的数字」
+    // TODO(规则书)（使结果增加1d4结果的数字）: the cell does not say whether a face
+    // another effect already fixed still takes the +1d4 -- we add anyway (the
+    // 「固定」 vs additive ruling is open, BACKLOG MOVE-02); `starry_night` /
+    // `eve_unify` refuse over a fixed face.
     let before = trigger::move_roll().unwrap_or_else(|| trigger::value().max(0));
     let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect)?;
     trigger::set_move_roll(before + n);

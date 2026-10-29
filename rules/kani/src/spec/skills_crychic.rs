@@ -197,8 +197,9 @@ pub fn band_03_crystal_cap() -> i32 {
     10
 }
 
-/// Drawn-hook leaf when SEEN == 4 and hand >= 5: AddCounter{+1} (instance
-/// crystals via `add_crystals`). Cap clamp is the host's `add_counter`.
+/// `Drew`-hook leaf (the field per-draw point) when SEEN == 4 and hand >= 5:
+/// AddCounter{+1} (instance crystals via `add_crystals`). Cap clamp is the
+/// host's `add_counter`.
 pub fn band_03_crystal_log_ok(effects: &[Effect], player: i32, key: u16) -> bool {
     effects.len() == 1
         && matches!(

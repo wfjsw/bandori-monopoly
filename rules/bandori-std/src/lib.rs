@@ -41,22 +41,22 @@ macro_rules! filled_msgs {
 #[doc(hidden)]
 pub use card_sdk::msg::Msg as __Msg;
 
-/// Named-counter wire names this ruleset's cards use. The strings are ABI
-/// codes (the host matches on them); the *names* are game vocabulary.
-/// (Also kept as `card_sdk::abi::counter` so the wire module stays self-contained.)
-pub mod counter {
-    /// On-card [CP点].
-    pub const CP: &str = "cp";
-    /// 奇迹水晶.
-    pub const CRYSTALS: &str = "crystals";
-}
+/// Named-counter wire names this ruleset's cards use -- see the marker
+/// vocabulary in [`marker::counter`].
+pub use marker::counter;
 
-/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
-/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
-pub mod fire;
+/// Tile-[CP点] mark category / kind ids.
+pub mod mark;
+/// Card-face marker vocabulary: the counter names, the countdown prop and its
+/// helpers, and the display row of each marker kind (`docs/DISPLAY.md`).
+pub mod marker;
+
 /// CEL sugar tables / kind constants / guard-const expansions for this
 /// ruleset. Plain data; the typed `CondExt` is assembled in `game-rules`.
 pub mod cel;
+/// 火罐 -- the capped 「技能指示物」 kernel and the face's 「（初始N，上限M）」
+/// declaration (`fire_pots` / `FIRE_INITIAL` / `FIRE_CAP`). Not a status.
+pub mod fire;
 /// Shared CEL guards.
 pub mod guards;
 /// Ruleset-declared raise-point kind ids and tile kind/class strings.
@@ -124,26 +124,44 @@ pub mod prop {
 pub mod ctx {
     pub use card_sdk::ctx::*;
 
+    pub use crate::marker::{dec_turns_left, set_turns_left, turns_left};
     pub use crate::{
         add_card_crystals, add_crystals, add_crystals_at, add_group_crystals, add_group_skill,
-        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, remove_crystal,
-        group_crystals, group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable,
-        is_color, is_deed, is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy,
-        offer_force_buy, pay_rent, persona_is, persona_skill, rent_unit_mult, ring_multiplier,
+        add_rent_unit_bonus, add_ring_bonus, card_crystals, crystals, crystals_at, group_crystals,
+        group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed,
+        is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy,
+        pay_rent, persona_is, persona_skill, remove_crystal, rent_unit_mult, ring_multiplier,
         set_crystals, skill_blocked, turn_snap,
     };
 }
 
-/// Turn-start snapshot of the three layer counters 「回到起始地点并取消所有
-/// 受到的效果」 restores: `(pos, stay, stun, exile)`. Wrapper over the generic
-/// keyed `card_sdk::ctx::turn_snap` with this ruleset's key names.
-pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
-    card_sdk::ctx::turn_snap(
-        player_id,
-        state_key::STAY,
-        state_key::STUN,
-        state_key::EXILE,
-    )
+/// What 「回到起始地点并取消所有受到的效果（不进行任何结算）」 restores: the
+/// turn-start square, the three layer counters, the player's money and the
+/// board ownership arrays. Wrapper over the generic `card_sdk::ctx::turn_snap_map`
+/// with this ruleset's key names; `pos < 0` when there is no snapshot.
+pub struct TurnRestore {
+    pub pos: i32,
+    pub stay: i32,
+    pub stun: i32,
+    pub exile: i32,
+    pub money: i32,
+    pub owners: Vec<i32>,
+    pub houses: Vec<i32>,
+    pub mortgaged: Vec<bool>,
+}
+
+pub fn turn_snap(player_id: i32) -> TurnRestore {
+    let snap = card_sdk::ctx::turn_snap_map(player_id);
+    TurnRestore {
+        pos: snap.pos,
+        stay: snap.state.get(state_key::STAY).copied().unwrap_or(0),
+        stun: snap.state.get(state_key::STUN).copied().unwrap_or(0),
+        exile: snap.state.get(state_key::EXILE).copied().unwrap_or(0),
+        money: snap.money,
+        owners: snap.owners,
+        houses: snap.houses,
+        mortgaged: snap.mortgaged,
+    }
 }
 
 // ------------------------------------------------------------- tile kinds
@@ -185,46 +203,58 @@ pub fn is_live_house_for(player_id: i32, tile: i32) -> bool {
 }
 
 /// Does `tile` count as colour `group` for `player_id`?
+#[cfg(not(kani))]
 pub fn is_color(player_id: i32, tile: i32, group: i32) -> bool {
     let class = format!("color:{}", group);
     card_sdk::ctx::tile_in(player_id, tile, &class)
+}
+
+/// Kani: the host models every `color:<g>` class as the tile's own group
+/// (`host::arm_tile_in`), so skip the `format!` heap String and the UTF-8
+/// validation that come with it -- both are per-call aborts/cliffs
+/// (`same_allocation` / `run_utf8_validation`) in a 60-tile scan.
+#[cfg(kani)]
+#[inline(always)]
+pub fn is_color(_player_id: i32, tile: i32, group: i32) -> bool {
+    // Same range guard as `host::arm_tile_in` (out-of-board is not a colour).
+    (0..60).contains(&tile) && card_sdk::ctx::tile_group(tile) == group
 }
 
 // ------------------------------------------------------------- 奇迹水晶
 
 /// Miracle crystals on **this card instance**.
 pub fn crystals() -> i32 {
-    counter("crystals")
+    counter(counter::CRYSTALS)
 }
 
 /// Set this card instance's crystals; returns the new count.
 pub fn set_crystals(n: i32) -> i32 {
-    set_counter("crystals", n)
+    set_counter(counter::CRYSTALS, n)
 }
 
 /// Adjust this card instance's crystals by `n`, clamped at 0 and at `max`.
 pub fn add_crystals(n: i32, max: i32) -> Result<i32, Prompt> {
-    add_counter("crystals", n, max)
+    add_counter(counter::CRYSTALS, n, max)
 }
 
 /// [奇迹水晶] on a named placed card.
 pub fn card_crystals(player_id: i32, card: &str) -> i32 {
-    card_sdk::ctx::card_counter(player_id, card, "crystals")
+    card_sdk::ctx::card_counter(player_id, card, counter::CRYSTALS)
 }
 
 /// Adjust [奇迹水晶] on a named placed card; `max` caps (0 = uncapped).
 pub fn add_card_crystals(player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-    add_card_counter(player_id, card, "crystals", n, max)
+    add_card_counter(player_id, card, counter::CRYSTALS, n, max)
 }
 
 /// [奇迹水晶] on the instance at `uid`.
 pub fn crystals_at(uid: i32) -> i32 {
-    counter_at(uid, "crystals")
+    counter_at(uid, counter::CRYSTALS)
 }
 
 /// Adjust [奇迹水晶] on the instance at `uid`; `max` caps (0 = uncapped).
 pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
-    add_counter_at(uid, "crystals", n, max)
+    add_counter_at(uid, counter::CRYSTALS, n, max)
 }
 
 /// Burn one of this card's crystals (the decay tick). Returns the count left.
@@ -241,7 +271,7 @@ pub fn remove_crystal() -> Result<i32, Prompt> {
 /// 「乐队卡 / 团卡」 [奇迹水晶] on `player_id`'s band-skill field instance.
 /// Game sugar: the group-skill pool (ruleset counter name).
 pub fn group_crystals(player_id: i32) -> i32 {
-    group_pool(player_id, "crystals")
+    group_pool(player_id, counter::CRYSTALS)
 }
 
 /// A named pool on the player's group-skill instance.
@@ -251,7 +281,7 @@ pub fn group_pool(player_id: i32, name: &str) -> i32 {
 }
 
 pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    add_group_pool(player_id, "crystals", n, max)
+    add_group_pool(player_id, counter::CRYSTALS, n, max)
 }
 
 pub fn add_group_pool(player_id: i32, name: &str, n: i32, max: i32) -> i32 {
@@ -391,14 +421,20 @@ pub fn half_ceil10(full: i32) -> i32 {
     ceil * 10
 }
 
-/// The RiNG rent multiplier.
+/// The `rentUnitMult` rule parameter in force (base + card bonus, floored at 1).
+/// RiNG's dice rent uses this as its per-tile unit (`count_owned_kind × this`,
+/// read by `World::rent_of` / `rent_figure` / `rent_quote`; the tile's static
+/// `RENT_DICE_MULT` only marks the tile as dice-rent).
 pub fn rent_unit_mult() -> i32 {
     unsafe { raw::sys::rent_unit_mult() }
 }
 
-/// Add `n` to the RiNG rent multiplier; returns the new multiplier.
+/// 规则书: 「每次打出此卡时使ring的价格基础乘数+5」 -- add `n` to the
+/// `rentUnitMult` bonus; returns the new multiplier (base + bonus), the number
+/// the card's log prints. The host verb itself returns only the bonus.
 pub fn add_rent_unit_bonus(n: i32) -> i32 {
-    unsafe { raw::sys::add_rent_unit_bonus(n) }
+    unsafe { raw::sys::add_rent_unit_bonus(n) };
+    rent_unit_mult()
 }
 
 /// Game sugar for [`rent_unit_mult`] (the RiNG dice-rent convention).
@@ -440,7 +476,7 @@ pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
 /// Base half of the x11 `crystals_changed_guard` copies: this instance's
 /// crystals counter changed. Cards add their own residual (value vs 0, …).
 pub fn crystals_changed_of(card_id: &str) -> bool {
-    card_sdk::ctx::trigger::card_is(card_id) && card_sdk::ctx::trigger::name() == "crystals"
+    card_sdk::ctx::trigger::card_is(card_id) && card_sdk::ctx::trigger::name() == counter::CRYSTALS
 }
 
 /// Always-true guard (the x4 `always` copy).

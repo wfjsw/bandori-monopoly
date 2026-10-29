@@ -380,6 +380,13 @@ fn vocal_too_hard_matches_only_big_payments_to_others() {
         "CRYCHIC:主唱太拼命了",
         "a [获得] is not 「向其他玩家支付」",
     );
+    // Not on a 5000 payment the holder makes to themselves (「向其他玩家」).
+    t.give_play(0, "TEST:selfCharge").unwrap();
+    assert_not_offered(
+        &mut t,
+        "CRYCHIC:主唱太拼命了",
+        "a self payment is not 「向其他玩家支付」",
+    );
     // Is on the 6760 rent P1 pays P0.
     pass_turn(&mut t, 0);
     t.give(1, &["CRYCHIC:主唱太拼命了"]);

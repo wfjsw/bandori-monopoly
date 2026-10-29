@@ -1298,6 +1298,22 @@ fn half_speed_drains_one_crystal_per_turn_end() {
                     t.field_ids(0)
                 ));
             }
+            // 「你的回合结束时」: the other seat's turn end must not drain it.
+            if expect > 0 {
+                t.begin_turn(1);
+                t.dice(&[1]);
+                let _ = t.roll(1);
+                skip_all(&mut t);
+                let _ = t.end(1);
+                skip_all(&mut t);
+                let x = t.crystals(0, "AG:（摩卡）0.5倍速");
+                if x != Some(expect) {
+                    return Err(format!(
+                        "C-AG-half-speed-02: P1's turn end drained the owner's crystal \
+                         ({expect} -> {x:?})"
+                    ));
+                }
+            }
         }
         Ok(())
     })

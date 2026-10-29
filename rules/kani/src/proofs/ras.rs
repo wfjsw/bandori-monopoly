@@ -360,19 +360,20 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
         if pre.out[p] {
             continue;
         }
-        let expect = spec::riot_draw_count_mutant(hand_ns[p] as i32, p as i32 == holder);
-        if expect <= 0 {
-            continue;
-        }
-        match effects.get(i) {
-            Some(Effect::Draw { player, n: dn }) => {
-                if *player != p as i32 || *dn != expect {
-                    ok = false;
+        // One host request per card, so the mutant expectation is `h` draws of
+        // 1 -- never the holder's own extra.
+        let _ = spec::riot_draw_count_mutant(hand_ns[p] as i32, p as i32 == holder);
+        let mut k = 0usize;
+        while k < 2 {
+            if k < hand_ns[p] {
+                match effects.get(i) {
+                    Some(Effect::Draw { player, n: dn }) if *player == p as i32 && *dn == 1 => {}
+                    _ => ok = false,
                 }
+                i += 1;
             }
-            _ => ok = false,
+            k += 1;
         }
-        i += 1;
     }
     if i != effects.len() {
         ok = false;

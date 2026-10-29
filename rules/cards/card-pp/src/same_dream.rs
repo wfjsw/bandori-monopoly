@@ -8,12 +8,14 @@
 //! > 2. 将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金；
 //! > 3. 将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有Pastel✽Palettes角色生效。
 //!
-//! then flip every face-down fan back up. Fan moves go through the band-skill
-//! `fans::flip_up` (state dict + `FansFlip` raise).
+//! then flip every face-down fan back up. Step 2's face-up -> face-down move is
+//! `fans::flip_down` (state dict only -- no `FansFlip` raise); step 3's move is
+//! `fans::flip_up`, which raises it, and its widened target (the other
+//! Pastel✽Palettes seats) is [共鸣]-gated.
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec, steps};
+use card_sdk::{para, sec, steps, CardText};
 use skill_groups::fans;
 
 pub const SAME_DREAM: CardDef =

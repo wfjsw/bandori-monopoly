@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const HARUHIKAGE: CardDef = CardDef::new(
@@ -25,12 +25,17 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
                 ChainKind::DiceRollResult,
                 ChainKind::SettleBefore,
             ],
-            // Per-kind applicability as a disjunction. The SettleBefore arm
-            // carries the within-5 scan (丰川祥子 needs a player to step toward).
+            // Per-kind applicability as a disjunction. The SettleBefore arms are
+            // 丰川祥子's two variants: (3) the owner's own main move with a
+            // rival within 5 and a fire pot to spend, (2) another player's
+            // settle within 5 of the owner (mover pays 300, steps toward).
             "(kind == DiceRollResult && actor == owner && move.roll != null) \
-             || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
+             || (kind == SettleBefore && actor == owner && move.main && tile.id >= 0 \
+                 && others_within(owner, 5) > 0 && charge(owner) >= 1) \
+             || (kind == SettleBefore && actor != owner && move.main && tile.id >= 0 \
+                 && dist(pos(actor), pos(owner)) <= 5) \
              || (kind == Effect && pay_is_rent && actor != owner \
-                 && target == owner && tile.id >= 0 && value > 0)",
+                 && target == owner && tile.owner == owner && tile.id >= 0 && value > 0)",
             None,
             counteract
         ).counter_reason(key!("haruhikage_when")),
@@ -89,9 +94,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("haruhikage_play")).player_id("who", player_id),
     );
-    // 规则书（2）: 「使用一次Crychic角色的技能」 -- pick one of the five CRYCHIC
-    // skills and run its `On::Play` entry. `ctx::play_card` is that run: the
-    // skill is a card rule and this invokes it under its own id.
+    use_skill(player_id)
+}
+
+/// 规则书（2）: 「使用一次Crychic角色的技能」 -- pick one of the CRYCHIC skills and
+/// run it under its own id (`ctx::play_card`). Only skills with a live press
+/// entry are offered: 椎名立希 / 长崎素世 / 丰川祥子 are timing skills with no
+/// `On::Play`, and `play_card` is a no-op for those.
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     const CRYCHIC: [&str; 5] = [
         "skill:高松灯（CRYCHIC）:跌跌撞撞...",
         "skill:椎名立希（CRYCHIC）:克服劣等感",
@@ -99,7 +109,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
         "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
         "skill:若叶睦（CRYCHIC）:精致的人偶",
     ];
-    let options: alloc::vec::Vec<Msg> = CRYCHIC
+    let avail: alloc::vec::Vec<&str> = CRYCHIC
+        .iter()
+        .copied()
+        .filter(|id| ctx::query_guard(player_id, id, ctx::entry::PRESS))
+        .collect();
+    if avail.is_empty() {
+        // The two pressable skills can both be gated off (no fire pot, no
+        // latched face); with nothing to run, skip the empty choice prompt.
+        return Ok(());
+    }
+    let options: alloc::vec::Vec<Msg> = avail
         .iter()
         .map(|id| Msg::new(key!("haruhikage_option")).card("card", *id))
         .collect();
@@ -109,7 +129,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("haruhikage_ask")),
         &options,
     )?;
-    if let Some(&id) = CRYCHIC.get(k) {
+    if let Some(&id) = avail.get(k) {
         ctx::play_card(id, player_id)?;
     }
     Ok(())
@@ -147,18 +167,23 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .card("card", ID),
     );
-    // 规则书（1）: 「依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
-    // breaks when the hand did not grow (`hand.Count <= before`) or the player is out.
+    // 规则书（1）: 「依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- the
+    // interrupt is the discard effect itself; a cancelled-and-nothing draw grows
+    // no hand but is not a discard, so the loop keeps going (the 10-pass cap
+    // bounds that).
     for _ in 0..10 {
         if ctx::hand_size(player_id) >= 6 || ctx::player_out(player_id) {
             break;
         }
-        let before = ctx::hand_size(player_id);
+        let discards = ctx::discard_size(player_id);
         ctx::draw(player_id, 1)?;
-        if ctx::hand_size(player_id) <= before {
+        if ctx::discard_size(player_id) > discards {
             break;
         }
     }
+    // 规则书（2）: 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 -- a
+    // 「直接从抽牌堆打出」 is a play, so (2) resolves on this route too.
+    use_skill(player_id)?;
     // 规则书（1）: the [特] body finishes with the card in the discard pile.
     ctx::to_discard(player_id, ID);
     Ok(())
@@ -196,8 +221,38 @@ fn reroll_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 丰川祥子（CRYCHIC）的技能 -- the endpoint steps 1 tile toward a player within 5.
+/// 丰川祥子（CRYCHIC）的技能 -- one endpoint step toward a player within 5.
+/// Two variants: (3) the owner's own main move (spends 1 fire pot), (2) another
+/// player's settle (that player pays 300 and steps toward the owner).
 fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
+    let actor = trigger::player_id();
+    if actor != player_id {
+        // 规则书（2）: 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」
+        if !ctx::ask_yes(
+            actor,
+            &Msg::new(key!("haruhikage_toward_title")),
+            &Msg::new(key!("haruhikage_pay_ask")).player_id("who", player_id),
+        )? {
+            return Ok(());
+        }
+        if ctx::transfer(
+            actor,
+            player_id,
+            300,
+            &Msg::new(key!("haruhikage_pay"))
+                .player_id("who", player_id)
+                .tile("tile", trigger::tile()),
+        )? <= 0
+        {
+            return Ok(());
+        }
+        nudge_toward(actor, ctx::player_pos(player_id));
+        return Ok(());
+    }
+    // 规则书（3）: 「你可消耗1火罐」 -- the pot is the cost of the self variant.
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("haruhikage_spend")))? {
+        return Ok(());
+    }
     let near = within5(player_id);
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "settleBefore" branch
     // asks `终点向哪名玩家靠近 1 格？` over `H.Within(i, 5, includeSame: false)`.
@@ -207,47 +262,59 @@ fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("haruhikage_toward_ask")),
         &near,
     )?;
-    // `H.StepToward(seat, target, why)` is a raw one-tile step toward the target
-    // (it writes `State.players[i].pos`, no settle); the host's `teleport_to` is
-    // that same raw write.
-    let pos = ctx::player_pos(player_id);
-    let target = ctx::player_pos(who);
-    let n = ctx::tile_count();
-    if n <= 0 {
-        return Ok(());
-    }
-    let fwd = (target - pos).rem_euclid(n);
-    if fwd == 0 {
-        return Ok(());
-    }
-    let dir = if fwd <= n - fwd { 1 } else { -1 };
-    let to = (pos + dir).rem_euclid(n);
-    // 规则书（2）: 「使用一次Crychic角色的技能」 -- the endpoint moves 1 tile closer.
-    ctx::teleport_to(player_id, to);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("haruhikage_step"))
-            .player_id("who", player_id)
-            .tile("tile", to),
-    );
+    nudge_toward(player_id, ctx::player_pos(who));
     Ok(())
 }
 
-/// 长崎素世（CRYCHIC）的技能 -- cancel the rent being paid to you.
+/// 「使自己的移动终点沿最短路径向…靠近1格」 -- one raw position write toward
+/// `goal` (C# `H.StepToward`; the host's `teleport_to` is that same write, no
+/// settle). A relocation inside `settleBefore` redirects the settle.
+fn nudge_toward(who: i32, goal: i32) {
+    let pos = ctx::player_pos(who);
+    let n = ctx::tile_count();
+    if n <= 0 {
+        return;
+    }
+    let fwd = (goal - pos).rem_euclid(n);
+    // 规则书（2）: 「使用一次Crychic角色的技能」 -- the endpoint moves 1 tile closer.
+    // The teleport lands on the live world and a replayed pass skips it, so log
+    // the position actually reached, not the recomputed `to`. The log sits
+    // outside the zero-distance early-out: a replay re-reads `pos` from the
+    // already-landed world, collapsing `fwd` to 0 -- returning first would drop
+    // the line the paused pass never got to post (it paused inside the
+    // teleport). A genuine 0-distance target just logs the tile it is on.
+    if fwd != 0 {
+        let dir = if fwd <= n - fwd { 1 } else { -1 };
+        let to = (pos + dir).rem_euclid(n);
+        ctx::teleport_to(who, to);
+    }
+    ctx::log(
+        who,
+        &Msg::new(key!("haruhikage_step"))
+            .player_id("who", who)
+            .tile("tile", ctx::player_pos(who)),
+    );
+}
+
+/// 长崎素世（CRYCHIC）的技能 -- cancel the rent being paid to you, and make the
+/// next main move a teleport back to that tile.
 fn cancel_pay_skill(player_id: i32) {
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "pay" branch:
-    // `trigger.Pay.cancel = true` plus `H.ExtraOf<SoyoTeleportFx>(i)` (teleport to
-    // the mortgaged tile on the next main move).
+    // `trigger.Pay.cancel = true` plus `H.ExtraOf<SoyoTeleportFx>(i)`.
+    let tile = trigger::tile();
     ctx::log(
         player_id,
         &Msg::new(key!("haruhikage_pay_note")).player_id("who", player_id),
     );
-    // 规则书（2）: cancel the rent being paid to you.
+    // 规则书（2）: 「可取消那次支付」 -- C# `trigger.Pay.cancel = true`.
     trigger::set_pay_amount(0);
-    // TODO(规则书)[judgement](ABI): `H.ExtraOf<SoyoTeleportFx>` (C# `SoyoTeleportFx.MoveBefore`:
-    //   the clause under-specifies -- see the note above it
-    //   `m.TeleportTo = t.Pay.tile`) -- needs the Fx.MoveBefore hook and a
-    //   remembered tile (C# `H.SetV(i, "soyoC", tile + 1)`).
+    // 规则书（2）: 「使你下回合的主要移动变为传送至触发此技能的那格」 -- the
+    // skill's own armed latch: the attached 长崎素世 skill consumes these two
+    // state keys in its `DiceRollPlan` / `MoveAfter` entries (soyo_crychic.rs).
+    ctx::state::set(player_id, "skill.soyoCrychic.tile", tile);
+    ctx::state::set(player_id, "skill.soyoCrychic.armed", 1);
+    // TODO(规则书)（使你下回合的主要移动变为传送至触发此技能的那格）: the two state
+    //   keys are private consts in soyo_crychic.rs -- keep the spellings in sync.
 }
 
 //

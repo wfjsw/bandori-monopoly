@@ -30,7 +30,7 @@
   "fire_bird_why": "Fire bird",
   "lisa_bond_ask_text": "[指定] 同一格的哪名角色？",
   "lisa_bond_ask_title": "必然的联系",
-  "lisa_bond_note": "{{who}} 对 Ta 使用技能不受「距离最近」的限制",
+  "lisa_bond_note": "{{who}} 对 Ta 使用技能不受「距离最近」的限制（尚未生效）",
   "lisa_bond_placed": "{{who}} 把「必然的联系」放在了 {{them}} 的游戏区",
   "lisa_bond_when": "你使用技能进行传送",
   "louder_up": "RiNG 的基础乘数 +{{n}}（louder），现在 {{mult}}",

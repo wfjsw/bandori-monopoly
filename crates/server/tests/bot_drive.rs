@@ -16,8 +16,8 @@ use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{stage, BotMentality};
 use game_core::MatchMode;
-use server::apply_bot_answer;
 use server::botsvc::BotService;
+use server::{apply_bot_answer, local_policy};
 
 fn data() -> Arc<GameData> {
     // No ruleset in this harness: the three legacy JSON files are the bridge.
@@ -97,6 +97,7 @@ fn parked_searchable() -> (Match, i32) {
             let _ = m.act(1, &msg);
         }
         m.tick(0.25);
+        bot_core::sim::pump_bots(&mut m);
     }
     panic!("no searchable decision for member 1");
 }
@@ -105,7 +106,7 @@ fn parked_searchable() -> (Match, i32) {
 async fn a_refused_service_answer_falls_back_without_reasking() {
     let data = data();
     let rules: Arc<dyn CardRules> = Arc::new(StubRules);
-    let bots = BotService::in_process(data.clone(), rules);
+    let bots = BotService::in_process(data.clone(), rules.clone());
     let (m, member) = parked_searchable();
     let seat = bot_service::BotSeatView::from_match(&m, member);
     let view = serde_json::to_value(&seat).expect("view serialises");
@@ -116,39 +117,45 @@ async fn a_refused_service_answer_falls_back_without_reasking() {
         .await
         .expect("decide answers");
     let refused = first.answer.clone();
-    let heuristic = bot_service::heuristic_message_view(&data, &seat);
+    let fallback = local_policy(&data, &rules, &seat);
 
-    // The engine refuses anything but the heuristic -- as it refused the
-    // unaffordable Buy in the live-match stall.
+    // The engine refuses anything but the policy's own answer -- as it refused
+    // the unaffordable Buy in the live-match stall.
     let mut seen: Vec<NetMessage> = Vec::new();
-    let acted = apply_bot_answer(&bots, &data, &seat, member, refused.clone(), {
-        let h = heuristic.clone();
-        let seen = &mut seen;
-        move |cmd| {
-            seen.push(cmd.clone());
-            let h = h.clone();
-            async move {
-                if cmd == h {
-                    Ok(None)
-                } else {
-                    Ok(Some(Msg::new("err.buy_build_at_settle")))
+    let acted = apply_bot_answer(
+        Some(&bots),
+        &data,
+        &rules,
+        &seat,
+        member,
+        refused.clone(),
+        {
+            let seen = &mut seen;
+            move |cmd| {
+                // The engine refuses the service's answer; whatever comes next
+                // (the policy fallback) is legal.
+                let first = seen.is_empty();
+                seen.push(cmd.clone());
+                async move {
+                    if first {
+                        Ok(Some(Msg::new("err.buy_build_at_settle")))
+                    } else {
+                        Ok(None)
+                    }
                 }
             }
-        }
-    })
+        },
+    )
     .await;
 
-    assert!(acted, "the heuristic fallback must land");
+    assert!(acted, "the policy fallback must land");
     assert_eq!(
         seen.len(),
         2,
         "exactly one fallback -- never re-ask the service: {seen:?}"
     );
     assert_eq!(seen[0], refused, "the service's answer goes first");
-    assert_eq!(
-        seen[1], heuristic,
-        "then the heuristic, not a second search"
-    );
+    assert_eq!(seen[1], fallback, "then the policy, not a second search");
 
     // The cached answer is gone: the next decide re-searches instead of
     // replaying the refused one (`reused: false`).

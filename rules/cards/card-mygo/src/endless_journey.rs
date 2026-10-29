@@ -10,7 +10,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
@@ -20,11 +20,17 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
         // （2）「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect
         // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
-        // field card that replaces the body skips this entry.
+        // body replace cancels this entry, but only once it has run: `SettleBody`
+        // hooks dispatch seat by seat and then in field order, so a replacer
+        // that runs *after* this one no longer stops the payout.
         On::Action(Action::SettleBody("actor == owner && move.main && card.placed", None, settle_body)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[手]「放置4个奇迹水晶」: the `⌛4` marker the client shows. It only
+// ticks on the long-move clause, so `N` here is long moves left, not turns.
+.props(&[(bandori_std::marker::TURNS_LEFT, 4)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"哪怕这旅程没有终点"#)
         .raw_name(r#"哪怕这旅程没有终点"#)
         .tags(&[r#"手"#, r#"持续"#])
@@ -61,6 +67,8 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_main_steps() <= 6 {
         return Ok(());
     }
+    // The burn is the tick (a short-turn end does not count down).
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }
@@ -73,10 +81,10 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// count emptied by *any* write leaves the field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
-/// Residual guard -- `card_is` + the counter name stay here (the name is not
-/// yet in the condition vocabulary).
+/// Residual guard -- `card_is(ID)` stays here (the condition already filters
+/// the counter name with `counter_is('crystals')`).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
@@ -94,13 +102,22 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
 /// replace (`trigger::cancelled()`) skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
+    // TODO(规则书)（触发结算时，获得X*60资金）: the sheet makes this an entry of the
+    // settle effect list, so a body replace must suppress it -- we only see a
+    // cancel from a replacer that already ran (seat/field order), so a
+    // later-seat replacer lets this entry pay first.
     if trigger::cancelled() {
         return Ok(());
     }
     // 规则书（2）: 「[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数」
-    // -- C# `m.Path.Count` is the tiles this main move walked (the trigger
-    // payload's `move_total`).
-    let x = trigger::move_total();
+    // -- C# `m.Path.Count` is the tiles this main move walked. The payload's
+    // `move_total` is the *planned* walk (a 强制停下 leaves it at the full
+    // length), so take the entered tiles: total minus what is still left.
+    // TODO(规则书)（触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数）: the
+    // book counts the tiles 经过 -- the payload's `move_total` is the planned
+    // walk, so no term carries the count itself and X is only derived as total
+    // minus remaining (load-bearing on a forced stop).
+    let x = trigger::move_total() - trigger::move_remaining();
     if x <= 0 {
         return Ok(());
     }

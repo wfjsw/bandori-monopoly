@@ -32,10 +32,12 @@ pub fn rui_demon_01_effects_ok(
         }
     }
     // Per other: PayTo(player→o, 100), SetState(X=5),
-    // then PayTo(o→player, 300), SetState(X=5), then a final SetState(X=5).
-    // X's key id is engine-side; match SetState { player, n: 5 } only.
-    let want_len = n_others * 4 + 1;
-    if effects.len() != want_len {
+    // then PayTo(o→player, 300), SetState(X=5). One extra trailing
+    // SetState(X=5) is allowed: the clause writes X 「每当你的技能被触发后」
+    // and nothing reports a skill fire yet (TODO(ABI)), so the body writes it
+    // unconditionally. X's key id is engine-side; match `{ player, n: 5 }`.
+    let want_len = n_others * 4;
+    if effects.len() != want_len && effects.len() != want_len + 1 {
         return false;
     }
     let mut i = 0usize;
@@ -65,9 +67,11 @@ pub fn rui_demon_01_effects_ok(
         }
         i += 1;
     }
-    match effects[i] {
-        Effect::SetState { player: p, n, .. } if p == player && n == 5 => {}
-        _ => return false,
+    if effects.len() == want_len + 1 {
+        match effects[i] {
+            Effect::SetState { player: p, n, .. } if p == player && n == 5 => {}
+            _ => return false,
+        }
     }
     true
 }
@@ -443,11 +447,10 @@ pub fn noble_02_mark_ok(effects: &[Effect], tile: i32) -> bool {
 // ===========================================================================
 // C-MOR-courage-03 post  `Mor:勇气展翅高飞之时`
 // 「结果对应序号格子的所有者向你支付…」 -- unowned branch: nobody pays.
-// Host note: `is_agent` / `tile_price` / `buy_price` use 1-based
-// `board::tile_slot` while the body passes the 0-based roll index; and
-// `buy_price` returns land price only (houses ignored). courage-01/02 are
-// BLOCKED-HOST on those ops. courage-03 is the empty-effect branch, which
-// holds whenever the agent check does not misfire (see proofs isolation).
+// Host note: `is_agent` / `tile_price` / `buy_price` index the static board
+// 0-based (the body's own slot convention) and `buy_price` folds houses.
+// courage-01/02 pin the rolled slot with `forced_roll`; courage-03 keeps the
+// roll symbolic, so only its empty limb is asserted.
 // ===========================================================================
 
 /// Unowned / self-owned / owner-out: no money moves; effect log empty.
@@ -477,10 +480,10 @@ pub fn toko_no_pair_ok(effects: &[Effect]) -> bool {
 // 「场地中央」 is not a board slot; the card is a field card of the user.
 // ===========================================================================
 
-/// X ∈ 1..=max, `max = clamp(money/1000, 1, 5)` (engine offer; OPEN-X).
-pub fn starry_01_x_in_range(x: i32, money: i32) -> bool {
-    let max = (money / 1000).clamp(1, 5);
-    (1..=max).contains(&x)
+/// X ∈ 1..=5 (engine offer; OPEN-X). The C# cash pre-cap is gone -- `ctx::pay`
+/// takes the shortfall path -- so cash on hand no longer narrows the range.
+pub fn starry_01_x_in_range(x: i32, _money: i32) -> bool {
+    (1..=5).contains(&x)
 }
 
 /// The user pays `X × 1000`.
@@ -634,8 +637,9 @@ pub fn nnm_05_press_empty_noop(effects: &[Effect], dest: i32, pre_dest: i32) -> 
 /// tritone-01 body effects (counteraction window is PROTOCOL-LEVEL; this is
 /// the admitted body): GainMoney(user, amount), PlaceCard(user, Field),
 /// AddCounter(user, crystals, 3) from `set_crystals(3)` (bookkeeping under the
-/// current host, same as AG half-speed / R fire-bird), SetState(user,
-/// tritone_owed, amount).
+/// current host, same as AG half-speed / R fire-bird), AddCounter(user, owed,
+/// amount) -- the per-instance debt counter (a player slot is shared by a
+/// second copy).
 pub fn tritone_01_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bool {
     if effects.len() != 4 {
         return false;
@@ -651,7 +655,7 @@ pub fn tritone_01_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bo
         Effect::AddCounter { owner: o, n, .. } if o == player && n == 3
     ) && matches!(
         effects[3],
-        Effect::SetState { player: p, n, .. } if p == player && n == amount
+        Effect::AddCounter { owner: o, n, .. } if o == player && n == amount
     )
 }
 
@@ -715,8 +719,9 @@ pub fn tritone_02_tick_effects_ok_mutant(
 // 「当你位于一块地契价值大于等于2200的地块时，可以打出此卡」
 // 「如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记…」
 // OPEN-触发结算: the forced settle is not defined; only the mark is pinned.
-// Host note: `tile_price(pos)` uses 1-based `board::tile_slot` while `pos` is
-// 0-based — noble-01's price gate is BLOCKED-HOST.
+// Host note: `tile_price(pos)` takes the 0-based engine index, the same
+// convention as `pos`; the gate itself is a `cant_play` residual with no
+// harness.
 // ===========================================================================
 
 /// noble-01 gate: deed (land) price ≥ 2200.

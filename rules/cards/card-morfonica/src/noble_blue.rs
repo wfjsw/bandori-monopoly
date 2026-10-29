@@ -5,8 +5,8 @@
 //!
 //! expensive tile immediately and mark it untargetable.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const NOBLE_BLUE: CardDef =
     CardDef::new("Mor:高贵的微蓝", &[On::Play("", Some(cant_play), noble_blue)]).meta(&card_sdk::meta::CardMeta::new()
@@ -36,13 +36,14 @@ fn noble_blue(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「如果此地块属于你」
     if ctx::tile_owner(pos) != player_id {
         // C# `c.Effective = false; H.Log(... 没有效果)`.
-        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
-        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
-        // side channel and is not being ported (a routine should *return* whether
-        // it took effect); but before that lands, what "not effective" changes has
-        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
-        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
-        // implies no)? And what counts a use that this would suppress?
+        // TODO(规则书)（如果此地块属于你）[judgement]: the not-yours branch is the
+        // no-effect case. `PlayCtx.Effective = false` is the C#'s mutable side
+        // channel and is not being ported (a routine should *return* whether it took
+        // effect); until that lands, what "not effective" changes has to be ruled.
+        // The spend looks settled -- haneoka 「放入弃牌堆且视为此卡未生效」 says yes
+        // and noble_blue / starry_night's "the card is spent anyway" says yes too
+        // (the engine's play-with-no-destination default agrees) -- but what else
+        // observes "not effective", and what counts a use it would suppress?
         ctx::log(
             player_id,
             &Msg::new(key!("noble_blue_not_yours")).tile("tile", pos),
@@ -51,10 +52,16 @@ fn noble_blue(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书1: 「立刻进行一次触发结算」 -- C# `H.SettleAt(seat, pos, CardName)`.
     // The player does not move; the tile they are on resolves again.
+    // TODO(规则书)（立刻进行一次触发结算）[judgement] OPEN-触发结算: 触发结算 is undefined --
+    //   settle-at-tile, and flagging the forced settle `main` though nothing moved,
+    //   are our readings.
     ctx::card_settle_at(player_id, pos, true);
     // 规则书2: 「在该地块上放置一个标记，有标记时此地块不能被指定」 -- the mark kind
     // is the gate: `target_tile` refuses any tile carrying `noTarget`.
     // `place_mark_new`: the old `add_mark` row-per-call semantics.
+    // TODO(规则书)（有标记时此地块不能被指定）[judgement] OPEN-指定: whether 「指定」 is
+    //   exactly `target_tile` (and not every tile pick -- `ask_tile` does not
+    //   filter `noTarget`) is undecided.
     ctx::place_mark(
         pos,
         card_sdk::abi::mark::NO_TARGET,

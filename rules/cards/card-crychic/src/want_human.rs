@@ -11,7 +11,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new(
@@ -55,6 +55,9 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
         20,
     )?;
     // 规则书（1）: 「将其写下」 -- `Mem["x"]`; the player slot is the stand-in.
+    // TODO(规则书)（将此卡置于场上并从1-20间选择并声明X，将其写下）: X / boost /
+    //   abBefore 属于该卡实例 (C# `Mem`) -- 都写在玩家 slot 上：卡离场不清，
+    //   同一玩家两张会共用。
     ctx::set_slot(player_id, SLOT_X, x);
     // Fresh placement: no boost snapshot from a previous instance (C# `Mem` is
     // per-card-instance; the player slot persists across re-places).
@@ -70,7 +73,9 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Where the armed boost is written down (C# `CardWantHuman.Mem["boost"]`).
+/// Where the armed boost is written down (C# `CardWantHuman.Mem["boost"]`),
+/// stored as the pending total **+ 1** so 0 still means "not armed" (X = 20
+/// arms a legitimate +0).
 const SLOT_BOOST: &str = "want_human_boost";
 
 /// Snapshot of `abnormal_count` taken when the boost was consumed (C#
@@ -88,6 +93,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         TriggerKind::DiceRollAfter => {
             let roll = trigger::value();
             let x = ctx::slot(player_id, SLOT_X);
+            // TODO(规则书)（每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶）: a
+            //   重骰后的出目也要检查 -- the check runs only at diceRollAfter, the
+            //   reroll lands later at diceRollResult.
             if x > 0 && roll <= x {
                 ctx::add_crystals(1, 0)?;
                 ctx::log(
@@ -97,9 +105,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                         .i("n", roll as i64),
                 );
             }
-            // 规则书（2）: the boost armed last turn start lands on this roll.
-            let boost = ctx::slot(player_id, SLOT_BOOST);
-            if boost > 0 {
+            // 规则书（2）: the boost armed last turn start lands on this roll
+            // (the slot holds the total + 1, so `armed - 1` may be 0).
+            let armed = ctx::slot(player_id, SLOT_BOOST);
+            if armed > 0 {
+                let boost = armed - 1;
                 ctx::set_slot(player_id, SLOT_BOOST, 0);
                 // 规则书（2）: snapshot the abnormal counter so 「若该次移动过程中受到
                 // 异常移动效果影响」 can be checked at turn end (C# `Mem["abBefore"]`).
@@ -108,6 +118,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                     SLOT_AB_BEFORE,
                     ctx::abnormal_count(player_id) + 1,
                 );
+                // TODO(规则书)（使你下次的移动掷骰结果额外增加20-X）: a rerolled
+                //   结果也要带上 +N -- this runs at diceRollAfter, before the
+                //   diceRollResult reroll window, and the reroll replaces the face.
                 trigger::set_move_roll(roll + boost);
                 ctx::log(
                     player_id,
@@ -124,18 +137,30 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             let x = ctx::slot(player_id, SLOT_X);
+            let boost = (20 - x).max(0);
             ctx::set_crystals(0);
-            ctx::set_slot(player_id, SLOT_BOOST, (20 - x).max(0));
+            // An earlier arming that never met its move targets the same
+            // 「下次的移动掷骰」, so add to it; only an unarmed slot gains the
+            // "+1 = armed" bit.
+            let armed = ctx::slot(player_id, SLOT_BOOST);
+            ctx::set_slot(
+                player_id,
+                SLOT_BOOST,
+                if armed > 0 { armed + boost } else { boost + 1 },
+            );
             ctx::log(
                 player_id,
                 &Msg::new(key!("want_human_drained"))
                     .player_id("who", player_id)
-                    .i("n", (20 - x).max(0) as i64),
+                    .i("n", boost as i64),
             );
         }
         // 规则书（2）: 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹
         // 水晶。」 -- C# `TurnEnd`: `H._abnormalTurn[Player] > Mem["abBefore"]` when
         // the boost was consumed this turn.
+        // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 --
+        //   这里是整回合的 `abnormal_count` 在回合结束时比，移动之后、回合结束
+        //   之前落下的异常也会算数。
         TriggerKind::TurnEnd => {
             let ab_before = ctx::slot(player_id, SLOT_AB_BEFORE);
             if ab_before <= 0 {

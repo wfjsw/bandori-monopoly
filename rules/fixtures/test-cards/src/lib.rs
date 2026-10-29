@@ -128,6 +128,13 @@ fn shield(player_id: i32, mut g: GateValue) -> GateValue {
 /// resumes. Logs where the player ended up.
 const MOVER: CardDef = CardDef::new("TEST:mover", &[On::Play("", None, mover)]);
 
+/// A **dice** walk: unlike [`MOVER`] it leaves `plan.steps` unset, so
+/// `card_move` rolls the plan's dice table (the default 1d20) and raises
+/// `diceRollPlan` / `diceRollValue` / `diceRollAfter` / `diceRollResult`.
+/// It runs as a *side* move only when the caller marks `turn.plan.forced`
+/// through `world_mut()` -- a `TEST:` id is not `event:`.
+const DICE_MOVER: CardDef = CardDef::new("TEST:diceMover", &[On::Play("", None, dice_mover)]);
+
 /// Places itself with one [奇迹水晶] and spends it inside the same effect -- the
 /// AG:绯红之魂 (3) shape: 「不再拥有[奇迹水晶]时」 is a `counterChanged` handler
 /// name-filtered to `counter::CRYSTALS`, so the write that empties the card is
@@ -151,6 +158,20 @@ fn mover(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+fn dice_mover(player_id: i32) -> card_sdk::Asked {
+    // No `set_steps`: `card_move` must roll the plan's dice. The landing does
+    // not settle (the caller owns `resolve` for the main move it keeps).
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Walk);
+    ctx::plan::set_teleport_to(-1);
+    ctx::plan::set_resolve(false);
+    ctx::card_move(player_id);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mover_done")).i("pos", ctx::player_pos(player_id) as i64),
+    );
+    Ok(())
+}
+
 fn crystal_play(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:named-counter", &Msg::new(key!("crystal_note")));
@@ -166,7 +187,7 @@ fn crystal_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is("TEST:named-counter")
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only the write that did not raise the count speaks for the empty
         // state -- an earlier write in the same run must not speak for the
@@ -1901,7 +1922,7 @@ fn query_body(player_id: i32) -> card_sdk::Asked {
 }
 
 card_sdk::ruleset!(&[
-    RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
+    RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, DICE_MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,

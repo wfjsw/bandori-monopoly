@@ -182,7 +182,7 @@ pub fn place_mark<C: HostCtx>(
 
 /// Place **one** paired mark spanning tiles `a` and `b` (one row per tile,
 /// `partner` cross-linked). Returns 1 on placement, 0 on the atomic refusal
-/// (either end already carries a matching mark for that owner).
+/// (either end already carries a matching mark, any owner).
 #[allow(clippy::too_many_arguments)]
 pub fn place_mark_pair<C: HostCtx>(
     c: &mut C,
@@ -944,7 +944,9 @@ pub fn add_to_dest<C: HostCtx>(
 ) -> Result<(), HostErr> {
     // Field / Banished are not piles; `place_card` / "gone" is the right verb.
     if !matches!(dest, 0 | 1 | 4 | 5 | 6) {
-        return Err(HostErr::trap(format!("add_to_dest: dest {dest} is not a pile")));
+        return Err(HostErr::trap(format!(
+            "add_to_dest: dest {dest} is not a pile"
+        )));
     }
     let card = guest_str(c, p, n)?;
     c.st_mut().w().add_to_dest(player_id, &card, dest);
@@ -1377,7 +1379,8 @@ pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Re
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
+    let (res, inner, left) =
+        c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {
@@ -2743,7 +2746,8 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
             return Ok(dest);
         }
     };
-    let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
+    let (res, inner, left) =
+        c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
     if let Some(w) = st.world.as_mut() {

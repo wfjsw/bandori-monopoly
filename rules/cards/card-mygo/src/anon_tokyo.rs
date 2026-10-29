@@ -17,14 +17,14 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
-use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Filter, Msg, On, PayAddValue};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
         On::Play("", Some(cant_play), anon_tokyo),
-        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", None, link_rent)),
+        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && target == owner && value > 0", Some(link_guard), link_rent)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)
@@ -56,7 +56,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if here < 0 || n <= 0 || !ctx::is_buyable(here) {
         return Some(Msg::new(key!("anon_tokyo_why_not_here")));
     }
-    // C# also refuses when `Adjacent(player_id)` is empty.
+    // TODO(规则书)（自己所在的格子是[可购买格子]）: the [限] is only the buyable own
+    // tile -- we also refuse when no adjacent buyable tile exists (C#
+    // `Adjacent(player_id)` empty), which the sheet does not require.
     if adjacent(here, n).is_empty() {
         return Some(Msg::new(key!("anon_tokyo_why_not_adj")));
     }
@@ -107,6 +109,9 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         // kind = "lose", must = false }` (money is destroyed; a short purse
         // pays what it has). `tile_price` is the C# `H._tiles[t].price` land
         // price (houses are extra; cf. `buy_price`).
+        // TODO(规则书)（[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半）:
+        // the 消耗 and the 放置 are one body -- we pay before `place_mark_pair`,
+        // which refuses at the cap, so a re-link spends the half and places nothing.
         let amount = ctx::tile_price(here).max(ctx::tile_price(t)) / 2;
         if amount > 0 {
             ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
@@ -123,11 +128,11 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         }
         // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the
         // cap is on **the pair** (「放置1个…（上限1）」). `place_mark_pair` is
-        // place-or-refuse atomic: if either end already carries a matching mark
-        // it places **neither** row (no half-link). TODO(规则书) Class C:
-        // whether a tile may sit in two links at once; the singular
-        // 「1个…（上限1）」 leans no, and `place_mark_pair`'s either-end refusal
-        // is that reading.
+        // place-or-refuse atomic: if either end already carries a mark of this
+        // kind -- whoever linked it -- it places **neither** row (no half-link).
+        // TODO(规则书) Class C: whether a tile may sit in two links at once; the
+        // singular 「1个…（上限1）」 leans no, and `place_mark_pair`'s either-end
+        // refusal is that reading.
         let placed = ctx::place_mark_pair(
             here,
             t,
@@ -148,6 +153,10 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
                     .card("card", "MyGO:[千早爱音]Anon Tokyo"),
             );
         }
+    // TODO(规则书)（[使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]格子且[结算]）:
+    // the clause's step has no availability precondition -- we skip the whole
+    // branch when `move_blocked` (C# `MoveWhyNot`), so a move-locked user moves
+    // nothing and settles nothing.
     } else if rules_status::move_blocked(player_id).is_none() {
         // 规则书[手]2: 「[使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]
         // 改为向前或后移动1格到被[指定]格子且[结算]」 -- C# gates this branch on
@@ -167,10 +176,21 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Pure guard for [`link_rent`] -- the activation gate. `false` means the card
-/// is not activated at all.
+/// The rider runs once per player -- from the earliest active stand-in. Marks
+/// are matched by kind (they outlive a hand-over), so every copy's stand-in
+/// would otherwise add the same crystal's half again. A face-down instance
+/// posts no hook, so it does not own the rider.
 fn link_guard(player_id: i32) -> bool {
-    ctx::is_placed()
+    if !ctx::is_placed() {
+        return false;
+    }
+    let me = ctx::self_uid();
+    ctx::field_instances(player_id)
+        .into_iter()
+        .filter(|(uid, id)| *id == ID && !ctx::is_face_down_at(*uid))
+        .map(|(uid, _)| uid)
+        .next()
+        == Some(me)
 }
 
 /// 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半」
@@ -183,13 +203,10 @@ fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
         return v;
     }
     // The settled tile is one end of a link; the partner is the other end
-    // (`TileMark.partner`, placed by `place_mark_pair`).
-    let other = ctx::mark_partner(
-        tile,
-        &MarkFilter::any()
-            .kind(key!("anon_tokyo_mark"))
-            .owner(player_id),
-    );
+    // (`TileMark.partner`, placed by `place_mark_pair`). Matched by kind only:
+    // the crystal sits on the tiles and outlives a hand-over, so the linker is
+    // not a stable key (and `target == owner` only narrows it to the owner).
+    let other = ctx::mark_partner(tile, &MarkFilter::any().kind(key!("anon_tokyo_mark")));
     if other < 0 {
         return v;
     }
@@ -197,7 +214,11 @@ fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
     if ctx::tile_owner(other) != player_id {
         return v;
     }
-    // 「被连接的其他格子收费的一半」 -- half of the linked tile's rent.
+    // TODO(规则书)（被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半）:
+    // the figure should be half the partner's real 收费 -- a mortgaged partner
+    // levies none (C-Q13) and a dice-rent / rent-factor partner is not the table
+    // number, but the SDK exports only `rent_of` (note: ENG-CHARGE-RENT wants a
+    // pure rent *figure*; `charge_rent` would charge a second time).
     let bonus = ctx::rent_of(other) / 2;
     if bonus <= 0 {
         return v;

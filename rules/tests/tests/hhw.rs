@@ -37,6 +37,57 @@ fn roll_then_end(t: &mut Table, who: usize) {
 
 // ================================================================ cards
 
+// 规则书（1）: 「投掷2次4d20并将一个育美标记放置到投掷结果之一的格子上…
+// 若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记」 -- one option per
+// *roll*, not per tile: a >60 and a ≤60 result that wrap onto the same tile must
+// both stay selectable, each with its own outcome.
+#[test]
+fn hagumi_offers_a_high_and_a_low_roll_on_the_same_tile() {
+    // 60 tiles: 70 (over) and 10 (under) both land on tile 9.
+    let setup = || {
+        let mut t = Table::new(&["北泽育美", "户山香澄"]);
+        t.clean();
+        t.begin_turn(0);
+        drain(&mut t);
+        t.give(0, &["HHW:（育美）"]);
+        t
+    };
+    // First roll 70 (>60) -- the old tile-keyed dedupe kept only this one.
+    let mut t = setup();
+    t.dice(&[20, 20, 20, 10, 3, 3, 2, 2]);
+    let money = t.money(0);
+    t.play(0, "HHW:（育美）").unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.options.len(),
+        2,
+        "both rolls are offered: {}",
+        t.dump_prompt()
+    );
+    t.answer(0, 1).unwrap(); // the ≤60 roll
+    drain(&mut t);
+    assert_eq!(t.money(0), money, "the ≤60 pick gains nothing");
+    assert!(
+        !t.marks_on(9).is_empty(),
+        "the ≤60 pick places a marker on its tile: {:?}",
+        t.marks()
+    );
+    // The >60 pick keeps its own outcome on the same tile: 1000 and a draw.
+    let mut t = setup();
+    t.dice(&[20, 20, 20, 10, 3, 3, 2, 2]);
+    let money = t.money(0);
+    t.play(0, "HHW:（育美）").unwrap();
+    t.expect_prompt();
+    t.answer(0, 0).unwrap(); // the >60 roll
+    drain(&mut t);
+    assert_eq!(t.money(0), money + 1000, "the >60 pick gains 1000");
+    assert!(
+        t.marks_on(9).is_empty(),
+        "the >60 pick places no marker: {:?}",
+        t.marks()
+    );
+}
+
 // ----- HHW:因为我一直相信着你
 
 #[test]
@@ -166,7 +217,7 @@ fn smile_patrol_builds_a_house_and_may_build_another() {
     let blue = tile("江户川公园");
     t.own(0, &[blue]);
     t.set_houses(blue, 0);
-    t.dice(&[7, 7, 7]); // all land on 江户川公园 (index 7) -> free extra house
+    t.dice(&[3, 3, 2]); // 3d20 are summed: 8 -> (8-1) % 60 = 江户川公园
     t.give(0, &["HHW:微笑巡逻队"]);
     t.play(0, "HHW:微笑巡逻队").unwrap();
     while t.prompt().is_some() {
@@ -177,7 +228,13 @@ fn smile_patrol_builds_a_house_and_may_build_another() {
             t.decline();
         }
     }
-    assert!(t.houses(blue) >= 1, "houses on {blue}: {}", t.houses(blue));
+    // One paid house plus the free one on the same tile.
+    assert_eq!(
+        t.houses(blue),
+        2,
+        "paid + free house on {blue}: {}",
+        t.houses(blue)
+    );
 }
 
 // ----- HHW:Happy, Lucky, Smile, Yeah！
@@ -374,7 +431,7 @@ fn black_clothes_supply_removes_a_crystal_after_passing_the_group_tile() {
     let crystals = |t: &Table, tl: usize| {
         t.marks_on(tl)
             .iter()
-            .filter(|m| m.kind == "黑衣人的补给")
+            .filter(|m| m.kind == "cards:card-hhw.black_suits_crystal")
             .count()
     };
     assert_eq!(crystals(&t, group), 1, "crystal parked on 弦卷集团");
@@ -409,7 +466,9 @@ fn black_clothes_supply_removes_a_crystal_after_passing_the_group_tile() {
         t.recent_keys(12)
     );
     assert!(
-        t.marks().iter().all(|m| m.kind != "黑衣人的补给"),
+        t.marks()
+            .iter()
+            .all(|m| m.kind != "cards:card-hhw.black_suits_crystal"),
         "no stray crystals elsewhere"
     );
 }
@@ -555,8 +614,8 @@ fn wacha_mocha_jump_at_nine_markers() {
 
 #[test]
 fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
-    // 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动」 -- the jump writes
-    // the move plan (no `card_move`), and the turn's main move is that teleport:
+    // 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动」 -- the jump runs the
+    // teleport now (`ctx::card_move`), and that teleport is the turn's main move:
     // no dice are cast and the piece lands on the pick, not `pos + roll`.
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
@@ -574,15 +633,16 @@ fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
         .expect("aquarium offered");
     t.answer(0, k as i32).unwrap();
     drain(&mut t);
-    let before = t.pos(0);
-    assert_ne!(before, aquarium, "the pick is not the starting tile");
-    t.dice(&[5]);
-    t.roll(0).unwrap();
-    drain(&mut t);
     assert_eq!(
         t.pos(0),
         aquarium,
-        "the main move is the jump's teleport, not a walk: was {before} keys={:?}",
+        "the main move is the jump's teleport, not a walk: keys={:?}",
+        t.recent_keys(15)
+    );
+    // 「视为本次主要移动」 -- the main move is spent now, so a later roll is refused.
+    assert!(
+        t.roll(0).is_err(),
+        "the jump consumed the main move: keys={:?}",
         t.recent_keys(15)
     );
 }
@@ -880,4 +940,61 @@ fn hagumi_overflow_removes_all_and_stays_one_turn() {
     drain(&mut t);
     assert_eq!(t.token(1, "可乐饼"), 0, "all croquettes removed");
     assert_eq!(t.state(1, "stay"), 1, "one [停留] layer");
+}
+
+// 规则书: 「将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000」 --
+// the sheet prints no one-copy limit: two copies on CiRCLE each keep their own
+// settle body and each charge the 6000 (C# refused the second play).
+#[test]
+fn kkr_two_copies_each_charge_6000() {
+    let kkr = "HHW:（kkr）前往笑容集结的地方！";
+    let mut t = Table::new(&["弦卷心", "弦卷心", "户山香澄"]);
+    t.clean();
+    t.set_money(0, 20_000);
+    t.set_money(1, 20_000);
+    t.set_money(2, 20_000);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &[kkr]);
+    t.play(0, kkr)
+        .map_err(|e| format!("first copy rejected: {e}"))
+        .unwrap();
+    drain(&mut t);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give(1, &[kkr]);
+    t.play(1, kkr)
+        .map_err(|e| format!("second copy rejected: {e}"))
+        .unwrap();
+    drain(&mut t);
+    // 「将此卡置于CiRCLE上」 -- a field placement whose tile is CiRCLE (#1).
+    let circle = 0;
+    let on_circle = |t: &Table, who: usize| {
+        t.field(who)
+            .iter()
+            .any(|f| f.card == kkr && (f.tile == circle || f.tile < 0))
+    };
+    assert!(
+        on_circle(&t, 0) && on_circle(&t, 1),
+        "both copies are on CiRCLE"
+    );
+    // P2 settles on CiRCLE: each instance charges its own 6000.
+    t.begin_turn(2);
+    drain(&mut t);
+    t.set_pos(2, 59);
+    let mark = t.mark();
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(0), 20_000 - 10_000 + 6000);
+    assert_eq!(t.money(1), 20_000 - 10_000 + 6000);
+    assert_eq!(t.money(2), 20_000 - 12_000);
+    assert_eq!(
+        t.keys_since(mark)
+            .iter()
+            .filter(|k| k.contains("kokoro_circle_settled"))
+            .count(),
+        2,
+        "one settle line per stacked copy"
+    );
 }

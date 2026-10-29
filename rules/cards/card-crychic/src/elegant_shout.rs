@@ -12,17 +12,18 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
-        On::Counteract(
-            &[ChainKind::DrawOut],
-            card_sdk::pre::MINE,
-            None,
-            counteract).counter_reason(key!("elegant_shout_when")),
+        // 规则书[反击]: 「当你在回合外受到抽卡效果时打出」 -- `DrawOut` is the
+        // out-of-turn effect-caused draw; `pre::MINE` is the drawer (「你」).
+        On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract)
+            .counter_reason(key!("elegant_shout_when")),
+        // 规则书[反击]: 「你的下回合结束时抽一张卡」 -- the deferred draw runs in
+        // the `at_end` handler below.
         On::Schedule("at_end", "", None, at_end),
     ],
 )
@@ -31,7 +32,9 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         .name(r#"优雅的呐喊"#)
         .raw_name(r#"优雅的呐喊"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#))
+        .text(CardText::para(
+            r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#,
+        ))
         // sheet cell M6
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]),
 );

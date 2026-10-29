@@ -67,16 +67,18 @@ pub fn unstoppable_card_03_out_log_ok(effects: &[Effect]) -> bool {
 // not part of this body.
 // ===========================================================================
 
-/// One player's contribution to the cycle: hand size `h` is discarded, then
-/// `h` cards are drawn; the holder draws `h + 1`.
+/// One player's total redraw: hand size `h`, plus the holder's own extra. The
+/// card draws the extra in a separate call, so the log holds `h + 1` Draw
+/// requests for the holder rather than one Draw of `h + 1`.
 pub fn riot_draw_count(hand_len: i32, is_holder: bool) -> i32 {
     hand_len + if is_holder { 1 } else { 0 }
 }
 
 /// Effect log of the cycle, in body order: every living player's hand is
 /// discarded (player order, hand order), then every living player draws
-/// (player order). `hands[p]` is the pre hand of player `p` as a list of
-/// card slots in `cards_in` order; `out[p]` marks players already out.
+/// `h` (player order), then the holder draws 1 extra. `hands[p]` is the pre
+/// hand of player `p` as a list of card slots in `cards_in` order; `out[p]`
+/// marks players already out.
 pub fn riot_cycle_log_ok(
     effects: &[Effect],
     hands: &[[u8; 4]; MAX_PLAYERS],
@@ -110,24 +112,32 @@ pub fn riot_cycle_log_ok(
         }
         p += 1;
     }
-    // 2. all draws, player order
+    // 2. all draws, player order -- one host request per card (`ctx::draw`
+    // loops `sys::draw(p, 1)`, so every Draw is `n: 1`)
     p = 0;
     while p < np && p < out.len() {
         if !out[p] {
-            let n = riot_draw_count(hand_ns[p] as i32, p as i32 == holder);
-            if n > 0 {
-                match effects.get(i) {
-                    Some(Effect::Draw { player, n: dn }) => {
-                        if *player != p as i32 || *dn != n {
-                            return false;
+            let mut k = 0usize;
+            while k < 2 {
+                if k < hand_ns[p] {
+                    match effects.get(i) {
+                        Some(Effect::Draw { player, n: dn }) if *player == p as i32 && *dn == 1 => {
                         }
+                        _ => return false,
                     }
-                    _ => return false,
+                    i += 1;
                 }
-                i += 1;
+                k += 1;
             }
         }
         p += 1;
+    }
+    // 3. 「你额外抽1张卡」 -- one last draw of 1 for the holder, after everyone
+    if holder >= 0 && (holder as usize) < np && holder < out.len() as i32 && !out[holder as usize] {
+        match effects.get(i) {
+            Some(Effect::Draw { player, n: dn }) if *player == holder && *dn == 1 => i += 1,
+            _ => return false,
+        }
     }
     i == effects.len()
 }

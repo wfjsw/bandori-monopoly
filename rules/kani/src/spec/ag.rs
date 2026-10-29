@@ -297,23 +297,27 @@ pub fn colors_02_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // ===========================================================================
 
 /// Play body when the chosen `k` is fully paid (`paid == k*500`):
-/// place on field, pay `k*500`, `k` crystals on the card.
+/// place on field, pay `k*500`, `k` crystals on the card (the `set_counter_self`
+/// write itself logs `AddCounter { n: k }`).
 pub fn soul_01_log_ok(effects: &[Effect], player: i32, this_card: u8, k: i32) -> bool {
-    if effects.len() != 2 {
+    if effects.len() != 2 + k as usize {
         return false;
     }
-    // Order in the body: pay first, then place.
+    // Order in the body: place first, then k separate 500 pays, then the write.
     matches!(
         effects[0],
-        Effect::PayMoney { player: p, n } if p == player && n == k * 500
-    ) && matches!(
-        effects[1],
         Effect::PlaceCard {
             player: p,
             dest: 2,
             card
         } if p == player && card == this_card
-    )
+    ) && effects[1..=k as usize]
+        .iter()
+        .all(|e| matches!(e, Effect::PayMoney { player: p, n: 500 } if *p == player))
+        && matches!(
+            effects[1 + k as usize],
+            Effect::AddCounter { owner: o, n, .. } if o == player && n == k
+        )
 }
 
 /// Post crystals on the card = `k` when the pay landed.

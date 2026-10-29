@@ -432,6 +432,14 @@ impl Pool {
             .unwrap_or_default())
     }
 
+    /// `MatchState::drive` without a per-viewer frame (the tick loop's claim).
+    pub fn drive(&self, state: &str) -> Result<Vec<i32>, String> {
+        let v = self.call(json!({"op": "drive", "state": state}))?;
+        Ok(v.get("drive")
+            .and_then(|d| serde_json::from_value(d.clone()).ok())
+            .unwrap_or_default())
+    }
+
     pub fn ended(&self, state: &str) -> Result<bool, String> {
         Ok(self
             .call(json!({"op": "ended", "state": state}))?

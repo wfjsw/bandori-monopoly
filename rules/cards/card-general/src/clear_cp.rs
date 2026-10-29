@@ -27,8 +27,10 @@
 //! spends both kinds.
 
 use alloc::vec::Vec;
+use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
+use bandori_std::mark;
+use card_sdk::abi::{ActionKind, MarkFilter, Message, Target, TriggerKind};
 use card_sdk::{CardText, it, items, para, sec};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -47,6 +49,9 @@ pub const CLEAR_CP: CardDef = CardDef::new(
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"该清CP了"#)
         .raw_name(r#"该清CP了"#)
+        // 规则书: 「[手]」 -- the sheet carries no [特]： section (dropped 2026-10-06
+        // `A8`); the tag stays as the carrier of the 2026-10-07 「[特] still
+        // pending」 play gate and of the `special_live` message.
         .tags(&[r#"手"#, r#"特"#])
         .text(CardText::of(&[
             sec("", &[
@@ -89,6 +94,8 @@ const SLOT_SPREAD: &str = "clear_cp_spread";
 /// contains `cp` / `CP` / `点`, so naming the reason after the dropped
 /// CP-count gate would trip it even though the gate is gone.
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // TODO(规则书)（[手]）: the book prints no play gate -- a copy still in play
+    //   blocks the play by the 2026-10-07 ruling (BACKLOG.md:2734).
     if ctx::placed_cards(player_id).iter().any(|c| c == ID) {
         return Some(Msg::new(key!("special_live")));
     }
@@ -110,16 +117,20 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
             free.push(t);
         }
     }
-    if free.is_empty() {
-        return Ok(());
-    }
-    let tile = ctx::ask_tile(
-        player_id,
-        &Msg::new(key!("clear_cp_ask_title")),
-        &Msg::new(key!("clear_cp_ask_text")),
-        &free,
-    )?;
-    // 规则书（2）[特] + 规则书[手]: the spread body runs in `spread` below,
+    // 规则书[手]: 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]
+    // 添加6个[CP点]」 -- the 「并」 half does not depend on a free tile; with none
+    // free only the tile half (and its ask) is skipped, the play still resolves.
+    let tile = if free.is_empty() {
+        None
+    } else {
+        Some(ctx::ask_tile(
+            player_id,
+            &Msg::new(key!("clear_cp_ask_title")),
+            &Msg::new(key!("clear_cp_ask_text")),
+            &free,
+        )?)
+    };
+    // 规则书（1）[特] + 规则书[手]: the spread body runs in `spread` below,
     // through the Fx hook dispatch at `turnStart`. C# carries the whole thing
     // on a standalone `CPControl` in `H._fx[i].extra`; the port's
     // persistent-effect carrier is the placed card. Place it **before** the
@@ -132,19 +143,24 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「添加1个[CP点]」 -- a **tile** [CP点], through a cross-card
     // message to the `mark:cp` owner, which stamps the neutral owner and this
     // card instance as the provenance 「此卡在格子上添加的[CP点]」.
-    place_tile_cp(tile, player_id)?;
+    if let Some(tile) = tile {
+        place_tile_cp(tile, player_id)?;
+    }
     // 规则书[手]: 「并在自己[场上]添加6个[CP点]」 -- the **on-card** [CP点]
     // stock on this very instance (named counter [`counter::CP`], user ruling
     // 2026-10-07: 「the cp point attached to the card」). The settle clause
     // spends one per [结算]; the graveyard rule below fires when it runs out.
     // Not a tile mark, and not a per-player counter.
     ctx::add_counter(counter::CP, 6, 0)?;
-    ctx::log(
-        player_id,
-        &Msg::new(key!("clear_cp_placed"))
-            .tile("tile", tile)
-            .player_id("who", player_id),
-    );
+    if let Some(tile) = tile {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("clear_cp_placed"))
+                .tile("tile", tile)
+                .player_id("who", player_id),
+        );
+    }
+    // 规则书（1）: 「[使用者]使用此卡后的下2回合开始时」 -- the printed 2 turns.
     // C# `cPControl.Spread = 2` -- reset the countdown on every play.
     ctx::set_slot(player_id, SLOT_SPREAD, 2);
     Ok(())
@@ -183,6 +199,9 @@ fn place_tile_cp(tile: i32, seat: i32) -> card_sdk::Asked {
 fn spread_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::kind() == TriggerKind::TurnStart
+        // TODO(规则书)（[使用者]使用此卡后的下2回合开始时）: 「下2回合」 is read as the
+        //   user's own turn starts -- the next two chronological turn starts is the
+        //   other reading (OPEN-GEN-clearcp-window).
         && trigger::player_id() == player_id
 }
 
@@ -217,6 +236,8 @@ fn spread(player_id: i32) -> card_sdk::Asked {
     let mut added = 0;
     for &t in &marked {
         // 「在相邻的没有[CP点]的格子添加1个[CP点]」
+        // TODO(规则书)（在相邻的没有[CP点]的格子添加1个[CP点]）: the book does not say
+        //   which neighbour -- when both are empty we take `t + 1` (OPEN-GEN-clearcp-neighbour).
         for &adj in &[(t + 1) % n, (t - 1 + n) % n] {
             if ctx::count_marks(adj, &MarkFilter::any().category(mark::CP_CATEGORY)) == 0 {
                 place_tile_cp(adj, player_id)?;
@@ -264,6 +285,9 @@ fn cp_empty_guard(player_id: i32) -> bool {
 }
 
 fn on_cp_empty(player_id: i32) -> card_sdk::Asked {
+    // TODO(规则书)（在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]）:
+    //   the book never sends the card off the field when its on-card count hits 0 --
+    //   the 2026-10-07 ruling does, and we graveyard it here.
     // 「the card goes to its owner's discard pile (弃牌区) immediately」
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

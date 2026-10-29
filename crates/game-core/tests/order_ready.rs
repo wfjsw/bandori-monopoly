@@ -14,6 +14,7 @@ use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn members(n: usize, bots: usize) -> Vec<RoomMember> {
     (1..=n as i32)
@@ -44,7 +45,7 @@ fn phase(m: &Match) -> String {
 /// Tick one 0.1s quantum, panicking if the phase was already past `order`.
 fn tick_order(m: &mut Match) {
     assert_eq!(phase(m), "order", "phase left the order beat");
-    m.tick(0.1);
+    m.pump_tick(0.1);
 }
 
 #[test]
@@ -76,7 +77,7 @@ fn leave_order(m: &mut Match) {
         if phase(m) != "order" {
             return;
         }
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     panic!("order phase never ended");
 }

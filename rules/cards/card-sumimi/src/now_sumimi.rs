@@ -8,7 +8,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(
@@ -18,9 +18,15 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         // 规则书[反击]: 「失去资金」 -- the `pay` effect entry, from the holder,
         // of a positive amount. The causer's own `abnormal` also rides an
         // `effect` link with `player_id` = the causer and `value` = its `AbKind`
-        // (> 0); that is not a money loss and must not open this window.
-        // `value > 0` also covers C# `!t.Pay.cancel` -- a payment an earlier
-        // counteraction already reduced to 0 reads as `value() == 0`.
+        // (> 0); `chain_has(Pay)` is what keeps it out (its effect kind is
+        // "abnormal"), not the value test.
+        // `value > 0` covers only a payment an earlier stage already set to 0
+        // (`set_pay_amount(0)`).
+        // TODO(规则书)(ABI)（即将超过你所在格子的[收费标价]）: a payment an
+        //   earlier counter *cancelled* (`set_cancelled`) still reads its
+        //   declared value, so this card is offered -- and gains -- for a
+        //   payment that never settles. Guards run before the round resolves,
+        //   so there is no pending-negation signal to read.
         "chain_has(Pay) && actor == owner && value > 0",
         Some(can_counteract),
         counteract).counter_reason(key!("now_sumimi_when"))],
@@ -39,6 +45,10 @@ fn is_deed(t: i32) -> bool {
 }
 
 /// C# `CardNowSumimi.Tag` = `H.PriceTag(H.State.seats[seat].pos)`.
+// TODO(规则书)（[收费标价]）: 「收费标价」 is an open term (OPEN-收费标价: the
+//   purchase price or the charge); we read the current rent (RiNG: its 基础乘数).
+//   A non-buyable tile (地产商 / CiRCLE / café / 江户川 / 流星堂) has no rent row
+//   and answers 0, though the sheet puts no buyable qualifier on 「你所在格子」.
 fn price_tag(player_id: i32) -> i32 {
     let t = ctx::player_pos(player_id);
     if t < 0 || !ctx::is_buyable(t) {
@@ -56,22 +66,20 @@ fn price_tag(player_id: i32) -> i32 {
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当…失去资金的总额即将超过你所在格子的[收费标价]时打出此卡」
     // The payment shape is the pre; the price-tag comparison is the residual.
+    // A 0 tag (a non-buyable tile) still lets any positive payment through.
     let tag = price_tag(player_id);
-    if tag <= 0 {
-        return false;
-    }
-    // TODO(规则书)[judgement][反击]: 「失去资金的总额即将超过」 -- C# compares
-    //   the clause under-specifies -- see the note above it
-    // `H._lostSinceTurn[player_id]` (money lost since this player's turn started) plus
-    // `t.Pay.amount` against `Tag`, firing when `lost <= Tag && lost + amount >
-    // Tag`. The trigger half is ready (`trigger::value()` is `t.Pay.amount`;
-    // `trigger::cancelled()` / `value() == 0` covers `!t.Pay.cancel`), but the
-    // lost-since-turn accumulator is engine state -- a `PayAfter` hook could
-    // feed a slot, and this [反击] card is in hand so it never sees that hook.
-    // The guard here is the conservative subset `amount > Tag` (this payment
-    // alone would exceed the tag).
-    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
-    // reads as `value() == 0`, so the >Tag guard covers it.
+    // TODO(规则书)[judgement][反击]（失去资金的总额即将超过）: C# keeps
+    //   `H._lostSinceTurn[player_id]` (money lost since this player's turn
+    //   started) and fires on `lost <= Tag && lost + amount > Tag`; the clause
+    //   under-specifies, see the note above it. The trigger half is ready
+    //   (`trigger::value()` is `t.Pay.amount`), but the lost-since-turn
+    //   accumulator is engine state -- a `PayAfter` hook could feed a slot, and
+    //   this [反击] card is in hand so it never sees that hook. The guard here is
+    //   `amount > Tag` alone: it drops both the running total and the 「即将超过」
+    //   window, so it also fires once the total has already crossed the tag.
+    // `!t.Pay.cancel` is only half covered: a payment an earlier counteraction
+    // already shaved to 0 reads `value() == 0`, but a `set_cancelled` link keeps
+    // its declared amount and still opens this window (see the TODO on the pre).
     trigger::value() > tag
 }
 

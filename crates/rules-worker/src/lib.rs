@@ -362,6 +362,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             } else {
                 Value::Null
             };
+            // The turn's public play history rides the frame (a seat-view
+            // fork's max-plays cap and skill de-dup read it; only the live
+            // world has it otherwise). Always present, extras or not.
+            let (played, cards_played) = m.played_context();
             let mut view = json!({
                 "state": state,
                 "hand": m.hand_of(member),
@@ -369,6 +373,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 "draw": m.draw_of(member),
                 "you": member,
                 "playerId": player_id,
+                "played": played,
+                "cardsPlayed": cards_played,
                 "tileQuotes": m.tile_quotes(member),
             });
             if need_extras {
@@ -391,6 +397,13 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         "ended" => {
             let m = restore(ctx, req)?;
             Ok(json!({"ok": true, "ended": m.ended()}))
+        }
+        // `MatchState::drive`: who a host must move now. Taken without a
+        // per-viewer frame -- the list is seat-independent, and the server
+        // asks once per tick of every playing room.
+        "drive" => {
+            let m = restore(ctx, req)?;
+            Ok(json!({"ok": true, "drive": m.drive()}))
         }
 
         // Re-run a `.bdrec` and report where it ended. `force`: a stamp
@@ -459,6 +472,10 @@ fn record_arg(req: &Value) -> Result<Vec<u8>, String> {
 /// are decoded by the shared [`game_core::record::decode_record`], which
 /// sniffs the framing.
 fn replay(ctx: &Ctx, req: &Value) -> Result<Value, String> {
+    // A format-3-and-older log carries no bot commands (those were engine
+    // decisions), so its re-armed machine seats need a host policy. Install
+    // this process's once (first call wins; the browser glue does the same).
+    game_core::record::set_machine_pump(bot_core::sim::pump_bots);
     let bytes = record_arg(req)?;
     let rec = decode_record(&bytes).map_err(|e| e.to_string())?;
     let mut rp = Replayer::new_with_stamp(

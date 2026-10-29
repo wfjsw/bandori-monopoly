@@ -96,7 +96,8 @@ export function normalizeMatchView(raw: unknown): MatchView {
   st.embers = def(st.embers, []);
   st.owners = def(st.owners, []);
   st.bans = def(st.bans, []);
-  st.eventActive = def(st.eventActive, []);
+  // `turnsLeft` postdates some archived bundles; default it for old records.
+  st.eventActive = def(st.eventActive, []).map((e: any) => ({ turnsLeft: 0, ...e }));
   st.eventTop = def(st.eventTop, []);
   st.eventDiscard = def(st.eventDiscard, []);
   st.plan = def(st.plan, { playerId: -1, from: -1, steps: 0, started: false, reach: [], canBuild: false });

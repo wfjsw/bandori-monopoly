@@ -1302,27 +1302,36 @@ pub fn jennifer_01_place_other_iff() {
 }
 
 // ===========================================================================
-// C-PP-ranger-01/02 (body, isolation: no [共鸣], count = field cards owned)
-// 「1. 数量至少为1则[获得]500资金； 2. 数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]；」
+// C-PP-ranger-01..05 (body, isolation: no [共鸣])
+// 「根据场上你拥有的卡数量并依次进行以下操作，如果[共鸣]则视为数量加1：
+//  1. 数量至少为1则[获得]500资金； 2. 数量至少为3则为Pastel✽Palettes乐队卡
+//  添加3个[奇迹水晶]； 3. 数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]
+//  并抽1张卡； 4. 数量至少为5则获得1层状态…； 5.数量至少为6则抽1张卡。」
+// `count` counts the in-flight Ranger itself (docs C-PP-ranger-01, sheet
+// 「场上你拥有的卡数量」): other cards `0..=5` plus the Ranger → count 1..=6,
+// so every leg's threshold is fired somewhere. `placed_count` omits the
+// in-flight card today (card TODO), so these legs are red until it counts.
+// Leg 4's status is not observable (`set_build_discount` is a host stub).
 // ===========================================================================
 
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
-pub fn ranger_01_02_steps_by_count_iff() {
+/// Shared body at a concrete in-flight-free field size `others`: the played
+/// Ranger itself is the +1 (`count = others + 1`), per docs C-PP-ranger-01
+/// and the sheet 「场上你拥有的卡数量」. Concrete counts keep the search cheap;
+/// the three callers sample the interesting rungs (1 / 4 / 6).
+#[inline(always)]
+fn ranger_01_05_steps_by_count_iff_at(others: i32) {
     symbolic_play_world();
     let user = any_player_in();
-    // Isolation: no [共鸣]; concrete `others` ∈ {0, 1} dummy field cards.
-    // `cards_in` is an exact-length facade (`n` strings for `n` field cards),
-    // so the body's `placed_count` is the literal 0 or 1 (class C fix in the
-    // `cfg(kani)` facade — the old padded 0|4 shape made 1 card look like 4
-    // and unlocked the count≥3 / count≥4 legs).
-    let others: i32 = kani::any();
-    kani::assume(others == 0 || others == 1);
-    let pre_band = kani::any();
+    // Isolation: no [共鸣]; the `others` dummy field cards are the body's
+    // `placed_count`. `symbolic_play_world` parks a band-skill instance on
+    // every seat, so clear the field; the band legs still act on the player
+    // `group_pool`.
+    world::with_world_mut(|w| w.field_n = 0);
+    let pre_band: i32 = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
-    if others == 1 {
+    let mut i = 0;
+    while i < others {
         world::with_world_mut(|ww| {
             let uid = ww.next_uid;
             ww.next_uid += 1;
@@ -1338,6 +1347,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
             };
             ww.field_n += 1;
         });
+        i += 1;
     }
     let pre_money = world::with_world(|ww| ww.money[user as usize]);
     invoke::unwrap_done(invoke::play_idx(
@@ -1346,18 +1356,58 @@ pub fn ranger_01_02_steps_by_count_iff() {
     ));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
-    // Exact facade length == the real placed count.
-    let count = others;
-    kani::cover!(count == 0, "empty field: no legs");
-    kani::cover!(count == 1, "one field card: leg 1 only (count>=1)");
+    // Exact facade length + the played Ranger == the book's count.
+    let count = others + 1;
+    let (logbuf, log_n) = effects_of();
+    let mut draws = 0;
+    let mut k = 0usize;
+    while k < log_n {
+        if matches!(logbuf[k], Effect::Draw { player: p, .. } if p == user) {
+            draws += 1;
+        }
+        k += 1;
+    }
+    match others {
+        0 => kani::cover!(count == 1, "empty field: leg 1 only"),
+        3 => kani::cover!(count == 4, "count fires the removal leg"),
+        _ => kani::cover!(count == 6, "count fires the second draw"),
+    }
     crate::kassert!(
-        post_money == pre_money + spec::pp::ranger_01_money(count),
-        "C-PP-ranger-01: +500 iff count >= 1"
+        post_money == spec::pp::ranger_money_after(pre_money, count),
+        "C-PP-ranger-01/04: +500 iff count >= 1, −2000 iff count >= 5"
     );
     crate::kassert!(
-        band == pre_band + spec::pp::ranger_02_band(count),
-        "C-PP-ranger-02: band +3 iff count >= 3"
+        band == spec::pp::ranger_band_after(pre_band, count),
+        "C-PP-ranger-02/03: band +3 iff count >= 3, −4 (floor 0) iff count >= 4"
     );
+    crate::kassert!(
+        draws == spec::pp::ranger_03_draw(count) + spec::pp::ranger_05_draw(count),
+        "C-PP-ranger-03/05: one draw iff count >= 4 and iff count >= 6"
+    );
+}
+
+/// Count 1 (empty field): leg 1 only.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn ranger_01_gain_count_1_iff() {
+    ranger_01_05_steps_by_count_iff_at(0);
+}
+
+/// Count 4 (three dummies): legs 1-3, the removal + draw rung.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn ranger_03_04_band_draw_count_4_iff() {
+    ranger_01_05_steps_by_count_iff_at(3);
+}
+
+/// Count 6 (five dummies): the full ladder, including the second draw.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn ranger_01_05_steps_by_count_iff() {
+    ranger_01_05_steps_by_count_iff_at(5);
 }
 
 // ===========================================================================
@@ -1422,6 +1472,11 @@ pub fn chisato_mask_01_total_iff() {
     // and `split_pay`'s filter/collect/find is the symex cliff (class E).
     // The OPEN-分摊 total (2000) is seat-count independent.
     world::with_world_mut(|w| w.n_players = 2);
+    // `symbolic_play_world` parks a band skill on every seat, and the Kani
+    // host models `is_placed` as "any field card". A hand play must not look
+    // placed to the body's `is_placed()` [手]/press split, so clear the field;
+    // chisato's [手] uses no fans.
+    world::with_world_mut(|w| w.field_n = 0);
     invoke::unwrap_done(invoke::play_idx(
         crate::card_id!("PP:[白鹭千圣]微笑的铁假面"),
         user,

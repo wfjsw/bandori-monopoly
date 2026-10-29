@@ -74,6 +74,32 @@ fn parked() -> (Match, i32) {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and no longer auto-answer; this
+    // harness only drives member 1, so put the other seats back on the engine
+    // schedule. That needs an idle world: answer the opening prompts first.
+    if m.state().prompt.id > 0 {
+        let st = m.state();
+        let p = st.prompt;
+        for (k, &s) in p.players.iter().enumerate() {
+            if p.answers.get(k).copied().unwrap_or(0) >= 0 {
+                continue;
+            }
+            let member = st.players[s as usize].member;
+            let _ = m.act(
+                member,
+                &game_core::net::NetMessage {
+                    prompt: p.id,
+                    value: p.fallback,
+                    ..game_core::net::NetMessage::act("answer")
+                },
+            );
+        }
+    }
+    // Player order is the roll order, not member order: drive only member 1,
+    // whatever index it landed on.
+    for p in m.world_mut().st.players.iter_mut() {
+        p.ai = p.member != 1;
+    }
     for _ in 0..20_000 {
         if m.ended() {
             break;
@@ -89,6 +115,7 @@ fn parked() -> (Match, i32) {
             if !acts.is_empty() {
                 return (m, 1);
             }
+            let msg = bot_core::heuristic_message_view(&data, &view);
             // Non-searchable decision (mulligan / roll / end): answer it with
             // the heuristic and move on -- the search tests need a surface
             // with something to branch on.
@@ -96,6 +123,7 @@ fn parked() -> (Match, i32) {
             let _ = m.act(1, &msg);
         }
         m.tick(0.25);
+        bot_core::sim::pump_bots(&mut m);
     }
     panic!("no searchable decision for member 1");
 }

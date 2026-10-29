@@ -4,12 +4,13 @@
 //! > Sumimi不会解散哦：
 //! >  当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果
 //!
-//! settle-teleport that must leave money with a repeated digit, else fully revert.
+//! settle-teleport that must leave money with a repeated digit, else fully
+//! revert (the revert half is not wired -- see the TODO R3 below).
 
 use alloc::vec::Vec;
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
@@ -30,6 +31,8 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
+/// 规则书: 「资金不含有相同数字」 (the gate); 「拥有相同数字」 reuses it though
+/// the target reading is open -- see the TODO at the `good` predicate.
 fn repeated_digits(money: i32) -> bool {
     let mut x = money.unsigned_abs();
     let mut seen: u16 = 0;
@@ -49,6 +52,15 @@ fn repeated_digits(money: i32) -> bool {
 
 /// C# `CardNoBreakup.Predict` -- money after settling on `t` (rent if other-owned).
 /// C# `H.RentOf` pays nothing to an out-of-game or mortgaged owner.
+/// 规则书: 「进行一次可使你的资金变动为拥有相同数字的传送」 -- the destination
+/// set the body asks from.
+/// TODO(规则书)（进行一次可使你的资金变动为拥有相同数字的传送）: the sheet
+///   lets any teleport that *makes* the money a repeated number be chosen, but
+///   only table rent is modelled (the C# `RentOf` shape) -- an unowned purchase,
+///   a build, a mortgaged force-buy, the agent half-charge or an event settle is
+///   predicted unchanged, so a tile that would in fact reach the target is only
+///   offered when no rent-predicted tile exists. Dice rent is not modelled
+///   either (it cannot be predicted).
 fn predict(player_id: i32, t: i32) -> i32 {
     let money = ctx::money_of(player_id);
     let owner = ctx::tile_owner(t);
@@ -62,15 +74,16 @@ fn predict(player_id: i32, t: i32) -> i32 {
 /// C# `CardNoBreakup.WhyNot` -- playability gates. The repeated-digit refusal
 /// is the specific `no_breakup_repeated`, so it lives here, not in `pre`.
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「当你本回合未进行过抵押/赎回操作」 -- both actions record
+    // themselves and clear at the turn end, so the gate is just those records.
+    // Checked first: the sheet puts this before the digit condition.
+    if ctx::state::get(player_id, "mortgaged") != 0 || ctx::state::get(player_id, "redeemed") != 0 {
+        return Some(Msg::new(key!("no_breakup_mortgaged")));
+    }
     // 规则书: 「资金不含有相同数字时可打出」 -- C# refuses with 「资金里有相同的数字」
     // when `RepeatedDigits(H.State.seats[player_id].money)`.
     if repeated_digits(ctx::money_of(player_id)) {
         return Some(Msg::new(key!("no_breakup_repeated")));
-    }
-    // 规则书: 「当你本回合未进行过抵押/赎回操作」 -- both actions record
-    // themselves and clear at the turn end, so the gate is just those records.
-    if ctx::state::get(player_id, "mortgaged") != 0 || ctx::state::get(player_id, "redeemed") != 0 {
-        return Some(Msg::new(key!("no_breakup_mortgaged")));
     }
     // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
     // C# `H.MoveWhyNot` gate applies.
@@ -93,6 +106,10 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         all.push(t);
+        // TODO(规则书)（拥有相同数字）: 「拥有相同数字」 is undefined -- all
+        //   digits equal (1111) or any repeated digit is open
+        //   (OPEN-C-SUMIMI-nobreakup-digits); we reuse the gate's any-repeat
+        //   predicate.
         if repeated_digits(predict(player_id, t)) {
             good.push(t);
         }

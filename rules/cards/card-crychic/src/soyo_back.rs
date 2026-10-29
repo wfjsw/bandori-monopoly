@@ -10,7 +10,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it, it_sub};
+use card_sdk::{it, it_sub, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const SOYO_BACK: CardDef = CardDef::new(
@@ -75,6 +75,8 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
 /// 为你的一个格子付费加盖一间房屋，然后[移除]此卡」
 fn branch_discard(player_id: i32) -> card_sdk::Asked {
     // C# `hand.Remove(Id)` first so this card is not among the discarded.
+    // 规则书（1）1: 「将你的所有手牌」 -- this card is already played, so it is
+    // not among the discarded.
     if !ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
         return Ok(());
     }
@@ -97,9 +99,16 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）1: 「抽1张卡」
     ctx::draw(player_id, 1)?;
     // 规则书（1）1: 「为你的一个格子付费加盖一间房屋」 -- the clause names the
-    // player's own tiles and says 「付费」, so: choose one of them, pay its build
-    // cost, put a house on it. A player who cannot pay just does not build.
-    let owned = ctx::owned_tiles(player_id);
+    // player's own tiles and says 「付费」, so: choose one a house can still go on
+    // and build through the ordinary build path (build-cost modifiers, a
+    // `PayKind::Build` payment, `buildAfter`, the refund); only a tile that
+    // actually took the house is logged. The build payment is the build's own
+    // optional-with-mortgage funding, so a player who cannot cover it just does
+    // not build.
+    let owned: alloc::vec::Vec<i32> = ctx::owned_tiles(player_id)
+        .into_iter()
+        .filter(|&t| ctx::can_build_on(player_id, t))
+        .collect();
     if !owned.is_empty() {
         let t = ctx::ask_tile(
             player_id,
@@ -107,20 +116,11 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("soyo_back_build_text")),
             &owned,
         )?;
-        if t >= 0 {
-            let cost = ctx::build_cost(t);
-            if ctx::pay(
+        if t >= 0 && ctx::card_build(player_id, t) {
+            ctx::log(
                 player_id,
-                cost,
-                &Msg::new(key!("soyo_back_build_why")).tile("tile", t),
-            )? > 0
-            {
-                ctx::add_house(t, 1);
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("soyo_back_built")).tile("tile", t),
-                );
-            }
+                &Msg::new(key!("soyo_back_built")).tile("tile", t),
+            );
         }
     }
     // 规则书（1）1: 「然后[移除]此卡」 -- already taken out of hand above and never

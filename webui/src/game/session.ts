@@ -11,9 +11,9 @@ import { api, ensureSession, openStream } from "../net/api";
 import { absolute, buildId } from "../net/server";
 import { startClockSync, clockSync, resyncLimiter } from "./clockSync";
 import type { Msg } from "../i18n/msg";
-import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
+import { isAuto, plan, type AutoMode, type AutopilotCtx, type PolicyName } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
-import { advancedSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks } from "./botDrive";
+import { botSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks } from "./botDrive";
 import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
@@ -162,43 +162,23 @@ class Autopilot {
       this.seq = at;
       this.tried.clear();
     }
-    if (mode === "advanced") return void this.stepAdvanced(v, at);
-    const cmd = plan(v, this.ctx(), mode).find((c) => !this.tried.has(Autopilot.key(c)));
-    if (!cmd) return;
-    this.tried.add(Autopilot.key(cmd));
-    this.inFlight = true;
-    Promise.resolve(s.act(cmd))
-      .then((err) => {
-        if (err) {
-          // Logged, marked tried, and the next candidate is attempted after
-          // the usual human beat -- never a tight retry loop.
-          console.warn(`${mode}: command refused`, cmd, err);
-          this.schedule();
-        } else if (cmd.act === "play") {
-          this.played++;
-        }
-      })
-      .finally(() => {
-        this.inFlight = false;
-        // Solo's `pump` emits the next view inside `act`; catch up if one
-        // already landed while we were in flight.
-        const now = s.view;
-        if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== this.seq) this.schedule();
-      });
+    void this.stepDrive(v, at, mode);
   }
 
   /**
-   * 进阶 托管 (`docs/BOT.md` B6): the worker pool answers play-phase decisions;
-   * setup / trivial surfaces still go through the standard policy below. On
-   * any search failure the existing bot policy answers instead -- a match
-   * never stalls (§1).
+   * 托管, all three modes (`docs/BOT-DRIVE.md`): every decision comes from the
+   * worker's policy -- `act` for 托管 / 混沌 (standard and chaos mentality
+   * over the same code the server bot runs), `decide` for 进阶 (`docs/BOT.md`
+   * B6 search). Setup / trivial surfaces still go through `plan`. On any
+   * worker failure the policy table answers instead -- a match never stalls
+   * (§1).
    */
-  private stepAdvanced(v: MatchView, at: number): void {
+  private stepDrive(v: MatchView, at: number, mode: PolicyName): void {
     const s = this.sess;
     // Setup / discard / vote: the search does not cover them (and the server
-    // keeps an Advanced seat's setup engine-side). Same policy as `bot`.
+    // keeps a bot's setup engine-side). Same policy as the mode's table.
     if (decisionAt(v.state, v.playerId) == null) {
-      const cmd = plan(v, this.ctx(), "advanced").find((c) => !this.tried.has(Autopilot.key(c)));
+      const cmd = plan(v, this.ctx(), mode).find((c) => !this.tried.has(Autopilot.key(c)));
       if (!cmd) return;
       this.tried.add(Autopilot.key(cmd));
       this.inFlight = true;
@@ -227,6 +207,8 @@ class Autopilot {
       timed: s.kind !== "solo",
       soloCapMs: botSoloCapMs(),
       decisionsThisTurn: this.played,
+      search: mode === "advanced",
+      mentality: mode === "chaos" ? "chaos" : mode === "advanced" ? "advanced" : "standard",
       onThinking: (_m, on) => this.setSearching(on),
     };
     void driveSeat(
@@ -238,7 +220,7 @@ class Autopilot {
       s.you,
       hooks,
     )
-      .catch((e) => console.warn("advanced: drive failed", e))
+      .catch((e) => console.warn(`${mode}: drive failed`, e))
       .finally(() => {
         this.inFlight = false;
         this.setSearching(false);
@@ -543,6 +525,14 @@ export class SoloSession extends GameSession {
    *  (`docs/BOT.md` §3.5 -- the same shape as the server's `spawn_ponder`). */
   private botPonderInFlight = new Set<number>();
   private botPonderAt = new Map<number, number>();
+
+  /** A bot seat's mentality, read off its own frame (the human frame carries
+   *  every seat, but the seat frame is authoritative for its mentality). */
+  private botMentality(member: number): "standard" | "chaos" | "advanced" {
+    const v = this.botViews.get(member) ?? this.view;
+    const m = v?.state.players[v.playerId]?.mentality;
+    return m === "chaos" || m === "advanced" ? m : "standard";
+  }
   /** The 进阶 seats' frames the worker pushes (the driver's views). */
   private botViews = new Map<number, MatchView>();
   /** Re-checks the speculative ponder surface while idle (the worker only
@@ -582,7 +572,7 @@ export class SoloSession extends GameSession {
       localStorage.removeItem(SOLO_KEY);
     });
     this.ponderTimer = window.setInterval(() => {
-      if (!this.closed) this.driveAdvancedBots();
+      if (!this.closed) this.driveBots();
     }, 350);
     window.addEventListener("pagehide", this.onHide);
     document.addEventListener("visibilitychange", this.onHide);
@@ -671,43 +661,50 @@ export class SoloSession extends GameSession {
     if (p.view) this.emitView(p.view);
     for (const b of p.bots ?? []) this.botViews.set(b.member, b.view);
     if (p.ended) this.exportReplay();
-    else this.driveAdvancedBots();
+    else this.driveBots();
   }
 
   /**
-   * Keep every Advanced bot seat moving (`docs/BOT.md` B6). The engine holds
-   * their `ai` off (`Match::new`), exactly like the server does for online
-   * Advanced seats -- so this driver is the one applying answers through the
-   * normal `act` path. Setup (ban / pick / deck) stays engine-side
-   * (`MatchPlayer::auto_setup`). Fallback to the existing bot policy on any
-   * search failure so a match never stalls (§1).
+   * Keep every bot seat moving (`docs/BOT-DRIVE.md`). The engine holds their
+   * `ai` off, so this driver is the one applying answers through the normal
+   * `act` path -- standard / chaos answer with the worker's policy alone,
+   * `advanced` searches (`docs/BOT.md` B6). Setup (ban / pick / deck) stays
+   * engine-side (`MatchPlayer::auto_setup`). Fallback to the policy table on
+   * any worker failure so a match never stalls (§1).
    *
    * The seats' frames come from the worker's pushes (they change together with
    * the state); the driver runs on every sync and on a light idle timer, which
    * is what keeps the speculative `ponder` (`docs/BOT.md` §3.5) firing while
    * the match is quiet.
    */
-  private driveAdvancedBots(): void {
+  private driveBots(): void {
     const v0 = this.view;
-    if (!v0 || v0.state.phase !== "play") return;
+    // Setup has no move surface, but it does carry prompts (初始重抽): a bot
+    // answers those through the same channel, so only a setup frame with no
+    // open prompt is idle.
+    if (!v0 || (v0.state.phase !== "play" && !v0.state.prompt?.id)) return;
     // One turn key per (round, turn) for the budget spread.
     const turnKey = `${v0.state.round}:${v0.state.turn}`;
     if (turnKey !== this.botTurnKey) {
       this.botTurnKey = turnKey;
       this.botPlayed.clear();
     }
-    for (const member of advancedSeats(v0)) {
+    for (const member of botSeats(v0)) {
       if (this.botInFlight.has(member)) continue;
       const v = this.botViews.get(member);
       if (!v) continue;
+      const mentality = this.botMentality(member);
       if (decisionAt(v.state, v.playerId) == null) {
         // Nothing to answer right now. Speculate on the seat's **next own
         // decision** when it is near (BOT-RESEARCH #5, `docs/BOT.md` §3.5) --
         // rate-limited like the server's idle probe, one in flight per seat.
         // An idle view has no searchable surface; `ponderUpcoming` gates on
         // `nextTurnNear` and the worker predicts the turn-start 运营 view.
+        // Only a searching (进阶) seat speculates -- the policy alone has no
+        // tree to fill.
         const now = performance.now();
         if (
+          mentality === "advanced" &&
           !this.botPonderInFlight.has(member) &&
           now >= (this.botPonderAt.get(member) ?? 0)
         ) {
@@ -747,12 +744,14 @@ export class SoloSession extends GameSession {
           timed: false,
           soloCapMs: botSoloCapMs(),
           decisionsThisTurn: played,
+          search: mentality === "advanced",
+          mentality,
           onThinking: (m, on) => this.setBotThinking(m, on),
         },
       ).finally(() => {
         this.botInFlight.delete(member);
         // A search can span several ticks; catch up on the next decision.
-        if (!this.closed) this.driveAdvancedBots();
+        if (!this.closed) this.driveBots();
       });
     }
   }

@@ -121,6 +121,7 @@ fn determinize_reproduces_the_view() {
         for s in 0..steps {
             for _ in 0..(7 + s * 3) {
                 m.tick(0.25);
+                bot_core::sim::pump_bots(&mut m);
             }
             if m.ended() {
                 break;

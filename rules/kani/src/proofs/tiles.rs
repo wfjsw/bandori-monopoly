@@ -51,8 +51,8 @@ fn symbolic_settle_world(player: i32) -> World {
 fn call_settle(def: &card_sdk::CardDef, player: i32) {
     for on in def.on.iter() {
         if let card_sdk::On::SettleBody(e) = on {
-            let f = e.body;
-            invoke::unwrap_done(f(player));
+            // The body is erased (`*const ()`); its `drive` owns the cast.
+            invoke::unwrap_done((e.drive)(player, e.body));
             return;
         }
     }

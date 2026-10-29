@@ -5,43 +5,52 @@
 //! > （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。
 //! > （2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。
 //!
-//! payment to a junior peer, or boost a senior peer's payment to you.
+//! payment to a junior or same-grade character, or boost a senior or
+//! same-grade character's payment to you.
 //!
 //! Counteraction-only (`Normal => false`). Grades are static data shipped with
 //! the rule (see [`GRADES`] below).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(
     "Mor:秘密与青春的虹彩",
     &[On::Counteract(
         &[ChainKind::Effect],
+        // TODO(规则书)（此次支付金额减半）: the 减半/翻倍 is the 支付阶段 4
+        //   「支付前」 stage -- we answer the earlier `effect` window, which the
+        //   engine raises before paySplitAdd/paySplitMul (PIPELINE-AUDIT P3a).
         // 规则书[反击]: 「支付」 -- a player-to-player payment of a positive
         // amount. A print (game -> player, `actor == -1`) is a [获得], not a
         // 「支付」, and must not open this window; nor may the causer's own
         // `abnormal` (`actor` = the causer). `value > 0` also covers C#
         // `!t.Pay.cancel` -- a payment an earlier counteraction already
-        // reduced to 0 reads as `value() == 0`.
-        "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0 && actor != target",
+        // reduced to 0 reads as `value() == 0`. A self-payment stays in: you
+        // are your own 同级生, and the engine keeps the window open for it.
+        "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0",
         Some(can_counteract),
-        counteract).counter_reason(key!("secret_rainbow_when"))],
-).meta(&card_sdk::meta::CardMeta::new()
+        counteract,
+    )
+    .counter_reason(key!("secret_rainbow_when"))],
+)
+.meta(
+    &card_sdk::meta::CardMeta::new()
         .name(r#"秘密与青春的虹彩"#)
         .raw_name(r#"秘密与青春的虹彩"#)
         .tags(&[r#"反击"#])
-        .text(CardText::of(&[
-            sec(r#"[反击]"#, &[
-                items(&[
-                    it(r#"当你向学妹或同级生支付时，打出此卡，此次支付金额减半。"#),
-                    it(r#"当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#),
-                ]),
-            ]),
-        ]))
+        .text(CardText::of(&[sec(
+            r#"[反击]"#,
+            &[items(&[
+                it(r#"当你向学妹或同级生支付时，打出此卡，此次支付金额减半。"#),
+                it(r#"当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#),
+            ])],
+        )]))
         // sheet cell G14
-        .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
+        .fields(&[("group", r#"Morfonica"#), ("owner", "")]),
+);
 
 // ============ NORMALIZED GRADE ORDINALS ================================
 // Ruling 2026-10-06: grades come from BanG Dream character facts, shipped as
@@ -68,10 +77,10 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
 // not high school; 珠手知由 is 12th grade = 12; 和奏瑞依 / 佐藤益木 are 3rd-yr
 // high school = 12; 长崎素世 is Tsukinomori 1st yr = 10.
 //
-// Keyed by the character's Chinese name (`ctx::persona_is`); `cnId` is the
-// id from the roster, the wiki page is the cited source.
+// Keyed by the character's Chinese name (`ctx::persona_is`); the second field
+// is not read today, the wiki page is the cited source.
 const GRADES: &[(&str, &str, i32)] = &[
-    // (name, cnId, ordinal)
+    // (name, unused id, ordinal)
     ("户山香澄", "001", 12),   // Toyama_Kasumi, Hanasakigawa Hi 3rd
     ("花园多惠", "002", 12),   // Hanazono_Tae, Hanasakigawa Hi 3rd
     ("牛込里美", "003", 12),   // Ushigome_Rimi, Hanasakigawa Hi 3rd
@@ -117,6 +126,15 @@ const GRADES: &[(&str, &str, i32)] = &[
     ("丰川祥子", "043", 10),   // Togawa_Sakiko, Haneoka Hi 1st
     ("八幡海铃", "044", 10),   // Yahata_Umiri, Hanasakigawa Hi 1st
     ("祐天寺若麦", "045", 10), // Yuutenji_Nyamu, Geijutsu Academy 1st
+    // Variant personas keep the suffixed name in `MatchPlayer::persona`
+    // (`variant_of` is host-side only) and `persona_is` is exact, so they need
+    // their own rows; each is in the same school year as its base.
+    ("高松灯（CRYCHIC）", "", 10),   // Takamatsu_Tomori
+    ("长崎素世（CRYCHIC）", "", 10), // Nagasaki_Soyo
+    ("椎名立希（CRYCHIC）", "", 10), // Shiina_Taki
+    ("若叶睦（CRYCHIC）", "", 10),   // Wakaba_Mutsumi
+    ("丰川祥子（CRYCHIC）", "", 10), // Togawa_Sakiko
+    ("三角初华（Sumimi）", "", 10),  // Misumi_Uika
     // Adults (no school year on the wiki): treat as 13+ so every student is a
     // 学妹 to them and no student is a 学姐.
     ("纯田真奈", "046", 13),   // Sumita_Mana (adult)
@@ -136,8 +154,8 @@ fn grade_of(player_id: i32) -> Option<i32> {
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「当你向学妹或同级生支付时」
     // 规则书[反击]（2）: 「当学姐或同级生向你支付的时候」
-    // The payment's shape (a positive `Pay` between two distinct players) is
-    // the pre; the grade-direction comparison is the residual.
+    // The payment's shape (a positive `Pay` naming a payer and a payee) is the
+    // pre; the grade-direction comparison is the residual.
     let Some(my) = grade_of(player_id) else {
         return false;
     };
@@ -170,6 +188,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // (`(amount + 1) / 2` / `(amount * 3 + 1) / 2`), so a sole modifier still
     // settles at `round10(exact)` (25 → 12.5 → 20).
     if from == player_id {
+        // TODO(规则书)（此次支付金额减半）: the half is a fraction -- the integer
+        //   fold below rounds inside the body, so a later fractional modifier
+        //   drifts (25 halves to 13, then ×7 → 91 → 100; exact 87.5 → 90).
         let half = (amount + 1) / 2;
         trigger::set_pay_amount(half as i32);
         ctx::log(

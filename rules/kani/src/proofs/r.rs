@@ -57,10 +57,18 @@ crate::host_subset!(sprechchor_dispatch {
 /// `play_from_hand` is a protocol stub (always 0 = off-hand).
 crate::host_subset!(ako_dark_dispatch {
     apply_abnormal => arm_apply_abnormal,
-    ,
-    log | effect => arm_log,
+    log | log_as | effect => arm_log,
     trig_set_pay_amount => arm_trig_set_pay_amount,
-    play_from_hand => arm_protocol_stub,  // 0 = not-from-hand (dispatch polarity); TODO(规则书) if a proof needs 1
+    is_placed => arm_is_placed,
+    // `stun::add` / `stun::get` ride the generic state surface + the abnormal
+    // gate (status host).
+    gate => arm_gate,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_state_add,
+    raise_after => arm_raise_after,
+    // `stun::add`'s `source_of` names the grant's source.
+    trig_player => arm_trig_player,
     draw => arm_draw,
 });
 
@@ -88,7 +96,9 @@ crate::host_subset!(nfo_play_dispatch {
     roll | roll_direct => arm_roll,
     schedule_turn_end => arm_schedule_turn_end,
     log | effect => arm_log,
+    // `ctx::player_out` reads `player_count` under Kani before the out bit.
     player_out => arm_player_out,
+    player_count => arm_player_count,
     gain | gain_typed | gain_fixed => arm_gain,
     tile_count => arm_tile_count,
     player_pos => arm_player_pos,
@@ -110,6 +120,13 @@ crate::host_subset!(nfo_play_dispatch {
     to_discard => arm_to_discard,
     add_to_dest => arm_add_to_dest,
     add_held => arm_add_held,
+    // face 5 keeps a lingering hook alive and adds crystals to the character
+    // card -- the mock has no persona skill, so the player-token fallback runs.
+    linger => arm_linger,
+    persona_skill => arm_band_skill,
+    card_counter => arm_card_counter,
+    add_card_counter => arm_add_card_counter,
+    count_held | count_held_name => arm_count_held,
 });
 
 /// `R:NFO` AtEnd — one [停留] layer.
@@ -120,7 +137,8 @@ crate::host_subset!(nfo_at_end_dispatch {
 
 /// `R:学生会的检查` counteract — insert 觉悟, no-build prop, optional place.
 /// Isolation (no owned deed with a house cost) keeps the body at the insert;
-/// the post-return ops are listed so an isolation break is a spec failure.
+/// the post-return ops (`pay` / place / `rent_of` for the refund threshold) are
+/// listed so an isolation break is a spec failure.
 crate::host_subset!(council_dispatch {
     add_to_dest => arm_add_to_dest,
     log | effect => arm_log,
@@ -131,6 +149,7 @@ crate::host_subset!(council_dispatch {
     owned_at => arm_owned_at,
     dist => arm_dist,
     build_cost => arm_build_cost,
+    rent_of => arm_rent_of,
     ask => arm_ask,
     pay => arm_pay,
     set_dest => arm_set_dest,
@@ -172,6 +191,12 @@ fn sparse_r_world(user: i32) {
 
 fn log_slice() -> ([Effect; MAX_LOG], usize) {
     world::with_world(|w| (w.log, w.log_n))
+}
+
+/// `state_key::STUN` as a world key (the status verbs write the state key, not
+/// the `w.stun` pilot slot — `arm_apply_abnormal` is no longer on this path).
+fn stun_key() -> crate::intern::NameId {
+    crate::intern::intern(bandori_std::state_key::STUN)
 }
 
 fn effects_of(logbuf: &[Effect; MAX_LOG], log_n: usize) -> &[Effect] {
@@ -419,9 +444,10 @@ pub fn sprechchor_pay_mutant_is_detected() {
 
 // ===========================================================================
 // C-R-黑暗大魔姬亚子-02 / -03 -- stun + off-hand draw
-// `play_from_hand` is a protocol stub (always 0) -- the host always reports
-// off-hand, so this harness proves the off-hand activation. The from-hand
-// no-draw half is BLOCKED-HOST (see the unit table).
+// The body keys the draw on `is_placed()` (the declaration's own origin), so
+// the world pins a placed instance (`field_n = 1`) and the harness proves the
+// off-hand activation. The from-hand no-draw half is BLOCKED-HOST (see the
+// unit table).
 // ===========================================================================
 
 /// Shared iff body at a concrete seat (ppcost). `user` ∈ {0, 1}.
@@ -437,11 +463,15 @@ fn ako_dark_offhand_iff_at(user: i32) {
         // The other seat in a 2-player world (clause is self-facing; which
         // other player is the pay target does not change the body).
         w.trig_target = 1 - user;
+        // The declaration came from a placed instance (off-hand).
+        w.field_n = 1;
     });
 
     let pre = world::snapshot();
+    let pre_stun = world::with_world(|w| w.key_get(user, stun_key()));
     invoke::unwrap_done(card_roselia::ako_dark::counteract_kani(user));
     let post = world::snapshot();
+    let post_stun = world::with_world(|w| w.key_get(user, stun_key()));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
@@ -451,8 +481,12 @@ fn ako_dark_offhand_iff_at(user: i32) {
         "C-R-黑暗大魔姬亚子-02/03: GiveStun{1} + SetPayAmount{0} + Draw{1}"
     );
     crate::kassert!(
+        spec::ako_dark_stun_ok(pre_stun, post_stun),
+        "C-R-黑暗大魔姬亚子-02: +1 stun layer (state key)"
+    );
+    crate::kassert!(
         spec::ako_dark_post_ok(&pre, &post, user),
-        "C-R-黑暗大魔姬亚子-02: +1 stun, pay zeroed, money unchanged"
+        "C-R-黑暗大魔姬亚子-02: pay zeroed, money unchanged"
     );
 }
 
@@ -485,13 +519,12 @@ pub fn ako_dark_mutant_is_detected() {
         w.trig_value = 500;
         w.trig_target = 1;
     });
+    let pre_stun = world::with_world(|w| w.key_get(user, stun_key()));
     invoke::unwrap_done(card_roselia::ako_dark::counteract_kani(user));
-    let (logbuf, log_n) = log_slice();
-    let effects = effects_of(&logbuf, log_n);
-    let two = spec::ako_dark_stun_n_mutant();
+    let post_stun = world::with_world(|w| w.key_get(user, stun_key()));
     crate::kassert!(
-        !matches!(effects.first(), Some(Effect::GiveStun { n, .. }) if *n == two),
-        "mutant: first effect is not 2 stun layers"
+        !spec::ako_dark_stun_ok_mutant(pre_stun, post_stun),
+        "mutant: stun delta is not 2"
     );
 }
 

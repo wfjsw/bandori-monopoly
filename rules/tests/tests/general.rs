@@ -121,11 +121,12 @@ fn tsugu_ge26_can_buy_any_unowned() {
     assert_eq!(t.owner(FUJIMI), Some(0));
 }
 
-// HOST-06: 「购买」 only logs when the deed actually changed hands. Poppin'
-// Party's hill lock is a `BuyGate` that cancels every buy of 星之鼓动山丘
-// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- `card_buy` must
-// answer `false` and the card must not log a buy. Before HOST-06 the guest's
-// `card_buy -> bool` was a constant `true`, so the log fired on a refused buy.
+// HOST-06/HOST-07: 「购买」 only logs when the deed actually changed hands.
+// Poppin' Party's hill lock is a `BuyGate` that cancels every buy of 星之鼓动山丘
+// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the hook-aware quote
+// marks the tile ineligible, so the card's candidate list drops it. (The
+// guest's `card_buy -> bool` must still answer `false` on a refused buy; before
+// HOST-06 it was a constant `true` and the log fired anyway.)
 #[test]
 fn tsugu_buy_gate_refused_does_not_log_a_buy() {
     let mut t = Table::vanilla(2);
@@ -136,19 +137,15 @@ fn tsugu_buy_gate_refused_does_not_log_a_buy() {
     t.answer(0, 0).unwrap(); // yes, buy
     let p = t.expect_prompt();
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
-    t.answer_tile(0, HILL).unwrap(); // 星之鼓动山丘, price 600
-    skip_all(&mut t);
-    assert_eq!(
-        t.owner(HILL),
-        None,
-        "BuyGate refused the buy: {:?}",
-        t.recent_keys(16)
-    );
-    let keys = t.recent_keys(16);
     assert!(
-        !keys.iter().any(|k| k.contains("tsugu_buy")),
-        "must not log a buy on a refused card_buy: {keys:?}"
+        !p.items.contains(&HILL.to_string()),
+        "BuyGate-refused tile still offered: {:?}",
+        p.items
     );
+    t.answer_tile(0, FUJIMI).unwrap(); // an ordinary unowned tile
+    skip_all(&mut t);
+    assert_eq!(t.owner(HILL), None, "{}", t.dump_prompt());
+    assert_eq!(t.owner(FUJIMI), Some(0), "{}", t.dump_prompt());
 }
 
 // HOST-07: `ctx::buy_quotes` is the same hook-aware quote `buy` charges.
@@ -223,6 +220,42 @@ fn tsugu_ge28_buy_discount_1500() {
                                        // 规则书: 「降低1500（最低0）」 → 600-1500 clamped to 0.
     assert_eq!(t.money(0), 10_000, "pays 0 after the 1500 discount");
     assert_eq!(t.owner(FUJIMI), Some(0));
+}
+
+// 规则书[手]: the card prints no [限] -- (1) and (3) do not need the main
+// move, so with 无法移动 the card is still playable and only the teleport arm
+// is refused.
+#[test]
+fn tsugu_effects_land_when_the_move_is_spent() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT"]);
+    t.set_state(0, bandori_std::state_key::STAY, 1);
+    t.begin_turn(0);
+    let pos = t.pos(0);
+    t.dice(&[9, 9, 8]); // 26: draw + teleport
+    let mark = t.mark();
+    t.give_play(0, "通用:@Tsugu ycm")
+        .map_err(|e| format!("play rejected under 无法移动: {e}"))
+        .unwrap();
+    // (1) 「结果至少为22则抽1张卡」 still lands.
+    assert!(
+        t.hand(0).contains(&"通用:GREAT".to_string()),
+        "hand {:?}",
+        t.hand(0)
+    );
+    // 「传送」 is refused.
+    assert_eq!(t.pos(0), pos, "no teleport under 无法移动");
+    // (2)'s own buy offer still comes up (it is not a move).
+    let p = t.expect_prompt();
+    assert_eq!(p.options.len(), 2, "{}", t.dump_prompt());
+    t.decline();
+    // The (1) log came with it.
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("tsugu_buy_title") || k == "log.draw")
+            || t.hand(0).contains(&"通用:GREAT".to_string())
+    );
 }
 
 // =====================================================================
@@ -529,15 +562,38 @@ fn recruit_costs_1500_and_draws() {
     assert_eq!(t.draw_pile(0), vec!["通用:10次招募（1回限定）".to_string()]);
 }
 
-// The name says 「1回限定」 but the body carries no [限]; the engine lets the
-// same name be played again. Noted as ambiguity — see report.
+// 规则书（1回限定）: 「10次招募（1回限定）」 -- once used, a second copy is refused
+// by the play gate. TODO(规则书): the book does not say whose limit it is; we
+// read it per player.
 #[test]
-fn recruit_allows_a_second_copy() {
+fn recruit_refuses_a_second_play() {
     let mut t = Table::vanilla(2);
     t.give(0, &["通用:10次招募（1回限定）", "通用:10次招募（1回限定）"]);
     t.play(0, "通用:10次招募（1回限定）").unwrap();
+    assert_eq!(t.money(0), 8_500);
+    let r = t.play(0, "通用:10次招募（1回限定）");
+    let e = r.expect_err("「1回限定」: the second copy must be refused");
+    assert!(
+        e.contains("gacha10_why"),
+        "refused by the once-only gate: {e}"
+    );
+    assert_eq!(t.money(0), 8_500, "the refused play costs nothing");
+}
+
+// 规则书（1回限定）: the latch is per player -- another seat's copy still works.
+#[test]
+fn recruit_is_per_player() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["通用:10次招募（1回限定）"]);
+    t.give(1, &["通用:10次招募（1回限定）"]);
     t.play(0, "通用:10次招募（1回限定）").unwrap();
-    assert_eq!(t.money(0), 7_000, "two lots of 1500");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    t.end(0).unwrap();
+    skip_all(&mut t);
+    t.play(1, "通用:10次招募（1回限定）").unwrap();
+    assert_eq!(t.money(1), 8_500);
 }
 
 // =====================================================================
@@ -608,8 +664,8 @@ fn cp_hand_is_not_gated_at_two_points() {
     // The CP-count gate is gone: a second play must not be refused for it.
     t.give(0, &["通用:该清CP了"]);
     let r = t.play(0, "通用:该清CP了");
-    // It may still be refused for another reason (e.g. no empty tile), but not
-    // for 「小等于2个[CP点]」.
+    // It is still refused by the copy-in-play ruling, but not for
+    // 「小等于2个[CP点]」 (and no longer for a lack of empty tiles either).
     if let Err(e) = &r {
         let s = e.to_string();
         assert!(
@@ -648,6 +704,45 @@ fn cp_places_one_tile_mark_and_six_on_card_cp() {
     assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(6));
     // The card itself stays on the field as a lasting piece.
     assert!(t.on_field(0, "通用:该清CP了"));
+}
+
+// 规则书: 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]」
+// -- the 「并」 half does not depend on a free tile: with none free only the
+// tile half (and its ask) is skipped; the play still resolves and seeds the six.
+#[test]
+fn cp_plays_with_no_free_tile_and_still_seeds_six() {
+    let mut t = Table::vanilla(2);
+    // Every tile carries a [CP点], so no 「没有角色和[CP点]的格子」 is left.
+    {
+        let w = t.m.world_mut();
+        for tile in 0..data().tiles.len() as i32 {
+            w.place_mark(
+                -1,
+                "cp",
+                "cp",
+                tile,
+                -1,
+                -1,
+                1,
+                game_core::msg::Msg::new("log.cp_place"),
+                false,
+            );
+        }
+    }
+    let marks_before = t.marks().len();
+    t.give(0, &["通用:该清CP了"]);
+    t.play(0, "通用:该清CP了")
+        .expect("the play resolves without a free tile");
+    assert_eq!(
+        t.cp_on_card(0, "通用:该清CP了"),
+        Some(6),
+        "the six on-card [CP点] are still seeded"
+    );
+    assert!(
+        t.on_field(0, "通用:该清CP了"),
+        "the card is still placed on the field"
+    );
+    assert_eq!(t.marks().len(), marks_before, "no tile mark was added");
 }
 
 // ruling 2026-10-07 (on-card vs tile CP): the on-card count rides the card's
@@ -737,7 +832,7 @@ fn cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler() {
     assert!(t.on_field(0, "通用:该清CP了"), "the card stays at 5");
 }
 
-// 规则书: 「（2）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」
+// 规则书: 「（1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」
 #[test]
 fn cp_spreads_to_adjacent_for_two_turn_starts() {
     let mut t = Table::vanilla(2);
@@ -795,7 +890,8 @@ fn cp_marks_are_neutral_and_attached_to_the_card() {
 // User ruling 2026-10-07 (on-card vs tile CP): 「该清CP了 should be graveyarded
 // as soon as the attached on-card cp mark is empty」 -- the card's **on-card**
 // [CP点] (`FieldCard::cp`, 「自己[场上]N个[CP点]」), not the tile marks it
-// placed. An event handler on that count (`ActionKind::CpChanged`), so it fires
+// placed. An event handler on that count (`ActionKind::CounterChanged` with the
+// `counter::CP` name check; `CpChanged` is gone), so it fires
 // however the count drops -- here the `mark:cp` settle clause 「自己[场上]1个
 // [CP点]」 spending the last one.
 #[test]
@@ -972,6 +1068,37 @@ fn harvest_moves_chosen_distance_and_settles() {
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
 }
 
+// 规则书[手]: 「移动1到6以内的任意整数」 -- the printed 6 is a 1-based
+// doubling slot, so 「后勤人员的努力」 naming it lifts the ask to 1..=12.
+#[test]
+fn harvest_printed_six_is_doubled_by_circle_staff() {
+    let mut t = Table::new(&["月岛麻里奈", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.give(0, &["通用:尽力后的收获", "通用:登上武道馆"]); // spare card to discard
+    t.play(0, "通用:尽力后的收获").unwrap();
+    let mut options = None;
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("circle_staff_ask") {
+            let _ = t.answer_one(0); // yes, extra discard
+        } else if d.contains("circle_staff") {
+            let _ = t.answer_one(0); // number 1 = the printed 6
+        } else if d.contains("effort_") {
+            options = Some(t.prompt().unwrap().options.len());
+            break;
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(
+        options,
+        Some(12),
+        "the 6 doubled to 12: {}",
+        t.dump_prompt()
+    );
+}
+
 #[test]
 fn harvest_previews_each_distance_with_wraparound_and_reverse() {
     for reverse in [false, true] {
@@ -1028,7 +1155,7 @@ fn party_x1_grants_extra_turn() {
     assert_eq!(t.turn(), 0, "still P0");
 }
 
-// 规则书: 「X至少为2则[使用者]投掷Xd20，如果结果大于35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
+// 规则书: 「X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
 #[test]
 fn party_x2_roll_win_pays_out() {
     let mut t = Table::vanilla(3);
@@ -1061,7 +1188,7 @@ fn party_x3_rolls_three_dice() {
     assert_eq!(t.money(3), 10_000, "declined");
 }
 
-// 规则书: 「如果结果大于35则…」 — a low roll pays nobody.
+// 规则书: 「如果结果至少为35则…」 — a low roll pays nobody.
 #[test]
 fn party_x2_roll_miss_pays_nobody() {
     let mut t = Table::vanilla(3);

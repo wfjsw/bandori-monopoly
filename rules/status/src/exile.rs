@@ -37,7 +37,7 @@
 //!   gate and the on-board gate.
 //! * **`exileMain`** -- the return teleport is consumed as the turn's
 //!   [主要移动] (`teleport_as(..., as_main = true)`), so the player cannot
-//!   also roll.
+//!   also roll, and it settles the landing like any other main-move landing.
 
 use bandori_std::kind::{abnormal, Actions};
 use card_sdk::abi::{ActionKind, FilterKind};
@@ -51,10 +51,7 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「任意玩家获得[除外]…时」 -- the landing clause (already raised from
         // the engine's post-commit log as wire kind 21; this `Abnormal`
         // hook is the same moment from the abnormal path).
-        On::Action(Action::Abnormal(
-            "",
-            Some(exile_landed),
-            on_exile_landed)),
+        On::Action(Action::Abnormal("", Some(exile_landed), on_exile_landed)),
         // 「任意玩家获得[除外]…时」 (`bandori_std::kind::Exile`, wire 21) --
         // raised from the engine's post-commit abnormal log. Cards that mean
         // 「获得[除外]时」 listen here rather than at each grant site (memory:
@@ -66,7 +63,8 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             "",
             Some(turn_start_peels_or_holds),
-            on_turn_start_before)),
+            on_turn_start_before,
+        )),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
         On::Filter(Filter::ActGate(EXILED, None, refuse)),
@@ -167,7 +165,13 @@ fn on_turn_start_before(_owner: i32) -> card_sdk::Asked {
     );
     if to >= 0 {
         // No abnormal window: the return is this status's own clause.
-        ctx::teleport_as(p, to, /* resolve */ false, as_main);
+        // 规则书（视为当回合的主要移动）: 主要移动的落点照常[结算] -- the return
+        // lands with `resolve = true`, so the landed tile settles as any
+        // main-move landing does (the card has no 「不进行结算」).
+        // TODO(规则书)（视为当回合的主要移动）: C-Q21 / MOVE-07 may instead rule
+        //   the immediate-`offer_buy` shape; if so this settle becomes the later
+        //   half and the offer moves here.
+        ctx::teleport_as(p, to, /* resolve */ true, as_main);
     }
     Ok(())
 }

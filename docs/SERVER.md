@@ -101,21 +101,19 @@ button press would. The server's engine is never asked to drive the seat -- no
 new act flips `players[i].ai`, and `member_left` is not reused -- so the server
 is unchanged and the player's seat is still theirs.
 
-Both policies share one driver; only the decision policy is pluggable
-(`policies: { bot, chaos }`).
+**There is one policy, and it is `bot-core`'s.** Every 托管 decision comes
+from the same `policy::act_for_view` the server's bot driver runs for a bot
+seat, through the seat-view worker's `act` op on a determinized fork
+(`docs/BOT-DRIVE.md`). The takeover sends the command through the ordinary
+`act` path. The TS table in `autopilot.ts` only runs on the surfaces the
+worker does not drive (setup, vote, discard) and when the worker fails.
 
-**托管 (`bot`)** is a port of the bot AI in `crates/game-core/src/engine/ai.rs`
-over public data (thresholds kept in sync next to the TS copy): redeem the most
-valuable mortgaged deed that still leaves 4 000; play a card with 70% odds while
-fewer than two have been played this turn; otherwise roll; after landing, buy
-while it leaves 2 000 and build while it leaves 3 500; discard at random over
-the hand limit. Prompts prefer the engine's own precomputed AI answer, which the
-match frame carries per viewer in `aiAnswer` (`Match::view_extra`) -- only for
-the player being asked, never another seat, because an auction ceiling is
-hidden information -- and fall back to the prompt's `fallback` when the frame
-does not carry one (counteract therefore declines). Ban / pick choose a random
+**托管 (`bot`)** therefore inherits the standard bot policy exactly --
+redeem, the 70% card odds, roll, the buy / build reserves, the discard, the
+settle offers' own tests, and the prompt answers. Ban / pick choose a random
 free character; the deck phase submits the character's preset; a live vote is
-answered yes so the table is never left hanging.
+answered yes so the table is never left hanging -- setup and votes are
+engine-side (`MatchPlayer::auto_setup`, `Match::auto_vote`).
 
 **混沌 (`chaos`)** is legal but maximally disruptive -- it prefers whatever
 makes more things happen. Play every legal card (100%, no cap) and fire every
@@ -140,16 +138,16 @@ bounces moves on instead of looping. Online it always moves well inside the
 turn timer.
 
 Limitations: auto-play is client-only, so other players do not see the
-`board.afk` tag on the seat. Card play uses the view's `playable` list
-(`Match::view_extra`), not a live `rules.ai_play` call -- the two agree today
-because `CardRules::ai_play` defaults to `true`, but a card rule that overrides
-it would not be consulted by the takeover. Chaos's "no visible card cost" note
-above is the same gap.
+`board.afk` tag on the seat. The command is computed against the *frame* the
+page holds, so a pressed command can be a beat stale if another seat acted
+meanwhile; the driver keeps its ordered candidates and moves on when the
+server refuses one.
 
 ### Bot mentality (engine bots)
 
 The auto-play takeover above is a *human* seat driven by the browser. A **bot**
-member is driven by the engine, and it carries a `BotMentality` on the seat
+member is driven the same way -- `view` -> policy -> `act` -- by the server
+probe (or the page, in solo), and it carries a `BotMentality` on the seat
 (`standard` / `chaos` / `advanced`, see
 [ENGINE.md](ENGINE.md#bot-ai-mentalities) and [BOT.md](BOT.md)). `POST
 /api/rooms/{id}/bots` takes `mentality` on `op: "add"` (default `standard`);
@@ -214,14 +212,18 @@ cadence, cancelled when the seat's own decision arrives. The service caches
 the result by information-set key and a later `decide` for the same key
 answers from that cache. `bot-service --no-ponder` turns the whole path off.
 
-* When the service is attached, the server holds the seat (the engine does not
-  auto-play it) and asks for one seat's view when that seat must act — an open
-  prompt or its turn decision. The answer is applied through the ordinary
-  `POST …/act` path.
-* On timeout, crash or a bad reply the engine's own heuristic (`aiAnswer`)
-  answers that decision and the match keeps moving — a match never stalls on
-  the service. The engine's turn clock is the last-resort takeover. A wedged
-  child costs at most one probe per seat and never the tick.
+* **Every** bot seat is driven this way (`docs/BOT-DRIVE.md`) — the engine
+  auto-plays none of them. One seat's view is requested when that seat must
+  act, an open prompt or its turn decision, and the answer is applied through
+  the ordinary `POST …/act` path.
+  * `advanced` seat: the service searches (`op: "decide"`).
+  * `standard` / `chaos` seat, or any seat without a service: the server's own
+    `bot-core` policy answers (`op: "act"` on the service, `heuristic: true`,
+    no search — a search would be pure latency for a one-shot policy).
+* On timeout, crash or a bad reply the same local policy answers that
+  decision and the match keeps moving — a match never stalls on the service.
+  The engine's turn clock is the last-resort takeover. A wedged child costs at
+  most one probe per seat and never the tick.
 * Setup (ban / pick / deck) stays engine-side and runs the standard policy.
 * The service sees exactly one seat's view — the same frame the client gets.
   It only proposes answers; the sandboxed engine stays authoritative.

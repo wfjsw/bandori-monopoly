@@ -13,8 +13,8 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, FilterKind};
-use card_sdk::{CardText, para, sec};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
+use card_sdk::{para, sec, CardText};
 
 const ID: &str = "Mor:再次牵起手来";
 
@@ -23,10 +23,18 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Paid],
+            // 规则书[反击]: 「[反击]当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后」
             "actor != owner && actor == neighbor(owner, -1) && value > 0",
             None,
             counteract).counter_reason(key!("hold_hands_again_when")),
-        On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_at)),
+        // 规则书[持续]: 「[消耗]或[支付]时取消此次资金变动」 -- the [持续] has no 「大于0」
+        // (only the [反击] clause does), so a payment shaved to 0 still cancels.
+        On::Filter(Filter::PaySplitAt("actor == owner && card.placed", None, pay_at)),
+        // 规则书[持续]: 「将此卡放置到弃卡区」 -- on `payAfter`, which also fires when
+        // the payment dies before `paySplitAt` (then the Filter half never logged).
+        // TODO(规则书)（[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区）: the book ties the
+        //   discard to a cancelled change -- we unplace on every `payAfter`, cancelled
+        //   before the split or not (nothing was cancelled by this card in that case).
         On::Action(Action::PayAfter("actor == owner && card.placed", None, pay_after)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -47,6 +55,9 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     // 规则书[反击]: 「并[消耗]等量资金」 -- C# `H.LoseR(i, c.Trigger.Value, CardName)`.
+    // TODO(规则书)（将此卡放置在[使用者]的[场地]并[消耗]等量资金）: the book places, then
+    //   spends -- we spend first so the fresh copy cannot cancel its own cost, and a
+    //   cost that knocks the counteruser out skips the placement entirely.
     ctx::pay(
         player_id,
         amount,
@@ -84,7 +95,9 @@ fn pay_at(player_id: i32, _value: i32) -> i32 {
     0
 }
 
-/// 规则书[持续]: 「将此卡放置到弃卡区」 -- the Filter half already logged.
+/// 规则书[持续]: 「将此卡放置到弃卡区」 -- the discard half. It rides bare
+/// `payAfter`, so it also runs when `paySplitAt` never did (the Filter half did
+/// not log): see the TODO on the `PayAfter` registration.
 fn pay_after(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())

@@ -22,7 +22,9 @@ use game_core::msg::Msg;
 
 #[cfg(feature = "sandbox")]
 use crate::host::Ruleset;
-use crate::host::{Call, CardModules, DeclareOut, HostRequest, Outcome, Prompt, PromptOption, RuleError};
+use crate::host::{
+    Call, CardModules, DeclareOut, HostRequest, Outcome, Prompt, PromptOption, RuleError,
+};
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
@@ -1040,7 +1042,19 @@ impl CardWorld for Run {
     }
     fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
         match dest {
-            0 => self.to_discard(player_id, card),
+            // 「加入弃卡区」 is a create-only push: unlike `to_discard` it must not
+            // first consume a same-named hand copy (PERFECT step 2).
+            0 => {
+                let idx = player_id.max(0) as usize;
+                self.flush_header();
+                if let Some(h) = self.world.hidden.get_mut(idx) {
+                    h.graveyard.push(card.to_string());
+                }
+                self.discard_log.push((player_id, card.to_string()));
+                if self.world.refill_draw_pile(idx) {
+                    self.reshuffle_log.push(player_id);
+                }
+            }
             1 => {
                 self.world.add_to_hand(player_id, card);
                 // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
@@ -1090,8 +1104,7 @@ impl CardWorld for Run {
         match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
-                if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize)
-                {
+                if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize) {
                     // Visible outcome: `commit_after` raises `reshuffled`.
                     self.flush_header();
                     self.reshuffle_log.push(player_id);
@@ -1752,7 +1765,10 @@ impl CardWorld for Run {
             // (the kernel logs its own `log.gain_charge_capped` when it refuses
             // before the write).
             if let Some(p) = self.world.st.players.get(player_id.max(0) as usize) {
-                let (cap, have) = (self.world.tok_max(player_id, name), self.world.tok(player_id, name));
+                let (cap, have) = (
+                    self.world.tok_max(player_id, name),
+                    self.world.tok(player_id, name),
+                );
                 if cap > 0 && have >= cap && !p.out() {
                     let msg = Msg::new("log.gain_charge_capped")
                         .player_id("who", player_id)
@@ -1864,13 +1880,16 @@ impl CardWorld for Run {
     fn set_build_cost_pct(&mut self, pct: i32) {
         self.world.turn.build_cost_pct = pct.clamp(0, 100);
     }
-    fn turn_snap(&self, player_id: i32) -> (i32, std::collections::BTreeMap<String, i32>) {
+    fn turn_snap(&self, player_id: i32) -> game_core::engine::TurnSnap {
         self.world
             .turn
             .turn_snap
             .get(player_id.max(0) as usize)
-            .map(|s| (s.pos, s.state.clone()))
-            .unwrap_or((-1, Default::default()))
+            .cloned()
+            .unwrap_or(game_core::engine::TurnSnap {
+                pos: -1,
+                ..Default::default()
+            })
     }
     fn tile_group(&self, tile: i32) -> i32 {
         self.data
@@ -2278,7 +2297,13 @@ impl CardWorld for Run {
     }
 
     // turn plan & scheduling -------------------------------------------------
-    fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool, entry: &str) {
+    fn schedule_turn_end(
+        &mut self,
+        player_id: i32,
+        next_of_player: bool,
+        early: bool,
+        entry: &str,
+    ) {
         let now = self.world.turn.player_id;
         let (target, skip) = if next_of_player {
             let s = player_id.max(0) as usize;
@@ -3199,8 +3224,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // not copied across.
                     let folded_hdr = header_mode.get();
                     w.silent_body = folded_hdr == card_sdk::abi::Presentation::Silent;
-                    w.quiet_when_empty =
-                        folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
+                    w.quiet_when_empty = folded_hdr == card_sdk::abi::Presentation::QuietWhenEmpty;
                     w.flash_cued = flash_cued_cell.get();
                     return;
                 }
@@ -3243,7 +3267,16 @@ impl<M: CardModules> RulesBridge<M> {
                     flash_cued_cell.set(true);
                 }
                 w.flash_cued = flash_cued_cell.get();
-                let id = self.announce_drive(w, call.clone(), card_id, uid, target, tile, trigger, entry);
+                let id = self.announce_drive(
+                    w,
+                    call.clone(),
+                    card_id,
+                    uid,
+                    target,
+                    tile,
+                    trigger,
+                    entry,
+                );
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
                 }
@@ -3400,7 +3433,7 @@ impl<M: CardModules> RulesBridge<M> {
                         marker_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
-                                named_raise_log: vec![],
+                        named_raise_log: vec![],
                         state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
@@ -3445,16 +3478,19 @@ impl<M: CardModules> RulesBridge<M> {
                         w.flash_cued = flash_cued_cell.get();
                     };
                     let outcome2 = if guarded {
-                        match self
-                            .ruleset
-                            .run_hook(&run, call.clone(), &answers, Some(&mut announce))
-                        {
+                        match self.ruleset.run_hook(
+                            &run,
+                            call.clone(),
+                            &answers,
+                            Some(&mut announce),
+                        ) {
                             Err(e) => Err(e),
                             Ok(None) => return Ok(DEST_UNSET),
                             Ok(Some(hr)) => Ok(hr.outcome),
                         }
                     } else {
-                        self.ruleset.run(&run, call.clone(), &answers, Some(&mut announce))
+                        self.ruleset
+                            .run(&run, call.clone(), &answers, Some(&mut announce))
                     };
                     match outcome2 {
                         Ok(Outcome::Done(after2)) => {
@@ -3688,7 +3724,8 @@ impl<M: CardModules> RulesBridge<M> {
                         drive_header_ids = run.header_ids.clone();
                     }
                     let live_before = cx.live_event_count();
-                    let v = self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
+                    let v =
+                        self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
                     if run.own_activation >= 0 {
                         cx.stamp_parent_since(live_before, run.parent);
                     }
@@ -3830,6 +3867,19 @@ impl<M: CardModules> RulesBridge<M> {
                     w.turn.main_moved = true;
                     cx.swap_world(w);
                 }
+                // The request's `resolve` is authoritative: `teleport_as_depth`
+                // re-reads the shared plan after the pass window, and a nested
+                // call (a counteraction inside a settling outer move) would
+                // otherwise inherit the outer move's `true`. Force it across the
+                // call, then put the plan back unless a pass-window counter
+                // rewrote it (e.g. `plan::set_resolve(true)` arming the settle,
+                // which the re-read then honours).
+                let prev_resolve = cx.world().turn.plan.resolve;
+                {
+                    let mut w = cx.world_copy();
+                    w.turn.plan.resolve = resolve;
+                    cx.swap_world(w);
+                }
                 cx.teleport_as(
                     player_id.max(0) as usize,
                     tile.max(0) as usize,
@@ -3837,6 +3887,11 @@ impl<M: CardModules> RulesBridge<M> {
                     None,
                     as_main,
                 )?;
+                if prev_resolve != resolve && cx.world().turn.plan.resolve == resolve {
+                    let mut w = cx.world_copy();
+                    w.turn.plan.resolve = prev_resolve;
+                    cx.swap_world(w);
+                }
                 return Ok(1);
             }
             // The rest of the routine family -- see `HostRequest`.
@@ -4140,6 +4195,7 @@ impl<M: CardModules> RulesBridge<M> {
                 amount,
             } => {
                 let mut cost = amount.max(0);
+                let mut refund = 0;
                 let pct = cx.state().step; // placeholder -- read turn pct below
                 let _ = pct;
                 {
@@ -4148,10 +4204,22 @@ impl<M: CardModules> RulesBridge<M> {
                     if pct != 100 {
                         cost = cost * pct / 100;
                     }
-                    let cut = w.turn.build_discount.min(cost);
+                    // 「可溢出」: no clamp to the cost; the excess is refunded.
+                    let cut = w.turn.build_discount;
                     if cut > 0 {
                         cost -= cut;
                     }
+                    if cost < 0 {
+                        refund = -cost;
+                        cost = 0;
+                    }
+                }
+                if refund > 0 {
+                    let mut w = cx.world_copy();
+                    if let Some(s) = w.st.players.get_mut(player_id.max(0) as usize) {
+                        s.money += refund;
+                    }
+                    cx.swap_world(w);
                 }
                 // One layer pops whether or not the build commits.
                 {
@@ -5234,6 +5302,9 @@ impl<M: CardModules> RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        // The `BuyAssign` deal rewrite (`set_deal_owner` / `set_deal_houses`) rides
+        // the buy trigger; the engine reads it back off `t.buy` at the commit.
+        t.buy = trigger.buy.map(unbridge_buy);
         Ok(())
     }
 
@@ -5615,9 +5686,6 @@ impl<M: CardModules> RulesBridge<M> {
         if cx.world().turn.cancelled_designations.contains(&p) {
             return Ok(-1);
         }
-        if p == by {
-            return Ok(p);
-        }
         if !cx
             .world()
             .gate_open(cx.rules(), game_core::engine::Gate::OnBoard, s)
@@ -5651,6 +5719,11 @@ impl<M: CardModules> RulesBridge<M> {
                 );
                 p = to;
             }
+        }
+        // A self-target no redirect moved (EXIST's 「包括其他玩家指向自身的卡」
+        // included): already named, nothing to chain.
+        if p == by {
+            return Ok(p);
         }
         // `Untargetable` governs who may be *named*. Block here and the effect
         // cannot name `p` at all, so no chain forms against them. Checked on
@@ -5710,6 +5783,16 @@ impl<M: CardModules> RulesBridge<M> {
         };
         let live = usize::try_from(owner).is_ok_and(|o| !cx.world().out(o));
         if owner >= 0 && owner != by && live {
+            // Naming a tile names its owner (the owner answers the declaration
+            // below), so `Untargetable` is asked on the owner like
+            // `target_player` asks it on the named player.
+            if self
+                .raise_core(cx, "untargetable", owner, |t| t.by_card = Some(by))?
+                .is_cancelled()
+            {
+                cx.log(owner, Msg::new("log.untargetable").player_id("who", owner));
+                return Ok(-1);
+            }
             // Chain first: the owner answers the declaration. Then resolution.
             if !self.target_window(cx, owner, tile, by, card)? {
                 return Ok(-1);
@@ -5971,6 +6054,24 @@ impl<M: CardModules> RulesBridge<M> {
             }
         }
         self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
+        // The pre-scan arms on a mere hand holder (the declaration site re-arms
+        // with its declarer). Drop it again unless a `SELF_REDIRECT` card
+        // actually declared against this link -- a holder that never plays must
+        // not redirect the joiners' self-targeted effects.
+        // 规则书: 「其反击卡中针对打出玩家自身的效果改为你」 -- the clause names a
+        // played counter card.
+        let redirect_declared = chain.iter().skip(1).any(|l| {
+            l.link.answers == 0
+                && self.ruleset.cards()[l.idx as usize]
+                    .props
+                    .get(card_sdk::abi::prop::SELF_REDIRECT)
+                    .copied()
+                    .unwrap_or(0)
+                    != 0
+        });
+        if !redirect_declared {
+            chain[0].link.join_redirect = None;
+        }
         // STACK-01: resolve as a job list so a nested settle can suspend the
         // walk and resume without rebuilding the chain.
         let mut order = Vec::new();
@@ -7084,7 +7185,10 @@ impl<M: CardModules> RulesBridge<M> {
         let mut answers: Vec<i32> = Vec::new();
         loop {
             let run = self.declare_run(cx, s, id, idx, top);
-            match self.ruleset.declare_entry(&run, idx, entry, s as i32, &answers) {
+            match self
+                .ruleset
+                .declare_entry(&run, idx, entry, s as i32, &answers)
+            {
                 Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
                 Ok(DeclareOut::Declined) => return Ok(None),
                 Ok(DeclareOut::Paused(p)) => {
@@ -7249,6 +7353,21 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         join_redirect: None,
         join_used: false,
     }
+}
+
+/// The reverse of [`bridge_trigger`]'s buy mapping: a guest-side deal rewrite
+/// back to the engine payload the commit reads.
+fn unbridge_buy(b: TriggerBuy) -> game_core::engine::rules::TriggerBuy {
+    let mut out = game_core::engine::rules::TriggerBuy::new(
+        game_core::engine::purchase::BuyKind::from_i32(b.kind as i32)
+            .unwrap_or(game_core::engine::purchase::BuyKind::Land),
+        b.seller.as_i32(),
+        b.price,
+    );
+    out.deal_owner = b.deal_owner;
+    out.deal_houses = b.deal_houses;
+    out.deal_mortgaged = b.deal_mortgaged;
+    out
 }
 
 /// Map a raw prompt answer to what the answer log should carry.
@@ -8091,7 +8210,8 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
                 self.world.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64
             }
             bandori_std::cel::KEY_CRYSTALS => {
-                self.world.group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
+                self.world
+                    .group_pool(seat as i32, bandori_std::cel::KEY_CRYSTALS) as i64
             }
             bandori_std::cel::KEY_PERSONA => {
                 let name = self
@@ -9117,7 +9237,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 .get(idx as usize)
                 .and_then(|c| c.entry(card_sdk::abi::OnKind::Play, None))
                 .unwrap_or(0);
-            match self.ruleset.declare_entry(&run, idx, entry, player_id as i32, &answers) {
+            match self
+                .ruleset
+                .declare_entry(&run, idx, entry, player_id as i32, &answers)
+            {
                 Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
                 Ok(DeclareOut::Declined) => return Ok(None),
                 Ok(DeclareOut::Paused(p)) => {
@@ -9594,6 +9717,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        // The `BuyAssign` deal rewrite (`set_deal_owner` / `set_deal_houses`) rides
+        // the buy trigger; the engine reads it back off `t.buy` at the commit.
+        t.buy = trigger.buy.map(unbridge_buy);
         Ok(())
     }
 }

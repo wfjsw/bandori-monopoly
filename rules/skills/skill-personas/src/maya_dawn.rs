@@ -28,12 +28,14 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart(
             "group_is(owner, 'Pastel✽Palettes')",
             None,
-            at_start)),
+            at_start,
+        )),
         // （2） replaces the draw, so it runs at the per-card **before** point.
         On::Action(Action::DrewBefore(
             "actor == owner && slot('ppFansUp') >= 1",
             None,
-            on_draw)),
+            on_draw,
+        )),
     ],
 );
 
@@ -59,6 +61,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「自己抽卡时时可选择将自己Y个正面[P✽P粉丝]变反，此次抽卡改为观看卡组顶端
 /// Y+1张卡…」.
 fn on_draw(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」 --
+    // 「初次演出事故」 seals every Pastel✽Palettes (2).
+    if ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+        return Ok(());
+    }
     let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,

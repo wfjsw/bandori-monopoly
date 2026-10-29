@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 use bandori_std::ctx::{self, plan};
 use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,14 +24,20 @@ pub const SHOP_FRIENDS: CardDef =
 
 /// C# `CardShopFriends.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so
-    // the C# `H.MoveWhyNot` gate applies (own turn, main move still available,
-    // turn's move not skipped).
+    // 规则书: 「视为你的主要移动」 -- still the turn's main move (own turn, main
+    // move not yet spent). A [传送] is exempt from [无法移动] (glossary 10
+    // 「无法使用非[传送]的移动效果」), so the turn's latched move-skip is not a
+    // refusal: `cant_move_code` 3 is exactly the skip latch (2, already moved,
+    // still refuses) -- same shape as `rimi_choco`'s teleport guard.
+    if ctx::cant_move_code(player_id) == 3 {
+        return None;
+    }
     rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「从商店街格子开始数」 -- C# walks `(street + d) % n` for d in 1..n,
+    // 规则书: 「商店街自己拥有的对应的格子（从商店街格子开始数）」 -- C# walks
+    // `(street + d) % n` for d in 1..n,
     // keeping `H.IsShop(t) && H.State.owners[t] == i`.
     let street = ctx::tile_named("商店街");
     let n = ctx::tile_count();
@@ -66,7 +72,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     };
     ctx::log(player_id, &why);
     // 规则书: 「[传送]」 + 「视为你的主要移动」 -- one move, not a bare hop: it is
-    // the turn's main move, it consumes it, and it settles at the destination.
+    // the turn's main move and it consumes it.
+    // TODO(规则书)（视为你的主要移动）: 卡面未写是否结算，这里按默认 resolve=true
+    //   结算 -- OPEN-传送主要移动结算 (BACKLOG MOVE-07 / C-Q21).
     plan::set_kind(MoveKind::Teleport);
     plan::set_teleport_to(to);
     ctx::card_move(player_id);

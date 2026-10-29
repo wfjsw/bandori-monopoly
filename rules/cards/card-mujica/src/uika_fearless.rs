@@ -6,8 +6,8 @@
 //!
 //! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new(
     "Mujica:（初华）我，无畏悲伤",
@@ -24,9 +24,10 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]」 -- C#
     // `H.V(i, "uikaMemory")` is bumped on every memory-tile settle and cleared
     // when CiRCLE is passed. The Ave Mujica 三角初华 skill (`Imprisoned XII`)
-    // already watches exactly that and publishes it under a neutral key, so
-    // this card reads `memory.dirty` rather than carrying its own hooks (this
-    // card is a hand card -- its own `pass` / `settle` entries would not run).
+    // already watches exactly that and publishes it under a neutral key
+    // (`memory.dirty`, set on settle and cleared by its `on_pass`), so this card
+    // reads that key rather than carrying its own hooks (this card is a hand
+    // card -- its own `pass` / `settle` entries would not run).
     let memory = ctx::state::get(player_id, "memory.dirty");
     if memory <= 0 {
         // C# `c.Effective = false` + a log line; no set_effective hook yet.
@@ -36,13 +37,17 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // 规则书: 「你可选择抽1张卡或使你本回合的投掷结果可定义为1-6以内的任何数字」
+    // 规则书: 「你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字」
     let mut options = alloc::vec::Vec::new();
     options.push(Msg::new(key!("uika_fearless_draw")));
-    // C# only offers the fix-roll option when `H.MoveWhyNot(i) == null &&
-    // H._turnCtx.Plan.FixedRoll < 0`; `rules_status::move_blocked` is `H.MoveWhyNot` and
-    // `ctx::fixed_roll` is `Plan.FixedRoll` (`None` when unset, i.e. `< 0`).
-    let can_move = rules_status::move_blocked(player_id).is_none() && ctx::fixed_roll().is_none();
+    // C# only offers the fix-roll option when `H.MoveWhyNot(i) == null`;
+    // `rules_status::move_blocked` is `H.MoveWhyNot`. `Plan.FixedRoll < 0` is not
+    // re-checked: `set_fixed_roll` overwrites, so a second copy still re-defines
+    // this turn's roll, which is what the clause says.
+    // TODO(规则书)（使你本回合的移动掷骰结果可定义为1-6以内的任何数字）: 书 poses the
+    //   choice unconditionally once the gate is met -- we also hide it when the main
+    //   move is closed (`move_blocked`, C# `MoveWhyNot`)
+    let can_move = rules_status::move_blocked(player_id).is_none();
     if can_move {
         options.push(Msg::new(key!("uika_fearless_fix")));
     }
@@ -53,7 +58,7 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
         &options,
     )?;
     if pick == 1 && can_move {
-        // 规则书: 「使你本回合的投掷结果可定义为1-6以内的任何数字」
+        // 规则书: 「使你本回合的移动掷骰结果可定义为1-6以内的任何数字」
         // C# `H.AskNumber(..., 1, 6, ...)` then `H._turnCtx.Plan.FixedRoll = n`.
         let n = ctx::ask_number(
             player_id,

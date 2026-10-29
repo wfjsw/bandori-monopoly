@@ -167,19 +167,17 @@ fn g02_half_speed_plus_expectations_floor_on_a_rent() {
     drain(&mut t);
     t.place_raw(0, "AG:（摩卡）0.5倍速");
     t.set_crystals(0, "AG:（摩卡）0.5倍速", 3);
-    t.place_raw(0, "PP:不要背负期待");
-    t.set_state(0, "no_expectation_stacks", 1);
+    let ne = t.place_raw(0, "PP:不要背负期待");
+    t.m.world_mut().set_prop_at(ne, "no_expectation.stacks", 1);
     let tile = tile("弦卷豪宅");
     let rent = data().tiles[tile].rent[0];
     t.set_owner(tile, Some(1));
-    // 不要背负期待 (1) cuts the roll by 2 and 0.5倍速 halves it, folding in
-    // placement order (0.5倍速 first here): 7 -> ceil(7/2)=4 -> 2, so start
-    // two tiles before `tile`. TODO(规则书) OPEN-ROLLRESHAPE-01: if 「最终结算」
-    // means *after* the additive −2 the answer is ceil(5/2)=3 instead and this
-    // landing moves by one. The two orders are not "either way round" -- they
-    // disagree -- and the card prints 向上取整, so a floor half is not a third
-    // option. Assertion left as-is pending the ruling.
-    t.set_pos(0, (tile + 58) % 60);
+    // 不要背负期待 (1) cuts the roll by 2 and 0.5倍速 halves it. 0.5倍速 is an
+    // `DiceRollAfter` body now, so it runs after the `DiceRollValue` reshape
+    // whatever the placement order: 7 -> 5 -> ceil(5/2)=3, so start three tiles
+    // before `tile`. This is the 「最终结算」 reading of OPEN-ROLLRESHAPE-01
+    // (after the additive −2); the card prints 向上取整.
+    t.set_pos(0, (tile + 57) % 60);
     t.dice(&[7]);
     t.roll(0).unwrap();
     drain(&mut t);
@@ -345,8 +343,8 @@ fn g06_expectations_floor_plus_100_on_a_split_leg() {
     t.clean();
     t.begin_turn(0);
     drain(&mut t);
-    t.place_raw(1, "PP:不要背负期待");
-    t.set_state(1, "no_expectation_stacks", 1);
+    let ne = t.place_raw(1, "PP:不要背负期待");
+    t.m.world_mut().set_prop_at(ne, "no_expectation.stacks", 1);
     t.give_play(0, "PP:[白鹭千圣]微笑的铁假面").unwrap();
     drain(&mut t);
     let share = ceil10(2000 / 3);

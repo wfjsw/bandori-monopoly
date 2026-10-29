@@ -29,6 +29,15 @@ fn field_card(t: &Table, who: usize, card: &str) -> Option<FieldCard> {
     t.field(who).into_iter().find(|f| f.card == card)
 }
 
+/// A per-`instance` property of `who`'s first field copy of `card` (unset = 0).
+/// The card's own record must ride the instance: a second copy of the same card
+/// on one field keeps its own pair.
+fn field_prop(t: &Table, who: usize, card: &str, key: &str) -> i32 {
+    field_card(t, who, card)
+        .and_then(|f| f.props.get(key).copied())
+        .unwrap_or(0)
+}
+
 /// Designation marks on `tile` belonging to `uid`.
 fn designates_on(t: &Table, tile: usize, uid: i32) -> Vec<TileMark> {
     t.marks_on(tile)
@@ -64,8 +73,8 @@ fn play_one_of_us(t: &mut Table) -> i32 {
 // =====================================================================
 
 // 规则书: 「将此卡放置在场上…指定双方各一块地契…」 -- the pair of deeds is the
-// lasting [指定] while the card is in play. Replaces the old
-// `one_of_us_mine` / `one_of_us_theirs` tile slots.
+// lasting [指定] while the card is in play. The `one_of_us_mine` /
+// `one_of_us_theirs` handles ride the instance's props, not per-player state.
 #[test]
 fn one_of_us_designation_marks_appear_and_die_with_the_card() {
     // 规则书: 「选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方
@@ -140,15 +149,16 @@ fn one_of_us_designation_marks_appear_and_die_with_the_card() {
 }
 
 // 规则书: 「指定双方各一块地契」 -- the two picks are stored as `MarkRef`s on
-// card state and retrieve to exactly those two deeds.
+// the card instance and retrieve to exactly those two deeds.
 #[test]
 fn one_of_us_refs_store_and_retrieve_the_pair() {
     let mut t = Table::vanilla(2);
     let uid = play_one_of_us(&mut t);
     assert!(uid > 0, "field uid {uid}");
-    // `play` stores the two designation handles as packed `MarkRef`s.
-    let mine_ref = t.state(0, "one_of_us_mine");
-    let theirs_ref = t.state(0, "one_of_us_theirs");
+    // `play` stores the two designation handles as packed `MarkRef`s on the
+    // placed instance.
+    let mine_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine");
+    let theirs_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs");
     assert!(mine_ref > 0, "mine MarkRef packed uid: {mine_ref}");
     assert!(theirs_ref > 0, "theirs MarkRef packed uid: {theirs_ref}");
     assert_ne!(mine_ref, theirs_ref, "distinct handles");
@@ -156,19 +166,22 @@ fn one_of_us_refs_store_and_retrieve_the_pair() {
     let mine = mark_by_uid(&t, mine_ref).expect("mine mark live");
     let theirs = mark_by_uid(&t, theirs_ref).expect("theirs mark live");
     assert_eq!(mine.tile, HILL as i32, "mine resolves to HILL: {mine:?}");
-    assert_eq!(theirs.tile, FUJIMI as i32, "theirs resolves to FUJIMI: {theirs:?}");
+    assert_eq!(
+        theirs.tile, FUJIMI as i32,
+        "theirs resolves to FUJIMI: {theirs:?}"
+    );
     assert_ne!(mine.tile, theirs.tile, "distinct tiles");
     assert_eq!(mine.category, mark_category::DESIGNATE, "{mine:?}");
     assert_eq!(theirs.category, mark_category::DESIGNATE, "{theirs:?}");
     assert_eq!(mine.instance, Some(uid), "{mine:?}");
     assert_eq!(theirs.instance, Some(uid), "{theirs:?}");
-    // An **unset** slot reads back 0. Uid 0 is never issued (allocation starts
+    // An **unset** prop reads back 0. Uid 0 is never issued (allocation starts
     // at 1), so unpacking it must yield `MarkRef::NONE`, never a live handle.
-    let unset = t.state(0, "no_such_ref");
-    assert_eq!(unset, 0, "unset slot reads 0");
+    let unset = field_prop(&t, 0, "AG:ONE OF US", "no_such_ref");
+    assert_eq!(unset, 0, "unset prop reads 0");
     assert!(
         card_sdk::abi::MarkRef::from(unset).is_none(),
-        "unset slot unpacks to MarkRef::NONE"
+        "unset prop unpacks to MarkRef::NONE"
     );
     assert!(
         !card_sdk::abi::MarkRef::from(mine_ref).is_none(),
@@ -182,10 +195,16 @@ fn one_of_us_refs_store_and_retrieve_the_pair() {
 fn mark_ref_dies_with_the_card_and_does_not_alias() {
     let mut t = Table::vanilla(2);
     let _uid = play_one_of_us(&mut t);
-    let mine_ref = t.state(0, "one_of_us_mine");
-    let theirs_ref = t.state(0, "one_of_us_theirs");
-    assert!(mark_by_uid(&t, mine_ref).is_some(), "mine live before unplace");
-    assert!(mark_by_uid(&t, theirs_ref).is_some(), "theirs live before unplace");
+    let mine_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine");
+    let theirs_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs");
+    assert!(
+        mark_by_uid(&t, mine_ref).is_some(),
+        "mine live before unplace"
+    );
+    assert!(
+        mark_by_uid(&t, theirs_ref).is_some(),
+        "theirs live before unplace"
+    );
     // 规则书: the designation lasts while the card is in play -- leaving the
     // field destroys the instance's units (`destroy_instance_units`).
     assert!(
@@ -193,9 +212,21 @@ fn mark_ref_dies_with_the_card_and_does_not_alias() {
         "unplace the field card"
     );
     assert!(mark_by_uid(&t, mine_ref).is_none(), "mine handle is dead");
-    assert!(mark_by_uid(&t, theirs_ref).is_none(), "theirs handle is dead");
-    assert_eq!(t.m.world().st.marks.iter().find(|m| m.uid == mine_ref).map(|m| m.tile).unwrap_or(-1), -1,
-        "dead handle reports tile -1");
+    assert!(
+        mark_by_uid(&t, theirs_ref).is_none(),
+        "theirs handle is dead"
+    );
+    assert_eq!(
+        t.m.world()
+            .st
+            .marks
+            .iter()
+            .find(|m| m.uid == mine_ref)
+            .map(|m| m.tile)
+            .unwrap_or(-1),
+        -1,
+        "dead handle reports tile -1"
+    );
     // A new mark must not recycle the old uids.
     let new_uid = t.m.world_mut().place_mark(
         -1,
@@ -212,8 +243,14 @@ fn mark_ref_dies_with_the_card_and_does_not_alias() {
     assert_ne!(new_uid, mine_ref, "new mark did not recycle mine's uid");
     assert_ne!(new_uid, theirs_ref, "new mark did not recycle theirs' uid");
     // The old stored refs still report dead -- the new mark did not alias.
-    assert!(mark_by_uid(&t, mine_ref).is_none(), "mine still dead after new mark");
-    assert!(mark_by_uid(&t, theirs_ref).is_none(), "theirs still dead after new mark");
+    assert!(
+        mark_by_uid(&t, mine_ref).is_none(),
+        "mine still dead after new mark"
+    );
+    assert!(
+        mark_by_uid(&t, theirs_ref).is_none(),
+        "theirs still dead after new mark"
+    );
     assert!(mark_by_uid(&t, new_uid).is_some(), "the new mark is live");
 }
 
@@ -223,8 +260,8 @@ fn mark_ref_dies_with_the_card_and_does_not_alias() {
 fn undesignate_drops_that_one_row() {
     let mut t = Table::vanilla(2);
     let uid = play_one_of_us(&mut t);
-    let mine_ref = t.state(0, "one_of_us_mine");
-    let theirs_ref = t.state(0, "one_of_us_theirs");
+    let mine_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine");
+    let theirs_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs");
     assert_eq!(designates_on(&t, HILL, uid).len(), 1);
     assert_eq!(designates_on(&t, FUJIMI, uid).len(), 1);
     // `ctx::undesignate(r)` is `remove_mark(r)` on that exact row.
@@ -239,12 +276,22 @@ fn undesignate_drops_that_one_row() {
         "theirs row still live: {:?}",
         t.marks()
     );
-    assert!(designates_on(&t, HILL, uid).is_empty(), "HILL designation gone");
-    assert_eq!(designates_on(&t, FUJIMI, uid).len(), 1, "FUJIMI designation stays");
+    assert!(
+        designates_on(&t, HILL, uid).is_empty(),
+        "HILL designation gone"
+    );
+    assert_eq!(
+        designates_on(&t, FUJIMI, uid).len(),
+        1,
+        "FUJIMI designation stays"
+    );
     // Dropping the other row is also exact.
     assert!(t.m.world_mut().remove_mark_by_uid(theirs_ref));
     assert!(mark_by_uid(&t, theirs_ref).is_none());
-    assert!(t.marks().iter().all(|m| m.category != mark_category::DESIGNATE));
+    assert!(t
+        .marks()
+        .iter()
+        .all(|m| m.category != mark_category::DESIGNATE));
 }
 
 // =====================================================================

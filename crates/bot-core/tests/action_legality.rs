@@ -12,10 +12,43 @@ use bot_core::action::{self, Action};
 use game_core::data::{GameData, Roster};
 use game_core::engine::{Match, StubRules};
 use game_core::msg::Msg;
-use game_core::net::RoomMember;
+use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{stage, MatchPrompt, MatchState};
 use game_core::MatchMode;
+
+/// Answer any opening prompt with its fallback so the world goes idle. A bot
+/// is a client since `docs/BOT-DRIVE.md` (`ai = false`), so `quick_start`
+/// leaves the mulligan barrier open; `Match::world_mut` needs no pending
+/// routine.
+fn clear_prompts(m: &mut Match) {
+    loop {
+        let st = m.state();
+        if st.prompt.id == 0 {
+            return;
+        }
+        let p = st.prompt;
+        let mut any = false;
+        for (k, &s) in p.players.iter().enumerate() {
+            if p.answers.get(k).copied().unwrap_or(0) >= 0 {
+                continue;
+            }
+            let member = st.players[s as usize].member;
+            let _ = m.act(
+                member,
+                &NetMessage {
+                    prompt: p.id,
+                    value: p.fallback,
+                    ..NetMessage::act("answer")
+                },
+            );
+            any = true;
+        }
+        if !any {
+            return;
+        }
+    }
+}
 
 fn data() -> Arc<GameData> {
     // bot-core must not grow a hard dep on the card crates, so the roster
@@ -279,6 +312,7 @@ fn a_real_match_at_end_never_offers_buy_or_build() {
         ScoreWeights::default(),
     );
     m.quick_start();
+    clear_prompts(&mut m);
     let tile = some_property(&data);
     {
         let w = m.world_mut();

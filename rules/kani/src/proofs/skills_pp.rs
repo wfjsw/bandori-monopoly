@@ -60,6 +60,9 @@ crate::host_subset!(skills_pp_dispatch {
     group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
+    // `cover_crystals` / `spend_crystals` walk the field for `Sumimi:#L11`
+    // (none in this world: the cover arm is not reached).
+    field_instances => arm_field_instances,
     player_count => arm_player_count,
     player_out => arm_player_out,
     persona_is => arm_character_is,

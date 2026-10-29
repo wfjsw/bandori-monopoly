@@ -375,6 +375,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::add_house => arm_add_house(a),
         Op::mortgaged_of => arm_mortgaged_of(a),
         Op::set_mortgaged => arm_set_mortgaged(a),
+        Op::apply_redeem => arm_apply_redeem(a),
         Op::set_owner => arm_set_owner(a),
         Op::owned_count => arm_owned_count(a),
         Op::owned_at => arm_owned_at(a),
@@ -1429,11 +1430,8 @@ pub fn arm_buy_price(a: Args) -> i64 {
         if s < 0 {
             0
         } else {
-            // `purchase::quote_native` = land + standing houses × house_cost.
-            // The model's `buy_price` arm historically returned land only;
-            // keep land-only here and note the gap — `quote_native` also
-            // folds house cost, which `houses_of` × `build_cost` exposes.
-            // Faithful quote: land + houses * house_cost (see purchase.rs).
+            // Faithful `purchase::quote_native`: land + houses * house_cost
+            // (see purchase.rs).
             let h = world::with_world(|w| w.tiles[tile_idx(a0)].houses).max(0);
             (board::TILES[s as usize].price + h * board::TILES[s as usize].house_cost) as i64
         }
@@ -1948,6 +1946,11 @@ pub fn arm_invoke_skill(a: Args) -> i64 {
 pub fn arm_is_placed(a: Args) -> i64 {
     let _ = a;
     world::with_world(|w| (w.field_n > 0) as i64)
+}
+
+pub fn arm_rent_of(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.rent_of(a0)) as i64
 }
 
 pub fn arm_linger(_a: Args) -> i64 {
@@ -2655,6 +2658,21 @@ pub fn arm_set_mortgaged(a: Args) -> i64 {
     }
 }
 
+/// `apply_redeem(player, tile, amount)` -- the mechanism half of a redeem:
+/// clear the mortgage flag. Modelled as the unmortgage write (the `redeemed`
+/// state key and the fee have no model field).
+pub fn arm_apply_redeem(a: Args) -> i64 {
+    let [_, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.tiles[tile_idx(a1)].mortgaged = false;
+        w.push(Effect::SetMortgaged {
+            tile: a1,
+            on: false,
+        });
+    });
+    0
+}
+
 pub fn arm_set_owner(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
@@ -2810,11 +2828,94 @@ pub fn arm_spend_marker(a: Args) -> i64 {
     }
 }
 
+/// The world abnormal column a well-known `state` key aliases (1 stay / 2 stun
+/// / 3 exile / 0 none). The shared status verbs write `state` keys, while
+/// `snapshot`, `cant_move` and `abnormal_count` read the dedicated columns; the
+/// generic `state_*` arms decode the keys so both views stay one model (the
+/// retired `give_stay` / `stay_of` ops used to do this).
+fn status_kind(key: NameId) -> i32 {
+    if intern::id_eq_str(key, "stay") {
+        1
+    } else if intern::id_eq_str(key, "stun") {
+        2
+    } else if intern::id_eq_str(key, "exile") {
+        3
+    } else {
+        0
+    }
+}
+
+/// The `ppFansUp` / `ppFansDown` state keys alias the world's fan columns:
+/// ABI v88 moved the fan counters onto the generic `state::*` surface
+/// (`pp_fans::up/down/grant`), while `snapshot` and the specs still read the
+/// columns the retired `count_held` / `set_held_name` ops mapped. 1 = up,
+/// 2 = down, 0 = not a fan key.
+fn fan_kind(key: NameId) -> i32 {
+    if intern::id_eq_str(key, "ppFansUp") {
+        1
+    } else if intern::id_eq_str(key, "ppFansDown") {
+        2
+    } else {
+        0
+    }
+}
+
 pub fn arm_state_add(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         let key = name_id(a1, a2);
-        world::with_world_mut(|w| w.key_add(a0, key, a3)) as i64
+        let fan = fan_kind(key);
+        if fan != 0 {
+            return world::with_world_mut(|w| {
+                if a0 < 0 || (a0 as usize) >= MAX_PLAYERS {
+                    return 0;
+                }
+                let p = a0 as usize;
+                let out = if fan == 1 {
+                    w.fans_pos[p] = (w.fans_pos[p] + a3).max(0);
+                    w.fans_pos[p]
+                } else {
+                    w.fans_neg[p] = (w.fans_neg[p] + a3).max(0);
+                    w.fans_neg[p]
+                };
+                w.key_set(a0, key, out);
+                out
+            }) as i64;
+        }
+        let kind = status_kind(key);
+        if kind == 0 {
+            return world::with_world_mut(|w| w.key_add(a0, key, a3)) as i64;
+        }
+        world::with_world_mut(|w| {
+            if a0 < 0 || (a0 as usize) >= MAX_PLAYERS {
+                return 0;
+            }
+            let p = a0 as usize;
+            let out = match kind {
+                1 => {
+                    w.stay[p] = (w.stay[p] + a3).max(0);
+                    w.push(Effect::GiveStay { player: a0, n: a3 });
+                    w.stay[p]
+                }
+                2 => {
+                    w.stun[p] = (w.stun[p] + a3).max(0);
+                    w.push(Effect::GiveStun { player: a0, n: a3 });
+                    w.stun[p]
+                }
+                _ => {
+                    w.exile[p] = (w.exile[p] + a3).max(0);
+                    w.push(Effect::GiveExile {
+                        player: a0,
+                        n: a3,
+                        to: w.exile_to[p],
+                    });
+                    w.exile[p]
+                }
+            };
+            // Keep the generic map in step for readers that bypass the columns.
+            w.key_set(a0, key, out);
+            out
+        }) as i64
     }
 }
 
@@ -2835,12 +2936,23 @@ pub fn arm_state_get(a: Args) -> i64 {
         // VALUE. Column ids are the SDK's `state::{MIN,MAX,EXPIRES,FLAGS}`.
         let key = name_id(a1, a2);
         let field = a3;
-        world::with_world(|w| match field {
-            1 => w.key_min(a0, key),
-            2 => w.key_max(a0, key),
-            3 => w.key_expires(a0, key),
-            4 => w.key_flags(a0, key) as i32,
-            _ => w.key_get(a0, key),
+        let kind = if field == 0 { status_kind(key) } else { 0 };
+        let fan = if field == 0 { fan_kind(key) } else { 0 };
+        world::with_world(|w| match fan {
+            1 => w.fans_pos[player_idx(a0)],
+            2 => w.fans_neg[player_idx(a0)],
+            _ => match kind {
+                1 => w.stay[player_idx(a0)],
+                2 => w.stun[player_idx(a0)],
+                3 => w.exile[player_idx(a0)],
+                _ => match field {
+                    1 => w.key_min(a0, key),
+                    2 => w.key_max(a0, key),
+                    3 => w.key_expires(a0, key),
+                    4 => w.key_flags(a0, key) as i32,
+                    _ => w.key_get(a0, key),
+                },
+            },
         }) as i64
     }
 }
@@ -2855,6 +2967,26 @@ pub fn arm_state_set(a: Args) -> i64 {
         let key = name_id(a1, a2);
         let field = a3;
         let v = a4;
+        let kind = if field == 0 { status_kind(key) } else { 0 };
+        let fan = if field == 0 { fan_kind(key) } else { 0 };
+        if fan != 0 {
+            return world::with_world_mut(|w| {
+                // Fan rows floor at 0 (counter semantics; `arm_state_add`
+                // clamps the same way), and the map shadow stores the same
+                // figure the column gets.
+                let stored = v.max(0);
+                if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
+                    let p = a0 as usize;
+                    if fan == 1 {
+                        w.fans_pos[p] = stored;
+                    } else {
+                        w.fans_neg[p] = stored;
+                    }
+                }
+                w.key_set(a0, key, stored);
+                stored
+            }) as i64;
+        }
         world::with_world_mut(|w| {
             let out = match field {
                 1 => {
@@ -2874,6 +3006,18 @@ pub fn arm_state_set(a: Args) -> i64 {
                     v
                 }
                 _ => {
+                    let v = if kind != 0 && w.key_never_negative(a0, key) {
+                        v.max(0)
+                    } else {
+                        v
+                    };
+                    if kind != 0 && a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
+                        match kind {
+                            1 => w.stay[a0 as usize] = v,
+                            2 => w.stun[a0 as usize] = v,
+                            _ => w.exile[a0 as usize] = v,
+                        }
+                    }
                     w.key_set(a0, key, v);
                     v
                 }
@@ -3022,6 +3166,14 @@ pub fn arm_tile_in(a: Args) -> i64 {
         (a1 == 31 || a1 == 50) as i64
     } else if intern::id_eq_str(class, "color:6") {
         (a1 == 31 || a1 == 50) as i64
+    } else if let Some(g) = intern::resolve_str(class)
+        .strip_prefix("color:")
+        .and_then(|g| g.parse::<i32>().ok())
+    {
+        // Generic colour class: the tile's own group (`is_color_lazy`'s first
+        // arm; the `anyColor` / `colorFor` props are not modelled).
+        let s = board::tile_slot(a1);
+        (s >= 0 && board::TILES[s as usize].group as i32 == g) as i64
     } else {
         0
     }

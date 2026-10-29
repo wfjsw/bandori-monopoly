@@ -296,17 +296,21 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     ctx::gain_marker(player_id, KEY, want, why)
 }
 
-/// Spend `n` pots. `ChargePaying` runs first (spend substitution 「以代替此次
-/// 技能的火罐消耗」), then `markerSpend` opens **before** the pots move; a
-/// cancelled window spends nothing. After a successful spend the engine raises
-/// `fireSpent`.
+/// Spend `n` pots. `ChargePaying` runs first over the **whole** cost -- one
+/// crystal replaces 「以代替此次技能的火罐消耗」, temp pots included -- then the
+/// temp and pool pots move, each `markerSpend` opening **before** its write; a
+/// cancelled `ChargePaying` spends nothing. After a successful spend the engine
+/// raises `markerSpent` for each counter that moved.
 ///
 /// Spend draws [`temp`] pots first (§10(2): it is the over-cap allowance),
-/// then the pool. Returns whether the full cost was paid.
+/// then the pool. Returns whether the full cost was paid; a cancelled temp
+/// `markerSpend` leaves the temp pots and falls back to the pool for the whole
+/// cost, which then refuses if the pool cannot cover it.
 ///
-/// The `ChargePaying` window rides the pool spend verb and opens **even when
-/// the pool is empty** (the substitution path). A pre-check on the pool would
-/// skip the window and break 「以代替此次技能的火罐消耗」.
+/// The `ChargePaying` window opens even when the pots can cover nothing (the
+/// substitution path) and for a fully-temp cost, which never reaches the pool
+/// verb. A pre-check on the pool would skip the window and break
+/// 「以代替此次技能的火罐消耗」.
 pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
@@ -314,11 +318,18 @@ pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if !writable(player_id) {
         return Ok(false);
     }
+    // 规则书: 「以代替此次技能的火罐消耗」 -- the swap covers the whole cost,
+    // temp pots included, so the window opens before *any* pot moves.
+    if !ctx::raise(player_id, crate::kind::ChargePaying, n)? {
+        return Ok(true);
+    }
     let from_temp = temp::get(player_id).min(n);
     let from_pool = n - from_temp;
     // Temp first: the over-cap allowance is spent before the declared pool.
-    if from_temp > 0 {
-        temp::spend(player_id, from_temp, why)?;
+    // A cancelled temp `markerSpend` leaves the temp pots, so the pool must
+    // then cover the whole cost.
+    if from_temp > 0 && !temp::spend(player_id, from_temp, why)? {
+        return spend_pool(player_id, n, why);
     }
     if from_pool > 0 {
         return spend_pool(player_id, from_pool, why);
@@ -326,13 +337,10 @@ pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     Ok(true)
 }
 
-/// Pool-only spend (never temp): `ChargePaying` then `markerSpend`, then the
-/// write. The substitution window opens **even when the pool is empty**.
+/// Pool-only spend (never temp): `markerSpend`, then the write. The caller has
+/// already opened the `ChargePaying` window for the whole cost.
 fn spend_pool(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
-        return Ok(true);
-    }
-    if !ctx::raise(player_id, crate::kind::ChargePaying, n)? {
         return Ok(true);
     }
     Ok(ctx::spend_marker(player_id, KEY, n, why)? != 0)
@@ -384,11 +392,15 @@ pub mod regime {
     }
 
     /// 「每回合结束时失去1火罐」 -- drain `n` from the pool (not temp).
-    /// Returns how many actually left.
+    /// Returns how many actually left. Opens the same `ChargePaying` window as
+    /// [`super::spend`]; a substituted loss leaves the pool alone.
     pub fn drain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
         let have = get(player_id);
         let take = n.clamp(0, have);
         if take <= 0 {
+            return Ok(0);
+        }
+        if !ctx::raise(player_id, crate::kind::ChargePaying, take)? {
             return Ok(0);
         }
         if !spend_pool(player_id, take, why)? {
@@ -459,7 +471,9 @@ pub mod temp {
         got
     }
 
-    /// Spend `n` temp pots. Returns whether the full amount left.
+    /// Spend `n` temp pots. Returns whether the full amount left. A temp pot is
+    /// a 火罐, so the spend also raises `markerSpent` (name [`TEMP_KEY`]) like
+    /// the pool does -- 「每当你消耗火罐时」 sees it.
     pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
         if n <= 0 {
             return Ok(true);
@@ -467,21 +481,6 @@ pub mod temp {
         if !writable(player_id) {
             return Ok(false);
         }
-        if get(player_id) < n {
-            return Ok(false);
-        }
-        let left = get(player_id) - n;
-        // `-1` = leave the stored temp ceiling alone.
-        set_row(player_id, TEMP_KEY, left, -1);
-        ctx::log(
-            player_id,
-            &Msg::new("log.spend_charge")
-                .player_id("who", player_id)
-                .msg("why", why)
-                .i("n", n as i64)
-                .i("charge", left as i64)
-                .i("max", max(player_id) as i64),
-        );
-        Ok(true)
+        Ok(ctx::spend_marker(player_id, TEMP_KEY, n, why)? != 0)
     }
 }

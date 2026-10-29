@@ -15,7 +15,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it, items, sec};
+use card_sdk::{it, items, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
@@ -25,12 +25,18 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // “山吹面包房”，“星之鼓动山丘”或“流星堂”时」 -- the five named spots
         // are the condition.
         On::Action(Action::PassTile("card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))", None, pass_tile)),
-        // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- a payment
-        // the owner owes, with a crystal to spend.
+        // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- 「消耗或支付」
+        // has two arms; only the pay pipeline is wired (owner as payer, a crystal to
+        // spend), and a 消耗 by 赎回 / [拍卖] deducts money directly.
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive crystal spend sits immediately before the pure
         // `PaySplitChoose` filter stage.
+        // TODO(规则书)（消耗或支付时）: a 消耗 is not a payment -- 赎回 / [拍卖] deduct
+        //   directly and never offer the crystals; a rent the owner *receives* is open
+        //   (MONEY-07 / C-Q18) -- we only offer when the owner pays.
+        // TODO(ABI)（消耗或支付时）: no redeem/auction money window, and no owner-seat
+        //   accessor in a pay body (needed to ask the owner when they are the payee).
         On::Action(Action::PaySplitChooseBefore("card.placed && actor == owner && value > 0 && card.counter('crystals') > 0", None, pay_choose)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()

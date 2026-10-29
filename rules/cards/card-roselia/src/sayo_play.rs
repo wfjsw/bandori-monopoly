@@ -6,17 +6,20 @@
 //!
 //! Counteraction after your non-teleport main distance is determined, before
 //! moving (same timing as Sayo's skill; the printed card text is unchanged).
-//! The C# realises 「视为使用一次此卡使用者的技能」
-//! as H.AnnounceSkill plus SkillSayo's extension (+1 or +2, no fire cost).
+//! 「视为使用一次此卡使用者的技能」 means Sayo's skill (2) extension (+1 or +2):
+//! C# `H.AnnounceSkill`. The skill's press body is not invoked, so the card
+//! currently runs the extension without the skill's 6-[火罐] cost.
 
 use bandori_std::ctx::{self, plan, state, trigger};
 use card_sdk::abi::{prop, ChainKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(
     "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
     &[
+        // 规则书: 「[反击] 时机合适时打出」 -- a counteraction in the skill's own
+        // window; `counter_only` explains the timing on a hand play.
         On::Counteract(
             &[ChainKind::MoveBefore],
             "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
@@ -42,10 +45,10 @@ fn no_play(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`can_counteract`] -- `skill_blocked` stays here (not
-/// yet in the condition vocabulary).
+/// Residual guard for [`can_counteract`] -- the bound-skill presence (「此卡使用
+/// 者的技能」) and `skill_blocked` stay here (not in the condition vocabulary).
 fn can_counteract(player_id: i32) -> bool {
-    !ctx::skill_blocked(player_id, "")
+    ctx::persona_skill(player_id).is_some() && !ctx::skill_blocked(player_id, "")
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -54,6 +57,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // `!skill_blocked` is the residual guard.
     // Announce the user's character skill. Running its press body again would
     // add a second paid skill offer before this card's free extension.
+    // TODO(规则书)（打出时视为使用一次此卡使用者的技能）: 使用一次技能 = the skill's
+    //   press body, whose （2） gates on `charge(owner) >= 6` and spends 6 个[火罐]
+    //   -- we only announce it and keep the +1/+2 and the `sayoThorns.used`
+    //   latch inline, at no [火罐] cost. Whether 「视为使用」 pays is an open
+    //   ruling (`card-ag/src/detour.rs` TODO on the same wording);
+    //   `ctx::invoke_skill` would run the body.
+    // TODO(ABI)（视为使用一次此卡使用者的技能）: no skill-use raise exists --
+    //   v35 `invoke_skill` deliberately raises none (that raise belongs to the
+    //   player's own press, `use_skill`), so 「使用角色技能时」 listeners never
+    //   hear this use. `cardUsed` also fires for every placed-card declaration,
+    //   so it is not a drop-in.
     if let Some(skill) = ctx::persona_skill(player_id) {
         ctx::log(
             player_id,

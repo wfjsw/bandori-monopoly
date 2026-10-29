@@ -1,42 +1,43 @@
 # Rulebook / ABI backlog
 
-**2026-10-20 audit.** Standing backlog for continuous iteration on rulebook
+**2026-10-28 cleanup.** Standing backlog for continuous iteration on rulebook
 divergences, rule-implementation bugs and ABI problems. Fix agents take
 independent batches from here; do not merge into the primary branch from this
 file. (Originally opened 2026-10-10 as `rulebook-triage`; full recount
-2026-10-17; card-rule TODO review + reconstruction 2026-10-20.)
+2026-10-17; card-rule TODO review + reconstruction 2026-10-20; 2026-10-27 card
+sheet review + triage; 2026-10-28 triage applied, closed items removed.)
 
-Sources (re-counted 2026-10-20 against master `b8e26436`):
-- **153** `TODO(规则书)` tags in `rules/` + `crates/` after the 2026-10-20
-  review. Breakdown: `rules/cards` 66, `rules/skills` 28, `rules/events` 21,
-  `crates/` 18, `rules/tiles`+`status`+`markers`+`bandori-std`+`card-sdk` 13,
-  `rules/tests` 5, `rules/kani` 2. Of these **7 are convention markers** (a
-  module doc naming the `TODO(规则书)` policy, not a gap) and **146 are live
-  gaps**. The 2026-10-17 figure of 157 included the 7 `NEGATION-AUDIT V2`
-  leftovers that this audit settled (see D-02).
-- **11** live `#[ignore = "RULING: …"]` rulebook tests in
+On 2026-10-27 the 47 completed item sections and the closed-audit tail were
+deleted. On 2026-10-28 every review row was triaged and merged by root cause
+into A/B/C/D, and the 776 A items were fixed on branch
+`worktree-card-rulebook-review`. This file now lists **open work only**: the B
+items grouped by ABI capability, the still-open legacy items, and the C
+questions as verbatim text at the end. Every fixed, landed or dropped item —
+the A list, the D row, and all earlier closed-batch notes — was removed from
+this file on 2026-10-28; the record lives in the branch's commit history.
+
+Sources (re-counted 2026-10-27 against master `325845ba`):
+- **162** `TODO(规则书)` tags in `rules/` + `crates/`. Breakdown: `rules/cards`
+  72, `rules/skills` 27, `rules/events` 21, `crates/` 23, other 19. Some are
+  convention markers (a module doc naming the policy, not a gap); the
+  convention-marker list is below.
+- **13** live `#[ignore = "RULING: …"]` rulebook tests in
   `rules/tests/tests/*.rs`, zero live `DISCREPANCY:` (comment mentions of the
   convention do not count). Plus 2 meta `q4_unintended` tooling ignores (soak /
-  report generator). `crates/game-rules/tests/` is clean. Unchanged since
-  2026-10-17.
+  report generator). `crates/game-rules/tests/` is clean.
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `crates/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v96** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`) — the v89
-figure in the 2026-10-20 header was already stale (v90..v95 landed between
-audits and were never recorded here). The doc body still quotes
-v53–v85-era names in places; where a kind has since been renamed
+**Current ABI: v104** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`). The body
+still quotes older era names in places; where a kind has since been renamed
 (`HookKind`/`GateKind` → `ActionKind`/`FilterKind`; `MoveRoll` → `DiceRollResult`;
 the `Pay*` / `Roll*` families restructured; `ruleset-core` → `bandori-std`),
-treat the live name as canonical. ABI bumps since the 2026-10-17 audit:
-v86–87 (markers / fire declaration), v88 (Phase C batch 2 — status verbs into
-`bandori-std`), v89 (status-vocab-zero — opaque status keys), v90 (`MetaRow`
-display slots), v91 (namespaced `TriggerKind`), v92 (CEL `kind` is a string),
-v93 (typed payloads + `game-kinds` vocabulary), v94 (typed filter/action
-registration DSL), v95 (named-field `On` entries + `counter_reason` locale
-keys). **v96 is in flight on `gap-batch8-meda`**: `PaySplitMulBefore`
-(engine id 110), the writable interactive stage between `PaySplitAdd` and
-`PaySplitMul`.
+treat the live name as canonical. v104 widened the turn-snapshot wire to
+`(pos, state, money, owners, houses, mortgaged)` (像往常一样's undo).
+v103 reworked the roll API:
+`ctx::roll` is the windowed default and `ctx::roll_direct` the windowless
+variant, both returning `Result<i32, Prompt>`; findings written against the
+pre-v103 `ctx::roll` were rechecked in triage.
 
 **Crate renames** — every path below is quoted in the new names:
 - `rules/skills/skill-characters/` → `rules/skills/skill-personas/`
@@ -55,7 +56,6 @@ Ignored-test run: `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`) then
 - **A** — fixable now from unambiguous rulebook text + current ABI
 - **B** — needs a new/changed ABI capability (named in our vocabulary)
 - **C** — rulebook text ambiguous; user ruling needed
-- **D** — stale (already fixed / already landed)
 
 **Severity**: high (common play) | medium | low (rare edge)
 
@@ -63,78 +63,204 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 ---
 
-# TODO(规则书) ↔ item index (2026-10-20)
+# 2026-10-27 card sheet review intake
 
-The 2026-10-20 review walked every `TODO(规则书)` in `rules/` + `crates/` and
-assigned it a home. **One tag = one gap**; several tags may share one item
-(e.g. the 「视为此卡未生效」 observer is CH-07 across seven card bodies).
-A tag with no item is a backlog bug — file it.
+Full review of all 183 cards on `新卡组卡` (gid 648135790) against their
+implementations and comments; the live sheet was verified identical to
+`docs/rulebook/cards-sheet.csv` the same day. Report:
+`docs/rulebook/CARD-REVIEW-2026-10-27.md`; machine-readable rows:
+`card-review-2026-10-27.{json,csv}`.
 
-## Where the 146 live gap tags sit
+- 1733 verified findings: 125 high / 587 medium / 1021 low.
+- 180 of 183 cards affected; clean: `PP:有你与我在这里共度`, `R:轨迹`, `通用:GREAT`.
+- All high are unrecorded. Top cards by volume: `HHW:（花音）Wacha Mocha
+  啪嗒进行曲` (26), `Mujica:#J11` (23), `RAS:（和奏瑞依）寄于指尖的执念` (22),
+  `Sumimi:（真奈）歌唱大赛5连冠` (21).
+- Dominant roots: dead hooks because a play body never places the card on the
+  field; missing owner gates on `TurnEnd`/`PassTile` hooks; `ctx::roll` ignoring
+  `turn.extreme` (fixed, v103 path); card-effect spends wrongly offering
+  skill-cost substitution; `PaySplitMul`/`DESIGNATES` props absent.
+- Comment work: 241 missing call-site citations, 259 missing `TODO(规则书)`,
+  362 misleading comments, 52 wrong quotes, 42 stale TODOs.
 
-| area | tags | owning items (cluster) |
-|---|---|---|
-| `rules/cards/card-ag` | 8 | CH-10, DETOUR-01, MONEY-05, ABI-04, ABI-10 |
-| `rules/cards/card-crychic` | 5 | MOVE-08, MOVE-09, TOMORI-BIND-01, HARU-SOYO-FX, SETTLE-04 |
-| `rules/cards/card-general` | 4 | ABI-02, ABI-03, CH-06, DRAW-OUT-01 |
-| `rules/cards/card-hhw` | 8 | CH-07, CRYSTAL-06, CRYSTAL-07, TILE-02, ABI-05, SETTLE-04 |
-| `rules/cards/card-morfonica` | 2 | CH-07, MOVE-13 |
-| `rules/cards/card-mujica` | 8 | CH-05, CH-09, LOW-03, NYAMU-01, SKILL-04, LOW-04 |
-| `rules/cards/card-mygo` | 4 | CH-07, CRYSTAL-02, LOY-ANON-01 |
-| `rules/cards/card-pp` | 6 | AYA-LONG-01 **closed**, LOY-DREAM-01, ABI-07, ABI-10 |
-| `rules/cards/card-ppp` | 1 | CRYSTAL-06 |
-| `rules/cards/card-ras` | 8 | ABI-01, ABI-03, CH-05, CH-11, LOY-GUERRILLA-01, MONEY-04 |
-| `rules/cards/card-roselia` | 5 | CH-07, LISA-BOND-01, NFO-CANCEL-01, CRYSTAL-08, MONEY-04 |
-| `rules/cards/card-sumimi` | 6 | CH-05, LINGER-10, MONEY-08, **DONUT-VOID-01 (new)** |
-| `rules/skills/skill-personas` | 17 | AYA-POOL-01, SKILL-04/07/10, MARKERS-LISA-01, MARKERS-MUTSU-01, SKILL-05, ABI-11, HAG-01 |
-| `rules/skills/skill-groups` | 8 | SKILL-06, CRYSTAL-05, AVE-CLAW-01, SKILL-06 |
-| `rules/events` | 18 | EVENT-01..04, DETOUR-01, MONEY-08, MOVE-15, LOW-01 |
-| `rules/tiles` | 4 | TILE-03/06, LOW-02, GUARD-PERVISIT |
-| `rules/status` | 2 | STA-02, STA-03 |
-| `rules/markers` + `bandori-std` | 2 | MARKERS-LISA-01, ABI-MARKER-SPENT (new) |
-| `crates/card-sdk` | 2 | MONEY-04, TILE-03 |
-| `crates/game-core` | 12 | MONEY-01..05, MOVE-06, LINGER-10, GUARD-SETTLE-DEPTH, ABI-12, HOST-01 |
-| `crates/game-rules` | 3 | GUARD-PERVISIT, DRAW-OUT-01, FORCE-WRITE-01 |
-| `rules/tests` | 5 | HOST-01, MOVE-06, LOY-ANON-01, EVENT-03 |
-| `rules/kani` | 2 | MARKERS-KANI-01 (spec pins) |
+**Triage result (2026-10-28).** Every one of the 1733 rows was read against its
+cell and classified, then merged by root cause; no row is unclassified. Final:
+**776 A items, fixed on the triage branch** (their item list was removed from
+this file on 2026-10-28); **65 B items** under 15 ABI capability groups with a
+review design each in `docs/rulebook/spec/abi/`; **50 C items**, mapped to the
+**88 numbered questions** at the end of this file (C-Q1–C-Q88; 12 items reuse an
+existing question); **1 D item** dropped. Items carry their sheet rows; a row
+merged into two items is listed under both.
 
-## Convention markers (not gaps — do not count as open)
+B items are grouped by the capability that closes them — the groups are the
+unit of approval, not the individual card. C items change no code until ruled;
+their sites carry a `TODO(规则书)` pointing at the C-Q id.
+
+# B — needs new ABI (65 items, 242 rows, 15 capability groups)
+
+One design per group, for review before implementation. The designs are the
+unit of approval; a card is fixed only after its group lands. Group files live
+in `docs/rulebook/spec/abi/`.
+
+## G01 — Instance identity and per-instance store
+
+Design: `docs/rulebook/spec/abi/G01-instance-identity-and-state.md`
+
+- **skill-fired-signal** (high, rows 152,184,232,445,1091,1243,1244,1481) — No per-resolution skill-fire signal, no guest emit, and X/skill-instance scope; `rules/cards/card-morfonica/src/rui_devil.rs`
+- **trigger-instance-identity** (medium, rows 252,283,285,1029,1039) — Trigger/marker identity and per-instance state are not addressable (uid, marker tile, card.prop, dest-by-uid); `rules/cards/card-morfonica/src/starry_night.rs`
+- **counter-cap-uid** (medium, rows 301,342,1056) — No per-uid counter cap read or clamp beyond one call; `rules/cards/card-mujica/src/sparkler.rs`
+
+## G02 — Pay pipeline payload, stages and raw-money windows
+
+Design: `docs/rulebook/spec/abi/G02-pay-pipeline.md`
+
+- **pay-payload-kind-tile** (high, rows 226,230,305,306,309,323,953,959,1005,1031,1241,1353,1427) — Card-driven payments cannot carry kind, must-buy, tile, settle tile or a fixed no-modifier tranche; `rules/cards/card-morfonica/src/rui_devil.rs`
+- **pay-stage-presplit** (medium, rows 21,1397,1539) — No interactive pre-stage before PaySplitAdd and no split-leg/total flag on the trigger; `rules/cards/card-crychic/src/vocal_too_hard.rs`
+- **raw-money-window** (medium, rows 572,1333) — Raw money paths (lose_raw, redeem, auction) open no pay window; `rules/cards/card-morfonica/src/tritone.rs`
+- **charge-paying-source** (high, rows 458,459,1360) — ChargePaying cannot tell a skill spend and only sees the pool share; `rules/cards/card-mygo/src/tomori_no_longer.rs`
+- **fire-bird-paid-signal** (medium, rows 1441) — A discounted payment misreads as a shortfall; `rules/cards/card-roselia/src/fire_bird.rs`
+- **rent-figure** (medium, rows 513,1388) — The link surcharge uses rent_of and ignores mortgage/dice/rent-factor partners; `rules/cards/card-mygo/src/anon_tokyo.rs`
+- **money-counters** (medium, rows 1009,1472) — gains_this_turn misses raw credits; paid_in_settle is world-wide; `rules/cards/card-hhw/src/hagumi_marks.rs`
+
+## G03 — Roll pipeline stages and prompt option actions
+
+Design: `docs/rulebook/spec/abi/G03-roll-and-prompts.md`
+
+- **roll-stage-effect-rolls** (high, rows 62,179,596,598,1053,1224,1367,1479) — Effect rolls and non-turn rollers skip the value/after stages; no per-roller move dice; `rules/cards/card-hhw/src/sports_talent.rs`
+- **roll-history-per-player** (low, rows 97,1159,1160) — turn_rolls is turn-wide, not per roller; `rules/cards/card-crychic/src/taki_even_if.rs`
+- **reroll-post-pick-signal** (high, rows 150,242,249,892,893,1002,1169,1187,1262,1379) — No reroll/post-pick signal; rerolled faces skip DiceRollValue and armed boosts/crystal checks; `rules/cards/card-morfonica/src/starry_night.rs`
+- **please-choose-option1** (medium, rows 750) — please_choose option (1) never plays a card; `rules/cards/card-ras/src/please_choose.rs`
+- **own-stage-answer** (high, rows 671,672,673,674,1455) — own_stage's resolveOverride/stageEnd answers are never consumed; `rules/cards/card-roselia/src/own_stage.rs`
+
+## G04 — Move plan, walk sync and forced moves
+
+Design: `docs/rulebook/spec/abi/G04-move-plan.md`
+
+- **want-to-grab-board-axis** (medium, rows 107,1003) — Clause (3) nearest-orthogonal teleport needs a board-coordinate axis query; `rules/cards/card-crychic/src/want_to_grab.rs`
+- **plan-shape-scope** (high, rows 131,132,288,290,338,339,340,560,835,963,964,1038,1064,1095,1361,1483) — Turn plan is one sticky struct: no reset, no pay_factor getter/multiplier, shaped moves leak; `rules/cards/card-morfonica/src/pure_wings.rs`
+- **charity-rolled-flag** (medium, rows 209,1215,1216) — charity_show: move.main proxies 「掷骰移动」; `rules/cards/card-hhw/src/charity_show.rs`
+- **plan-live-sync** (high, rows 203,973,1025,1182) — Plan writes after a window and next_steps ordering never reach the running walk; `rules/cards/card-hhw/src/charity_show.rs`
+- **effect-move-forced-path** (high, rows 129,200,291,293,295,431,1183,1184,1286) — Effect moves take the main-move path: no forced flag, no walk void, followers dropped; `rules/cards/card-crychic/src/sakiko_lead.rs`
+- **trigger-walk-payload** (high, rows 292,294,298,954,1006,1007,1101) — diceRollResult carries no roll_source, planned start, parity or effective walk data; `rules/cards/card-ag/src/detour.rs`
+- **nested-teleport-tail** (medium, rows 693) — A skill teleport nested in a settle raises no MoveAfter; `rules/cards/card-roselia/src/lisa_bond.rs`
+
+## G05 — Press surface for placed cards
+
+Design: `docs/rulebook/spec/abi/G05-placed-card-press.md`
+
+- **press-surface-placed-card** (high, rows 380,487,488,490,955,967,974,1521,1555) — Placed non-skill cards and field actions are on no press surface; `rules/cards/card-hhw/src/kanon_march.rs`
+
+## G06 — Counteraction, join and negation windows
+
+Design: `docs/rulebook/spec/abi/G06-counteraction-and-join.md`
+
+- **join-window-report** (medium, rows 844,845,942,1090,1094,1312,1510) — No nested per-seat join window or joiner report; chosen designations unreadable; `rules/cards/card-general/src/net_error.rs`
+- **extreme-range-event-counter** (medium, rows 158,980,982,990) — Extreme counter admits every card play and has no event-chain scoping; `rules/cards/card-ag/src/tsugumi_can.rs`
+- **counter-link-move-face** (medium, rows 838) — A counter link loses the move face, so repaint cannot answer a chain; `rules/cards/card-ras/src/repaint.rs`
+- **counteraction-history** (high, rows 426,1060) — No per-turn counteraction history (who countered whom); `rules/cards/card-mujica/src/cant_look_away.rs`
+- **window-timing-negation** (medium, rows 395,936,940,1527,1643) — The effect window opens before the abnormal lands or is refused; guards see no pending negation; `rules/cards/card-mygo/src/ordinary.rs`
+- **mortis-copy-links** (medium, rows 312,313,315,1045) — mortis copies nothing; an empty counteraction link list is never offered; `rules/cards/card-mujica/src/mortis_instinct.rs`
+
+## G07 — Targeting pipeline and distance
+
+Design: `docs/rulebook/spec/abi/G07-targeting-and-distance.md`
+
+- **target-count-pipeline** (medium, rows 274,1037,1061,1294) — targeted_count reset timing, uncounted tile targetings, self-target short-circuit; `rules/cards/card-morfonica/src/centrifugal.rs`
+- **lisa-distance-exemption** (medium, rows 691,1451) — No mechanism grants the 距离最近 exemption; `rules/cards/card-roselia/src/lisa_bond.rs`
+
+## G08 — Zone and attachment lifecycle
+
+Design: `docs/rulebook/spec/abi/G08-zone-lifecycle.md`
+
+- **nyamu-face-flip-trigger** (high, rows 347,348,1043,1272) — No face-flip trigger; both nyamu flip clauses are dead; `rules/cards/card-mujica/src/nyamu_card.rs`
+- **one-of-us-rehome** (medium, rows 1107) — ONE OF US: the card instance never reaches the survivor's field; `rules/cards/card-ag/src/one_of_us.rs`
+- **one-of-us-cause** (low, rows 1124) — ONE OF US: forfeit also runs the bankruptcy hand-over; `rules/cards/card-ag/src/one_of_us.rs`
+- **same-sky-mulligan-order** (low, rows 32) — SAME SKY: the copy is swept back only after the mulligan window; `rules/cards/card-ag/src/same_sky.rs`
+- **cardplayed-payload** (medium, rows 34,677,680) — cardPlayed lacks a cancelled flag and payload; hand counters raise no cardPlayed; `rules/cards/card-ag/src/same_sky.rs`
+- **hand-changed-event** (high, rows 57,58,197,642,1688) — No add-to-hand/hand-changed event for tutors, bounces and hand counters; `rules/cards/card-crychic/src/fate_together.rs`
+- **wasted-flag** (medium, rows 510,522,523,1396,1701) — No 未生效/wasted flag on Discarded; `rules/cards/card-mygo/src/miracle.rs`
+- **card-on-card** (high, rows 1075) — Back-face-up placement on a card is not modelled; `rules/cards/card-sumimi/src/here_the_world.rs`
+- **here-the-world-leave-hook** (high, rows 639,645,867,875,1074,1252,1474,1488,1514,1515,1689,1695) — No hook runs when a placed card leaves the field (generic); `rules/cards/card-morfonica/src/summer_camp.rs`
+- **tomori-earliest-owned** (medium, rows 188,994) — Placement uses the lowest board index, not the first-acquired deed; `rules/cards/card-crychic/src/tomori_inner_shout.rs`
+
+## G09 — Tile, build, pass and house-removal hooks
+
+Design: `docs/rulebook/spec/abi/G09-tile-build-pass.md`
+
+- **marina-suppression-window** (medium, rows 880,885,1493) — No pass-time "affected" window and no reader for the CiRCLE suppression tag; `rules/cards/card-general/src/marina_work.rs`
+- **parade-tile-swap** (medium, rows 1089) — smile_parade (3): the tile swap covers the settle only, not [经过]; `rules/cards/card-hhw/src/smile_parade.rs`
+- **build-pipeline-queries** (medium, rows 118,123,124,521,748,1206) — Card-driven builds bypass buildability, effective price and build hooks; `rules/cards/card-hhw/src/smile_patrol.rs`
+- **tile-write-effect-declare** (medium, rows 36,38,989) — Tile-only writes declare no Effect, so 「或你拥有的格子」 is unreachable; `rules/cards/card-ag/src/declare_war.rs`
+- **guerrilla-pass-path** (medium, rows 866) — guerrilla: the window never checks a passed opponent Live House; `rules/cards/card-ras/src/guerrilla.rs`
+- **house-removed-kind** (medium, rows 819,826) — No HouseRemoved kind: a razed max tile leaves the view and the half stale; `rules/cards/card-roselia/src/ringing_bloom.rs`
+
+## G10 — Effect outcome, cause and settle facts
+
+Design: `docs/rulebook/spec/abi/G10-effect-outcome.md`
+
+- **event-defer** (medium, rows 567,568) — No IEventDefer and eventAfter has no cause; `rules/cards/card-ppp/src/arisa_wait.rs`
+- **settle-outcome-flags** (medium, rows 792,1428,1449) — A settle cannot report body-replaced/paid/cancelled outcome; `rules/cards/card-ppp/src/tomorrows_door.rs`
+- **host01-journal** (medium, rows 724,728) — Nested-settle writes are invisible to the master re-run (HOST-01); `rules/cards/card-ras/src/be_strongest.rs`
+- **redirect-latch** (medium, rows 781,1465) — 「造成影响」 latches on any payee-equals-owner effect, not a landed redirect; `rules/cards/card-ras/src/exist.rs`
+- **world-snapshot** (medium, rows 782,1077) — No play-time world snapshot/restore for no_breakup; `rules/cards/card-sumimi/src/no_breakup.rs`
+
+## G11 — Information and deck inspection
+
+Design: `docs/rulebook/spec/abi/G11-information-and-deck.md`
+
+- **backstage-peek-refill** (medium, rows 1018) — backstage_tour: a peek empties the deck and the first flip triggers the refill; `rules/cards/card-hhw/src/backstage_tour.rs`
+- **reveal-deck-inspection** (medium, rows 165,170,171,537,612,615,1092,1400) — No public reveal output or deck-inspection hook; piles only log counts; `rules/cards/card-hhw/src/believe_you.rs`
+- **drew-batch** (medium, rows 1401,1480) — Drew fires per card; the sheet keys on a draw action; `rules/cards/card-pp/src/infinite_possibility.rs`
+
+## G12 — Status, blocked and immunity gates
+
+Design: `docs/rulebook/spec/abi/G12-status-and-immunity.md`
+
+- **move-gate-replay-read** (high, rows 225,988,1498) — Tsugu refuses the whole play on a spent main move; no replay-stable moved read; `rules/cards/card-general/src/tsugu_ycm.rs`
+- **unstoppable-blocked-read** (medium, rows 403,404,1035,1454) — Engine gate never reads [不可阻挡] and own_stage's turn-end branch keys on abnormal kind, not blocked-ness; `rules/cards/card-morfonica/src/tsukushi_garden.rs`
+- **major-abnormal-scope** (medium, rows 1098,1171) — Abnormal check for want_human is a turn-wide diff, not move-scoped; `rules/cards/card-crychic/src/want_human.rs`
+- **immunity-causer** (medium, rows 608,1412) — Card immunity is causer-blind; an owner-exempt flavour is unavailable; `rules/cards/card-pp/src/shine_again.rs`
+- **dice-immunity** (medium, rows 710,1462) — [特] immunity for dice-adding cards is unimplemented; `rules/cards/card-ras/src/crush_drum.rs`
+
+## G13 — Skill invoke and copy context
+
+Design: `docs/rulebook/spec/abi/G13-invoke-and-copy.md`
+
+- **invoke-skill-entry** (medium, rows 437,996) — invoke_skill runs On::Play only and loses the skill instance; `rules/cards/card-morfonica/src/nanami_effort.rs`
+- **tomori-borrowed-second-half** (medium, rows 187,995) — Borrowed (2): the roll/停留/delayed settle half never runs; `rules/cards/card-crychic/src/tomori_inner_shout.rs`
+
+## G14 — CardDef AI hooks and hand limit
+
+Design: `docs/rulebook/spec/abi/G14-ai-and-hand-limit.md`
+
+- **hand-limit-lift** (medium, rows 441) — A guest state increase does not reach the host hand-limit read; draw trims; `rules/cards/card-morfonica/src/nanami_effort.rs`
+- **aiplay-hook** (low, rows 1253) — No CardDef AiPlay hook; bots offer a never-play card; `rules/cards/card-morfonica/src/summer_camp.rs`
+
+## G15 — Kani verification host support
+
+Design: `docs/rulebook/spec/abi/G15-kani-host.md`
+
+- **kani-owned-livehouse** (low, rows 623) — blue_rose proofs are vacuous: the Kani host cannot own a buyable tile; `rules/kani/src/spec/r.rs`
+
+---
+
+# Convention markers (not gaps — do not count as open)
 
 `rules/{events,tiles,markers}/src/lib.rs`, `rules/skills/{skill-personas,
 skill-groups}/src/lib.rs`, `crates/game-core/src/data.rs` (`event_rule_id` doc),
 `crates/card-sdk/src/ctx.rs:576` (cross-ref to the ruling-6 note). These name the
 `TODO(规则书)` policy: a gap in the text is tagged, never silently dropped.
 
-## Orphans closed by this audit
-
-- `rules/cards/card-sumimi/src/two_donuts.rs:50` had no item → filed
-  **DONUT-VOID-01** below.
-- `fireSpent` → `MarkerSpent` was called a "separate ticket" twice (Phase C
-  batch 2 / status-vocab-zero notes) and never filed → **ABI-MARKER-SPENT**
-  below.
-- `crates/game-core/src/engine/tile_text.rs:30` (settle-priority) is covered by
-  **EVENT-03** / C-Q40h via `circle_rebuild.rs:117`; no new id.
-
----
-
 # card-std-split leftovers (2026-10-12)
 
 Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 `tile_attr`/`tile_in`). Not merge blockers once drift is green.
 
-- **CD-01 CEL `is_live_house` group-10 quirk.** **Closed** (2026-10-17 audit):
-  the CEL `is_live_house` sugar was removed (abi.rs v70). The only live answer
-  is `tile_in(_, t, "livehouse")` = `VENUE_GROUP = 6`
-  (`rules/bandori-std/src/kind.rs:81,90`); `is_venue` / `is_live_house_for`
-  route through it (`bandori-std/src/lib.rs:96-105`). No second SnapSrc
-  group-10 answer remains to reconcile.
 - **CD-02 `crystals_changed_guard` residuals.** `bandori_std::crystals_changed_of`
   is the shared base (`bandori-std/src/lib.rs:370-375`); per-card copies still
   carry local residuals (value vs 0, `is_placed`, …) — e.g.
   `rules/cards/card-mujica/src/j11.rs:165-174`, `card-roselia/src/fire_bird.rs:25`.
   Fold the identical prefix onto the helper.
-- **CD-03 `legacy_*` audit copies.** Done 2026-10-14: the G3 audit scaffolding
-  and every `legacy_*` copy were deleted (GUARDS.md §5.1/§10; ABI 61).
 - **CD-04 game-named wire variants.** **Restated** (2026-10-17 audit): the
   `HookKind` / `GateKind` types were retired at ABI v85 in favour of
   `ActionKind` / `FilterKind`, and the game-named kinds left `card-sdk` for
@@ -148,63 +274,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   `C-unwind`; revisit if a non-unwinding abort path appears.
 
 # HIGH
-
-## STACK-01 — nested `card_settle_at` recursion overflows the stack (engine defect)
-- **status**: **fixed** (2026-10-10, `stack-01-settle-queue`) — nested settles run on an
-  explicit work stack (`game-core/src/engine/work.rs`); `card_settle_at` enqueues and
-  `Cx::drain_work` pumps. A drive that needs a nested settle while the pump is running
-  suspends (`Halt::Suspended`) and resumes after — same order as the old synchronous
-  nest, one Rust frame deep. `flush_deferred → start → execute` is also iterative
-  (guard flag). Rulebook-level `MAX_SETTLE_DEPTH` = 64 logs and stops a rules infinite
-  loop (two cards settling each other); it is **not** the stack-safety mechanism.
-  Regression: `crates/game-rules/tests/settle_depth.rs` (120-deep chain on a 512 KiB
-  thread). `ckpt_equiv -- out 8 4 120 standard|chaos` now completes.
-  Equivalence: `ckpt_equiv` `4 4 60` and `8 4 40` standard+chaos and `card_events`
-  are **byte-identical** to master af2e1a1. `8 4 120` standard+chaos complete.
-  Resume keeps completed hook bodies exactly once (`settle_tail_once`).
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high (any long bot game / real match that nests a settle hook; already aborts `ckpt_equiv`)
-- **suggested batch**: engine: settle recursion / stack safety
-- **locations**
-  - repro (2026-10-10, this worktree, release, 8 MiB main stack):
-    `cargo run -p game-rules --release --example ckpt_equiv -- out 8 4 120 standard`
-    → `thread 'main' has overflowed its stack` / `fatal runtime error: stack overflow, aborting`
-  - recursion cycle (LD_PRELOAD `backtrace()` on SIGSEGV + `addr2line`, 5-frame repeat):
-    ```
-    game_core::engine::play::Cx::card_settle_at          (play.rs:790)
-      → Cx::settle_at                                    (play.rs:1677)
-        → CardRules::counteract                          (wasm_rules.rs:5610)
-          → RulesBridge::drive_inner_body                (wasm_rules.rs:1878)
-            → RulesBridge::apply_host_request            (wasm_rules.rs:2231 HostRequest::SettleAt)
-              → Cx::card_settle_at                       (play.rs:790)  … repeat
-    ```
-  - no depth guard on nested settles (`MAX_SETTLE_REDIRECTS` = 8 only caps *redirects inside one* settlement, `play.rs:41/1641`; `MAX_COUNTERACT_DEPTH` = 16 only caps one counteract *tree*, `wasm_rules.rs:53/3149`; `MAX_MONEY_DEPTH` = 32 only caps the money pipeline, `play.rs:27/3048`)
-  - guest callers of `ctx::card_settle_at` from hook bodies (any of these can re-enter `settle_at`):
-    `rules/cards/card-hhw/src/smile_parade.rs:122` (`On::Action(SettleBody, settle_instead)` — direct self-nest: the body cancels the tile settle and `card_settle_at`s at 「弦卷集团」),
-    `card-ras/src/{studio_storm,guerrilla}.rs`, `card-mygo/src/{taki_serious,rinne_rain}.rs`,
-    `card-morfonica/src/noble_blue.rs`, `skills/skill-personas/src/{kaede_support,tomori_crychic,tukushi_try,tomori_poem}.rs`
-  - related: `crates/bot-core/src/ismcts.rs:823-830` already documents "a rollout's trigger chain can nest deeply" and spawns 32 MiB stacks for that reason
-- **ABI / engine contract**: `HostRequest::SettleAt` is a synchronous nested routine (`wasm_rules.rs:2231-2238` → `cx.card_settle_at` → `settle_at` → `raise!` → `counteract` → `drive` …). A hook body that settles therefore stacks a full `settle_at` + `drive_inner_body` (a large `Run` frame) on top of the outer one. Guest **fuel** (`be_wasmi.rs:51` / `be_wasmtime.rs:72`) bounds guest recursion only; these are **host** frames.
-- **current**: unbounded mutual recursion `card_settle_at ↔ settle_at ↔ counteract ↔ drive_inner_body ↔ apply_host_request`. Long seeded bot games hit it on the 8 MiB main stack (`ckpt_equiv`).
-- **expected**: nested settles are either (a) queued and pumped by an iterative loop at the outermost `execute` / `tick` (preferred — same shape as `flush_deferred`'s intent, but without `start()` re-entering `execute()`), or (b) refused past a `MAX_SETTLE_DEPTH` (stopgap; log + no-op the inner settle). A bigger stack is a workaround only.
-- **can a real match hit this?**
-  - **Server — yes, more easily than `ckpt_equiv`.** Room work runs on `tokio::task::spawn_blocking` (`crates/server/src/lib.rs:134`, `api.rs:503`, `botsvc.rs:440`, …) with the Rust default ~2 MiB thread stack (no `stack_size` in `crates/server/Cargo.toml`). A settle-nesting chain that already dies at 8 MiB will kill the blocking worker at ~1/4 the depth → aborted thread / failed `act` / dropped room tick.
-  - **Browser / wasm — yes for the host side.** The guest module is fuel-bounded, but `card_settle_at` runs as a **host import** on the JS/embedder native stack (and on wasmi/wasmtime's host call stack). Each nested `drive_inner_body` allocates a full `Run` on that stack. Worker stacks are typically 1–2 MiB. wasmtime's "trap tears the stack" note (`be_wasmtime.rs:43`) covers *guest* traps, not host frames.
-  - **bot-core ISMCTS** already works around this with 32 MiB stacks; that workaround does not cover server workers or the browser.
-- **fix sketch**
-  1. **Preferred:** give `Cx` a settle-job queue. `card_settle_at` pushes `(player, tile, main)` and returns; the outermost `execute` / `tick_play` drains the queue in a `while` loop (no `start()` inside `flush_deferred` — that path has the same re-entry shape via `Deferred::Leave` → `start(Routine::Act)` → `execute` → `flush_deferred`).
-  2. **Stopgap:** `MAX_SETTLE_DEPTH` (e.g. 8) in `card_settle_at` / `settle_at`; past it, log and skip. Cheap, unblocks fuzz / `ckpt_equiv`, does not fix the shape.
-  3. **Do not** "fix" this by raising server/browser stack sizes alone (bot-core already tried that for one caller).
-- **cross-links**
-  - **SETTLE-01** (笑容大游行 stack overflow, `t13_smile_parade` / `g30_*`) is one *instance* of this cycle — `smile_parade::settle_instead` is a `SettleBody` hook that calls `card_settle_at`. Fix STACK-01 first; then SETTLE-01 may reduce to the swap-axes bug alone.
-  - **HOST-01** (HostRequest B2 learn-pass rebase) is a different defect in the same `apply_host_request` surface.
-  - `flush_deferred` → `start` → `execute` re-entry (`engine/mod.rs:1172-1286`) is a second unbounded host-stack growth path (Leave → Act → Leave → …); fold it into the same batch.
-- **notes / reproduction**
-  - Fails reliably with `games=8 players=4 max_rounds=120 standard` on an 8 MiB stack. Completes for `games=2 max_rounds=40` on 2 MiB — the nest is seed/length dependent, not a constant-depth crash.
-  - Backtrace captured with a SIGSEGV + `sigaltstack` + `backtrace()` LD_PRELOAD (`target/scratch/btso.c`, scratch only — not committed) because `gdb` is not installed on the host. Frame offsets in the release `ckpt_equiv` binary: `+0x55d2d3` `+0x55ab6f` `+0x546f24` `+0xb091c9` `+0xaef4fd` (5-cycle).
-  - Tag any fix `TODO(规则书)` only if a *rule* text forces a nested settle; the engine defect itself is not a rulebook divergence.
-
 
 ## MONEY-01 — rent / settle multipliers do not have a composition rule
 - **kind**: rulebook divergence
@@ -233,26 +302,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **current**: share is the pre-drop figure (TEST-FINDINGS §3); halving-vs-cancel order undecided.
 - **expected**: decide whether the share recomputes after a designation drop, and whether halving applies before or after the split.
 - **question**: C-Q2.
-
-## MONEY-03 — Repaint (「对方此次结算的支付减半」) does not halve the shaped total
-- **kind**: test-setup bug (implementation already correct)
-- **class**: A
-- **severity**: high
-- **suggested batch**: payment pipeline
-- **status**: **fixed** (this batch, `fix: MONEY-03 …`) — the pipeline
-  already halves the shaped total (`paySplitAdd` runs Tomorrow's Door's surcharge,
-  `paySplitMul` applies `plan::set_pay_factor(500)`). The test's dice math put
-  the hill off the planned path (`hill - 1 - 5 - 2` → X = 0, Repaint never
-  offered), so the discrepancy was never actually observed. Dice is now
-  `(hill − 5) + X` from a close start. Un-ignored, green twice.
-- **locations**
-  - `rules/tests/tests/ras.rs` `repaint_halves_a_shaped_settlement_payment` (un-ignored)
-  - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `paySplitAdd`)
-  - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `paySplitMul`)
-  - related tests `cross_tiles.rs:180` `t03_anon_link_plus_repaint` (Anon link arrangement; un-ignored under TILE-01 — the older "still ignored" note is stale)
-- **rulebook**: ruling 2026-10-06 + sheet 「对方此次结算的支付减半」 — the *settlement payment* (post-shape) is halved.
-- **was**: test dice put the hill off-path; X = 0 so Repaint was never offered.
-- **expected**: half applies to the whole shaped settlement payment (surcharge included). **Confirmed.**
 
 ## MONEY-04 — 强制购买 / auction money sits outside the money pipeline
 - **kind**: rulebook divergence
@@ -283,84 +332,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **expected**: decide the price base, whether 收购 is a 「购买」, and whether the mortgage stays.
 - **question**: C-Q4.
 
-## CH-01 — self-applied abnormal / self-[传送] never opens a [反击] window
-- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the abnormal
-  `Effect` chain already opened for self-applied abnormals (the green twin
-  `choose_your_stage_answers_an_abnormal_move` proved it); `ix_encore_…` was
-  a **D** test drive that never declared 安可. Un-ignored and green after the
-  drive plays the counteraction. `m28b` (MOVE-11) and `m09` (MOVE-12) are
-  filed under their own MOVE ids and fixed alongside.
-- **kind**: implementation bug + missing ABI
-- **class**: A (wire the abnormal/Effect chain on `card_move` teleport) then B if the move-tag cannot express 「因任何原因」
-- **severity**: high (安可 is a staple [反击])
-- **suggested batch**: counteraction windows
-- **locations**
-  - `rules/cards/card-general/src/encore.rs:35` (「因任何原因」)
-  - `rules/cards/card-ag/src/ran_as_usual.rs:23` (「包括你的技能」), `:27` (C# once-per-turn gate — separate C, see CH-07), `:92` (`Plan.Reverse` skill move is abnormal but `_abnormalTurn` never counted it)
-  - `rules/tests/tests/pp.rs:963` `ix_encore_blocks_overlap_teleport` (un-ignored, green)
-  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (see MOVE-11)
-  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (see MOVE-12)
-  - `crates/game-rules/src/wasm_rules.rs:2801` (self-applied abnormals note)
-  - **D**: `choose_your_stage_answers_an_abnormal_move` (`roselia.rs:369`) — ignore already removed; keep as a D note only
-- **rulebook**: 通用:安可 「[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次…」; （兰）像往常一样 (2) 「受到异常移动效果（包括你的技能）」.
-- **was**: `abnormal` chain only opens when `by != target`; `card_move` / `plan::set_teleport_to` never runs the abnormal gate at all.
-- **now**: every abnormal move on the user — self-inflicted included — opens the [反击] window before it lands (`HostRequest::Move` / `Teleport` run `abnormal_gate`).
-
-## CH-02 — 花园多惠 (2) cancel window never opens
-- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — the bound skill declared
-  `On::Counteract` but lacked `COUNTERACT_FROM_FIELD`, so `declare_one` never
-  offered it. Added that prop plus `COUNTERACT_GROUP` (one cancel per activation;
-  the skill stays in play and the seat keeps the floor). The redundant `ask_yes`
-  confirm is gone — the [反击] window's play-vs-skip is the 「你可以使用」 choice.
-  Tests: `counteract_offered` matches `ask.counteract.skill`; `prompt_refers`
-  reads an `ask_yes` question from the title/text.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high
-- **suggested batch**: counteraction windows
-- **locations**
-  - `rules/tests/tests/cross_chain.rs` `c24_hanae_cancels_a_hand_effect`, `c25_hanae_vs_skill_main` (un-ignored, green twice)
-  - `rules/tests/tests/cross_long.rs` `l05_one_skill_several_counteractions` (un-ignored, green twice)
-  - `rules/skills/skill-personas/src/tae_police.rs`
-- **rulebook**: 花园多惠 (2) — cancel a hand effect / skill use (「取消」 window).
-- **was**: card resolves normally; no cancel window.
-
-## CH-03 — 骰子已经掷下 is placed twice and does not shut counter windows
-- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — `can_counteract_now`
-  honours the well-known state key `noCounteractTurn` (the latch owner is exempt
-  「其他」; field counteractions stay a separate path, the clause names
-  「从手牌中」). A turn-key placement latch replaces the uid-based `is_placed`
-  check (a hand play has `current_uid = -1`, so play + the own-counteract
-  follow-up double-placed).
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high
-- **suggested batch**: counteraction windows
-- **locations**
-  - `rules/tests/tests/cross_chain.rs` `c14_dice_cast_shuts_windows` (un-ignored, green twice; asserts single placement)
-  - `rules/tests/tests/gap_window.rs` `g18_shut_window_blocks_the_negate_one` (un-ignored, green twice)
-  - `rules/cards/card-mujica/src/dice_cast.rs`, `crates/game-rules/src/wasm_rules.rs` `can_counteract_now`
-- **rulebook**: 骰子已经掷下 — place the lock and shut further [反击] windows for that timing.
-- **was**: placed twice; windows stay open.
-
-## CH-04 — 无法将视线移开 cannot be played as a counter and does not force the move
-- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — the card only declared
-  `ChainKind::Counteracted`, which the engine never raises; it now also declares
-  `Card`/`SkillUsed` with `target == owner && actor != owner` (the counter link's
-  `target` is the countered seat, `actor` the declarer). Force-move lands on
-  `trigger::player_id` of the answered link (the immediate 「有玩家对你使用[反击]
-  后」); the full-turn history (ABI-03) stays a separate hole.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high
-- **suggested batch**: counteraction windows
-- **locations**
-  - `rules/tests/tests/cross_chain.rs` `c16_cannot_look_away_answers_a_counter` (un-ignored, green twice)
-  - `rules/tests/tests/cross_long.rs` `l04_forced_move_into_remote_settle` (un-ignored, green twice)
-  - `rules/cards/card-mujica/src/cant_look_away.rs`
-- **rulebook**: 无法将视线移开 — usable as a [反击]; forces the counter-user to move.
-- **was**: `err.play_phase` when played as the counter; forced move did not happen.
-
 ## CH-05 — nested [反击] copy machinery (play-history / nested PlayCtx)
 - **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — join retarget
   (`改为你`) landed for 真奈 (CH-06 / g19 green). `Trigger.join_redirect` /
@@ -375,32 +346,13 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **severity**: high (Mortis and Mana Champion are the two "copy a counter" cards)
 - **suggested batch**: host ABI: out-buffers / counteraction windows
 - **locations**
-  - `rules/cards/card-mujica/src/mortis_instinct.rs:22` (CanCounteract delegates to copy), `:37` (copy walks `H._playHistory`)
-  - `rules/cards/card-sumimi/src/mana_champion.rs:57` (nested `H.Counteract(copy, p)`, shield + counteractor's draw)
-  - `rules/cards/card-mujica/src/dice_cast.rs:55` (「（此卡可以被反击）」 needs the reverse-order counter play)
-- **rulebook**: Mortis 「此卡打出时效果为场上任意其他玩家打出的上一张卡…」 + 「（此卡复制[反击]卡时可在符合条件时打出）」; Mana Champion 「此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你…」
+  - `rules/cards/card-mujica/src/mortis_instinct.rs:37` (CanCounteract delegates to copy), `:51` (copy walks `H._playHistory`)
+  - `rules/cards/card-sumimi/src/mana_champion.rs:66-69` (nested `H.Counteract(copy, p)`, shield + counteractor's draw)
+  - `rules/cards/card-mujica/src/dice_cast.rs:29-36` (「（此卡可以被反击）」 needs the reverse-order counter play)
+- **rulebook**: Mortis 「此卡打出时效果为场上其他玩家打出的上一张卡…」 + 「（此卡复制[反击]卡时可在符合条件时打出）」; Mana Champion 「此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你…」
 - **current**: join retarget works (g19). No play-history query; full nested PlayCtx window still TODO.
 - **expected**: copy the latest eligible play and nest a full Play/Counteract run with forwarded Tags/Extreme/Doubled.
 - **capability**: `play-history query` + `nested PlayCtx` (cross-card identity + counteraction mode).
-
-## CH-06 — 网络链接异常 still drops the wrong designation in join fixtures
-- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — 真奈's join retarget
-  (「改为你」) landed. `SELF_REDIRECT` on 真奈 marks the counter as opening a
-  join; `Trigger.join_redirect` is set at declaration; 网络链接异常's
-  self-targeted cancel now cancels 真奈's user's designation (not the joiner's).
-  Joiner draws 1 (真奈's shield clause). `g19_manas_join_window_lets_a_third_party_drop_one`
-  un-ignored, green. Remaining TODOs (nested window shape, fallback-draw
-  joiner-count) are tagged `TODO(规则书)` under CH-05.
-- **kind**: implementation bug
-- **class**: B (capability: nested PlayCtx / join retarget — see CH-05)
-- **severity**: high
-- **suggested batch**: host ABI: counteraction windows
-- **locations**
-  - `rules/tests/tests/gap_window.rs` `g19_manas_join_window_lets_a_third_party_drop_one` (un-ignored, green)
-  - `rules/cards/card-sumimi/src/mana_champion.rs` (join retarget + fallback draw)
-  - `rules/cards/card-general/src/net_error.rs` (join-aware cancel)
-- **rulebook**: sheet cancels **one** designation (「取消一个指定」 / 「改为你」).
-- **was**: P3's cancel dropped P3's own designation (P3 exempt, P0 pays).
 
 ## CH-07 — 「视为此卡未生效」 has no observer
 - **status**: **minimal path landed** (2026-10-13, `closeout-3-windows`) —
@@ -416,7 +368,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/cards/card-mygo/src/haneoka.rs:52` (「放入弃牌堆且视为此卡未生效」 — card *is* discarded)
   - `rules/cards/card-mygo/src/no_road.rs:48`
   - `rules/cards/card-mygo/src/miracle.rs:138` (（3） crystals left on discard → 未生效; wants `CardWasted`)
-  - `rules/cards/card-roselia/src/fire_bird.rs:35`
+  - `rules/cards/card-roselia/src/fire_bird.rs:50`
   - `rules/cards/card-hhw/src/kokoro_circle.rs:49`
   - `rules/cards/card-morfonica/src/starry_night.rs:53`
   - `rules/cards/card-morfonica/src/noble_blue.rs:32`
@@ -426,203 +378,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **expected**: rule (a) does the card get spent / discarded (haneoka says yes; noble_blue/starry_night "spent anyway" implies no), (b) what counts as a "use" this suppresses (later 「抵消一次任意付款」 etc.).
 - **question**: C-Q5.
 - **capability (after the ruling)**: routine return value for took-effect + `CardWasted` (C# `H.CardWasted`).
-
-## MOVE-01 — forced stop (`plan::set_stop_at`) does not land the piece on the hook tile
-- **kind**: test-harness drive / arrangement (not an engine defect)
-- **class**: D (fixed 2026-10-10; see D-08)
-- **severity**: high (凑友希那 (3) / 香澄 stop-pots are common)
-- **suggested batch**: movement
-- **locations**
-  - `rules/tests/tests/cross_move.rs` `m12a_yukina_forced_stop` / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` (un-ignored, green twice)
-  - engine landing already correct: `settle_stages.rs` `m4_kokoro_force_stop_stops_a_passer`, `gap_move.rs` `g11`/`g12`, `roselia.rs` yukina stop-pot
-- **rulebook**: 「令该玩家强制停下并[触发结算]」 — the passer stops on the named tile and settles there.
-- **was**: m12a/m12b declined the `ask_yes` offer (option matcher missed `ask.yes`/`ask.no`); m15 used `place_raw` (tile:-1) so the `card.placed && self_tile()` pre never matched. m12b also pinned 41 instead of the rolled dest 37.
-- **fixed**: match the `kokoro_practice_force` dump and `answer_one(0)`; `place_on_tile` both stop-pot cards; assert 37 for the countered stop. Un-ignored, green twice.
-
-## MOVE-02 — 白金燐子 (2) spends fire / prompts X but never moves
-- **kind**: test-harness drive shape (not an engine defect)
-- **class**: D (fixed 2026-10-10; see D-06)
-- **severity**: high (Roselia staple)
-- **suggested batch**: movement
-- **locations**
-  - `rules/tests/tests/cross_move.rs` `m10_rinko_while_stunned` / `m11_rinko_plus_yolo` (un-ignored, green twice)
-  - green twins already pin the drive: `roselia.rs` `rinko_skill_2_fixes_the_move_roll_to_x_times_six`, `gap_move.rs` `g09_fixed_roll_plus_starlit_reroll`
-- **rulebook**: 白金燐子 (2) — 「你可以在移动掷骰前消耗X个火罐，使这回合移动掷骰的结果固定为X*6」. The press is a **pre-roll shape**; the player still takes the main roll.
-- **was**: m10/m11 pressed the skill and drained prompts, then asserted pos without `t.roll(0)`.
-- **fixed**: take the main roll after the X prompt (same drive as the green roselia/gap twins). Un-ignored, green twice. m11 records 14 (Y.O.L.O adds +2 over the fixed 12; the 「固定」 vs additives question stays open as C-Q24-adjacent RULING in the test).
-
-## MOVE-03 — MyGO band (2) move-1 replacement never fires / multi-activation `On::Play`
-- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the multi-activation
-  half was already merged into one `On::Play` with a which-effect prompt (the
-  green twins `band_move_one_for_a_crystal` / `band_draw_for_two_crystals` /
-  `band_press_offers_both_effects_when_both_are_available`). `m22_mygo_band_move1`
-  was a **D** test drive: it rolled first and looked for a window inside
-  `t.roll`, but 「于移动掷骰前选择移动1格以替代移动掷骰」 is a skill press
-  *before* the roll (`t.skill`). Un-ignored and green with the green twin's
-  drive. NNM 「发动以下效果中的一个」 is a separate in-entry choice (C-Q6).
-- **kind**: implementation bug + ABI defect
-- **class**: B (multi-activation selection) unblocks A
-- **severity**: high
-- **suggested batch**: movement / skills: MyGO
-- **locations**
-  - `rules/tests/tests/cross_move.rs:927` `m22_mygo_band_move1` (un-ignored, green)
-  - `rules/tests/tests/mygo.rs` `band_draw_for_two_crystals` / `band_move_one_for_a_crystal`
-  - `rules/skills/skill-groups/src/mygo.rs` — one `On::Play` with a selection prompt
-  - also Morfonica NNM: `rules/cards/card-morfonica/src/nanami_effort.rs`
-  - TEST-FINDINGS §6 item 8 (multi-activation selection)
-- **rulebook**: MyGO band (2) has several activations (move-1 replacement and a 2-crystal draw); NNM 「发动以下效果中的一个」.
-
-## MOVE-04 — 若能再次交汇 re-roll loop hits `world_mut` while a routine is pending
-- **kind**: test-harness sequencing (not a card/host defect)
-- **class**: D (fixed 2026-10-10; see D-05)
-- **severity**: high (re-roll cards are common)
-- **suggested batch**: fuzz/determinism / movement
-- **locations**
-  - `rules/tests/tests/cross_move.rs` `m06_reunion_20_tile_cap` / `m06b_reunion_stops_on_passing` (un-ignored, green twice)
-- **rulebook**: 若能再次交汇 — re-roll the move dice (with a 20-tile cap / stop-on-passing shape).
-- **was**: `t.dice` after `t.roll` called `Match::world_mut` while the `diceRollResult` [反击] window was a pending routine.
-- **fixed**: queue all faces before `t.roll` (snapshot replay also means mid-window loads never reach the re-roll). Card (`meet_again.rs`) and host `do_move_roll` / `set_move_roll` write-back are correct and unchanged.
-
-## MOVE-05 — mid-turn [停留] does not stop the main move
-- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — glossary 51
-  「[停留]=无法移动」 is rulebook, so a stay gained in 运营 locks the turn's
-  main move immediately. `give_stay` / `give_exile` now maintain the
-  `skip_move` latch as a consequence of the state (set on gain, clear when the
-  last layer drops and no [除外] holds the move); [不可阻挡] 「无视已存在的
-  [停留]」 keeps the walk legal. `rain_stay_blocks_this_turn_move` un-ignored
-  and green. C-Q7's *mid-walk* half (stay gained after the roll) is unchanged:
-  the walk still completes — only the pre-roll lock is in scope here.
-  Green twins that moved after a stay grant (`rain_extra_settle_at_turn_end`,
-  `rain_day_drains_one_crystal_per_turn_end`, `g15_…`) now use [不可阻挡] or
-  skip the roll, since the glossary forbids the move.
-- **kind**: rulebook divergence
-- **class**: A (glossary 51 is rulebook)
-- **severity**: high
-- **suggested batch**: movement
-- **locations**
-  - `rules/tests/tests/mygo.rs:285` `rain_stay_blocks_this_turn_move` (un-ignored, green)
-  - `crates/game-core/src/engine/ops.rs` `give_stay` / `give_exile` (skip latch)
-  - TEST-FINDINGS §9 (ileuxali: check once at move-branch selection)
-- **rulebook**: glossary 51 「[停留]=无法移动」; 51 「[不可阻挡]」 「无视已存在的[停留]」.
-- **was**: a [停留] gained mid-turn did not stop the current move (latch set only at turn start).
-- **question**: C-Q7 mid-walk half still open (stay gained *during* a walk).
-
-## SETTLE-01 — 笑容大游行 tile-swap overflows the stack
-- **status**: **closed** (2026-10-18 engine-verbs batch). Stack overflow half
-  **fixed** by STACK-01; swap-axes half **fixed**; and the reverse direction
-  (「交换位置」 is a two-way exchange) **landed** with the host-visible
-  `Move::settle_redirect` flag — `trigger::is_settle_redirect()` marks the
-  nested settle a card caused, so the ping-pong that used to hit the
-  settle-depth cap is gone. `SLOT_REPLAY` is deleted (guest `set_slot` writes
-  were the wrong home). `g30b_smile_parade_reverse_swap_runs_as_card_tile`
-  asserts a settle on 弦卷集团 runs as the card's tile and does **not** discard
-  the parade.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high (HHW signature continuous)
-- **suggested batch**: HHW cards / crystal/marker accounting
-- **locations**
-  - `rules/tests/tests/cross_tiles.rs` `t13_smile_parade` (un-ignored)
-  - `rules/tests/tests/gap_res.rs` `g30_smile_parade_swap_with_a_field_card_in_place` (un-ignored)
-  - `rules/cards/card-hhw/src/smile_parade.rs` (`settle_body` / `on_resolved`)
-- **rulebook**: 笑容大游行 (3) 「[持续] 当此卡位于格子上时，那格视为与"弦卷集团"格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
-- **fixed**: (1) end-as-agent via a one-shot move tag; (2) move-to-end + clear
-  crystals; (3) one-way card-tile → agent body + discard after **any** player's
-  settle on the card's tile (LOY-SMILE-01, 2026-10-18: 「任何玩家」 includes the
-  owner; (1)'s redirect and (2)'s arrival are keyed off `SLOT_REPLAY`, not off
-  "the actor is the owner"). The crystal tick is unconditional; only the
-  zero-crystal discard names 「仍位于"弦卷集团"」.
-
-## SETTLE-02 — CRYCHIC band (1) at 6+ hand cards still lets money move
-- **status**: **fixed** (both halves) — (1) money lock: `lock_pay` / `force_card`
-  scope to the skill owner (`你`), a payment between two other players is
-  untouched. (2) play gate: 「无法从手中打出任何牌」 landed as a standing
-  hand-play veto `On::FilterFlag(&[FilterKind::PlayGate], "hand(actor) >= 6",
-  None, refuse)` (`rules/skills/skill-groups/src/crychic.rs:35-39`); the engine
-  consults `Gate::Play` on every hand play (`crates/game-core/src/engine/play.rs`).
-  **Re-opened and truly closed 2026-10-21**: the 2026-10-17 audit called this
-  "green / Confirmed" but `s05_crychic_band_six_cards` was red. The skill was
-  always on the right hook -- `FilterKind::PaySplitChoose` is `FilterShape::Flag`
-  and `drive_flag` correctly folds `false` to `set_cancelled()` -- but
-  `Cx::money_inner`'s settlement-stage loop folded only `t.value` / `t.target`
-  and **dropped the cancel**. Every other cancel point in that function
-  (`effect`, `pay`, `payCombinedCancel`) already honoured it. Fixed in
-  `crates/game-core/src/engine/play.rs` (the `paySplitChoose` arm now mirrors
-  `payCombinedCancel`: `payAfter` at 0 and `Paid::default()`).
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high
-- **suggested batch**: skills: Roselia / payment pipeline
-- **locations**
-  - `rules/tests/tests/cross_status.rs:165` `s05_crychic_band_six_cards`
-  - `rules/skills/skill-groups/src/crychic.rs:35-39` (`FilterKind::PlayGate`), `:75-86` (`lock_pay` owner scope), `:203-214` (`force_card` owner scope)
-  - `crates/game-core/src/engine/play.rs` settlement-stage loop (the dropped cancel)
-- **rulebook**: CRYCHIC band (1) at 6+ hand cards blocks gain/loss and 「无法从手中打出任何牌」.
-  支付阶段 5 「支付时/无需失去资金/取消支付/更改目标」 (G-MONEY-14).
-- **was**: `lock_pay` zeroed **every** payment in the game (the empty pre +
-  owner-hand guard fired on any money movement); no hand-play gate existed.
-  Then the Flag cancel was answered but ignored by the stage.
-- **expected**: no money gain/loss **for the skill owner** and no hand play
-  while the gate is up. **Confirmed 2026-10-21.**
-- **same hole, now live**: `Mujica:#J11` `pay_choose_cancel` (「p.cancel = true
-  when Me.Stunned」) was documented as dead for the same reason; it works now.
-
-## SETTLE-03 — 丰川祥子 (1) does not absorb stays when passing another player
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high
-- **suggested batch**: movement / skills: Mujica
-- **status**: **fixed** (this batch, `fix: SETTLE-03 …`) — two defects: the
-  test declined the YesNo (`option("转移")` never matches `ask.yes`/`ask.no`
-  labels; match `sakiko_life_take` and answer `ask.yes`), and the body
-  *copied* the layers instead of transferring (now `state::add` on the source
-  before `give_stay`/`give_stun`). `s08` green twice. `g21`
-  `summer_camp_immune_to_the_rains_zone` is also un-ignored (its 夏日合宿 half
-  was test-fixed 2026-10-13) — the older "g21 stays ignored" note is stale.
-- **locations**
-  - `rules/tests/tests/cross_status.rs:275` `s08_sakiko_absorbs_statuses` (un-ignored)
-  - `rules/skills/skill-personas/src/sakiko_life.rs:133-142` (`on_pass_player` transfer)
-  - `rules/tests/tests/gap_window.rs:217` `g21_summer_camp_immune_to_the_rains_zone` (un-ignored)
-- **rulebook**: 丰川祥子 (1) absorbs stays when passing another player.
-- **was**: absorb did nothing on a pass (test declined the ask; body copied).
-- **expected**: stays on the passed player are absorbed / cancelled as the clause says.
-
-## WINDOW-01 — Welcome to Ave Mujica's World (1) cannot be played (`err.play_phase`)
-- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — **test bug**. `err.play_phase`
-  was the harness leaving a turn-start skill hook prompt open (若叶睦 / 丰川祥子
-  `ask_yes` at `TurnStartBefore`), so the match was `busy` and `cant_play`
-  refused the play. Drain after `begin_turn`. The card itself was always playable.
-- **kind**: test-harness drive
-- **class**: A
-- **severity**: high
-- **suggested batch**: counteraction windows
-- **locations**
-  - `rules/tests/tests/cross_chain.rs` `c27_welcome_state_switch` (un-ignored, green twice)
-  - `rules/cards/card-mujica/src/welcome_mujica.rs:31` (（1） 「若指定了不存在状态2的玩家则无效果」 reading — C, see CH-08)
-- **rulebook**: 「转换任意一名玩家的状态」 (状态1 ↔ 状态2).
-- **was**: play refused with `err.play_phase`.
-
-## WINDOW-02 — R.I.O.T. + 宣战布告 same timing loses the 500 payment
-- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — a
-  `DESIGNATES` play is one [反击] timing (CROSS-TESTS C13): its `Effect`
-  counters also answer the play's own `card` raise. `effect::hits` falls back
-  to the static `DESIGNATES` list when the effects list is empty. The offer
-  scan, probe and **body dispatch** all use the same Effect-on-DESIGNATES-play
-  entry lookup, so 宣战布告 is declared on the play and its 500 lands.
-  `c13_riot_and_war_declaration` un-ignored, green (2026-10-11).
-  `l01_counter_war_five_links_deep` — the five-link war now nests counters to
-  counters (C answers B, D answers C, E answers A) instead of putting every
-  counter on X's round. Un-ignored, green.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high (war declaration is a whole-table event)
-- **suggested batch**: counteraction windows / payment pipeline
-- **locations**
-  - `rules/tests/tests/cross_chain.rs` `c13_riot_and_war_declaration` (un-ignored, green)
-  - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (un-ignored, green)
-  - `crates/game-rules/src/host.rs` `counteracts_to_play` / `counteract_entry`, `crates/card-sdk/src/ctx.rs` `effect::hits`
-- **rulebook**: R.I.O.T. / 宣战布告 — 500 payment and the war ring offers.
-- **was**: 500 missing; war never declared on the play's timing.
 
 ## WINDOW-03 — EXIST redirect / 「造成影响」 latch is at declaration, not settlement
 - **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — the
@@ -643,38 +398,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **expected**: decide declaration vs settlement (「nothing landed on me」).
 - **question**: C-Q8.
 
-## FUZZ-01 — determinism / save-restore / unknown card id / negation totality
-- **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: FUZZ-01 …`) —
-  5 of 6 shapes un-ignored and green:
-  * `save_restore_break` — root cause was `TurnCtx::plan` (`MoveCtx`) marked
-    `#[serde(skip)]`, so a restore dropped card-shaped roll tables and the next
-    roll diverged (pinned seed walked 36 vs 4). `MoveCtx` is now serialized
-    (`SAVE_VERSION` 6 → 7).
-  * `negation_not_total` — harness gap: the declare was hardcoded to seat 1
-    even when the [反击] window asked another seat, and a stunned seat silently
-    skipped the declare. `check_negation` now uses a vanilla board and declares
-    as the asked seat; the invariant (negated GREAT leaves money unchanged)
-    holds.
-  * `monotonicity_break` — harness measured net board displacement, which a
-    longer walk can shrink by landing on a teleporting tile. Now measures
-    `turn.main_steps` (walk length) on a vanilla board.
-  * `determinism_break` / `unknown_card_id` — original seeds no longer
-    reproduce (40-seed sweep clean); converted to green invariant pins.
-  * `multiply_order_matters` stays `#[ignore]` under **MONEY-01 / C-Q1** (the
-    rulebook gives no composition rule for two live money multipliers).
-- **kind**: implementation bug
-- **class**: A
-- **severity**: high (breaks every sim / replay)
-- **suggested batch**: fuzz/determinism
-- **locations**
-  - `rules/tests/tests/fuzz_found.rs` (5 green pins; `multiply_order_matters` ignored)
-  - `rules/tests/tests/fuzz/meta.rs` `check_negation` / `check_monotonicity` (harness fixes)
-  - `crates/game-core/src/engine/move_ctx.rs` / `world.rs` (`TurnCtx::plan` serde)
-  - **D**: `card_trap_reachable`, `immunity_gap` ignores already removed
-  - `rules/tests/tests/inline_provider.rs:247` B2 HostRequest learn-pass gap (see HOST-01 -- top-level pay path now pinned green; nested-settle remainder)
-- **rulebook**: general engine invariants (same answers → same world; save/restore round-trip; negation is total; +N never shortens).
-- **expected**: green under the existing `fuzz_found` assertions. **Confirmed** (except C-Q1).
-
 ## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects)
 - **kind**: ABI defect / implementation bug
 - **class**: B
@@ -684,9 +407,24 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/tests/tests/inline_provider.rs:247` (B2 equivalence gap TODO), `:343` (cross-ref)
   - `docs/BOT.md` §3.2
 - **rulebook**: n/a — ABI contract: inline learn pass must see the same world as the replay model's last pass (`live + host_effects`).
-- **current**: PARTIAL (top-level done; nested-settle remainder). Each pass shares `live` after `NeedHost`, so the **landing** pass reads `live + host_effects`; write-through replace-on-rerun means the event stream carries that pass's lines (`docs/ENGINE.md` "Drive replay semantics"). Pinned for the top-level `pay` path by `effect_applied_log::reread_after_host_effect_sees_the_updated_value`. **Remaining gap:** a write inside a host routine's *nested settle* (the agent-tile offer buying a deed during `HostRequest::Move`) may not be on live before the next pass shares -- `RAS:成为最强`'s ownership check still sees the pre-buy deed (`be_strongest_rolls_only_with_a_livehouse`).
+- **current**: PARTIAL (top-level done; nested-settle remainder). Each pass shares `live` after `NeedHost`, so the **landing** pass reads `live + host_effects`; write-through replace-on-rerun means the event stream carries that pass's lines (`docs/ENGINE.md` "Drive replay semantics"). Pinned for the top-level `pay` path by `effect_applied_log::reread_after_host_effect_sees_the_updated_value`. **Remaining gap:** a write inside a host routine's *nested settle* (the agent-tile offer buying a deed during `HostRequest::Move`) may not be on live before the next pass shares -- `RAS:成为最强`'s ownership check still sees the pre-buy deed (`be_strongest_always_rolls_and_ignores_the_face_on_the_fallback`).
 - **expected**: rebase onto the updated live world between passes, including nested settle writes (the write journal this item names).
 - **capability**: write journal on `Run` for nested settle writes. Top-level HostRequest sequencing is in.
+
+## HOST-02 — guest world writes are not visible to the host routine that follows
+- **kind**: ABI defect / implementation bug
+- **class**: B
+- **severity**: medium (silently no-ops a routine whose guard reads board state)
+- **suggested batch**: host ABI: `apply_host_request` world sync
+- **locations**
+  - `crates/game-rules/src/wasm_rules.rs:3597` (`adopt_turn_policy` / `overlay_guest_state` at the `NeedHost` boundary)
+  - `crates/game-core/src/engine/play.rs:3219` (`apply_redeem` owner guard)
+  - `rules/cards/card-morfonica/src/toko_swap.rs` (worked around 2026-10-28)
+  - `rules/cards/card-pp/src/first_live_accident.rs` (seal token vs the body's own draw hook, 2026-10-28)
+- **rulebook**: n/a — ABI contract. A body's writes before a host request must be what the routine — and any hook the routine raises — sees.
+- **current**: Only the turn **policy** knobs, the plan knobs (`resolve` / `pay_factor` / …) and `players[].state` **decreases** cross at `NeedHost`; `owners` / `mortgaged` / `houses` / `field` / token writes stay on the guest copy until the re-run. `Mor:（toko）`'s 「互换后将你得到的地契免费赎回」 via `ctx::apply_redeem` therefore returned 0 every time (the guard read the *old* owner) while the money pipeline moved; the branch now writes `set_mortgaged` + the `redeemed` record by hand. The same staleness hits hook bodies: 「初次演出事故」 sets its `skillBlock` token and then draws, but the `DrewBefore` skill sees the pre-body world, so 大和麻弥's sealed (2) still offers on that one draw.
+- **expected**: rebase the live world on the guest copy before `apply_host_request` (or overlay board rows for the routine's duration), so a routine's guards see the body's preceding writes. Then the toko workaround can go back to `apply_redeem` (the `log.redeem` / `redeemed` record then come for free).
+- **capability**: board-row overlay at the pause boundary; needs no new import.
 
 ---
 
@@ -749,26 +487,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **rulebook**: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」; 「（不触发结算但视为可触发乐队技能）」.
 - **current**: hand listing / `card_replayable` ready; `H.Target` / `Card.Targeting` / force-target tag missing.
 - **capability**: `CardDef.targeting()` + `Normal` hand filter + force-target play tag + `BandBase.PassTile` fan-out.
-
-## ABI-05 — flip-effect trigger (PP band overflow)
-- **kind**: ABI defect
-- **class**: B
-- **severity**: medium
-- **suggested batch**: host ABI: out-buffers / skills: PP
-- **status**: **fixed** (this batch, `fix: ABI-05 …`; names updated 2026-10-17) —
-  the flip-effect trigger is raised with the clause's intended X *before* the
-  counters move. Originally landed as `TriggerKind::FlipEffect` /
-  `HookKind::FlipEffect` (94); those kinds were **retired in ABI v83** and the
-  capability now lives as `bandori_std::kind::FansFlip` (wire 107) with
-  `ppFansUp` / `ppFansDown` counters. `PP:有你与我在这里共度` raises it; the
-  PP band (2) hooks it and adds `X - owned` overflow crystals.
-  Test: `band_skill_overflow_to_crystals` (un-ignored).
-- **locations**
-  - `rules/tests/tests/pp.rs` `band_skill_overflow_to_crystals` (un-ignored)
-  - `rules/bandori-std/src/kind.rs:33,56-59` (`FansFlip`)
-- **rulebook**: PP band (2) 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 — passive hook on a fan-*flip*.
-- **was**: no flip-effect trigger; overflow never became crystals.
-- **capability**: flip-effect trigger. **Landed** as `bandori_std::kind::FansFlip`.
 
 ## ABI-06 — world snapshot / restore (「取消所有受到的效果」)
 - **kind**: ABI defect
@@ -901,50 +619,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **unblocks**: a generic 「效果迁移至…」 / 「视为与…交换位置」 clause; 笑容大游行
   would drop its hand-rolled settle-redirect pair.
 
-## SKILL-01 — hook-guard dispatch does not see `skillBlock` (丸山彩 (2) under 初次演出事故)
-- **kind**: implementation bug
-- **class**: B (contained)
-- **severity**: medium
-- **suggested batch**: skills: PP
-- **status**: **fixed** (this batch, `fix: SKILL-01 …`) — the residual guard
-  *was* consulting `skill_blocked` correctly; the test's `set_fans` helper
-  replaced the whole tokens vector and wiped `skillBlock`. The helper now
-  updates the two fan counters in place. Test: `accident_blocks_pp_skill_2`.
-- **locations**
-  - `rules/tests/tests/pp.rs:1078` `accident_blocks_pp_skill_2`
-- **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PaySplitChoose hook must not prompt.
-- **current**: `skillBlock` token is set (`tok=1`) but the guard/body `skill_blocked` check does not see it.
-- **expected**: hook-guard dispatch consults the token.
-
-## SKILL-02 — 冰川日菜 (2) lottery borrow never runs
-- **status**: **fixed** (closed in the 2026-10-17 audit) — the lottery borrow
-  runs at `TurnStartBefore`: rolls 1d4, `place_card`s the matching (2), and
-  writes `state::set(…, BORROWED, n-1)`. Test `hina_skill_2_borrows_skill`
-  is un-ignored and asserts `skill.hinaLottery.borrowed == 1` plus the
-  borrowed skill on field. The old "0-based scratch index" test bug is gone.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: skills: PP
-- **locations**
-  - `rules/tests/tests/pp.rs:1579` `hina_skill_2_borrows_skill` (un-ignored)
-  - `rules/skills/skill-personas/src/hina_lottery.rs:68-76`
-- **rulebook**: 「每回合开始时投掷1d4…借用对应（2）」.
-- **was**: `place_raw` + `begin_turn` never reached `borrowed`.
-- **expected**: roll 1d4 at turn start and borrow the matching (2). **Confirmed.**
-
-## SKILL-03 — stun waiver 「此技能可以正常使用或在[晕眩]状态下使用」
-- **status**: **fixed** (closed in the 2026-10-17 audit) — the waiver is a
-  declared static property `prop::PLAYABLE_STUNNED` (「可在眩晕时打出」,
-  `crates/card-sdk/src/abi.rs:993-996`), not a play-guard reorder.
-- **kind**: ABI defect
-- **class**: B
-- **severity**: medium
-- **suggested batch**: skills: Roselia
-- **locations**
-  - `rules/skills/skill-personas/src/rinko_1cm.rs:32-33` (`.props(&[(prop::PLAYABLE_STUNNED, 1)])`)
-- **capability**: per-card waiver of the engine's generic stun gate. **Landed** as `CardDef` prop `PLAYABLE_STUNNED`.
-
 ## SKILL-04 — 状态2 exit conditions missing (several character skills)
 - **kind**: rulebook divergence
 - **class**: C
@@ -985,122 +659,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/skills/skill-personas/src/soyo_clear.rs:114` (「以此法免除」 attribution)
 - **capability**: deck-list / character-exclusive tag / co-owned tile / provenance-tagged spends / tag query on triggers.
 
-## SKILL-07 — soyo 「持续至你的下回合开始」 recolour has no expiry
-- **kind**: implementation bug
-- **class**: **A — closed 2026-10-21** (`0ce220b1`, verified this batch)
-- **severity**: medium
-- **suggested batch**: skills: CRYCHIC / tiles
-- **locations**
-  - `rules/skills/skill-personas/src/soyo_clear.rs` — `COLOURED` remembers the
-    landing as `tile + 1`; `declare_cap` (on `TurnStartBefore` /
-    `DeckAtGameStart`, gated `trigger::player_id() == player_id`) expires the
-    `colorFor:<p>` prop and clears the slot. Both entries are on the card's
-    `silent` list: the expiry is bookkeeping, not a printed effect.
-  - pinned by `rules/tests/tests/mygo.rs` `soyo_recolour_expires_at_next_turn_start`.
-- **rulebook**: 「持续至你的下回合开始」.
-- **was**: the `colorFor:<p>` write was permanent.
-- **residual (already filed, not this item)**: 「若以此法单次免除了至少1500资金的
-  [支付]…」 attribution is **SKILL-06**'s provenance-tagged-spends capability
-  (`soyo_clear.rs` `TODO(规则书)[judgement]`). The penalty latch itself is wired
-  in `on_pass`.
-
-## SKILL-08 — Rana parking 「你与其他玩家重合时」 never fires (suspected bug)
-- **kind**: implementation bug
-- **class**: D (fixed 2026-10-10; see D-07)
-- **severity**: medium
-- **suggested batch**: movement / skills: MyGO
-- **locations**
-  - `rules/skills/skill-personas/src/rana_parking.rs` `on_overlap` (un-ignored via new test `rana_cat_overlap_takes_800_and_gives_a_parfait`, green twice)
-- **rulebook**: 「你与其他玩家重合时」.
-- **was**: pre is `MINE` (owner is the mover) but the body read `player_id` as "the other" and bailed when it equalled the owner — always.
-- **fixed**: body reads `trigger::target()` (the other player already on the landing tile). Amount stays 800 (sheet / `characters.json`; older `rulebook.txt` prose says 1000).
-
-## SKILL-09 — kaoru_prince 「每次[经过]或被[经过]时」 fires for every passer
-- **kind**: stale
-- **class**: D (already fixed; backlog entry was against an older revision)
-- **severity**: medium
-- **suggested batch**: movement
-- **locations**
-  - `rules/skills/skill-personas/src/kaoru_prince.rs` — Pass half is already `pre::MINE`; 被[经过] is a filtered `PassTile`
-  - live pins: `hhw.rs` `kaoru_skill_1_own_walk_gains_one_pot_per_step` / `kaoru_skill_1_another_players_walk_gives_nothing` / `kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step`
-- **rulebook**: 「每次[经过]或被[经过]时」 — `Pass` half is "I pass" (`actor == owner`).
-- **fixed already**: `On::Action(&[ActionKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half (was `HookKind::Pass` pre-v85). Nothing to un-ignore.
-
-## TILE-01 — Anon Tokyo link arrangements (Fire bird / Repaint / ONE OF US / linked rent)
-- **status**: **fixed** (this batch, 2026-10-13, `closeout-4-tiles`) —
-  t02 (Fire bird needs crystals to survive to the settle), t03 (P0 plays
-  Repaint on P1's roll; plain /2, no ceil-10), t05 (ONE OF US share is a raw
-  `adjust_money` split so FEVER! cannot boost it), t21 (play Anon Tokyo on
-  P1's turn; arm [停留] after `until_turn`). Un-ignored, green.
-- **kind**: implementation bug + test setup
-- **class**: A (arrangements) + C (mortgaged partner half)
-- **severity**: medium
-- **suggested batch**: rent multipliers / tiles
-- **locations**
-  - `rules/tests/tests/cross_tiles.rs` `t02_anon_link_plus_fire_bird` (green)
-  - `rules/tests/tests/cross_tiles.rs` `t03_anon_link_plus_repaint` (green)
-  - `rules/tests/tests/cross_tiles.rs` `t04_anon_link_mortgaged_partner` (**RULING** — left ignored)
-  - `rules/tests/tests/cross_tiles.rs` `t05_one_of_us_shares` (green)
-  - `rules/tests/tests/cross_tiles.rs` `t21_riki_plus_anon_link` (green)
-  - `rules/cards/card-ag/src/one_of_us.rs` (`ctx::lose_raw` / `gain_raw`)
-  - `crates/card-sdk/src/ctx.rs` (`adjust_money` — raw money move, no pipeline)
-- **question**: C-Q13 (mortgaged partner tile's half 收费) — still open.
-
-## TILE-02 — agent half-rent 「同色」 vs colour overrides
-- **status**: **fixed** (this batch, 2026-10-13, `closeout-4-tiles`) —
-  「无主或玩家拥有的」 reads as unowned **or any player-owned**: unowned →
-  buy, own → build, another seat's non-mortgaged deed → the agent's
-  「半价收费的[结算]（向上取整10）」. `ANY_COLOR` still widens the colour set
-  for buy/rent but is never buildable. soyo's PaySplitMul halves again on top.
-  `t16_soyo_mixed_colors` un-ignored, green (R/2/2).
-- **kind**: rulebook divergence (resolved)
-- **class**: C
-- **severity**: medium
-- **suggested batch**: rent multipliers
-- **locations**
-  - `rules/tiles/src/agent.rs` + `crates/game-core/src/engine/play.rs` (`agent_landing`)
-  - `rules/tests/tests/cross_tiles.rs` `t16_soyo_mixed_colors` (green)
-  - TEST-FINDINGS §6 item 10 / Ruling 4–5
-- **question**: C-Q14 — superseded by the above reading.
-
-## TILE-03 — RiNG rent table / mortgageability / `ringMultiplier`
-- **kind**: rulebook divergence
-- **class**: C
-- **severity**: medium
-- **suggested batch**: rent multipliers / tiles
-- **locations**
-  - `rules/tiles/src/ring.rs:13` (dice-rent table + 「至少1个」 floor have no book clause)
-  - `crates/game-core/src/state.rs:455` / `crates/card-sdk/src/abi.rs:572` / `crates/card-sdk/src/ctx.rs:453` (`ring_multiplier` TODO)
-  - `docs/TILES.md` TODOs; TEST-FINDINGS §6 items 9 & 11
-  - no black-box test
-- **rulebook**: 「所有RiNG不可升级」 is the only RiNG clause; 游戏流程 5 「抵押拥有的地契」 with no exclusion (engine refuses RiNG mortgage).
-- **question**: C-Q15.
-
-## TILE-04 — 学生会的检查 placement / forced stop
-- **kind**: test window / arrangement
-- **class**: D (fixed 2026-10-10; see D-09)
-- **severity**: medium
-- **suggested batch**: movement
-- **locations**
-  - `rules/tests/tests/cross_tiles.rs` `t12_student_council_check` (un-ignored, green twice)
-  - body already correct (same shape as green 香澄 / `student_council_check_adds_juewu_not_ya`)
-- **rulebook**: 学生会的检查 — placement + forced stop + 「本回合无法加盖房屋」 (linger `NO_BUILD` already landed).
-- **was**: the test `t.play`'d a SettleBefore [反击] as a free [手] (silent no-op) and declined the allowNone stand-in; `t1 - 2` also usize-underflowed on 购物中心 = 1.
-- **fixed**: drive the SettleBefore window (roll + `counteract`), answer yes then the tile, wrap the start index. Un-ignored, green twice.
-
-## TILE-05 — Parking Space + 要乐奈 (2) teleport arrangement
-- **kind**: test setup
-- **class**: D (fixed 2026-10-10; see D-09)
-- **severity**: medium
-- **suggested batch**: movement
-- **locations**
-  - `rules/tests/tests/cross_tiles.rs` `t24_parking_space` (un-ignored, green twice)
-  - engine path already green in `g15_parking_space_settle_replaced_plus_rain_extra_settle`
-- **rulebook**: Parking Space body-replace + Rana (2) Space teleport as the main move.
-- **was**: P0 played Parking Space on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`.
-- **fixed**: setup on P0's turn; assert stay after `pass`. Un-ignored, green twice.
-- **open C (owned-Space body-replace order)**: see C-Q43 — only needed when Space has a deed owner; the CROSS-TESTS T24 path is unowned.
-
 ## TILE-06 — 江户川乐器店 / CiRCLE shared body
 - **kind**: rulebook divergence
 - **class**: C
@@ -1110,52 +668,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/tiles/src/edogawa.rs:9` (book names both in one sentence with different extra text)
   - `rules/tiles/src/circle.rs:29,59,129` (stunned card-only reward is a ruling `C44`/`D13`, not book; exile bar is engine bookkeeping)
 - **question**: C-Q16 (only if the two shops ever diverge).
-
-## DRAW-01 — Maya (2) look-at-top kept card does not raise `drew`
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: draw/discard pipeline
-- **status**: **fixed** (this batch, `fix: DRAW-01 …`) — a `DrewBefore`
-  replacement's `add_to_hand` now pushes to the run's `draw_log`, so the after
-  points (`drawn` / `drew`) fire for the kept card (「此次加手视为抽卡动作」).
-  Test: `g28_maya_look_at_top_still_counts_as_a_draw`.
-- **locations**
-  - `rules/tests/tests/gap_res.rs:209` `g28_maya_look_at_top_still_counts_as_a_draw`
-- **rulebook**: look-at-top + keep is a draw for 「梦在前方」's crystal.
-- **current**: `drew` not raised on the kept card.
-- **expected**: raises `drew` like any draw.
-
-## DRAW-02 — 星月夜 even-roll crystal-removal offer never prompts
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: draw/discard pipeline / skills: Morfonica
-- **status**: **fixed** (this batch, `fix: DRAW-02 …`) — the hook did prompt;
-  `attack` billed the *roller* (C#) while the sheet's omitted subject of 「可消耗」
-  is the card controller. The owner now pays 1,000 and removes a crystal (net 0
-  with （3）'s payout). Test: `starry_even_roll_of_another_player_offers_crystal_removal`.
-- **locations**
-  - `rules/tests/tests/morfonica.rs:304` `starry_even_roll_of_another_player_offers_crystal_removal`
-  - `rules/cards/card-morfonica/src/starry_night.rs`
-- **rulebook**: 「当其他玩家的移动掷骰为偶数时可[支付]1000资金并移除此卡一个[奇迹水晶]」.
-- **current**: engine never prompts.
-
-## DRAW-03 — 游击演出 [特] window at turn end never opens
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: skills: RAS
-- **status**: **fixed** (this batch, `fix: DRAW-03 …`) — own-card `Discarded`
-  dispatch (the card that entered the discard hears its own discard) plus a
-  `Discarded` hook that arms the turn-end check (C# `OnDiscarded`). The test
-  now discards through the engine (`discard_card`) rather than a raw
-  `set_discard`. Test: `guerrilla_special_offers_to_mark_a_deed_as_livehouse`.
-- **locations**
-  - `rules/tests/tests/ras.rs:1411` `guerrilla_special_offers_to_mark_a_deed_as_livehouse`
-- **rulebook**: [特] (card in discard + ≥1000 paid in settle + no buildable livehouse owned or purchasable) at turn end.
-- **current**: card stays in the discard with no prompt.
-- **expected**: the [特] offer opens at turn end when the gate holds.
 
 ## MONEY-06 — 「支付」 reach of a non-settlement loss
 - **kind**: rulebook divergence
@@ -1184,6 +696,16 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **locations**
   - `rules/events/src/front_or_back.rs:49,56`
 - **question**: C-Q19 (who gets the remainder).
+
+## MOVE-02 residual — does a 「固定为X*6」 face still take later additions?
+- **kind**: rulebook divergence
+- **class**: C
+- **severity**: low
+- **locations**: `rules/cards/card-ag/src/yolo.rs:49` (`TODO(规则书)`, points here);
+  `rules/tests/tests/cross_move.rs:551` `m11_rinko_plus_yolo` (pins the add-anyway reading)
+- **rulebook**: 白金燐子 (2) 「使这回合移动掷骰的结果固定为X*6」 + Y.O.L.O 「使结果增加1d4
+  结果的数字」 — the text does not say whether a fixed face refuses the addition.
+  Contrast `starry_night` / `eve_unify`, which refuse over a fixed face.
 
 ## MOVE-06 — E14 0-step case: [经过] vs [重叠]
 - **kind**: rulebook divergence
@@ -1226,58 +748,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **rulebook**: 「[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动。」
 - **capability**: board grid geometry ray-nearest search + `plan::set_teleport_to` teleport-with-settle (`H.MainMoveAs`).
 
-## MOVE-10 — 若宫伊芙 (2) fan flip + Y.O.L.O dice accounting
-- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — **D** test drive.
-  Eve's (2) is an `ask_number` 0..=up choice (options are `ask.intOption`), so
-  Y = 2 is `answer(0, 2)` — the same drive as the green twins
-  `g10_eve_plus_yd4_on_a_2d20_move` / `g32`. The old matcher looked for
-  「若宫伊芙」/「粉丝」 in the options (never present) and declined, so only
-  Y.O.L.O's 1d4 landed (pos 5 = 4+1). Un-ignored and green (pos 8 = 4+2+2).
-- **kind**: test-harness drive
-- **class**: D
-- **severity**: medium
-- **suggested batch**: movement / draw/discard pipeline
-- **locations**
-  - `rules/tests/tests/cross_move.rs:140` `m03_eve_then_yolo` (un-ignored, green)
-
-## MOVE-11 — 是我自己的问题 still fires after an abnormal move effect
-- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — 「（2）若受到
-  [异常移动效果]影响，此卡不生效」 now gates the [反击] offer itself
-  (`can_counteract`). The signal is the longer-lived `abnormalHit` latch (set
-  when an abnormal lands, cleared when the player's next [主要移动] completes),
-  so a forced move on *another* player's turn still suppresses the owner's
-  next main-move window. The test drive also had a **D** bug: the saki_move
-  target pick is a `saki_move_title` choice (not `kind == "player"`) and the
-  direction is `saki_move_dir` option 0 — without that the force-move never
-  landed. Un-ignored and green.
-- **kind**: implementation bug + test-harness drive
-- **class**: A (+D)
-- **severity**: medium
-- **suggested batch**: counteraction windows / movement
-- **locations**
-  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (un-ignored, green)
-  - `rules/cards/card-crychic/src/my_own_problem.rs` `can_counteract`
-  - `crates/game-core/src/state.rs` `key::ABNORMAL_HIT`
-- **rulebook**: sheet says it does **not** fire after an abnormal move effect.
-
-## MOVE-12 — RAS band (1) cannot decline the second abnormal-move effect
-- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the drop of the
-  second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late to cancel)
-  with pre `actor == owner` (the causer, not the recipient). Moved to
-  `On::FilterFlag(&[FilterKind::AbnormalGuard])` (was `GateKind::AbnormalGuard`
-  pre-v85) with pre `target == owner`, so the
-  declaration gate refuses the second [异常移动效果] of the turn. The test
-  drive also had a **D** bug (same saki_move matcher as MOVE-11) that left
-  `err.play_phase` because the force-move never landed. Un-ignored and green.
-- **kind**: implementation bug + test-harness drive
-- **class**: A (+D)
-- **severity**: medium
-- **suggested batch**: counteraction windows
-- **locations**
-  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (un-ignored, green)
-  - `rules/skills/skill-groups/src/ras.rs` `on_abnormal` (now `AbnormalGuard`)
-- **rulebook**: RAS band (1) 「每回合可选择只获得第一次受到的[异常移动效果]」.
-
 ## MOVE-13 — 星月夜's re-roll scope (whole dice set vs base die)
 - **kind**: rulebook divergence
 - **class**: C
@@ -1304,23 +774,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **locations**
   - `rules/events/src/heat_head.rs:57` (subtract from face vs `add_extra_dice(-1, 6)`; sheet says 减少1d6 not 少投1d6)
 - **question**: C-Q25.
-
-## SETTLE-04 — 线香花火 last crystal / extra turn / stun cascade (R-7)
-- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — C-Q26a ruling: the
-  last crystal removal does **not** grant an extra turn. The terminal effect is
-  discard + 2 [眩晕]. (Granting one would auto-skip it on the stun — `play.rs`
-  `stunned` -> `end_turn` — and its 「每回合结束时移除一层」 tick would eat one of
-  the two layers, netting 1.) `l07_extra_turn_cascade` un-ignored, green.
-  C-Q26b (「until your next turn start」 vs an extra turn's start) is still open.
-- **kind**: rulebook divergence
-- **class**: C
-- **severity**: medium
-- **suggested batch**: settle stages
-- **locations**
-  - `rules/tests/tests/cross_long.rs:522` `l07_extra_turn_cascade` (un-ignored, green)
-  - `rules/cards/card-mujica/src/sparkler.rs` (last removal skips `give_extra_turn`)
-  - TEST-FINDINGS §6 items 2 and R-7
-- **question**: C-Q26b (does 「until your next turn start」 end at an extra turn's start?).
 
 ## SETTLE-05 — no_breakup R3 timing (settleAfter vs tileResolved)
 - **kind**: rulebook divergence
@@ -1372,6 +825,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **suggested batch**: counteraction windows
 - **locations**
   - `rules/cards/card-mujica/src/dice_cast.rs:85`
+- **related** (carried from the closed CH-03): the turn-key `PLACED` latch also backs `cant_play` (`x_in_play`, `:59-64`), so a second copy in hand is refused in the same turn although the cell prints no once-per-turn cap; the `noCounteractTurn` latch is still the other seats' hand-counter block (`:98`). Probe: a second copy fails `Err("cards:card-mujica.x_in_play")`.
 - **question**: C-Q31 (must other [反击]s still answer this card's own play window?).
 
 ## CH-10 — ran_as_usual (1) C# once-per-turn gate
@@ -1383,77 +837,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/cards/card-ag/src/ran_as_usual.rs:27` (C# adds a once-per-turn gate the passage does not name)
 - **question**: C-Q32.
 
-## CH-11 — 「会在骗着买水晶的人」 offers 「不要背负期待」 as a crystal endpoint
-- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — 「此卡不受任何其他
-  效果影响」 is a static [特] property (`prop::IMMUNE` / `FieldCard.immune`),
-  stamped at placement from the card's static props, so `place_raw` and engine
-  placement see it without running the play body. `c26_immunity_vs_crystal_mover`
-  un-ignored, green.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting
-- **locations**
-  - `rules/tests/tests/cross_chain.rs:1175` `c26_immunity_vs_crystal_mover` (un-ignored, green)
-  - `crates/game-core/src/engine/ops.rs` `place_card_on` (stamps `immune` from `prop::IMMUNE`)
-- **rulebook**: 「此卡不受任何其他效果影响」 — should not be a crystal endpoint.
-- **was**: `set_self_immune` was a play-body side effect; `place_raw` never ran it.
-
-## CH-12 — [不可阻挡] still grants new [除外] from 无路矢
-- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — glossary 14
-  「无法获得新的[除外]层数」/「也不会获得新的层数」 now refuses new [除外]/[晕眩]
-  in `abnormal_gate`. 无路矢's exile is its teleport cost, so a refused gain
-  negates the card (CH-07 minimal: spent, no place / no designate / no later
-  teleport). `g23_unstoppable_refuses_the_exile_cost` un-ignored, green.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting
-- **locations**
-  - `rules/tests/tests/gap_window.rs:302` `g23_unstoppable_refuses_the_exile_cost` (un-ignored, green)
-  - `crates/game-rules/src/wasm_rules.rs` `abnormal_gate` (unstoppable × Stun/Exile)
-  - `rules/cards/card-mygo/src/no_road.rs` (early-out when the exile is refused)
-- **rulebook**: glossary 14 「无法获得新的[除外]层数」.
-- **was**: 无路矢 still granted 2 [除外] to the holder.
-
-## CH-13 — Here the world does not land on the second card played in one turn
-- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — `TriggerKind::TwoCards`
-  (「当有人同一回合内打出两张卡时」) is now raised on the play that makes it two
-  hand-card plays in a turn (`TurnCtx.cards_played`), opening its own [反击]
-  window. `c21_here_the_world` un-ignored, green.
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: draw/discard pipeline
-- **locations**
-  - `rules/tests/tests/cross_chain.rs:957` `c21_here_the_world` (un-ignored, green)
-  - `crates/game-core/src/engine/play.rs` `play_from_hand` (raises `"twoCards"`)
-  - **D note**: `l06_one_draw_several_effects` ignore already removed (capture-vs-autoplay is C-Q33)
-- **rulebook**: Here the world captures a drawn / second card.
-- **was**: the TwoCards trigger was never raised.
-
-## CRYSTAL-01 — crystal can pay a skill's fire cost (ChargePaying)
-- **kind**: ABI defect
-- **class**: B
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting
-- **status**: **fixed** (this batch, `fix: CRYSTAL-01 …`; name updated 2026-10-17) —
-  the pre-spend hook is raised inside `ctx::spend_charge` before the pots move;
-  a hook that substitutes cancels the link. Landed as `TriggerKind::FirePaying` /
-  `HookKind::FirePaying` (78); the wire name is now **`ChargePaying`**
-  (`bandori_std::kind::ChargePaying`, ABI v68 `firePaying` → `chargePaying`).
-  不再迷茫 (2) hooks it (`tomori_no_longer.rs:34-40`) and burns one crystal;
-  (3) sweeps the card at 0 via `CounterChanged`.
-  Tests: `light_crystal_pays_skill_fire_cost`, `light_removed_when_crystals_run_out` (un-ignored).
-- **locations**
-  - `rules/tests/tests/mygo.rs:126` `light_crystal_pays_skill_fire_cost`
-  - `rules/tests/tests/mygo.rs:220` `light_removed_when_crystals_run_out`
-  - `rules/cards/card-mygo/src/tomori_no_longer.rs:34-40`
-  - `rules/bandori-std/src/kind.rs:30-31,51-55` (`ChargePaying`)
-- **rulebook**: 灯 不再迷茫 (2) 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」; when crystals run out the card is [移除]d.
-- **was**: `spend_charge` had no pre-spend substitution hook (only post-commit `fireSpent`); crystal count never emptied.
-- **capability**: `ChargePaying` hook / substitute consult inside `spend_charge`. **Landed.**
-
 ## CRYSTAL-02 — miracle (3) / crystal-on-discard 「视为此卡未生效」
 - **kind**: ABI defect
 - **class**: B (after CH-07 ruling)
@@ -1462,40 +845,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **locations**
   - `rules/cards/card-mygo/src/miracle.rs:138` (needs `PlayCtx.Effective` / `H.CardWasted`)
 - **capability**: `CardWasted` when a card is discarded with crystals left.
-
-## CRYSTAL-03 — 绯红之魂 500 owed at crystal-spend time, paid after possible discard
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting / payment pipeline
-- **status**: **fixed** (this batch, `fix: CRYSTAL-03 …`) — the 500 is paid in
-  `pay_choose` as part of the crystal spend, before `add_crystals` raises
-  `CounterChanged` (which rule (3) answers with the discard). The `PayAfter`
-  tag is gone. Test: `ag::soul_last_crystal_still_pays_the_payee_500`.
-- **locations**
-  - `rules/cards/card-ag/src/crimson_soul.rs` (was `:126`; now paid inline in
-    `pay_choose`)
-- **rulebook**: rule (1) — 500 is owed the moment the crystal is spent; not conditioned on the card still being in play.
-- **was**: paid after rule (3) may have discarded the card.
-- **expected**: pay 500 as part of the spend, before the discard check.
-
-## CRYSTAL-04 — NNM (2) 「获得x次经过CiRCLE时的资金奖励」 does not scale with the live reward
-- **kind**: implementation bug
-- **class**: **A — closed** (earlier batch, `fix: CRYSTAL-04 …`; the 2026-10-20
-  entry still described the bug and is corrected 2026-10-21)
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting / rent multipliers
-- **locations**
-  - `rules/cards/card-morfonica/src/nanami_effort.rs:162-170` —
-    `gain_circle_money` raises `PassRewardAffected` / `REWARD_MONEY` and pays the
-    live figure.
-  - `rules/tests/tests/morfonica.rs:468`
-    `nnm_option2_gains_x_times_circle_money_reward` (expects Morfonica's 1000).
-- **rulebook**: Sheet 2026-10-06 新卡组卡 G7 (2) 「获得x次经过CiRCLE时的资金奖励」 (was 「获得x*2000资金」); Morfonica rewrites the CiRCLE reward to 1000/1500/2000.
-- **was**: hard-coded 2000.
-- **now**: each of the x rewards runs the money half of the CiRCLE reward step
-  (`circleAffected` between pick and payout), so Morfonica's 1000/1500/2000 cycle
-  (and any other listener) scales it.
 
 ## CRYSTAL-05 — 育美标记 circle-tile case (C# only)
 - **kind**: rulebook divergence
@@ -1622,34 +971,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - 支付阶段 1 / 5 / 7 shaping (one `effect` raise carries window 5's power at window 1's position)
 - **expected**: sync the tables without rewording; raise the missing windows when a card hooks them.
 
-## HOST-03 — guard-side kind-rejection lint (G3)
-- **status**: **already landed** (stale backlog row) — `cargo run -p game-rules
-  --example precheck` is the G3 lint (`docs/GUARDS.md` §10.1); it flags guards
-  that still reject on the trigger kind. The 2026-10-17 audit found no live
-  `TODO` at `rules/cond/src/lib.rs` — that site is now a pointer comment at
-  `:112-115`, so the "leftover TODO" sentence in the older draft was itself stale.
-- **kind**: tooling gap
-- **class**: A
-- **severity**: low
-- **suggested batch**: fuzz/determinism
-- **locations**
-  - `crates/game-rules/examples/precheck.rs`
-  - `docs/GUARDS.md` §5.2 / §10.1
-
-## HOST-04 — `tile_kind` / ring query missing on the ABI
-- **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: HOST-04 …`; name updated 2026-10-17) —
-  stale row: the query has been on the ABI since v9. The symbol was renamed
-  **`ctx::is_ring` → `ctx::is_deed`** at ABI v69 (`bandori-std/src/lib.rs:82-84`
-  `is_deed` = `tile_is(tile, "ring")`). `sweet_escape` / `now_sumimi` call
-  `ctx::is_deed` + `ctx::ring_multiplier()` instead of the local rent-table
-  approximation (`now_sumimi.rs:37-50`).
-- **kind**: ABI defect
-- **class**: B
-- **severity**: low
-- **suggested batch**: tiles
-- **locations**
-  - `rules/cards/card-sumimi/src/sweet_escape.rs`, `now_sumimi.rs:37-50` (`ctx::is_deed` / `ctx::ring_multiplier`)
-
 ## HOST-05 — `ask_tile(allowNone: true)` / free-amount `ask_money`
 - **status**: **partial** (2026-10-13, `closeout-5-engine`) —
   `pareo_far` now uses `ask_tiles` (TileId, 「不选」 → `-1`) so the optional
@@ -1663,200 +984,8 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/cards/card-ras/src/pareo_far.rs` (ask_tiles 「不选」)
   - `rules/events/src/tsurumaki_estate.rs:53` (ask_money still open)
 
-
-## HOST-06 — HostRequest purchase replies always `1` (guest `bool` is a lie)
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-06 …`) — `buy` /
-  `build` / `mortgage` / `card_buy` / `card_build` / `card_acquire` /
-  `card_mortgage` / `card_offer_build` / `card_raise_bought` now return
-  `Flow<bool>` (`true` = the deed/house/mortgage actually committed), and the
-  matching `apply_host_request` arms answer `did as i32` instead of `Ok(1)`.
-  Guest callers that logged a buy on the old lie are gated on the real outcome
-  (`tsugu_ycm`'s `tsugu_buy`, `tomoe_savior`'s `tomoe_savior_bought`);
-  `dream_ahead` (spend 3 crystals only on success) and `afterglow` (log the
-  free house only on success) already checked the bool and are now truthful.
-  ABI v52 → **v53** (return-value meaning). Tests: `ag.rs`
-  `band_free_house_skipped_when_build_refused` (NO_BUILD vetoes the free
-  house, no `afterglow_free_house` log), `general.rs`
-  `tsugu_buy_gate_refused_does_not_log_a_buy` (Poppin' hill `BuyGate` refuses
-  the deed, no `tsugu_buy` log). `DrawEvent` / `PayRent` / `OfferBuy` /
-  `OfferForceBuy` / `OfferBuildOne` still answer `1`: their guest wrappers are
-  `asked()` (prompt sentinel), not a purchase bool.
-- **kind**: ABI defect
-- **class**: A
-- **severity**: high (common play with buy/build hooks)
-- **suggested batch**: HostRequest handlers / out-sentinel answers
-- **locations**
-  - `crates/game-rules/src/wasm_rules.rs` `apply_host_request` — `Buy` / `Acquire` / `AgentOffer` / `Build` / `OfferBuild` / `Mortgage` / `RaiseBought` now answer the real outcome
-  - `crates/game-core/src/engine/play.rs` `card_buy` / `card_acquire` / `card_build` / `buy` / `build` / `mortgage` — `Flow<bool>`
-  - consumers that trust the reply: `rules/cards/card-pp/src/dream_ahead.rs:193` (`if !ctx::card_buy(...) { return; }`), `rules/skills/skill-groups/src/afterglow.rs:34` (`if ctx::card_build(...) { log free house }`)
-- **ABI contract**: `crates/card-sdk/src/ctx.rs` `card_buy` / `buy` / `card_build` / `acquire` `-> bool` = the real outcome (ABI v53)
-- **was**: every purchase HostRequest resumed as `true` (`!= 0` on answer `1`)
-- **expected**: `0` when the engine no-op'd (BuyGate cancel, already owned, `buyBefore` cancel, payment unpaid, `why_not_build_on`, `buildBefore` cancel, max houses). **Confirmed.**
-- **impact was**: `dream_ahead` spent 3 crystals and logged "bought" after a refused buy; `afterglow` always logged a free house even when `card_build` refused; `tsugu_ycm` / `tomoe_savior` logged a buy on a refused commit
-
-## HOST-07 — `ctx::buy_quotes` is not the hook-aware quote; ignores `player_id`/`kind`
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-07 …`) —
-  `hostfns::buy_quotes` now calls `CardWorld::buy_quotes`, which `Run`
-  implements through the live `Cx` → `purchase::quote_for` /
-  `CardRules::buy_quote` (the same hook-aware path `buy` charges). Still a
-  query: no pause, no world write. `player_id` and `kind` select the buyer and
-  the pipeline shape (`Force` / `Acquire` name the owner as seller). The
-  default `CardWorld` impl stays the native land+houses figure for stub
-  worlds. Stale "One `HostRequest::Quote`" doc comments removed
-  (`ctx.rs` / `docs/PURCHASE.md`). ABI v53. Test: `general.rs`
-  `agent_quote_carries_the_tsugu_buy_add` (agent offer quotes
-  `max(0, native − 1500)` under Tsugu's linger `BuyAdd`).
-- **kind**: ABI defect
-- **class**: A
-- **severity**: high (common play with buy-hook cards)
-- **suggested batch**: host ABI: queries / quote==charge
-- **locations**
-  - `crates/game-rules/src/hostfns.rs` `buy_quotes` — now `c.st().wr().buy_quotes(...)`
-  - `crates/game-rules/src/wasm_rules.rs` `Run::buy_quotes` — `purchase::quote_for(cx.rules(), …)`
-  - `crates/game-rules/src/world.rs` `CardWorld::buy_quotes` default
-  - guest caller: `rules/tiles/src/agent.rs:87` `ctx::buy_quotes(player_id, BuyKind::Agent, &same)`
-  - hook cards that change the charge: `card-general/src/tsugu_ycm.rs` (`BuyAdd` −1500), `card-ppp/src/maze_warehouse.rs` (`BuySet` 0), Roselia band `BuyMul` ½
-- **ABI contract** (`docs/PURCHASE.md`, `purchase.rs`): post-hook price and `BUYABLE + BuyGate`; quote == charge. **Confirmed.**
-- **was**: guest quote = native land+houses; eligibility = `is_buyable` only
-- **expected**: same `CardRules::buy_quote` / `quote_for` the engine uses. **Confirmed.**
-
-## HOST-08 — `plan::set_no_build` / `plan::set_build_anywhere` trap on native, unregistered on wasm
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-08 …`) —
-  both have host bodies on native and wasm. `set_no_build(on)` folds into
-  `set_can_build(!on)` (`World::set_no_build`, one plan flag). `set_build_anywhere`
-  is a new `MovePlan.build_anywhere` flag that lifts `why_not_build`'s
-  landing-only check. Registered in the `host.rs` linker beside `set_no_buy` /
-  `set_can_build`; `native_shims` ops call the hostfns. ABI v53. Test:
-  `game-core` `move_ctx::tests::no_build_folds_into_can_build`.
-- **kind**: ABI defect
-- **class**: A
-- **severity**: medium (latent; no current caller in `card_all.wasm`)
-- **suggested batch**: host ABI: plan flags
-- **locations**
-  - guest wrappers `crates/card-sdk/src/ctx.rs` `plan::set_no_build` / `set_build_anywhere`; imports `crates/card-sdk/src/ctx/sys.rs`
-  - registered in `crates/game-rules/src/host.rs` linker (was a gap vs `set_no_buy` / `set_can_build`)
-  - native `crates/game-rules/src/native_shims.rs` — host bodies (was a trap)
-  - `World::set_no_build` / `set_build_anywhere` (`engine/ops.rs`); `MovePlan.build_anywhere` (`state.rs`); enforced `play.rs` `why_not_build`
-- **was**: calling either API trapped on native; on wasm a module that kept the import failed to instantiate
-- **expected**: `set_no_build(true)` ≡ `set_can_build(false)`; `set_build_anywhere` opens builds past the landing-only rule. **Confirmed.**
-
-## HOST-09 — `set_bonus` dead guest import + native trap
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-09 …`) —
-  deleted. No `ctx` wrapper, never called, absent from the built wasm (GC).
-  Import + `native_shims` stub + `ruleset_set_bonus` symbol removed. Nothing
-  to implement: no card text names a move-plan / dice bonus buffer.
-- **kind**: ABI defect (dead surface)
-- **class**: D (dead)
-- **severity**: low
-- **suggested batch**: guest imports vs host registration
-- **locations** (removed)
-  - `crates/card-sdk/src/ctx/sys.rs` `set_bonus`
-  - `crates/game-rules/src/native_shims.rs` `op_set_bonus` / `ruleset_set_bonus`
-- **expected**: delete the import + native stub. **Confirmed.**
-
-## HOST-10 — host linker names with no guest import (dead registrations)
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-10 …`) —
-  dropped the five unused linker names. The guest's real names stay
-  (`set_extreme`, `trig_move_kind`, `trig_move_tag`, `trig_set_pay_target`,
-  `trig_set_cancelled`); the hostfns they share are unchanged.
-- **kind**: ABI defect (dead surface)
-- **class**: D
-- **severity**: low
-- **suggested batch**: guest imports vs host registration
-- **locations** (removed from `crates/game-rules/src/host.rs`)
-  | host name | guest actually uses |
-  |---|---|
-  | `extreme` | only `set_extreme` (no reader) |
-  | `move_kind` | `trig_move_kind` |
-  | `move_tag` | `trig_move_tag` |
-  | `set_trigger_target` | `trig_set_pay_target` (same body) |
-  | `set_trigger_cancelled` | `trig_set_cancelled` |
-- **expected**: drop the unused linker names. **Confirmed.**
-
-## HOST-11 — CEL `roll_source` sentinel doc disagrees with guest/host
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-11 …`) —
-  the doc is aligned to the live encoding: `0 = none` (`roll_source::NONE`).
-  The host fills `0` and `layer_keep` already codes against that; no migration.
-  `ty: Ty::Int` is correct (a sentinel, not an optional).
-- **kind**: ABI defect (sentinel mismatch)
-- **class**: A (doc align)
-- **severity**: low
-- **suggested batch**: CEL vocab vs guest readers
-- **locations**
-  - `rules/cond/src/vocab.rs` — `doc: "where a roll came from, 0 = none (roll_source::NONE)"` (was `-1 = none`)
-  - `crates/card-sdk/src/abi.rs` — `roll_source::NONE = 0` (the contract)
-  - host fills `0` for unattributed: `hostfns.rs`, `cond_pre.rs`
-  - existing guard uses the guest code: `rules/cards/card-ras/src/layer_keep.rs` `"… && roll_source == 1"`
-- **was**: guards written as `roll_source == -1` never matched
-- **expected**: align docs to `0 = none`. **Confirmed.**
-
-## HOST-12 — stale purchase-surface comments
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-12 …`) —
-  "P0: stubs" dropped (HOST-06 rewrote the arms); "One `HostRequest::Quote`"
-  dropped from `ctx.rs` / `docs/PURCHASE.md` (HOST-07); the hostfns comment
-  that justified a native quote is gone (HOST-07 routes through the hook-aware
-  path).
-- **kind**: stale
-- **class**: D
-- **severity**: low
-- **suggested batch**: docs / comments
-- **locations** (cleaned)
-  - `wasm_rules.rs` — "v40 purchase surface. P0: stubs"
-  - `ctx.rs` + `docs/PURCHASE.md` — "One `HostRequest::Quote`"
-  - `hostfns.rs` — "commit re-quotes" justification for a native quote
-
-## TOOL-01 — `root_parallel::early_stop_stops_no_later_than_the_full_budget_search` is flaky
-- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: TOOL-01 …`) —
-  the test compared two separate 200 ms wall-clock searches
-  (`on.iterations <= off.iterations` + `off.elapsed >= 190ms`) and failed
-  ~1 in 3 under load. It now pins a shared **iteration cap** (24) with a
-  wide wall budget: the full-budget run must hit the cap, the early-stop
-  run must not exceed it, and same seed ⇒ same pick. No wall-clock
-  assertion left.
-- **kind**: tooling gap
-- **class**: A
-- **severity**: low (CI / agent runs under load)
-- **suggested batch**: tooling
-- **locations**
-  - `crates/bot-core/tests/root_parallel.rs` `early_stop_stops_no_later_than_the_full_budget_search`
-  - sibling `early_stop_is_off_in_deterministic_mode_and_the_iteration_cap_binds` (iteration cap ⇒ `early_stop` cannot fire)
-- **expected**: deterministic stopping rule (iteration budget), assert on the decision rule rather than timing. **Confirmed.**
-
-## HOST-13 — `HostRequest::AgentOffer` drops `agent`
-- **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: HOST-13 …`) —
-  the `AgentOffer` arm now writes `log.agent_offer_commit` carrying the agent
-  tile, the chosen tile, and the branch kind, instead of discarding `agent`.
-- **kind**: ABI defect
-- **class**: C (keep for audit log?)
-- **severity**: low
-- **suggested batch**: HostRequest handlers
-- **locations**: `wasm_rules.rs` `HostRequest::AgentOffer` arm (agent kept on the audit line)
-- **current**: the answer log names which agent offered
-- **expected**: keep the field for logging / audit. **Confirmed.**
-
-
----
-
-# LOW / rare-edge
-
 ## LOW-01 — event shout / skin-change / auction leftovers
 - Covered by ABI-09 / EVENT-03. Keep as one low batch: `lulu.rs:37` shout logged only; `ex_quest.rs:36` skin; `tsurumaki_estate.rs:37` sealed bid vs open auction.
-
-## LOW-02 — property / upgrade book clauses that live elsewhere
-- **class**: A (docs only) — **closed 2026-10-21**. The module doc in
-  `rules/tiles/src/property.rs` now cites both live sites instead of restating
-  them (and the old `TODO(规则书)` is gone):
-  - 「每块地有标注的等级上限」 -- the cap is the rent-table length
-    (`rent.len() - 1`; `prop::BUILD_MAX` in `crates/game-core/src/state.rs`);
-    refusals live in `crates/game-core/src/engine/ops.rs` `why_not_build_on`
-    (no upgrade row / stamped `BUILD_MAX = 0` / `houses >= rent.len() - 1`).
-    `rules/tiles/src/ring.rs` is the `buildMax = 0` RiNG case.
-  - 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」 -- enforced by
-    `Cx::offer_mortgage_funds`'s `exclude`
-    (`crates/game-core/src/engine/play.rs`), **not** by `mortgage` (the 2026-10-20
-    entry had that site wrong). Restated beside the deed-economics clauses in
-    `rules/tiles/src/deed.rs`.
-- no behaviour change.
 
 ## LOW-03 — `Mujica:#J11` has no rulebook entry
 - **kind**: rulebook gap
@@ -1888,18 +1017,6 @@ had a code TODO but no backlog id. Not yet severity-sorted; take them in the
 suggested batches. **Status-layer items (STA-*) are one root-cause family** —
 the status crate's grant verbs do not yet enforce every glossary clause.
 
-## STA-01 — [不可阻挡] does not refuse new [晕眩]/[除外] at grant verbs
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting
-- **locations**: `rules/status/src/unstoppable.rs:14-15`
-- **rulebook**: glossary 14 「无法获得新的[除外]层数」/「也不会获得新的层数」.
-- **current (2026-10-18)**: **done** -- both halves refuse in the host grant
-  verbs before the engine service (no abnormal window for a refused grant):
-  [晕眩] in `status::stun::add` / `add_start` (`status-hosts-rest`), [除外] in
-  `rules/status/src/exile.rs::grant` (`twodonuts-exile`).
-
 ## STA-02 — no prompt surface for 「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」
 - **kind**: ABI defect
 - **class**: B
@@ -1920,16 +1037,6 @@ the status crate's grant verbs do not yet enforce every glossary clause.
   hooks. The `TODO(规则书)` stays (the ladder is still our reading of card
   text, not a glossary clause); the host now owns it.
 
-## STA-04 — [除外] re-gain stacks despite 「该效果生效时无法重复获得该效果」
-- **kind**: implementation bug
-- **class**: A
-- **severity**: medium
-- **suggested batch**: crystal/marker accounting
-- **locations**: `rules/status/src/exile.rs::grant`
-- **rulebook**: 「该效果生效时无法重复获得该效果」 (`data/rules.txt`).
-- **current**: **done** (2026-10-18) -- the guard lives in the host grant verbs
-  (`grant` / `send` / `hold`); `give_exile` is a dumb layer write.
-
 ## STA-05 — [除外] 「不能被[指定]」 / on-board clause still engine-side
 - **kind**: ABI defect
 - **class**: B
@@ -1937,23 +1044,6 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: host ABI: out-buffers
 - **locations**: `rules/status/src/exile.rs:47-49`
 - **capability**: Untargetable / on-board gate kinds (today `MatchPlayer::status_gates`).
-
-## AYA-GRANT-01 — PP (1) skill-attachment grant fires the wrong (2)
-- **status**: **not a bug** (2026-10-20, `batch3b-aya-grant`) — closed as **D**.
-- **was**: the in-source note claimed a non-P◇P player pressing the granted
-  skill runs 「丸山彩's own (2), which is the wrong clause」, and asked for an
-  `H.ReplaceSkill` shape.
-- **why it is not a bug**: the clause names the character — 「所有非Pastel✽Palettes
-  玩家获得**丸山彩**的（2）技能」 — so the grantee running 丸山彩's (2) **is** the
-  rulebook text. `H.ReplaceSkill` is C# machinery for reaching that clause (it
-  replaces the (2) slot); we place the skill rule on the grantee's field, which
-  is the same clause by a different mechanism. C# is not a spec. Each of
-  `chisato_frank` / `eve_unify` likewise places its own named skill
-  (「获得白鹭千圣的（2）技能」 / 「获得若宫伊芙的（2）技能」).
-- **pinned**: `aya_with_grants_ayaa_2_to_non_pp_players` (the non-P◇P seat gets
-  丸山彩's (2); a different P◇P seat does not, and keeps her own),
-  `aya_flip_all_pp_clause2_crystal` (the grantee runs 丸山彩's (2) body).
-- **action taken**: the in-source note is rewritten as a settled reading.
 
 ## AYA-POOL-01 — 「将Y个…变正」 pool-of-Y vs per-seat remaining-Y
 - **kind**: rulebook divergence
@@ -2058,34 +1148,14 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **current**: `PayAfter` has no "PaySplitAt ran" bit, so the card is unplaced
   even when the payment was cancelled before the shave.
 
-## AYA-LONG-01 — payment shaves land at `Effect`, not `PaySplitAdd`
-- **kind**: implementation bug
-- **class**: **closed 2026-10-21** (v96 `PaySplitMulBefore`)
-- **severity**: medium
-- **suggested batch**: payment pipeline
-- **locations**: `rules/cards/card-pp/src/aya_longing.rs` -- (2) 「将金额降低1500
-  （最低0）」 rides `Action::PaySplitMulBefore`; (1) X stays a pure
-  `PaySplitAdd` filter above it.
-- **was**: the interactive half landed at `Effect` (the declaration), so sibling
-  add modifiers saw the 1500 already gone. The 2026-10-20 entry called this
-  class A; the code TODO had already reclassified it B -- correct, one shared
-  capability with AVE-CLAW-01.
-- **residual (`TODO(规则书)` in the body)**: local `.max(0)` per clause vs a
-  final floor after the whole add/sub stage is still unnamed by the book.
-  Pinned by `money.rs`
-  `aya_longing_1500_shave_lands_after_sibling_pay_split_add`.
-
-## AVE-CLAW-01 — bend clawback latches the declared amount, not the `PaySplitMul` input
-- **kind**: implementation bug
-- **class**: **closed 2026-10-21** (v96 `PaySplitMulBefore`)
-- **severity**: medium
-- **suggested batch**: payment pipeline
-- **locations**: `rules/skills/skill-groups/src/ave_mujica.rs` -- `latch_orig`
-  rides `Action::PaySplitMulBefore`, so `ORIG` is the figure the 1.5x bend is
-  about to see (after any `PaySplitAdd` rewrite).
-- **was**: stored the *declared* amount, so whenever a `PaySplitAdd` also
-  rewrote the figure the clawback delta was against the wrong baseline.
-- **pinned by** `money.rs` `ave_mujica_clawback_uses_post_add_pay_split_mul_input`.
+## AYA-LONG-01 residual — the 最低0 floor's scope
+- **kind**: rulebook gap
+- **class**: C
+- **severity**: low
+- **locations**: `rules/cards/card-pp/src/aya_longing.rs` (`TODO(规则书)` in the body)
+- **rulebook**: 「（最低0）」 — a local `.max(0)` per clause vs a final floor after
+  the whole add/sub stage is still unnamed by the book.
+- **pinned by**: `money.rs` `aya_longing_1500_shave_lands_after_sibling_pay_split_add`.
 
 ## LISA-BOND-01 — 「使用技能进行传送后」 names no stage number
 - **kind**: rulebook divergence
@@ -2161,7 +1231,7 @@ Two of the 11 remaining `#[ignore = "RULING: …"]` tests had no id here. Filed 
 # Newly filed 2026-10-20 (card-rule TODO review)
 
 Two items the 2026-10-17/18 waves referenced but never gave an id. Everything
-else in the 153-tag sweep already had a home (see the index above).
+else in the 153-tag sweep already had a home (the item sections of this file).
 
 ## DONUT-VOID-01 — 一人两个甜甜圈 has no clause for a barred acquisition
 - **kind**: rulebook gap
@@ -2200,77 +1270,7 @@ else in the 153-tag sweep already had a home (see the index above).
 
 ---
 
-# Batch 2026-10-21 (`gap-batch8-meda`) — proposed-batch-8 sweep + wave 3 check
-
-Take from "Proposed batch order" item 8 (medium-A contained bugs). Most of that
-item turned out to be **already landed or reclassified**; the batch became an
-accuracy pass plus the one shared class-B capability that the two remaining
-payment bugs needed.
-
-## Closed this batch
-
-- **SKILL-07** — already fixed in `0ce220b1` (2026-10-20 tree, unnoticed by
-  that day's audit). Expiry verified: `soyo_clear.rs` `COLOURED` / `declare_cap`,
-  pinned by `mygo.rs` `soyo_recolour_expires_at_next_turn_start`. Residual
-  「以此法免除」 attribution stays under **SKILL-06**.
-- **CRYSTAL-08** (rise half) — already fixed in `0ce220b1`. `apply_view` +
-  `Action::HouseAdded` track a build past the play snapshot; pinned by
-  `cross_tiles.rs` `t10b_ringing_bloom_tracks_a_later_build`. Fall half and the
-  non-discard disarm are **class B** (no `HouseRemoved` kind); （3） X stays
-  **C-Q36**. Entry rewritten, not deleted.
-- **LOW-02** — docs only, this batch. `rules/tiles/src/property.rs` module doc
-  now cites both live sites (rent-table length / `why_not_build_on` for the
-  level cap; `Cx::offer_mortgage_funds`'s `exclude` for the upgrade-funding
-  bar). The 2026-10-20 entry had the second site wrong (`mortgage`).
-
-## Closed by the engine work on this branch
-
-- **AYA-LONG-01** and **AVE-CLAW-01** — one shared root cause: the money
-  pipeline had no writable interactive stage between `paySplitAdd` and
-  `paySplitMul`. Both card bodies were latching / shaving at `Effect` (the
-  declaration) instead. **v96 `PaySplitMulBefore`** (engine id 110) is that
-  stage; `aya_longing.rs` (2) and `ave_mujica.rs` `latch_orig` moved onto it.
-  The 2026-10-20 batch table listed both as class A; the code TODOs had already
-  reclassified them as B — correct, one ABI bump closes both. Pinned by
-  `money.rs` `aya_longing_1500_shave_lands_after_sibling_pay_split_add` and
-  `ave_mujica_clawback_uses_post_add_pay_split_mul_input`.
-- **W3-KAORU-01** (the wave-3 high) — `kaoru_thief` 「经过该玩家」 re-homed off
-  `passPlayer` onto `passTile`; pinned by
-  `settle_stages.rs` `m4_kaoru_thief_force_stop_stops_on_the_marked_player`.
-
-## Verification (2026-10-21)
-
-Run from `/home/monopoly/gap-batch8-meda-wt` after
-`node tools/build-ruleset.mjs` (ruleset-tests loads the card **wasm**; a Rust
-edit to `rules/cards` is invisible to it until that is re-run):
-
-- `cargo test -p game-kinds -p card-sdk --no-fail-fast` — green.
-- `cargo test -p game-rules --no-fail-fast` — green except
-  `--test settle_depth`, which **stack-overflows on master too** (pre-existing,
-  not this batch).
-- `cargo test -p ruleset-tests --no-fail-fast` — every target green except two
-  tests that **fail identically with master's code** in this same harness
-  (checked by `git checkout 41345b5c --` of the four changed rule files plus
-  `play.rs`, rebuild the wasm, re-run -- both still fail; restored after):
-  - `cross_status::s05_crychic_band_six_cards` — "P1 neither pays nor
-    receives: 9000 != 10000". The CRYCHIC band (1) 「无法获得或失去资金」 lock
-    (a `PaySplitChoose` cancel) does not void P1's leg of 登上武道馆. This is
-    **SETTLE-02 regressing** — the 2026-10-17 audit recorded it as fixed and
-    the test un-ignored/green. Re-open below.
-  - `gap_money::g02_half_speed_plus_expectations_floor_on_a_rent` — fails in
-    the **arrangement** assert ("landed on the rent tile: 32 != 29"), before
-    any money assertion. Movement/setup, not the payment pipeline.
-- `cargo check --workspace --all-targets` — clean (warnings only).
-
-**Pre-existing, not this batch** (verified above; filed so they are not lost):
-- **REOPEN SETTLE-02** — `s05_crychic_band_six_cards` red again.
-- **TEST-ARRANGE g02** — `g02_half_speed_plus_expectations_floor_on_a_rent`
-  stops at "landed on the rent tile: 32 != 29".
-- **settle_depth stack overflow** — `game-rules --test settle_depth` aborts
-  with a stack overflow on master too; the name suggests it is the STACK-01
-  guard, which the 2026-10-10 audit recorded as fixed. Worth a look.
-
-## Wave 3 clause check (checking half)
+# Wave 3 clause check (2026-10-21)
 
 Five large, previously unreviewed bodies reviewed clause-by-clause against
 `docs/rulebook/cards.json` (the same method as the 2026-10-18 waves 1–2):
@@ -2292,25 +1292,6 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
 - **gap**: The printed target is clause **（2）** 「当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）」. 「不受数量或轮数限制」 names exactly the two limits that exist only on （2） (mark cap + 3-turn CD), and neither is waived. The comment at `nanami_effort.rs:252-253` states the waiver is deliberately unimplemented. Tests only assert the crystal spend / (4) discard and `decline_all` the prompts.
 - **question**: see C-Q46.
 - **note**: Contrast `CRYCHIC:（灯）内心的呐喊`（3） 「使用一次高松灯（MyGO!!!!!）的（2）技能」, which implements *that* body directly (`tomori_inner_shout.rs:155-197`) rather than `play_card` on the skill.
-
-### W3-KAORU-01 `HHW:（薰）怪盗hello happy` — 「经过该玩家时」 is wired to end-tile 重叠, not mid-route [经过]
-- **class**: **A — closed 2026-10-21** (this batch)
-- **severity**: high
-- **rule text**: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。」
-- **code**: `rules/cards/card-hhw/src/kaoru_thief.rs` — was
-  `On::Action(Action::PassPlayer(…))`; the engine's `passPlayer` is overlap at
-  move **end** only (`crates/game-core/src/engine/play.rs:1812-1834`).
-- **was**: The body then `plan::set_stop_at` + `set_resolve(true)` — a mid-walk
-  force-stop — but `move.remaining > 0` is already false when `PassPlayer`
-  fires, so the printed optional stop-and-settle never engaged during a walk
-  past the mark. Same latent bug as the 凑友希那 case in SETTLE-STAGES §4 M4,
-  which the original sweep missed.
-- **now**: re-homed onto `Action::PassTile` (行动阶段 12 [经过], per path step)
-  with the mark-match as a board read (`player_pos(marked) == trigger::tile()` —
-  a `passTile` payload has no `target`). Residual comment un-inverted
-  (`trigger::target()` is the overlapped player, not the mover). Pinned by
-  `settle_stages.rs` `m4_kaoru_thief_force_stop_stops_on_the_marked_player`.
-  `SETTLE-STAGES.md` M4 lists the card.
 
 ### W3-KAORU-02 `HHW:（薰）怪盗hello happy` — 「投掷1d2（前后）」 is a d6-peek parity, not a 1d2
 - **class**: B (die shape) + C (polarity)
@@ -2383,133 +1364,21 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
   Only printed line structure differs, so the UI shows a denser paragraph.
 - **fix**: literal newline restore in the three `.text()` strings. No behaviour impact.
 
-### Wave 3 — already filed / already fixed (not duplicated)
-- **CRYSTAL-06 / C-Q35** (薰 charge/decay) — open, C, low.
-- **CH-13** (Here the world two-cards) — **fixed** 2026-10-13.
-- **C-Q33** (Here capture vs auto-play) — open question.
-- **C-Q44** (Door co-owned hill) — open question, `t22_hill_coownership` ignored.
-- NNM (2) 「hard-codes 2000」 — **stale claim, already fixed**. `gain_circle_money`
-  raises `PassRewardAffected` / `REWARD_MONEY` and pays the live figure (test
-  `nnm_option2_gains_x_times_circle_money_reward` expects Morfonica's 1000).
-  The CRYSTAL-04 bullet below is out of date on this point.
-- **MOVE-03 / C-Q6** multi-activation — not live on this card (NNM already has
-  one `On::Play` branching on `is_placed()`).
-- Entity resolution: every quoted tile / character / group / token / status on
-  these five cards resolves (`data/board.json`, roster, `is_shop` = group-10
-  deeds). No dangling names.
-
 ---
 
-# D — stale (already fixed / already landed)
+# Stale doc references (drift notes)
 
-Do **not** put these in the open backlog. Keep as notes so they are not re-filed.
-
-## D-01 — nine stale `#[ignore]`s already removed (2026-10-10 triage; run twice, green)
-| test | file | former reason |
-|---|---|---|
-| `c05_cancels_one_designation_of_four` | `rules/tests/tests/cross_chain.rs:265` | whole-card negate (ABI per-pair cancel landed) |
-| `l06_one_draw_several_effects` | `rules/tests/tests/cross_long.rs:471` | capture-vs-autoplay (record-only) |
-| `t11_fire_bird_plus_hhw_double` | `rules/tests/tests/cross_tiles.rs:458` | multiplier order (still a C question, MONEY-01) |
-| `immunity_gap` | `rules/tests/tests/fuzz_found.rs:198` | effect on immune player |
-| `card_trap_reachable` | `rules/tests/tests/fuzz_found.rs:108` | card module trapped |
-| `g11_forced_stop_beats_lock_end_rewrite` | `rules/tests/tests/gap_move.rs:270` | forced stop vs SettleBefore end-rewrite |
-| `inter_yolo_pushes_haneoka_over_20` | `rules/tests/tests/mygo.rs:1379` | Y.O.L.O timing CROSS-AGENT |
-| `choose_your_stage_answers_an_abnormal_move` | `rules/tests/tests/roselia.rs:369` | self-[传送] window (see CH-01; the encore twin `ix_encore_…` is still open) |
-| `sweet_escape_gate_requires_high_rent` | `rules/tests/tests/sumimi.rs:185` | 「收费标价」 (still a C question if reopened) |
-
-## D-02 — NEGATION-AUDIT V2 "no activation cost" TODOs (already landed)
-- **status**: **done** (2026-10-20, `backlog-reconstruct`) — the seven
-  `TODO(规则书) NEGATION-AUDIT V2` markers are rewritten as
-  `NEGATION-AUDIT V2 (settled)` notes. They no longer count as open TODOs
-  (160 → 153 in the 2026-10-20 sweep).
-- One root cause, already applied: the six text-less money play gates are gone; in-body 「[消耗]/[支付]」 is effect content and takes the Q1 shortfall path.
-- Locations (now settled notes):
-  - `rules/cards/card-roselia/src/fire_bird.rs:18`
-  - `rules/cards/card-general/src/gacha10.rs:13`
-  - `rules/cards/card-ag/src/crimson_soul.rs:28`
-  - `rules/cards/card-morfonica/src/starry_night.rs:23`
-  - `rules/cards/card-hhw/src/believe_you.rs:28`
-  - `rules/cards/card-hhw/src/kokoro_circle.rs:36`
-  - `rules/tests/tests/money.rs:365`
-- Tests green: `gacha10_playable_while_short_then_bankrupts`, `fire_bird_playable_while_short_then_mortgages`, `crimson_soul_playable_while_short_then_bankrupts`, `believe_you_playable_while_short_then_bankrupts`, `kokoro_circle_playable_while_short_then_bankrupts`, `starry_night_playable_while_short_then_bankrupts`.
-
-## D-03 — 2026-10-09 batch already fixed (do not re-open)
-- 凑友希那 (3) fire cap; 要乐奈 (2) Space teleport; 白金燐子 (2) pre-roll window (test bug); 麻里奈小姐的礼物箱 「可」; 飞鸟山之战 stun layers (test bug); CiRCLE band (2) doubling; 游击演出 ends on the chosen tile.
-- See TEST-FINDINGS "Resolved (2026-10-09)".
-
-## D-04 — other already-landed surfaces referenced by TODOs
-- per-pair cancel (`ctx::cancel_designation`); `payAfter` / `gains_this_turn`; `overlay_guest_state`; `EXILE_MAIN`; ABI v35 skill-attachment / `invoke_skill` / `raise_bought` / `add_follower`; purchase surface P0–P5; settle/move stage model ABI 43; counteract ring ruling 2026-10-07.
-
-## D-05 — MOVE-04 若能再次交汇 re-roll (test-harness sequencing; 2026-10-10)
-- Root cause: `Table::dice` → `Match::world_mut` after `t.roll` left the `diceRollResult` [反击] window pending (`mod.rs:783` assert). The card body's `do_move_roll` / `set_move_roll` / `log` never touches `world_mut`; real matches never do either.
-- Secondary: routines replay from their start-time snapshot, so faces loaded after the halt never reach the re-roll. All faces must be queued before `t.roll` (same pattern as `gap_move` G08 / `hhw` 运动的天赋).
-- Fix: merge the re-roll faces into the pre-roll `t.dice` load in `m06` / `m06b`. Un-ignored, green twice. No engine/card change.
-
-## D-06 — MOVE-02 白金燐子 (2) (test drive shape; 2026-10-10)
-- Root cause: m10/m11 pressed the skill and asserted pos without taking the main roll. `set_fixed_roll` is a **pre-roll shape** of the upcoming main move; it does not auto-run the walk. The press-is-the-move pattern (`ctx::card_move`) is for 「代替本回合的移动」 skills (要乐奈 (2) etc.), not this clause.
-- Green twins already pin the drive: `rinko_skill_2_fixes_the_move_roll_to_x_times_six` (roselia), `g09_fixed_roll_plus_starlit_reroll` (gap_move).
-- Fix: `t.roll(0)` after the X prompt. m10 (stunned mid-turn) and m11 (Y.O.L.O) un-ignored, green twice. m11 records 14 (Y.O.L.O +2 over the fixed 12).
-- Related (not this item): `fixed_roll` is not one-shot-cleared after consumption (latent, no test); the 「固定」 vs later additives question stays a RULING (starry_night / eve_unify already refuse additives over a fixed face; Y.O.L.O does not).
-
-## D-07 — SKILL-08 要乐奈 (3) overlap (pre/body mismatch; 2026-10-10)
-- Root cause: `on_overlap` sat on `PassPlayer` with `pre::MINE` (owner is the mover) but read `trigger::player_id()` as "the other" and bailed when it equalled the owner — always. `target` is the other player already on the landing tile (`abi.rs` PassPlayer payload).
-- Fix: read `trigger::target()`. New test `rana_cat_overlap_takes_800_and_gives_a_parfait` (mygo) pins +800/−800 and a 抹茶芭菲 on the other. Green twice.
-- Amount: 800 (sheet / `characters.json`). Older `rulebook.txt` prose says 1000 — sheet wins.
-
-## D-08 — MOVE-01 forced-stop landing (test drive / arrangement; 2026-10-10)
-- Root cause: the engine `set_stop_at` path is already correct (see green `m4_kokoro_force_stop_stops_a_passer`, `g11`, `g12`, `m16`, roselia yukina). The three cross_move ignores were test bugs:
-  - m12a/m12b: `ask_yes` options are `ask.yes`/`ask.no`; the matcher looked for 「凑友希那」/「强制停下」 in options (they live on the prompt dump) and `decline()` answered no. Same bug class as the 2026-10-09 yukina prompt-match fix.
-  - m12b: also pinned 41 instead of the rolled dest 32+5 = 37; the 安可 window only opens after the force-stop is accepted (AbnormalGate).
-  - m15: `place_raw` leaves `tile: -1`, so `card.placed && self_tile() == tile.id` never matches. Both stop-pot cards need `place_on_tile`.
-- Fix: dump-match `kokoro_practice_force` + `answer_one(0)`; assert 37 for the countered stop; `place_on_tile` for 香澄@44 and 乐奈@48. Un-ignored, green twice. m12b records fire spent even when countered (RULING recorded, not decided).
-
-## D-09 — TILE-04 / TILE-05 (test window / arrangement; 2026-10-10)
-- **TILE-04 学生会的检查**: the card is a SettleBefore [反击], not a free [手]. `t.play` silently no-ops (no `On::Play` entry) and never places. The body's ask_yes (allowNone stand-in) + ask_tile also had to be accepted. `t1 - 2` usize-underflowed on 购物中心 = 1. Fix: roll + `counteract`, answer yes then the tile, wrap the start. Engine forced-stop + rent-half already matched the green 香澄 shape.
-- **TILE-05 Parking Space + 要乐奈 (2)**: P0 played the [手] on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`. Fix: setup on P0's turn; assert stay after `pass`. Engine path (teleport → body-replace → stay at turn end, skillBlock) already green in `g15`.
-- Both un-ignored, green twice.
-
-## COND-01 — `slot()` conditions on FilterValue miss mid-roll state writes (possible engine defect)
-- **Symptom (2026-10-17, seen while splitting eve_unify):** a `slot('…') >= n`
-  *condition* on an `On::FilterValue` at `DiceRollPlan` did not observe a
-  per-player state write made earlier in the same roll, while `state::get`
-  inside the body saw it. The condition and the body therefore disagree about
-  the same world.
-- **Suspect:** the condition (CEL) evaluation uses a snapshot taken before
-  mid-roll writes (or a cached `slot` view), while body calls read the live
-  world. Affects any entry whose gate counts up during the roll.
-- **Likely affected:** `kanon_lost`'s `On::FilterValue(DiceRollPlan)` gate
-  `slot('skill.kanonLost.silent') >= 3` (TODO(bug) at the entry in
-  `rules/skills/skill-personas/src/kanon_lost.rs`); any future gate written the
-  same way. eve_unify worked around it (`actor == owner` + `state::get` in the
-  body).
-- **Check:** a two-roll scenario where the slot increments mid-roll and the
-  gate must flip on the same roll; compare `slot()` in the condition vs
-  `state::get` in the body.
-- **Fix needs:** make the condition see the same world the body sees (evaluate
-  conditions against the live world, or document that conditions are
-  pre-roll-snapshot and move such gates into the body); a test pinning both
-  readings agree.
-
----
-
-# Stale sections in TEST-FINDINGS.md / companion docs
-
-Checked **2026-10-17** against the tree (re-verified item by item). Do **not**
-re-file these as open items; a later docs pass should strike or rewrite them.
-Every row below is **still stale today**.
+These name other docs whose text no longer matches the tree; fixing them is
+doc maintenance, not rule work.
 
 ## TEST-FINDINGS.md
-1. **:42–78 `## Status (2026-10-07)`.** "875 tests, 90 `#[ignore]`" (:48-49, :78) and the per-group table (:54-71) are historical. Live tree has **11** `#[ignore = "RULING: …"]` + 2 meta. Later gates (:921-922 "979 / 97 ignored", :998-999 "1041 / 96 ignored") are separate batch gates and do not fix Status.
-2. **:112–119** `asukayama_teleports_and_assigns_the_status_spread` "now fails" — the test is green / not ignored.
-3. **:339–342 / :184 §4 NNM dual `On::Play` "card bug".** **Stale.** Commit `1e80323` (2026-10-09) merged the two Play entries into one branching on `is_placed()`; `nnm_discard_marks_draw_x` is green. Only `nnm_option2` remained — and that is now fixed too (CRYSTAL-04).
-4. **:358–360 MyGO band (2) draw half "unreachable".** **Stale.** Merged to one press entry; contradicted by :1232-1234 and live `rules/skills/skill-groups/src/mygo.rs:29-36` (one `On::Play`).
-5. **:314–315 / :376–377 cross list.** Stale: m27 is green, `c05` un-ignored, `g19` fixed 2026-10-13 (CH-06). "still drops every designation (c05, g19)" is wrong for both.
-6. **:559–567 §6 item 8 Multi-activation.** "Engine now: the first entry only" is stale (MyGO merged 2026-10-13; NNM merged `1e80323`). Residual live question is NNM's choice-inside-one-entry — C-Q6.
-7. **:1054–1059 "Known failures at time of writing" (`card_paths` 4 cases).** **Stale** — closed the same day (:126-151).
-8. **:986–994 B2 markers-kept / `shanyao` pin.** Contradicted by :1082-1083 (P✽P fan now expected **cleared** with bankruptcy). The later statement is live.
-9. **:1232–1234 wider-B "NNM / MyGO band (2) multi-activation".** Same as #3/#4 — MyGO half is annotated fixed; NNM half is gone too.
-10. **:159–160 §10 Resolved-summary bullet "ring opens at the next seat".** Superseded by the 2026-10-07 ruling at :787-798 (ring starts at the **initial user**; exhaust before advance). The ileuxali "next seat" clause is marked Superseded at :757-763.
-11. **:1379–1381 "Pre-existing … `inter_yolo_pushes_haneoka_over_20` fails with `err.play_timing` on master source too".** Stale — that test is green (un-ignored 2026-10-10).
+- **`:159–160` §10 Resolved-summary bullet "ring opens at the next seat".**
+  Superseded by the 2026-10-07 ruling at `:787-798` (ring starts at the
+  **initial user**; exhaust before advance). The ileuxali "next seat" clause is
+  marked Superseded at `:757-763`.
+- **`:1379–1381` "Pre-existing … `inter_yolo_pushes_haneoka_over_20` fails with
+  `err.play_timing` on master source too".** Stale — that test is green
+  (un-ignored 2026-10-10).
 
 ## COVERAGE.md
 Header (:17-20) "**774 tests, 102 ignored**" dated 2026-10-06 is historical. Every
@@ -2547,7 +1416,6 @@ and §5 was answered the same day (`:238-254`). N3–N6 (`:321-324`) remain open
 uses `ActionKind::PassTile` with `move.remaining > 0` and notes the §4 M4
 latent bug is fixed. The `TODO(规则书) PIPELINE-AUDIT Q7` marker at L5 is already gone.
 
-
 ---
 
 # Newly filed 2026-10-18 (card loyalty review, wave 1)
@@ -2558,165 +1426,48 @@ quoted-name sweep of all 180. Reports: job tmp `wave1-{mixed,ppp,pp}.md` +
 `findings-main.md`. **Quoted wordings** were the focus: a `.text()` that drops
 or moves a 「…」 clause, and a “...” proper name that fails to resolve.
 
-## Closed in this batch (fixed on `worktree-card-loyalty-review`)
-
-- **LOY-DISP-01 `R:向着顶点` `.text()` moved 「视为你的主要移动」.** The phrase
-  belongs to the walk sentence; `.text()` had it after 「加盖一层房屋」. Behavior
-  already matched the sheet (`to_the_peak.rs` walk = `card_move`, build = not;
-  `spec_card_r.rs:975` asserts the sheet order). **Fixed.**
-- **LOY-DISP-02 `RAS:（和奏瑞依）寄于指尖的执念` `.text()` dropped `[反击]` and
-  「可打出此卡并」.** Read as an automatic keep; the code is an `On::Counteract`.
-  **Fixed.**
-- **LOY-DISP-03 `RAS:练习室里的风暴`（2）`.text()` kept the pre-2026-10-06
-  wording.** Sheet 新卡组卡 H8 rewrote 「那个玩家进行一次…[结算]」 into
-  「对那个玩家进行一次相当于…的收费」. **Fixed** (behavior still open — see
-  LOY-STORM-01).
-- **LOY-DISP-04 `通用:该清CP了` `.text()` showed `[特]：` and 「（2）」.** The
-  sheet has no `[特]：` line and numbers the clause 「（1）」 (a stale number left
-  after sheet 2026-10-06 A8 dropped a gate). **Fixed.**
-- **LOY-DISP-05 `1d6mod6` vs `1d6` on four cards** (`AG:商店街的青梅竹马`,
-  `AG:无论是何种颜色的夕阳`, `Mor:（筑紫）迷茫的庭园`, `R:NFO`). Live sheet says
-  `1d6` (`spec/cards/r.md:103-104` already rules it authoritative). **Fixed.**
-  `RAS:UNSTOPPABLE` is the reverse and stays under `OPEN-unstoppable-mod`.
-- **LOY-DISP-06 `HHW:（花音）Wacha Mocha 啪嗒进行曲` dropped 「此卡」.** **Fixed.**
-- **LOY-SOUL-01 `AG:绯红之魂` [手] choice capped by cash.** 「选择[消耗]1到5次
-  500资金」 is a printed 1..=5; `max = min(5, money/500)` pre-empted the
-  shortfall path (NEGATION-AUDIT V2 removed the money play gate). **Fixed** to
-  `ask_number(…, 1, 5)`. Tests already expected 5 options.
-- **LOY-RET-01 `PPP:Returns` [持续]（3） tax fired on the owner's own PPP
-  presses.** 「使用**因此卡获得的**团卡的主动效果时需要支付1星星贴纸」 — the
-  code keyed on the player token `returns.copied` (armed on every borrow), so
-  from game start every band press paid. Now keys on the borrowed **instance**
-  (`returns.borrow_uid` = the uid `place_card` returned;
-  `spend_copy_sticker` compares `self_uid()`). **Fixed.**
-- **LOY-RET-02 `PPP:Returns` meta `.tags` listed 「手」.** Printed card is
-  [特]/[持续] only. **Fixed.**
-
-## Open — status after the 2026-10-18 fix batch
-
-**Closed by the fix batch** (worktree `worktree-card-loyalty-review`, see the
-commit log): **LOY-TRAIN-01** (the [共鸣] branch now asks for the two marks),
-**LOY-TRAIN-02** (cash-in moved to a `CounterChanged` state clause so any write
-landing ≥5 fires it), **LOY-OVERLAP-01** (the missing `Discarded` hook is in;
-both branches `[移除]`/banish the accident), **LOY-RET-03** (`copy_sticker_gate`
-refuses the borrowed copy's press at 0 stickers), **LOY-SMILE-01** (「任何玩家」
-includes the owner; (1)'s redirect and (2)'s arrival are keyed off `SLOT_REPLAY`
-instead; the crystal tick is unconditional), **LOY-ANON-01** (「（上限1）」 is
-pair-atomic), **LOY-STORM-01** (a one-shot 「收费」 to the tile owner, not a
-`card_settle_at`).
-
-**LOY-DREAM-01** landed as a **Class-B fallback**: `On::Action(&[TurnEndBefore],
-…)` with a `TODO(规则书) LOY-DREAM-01` naming the missing turn-end
-counteraction window (`is_hook_only` lists the turn-end family, so
-`On::Counteract` there is a dead entry). The buy still settles before the turn
-end's own effects; the [反击] declaration shape is the open half.
-
-**Still open**: **LOY-TSUGU-01** (engine quirk — any `cant_move` call inside
-that card's `play` body suppresses the (2) buy prompt) and the **LOY-C pile**.
-
 ## Open
 
-### LOY-TSUGU-01 — unprinted whole-card move gate (and the quirk that blocks the fix)
-- **class**: A on the text; blocked by an engine quirk. **severity**: medium.
-- **rule text**: `通用:@Tsugu ycm` is `[手]：投掷3d10…` with **no [限]**. Steps
-  (1) / (3) and the 「[获得]1000资金」 arm of (4) have nothing to do with the
-  main move.
-- **code**: `card-general/src/tsugu_ycm.rs:61-66` — `cant_play =
-  rules_status::move_blocked` refuses the whole card once the main move is
-  spent (C# `H.MoveWhyNot` carry; C# is not the spec).
-- **attempted fix**: drop the gate, guard the (2) teleport arm with
-  `move_blocked` (the (4) arm already does exactly this and its tests pass).
-- **blocker**: any `cant_move` call from inside this card's `play` body — even
-  hoisted to the top of the function, even bound to a local first — makes the
-  (2) 「可选择购买任意无主的[可购买格子]」 `ask_yes` never appear. 4 tests fail
-  (`tsugu_ge26_teleports_without_settle`, `tsugu_ge26_can_buy_any_unowned`,
-  `tsugu_ge28_buy_discount_1500`, `tsugu_buy_gate_refused_does_not_log_a_buy`).
-  The (4) arm's identical call is fine. `cant_move` is a pure read
-  (`wasm_rules.rs:1955-1967`). Guest/host request-ordering bug.
-- **note**: reverted to master behavior. Do not re-attempt until the quirk is
-  understood — dropping the gate without the (2) guard would let the card
-  teleport twice.
+### Replay host-answer matching by position (LOY-TSUGU-01 residual)
+- **class**: B. **severity**: low.
+- A guest body that re-runs after a `HostRequest` sees the answers replayed by
+  position, so a `cant_move` read inside the body flips on the re-run and a later
+  prompt disappears. Worked around in `tsugu_ycm.rs` by latching the destination
+  in a slot (2026-10-28 batch; pinned by
+  `tsugu_effects_land_when_the_move_is_spent`), not fixed at the root.
+- **fix**: an arg-identity check in `request_or_pause` would let cards read the
+  gate plainly.
 
 ### LOY-DREAM-01 `PP:梦在前方，结彩当下`（4）is a turn-end [反击], not a hand press
 - **class**: A. **severity**: high.
 - **rule text**: 「（4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格
   以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意…」
-- **code**: `card-pp/src/dream_ahead.rs:33` — `On::Play("", Some(can_buy),
-  buy_one)`. The card is placed by [特] and never in hand, so the press is
-  either an anytime button or dead. The printed window is a turn-end
-  counteraction.
-- **note**: needs the counteraction shape + the [共鸣] rider. `can_buy` already
-  checks the ≤3-distance candidate set.
+- **code**: `card-pp/src/dream_ahead.rs:50` — `On::Action(Action::TurnEndBefore(
+  "…", Some(has_free_near), buy_one))`. Field card; the residual guard is the
+  clause's third availability fact (a free unowned buyable tile within 3), not
+  the removed `can_buy` press shape.
+- **status**: **partially fixed** — the buy fires at the owner's turn end
+  (`dream_ahead_buys_a_tile_at_turn_end`). Still open: the printed shape is a
+  [反击] *declaration*; turn-end is hook-only, so the entry is an `On::Action`
+  and the [反击] window is the missing half (in-file `TODO(规则书) LOY-DREAM-01`).
 
-### LOY-TRAIN-01 `PP:练习生解密指南` [共鸣] pays 500 and never adds the two marks
-- **class**: A. **severity**: high.
-- **rule text**: 「如果[共鸣]则[消耗]500资金并添加任意2个标记。」
-- **code**: `card-pp/src/trainee_guide.rs:91-97` — pays 500, no mark grant.
-
-### LOY-TRAIN-02 `PP:练习生解密指南`（3）≥5 crystals only sampled in `turn_end`
-- **class**: A. **severity**: high.
-- **rule text**: 「（3）此卡拥有至少5个[奇迹水晶]时…」
-- **code**: `card-pp/src/trainee_guide.rs:111-147` — the cash-in is only looked
-  for at turn end. Placement already puts fans/3 crystals on the card; a ≥5
-  crossing at that moment (or any later moment) must fire. State-clause-on-event
-  rule (`[[state-clauses-belong-on-events]]`).
-
-### LOY-OVERLAP-01 `PP:[衍生]重叠的声音` [特] discard hook is missing
-- **class**: A. **severity**: high.
-- **rule text**: 「[特]：此卡进入拥有此卡的玩家的弃卡区时[移除]此卡和[使用者]
-  [场地]上的“初次演出事故”」 (and the parallel clause on the accident side).
-- **code**: `card-pp/src/overlapping_voices.rs:89-90` — a comment only; there is
-  **no Discarded hook at all**. A whole printed clause is silent.
-- **note**: also, the accident is `unplace_at`'d rather than `[移除]`'d
-  (glossary: `[移除]` = remove from the game / banish).
-
-### LOY-RET-03 `PPP:Returns` 「需要支付1星星贴纸」 is not a cost gate
-- **class**: A. **severity**: high.
-- **rule text**: 「使用因此卡获得的团卡的主动效果时**需要支付**1星星贴纸。」
-- **code**: `skill-groups/src/lib.rs` — `add_tok(…, -1)` floors at 0, so a
-  0-sticker owner still runs the press and the "payment" moves 0.
-- **note**: `Err(Prompt)` is the **pause** sentinel, not a refusal
-  (`card-sdk/src/lib.rs:81`), so a play body cannot refuse its own activation.
-  The gate belongs on the borrowed instance's `On::Play` (`cant_play`), keyed
-  the same way as LOY-RET-01's `returns.borrow_uid`.
-
-### LOY-SMILE-01 `HHW:笑容大游行`（3）discard skips the owner
-- **class**: A. **severity**: medium. (In-source `TODO(规则书)`.)
-- **rule text**: 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。」
-- **code**: `card-hhw/src/smile_parade.rs:246-251` — `resolve_guard` returns
-  false when `trigger::player_id() == owner`. The exclusion protects (1)'s own
-  nested settle; it should key off the placement move, not a blanket owner skip.
-- **related**: (1)'s crystal countdown (`:122-129`) is gated on `on_group()`;
-  the printed tick 「你的每回合结束时移除一个」 is unconditional (only the
-  zero-crystal discard names 弦卷集团). Settled-01's "fixed" line describes the
-  weaker behaviour as if it were the rule.
-
-### LOY-ANON-01 `MyGO:[千早爱音]Anon Tokyo` 「（上限1）」 produces half-links
-- **class**: A. **severity**: medium.
+### LOY-ANON-01 residual — the 消耗 runs before the pair refusal
+- **class**: A on the payment order; **C** on whether a tile may sit in two
+  links at once (the singular 「1个…（上限1）」 leans no). **severity**: medium.
 - **rule text**: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」
-- **code**: `card-mygo/src/anon_tokyo.rs:108-131` — one mark **per tile**,
-  each skipped independently, so a re-link can mark only one end and `LINK`
-  slots disagree. Cap should apply to the pair.
-- **Class C** on whether a tile may sit in two links at once (the singular
-  「1个…（上限1）」 leans no).
+- **code**: `card-mygo/src/anon_tokyo.rs:136-146` — `place_mark_pair` is
+  place-or-refuse atomic (commit 6f9c5564), but the 消耗 still runs first, so a
+  re-link at the cap pays the half and places nothing: the 消耗 and the 放置
+  are one body (in-file TODO).
 
-### LOY-STORM-01 `RAS:练习室里的风暴`（2）is still a forced re-settle
-- **class**: A on "charge, not settle"; **C** on the recipient when mortgaged.
-  **severity**: medium.
-- **rule text**: sheet 2026-10-06 新卡组卡 H8: 「…对那个玩家进行一次相当于此卡
-  所在格子普通[结算]的(4-X)/4倍价格的**收费**」 (was 「那个玩家进行一次此卡所在
-  格子的[结算]」).
-- **code**: `card-ras/src/studio_storm.rs` — **fixed 2026-10-18**: now a one-shot
-  `ctx::transfer(settler → tile owner, rent_of(tile) * (4-X) / 4)`. A full
-  `card_settle_at` would also fire settle hooks / counteractions and offer
-  build/buy, none of which the 「收费」 wording asks for. Amount matches the old
-  `set_rent_factor(250 * (4-X))` figure (`3340 * 2 / 4 = 1670` in
-  `ras.rs` `storm_part2_rent_factor`).
-- **still open — Class C**: 「普通[结算]」 of a **mortgaged** tile is a forced-buy
-  offer, not rent, so there is no obvious 收费 recipient. Charge nothing on a
-  mortgaged tile for now (`TODO(规则书)[ruling]` on the call site); needs a
-  ruling. `ras.rs` `storm_part2_discards_and_charges` renamed from
-  `…_forces_a_settle` to match the sheet.
+### LOY-STORM-01 residual — 「普通[结算]」 of a mortgaged tile has no 收费 recipient
+- **class**: C. **severity**: medium.
+- **rule text**: sheet 2026-10-06 新卡组卡 H8 「…对那个玩家进行一次相当于此卡所在
+  格子普通[结算]的(4-X)/4倍价格的**收费**」.
+- **code**: `card-ras/src/studio_storm.rs` charges a one-shot 「收费」
+  (`ctx::charge_rent`). A mortgaged tile's 「普通[结算]」 is a forced-buy offer,
+  not rent, so there is no obvious recipient; it charges nothing there for now
+  (`TODO(规则书)[ruling]` on the call site) — needs a ruling.
 
 ### LOY-C pile (Class C — needs a ruling; do not guess)
 - `PPP:STAR BEAT!` — 「下次结算后…随后减少1层」 is neither one-shot nor a clean
@@ -2742,19 +1493,6 @@ that card's `play` body suppresses the (2) buy prompt) and the **LOY-C pile**.
 - `PP:[若宫伊芙]属于我的武士道！` — 「（1）[使用者]抽卡后」 hooks on owner; they
   coincide on every normal path (the card is placed on [使用者]的[场地]).
 
-## Quoted-name sweep (all 180) — no unresolved entity names
-
-Every “...” that names a thing resolves: derived cards (`“FEVER!”` →
-`通用:[衍生]FEVER!`, `“觉悟”` → `R:[衍生] 觉悟` **with a space in the id**,
-`“拍卖撤下来了”`, `“表演的本能”`, `“共鸣”`, …), tiles (`“bandori车站”` vs board
-`Bandori车站` — sheet case drift; impls use the canonical spelling via
-`const STATION`), `“MyGO!!!!!”` → `in_group`, `“抹茶芭菲”` → a player token.
-Quoted formulas are expressions. `“afterglow”` is a named movement style and
-already carries `TODO(规则书)[judgement]` in `detour.rs`.
-
-Sheet typos deliberately **not** propagated into `.text()`: `“FEVER!“` /
-`“PERFECT“` (closing quote), 「1000的的的资金」.
-
 # Newly filed 2026-10-18 (card loyalty review, wave 2)
 
 15 more quote-dense cards reviewed clause-by-clause (3 subagents × 5). Reports:
@@ -2763,53 +1501,28 @@ Display text / quoted names were clean on all 15 — the problems are behavioral
 
 ## High
 
-### LOY-BLACK-01 `HHW:黑衣人的补给` 「移除那格的一个奇迹水晶」 is dead code
-- **class**: A. **severity**: high.
-- **rule text**: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。」
-- **code**: `card-hhw/src/black_suits.rs:29-34,116-123` —
-  `On::Action(PassTile, "actor == owner && tile.id == tile_named('弦卷集团')", …)`.
-- **gap**: field hooks only dispatch to placed instances. A `[反击]`
-  declaration leaves the hand and defaults to discard; `counteract()` never
-  `place_card`s. So the removal never runs and the borrowed `tile:circle` stays
-  forever. Compare `hagumi_marks.rs:110-118`, which places itself as the C#
-  `HagumiMarkFx` stand-in for exactly this reason (C# had `BlackSuitFx`).
-- **note**: fix by the 育美 pattern (place as stand-in, file away when the last
-  crystal leaves) or a tile-mark rule instance. Related medium:
-  「该格上拥有奇迹水晶时」 is only re-evaluated by this card's own place/remove
-  (`sync_circle_instance`), not by any crystal add/clear.
+### LOY-BLACK-01 residual — 「该格上拥有奇迹水晶时」 is only re-evaluated by this card
+- **class**: B. **severity**: medium.
+- **rule text**: 「该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果」
+- **code**: `card-hhw/src/black_suits.rs:104` (`TODO(规则书)`): the state is
+  re-checked only on this card's own place/pass, not on any external crystal
+  add/clear (`sync_circle_instance`). Same root as HAG-01 (no post-commit token
+  `*Changed` event).
 
-### LOY-SEEYOU-01 `PP:[衍生]明天见` declining `[共鸣]` still discards the card
-- **class**: A. **severity**: high.
+### LOY-SEEYOU-01 `PP:[衍生]明天见` a declined play is still announced as played
+- **class**: B (the announcement half). **severity**: high.
 - **rule text**: 「（1）只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可
   使用。」+「（2）[共鸣]无视此卡的[特]效果（1）。」
-- **code**: `card-pp/src/see_you_tomorrow.rs:42-56` — `cant_play` allows whenever
+- **code**: `card-pp/src/see_you_tomorrow.rs:45-83` — `cant_play` allows whenever
   a 共鸣 is in hand even if `up > down`; the body `return Ok(())` on a declined
   `try_resonance`.
-- **gap**: `play_from_hand` removes the card from hand before the body, and
-  `DEST_UNSET` fates it to discard. Declining the 共鸣 offer still loses 明天见
-  with no effect. 「才可使用」 means a refused play leaves the card in hand.
-  Test `seeyou_echo_ignores_gate` only covers accept.
+- **gap (announcement — open)**: the play is already announced when the body
+  runs, so a refused 共鸣 still counts as a played card -- the log, the `card`
+  window and the played/two-cards counters all ran and it can be counteracted
+  (in-file `TODO(规则书)`). Fix: move the 共鸣 into the new activation
+  collector (`docs/ACTIVATION.md` §2) and `Activation::Decline` on refusal.
 - **note**: the bypass structure itself is right (gate holds → free play; gate
-  fails → only via 共鸣). Fix: do not commit the play until 共鸣 is paid.
-
-### LOY-TOMORI-01 `CRYCHIC:（灯）内心的呐喊`（3）window and body are both off
-- **class**: A. **severity**: high. ×2.
-- **rule text**: 「…**你**位于此卡前后5格内时…」 and the (3) body 「使用高松灯
-  （MyGO!!!!!）的（2）效果」.
-- **code**: `card-crychic/src/tomori_inner_shout.rs:27` keys the window on the
-  **mover's** endpoint near the card, not on 「你」 (the controller) being near
-  it. The body teleports to `card_tile` rather than 「自己所在的格子」 and
-  comments claim 「no settle」 while (2) is 「…并[触发结算]」 + a half-pay bend.
-- **note**: 1d20 half is already filed as TOMORI-BIND-01; destination /
-  proximity / half-pay-on-immediate-settle are not.
-
-### LOY-TOMORI-02 `CRYCHIC:（灯）内心的呐喊`（2）field copies are swept by CRYCHIC (2)
-- **class**: A. **severity**: high.
-- **rule text**: 「此卡不会被你乐队技能的（2）效果移除」.
-- **code**: `skill-groups/src/crychic.rs:132-136` unplaces all `CRYCHIC:` cards;
-  the exemption only covers hand/deck/discard. After (3) places a field copy it
-  is removed. Also （2）'s 「将其洗入抽牌堆」 cannot move a field copy with
-  `shuffle_into_deck(hand, discard)`.
+  fails → only via 共鸣).
 
 ### LOY-NET-01 `通用:网络链接异常` clause 1/2 branch sees only `DESIGNATES` cards
 - **class**: B. **severity**: high.
@@ -2831,15 +1544,9 @@ Display text / quoted names were clean on all 15 — the problems are behavioral
 
 ## Medium
 
-- **LOY-JEN-01** `PP:找回珍妮弗` [med/A] — `[移除]` runs before steps 1–2, against
-  「依次进行以下操作」 (`jennifer.rs:100-121`).
-- **LOY-FEVER-01** `通用:[衍生]FEVER!` [med/A] ×2 — （2）'s 「放入[使用者]弃卡区」
-  uses `set_dest(Graveyard)` (owner's discard) not `set_transfer_to_dest([使用者], …)`;
-  X's 「[拥有者]场上每拥有一张卡」 filters out face-down instances with no printed
-  carve-out.
-- **LOY-THANKS-01** `通用:CiRCLE THANKS PARTY!` [med/A] — unprinted cash gate
-  (`money_of < 500` skips seats) on 「所有其他玩家可选择[消耗]500资金」. Same shape
-  as the already-fixed LOY-SOUL-01.
+- **LOY-THANKS-01 residual** `通用:CiRCLE THANKS PARTY!` [med/A] — `can_pay`
+  (晕眩/除外 PayGate) still narrows 「所有其他玩家」 (`thanks_party.rs:47`,
+  in-file TODO).
 - **LOY-TOMORI-03** `CRYCHIC:（灯）内心的呐喊` [med/A] ×2 — （3）'s 「最早拥有的格子」
   (`firstTile` slot is never written; falls back to `min()` tile index); （2）'s
   「将其洗入抽牌堆」 cannot move a field copy.
@@ -2863,8 +1570,6 @@ Display text / quoted names were clean on all 15 — the problems are behavioral
   「必须购买」 offer on both cards. 「必须购买」 should replace the optional.
 - **LOY-MUTSUMI-01** `CRYCHIC:（睦）从没有觉得...` [low/C] — (2)'s
   `set_dest(Banished)` is an unprinted `[移除]`; only (3) prints 「此卡[移除]」.
-- **LOY-JEN-02** `PP:找回珍妮弗` [low/C] — skipped steps when the user is
-  `player_out`; text has no escape.
 - **LOY-BLACK-02** `HHW:黑衣人的补给` [low/C] — the borrowed pass-reward's
   「移动起点不为CiRCLE」 exemption does not re-bind (弦卷集团 is kind `agent`, so
   `is_start` never applies). Two readings of 「获得"CiRCLE"格子的全部效果」.
@@ -2874,26 +1579,12 @@ Display text / quoted names were clean on all 15 — the problems are behavioral
   `IEventDefer`. (1)'s 「非因为此卡导致」 filter is vacuous until Defer lands
   (OPEN-wait-causality).
 
-# Engine verbs (2026-10-18)
+# Engine follow-ups
 
-The `/simplify` pass on the loyalty batch deferred four fixes that needed
-engine capabilities rather than rule-side bandaids. Three landed here.
+## FIRE-TOKENS — open follow-ups (2026-10-24)
 
-## Landed
-
-### FIRE-TOKENS — 火罐 re-homed onto the persona-skill token counter (2026-10-24)
-Branch `worktree-fire-tokens`. `MatchPlayer.state["charge"]`/`["tempFire"]` →
-`tokens` rows `name="charge"`/`"tempFire"`, `instance=<persona-skill uid>`,
-live cap on `Counter.max`. Wire names unchanged. `gain_marker` /
-`spend_marker` / `add_marker_max` fold the held-token store and stay dumb
-(uncapped add). The uncapped `gain_charge`/`spend_charge`/`add_charge_max`
-sugar is deleted. Skill press-gates and cond-ir `charge(p)` read the token.
-Kani `arm_gain_marker` was aligned to the production uncapped add in the
-same batch (it had modelled a `charge_max` clamp the engine does not have);
-`conf_hostops2` / `conf_model` unit tests are green. The CBMC proof suite
-itself was **not** run this batch.
-
-Open follow-ups from the code review of this batch (2026-10-24):
+The 火罐 re-home onto the persona-skill token counter landed on
+`worktree-fire-tokens`. Two follow-ups remain:
 
 - **FIRE-TOKENS-1 — legacy `state["charge"]` is never folded into the token
   row.** The webui falls back to `state["charge"]` for display
@@ -2912,107 +1603,6 @@ Open follow-ups from the code review of this batch (2026-10-24):
   `state.contains_key("charge")` and writes `MatchPlayer.state`, both dead
   after the re-home. Give it a token-store equivalent (or drop the charge
   case).
-
-### ENG-CARD-MESSAGE — `Target::Board` reaches tile rules; CiRCLE reward is messaged
-- `Target::Board(id)` / `Target::Uid(uid)` now resolve over **every** standing
-  board-owned rule on `BOARD_OWNER` (tile rules, marks, events, status hosts),
-  not just `mark_rule_instances()` (`crates/game-rules/src/hostfns.rs`
-  `resolve_receivers`). The id is what disambiguates; `Target::Board`'s shape
-  is unchanged so this is a strict superset. Docs: `docs/CARDS.md`
-  「Cross-card messages」.
-- **Consumer:** `event:协助CiRCLE重建` re-homes 「CiRCLE原本的所有效果」 onto
-  「CiRCLE咖啡厅」 by messaging `tile:circle` (`On::Message("settleReward")`)
-  instead of calling `rules_tiles::circle::settle_reward` across modules. The
-  reward body runs **as `tile:circle`** (its prompt, its `passRewardAffected`
-  window, its `prop::NO_REWARD` read) and is now private to that module.
-  `rules/events` no longer depends on `rules-tiles` -- the only production
-  card→card body call in `rules/*` is gone. Test:
-  `circle_rebuild_pays_the_reward_on_a_cafe_pass`.
-- Also fixed on the way: the rebuild event's `prop::NO_REWARD` arm lives on
-  the `tile:circle` instance (the source owns arming, the reader is the tile),
-  so expiring the event did not drop it and the **next** pass of CiRCLE was
-  silently unpaid. The event now declines to re-arm on the expiring pass
-  (order-independent: the reward step either already consumed the armed veto
-  or will). Test: `circle_rebuild_restores_the_reward_after_it_expires`.
-- The remaining half of the `TODO(ABI)` in `circle_rebuild.rs` -- a real
-  temporary tile-rule swap -- is **ABI-13**.
-### SUITE-TRIO — three long-standing red tests, 2026-10-21
-Three tests that had been red on master, each a different hole. All three
-failed identically on `d70086ed` / `43f2efc9`, so none was an in-flight
-regression.
-
-- **`cross_status::s05_crychic_band_six_cards`** (SETTLE-02, reopened) —
-  `Cx::money_inner`'s settlement-stage loop folded only `t.value` / `t.target`
-  and **dropped `t.is_cancelled()`**, so a Flag-shaped `paySplitChoose` answer
-  of `false` (contract: "stops the payment", abi.rs; 规则书 支付阶段 5
-  「取消支付 / 无需失去资金」 G-MONEY-14) was ignored. Every other cancel
-  point in that function (`effect`, `pay`, `payCombinedCancel`) already
-  honoured it. Fixed in `crates/game-core/src/engine/play.rs` by mirroring
-  `payCombinedCancel`. Side effect: `Mujica:#J11`'s `pay_choose_cancel`
-  (stun cancel) was documented as dead and is now live.
-- **`gap_money::g02_half_speed_plus_expectations_floor_on_a_rent`** —
-  `RollValue`'s payload constructor read `trigger::value()` (the raise's
-  *original* face) rather than `trigger::move_roll()` (the running face after
-  `set_move_roll` rewrites). With two DiceRollValue modifiers the second
-  folded the original face and the last writer won: 7 → (−2) → 5, the ½ lost.
-  Fixed in `crates/card-sdk/src/payload.rs` to use the same
-  `move_roll().unwrap_or(value())` idiom the roll skills already use.
-  **Open ruling on the composition order** -- see `OPEN-ROLLRESHAPE-01` below;
-  the fix makes the two reshapes *fold* (previously one clobbered the other),
-  but which order they fold in is a separate question the card text does not
-  settle.
-- **`spec_card_general::fever_gain_boost`** — `通用:[衍生]FEVER!` stored its
-  C# `Card.User` Mem in the **per-player keyed-state map** (`fever_user`), so
-  playing it materialised a default-valued state key the
-  `C-GEN-fever-frame` allowlist correctly rejects. The Mem belongs on the
-  card instance (`FieldCard::props`, as `RAS:EXIST`'s `exist.used` does) and
-  is 1-based so seat 0 is representable. Fixed in
-  `rules/cards/card-general/src/fever.rs`; the frame is untouched and the
-  「放入[使用者]弃卡区」 routing still works. New test
-  `fever_user_mem_lands_on_the_placed_instance` pins the placement (the
-  owner==user case cannot tell a right write from a lost one).
-
-### ENG-REDIRECT — host-visible "this settle is a redirect" flag
-- `MoveCtx.settle_redirect: bool` (`crates/game-core/src/engine/move_ctx.rs`),
-  set **only** in `card_settle_move` (`play.rs`) when the engine runs a
-  card-initiated `card_settle_at`. Plan-seed sites force it false so it cannot
-  stick.
-- `card_sdk::ctx::trigger::is_settle_redirect()`, wired through
-  `sys`/`sys_kani`/`Op`/`hostfns`/`native_shims`/`host`/`wasm_rules`/kani.
-- **Consumer:** `HHW:笑容大游行` drops `SLOT_REPLAY` entirely. The nested
-  settle's flag stops the ping-pong, so **SETTLE-01's reverse direction is
-  implemented** — a settle on 弦卷集团 while the card sits elsewhere now runs
-  as the card's tile (`g30b_smile_parade_reverse_swap_runs_as_card_tile`).
-  `TAG_AS_AGENT` stays: it marks (1)'s outer placement-move endpoint, which the
-  nested-move flag does not.
-
-### ENG-CHARGE-RENT — a rent-shaped 「收费」 that is not a settle
-- `ctx::charge_rent(payer, tile, milli_scale) -> paid` (1000 = ×1.0). Computes
-  the rent **as a settle would** (`rent_figure`, shared with `pay_rent`), scales
-  it at the money pipeline's `paySplitMul` stage alongside the rent factors
-  (`Pay::milli_scale`, `spec/ROUNDING.md`), and runs it through `money()` as
-  `PayKind::Rent` — so `pay_is_rent` / `RENT_FACTOR` / `PaySplitAdd` riders see
-  it and `paid_in_settle` is tallied, but settle hooks and buy/build offers do
-  not.
-- Refuses (0) on unowned / mortgaged / payer==owner. Mortgaged is Class C
-  (`TODO(规则书)[ruling]`) — 「普通[结算]」 there is a forced-buy, not a rent.
-- **Consumer:** `RAS:练习室里的风暴`（2）on the verb (was `transfer`+`rent_of`).
-  Unblocks the same shape in `anon_tokyo`'s `link_rent` and `dream_return`'s
-  `rent_of * 2` (not migrated here).
-
-### ENG-PAIRED-MARK — one mark bound to two tiles
-- `TileMark.partner: Option<i32>` (`crates/game-core/src/state.rs`),
-  Serde-defaulted like `src`/`instance` so pre-partner saves load.
-- `ctx::place_mark_pair(a, b, …) -> bool` — place-or-refuse **atomic**: returns
-  false and places neither row when either end already carries a matching mark.
-  `ctx::mark_partner(tile, filter) -> i32` reads the other end.
-- Rows carry `src`/`instance` like any mark, so `destroy_instance_units` drops
-  them with the creating instance (no second lifetime mechanism).
-- **Consumer:** `MyGO:[千早爱音]Anon Tokyo` drops its `LINK{tile}` slot graph.
-  The field stand-in is now placed *before* the crystal so both rows bind to its
-  `instance` (they were legacy `instance: None` rows that would never die).
-  Class C kept: whether a tile may sit in two links; the singular
-  「1个…（上限1）」 leans no and the either-end refusal is that reading.
 
 ## Not landed: ENG-COST — a generic press activation cost
 
@@ -3040,7 +1630,7 @@ generalize.
     composition)
   - `rules/cards/card-pp/src/no_expectation.rs` `roll_shave`
   - `crates/card-sdk/src/payload.rs` `RollValue` (the fold that made stacking
-    possible at all -- `SUITE-TRIO`)
+    possible at all)
   - `rules/tests/tests/gap_money.rs:159` `g02_half_speed_plus_expectations_floor_on_a_rent`
 - **rulebook**
   - `AG:（摩卡）0.5倍速` (2): 「此卡在场时，你的移动掷骰的**最终结算**/2（向上取整）」
@@ -3103,70 +1693,31 @@ generalize.
   future frame check does not trip, and so the 0-based `Card.User` cases
   (jennifer, chuchu_music) get their seat-0 bug fixed.
 
-# Summary counts
+# Open engine defects (carried)
 
-**2026-10-21 addendum — `circle_rebuild` TODO(ABI) sweep.** The two
-`TODO(ABI)` tags in `rules/events/src/circle_rebuild.rs` were filed and the
-tractable half landed. Card→card messaging already existed (`On::Message` /
-`ctx::send`, ABI v50) but only ever reached `mark:cp`; `Target::Board` now
-resolves any standing board-owned rule, and the rebuild event messages
-`tile:circle` for the re-homed [经过] reward instead of calling into
-`rules-tiles` (that crate dep is gone from `rules/events`). The stale
-`prop::NO_REWARD` arm that ate the first CiRCLE reward after the event expired
-is fixed. The tile-swap half is **ABI-13** (new, MEDIUM) -- a real capability
-gap, not a bug. Four tests added under `rules/tests/tests/events.rs`.
+## COND-01 — `slot()` conditions on FilterValue miss mid-roll state writes (possible engine defect)
+- **Symptom (2026-10-17, seen while splitting eve_unify):** a `slot('…') >= n`
+  *condition* on an `On::FilterValue` at `DiceRollPlan` did not observe a
+  per-player state write made earlier in the same roll, while `state::get`
+  inside the body saw it. The condition and the body therefore disagree about
+  the same world.
+- **Suspect:** the condition (CEL) evaluation uses a snapshot taken before
+  mid-roll writes (or a cached `slot` view), while body calls read the live
+  world. Affects any entry whose gate counts up during the roll.
+- **Likely affected:** `kanon_lost`'s `On::FilterValue(DiceRollPlan)` gate
+  `slot('skill.kanonLost.silent') >= 3` (TODO(bug) at the entry in
+  `rules/skills/skill-personas/src/kanon_lost.rs`); any future gate written the
+  same way. eve_unify worked around it (`actor == owner` + `state::get` in the
+  body).
+- **Check:** a two-roll scenario where the slot increments mid-roll and the
+  gate must flip on the same roll; compare `slot()` in the condition vs
+  `state::get` in the body.
+- **Fix needs:** make the condition see the same world the body sees (evaluate
+  conditions against the live world, or document that conditions are
+  pre-roll-snapshot and move such gates into the body); a test pinning both
+  readings agree.
 
-**Recounted 2026-10-20** against master `b8e26436` after the card-rule TODO
-review. The 2026-10-10 figures (78 open from 144 TODOs + ~85 ignores) and the
-2026-10-17 figures (157 TODOs, ABI v85) are historical.
-
-**2026-10-18 addendum** — card loyalty review wave 1 (15 quote-dense cards +
-a `.text()`/quoted-name sweep of all 180): **8 display/behavior items closed**
-(LOY-DISP-01..06, LOY-SOUL-01, LOY-RET-01/02) and **11 opened**.
-The same day's **fix batch** closed 7 more (LOY-TRAIN-01/02, LOY-OVERLAP-01,
-LOY-RET-03, LOY-SMILE-01, LOY-ANON-01, LOY-STORM-01) and landed LOY-DREAM-01 as
-a Class-B fallback. **Wave 2** (15 more cards) opened **32** items (5 high).
-See "Newly filed 2026-10-18 (wave 1)" and "(wave 2)". **140 cards remain
-unreviewed at clause level.**
-
-**2026-10-20 addendum — card-rule TODO review + reconstruction.** Walked all
-153 `TODO(规则书)` tags in `rules/` + `crates/` against the backlog and against
-the live code:
-- **7 stale tags settled** (D-02 NEGATION-AUDIT V2 leftovers) — rewritten as
-  `NEGATION-AUDIT V2 (settled)` notes in the six card bodies + `money.rs`.
-  160 → 153 tags. Of the 153, 7 are convention markers and **146 are live gaps**.
-- **2 orphans filed**: DONUT-VOID-01 (`two_donuts.rs` barred-acquisition void),
-  ABI-MARKER-SPENT (`fireSpent` → `MarkerSpent`, previously an unfiled
-  "separate ticket").
-- **Every other tag already had a home** — see the "TODO(规则书) ↔ item index"
-  above. Notable clusters: CH-07 「视为此卡未生效」 is 7 card-body tags on one
-  observer; the settle-priority rule is EVENT-03 / C-Q40h across
-  `circle_rebuild.rs` + `tile_text.rs`.
-- **Verified live** (not stale): ruling 6 / 7 (force-buy and auction still skip
-  `bought`/`buyAfter`; auction money is still a direct delete), ruling 8
-  (MONEY-05 巴 base), ruling 10 (LINGER-10), GUARD-PERVISIT /
-  GUARD-SETTLE-DEPTH (book states no bounds). STA-01 and STA-04 are closed
-  (2026-10-18) and stay closed.
-- **Header drift fixed**: ABI v85 → **v89** (markers / Phase C batch 2 /
-  status-vocab-zero landed after the last audit).
-
-What the 2026-10-17 audit changed (kept for the record):
-- **4 items closed** (the tree had landed them and the doc had not noticed):
-  SETTLE-02 (both halves — the `cantPlayHand` B-split is `FilterKind::PlayGate`),
-  SKILL-02 (hina lottery borrow), SKILL-03 (`prop::PLAYABLE_STUNNED`), CD-01
-  (CEL `is_live_house` sugar deleted).
-- **3 items partially closed**: ABI-09 (host clocks landed; 5 sub-caps open),
-  HOST-02 (tables + `MoveBefore` landed; 行动阶段 3/6 + 支付阶段 3 open),
-  EVENT-04 (song-table half gone; `end_it_all` NON_DERIVED remains).
-- **22 new items filed** under "Newly filed 2026-10-17" (STA-01..05, AYA-GRANT-01,
-  AYA-POOL-01, EVE-01, HAG-01, NYAMU-01, DETOUR-01, TOMORI-BIND-01, NFO-CANCEL-01,
-  AYA-LONG-01, AVE-CLAW-01, LISA-BOND-01, HARU-SOYO-FX, DRAW-OUT-01, FORCE-WRITE-01,
-  LINGER-10, NOBUY-CARD-01, GUARD-PERVISIT, GUARD-SETTLE-DEPTH) — each had a live
-  `TODO(规则书)` and no backlog id.
-- **2 live RULING tests given a home**: `t22_hill_coownership` → C-Q44,
-  `g29_maya_look_at_top_inside_the_draw_curve` → C-Q45.
-- **All path cites** moved to `skill-personas/` / `skill-groups/`; several kind
-  names updated for the v85 `ActionKind`/`FilterKind` system.
+---
 
 # Newly filed 2026-10-23 (ABI v98 `declare` + `can_fire`)
 
@@ -3206,93 +1757,6 @@ hole and it is older.
   channel left to learn that one of them trapped.
 - **land both arms together** (hook `OP_DECLARE` *and* the residual guard) or
   the table gains a fifth row and it is a half-fix.
-
-## Per class (open items only; D excluded)
-
-| class | meaning | open items (2026-10-20) |
-|---|---|---|
-| **A** | fixable now from clear text + current ABI | ~40 |
-| **B** | needs a new/changed ABI capability | ~30 |
-| **C** | needs a user ruling | ~32 |
-| **D** | stale (already fixed / landed) | 6 note groups + the closures above |
-
-*(A+B+C ≈ 100 open root-cause items after dedup of 146 live `TODO(规则书)` gap
-tags + 11 RULING ignore rows + the 2026-10-10 ABI audit + the loyalty waves.
-Treat these as approximate — the per-item entries are the source of truth.
-Some A items are "contained engine bug" one-liners; some B items unblock
-several A/C.)*
-
-## Per kind
-
-| kind | count (approx) |
-|---|---|
-| implementation bug | ~38 |
-| ABI defect | ~30 |
-| rulebook divergence | ~22 |
-| rulebook gap / implementation debt / tooling | ~6 |
-| stale | 6 note groups |
-
-## Per suggested batch
-
-| batch | items | severity mix |
-|---|---|---|
-| payment pipeline | MONEY-01..08, SETTLE-06, SETTLE-07, ABI-11, ABI-12, NFO-CANCEL-01, AYA-LONG-01, AVE-CLAW-01, FORCE-WRITE-01, NOBUY-CARD-01 | 4 high C |
-| movement | MOVE-06..15, ABI-02, CRYSTAL-07, EVE-01, LISA-BOND-01 | (MOVE-01..05 fixed) |
-| counteraction windows | CH-08..13, WINDOW-03, ABI-03, GUARD-PERVISIT | 1 high C (WINDOW-03) |
-| rent multipliers | MONEY-01, TILE-01..03, CRYSTAL-08 | 1 high C |
-| host ABI: out-buffers / queries | ABI-01, ABI-02, STA-02, STA-05, HOST-01 | 1 high B (HOST-01) |
-| HostRequest handlers / reply sentinels | ABI-04, ABI-09, HOST-05 | (HOST-06/07/08/13 fixed) |
-| crystal/marker accounting | CRYSTAL-02/05/06/07/08, STA-01 **closed**, STA-04 **closed**, HAG-01, HARU-SOYO-FX, MONEY-07, **DONUT-VOID-01**, **ABI-MARKER-SPENT** | 1 high via CH-07 |
-| draw/discard pipeline | ABI-07, ABI-08, DRAW-OUT-01, CH-13 fixed | |
-| skills: PP | AYA-GRANT-01 **closed (not a bug)**, AYA-POOL-01 | 0 |
-| skills: Roselia / CRYCHIC | SKILL-05, SKILL-07, TOMORI-BIND-01 | |
-| skills: Mujica | SKILL-04, CH-08, NYAMU-01 | |
-| skills: CiRCLE / sumimi / HHW | SKILL-06, SKILL-10, STA-03, CRYSTAL-05/06, SETTLE-01 reverse | |
-| settle stages | SETTLE-05, MOVE-08, HOST-02 remainder, LINGER-10, GUARD-SETTLE-DEPTH | |
-| events | EVENT-01..04, DETOUR-01, ABI-09 remainder | |
-| engine: settle recursion / stack safety | STACK-01 **fixed**; SETTLE-01 reverse-swap TODO | 0 (stack) |
-| fuzz/determinism | HOST-03 (landed) | 0 |
-| tiles | TILE-06, LOW-02, HOST-04 (landed) | |
-
----
-
-# Proposed batch order
-
-Do these in order; each batch should be a PR that does not share files with the next.
-**2026-10-20 rewrite** — batches 1/2/3/4/5 below are already done, kept for the record.
-STA-01 / STA-04 dropped out of batch 6 (closed 2026-10-18).
-
-1. ~~**high-A engine: settle recursion / stack safety** (STACK-01)~~ **fixed 2026-10-10**
-2. ~~**high-A engine bugs — movement** (MOVE-01..05, SKILL-08, SKILL-09, TILE-04, TILE-05)~~ **fixed**
-3. ~~**high-A counteraction windows** (CH-02..04, CH-06, WINDOW-01, WINDOW-02)~~ **fixed 2026-10-11/13**
-4. ~~**high-A money** (MONEY-03, CRYSTAL-03, SETTLE-02, SETTLE-03)~~ **fixed** (SETTLE-02 closed in the 2026-10-17 audit)
-5. ~~**high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08)~~ **fixed**
-6. **high-B unblockers** — the live ones, in this order
-   - ~~**AYA-GRANT-01** skill-attachment grant~~ **closed 2026-10-20 -- not a bug; the clause names the character**
-   - **CH-05 play-history + nested PlayCtx** (unblocks Mortis, Mana Champion, dice_cast counters)
-   - **HOST-01 HostRequest nested-settle write journal** (unblocks inline equivalence)
-   - ~~**STA-01 / STA-04** status grant-verb enforcement~~ **closed 2026-10-18**
-   - **CH-07 general 「视为此卡未生效」 observer** (C-Q5 first, then `CardWasted`)
-7. **C questions to the user** (all of §C below, now C-Q1..C-Q45, in one sitting).
-   While waiting, continue on:
-8. ~~**medium-A contained bugs** (SKILL-07 soyo expiry, CRYSTAL-08 ringing_bloom
-   continuous max, AYA-LONG-01, AVE-CLAW-01, NFO-CANCEL-01, LOW-02 docs)~~
-   **done 2026-10-21** — SKILL-07 / CRYSTAL-08 (rise) were already landed in
-   `0ce220b1` and are now verified + recorded; LOW-02 closed; AYA-LONG-01 +
-   AVE-CLAW-01 closed via v96 `PaySplitMulBefore` (they were class B in
-   disguise). **NFO-CANCEL-01 is still open and is class B** — `PayAfter` has
-   no "PaySplitAt ran" bit — so it moved to the medium-B pile (item 9).
-9. **medium-B ABI pile** (ABI-01..12, HOST-05 ask_money, STA-02/05, HAG-01,
-   NFO-CANCEL-01 (moved here 2026-10-21),
-   EVE-01, TOMORI-BIND-01, HARU-SOYO-FX, DRAW-OUT-01, FORCE-WRITE-01,
-   **ABI-MARKER-SPENT**) — one ABI bump, many cards.
-10. **medium-C leftovers + events** (MONEY-01..08, MOVE-06..15, SETTLE-05..07,
-    CH-08..10, TILE-03/06, EVENT-01..04, DETOUR-01, NYAMU-01, STA-03,
-    LINGER-10, NOBUY-CARD-01, **DONUT-VOID-01**) after the user answers §C.
-11. **D cleanup** — ~~rewrite NEGATION-AUDIT V2 TODOs as settled notes~~ **done
-    2026-10-20**; strike the stale TEST-FINDINGS / COVERAGE / CROSS-TESTS /
-    NEGATION-AUDIT / SETTLE-STAGES sections listed above (all still stale as of
-    2026-10-20).
 
 ---
 
@@ -3515,35 +1979,269 @@ the intermediate park / log shape?
 
 ---
 
-# Closed after the 2026-10-17 audit (kept for the record)
+**C-Q51 (clear-cp-spread-window).** *(filed 2026-10-28; rows 1507; `rules/cards/card-general/src/clear_cp.rs`)*
+[使用者]使用此卡后的下2回合开始时
 
-## Phase C batch 2 — generic status / marker verbs (closed)
-- **status**: **fixed** (2026-10-19, `bandori-std`) — `apply_abnormal` /
-  `skip_main_move` / `clear_move_skip` / marker-only `gain_marker` /
-  `spend_marker` / `add_marker_max`; named `give_*` / `charge*` / `*_of`
-  imports deleted from `crates/` and `crates/card-sdk`. `AbKind` is an opaque
-  newtype; `ActionKind::Exile` / `TriggerKind::Exile` named consts moved to
-  `bandori_std::kind::Exile`. Shared stay/stun/exile verbs live in
-  `bandori_std::status`. ABI_VERSION 87 -> 88. Still open: `fireSpent` ->
-  `MarkerSpent` rename → **ABI-MARKER-SPENT** (filed 2026-10-20).
+Current: spread_guard requires trigger::player_id() == owner
 
-## status-vocab-zero — opaque status keys (closed)
-- **status**: **fixed** (2026-10-19) — the engine no longer names stay/stun/
-  exile/noHand/unstoppable/playableStunned. Layer keys are opaque strings;
-  gates are asked of the ruleset (`gate_open` + `OnBoard`/`Targetable`);
-  wear-off and flooring are declared by the writer (`set_expires` /
-  `set_flags`); post-commit raises take a caller-supplied wire name
-  (`raise_after`). Names live in `rules/bandori-std` + `rules/status` + the
-  CEL vocabulary in `rules/cond`. `AbKind::as_str` name table, `status_gates`
-  / `StatusGates`, `MatchPlayer::{stay,stun,exile,…}`, `default_expiry`, and
-  the `state::key` status constants are deleted. ABI_VERSION 88 -> 89.
-  `apply_abnormal` is split (`gate` + `state_add` + `raise_after`).
-  Still open: `fireSpent` -> `MarkerSpent` rename → **ABI-MARKER-SPENT**
-  (filed 2026-10-20).
+Decision needed: After the card is used, whose two turn starts must the spread fire on — the user's own next two, or the next two chronological (any-player) starts?
 
----
+**C-Q52 (fever-floor).** *(filed 2026-10-28; rows 932; `rules/cards/card-general/src/fever.rs`)*
+X降低200（可小于0）
 
-*End of backlog. Standing file: `docs/rulebook/BACKLOG.md`. Reconstructed
-2026-10-20 against master `b8e26436` (153 `TODO(规则书)` tags = 146 live gaps +
-7 convention markers, 11 RULING ignores, ABI v89). Every live gap tag has an
-item id — see the "TODO(规则书) ↔ item index" at the top.*
+Current: (v.value + x).max(0) with no marker
+
+Decision needed: When X is negative, may the boosted amount go negative (making the owner pay the difference), or is it floored at 0 as the code does — the cell only says X may be below 0 and prints no floor on the result?
+
+**C-Q53 (marina-window-guard).** *(filed 2026-10-28; rows 881, 882; `rules/cards/card-general/src/marina_work.rs`)*
+[经过]#1格子且#1格子受到其他效果影响时
+
+Current: pre::MINE only; the card is offered on every passRewardAffected, including the re-homed cafe
+
+Decision needed: Which passed tile counts as #1 (CiRCLE or its re-homed cafe), and what counts as 「受到其他效果影响」, so the window opens only for a #1 passage carrying another effect rather than on every passRewardAffected?
+
+**C-Q54 (tsugu-step-3-before-2).** *(filed 2026-10-28; rows 853, 854; `rules/cards/card-general/src/tsugu_ycm.rs`)*
+投掷3d10并根据结果依次进行以下操作：
+
+Current: The linger lands at r>=28 before the (2) block, so the step-2 buy itself is already discounted (tsugu_ge28_buy_discount_1500 pins it).
+
+Decision needed: Does 「依次」 install (3)'s −1500 only after (2)'s optional buy, so the buy from (2) is charged at full price, or does the turn-long modifier cover it?
+
+**C-Q55 (tsugu-gain-fallback).** *(filed 2026-10-28; rows 1716; `rules/cards/card-general/src/tsugu_ycm.rs`)*
+结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。
+
+Current: Picking the move when `move_blocked` is set (or no station tile) pays 1000 instead; latent today because the whole-card gate already requires the main move.
+
+Decision needed: When (4)'s player picks the teleport but the main move is already gone, does the 1000 gain silently substitute, or is the choice taken against availability?
+
+**C-Q56 (tritone-payee-unnamed).** *(filed 2026-10-28; rows 388, 1266, 1349; `rules/cards/card-morfonica/src/tritone.rs`)*
+弃置此卡并支付由此卡获得的资金
+
+Current: `ctx::pay(player_id, owed, ...)` pays the bank (`to: -1`); the cell names no payee.
+
+Decision needed: Who receives 「支付由此卡获得的资金」 — the bank, or the players the money was gained from?
+
+**C-Q57 (garden-unstoppable-extra-halves).** *(filed 2026-10-28; rows 405; `rules/cards/card-morfonica/src/tsukushi_garden.rs`)*
+直到下个你的回合开始时，你无法被异常移动
+
+Current: The grant adds [不可阻挡], which also bypasses the [停留] move gate and refuses new [晕眩]/[除外] layers.
+
+Decision needed: Does the granted [不可阻挡] status's extra halves (ignoring [停留], refusing new [晕眩]/[除外]) fall under 「无法被异常移动」, or must the grant be narrowed to the abnormal-move half?
+
+**C-Q58 (forced-settle-main-flag).** *(filed 2026-10-28; rows 1269, 565; `rules/cards/card-morfonica/src/noble_blue.rs, rules/cards/card-mygo/src/taki_serious.rs`)*
+立刻进行一次触发结算 / 进行一次[触发结算]
+
+Current: Both call `ctx::card_settle_at(..., true)`: noble_blue.rs:54 and taki_serious.rs:76. main=true writes `st.landed` and `move.main`, so main-only settle hooks (e.g. 「不能通过主要移动的结算盖房」) fire for a settle where the player never moved.
+
+Decision needed: Is a card-forced 「触发结算」 a main move settle (main=true, overwriting 落地 and firing main-only settle hooks), or a plain settle?
+
+**C-Q59 (believe-chooser-self).** *(filed 2026-10-28; rows 1201; `rules/cards/card-hhw/src/believe_you.rs`)*
+选择一名玩家
+
+Current: Only other players are offered and the card is refused outright with no rival.
+
+Decision needed: Does 「选择一名玩家」 include the user as a legal chooser, so the card is still playable with every rival out?
+
+**C-Q60 (charity-first-pass-scope).** *(filed 2026-10-28; rows 204; `rules/cards/card-hhw/src/charity_show.rs`)*
+每初次经过一个属于你的格子
+
+Current: The seen marker holds the turn key, so a tile passed earlier never counts on a later dice move of the same turn.
+
+Decision needed: Is 「初次经过」 once per tile per move or once per tile per turn?
+
+**C-Q61 (dream-rent-shape).** *(filed 2026-10-28; rows 125, 126, 1097; `rules/cards/card-hhw/src/dream_return.rs`)*
+向场上你以外的任意一名玩家的一个格子进行一次支付
+
+Current: `ctx::transfer` runs as PayKind::Card, so RENT_FACTOR, dice-rent and pay_is_rent are lost; crystals and the record are written after the payment, so the skill's (2) can never see it.
+
+Decision needed: Is the payment a rent-shaped charge (RENT_FACTOR, dice rent, pay_is_rent) that the holder's band skill (2) can see, or a plain Card-kind transfer?
+
+**C-Q62 (tomori-two-x-diff).** *(filed 2026-10-28; rows 993; `rules/cards/card-crychic/src/tomori_inner_shout.rs`)*
+获得两个X差值*120的资金
+
+Current: `diff * 120`; C-CRYCHIC-tomoricry-01 reads (|ΔX| * 2) * 120 and tracks OPEN-两个X差值.
+
+Decision needed: Does 「两个X差值*120」 pay |ΔX|*120, or (|ΔX|*2)*120 as the recorded reading C-CRYCHIC-tomoricry-01 has it?
+
+**C-Q63 (vocal-pre-modifier-amount).** *(filed 2026-10-28; rows 22; `rules/cards/card-crychic/src/vocal_too_hard.rs`)*
+支付至少5000资金
+
+Current: The effect window's `value` is the amount before paySplit/rounding, so a halved 9000 payment still opens the card.
+
+Decision needed: Is 「支付至少5000资金」 tested on the declared pre-modifier amount or on the payment actually made after halving/rounding?
+
+**C-Q64 (declare-war-skill-vs-card).** *(filed 2026-10-28; rows 37; `rules/cards/card-ag/src/declare_war.rs`)*
+被其他玩家的卡效果影响
+
+Current: Any rival card body stamped as `by_card` opens the card; persona/group skill bodies ride the same Pay path and also open it.
+
+Decision needed: Does a persona/group skill body that charges a player count as a 「卡效果」 for 「被其他玩家的卡效果影响」?
+
+**C-Q65 (detour-missing-plans).** *(filed 2026-10-28; rows 221; `rules/cards/card-ag/src/detour.rs`)*
+视为使用一次初始Afterglow角色的
+
+Current: PLANS has four entries but only three distinct skills; Moca's teleport and Tsugumi's reverse/deferred-move (2) are unreachable.
+
+Decision needed: Which 「(2) effect of an initial Afterglow character」 does the card use — a fixed four-entry plan list, or any/one of the five (which would add Moca's teleport and Tsugumi's reverse)?
+
+**C-Q66 (misaki-endpoint).** *(filed 2026-10-28; rows 300; `rules/cards/card-hhw/src/misaki_card.rs`)*
+位于你的移动起点与预定移动终点之间
+
+Current: `(1..=roll)` includes the planned end tile while the start (d == 0) is excluded -- asymmetrical.
+
+Decision needed: Does 「位于你的移动起点与预定移动终点之间」 include the planned destination tile while excluding the start, or exclude both endpoints?
+
+**C-Q67 (misaki-neighbour).** *(filed 2026-10-28; rows 1096; `rules/cards/card-hhw/src/misaki_card.rs`)*
+那格及相邻2格上的所有其他玩家[支付]你500资金
+
+Current: `for d in -2..=2` charges two tiles on each side plus the target tile.
+
+Decision needed: Does 「那格及相邻2格」 mean the target tile plus its two neighbours (3 tiles) or two tiles on each side of it (5 tiles)?
+
+**C-Q68 (ran-start-tile-undefined).** *(filed 2026-10-28; rows 45, 1111; `rules/cards/card-ag/src/ran_as_usual.rs`)*
+回到起始地点
+
+Current: turn_snap pos (the turn-start square) with no record.
+
+Decision needed: What is 「起始地点」 — CiRCLE, the seat's opening tile, or the pre-move position?
+
+**C-Q69 (mutsumi-removal-fate).** *(filed 2026-10-28; rows 101, 102, 1154; `rules/cards/card-crychic/src/mutsumi_never.rs`)*
+消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。
+
+Current: Comment claimed a nonexistent Removed variant and that Banished posts nothing.
+
+Decision needed: Does (2) banish the played card (an unprinted [移除]) or use the default graveyard fate that only (3) prints?
+
+**C-Q70 (out-of-turn-self-caused-draw).** *(filed 2026-10-28; rows 1000, 55; `rules/cards/card-crychic/src/elegant_shout.rs, crates/game-rules/src/wasm_rules.rs`)*
+当你在回合外受到抽卡效果时打出
+
+Current: `if n > 0 && player_id >= 0 && player_id != cx.state().turn` (crates/game-rules/src/wasm_rules.rs:4315) opens for every effect-caused out-of-turn draw, a self-caused one included, and the card answers it.
+
+Decision needed: Does 「受到抽卡效果」 cover a draw the player causes themself during another player's turn, or only an externally caused draw?
+
+**C-Q71 (myown-offer-gate).** *(filed 2026-10-28; rows 1179; `rules/cards/card-crychic/src/my_own_problem.rs`)*
+若受到[异常移动效果]影响，此卡不生效
+
+Current: The guard is `can_counteract` (the offer filter), so the card is never offered once an abnormal move already hit; the body also re-checks and logs 不生效.
+
+Decision needed: Should 「此卡不生效」 leave the card unoffered (a spent, played no-op) or let it be played and resolve as a no-op?
+
+**C-Q72 (aya-empty-discard-condition).** *(filed 2026-10-28; rows 1541; `rules/cards/card-pp/src/aya_longing.rs`)*
+[手]：将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。
+
+Current: On::Play("", None, aya_longing); empty graveyard returns after placing
+
+Decision needed: Is a non-empty discard a legality condition that blocks the play, or does the play legally resolve with only its placement half?
+
+**C-Q73 (chisato-stale-designation-cancel).** *(filed 2026-10-28; rows 1402; `rules/cards/card-pp/src/chisato_mask.rs`)*
+（1）[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金。
+
+Current: split_pay consults designation_cancelled unconditionally; the flag clears only at the next hand play
+
+Decision needed: Does a designation cancel from the current play also skip a later reshuffle's 500 分摊, or only the split inside that play?
+
+**C-Q74 (guerrilla-mustbuy-shortfall).** *(filed 2026-10-28; rows 871, 1677; `rules/cards/card-ras/src/guerrilla.rs`)*
+且必须购买
+
+Current: On a shortfall the body logs guerrilla_broke and skips card_buy, so no raise-funds/破产 path runs.
+
+Decision needed: On a 「必须购买」 purchase the player cannot cover, must the money pipeline run raise-funds/[破产], or does the buy soft-fail?
+
+**C-Q75 (hey-kids-fee-scope).** *(filed 2026-10-28; rows 755, 1476, 760; `rules/cards/card-ras/src/hey_kids.rs, docs/rulebook/COVERAGE.md`)*
+随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金。
+
+Current: `cost_in` sums only the houses just moved (rules/cards/card-ras/src/hey_kids.rs:128), while 「各格」 can also read all owned tiles or the touched tiles including houses already standing there and the source remainder; COVERAGE.md:728 bakes the narrow reading.
+
+Decision needed: Does 「转移后各格房屋造价总和」 sum every owned tile, the tiles touched by the transfer (including houses already there and the source remainder), or only the houses just moved?
+
+**C-Q76 (hey-kids-split-grammar).** *(filed 2026-10-28; rows 756, 1475; `rules/cards/card-ras/src/hey_kids.rs`)*
+转移的房屋与目标格子中，至少一方数量为1
+
+Current: `max = houses.min(targets.len())`, so 2 houses onto 2 targets offers k = 2.
+
+Decision needed: Does 「至少一方数量为1」 constrain the player's k so one of houses/targets must be exactly 1, or only describe the minimum (allowing k>=2 when both exceed 1)?
+
+**C-Q77 (be-strongest-livehouse-table-open).** *(filed 2026-10-28; rows 725, 1673; `rules/cards/card-ras/src/be_strongest.rs`)*
+roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”）
+
+Current: LIVEHOUSES is every group-6 tile board-wide; the reasoning lived only in spec prose.
+
+Decision needed: Is the sorted livehouse table every group-6 tile on the board, or only the livehouses the user owns?
+
+**C-Q78 (star-beat-layer-burn-ruling).** *(filed 2026-10-28; rows 652, 1426; `rules/cards/card-ppp/src/star_beat.rs`)*
+可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层
+
+Current: A declined offer returns before the decrement (layer kept); the decrement runs regardless of `card_offer_build`'s false (layer burned).
+
+Decision needed: When exactly does 「随后减少1层」 resolve — after a declined offer too, and after a build that fails for lack of funds?
+
+**C-Q79 (repaint-exist-redirect).** *(filed 2026-10-28; rows 1669; `rules/cards/card-ras/src/repaint.rs`)*
+使目标玩家的此次移动数-X
+
+Current: On an EXIST redirect (`hit != them`) the body returns before `set_move_roll` and `set_pay_factor`, so neither effect happens.
+
+Decision needed: When an EXIST redirect changes the target, do 「目标玩家」/「对方」 still mean the mover, so both effects apply to him?
+
+**C-Q80 (repaint-min-roll-floor).** *(filed 2026-10-28; rows 1670; `rules/cards/card-ras/src/repaint.rs`)*
+使目标玩家的此次移动数-X
+
+Current: The engine re-applies `min_roll` after the diceRollResult window (`m.roll.max(mr)`, crates/game-core/src/engine/play.rs:1428-1434), so the cut is truncated.
+
+Decision needed: Does the mover's 结果为10以上 floor re-apply after Repaint cuts the roll (truncating X), or does the cut stand?
+
+**C-Q81 (storm-clause-readings).** *(filed 2026-10-28; rows 716, 1684, 1685; `rules/cards/card-ras/src/studio_storm.rs`)*
+在距此卡所在格子X个格子处[结算]时 / 对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费
+
+Current: `ctx::dist` is the undirected ring minimum (crates/game-rules/src/wasm_rules.rs:1961-1969), `charge_rent` charges the house-level/dice figure, and a mortgaged tile returns 0 so the card discards and charges nothing.
+
+Decision needed: For 「在距此卡所在格子X个格子处」 and 「相当于普通[结算]的(4-X)/4倍价格的收费」: clockwise or undirected distance, base or house-level rent, and who (if anyone) is charged when the tile is mortgaged?
+
+**C-Q82 (ringing-bloom-zero-value-pay).** *(filed 2026-10-28; rows 821; `rules/cards/card-roselia/src/ringing_bloom.rs`)*
+你的任意非RiNG格子收费后
+
+Current: No trigger::value() check, so the card discards and pays 500×X although the tile collected nothing; in a reflected rent only the 0-value parent pay carries target == owner.
+
+Decision needed: Does 「收费后」 require the tile to have collected something, or does a fully counteracted / blocked / reflected pay still fire the 500×X?
+
+**C-Q83 (sayo-cost-open).** *(filed 2026-10-28; rows 681, 1376; `rules/cards/card-roselia/src/sayo_play.rs`)*
+打出时视为使用一次此卡使用者的技能
+
+Current: The pre has no charge(owner) >= 6 and the body never spends 6 火罐, so the card grants +1/+2 at 0 pots; tests pin the free behaviour.
+
+Decision needed: Does 「视为使用一次技能」 pay the skill's cost (its ≥6 火罐 gate and 6-pot spend), or is the use free?
+
+**C-Q84 (debut-lock-waives-payee).** *(filed 2026-10-28; rows 51, 1001; `crates/game-core/src/engine/play.rs`)*
+打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外）
+
+Current: money_inner returns Paid { paid: true, ..default } at the money_locked branch before the split windows, log_money, the payee credit at the transfer stage and the pay/paid raises -- the payer is spared and the payee is skipped.
+
+Decision needed: Does the money lock spare only the user's debit while the payee still receives (and the pay events fire), or does it void the whole transfer?
+
+**C-Q85 (lisa-bond-stage-ambiguity).** *(filed 2026-10-28; rows 694; `rules/cards/card-roselia/src/lisa_bond.rs`)*
+当你使用技能进行传送后
+
+Current: the code commits to MoveAfter (stage 13) and the stage TODO stays
+
+Decision needed: Which stage is 「使用技能进行传送后」 — MoveAfter (action stage 13), or a post-teleport point that the teleport's own landing precedes?
+
+**C-Q86 (nobreakup-predict-model).** *(filed 2026-10-28; rows 783, 1076; `rules/cards/card-sumimi/src/no_breakup.rs`)*
+进行一次可使你的资金变动为拥有相同数字的传送
+
+Current: `predict` (rules/cards/card-sumimi/src/no_breakup.rs:52-60) subtracts only table rent; purchase, build, force-buy, agent half-charge, event settle and dice rent are unmodelled, so legal destinations are omitted once any rent-repeat exists.
+
+Decision needed: Which settle money changes must the prediction model cover (purchase, build, force-buy, agent half-charge, event settle, dice rent) for 「进行一次可使你的资金变动为…的传送」?
+
+**C-Q87 (donuts-grant-void).** *(filed 2026-10-28; rows 828, 830; `rules/cards/card-sumimi/src/two_donuts.rs`)*
+（1）获得[除外]直至你原本所在格子被其他玩家经过。
+
+Current: A second copy returns at the top (rules/cards/card-sumimi/src/two_donuts.rs:58) before recording SLOT_ORIG/placing, while a grant refused by [不可阻挡] or a countered abnormal window is discarded and the body still records, places and later runs (2) and the pots.
+
+Decision needed: When (1)'s [除外] grant is barred — a second copy already exiled, [不可阻挡], or a countered abnormal window — is the whole card void, or do the record, (2) and the pot payout still run?
+
+**C-Q88 (l12-per-pot-reading).** *(filed 2026-10-28; rows 1319; `rules/cards/card-sumimi/src/l12.rs`)*
+每当你消耗火罐时，为此卡添加一个[奇迹水晶]
+
+Current: The comment grounded one crystal per pot in C# t.value without saying the clause itself does not state it.
+
+Decision needed: Is a crystal added per 火罐 spent or per 消耗 event (a mixed temp+pool spend now raising two events)?
+

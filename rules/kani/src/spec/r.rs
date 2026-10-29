@@ -165,8 +165,9 @@ pub fn sprechchor_face_ok(x: i32) -> bool {
 //     body's `set_pay_amount(0)` is that consequence)
 //   * +1 draw when the card did not come from hand (clause 03)
 // Clause 01's window is the [反击] protocol (PROTOCOL-LEVEL).
-// `play_from_hand` is a host protocol stub (always 0), so the off-hand branch
-// is the only one the Kani host can admit -- see the unit table.
+// The off-hand half keys on `ctx::is_placed()` (the declaration's own origin);
+// the world pins a placed instance, while the from-hand no-draw half is
+// BLOCKED-HOST -- see the unit table.
 // ===========================================================================
 
 /// Stun delta the book pins.
@@ -181,6 +182,8 @@ pub fn ako_dark_offhand_draw_n() -> i32 {
 
 /// Activation effects when the card is treated as off-hand (the only origin the
 /// Kani host can report). Exactly: GiveStun{1}, SetPayAmount{0}, Draw{1}.
+/// `stun::add` writes the `stun` state key, and the host's status-key decode
+/// mirrors it into the pilot column with the `GiveStun` effect.
 pub fn ako_dark_offhand_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 3
         && matches!(effects[0], Effect::GiveStun { player: p, n } if p == player && n == ako_dark_stun_n())
@@ -188,14 +191,16 @@ pub fn ako_dark_offhand_log_ok(effects: &[Effect], player: i32) -> bool {
         && matches!(effects[2], Effect::Draw { player: p, n } if p == player && n == ako_dark_offhand_draw_n())
 }
 
-/// Post: stun layer +1 ([眩晕] is `stun`, distinct from [停留]), money
-/// unchanged at activation, pay_amount zeroed.
+/// The [晕眩] state key gains exactly one layer (`stun::add` writes the state
+/// key; the host keeps the `w.stun` pilot column in step for its readers).
+pub fn ako_dark_stun_ok(pre_stun: i32, post_stun: i32) -> bool {
+    post_stun == pre_stun.saturating_add(ako_dark_stun_n())
+}
+
+/// Post: money unchanged at activation, pay_amount zeroed.
 pub fn ako_dark_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let me = player as usize;
-    me < MAX_PLAYERS
-        && post.stun[me] == pre.stun[me].saturating_add(1)
-        && crate::world::arr4_eq(post.money, pre.money)
-        && post.pay_amount == 0
+    me < MAX_PLAYERS && crate::world::arr4_eq(post.money, pre.money) && post.pay_amount == 0
 }
 
 /// MUTANT: wants 2 stun layers.
@@ -203,13 +208,21 @@ pub fn ako_dark_stun_n_mutant() -> i32 {
     2
 }
 
+/// MUTANT companion: the 2-layer reading of the state key.
+pub fn ako_dark_stun_ok_mutant(pre_stun: i32, post_stun: i32) -> bool {
+    post_stun == pre_stun.saturating_add(ako_dark_stun_n_mutant())
+}
+
 // ===========================================================================
 // C-R-louder-01 -- `R:（ykn）louder`
 // 「每次打出此卡时使ring的价格基础乘数+5」
-// OPEN-RING-MULT: the book never defines 「价格基础乘数」. The only observable
-// the host offers is `add_rent_unit_bonus` / `rent_unit_mult`, both protocol stubs
-// with no world slot -- classified BLOCKED-HOST in the unit table. The pure
-// spec below is the determined arithmetic (+5) the stub *should* observe.
+// OPEN-RING-MULT: the book never defines 「价格基础乘数」. The engine maps it to
+// the `rentUnitMult` rule param (`World::add_rent_unit_bonus` /
+// `rent_unit_mult`, read by the ring dice-rent charge path); the **Kani host**
+// still stubs both arms (`arm_ring_multiplier` returns 1, `add_rent_unit_bonus`
+// is a protocol stub), so the world slot is unobservable here -- BLOCKED-HOST
+// in the unit table is the model gap, not a production one. The pure spec below
+// is the determined arithmetic (+5) the stub *should* observe.
 // ===========================================================================
 
 /// Determined delta: +5.
@@ -355,12 +368,14 @@ pub fn fire_bird_exhausted(crystals: i32) -> bool {
 // 「（1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些
 // Livehouse格子地契价值20%的资金。」
 // OPEN-ROUND10: rounding of 20% is not stated; the integer case is the pin.
-// 「地契价值」 = printed tile price.
+// 「地契价值」 = printed tile price. No harness yet -- these helpers are
+// spec-only (`proofs/r.rs` has no blue_rose section).
 // ===========================================================================
 
-/// Branch predicate: `#(owned Livehouse) ≥ #(owned non-Livehouse)`.
+/// Branch predicate: `#(owned Livehouse) ≥ #(owned non-Livehouse)` (0 ≥ 0 takes
+/// (1); the cell states no "at least one" prerequisite).
 pub fn blue_rose_rich(n_live: i32, n_other: i32) -> bool {
-    n_live >= n_other && n_live > 0
+    n_live >= n_other
 }
 
 /// 20% of the sum of those tiles' printed prices (integer pin only).

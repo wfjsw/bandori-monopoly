@@ -86,13 +86,15 @@ crate::host_subset!(sparkler_changed_dispatch {
 });
 
 /// `Mujica:人偶的箱庭` play — window scan + pay / move branches.
-/// GAP: `arm_stay_of` / `arm_stun_of` are still inlined in `host::dispatch` —
-/// see [`doll_garden_dispatch`]. `tile_forward` shares `arm_dist`.
+/// The [无法移动] gate's 停留 / 眩晕 reads ride `state_get`, whose arm aliases
+/// the world stay / stun columns. `tile_forward` shares `arm_dist`.
 crate::host_subset!(doll_garden_subset {
     others_count => arm_others_count,
     others_at => arm_others_at,
     tile_forward | dist => arm_dist,
     player_pos => arm_player_pos,
+    // `state_key::UNSTOPPABLE` / `STUN_START` reads on the [无法移动] gate.
+    state_get => arm_state_get,
     ask => arm_ask,
     opt_str | opt_int | opt_tile => arm_opt,
     pay_to => arm_pay_to,
@@ -102,34 +104,6 @@ crate::host_subset!(doll_garden_subset {
     card_move => arm_card_move,
     log | effect => arm_log,
 });
-
-/// Same reads as `host::dispatch` `Op::stay_of` / `Op::stun_of`; rest is the
-/// loud subset.
-fn doll_garden_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args) -> i64 {
-    match op {
-        card_sdk::kani_host::Op::stay_of => {
-            let p = a[0];
-            world::with_world(|w| {
-                if p >= 0 && (p as usize) < MAX_PLAYERS {
-                    w.stay[p as usize]
-                } else {
-                    0
-                }
-            }) as i64
-        }
-        card_sdk::kani_host::Op::stun_of => {
-            let p = a[0];
-            world::with_world(|w| {
-                if p >= 0 && (p as usize) < MAX_PLAYERS {
-                    w.stun[p as usize]
-                } else {
-                    0
-                }
-            }) as i64
-        }
-        other => doll_garden_subset(other, a),
-    }
-}
 
 /// `Mujica:（喵梦）` play — place on own field.
 crate::host_subset!(nyamu_dispatch {
@@ -702,7 +676,7 @@ fn doll_garden_pay_iff_at(user: i32) {
     let other = 1 - user;
     // X = clockwise tiles from other(10) to user(20) = 10.
     let x = 10i32;
-    sparse2(doll_garden_dispatch, user, |w| {
+    sparse2(doll_garden_subset, user, |w| {
         w.money[user as usize] = 5_000;
         w.money[other as usize] = 5_000;
         w.pos[user as usize] = 20;
@@ -757,7 +731,7 @@ pub fn doll_garden_pay_amount_mutant_is_detected() {
     let user = 0i32;
     let other = 1i32;
     let x = 10i32;
-    sparse2(doll_garden_dispatch, user, |w| {
+    sparse2(doll_garden_subset, user, |w| {
         w.money[user as usize] = 5_000;
         w.money[other as usize] = 5_000;
         w.pos[user as usize] = 20;

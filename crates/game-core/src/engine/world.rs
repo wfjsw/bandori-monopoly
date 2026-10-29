@@ -117,14 +117,22 @@ mod opt_i32_neg1 {
     }
 }
 
-/// One player's turn-start snapshot: the starting square plus a copy of the
-/// whole keyed state map. The guest picks which keys to restore; the engine
-/// names none of them.
+/// One player's turn-start snapshot: the starting square, a copy of the whole
+/// keyed state map, that player's money and the whole board ownership arrays.
+/// The guest picks which keys to restore; the engine names none of them.
+/// 「取消所有受到的效果」 restores the money and the ownership arrays too.
+///
+/// The wire field order is mirrored by `card_sdk::ctx::TurnSnapshot`; keep the
+/// two in step (the postcard payload has no field names).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TurnSnap {
     pub pos: i32,
     pub state: std::collections::BTreeMap<String, i32>,
+    pub money: i32,
+    pub owners: Vec<i32>,
+    pub houses: Vec<i32>,
+    pub mortgaged: Vec<bool>,
 }
 
 /// Per-turn bookkeeping the shell uses.
@@ -998,6 +1006,11 @@ impl World {
             if let Some(f) = st.board_field.iter().find(|f| f.card == rid && f.tile < 0) {
                 e.counter = f.counters.values().sum();
                 e.counter2 = f.props.get("count2").copied().unwrap_or(0);
+                e.turns_left = f
+                    .props
+                    .get(crate::state::prop::TURNS_LEFT)
+                    .copied()
+                    .unwrap_or(0);
                 e.note = f.note.clone();
                 e.face_down = f.face_down;
             }

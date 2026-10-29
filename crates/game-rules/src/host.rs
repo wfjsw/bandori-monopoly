@@ -1060,7 +1060,8 @@ impl RulesetBuilder {
                 }
                 // ABI v102: a `OnKind::Schedule` entry must carry a non-empty
                 // slug `id` -- the scheduling family names which entry to run.
-                if ok == Some(OnKind::Schedule) && o.id.as_deref().filter(|s| !s.is_empty()).is_none()
+                if ok == Some(OnKind::Schedule)
+                    && o.id.as_deref().filter(|s| !s.is_empty()).is_none()
                 {
                     return Err(RuleError::Load(format!(
                         "{} entry {ei}: On::Schedule requires a non-empty id slug (the schedule call names it)",
@@ -1758,9 +1759,7 @@ impl Ruleset {
             // advanced past any prompt the collector made.
             Ok((code, _bytes)) if code == abi::EXIT_DECLINED as i64 => {
                 let _ = finish(store, Ok(0))?;
-                Ok(Admitted::No {
-                    next_answer: after,
-                })
+                Ok(Admitted::No { next_answer: after })
             }
             Ok((_code, bytes)) => {
                 let _ = finish(store, Ok(0))?;
@@ -1778,9 +1777,7 @@ impl Ruleset {
                 // here would fall into the body-trap arm (`log.card_trap` +
                 // `DEST_GRAVEYARD`) and destroy a card whose body never ran.
                 // Matches the residual guard's own leniency a few lines up.
-                Err(_e2) => Ok(Admitted::No {
-                    next_answer: after,
-                }),
+                Err(_e2) => Ok(Admitted::No { next_answer: after }),
             },
         }
     }
@@ -1925,9 +1922,7 @@ impl Ruleset {
                         outcome: p,
                     }));
                 }
-                Admitted::No {
-                    next_answer: after,
-                } => {
+                Admitted::No { next_answer: after } => {
                     next_answer = after;
                     continue;
                 }
@@ -2222,7 +2217,7 @@ impl Ruleset {
             .and_then(|p| p.as_ref());
         // The CEL scope is only read when a condition exists -- with `pre ==
         // None` nothing evaluates it, so skip the build. That is the
-        // `cant_play` hot path (ai_step / view extras ask it per hand card).
+        // `cant_play` hot path (the policy / view extras ask it per hand card).
         let scope;
         let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
             scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
@@ -3173,12 +3168,12 @@ fn call_card_declare<W: CardWorld>(
     let inst = instantiate_cached(rules, &mut *store, slot.module)?;
     let packed = inst
         .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
-        .call(&mut *store, (slot.local, entry, export::OP_DECLARE, player_id))
+        .call(
+            &mut *store,
+            (slot.local, entry, export::OP_DECLARE, player_id),
+        )
         .and_then(fold_exit)?;
-    if packed == 0
-        || packed == abi::EXIT_NEED_INPUT as i64
-        || packed == abi::EXIT_DECLINED as i64
-    {
+    if packed == 0 || packed == abi::EXIT_NEED_INPUT as i64 || packed == abi::EXIT_DECLINED as i64 {
         return Ok((packed, Vec::new()));
     }
     let (ptr, len) = abi::unpack(packed);
@@ -3460,14 +3455,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
          purpose: i32,
          source: i32|
          -> Result<i32, Error> {
-            hostfns::roll(&mut c, player_id, count, sides, purpose, source).map_err(HostErr::into_err)
+            hostfns::roll(&mut c, player_id, count, sides, purpose, source)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "roll_direct",
         |mut c: C<W>, player_id: i32, count: i32, sides: i32, purpose: i32| -> Result<i32, Error> {
-            hostfns::roll_direct(&mut c, player_id, count, sides, purpose).map_err(HostErr::into_err)
+            hostfns::roll_direct(&mut c, player_id, count, sides, purpose)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3602,9 +3599,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::mark_partner(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "mark_tile", |mut c: C<W>, uid: i32| -> Result<i32, Error> {
-        hostfns::mark_tile(&mut c, uid).map_err(HostErr::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "mark_tile",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::mark_tile(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "remove_mark",
@@ -5302,13 +5303,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "query_guard",
-        |mut c: C<W>,
-         player_id: i32,
-         p: i32,
-         n: i32,
-         ep: i32,
-         el: i32|
-         -> Result<i32, Error> {
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, ep: i32, el: i32| -> Result<i32, Error> {
             hostfns::query_guard(&mut c, player_id, p, n, ep, el).map_err(HostErr::into_err)
         },
     )?;

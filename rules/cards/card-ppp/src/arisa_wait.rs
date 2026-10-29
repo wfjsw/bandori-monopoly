@@ -13,7 +13,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（有咲）等等等一下";
@@ -60,10 +60,11 @@ fn arisa_wait(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `IEventDefer.Resolved` (C# `CardArisaWait.Resolved`) -- any event that
-/// settles banks a crystal on this card.
-/// Pure guard for [`event_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
+/// -- placed gate; `false` means the card is not activated at all.
+/// Pure guard for [`event_after`], the plain `eventAfter` body of (1). The
+/// `IEventDefer.Resolved` callback (C# `CardArisaWait.Resolved`) belongs to (2)
+/// and is not wired yet.
 fn event_after_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
@@ -72,6 +73,9 @@ fn event_after(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
     // C# `by != Title` filters out this card's own deferred releases; while
     // Defer (2) is held there are none, so every `eventAfter` is foreign.
+    // TODO(规则书)（任何非因为此卡导致的事件结算时）: the book excludes events this card
+    //   caused -- `eventAfter` carries no cause, so every settle banks one (vacuous
+    //   until the (2) deferral lands).
     ctx::add_crystals(1, 0)?;
     ctx::log(
         player_id,

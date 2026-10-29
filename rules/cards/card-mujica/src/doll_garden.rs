@@ -7,9 +7,10 @@
 //!
 //! player either moves without settling or pays you X*20, then you move the sum.
 
+use bandori_std::state_key;
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const DOLL_GARDEN: CardDef = CardDef::new(
     "Mujica:人偶的箱庭",
@@ -37,10 +38,16 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「X为该玩家正常移动到你所在格子所需的移动数」 -- C#
         // `H.Forward(p.pos, i.pos)`.
         let x = ctx::tile_forward(ctx::player_pos(p), ctx::player_pos(player_id));
-        // 规则书: 「无法移动的玩家只能选择向你支付」 -- C# gates on
-        // `stay <= 0 && !Stunned` (`MatchPlayer::stunned()` = `stun + stunStart > 0`;
-        // `stun_of` is the `stun` field alone).
-        let can_move = rules_status::stay::get(p) <= 0 && rules_status::stun::get(p) <= 0;
+        // 规则书: 「无法移动的玩家只能选择向你支付」 -- the generic [无法移动]
+        // gate (`stun` counts `stunStart` too: `MatchPlayer::stunned()` =
+        // `stun + stunStart > 0`; [不可阻挡] lifts the stay and stun halves).
+        let unstoppable = ctx::state::get(p, state_key::UNSTOPPABLE);
+        let can_move = !rules_status::stay::blocks_move(rules_status::stay::get(p), unstoppable)
+            && !rules_status::stun::blocks_move(
+                rules_status::stun::get(p) + ctx::state::get(p, state_key::STUN_START),
+                unstoppable,
+            )
+            && !rules_status::exile::blocks_move(rules_status::exile::get(p));
         if can_move {
             let pick = ctx::ask_pick(
                 p,
@@ -64,10 +71,16 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         } else {
             // 规则书: 「无法移动的玩家只能选择向你支付」 -- no prompt, straight to
             // the payment (C# leaves `num2 = 1` and pays).
+            // TODO(规则书)（「无法移动的玩家只能选择向你支付」）: a [晕眩]/[除外] victim is
+            //   also 「无法收付款」 (rules.txt 49/50) -- the pay gate refuses it
+            //   (`log.blocked_pay`) and they wind up paying 0.
             ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")))?;
             continue;
         }
         // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
+        // TODO(ABI)（移动掷骰）: no per-roller movement-dice reader -- this generic
+        //   Effect roll misses the victim's move-dice modifiers and the
+        //   `DiceRollAfter` hooks.
         let r = ctx::roll(p, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
         sum += r;
         // C# `H.Walk(p, r, resolve: false, ...)` (MatchHost.cs:5965) builds
@@ -92,6 +105,12 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             player_id,
             &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id),
         );
+        // 规则书: 「视为你本回合的主要移动」 -- the sum walk is the main move even
+        // when the sum is 0: run a 0-step walk so the main move is consumed and
+        // the shared plan stops carrying the last victim's steps / `resolve`.
+        ctx::plan::set_steps(0);
+        ctx::plan::set_resolve(true);
+        ctx::card_move(player_id);
         return Ok(());
     }
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。」
@@ -103,8 +122,12 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- C# `H.CardMove(c, new
     // MoveCtx { Steps = sum, Forced = true })` (MatchHost.cs:5973-5977) builds
-    // `MoveCtx { Steps = sum, Resolve = true, Forced = true }`. The MoveCtx
-    // shape maps onto `ctx::plan::*`.
+    // `MoveCtx { Steps = sum, Resolve = true, Forced = true }`. Steps/Resolve
+    // map onto `ctx::plan::*`; `forced` has no setter.
+    // TODO(ABI)（强制移动）: no guest `plan::set_forced`, so rules.txt 51's
+    //   「可选择…是否生效」 opt-out is unavailable (STA-02).
+    // TODO(ABI)（fresh MoveCtx）: the shared turn plan is never reset -- a stale
+    //   `stop_at` / `pay_factor` / `reverse` from an earlier walk leaks in.
     ctx::plan::set_steps(sum);
     ctx::plan::set_resolve(true);
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- run the shaped walk now

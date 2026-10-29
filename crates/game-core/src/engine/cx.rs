@@ -19,7 +19,7 @@ use crate::msg::Msg;
 use crate::state::MatchPrompt;
 
 use super::rules::{CardRules, ExclusiveAsk};
-use super::world::World;
+use super::world::{Extreme, World};
 
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
 /// on with `?`.
@@ -455,6 +455,11 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
+    /// How many [触发结算]s are open right now (nested settles included; a
+    /// settle that suspends keeps its count until it resumes and finishes).
+    /// Non-zero is 「结算中」 for the payments it carries -- RAS:游击演出's
+    /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally. Transient.
+    pub(crate) settle_open: u32,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -616,6 +621,15 @@ impl<'a> Cx<'a> {
     /// through this instead of [`Self::world_copy`].
     pub fn world(&self) -> &World {
         &self.w
+    }
+
+    /// Mutable view of the live world -- **no clone**. A policy context draws
+    /// its randomness through this ([`World::rng`]); see [`Self::world`].
+    pub fn world_mut(&mut self) -> &mut World {
+        // The play memos key on the world stamp; drop them so the next probe
+        // re-asks rather than trusting a verdict from before the write.
+        self.play_memo.borrow_mut().clear();
+        &mut self.w
     }
 
     /// A shareable handle to the live world -- a refcount bump, **no copy**
@@ -818,13 +832,24 @@ impl<'a> Cx<'a> {
         // runs against the live world, so the knobs have to cross too --
         // otherwise 练习室里的风暴's (4-X)/4 and Repaint's 「支付减半」 are
         // dropped at the `SettleAt` / `Move` boundary.
+        // `resolve` is re-read by `teleport_as_depth` after the pass window and
+        // gates the settle stages. A 「不[触发结算]」 body clears it *before*
+        // the `teleport_to` request (纯真振翅), so it must be on the live plan
+        // at the request, not left stale from an earlier move.
+        t.plan.resolve = f.plan.resolve;
         t.plan.pay_factor = f.plan.pay_factor;
         t.plan.rent_factor = f.plan.rent_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
+        // Card-owned per-move tags are read by the routine's own raise payloads
+        // (`t.Move.Tags`), so they cross with the knobs too -- 笑容大游行 tags
+        // the move of its nested `card_settle_at` so the redirect does not
+        // swap back.
+        t.plan.tags = f.plan.tags.clone();
         // A card body may latch a decision across the pauses its host routines
-        // cause -- e.g. 黑色生日 freezing 「资金在1000以下」 at resolution so the
-        // replay's re-run takes the same branch across its two pay entries.
+        // cause -- e.g. 黑色生日 freezing 「每名你以外的资金不多于1000的玩家」 at
+        // resolution so the replay's re-run takes the same branch across its
+        // two pay entries.
         // That write lives on the card's world copy and is dropped when the run
         // pauses. Carry it over -- but *only* for keys a body explicitly
         // registers under the `latch.` prefix. (A latch is "already taken", so
@@ -1009,6 +1034,7 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
+            settle_open: 0,
             state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,
@@ -1147,6 +1173,16 @@ impl<'a> Cx<'a> {
         Err(Halt(HaltKind::Ask(Box::new(ask))))
     }
 
+    /// Re-ask a prompt a restored fork halted on (`Routine::Ai`). An answer
+    /// the caller already supplied comes back through the answer list; a seat
+    /// still missing halts here again. The `Ask` is the one the fork was saved
+    /// with, so its title, options and prefilled `ai` stay as the live match
+    /// had them.
+    pub(crate) fn resume_prompt(&mut self, ask: Ask) -> Flow<()> {
+        self.ask(ask)?;
+        Ok(())
+    }
+
     /// Replace every [`AI_UNSET`] entry of `ask.ai` with the answer this seat's
     /// policy would give. Standard (and every human seat, including one taken
     /// over after a time-out) takes the prompt's fallback. Chaos picks uniformly
@@ -1212,9 +1248,41 @@ impl<'a> Cx<'a> {
             // (`docs/BOT.md` §3.8 "counteraction"; default 600‰, user
             // ruling 2026-10-08). `CounterParams` 0 holds a card back.
             self.counteract_pick(seat, ask, fallback, n)
+        } else if ask.view.title.key() == "ask.pass_reward.title" {
+            // Standard: the card odds ramp with the seat's money (user
+            // ruling 2026-10-28). Both the server bot and 托管 come through
+            // here, so there is no second copy to keep in step.
+            self.pass_reward_pick(seat, ask, fallback)
         } else {
             fallback
         }
+    }
+
+    /// Standard's [pass-reward] answer: the card on
+    /// [`super::ai::pass_reward_card_chance`], else `fallback` (the money
+    /// print). Both option wordings carry the card ("card" on a pass,
+    /// "card_landed" on a stop on the start square). Only the intermediate
+    /// band draws the world RNG, so the stream moves exactly where the
+    /// outcome is undecided.
+    fn pass_reward_pick(&mut self, seat: usize, ask: &Ask, fallback: i32) -> i32 {
+        let money = self.w.st.players.get(seat).map_or(0, |p| p.money);
+        let chance = super::ai::pass_reward_card_chance(money);
+        if chance <= 0.0 {
+            return fallback;
+        }
+        if chance < 1.0 && self.w.rng.f64() >= chance {
+            return fallback;
+        }
+        ask.view
+            .options
+            .iter()
+            .position(|o| {
+                matches!(
+                    o.key(),
+                    "ask.pass_reward.card" | "ask.pass_reward.card_landed"
+                )
+            })
+            .map_or(fallback, |i| i as i32)
     }
 
     /// Standard's counteraction answer: the first offered card whose
@@ -1343,8 +1411,22 @@ impl<'a> Cx<'a> {
     }
 
     /// Roll `count`d`sides` and log a dice event.
+    ///
+    /// Honours [`Extreme`]: a play under 「以理论最大值或最小值结算」 settles
+    /// every die at its maximum / minimum instead of rolling it (same result as
+    /// `World::roll_silent`). Which *plays* may be forced is the counteraction
+    /// window's decision, not this function's -- AG 微小 limits itself to a
+    /// numeric-interval play (「可以对YOLO生效但无法对无论是何种颜色的夕阳
+    /// 生效」); that filter is still OPEN (BACKLOG ABI-04), so a branch-selecting
+    /// die of a play the counter should not reach is forced today too.
     pub fn roll(&mut self, player_id: i32, count: i32, sides: i32, what: Option<Msg>) -> i32 {
-        let faces: Vec<i32> = (0..count).map(|_| self.w.rng.d(sides)).collect();
+        let extreme = self.w.turn.extreme;
+        let faces: Vec<i32> = if extreme == Extreme::Plain {
+            (0..count).map(|_| self.w.rng.d(sides)).collect()
+        } else {
+            let face = if extreme == Extreme::Max { sides } else { 1 };
+            (0..count).map(|_| face).collect()
+        };
         let sum = faces.iter().sum();
         let detail = (count > 1).then(|| {
             let joined = faces

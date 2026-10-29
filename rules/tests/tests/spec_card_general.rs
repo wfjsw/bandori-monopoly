@@ -473,7 +473,8 @@ fn perfect_contract() {
         // Keep a non-empty draw pile so the [移除]ed PERFECT cannot reshuffle
         // and the FEVER! line stays observable in the discard.
         t.set_draw(0, &["通用:安可"]);
-        t.give(0, &["通用:[衍生]PERFECT"]);
+        // A FEVER! is already in hand: 「加入一张新的」 must not consume it.
+        t.give(0, &["通用:[衍生]PERFECT", "通用:[衍生]FEVER!"]);
 
         let pre = t.snapshot_world();
         t.observe(PERFECT_CLAUSES);
@@ -491,6 +492,14 @@ fn perfect_contract() {
                 "FEVER! not in discard {:?} (draw {:?})",
                 t.discard(0),
                 t.draw_pile(0)
+            ));
+        }
+        // 「将一张“FEVER!“加入弃卡区」 is a new copy: the one held in hand stays.
+        if !t.hand(0).iter().any(|c| c == "通用:[衍生]FEVER!") {
+            return Err(format!(
+                "the hand FEVER! was consumed by the add; hand {:?} discard {:?}",
+                t.hand(0),
+                t.discard(0)
             ));
         }
         frame(

@@ -4,7 +4,16 @@
 
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { suggest, plan, CHAOS_RESERVE, DEFAULT_STRATEGY, type AutopilotCtx } from "./autopilot.ts";
+import {
+  suggest,
+  plan,
+  passRewardCardChance,
+  CHAOS_RESERVE,
+  DEFAULT_STRATEGY,
+  PASS_REWARD_CARD_MIN_MONEY,
+  PASS_REWARD_CARD_MONEY,
+  type AutopilotCtx,
+} from "./autopilot.ts";
 import type { MatchPlayer, MatchState, MatchView, TileData } from "../core/types.ts";
 
 // ---------------------------------------------------------------- fixtures
@@ -231,6 +240,92 @@ test("it falls back to the prompt's fallback without an aiAnswer", () => {
   assert.deepEqual(cmd, { act: "answer", prompt: 8, value: 1 }, "counteract declines");
 });
 
+// ---------------------------------------------------------------- [pass-reward]
+
+const rewardPrompt = (
+  options = ["ask.pass_reward.money", "ask.pass_reward.card"],
+) => ({
+  id: 11,
+  kind: "choice",
+  title: { k: "ask.pass_reward.title" },
+  text: { k: "ask.pass_reward.text" },
+  card: "",
+  options: options.map((k) => ({ k })),
+  fallback: 0,
+  players: [0],
+  answers: [-1],
+  timeLeft: 10,
+  tile: -1,
+  bid: 0,
+  bidder: -1,
+  items: [],
+  count: 0,
+});
+
+function rewardView(money: number, options?: string[], ai = 0) {
+  return view({
+    state: state({ busy: true, players: [player({ money })], prompt: rewardPrompt(options) }),
+    aiAnswer: { answer: ai, picked: [], worth: 0 },
+  });
+}
+
+test("pass-reward card odds rise superlinearly from 8 000 to 150 000", () => {
+  assert.equal(passRewardCardChance(0), 0);
+  assert.equal(passRewardCardChance(PASS_REWARD_CARD_MIN_MONEY), 0);
+  assert.equal(passRewardCardChance(PASS_REWARD_CARD_MONEY), 1);
+  assert.equal(passRewardCardChance(PASS_REWARD_CARD_MONEY * 2), 1);
+  const mid = (PASS_REWARD_CARD_MIN_MONEY + PASS_REWARD_CARD_MONEY) / 2;
+  assert.equal(passRewardCardChance(mid), 0.25, "t² at the midpoint");
+  let prev = 0;
+  for (let m = PASS_REWARD_CARD_MIN_MONEY; m <= PASS_REWARD_CARD_MONEY; m += 1_000) {
+    const chance = passRewardCardChance(m);
+    assert.ok(chance >= prev, "monotonic");
+    prev = chance;
+  }
+});
+
+test("a rich seat takes the card [pass-reward] over the AI's money answer", () => {
+  const cmd = suggest(rewardView(PASS_REWARD_CARD_MONEY + 1), ctx());
+  assert.deepEqual(cmd, { act: "answer", prompt: 11, value: 1 });
+});
+
+test("a seat at exactly the threshold always takes the card", () => {
+  const cmd = suggest(rewardView(PASS_REWARD_CARD_MONEY), ctx({ random: rng(0.999) }));
+  assert.deepEqual(cmd, { act: "answer", prompt: 11, value: 1 });
+});
+
+test("a seat at the floor takes the money", () => {
+  const cmd = suggest(rewardView(PASS_REWARD_CARD_MIN_MONEY), ctx({ random: rng(0) }));
+  assert.deepEqual(cmd, { act: "answer", prompt: 11, value: 0 });
+});
+
+test("the mid ramp rolls the card", () => {
+  const mid = (PASS_REWARD_CARD_MIN_MONEY + PASS_REWARD_CARD_MONEY) / 2;
+  assert.deepEqual(suggest(rewardView(mid), ctx({ random: rng(0.2) })), {
+    act: "answer",
+    prompt: 11,
+    value: 1,
+  });
+  assert.deepEqual(suggest(rewardView(mid), ctx({ random: rng(0.3) })), {
+    act: "answer",
+    prompt: 11,
+    value: 0,
+  });
+});
+
+test("the landed wording's card option counts too", () => {
+  const cmd = suggest(
+    rewardView(PASS_REWARD_CARD_MONEY + 1, ["ask.pass_reward.money_landed", "ask.pass_reward.card_landed"]),
+    ctx(),
+  );
+  assert.deepEqual(cmd, { act: "answer", prompt: 11, value: 1 });
+});
+
+test("with no card option the money fallback stands", () => {
+  const cmd = suggest(rewardView(PASS_REWARD_CARD_MONEY + 1, ["ask.pass_reward.money"]), ctx());
+  assert.deepEqual(cmd, { act: "answer", prompt: 11, value: 0 });
+});
+
 test("it does nothing when the turn is not yours", () => {
   const v = view({
     state: state({
@@ -325,6 +420,12 @@ test("auction bids within the precomputed worth and passes above it", () => {
     ctx(),
   );
   assert.deepEqual(poor, { act: "answer", prompt: 4, value: -1 });
+  // Already the top bidder -> pass, not a repeat bid (`err.already_top_bid`).
+  const top = suggest(
+    view({ state: state({ busy: true, prompt: { ...prompt, bid: 100, bidder: 0 } }) }),
+    ctx(),
+  );
+  assert.deepEqual(top, { act: "answer", prompt: 4, value: -1 });
 });
 // ---------------------------------------------------------------- chaos
 

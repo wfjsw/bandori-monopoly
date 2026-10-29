@@ -52,6 +52,7 @@ pub fn settle_match(m: &mut Match) {
         {
             return;
         }
+        bot_core::sim::pump_bots(m);
         m.tick(0.25);
     }
     panic!(
@@ -218,7 +219,6 @@ impl Table {
         let p = &mut self.m.world_mut().st.players[who];
         p.bot = true;
         p.mentality = mentality;
-        p.ai = mentality != BotMentality::Advanced;
     }
 
     /// Tick the host clock until `pred` (or the tick budget runs out). Lets a
@@ -228,6 +228,7 @@ impl Table {
             if pred(self) {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!("tick_until: {what} never happened: {}", self.dump_prompt());
@@ -943,6 +944,16 @@ impl Table {
             .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
+    /// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no
+    /// instance.
+    pub fn turns_left(&self, who: usize, card: &str) -> i32 {
+        self.field(who)
+            .into_iter()
+            .find(|f| f.card == card)
+            .map(|f| f.props.get(bandori_std::marker::TURNS_LEFT).copied().unwrap_or(0))
+            .unwrap_or(-1)
+    }
+
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
     /// card is not placed.
     pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {
@@ -1007,9 +1018,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m
-            .world()
-            .tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

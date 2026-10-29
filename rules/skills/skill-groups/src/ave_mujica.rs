@@ -19,7 +19,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::{counter, ActionKind, FilterKind};
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// Turns spent in 状态2. 「处于状态2的第三回合开始时」 reads this.
@@ -37,7 +37,8 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             "slot('skillState') != 0",
             None,
-            at_turn_start)),
+            at_turn_start,
+        )),
         // Latch the PaySplitMul input for the PayAfter one-sided fixup. Rides
         // `PaySplitMulBefore` (v96) so the stored figure is the one the bend
         // Filter is about to see -- after any `PaySplitAdd` rewrite, before
@@ -45,7 +46,8 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Action(Action::PaySplitMulBefore(
             "slot('skillState') == 2 && card.placed",
             None,
-            latch_orig)),
+            latch_orig,
+        )),
         On::Filter(Filter::PaySplitMul(
             "slot('skillState') == 2 && card.placed",
             None,
@@ -56,11 +58,13 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Action(Action::PayAfter(
             "slot('skillState') == 2 && card.placed",
             None,
-            after_bend)),
+            after_bend,
+        )),
         On::Action(Action::TurnEnd(
             "actor == owner && slot('skillState') == 2",
             None,
-            at_turn_end)),
+            at_turn_end,
+        )),
     ],
 );
 
@@ -210,7 +214,7 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
-    if ctx::crystals() < 1 {
+    if crate::cover_crystals(player_id) < 1 {
         return Some(Msg::new(key!("ave_mujica_no_crystal")));
     }
     None
@@ -218,20 +222,9 @@ fn can_halve(player_id: i32) -> Option<Msg> {
 
 fn halve(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
-    let mut n = 1;
-    // 「每当乐队技能需要移除[奇迹水晶]时，可移除「#L11」上的一个[奇迹水晶]代替」
-    if let Some(uid) = ctx::find_card(player_id, "Sumimi:#L11") {
-        while n > 0 && ctx::counter_at(uid, counter::CRYSTALS) > 0 {
-            ctx::add_counter_at(uid, counter::CRYSTALS, -1, i32::MAX);
-            n -= 1;
-        }
-    }
-    if n > 0 {
-        if ctx::crystals() < n {
-            return Ok(());
-        }
-        ctx::add_crystals(-n, i32::MAX)?;
-    }
+    // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
+    // -- 「此卡」 is the placed `Sumimi:#L11`, drained first.
+    crate::spend_crystals(player_id, 1)?;
     ctx::log(player_id, &Msg::new(key!("ave_mujica_halved")));
     Ok(())
 }

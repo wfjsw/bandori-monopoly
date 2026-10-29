@@ -319,7 +319,9 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     wiped `skillBlock`. SKILL-01).
   * 冰川日菜 (2) never rolls 1d4 nor borrows a skill (`skill.hinaLottery`
     stays -1).
-  * 安可 doesn't counter 重叠的声音's self-teleport.
+  * ~~安可 doesn't counter 重叠的声音's self-teleport.~~ **Fixed 2026-10-13**
+    (CH-01: the self-[传送] already opened the abnormal window; the test drive
+    now declares 安可. `ix_encore_blocks_overlap_teleport`, green).
   * ~~PP band (2) overflow crystals: no flip-effect trigger to observe.~~
     **Fixed 2026-10-13** (`FlipEffect` = 94; ABI-05).
 * **roselia** (1)

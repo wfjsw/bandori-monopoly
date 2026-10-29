@@ -4,13 +4,15 @@
 //! > Sweet Escape：
 //! >  回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。
 //!
-//! settle-teleport onto a free tile of the 周边精选 / 商店街 / 东京外 colour groups.
+//! settle-teleport onto any unmortgaged tile of the 周边精选 / 商店街 / 东京外
+//! colour groups that the user does not own -- another player's tile is legal
+//! and its settle charges rent.
 
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new(
     "Sumimi:Sweet Escape",
@@ -30,6 +32,10 @@ fn is_deed(t: i32) -> bool {
 }
 
 /// C# `H.PriceTag` -- the tile's 「收费标价」.
+// TODO(规则书)（[收费标价]）: 「收费标价」 is an open term (OPEN-收费标价: the
+//   purchase price or the charge). TEST-FINDINGS §6.5 records the price sum and
+//   the green `sweet_escape_gate_requires_high_rent` pins the current rent --
+//   we read the current rent (RiNG: its 基础乘数); reconciling the two is open.
 fn price_tag(t: i32) -> i32 {
     if t < 0 || !ctx::is_buyable(t) {
         return 0;
@@ -76,7 +82,9 @@ fn spots(player_id: i32) -> Vec<i32> {
         if !ctx::is_buyable(t) {
             continue;
         }
-        if !groups.contains(&ctx::tile_group(t)) {
+        // 规则书: 「对应颜色」 -- the colour primitive (`ctx::is_color`), so a
+        // tile that has gained every colour (soyo's ANY_COLOR) counts too.
+        if !groups.iter().any(|&g| ctx::is_color(player_id, t, g)) {
             continue;
         }
         if ctx::tile_owner(t) == player_id {
@@ -128,10 +136,24 @@ fn sweet_escape(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「…并触发结算」 / 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
     // { TeleportTo = to })` (`Resolve` defaults to true) = `set_teleport_to(to)`
     // + `set_resolve(true)` + `card_move(player_id)`.
+    let from = ctx::player_pos(player_id);
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     ctx::plan::set_teleport_to(to);
     ctx::plan::set_resolve(true);
-    ctx::card_move(player_id);
+    // 规则书: 「若为可购买格子则必须购买」 -- the settle's own optional buy offer
+    // duplicates the forced one below (LOY-MUSTBUY-02), so it is suppressed
+    // here: the buy follows the settle, mandatory.
+    ctx::plan::set_no_buy(true);
+    // A counteraction can refuse the move (the abnormal gate) or cancel it at
+    // `moveBefore`; either way nothing moved, so nothing may be bought. Drop
+    // the no-buy flag again: the plan is never reset between moves, and a
+    // refused move leaves the turn's main move still to play.
+    if !ctx::card_move(player_id) || (ctx::player_pos(player_id) == from && to != from) {
+        ctx::plan::set_no_buy(false);
+        return Ok(());
+    }
+    // The tile actually reached -- a `moveBefore` counter may have retargeted it.
+    let to = ctx::player_pos(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("sweet_escape_moved"))

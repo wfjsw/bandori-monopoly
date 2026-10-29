@@ -111,9 +111,13 @@ fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
     #[cfg(kani)]
     {
         // Fixed arena slot — never `vec![0u8; cap]` (`extend_with` cliff when
-        // `cap` is a host return). Scratch is empty: `out_read` pulls the bytes.
+        // `cap` is a host return). `out_read` ignores the scratch and pulls
+        // the bytes from the arena, but it still gets dropped: a cap-0 `Vec`
+        // drops a dangling pointer through the Kani 0.68 niche-`Cap`
+        // read-back (false positive, see `owned_tiles`), so keep a concrete
+        // capacity (64 = `native::arena::MAX_BUF`).
         let (h, _l) = crate::native::reserve(cap);
-        (h, alloc::vec::Vec::new())
+        (h, alloc::vec::Vec::with_capacity(64))
     }
     #[cfg(not(kani))]
     #[cfg(target_arch = "wasm32")]
@@ -344,7 +348,11 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
     // Bounded loop instead of a symbolic-length Range fold (the `collect`
     // → `extend_trusted` path is an unwinding cliff at 32). Same result.
     let n = owned_count(player_id).max(0).min(8) as usize;
-    let mut v = Vec::new();
+    // Concrete capacity, not `with_capacity(n)`: `n` crosses the host
+    // function-pointer call, so CBMC keeps it symbolic and the `__rust_dealloc`
+    // layout check cannot relate the allocation size to the drop (timeout or
+    // spurious FAIL). A fixed ≤8 capacity makes both sides constant.
+    let mut v = Vec::with_capacity(8);
     let mut i = 0usize;
     while i < n {
         v.push(owned_at(player_id, i as i32));
@@ -453,9 +461,15 @@ pub fn neighbor(player_id: i32, dir: i32) -> i32 {
 
 /// Present players standing on a tile.
 pub fn players_on(tile: i32, except: i32) -> Vec<i32> {
-    (0..players_on_count(tile, except))
-        .map(|i| players_on_at(tile, except, i))
-        .collect()
+    // Concrete cap, same host-call reason as `others`.
+    let n = players_on_count(tile, except);
+    let mut v = Vec::with_capacity(4);
+    let mut i = 0;
+    while i < n {
+        v.push(players_on_at(tile, except, i));
+        i += 1;
+    }
+    v
 }
 
 fn players_on_count(tile: i32, except: i32) -> i32 {
@@ -519,9 +533,18 @@ pub fn others_at(player_id: i32, index: i32) -> i32 {
 
 /// The other players still in the game.
 pub fn others(player_id: i32) -> Vec<i32> {
-    (0..others_count(player_id))
-        .map(|i| others_at(player_id, i))
-        .collect()
+    // Concrete cap: `others_count` crosses a host call, so `collect` would
+    // size the Vec symbolically and its drop trips the Kani 0.68
+    // `__rust_dealloc` layout check (see `owned_tiles`). A match has at most
+    // four seats.
+    let n = others_count(player_id);
+    let mut v = Vec::with_capacity(4);
+    let mut i = 0;
+    while i < n {
+        v.push(others_at(player_id, i));
+        i += 1;
+    }
+    v
 }
 
 /// The player's current cash.
@@ -668,16 +691,20 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
         if payers.len() > 4 {
             kani::assert(false, "split_pay: more than 4 payers under Kani");
         }
+        // Concrete cap on every returned `Vec` (including the empty ones):
+        // the caller drops it, and a cap-0 `Vec` is dropped through the
+        // Kani 0.68 niche-`Cap` read-back (false positive, see
+        // `owned_tiles`).
         if n == 0 || total <= 0 {
-            return Ok(Vec::new());
+            return Ok(Vec::with_capacity(4));
         }
         let Some(shaped) = pay_total(list[0], to, total, src)? else {
-            return Ok(Vec::new());
+            return Ok(Vec::with_capacity(4));
         };
         let ln = n as i32;
         let per = (shaped + ln - 1) / ln;
         let share = (per + 9) / 10 * 10;
-        let mut moved = Vec::new();
+        let mut moved = Vec::with_capacity(4);
         macro_rules! leg {
             ($i:expr) => {
                 if $i < n {
@@ -859,20 +886,29 @@ fn decode_uid_name_list(buf: &[u8]) -> Vec<(i32, NameId)> {
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     // `need` is the encoded buffer size `1 + n`; `n = 0` is the empty pile.
+    // Empty still carries the concrete capacity: a cap-0 `Vec` drops a
+    // dangling pointer whose dealloc layout travels through the Kani 0.68
+    // niche-`Cap` read-back (false positive, see `owned_tiles`).
     if need < 2 {
-        return Vec::new();
+        return Vec::with_capacity(8);
     }
+    // Known exact push count: size the Vec once (bounded ≤ 8) so the pushes
+    // below never grow it -- a realloc here trips the CBMC dealloc layout
+    // checks (same fix as `owned_tiles`).
+    let n = (need - 1).min(8) as usize;
     let (p, scratch) = out_buf(need as usize);
+    // (capacity is made concrete at `with_capacity` below, see `owned_tiles`.)
     let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
     if got != need {
-        return Vec::new();
+        return Vec::with_capacity(8);
     }
     let buf = out_read(p, got, scratch);
     // Interned short static names. The literal FNV hashes constant-fold;
     // no `String::from`, no `memcmp` on the proof path.
     const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
-    let n = (need - 1).min(8) as usize;
-    let mut out: Vec<NameId> = Vec::new();
+    // Concrete cap (see `owned_tiles`): `need` is symbolic through the host
+    // call even when the pile is empty on every feasible path.
+    let mut out: Vec<NameId> = Vec::with_capacity(8);
     let mut i = 0usize;
     while i < n {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
@@ -901,8 +937,13 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
 /// copies of one card; when the player is picking a *title*, list each id
 /// once (C# `Distinct()`).
 pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
-    let mut ids: Vec<NameId> = Vec::new();
-    for c in cards_in(player_id, pile) {
+    // Concrete cap (see `owned_tiles`): the mixed push/realloc growth is
+    // capped at `cards_in`'s own 8 anyway.
+    let mut ids: Vec<NameId> = Vec::with_capacity(8);
+    // By reference: consuming the `cards_in` `Vec` into an `IntoIter` makes
+    // the drop go through the Kani 0.68 niche-`Cap` read-back, which can
+    // deallocate with a bogus size (allocator-check false positive).
+    for &c in &cards_in(player_id, pile) {
         if !ids.contains(&c) {
             ids.push(c);
         }
@@ -1157,12 +1198,12 @@ pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
 
 // ------------------------------------------------------ counters & marks
 // Named counters on a card instance, and their units bound to a tile (a tile
-// mark) or a holder (a player token). One API; see `abi::counter` /
+// mark) or a holder (a player token). One API; see `bandori_std::counter` /
 // `abi::MarkFilter`. User ruling 2026-10-10: every mark/token is a unit of
 // some card instance's counter and dies with that instance.
 
-/// On-card named counter of **this** instance (`abi::counter::{CP,CRYSTALS}`
-/// or a card-invented name).
+/// On-card named counter of **this** instance (`bandori_std::counter`
+/// names, or a card-invented name).
 #[cfg_attr(kani, inline(always))]
 pub fn counter(name: &str) -> i32 {
     let (p, l) = s(name);
@@ -1197,7 +1238,7 @@ pub fn counter_at(uid: i32, name: &str) -> i32 {
 /// `CounterChanged` against that instance. Cross-instance **writes** prefer
 /// `send` (the owner writes its own counters); this is the engine-level form
 /// used when the engine itself is the actor (e.g. the `mark:cp` landing hook
-/// spending the placer's on-card CP).
+/// spending the placer's on-card stock).
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
     crate::pure::refuse_if_filter("ctx::add_counter_at");
@@ -1227,7 +1268,7 @@ pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32
 
 /// Bind `count` units of **this** instance's counter `kind` to `tile`.
 /// `owner` colours the mark (a seat, or -1 neutral); `category` is the display
-/// category (`""` player / `abi::mark::CP_CATEGORY`); `src` is provenance
+/// category (`""` player / `bandori_std::mark::CP_CATEGORY`); `src` is provenance
 /// (defaults to this instance when -1). `note` explains it. `stack` picks
 /// [`abi::Stack::Merge`] (onto the first match) or [`abi::Stack::Fresh`] (a
 /// new row per call).
@@ -1238,7 +1279,7 @@ pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32
 /// (`set_slot` / `state::set`) and retrieve it later via [`mark_tile`] /
 /// [`mark_alive`] / [`remove_mark`].
 ///
-/// This is the one place-mark verb: 通用:该清CP了 asks `mark:cp` to bind CP
+/// This is the one place-mark verb: the graveyard rule asks `mark:cp` to bind
 /// units this way via `send`; a skill like 要乐奈 binds 抹茶芭菲 units here.
 #[cfg_attr(kani, inline(always))]
 pub fn place_mark(
@@ -1274,8 +1315,8 @@ pub fn place_mark(
 /// Place **one** paired mark spanning tiles `a` and `b` (the miracle-crystal
 /// shape: one unit bound to two tiles). One row per tile, each row's
 /// `partner` naming the other. Place-or-refuse atomic: returns `false` and
-/// places **nothing** when either tile already carries a matching mark for
-/// that owner (the pair cap 「上限1」 is on the pair; a tile cannot sit in two
+/// places **nothing** when either tile already carries a matching mark, any
+/// owner (the pair cap 「上限1」 is on the pair; a tile cannot sit in two
 /// links at once). `owner` / `category` / `src` / `note` / `stack` speak as in
 /// [`place_mark`]; both rows die with the creating instance like any mark.
 #[cfg_attr(kani, inline(always))]
@@ -1641,7 +1682,7 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
     // other host string return uses. A raw `buf.as_mut_ptr() as i32` truncates
     // a 64-bit pointer on native (the host writes into an arena slot, not the
     // guest's stack buffer), so the read came back as NULs and
-    // `trigger::name() == counter::CRYSTALS` never matched -- the native
+    // `trigger::name() == bandori_std::counter::CRYSTALS` never matched -- the native
     // build kept a crystal-empty card on the field (drift.rs).
     let (p, scratch) = out_buf(need as usize);
     if fill(p, need) != need {
@@ -1898,6 +1939,13 @@ pub fn can_pay(player_id: i32) -> bool {
     unsafe { sys::can_pay(player_id) != 0 }
 }
 
+/// [`cant_move`]'s raw code: 0 = free, 1 = not your turn, 2 = the main move
+/// is already spent, 3 = the move gate holds (a [停留] latch).
+#[doc(hidden)]
+pub fn cant_move_code(player_id: i32) -> i32 {
+    unsafe { sys::cant_move(player_id) }
+}
+
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
 #[doc(hidden)]
@@ -2085,8 +2133,20 @@ pub fn ask_tile_walk(
         if let Some(&t) = tiles.get(3) {
             unsafe { sys::opt_int(t) }
         }
-        if tiles.len() > 4 {
-            kani::assert(false, "ask_tile_walk: more than 4 tiles under Kani");
+        if let Some(&t) = tiles.get(4) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(5) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(6) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(7) {
+            unsafe { sys::opt_int(t) }
+        }
+        if tiles.len() > 8 {
+            kani::assert(false, "ask_tile_walk: more than 8 tiles under Kani");
         }
         let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
         return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
@@ -2399,7 +2459,15 @@ pub fn pick_take_from(
         }
         return Ok(None);
     }
-    let refs: Vec<&str> = cards.iter().map(|c| c.as_str()).collect();
+    // Concrete cap: `cards.len()` is symbolic and the `collect` sizing
+    // crosses the `ask_card` host call before the drop (Kani 0.68
+    // `__rust_dealloc` layout check, see `owned_tiles`); callers cap at 8.
+    let mut refs: Vec<&str> = Vec::with_capacity(8);
+    let mut i = 0usize;
+    while i < cards.len() {
+        refs.push(cards[i].as_str());
+        i += 1;
+    }
     let pick = ask_card(player_id, title, text, &refs)?;
     let id = cards[pick.min(cards.len() - 1)];
     Ok(take_card(player_id, id.as_str(), pile).then_some(id))
@@ -3649,28 +3717,47 @@ pub fn turn_rolls() -> Vec<i32> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// Turn-start snapshot: starting square + whole keyed state map.
-/// Host writes postcard of `(i32, BTreeMap<String, i32>)`.
-pub fn turn_snap_map(player_id: i32) -> (i32, alloc::collections::BTreeMap<String, i32>) {
-    let cap = 4096;
+/// Turn-start snapshot payload (`ruleset_turn_snap`): starting square, keyed
+/// state map, that player's money and the board ownership arrays. Field order
+/// mirrors `game_core::engine::TurnSnap` -- postcard carries no field names,
+/// so the two must stay in step.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct TurnSnapshot {
+    pub pos: i32,
+    pub state: alloc::collections::BTreeMap<String, i32>,
+    pub money: i32,
+    pub owners: Vec<i32>,
+    pub houses: Vec<i32>,
+    pub mortgaged: Vec<bool>,
+}
+
+/// The host's postcard [`TurnSnapshot`]; `pos = -1` when there is no snapshot.
+pub fn turn_snap_map(player_id: i32) -> TurnSnapshot {
+    let cap = 16_384;
     let (p, scratch) = out_buf(cap);
     let n = unsafe { sys::turn_snap(player_id, p) };
     if n <= 0 || n as usize > cap {
-        return (-1, alloc::collections::BTreeMap::new());
+        return TurnSnapshot {
+            pos: -1,
+            ..Default::default()
+        };
     }
     let buf = out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or((-1, alloc::collections::BTreeMap::new()))
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or(TurnSnapshot {
+        pos: -1,
+        ..Default::default()
+    })
 }
 
 /// `(pos, v0, v1, v2)` for the caller's three keys (the caller names them) --
 /// the three layer counters 「回到起始地点并取消所有受到的效果」 restores.
 pub fn turn_snap(player_id: i32, k0: &str, k1: &str, k2: &str) -> (i32, i32, i32, i32) {
-    let (pos, map) = turn_snap_map(player_id);
+    let snap = turn_snap_map(player_id);
     (
-        pos,
-        map.get(k0).copied().unwrap_or(0),
-        map.get(k1).copied().unwrap_or(0),
-        map.get(k2).copied().unwrap_or(0),
+        snap.pos,
+        snap.state.get(k0).copied().unwrap_or(0),
+        snap.state.get(k1).copied().unwrap_or(0),
+        snap.state.get(k2).copied().unwrap_or(0),
     )
 }
 

@@ -9,15 +9,21 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
     &[On::Counteract(
         &[ChainKind::DiceRollResult],
+        // TODO(规则书)（场上有可被经过的玩家时可打出）: 「可被经过」 means reachable
+        // -- we only require some player ahead, even one further away than the
+        // 20-tile cap allows (`next_dist` is not compared with `move.roll + 20`).
         "actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0",
         None,
+        // 规则书: 「[反击]移动掷骰后，且场上有可被经过的玩家时可打出」 -- the
+        // `diceRollResult` [反击] window (after the move roll, while it can
+        // still be reshaped).
         counteract).counter_reason(key!("meet_again_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"若能再次交汇"#)
@@ -27,8 +33,9 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
         // sheet cell I13
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
-/// Distance in the direction of travel to the nearest other player who can be
-/// passed (C# `CardMeetAgain.Next` over `H.Forward`, picked by `MoveCtx.Dir`).
+/// 规则书: 「可被经过的玩家」 -- distance in the direction of travel to the
+/// nearest other player who can be passed (C# `CardMeetAgain.Next` over
+/// `H.Forward`, picked by `MoveCtx.Dir`).
 fn next_dist(player_id: i32, dir: i32) -> i32 {
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);
@@ -69,14 +76,19 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let dist = next_dist(player_id, trigger::move_dir());
     // 规则书: 「（最多掷骰至移动超过原本移动终点的20格以后）」 -- the original
     // endpoint is the roll this card answered; re-rolls may push at most 20 past it.
+    // TODO(规则书)（最多掷骰至移动超过原本移动终点的20格以后）: the book measures
+    // the cap from the original end -- `roll` is the *live* face, already boosted
+    // by any roll-adder that resolved earlier in this window.
     let origin_end = roll;
     let cap = origin_end + 20;
+    // TODO(规则书)（持续进行移动掷骰直至[经过]下一名玩家）: the book repeats until a
+    // pass -- we hard-stop after 30 re-rolls (a 0-rolling table would end short).
     for _ in 0..30 {
         if roll >= dist || roll >= cap {
             break;
         }
-        // 规则书: `H.DoMoveRoll(move)` re-rolls the move's whole dice table
-        // (base + extra dice + flat bonuses).
+        // 规则书: 「持续进行移动掷骰」 -- C# `H.DoMoveRoll(move)` re-rolls the
+        // move's whole dice table (0-sided terms are flat adds).
         let n = ctx::do_move_roll(player_id)?.max(0);
         roll += n;
         trigger::set_move_roll(roll);

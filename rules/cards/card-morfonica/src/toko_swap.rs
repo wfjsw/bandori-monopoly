@@ -8,8 +8,10 @@
 
 use alloc::vec::Vec;
 
+use bandori_std::ctx::is_color;
+use card_sdk::abi::{mark, MarkFilter};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const TOKO_SWAP: CardDef =
     CardDef::new("Mor:（toko）", &[On::Play("", Some(cant_play), toko_swap)]).meta(&card_sdk::meta::CardMeta::new()
@@ -20,10 +22,13 @@ pub const TOKO_SWAP: CardDef =
         // sheet cell G8
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"桐谷透子"#)]));
 
-/// One swappable pair: `(mine, theirs)` -- both mortgaged, same colour group,
+/// One swappable pair: `(mine, theirs)` -- both mortgaged, same colour,
 /// `theirs` owned by another still-in player (C# `CardTokoSwap.Pairs`).
 fn pairs(player_id: i32) -> Vec<(i32, i32)> {
-    let mut list: Vec<(i32, i32)> = Vec::new();
+    // Capacity up front: a `Vec` that grows through `__rust_realloc` makes
+    // Kani's `same_allocation` abort every path (2026-10-28). 8 covers the
+    // per-board pair count; a larger production list just reallocs as before.
+    let mut list: Vec<(i32, i32)> = Vec::with_capacity(8);
     // 规则书: 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换」
     for mine in ctx::owned_tiles(player_id) {
         if !ctx::mortgaged_of(mine) {
@@ -37,7 +42,14 @@ fn pairs(player_id: i32) -> Vec<(i32, i32)> {
                 && owner != player_id
                 && !ctx::player_out(owner)
                 && ctx::mortgaged_of(theirs)
-                && ctx::tile_group(theirs) == group
+                // 「颜色相同」 is the colour *view*, not the raw group: `is_color`
+                // honours `anyColor` / `colorFor`, and either tile counting as
+                // the other's colour is 同色.
+                && (is_color(player_id, theirs, group)
+                    || is_color(owner, mine, ctx::tile_group(theirs)))
+                // A `noTarget` mark makes `target_tile` refuse the pick, which
+                // aborts the whole effect -- such a pair must not be offered.
+                && ctx::count_marks(theirs, &MarkFilter::any().kind(mark::NO_TARGET)) == 0
             {
                 list.push((mine, theirs));
             }
@@ -71,15 +83,17 @@ fn toko_swap(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换」
     // C# `H.AskPick` over the pairs (`MatchHost.cs:4966`).
-    let options: Vec<Msg> = ps
-        .iter()
-        .map(|&(mine, theirs)| {
+    // Exact capacity + a plain push loop (no `iter().map().collect()` extend
+    // path -- both are Kani unwinding/pointer-check cliffs).
+    let mut options: Vec<Msg> = Vec::with_capacity(ps.len());
+    for &(mine, theirs) in ps.iter() {
+        options.push(
             Msg::new(key!("toko_swap_pair"))
                 .tile("mine", mine)
                 .tile("theirs", theirs)
-                .player_id("other", ctx::tile_owner(theirs))
-        })
-        .collect();
+                .player_id("other", ctx::tile_owner(theirs)),
+        );
+    }
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("toko_swap_title")),
@@ -91,8 +105,9 @@ fn toko_swap(player_id: i32) -> card_sdk::Asked {
     if other < 0 || other == player_id || ctx::player_out(other) {
         return Ok(());
     }
-    // 规则书: the C# confirms the picked tile with `H.TargetTile` before the
-    //   swap (`MatchHost.cs:4973`); false when the tile cannot be targeted.
+    // 规则书: 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换」 --
+    //   C# still confirms the picked tile with `H.TargetTile` (`MatchHost.cs:4973`):
+    //   a negation / immunity answer can still refuse the tile.
     if !ctx::target_tile(theirs) {
         return Ok(());
     }
@@ -101,8 +116,6 @@ fn toko_swap(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「交换」 -- C# `H.State.owners[m] = other; H.State.owners[t] = i`.
     ctx::set_owner(mine, other);
     ctx::set_owner(theirs, player_id);
-    // 规则书: 「互换后将你得到的地契免费赎回」 -- C# `H.State.mortgaged[pick.theirs] = false`.
-    ctx::set_mortgaged(theirs, false);
     ctx::log(
         player_id,
         &Msg::new(key!("toko_swap_swapped"))
@@ -113,12 +126,31 @@ fn toko_swap(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「地契+房屋价格更低的玩家向更高的玩家支付差价」
     // C# `H.PayR` of `Value(theirs) - Value(mine)` from the lower to the higher.
+    // The 差价 comes before the 免费赎回: the payment can pause for raise-funds,
+    // and the book leaves the received deed mortgaged until after it.
     let why = &Msg::new(key!("toko_swap_diff"));
     if num < num2 {
         ctx::transfer(player_id, other, num2 - num, why)?;
     } else if num2 < num {
         ctx::transfer(other, player_id, num - num2, why)?;
     }
+    // 规则书: 「互换后将你得到的地契免费赎回」 -- written raw rather than through
+    // `apply_redeem`: a host routine runs against a world that does not yet
+    // carry this body's `set_owner` writes (they are replayed after the
+    // pause), so `apply_redeem`'s owner guard still saw the previous owner and
+    // returned 0. The flag clear is replayed; copy the rest of what
+    // `apply_redeem` does -- the 「本回合进行过赎回操作」 record (turn-end) and
+    // the `log.redeem` line.
+    ctx::set_mortgaged(theirs, false);
+    ctx::state::set(player_id, "redeemed", 1);
+    ctx::state::set_expires(player_id, "redeemed", ctx::state::TURN_END);
+    ctx::log(
+        player_id,
+        &Msg::new("log.redeem")
+            .player_id("who", player_id)
+            .n("cost", 0)
+            .tile("tile", theirs),
+    );
     Ok(())
 }
 

@@ -11,7 +11,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "Mujica:#J11";
@@ -22,7 +22,9 @@ pub const J11: CardDef = CardDef::new(
         On::Play("", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
         // reactions, not [反击]s.
+        // 规则书: 「每回合结束时移除1个」
         On::Action(Action::TurnEnd("card.placed", None, counteract)),
+        // 规则书: 「被其他卡指定的时刻」
         On::Action(Action::Targeted("card.placed", None, counteract)),
         // C# `CardJ11.PaySplitChoose` interactive arm: `ask_yes` → `charge` →
         // `set_pay_amount(0)`. Rides `PaySplitChooseBefore` (v78), restoring the
@@ -32,7 +34,10 @@ pub const J11: CardDef = CardDef::new(
         On::Filter(Filter::PaySplitChoose("card.placed", None, pay_choose_cancel)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「添加2个[奇迹水晶]」: the `⌛2` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
+.meta(&card_sdk::meta::CardMeta::new()
         // sheet cell J11 -- the name line is blank; `#J11` is the name.
         .name("#J11")
         .raw_name("")
@@ -41,6 +46,7 @@ pub const J11: CardDef = CardDef::new(
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「将此卡置于自身场上，为其添加2个[奇迹水晶]」
     // C# `H.PlaceFromPlay(c, -1, -1, 2)` -- place with 2 miracle crystals.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("j11_note")));
@@ -55,10 +61,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// C# `CardJ11.Fire` / `CardJ11.Ask`'s body -- discard the card to [stun] its
 /// owner and every player within 1 tile.
 fn charge(player_id: i32) {
+    // 规则书: 「可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕」
     ctx::set_dest(ctx::Dest::Graveyard);
     rules_status::stun::add(player_id, 1);
     let here = ctx::player_pos(player_id);
     for p in ctx::others(player_id) {
+        // 规则书: 「使自身及前后1格内的其他玩家获得1层眩晕」 -- `ctx::dist` is
+        // undirected ring distance, i.e. 前后1格.
         // C# `H.Within(Seat, 1)` (includeSame: true): `H.Dist(seat.pos, p.pos) <= 1`.
         if ctx::dist(here, ctx::player_pos(p)) <= 1 {
             rules_status::stun::add(p, 1);
@@ -72,15 +81,23 @@ fn charge(player_id: i32) {
 
 /// Field hooks: `DecayCard.TurnEnd` (the crystal tick) and `CardJ11.Targeted`.
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击]s.
+///
+/// TODO(规则书): 「每回合结束时」 does not say whose. Read as the owner's own
+/// turn end (C# `DecayCard.TurnEnd`'s `DecayOn`); `R:Fire bird` reads the same
+/// phrase for **every** seat's turn end, so one of the two readings is wrong.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // `DecayCard.TurnEnd` (C# MatchHost.cs:1874-1897) -- burn one miracle
         // crystal at the card's own player's turn end (`turn != DecayOn` -> skip,
         // `DecayOn => Player`), and discard the card when it runs out.
         TriggerKind::TurnEnd => {
+            // 规则书: 「每回合结束时移除1个」
+            // TODO(规则书)（每回合结束时移除1个）: 书中是每回合结束时 -- 这里只在拥有者自己的回合结束时移除（C# `DecayOn => Player`）
             if trigger::player_id() != player_id {
                 return Ok(());
             }
+            // 「每回合结束时移除1个」 -- the tick.
+            ctx::dec_turns_left();
             // C# `AddCrystals(-1, ...)`; the `if (Crystals <= 0) Unplace(discard)`
             // half is [`on_crystals_changed`] (`Empty` is a no-op for `CardJ11`).
             ctx::remove_crystal()?;
@@ -89,8 +106,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // targets the owner -> may discard. `t.Target != Seat || t.ByCard ==
         // Player || !placed` -> skip.
         TriggerKind::Targeted => {
+            // 规则书: 「被其他卡指定的时刻，可将此卡置入弃牌堆」 -- the trigger
+            // must come from another card: `by_card >= 0 && by_card != player_id`
+            // (abi v11). Not the owner's own card, per C# `t.ByCard == Player`;
+            // a designation that is not card-caused (`by_card` None) does not qualify.
+            // TODO(规则书)（被其他卡指定的时刻）: 书中「其他卡」也含拥有者自己的另一张卡 -- 这里按 C# 连自己玩家的卡也跳过（况且引擎自指根本不触发 targeted）
             if trigger::target() != player_id
-                || trigger::by_card().is_some_and(|by| by == player_id)
+                || !trigger::by_card().is_some_and(|by| by != player_id)
             {
                 return Ok(());
             }
@@ -117,6 +139,7 @@ fn pay_choose_ask(player_id: i32) -> card_sdk::Asked {
     if trigger::player_id() != player_id || trigger::value() <= 0 {
         return Ok(());
     }
+    // 规则书: 「任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆」
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("j11_title")),
@@ -125,14 +148,16 @@ fn pay_choose_ask(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     charge(player_id);
+    // 规则书: 「可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕」
+    // TODO(规则书)（可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕）: 此句只给弃卡 + 眩晕，本次支付照常 -- 这里按规则书 12「无法收付款」把本次支付清零
     trigger::set_pay_amount(0);
     Ok(())
 }
 
 /// PaySplitChoose cancel half (ABI v74 FilterFlag). C# `p.cancel = true when
 /// Me.Stunned` -- an already-stunned owner's payment is cancelled outright.
-/// Pure: no prompt (the interactive offer lives on the Effect arm of
-/// [`counteract`]).
+/// Pure: no prompt (the interactive offer lives in [`pay_choose_ask`], the
+/// `PaySplitChooseBefore` arm).
 ///
 /// The `paySplitChoose` stage honours `set_cancelled()` (V5 `NEGATION-AUDIT`;
 /// 规则书 支付阶段 5 「取消支付」 G-MONEY-14): a `false` Flag answer stops the
@@ -142,13 +167,11 @@ fn pay_choose_cancel(player_id: i32, value: i32) -> bool {
     if trigger::player_id() != player_id || value <= 0 {
         return true;
     }
+    // 规则书 12「无法收付款」: a stunned owner's payment is cancelled.
     rules_status::stun::get(player_id) <= 0
 }
 
-/// The card decays out -- C# `if (Crystals <= 0) Unplace(discard)`.
-///
-/// TODO(规则书): `Mujica:#J11` has no rulebook entry at all, so this follows the
-/// C# alone. The book needs a clause before this is more than a port of it.
+/// 规则书: 「为0时置入弃牌堆」 -- C# `if (Crystals <= 0) Unplace(discard)`.
 ///
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all. Name-filtered to `counter::CRYSTALS`.
@@ -156,7 +179,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).
@@ -164,6 +187,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「为0时置入弃牌堆」
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,

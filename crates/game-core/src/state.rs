@@ -156,6 +156,18 @@ pub struct MatchState {
     /// mid-turn layer grants -- a bot trusting it sent `end` into
     /// `err.roll_first`).
     pub can_end_here: bool,
+    /// How many hand cards / skills the turn has already played
+    /// (`world.turn.played.len()`) -- what the standard policy's
+    /// per-turn play cap counts. Filled with [`Self::can_roll_here`] /
+    /// [`Self::can_end_here`].
+    pub played_count: i32,
+    /// Members a driver must move **right now** (`docs/BOT-DRIVE.md`): every
+    /// bot seat, every machine-held human (`ai` -- 托管 takeover, disconnect),
+    /// and the acting seat once its own clock is spent. The host (server /
+    /// page) probes exactly these; the engine decides for nobody. Empty in
+    /// Solo -- the page is the host there.
+    #[serde(default)]
+    pub drive: Vec<i32>,
     /// The movement this turn is taking.
     pub plan: MovePlan,
     pub time_left: f32,
@@ -243,6 +255,8 @@ impl Default for MatchState {
             think_time: 0,
             can_roll_here: false,
             can_end_here: false,
+            played_count: 0,
+            drive: vec![],
             plan: MovePlan::default(),
             time_left: 0.0,
             base_time: 0.0,
@@ -436,6 +450,13 @@ pub mod prop {
     /// on the tile's rule instance (`ctx::set_tile_prop`). Read by
     /// [`crate::engine::ops::World::rent_houses`]; `houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
+    /// Display-only **remaining-turn countdown** marker (「…回合后」 / 「…结束时」
+    /// removal). Set by a rule at placement and decremented at the card's own
+    /// turn boundary; the card still owns the expiry (this counter never drives
+    /// it). The client renders it as `⌛N` -- a field card's prop, or
+    /// [`ActiveEvent::turns_left`] for an event instance. `0` / absent = no
+    /// marker. Mirrors `bandori_std::marker::TURNS_LEFT`.
+    pub const TURNS_LEFT: &str = "turnsLeft";
 
     // ---------------------------------------------------------- tile data
     // Stamped onto a board-owned tile rule instance at `bind_tiles` (from
@@ -685,11 +706,11 @@ impl Default for MatchPlayer {
 impl MatchPlayer {
     /// Does the machine handle this seat's **setup** (ban / pick / deck) without
     /// waiting on a human or the server? True for every engine-driven seat
-    /// (`ai`) and for an Advanced bot: its play-phase decisions belong to the
-    /// server's `bot-service` (`docs/BOT.md` B5), but setup remains engine-side
-    /// and runs the standard policy, exactly like a standard bot.
+    /// (`ai`) and every bot: play-phase decisions reach a bot over the human
+    /// interface (`docs/BOT-DRIVE.md`), but setup is engine-side and runs the
+    /// standard policy for all of them.
     pub fn auto_setup(&self) -> bool {
-        self.ai || (self.bot && self.mentality == BotMentality::Advanced)
+        self.ai || self.bot
     }
 
     // ---------------------------------------------------------- keyed state
@@ -1073,6 +1094,9 @@ pub struct ActiveEvent {
     pub player_id: i32,
     pub counter: i32,
     pub counter2: i32,
+    /// Display-only remaining-turn countdown (see [`prop::TURNS_LEFT`]); `0` =
+    /// no marker.
+    pub turns_left: i32,
     pub note: Msg,
     pub face_down: bool,
 }
@@ -1084,6 +1108,7 @@ impl Default for ActiveEvent {
             player_id: -1,
             counter: 0,
             counter2: 0,
+            turns_left: 0,
             note: Msg::default(),
             face_down: false,
         }

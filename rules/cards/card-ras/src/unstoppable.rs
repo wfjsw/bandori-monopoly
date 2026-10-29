@@ -6,8 +6,8 @@
 //!
 
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const UNSTOPPABLE: CardDef =
     CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", Some(cant_play), unstoppable)])
@@ -20,12 +20,16 @@ pub const UNSTOPPABLE: CardDef =
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
-/// turn's main move.
+/// turn's main move, so the printed main-move gate applies (off-turn, spent,
+/// move closed).
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move.
     rules_status::move_blocked(player_id)
 }
 
 /// C# `CardUnstoppable.Spots` -- the six destinations, indexed by the 1d6.
+/// 规则书: 「根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
+/// -- 1-based, in printed order.
 const SPOTS: [&str; 6] = [
     "白雪学园",
     "艺术学院高中",
@@ -38,7 +42,11 @@ const SPOTS: [&str; 6] = [
 fn unstoppable(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
     let r = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
-    let spot = SPOTS[(r.clamp(1, 6) - 1) as usize];
+    // 规则书: 「投掷1d6mod6」 -- a face above 6 wraps back from 1 (`nfo` and
+    // `any_color_sunset` read the same die the same way); `r` itself stays on
+    // the log as the face actually rolled.
+    let k = (r - 1).rem_euclid(6) + 1;
+    let spot = SPOTS[(k - 1) as usize];
     let to = ctx::tile_named(spot);
     if to >= 0 {
         // 规则书: 「本次传送不触发结算，视为你的主要移动」 -- C#
@@ -51,7 +59,7 @@ fn unstoppable(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「且若骰点为1-3获得2000资金，若为4-6则获得1000资金」
     if !ctx::player_out(player_id) {
-        let money = if r <= 3 { 2000 } else { 1000 };
+        let money = if k <= 3 { 2000 } else { 1000 };
         ctx::gain(
             player_id,
             money,

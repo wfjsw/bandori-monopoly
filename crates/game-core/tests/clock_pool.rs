@@ -19,6 +19,7 @@ use game_core::MatchMode;
 
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -111,7 +112,7 @@ fn answer_all(m: &mut Match) {
 fn to_human_ops(m: &mut Match, human: i32) -> i32 {
     m.quick_start();
     for _ in 0..40 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     answer_all(m);
     let me = m
@@ -122,7 +123,7 @@ fn to_human_ops(m: &mut Match, human: i32) -> i32 {
         .unwrap() as i32;
     let mut guard = 0;
     while !(m.state().turn == me && m.state().step == stage::OPS && !m.state().busy) {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         answer_all(m);
         guard += 1;
         assert!(guard < 10_000, "never got a human OPS turn");
@@ -139,7 +140,7 @@ fn release_hold_and_settle(m: &mut Match, member: i32) {
     // then some, without draining much pool (the hold also eats the first
     // part if it re-armed).
     for _ in 0..20 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     // A later `act` (e.g. `give_play`) re-arms the hold against a new seq --
     // release again so the prompt / turn clock runs.
@@ -226,7 +227,7 @@ fn bonus_drains_before_base() {
     release_hold_and_settle(&mut m, 1);
     let before = m.state();
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(
@@ -258,7 +259,7 @@ fn base_drains_only_after_the_bonus_is_gone() {
     assert!(before.bonus_time > 0.0, "refilled bonus: {before:?}");
     // Phase 1: drain only the bonus.
     for _ in 0..40 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let mid = m.state();
     assert!(
@@ -273,7 +274,7 @@ fn base_drains_only_after_the_bonus_is_gone() {
     );
     // Phase 2: past the bonus, the spill lands on base.
     for _ in 0..120 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert_eq!(st.bonus_time, 0.0, "bonus emptied first: {st:?}");
@@ -304,7 +305,7 @@ fn base_refill_is_capped_at_the_initial_pool() {
     m.quick_start();
     let mut peak = 0.0f32;
     for _ in 0..400 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
         if m.state().phase == "play" {
             peak = peak.max(m.state().base_time);
         }
@@ -364,7 +365,7 @@ fn seat_pools_are_independent() {
     let _ = m.anim_done(1, seq);
     let before = m.state();
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let after = m.state();
     assert!(
@@ -395,7 +396,7 @@ fn a_prompt_consumes_the_answering_seats_pool() {
     let _ = m.anim_done(1, seq);
     let before = m.state();
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(
@@ -437,7 +438,7 @@ fn prompt_timeout_falls_back_once_the_pool_is_spent() {
     let _ = m.anim_done(1, seq);
     // ~13 s of ticks: 11 s pool + REMOTE_GRACE 1.5 s, then the fallback lands.
     for _ in 0..200 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
         if m.state().prompt.id == 0 {
             break;
         }
@@ -465,7 +466,7 @@ fn a_dedicated_window_prompt_does_not_drain_pools() {
     let _ = m.anim_done(1, seq);
     let before = m.state();
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let after = m.state();
     assert_eq!(
@@ -498,7 +499,7 @@ fn ban_pick_deck_honour_the_settings() {
     // (that would skip setup entirely).
     let mut guard = 0;
     while m.state().phase != "ban" {
-        m.tick(0.1);
+        m.pump_tick(0.1);
         guard += 1;
         assert!(guard < 200, "never reached ban: {:?}", m.state().phase);
     }
@@ -562,7 +563,7 @@ fn legacy_clock_drains_base_first() {
     release_hold_and_settle(&mut m, 1);
     let before = m.state();
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     // Base-first: base drops, bonus is untouched.
@@ -603,7 +604,7 @@ fn legacy_prompts_do_not_drain_pools() {
     let _ = m.anim_done(1, seq);
     let before = m.state();
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let after = m.state();
     assert_eq!(

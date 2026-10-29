@@ -17,6 +17,7 @@ use game_core::state::BOARD_OWNER;
 use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 /// A rules stand-in with exactly one event rule: `event:EVT1` remains in play
 /// (「将此卡放置于场地中央」) and every other event falls through the built-in
@@ -45,14 +46,15 @@ fn member(id: i32) -> RoomMember {
 }
 
 fn new_match(rules: Arc<dyn CardRules>) -> Match {
-    Match::new(
+    let mut m = Match::new(
         data(),
         rules,
         &[member(1), member(2)],
         7,
         MatchMode::Solo,
         ScoreWeights::default(),
-    )
+    );
+    m
 }
 
 // 规则书（data/rules.txt 97–99）: 「抽取的事件卡不进入手卡并向所有玩家公开，
@@ -92,6 +94,26 @@ fn bind_event_places_a_rule_instance_on_the_board_owner() {
     assert_eq!(insts.len(), 1, "instances {insts:?}");
     assert_eq!(insts[0].1, event_rule_id("EVT1"));
     assert_eq!(m.world().field_by_uid(uid).unwrap().owner, BOARD_OWNER);
+}
+
+// `docs/EVENTS.md`: the active row mirrors the instance's `turnsLeft` prop for
+// the display-only countdown marker; absent reads 0.
+#[test]
+fn active_event_mirrors_the_turns_left_prop() {
+    let mut m = new_match(Arc::new(OneEvent));
+    let d = data();
+    m.quick_start();
+    let uid = m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
+    assert_eq!(m.state().event_active[0].turns_left, 0, "absent = no marker");
+    m.world_mut()
+        .st
+        .board_field
+        .iter_mut()
+        .find(|f| f.uid == uid)
+        .unwrap()
+        .props
+        .insert(game_core::state::prop::TURNS_LEFT.to_string(), 2);
+    assert_eq!(m.state().event_active[0].turns_left, 2);
 }
 
 // `docs/EVENTS.md`: binding is idempotent per event id.

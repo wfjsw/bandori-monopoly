@@ -393,10 +393,14 @@ pub trait CardWorld: Clone + 'static {
     fn set_build_discount(&mut self, _n: i32, _layers: i32) {}
     /// 「加盖房屋时半价」 -- 100 = full, 50 = half, 0 = free.
     fn set_build_cost_pct(&mut self, _pct: i32) {}
-    /// The turn-start snapshot: starting square plus the whole keyed state
-    /// map. The guest picks which keys to restore.
-    fn turn_snap(&self, _player_id: i32) -> (i32, std::collections::BTreeMap<String, i32>) {
-        (-1, Default::default())
+    /// The turn-start snapshot: starting square, whole keyed state map, the
+    /// player's money and the board ownership arrays. The guest picks which
+    /// keys to restore.
+    fn turn_snap(&self, _player_id: i32) -> game_core::engine::TurnSnap {
+        game_core::engine::TurnSnap {
+            pos: -1,
+            ..Default::default()
+        }
     }
     /// Colour group (`TileData::group`; -1 for no tile).
     fn tile_group(&self, tile: i32) -> i32;
@@ -1101,7 +1105,14 @@ pub trait CardWorld: Clone + 'static {
     /// end: this turn's end, or -- `next_of_player` -- the end of `player_id`'s next
     /// turn (「你的下回合结束时」). `entry` names which Schedule entry to run;
     /// an unknown / unmatching id is a no-op.
-    fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool, _entry: &str) {}
+    fn schedule_turn_end(
+        &mut self,
+        _player: i32,
+        _next_of_player: bool,
+        _early: bool,
+        _entry: &str,
+    ) {
+    }
     /// `player_id`'s money cannot drop this turn.
     fn set_no_money_loss(&mut self, _player: i32) {}
     /// This turn's main-move roll (a fixed face, not a dice table).

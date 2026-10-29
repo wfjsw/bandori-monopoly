@@ -11,7 +11,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, CardPile};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// C# `Normal => false` with no `Play`/`Counteract`: the card is shown out of the
@@ -26,6 +26,9 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("card.placed", None, deck_at_game_start)),
         On::Action(Action::PassTile("actor == owner && move.main && tile.id == tile_named('Bandori车站')", None, pass_tile)).silent(),
         On::Action(Action::SettleBefore("actor == owner && slot('lock_dream_tag') != 0", None, settle_before)),
+        // One-shot latch drop: a main move that passed but never settled
+        // (`resolve: false`) must not reroute the owner's next settle.
+        On::Action(Action::MoveResolved("actor == owner && move.main", None, clear_tag)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"追逐梦想的步伐"#)
@@ -42,23 +45,24 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
 const SLOT_TAG: &str = "lock_dream_tag";
 
 // 规则书（1）: 「抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上」
-/// C# `CardLockDream.DeckBeforeGame` -- pull the card out of the draw pile and
-/// place it on the owner's field, revealed to everyone.
+/// Residual guard for the hook: the card is still in the owner's deck.
 /// The hook fires on this card while it sits in a draw pile (once per
-/// distinct id per player, up to 5 passes before the opening deal); it only
-/// applies while the card is still in the owner's deck.
+/// distinct id per player, up to 5 passes before the opening deal).
 fn deck_before_game_guard(player_id: i32) -> bool {
     ctx::cards_in(player_id, CardPile::Deck)
         .iter()
         .any(|c| c == "RAS:（LOCK）追逐梦想的步伐")
 }
 
+/// C# `CardLockDream.DeckBeforeGame` -- pull the card out of the draw pile and
+/// place it on the owner's field, revealed to everyone.
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     // C# pulls the id out of the deck and `H.PlaceCard(seat, seat, Id)`.
     if !ctx::take_card(player_id, "RAS:（LOCK）追逐梦想的步伐", CardPile::Deck) {
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field);
+    // 规则书（1）: 「并放置在自身场上」 -- C# `H.PlaceCard(seat, seat, Id)`.
     ctx::place_card(
         player_id,
         "RAS:（LOCK）追逐梦想的步伐",
@@ -81,7 +85,10 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书（1）: 「[传送]到“东京外”」 -- C# `H.Teleport(..., resolve: false)`.
-    ctx::teleport_to(player_id, to);
+    // `teleport_as` is the move-raising teleport (a bare `teleport_to` write
+    // raises no `passTile` at the destination); `as_main` stays false -- this is
+    // not the turn's 主要移动.
+    ctx::teleport_as(player_id, to, false, false);
     // 规则书（1）: 「获得3层[除外]」 -- C# `H.GiveExile(Seat, 3, to)`.
     rules_status::exile::send(player_id, 3, to);
     ctx::log(
@@ -99,14 +106,26 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
 /// C# `CardLockDream.PassTile` -- tag the owner's main move as having passed
 /// Bandori车站.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Tags["lockStation"] = 1` -- a slot stands in for the move tag.
+    // C# `m.Tags["lockStation"] = 1` -- a player slot stands in for the move
+    // tag, dropped again by [`clear_tag`] at the move's end.
     ctx::set_slot(player_id, SLOT_TAG, 1);
+    Ok(())
+}
+
+/// Drop the pass tag at the end of the owner's main move, so only that move's
+/// own settle (which runs before `moveResolved`) can read it.
+fn clear_tag(_player_id: i32) -> card_sdk::Asked {
+    let mover = ctx::trigger::player_id();
+    if mover >= 0 {
+        ctx::set_slot(mover, SLOT_TAG, 0);
+    }
     Ok(())
 }
 
 /// C# `CardLockDream.SettleBefore` -- the tagged move: move the player to
 /// 旭汤澡堂 before the settle and remove the card. The condition
-/// `actor == owner && slot('lock_dream_tag') != 0` selects exactly that move.
+/// `actor == owner && slot('lock_dream_tag') != 0` selects exactly that move
+/// (the slot lives only for the move that armed it).
 fn settle_before(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_TAG, 0);
     let to = ctx::tile_named("旭汤澡堂");
@@ -157,4 +176,10 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn settle_before_kani(player_id: i32) -> card_sdk::Asked {
     settle_before(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_tag_kani(player_id: i32) -> card_sdk::Asked {
+    clear_tag(player_id)
 }

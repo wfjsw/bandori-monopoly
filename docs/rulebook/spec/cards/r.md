@@ -573,7 +573,8 @@ prefix dropped).
 * **Source:** `cards.json#R:蓝玫瑰的骄傲`
 * **Quote:** 「（1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些Livehouse格子地契价值20%的资金 。」
 * **Trigger:** the [手] play, when `#(owned Livehouse) ≥ #(owned non-Livehouse)`.
-* **Condition:** the user owns at least one Livehouse tile.
+* **Condition:** -- (the cell adds no "at least one": with no deeds at all,
+  0 ≥ 0 takes (1) and pays 0, it does not fall through to (2)).
 * **Effect:** the user gains 20% of the sum of those Livehouse tiles' deed
   values (tile price).
 * **Frame:** the user's money and card zones.

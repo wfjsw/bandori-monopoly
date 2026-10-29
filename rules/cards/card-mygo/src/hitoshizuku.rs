@@ -4,14 +4,13 @@
 //! > 壱雫空：
 //! >  清除场上所有[停留]与[眩晕]效果，所有玩家因本效果每清除一种效果则支付此卡使用者1000资金，若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金。（此卡可在眩晕时打出）
 //!
-//! [停留] / [眩晕] on the table; each player pays the user 1,000 per effect
-//! type cleared (the user gains instead of paying for their own).
-
-use alloc::vec::Vec;
+//! [停留] / [眩晕] on the table; every player pays the user 1,000 per effect
+//! type cleared (the user's own leg is a real self-payment and nets 0), and the
+//! user gains 1,000 extra per own type.
 
 use bandori_std::state_key;
 use card_sdk::abi::prop;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", None, hitoshizuku)])
@@ -29,8 +28,12 @@ pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", N
 
 fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
-    // `dictionary`, built while walking the table.
-    let mut cleared: Vec<(i32, i32)> = Vec::new();
+    // `dictionary`, built while walking the table. Fixed size: the engine caps
+    // a match at 4 seats (`cond-ir` MAX_PLAYERS), and dropping the heap `Vec`
+    // keeps Kani's `__rust_realloc` pointer checks out of the proof (they made
+    // every post-clear assertion unreachable, 2026-10-28).
+    let mut cleared = [(0i32, 0i32); 4];
+    let mut cleared_n = 0usize;
     for j in 0..ctx::player_count() {
         if ctx::player_out(j) {
             continue;
@@ -39,6 +42,8 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「清除场上所有[停留]与[眩晕]效果」 -- C# clamps stay down to
         // `H.V(j, "lockedStay")` (locked layers survive the clear) and zeroes
         // stun; `give_stay`/`give_stun` take negative counts to strip layers.
+        // The locked layers come from `MyGO:（灯）不再迷茫` 「获得两层仅能被自然流失
+        // 效果移除的[停留]」 (cards.json:90).
         let stay = rules_status::stay::get(j);
         let locked = ctx::slot(j, "lockedStay").max(0);
         let keep = locked.min(stay);
@@ -57,7 +62,10 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
             n += 1;
         }
         if n > 0 {
-            cleared.push((j, n));
+            if cleared_n < 4 {
+                cleared[cleared_n] = (j, n);
+                cleared_n += 1;
+            }
             // C# `H.Log("status", j, ...)` names the kinds when both went.
             if n == 2 {
                 ctx::log(
@@ -85,26 +93,19 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     //
     // The money moves through the pipeline (`transfer` / `gain` -> paySplitAdd /
     // paySplitMul / paySplitChoose / paySplitAt -> the `pay` [反击] window), so 「[支付]时可以
-    // 打出」 windows open on each leg. The status clears above reach the live
-    // world for the routine's duration (`Cx::overlay_guest_state`), so a payer
-    // we just un-stunned is not blocked by `can_pay`.
+    // 打出」 windows open on each paying leg. The status clears above reach the
+    // live world for the routine's duration (`Cx::overlay_guest_state`), so a
+    // payer we just un-stunned is not blocked by `can_pay`.
     //
     // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
-    // every affected seat pays for its own cleared kinds, the user included
-    // (a self-pay nets 0; the extra-gain clause below pays the user instead).
-    for &(j, n) in &cleared {
-        if j == player_id {
-            // Self-pay nets nothing; keep the log so the count is visible.
-            ctx::log(
-                player_id,
-                &Msg::new(key!("hitoshizuku_pay")).player_id("who", j),
-            );
-        } else {
-            ctx::transfer(j, player_id, 1000 * n, &Msg::new(key!("hitoshizuku_pay")))?;
-        }
+    // every affected seat pays for its own cleared kinds, the user included.
+    // The user's own leg is a real 「ApayA」 payment: it nets 0 but still opens
+    // the pay windows and runs the affordability path (`money_inner`, Q4).
+    for &(j, n) in &cleared[..cleared_n] {
+        ctx::transfer(j, player_id, 1000 * n, &Msg::new(key!("hitoshizuku_pay")))?;
     }
     // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
-    for &(j, n) in &cleared {
+    for &(j, n) in &cleared[..cleared_n] {
         if j == player_id && n > 0 {
             ctx::gain(
                 player_id,

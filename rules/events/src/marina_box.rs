@@ -29,6 +29,9 @@ pub const MARINA_BOX: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
 )
+// 「抽到的玩家的第3回合开始时」: the `⌛2` marker the client shows (the draw is
+// mid-turn 1, so two more drawer turn starts remain).
+.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"麻里奈小姐的礼物箱"#)
             .text(CardText::para(r#"将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。"#))
@@ -95,6 +98,8 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
     }
     let n = ctx::prop(TURNS) + 1;
     ctx::set_prop(TURNS, n);
+    // The drawer turn-start tick.
+    ctx::dec_turns_left();
     // The draw happens mid-turn-1, so turn starts 1 and 2 are the drawer's 2nd
     // and 3rd turns. 「第3回合开始时」 = `n >= 2`.
     if n >= 2 {

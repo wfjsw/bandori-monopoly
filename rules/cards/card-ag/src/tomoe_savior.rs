@@ -7,7 +7,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(
@@ -16,8 +16,10 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     // condition (`owner.money >= tile.price / 2` on the non-self arm); the
     // shop-street check is a derived predicate (GUARDS.md §6) and stays in the
     // residual guard.
+    // 规则书[反击]: 「当其他玩家抵押商店街地契时，你可以打出此卡」
     &[On::Counteract(
         &[ChainKind::Mortgage],
+        // 规则书[反击]: 「立刻支付常规收购价一半的价格」
         "actor == owner || owner.money >= tile.price / 2",
         Some(can_counteract),
         counteract).counter_reason(key!("tomoe_savior_when"))],
@@ -46,9 +48,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
     let from = trigger::player_id();
     if from == player_id {
+        // 规则书[反击]: 「当你抵押商店街地契时，你可以打出此卡」 -- the self arm.
         // 规则书[反击]: 「额外获得一份抵押收益并将地契翻回」 -- C# only fires when
         // the deed is still the player's and still mortgaged
         // (`H.State.owners[t] == i && H.State.mortgaged[t]`).
+        // TODO(规则书)（额外获得一份抵押收益并将地契翻回）: the cell attaches no
+        // still-mortgaged precondition -- we keep the C# check, so a second copy
+        // declared on the same mortgage finds the deed already flipped and fizzles.
         if ctx::tile_owner(t) != player_id || !ctx::mortgaged_of(t) {
             return Ok(());
         }
@@ -90,6 +96,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // hear a buy caused by this card.
     // HOST-06: `acquire` answers whether the deed actually changed hands.
     // A refused acquire (`BuyGate` / unpaid) must not log one.
+    // TODO(规则书)（从该玩家处收购该地契）: the cell calls it 「收购」, not 「购买」,
+    // but `acquire` runs the purchase gate `buyGate` (a 「不能购买」 refuses the
+    // 收购), raises the 「购买…时」 listeners (C-Q4 4b), and clears the mortgage
+    // on the hand-over (C-Q4 4c).
     if ctx::acquire(player_id, from, t, price) {
         ctx::log(
             player_id,

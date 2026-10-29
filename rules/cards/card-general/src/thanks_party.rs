@@ -6,12 +6,12 @@
 //! > 1. X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
 //! > 2. X等于1则[使用者]的本回合结束后获得一个额外回合。
 //!
-//! then Xd20 > 35 pays out; alone, an extra turn.
+//! then Xd20 >= 35 pays out; alone, an extra turn.
 
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec, steps};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const THANKS_PARTY: CardDef =
     CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play("", None, thanks_party)])
@@ -37,9 +37,13 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     // choose. There is no printed cash gate: a player under 500 still gets the
     // offer, and accepting runs the shortfall path (same reading as
     // LOY-SOUL-01's un-capped 「1到5次」). C# skipped `money < 500` seats; that
-    // narrowing is not in the text. Out-of-the-game seats are not 「其他玩家」.
+    // narrowing is not in the text.
     let mut payers: Vec<i32> = Vec::new();
     for p in ctx::others(player_id) {
+        // `ctx::others` already drops out-of-the-game seats; `can_pay` adds the
+        // unprinted PayGate narrowing below.
+        // TODO(规则书)（所有其他玩家可选择[消耗]500资金）: 书说所有其他玩家都可选择
+        //   -- 晕眩/除外（PayGate）的座位不给出选项.
         if !rules_status::can_pay(p) {
             continue;
         }
@@ -72,6 +76,7 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     // 规则书[手] (sheet 2026-10-06 新卡组卡 A12): 「1. X至少为2则[使用者]投掷
     // Xd20，如果结果至少为35则…」 (was 「大于35」).
     let r = ctx::roll(player_id, x, 20, RollPurpose::Effect, roll_source::CARD)?;
+    // 规则书[手]: 「如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
     if r < 35 {
         ctx::log(
             player_id,
@@ -79,11 +84,15 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // 规则书[手]: 「如果结果大于35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
-    ctx::gain(player_id, 3000, &why)?;
+    // 规则书[手]: 「如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
+    // -- `ctx::n(1/2, …)` so 「后勤人员的努力」 can double one of the payouts
+    // (one-shot: the named index spends the flag).
+    ctx::gain(player_id, ctx::n(1, 3000), &why)?;
     for p in payers {
+        // TODO(规则书)（其他因此卡[消耗]资金的玩家[获得]1500资金）: 书按资格给
+        //   -- 本次结算中离场的参加者拿不到.
         if !ctx::player_out(p) {
-            ctx::gain(p, 1500, &why)?;
+            ctx::gain(p, ctx::n(2, 1500), &why)?;
         }
     }
     Ok(())

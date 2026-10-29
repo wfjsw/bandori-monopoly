@@ -16,6 +16,7 @@ use game_core::MatchMode;
 
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn members(n: i32) -> Vec<RoomMember> {
     (1..=n)
@@ -38,6 +39,21 @@ fn solo(seed: u64, rules: Arc<dyn CardRules>) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients now (`docs/BOT-DRIVE.md`) and stay `ai = false`; these
+    // fixtures only read quotes, so let the engine clear setup. An answering
+    // routine restores its pre-prompt snapshot (bits off) -- re-arm each tick.
+    for _ in 0..2_000 {
+        for i in 1..=3 {
+            m.set_machine_seat(i, true);
+        }
+        if m.state().prompt.id == 0 && !m.state().busy {
+            break;
+        }
+        m.pump_tick(0.25);
+    }
+    for i in 1..=3 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 

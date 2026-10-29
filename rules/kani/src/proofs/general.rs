@@ -546,8 +546,8 @@ pub fn budokan_x_mutant_is_detected() {
 
 // ===========================================================================
 // C-GEN-harvest-01 -- step bound (pure). The move-plan rewrite + settle is
-// PROTOCOL-LEVEL; the printed 6 is also read through ctx::n(0, …)
-// (BLOCKED-HOST play_doubled). The 1..=6 contract is still pinned here.
+// PROTOCOL-LEVEL. The printed 6 is a 1-based doubling slot (`ctx::n(1, 6)`),
+// so the legal set is 1..=6, or 1..=12 when 「后勤人员的努力」 doubles it.
 // ===========================================================================
 
 #[kani::proof]
@@ -555,23 +555,25 @@ pub fn budokan_x_mutant_is_detected() {
 #[kani::unwind(8)]
 pub fn harvest_steps_bound() {
     let s: i32 = kani::any();
-    kani::assume((-2..=9).contains(&s));
-    let ok = spec::harvest_steps_ok(s);
+    let doubled: bool = kani::any();
+    kani::assume((-2..=15).contains(&s));
+    let cap = if doubled { 12 } else { 6 };
+    let ok = spec::harvest_steps_ok(s, doubled);
     kani::cover!(s == 1, "min step");
-    kani::cover!(s == 6, "max step");
+    kani::cover!(s == cap, "cap step");
     kani::cover!(s == 0, "below");
-    kani::cover!(s == 7, "above");
-    assert_eq!(ok, (1..=6).contains(&s), "1..=6 is the printed set");
+    kani::cover!(s == cap + 1, "above the cap");
+    assert_eq!(ok, (1..=cap).contains(&s), "1..=cap is the legal set");
 }
 
-/// MUTANT companion: the 1..=7 set is distinguishable.
+/// MUTANT companion: the off-by-one cap is distinguishable.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn harvest_steps_mutant_is_detected() {
     crate::kassert!(
-        spec::harvest_steps_ok(7) != spec::harvest_steps_ok_mutant(7),
-        "1..=7 mutant must disagree at 7"
+        spec::harvest_steps_ok(7, false) != spec::harvest_steps_ok_mutant(7, false),
+        "off-by-one mutant must disagree at 7"
     );
 }
 

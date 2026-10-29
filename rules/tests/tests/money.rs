@@ -623,7 +623,7 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         let w = t.m.world_mut();
         w.note_marker_owner("抹茶芭菲", "skill:要乐奈:投币式停车场的猫");
         w.set_tok(1, "抹茶芭菲", 2, -1, 0); // arrange-only row; name-keyed lookup
-                                         // One parfait row on Space (fresh row, owner seat 1).
+                                            // One parfait row on Space (fresh row, owner seat 1).
         w.place_mark(
             -1,
             "抹茶芭菲",
@@ -639,8 +639,8 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         // counter, so they outlive any placer.
         w.place_mark(
             w.mark_owner_uid("mark:cp"),
-            card_sdk::abi::mark::CP_KIND,
-            card_sdk::abi::mark::CP_CATEGORY,
+            bandori_std::mark::CP_KIND,
+            bandori_std::mark::CP_CATEGORY,
             tile("CiRCLE") as i32,
             game_core::state::BOARD_OWNER,
             -1,
@@ -674,7 +674,7 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
     assert!(
         t.marks_on(tile("CiRCLE"))
             .iter()
-            .any(|m| m.category == card_sdk::abi::mark::CP_CATEGORY),
+            .any(|m| m.category == bandori_std::mark::CP_CATEGORY),
         "neutral CP marks stay: {:?}",
         t.marks_on(tile("CiRCLE"))
     );
@@ -847,8 +847,9 @@ fn aya_longing_1500_shave_lands_after_sibling_pay_split_add() {
     let mut t = Table::vanilla(2);
     // Hooks only -- the play body (discard recycle) is not under test.
     t.place_raw(0, "PP:[丸山彩]憧憬的前方");
-    t.place_raw(0, "PP:不要背负期待");
-    t.set_state(0, "no_expectation_stacks", 5); // +500 on P0→P1 pays
+    let ne = t.place_raw(0, "PP:不要背负期待");
+    // 「生效2次」 lives on the placed instance (a prop), not in player state.
+    t.m.world_mut().set_prop_at(ne, "no_expectation.stacks", 5); // +500 on P0→P1 pays
     t.give(0, &["PP:[衍生]共鸣"]);
     t.set_money(0, 15_000);
     t.set_money(1, 10_000);
@@ -885,8 +886,8 @@ fn ave_mujica_clawback_uses_post_add_pay_split_mul_input() {
     t.set_character_raw(0, "丰川祥子");
     t.place_raw(0, "skill:Ave Mujica:假面之下的真实");
     t.set_state(0, "skillState", 2);
-    t.place_raw(0, "PP:不要背负期待");
-    t.set_state(0, "no_expectation_stacks", 5); // +500 on P0→P1 pays
+    let ne = t.place_raw(0, "PP:不要背负期待");
+    t.m.world_mut().set_prop_at(ne, "no_expectation.stacks", 5); // +500 on P0→P1 pays
     t.set_money(0, 10_000);
     t.set_money(1, 10_000);
     t.give_play(0, "TEST:xfer1000").unwrap();

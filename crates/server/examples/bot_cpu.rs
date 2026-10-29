@@ -491,13 +491,10 @@ fn run_match(
                 continue;
             };
 
-            // The seat's own decision: the live `decide` path.
-            // The turn bank is gone: `tick_play`'s `timed_out` path hands the
-            // seat to the engine's own `Routine::Ai`. Do not double-drive it.
-            if pid == 0 && seat.state.time_left <= 0.0 {
-                next_probe[si] = t + 0.2;
-                continue;
-            }
+            // The seat's own decision: the live `decide` path. A spent turn
+            // bank does not exempt it any more -- the engine drives nobody
+            // (`docs/BOT-DRIVE.md`), so the timed-out seat is still this
+            // loop's to move, exactly like a live host's.
             let budget = budget_override.unwrap_or_else(|| botsvc::budget_ms(&seat.state, pid));
             let me = seat.player_id.max(0) as usize;
             let root_actions = bot_service::bot_action::legal_actions_with_cost(

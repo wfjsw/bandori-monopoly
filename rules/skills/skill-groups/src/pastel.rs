@@ -27,14 +27,12 @@ pub const PASTEL: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            at_turn_start)),
+            at_turn_start,
+        )),
         // （2） overflow crystals. `FansFlip` is raised with the effect's X
         // before the dict writes, so `fans::down` is still the pre-flip count.
         // 「你」 is this card's owner (`actor == owner`).
-        On::Action(Actions::FansFlip(
-            "actor == owner",
-            None,
-            on_fans_flip)),
+        On::Action(Actions::FansFlip("actor == owner", None, on_fans_flip)),
     ],
 );
 
@@ -60,7 +58,7 @@ fn at_start(_player_id: i32) -> card_sdk::Asked {
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
     ctx::add_crystals(1, i32::MAX)?;
-    if ctx::crystals() < 5 {
+    if crate::cover_crystals(player_id) < 5 {
         return Ok(());
     }
     if !ctx::ask_yes(
@@ -70,7 +68,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_crystals(-5, i32::MAX)?;
+    crate::spend_crystals(player_id, 5)?;
     ctx::draw(player_id, 1)?;
     Ok(())
 }

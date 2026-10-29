@@ -6,8 +6,8 @@
 //!
 //! 3 tiles in a chosen direction, settling at half price.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play("", None, saki_move)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"祥，移动"#)
@@ -55,7 +55,9 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
     // MatchHost.cs:5526-5532) / `H.ForceWalk(hit, forward ? 3 : -3,
     // resolve: true, ...)` (others, MatchHost.cs:5533-5536) build
     // `MoveCtx { Steps = 3, Reverse = !forward, Resolve = true, Forced = true,
-    // PayFactor = 0.5 }`. The MoveCtx shape maps onto `ctx::plan::*`.
+    // PayFactor = 0.5 }`. The shape maps onto `ctx::plan::*` except `Forced`:
+    // Rust `forced` means event-driven and stays false here (only `event:` cards
+    // set it), so a self-targeted play still runs as the main move.
     ctx::plan::set_steps(3);
     ctx::plan::set_reverse(!forward);
     ctx::plan::set_resolve(true);
@@ -70,6 +72,7 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「移动3格并[触发结算]」 -- run the shaped walk now (C# `H.CardMove`
     // for self / `H.ForceWalk` for others, both through the move plan).
+    // TODO(规则书)（强制一名玩家向你选择的方向移动3格并[触发结算]）: 这 3 格/方向/半价只属于被强制的这一次行走 -- 这些形状写在共享的 turn.plan 上没有复位，目标不是自己时，随后自己的主要移动也会走 3 格（无视骰点）、按同一方向并半价结算
     ctx::card_move(hit);
     // 规则书: 「（可在掷骰前选择自己以代替主要移动）」 -- C# `H.CardMove(Forced =
     // true)` runs `MainMoveAs` (MatchHost.cs:23102-23120), which sets

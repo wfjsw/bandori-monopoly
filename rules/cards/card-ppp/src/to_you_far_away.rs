@@ -8,9 +8,8 @@
 //! a farthest player and settle, then maybe raise a house on your farthest deed.
 
 use alloc::vec::Vec;
-use card_sdk::abi::MoveKind;
-use card_sdk::{CardText, para, sec};
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{para, sec, CardText};
 
 pub const TO_YOU_FAR_AWAY: CardDef =
     CardDef::new("PPP:献给远方的你", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
@@ -26,6 +25,8 @@ pub const TO_YOU_FAR_AWAY: CardDef =
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「[传送]至任意与[使用者]绝对距离最远的玩家的格子」 -- the destination
+    // is another player's tile, so the card needs at least one other player.
     // C# `CardToYouFarAway.WhyNot`: refuses with 「没有别的玩家」 when `H.Others` is
     // empty (no other present player at all).
     if ctx::others(player_id).is_empty() {
@@ -73,12 +74,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let to = ctx::player_pos(who);
     // 规则书: 「[传送]至…玩家的格子」/「并[结算]」 -- C#
     // `H.ForceTeleport(i, H.State.seats[who].pos, resolve: true, i, "献给远方的你")`
-    // (MatchHost.cs:8902): a teleport that settles on arrival. The plan names
-    // the destination and settles (`set_teleport_to` implies `MoveKind::Teleport`,
-    // `set_resolve(true)`), and `card_move` runs it now.
-    ctx::plan::set_kind(MoveKind::Teleport);
-    ctx::plan::set_teleport_to(to);
-    ctx::plan::set_resolve(true);
+    // (MatchHost.cs:8902): a teleport that settles on arrival. `teleport_as`
+    // is that routine (it raises `passTile` / `passPlayer` / `moveAfter` at the
+    // destination and runs the settle), and `as_main: false` keeps it off the
+    // main move -- the
+    // sheet never makes it one, so the turn's roll stays available
+    // (`card_move` would spend it: `plan.main`, `main_moved`, step -> END).
+    ctx::teleport_as(player_id, to, true, false);
     ctx::log(
         player_id,
         &Msg::new(key!("to_you_far_away_moved"))
@@ -86,15 +88,20 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .player_id("target", who)
             .tile("tile", to),
     );
-    ctx::card_move(player_id);
     if ctx::player_out(player_id) {
         return Ok(());
     }
     // 规则书: 「然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖」
-    // -- C# filters `H.OwnedBy` by `H.WhyNotBuildOn == null`, keeps those at the
-    // maximum `H.Dist` from the new position, then `H.OfferBuildAmong`.
+    // -- the candidates are owned ∩ buildable (∩ affordable): the maximum
+    // `ctx::dist` from the new position is taken over those only (C# filters
+    // `H.OwnedBy` by `H.WhyNotBuildOn == null` first), then
+    // `H.OfferBuildAmong` offers among them.
     let at = ctx::player_pos(player_id);
-    let mine = ctx::owned_tiles(player_id);
+    let money = ctx::money_of(player_id);
+    let mine: Vec<i32> = ctx::owned_tiles(player_id)
+        .into_iter()
+        .filter(|&t| ctx::can_build_on(player_id, t) && money >= ctx::build_cost(t))
+        .collect();
     let best = mine.iter().map(|&t| ctx::dist(at, t)).max().unwrap_or(0);
     let far_tiles: Vec<i32> = mine
         .into_iter()

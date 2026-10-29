@@ -18,7 +18,7 @@
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
 use card_sdk::ctx::NameId;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
@@ -38,8 +38,8 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // skill). The gate admits whenever either branch is available.
         On::Play("", Some(cant_play), play),
         On::Schedule("discard_down_to_five", "", None, discard_down_to_five),
-        // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- same CounterChanged
-        // shape as AG:（摩卡）0.5倍速 / R:Fire bird.
+        // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the same CounterChanged
+        // shape as R:Fire bird (identity check in the residual, not the condition).
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -52,7 +52,7 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
                 items(&[
                     it(r#"抽x张卡（可超过上限），回合结束后将手牌弃置到五张"#),
                     it(r#"获得x次经过CiRCLE时的资金奖励"#),
-                    it(r#"将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制"#),
+                    it("将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的\n（2）技能，此次技能不受数量或轮数限制"),
                     it(r#"当奇迹水晶耗尽时，将此卡置入弃牌堆"#),
                 ]),
             ]),
@@ -76,6 +76,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     }
     if owner_skill(player_id).is_none() {
         return Some(Msg::new(key!("nanami_effort_no_skill")));
+    }
+    // The press runs the skill's (3) body, which spends a mark -- without one the
+    // crystal would be burned for nothing.
+    if ctx::tok_names(player_id, TOKEN_PREFIX).is_empty() {
+        return Some(Msg::new(key!("nanami_effort_no_mark")));
     }
     None
 }
@@ -131,10 +136,11 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         ],
     )?;
     match k {
-        // (1) 「回合结束时抽x张卡（可超过上限）」 -- scheduled, runs in `effect_draw`.
+        // (1) 「抽x张卡（可超过上限）」 -- drawn now in `effect_draw`; only
+        // 「回合结束后将手牌弃置到五张」 is scheduled.
         0 => effect_draw(player_id, x)?,
-        // (2) Sheet 2026-10-06 新卡组卡 G7: 「获得x次经过CiRCLE时的资金奖励」
-        // -- x times the CiRCLE pass *money* reward, not a flat x*2000. Each
+        // 规则书（2）: 「获得x次经过CiRCLE时的资金奖励」 -- Sheet 2026-10-06 新卡组卡 G7.
+        // x times the CiRCLE pass *money* reward, not a flat x*2000. Each
         // time runs the money half of the reward step (`passRewardAffected`
         // between pick and payout), so a listener that rewrites the amount
         // (Morfonica's 1000/1500/2000 cycle) scales this too.
@@ -143,7 +149,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
                 gain_circle_money(player_id)?;
             }
         }
-        // (3) 「将此卡放置在场上并为其放置x个奇迹水晶」 -- placed with x crystals
+        // (3) 「将此卡放置在场上并放置x个奇迹水晶」 -- placed with x crystals
         // on it; (4) is its exhaustion.
         2 => {
             ctx::set_dest(ctx::Dest::Field);
@@ -156,7 +162,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         }
         _ => {}
     }
-    // （3）「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数
+    // 规则书（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数
     // 限制」 -- a press. The owner's skill is the `skill:<character>:<name>` field
     // card `bind_skills` placed, so `placed_cards` finds it and `play_card` runs
     // its `On::Play` entry.
@@ -166,16 +172,18 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
 /// One 「经过CiRCLE时的资金奖励」 -- the money half of the CiRCLE reward step.
 /// `passRewardAffected` fires between the pick and the payout (value = 0 = money),
 /// so a listener may replace the amount or cancel it outright; if it stands,
-/// the default 专有名词 11 figure is paid.
+/// the default 专有名词 11 figure is paid as a `pass`-typed gain, like the
+/// CiRCLE reward it copies.
 fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
     if ctx::raise(
         player_id,
         bandori_std::kind::PassRewardAffected,
         REWARD_MONEY,
     )? {
-        ctx::gain(
+        ctx::gain_typed(
             player_id,
             CIRCLE_MONEY,
+            "pass",
             &Msg::new(key!("nanami_effort_money")).i("n", CIRCLE_MONEY as i64),
         )?;
     }
@@ -185,14 +193,14 @@ fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
 /// 规则书（4）: 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the exhaustion half of
 /// effect (3). Residual guard: this card's own crystals counter hit 0.
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
-        &Msg::new(key!("nanami_effort_note")).player_id("who", player_id),
+        &Msg::new(key!("nanami_effort_exhausted")).player_id("who", player_id),
     );
     Ok(())
 }
@@ -201,13 +209,15 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// the play's `H.AskPick` (`MatchHost.cs:4874-4878`). The discard-down half is
 /// C# `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))` =
 /// `ctx::before_turn_end` (C# `AtEnd`, pre-wear-off) queuing the `On::Schedule`
-/// body below. Unreachable until the token-list query lands (the play folds
-/// first); written now so the queued scheduling is already the right hook.
-#[allow(dead_code)]
+/// body below.
 fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     // 规则书（1）: 「抽x张卡（可超过上限）」 -- 「可超过上限」 is the hand limit
     // itself, so lift it for the draw and put it back (the limit is keyed state,
     // which is what `NoLimitFx` was an attachment for).
+    // TODO(ABI): a guest state *increase* does not cross onto the live world for a
+    //   host routine (docs/ENGINE.md 「Only decreases cross」), so the draw still
+    //   trims to the old cap -- 「可超过上限」 needs a draw that skips the over-hand
+    //   trim (or increases the host can see).
     let cap = ctx::state::get(player_id, card_sdk::abi::state_key::HAND_LIMIT);
     ctx::state::set(
         player_id,
@@ -246,7 +256,7 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （3）「移除一个奇迹水晶视为发动你的（2）技能」 -- the placed-press branch.
+/// 规则书（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能」 -- the placed-press branch.
 fn owner_skill(player_id: i32) -> Option<NameId> {
     ctx::placed_cards(player_id)
         .into_iter()
@@ -261,12 +271,17 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     ctx::add_crystals(-1, 0)?;
-    // 「此次技能不受数量或轮数限制」 -- the press is a plain `play_card`, so the
-    // skill's own gate is what runs; nothing here counts a use.
+    // 「此次技能不受数量或轮数限制」 -- a plain `play_card` runs the skill's body,
+    // not its gate; nothing here counts a use.
+    // TODO(规则书)（此次技能不受数量或轮数限制）: the book waives the skill's count/CD
+    //   here -- nothing is waived.
     ctx::log(
         player_id,
         &Msg::new(key!("nanami_effort_skill")).card("card", id.as_str()),
     );
+    // TODO(规则书)（你可以移除一个奇迹水晶视为发动你的）: the book runs the persona
+    //   skill's (2) (pay a pot, gain a mark) -- `play_card` runs its (3) body, which
+    //   spends a mark instead.
     ctx::play_card(id.as_str(), player_id)?;
     Ok(())
 }

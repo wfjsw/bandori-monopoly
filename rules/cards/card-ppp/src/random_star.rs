@@ -11,7 +11,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RANDOM_STAR: CardDef = CardDef::new(
@@ -74,10 +74,16 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
+    // 规则书（2）: 「[强制停下]」 is an abnormal movement effect -- pass the
+    // `H.WithCard(User, H.AbnormalGate(a))` gate so guards / [反击] see it; a
+    // refused stop spends no stickers.
+    if !ctx::gate(player_id, bandori_std::kind::abnormal::Stop) {
+        return Ok(());
+    }
     // 规则书（2）: 「在“流星堂”强制停下并[结算]」 -- C# `m.Stopped = true; m.Resolve = true`
-    // (MatchHost.cs:8955-8963, behind `H.AbnormalGate`). `set_stop_at` is the
-    // forced stop from this `PassTile` hook: the walk settles at the stop tile
-    // (`plan::stopped()` is the read-only check).
+    // (MatchHost.cs:8955-8963, behind `H.AbnormalGate`, called above). `set_stop_at`
+    // is the forced stop from this `PassTile` hook: the walk settles at the stop
+    // tile (`ctx::plan::stop_at()` is the read-only check).
     ctx::plan::set_stop_at(ryuseido);
     ctx::plan::set_resolve(true);
     // 规则书（2）: 「使用2星星贴纸」 -- C# `H.AddTok(Seat, "星星贴纸", -2)`.

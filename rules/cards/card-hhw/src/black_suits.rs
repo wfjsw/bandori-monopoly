@@ -14,17 +14,18 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
-/// (C# `H.AddMark(..., "黑衣人的补给", ...)`).
-const MARK: &str = "黑衣人的补给";
+/// (C# `H.AddMark(..., "黑衣人的补给", ...)`). It is a locale key so the
+/// placement line reads as a 奇迹水晶, not as the card's own name.
+const MARK: &str = key!("black_suits_crystal");
 
 pub const BLACK_SUITS: CardDef = CardDef::new(
     "HHW:黑衣人的补给",
     &[
-        // 规则书: 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- the tile
+        // 规则书: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- the tile
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
         // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
@@ -70,15 +71,15 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", player_id)
                 .tile("tile", group),
         );
-        // 「该格上拥有奇迹水晶时，该格获得"CiRCLE"格子的全部效果」 --
+        // 「该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果」 --
         // `docs/TILES.md` / `SETTLE-STAGES.md` §4 M3: attach a `tile:circle`
         // rule instance to 弦卷集团, additive next to its `tile:agent` body.
         // The instance's own `On::Settle` (landing draw) and Pass entry (the
         // [经过] reward) are what 「全部效果」 means; no card hook draws.
         sync_circle_instance(group);
-        // 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- field hooks only
+        // 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- field hooks only
         // dispatch to placed instances, and a [反击] declaration would otherwise
-        // be discarded, leaving the `PassTile` hook below dead. Place this card
+        // be discarded, leaving the `Pass` hook below dead. Place this card
         // as the stand-in for C# `BlackSuitFx` (same pattern as `HHW:育美标记`).
         if !ctx::is_placed() {
             ctx::set_dest(ctx::Dest::Field);
@@ -100,6 +101,11 @@ fn own_crystals(tile: i32, owner: i32) -> i32 {
 /// Attach or drop the borrowed `tile:circle` instance so it exists exactly
 /// while 弦卷集团 carries a crystal.
 fn sync_circle_instance(group: i32) {
+    // TODO(规则书)（该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果）: the book keys
+    //   the borrow on the crystal's presence -- this sync only runs from this
+    //   card's own place/pass, so an external crystal clear is not re-synced;
+    //   a bankrupt owner's field purge destroys the crystal with no sync either,
+    //   leaving the borrowed instance behind (LOY-BLACK-01 related medium).
     let has = ctx::count_marks(group, &MarkFilter::any().kind(MARK)) > 0;
     // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a tile"
     // gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The board
@@ -130,7 +136,7 @@ fn pass_tile_guard(player_id: i32) -> bool {
     own_crystals(ctx::trigger::tile(), player_id) > 0
 }
 
-/// 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
+/// 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
 /// `mark.count--`, which is `bump_mark`'s single-tick form. Dropping the last
 /// crystal takes the borrowed `tile:circle` instance with it.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
@@ -139,6 +145,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     // The owner's own crystal is the one spent (`owner(player_id)`), so two
     // players' stand-ins never eat each other's crystals.
+    // TODO(规则书)（你经过“弦卷集团”格子后，移除那格的一个奇迹水晶）: one hook job
+    //   runs per placed copy -- two copies remove two crystals on a single pass
+    //   (the filing guard counts the owner's total, so only the second files).
     ctx::bump_mark(t, &MarkFilter::any().kind(MARK).owner(player_id), -1);
     sync_circle_instance(t);
     // Stand-in cleanup: nothing left to remove, so file the card away.

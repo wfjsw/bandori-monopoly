@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
@@ -43,7 +43,8 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
         // sheet cell M7
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
-/// `H.Nearest(seat)` -- every other player at the smallest ring distance.
+/// 规则书[反击]（1）: 「绝对距离最近的玩家」 -- every other player at the smallest
+/// ring distance (C# `H.Nearest(seat)`).
 fn nearest(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
     let others = ctx::others(player_id);
@@ -65,11 +66,12 @@ fn nearest(player_id: i32) -> Vec<i32> {
 /// outside the CEL schema (docs/GUARDS.md §4.2c). The `actor == owner &&
 /// move.main` applicability is the entry's condition.
 ///
-/// 规则书[反击]（2）: 「若受到[异常移动效果]影响，此卡不生效」 -- the [反击] is
-/// not offered at all once the mover has been hit by an abnormal move effect
-/// (the sheet says the card does not fire after an abnormal). The latch is
-/// longer-lived than the per-turn abnormal counter: a forced move on another
-/// player's turn still suppresses the owner's next main-move window.
+/// 规则书[反击]（2）: 「若受到[异常移动效果]影响，此卡不生效」 -- 「不生效」 is the
+/// body's skip: the body re-checks [`hit_by_abnormal`] and logs the ineffective
+/// note. We also withhold the offer entirely (a played card would just be
+/// wasted; MOVE-11, TEST-FINDINGS.md). The latch is longer-lived than the per-turn
+/// abnormal counter: a forced move on another player's turn still suppresses
+/// the owner's next main-move window.
 fn can_counteract(player_id: i32) -> bool {
     !ctx::others(player_id).is_empty() && !hit_by_abnormal(player_id)
 }
@@ -132,12 +134,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     };
     let to = (pos + dir).rem_euclid(n);
     // 规则书[反击]（1）: 「使自己额外远离绝对距离最近的玩家一格」
+    // The teleport lands on the live world and a replayed pass skips it, so log
+    // the position actually reached, not the recomputed `to`.
     ctx::teleport_to(player_id, to);
     ctx::log(
         player_id,
         &Msg::new(key!("my_own_problem_moved"))
             .player_id("who", player_id)
-            .tile("tile", to),
+            .tile("tile", ctx::player_pos(player_id)),
     );
     Ok(())
 }

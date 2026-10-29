@@ -14,12 +14,13 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
+        // 规则书（1）: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
         On::Play("", None, play),
         On::Action(Action::PayAfter(
             "card.placed && pay_is_rent && target == owner",
@@ -29,6 +30,13 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
         // `HouseAdded` covers the rise path; there is no `HouseRemoved` kind yet,
         // so a raze of the max tile is not tracked (see the TODO on `apply_view`).
         On::Action(Action::HouseAdded(
+            "card.placed && actor == owner",
+            None,
+            on_house_added)),
+        // 规则书（2）: 「你的所有格子」 -- a tile acquired while the card is placed
+        // is lifted by the owner-wide `RENT_HOUSES` view too, so its half-charge
+        // is armed like a rise (`bought` carries the buyer as actor).
+        On::Action(Action::Bought(
             "card.placed && actor == owner",
             None,
             on_house_added)),
@@ -103,37 +111,57 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书（2）: 「你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此
 /// 效果影响获得额外房屋数的格子收费减半」 -- recompute the counted max and the
-/// half-charge set. Called at play and on every `HouseAdded`, so the 「视为」
-/// tracks the max as houses rise.
+/// half-charge set. Called at play, on every `HouseAdded` and on a `Bought`, so
+/// the 「视为」 tracks the max as houses rise and reaches newly acquired tiles.
 ///
 /// TODO(规则书)（2）: the **fall** path is still open. There is no `HouseRemoved`
 ///   kind, so a raze of the max tile (or a sale) leaves the view at the old max
-///   until the next build. Also, a removal path other than [`pay_after`]'s
-///   discard leaves the tile `RENT_FACTOR`s armed -- there is no general
-///   "instance left the field" hook to disarm on.
+///   until the next build, and a sold tile keeps its half (`RENT_FACTOR` is a
+///   board-tile prop, not a per-owner one). Only `Bought` arms a gained tile --
+///   an ownership change that raises no `bought` (`ctx::set_owner`: gift/swap)
+///   leaves it un-halved until the next build, though the owner-wide
+///   `RENT_HOUSES` view already lifts it. A hand/banish/deck removal of this
+///   card has no disarm hook either -- only [`pay_after`]'s discard path does;
+///   `Action::Discarded` would cover the other discard routes.
 fn apply_view(player_id: i32) {
     let max_h = counted_max(player_id);
     if max_h > 0 {
         ctx::set_prop(prop::RENT_HOUSES, max_h);
+    }
+    // Reconcile the whole set, not just the rise: a tile that has caught up with
+    // the max is no longer 「受此效果影响获得额外房屋数」 and must charge in full.
+    for &t in &ctx::owned_tiles(player_id) {
+        if ctx::is_deed(t) {
+            continue;
+        }
+        ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
     }
     for &t in &raised_tiles(player_id, max_h) {
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 500);
     }
 }
 
-/// 规则书（2）: the 「视为」 tracks the max as houses move (rise path).
+/// 规则书（2）: the 「视为」 tracks the max as houses move (rise path) and covers
+/// a tile acquired mid-life.
 fn on_house_added(player_id: i32) -> card_sdk::Asked {
     apply_view(player_id);
     Ok(())
 }
 
 /// C# `CardRingingBloom.PayAfter` -> `Done`: after a non-RiNG rent lands on this
-/// player, unplace to discard and gain 500 per standing house on the charged tile.
+/// player, unplace to discard and gain 500 per counted (「视为」) house on the
+/// charged tile.
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
 /// Pure guard for [`pay_after`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pay_after(player_id: i32) -> card_sdk::Asked {
-    // C# `p.tile < 0 || H._tiles[p.tile].kind == "ring"` -- skip RiNG (and tile-less) pays.
+    // 规则书（3）: 「你的任意非RiNG格子收费后」 -- C#
+    // `p.tile < 0 || H._tiles[p.tile].kind == "ring"`: skip RiNG (and tile-less) pays.
+    // TODO(规则书)（你的任意非RiNG格子收费后）: 「收费后」 can also be read as a pay
+    //   that collected nothing (fully counteracted, or a blocked payee) -- the
+    //   engine still raises `payAfter` there with `value` 0, and we discard and
+    //   pay out on it anyway (in a reflected rent only the 0-value parent pay
+    //   carries `target == owner`, so the card can never fire on the real leg).
     let tile = trigger::tile();
     if tile < 0 || ctx::is_deed(tile) {
         return Ok(());
@@ -150,8 +178,10 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     // 房屋数的格子收费减半」 ends with it. TODO(规则书)（2）: a removal path
     // other than this discard leaves the tile props armed; the counted value
     // itself still ends (gone with the card).
-    let max_h = counted_max(player_id);
-    for &t in &raised_tiles(player_id, max_h) {
+    for &t in &ctx::owned_tiles(player_id) {
+        if ctx::is_deed(t) {
+            continue;
+        }
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
     }
     // 规则书（3）: 「此卡置入弃牌堆」 -- C# `H.Unplace(this, "discard", "自己的格子收了费")`.

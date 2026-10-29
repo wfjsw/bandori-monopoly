@@ -112,6 +112,13 @@ crate::host_subset!(ppp_dispatch {
     card_move => arm_card_move,
     trig_card_is => arm_trig_card_is,
     trig_cards => arm_trig_cards,
+    // popipapapipopa c1 reads `trigger::tile()`; c2 reads `trigger::value()`,
+    // rewrites the pay amount and asks `ask_number` (whose `ask_pick` walks
+    // the `opt_*` option list).
+    trig_tile => arm_trig_tile,
+    trig_value => arm_trig_value,
+    trig_set_pay_amount => arm_trig_set_pay_amount,
+    opt_int | opt_str | opt_tile => arm_opt,
 });
 
 /// Install the sparse 2-seat world + the ppp host subset **in place**.
@@ -214,8 +221,8 @@ pub fn popipa_01_iff() {
     popipa_01_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -291,8 +298,8 @@ pub fn pipopa_01_iff() {
     pipopa_01_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -394,8 +401,9 @@ pub fn signpost_02_lose_1000_at_end_iff() {
     signpost_02_lose_1000_at_end_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the schedule fires
+/// for the card's owner, whose seat is the callback's `player_id`; a symbolic
+/// user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -479,8 +487,8 @@ pub fn bang_dream_01_crystal_iff() {
     bang_dream_01_crystal_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -603,8 +611,8 @@ pub fn bang_dream_02_teleport_owned_iff() {
     bang_dream_02_teleport_owned_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -640,20 +648,20 @@ pub fn bang_dream_02_mutant_extra_money() {
 // 「此卡拥有者每次[经过]…时为此卡添加1个[奇迹水晶]（上限10个）」
 // Guard (single-source): `card.placed && actor == owner && (tile.id ==
 // tile_named('东京外') || … || tile_named('流星堂'))`.
-// Isolation: pre-crystals < 10 so the host's missing max-clamp cannot
-// inflate the count past the book's cap (the cap itself is BLOCKED-HOST:
-// `Op::add_counter_*` ignores its `max` argument).
+// Isolation: pre-crystals < 10 so the iff stays on the single +1 branch.
+// The 「上限10个」 cap itself is host-enforced (`add_counter_self` forwards
+// `max` to `World::add_counter`), not a missing capability.
 // ===========================================================================
 
 const CRYSTALS_KEY: &str = "crystals";
 
 fn popipa_c1_world(user: i32, named_tile: i32) -> World {
     ppp_world_placed(user, named_tile, 2);
-    // Under-cap isolation (host max is ignored; see module note).
+    // Under-cap isolation (single +1 branch; see module note).
     let pre: i32 = kani::any();
     kani::assume((0..10).contains(&pre));
     world::with_world_mut(|w| {
-        w.key_set(user, crate::intern::intern(CRYSTALS_KEY), pre);
+        w.field[0].crystals = pre;
     });
     world::with_world(|w| w.clone())
 }
@@ -669,7 +677,9 @@ fn popipapapipopa_c1_crystal_on_pass_iff_at(user: i32) {
     let w = popipa_c1_world(user, named);
     let player = w.trig_player;
     let key = crate::intern::intern(CRYSTALS_KEY);
-    let pre_crystals = w.key_get(player, key);
+    // On-card crystals live on the running instance (`counter_self`), not in
+    // the player key map.
+    let pre_crystals = w.field_crystals(w.last_uid);
 
     // single-source guard: the real CEL string on the PassTile hook
     let gid = crate::guard_id!(
@@ -691,7 +701,7 @@ fn popipapapipopa_c1_crystal_on_pass_iff_at(user: i32) {
 
     invoke::unwrap_done(card_ppp::popipapapipopa::pass_tile_kani(user));
 
-    let post_crystals = world::with_world(|ww| ww.key_get(player, key));
+    let post_crystals = world::with_world(|ww| ww.field_crystals(ww.last_uid));
     let (logbuf, log_n) = log_slice();
     crate::kassert!(
         post_crystals == spec::ppp::popipapapipopa_c1_crystals_after(pre_crystals),
@@ -715,8 +725,9 @@ pub fn popipapapipopa_c1_crystal_on_pass_iff() {
     popipapapipopa_c1_crystal_on_pass_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the clause is
+/// owner-anchored via `card.placed && actor == owner`; a symbolic user is a
+/// BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -734,12 +745,12 @@ pub fn popipapapipopa_c1_mutant_plus_2() {
     let named: i32 = kani::any();
     kani::assume(named == 23 || named == 30 || named == 48 || named == 44 || named == 45);
     let w = popipa_c1_world(user, named);
-    let player = w.trig_player;
-    let key = crate::intern::intern(CRYSTALS_KEY);
-    let pre_crystals = w.key_get(player, key);
+    // On-card crystals live on the running instance (`counter_self`), not in
+    // the player key map.
+    let pre_crystals = w.field_crystals(w.last_uid);
     world::reset_world(w);
     invoke::unwrap_done(card_ppp::popipapapipopa::pass_tile_kani(user));
-    let post_crystals = world::with_world(|ww| ww.key_get(player, key));
+    let post_crystals = world::with_world(|ww| ww.field_crystals(ww.last_uid));
     crate::kassert!(
         post_crystals == pre_crystals + 2,
         "mutant: card must not match the +2 spec"
@@ -806,7 +817,7 @@ fn popipapapipopa_c2_pay_reduce_iff_at(user: i32) {
 
     invoke::unwrap_done(card_ppp::popipapapipopa::pay_choose_kani(user));
 
-    let post_crystals = world::with_world(|ww| ww.key_get(player, key));
+    let post_crystals = world::with_world(|ww| ww.field_crystals(ww.last_uid));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let (logbuf, log_n) = log_slice();
     let k = pre_crystals - post_crystals;
@@ -841,8 +852,9 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
     popipapapipopa_c2_pay_reduce_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the clause is
+/// owner-anchored via `card.placed && actor == owner`; a symbolic user is a
+/// BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
@@ -860,7 +872,6 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
     ppp_world(user);
     let w = world::with_world(|ww| ww.clone());
     let player = user;
-    let key = crate::intern::intern(CRYSTALS_KEY);
     let pre_crystals: i32 = kani::any();
     kani::assume((1..=8).contains(&pre_crystals));
     let amount: i32 = kani::any();
@@ -880,11 +891,10 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
         crystals: pre_crystals,
         props: world::NameMap::new(),
     };
-    w.key_set(player, key, pre_crystals);
     world::reset_world(w);
     invoke::unwrap_done(card_ppp::popipapapipopa::pay_choose_kani(user));
     let post_amount = world::with_world(|ww| ww.pay_amount);
-    let post_crystals = world::with_world(|ww| ww.key_get(player, key));
+    let post_crystals = world::with_world(|ww| ww.field_crystals(ww.last_uid));
     let k = pre_crystals - post_crystals;
     crate::kassert!(
         post_amount == spec::ppp::popipapapipopa_c2_amount_after_mutant(amount, k),
@@ -1054,8 +1064,8 @@ pub fn star_beat_01_layer_iff() {
     star_beat_01_layer_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]
@@ -1131,8 +1141,8 @@ pub fn wait_aoki_01_place_on_field_iff() {
     wait_aoki_01_place_on_field_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -1226,8 +1236,8 @@ pub fn random_star_01_place_and_deck_bottom_iff() {
     random_star_01_place_and_deck_bottom_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -1326,8 +1336,8 @@ pub fn star_beat_03_stickers_iff() {
     star_beat_03_stickers_iff_at(0);
 }
 
-/// Same iff at seat 1 — two harnesses cover every seat
-/// (seat-symmetric clause 「自己的」; symbolic user is a BMC cliff).
+/// Same iff at seat 1 — two harnesses cover every seat (the Play body takes
+/// the acting seat as its `player_id`; a symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(40)]

@@ -1,4 +1,4 @@
-//! `AG:无论是何种颜色的夕阳` 
+//! `AG:无论是何种颜色的夕阳`
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:无论是何种颜色的夕阳`）:
 //! > 无论是何种颜色的夕阳：
@@ -23,7 +23,7 @@ pub const ANY_COLOR_SUNSET: CardDef =
     CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无论是何种颜色的夕阳"#)
         .raw_name(r#"无论是何种颜色的夕阳"#)
-        .tags(&[r#"手"#])
+        .tags(&[])
         .text(CardText::para(r#"投掷1d6并根据结果获得对应效果: 若为1则立刻获得1500资金，若为2则从弃牌堆中选择一张牌放置到抽牌堆顶，若为3则抽一张牌，若为4则可选择补满火罐或者获得2000资金，若为5则从弃牌堆中选择一张牌加入手牌，若为6则选择1-5中的3个效果触发（若结果严格大于6，则从1开始重新计数）"#))
         // sheet cell C8
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
@@ -56,6 +56,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     )?;
     // Ascending face order -- see the module doc. The decode already returns
     // ascending indices; `apply` takes the 1-based effect number.
+    // TODO(规则书)（若为6则选择1-5中的3个效果触发）: the book gives no order -- the
+    //   multi-select bitmask forces ascending, so the pick order is lost.
     for k in picks {
         apply(player_id, k as i32 + 1)?;
     }
@@ -94,33 +96,30 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若为4则可选择补满火罐或者获得2000资金」
         4 => {
-            let fire_to_fill = bandori_std::fire::max(player_id) - bandori_std::fire::get(player_id);
-            let take_money = if fire_to_fill > 0 {
-                // Ask the player whether to take money instead of filling the fire charge.
-                ctx::ask_pick(
-                    player_id,
-                    &Msg::new(key!("any_color_sunset_title")),
-                    &Msg::new(key!("any_color_sunset_fire_ask")),
-                    &[
-                        Msg::new(key!("any_color_sunset_fire_fill")),
-                        Msg::new(key!("any_color_sunset_fire_money")),
-                    ],
-                )? != 0
-            } else {
-                // If the fire cannot be filled, the player must take the money.
-                true
-            };
+            // 规则书: 「若为4则可选择补满火罐或者获得2000资金」 -- the ask is
+            // unconditional; filling an already-full pot is a no-op.
+            let take_money = ctx::ask_pick(
+                player_id,
+                &Msg::new(key!("any_color_sunset_title")),
+                &Msg::new(key!("any_color_sunset_fire_ask")),
+                &[
+                    Msg::new(key!("any_color_sunset_fire_fill")),
+                    Msg::new(key!("any_color_sunset_fire_money")),
+                ],
+            )? != 0;
 
-            if !take_money && fire_to_fill > 0 {
-                // 规则书: 「补满火罐」 
+            if take_money {
+                // 规则书: 「或者获得2000资金」
+                ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_why")))?;
+            } else {
+                // 规则书: 「补满火罐」
+                let fire_to_fill =
+                    bandori_std::fire::max(player_id) - bandori_std::fire::get(player_id);
                 bandori_std::fire::gain(
                     player_id,
                     fire_to_fill,
                     &Msg::new(key!("any_color_sunset_why")),
                 )?;
-            } else {
-                // 规则书: 「获得2000资金」
-                ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_why")))?;
             }
         }
         // 规则书: 「若为5则从弃牌堆中选择一张牌加入手牌」
@@ -128,7 +127,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
             if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_hand_ask"))? {
                 ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
             }
-        },
+        }
         _ => unreachable!(),
     }
     Ok(())

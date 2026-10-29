@@ -4,14 +4,23 @@
 //! > （睦/mortis）表演的本能：
 //! >  此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）
 //!
-//! copy the last non-placed card another player played.
+//! copy the last non-placed card another player played; the copy is not
+//! implemented yet (`run` only logs), and a [反击] card copied may be played in
+//! that window.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
-    &[On::Play("", None, play), On::Counteract(&[], "", Some(can_counteract), counteract).counter_reason(key!("mortis_instinct_when"))],
+    &[
+        On::Play("", None, play),
+        // TODO(ABI) counteraction link list: `&[]` maps to an empty trigger list,
+        // which the host never dispatches, so this entry is offered at no chain
+        // kind. The kinds depend on the card being copied (dynamic); needs a
+        // dynamic counteract mask, or an empty-links = all-kinds convention.
+        On::Counteract(&[], "", Some(can_counteract), counteract).counter_reason(key!("mortis_instinct_when")),
+    ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)
         .raw_name(r#"（睦/mortis）表演的本能"#)
@@ -40,13 +49,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 fn run(player_id: i32) {
-    // 规则书: 「此卡打出时效果为场上任意其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）」
-    // TODO(规则书): the copy itself -- C# `CardMortisInstinct.Copy` walks
-    // `H._playHistory` backwards for the latest `(player_id != me, !placed, id != me)`
-    // entry, then `H.NewCard(id)` + nested `Play`/`Counteract` (a full `PlayCtx` with
+    // 规则书: 「此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）」
+    // The copy itself: C# `CardMortisInstinct.Copy` walks `H._playHistory`
+    // backwards for the latest `(player_id != me, !placed, id != me)` entry, then
+    // `H.NewCard(id)` + nested `Play`/`Counteract` (a full `PlayCtx` with
     // `Extrene`/`Doubled`/`Tags` forwarding). The ABI has no play-history query
     // and no cross-card `PlayCtx` nesting (`ctx::play_card` runs a card's `play`
     // without the copied card's identity / counteraction mode).
+    // TODO(规则书)（此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡））: 打出时复制该卡并执行其效果 -- 复制未实现，只记一条 nothing 日志
     ctx::log(
         player_id,
         &Msg::new(key!("mortis_instinct_nothing")).player_id("who", player_id),

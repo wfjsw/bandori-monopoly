@@ -9,6 +9,8 @@ description = "Black-box rulebook tests for this game's shipped rules (cards, sk
 
 [dev-dependencies]
 game-core = { path = "../../crates/game-core" }
+game-kinds = { path = "../../crates/game-kinds" }
+bot-core = { path = "../../crates/bot-core" }
 game-rules = { path = "../../crates/game-rules" }
 card-sdk = { workspace = true }
 bandori-std = { path = "../bandori-std" }

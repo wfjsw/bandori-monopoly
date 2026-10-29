@@ -278,7 +278,11 @@ pub fn intern(bytes: &[u8]) -> (i32, i32) {
         slot.len = n as u8;
         frame.slots[i] = slot;
         frame.n = (i + 1) as u8;
-        (i as i32, n as i32)
+        // 1-based handle, matching the production twin: 0 remains the
+        // wasm-style null / length-only probe. A 0-based handle made the
+        // *first* out-buffer reserve return 0, so the host's real fill was
+        // taken for the length probe and the read came back zeroed.
+        ((i + 1) as i32, n as i32)
     })
 }
 
@@ -309,7 +313,8 @@ pub fn reserve(len: usize) -> (i32, i32) {
         frame.slots[i] = arena::Slot::empty();
         frame.slots[i].len = n as u8;
         frame.n = (i + 1) as u8;
-        (i as i32, n as i32)
+        // 1-based handle (see `intern`): 0 is the length-only probe.
+        ((i + 1) as i32, n as i32)
     })
 }
 
@@ -336,9 +341,12 @@ pub fn reserve(len: usize) -> (i32, i32) {
 pub fn read(handle: i32, len: usize) -> Vec<u8> {
     if let Some(id) = crate::intern::decode_handle(handle) {
         let b = crate::intern::resolve(id);
-        // Zero-loop copy into a `Vec` (bump-backed under the kani allocator).
+        // Zero-loop copy into a `Vec`. Size it once, concretely: `len` crosses
+        // the host call and a symbolic capacity makes the dealloc layout check
+        // fail under Kani 0.68 (see `ctx::owned_tiles`). A push-driven regrow
+        // here would trip the same check; MAX_BUF bounds the copy.
         let n = len.min(b.len()).min(arena::MAX_BUF);
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(arena::MAX_BUF);
         macro_rules! step {
             ($k:expr) => {
                 if $k < n {
@@ -416,8 +424,11 @@ pub fn read(handle: i32, len: usize) -> Vec<u8> {
     }
     let want = len.min(arena::MAX_BUF);
     frame_mut(|frame| {
-        let mut out = Vec::new();
-        let slot = frame.slots.get(handle.max(0) as usize);
+        // Concrete MAX_BUF capacity: `want` is symbolic through the host
+        // call, and the copy never exceeds MAX_BUF anyway (CBMC dealloc layout
+        // checks; same fix as `ctx::cards_in`).
+        let mut out = Vec::with_capacity(arena::MAX_BUF);
+        let slot = frame.slots.get((handle - 1).max(0) as usize);
         let have = slot.map(|s| s.len as usize).unwrap_or(0);
         let n = want.min(have);
         if let Some(s) = slot {
@@ -648,7 +659,7 @@ pub fn read_name_bytes(handle: i32, len: usize) -> Vec<u8> {
 #[cfg(kani)]
 pub fn write(handle: i32, bytes: &[u8]) {
     frame_mut(|frame| {
-        let idx = handle.max(0) as usize;
+        let idx = (handle - 1).max(0) as usize;
         if idx >= arena::MAX_SLOTS {
             return;
         }

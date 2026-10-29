@@ -121,7 +121,7 @@ fn rui_demon_01_iff_at(user: i32) {
 
     crate::kassert!(
         spec::rui_demon_01_effects_ok(&effects, user, n, &out),
-        "C-MOR-rui-demon-01: effect log must be 100-out + X=5 per other, then 300-in + X=5, then X=5"
+        "C-MOR-rui-demon-01: effect log must be 100-out + X=5 per other, then 300-in + X=5 (trailing X=5 optional)"
     );
     crate::kassert!(
         spec::rui_demon_01_post_ok(&post, &pre, user, n, &out),
@@ -575,15 +575,25 @@ pub fn garden_01_mutant_is_detected() {
 //  建造价格总额的一半，若为地产商地块，获得1000资金」
 // Ruling 2026-10-06: land price full; only house total halved.
 //
-// BLOCKED-HOST: `Op::is_agent` / `Op::tile_price` / `Op::buy_price` index the
-// static board with 1-based `board::tile_slot`, while the body passes the
-// 0-based `(roll-1)%60` index (and `tile_owner` is correctly 0-based).
-// `Op::buy_price` also returns land price only (houses ignored), so the
-// house half of the formula is always 0. courage-01/02 cannot pin the right
-// tile's price / agent bit. courage-03 (unowned, no money) is proven under
-// the isolation that the off-by-one agent bit does not misfire.
+// The host ops (`tile_is` / `tile_price` / `buy_price`) index the static board
+// **0-based** (the same `(roll-1)%60` slot the body passes), and `buy_price`
+// folds houses (`price + houses × house_cost`). The harness pins the die via
+// `forced_roll` so each arm names a known tile: face 5 → slot 4 (agent,
+// board 5), face 6 → slot 5 (property, board 6, price 1600 / house 1000).
+// courage-03 keeps the symbolic roll and asserts the empty limb only.
 // Seat-symmetric on the roller; n_players=2 pins the owner to the other seat.
 // ===========================================================================
+
+/// `forced_roll` face pinning the courage tile onto the agent slot 4 (board 5).
+const AGENT_FACE: i32 = 5;
+/// `forced_roll` face pinning the courage tile onto the neighbouring property.
+const PROPERTY_FACE: i32 = 6;
+/// Slot of `PROPERTY_FACE` and its static price / house cost. Two houses are
+/// set there so the halved house-total leg is exercised.
+const PROPERTY_SLOT: usize = 5;
+const PROPERTY_PRICE: i32 = 1600;
+const PROPERTY_HOUSE: i32 = 1000;
+const PROPERTY_HOUSES: i32 = 2;
 
 /// `Mor:勇气展翅高飞之时` play body ops.
 crate::host_subset!(courage_dispatch {
@@ -601,11 +611,9 @@ crate::host_subset!(courage_dispatch {
 });
 
 /// Isolation for courage-03: every tile is unowned, and the player is not
-/// out. The roll is symbolic 3..=60. The off-by-one `is_agent` may still
-/// misfire on the static board (see BLOCKED-HOST note) — the iff below is the
-/// book pin and is expected to FAIL on those rolls; the companion
-/// `courage_03_empty_when_no_agent_misfire` proves the no-op limb whenever
-/// the log comes back empty.
+/// out. The roll stays symbolic, so an agent face still diverts to the
+/// 1000-gain arm; only the empty limb is asserted (the companion
+/// `courage_03_empty_when_no_agent_misfire` covers the frame).
 fn courage_world(user: i32) {
     sparse2(courage_dispatch, user, |w| {
         // `World::new` already has owner=-1 / houses=0 / mortgaged=false.
@@ -638,8 +646,9 @@ fn courage_world_owned(user: i32) {
     });
 }
 
-/// courage-03 book pin: unowned tile ⇒ no effects and no money moves.
-/// BLOCKED-HOST: the off-by-one `is_agent` can divert to the 1000-gain arm.
+/// courage-03 book pin: unowned non-agent tile ⇒ no effects and no money
+/// moves. The roll stays symbolic, so an agent face is the only non-empty
+/// limb (it legitimately takes the 1000-gain arm, courage-02).
 fn courage_03_unowned_iff_at(user: i32) {
     courage_world(user);
     let pre = world::snapshot();
@@ -656,9 +665,9 @@ fn courage_03_unowned_iff_at(user: i32) {
         "agent misfire or pay branch (host bug)"
     );
 
-    // Book: unowned (and not agent) ⇒ empty log, money unchanged.
-    // The empty limb is sound whenever it fires; the non-empty limb is the
-    // BLOCKED-HOST divergence and is reported, not hidden.
+    // Book: unowned (and not agent) ⇒ empty log, money unchanged. Only the
+    // empty limb is asserted; a non-empty log is an agent face, covered by
+    // courage-02.
     if effects.is_empty() {
         crate::kassert!(
             spec::courage_03_post_ok(&post, &pre),
@@ -706,64 +715,15 @@ pub fn courage_03_empty_when_no_agent_misfire() {
     }
 }
 
-/// courage-01 book pin: owner pays `land + house_total/2`.
-/// BLOCKED-HOST: `tile_price`/`buy_price` read the off-by-one board slot and
-/// `buy_price` ignores houses. The harness is written against the book amount
-/// computed from the **true** tile's static data and is expected to fail.
+/// courage-01 book pin: the pinned property roll makes the other seat (owner
+/// of every tile) pay `land + house_total/2` -- 1600 + 2×1000/2 = 2600.
 fn courage_01_pay_iff_at(user: i32) {
     let owner = 1 - user;
     courage_world_owned(user);
-    let pre = world::snapshot();
-    invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
-    kani::cover!(true, "body returned");
-    let _post = world::snapshot();
-    let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
-    let log_n = effects_of(&mut ebuf);
-    let effects = &ebuf[..log_n];
-
-    // We cannot recover the roll from the log. The book has two arms:
-    // 「所有者向你支付…」 (pay) and 「若为地产商地块，获得1000资金」 (agent).
-    // The 3d20 roll is symbolic, so both arms are live; partition by the
-    // effect shape and pin each arm's leaf.
-    let pay_leg = log_n == 1 && matches!(effects[0], Effect::PayTo { .. });
-    let agent_leg = log_n == 1 && matches!(effects[0], Effect::GainMoney { .. });
-    kani::cover!(pay_leg, "pay arm: one PayTo");
-    kani::cover!(agent_leg, "agent arm: GainMoney 1000");
-    kani::cover!(log_n == 0, "empty (no owner / out)");
-    if pay_leg {
-        // Shape check (the amount cannot be pinned — tile_price/buy_price).
-        crate::kassert!(
-            matches!(effects[0], Effect::PayTo { from, to, .. } if from == owner && to == user),
-            "C-MOR-courage-01: exactly one PayTo(owner → user)"
-        );
-    }
-    if agent_leg {
-        crate::kassert!(
-            matches!(effects[0], Effect::GainMoney { player: p, n } if p == user && n == 1000),
-            "C-MOR-courage-01: agent arm is GainMoney 1000 to the user"
-        );
-    }
-    let _ = &pre;
-}
-
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
-pub fn courage_01_pay_iff_blocked_host() {
-    courage_01_pay_iff_at(0);
-}
-
-#[kani::proof]
-#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
-#[kani::unwind(32)]
-pub fn courage_01_pay_user1_iff_blocked_host() {
-    courage_01_pay_iff_at(1);
-}
-
-/// courage-02 book pin: agent tile ⇒ GainMoney(user, 1000), no pay leg.
-/// BLOCKED-HOST: `is_agent` is off-by-one on the static board.
-fn courage_02_agent_iff_at(user: i32) {
-    courage_world(user);
+    world::with_world_mut(|w| {
+        w.forced_roll = PROPERTY_FACE;
+        w.tiles[PROPERTY_SLOT].houses = PROPERTY_HOUSES;
+    });
     let pre = world::snapshot();
     invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
     kani::cover!(true, "body returned");
@@ -771,39 +731,105 @@ fn courage_02_agent_iff_at(user: i32) {
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let _ = &pre;
+    let amount = spec::courage_01_amount(
+        PROPERTY_PRICE,
+        PROPERTY_PRICE + PROPERTY_HOUSES * PROPERTY_HOUSE,
+    );
 
-    // The 1000-gain arm is what the body takes when `is_agent(roll_tile)`
-    // (off-by-one) fires. Cover both outcomes.
-    kani::cover!(
-        spec::courage_02_effects_ok(effects, user),
-        "agent arm (host bit)"
+    crate::kassert!(
+        spec::courage_01_effects_ok(effects, owner, user, amount),
+        "C-MOR-courage-01: exactly one PayTo(owner → user, land + house_total/2)"
     );
-    kani::cover!(
-        !spec::courage_02_effects_ok(effects, user),
-        "not the agent arm"
+    crate::kassert!(
+        post.money[user as usize] == pre.money[user as usize] + amount
+            || pre.money[user as usize] > i32::MAX - amount,
+        "C-MOR-courage-01: user is paid the book amount"
     );
-    if spec::courage_02_effects_ok(effects, user) {
-        crate::kassert!(
-            post.money[user as usize] == pre.money[user as usize] + 1000
-                || pre.money[user as usize] > i32::MAX - 1000,
-            "C-MOR-courage-02: user gains 1000 on the agent arm"
-        );
-    }
+    crate::kassert!(
+        post.money[owner as usize] == (pre.money[owner as usize] - amount).max(0),
+        "C-MOR-courage-01: owner pays the book amount (floor 0)"
+    );
 }
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
-pub fn courage_02_agent_iff_blocked_host() {
+pub fn courage_01_pay_iff() {
+    courage_01_pay_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn courage_01_pay_user1_iff() {
+    courage_01_pay_iff_at(1);
+}
+
+/// courage-02 book pin: the pinned agent tile ⇒ GainMoney(user, 1000), no
+/// pay leg.
+fn courage_02_agent_iff_at(user: i32) {
+    courage_world(user);
+    world::with_world_mut(|w| w.forced_roll = AGENT_FACE);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
+    kani::cover!(true, "body returned");
+    let post = world::snapshot();
+    let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
+    let log_n = effects_of(&mut ebuf);
+    let effects = &ebuf[..log_n];
+
+    crate::kassert!(
+        spec::courage_02_effects_ok(effects, user),
+        "C-MOR-courage-02: agent tile ⇒ exactly GainMoney(user, 1000)"
+    );
+    crate::kassert!(
+        post.money[user as usize] == pre.money[user as usize] + 1000
+            || pre.money[user as usize] > i32::MAX - 1000,
+        "C-MOR-courage-02: user gains 1000 on the agent arm"
+    );
+}
+
+/// courage-02 negative limb: the pinned neighbouring property is unowned, so
+/// nothing moves and nothing is logged.
+fn courage_02_property_iff_at(user: i32) {
+    courage_world(user);
+    world::with_world_mut(|w| w.forced_roll = PROPERTY_FACE);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
+    kani::cover!(true, "body returned");
+    let post = world::snapshot();
+    let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
+    let log_n = effects_of(&mut ebuf);
+
+    crate::kassert!(
+        log_n == 0,
+        "C-MOR-courage-02: property tile must not take the agent arm"
+    );
+    crate::kassert!(
+        spec::courage_03_post_ok(&post, &pre),
+        "C-MOR-courage-02: unowned property moves no money"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn courage_02_agent_iff() {
     courage_02_agent_iff_at(0);
 }
 
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
-pub fn courage_02_agent_user1_iff_blocked_host() {
+pub fn courage_02_agent_user1_iff() {
     courage_02_agent_iff_at(1);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn courage_02_property_iff() {
+    courage_02_property_iff_at(0);
 }
 
 /// MUTANT companion (courage-01 amount shape): a 200-leg PayTo is NOT the
@@ -832,12 +858,10 @@ pub fn courage_01_mutant_is_detected() {
 // 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换，
 //  地契+房屋价格更低的玩家向更高的玩家支付差价，互换后将你得到的地契免费赎回」
 //
-// BLOCKED-HOST: `owned_at` returns 1-based indices while `tile_owner` /
-// `mortgaged_of` / `set_owner` are 0-based, and `tile_group` uses 1-based
-// `board::tile_slot` — the pair enumerator mixes both conventions and
-// `buy_price` ignores houses. The no-pair no-op below is proven; the swap
-// multiset cannot be pinned. Seat-symmetric on the player; n_players=2 pins
-// the other seat to `1 - user`.
+// The pair enumerator and the tile ops share the 0-based engine index
+// (`board::tile_slot` is the identity on 0..60), and `buy_price` folds houses.
+// The no-pair no-op below is proven; the swap multiset is checked.
+// Seat-symmetric on the player; n_players=2 pins the other seat to `1 - user`.
 // ===========================================================================
 
 /// `Mor:（toko）` play body ops (`cant_play` is a residual gate, not the body).
@@ -857,6 +881,9 @@ crate::host_subset!(toko_dispatch {
     buy_price => arm_buy_price,
     set_owner => arm_set_owner,
     set_mortgaged => arm_set_mortgaged,
+    apply_redeem => arm_apply_redeem,
+    tile_in => arm_tile_in,
+    count_marks_f => arm_count_marks_f,
     pay_to => arm_pay_to,
 });
 
@@ -901,15 +928,14 @@ pub fn toko_no_pair_noop_user1() {
 }
 
 /// Swap multiset (book): two SetOwner, one PayTo(diff), one SetMortgaged(off)
-/// on the received deed. BLOCKED-HOST on the tile-index split; the harness
-/// seeds one mortgaged same-group pair and checks the book multiset.
+/// on the received deed. The harness seeds one mortgaged same-group pair and
+/// checks the book multiset.
 fn toko_swap_iff_at(user: i32) {
     let other = 1 - user;
     sparse2(toko_dispatch, user, |w| {
-        // Seed a same-group mortgaged pair on the 0-based indices 1 and 6
-        // (board group 1: tiles 2 and 7 are 1-based 2,7 → 0-based 1,6).
-        // `owned_at` will report them as 2 and 7 (1-based) — the index split.
-        // (`World::new` already leaves every tile owner=-1 / house-free.)
+        // Seed a same-group mortgaged pair on board slots 1 and 6 (both
+        // colour group 1). (`World::new` already leaves every tile owner=-1 /
+        // house-free.)
         w.tiles[1].owner = user;
         w.tiles[1].mortgaged = true;
         w.tiles[6].owner = other;
@@ -927,8 +953,8 @@ fn toko_swap_iff_at(user: i32) {
     kani::cover!(log_n >= 3, "swap produced effects");
     kani::cover!(log_n == 0, "body bailed (index split / empty pairs)");
     if log_n == 4 {
-        // Book multiset. `give_tile`/`get_tile` under the index split are
-        // NOT the seeded 0-based tiles — BLOCKED-HOST. Check the shape only.
+        // Book multiset. Check the shape only (the tile ids are the seeded
+        // pair, but the spec predates pinning them here).
         let mut n_set_owner = 0;
         let mut n_pay = 0;
         let mut n_unmort = 0;
@@ -1173,13 +1199,18 @@ pub fn starry_06_mutant_is_detected() {
 // PassTile hook arm. `is_start` / `arm_tile_is` use the 0-based engine tile
 // index (`board::tile_slot` is the identity on `0..60`); pin `trig_tile = 0`
 // (TILES[0] kind 0 = CiRCLE) so the gate holds. The DiceRollAfter arm of the
-// same hook is BLOCKED-HOST on `Op::trig_move_main` (unmodeled) and is not
-// driven here (starry-03/04). Seat-symmetric.
+// same hook is not driven here: `fixed_roll` is still a zero stub, so the
+// reroll gate cannot be exercised (no starry-03/04 harness). Seat-symmetric.
 // ===========================================================================
 
 /// `Mor:蝴蝶飞舞的星月夜` Hook body ops (DiceRollAfter + PassTile arms).
+///
+/// `trigger::kind()`'s `TriggerKind::from_str` lowers the wire string through
+/// `game_kinds::from_wire`, which under Kani is a scan-free `match` (the
+/// 99-entry `iter().find` would otherwise need a ~100-trip unwind).
 crate::host_subset!(starry_hook_dispatch {
     trig_kind => arm_trig_kind,
+    trig_name => arm_trig_name,
     trig_move_main => arm_trig_move_main,
     fixed_roll => arm_stub_zero,
     trig_player => arm_trig_player,
@@ -1526,6 +1557,11 @@ pub fn nnm_03_mutant_is_detected() {
 // ===========================================================================
 
 /// `Mor:迷茫之蝶们的三全音` body ops (union of the Effect and TurnEnd arms).
+///
+/// The body matches on `trigger::kind()`, and `TriggerKind::from_str` lowers
+/// the wire string through `game_kinds::from_wire`, which under Kani is a
+/// scan-free `match` (the 99-entry `iter().find` would otherwise need a
+/// ~100-trip unwind).
 crate::host_subset!(tritone_dispatch {
     trig_kind => arm_trig_kind,
     trig_value => arm_trig_value,
@@ -1534,6 +1570,7 @@ crate::host_subset!(tritone_dispatch {
     is_placed => arm_is_placed,
     add_counter_self => arm_add_counter_self,
     set_counter_self => arm_set_counter_self,
+    counter_self => arm_counter_self,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     state_set => arm_state_set,
@@ -1550,7 +1587,8 @@ fn tritone_counteract_world(user: i32, amount: i32) {
     });
 }
 
-/// IFF tritone-01 body: GainMoney + PlaceCard + SetState(owed); crystals = 3.
+/// IFF tritone-01 body: GainMoney(amount) + PlaceCard + crystals=3 +
+/// AddCounter(owed=amount).
 fn tritone_01_gain_place_iff_at(user: i32) {
     let amount: i32 = kani::any();
     kani::assume(amount >= 1 && amount <= 5_000);
@@ -1568,7 +1606,7 @@ fn tritone_01_gain_place_iff_at(user: i32) {
 
     crate::kassert!(
         spec::tritone_01_effects_ok(effects, user, amount),
-        "C-MOR-tritone-01: GainMoney(amount) + PlaceCard + SetState(owed=amount)"
+        "C-MOR-tritone-01: GainMoney(amount) + PlaceCard + crystals=3 + AddCounter(owed=amount)"
     );
     // `set_crystals(3)` lands on the just-placed instance (`last_uid`).
     let crystals = self_crystals();
@@ -1605,7 +1643,7 @@ fn tritone_02_tick_iff_at(user: i32) {
     let owed: i32 = kani::any();
     kani::assume(owed >= 0 && owed <= 5_000);
     set_self_crystals(pre_crystals);
-    let owed_key = crate::intern::intern_or_fail("tritone_owed");
+    let owed_key = crate::intern::intern_or_fail("owed");
     sparse2(tritone_dispatch, user, |w| {
         w.key_set(user, owed_key, owed);
         w.trig_kind = "turnEnd";
@@ -1676,7 +1714,7 @@ pub fn tritone_02_mutant_is_detected() {
     let owed: i32 = kani::any();
     kani::assume(owed >= 1 && owed <= 1_000);
     set_self_crystals(1);
-    let owed_key = crate::intern::intern_or_fail("tritone_owed");
+    let owed_key = crate::intern::intern_or_fail("owed");
     sparse2(tritone_dispatch, user, |w| {
         w.key_set(user, owed_key, owed);
         w.trig_kind = "turnEnd";
@@ -1698,7 +1736,7 @@ pub fn tritone_02_mutant_is_detected() {
 // 「如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记…」
 // OPEN-触发结算: the forced settle (`card_settle_at`) is a protocol stub
 // returning 0; only the mark leg is pinned. The body is invoked directly
-// (the cant_play price gate is BLOCKED-HOST on 1-based `tile_price`).
+// (the `cant_play` price gate is a residual, not in this subset).
 // Seat-symmetric on the standing player.
 // ===========================================================================
 

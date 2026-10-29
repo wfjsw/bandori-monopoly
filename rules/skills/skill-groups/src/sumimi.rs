@@ -38,10 +38,7 @@ pub const SUMIMI: CardDef = CardDef::new(
         // Both halves of （1） live in the body: add when GOT, else clear.
         // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
         // clear branch (FINDINGS C-SUMIMI-band-01).
-        On::Action(Action::TurnEndBefore(
-            "actor == owner",
-            None,
-            at_turn_end)),
+        On::Action(Action::TurnEndBefore("actor == owner", None, at_turn_end)),
     ],
 );
 
@@ -84,9 +81,12 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("sumimi_crystal")));
         return Ok(());
     }
+    // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」
+    // -- the cost is this card's own count (its 「所有」); the L11 cover pays first
+    // and the skill's own pool for the rest.
     let n = ctx::crystals();
     if n > 0 {
-        ctx::add_crystals(-n, i32::MAX)?;
+        crate::spend_crystals(player_id, n)?;
         ctx::log(player_id, &Msg::new(key!("sumimi_cleared")));
     }
     Ok(())

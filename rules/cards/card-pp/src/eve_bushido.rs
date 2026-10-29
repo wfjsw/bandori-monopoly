@@ -18,7 +18,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, RollPurpose, TriggerKind};
-use card_sdk::{CardText, it, it_sub, items, para, sec};
+use card_sdk::{it, it_sub, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const EVE_BUSHIDO: CardDef = CardDef::new(
@@ -76,6 +76,8 @@ fn eve_bushido(player_id: i32) -> card_sdk::Asked {
 /// 规则书[持续]（1）: 「[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）」
 /// Pure guard for [`drew`] -- the activation gate. `false`
 /// means the card is not activated at all.
+// TODO(规则书)（[使用者]抽卡后）: the hook keys on the field [拥有者], not the card's
+//   [使用者]; placement is always on the caster's own field, so they coincide.
 fn drew_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
 }
@@ -84,16 +86,19 @@ fn drew(_player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
         return Ok(());
     }
+    // 规则书[持续]（1）: 「为此卡添加1个[奇迹水晶]（上限3）」
     ctx::add_crystals(1, 3)?;
     Ok(())
 }
 
 /// C# `CardEveBushido.SettleBefore` -- the owner is settling on someone else's
 /// deed and this card still holds a miracle crystal: duel the landlord.
+/// 规则书[持续]（2）: 「[结算]前如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家」
 fn settle_before(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
         return Ok(());
     }
+    // 规则书[持续]（2）: 「如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家」
     if trigger::player_id() != player_id || ctx::crystals() <= 0 {
         return Ok(());
     }
@@ -102,6 +107,7 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let owner = ctx::tile_owner(at);
+    // 规则书[持续]（2）: 「[拥有者]所在格子的地契主人为其他玩家」
     if owner < 0 || owner == player_id || ctx::player_out(owner) {
         return Ok(());
     }
@@ -111,8 +117,11 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     let a = ctx::roll(owner, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书[持续]（2）2: 「[拥有者]投掷3d4」
     let b = ctx::roll(player_id, 3, 4, RollPurpose::Effect, roll_source::CARD)?;
-    // 规则书[持续]（2）3: 「如果平局则双方互不支付」
+    // 规则书[持续]（2）3: 「如果平局则双方互不支付」 -- the 共鸣 rider is printed
+    // after the tie parenthetical, and paying the fuel still resolves its own
+    // effect, so the offer runs on a tie too (the amount stays 0).
     if a == b {
+        let _ = crate::resonance::try_resonance(player_id)?;
         ctx::log(player_id, &Msg::new(key!("eve_bushido_tie")));
         return Ok(());
     }
@@ -124,6 +133,7 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     if crate::resonance::try_resonance(player_id)? {
         amount = (a - b).abs() * 50;
     }
+    // 规则书[持续]（2）3: 「投掷点数低的玩家[支付]投掷点数高的玩家」
     let (from, to) = if a < b {
         (owner, player_id)
     } else {

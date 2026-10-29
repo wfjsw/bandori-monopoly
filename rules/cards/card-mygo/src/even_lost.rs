@@ -11,15 +11,19 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
+        // TODO(ABI): a placed plain-card instance is not offered as a pressable
+        // skill -- the view lists only `skill:*` ids, so (2) has no client entry.
         On::Play("", Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
+            // 规则书（1）: 「当你被其他人的卡的效果影响时」 -- another card's
+            // effect, not your own (`by != owner`), and it must hit you.
             "by != owner && by >= 0 && effect.hits(owner)",
             None,
             counteract).counter_reason(key!("even_lost_when")),
@@ -57,11 +61,16 @@ fn can_go(player_id: i32) -> Option<Msg> {
     if !ctx::is_placed() {
         return Some(Msg::new(key!("even_lost_not_placed")));
     }
-    None
+    // 规则书（2）: 「使你的此次主要移动格数为你当前手牌张数」 -- it replaces the
+    // main move, so the press also needs one still available (`card_move` is a
+    // silent no-op once the main move is spent).
+    rules_status::move_blocked(player_id)
 }
 
 fn go(player_id: i32) -> card_sdk::Asked {
-    // The move below settles, so the card must be gone before it runs.
+    // 规则书（2）: 「主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要
+    // 移动格数为你当前手牌张数」 -- discard first: the move below settles, so the
+    // card must be gone before it runs.
     ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::plan::set_steps(ctx::hand_size(player_id));
     ctx::plan::set_resolve(true);

@@ -541,9 +541,10 @@ fn rent_quote(
     let Some(tile) = data.tiles.get(t) else {
         return (0, None);
     };
-    let mult = w.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT);
-    if mult > 0 {
-        // Rolled at payment time; show the honest dice range.
+    if w.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT) > 0 {
+        // Rolled at payment time; show the honest dice range. The unit is the
+        // live `rentUnitMult` rule param, as the charge path reads it.
+        let mult = w.rent_unit_mult();
         let owner = w.st.owners.get(t).copied().unwrap_or(-1);
         let unit = dice_rent_unit(data, w, owner.max(0) as usize, tile.kind.as_str(), mult);
         (unit, Some(unit * 20))

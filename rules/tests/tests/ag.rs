@@ -212,6 +212,34 @@ fn soul_places_and_loads_crystals() {
     assert_eq!(x, 3, "3 crystals");
 }
 
+// 规则书（2）: 「[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」 --
+// a placed card's own activation press (`cardUsed`, id without `skill:`) is not
+// 「使用技能」, so it leaves the crystals alone. The body then loads fresh ones;
+// the strip would show as the `crimson_soul_skill` log (and an empty-card pass),
+// so assert on the log.
+#[test]
+fn soul_crystal_survives_a_placed_card_activation() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "AG:绯红之魂").unwrap();
+    t.answer(0, 0).unwrap(); // 1 crystal
+    skip_all(&mut t);
+    let mark = t.mark();
+    // Activate the placed card itself (its own [手] entry again).
+    t.skill(0, "AG:绯红之魂").unwrap();
+    t.answer(0, 0).unwrap(); // 1 crystal again
+    skip_all(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        !keys.iter().any(|k| k.contains("crimson_soul_skill")),
+        "a placed-card activation must not strip a crystal: {keys:?}"
+    );
+    // A buggy strip on a 1-crystal card would also empty it and fire rule (3).
+    assert!(
+        !keys.iter().any(|k| k.contains("crimson_soul_empty")),
+        "the crystal was not spent: {keys:?}"
+    );
+}
+
 // 规则书: 「（1）[反击][拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次[消耗]或[支付]金额减少1000（最少为0，若为[支付]则被[支付]玩家[获得]500资金）」
 #[test]
 fn soul_counter_reduces_a_payment() {
@@ -323,7 +351,7 @@ fn soul_last_crystal_still_pays_the_payee_500() {
 // AG:朝同一片天空迈进
 // =====================================================================
 
-// 规则书: 「[反击]抽出此卡时立刻打出，如果你手牌数大于等于3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡」
+// 规则书: 「[反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）」
 #[test]
 fn sky_fires_on_draw() {
     let mut t = Table::vanilla(2);
@@ -361,17 +389,29 @@ fn moca_card_places_with_three_crystals() {
     t.give_play(0, "AG:（摩卡）0.5倍速").unwrap();
     assert!(t.on_field(0, "AG:（摩卡）0.5倍速"));
     assert_eq!(t.crystals(0, "AG:（摩卡）0.5倍速"), Some(3), "3 crystals");
+    assert_eq!(t.turns_left(0, "AG:（摩卡）0.5倍速"), 3, "⌛3 face marker");
     // 规则书: 「你的回合结束时移除一个奇迹水晶」
     t.dice(&[1]);
     t.roll(0).unwrap();
     skip_all(&mut t);
     t.end(0).unwrap();
-    let x = t.crystals(0, "AG:（摩卡）0.5倍速").unwrap();
-    assert!(
-        x < 3,
-        "a crystal was removed: {x} events {:?}",
-        t.recent_keys(8)
+    assert_eq!(t.crystals(0, "AG:（摩卡）0.5倍速"), Some(2), "one removed");
+    assert_eq!(t.turns_left(0, "AG:（摩卡）0.5倍速"), 2, "marker ticks");
+    // 「你的」 is the owner: the other seat's turn end leaves both alone (the
+    // turn-end hook itself reaches every player's field instances).
+    if t.turn() == 1 {
+        t.dice(&[1]);
+        t.roll(1).ok();
+        skip_all(&mut t);
+        t.end(1).ok();
+        skip_all(&mut t);
+    }
+    assert_eq!(
+        t.crystals(0, "AG:（摩卡）0.5倍速"),
+        Some(2),
+        "another seat's turn end does not decay it"
     );
+    assert_eq!(t.turns_left(0, "AG:（摩卡）0.5倍速"), 2);
 }
 
 // 规则书: 「(2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半」
@@ -381,7 +421,7 @@ fn moca_card_halves_move_and_spend() {
     t.set_character_raw(0, "青叶摩卡");
     t.give_play(0, "AG:（摩卡）0.5倍速").unwrap();
     t.set_pos(0, 10);
-    t.dice(&[7]); // 7 / 2 ceil = 4
+    t.dice(&[7]); // 7 / 2 ceil = 4 (rewritten in the `diceRollAfter` body)
     t.roll(0).unwrap();
     skip_all(&mut t);
     assert_eq!(t.pos(0), 14, "10 + ceil(7/2)");
@@ -433,6 +473,35 @@ fn ran_card_returns_to_start_after_abnormal() {
     assert_eq!(t.pos(0), 0, "P0 never moved");
 }
 
+/// 规则书: 「回到起始地点并取消所有受到的效果（不进行任何结算）」 -- the money
+/// the turn cost and every deed / house / mortgage change are put back from
+/// the turn-start snapshot, and the return itself settles nothing.
+#[test]
+fn ran_undo_restores_money_and_the_board() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "美竹兰");
+    t.begin_turn(0);
+    // Something abnormal landed (the residual guard) and the card armed.
+    t.m.world_mut().turn.abnormal = vec![1, 0];
+    t.give(0, &["AG:(兰) 像往常一样"]);
+    t.play(0, "AG:(兰) 像往常一样").unwrap();
+    // What the abnormal turn did: money spent, a deed bought and upgraded,
+    // mortgaged, and the piece moved away from its start square.
+    t.set_money(0, 4_000);
+    t.own(0, &[11]);
+    t.set_houses(11, 2);
+    t.m.world_mut().st.mortgaged[11] = true;
+    t.set_pos(0, 11);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.money(0), 10_000, "the turn's spending is cancelled");
+    assert_eq!(t.owner(11), None, "the deed bought is returned");
+    assert_eq!(t.houses(11), 0, "houses are returned with it");
+    assert!(!t.mortgaged(11), "the mortgage is cleared");
+    assert_eq!(t.pos(0), 0, "back at the starting square");
+}
+
 // =====================================================================
 // AG:回家的路上绕个道 / AG:刻入天穹傲岸的烈光 / AG:（巴）/（绯玛丽）/（鸫）
 // =====================================================================
@@ -450,6 +519,89 @@ fn detour_can_be_a_counter() {
     }
     skip_all(&mut t);
     eprintln!("money: {} {}", t.money(0), t.money(1));
+}
+
+/// The counter path's 「并将下一次的移动掷骰变更为1d6」 latch must survive as a
+/// turn-scoped **lingering instance**: a counter's card is not placed, so
+/// without `ctx::linger` the `DiceRollPlan` rewrite and the `DiceRollAfter`
+/// consume never dispatch and the next roll stays 1d20.
+///
+/// The counter rides a **side** dice move (`TEST:diceMover`, a forced walk --
+/// the only non-main walk that rolls); the turn's main move then is the
+/// 「下一次的移动掷骰」, still in the same turn.
+#[test]
+fn detour_counter_arms_the_next_roll_as_a_lingering_instance() {
+    let mut t = Table::new(&["美竹兰", "户山香澄"]);
+    t.clean();
+    // The gate needs an Afterglow (2) whose fire-pot cost is payable.
+    t.set_fire(0, 1, 1);
+    t.give(0, &["AG:回家的路上绕个道", "TEST:diceMover"]);
+    t.begin_turn(0);
+    skip_all(&mut t);
+    // The fixture walk is forced, so it rolls 1d20 and leaves the main move
+    // free (`plan.forced` has no guest setter).
+    t.m.world_mut().turn.plan.forced = true;
+    t.dice(&[3, 4]);
+    t.play(0, "TEST:diceMover").unwrap();
+    assert!(
+        t.counteract_offered("AG:回家的路上绕个道"),
+        "the [反击] window after the side roll: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:回家的路上绕个道").unwrap();
+    // Pick a plan (reverse); the activation arg is asked at declaration.
+    let k = t.option("detour_opt_reverse").unwrap();
+    t.answer(0, k).unwrap();
+    assert!(
+        t.m.world()
+            .turn
+            .lingering
+            .iter()
+            .any(|l| l.card == "AG:回家的路上绕个道"),
+        "the counter lingers its own def: {:?}",
+        t.m.world().turn.lingering
+    );
+    assert_eq!(
+        t.state(0, "detour_next_roll"),
+        1,
+        "the next-roll latch is armed"
+    );
+    // Let the side walk finish (it does not settle).
+    skip_all(&mut t);
+    // The fixture cleared `resolve` for its own walk; the main move settles as
+    // usual.
+    t.m.world_mut().turn.plan.resolve = true;
+    let from = t.pos(0);
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    // The lingering `DiceRollAfter` consumed the one-shot latch...
+    assert_eq!(
+        t.state(0, "detour_next_roll"),
+        0,
+        "the one-shot latch was consumed"
+    );
+    // ...and the lingering `DiceRollPlan` filter rewrote the main move's dice
+    // table to 1d6 (the base stays on the turn plan).
+    assert!(
+        t.m.world()
+            .turn
+            .plan
+            .base
+            .iter()
+            .any(|d| d.dice.count == 1 && d.dice.sides == 6),
+        "the next plan was rewritten to 1d6: {:?}",
+        t.m.world().turn.plan.base
+    );
+    // The second loaded face (4) is the walk distance.
+    let roll = t
+        .events_since(mark)
+        .into_iter()
+        .find(|e| e.msg.key() == "log.roll")
+        .expect("the main move logs its roll");
+    assert_eq!(int_arg(&roll.msg, "n"), Some(4), "the loaded face is cast");
+    // The picked reverse plan sends those 4 steps backwards.
+    assert_eq!(t.pos(0), (from + 56) % 60, "walked the 1d6 backwards");
 }
 
 // 规则书: 「[反击] 当你经过一名角色时…你从对方处获得等于对方最贵格子基础购买价格一半数额的资金…」
@@ -480,6 +632,37 @@ fn glory_counter_is_offered_when_passing_a_character() {
     // 「你最贵格子基础购买价格一半」 = 0 (P0 owns nothing) from P0.
     assert_eq!(t.money(0), m0 + 1700, "P0 gained half of P1's dearest deed");
     assert_eq!(t.money(1), m1 - 1700, "P1 paid half of their dearest deed");
+}
+
+// 规则书: 「当你经过一名角色时」 -- every occupant of the entered tile is a
+// passed 「一名角色」, so both legs run once per character (two stand there).
+#[test]
+fn glory_counter_swaps_with_every_character_on_the_tile() {
+    let mut t = Table::vanilla(3);
+    t.give(0, &["AG:刻入天穹傲岸的烈光"]);
+    t.own(1, &[40]); // 武道馆, price 3400 -> 1700 from P1
+    t.own(2, &[HILL]); // 星之鼓动山丘, price 600 -> 300 from P2
+    t.set_pos(1, 20);
+    t.set_pos(2, 20);
+    t.begin_turn(0);
+    t.set_pos(0, 18);
+    t.dice(&[2]); // 18 -> 20: both characters are passed
+    t.roll(0).unwrap();
+    assert!(
+        t.counteract_offered("AG:刻入天穹傲岸的烈光"),
+        "the passTile [反击] window must offer the card: {}",
+        t.dump_prompt()
+    );
+    let (m0, m1, m2) = (t.money(0), t.money(1), t.money(2));
+    t.counteract(0, "AG:刻入天穹傲岸的烈光").unwrap();
+    skip_all(&mut t);
+    assert_eq!(
+        t.money(0),
+        m0 + 1700 + 300,
+        "P0 gained half of each passed character's dearest deed"
+    );
+    assert_eq!(t.money(1), m1 - 1700, "P1 paid for their dearest deed");
+    assert_eq!(t.money(2), m2 - 300, "P2 paid for their dearest deed");
 }
 
 // The same window reaches a **bot** seat: "is a bot" is not a rulebook reason
@@ -993,4 +1176,144 @@ fn ix_soul_crystal_vs_rent() {
     skip_all(&mut t);
     let x = t.crystals(0, "AG:绯红之魂").unwrap_or(0);
     assert!(x < 2, "a crystal was spent: {x}");
+}
+
+// 规则书: 「打出此卡时，选择其中一个效果发动：」
+#[test]
+fn tiny_can_asks_which_effect_at_play() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "羽泽鸫");
+    t.give(0, &["AG:（鸫）微小的『能做到』的事"]);
+    t.play(0, "AG:（鸫）微小的『能做到』的事").unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.options.len(),
+        2,
+        "the printed choice: {}",
+        t.dump_prompt()
+    );
+    assert!(
+        t.option("choice_counter").is_some() && t.option("choice_ycm").is_some(),
+        "{}",
+        t.dump_prompt()
+    );
+    skip_all(&mut t);
+}
+
+#[test]
+fn tiny_can_pick_ycm_plays_a_ycm_and_does_not_force() {
+    // 规则书（2）: 「视为打出一张@Tsugu ycm」 -- and the (1) force must not
+    // also run (it used to before the choice).
+    let bandori = tile("Bandori车站");
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "羽泽鸫");
+    t.dice(&[9, 9, 8]); // the ycm's 3d10 = 26 -> teleport
+    t.give(0, &["AG:（鸫）微小的『能做到』的事"]);
+    let mark = t.mark();
+    t.play(0, "AG:（鸫）微小的『能做到』的事").unwrap();
+    let k = t.option("choice_ycm").unwrap();
+    t.answer(0, k).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.pos(0), bandori, "the ycm teleported");
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("tsugumi_can_ycm")),
+        "the ycm play is logged: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.contains("tsugumi_can_forced")),
+        "the (1) force must not also run: {keys:?}"
+    );
+}
+
+#[test]
+fn tiny_can_pick_counter_forces_the_roll_only() {
+    // 规则书（1）【反击】: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」
+    // -- choosing (1) runs the force effect and does not play the ycm.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "羽泽鸫");
+    let pos = t.pos(0);
+    t.dice(&[9, 9, 8]);
+    t.give(0, &["AG:（鸫）微小的『能做到』的事"]);
+    let mark = t.mark();
+    t.play(0, "AG:（鸫）微小的『能做到』的事").unwrap();
+    let k = t.option("choice_counter").unwrap();
+    t.answer(0, k).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.options.len(), 2, "max/min: {}", t.dump_prompt());
+    let k = t.option("tsugumi_can_max").unwrap();
+    t.answer(0, k).unwrap();
+    skip_all(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("tsugumi_can_forced")),
+        "the forced extreme is logged: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.contains("tsugumi_can_ycm")),
+        "no ycm play on the (1) pick: {keys:?}"
+    );
+    assert_eq!(t.pos(0), pos, "the force does not move anyone");
+}
+
+#[test]
+fn tiny_can_stays_playable_when_the_move_is_spent() {
+    // 规则书 prints no [限]; (1) needs no main move. Only the nested (2) ycm's
+    // own teleport arm reads the gate, so the card is still playable.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "羽泽鸫");
+    t.m.world_mut().st.skip_move = true;
+    t.give(0, &["AG:（鸫）微小的『能做到』的事"]);
+    let mark = t.mark();
+    t.play(0, "AG:（鸫）微小的『能做到』的事")
+        .expect("no whole-card move gate");
+    let k = t.option("choice_counter").unwrap();
+    t.answer(0, k).unwrap();
+    let k = t.option("tsugumi_can_max").unwrap();
+    t.answer(0, k).unwrap();
+    skip_all(&mut t);
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("tsugumi_can_forced")),
+        "the (1) force still runs under a spent move"
+    );
+}
+
+#[test]
+fn tiny_can_used_as_a_counter_asks_the_choice_and_forces() {
+    // 规则书（1）: used as a [反击] against a range card, it forces that card's
+    // roll to the picked extreme; (2) would play a ycm instead.
+    let bandori = tile("Bandori车站");
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "羽泽鸫");
+    t.set_character_raw(1, "羽泽鸫");
+    t.dice(&[9, 9, 8]); // the answered ycm's 3d10 = 26 -> forced max = 30
+    t.give(1, &["通用:@Tsugu ycm"]);
+    t.give(0, &["AG:（鸫）微小的『能做到』的事"]);
+    t.begin_turn(1);
+    let mark = t.mark();
+    t.play(1, "通用:@Tsugu ycm").unwrap();
+    assert!(
+        t.counteract_offered("AG:（鸫）微小的『能做到』的事"),
+        "the card [反击] window: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:（鸫）微小的『能做到』的事").unwrap();
+    let k = t.option("choice_counter").unwrap();
+    t.answer(0, k).unwrap();
+    let k = t.option("tsugumi_can_max").unwrap();
+    t.answer(0, k).unwrap();
+    skip_all(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("tsugumi_can_forced")),
+        "the forced extreme is logged: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.contains("tsugumi_can_ycm")),
+        "no ycm play on the (1) pick: {keys:?}"
+    );
+    assert_eq!(t.pos(1), bandori, "30 is still the ge26 teleport");
+    assert!(t.hand(0).is_empty(), "the counter card left the hand");
 }

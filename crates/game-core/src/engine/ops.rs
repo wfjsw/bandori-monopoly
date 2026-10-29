@@ -91,6 +91,10 @@ impl World {
     /// entry is `count`d`sides`, summed into the face. `sides == 0` is a flat
     /// `count` (see [`crate::engine::move_ctx::Roll`]).
     pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+        // A rewrite of the dice is the new face: drop a stale `fixed_roll` so a
+        // card played after `set_fixed_roll` (e.g. STAR BEAT's `set_base_dice` +
+        // `card_move`) gets its own dice instead of the pinned face.
+        self.turn.fixed_roll = None;
         self.turn.plan.base.clear();
         if count > 0 && sides >= 0 {
             self.turn
@@ -305,9 +309,11 @@ impl World {
             return 0;
         };
         // Dice rent (`prop::RENT_DICE_MULT`) is rolled at payment time; the
-        // unit (`count_owned_kind × mult`) is the quoted base.
-        let mult = self.tile_prop(tile, crate::state::prop::RENT_DICE_MULT);
-        if mult > 0 {
+        // unit (`count_owned_kind × mult`) is the quoted base. The prop marks
+        // the tile as dice-rent; the multiplier itself is the live
+        // `rentUnitMult` rule param so a card's +N lands here.
+        if self.tile_prop(tile, crate::state::prop::RENT_DICE_MULT) > 0 {
+            let mult = self.rent_unit_mult();
             return super::play::purchase::dice_rent_unit(data, self, i, t.kind.as_str(), mult);
         }
         super::play::purchase::table_rent(data, self, i)
@@ -1695,6 +1701,7 @@ impl World {
             player_id: player_id as i32,
             counter: 0,
             counter2: 0,
+            turns_left: 0,
             note: Msg::default(),
             face_down: false,
         });
@@ -2015,11 +2022,14 @@ impl World {
     /// Place **one** paired mark spanning tiles `a` and `b`: one row per tile,
     /// each row's [`TileMark::partner`] naming the other. Place-or-refuse
     /// atomic -- if either tile already carries a matching mark (same kind /
-    /// category / owner), place **nothing** and return `false`. The pair cap
-    /// 「放置1个…（上限1）」 is therefore on the pair, and a tile cannot sit in
-    /// two links at once (either-end refusal). Returns `true` when both rows
-    /// landed. `instance` / `src` / `note` stamp both rows like [`Self::place_mark`];
-    /// both die with the creating instance via [`Self::destroy_instance_units`].
+    /// category, whoever its `owner` is), place **nothing** and return `false`.
+    /// The pair cap 「放置1个…（上限1）」 is therefore on the pair, and a tile
+    /// cannot sit in two links at once (either-end refusal). Owner-agnostic on
+    /// purpose: the mark survives an ownership hand-over, so an owner-scoped
+    /// test would let a second copy of the same crystal land between the same
+    /// two tiles. Returns `true` when both rows landed. `instance` / `src` /
+    /// `note` stamp both rows like [`Self::place_mark`]; both die with the
+    /// creating instance via [`Self::destroy_instance_units`].
     pub fn place_mark_pair(
         &mut self,
         instance: i32,
@@ -2042,13 +2052,14 @@ impl World {
         } else {
             category
         };
-        // Pair cap 1: refuse if either end already carries a matching mark for
-        // that owner. Atomic -- neither row is placed when this trips.
+        // Pair cap 1: refuse if either end already carries a matching mark --
+        // any owner (a hand-over must not allow a second crystal on the same
+        // pair). Atomic -- neither row is placed when this trips.
         let marked = |tile: i32| {
             self.st
                 .marks
                 .iter()
-                .any(|m| m.tile == tile && m.kind == kind && m.category == cat && m.owner == owner)
+                .any(|m| m.tile == tile && m.kind == kind && m.category == cat)
         };
         if marked(a) || marked(b) {
             return false;

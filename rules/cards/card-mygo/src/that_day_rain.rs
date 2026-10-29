@@ -7,11 +7,9 @@
 //! crystal-decay field card that, on play and every own turn start, rolls 1d10
 //! and gives [停留] to everyone on (or next to) that agent's colour.
 
-use alloc::vec::Vec;
-
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, RollPurpose, TriggerKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const THAT_DAY_RAIN: CardDef = CardDef::new(
@@ -23,7 +21,10 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("", Some(hook_guard), hook)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「放置5个奇迹水晶」: the `⌛5` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 5)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"那天的雨"#)
         .raw_name(r#"那天的雨"#)
         .tags(&[])
@@ -116,13 +117,15 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             }
         }
         // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
-        // -- C# `DecayCard.TurnEnd` / `Decay` (`AddCrystals(-1)`), on the
-        // owner's turn end. The 「移除所有奇迹水晶后将其放入弃牌堆」 half is
-        // [`on_crystals_changed`].
+        // -- C# `DecayCard.TurnEnd` / `Decay` (`AddCrystals(-1)`). The cell scopes
+        // only the roll with 「你的每回合开始时」; the decay is unscoped, so it
+        // burns at **every** turn end (spec C-MYGO-rainday-03), not the owner's.
+        // TODO(规则书)（每回合结束时）: 每回合结束都移除 -- C# `DecayCard` 只在拥有者
+        //   的回合结束移除；这里没有 `trigger::player_id()` 拥有者过滤。
         TriggerKind::TurnEnd => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
+            // 「每回合结束时移除一个奇迹水晶」 -- the tick; also rolls the
+            // static `⌛5` face marker down one turn.
+            ctx::dec_turns_left();
             ctx::remove_crystal()?;
         }
         _ => {}
@@ -141,7 +144,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).
@@ -173,6 +176,24 @@ fn that_day_rain(player_id: i32) -> card_sdk::Asked {
     rain(player_id)
 }
 
+/// Fixed-size `area` buffer for `rain`: every board tile appears at most once
+/// and there are at most 60, so 64 entries can never overflow. A fixed array
+/// (instead of a `Vec`) keeps the `contains` scan a constant-length loop and
+/// avoids the `__rust_realloc` pointer checks Kani chokes on.
+const MAX_AREA: usize = 64;
+
+fn push_neighbours(area: &mut [i32; MAX_AREA], area_n: &mut usize, t: i32, n: i32) {
+    if t < 0 || n <= 0 {
+        return;
+    }
+    for d in [t, (t + 1) % n, (t - 1 + n) % n] {
+        if !area[..*area_n].contains(&d) && *area_n < MAX_AREA {
+            area[*area_n] = d;
+            *area_n += 1;
+        }
+    }
+}
+
 /// C# `CardThatDayRain.Rain` -- the 1d10 -> agent -> colour-and-neighbours stay.
 fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d10」 -- C# `H.Roll(Seat, 1, 10, CardName)`.
@@ -191,21 +212,12 @@ fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「对应的颜色格子及这些格子相邻格子上的所有玩家」 -- every tile of
     // the agent's colour group plus each one's two ring neighbours. The agent
     // tile itself is in the group (主要街道 is group 1) and so counts.
-    let mut area: Vec<i32> = Vec::new();
-    let mut push_neighbours = |area: &mut Vec<i32>, t: i32| {
-        if t < 0 || n <= 0 {
-            return;
-        }
-        for d in [t, (t + 1) % n, (t - 1 + n) % n] {
-            if !area.contains(&d) {
-                area.push(d);
-            }
-        }
-    };
+    let mut area = [0i32; MAX_AREA];
+    let mut area_n = 0usize;
     for &name in color {
-        push_neighbours(&mut area, ctx::tile_named(name));
+        push_neighbours(&mut area, &mut area_n, ctx::tile_named(name), n);
     }
-    push_neighbours(&mut area, ctx::tile_named(agent));
+    push_neighbours(&mut area, &mut area_n, ctx::tile_named(agent), n);
     let agent_tile = ctx::tile_named(agent);
     ctx::log(
         player_id,
@@ -221,7 +233,7 @@ fn rain(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         let pos = ctx::player_pos(p);
-        if area.contains(&pos) {
+        if area[..area_n].contains(&pos) {
             rules_status::stay::add(p, 1);
             ctx::log(p, &Msg::new(key!("that_day_rain_stay")).player_id("who", p));
         }

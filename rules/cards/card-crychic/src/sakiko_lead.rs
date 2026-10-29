@@ -6,8 +6,8 @@
 //!
 //! record the players sharing your tile; they follow your next main move.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const SAKIKO_LEAD: CardDef = CardDef::new(
     "CRYCHIC:（祥子）带领着大家",
@@ -23,6 +23,8 @@ pub const SAKIKO_LEAD: CardDef = CardDef::new(
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSakikoLead.WhyNot`: refuses with 「没有和你重合的玩家」 when no
     // other player shares this player's tile, then defers to `H.MoveWhyNot`.
+    // 规则书: 「回合开始时若你与其他玩家重合，可打出此卡」 -- the overlap at
+    // turn start is the play gate itself.
     let pos = ctx::player_pos(player_id);
     if pos < 0 || ctx::players_on(pos, player_id).is_empty() {
         return Some(Msg::new(key!("sakiko_lead_no_shared")));
@@ -57,6 +59,9 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「使你的下次主要移动结果对那些玩家一起执行」 -- C# `LeadFx.Who`
         // + `Follow`: after the user settles, the engine replays this move's
         // result for each follower (`ctx::plan::add_follower`).
+        // TODO(规则书)（使你的下次主要移动结果对那些玩家一起执行）: 记录的主要移动对卡牌
+        //   产生的主要移动也要回放 -- followers 只在掷骰的主要移动里回放，
+        //   `ctx::card_move` 的主要移动不回放，记录的人原地不动。
         ctx::plan::add_follower(who);
     }
     // 规则书: 「触发结算时进行的[支付]价格减半」 -- C# `LeadFx.Mark` on the player's
@@ -65,6 +70,10 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     // `MoveCtx` the C# marks at `MoveBefore`; with the default factor of 1.0
     // `*= 0.5` and `= 0.5` agree. The followers' replays carry the same plan,
     // so their settle payments are halved too.
+    // TODO(规则书)（触发结算时进行的[支付]价格减半）: 两次减半应叠乘为 0.25 --
+    //   `set_pay_factor` 是赋值，同一结算上的第二次减半会把 0.5 覆盖回去。
+    // TODO(规则书)（触发结算时进行的[支付]价格减半）: 只该减该次移动的结算 --
+    //   因子写在整回合的 `plan` 上且无人清除，同回合之后的结算也被减半。
     ctx::plan::set_pay_factor(500);
     Ok(())
 }

@@ -16,13 +16,14 @@
 //!
 //! in play with crystals and mono/dual marks; cash the marks in at 5 crystals.
 //! The crystal counter, the turn-end tick, the resonance marks and the
-//! (3) cash-in are live. The marks are this instance's `mono` / `dual`
-//! counters, so they die with it.
+//! (3) cash-in are live; the banked build discount it leaves behind has no
+//! listener once the card is filed away (see the TODO on `before_build`).
+//! The marks are this instance's `mono` / `dual` counters, so they die with it.
 
 use bandori_std::ctx;
 use bandori_std::state_key;
 use card_sdk::abi::{prop, ActionKind};
-use card_sdk::{CardText, it, it_sub, items, para, sec};
+use card_sdk::{it, it_sub, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
 
@@ -83,12 +84,18 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[手]: 「在此卡上放置“粉丝数量”÷3个[奇迹水晶]」 -- C#
     // `H.PlaceFromPlay(c, -1, -1, H.Fans(i) / 3)`.
+    // TODO(规则书)（在此卡上放置“粉丝数量”÷3个[奇迹水晶]） OPEN-div: the ÷3 rounding is
+    //   unprinted -- we floor-divide.
     let fans = fans::up(player_id) + fans::down(player_id);
     ctx::set_crystals(fans / 3);
-    // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
-    // -- `cards_in(Deck)` is the reveal; a card's colour is the band prefix of
-    // its id (`PP:`, `R:`, ...), which is what `H.Db.Card(id)?.group` reads.
+    // 规则书[手]: 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
+    // -- `cards_in(Deck)` only reads the deck; the log below carries the distinct
+    // colour count, never the revealed cards. A card's colour is the band prefix
+    // of its id (`PP:`, `R:`, ...), which is what `H.Db.Card(id)?.group` reads.
     // One distinct colour -> 1 mono mark; two or more -> 1 dual mark.
+    // TODO(规则书)（根据公开卡中的颜色数量添加一个单色/双色标记） OPEN-mark: the
+    //   colour-count table and the 单色/双色标记 vocabulary are unprinted -- we guess
+    //   1 colour = mono, >=2 = dual.
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
     let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
     for c in deck.iter() {
@@ -97,6 +104,8 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
             seen.push(band);
         }
     }
+    // TODO(ABI) 公开抽卡区: the public reveal itself is missing -- the log gives the
+    //   colour count only; it should name the revealed cards too.
     ctx::log(
         player_id,
         &Msg::new(key!("trainee_guide_revealed")).i("n", seen.len() as i64),
@@ -144,7 +153,9 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed()
+    // TurnEnd is dispatched over every seat's field; 「回合结束时」 is the owner's
+    // own turn end only.
+    ctx::is_placed() && ctx::trigger::player_id() == player_id
 }
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
@@ -167,6 +178,14 @@ fn cash_in_guard(_player_id: i32) -> bool {
 fn cash_in(player_id: i32) -> card_sdk::Asked {
     let mono = ctx::counter("mono");
     let dual = ctx::counter("dual");
+    // 1. 「每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；」
+    if mono > 0 {
+        ctx::state::add(player_id, "trainee_guide.buildOff", mono);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("trainee_guide_build_off")).i("n", mono as i64),
+        );
+    }
     // 2. 「每个双色效果为将自己的所有反面[P✽P粉丝]变正」 -- X = all face-downs.
     // Canonical marker name (U+273d); the previous body flipped a sparkle-spelled
     // alias that is not the real marker.
@@ -182,14 +201,6 @@ fn cash_in(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    // 1. 「每个单色效果为获得1层状态"下次盖房的价格减少1000（可溢出），盖房后减少1层"」
-    if mono > 0 {
-        ctx::state::add(player_id, "trainee_guide.buildOff", mono);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("trainee_guide_build_off")).i("n", mono as i64),
-        );
-    }
     // 「随后进入弃卡区」 -- `send_to_dest` leaves **now**, so a second crystal
     // write in the same raise batch cannot re-enter this body (a deferred
     // `set_dest` would still see `is_placed()` and need a latch).
@@ -199,6 +210,10 @@ fn cash_in(player_id: i32) -> card_sdk::Asked {
 
 /// 「下次盖房的价格减少1000（可溢出），盖房后减少1层」 -- a stack of build
 /// discounts, one per mono mark.
+// TODO(规则书)（下次盖房的价格减少1000（可溢出），盖房后减少1层）: the layers are
+//   banked on the player, but `before_build` / `after_build` are hooks of *this
+//   instance* and (3) always files the card away -- so a banked layer never
+//   discounts a build. Needs a persistent builder listener, not the card instance.
 fn before_build(player_id: i32) -> card_sdk::Asked {
     let n = ctx::state::get(player_id, "trainee_guide.buildOff");
     if n <= 0 {

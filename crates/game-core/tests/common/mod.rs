@@ -37,6 +37,69 @@ pub fn data_arc() -> Arc<GameData> {
     Arc::new(data())
 }
 
+/// The policy command for one machine-driven seat, if it has anything to
+/// decide.
+///
+/// Production drives every bot seat over the human interface
+/// (`docs/BOT-DRIVE.md`) and the engine decides nothing itself; a test host is
+/// a driver the same way, and follows the same list the server claims by
+/// (`state.drive`).
+pub fn bot_msg(m: &game_core::engine::Match, member: i32) -> Option<game_core::net::NetMessage> {
+    let st = m.state();
+    let me = st.player_of(member);
+    let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+    // Off its turn and unasked, the seat has nothing to do. (Setup surfaces
+    // other than a prompt are engine-side.)
+    if !asked && (st.phase != "play" || st.busy || st.vote.id > 0 || st.turn != me) {
+        return None;
+    }
+    bot_core::policy::act_for(m, member)
+}
+
+/// The members a harness must drive now: the engine's drive list, except in
+/// Solo, where the list is empty by design (one client drives the whole
+/// table) and the harness plays the bots itself.
+pub fn drive_members(m: &game_core::engine::Match) -> Vec<i32> {
+    let st = m.state();
+    if !st.drive.is_empty() {
+        return st.drive.clone();
+    }
+    st.players
+        .iter()
+        .filter(|p| p.bot && !p.bankrupt && !p.left)
+        .map(|p| p.member)
+        .collect()
+}
+
+/// Let every member of [`drive_members`] take one policy command. Returns
+/// whether any applied.
+pub fn drive(m: &mut game_core::engine::Match) -> bool {
+    let members = drive_members(m);
+    let mut any = false;
+    for member in members {
+        let Some(msg) = bot_msg(m, member) else {
+            continue;
+        };
+        if m.act(member, &msg).is_ok() {
+            any = true;
+        }
+    }
+    any
+}
+
+/// `Match::tick` plus [`drive`] -- one clock quantum, then the bots' answers,
+/// the cadence a host runs at.
+pub trait Pump {
+    fn pump_tick(&mut self, dt: f32);
+}
+
+impl Pump for game_core::engine::Match {
+    fn pump_tick(&mut self, dt: f32) {
+        self.tick(dt);
+        drive(self);
+    }
+}
+
 /// Answer the opening-hand re-roll, if it is up, for every seat.
 ///
 /// 初始重抽 is a whole-table barrier with no advance until every seat answers

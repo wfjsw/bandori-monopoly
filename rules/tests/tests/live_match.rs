@@ -117,6 +117,9 @@ fn match_with_exclusive(card: &str, persona: &str) -> Match {
             break;
         }
         m.tick(0.25);
+        // The engine decides for nobody; the bots are this loop's to
+        // drive (`docs/BOT-DRIVE.md`).
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     assert_eq!(st.phase, "play", "match should reach play");
@@ -155,6 +158,9 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
             break;
         }
         m.tick(0.25);
+        // The engine decides for nobody; the bots are this loop's to
+        // drive (`docs/BOT-DRIVE.md`).
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     assert_eq!(st.phase, "play", "match should reach play");
@@ -219,6 +225,9 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
             break;
         }
         m.tick(0.25);
+        // The engine decides for nobody; the bots are this loop's to
+        // drive (`docs/BOT-DRIVE.md`).
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     let ids: Vec<&str> = st.players[1]
@@ -256,11 +265,11 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
     m.act(1, &play("HHW:（育美）"))
         .expect("play should start the effect");
 
-    // The module blocked on its tile prompt; answer with the first option.
+    // The module blocked on its roll-option prompt; answer with the first option.
     let st = m.state();
     assert_eq!(
-        st.prompt.kind, "tile",
-        "the module's prompt is an engine tile prompt: {:?}",
+        st.prompt.kind, "choice",
+        "the module's prompt offers one option per roll: {:?}",
         st.prompt
     );
     assert!(!st.prompt.options.is_empty());

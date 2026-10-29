@@ -30,20 +30,23 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             None,
-            at_turn_start)).silent(),
-        On::Action(Action::Drawn(card_sdk::pre::MINE, None, on_drawn)),
+            at_turn_start,
+        ))
+        .silent(),
+        // 规则书（3）: 「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶」 -- a
+        // **field** point: `Drawn` is the drawn card's own hook (the field walk is
+        // skipped for it), so this placed skill has to ride `Drew`.
+        On::Action(Action::Drew(card_sdk::pre::MINE, None, on_drawn)),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Action(Action::TurnEndBefore(
             card_sdk::pre::MINE,
             Some(decks_empty),
-            at_turn_end)),
+            at_turn_end,
+        )),
         On::Filter(Filter::PaySplitChoose("", Some(in_lock), lock_pay)),
-        On::Action(Actions::PassRewardAffected(
-            "",
-            Some(in_lock),
-            force_card)),
+        On::Action(Actions::PassRewardAffected("", Some(in_lock), force_card)),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
@@ -132,7 +135,9 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             x * 500,
             &Msg::new(key!("crychic_cash_out")).i("n", (x * 500) as i64),
         )?;
-        ctx::add_crystals(-x, 10)?;
+        // 规则书（`Sumimi:#L11`）: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡
+        // 上的一个[奇迹水晶]代替」 -- 「此卡」 is the placed `Sumimi:#L11`.
+        crate::spend_crystals(player_id, x)?;
     }
     // 规则书（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
     // 「移除」 is the out-of-game keyword (`apply_dest`'s Banished = "just
@@ -207,7 +212,11 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("crychic_which")),
     )?;
     while ctx::deck_count(player_id) < 10 {
-        ctx::add_to_dest(player_id, if mygo { "MyGO" } else { "Ave Mujica" }, ctx::Dest::DeckTop);
+        ctx::add_to_dest(
+            player_id,
+            if mygo { "MyGO" } else { "Ave Mujica" },
+            ctx::Dest::DeckTop,
+        );
     }
     ctx::shuffle_into_deck(player_id, false, true);
     // 「获得角色对应的"MyGO"或"Ave Mujica"乐队技能卡，然后抽2张卡」

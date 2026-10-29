@@ -28,11 +28,14 @@ pub const MYGO: CardDef = CardDef::new(
         On::Action(Action::DiceRollAfter(
             "actor == owner && move.roll >= 16",
             None,
-            after_roll)),
-        On::Action(Action::Discarded(
-            card_sdk::pre::MINE,
-            None,
-            on_discarded)),
+            after_roll,
+        )),
+        // TODO(规则书)（每次你的卡在未生效的情况下进入弃牌堆时）: only cards that
+        //   entered the discard without taking effect -- `pre::MINE` is just
+        //   `actor == owner`, so every owner discard counts and an effective
+        //   card (羽丘 at face 10) also grants a crystal. Needs a
+        //   `PlayCtx.Effective` / `CardWasted` flag on the discard (BACKLOG CH-07).
+        On::Action(Action::Discarded(card_sdk::pre::MINE, None, on_discarded)),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（2）/（3） give two independent 「可」 abilities
         // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
@@ -90,7 +93,7 @@ fn available(player_id: i32) -> [bool; 2] {
     if bandori_std::ctx::skill_blocked(player_id, "") || !is_my_turn(player_id) {
         return [false, false];
     }
-    let c = ctx::crystals();
+    let c = crate::cover_crystals(player_id);
     [c >= 1, c >= 2]
 }
 
@@ -109,7 +112,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if !is_my_turn(player_id) {
         return Some(Msg::new(key!("mygo_not_your_turn")));
     }
-    if ctx::crystals() < 1 {
+    if crate::cover_crystals(player_id) < 1 {
         return Some(Msg::new(key!("mygo_no_crystal")));
     }
     None
@@ -151,10 +154,10 @@ fn press(player_id: i32) -> card_sdk::Asked {
 /// （2）「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
 fn step_one(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
-    if ctx::crystals() < 1 {
+    if crate::cover_crystals(player_id) < 1 {
         return Ok(());
     }
-    ctx::add_crystals(-1, i32::MAX)?;
+    crate::spend_crystals(player_id, 1)?;
     // 规则书（2）: 「移动1格以替代移动掷骰」 -- the shaped 1-step move replaces
     // the roll and runs now (`ctx::card_move`).
     plan::clear_dice();
@@ -167,10 +170,10 @@ fn step_one(player_id: i32) -> card_sdk::Asked {
 /// （3）「你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡」.
 fn draw_two(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
-    if ctx::crystals() < 2 {
+    if crate::cover_crystals(player_id) < 2 {
         return Ok(());
     }
-    ctx::add_crystals(-2, i32::MAX)?;
+    crate::spend_crystals(player_id, 2)?;
     ctx::draw(player_id, 1)?;
     ctx::log(player_id, &Msg::new(key!("mygo_draw")));
     Ok(())

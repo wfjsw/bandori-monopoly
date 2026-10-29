@@ -4,16 +4,17 @@
 //! > （soyo）混合的颜色：
 //! >  将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。
 //!
-//! place this card on one of your deeds; that tile gains every colour, and
-//! rent charged there under a foreign agent is halved again.
+//! place this card on one of your deeds; that tile gains every colour, and an
+//! agent settle that charges rent there is halved again.
 
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Filter, Msg, On};
-use card_sdk::{CardText};
 
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
     &[
         On::Play("", Some(cant_play), soyo_colors),
+        // 规则书: 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半」
         On::Filter(Filter::PaySplitMul("", Some(on_rent), half_again)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -24,18 +25,22 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
         // sheet cell I9
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"长崎素世"#)]));
 
-/// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent charged
-/// on this card's own tile. The card's tile 「获得所有颜色」, so any agent
-/// settling it sees a "different colour" tile and the charge is halved again on
-/// top of the agent's half.
-fn on_rent(player_id: i32) -> bool {
+/// 规则书: 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
+/// 减半收费基础上额外减半」 -- a rent-shaped charge on this card's own tile while
+/// the charge comes from an agent settle. The payer is `trigger::player_id()` and
+/// still stands on the agent tile the settle was triggered at; a plain landing on
+/// this tile is no agent charge.
+///
+/// TODO(规则书)（「其他颜色」）: no colour comparison is made -- an agent of the
+/// tile's own colour is halved too (BACKLOG C-Q14, still open).
+fn on_rent(_player_id: i32) -> bool {
     if !ctx::is_placed() {
         return false;
     }
     if !ctx::trigger::pay_is_rent() {
         return false;
     }
-    if ctx::trigger::target() != player_id {
+    if !ctx::tile_is(ctx::player_pos(ctx::trigger::player_id()), "agent") {
         return false;
     }
     let t = ctx::trigger::tile();
@@ -48,7 +53,8 @@ fn on_rent(player_id: i32) -> bool {
     mine >= 0 && t == mine
 }
 
-/// 「收费在地产商的减半收费基础上额外减半」.
+/// 规则书: 「收费在地产商的减半收费基础上额外减半」 -- half the already
+/// agent-halved charge (ceil, the pipeline's `ceil10` rounds after).
 fn half_again(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
@@ -98,14 +104,14 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id),
     );
     // 规则书: 「该格获得所有颜色」 -- the `anyColor` tile prop is exactly that:
-    // `is_color` answers true for every group. (The parenthetical -- 「该格本身
-    // 不可因自有以外的颜色的地产商盖房」, the tile itself may only be built through
-    // a matching-colour agent -- is `agent_colour_set`'s `buildable = tg == g`,
-    // which reads the tile's *own* group and so already refuses.)
+    // `is_color` answers true for every group.
+    // TODO(规则书)（该格获得所有颜色）: 颜色授予随卡结束 -- 实例离开场上时没有把
+    //   ANY_COLOR 写回 0 的钩子（`destroy_instance_units` 只清标记），全色留在格子上。
     ctx::set_tile_prop(tile, card_sdk::abi::prop::ANY_COLOR, 1);
-    // 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
-    // 减半收费基础上额外减半」 -- the agent group is the group of the tile being
-    // settled; 「其他颜色」 is that group differing from this tile's.
+    // 规则书: 「该格本身不可因自有以外的颜色的地产商盖房」 -- the parenthetical:
+    // the tile may only be built through a matching-colour agent, which is
+    // `agent_colour_set`'s `buildable = tg == g` reading the tile's *own* group,
+    // so the build branch already refuses.
     Ok(())
 }
 

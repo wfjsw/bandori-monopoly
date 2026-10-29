@@ -16,8 +16,8 @@
 //! not parameterised -- it keeps [`CHAOS_RESERVE`] and [`CHAOS_COUNTER_CHANCE`]
 //! as literals.
 
-use super::cx::{Cx, Flow};
-use crate::state::{stage, BotMentality};
+use super::cx::Cx;
+use crate::state::BotMentality;
 use crate::strategy::StrategyParams;
 
 /// Keep at least this much money after buying.
@@ -32,6 +32,12 @@ pub const FORCE_BUY_RESERVE: i32 = 4_000;
 pub const PLAY_CARD_CHANCE: f64 = 0.7;
 /// Hand cards a bot plays in one turn before it rolls.
 pub const MAX_PLAYS_PER_TURN: usize = 2;
+/// [pass-reward] card odds ramp (user ruling 2026-10-28). At or below [`PASS_REWARD_CARD_MIN_MONEY`] the
+/// seat takes the 2 000 money print; the card odds then rise superlinearly to
+/// 1 at [`PASS_REWARD_CARD_MONEY`], above which the seat always draws. The
+/// print's value falls as the stack grows, so the ramp is `t²`, not linear.
+pub const PASS_REWARD_CARD_MIN_MONEY: i32 = 8_000;
+pub const PASS_REWARD_CARD_MONEY: i32 = 80_000;
 /// Chaos's coin reserve: voluntary spending only while it leaves this much.
 /// The one knob the chaos policy spends to -- without it a chaos bot burns out
 /// in a few turns and stops being disruptive.
@@ -49,6 +55,21 @@ pub fn wants_buy(money: i32, price: i32) -> bool {
 /// Would building for `cost` leave [`BUILD_RESERVE`]?
 pub fn wants_build(money: i32, cost: i32) -> bool {
     money - cost >= BUILD_RESERVE
+}
+
+/// Standard's [pass-reward] card odds at `money` -- 0 at or below
+/// [`PASS_REWARD_CARD_MIN_MONEY`], 1 at or above [`PASS_REWARD_CARD_MONEY`],
+/// superlinear (`t²`) in between.
+pub fn pass_reward_card_chance(money: i32) -> f64 {
+    if money <= PASS_REWARD_CARD_MIN_MONEY {
+        return 0.0;
+    }
+    if money >= PASS_REWARD_CARD_MONEY {
+        return 1.0;
+    }
+    let t = f64::from(money - PASS_REWARD_CARD_MIN_MONEY)
+        / f64::from(PASS_REWARD_CARD_MONEY - PASS_REWARD_CARD_MIN_MONEY);
+    t * t
 }
 
 /// Would redeeming for `cost` leave [`REDEEM_RESERVE`]?
@@ -108,33 +129,28 @@ pub fn bot_wants_force_buy(m: BotMentality, money: i32, price: i32) -> bool {
 }
 
 impl Cx<'_> {
-    /// The policy this seat actually plays under. A human seat (including one
-    /// taken over after a time-out / disconnect) is always [`BotMentality::Standard`]
-    /// -- a mentality is a property of a *bot*, not of whoever is driving it.
+    /// The policy this seat actually plays under: the seat's own mentality.
+    /// A human seat carries [`BotMentality::Standard`] unless a host set
+    /// otherwise -- 托管's 混沌 mode tags the human seat `chaos`, and the
+    /// page's own frame rewrite (and this fill) must agree with the driver.
     ///
     /// Inlined and branch-light: this sits on every bot decision, and the
     /// standard path must not pay for the chaos one.
     #[inline]
-    pub(crate) fn bot_mentality(&self, i: usize) -> BotMentality {
-        let p = &self.w.st.players[i];
-        if p.bot {
-            p.mentality
-        } else {
-            BotMentality::Standard
-        }
+    pub fn bot_mentality(&self, i: usize) -> BotMentality {
+        self.w.st.players[i].mentality
     }
 
     #[inline]
-    pub(crate) fn is_chaos(&self, i: usize) -> bool {
-        let p = &self.w.st.players[i];
-        p.bot && p.mentality == BotMentality::Chaos
+    pub fn is_chaos(&self, i: usize) -> bool {
+        self.w.st.players[i].mentality == BotMentality::Chaos
     }
 
     /// The standard policy's parameters for seat `i` (`docs/BOT.md` §3.8).
     /// Resolved from public state only (own persona + the other seats'
     /// personas); chaos never reads them.
     #[inline]
-    pub(crate) fn strategy_of(&self, i: usize) -> StrategyParams {
+    pub fn strategy_of(&self, i: usize) -> StrategyParams {
         crate::strategy::for_seat_sha(
             self.data,
             &self.w.st,
@@ -159,7 +175,7 @@ impl Cx<'_> {
     /// decides on the figure a hook-aware ruleset would actually charge; for
     /// `StubRules` the quote is the plain rulebook formula.
     #[inline]
-    pub(crate) fn ai_wants_buy(&self, i: usize, t: usize) -> bool {
+    pub fn ai_wants_buy(&self, i: usize, t: usize) -> bool {
         let quote = self.buy_quote_for(i, t, super::purchase::BuyKind::Land);
         if !quote.eligible {
             return false;
@@ -182,7 +198,7 @@ impl Cx<'_> {
 
     /// Would building leave the reserve?
     #[inline]
-    pub(crate) fn ai_wants_build(&self, i: usize, t: usize) -> bool {
+    pub fn ai_wants_build(&self, i: usize, t: usize) -> bool {
         if self.is_chaos(i) {
             self.w.st.players[i].money - self.build_cost(t) >= CHAOS_RESERVE
         } else {
@@ -202,7 +218,7 @@ impl Cx<'_> {
     /// `price` is the quoted force-buy figure (the prompt's `view.price`),
     /// which is not the plain land quote.
     #[inline]
-    pub(crate) fn ai_wants_force_buy(&self, i: usize, price: i32) -> bool {
+    pub fn ai_wants_force_buy(&self, i: usize, price: i32) -> bool {
         let money = self.w.st.players[i].money;
         if self.is_chaos(i) {
             bot_wants_force_buy(self.bot_mentality(i), money, price)
@@ -263,175 +279,6 @@ impl Cx<'_> {
         options.len() as i32
     }
 
-    /// Standard: most valuable mortgaged deed that leaves
-    /// the reserve (the original sort-then-`find`, which short-circuits).
-    /// Chaos: any affordable one, at random.
-    fn ai_redeem_choice(&mut self, i: usize) -> Option<usize> {
-        if self.is_chaos(i) {
-            let mut deeds: Vec<usize> = (0..self.data.tiles.len())
-                .filter(|&t| self.w.st.owners[t] == i as i32 && self.w.st.mortgaged[t])
-                .filter(|&t| self.w.st.players[i].money - self.redeem_cost(t) >= CHAOS_RESERVE)
-                .collect();
-            if deeds.is_empty() {
-                return None;
-            }
-            let k = self.w.rng.below(deeds.len());
-            return Some(deeds[k]);
-        }
-        let mut deeds: Vec<usize> = (0..self.data.tiles.len())
-            .filter(|&t| self.w.st.owners[t] == i as i32 && self.w.st.mortgaged[t])
-            .collect();
-        let p = self.strategy_of(i);
-        deeds.sort_by_key(|&t| p.redeem_key(self.tile(t).price));
-        deeds
-            .into_iter()
-            .find(|&t| p.wants_redeem(self.w.st.players[i].money, self.redeem_cost(t)))
-    }
-
-    /// A random playable card the rules say a bot would play.
-    /// Chaos ignores the rule's `ai_play` heuristic (it will even raise a counteraction
-    /// cards from hand) and only asks `cant_play`.
-    ///
-    /// Standard additionally gates on the card's [`crate::strategy::CardPlayParams`]
-    /// (round window, `hold_for_counteract`, weight `> 0`, per-card cash floor
-    /// over `estCost`). All defaults are neutral, so the candidate set and the
-    /// uniform pick are exactly the old ones.
-    fn ai_card_choice(&mut self, i: usize) -> Option<String> {
-        let chaos = self.is_chaos(i);
-        let mentality = self.bot_mentality(i);
-        let money = self.w.st.players[i].money;
-        let mut hand = self.w.hidden[i].hand.clone();
-        hand.dedup();
-        // Bot-only reserve check against the card's estimated execution cost
-        // (`prop::EST_COST`, user ruling 2026-10-07). Never legality -- `cant_play`
-        // is the only gate for that.
-        let affordable = |id: &str| {
-            let est = self.rules.card_prop(id, crate::state::prop::EST_COST);
-            bot_wants_play_card(mentality, money, est)
-        };
-        if chaos {
-            let ok: Vec<String> = hand
-                .into_iter()
-                .filter(|id| self.cant_play(i, id, false).is_none() && affordable(id))
-                .collect();
-            return if ok.is_empty() {
-                None
-            } else {
-                let k = self.w.rng.below(ok.len());
-                Some(ok[k].clone())
-            };
-        }
-        let p = self.strategy_of(i);
-        let round = self.w.st.round;
-        let mut ok: Vec<String> = Vec::new();
-        let mut weights: Vec<i32> = Vec::new();
-        for id in hand {
-            if self.cant_play(i, &id, false).is_some() || !self.rules.ai_play(self, i, &id) {
-                continue;
-            }
-            let params = p.card(&id);
-            if params.play_weight_milli <= 0
-                || params.hold_for_counteract
-                || round < params.min_round
-                || round > params.max_round
-            {
-                continue;
-            }
-            let est = self.rules.card_prop(&id, crate::state::prop::EST_COST);
-            if !p.wants_play_card(money, est, &id) {
-                continue;
-            }
-            ok.push(id);
-            weights.push(params.play_weight_milli);
-        }
-        if ok.is_empty() {
-            return None;
-        }
-        // Uniform among equal weights (the default): the original
-        // `ok[rng.below(len)]`, same draw, same mapping. A non-uniform weight
-        // set switches to one cumulative draw.
-        let uniform = weights.windows(2).all(|w| w[0] == w[1]);
-        let k = if uniform {
-            self.w.rng.below(ok.len())
-        } else {
-            let total: i64 = weights.iter().map(|&w| w.max(0) as i64).sum();
-            if total <= 0 {
-                self.w.rng.below(ok.len())
-            } else {
-                let mut r = (self.w.rng.below(total as usize)) as i64;
-                let mut k = ok.len() - 1;
-                for (j, &w) in weights.iter().enumerate() {
-                    r -= w.max(0) as i64;
-                    if r < 0 {
-                        k = j;
-                        break;
-                    }
-                }
-                k
-            }
-        };
-        Some(ok[k].clone())
-    }
-
-    /// A skill button the seat would press right now: a placed persona /
-    /// group skill rule the player may activate.
-    ///
-    /// Chaos presses every usable one (at most one press per skill per turn --
-    /// a skill whose body is a no-op must not park the bot in a press loop).
-    /// Standard only presses when the seat's [`crate::strategy::SkillParams`]
-    /// say so; the default entry is "never", which is the old standard policy
-    /// (skills were left to the player). The gate is the rule's own
-    /// `cant_play` (`why_not_act` asks the same one before honouring a `skill`
-    /// command).
-    fn ai_skill_choice(&mut self, i: usize) -> Option<String> {
-        let placed = self.w.placed_cards(i as i32);
-        let chaos = self.is_chaos(i);
-        let params = if chaos {
-            None
-        } else {
-            Some(self.strategy_of(i))
-        };
-        let candidates: Vec<String> = self
-            .data
-            .skill_rules_of(&self.w.st.players[i].persona)
-            .into_iter()
-            .filter(|id| {
-                placed.contains(id)
-                    && !self.w.turn.played.contains(id)
-                    && self.rules_cant_play(i, id).is_none()
-            })
-            .collect();
-        let round = self.w.st.round;
-        let mut ok: Vec<String> = Vec::new();
-        for id in candidates {
-            if let Some(p) = &params {
-                let sk = p.skill(&id);
-                // `min_charge` / `min_named_counter` / `keep_markers` are tuner
-                // metadata in S1 -- the S1 heuristic enforces the weight and
-                // the round window only (`docs/BOT.md` §3.8).
-                if sk.play_weight_milli <= 0 || round < sk.min_round || round > sk.max_round {
-                    continue;
-                }
-                // Odds per offer; the "always" group draws nothing extra, and a
-                // zero weight (the default) short-circuits above so the RNG
-                // stream of the old policy is untouched.
-                if sk.play_weight_milli < crate::strategy::NEUTRAL_WEIGHT {
-                    let roll = self.w.rng.f64() * 1000.0;
-                    if roll >= sk.play_weight_milli as f64 {
-                        continue;
-                    }
-                }
-            }
-            ok.push(id);
-        }
-        if ok.is_empty() {
-            None
-        } else {
-            let k = self.w.rng.below(ok.len());
-            Some(ok[k].clone())
-        }
-    }
-
     /// The auction ceiling for seat `s` on a tile of price `base`. Standard
     /// randomises around the price; chaos will spend down to [`CHAOS_RESERVE`].
     pub(crate) fn ai_auction_worth(&mut self, s: usize, base: i32) -> i32 {
@@ -442,85 +289,5 @@ impl Cx<'_> {
         let p = self.strategy_of(s);
         let roll = self.w.rng.f64();
         p.auction_worth(roll, base, money)
-    }
-
-    /// One decision for the player whose turn it is.
-    ///
-    /// The standard path below is the standard bot policy -- the chaos branch is
-    /// taken *before* it and returns, so a standard seat never pays for it.
-    pub(crate) fn ai_step(&mut self, i: usize) -> Flow<()> {
-        let bot = self.w.st.players[i].ai;
-        if self.w.st.step == stage::OPS {
-            if bot {
-                if self.is_chaos(i) {
-                    // Cards first (every legal opportunity, no cap), then every
-                    // usable skill, then redeem down to the reserve. Only then
-                    // does the turn move on.
-                    if let Some(card) = self.ai_card_choice(i) {
-                        self.play_from_hand(i, &card)?;
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                    if let Some(sk) = self.ai_skill_choice(i) {
-                        self.w.turn.played.push(sk.clone());
-                        self.use_skill(i, &sk)?;
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                    if let Some(t) = self.ai_redeem_choice(i) {
-                        let _ = self.deed_redeem(i, t);
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                } else {
-                    let p = self.strategy_of(i);
-                    if let Some(t) = self.ai_redeem_choice(i) {
-                        let _ = self.deed_redeem(i, t);
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                    if self.w.turn.played.len() < p.max_plays_per_turn.max(0) as usize
-                        && self.w.rng.chance(p.play_card_chance())
-                    {
-                        if let Some(card) = self.ai_card_choice(i) {
-                            self.play_from_hand(i, &card)?;
-                            self.wait(1.2);
-                            return Ok(());
-                        }
-                    }
-                    // A skill press only when the seat's `SkillParams` ask for
-                    // one (the default entry is "never", the old policy). No
-                    // RNG is drawn otherwise, so the stream above is untouched.
-                    if let Some(sk) = self.ai_skill_choice(i) {
-                        self.w.turn.played.push(sk.clone());
-                        self.use_skill(i, &sk)?;
-                        self.wait(1.2);
-                        return Ok(());
-                    }
-                }
-            }
-            if self.w.st.skip_move {
-                return self.end_turn_cmd(i);
-            }
-            let roller = if self.w.st.roller >= 0 {
-                self.w.st.roller as usize
-            } else {
-                i
-            };
-            return self.main_move(i, roller);
-        }
-        // Buy / build are settle-time offers only: the tile rule's
-        // `ctx::offer_buy` / `ctx::offer_build` prompt already carried the
-        // bot's `ai_wants_*` answer. END is discard / end-turn.
-        if self.over_hand(i) {
-            let hand_len = self.w.hidden[i].hand.len();
-            let k = self.w.rng.below(hand_len);
-            let card = self.w.hidden[i].hand[k].clone();
-            self.discard(i, &card)?;
-            self.wait(0.4);
-        } else {
-            self.end_turn_cmd(i)?;
-        }
-        Ok(())
     }
 }

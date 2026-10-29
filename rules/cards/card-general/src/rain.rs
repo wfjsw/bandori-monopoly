@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 
 pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play("", None, rain)])
     .meta(
@@ -36,11 +36,16 @@ fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「[指定]X名玩家（其中必须包括[使用者]）」 -- the user is always
     // one of them (C# `targets = { i }`), the rest come one prompt at a time.
     let mut targets: Vec<i32> = Vec::new();
-    targets.push(player_id);
+    // 规则书[手]: 「[指定]X名玩家（其中必须包括[使用者]）」 -- through
+    // `ctx::target` like the others, so a cancelled designation of the user counts.
+    if let Some(hit) = ctx::target(player_id) {
+        targets.push(hit);
+    }
     let mut pool: Vec<i32> = ctx::others(player_id);
     while (targets.len() as i32) < x && !pool.is_empty() {
-        // C# `H.PickTarget(c, others, ...)`: a player prompt over the candidates
-        // (`!Out && !exile`), then the `H.Target` targeting gate on the answer.
+        // C# `H.PickTarget(c, others, ...)`: a player prompt over the other
+        // living players (`ctx::others` is `!Out`; an exiled seat is still
+        // offered), then the `H.Target` targeting gate on the answer.
         let who = ctx::ask_player(
             player_id,
             &Msg::new(key!("rain_title")),
@@ -50,13 +55,17 @@ fn rain(player_id: i32) -> card_sdk::Asked {
             &pool,
         )?;
         // 规则书[手]: 「[指定]X名玩家」 -- the gate (out / exile / ImmuneAll /
-        // Untargetable / Redirect / the `target` [反击] window). C# `PickTarget`
-        // answers `t.yes ? t.index : -1` and a failed pick ends the loop.
-        // `Some(hit)` is the player actually hit (a `Redirect` hook may have moved
-        // it), which is what joins `targets` and leaves the pool.
+        // Untargetable / Redirect / the `target` [反击] window). `Some(hit)` is
+        // the player actually hit (a `Redirect` hook may have moved it), which is
+        // what joins `targets` and leaves the pool.
+        // C# `PickTarget` ends the loop on a refused pick; the sheet wants X
+        // names, so drop the refused seat and ask again.
         let hit = match ctx::target(who) {
             Some(hit) => hit,
-            None => break,
+            None => {
+                pool.retain(|&s| s != who);
+                continue;
+            }
         };
         targets.push(hit);
         pool.retain(|&s| s != hit);

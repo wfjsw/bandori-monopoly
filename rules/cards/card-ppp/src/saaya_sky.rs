@@ -11,7 +11,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
@@ -24,10 +24,10 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
             "actor == owner && card.placed",
             None,
             pass_tile)).silent(),
-        On::Action(Action::TurnEndAfter(
-            "card.placed && slot('saaya_sky_passed') != 0",
-            None,
-            turn_end_after)),
+        // 规则书: 「[使用者][经过]此卡后在回合结束后获得1个[火罐]」 -- a scheduled
+        // callback (`ctx::at_turn_end` names this entry), not a field hook: the
+        // book pays at turn end even if the card has left the field by then.
+        On::Schedule("at_end", "", Some(passed_here), turn_end_after),
     ],
 )
 .meta(
@@ -43,8 +43,8 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]),
 );
 
-/// Where the card's tile is written down (C# `Tile` on the placed card).
-/// C# `CardSaayaSky._passed` -- the user walked past the card this turn.
+/// The pass record (C# `CardSaayaSky._passed`): the uid of the copy the user
+/// walked past, so with two copies only the passed one reacts; 0 = none.
 const SLOT_PASSED: &str = "saaya_sky_passed";
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -52,8 +52,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // H.TileNamed("山吹面包房"))`.
     let tile = ctx::tile_named("山吹面包房");
     ctx::set_dest(ctx::Dest::Field);
+    // A pass from a previous time on the field must not fire again.
+    ctx::set_slot(player_id, SLOT_PASSED, 0);
     // 规则书（1）: 「将此卡放置在山吹面包房」 -- bound to that tile; the hop in
-    // (2) moves it with `set_card_tile`.
+    // (2) moves it with `set_self_tile`.
     ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("saaya_sky_note")));
     ctx::log(
         player_id,
@@ -70,8 +72,23 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
-    ctx::set_slot(player_id, SLOT_PASSED, 1);
+    // C# `_passed` is a bool: a second crossing of the same copy this turn must
+    // not schedule a second payout.
+    let uid = ctx::self_uid();
+    if ctx::slot(player_id, SLOT_PASSED) == uid {
+        return Ok(());
+    }
+    // TODO(规则书)（[使用者][经过]此卡后）: the record is one uid per player -- with
+    // two copies both passed in the same turn only the last one pays.
+    ctx::set_slot(player_id, SLOT_PASSED, uid);
+    ctx::at_turn_end(player_id, "at_end");
     Ok(())
+}
+
+/// Residual guard for [`turn_end_after`]: the recorded pass is this instance's,
+/// so a second copy the user did not pass stays put.
+fn passed_here(player_id: i32) -> bool {
+    ctx::slot(player_id, SLOT_PASSED) == ctx::self_uid()
 }
 
 /// 规则书（2）: 「在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上」

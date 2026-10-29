@@ -7,7 +7,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, MoveKind, RollPurpose};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BALLOON_SHOW: CardDef =
@@ -31,21 +31,29 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    // 规则书: 「投掷4次3d20并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four
+    // 规则书: 「投掷4次3d20mod60并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four
     // times. Windowed (`ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
     // 「你的任意掷骰结算前」) rings on each; source is CARD (a hand card's own roll).
+    // 规则书: 「记录其结果」 -- every face is logged, and all four stay options
+    // below even when two add up to the same tile.
     let mut tiles: Vec<i32> = Vec::new();
     for _ in 0..4 {
         let r = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
+        ctx::log(
+            player_id,
+            &Msg::new(key!("balloon_show_face"))
+                .player_id("who", player_id)
+                .i("n", r as i64),
+        );
+        // 规则书: 「投掷4次3d20mod60并记录其结果」 -- sum mod 60 fixes the 序号
+        // (a 60th face wraps to 序号 60); `n` is the fixed 60-tile board.
         let t = (r - 1).rem_euclid(n);
-        if !tiles.contains(&t) {
-            tiles.push(t);
-        }
+        tiles.push(t);
     }
     if tiles.is_empty() {
         return Ok(());
     }
-    // 规则书: 「选择其中之一」 -- C# `H.AskTileOf` over the distinct rolled tiles.
+    // 规则书: 「选择其中之一」 -- C# `H.AskTileOf` over the four rolled tiles.
     let title = Msg::new(key!("balloon_show_ask_title"));
     let text = Msg::new(key!("balloon_show_ask_text"));
     let to = ctx::ask_tile(player_id, &title, &text, &tiles)?;

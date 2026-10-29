@@ -209,6 +209,16 @@ pub fn resolve_removed_pays(step: &Step<'_>) -> Result<(), String> {
     if !played(step, RESOLVE) {
         return Ok(());
     }
+    // The [特] is keyed on the removal, so pin that separately from the money:
+    // the removal log is the only signal (no removal event exists yet -- see the
+    // card's TODO).
+    let removed = step
+        .events
+        .iter()
+        .any(|e| e.msg.key() == "log.card_removed" && format!("{}", e.msg).contains(RESOLVE));
+    if !removed {
+        return Err("觉悟 was not [移除]d (no log.card_removed)".into());
+    }
     let who = actor(step);
     let delta = step.post_money(who) as i64 - step.pre_money(who) as i64;
     if delta != 1000 {
@@ -511,7 +521,8 @@ pub fn fire_bird_exhaust(step: &Step<'_>) -> Result<(), String> {
     // draw pile may immediately reshuffle it into the draw (G-CARDS); both
     // zones honour the clause.
     let h = &step.post.hidden[who];
-    let landed = h.graveyard.iter().any(|c| c == FIRE_BIRD) || h.deck.iter().any(|c| c == FIRE_BIRD);
+    let landed =
+        h.graveyard.iter().any(|c| c == FIRE_BIRD) || h.deck.iter().any(|c| c == FIRE_BIRD);
     if pre_on && !post_on && !landed {
         return Err(format!(
             "Fire bird left the field without entering the discard; discard={:?} draw={:?}",
@@ -1287,31 +1298,91 @@ fn track_is_a_special_not_a_hand_play() {
 // ================================================================ 选择自己的舞台
 
 const STAGE: &str = "R:选择自己的舞台";
+/// 重叠的声音 [手]2 [传送]s without settling -- an [除外]-free abnormal move
+/// that only the answer can make settle.
+const OVERLAP: &str = "PP:[衍生]重叠的声音";
 
 /// 选择自己的舞台: [反击] vs an [除外]-free abnormal move.
 ///
 /// [停留] only *prevents* a move -- it is not an abnormal move *applied* to
 /// the user. Drive a forced [传送] instead (the same shape the engine's
-/// window keys on).
+/// window keys on). 重叠的声音's teleport is 「不[结算]」, so answering 「是」
+/// is the only thing that can make this move settle.
 #[test]
 fn own_stage_offered_on_abnormal_move() {
     let mut t = vanilla2();
     t.give(0, &[STAGE]);
-    // 蓝玫瑰的骄傲 (2) [传送]s the user to the next unbought Livehouse --
-    // an [异常移动效果] other than [除外].
-    t.give(0, &[BLUE]);
-    t.play(0, BLUE).unwrap();
-    let mut offered = t.counteract_offered(STAGE);
-    while t.prompt().is_some() {
+    t.give(0, &[OVERLAP]);
+    t.play(0, OVERLAP).unwrap();
+    let mut offered = false;
+    let mut answered = false;
+    let mut settled = false;
+    while let Some(p) = t.prompt() {
         if t.counteract_offered(STAGE) {
             offered = true;
+            t.counteract(0, STAGE).unwrap();
+            answered = true;
+        } else if answered && p.title.key().contains("own_stage") {
+            t.answer(0, 0).unwrap(); // 「是」: trigger the settle
+        } else {
+            // The station is an unowned property: its settle IS the buy offer.
+            if answered && p.title.key().contains("buy") {
+                settled = true;
+            }
+            t.decline();
         }
-        t.decline();
     }
     assert!(
         offered,
         "选择自己的舞台 never offered on a forced [传送]; prompt={}",
         t.dump_prompt()
+    );
+    assert!(
+        settled,
+        "answering 「是」 must settle the move (the station's buy offer)"
+    );
+}
+
+/// The `nores` flag of every `log.teleport` since `mark` -- true where the
+/// teleport skipped its settle.
+fn nores_marks(t: &Table, mark: i32) -> Vec<bool> {
+    t.events_since(mark)
+        .iter()
+        .filter(|e| e.msg.key() == "log.teleport")
+        .map(|e| e.msg.a.get("nores").is_some())
+        .collect()
+}
+
+/// 选择自己的舞台 「否」: the same 「不[结算]」 teleport must stay unsettled.
+#[test]
+fn own_stage_no_answer_skips_the_settle() {
+    let mut t = vanilla2();
+    t.give(0, &[STAGE]);
+    t.give(0, &[OVERLAP]);
+    let mark = t.m.world().recent.back().map_or(0, |e| e.id);
+    t.play(0, OVERLAP).unwrap();
+    let mut offered = false;
+    let mut answered = false;
+    while let Some(p) = t.prompt() {
+        if t.counteract_offered(STAGE) {
+            offered = true;
+            t.counteract(0, STAGE).unwrap();
+            answered = true;
+        } else if answered && p.title.key().contains("own_stage") {
+            t.answer(0, 1).unwrap(); // 「否」: no settle
+        } else {
+            t.decline();
+        }
+    }
+    assert!(
+        offered,
+        "选择自己的舞台 not offered; prompt={}",
+        t.dump_prompt()
+    );
+    assert_eq!(
+        nores_marks(&t, mark),
+        [true],
+        "answering 「否」 keeps it unsettled"
     );
 }
 

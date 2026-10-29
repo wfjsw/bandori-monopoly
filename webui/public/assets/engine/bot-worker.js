@@ -19,7 +19,7 @@
 // the page renders for that seat. Never a World, a match seed, or another
 // seat's hidden information. The `seed` is the **search** RNG's.
 //
-// Messages in  ({id, op, ...}):  init | decide | ponder | extras | invalidate | close
+// Messages in  ({id, op, ...}):  init | decide | act | ponder | extras | invalidate | close
 // Messages out ({id, ok, value} | {id, ok:false, error})
 
 let glue = null;
@@ -134,6 +134,16 @@ function decide(view, budgetMs, seed) {
   return JSON.parse(glue.decide(JSON.stringify(view), budgetMs | 0, seed >>> 0));
 }
 
+/**
+ * The policy's command for one seat, with **no search** -- the standard /
+ * chaos path (`docs/BOT-DRIVE.md`). `seed` is the determinizer's sampling
+ * seed; the answer is `null` when the seat has nothing to decide.
+ */
+function act(view, seed) {
+  if (!glue) throw new Error("init first");
+  return JSON.parse(glue.act(JSON.stringify(view), seed >>> 0));
+}
+
 function ponder(view, budgetMs, seed) {
   if (!glue) throw new Error("init first");
   return JSON.parse(glue.ponder(JSON.stringify(view), budgetMs | 0, seed >>> 0));
@@ -163,6 +173,7 @@ self.onmessage = async (e) => {
     if (op === "init") value = await init(rest.base);
     else if (op === "decide") value = decide(rest.view, rest.budgetMs, rest.seed);
     else if (op === "ponder") value = ponder(rest.view, rest.budgetMs, rest.seed);
+    else if (op === "act") value = act(rest.view, rest.seed);
     else if (op === "extras") value = extras(rest.view, rest.seed);
     else if (op === "invalidate") value = invalidate(rest.decisionKey);
     else if (op === "close") {

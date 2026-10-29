@@ -83,6 +83,14 @@ pub const CARDS: &[CardDef] = &[
 /// caller derives from this, and effects that spend the same token budget it
 /// on top of their own cost.
 pub fn copy_sticker_cost(player_id: i32) -> i32 {
+    // (3) is a [持续] of `PPP:Returns`: once Returns has left the field (or is
+    // face down) the borrowed copy stays, but the tax does not -- the same
+    // reason (1) scans the field instead of keeping a token.
+    if bandori_std::ctx::find_card(player_id, "PPP:Returns").is_none()
+        || bandori_std::ctx::card_face_down(player_id, "PPP:Returns")
+    {
+        return 0;
+    }
     let borrow = bandori_std::ctx::tok(player_id, "returns.borrow_uid");
     if borrow != 0 && bandori_std::ctx::self_uid() == borrow {
         1
@@ -111,6 +119,53 @@ pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
     let cost = copy_sticker_cost(player_id);
     if cost > 0 {
         bandori_std::ctx::add_tok(player_id, "星星贴纸", -cost, i32::MAX)?;
+    }
+    Ok(())
+}
+
+/// `Sumimi:#L11`'s [奇迹水晶] cover: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡
+/// 上的一个[奇迹水晶]代替」. Read by the gates so a skill with an empty own pool
+/// is still payable. Every copy on the field counts -- `find_card` is a name
+/// resolver and would only ever see the first.
+fn l11_cover(player_id: i32) -> i32 {
+    let mut n = 0;
+    for (uid, id) in bandori_std::ctx::field_instances(player_id) {
+        if id == "Sumimi:#L11" {
+            n += bandori_std::ctx::counter_at(uid, bandori_std::counter::CRYSTALS).max(0);
+        }
+    }
+    n
+}
+
+/// [奇迹水晶] a band-skill cost may draw on right now: the skill's own plus
+/// the `Sumimi:#L11` cover. Gate on this, not on `ctx::crystals()`.
+pub fn cover_crystals(player_id: i32) -> i32 {
+    bandori_std::ctx::crystals() + l11_cover(player_id)
+}
+
+/// Pay `n` [奇迹水晶] of a band-skill cost: `Sumimi:#L11`'s cover first (every
+/// copy, in placement order), the skill's own pool for the rest in one write.
+/// Callers gate on [`cover_crystals`] first.
+pub fn spend_crystals(player_id: i32, n: i32) -> card_sdk::Asked {
+    let mut left = n;
+    for (uid, id) in bandori_std::ctx::field_instances(player_id) {
+        if left <= 0 {
+            break;
+        }
+        if id != "Sumimi:#L11" {
+            continue;
+        }
+        while left > 0 {
+            let have = bandori_std::ctx::counter_at(uid, bandori_std::counter::CRYSTALS);
+            if have <= 0 {
+                break;
+            }
+            bandori_std::ctx::add_counter_at(uid, bandori_std::counter::CRYSTALS, -1, i32::MAX);
+            left -= 1;
+        }
+    }
+    if left > 0 {
+        bandori_std::ctx::add_crystals(-left, i32::MAX)?;
     }
     Ok(())
 }

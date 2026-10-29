@@ -40,7 +40,7 @@ use game_core::engine::CardRules;
 use serde_json::Value;
 use tokio::sync::oneshot;
 
-pub use bot_service::{decide_request, invalidate_request, ponder_request, BotAnswer};
+pub use bot_service::{act_request, decide_request, invalidate_request, ponder_request, BotAnswer};
 
 /// Extra wall-clock on top of the search budget, sized to absorb **one
 /// iteration overrun** (`docs/BOT.md` §5 B7: the ISMCTS loop is anytime
@@ -328,6 +328,46 @@ impl BotService {
         }
     }
 
+    /// The policy's command for a standard / chaos seat -- no search
+    /// (`docs/BOT-DRIVE.md`). Same deadline / fallback contract as
+    /// [`Self::decide`].
+    pub async fn act(
+        &self,
+        room: &str,
+        seat: i32,
+        view: &Value,
+        seed: u64,
+        timeout: Duration,
+    ) -> Result<BotAnswer, BotError> {
+        self.stats.decides.fetch_add(1, Ordering::Relaxed);
+        let id = match &self.backend {
+            Backend::Child { next, .. } | Backend::Local { next, .. } => {
+                next.fetch_add(1, Ordering::Relaxed)
+            }
+        };
+        let req = act_request(id, room, seat, view, seed);
+        let deadline = Instant::now() + timeout;
+        let raw = match self.call(id, req, deadline).await {
+            Ok(r) => r,
+            Err(e) => {
+                self.stats.decide_fallback.fetch_add(1, Ordering::Relaxed);
+                return Err(e);
+            }
+        };
+        let v: Value =
+            serde_json::from_str(&raw).map_err(|e| BotError::Down(format!("bad reply: {e}")))?;
+        match BotAnswer::from_response(&v) {
+            Ok(a) => {
+                self.stats.decide_ok.fetch_add(1, Ordering::Relaxed);
+                Ok(a)
+            }
+            Err(e) => {
+                self.stats.decide_fallback.fetch_add(1, Ordering::Relaxed);
+                Err(BotError::Down(e))
+            }
+        }
+    }
+
     /// Speculative search for an idle seat (BOT-RESEARCH #5). The caller must
     /// not block on this -- spawn it and move on; the result is cached inside
     /// the service and a later [`Self::decide`] for the same information-set
@@ -475,11 +515,13 @@ impl Drop for BotService {
 /// turn surface (运营 card plays / 结束 buy-build-end).
 pub fn decision_at(state: &game_core::state::MatchState, player_id: i32) -> Option<i32> {
     use game_core::state::stage;
-    if state.phase != "play" {
-        return None;
-    }
+    // Setup prompts (mulligan etc.) come through the same channel; only the
+    // turn surface below is play-only.
     if state.prompt.id > 0 {
         return state.prompt.waiting(player_id).then_some(state.prompt.id);
+    }
+    if state.phase != "play" {
+        return None;
     }
     if state.busy || state.turn != player_id {
         return None;

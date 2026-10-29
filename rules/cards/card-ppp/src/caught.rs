@@ -1,30 +1,34 @@
-//! `PPP:抓到了` -- C# `CardCaught` (MatchHost.cs:8776-8813): walk to the next
+//! `PPP:抓到了` -- C# `CardCaught` (MatchHost.cs:8776-8813): walk to a player
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:抓到了`）:
 //! > 抓到了：
 //! > 移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。
 //!
-//! player ahead and treat the walk as the main move, build allowed.
+//! ahead of the user's choice (nearest forward first), treat the walk as the
+//! main move, build allowed.
 
 use alloc::vec::Vec;
+use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
-pub const CAUGHT: CardDef =
-    CardDef::new("PPP:抓到了", &[On::Play("", Some(cant_play), play)]).meta(
+pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", Some(cant_play), play)])
+    .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"抓到了"#)
             .raw_name(r#"抓到了"#)
             .tags(&[])
-            .text(CardText::para(r#"移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。"#))
+            .text(CardText::para(
+                r#"移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。"#,
+            ))
             // sheet cell B9
             .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
     );
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // C# `CardCaught.WhyNot`: `H.MoveWhyNot` first (main move still available),
-    // then refuses with 「前方没有别的玩家」 unless another present player stands on
-    // a different tile.
+    // 规则书: 「视为本回合的主要移动」 -- `H.MoveWhyNot` refuses once the main move
+    // is spent. 规则书: 「移动到你前方一名玩家的格子」 -- C# `CardCaught.WhyNot` then
+    // refuses with 「前方没有别的玩家」 unless another present player stands on a
+    // different tile.
     if let Some(why) = rules_status::move_blocked(player_id) {
         return Some(why);
     }
@@ -60,7 +64,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let steps = ctx::tile_forward(pos, ctx::player_pos(who));
     // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove(c, new MoveCtx { Steps =
     // H.Forward(...) })`: the walk passes intervening tiles and settles on the
-    // target, and `card_move` consumes the turn's main move (`MainMoveAs`).
+    // target, and `card_move` consumes the turn's main move (`MainMoveAs`). A
+    // stale `resolve = false` on the shared plan must not skip that settle.
+    ctx::plan::set_resolve(true);
     ctx::plan::set_steps(steps);
     ctx::log(
         player_id,
@@ -70,10 +76,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("n", steps as i64),
     );
     ctx::card_move(player_id);
-    // 规则书: 「且可选择盖房」 -- C# arms `H._turnCtx.BuildOk` and lets the engine
-    // offer afterwards. An explicit `H.OfferBuildAmong` on the tile reached is
-    // the same effect without a hidden turn flag: ask, then build there.
-    ctx::card_offer_build(player_id, &[ctx::player_pos(player_id)]);
+    // 规则书: 「且可选择盖房」 -- C# arms `H._turnCtx.BuildOk`; the landing settle
+    // offers that build itself when the mover owns the tile, so no explicit
+    // `OfferBuildAmong` here (unlike `bang_dream`, whose teleport does not settle).
     Ok(())
 }
 

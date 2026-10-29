@@ -37,7 +37,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-心の雨-01 | 「前方20格内的所有玩家各自骰1d20」 | PROVEN | `heart_rain_in_window_roll_stay_iff`, `heart_rain_fallback_stun_and_money_iff` | see run table | — | OPEN-前方20格 |
 | C-MUJICA-心の雨-02 | 「≤12…1层，≤3…变为2层」 | PROVEN | `heart_rain_stay_layers_iff`, `heart_rain_stay_layers_mutant_is_detected` | see run table | — | — |
 | C-MUJICA-心の雨-03 | 「未能…则自身获得一层[晕眩]并获得1000」 | PROVEN | `heart_rain_fallback_stun_and_money_iff` | see run table | — | — |
-| C-MUJICA-视线-01 | 「对你打出过[反击]的所有玩家…移动1~4」 | FAILS | (contract finding; body only sees the immediate counter-user) | — | **WRONG/LESS**: body force-moves the immediate counter-user only; book targets the full turn's counteractor set. Engine finding also moves every other player when nobody countered. | OPEN-触发结算 |
+| C-MUJICA-视线-01 | 「对你打出过[反击]的所有玩家…移动1~4」 | FAILS | (contract finding; body only sees the immediate counter-user) | — | **WRONG/LESS**: body force-moves the immediate counter-user only; book targets the full turn's counteractor set. A normal hand play moves nobody at all (the guard returns) -- the contract passes only on its empty-target case. | OPEN-触发结算 |
 | C-MUJICA-视线-02 | 「视为其主要移动」 | PROTOCOL-LEVEL | — | — | `main_moved` scheduling | — |
 | C-MUJICA-视线-03 | 「（此卡可作为[反击]…）」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-欢迎-01 | 「选择以下效果其一发动」 | PROTOCOL-LEVEL | — | — | (2) is a [反击] branch | — |

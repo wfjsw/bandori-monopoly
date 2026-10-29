@@ -230,7 +230,8 @@ impl Table {
     }
 
     /// Mark `who` as a bot seat under `mentality`. Standard / chaos flip `ai`
-    /// on (the engine's bot schedule answers, via `Cx::fill_ai`); Advanced
+    /// on (a machine seat: the pump drives it and `Cx::fill_ai` prefills its
+    /// prompts); Advanced
     /// leaves `ai` off -- the seat is held for an external driver (bot-service
     /// / the browser worker) and its prompts time out to the fallback.
     pub fn make_bot(&mut self, who: usize, mentality: game_core::state::BotMentality) {
@@ -238,7 +239,6 @@ impl Table {
         let p = &mut self.m.world_mut().st.players[who];
         p.bot = true;
         p.mentality = mentality;
-        p.ai = mentality != BotMentality::Advanced;
     }
 
     /// Tick the host clock until `pred` (or the tick budget runs out). Lets a
@@ -248,6 +248,7 @@ impl Table {
             if pred(self) {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!("tick_until: {what} never happened: {}", self.dump_prompt());
@@ -284,6 +285,7 @@ impl Table {
             {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!(
@@ -796,7 +798,9 @@ impl Table {
         let cap = self.m.world().tok_max(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::gain_clamped(have, cap, n);
         if want > 0 {
-            self.m.world_mut().gain_marker(who as i32, bandori_std::fire::KEY, want);
+            self.m
+                .world_mut()
+                .gain_marker(who as i32, bandori_std::fire::KEY, want);
         }
         want
     }
@@ -983,6 +987,16 @@ impl Table {
             .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
+    /// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no
+    /// instance.
+    pub fn turns_left(&self, who: usize, card: &str) -> i32 {
+        self.field(who)
+            .into_iter()
+            .find(|f| f.card == card)
+            .map(|f| f.props.get(bandori_std::marker::TURNS_LEFT).copied().unwrap_or(0))
+            .unwrap_or(-1)
+    }
+
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
     /// card is not placed. This is where band-card crystals go now -- the band
     /// skill's own instance, not a keyed state.
@@ -991,6 +1005,14 @@ impl Table {
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
             f.counters.insert("crystals".into(), n);
         }
+    }
+
+    /// Force the turn's dice to a theoretical extreme (`1` = max, `-1` = min,
+    /// `0` = plain), as a tsugumi_can (1) counteraction's `ctx::set_extreme`
+    /// leaves it. `settle()` lets an open prompt see it.
+    pub fn set_extreme(&mut self, v: i32) {
+        self.m.world_mut().turn.extreme = game_core::engine::Extreme::from_i32(v.signum());
+        self.settle();
     }
 
     /// On-card [CP点] on `who`'s first field copy of `card` (None if not
@@ -1069,9 +1091,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m
-            .world()
-            .tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     /// A standing tile prop (`World::tile_prop`). Used to read per-player
@@ -1116,6 +1136,12 @@ impl Table {
         let all: Vec<String> = self.m.world().recent.iter().map(|e| log_key(e)).collect();
         all[all.len().saturating_sub(n)..].to_vec()
     }
+}
+
+/// [`Table::turns_left`] as a free function, so a call site reads like the
+/// other probes (`crystals(&t, ...)`).
+pub fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
+    t.turns_left(who, card)
 }
 
 /// The key a log event speaks as: its own, or the `what` inside an in-play

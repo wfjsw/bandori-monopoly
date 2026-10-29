@@ -15,7 +15,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
@@ -23,8 +23,14 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Action(Action::PassTile("card.placed && actor == owner", Some(pass_tile_guard), pass_tile)),
-        // (3)'s surcharge joins the rent payment at `paySplitAdd` (before `paySplitMul`),
-        // so a 「支付减半」 scaler sees the shaped total.
+        // 规则书: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外
+        // 支付[拥有者]星之鼓动山丘上房子数量×100的资金」 -- the surcharge joins the
+        // rent payment at `paySplitAdd` (before `paySplitMul`), so a 「支付减半」
+        // scaler sees the shaped total.
+        // TODO(规则书)（在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付）: the book
+        //   gates on the settle's tile -- we key on the payment (`pay_is_rent` + the
+        //   charged tile), so a rent-shaped 「收费」 outside a settle (练习室里的风暴)
+        //   also collects it; needs the settle tile on the pay payload.
         On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner", Some(pay_add_guard), pay_add)),
         // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
         // -- an entry in the settle's effect list, for the shapes no rent
@@ -58,25 +64,28 @@ const ROUTE: [&str; 10] = [
     "大阪中之岛公园",
 ];
 
-/// Where the route cursor is written down (C# `Mem["step"]`). `ROUTE.len()`
-/// means the route is finished and the card sits in the owner's play area
-/// (C# `Tile = -1`), which is when the tax (3) applies. While the cursor is
-/// below `ROUTE.len()` the card is still travelling and the tax is dormant.
-const SLOT_STEP: &str = "tomorrows_door_step";
+/// Where the route cursor is written down (C# `Mem["step"]`) -- an instance
+/// prop, so two copies each carry their own. `ROUTE.len()` means the route is
+/// finished and the card sits in the owner's play area (C# `Tile = -1`), which
+/// is when the tax (3) applies. While the cursor is below `ROUTE.len()` the
+/// card is still travelling and the tax is dormant.
+const PROP_STEP: &str = "tomorrows_door_step";
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「将此卡放置在“流星堂”上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // H.TileNamed(Route[0]))`. The card stays in play.
     ctx::set_dest(ctx::Dest::Field);
     // 规则书（2）: 「将此卡放置在“流星堂”上」 -- bound to `ROUTE[0]`; the route
-    // cursor is the stand-in for the per-card `Mem["step"]`.
+    // cursor is the per-card `Mem["step"]` (an instance prop, so copies do not
+    // share it).
     ctx::place_card_on(
         player_id,
         ctx::tile_named(ROUTE[0]),
         "PPP:Tomorrow's Door",
         &Msg::new(key!("tomorrows_door_note")),
     );
-    ctx::set_slot(player_id, SLOT_STEP, 0);
+    // After `place_card_on`, so the run is bound to the freshly placed copy.
+    ctx::set_prop(PROP_STEP, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("tomorrows_door_placed")).player_id("who", player_id),
@@ -91,10 +100,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// means the card is not activated at all. Also the route cursor and the
 /// "am I on the tile being passed" checks -- applicability, not effect (a
 /// hook body that ran and returned still flashes).
-fn pass_tile_guard(player_id: i32) -> bool {
+fn pass_tile_guard(_player_id: i32) -> bool {
     // `card.placed && actor == owner` is the pre. The route cursor and
     // "am I on the tile being passed" are residuals (`self_tile`).
-    let step = ctx::slot(player_id, SLOT_STEP);
+    let step = ctx::prop(PROP_STEP);
     if step < 0 || step >= ROUTE.len() as i32 {
         return false;
     }
@@ -103,12 +112,12 @@ fn pass_tile_guard(player_id: i32) -> bool {
 }
 
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    let step = ctx::slot(player_id, SLOT_STEP);
+    let step = ctx::prop(PROP_STEP);
     let next = step + 1;
-    ctx::set_slot(player_id, SLOT_STEP, next);
+    ctx::set_prop(PROP_STEP, next);
     // 「如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 --
     // the last stop is 大阪中之岛公园; past it the card goes back to the owner
-    // (`tile = -1`), which is when the tax in `settle_after` wakes up.
+    // (`tile = -1`), which is when the tax's `settle_body` entry wakes up.
     if next >= ROUTE.len() as i32 {
         ctx::set_self_tile(-1);
     } else {
@@ -129,11 +138,13 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// payment a rent on the owner's own tile by someone else, and there must be a
 /// surcharge to add. `TriggerKind::PaySplitAdd` is the category's job -- not
 /// re-checked here (docs/GUARDS.md).
-fn pay_add_guard(player_id: i32) -> bool {
+fn pay_add_guard(_player_id: i32) -> bool {
+    // 规则书: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付
+    // [拥有者]星之鼓动山丘上房子数量×100的资金」
     // `card.placed && pay_is_rent && actor != owner && tile.id >= 0 &&
     // tile.owner == owner` is the pre. Still travelling / player_out /
     // tax_due are residuals.
-    if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
+    if !in_play_area() && ctx::prop(PROP_STEP) < ROUTE.len() as i32 {
         return false;
     }
     if ctx::player_out(trigger::player_id()) {
@@ -157,6 +168,8 @@ fn tax_due() -> i32 {
 }
 
 fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
+    // 规则书: 「额外支付[拥有者]星之鼓动山丘上房子数量×100的资金」 -- add the figure
+    // into the payment; the shell of the clause is in the registration above.
     let due = tax_due();
     let payer = trigger::player_id();
     ctx::log(
@@ -181,10 +194,14 @@ fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
 fn settle_body_guard(player_id: i32) -> bool {
     // `card.placed && actor != owner && tile.id >= 0` is the pre;
     // `cancelled()` is resolution-time and stays.
+    // TODO(规则书)（[结算]时额外支付）: 书 pays on any settle over such a tile -- we
+    //   drop the whole surcharge when a body replacer (Parking Space) ran first,
+    //   although the settle still resolves. Needs a settle-scoped 「body replaced」
+    //   fact readable after the body stage.
     if trigger::cancelled() {
         return false;
     }
-    if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
+    if !in_play_area() && ctx::prop(PROP_STEP) < ROUTE.len() as i32 {
         return false;
     }
     if ctx::player_out(trigger::player_id()) {
@@ -201,6 +218,9 @@ fn settle_body_guard(player_id: i32) -> bool {
     }
     // Rent on an unmortgaged owner tile already carried the surcharge via
     // `pay_add`; don't charge it twice.
+    // TODO(规则书)（[拥有者]拥有的格子或梦开始的地方[结算]时）: whether the rent
+    //   actually ran is only guessed from the mortgage bit, so a body-replaced
+    //   settle on a mortgaged tile charges or not by card-placement order.
     if is_owner_tile && !is_dream && !ctx::mortgaged_of(at) {
         return false;
     }

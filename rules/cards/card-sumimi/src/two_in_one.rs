@@ -9,13 +9,17 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new(
     "Sumimi:Sumimi是二人一体的",
     &[
-        On::Play("", None, play),
+        On::Play("", Some(cant_play), play),
+        // TODO(规则书)（此卡可在你的移动掷骰后作为[反击]使用）: the sheet
+        //   conditions (2) on the roll alone -- we also require a Sumimi holder,
+        //   because (1)'s 「另一名」 needs one (the same gate as the play).
+        // 规则书（2）: 「此卡可在你的移动掷骰后作为[反击]使用。」
         On::Counteract(
             &[ChainKind::DiceRollResult],
             "actor == owner && (persona_is(owner, \"三角初华（Sumimi）\") || persona_is(owner, \"纯田真奈\"))",
@@ -32,6 +36,13 @@ pub const TWO_IN_ONE: CardDef = CardDef::new(
         ]))
         // sheet cell L6
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
+
+/// 规则书（1）: 「将自己的角色卡替换为sumimi的另一名角色」 -- 「另一名」
+/// presupposes the user is one of the two; the sheet states no gate of its own.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    let is_sumimi = ctx::persona_is(player_id, A.0) || ctx::persona_is(player_id, B.0);
+    (!is_sumimi).then(|| Msg::new(key!("two_in_one_not_sumimi")))
+}
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
@@ -67,6 +78,10 @@ fn swap(player_id: i32) {
     // itself, not just the bound skill. Exclusive play and `persona_is` read
     // this name.
     ctx::set_persona(player_id, to.0);
+    // TODO(规则书)（将自己的角色卡替换为sumimi的另一名角色）: the old skill card
+    //   is looked up by name and unplaced only when found -- a miss (the
+    //   persona's skill was already removed) leaves it on the field beside the
+    //   new one, and `persona_skill_uid` keeps answering the stale entry.
     if let Some(uid) = ctx::find_card(player_id, from.1) {
         ctx::unplace_at(uid);
     }

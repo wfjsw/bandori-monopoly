@@ -17,8 +17,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::{it, CardText};
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText, it};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new(
     "CRYCHIC:（睦）从没有觉得...",
@@ -37,29 +37,21 @@ pub const MUTSUMI_NEVER: CardDef = CardDef::new(
 
 fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，使用者可以选择（2）或（3）效果之一发动。」 -- C#
-    // `H.AskPick` between the two effects (default the last option).
-    // C# only offers (2) when a real (non-Extra) `BandCrychic` skill is attached
-    // (`H._fx[i].groups.Any(b => b is BandCrychic && !b.Extra)`); the ABI names
-    // the band attachments (`ctx::group_skills`), so (2) is offered only when a
-    // real (non-Extra) one is there. TODO(规则书): the C# narrows further to
-    // `BandCrychic` specifically -- 「乐队技能的（2）效果」 reads as the player's
-    // own band skill whatever it is, so the wider gate is taken here.
-    let has_band = ctx::group_skills(player_id)
-        .iter()
-        .any(|&(_, _, extra)| extra == 0);
-    let mut options: Vec<Msg> = Vec::new();
-    if has_band {
-        options
-            .push(Msg::new(key!("mutsumi_never_opt2")).card("card", "CRYCHIC:（睦）从没有觉得..."));
-    }
-    options.push(Msg::new(key!("mutsumi_never_opt3")).card("card", "CRYCHIC:（睦）从没有觉得..."));
+    // `H.AskPick` between the two effects (default the last option). The sheet
+    // grants the choice unconditionally; with no band skill attached a (2) pick
+    // is still legal (0 crystals = 「不足3个则改为全部消耗」, then discard) and
+    // only the band-skill invoke is skipped (`ctx::group_skill` is `None`).
+    let options: Vec<Msg> = Vec::from([
+        Msg::new(key!("mutsumi_never_opt2")).card("card", "CRYCHIC:（睦）从没有觉得..."),
+        Msg::new(key!("mutsumi_never_opt3")).card("card", "CRYCHIC:（睦）从没有觉得..."),
+    ]);
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("mutsumi_never_title")),
         &Msg::new(key!("mutsumi_never_ask")),
         &options,
     )?;
-    if has_band && pick == 0 {
+    if pick == 0 {
         branch_crystals(player_id)?;
     } else {
         branch_shuffle(player_id)?;
@@ -91,6 +83,8 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（2）: 「然后弃一张卡」 -- C# `H.AskCard(i, ..., H._hidden[i].hand.ToList())`.
     let hand = ctx::cards_in(player_id, ctx::CardPile::Hand);
+    // TODO(规则书)（然后弃一张卡）: the discard is unconditional -- we skip it when
+    //   the hand is empty.
     if !hand.is_empty() {
         let ids: Vec<&str> = hand.iter().map(|c| c.as_str()).collect();
         let pick = ctx::ask_card(
@@ -101,8 +95,13 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
         )?;
         ctx::discard_from_hand(player_id, ids[pick.min(ids.len() - 1)]);
     }
-    // C# `c.Dest = "gone"` -- the card is consumed without the [移除] log; the
-    // nearest `ctx::Dest` is `Removed` (same out-of-game destination).
+    // 规则书（2）: 「消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。」 -- the cell
+    // prints no fate for the played card.
+    // `Dest::Banished` is the out-of-game fate (C# `c.Dest = "gone"`) and it
+    // does post the [移除] log from the play pipeline, even though (2) prints
+    // no [移除] (only (3) does).
+    // TODO(规则书)（然后弃一张卡）: (2) prints no [移除] for the played card -- we
+    //   banish it, which logs an unprinted 「被 [移除]」.
     ctx::set_dest(ctx::Dest::Banished);
     Ok(())
 }
@@ -113,7 +112,11 @@ fn branch_shuffle(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);
     // 规则书（3）: 「并向抽牌堆中加入一张“表演的本能”」 -- C#
     // `H.AddToDeck(i, "Mujica:（睦/mortis）表演的本能")`.
-    ctx::add_to_dest(player_id, "Mujica:（睦/mortis）表演的本能", ctx::Dest::DeckRandom);
+    ctx::add_to_dest(
+        player_id,
+        "Mujica:（睦/mortis）表演的本能",
+        ctx::Dest::DeckRandom,
+    );
     ctx::sweep_to_deck(player_id); // 规则书（3）: 「将手牌与弃牌堆全部放入抽牌堆并洗切」
     ctx::log(
         player_id,

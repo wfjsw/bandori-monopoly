@@ -35,14 +35,16 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore(
             card_sdk::pre::MINE,
             Some(state2_or_fire_capped),
-            at_turn_start)),
+            at_turn_start,
+        )),
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
         On::Action(Action::PassTile(
             "actor == owner && move.main && slot('skillState') != 2",
             None,
-            on_pass_player)),
+            on_pass_player,
+        )),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
@@ -51,7 +53,8 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         On::Action(Action::Abnormal(
             "target == owner",
             Some(im_hit),
-            on_abnormal)),
+            on_abnormal,
+        )),
     ],
 )
 // 「（初始0，上限3）」
@@ -197,7 +200,15 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("sakiko_life_auto")).card("card", top.as_str()),
     );
-    ctx::play_card(top.as_str(), player_id)?;
+    // 规则书: 「每回合开始时自动打出一张抽牌堆顶端的牌」 -- the play takes the card
+    // out of the pile (as the hand path does before resolving) and leaves it on its
+    // own `Dest`; `ctx::play_card` only reports that `Dest` back to the caller.
+    ctx::take_card(player_id, top.as_str(), CardPile::Deck);
+    let dest = ctx::play_card(top.as_str(), player_id)?;
+    match dest {
+        ctx::Dest::Field | ctx::Dest::Banished => {}
+        dest => ctx::add_to_dest(player_id, top.as_str(), dest),
+    }
     Ok(())
 }
 
