@@ -25,6 +25,8 @@ pub mod determinize;
 pub mod eval;
 pub mod extras;
 pub mod ismcts;
+/// The one bot policy (`docs/BOT-DRIVE.md`): turn commands and prompt answers.
+pub mod policy;
 pub mod saved;
 pub mod sim;
 pub mod view;
@@ -41,7 +43,7 @@ pub use ismcts::{
     merge_stats, seed_for_thread, ActionStats, Ismcts, SearchConfig, SearchOutcome, Timings,
 };
 pub use sim::{
-    ai_answer_to_action, heuristic_message_view, heuristic_message_with, next_decision, Advance,
-    Deadline, Horizon, MatchSim, SimError, Simulator,
+    ai_answer_to_action, heuristic_message_view, heuristic_message_with, next_decision, pump_bots,
+    Advance, Deadline, Horizon, MatchSim, SimError, Simulator,
 };
 pub use view::{next_turn_near, predict_upcoming_view, AiAnswer, SeatView};

@@ -759,6 +759,10 @@ fn frame(
     // just to re-embed them here. `view()` / `views()` are the per-dirty-tick
     // hot path (one call per human seat plus one per advanced bot).
     let extra = m.view_extra_typed(member);
+    // The turn's public play history rides the frame: a seat-view fork's
+    // max-plays cap and skill de-dup read it (`SeatView::played`), and only
+    // the live world has it otherwise.
+    let (played, cards_played) = m.played_context();
     serde_json::json!({
         "state": state,
         "hand": m.hand_of(member),
@@ -766,6 +770,8 @@ fn frame(
         "draw": m.draw_of(member),
         "you": member,
         "playerId": player_id,
+        "played": played,
+        "cardsPlayed": cards_played,
         "aiAnswer": extra.ai_answer,
         "playable": extra.playable,
         "estCost": extra.est_cost,
@@ -1013,6 +1019,9 @@ impl ReplayMatch {
     /// so every framing plays in the browser.
     pub fn from_record_bytes(bytes: &[u8], force: bool) -> Result<ReplayMatch, JsError> {
         let rec = decode_record(bytes).map_err(|e| JsError::new(&e.to_string()))?;
+        // A format < 4 record carries no bot commands; the replayer pumps the
+        // seats it re-armed with this (`game_core::record::set_machine_pump`).
+        game_core::record::set_machine_pump(bot_core::sim::pump_bots);
         let rp = Replayer::new_with_stamp(data()?, rules()?, &rec, &stamp(), force)
             .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(ReplayMatch { rp })

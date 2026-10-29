@@ -1540,8 +1540,9 @@ async fn advanced_bots_play_with_the_bot_service() {
     );
 }
 
-/// With **no** bot-service, Advanced seats play as standard engine bots: the
-/// mentality is rewritten at match start and the engine drives them.
+/// With **no** bot-service, Advanced seats play as standard bots: the
+/// mentality is rewritten at match start and the server's own probe answers
+/// them with the local policy (`docs/BOT-DRIVE.md`).
 #[tokio::test]
 async fn advanced_bots_play_as_standard_without_the_service() {
     let (base, server) = spawn_scaled(Duration::from_secs(30), 3.0).await;
@@ -1549,7 +1550,7 @@ async fn advanced_bots_play_as_standard_without_the_service() {
     let a = Client::new(&base, "Host").await;
     let id = advanced_room(&server, &a, 2).await;
 
-    // Rewritten: the match seats are standard, and the engine holds them.
+    // Rewritten: the match seats are standard, and the probe drives them.
     let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
     assert_eq!(s, StatusCode::OK, "{st}");
     let seats = advanced_seats(&st);
@@ -1562,7 +1563,7 @@ async fn advanced_bots_play_as_standard_without_the_service() {
         .collect();
     assert_eq!(std_bots.len(), 2, "{st}");
     for p in &std_bots {
-        assert_eq!(p["ai"], true, "the engine drives this seat: {p}");
+        assert_eq!(p["ai"], false, "a bot seat is client-driven: {p}");
     }
 
     // The engine plays them; a short match still completes.
@@ -1841,6 +1842,7 @@ fn parked_searchable_view() -> (Value, i32, i32) {
             let _ = m.act(1, &msg);
         }
         m.tick(0.25);
+        bot_core::sim::pump_bots(&mut m);
     }
     panic!("no searchable decision for member 1");
 }

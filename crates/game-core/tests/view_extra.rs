@@ -11,6 +11,7 @@ use game_core::MatchMode;
 
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -34,6 +35,12 @@ fn solo(seed: u64) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and stay `ai = false`; these
+    // fixtures only inspect views, so put the bot seats back on the engine
+    // schedule. No tick here -- a caller may want the ban / pick phase.
+    for i in 2..=3 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 
@@ -66,7 +73,7 @@ fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
     let mut m = solo(3);
     let mut saw_prompt = false;
     for _ in 0..4000 {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         let st = m.state();
         if st.prompt.id > 0 {
             saw_prompt = true;
@@ -142,6 +149,12 @@ fn solo_with(rules: Arc<dyn CardRules>, seed: u64) -> Match {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Bots are clients (`docs/BOT-DRIVE.md`) and stay `ai = false`; these
+    // fixtures only inspect views, so put the bot seats back on the engine
+    // schedule. No tick here -- a caller may want the ban / pick phase.
+    for i in 2..=3 {
+        m.set_machine_seat(i, true);
+    }
     m
 }
 
@@ -160,6 +173,11 @@ fn wait_ops(m: &mut Match, me: i32) {
             break;
         }
         {
+            // An answering routine restores its pre-prompt snapshot, whose
+            // `ai` bits are off: keep the bots on the engine schedule.
+            for i in 2..=3 {
+                m.set_machine_seat(i, true);
+            }
             let st = m.state();
             if st.turn == seat && st.step == stage::OPS && !st.busy {
                 return;
@@ -173,7 +191,7 @@ fn wait_ops(m: &mut Match, me: i32) {
                 let _ = m.act(me, &msg);
             }
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     panic!("never reached OPS for member {me}");
 }
@@ -273,7 +291,7 @@ fn skills_are_disabled_outside_the_ops_window() {
         if st.phase == "play" && !(st.step == stage::OPS && !st.busy) {
             break;
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     let extra = m.view_extra(1);
     let skills = extra["skills"].as_array().expect("skills list");

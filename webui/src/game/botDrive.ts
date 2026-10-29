@@ -39,6 +39,13 @@ export interface DriveHooks {
   soloCapMs?: number;
   /** How many decisions this seat has already spent this turn. */
   decisionsThisTurn?: number;
+  /** Search (`advanced`) or answer with the policy alone (standard / chaos,
+   *  `docs/BOT-DRIVE.md`). Default: search. */
+  search?: boolean;
+  /** Mentality to decide under. The policy reads it off the frame, so a
+   *  human 混沌 seat's frame is rewritten before it is sent; a bot seat
+   *  already carries its own. */
+  mentality?: "standard" | "chaos" | "advanced";
   /** Pool override for tests. */
   pool?: BotPool;
   /** Notified when a search starts / stops (the "thinking…" indicator). */
@@ -70,6 +77,7 @@ export async function driveSeat(
   const promptId = decisionAt(v.state, v.playerId);
   if (promptId == null) return "fallback";
 
+  const search = hooks.search ?? true;
   const budgetInput: BudgetInput = {
     timed: hooks.timed,
     promptTimeLeft: v.state.prompt?.id > 0 ? v.state.prompt.timeLeft : null,
@@ -104,10 +112,29 @@ export async function driveSeat(
 
   hooks.onThinking?.(member, true);
   try {
+    const sent = withMentality(v, hooks.mentality);
+    if (!search) {
+      // Standard / chaos: the policy alone, no search budget, no tree.
+      const cmd = await withTimeout(pool.act(sent, seed), 5_250);
+      if (!cmd) {
+        if (fallback) await act(member, fallback);
+        hooks.onDone?.(member, "heuristic", 0);
+        return "heuristic";
+      }
+      const err = await act(member, cmd);
+      if (err) {
+        console.warn(`bot ${member}: policy answer refused`, cmd, err);
+        if (fallback) await act(member, fallback);
+        hooks.onDone?.(member, "fallback", 0);
+        return "fallback";
+      }
+      hooks.onDone?.(member, "heuristic", 0);
+      return "heuristic";
+    }
     // The pool's own outer deadline is `outerDeadlineMs(budgetMs)`; wrap with
     // a slightly wider race so a wedged worker cannot park the turn either.
     const result = await withTimeout(
-      pool.decide(v, budgetMs, seed),
+      pool.decide(sent, budgetMs, seed),
       outerDeadlineMs(budgetMs) + 250,
     );
     if (result.heuristic && !result.answer) {
@@ -141,6 +168,16 @@ export async function driveSeat(
   } finally {
     hooks.onThinking?.(member, false);
   }
+}
+
+/** `v` with the viewer's mentality forced to `m` (`chaos` only -- `standard`
+ *  and `advanced` already decide alike in the policy). */
+function withMentality(v: MatchView, m?: DriveHooks["mentality"]): MatchView {
+  if (m !== "chaos") return v;
+  const me = v.playerId;
+  if (me < 0 || v.state.players[me]?.mentality === "chaos") return v;
+  const players = v.state.players.map((p, i) => (i === me ? { ...p, mentality: "chaos" as const } : p));
+  return { ...v, state: { ...v.state, players } };
 }
 
 /** The policy's first candidate (the existing bot policy's answer). */
@@ -211,15 +248,15 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 // ---------------------------------------------------------------- seat set
 
 /**
- * Which seats an advanced driver must move: every `bot` seat whose
- * `mentality` is `"advanced"` and that the engine does **not** drive (`ai` is
- * off -- `Match::new` holds Advanced seats; `docs/BOT.md` B5/B6). A seat the
- * engine took over (`ai` flipped on after a leave) is dropped.
+ * Which seats the page drives: **every** bot seat (`docs/BOT-DRIVE.md` -- the
+ * engine decides for nobody). Every mentality is here: standard / chaos
+ * answer through the policy alone, `advanced` searches. A bankrupt / left
+ * seat is out and needs nothing.
  */
-export function advancedSeats(v: MatchView): number[] {
+export function botSeats(v: MatchView): number[] {
   const out: number[] = [];
   for (const p of v.state.players) {
-    if (p.bot && p.mentality === "advanced" && !p.ai && !p.bankrupt && !p.left) {
+    if (p.bot && !p.bankrupt && !p.left) {
       out.push(p.member);
     }
   }

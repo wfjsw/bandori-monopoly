@@ -227,6 +227,7 @@ fn seat_view_extras_match_the_server_on_seeded_games() {
         for s in 0..steps {
             for _ in 0..(7 + s * 3) {
                 m.tick(0.25);
+                bot_core::sim::pump_bots(&mut m);
             }
             if m.ended() {
                 break;
@@ -313,6 +314,7 @@ fn seat_view_extras_match_on_a_solo_frame_too() {
             for _ in 0..(6 + s * 2) {
                 cross_mulligan(&mut m);
                 m.tick(0.25);
+                bot_core::sim::pump_bots(&mut m);
             }
             if m.ended() {
                 break;

@@ -117,6 +117,9 @@ fn match_with_exclusive(card: &str, persona: &str) -> Match {
             break;
         }
         m.tick(0.25);
+        // The engine decides for nobody; the bots are this loop's to
+        // drive (`docs/BOT-DRIVE.md`).
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     assert_eq!(st.phase, "play", "match should reach play");
@@ -155,6 +158,9 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
             break;
         }
         m.tick(0.25);
+        // The engine decides for nobody; the bots are this loop's to
+        // drive (`docs/BOT-DRIVE.md`).
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     assert_eq!(st.phase, "play", "match should reach play");
@@ -219,6 +225,9 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
             break;
         }
         m.tick(0.25);
+        // The engine decides for nobody; the bots are this loop's to
+        // drive (`docs/BOT-DRIVE.md`).
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     let ids: Vec<&str> = st.players[1]

@@ -273,7 +273,7 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                 bot_core::action::legal_actions(&data, &st, &view.hand, &view.playable, seat);
             if searched.is_empty() {
                 s.delegated += 1;
-                let msg = bot_core::heuristic_message_with(&data, &m, member, &st);
+                let msg = bot_core::heuristic_message_with(&data, &mut m, member, &st);
                 let ok = m.act(member, &msg).is_ok();
                 let ok = ok
                     || (st.prompt.id > 0
@@ -331,7 +331,7 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                     if m.act(member, &msg).is_err() {
                         s.failbacks += 1;
                         s.fb_refused += 1;
-                        let msg = bot_core::heuristic_message_with(&data, &m, member, &st);
+                        let msg = bot_core::heuristic_message_with(&data, &mut m, member, &st);
                         if m.act(member, &msg).is_err() {
                             let _ = m.act(member, &game_core::net::NetMessage::act("end"));
                         }
@@ -390,7 +390,7 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                         out.action, st.prompt.id, st.prompt.kind, st.step
                     );
                 }
-                let msg = bot_core::heuristic_message_with(&data, &m, member, &st);
+                let msg = bot_core::heuristic_message_with(&data, &mut m, member, &st);
                 if m.act(member, &msg).is_err() {
                     let _ = m.act(member, &game_core::net::NetMessage::act("end"));
                 }

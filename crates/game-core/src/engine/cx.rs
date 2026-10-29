@@ -623,6 +623,15 @@ impl<'a> Cx<'a> {
         &self.w
     }
 
+    /// Mutable view of the live world -- **no clone**. A policy context draws
+    /// its randomness through this ([`World::rng`]); see [`Self::world`].
+    pub fn world_mut(&mut self) -> &mut World {
+        // The play memos key on the world stamp; drop them so the next probe
+        // re-asks rather than trusting a verdict from before the write.
+        self.play_memo.borrow_mut().clear();
+        &mut self.w
+    }
+
     /// A shareable handle to the live world -- a refcount bump, **no copy**
     /// (fix B). A pure check (`cant_play` probe, guard body, buy quote) runs
     /// against it; the first write inside the check's sandbox detaches a
@@ -1164,6 +1173,16 @@ impl<'a> Cx<'a> {
         Err(Halt(HaltKind::Ask(Box::new(ask))))
     }
 
+    /// Re-ask a prompt a restored fork halted on (`Routine::Ai`). An answer
+    /// the caller already supplied comes back through the answer list; a seat
+    /// still missing halts here again. The `Ask` is the one the fork was saved
+    /// with, so its title, options and prefilled `ai` stay as the live match
+    /// had them.
+    pub(crate) fn resume_prompt(&mut self, ask: Ask) -> Flow<()> {
+        self.ask(ask)?;
+        Ok(())
+    }
+
     /// Replace every [`AI_UNSET`] entry of `ask.ai` with the answer this seat's
     /// policy would give. Standard (and every human seat, including one taken
     /// over after a time-out) takes the prompt's fallback. Chaos picks uniformly
@@ -1229,9 +1248,41 @@ impl<'a> Cx<'a> {
             // (`docs/BOT.md` §3.8 "counteraction"; default 600‰, user
             // ruling 2026-10-08). `CounterParams` 0 holds a card back.
             self.counteract_pick(seat, ask, fallback, n)
+        } else if ask.view.title.key() == "ask.pass_reward.title" {
+            // Standard: the card odds ramp with the seat's money (user
+            // ruling 2026-10-28). Both the server bot and 托管 come through
+            // here, so there is no second copy to keep in step.
+            self.pass_reward_pick(seat, ask, fallback)
         } else {
             fallback
         }
+    }
+
+    /// Standard's [pass-reward] answer: the card on
+    /// [`super::ai::pass_reward_card_chance`], else `fallback` (the money
+    /// print). Both option wordings carry the card ("card" on a pass,
+    /// "card_landed" on a stop on the start square). Only the intermediate
+    /// band draws the world RNG, so the stream moves exactly where the
+    /// outcome is undecided.
+    fn pass_reward_pick(&mut self, seat: usize, ask: &Ask, fallback: i32) -> i32 {
+        let money = self.w.st.players.get(seat).map_or(0, |p| p.money);
+        let chance = super::ai::pass_reward_card_chance(money);
+        if chance <= 0.0 {
+            return fallback;
+        }
+        if chance < 1.0 && self.w.rng.f64() >= chance {
+            return fallback;
+        }
+        ask.view
+            .options
+            .iter()
+            .position(|o| {
+                matches!(
+                    o.key(),
+                    "ask.pass_reward.card" | "ask.pass_reward.card_landed"
+                )
+            })
+            .map_or(fallback, |i| i as i32)
     }
 
     /// Standard's counteraction answer: the first offered card whose

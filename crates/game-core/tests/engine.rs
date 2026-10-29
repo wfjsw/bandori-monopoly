@@ -11,6 +11,7 @@ use game_core::state::MatchState;
 use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -22,14 +23,15 @@ fn member(id: i32, bot: bool) -> RoomMember {
 }
 
 fn new_match(members: &[RoomMember], seed: u64, mode: MatchMode) -> Match {
-    Match::new(
+    let mut m = Match::new(
         data(),
         Arc::new(StubRules),
         members,
         seed,
         mode,
         ScoreWeights::default(),
-    )
+    );
+    m
 }
 
 /// Invariants that must hold at every step of every game.
@@ -65,7 +67,7 @@ fn play_out(m: &mut Match, max_rounds: i32, d: &GameData) -> u32 {
     let mut ticks = 0;
     let mut last_event = 0;
     while !m.ended() {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         ticks += 1;
         let st = m.state();
         if st.phase == "play" {
@@ -133,7 +135,7 @@ fn ranked_games_run_the_ban_phase() {
     let mut m = new_match(&members, 3, MatchMode::Ranked);
     let mut saw_ban = false;
     for _ in 0..2000 {
-        m.tick(0.5);
+        m.pump_tick(0.5);
         saw_ban |= m.state().phase == "ban";
         if m.state().phase == "play" {
             break;
@@ -232,7 +234,7 @@ fn new_pick_match(members: &[RoomMember], seed: u64) -> Match {
     // Casual opens on pick after the order beat (no ban).
     let mut guard = 0;
     while m.state().phase != "pick" {
-        m.tick(0.5);
+        m.pump_tick(0.5);
         guard += 1;
         assert!(guard < 100, "never reached pick: {:?}", m.state().phase);
     }
@@ -270,7 +272,7 @@ fn pick_timeout_uses_preselect_intent() {
     .expect("preselect a free persona");
 
     // Expire the current pick window.
-    m.tick(2.0);
+    m.pump_tick(2.0);
     let st = m.state();
     assert_eq!(
         st.players[turn].persona, want,
@@ -326,7 +328,7 @@ fn pick_timeout_ignores_a_stolen_preselect() {
 
     // Expire the waiting seat: random free, never the stolen one.
     while m.state().players[later].persona.is_empty() {
-        m.tick(2.0);
+        m.pump_tick(2.0);
     }
     let got = m.state().players[later].persona.clone();
     assert_ne!(got, x, "a stolen preselect must not fire");
@@ -350,7 +352,7 @@ fn pick_timeout_without_preselect_is_random_free() {
     let mut m = new_pick_match(&members, 7);
     let turn = m.state().turn as usize;
 
-    m.tick(2.0);
+    m.pump_tick(2.0);
     let st = m.state();
     let got = st.players[turn].persona.clone();
     assert!(!got.is_empty(), "timeout still picks something");
@@ -457,7 +459,7 @@ fn a_human_plays_a_turn_with_commands() {
     );
     assert!(m.state().turn < 0, "no turn has started");
     for _ in 0..40 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     assert_ne!(
         m.state().prompt.kind,
@@ -474,7 +476,7 @@ fn a_human_plays_a_turn_with_commands() {
         .unwrap() as i32;
     let mut guard = 0;
     while !(m.state().turn == me && m.state().step == stage::OPS && !m.state().busy) {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         answer_first(&mut m, 1);
         guard += 1;
         assert!(guard < 10_000, "never got a turn");
@@ -491,7 +493,7 @@ fn a_human_plays_a_turn_with_commands() {
     m.act(1, &NetMessage::act("roll")).unwrap();
     while m.state().busy {
         answer_first(&mut m, 1);
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert_eq!(st.step, stage::END);
@@ -515,8 +517,8 @@ fn a_human_plays_a_turn_with_commands() {
     }
     if m.state().players[me as usize].hand as usize <= 5 {
         m.act(1, &NetMessage::act("end")).unwrap();
-        m.tick(3.0);
-        m.tick(3.0);
+        m.pump_tick(3.0);
+        m.pump_tick(3.0);
         assert_ne!(m.state().turn, me, "turn passed on");
     }
 }
@@ -548,7 +550,7 @@ fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     // used to force it after the 1.5 s grace), still short of the barrier's
     // own 20 s window: player 2 is simply still deciding.
     for _ in 0..180 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(
@@ -561,7 +563,7 @@ fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     // that seat's decision -- one way the barrier lifts without one.
     m.member_left(2, true);
     for _ in 0..40 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(!st.busy && st.prompt.id == 0, "every seat has decided");
@@ -591,7 +593,7 @@ fn mulligan_forces_keep_when_the_window_runs_out() {
     // The bot answers at once; the human never does. 26 s is past the 20 s
     // window.
     for _ in 0..260 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(
@@ -611,7 +613,7 @@ fn unanimous_vote_ends_the_match() {
     while m.state().busy || m.state().turn < 0 {
         answer_first(&mut m, 1);
         answer_first(&mut m, 2);
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     assert_eq!(
         m.act(
@@ -675,7 +677,7 @@ fn unanimous_vote_ends_the_match() {
     );
 
     for _ in 0..140 {
-        m.tick(0.25); // cool-down
+        m.pump_tick(0.25); // cool-down
         answer_first(&mut m, 1);
         answer_first(&mut m, 2);
     }
@@ -698,7 +700,7 @@ fn unanimous_vote_ends_the_match() {
     // The bot seat's vote was cast by the engine with the proposal (user
     // ruling 2026-10-09) -- the drivers have no vote path. The tick here only
     // advances the clock.
-    m.tick(0.25);
+    m.pump_tick(0.25);
     let st = m.state();
     assert_eq!(
         (st.phase.as_str(), st.end_reason.as_str()),
@@ -745,7 +747,7 @@ fn changed_and_seq_move_together() {
         }
         answer_first(&mut m, 1);
         answer_first(&mut m, 2);
-        m.tick(0.25);
+        m.pump_tick(0.25);
         prev = sample_frame_id(&mut m, "settle", prev);
     }
     assert!(
@@ -777,7 +779,7 @@ fn changed_and_seq_move_together() {
     prev = sample_frame_id(&mut m, "refused vote", prev);
 
     // The engine fills the bot seat on the next tick (`tick_vote`'s auto-vote).
-    m.tick(0.25);
+    m.pump_tick(0.25);
     prev = sample_frame_id(&mut m, "auto-vote", prev);
 
     // The last human answers and the tally ends the vote (`end_vote`).
@@ -805,7 +807,7 @@ fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
     let mut m = new_match(&members, 5, MatchMode::Solo);
     m.quick_start();
     while m.state().busy || m.state().turn < 0 {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         answer_first(&mut m, 1);
         answer_first(&mut m, 2);
         answer_first(&mut m, 3);
@@ -933,11 +935,11 @@ fn leaving_forfeits_and_the_last_human_leaving_ends_the_match() {
     while m.state().turn < 0 {
         answer_first(&mut m, 1);
         answer_first(&mut m, 2);
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     m.act(1, &NetMessage::act("leave")).unwrap();
     for _ in 0..20 {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         answer_first(&mut m, 2);
     }
     let st = m.state();
@@ -951,7 +953,7 @@ fn leaving_forfeits_and_the_last_human_leaving_ends_the_match() {
 
     m.act(2, &NetMessage::act("leave")).unwrap();
     for _ in 0..20 {
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     let st = m.state();
     assert_eq!(
@@ -966,7 +968,7 @@ fn disconnect_hands_the_player_to_the_ai_and_reconnect_takes_it_back() {
     let mut m = new_match(&members, 2, MatchMode::Casual);
     m.quick_start();
     for _ in 0..400 {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         if !m.state().busy {
             break;
         }
@@ -995,7 +997,7 @@ fn save_and_restore_continue_identically() {
     // Save at several points, including mid-prompt and mid-wait.
     for checkpoint in [10, 137, 401, 900] {
         while (a.state().seq as usize) < checkpoint && !a.ended() {
-            a.tick(0.25);
+            a.pump_tick(0.25);
         }
         let json = a.save();
         let mut b = Match::restore(d.clone(), Arc::new(StubRules), &json).unwrap();
@@ -1005,8 +1007,8 @@ fn save_and_restore_continue_identically() {
             "restored state differs at {checkpoint}"
         );
         for _ in 0..200 {
-            a.tick(0.25);
-            b.tick(0.25);
+            a.pump_tick(0.25);
+            b.pump_tick(0.25);
         }
         assert_eq!(
             a.state(),

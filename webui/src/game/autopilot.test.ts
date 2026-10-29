@@ -420,6 +420,12 @@ test("auction bids within the precomputed worth and passes above it", () => {
     ctx(),
   );
   assert.deepEqual(poor, { act: "answer", prompt: 4, value: -1 });
+  // Already the top bidder -> pass, not a repeat bid (`err.already_top_bid`).
+  const top = suggest(
+    view({ state: state({ busy: true, prompt: { ...prompt, bid: 100, bidder: 0 } }) }),
+    ctx(),
+  );
+  assert.deepEqual(top, { act: "answer", prompt: 4, value: -1 });
 });
 // ---------------------------------------------------------------- chaos
 

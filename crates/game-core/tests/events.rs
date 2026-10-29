@@ -17,6 +17,7 @@ use game_core::state::BOARD_OWNER;
 use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 /// A rules stand-in with exactly one event rule: `event:EVT1` remains in play
 /// (「将此卡放置于场地中央」) and every other event falls through the built-in
@@ -45,14 +46,15 @@ fn member(id: i32) -> RoomMember {
 }
 
 fn new_match(rules: Arc<dyn CardRules>) -> Match {
-    Match::new(
+    let mut m = Match::new(
         data(),
         rules,
         &[member(1), member(2)],
         7,
         MatchMode::Solo,
         ScoreWeights::default(),
-    )
+    );
+    m
 }
 
 // 规则书（data/rules.txt 97–99）: 「抽取的事件卡不进入手卡并向所有玩家公开，

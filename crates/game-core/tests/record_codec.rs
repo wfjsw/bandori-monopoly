@@ -38,6 +38,19 @@ fn stamp() -> EngineStamp {
     }
 }
 
+/// Let every seat on the engine's drive list take one policy command, over the
+/// same human interface a host uses (`docs/BOT-DRIVE.md`): the engine decides
+/// for nobody, and `tick_steps` only moves the clock. Going through `act`
+/// keeps the commands in the record.
+fn pump(rm: &mut RecordedMatch) {
+    for member in common::drive_members(rm.inner()) {
+        let Some(msg) = common::bot_msg(rm.inner(), member) else {
+            continue;
+        };
+        let _ = rm.act(member, &msg);
+    }
+}
+
 /// Play an all-bot match to `max_rounds` and export it.
 fn run_bot_game(seed: u64, n: i32, max_rounds: i32) -> game_core::record::RecordFile {
     let members = (1..=n)
@@ -62,6 +75,7 @@ fn run_bot_game(seed: u64, n: i32, max_rounds: i32) -> game_core::record::Record
     let mut steps = 0u32;
     while !rm.inner().ended() {
         rm.tick_steps(3);
+        pump(&mut rm);
         steps += 1;
         assert!(steps < 2_000_000, "seed {seed}: game did not progress");
         if rm.inner().state().round > max_rounds {
@@ -280,6 +294,7 @@ fn size_comparison_on_a_real_200_round_bot_game() {
     rm.quick_start();
     while !rm.inner().ended() {
         rm.tick_steps(3);
+        pump(&mut rm);
         if rm.inner().state().round > 200 {
             rm.finish();
         }

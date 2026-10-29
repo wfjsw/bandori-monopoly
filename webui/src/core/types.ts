@@ -276,6 +276,10 @@ export interface MatchView {
   draw: string[];
   you: number;
   playerId: number;
+  /** Card ids already played this turn, in play order. */
+  played?: string[];
+  /** How many of `played` were hand-card plays. */
+  cardsPlayed?: number;
   /**
    * The engine's own AI answer for *this* player's live prompt, only while they
    * are still waiting on it (`Match::view_extra`). Never another seat's entry.

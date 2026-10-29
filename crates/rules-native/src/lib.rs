@@ -27,9 +27,8 @@ use card_sdk::On;
 use game_rules::hostfns;
 use game_rules::tile_class;
 use game_rules::{
-    Call, CallOut, CardInfo, CardModules, DeclareOut, HookRun, HostCtx, HostErr, HostState, Outcome,
-    RuleError,
-    RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
+    Call, CallOut, CardInfo, CardModules, DeclareOut, HookRun, HostCtx, HostErr, HostState,
+    Outcome, RuleError, RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
 };
 use game_rules::{CardWorld, Msg, RulesBridge};
 
@@ -186,12 +185,14 @@ impl NativeRulesHandle {
                         .iter()
                         .enumerate()
                         .flat_map(|(ei, o)| {
-                            o.texts_of().iter().map(move |(slot, tile, key)| ManifestTileText {
-                                entry: ei as i32,
-                                slot: (*slot).to_string(),
-                                tile: (*tile).to_string(),
-                                key: (*key).to_string(),
-                            })
+                            o.texts_of()
+                                .iter()
+                                .map(move |(slot, tile, key)| ManifestTileText {
+                                    entry: ei as i32,
+                                    slot: (*slot).to_string(),
+                                    tile: (*tile).to_string(),
+                                    key: (*key).to_string(),
+                                })
                         })
                         .collect(),
                     board_role: card.board_role.to_string(),
@@ -622,7 +623,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                     &[],
+                    &[],
                     true,
                     DEFAULT_FUEL,
                 )
@@ -675,7 +676,7 @@ impl NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                     &[],
+                    &[],
                     false,
                     DEFAULT_FUEL,
                 )
@@ -804,7 +805,7 @@ impl CardModules for NativeModules {
             entry,
             export::OP_RUN,
             player_id,
-             &[],
+            &[],
             false,
             DEFAULT_FUEL,
         );
@@ -867,7 +868,7 @@ impl CardModules for NativeModules {
                                     entry,
                                     export::OP_GUARD,
                                     player_id,
-                                     &[],
+                                    &[],
                                     false,
                                     DEFAULT_FUEL,
                                 )
@@ -896,7 +897,7 @@ impl CardModules for NativeModules {
                 entry,
                 export::OP_RUN,
                 player_id,
-                 &[],
+                &[],
                 false,
                 DEFAULT_FUEL,
             );
@@ -961,7 +962,7 @@ impl CardModules for NativeModules {
                     entry,
                     export::OP_GUARD,
                     player_id,
-                     &[],
+                    &[],
                     false,
                     DEFAULT_FUEL,
                 )
@@ -988,7 +989,7 @@ impl CardModules for NativeModules {
         };
         let pre = self.index.pre(card, entry);
         // Scope only when a condition exists (`pre == None` never reads it) --
-        // the `cant_play` hot path (ai_step / view extras ask it per hand card).
+        // the `cant_play` hot path (the policy / view extras ask it per hand card).
         let scope;
         let scope: Option<&game_rules::cond_pre::WindowScope> = if pre.is_some() {
             scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window_ambient(
@@ -1013,7 +1014,7 @@ impl CardModules for NativeModules {
                         entry,
                         export::OP_GUARD,
                         player_id,
-                         &[],
+                        &[],
                         true,
                         DEFAULT_FUEL,
                     )
@@ -1041,7 +1042,12 @@ impl CardModules for NativeModules {
             .index
             .card(card)
             .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
-        if !info.on.get(entry as usize).map(|o| o.has_declare).unwrap_or(false) {
+        if !info
+            .on
+            .get(entry as usize)
+            .map(|o| o.has_declare)
+            .unwrap_or(false)
+        {
             return Ok(DeclareOut::Arg(Vec::new()));
         }
         let state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);

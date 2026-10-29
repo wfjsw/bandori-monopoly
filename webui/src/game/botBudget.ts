@@ -104,11 +104,13 @@ export function decisionAt(
   state: { phase: string; busy: boolean; turn: number; step: number; prompt: { id: number; players: number[]; answers: number[] } },
   playerId: number,
 ): number | null {
-  if (state.phase !== "play") return null;
+  // A prompt is an answer surface in any phase (初始重抽 opens in setup); the
+  // turn surfaces below only exist in play.
   if (state.prompt.id > 0) {
     const k = state.prompt.players.indexOf(playerId);
     return k >= 0 && (state.prompt.answers[k] ?? -1) < 0 ? state.prompt.id : null;
   }
+  if (state.phase !== "play") return null;
   if (state.busy || state.turn !== playerId) return null;
   // stage::OPS = 2, stage::END = 4 (game-core/src/state.rs `stage`).
   return state.step === 2 || state.step === 4 ? 0 : null;

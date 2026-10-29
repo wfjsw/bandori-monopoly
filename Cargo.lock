@@ -930,6 +930,7 @@ dependencies = [
 name = "game-core"
 version = "0.1.0"
 dependencies = [
+ "bot-core",
  "flate2",
  "game-kinds",
  "rand_chacha",
@@ -954,6 +955,7 @@ name = "game-rules"
 version = "0.1.0"
 dependencies = [
  "bandori-std",
+ "bot-core",
  "card-sdk",
  "game-core",
  "game-kinds",
@@ -1905,6 +1907,7 @@ name = "rules-spec"
 version = "0.1.0"
 dependencies = [
  "bandori-std",
+ "bot-core",
  "game-core",
  "game-rules",
  "serde_json",
@@ -1932,6 +1935,7 @@ dependencies = [
 name = "rules-worker"
 version = "0.1.0"
 dependencies = [
+ "bot-core",
  "game-core",
  "game-rules",
  "serde",
@@ -1944,6 +1948,7 @@ name = "ruleset-tests"
 version = "0.1.0"
 dependencies = [
  "bandori-std",
+ "bot-core",
  "card-sdk",
  "game-core",
  "game-kinds",
@@ -3141,6 +3146,7 @@ dependencies = [
 name = "web-glue"
 version = "0.1.0"
 dependencies = [
+ "bot-core",
  "game-core",
  "game-rules",
  "player-meta",

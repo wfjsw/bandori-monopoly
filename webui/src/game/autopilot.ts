@@ -1,19 +1,18 @@
-// 托管 / 混沌 -- browser-side auto-play. The client computes every choice from
-// what it can see (the match view, its own hand, its prompts) and sends it
-// through the ordinary `act` path, exactly as a button press would. The
-// server's engine is never asked to take the seat: no `players[i].ai` flip, no
+// 托管 / 混沌 -- browser-side auto-play. The client sends every choice through
+// the ordinary `act` path, exactly as a button press would. The server's
+// engine is never asked to take the seat: no `players[i].ai` flip, no
 // `member_left`.
 //
-// Two policies share one driver (`GameSession`'s `Autopilot`):
+// **One decision path.** A 托管 seat drives through the bot worker exactly as
+// a bot seat does (`botDrive.ts`): `view(member)` -> `act`, the same policy the
+// server runs (`docs/BOT-DRIVE.md`). The driver hands the worker every surface
+// it knows; this table answers the ones it does not (setup, vote, discard) and
+// is the fallback when the worker fails. The engine decides nothing itself.
 //
-//   * `bot`   -- a port of `crates/game-core/src/engine/ai.rs` over public
-//     data. The engine's own precomputed answer rides along in
-//     `MatchView.aiAnswer` for the viewer's own prompt (never another seat's --
-//     an auction ceiling is hidden information); when it is absent the
-//     prompt's `fallback` / the table below is used.
-//   * `chaos` -- legal but maximally disruptive: play every card, fire every
-//     skill, counter on CHAOS_COUNTER_CHANCE of offers, buy/build whenever it keeps a
-//     1 000 float (`CHAOS_RESERVE`). Prefers whatever makes more things happen.
+// Two mentalities:
+//
+//   * `bot`   -- the standard policy.
+//   * `chaos` -- legal but maximally disruptive.
 //
 // Both cover solo and online, never use hidden information (other hands, deck
 // order), and return an ordered candidate list so a refused command is marked
@@ -671,7 +670,9 @@ function auctionCommand(
   const canPay = !!st && !st.bankrupt && !st.left && !(st.state?.stun?.value > 0) && !(st.state?.exile?.value > 0);
   const min = p.bid <= 0 ? 100 : p.bid + 100;
   const cap = Math.min(worth, money);
-  if (min > cap || !canPay) return { act: "answer", prompt: p.id, value: -1 };
+  // The engine refuses both of these (`err.already_top_bid`, `err.bid_min`):
+  // pass, never send a bid that would be turned down.
+  if (p.bidder === me || min > cap || !canPay) return { act: "answer", prompt: p.id, value: -1 };
   const bid =
     mode === "chaos"
       ? min + 100 * (Math.floor(ctx.random() * (Math.floor((cap - min) / 100) + 1)) % (Math.floor((cap - min) / 100) + 1))
@@ -750,6 +751,12 @@ function usableSkills(view: MatchView): string[] {
   return (view.skills ?? []).filter((a) => a.enabled).map((a) => a.id);
 }
 
+/**
+ * The **fallback** table: setup / vote / discard surfaces and the
+ * worker-failure path. The worker's own policy (`bot-core/src/policy.rs`)
+ * answers every play-phase decision; the play entries below mirror it and must
+ * be kept in step, but they only run when the worker is unavailable.
+ */
 export const policies: Record<PolicyName, Policy> = {
   bot: {
     name: "bot",
@@ -931,6 +938,7 @@ export function plan(view: MatchView, ctx: AutopilotCtx, mode: PolicyName): Comm
   // 6. Turn input: only on my turn (rolling is the one exception -- `S.roller`
   //    may be someone else rolling for the turn player).
   if (S.turn !== me && S.roller !== me) return [];
+  // 7. The turn surface.
   return policy.turn(view, ctx);
 }
 

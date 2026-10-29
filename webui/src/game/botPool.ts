@@ -33,7 +33,8 @@ export interface ViewExtras {
   estCost: number[];
   /** The viewer's pressable skills, gated through `why_not_act`. */
   skills: SkillAction[];
-  /** The standard bot's answer for the viewer's own live prompt, if any. */
+  /** The standard policy's precomputed answer for the viewer's own live
+   *  prompt, if any (the engine's prompt-open fill). */
   aiAnswer: { answer: number; picked: string[]; worth: number } | null;
 }
 
@@ -341,6 +342,19 @@ export class BotPool {
           .catch(() => undefined),
       ),
     );
+  }
+
+  /**
+   * The policy's command for one seat, with **no search** -- the standard /
+   * chaos path (`docs/BOT-DRIVE.md`). One worker, one determinize pass; `seed`
+   * is the determinizer's sampling seed (`decisionSeed`). `null` when the seat
+   * has nothing to decide.
+   */
+  async act(view: MatchView, seed: number): Promise<Command | null> {
+    await this.ensureLoaded();
+    const slot = this.slots[0];
+    if (!slot) throw new Error("bot pool has no workers");
+    return (await slot.call("act", { view, seed }, 5_000)) as Command | null;
   }
 
   /**

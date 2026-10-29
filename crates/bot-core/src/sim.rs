@@ -512,28 +512,24 @@ pub fn heuristic_message_view(_data: &GameData, view: &SeatView) -> NetMessage {
     NetMessage::act("end")
 }
 
-/// [`heuristic_message_view`] over a forked [`Match`]'s own accessors.
+/// The policy over a forked [`Match`] ([`crate::policy::act_for`]) -- the
+/// single implementation the server, the client 托管 and the rollouts share.
+/// A prompt for the seat is answered from the same `ai_*` choice functions the
+/// prompt-open fill runs; the turn surface is the policy itself (redeem / play
+/// / skill / roll / end / discard).
 ///
-/// Rollout hot path: builds only what the heuristic reads (the caller's
-/// already-fresh `st`, the hand size / first card, and `aiAnswer` when a prompt
-/// is open) -- no `SeatView`, no `view_extra` JSON, no `draw_of` sort.
+/// Rollout hot path: no `SeatView`, no `view_extra` JSON. `BOT_STRENGTH_AB_NO_GATES`
+/// keeps its old bare roll/end turn surface for A/B runs.
 pub fn heuristic_message_with(
     _data: &GameData,
-    fork: &Match,
+    fork: &mut Match,
     member: i32,
     st: &MatchState,
 ) -> NetMessage {
     let player_id = st.player_of(member);
     if st.prompt.id > 0 && st.prompt.waiting(player_id) {
-        let ai_answer = fork.view_extra_typed(member).ai_answer.map(|a| AiAnswer {
-            answer: a.answer,
-            picked: a.picked,
-            worth: a.worth,
-        });
-        if let Some(ans) = &ai_answer {
-            if let Some(action) = ai_answer_to_action(st, ans, player_id.max(0) as usize) {
-                return action::to_net_message(&action, st, player_id.max(0) as usize);
-            }
+        if let Some(msg) = crate::policy::act_for(fork, member) {
+            return msg;
         }
         return NetMessage {
             act: "answer".into(),
@@ -542,41 +538,20 @@ pub fn heuristic_message_with(
             ..Default::default()
         };
     }
-    // Turn surface. Same order as `heuristic_message_view`; hand is only
-    // needed for the over-hand discard branch.
-    let me = player_id.max(0) as usize;
-    let (hand_len, first) = fork.hand_len_first(member);
-    if st.players.get(me).is_some_and(|p| p.over_hand(hand_len)) {
-        if let Some(c) = first {
-            return NetMessage {
-                act: "discard".into(),
-                card: c,
-                ..Default::default()
-            };
-        }
-    }
-    if st.step == stage::OPS {
-        if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {
-            if st.skip_move {
-                return NetMessage::act("end");
-            }
-            return NetMessage::act("roll");
-        }
-        if st.can_end_here && !st.can_roll_here {
+    if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {
+        if st.skip_move {
             return NetMessage::act("end");
         }
         return NetMessage::act("roll");
     }
-    if st.step == stage::END {
-        // Buy / build happen only at a settle Ask (prompt path above).
-        return NetMessage::act("end");
-    }
-    NetMessage::act("end")
+    crate::policy::act_for(fork, member).unwrap_or_else(|| NetMessage::act("end"))
 }
 
 /// Drive a live (or forked) [`Match`] to the searching seat's next decision.
-/// The seat is a human (`ai = false`) and the other seats are bots. Returns
-/// false when the game ended first.
+/// The seat is left for the caller (the search itself); **every other seat is
+/// a bot** and is pumped here with [`crate::policy::act_for`], since the engine
+/// decides for nobody (`docs/BOT-DRIVE.md`). Returns false when the game ended
+/// first.
 pub fn next_decision(m: &mut Match, member: i32, max_ticks: u32) -> bool {
     let player_id = m.state().player_of(member);
     for _ in 0..max_ticks {
@@ -593,9 +568,53 @@ pub fn next_decision(m: &mut Match, member: i32, max_ticks: u32) -> bool {
                 return true;
             }
         }
-        m.tick(0.25);
+        if !pump_bots_except(m, Some(member)) {
+            m.tick(0.25);
+        }
     }
     false
+}
+
+/// Give every machine-driven seat that has a decision its policy command --
+/// what a host does between ticks, since the engine decides for nobody
+/// (`docs/BOT-DRIVE.md`). A harness that only ticks is not a host. Returns
+/// whether any command applied.
+///
+/// Covers a bot seat and a machine-held human (`ai`: 托管 takeover, disconnect,
+/// or a legacy replay re-arming an engine-driven seat).
+pub fn pump_bots(m: &mut Match) -> bool {
+    pump_bots_except(m, None)
+}
+
+/// [`pump_bots`] skipping one member (the seat its caller drives itself).
+pub fn pump_bots_except(m: &mut Match, skip: Option<i32>) -> bool {
+    let seats: Vec<i32> = m
+        .state()
+        .players
+        .iter()
+        .filter(|p| (p.bot || p.ai) && !p.bankrupt && !p.left && Some(p.member) != skip)
+        .map(|p| p.member)
+        .collect();
+    let mut acted = false;
+    for seat in seats {
+        let st = m.state();
+        let me = st.player_of(seat);
+        let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+        // Off its turn and unasked, the seat has nothing to do.
+        if !asked && (st.phase != "play" || st.busy || st.vote.id > 0 || st.turn != me) {
+            continue;
+        }
+        if let Some(cmd) = crate::policy::act_for(m, seat) {
+            match m.act(seat, &cmd) {
+                Ok(()) => acted = true,
+                Err(e) => {
+                    let st = m.state();
+                    eprintln!("PUMPREFUSED seat={seat} act={} msg={:?} turn={} roller={} step={} skip={} roll={} end={}", cmd.act, e.key(), st.turn, st.roller, st.step, st.skip_move, st.can_roll_here, st.can_end_here);
+                }
+            }
+        }
+    }
+    acted
 }
 
 /// Wall-clock budget for one decision.
