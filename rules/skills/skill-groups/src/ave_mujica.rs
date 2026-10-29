@@ -19,7 +19,8 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::{counter, ActionKind, FilterKind};
+use bandori_std::counter;
+use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 /// Turns spent in 状态2. 「处于状态2的第三回合开始时」 reads this.

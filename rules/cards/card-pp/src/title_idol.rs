@@ -11,7 +11,7 @@
 //! 「奇迹水晶」.
 
 use bandori_std::ctx;
-use card_sdk::abi::counter;
+use bandori_std::counter;
 use card_sdk::{CardText, para, sec, steps};
 use card_sdk::{key, CardDef, Msg, On};
 

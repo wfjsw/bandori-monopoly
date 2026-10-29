@@ -12,7 +12,8 @@
 //! collect the "last three digits" purse of the crystal-closest rival.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{counter, ActionKind};
+use bandori_std::counter;
+use card_sdk::abi::{ActionKind};
 use card_sdk::{CardText, it};
 use card_sdk::{key, Action, CardDef, Msg, On};
 

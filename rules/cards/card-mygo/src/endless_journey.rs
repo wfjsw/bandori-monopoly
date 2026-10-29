@@ -24,7 +24,11 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
         On::Action(Action::SettleBody("actor == owner && move.main && card.placed", None, settle_body)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[手]「放置4个奇迹水晶」: the `⌛4` marker the client shows. It only
+// ticks on the long-move clause, so `N` here is long moves left, not turns.
+.props(&[(bandori_std::marker::TURNS_LEFT, 4)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"哪怕这旅程没有终点"#)
         .raw_name(r#"哪怕这旅程没有终点"#)
         .tags(&[r#"手"#, r#"持续"#])
@@ -61,6 +65,8 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_main_steps() <= 6 {
         return Ok(());
     }
+    // The burn is the tick (a short-turn end does not count down).
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }
@@ -76,7 +82,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// Residual guard -- `card_is` + the counter name stay here (the name is not
 /// yet in the condition vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

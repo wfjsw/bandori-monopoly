@@ -1695,6 +1695,7 @@ impl World {
             player_id: player_id as i32,
             counter: 0,
             counter2: 0,
+            turns_left: 0,
             note: Msg::default(),
             face_down: false,
         });

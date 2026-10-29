@@ -171,6 +171,8 @@
   "board.specialMarkerZone": "特殊指示物区",
   "board.cp": "CP点 ×{{n}}",
   "board.crystals": "结晶 ×{{n}}",
+  "board.turnsLeft": "还有{{n}}回合移除",
+  "board.turnsLabel": "剩余回合",
   "board.dice": "掷骰子",
   "board.discardThis": "弃掉这张",
   "board.drawPile": "我的抽卡区",

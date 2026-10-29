@@ -1157,12 +1157,12 @@ pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
 
 // ------------------------------------------------------ counters & marks
 // Named counters on a card instance, and their units bound to a tile (a tile
-// mark) or a holder (a player token). One API; see `abi::counter` /
+// mark) or a holder (a player token). One API; see `bandori_std::counter` /
 // `abi::MarkFilter`. User ruling 2026-10-10: every mark/token is a unit of
 // some card instance's counter and dies with that instance.
 
-/// On-card named counter of **this** instance (`abi::counter::{CP,CRYSTALS}`
-/// or a card-invented name).
+/// On-card named counter of **this** instance (`bandori_std::counter`
+/// names, or a card-invented name).
 #[cfg_attr(kani, inline(always))]
 pub fn counter(name: &str) -> i32 {
     let (p, l) = s(name);
@@ -1197,7 +1197,7 @@ pub fn counter_at(uid: i32, name: &str) -> i32 {
 /// `CounterChanged` against that instance. Cross-instance **writes** prefer
 /// `send` (the owner writes its own counters); this is the engine-level form
 /// used when the engine itself is the actor (e.g. the `mark:cp` landing hook
-/// spending the placer's on-card CP).
+/// spending the placer's on-card stock).
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
     crate::pure::refuse_if_filter("ctx::add_counter_at");
@@ -1227,7 +1227,7 @@ pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32
 
 /// Bind `count` units of **this** instance's counter `kind` to `tile`.
 /// `owner` colours the mark (a seat, or -1 neutral); `category` is the display
-/// category (`""` player / `abi::mark::CP_CATEGORY`); `src` is provenance
+/// category (`""` player / `bandori_std::mark::CP_CATEGORY`); `src` is provenance
 /// (defaults to this instance when -1). `note` explains it. `stack` picks
 /// [`abi::Stack::Merge`] (onto the first match) or [`abi::Stack::Fresh`] (a
 /// new row per call).
@@ -1238,7 +1238,7 @@ pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32
 /// (`set_slot` / `state::set`) and retrieve it later via [`mark_tile`] /
 /// [`mark_alive`] / [`remove_mark`].
 ///
-/// This is the one place-mark verb: 通用:该清CP了 asks `mark:cp` to bind CP
+/// This is the one place-mark verb: the graveyard rule asks `mark:cp` to bind
 /// units this way via `send`; a skill like 要乐奈 binds 抹茶芭菲 units here.
 #[cfg_attr(kani, inline(always))]
 pub fn place_mark(
@@ -1641,7 +1641,7 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
     // other host string return uses. A raw `buf.as_mut_ptr() as i32` truncates
     // a 64-bit pointer on native (the host writes into an arena slot, not the
     // guest's stack buffer), so the read came back as NULs and
-    // `trigger::name() == counter::CRYSTALS` never matched -- the native
+    // `trigger::name() == bandori_std::counter::CRYSTALS` never matched -- the native
     // build kept a crystal-empty card on the field (drift.rs).
     let (p, scratch) = out_buf(need as usize);
     if fill(p, need) != need {

@@ -181,7 +181,8 @@
    row is retracted: crystals, on-card CP, and an event's counters. */
 .crystal,
 .cp,
-.count {
+.count,
+.turns {
   padding: 0 5px;
   border-radius: var(--r-sm);
   color: #fff;
@@ -194,6 +195,10 @@
 .crystal,
 .count {
   background: var(--purple);
+}
+
+.turns {
+  background: var(--gold);
 }
 
 .cp {

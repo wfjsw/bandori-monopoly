@@ -40,7 +40,7 @@ const CARD_GLORY: usize = crate::card_id!("AG:刻入天穹傲岸的烈光");
 const CARD_ONE_OF_US: usize = crate::card_id!("AG:ONE OF US");
 
 fn crystal_name() -> intern::NameId {
-    intern::intern(card_sdk::abi::counter::CRYSTALS)
+    intern::intern(bandori_std::counter::CRYSTALS)
 }
 
 fn crystal_key() -> u16 {

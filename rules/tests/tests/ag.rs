@@ -361,17 +361,29 @@ fn moca_card_places_with_three_crystals() {
     t.give_play(0, "AG:（摩卡）0.5倍速").unwrap();
     assert!(t.on_field(0, "AG:（摩卡）0.5倍速"));
     assert_eq!(t.crystals(0, "AG:（摩卡）0.5倍速"), Some(3), "3 crystals");
+    assert_eq!(t.turns_left(0, "AG:（摩卡）0.5倍速"), 3, "⌛3 face marker");
     // 规则书: 「你的回合结束时移除一个奇迹水晶」
     t.dice(&[1]);
     t.roll(0).unwrap();
     skip_all(&mut t);
     t.end(0).unwrap();
-    let x = t.crystals(0, "AG:（摩卡）0.5倍速").unwrap();
-    assert!(
-        x < 3,
-        "a crystal was removed: {x} events {:?}",
-        t.recent_keys(8)
+    assert_eq!(t.crystals(0, "AG:（摩卡）0.5倍速"), Some(2), "one removed");
+    assert_eq!(t.turns_left(0, "AG:（摩卡）0.5倍速"), 2, "marker ticks");
+    // 「你的」 is the owner: the other seat's turn end leaves both alone (the
+    // turn-end hook itself reaches every player's field instances).
+    if t.turn() == 1 {
+        t.dice(&[1]);
+        t.roll(1).ok();
+        skip_all(&mut t);
+        t.end(1).ok();
+        skip_all(&mut t);
+    }
+    assert_eq!(
+        t.crystals(0, "AG:（摩卡）0.5倍速"),
+        Some(2),
+        "another seat's turn end does not decay it"
     );
+    assert_eq!(t.turns_left(0, "AG:（摩卡）0.5倍速"), 2);
 }
 
 // 规则书: 「(2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半」

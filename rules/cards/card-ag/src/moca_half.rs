@@ -23,7 +23,7 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 /// count emptied by *any* write leaves the field just the same.
 ///
 /// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
-/// trigger::name() == card_sdk::abi::counter::CRYSTALS`) is folded into this
+/// trigger::name() == bandori_std::counter::CRYSTALS`) is folded into this
 /// pre as `trigger_card == card.id && counter_is('crystals')`. The cond
 /// vocabulary has no `card_is` function; `trigger_card` / `card.id` are the
 /// same `id_of` hashes and this entry only runs as this card, so the
@@ -37,8 +37,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         // > (1)  将此卡放置在场上并获得3个奇迹水晶
         On::Play("", None, play),
 
-        // 你的回合结束时移除一个奇迹水晶
-        On::Action(Action::TurnEnd("card.placed", None, turn_end)),
+        // 你的回合结束时移除一个奇迹水晶 -- `actor == owner` because the turn-end
+        // hook reaches every player's field instances, and the text's 「你的」
+        // is the card's owner, not whoever's turn ended.
+        On::Action(Action::TurnEnd("actor == owner && card.placed", None, turn_end)),
 
         // 奇迹水晶为0时此卡放入弃牌堆。
         // TODO: Check, this effect should be silent
@@ -56,7 +58,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         // Note: Mul happens after Add
         On::Filter(Filter::PaySplitMul("actor == owner && card.placed && value > 0", None, pay_mul)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书(1) 「3个奇迹水晶」: the `⌛3` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
         .raw_name(r#"（摩卡）0.5倍速"#)
         .tags(&[r#"手"#, r#"场地"#])
@@ -85,6 +90,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// The 「奇迹水晶为0时此卡放入弃牌堆」 half is
 /// [`on_crystals_changed`], not this tick.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // 「你的回合结束时」 -- the tick.
+    ctx::dec_turns_left();
     ctx::remove_crystal()?;
     Ok(())
 }

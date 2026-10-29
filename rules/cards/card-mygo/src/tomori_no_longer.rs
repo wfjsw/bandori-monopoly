@@ -100,7 +100,7 @@ fn cover(player_id: i32) -> card_sdk::Asked {
 /// Residual guard -- the name is also `counter_is('crystals')` in the pre
 /// (kept here as well).
 fn refill_guard(_player_id: i32) -> bool {
-    trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::name() == bandori_std::counter::CRYSTALS
 }
 
 fn refill(player_id: i32) -> card_sdk::Asked {
@@ -171,7 +171,7 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
 /// Guard for [`sweep`] -- the count emptied (the write was a decrease and the
 /// card now holds 0). Name-filtered to `counter::CRYSTALS`.
 fn sweep_guard(player_id: i32) -> bool {
-    trigger::name() == card_sdk::abi::counter::CRYSTALS
+    trigger::name() == bandori_std::counter::CRYSTALS
         && ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)

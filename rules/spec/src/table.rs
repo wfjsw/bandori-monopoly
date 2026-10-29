@@ -944,6 +944,16 @@ impl Table {
             .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
+    /// The instance's remaining-turn marker (`props.turnsLeft`); `-1` = no
+    /// instance.
+    pub fn turns_left(&self, who: usize, card: &str) -> i32 {
+        self.field(who)
+            .into_iter()
+            .find(|f| f.card == card)
+            .map(|f| f.props.get(bandori_std::marker::TURNS_LEFT).copied().unwrap_or(0))
+            .unwrap_or(-1)
+    }
+
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
     /// card is not placed.
     pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {

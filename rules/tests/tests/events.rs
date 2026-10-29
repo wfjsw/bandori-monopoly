@@ -48,6 +48,17 @@ fn pass(t: &mut Table, who: usize) {
     drain(t);
 }
 
+/// The active row's remaining-turn marker (`ActiveEvent.turns_left`); `-1` =
+/// not in play. `st()` runs `public_state`, so the mirror is fresh.
+fn event_turns_left(t: &Table, id: &str) -> i32 {
+    t.st()
+        .event_active
+        .iter()
+        .find(|e| e.id == id)
+        .map(|e| e.turns_left)
+        .unwrap_or(-1)
+}
+
 fn until_turn(t: &mut Table, who: usize) {
     for _ in 0..60 {
         if t.turn() == who && t.step() == stage::OPS {
@@ -1236,6 +1247,8 @@ fn marina_box_expires_at_the_drawer_third_turn_start() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "麻里奈小姐的礼物箱", &[]);
     assert!(t.event_in_play("麻里奈小姐的礼物箱"));
+    // 「第3回合开始时」 -- the face starts at 2.
+    assert_eq!(event_turns_left(&t, "麻里奈小姐的礼物箱"), 2);
     // P0 (the drawer) is mid-turn 1. Turn starts to wait for: P1's, P0's (2nd),
     // P1's, P0's (3rd).
     pass(&mut t, 0);
@@ -1243,6 +1256,11 @@ fn marina_box_expires_at_the_drawer_third_turn_start() {
     assert!(
         t.event_in_play("麻里奈小姐的礼物箱"),
         "still up at the drawer's 2nd start"
+    );
+    assert_eq!(
+        event_turns_left(&t, "麻里奈小姐的礼物箱"),
+        1,
+        "the marker ticks down at the drawer's 2nd start"
     );
     pass(&mut t, 0);
     until_turn(&mut t, 0);

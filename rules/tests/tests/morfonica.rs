@@ -107,6 +107,8 @@ fn tritone_gains_amount_and_places_with_crystals() {
         t.field_ids(0)
     );
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(3));
+    // 「三回合后」 -- the face counts down from 3.
+    assert_eq!(turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"), 3);
 }
 
 #[test]
@@ -130,6 +132,7 @@ fn tritone_countdown_discards_and_pays_back() {
     t.end(0).unwrap();
     decline_all(&mut t);
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(2));
+    assert_eq!(turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"), 2);
     // P1's turn comes around; its end does not tick the owner's countdown.
     t.begin_turn(1);
     t.dice(&[1]);
@@ -142,6 +145,11 @@ fn tritone_countdown_discards_and_pays_back() {
         Some(2),
         "an opponent's turn end does not tick 「三回合后」"
     );
+    assert_eq!(
+        turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"),
+        2,
+        "the marker does not tick on an opponent's end either"
+    );
     // Owner turn-end #2: 2 -> 1, still on the field.
     t.begin_turn(0);
     t.dice(&[1]);
@@ -150,6 +158,7 @@ fn tritone_countdown_discards_and_pays_back() {
     t.end(0).unwrap();
     decline_all(&mut t);
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(1));
+    assert_eq!(turns_left(&t, 0, "Mor:迷茫之蝶们的三全音"), 1);
     // Owner turn-end #3: 1 -> 0 -> 「弃置此卡并支付由此卡获得的资金」.
     t.begin_turn(0);
     t.dice(&[1]);

@@ -109,7 +109,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
-        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && trigger::name() == bandori_std::counter::CRYSTALS
         // （3） pays for removals; （1） leaves when the count lands on 0.
         && (trigger::value() < 0 || ctx::crystals() == 0)
 }

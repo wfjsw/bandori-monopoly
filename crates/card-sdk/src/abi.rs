@@ -181,7 +181,7 @@ use std::borrow::Cow;
 ///    玩家一起执行」 (sakiko_lead): the move's result is replayed for each
 ///    follower after the mover settles, in the recorded order (「你先触发结算，
 ///    此后其他玩家按行动顺序依次触发结算」).
-/// v36: [CP点] is its own tile-mark category (`mark::CP_CATEGORY` / `mark::CP_KIND`),
+/// v36: [CP点] is its own tile-mark category (`bandori_std::mark::CP_CATEGORY` / `CP_KIND`),
 ///    owned by the `mark:cp` rule instance on the neutral board owner and never
 ///    by a player. The small writer API is `ctx::place_cp` / `ctx::count_cp` /
 ///    `ctx::clear_cp` plus the attached counts (`ctx::count_cp_from` per tile,
@@ -192,7 +192,7 @@ use std::borrow::Cow;
 ///    该清CP了 graveyard rule) live in one event handler instead of at each
 ///    spend site. Mirrors v29's `crystalsChanged`.
 ///    **Retired** (v51 / user ruling 2026-10-07): `CpChanged` is gone; the
-///    该清CP了 graveyard rule rides `CounterChanged` with a `counter::CP`
+///    该清CP了 graveyard rule rides `CounterChanged` with a `bandori_std::counter::CP`
 ///    name check in the residual guard (`clear_cp.rs`), not a CP-only trigger.
 /// v37: event rule instances (`docs/EVENTS.md`) -- the `rules/events` category.
 ///    `ctx::event_expire` / `event_is_active` / `event_deck_push` /
@@ -308,7 +308,7 @@ use std::borrow::Cow;
 ///    2026-10-10). Every tile mark and player token is a unit of some card
 ///    instance's named counter, bound to a tile or a holder; destroying the
 ///    instance destroys its units. The two on-card counters keep their wire
-///    names ([`counter::CP`], [`counter::CRYSTALS`]); anything else is a
+///    names (`bandori_std::counter::{CP, CRYSTALS}`); anything else is a
 ///    name in `FieldCard::counters`. One `CounterChanged` hook replaces
 ///    `CpChanged` / `CrystalsChanged` (carries the counter name + signed
 ///    delta). The tile-mark surface is a filter
@@ -843,6 +843,13 @@ use std::borrow::Cow;
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
 pub const ABI_VERSION: i32 = 103;
+/// Source-only (no version bump): **ruleset vocabulary left this crate**.
+///    `abi::counter::{CP, CRYSTALS}` moved to `bandori_std::counter`, and the
+///    remaining-turn marker became ruleset vocabulary too --
+///    `prop::TURNS_LEFT` / `ctx::set_turns_left` / `turns_left` /
+///    `dec_turns_left` moved to `bandori_std::marker`, beside the marker's
+///    display row. Wire strings unchanged. The generic `ctx::prop` /
+///    `ctx::counter` readers stay: the engine still stores the values.
 /// v103: **roll API redesign**. `ctx::roll` is the windowed default (raises
 ///    the 「掷骰结算前」 [反击] window on the face) and `ctx::roll_direct` is the
 ///    windowless one; both return `Result<i32, Prompt>` via `asked()` and pause
@@ -1068,28 +1075,11 @@ pub mod state_key {
     // rule instance (`docs/TILES.md`).
 }
 
-/// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
-/// responds to these two by name so a card can arm a gate without the engine
-/// hardcoding the card's own name in the engine.
-pub mod counter {
-    /// On-card [CP点] (「自己[场上]N个[CP点]」). Storage `FieldCard::cp`.
-    pub const CP: &str = "cp";
-    /// 奇迹水晶. Storage `FieldCard::crystals`.
-    pub const CRYSTALS: &str = "crystals";
-}
-
+/// Mark machinery. The ruleset's own category / kind ids live in
+/// `bandori_std::mark`, not here.
 pub mod mark {
     /// Carrying tiles cannot be named as a target (`target_tile` answers -1).
     pub const NO_TARGET: &str = "noTarget";
-
-    /// Tile-mark **category**: [CP点], 「放置于路面上的指示物」
-    /// (`data/rules.txt` 125). Mirrors `game_core::state::mark_category::CP`.
-    /// The tile [CP点] are units of the standing `mark:cp` pseudo card's
-    /// [`counter::CP`] counter, bound to tiles.
-    pub const CP_CATEGORY: &str = "cp";
-    /// The [CP点] mark's stable `kind`. Mirrors
-    /// `game_core::state::mark_kind::CP`.
-    pub const CP_KIND: &str = "mark:cp";
 
     /// Tile-mark **category**: a [指定] of one or more tiles by a field card /
     /// skill while it is in play (「指定…格子 / 地契 / 地块」). The mark is owned

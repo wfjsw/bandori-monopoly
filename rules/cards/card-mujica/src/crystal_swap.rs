@@ -12,7 +12,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::abi::counter;
+use bandori_std::counter;
 use card_sdk::ctx::NameId;
 use card_sdk::{CardText};
 use card_sdk::{key, CardDef, Msg, On};

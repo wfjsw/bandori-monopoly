@@ -23,7 +23,10 @@ pub const TRITONE: CardDef = CardDef::new(
             counteract).counter_reason(key!("tritone_when")),
         On::Action(Action::TurnEnd("", None, counteract)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书「奇迹水晶3」: the `⌛3` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 3)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)
         .raw_name(r#"迷茫之蝶们的三全音"#)
         .tags(&[r#"反击"#])
@@ -74,6 +77,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id || !ctx::is_placed() {
                 return Ok(());
             }
+            // 「每回合结束时移除1」 -- the tick.
+            ctx::dec_turns_left();
             if ctx::add_crystals(-1, 0)? > 0 {
                 return Ok(());
             }

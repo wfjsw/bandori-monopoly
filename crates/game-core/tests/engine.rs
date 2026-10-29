@@ -697,8 +697,9 @@ fn unanimous_vote_ends_the_match() {
         },
     )
     .unwrap();
-    // The bot seat's vote is cast by the engine (user ruling 2026-10-09) on
-    // the next tick -- the drivers have no vote path.
+    // The bot seat's vote was cast by the engine with the proposal (user
+    // ruling 2026-10-09) -- the drivers have no vote path. The tick here only
+    // advances the clock.
     m.pump_tick(0.25);
     let st = m.state();
     assert_eq!(
@@ -801,8 +802,7 @@ fn changed_and_seq_move_together() {
 /// vote for advanced bot seats") so the vote resolves with no external answer.
 #[test]
 fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
-    let mut members = [member(1, false), member(2, true), member(3, true)];
-    members[1].mentality = game_core::state::BotMentality::Advanced;
+    let mut members = [member(1, false), member(2, false), member(3, true)];
     members[2].mentality = game_core::state::BotMentality::Advanced;
     let mut m = new_match(&members, 5, MatchMode::Solo);
     m.quick_start();
@@ -812,22 +812,22 @@ fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
         answer_first(&mut m, 2);
         answer_first(&mut m, 3);
     }
-    // The advanced seats are `ai = false` (held for the driver) but still bots.
+    // The advanced seat is `ai = false` (held for the driver) but still a bot.
     let st = m.state();
     let advanced: Vec<_> = st
         .players
         .iter()
         .filter(|p| p.bot && p.mentality == game_core::state::BotMentality::Advanced)
         .collect();
-    assert!(!advanced.is_empty(), "the advanced seats are present");
+    assert!(!advanced.is_empty(), "the advanced seat is present");
     assert!(
         advanced.iter().all(|p| !p.ai),
-        "advanced seats are held for their driver: {:?}",
+        "the advanced seat is held for its driver: {:?}",
         advanced.iter().map(|p| p.ai).collect::<Vec<_>>()
     );
 
     // The human starts the end-match vote. Solo: the vote never expires, so
-    // without the engine's vote for the advanced seats this would hang.
+    // without the engine's vote for the advanced seat this would hang.
     m.act(
         1,
         &NetMessage {
@@ -836,19 +836,35 @@ fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
         },
     )
     .unwrap();
+    let st = m.state();
+    assert_eq!(st.vote.id, 1, "human 2 is still pending: {:?}", st.vote);
     assert_eq!(
-        m.state().vote.id,
-        1,
-        "the vote is open: {:?}",
-        m.state().vote
-    );
-    assert_eq!(
-        m.state().vote.players.len(),
+        st.vote.players.len(),
         3,
         "every seat votes -- humans by hand, bots by the engine"
     );
-    // One tick: `tick_vote` casts the bot seats' votes.
-    m.pump_tick(0.25);
+    let bot = st.players.iter().position(|p| p.bot).unwrap();
+    let k = st
+        .vote
+        .players
+        .iter()
+        .position(|&p| p == bot as i32)
+        .unwrap();
+    assert_eq!(
+        st.vote.answers[k], 1,
+        "the bot seat agreed with the proposal, no tick in between: {:?}",
+        st.vote
+    );
+
+    // The last human agrees; the vote resolves with no tick either.
+    m.act(
+        2,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
     let st = m.state();
     assert_eq!(
         (st.phase.as_str(), st.end_reason.as_str()),
@@ -856,6 +872,54 @@ fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
         "the vote resolved with no external answer: {:?}",
         st.vote
     );
+}
+
+/// Bots agree **when the vote opens**, not on a later tick: an online room
+/// must not wait on a scheduler beat (or a stale ticker) for an answer nobody
+/// is going to send by hand.
+#[test]
+fn bots_agree_the_moment_the_vote_opens() {
+    let members = [
+        member(1, false),
+        member(2, false),
+        member(3, true),
+        member(4, true),
+    ];
+    let mut m = new_match(&members, 5, MatchMode::Casual);
+    m.quick_start();
+    while m.state().busy || m.state().turn < 0 {
+        answer_first(&mut m, 1);
+        answer_first(&mut m, 2);
+        m.tick(0.25);
+    }
+    m.act(
+        1,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    let st = m.state();
+    assert_eq!(st.vote.id, 1, "human 2 is still pending: {:?}", st.vote);
+    for (k, &p) in st.vote.players.iter().enumerate() {
+        if st.players[p as usize].bot {
+            assert_eq!(
+                st.vote.answers[k], 1,
+                "bot seat {p} agreed on the proposal itself: {:?}",
+                st.vote
+            );
+        }
+    }
+    m.act(
+        2,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    assert_eq!(m.state().end_reason, "vote");
 }
 
 #[test]

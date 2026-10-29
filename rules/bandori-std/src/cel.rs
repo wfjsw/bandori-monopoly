@@ -364,11 +364,7 @@ mod typed {
                 key,
             },
         };
-        let get: Getter = if s.is_func {
-            NO_GET
-        } else {
-            owner_get(s.flat)
-        };
+        let get: Getter = if s.is_func { NO_GET } else { owner_get(s.flat) };
         let fx = if !s.is_func {
             NO_FX
         } else if s.is_bool && s.arity == 2 {
@@ -487,11 +483,7 @@ mod tests {
                 LowerShape::OwnerState { key } => key,
                 LowerShape::CallCandHas { bake } => bake,
             };
-            assert_eq!(
-                s.key, lower_key,
-                "SUGAR[{}] key/bake mismatch",
-                s.cel
-            );
+            assert_eq!(s.key, lower_key, "SUGAR[{}] key/bake mismatch", s.cel);
         }
     }
 }

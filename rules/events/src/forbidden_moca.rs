@@ -23,6 +23,8 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         On::Schedule("expire", "", None, expire),
     ],
 )
+// 「直到你的下个回合结束」: the `⌛1` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 1)])
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Forbidden Moca"#)
@@ -36,6 +38,9 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
 /// end. 「永久移除此事件！」 is the `AtEnd` body below.
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
+    // 「直到你的下个回合结束…在你的下个回合结束时永久移除此事件！」 -- it
+    // expires at that turn end (the `⌛1` face marker is the static `TURNS_LEFT`
+    // prop).
     ctx::at_next_turn_end(player_id, "expire");
     ctx::log(
         player_id,

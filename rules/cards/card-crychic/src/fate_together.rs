@@ -22,7 +22,10 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
         On::Action(Action::PayAfter("", Some(counteract_guard), counteract)),
         On::Action(Action::TurnStart("", Some(counteract_guard), counteract)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书（1）「直到你的下回合开始」: the `⌛1` marker the client shows.
+.props(&[(bandori_std::marker::TURNS_LEFT, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)
         .raw_name(r#"一起演奏音乐的命运共同体"#)
         .tags(&[r#"手"#])
@@ -51,6 +54,8 @@ fn fate_together(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("fate_together_note")).player_id("who", player_id),
     );
     ctx::set_slot(player_id, SLOT_HIT, 0);
+    // 规则书（1）: 「直到你的下回合开始」 -- it ends at the next turn start (the
+    // `⌛1` face marker is the static `TURNS_LEFT` prop).
     Ok(())
 }
 
