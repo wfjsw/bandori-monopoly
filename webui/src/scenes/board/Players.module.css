@@ -6,8 +6,11 @@
 /* Scrolls vertically only. Your own seat's ring (`.me`: 3px outline + 2px
    offset) sits 5px outside its panel; the padding keeps it inside the scroll
    box, so it neither clips nor makes the list scroll sideways. */
-.playersWrap { position: absolute; left: 0; top: var(--players-top, 107px); bottom: calc(var(--players-bottom, 160px) + var(--replay-bar-bottom, 0px)); width: 100%; }
-.players { position: absolute; inset: 0; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+/* The wrapper takes the column's leftover height (Board `.left` is a flex
+   column with the top bar / action strip as padding); it stays `relative` only
+   so the graveyard peek can anchor beside it. */
+.playersWrap { flex: 1 1 0; min-height: 0; position: relative; display: flex; }
+.players { flex: 1 1 0; min-width: 0; min-height: 0; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
    holds both without spilling. */

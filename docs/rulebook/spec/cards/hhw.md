@@ -414,7 +414,9 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 > （1）每个回合在北泽精肉店生成一个可乐饼。你经过格子上的可乐饼时可以将其转移到自己场上（持有上限10），其他角色经过格子上可乐饼时可以将其转移到自己场上并向你支付50*X资金，X为该角色持有的可乐饼数量。你将可乐饼转移至自己场上时可用其替换掉一个其他不位于[持续]卡上的标记。角色每拥有一个可乐饼，移动时多投掷1个1d2。
 
 * `C-HHW-hagumi-skill-01` -- spawn. Quote (1) first sentence.
-  **Trigger:** every turn. **Effect:** one 可乐饼 appears on 北泽精肉店.
+  **Trigger:** the owner's turn start, once per her turn (ruling 2026-10-29:
+  「每个回合」 reads as 「你每个回合开始」, the `simple` tab -- not every
+  player's turn end). **Effect:** one 可乐饼 appears on 北泽精肉店.
 * `C-HHW-hagumi-skill-02` -- own pass transfer. Quote (1).
   **Trigger:** the owner [经过]s a tile holding a 可乐饼.
   **Effect:** may transfer it to their own field (cap 10).
@@ -540,7 +542,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 | OPEN-HHW-CHARGE | 「充能3，衰减1」 counter name | |
 | OPEN-HHW-KANON-NEG | negative difference on 花音 (2) | `simple` says signed (first − second; negative walks backward); `text` does not |
 | OPEN-HHW-BAND-RECORD | band skill 「记录」 storage | |
-| OPEN-HHW-TEXT-VS-SIMPLE | `characters.json` `text` vs `simple` | 北泽育美 `simple` also has a gift-on-pass, a 4-croquette trade, and an enemy-at-4 punish; 松原花音 `simple` decides signed subtraction (「用第一次减第二次：正数往前走，负数往后走」); 濑田薰 `text` says 「主要阶段」 while `simple` says 「运营阶段」; 北泽育美 spawn is 「每个回合」 (`text`) vs 「你每个回合开始」 (`simple`). Precedence names `text`; the gap is recorded here. |
+| OPEN-HHW-TEXT-VS-SIMPLE | `characters.json` `text` vs `simple` | 北泽育美 `simple` also has a gift-on-pass, a 4-croquette trade, and an enemy-at-4 punish; 松原花音 `simple` decides signed subtraction (「用第一次减第二次：正数往前走，负数往后走」); 濑田薰 `text` says 「主要阶段」 while `simple` says 「运营阶段」; 北泽育美 spawn is 「每个回合」 (`text`) vs 「你每个回合开始」 (`simple`); ruling 2026-10-29 resolves it to the owner's own turn start (C-HHW-hagumi-skill-01). |
 | OPEN-HHW-RETURN-RELIEF | relief = pre-double or post-double (2) amount | (3) forces 「支付双倍」; (5) says 「相当于你支付金额」 |
 
 ## Findings

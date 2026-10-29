@@ -847,6 +847,35 @@ fn interaction_smile_patrol_and_owned_houses() {
 
 // ----- 北泽育美：全垒打！ ----------------------------------------------
 
+// 规则书: 「每个回合在北泽精肉店生成一个可乐饼」 -- one per *owner turn start*
+// (the `simple` tab: 「你每个回合开始」), not one at every player's turn end.
+#[test]
+fn hagumi_spawns_one_croquette_on_her_own_turn_start_only() {
+    let mut t = Table::new(&["北泽育美", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.marks_on(51).len(), 1, "one at her turn start");
+    // End her turn, then P1's turn: no further spawn.
+    t.dice(&[1]);
+    let _ = t.roll(0);
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.marks_on(51).len(), 1, "no spawn at her turn end");
+    t.begin_turn(1);
+    drain(&mut t);
+    assert_eq!(t.marks_on(51).len(), 1, "no spawn at another's turn start");
+    t.dice(&[1]);
+    let _ = t.roll(1);
+    drain(&mut t);
+    t.end(1).unwrap();
+    drain(&mut t);
+    // Ending P1's turn rolls straight into her next turn start: exactly one
+    // more (one per round, not one per turn).
+    assert_eq!(t.marks_on(51).len(), 2, "exactly one per own turn");
+}
+
 #[test]
 fn hagumi_cash_trades_four_croquettes_for_1000() {
     // 规则书: 「育美可在主要阶段消耗4个可乐饼兑换1000资金」

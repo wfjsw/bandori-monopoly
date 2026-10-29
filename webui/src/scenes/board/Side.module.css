@@ -1,16 +1,10 @@
-/* Two deed controls, anchored below the player column. The die moved into the
+/* Two deed controls at the foot of the player column (Board `.left` is a flex
+   column and reserves the bottom padding they sit in). The die moved into the
    board's roll zone (Ring); skills live in the hand dock's left stack. Two
    controls leave the last one alone on its row -- let it span, so the grid
-   stays tidy either way. A replay transport docked at the bottom edge raises
-   every bottom-anchored strip by its height (`--replay-bar-bottom`, 0 when
-   the transport floats or is hidden) so nothing hides behind it. */
+   stays tidy either way. */
 .actions {
-  position: absolute;
-  /* Off the home indicator (`--safe-bottom`). The cutout on the left is
-     already cleared by Board `.body`, which this column sits in. */
-  left: 0;
-  right: 0;
-  bottom: calc(max(var(--actions-bottom, 22px), var(--safe-bottom, 0px)) + var(--replay-bar-bottom, 0px));
+  flex: none;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
