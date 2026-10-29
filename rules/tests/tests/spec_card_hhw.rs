@@ -1111,11 +1111,13 @@ fn hagumi_two_rolls_place_a_mark() {
     // The two 4d20 sums are 10 and 12 (faces 2+2+3+3 twice). The mark must
     // sit on one of those 序号 tiles (indices 9 and 11).
     let marks = t.marks();
+    // The skill's 可乐饼 on 北泽精肉店 also belongs to 育美; skip it.
     let hit = marks.iter().find(|m| {
-        m.kind.contains("hagumi")
-            || m.kind.contains("育美")
-            || m.card.contains("hagumi")
-            || m.card.contains("育美")
+        m.kind != "可乐饼"
+            && (m.kind.contains("hagumi")
+                || m.kind.contains("育美")
+                || m.card.contains("hagumi")
+                || m.card.contains("育美"))
     });
     let Some(m) = hit else {
         panic!(

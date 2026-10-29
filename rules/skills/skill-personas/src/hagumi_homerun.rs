@@ -22,6 +22,11 @@
 //! no post-commit `*Changed` hook (only the pre-move `markerGain` window), so
 //! the sweep runs after each of this skill's own croquette-raising writes --
 //! the only sites that can raise the count (marker ownership).
+//!
+//! Spawn timing: 「每个回合」 is the owner's turn start, once (the `simple`
+//! tab spells it 「你每个回合开始」). The hook is `TurnStart` filtered to
+//! `actor == owner`, so it fires on her turn only, not at every player's
+//! turn end.
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, Dice, FilterKind, MarkFilter};
@@ -35,7 +40,11 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Action(Action::TurnEnd("", None, at_turn_end)),
+        // 「每个回合在北泽精肉店生成一个可乐饼」 -- the owner's turn start, once.
+        On::Action(Action::TurnStart("actor == owner", None, at_turn_start)),
+        // 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- the
+        // standing sweep's catch-all tick.
+        On::Action(Action::TurnEnd("", None, on_turn_end)),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
@@ -66,12 +75,12 @@ fn passing_a_player(player_id: i32) -> bool {
     t >= 0 && !ctx::players_on(t, player_id).is_empty()
 }
 
-/// 「每个回合在北泽精肉店生成一个可乐饼」 + the standing overflow sweep
-/// (「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」).
-fn at_turn_end(player_id: i32) -> card_sdk::Asked {
+/// 「每个回合在北泽精肉店生成一个可乐饼」 -- the owner's turn start only
+/// (`actor == owner`), one fresh row per turn so croquettes accumulate as
+/// separate units.
+fn at_turn_start(_player_id: i32) -> card_sdk::Asked {
     let t = ctx::tile_named("北泽精肉店");
     if t >= 0 {
-        // One fresh row per turn -- croquettes accumulate as separate units.
         ctx::place_mark(
             t,
             ON_TILE,
@@ -83,6 +92,12 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             card_sdk::abi::Stack::Fresh,
         );
     }
+    Ok(())
+}
+
+/// The standing overflow sweep's catch-all tick, at every turn end (the count
+/// can also change outside this skill's own writes).
+fn on_turn_end(player_id: i32) -> card_sdk::Asked {
     sweep_overflow(player_id)
 }
 
@@ -268,8 +283,14 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
-    at_turn_end(player_id)
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_end(player_id)
 }
 
 #[cfg(kani)]
