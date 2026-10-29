@@ -209,6 +209,9 @@ fn drive(m: &mut Match, max_rounds: i32) -> Run {
             }
         }
         m.tick(0.25);
+        // The engine decides nothing: the harness drives the bot seats
+        // (`docs/BOT-DRIVE.md`), in the baseline and the replay alike.
+        bot_core::sim::pump_bots(m);
         ticks += 1;
     }
     checkpoints.push(checkpoint(m));

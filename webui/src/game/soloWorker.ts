@@ -272,7 +272,7 @@ function pump(forceSave = false): void {
 function refreshBotSeats(main: MatchView): void {
   botSeats.clear();
   for (const p of main.state.players) {
-    if (!(p.bot && !p.ai && !p.bankrupt && !p.left)) continue;
+    if (!(p.bot && !p.bankrupt && !p.left)) continue;
     botSeats.add(p.member);
   }
   for (const k of [...botJson.keys()]) {

@@ -264,7 +264,6 @@ impl Table {
         let p = &mut self.m.world_mut().st.players[who];
         p.bot = true;
         p.mentality = mentality;
-        p.ai = mentality != BotMentality::Advanced;
     }
 
     /// Tick the host clock until `pred` (or the tick budget runs out). Lets a
@@ -274,6 +273,7 @@ impl Table {
             if pred(self) {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!("tick_until: {what} never happened: {}", self.dump_prompt());
@@ -310,6 +310,7 @@ impl Table {
             {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!(

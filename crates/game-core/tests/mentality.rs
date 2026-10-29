@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 mod common;
 use common::data_arc as data;
+use common::Pump;
 use game_core::engine::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Cx, Dest, Flow,
     Match, StubRules, Trigger, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
@@ -40,7 +41,6 @@ fn new_match(
         MatchMode::Casual,
         ScoreWeights::default(),
     );
-    common::engine_bots(&mut m);
     m
 }
 
@@ -53,7 +53,7 @@ fn play_out(m: &mut Match, max_rounds: i32) {
     let mut ticks = 0;
     while !m.ended() {
         common::cross_mulligan(m);
-        m.tick(0.25);
+        m.pump_tick(0.25);
         ticks += 1;
         if m.state().round > max_rounds {
             m.finish();
@@ -110,7 +110,7 @@ fn chaos_bot_buys_with_no_reserve() {
         let mut after = vec![];
         let mut ticks = 0;
         while !match_.ended() {
-            match_.tick(0.25);
+            match_.pump_tick(0.25);
             ticks += 1;
             let st = match_.state();
             for e in match_.events_since(last) {
@@ -364,9 +364,14 @@ fn standard_counters_at_the_default_propensity() {
 /// Chaos plays every playable card before it rolls -- no 70% roll, no
 /// two-per-turn cap beyond the engine's own. Counted per seat against that
 /// seat's own hand: a one-card hand owes one play, not two.
+///
+/// A driver acts right after a tick (`pump_tick`), so the tick that opens the
+/// turn can already carry the seat's first play; plays counted from the wait
+/// loop in are part of the same turn and count too.
 #[test]
 fn chaos_plays_every_playable_card_instead_of_rolling() {
-    for seed in 1..=6 {
+    let mut live_seeds = 0;
+    for seed in 1..=14 {
         let members: Vec<RoomMember> = (1..=4)
             .map(|i| member(i, true, BotMentality::Chaos))
             .collect();
@@ -374,35 +379,45 @@ fn chaos_plays_every_playable_card_instead_of_rolling() {
         m.quick_start();
         // Wait for the first seat's 运营; the bots drive themselves.
         let mut ticks = 0;
+        let mut last = 0;
+        // Plays by whoever was on turn while waiting. The seat is only known
+        // once the loop stops; it is the seat whose turn opened.
+        let mut early: Vec<i32> = Vec::new();
         while !m.ended() {
             let st = m.state();
             if !st.busy && st.turn >= 0 && st.step == stage::OPS {
                 break;
             }
-            m.tick(0.25);
+            m.pump_tick(0.25);
+            for e in m.events_since(last) {
+                last = e.id;
+                if e.r#type == "play" {
+                    early.push(e.player_id);
+                }
+            }
             ticks += 1;
             assert!(ticks < 2_000_000, "seed {seed}: no first turn");
         }
         let st = m.state();
         let seat = st.turn as usize;
         let member = st.players[seat].member;
-        // How many of its cards this seat could play at the top of its turn.
+        // What of its hand this seat can still play now.
         let owed = m
             .view_extra_typed(member)
             .playable
             .iter()
             .filter(|&&ok| ok)
             .count();
-        assert!(
-            owed > 0,
-            "seed {seed}: nothing playable, the case is vacuous"
-        );
-
-        let mut last = 0;
-        let mut played = 0;
+        let mut played = early.iter().filter(|&&p| p as usize == seat).count();
         let mut saw_move = false;
+        if owed == 0 && played == 0 {
+            // A hand with nothing playable proves nothing; the turn surface is
+            // still exercised, so only the population assert below can fail.
+            continue;
+        }
+        live_seeds += 1;
         while !m.ended() && !saw_move {
-            m.tick(0.25);
+            m.pump_tick(0.25);
             for e in m.events_since(last) {
                 last = e.id;
                 match e.r#type.as_str() {
@@ -421,6 +436,7 @@ fn chaos_plays_every_playable_card_instead_of_rolling() {
             "seed {seed}: played {played} of {owed} playable card(s) before rolling"
         );
     }
+    assert!(live_seeds >= 10, "only {live_seeds} seeds were not vacuous");
 }
 
 // ---------------------------------------------------------------- determinism
@@ -452,13 +468,13 @@ fn chaos_save_and_restore_continue_identically() {
     let mut a = new_match(&members, 7, Arc::new(StubRules));
     a.quick_start();
     for _ in 0..40 {
-        a.tick(0.25);
+        a.pump_tick(0.25);
     }
     let json = a.save();
     let mut b = Match::restore(data(), Arc::new(StubRules), &json).unwrap();
     for _ in 0..40 {
-        a.tick(0.25);
-        b.tick(0.25);
+        a.pump_tick(0.25);
+        b.pump_tick(0.25);
     }
     assert_eq!(
         serde_json::to_string(&a.state()).unwrap(),
@@ -483,25 +499,35 @@ fn mentality_defaults_to_standard_and_round_trips() {
     assert_eq!(back.mentality, BotMentality::Chaos);
 }
 
-/// A human seat is never chaos -- a time-out or disconnect keeps the standard
-/// policy even if the field is marked.
+/// A mentality is a property of the **seat**, not of whoever drives it: 托管's
+/// 混沌 mode tags the (human) seat `chaos` and the policy must honor it -- both
+/// the driver and the engine's prefill read the same seat field. An untagged
+/// human seat stays standard.
 #[test]
-fn a_human_seat_is_never_chaos() {
+fn a_human_seat_plays_the_mentality_on_its_seat() {
     let members = [
-        member(1, false, BotMentality::Chaos), // human carrying a chaos tag
-        member(2, true, BotMentality::Standard),
+        member(1, false, BotMentality::Chaos), // human under 托管 混沌
+        member(2, false, BotMentality::Standard),
         member(3, true, BotMentality::Standard),
     ];
     let mut m = new_match(&members, 3, Arc::new(StubRules));
     m.quick_start();
     let st = m.state();
-    let human = st.players.iter().find(|p| !p.bot).unwrap();
-    assert_eq!(
-        human.mentality,
-        BotMentality::Chaos,
-        "the tag is on the seat"
+    // Seats are in rolled order, so find the human by member.
+    let chaos_seat = st.players.iter().position(|p| p.member == 1).unwrap();
+    let plain_seat = st.players.iter().position(|p| p.member == 2).unwrap();
+    assert_eq!(st.players[chaos_seat].mentality, BotMentality::Chaos);
+    assert!(!st.players[chaos_seat].bot, "still a human seat");
+    let cx = m.bot_cx();
+    assert!(
+        bot_core::policy::is_chaos(&cx, chaos_seat),
+        "chaos human is chaos"
     );
-    // The engine's policy lookup ignores it (exercised through a full game --
-    // the human is never auto-answered by chaos).
+    assert!(
+        !bot_core::policy::is_chaos(&cx, plain_seat),
+        "untagged human is not"
+    );
+    drop(cx);
+    // And a full game with the tag in place runs (the time-out fill reads it).
     play_out(&mut m, 30);
 }

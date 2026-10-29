@@ -37,23 +37,66 @@ pub fn data_arc() -> Arc<GameData> {
     Arc::new(data())
 }
 
-/// Put every non-advanced bot seat back on the engine's own schedule.
+/// The policy command for one machine-driven seat, if it has anything to
+/// decide.
 ///
-/// Production leaves `ai` off for bot seats and drives them over the human
-/// interface (`docs/BOT-DRIVE.md`); these engine tests have no driver, so they
-/// opt back into the in-engine answerer. Call between `Match::new` and
-/// `quick_start` (`world_mut` needs no pending routine).
-pub fn engine_bots(m: &mut game_core::engine::Match) {
-    let bots: Vec<usize> = m
-        .state()
-        .players
+/// Production drives every bot seat over the human interface
+/// (`docs/BOT-DRIVE.md`) and the engine decides nothing itself; a test host is
+/// a driver the same way, and follows the same list the server claims by
+/// (`state.drive`).
+pub fn bot_msg(m: &game_core::engine::Match, member: i32) -> Option<game_core::net::NetMessage> {
+    let st = m.state();
+    let me = st.player_of(member);
+    let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+    // Off its turn and unasked, the seat has nothing to do. (Setup surfaces
+    // other than a prompt are engine-side.)
+    if !asked && (st.phase != "play" || st.busy || st.vote.id > 0 || st.turn != me) {
+        return None;
+    }
+    bot_core::policy::act_for(m, member)
+}
+
+/// The members a harness must drive now: the engine's drive list, except in
+/// Solo, where the list is empty by design (one client drives the whole
+/// table) and the harness plays the bots itself.
+pub fn drive_members(m: &game_core::engine::Match) -> Vec<i32> {
+    let st = m.state();
+    if !st.drive.is_empty() {
+        return st.drive.clone();
+    }
+    st.players
         .iter()
-        .enumerate()
-        .filter(|(_, p)| p.bot && p.mentality != game_core::state::BotMentality::Advanced)
-        .map(|(i, _)| i)
-        .collect();
-    for i in bots {
-        m.world_mut().st.players[i].ai = true;
+        .filter(|p| p.bot && !p.bankrupt && !p.left)
+        .map(|p| p.member)
+        .collect()
+}
+
+/// Let every member of [`drive_members`] take one policy command. Returns
+/// whether any applied.
+pub fn drive(m: &mut game_core::engine::Match) -> bool {
+    let members = drive_members(m);
+    let mut any = false;
+    for member in members {
+        let Some(msg) = bot_msg(m, member) else {
+            continue;
+        };
+        if m.act(member, &msg).is_ok() {
+            any = true;
+        }
+    }
+    any
+}
+
+/// `Match::tick` plus [`drive`] -- one clock quantum, then the bots' answers,
+/// the cadence a host runs at.
+pub trait Pump {
+    fn pump_tick(&mut self, dt: f32);
+}
+
+impl Pump for game_core::engine::Match {
+    fn pump_tick(&mut self, dt: f32) {
+        self.tick(dt);
+        drive(self);
     }
 }
 

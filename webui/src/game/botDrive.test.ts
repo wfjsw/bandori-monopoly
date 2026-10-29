@@ -166,14 +166,16 @@ test("botSeats: every held bot seat, no matter its mentality", () => {
       players: [
         player({ member: 1, bot: false, ai: false }),
         player({ member: 2, bot: true, ai: false, mentality: "advanced" }),
-        player({ member: 3, bot: true, ai: true, mentality: "advanced" }), // engine-driven
+        // `ai` marks a human under machine control, never a bot; a bot seat is
+        // driven whatever the flag says (`docs/BOT-DRIVE.md`).
+        player({ member: 3, bot: true, ai: true, mentality: "advanced" }),
         player({ member: 4, bot: true, ai: false, mentality: "standard" }),
         player({ member: 5, bot: true, ai: false, mentality: "chaos" }),
         player({ member: 6, bot: true, ai: false, mentality: "advanced", left: true }), // gone
       ],
     }),
   });
-  assert.deepEqual(botSeats(v), [2, 4, 5]);
+  assert.deepEqual(botSeats(v), [2, 3, 4, 5]);
 });
 
 // ---------------------------------------------------------------- driveSeat

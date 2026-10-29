@@ -33,11 +33,9 @@ export interface ViewExtras {
   estCost: number[];
   /** The viewer's pressable skills, gated through `why_not_act`. */
   skills: SkillAction[];
-  /** The standard bot's answer for the viewer's own live prompt, if any. */
+  /** The standard policy's precomputed answer for the viewer's own live
+   *  prompt, if any (the engine's prompt-open fill). */
   aiAnswer: { answer: number; picked: string[]; worth: number } | null;
-  /** The policy's whole next command (`Match::bot_action`) -- the engine's
-   *  one implementation, which 托管 sends instead of re-deciding. */
-  autoAction: Command | null;
 }
 
 // ---------------------------------------------------------------- merge

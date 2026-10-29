@@ -17,6 +17,7 @@ use game_core::state::BOARD_OWNER;
 use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 /// A rules stand-in with exactly one event rule: `event:EVT1` remains in play
 /// (「将此卡放置于场地中央」) and every other event falls through the built-in
@@ -53,7 +54,6 @@ fn new_match(rules: Arc<dyn CardRules>) -> Match {
         MatchMode::Solo,
         ScoreWeights::default(),
     );
-    common::engine_bots(&mut m);
     m
 }
 

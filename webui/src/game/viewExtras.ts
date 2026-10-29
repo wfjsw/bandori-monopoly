@@ -37,7 +37,6 @@ export function mergeExtras(v: MatchView, e: ViewExtras): MatchView {
     estCost: e.estCost,
     skills: e.skills,
     aiAnswer: e.aiAnswer,
-    autoAction: e.autoAction,
   };
 }
 
@@ -85,10 +84,10 @@ export class OnlineExtras {
    *  **only `skills`** carries the most recent set forward: the roster's
    *  pressable skills are stable across a decision, and an absent list empties
    *  the skill row (its faces remount, and their art flashes). The decision
-   *  fields (`playable` / `estCost` / `aiAnswer` / `autoAction`) are
-   *  decision-specific and must never be borrowed from another key -- a stale
-   *  `playable` greys a legal card, a stale `aiAnswer` / `autoAction` answers
-   *  托管 with the previous decision, and a spent command would replay.
+   *  fields (`playable` / `estCost` / `aiAnswer`) are decision-specific and
+   *  must never be borrowed from another key -- a stale `playable` greys a
+   *  legal card and a stale `aiAnswer` answers 托管 with the previous
+   *  decision.
    *  Returns `v` itself when nothing can be merged (or the frame already
    *  carries those fields). */
   mergeCached(v: MatchView): MatchView {
@@ -98,8 +97,7 @@ export class OnlineExtras {
         v.playable === exact.playable &&
         v.estCost === exact.estCost &&
         v.skills === exact.skills &&
-        v.aiAnswer === exact.aiAnswer &&
-        v.autoAction === exact.autoAction
+        v.aiAnswer === exact.aiAnswer
       ) {
         return v;
       }

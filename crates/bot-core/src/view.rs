@@ -42,7 +42,8 @@ pub struct SeatView {
     pub ai_answer: Option<AiAnswer>,
     /// Card ids already played this turn, in play order (`world.turn.played`;
     /// the engine's skill de-dup and max-plays gate read it). All plays are
-    /// public; a fact-driven frame builder should carry it.
+    /// public, and both frame builders (`rules-worker`'s `view` op,
+    /// `web-glue`'s `frame`) carry it.
     pub played: Vec<String>,
     /// How many of [`Self::played`] were hand-card plays (`cards_played`; the
     /// 「same turn, two cards」 trigger reads it).

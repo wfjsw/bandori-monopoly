@@ -129,6 +129,7 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
             break;
         }
         m.tick(0.25);
+        bot_core::sim::pump_bots(&mut m);
     }
     let st = m.state();
     assert_eq!(st.phase, "play", "match should reach play");
@@ -462,7 +463,12 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
         ScoreWeights::default(),
     );
     m.quick_start();
+    // Both seats are humans (a [反击] window goes to the other seat, not to a
+    // bot), so the harness takes the other one over as 托管 -- the pump then
+    // answers it and the match can reach the human's turn. Re-set every pass:
+    // a routine's re-run restores the snapshot it took, dropping the flag.
     for _ in 0..2000 {
+        m.set_machine_seat(2, true);
         cross_mulligan(&mut m);
         let st = m.state();
         if st.phase == "play"
@@ -476,6 +482,7 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
             break;
         }
         m.tick(0.25);
+        bot_core::sim::pump_bots(&mut m);
     }
     let (actor, other) = (1, 2);
     m.give_cards(actor, &["TEST:aimer"]);

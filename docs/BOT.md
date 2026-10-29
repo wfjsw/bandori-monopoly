@@ -49,19 +49,20 @@ policy, and a static evaluation at the horizon.
 * **No RNG coupling.** Search uses its own RNG and forked worlds only; it
   never touches the live `world.rng`, `live_rng`, `seq` or event counters.
   Recordings are unchanged because the answers are what get recorded.
-* **Fallback.** Timeout, crash or a missing service → the engine's own
-  `autoAction` for the seat; when even that is absent, the page's fallback
-  table (`autopilot.ts`, a port of `ai.rs`).
+* **Fallback.** Timeout, crash or a missing service → the host's own
+  `bot-core` policy answer for the seat (`policy::act_for_view`, no search);
+  when even that is absent, the prompt's prefill and the page's fallback table
+  (`autopilot.ts`, a port of `policy.rs`).
 
 ### 1.1 Hidden-state audit (seat-view extras)
 
 The client-side **seat-view engine** (`crates/bot-core/src/extras.rs`
 `view_extras`) recomputes the per-viewer extras -- `playable`, `estCost`,
-`skills`, `aiAnswer`, `autoAction` -- from one seat's `MatchView` (public
-`MatchState` + own hand + own sorted draw + open prompt). `autoAction` is the
-policy's whole next command (`Match::bot_action`), so browser 托管 sends the
-same implementation the server scheduler runs instead of re-deciding in
-TypeScript (`webui/src/game/autopilot.ts`'s table is only the extras-missing
+`skills`, `aiAnswer` -- from one seat's `MatchView` (public `MatchState` +
+own hand + own sorted draw + open prompt). The decision itself is
+`bot-core::policy` on the same determinized fork (`docs/BOT-DRIVE.md`), so
+browser 托管 and the server bot run one implementation instead of re-deciding
+in TypeScript (`webui/src/game/autopilot.ts`'s table is only the worker-failure
 fallback). It builds a determinized fork (`bot-core/src/determinize.rs`) and
 runs the same gates the server's `Match::view_extra_parts` (`engine/mod.rs`)
 runs. The list below is every
@@ -146,60 +147,55 @@ client/server split -- list it here.
 |---|---|---|---|
 | `CardRules::card_prop(id, "estCost")` | **static** `CardDef::props` map (`card-sdk::abi::prop::EST_COST`). Never derived from prose, never from the world. Default `0`. | always equal | none |
 
-#### F. `aiAnswer` -- `Ask` fill vs `Match::compute_ai_answer`
+#### F. `aiAnswer` -- the prompt prefill
 
-The server `view_extra` **reads the precomputed fill** stamped at
-prompt-open (`Ask::ai` / `ai_picked` / `worth`: `Cx::fill_ai` for ordinary
+`aiAnswer` is the answer the engine stamps **once, at prompt-open**, on the
+live stream (`Ask::ai` / `ai_picked` / `worth`: `Cx::fill_ai` for ordinary
 prompts, `Ask::mortgage`'s `ai_pick` from `auto_mortgage(_from)`,
-`Ask::auction`'s `worth` from `ai_auction_worth` per seat). The seat-view
-engine **recomputes** via `compute_ai_answer` on the fork
-(`ai_auction_worth` / `auto_mortgage(_from)` / the `Ask::with_ai` policy
-tests / `ai_answer_for_entry`). Every way those can disagree:
+`Ask::auction`'s `worth` from `ai_auction_worth` per seat). It is no longer a
+scheduled decision (`docs/BOT-DRIVE.md`); it serves two jobs:
+
+* the prompt's **forced default** when a seat's window is spent and its
+  driver never answered, and
+* the hint the search's priors and the 托管 fallback table rank with.
+
+Solo ships it in `view_extra`; online ships it on the same field, and the
+seat-view engine mirrors it into the fork's stub (`determinize` ->
+`saved::stub_pending`) rather than recomputing -- so the extras echo exactly
+what the server stamped. Every way the value can be wrong:
 
 | name / gate | reads | client vs server | blast radius |
 |---|---|---|---|
-| **RNG stream** (the umbrella divergence) | the fill draws from the **live match RNG** at prompt-open; the fork draws from a **fresh** `DeterminizerRng`-seeded stream (`determinize.rs`) | **may diverge** whenever the choice fn draws | `aiAnswer` differs (托管 hint only) |
+| **RNG stream** (the umbrella divergence) | the fill draws from the **live match RNG** at prompt-open; a policy decision on the fork draws from a **fresh** `DeterminizerRng`-seeded stream (`determinize.rs`) | **may diverge** whenever the choice fn draws -- the fill itself is mirrored, so only a *policy* answer differs | a different but legal answer |
 | `fill_ai` / `ai_answer_for_entry` -- chaos branch (`is_chaos`) | **public** (`bot`, `mentality`) | always equal | -- |
-| `chaos_pick` (chaos non-counteract prompts) | **RNG** (`w.rng.below`) | **may diverge** (RNG) | `aiAnswer.answer` differs |
-| `counteract_pick` (standard, title `ask.counteract.title`) | **RNG** one `f64` per offered card until one fires + `strategy_of(seat).counteract_propensity` (public characters + ruleset sha) + prompt `options` (public to the asked seat) | **may diverge** (RNG) | `aiAnswer.answer` differs |
-| chaos [反击] pass roll (`CHAOS_COUNTER_CHANCE`) | **RNG** (`w.rng.f64`) | **may diverge** (RNG) | `aiAnswer.answer` differs |
+| `chaos_pick` (chaos non-counteract prompts) | **RNG** (`w.rng.below`) | mirrored | -- |
+| `counteract_pick` (standard, title `ask.counteract.title`) | **RNG** one `f64` per offered card until one fires + `strategy_of(seat).counteract_propensity` (public characters + ruleset sha) + prompt `options` (public to the asked seat) | mirrored | -- |
+| chaos [反击] pass roll (`CHAOS_COUNTER_CHANCE`) | **RNG** (`w.rng.f64`) | mirrored | -- |
 | standard non-counteract / non-chaos **without** `Ask::with_ai` | deterministic `fallback` | always equal | -- |
-| **`Ask::with_ai` policy tests** -- `offer_buy` / `offer_build` / `offer_force_buy` (titles `ask.buy.title` / `ask.build.title` / `ask.force_buy.title`) | **public** money + quoted price + `StrategyParams` + round (and the force-buy reserve). Deterministic, no draw. `compute_ai_answer` re-runs them (`ai_wants_buy` / `ai_wants_build` / `ai_wants_force_buy`); the answer is 0 = accept, 1 = decline | always equal (regression: `crates/game-core/tests/compute_ai_answer.rs`) | -- |
-| **`Ask::with_ai` tile pick** -- `rules/tiles` `agent.rs` (title `ask.agent.title`) | `ai_agent_choice` over the offered tiles: public money / quotes / strategy. Deterministic for standard; chaos draws. `compute_ai_answer` re-runs `ai_agent_choice` | always equal (standard); **may diverge** (RNG) for chaos | `aiAnswer.answer` differs |
-| any other `Ask::with_ai` (a card body's own hint) | card-defined; the fork cannot re-run the card body, so `compute_ai_answer` takes the fallback | **may diverge** | `aiAnswer.answer` is the fallback, not the card's hint |
-| `ai_auction_worth` -- standard | **RNG** (`w.rng.f64` into `StrategyParams::auction_worth`) + public money + public tile quote | **may diverge** (RNG) | `aiAnswer.worth` differs (auction ceiling) |
+| **`Ask::with_ai` policy tests** -- `offer_buy` / `offer_build` / `offer_force_buy` (titles `ask.buy.title` / `ask.build.title` / `ask.force_buy.title`) | **public** money + quoted price + `StrategyParams` + round (and the force-buy reserve). Deterministic, no draw; the answer is 0 = accept, 1 = decline (`ai_wants_buy` / `ai_wants_build` / `ai_wants_force_buy`) | always equal | -- |
+| **`Ask::with_ai` tile pick** -- `rules/tiles` `agent.rs` (title `ask.agent.title`) | `ai_agent_choice` over the offered tiles: public money / quotes / strategy. Deterministic for standard; chaos draws | always equal (standard); mirrored (chaos) | -- |
+| any other `Ask::with_ai` (a card body's own hint) | card-defined and not re-runnable; the fork keeps the stamped value | mirrored | -- |
+| `ai_auction_worth` -- standard | **RNG** (`w.rng.f64` into `StrategyParams::auction_worth`) + public money + public tile quote | mirrored | -- |
 | `ai_auction_worth` -- chaos | deterministic `money - CHAOS_RESERVE` | always equal (same formula) | -- |
 | `auto_mortgage` / `auto_mortgage_from` -- standard | **public** deeds (`mortgageable` = own buyable unmortgaged tiles), sort key from `StrategyParams` (public). No draw. | always equal | -- |
-| `auto_mortgage_from` -- chaos | **RNG** (`w.rng.below` per pick) over the deed list | **may diverge** (RNG) | `aiAnswer.picked` differs |
-| `Ask::mortgage` / `Ask::auction` fill timing | the fill is stamped once at prompt-open on the live stream; a later recompute on the live match would already see a moved RNG. The fork never shares that stream. | **may diverge** (timing + RNG) | `aiAnswer` differs |
-| stubbed other seats' auction ceilings (`stub_pending`) | approximate (`base.min(money-1000)`) -- **not** used by `compute_ai_answer`, which only fills the viewer's own entry | n/a for extras | none |
+| `auto_mortgage_from` -- chaos | **RNG** (`w.rng.below` per pick) over the deed list | mirrored | -- |
+| stubbed other seats' auction ceilings (`stub_pending`) | approximate (`base.min(money-1000)`) -- only the viewer's own entry is read | n/a for extras | none |
 
 **The `with_ai` row is load-bearing.** Those fills are *not* the fallback
-(`fill_ai` skips an entry `with_ai` already set). A recompute that only ran
-`ai_answer_for_entry` answered every fundable buy with the prompt's "decline"
-slot, and online 托管 -- which trusts `aiAnswer` over its own policy table in
-`autopilot.ts` `botPrompt` -- never bought a tile, while solo (which reads the
-fill) kept buying. Pinned by `crates/game-core/tests/compute_ai_answer.rs`.
+(`fill_ai` skips an entry `with_ai` already set). Without it the forced default
+for every fundable buy would be the prompt's "decline" slot, and online 托管
+(falling back to `aiAnswer` in `autopilot.ts` `botPrompt`) would never buy a
+tile while solo (which forces the fill) kept buying.
 
-No `ai_*` choice fn in the extras path reads another seat's hand, the deck
+No `ai_*` choice fn in the fill path reads another seat's hand, the deck
 order, or a hidden zone. Hidden-state risk is limited to the **RNG**.
 
-Both fields now come from **one** computation: the extras run
-`Match::bot_action` (below), which answers a live prompt through
-`compute_ai_answer`, and derive `aiAnswer` from that command (`answer` =
-`value`, `picked` = `cards`, `worth` = the value on an auction only). 托管
-sends the command itself, so a divergence between the hint and the choice can
-no longer happen -- the stand-in fill is only used when `bot_action` is absent
-(a vote is open, or the prompt is not waiting on the viewer).
+#### F2. The command itself -- `bot-core::policy::act_for`
 
-#### F2. `autoAction` -- `Match::bot_action`
-
-`Match::bot_action(member)` is the **single** policy implementation shared by
-the server scheduler (`Cx::ai_step` for turn surfaces, `ai_answer_for_entry`
-for prompts) and the page. Solo ships it on the frame (`web-glue`'s
-`view_extra`); online computes it on the seat-view fork. It decides **only**
-what the seat could send through `act` and never applies it, so a frame read
-costs no live RNG.
+The whole next command is the **single** policy implementation shared by the
+server, the page and the search (`bot-core/src/policy.rs`). Online the page
+asks the worker for it (`op: "act"`); solo and 托管 do the same. The engine no
+longer computes it, so a frame read costs no live RNG.
 
 Turn-surface rows follow the same hidden-state rules as the prompt rows above:
 `playable` / `estCost` / public money decide a play or redeem, skills come
@@ -207,6 +203,7 @@ from the public field, and the two RNG draws (`play_card_chance`, chaos's card
 pick) may diverge from the server's own draw. The blast radius is the sent
 command, which the server applies verbatim -- a divergence is a different but
 legal play, never a desync.
+
 
 #### G. `why_not_act` -- the other branches (not extras, listed for completeness)
 
@@ -401,17 +398,17 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   UCB over the searching seat's abstracted actions, a fresh determinization
   per iteration, tree keyed by the seat's public view (clocks stripped).
   Generic over [`sim::Simulator`]; [`sim::MatchSim`] drives real `Match`
-  forks through `act` / `tick`. The searching seat is taken over in the fork
-  (its `ai` flag is dropped in the save JSON before `restore`, so the engine
-  never auto-plays it); the other seats are the engine's own bots.
+  forks through `act` / `tick`. The searching seat is left to the search; the
+  other seats are pumped with the policy (`sim::next_decision` ->
+  `pump_bots`), since the engine drives nobody.
 * **Action abstraction** ([`action::Action`]): card plays, buy / build /
   force-buy offers, a few auction bid levels (min / min+100 / ¾·quote /
   quote / money−1000), counteract offers, agent / tile picks, mortgage
   subsets in the heuristic's order, and a **decline** (`act: "end"` at 结束)
   for a turn surface with no paid option left. Trivial prompts (≤1 option,
   mulligan) and everything else (roll, end, discard) are delegated to the
-  heuristic — the engine's `aiAnswer` for prompts, an `ai_step`-shaped policy
-  for the turn surface.
+  heuristic — the prompt's prefill (`aiAnswer`) for prompts, the policy's turn
+  surface otherwise.
   * **Decline scope (post-bisect, 2026-10-08).** Decline is only on the menu
     when the turn would otherwise have **no** action (an unaffordable /
     gate-refused buy — the stall). A legal Buy/Build stays forced: the §5 C1
@@ -435,6 +432,18 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     exile and can disagree with the end gate (unstoppable, mid-turn [停留],
     [除外]); trusting it sent `end` into `err.roll_first` — the heuristic's
     运营 branch now picks roll vs end by `can_roll_here` / `can_end_here`.
+    The **policy** branch (`policy::turn_action`) mirrors the same gates from
+    the live world (a `Cx` carries no `MatchState`, whose convenience fields
+    are only filled by `Match::state`) instead of reading `skip_move`, and
+    discards first while over the hand: nobody but the seat's own client can
+    end its turn, so a refused command is a permanent stall, not a retry
+    (`docs/BOT-DRIVE.md`).
+  * **Auction answers (2026-10-28).** The prompt's `worth` is a ceiling, not a
+    bid: `policy::act_for` passes when the seat is already the top bidder
+    (`err.already_top_bid`) or cannot reach the minimum raise (`err.bid_min`),
+    and otherwise bids from that minimum by its own `bid_step`. A refused
+    auction answer holds the whole table on the prompt, because nobody marks
+    an answer the engine turned down.
   * **Trivial decisions (2026-10-08).**
     [`action::trivial_decision`] skips the search when the root has exactly
     one legal action (it is forced) or when no candidate moves money,
@@ -445,8 +454,8 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     plays, agent picks, tile choices and mortgages always keep the full
     search. Answered as `heuristic: true, iterations: 0`. This was 27–34% of
     searched bot CPU.
-* **Rollout**: the engine's own heuristic bot (`ai.rs`) plays every seat to
-  the horizon (2 rounds by default) — all seats in a fork are bots.
+* **Rollout**: the policy itself (`policy::act_for`, no search) plays every
+  seat to the horizon (2 rounds by default) — all seats in a fork are bots.
 * **Evaluation** ([`eval::relative_worth`]): net worth (cash + deeds at
   value, mortgaged at half + houses at build cost) minus the field mean,
   normalised by start money + board value. Simple on purpose; rent /
@@ -544,8 +553,8 @@ them; to be added once the purchasing migration stops touching
       "nextTurnPending": bool, "ringBonus": i32,
       "askAi": […], "askPicked": […], "askWorth": […] }`.
    Closes three stubs at once: the true `Pending.snapshot` (today B4 uses the
-   partial world at the halt), the true `Pending.routine` (today
-   `Routine::Ai(turn)`), and the `World` fields `MatchState` does not carry
+   partial world at the halt), the true `Pending.routine` (today the `Ai`
+   re-ask stub), and the `World` fields `MatchState` does not carry
    (`TurnCtx` extras, `scheduled`, `targeted`, `gains`, `ring_bonus`,
    `leftovers`, `next_turn_pending`, `ask_seq`). Without it, continuing a
    mid-prompt fork past `complete_prompt` re-runs the wrong routine from the
@@ -1518,9 +1527,10 @@ rollout prompt and turn. Now: `view_extra_typed` returns
 the wire), and the rollout heuristic reads only `st` + `hand_len_first` +
 `aiAnswer` when a prompt is open.
 
-Later the policy itself became shared (`Match::bot_action`, §1.1 F2), so
-`heuristic_message_with` now delegates to it, and the search's own extras
-reads went to `view_extra_typed_light` (no `autoAction` pass per node).
+Later the policy itself moved to `bot-core` (§1.1 F2), so
+`heuristic_message_with` delegates to it, and since the frame no longer carries
+a whole-command extra the search's per-node `view_extra_typed` is the only
+extras call.
 
 Measured with `bot_cpu` (same seed 1, same budget, `RUST_MIN_STACK=16MiB`):
 

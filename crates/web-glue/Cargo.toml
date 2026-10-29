@@ -11,6 +11,8 @@ crate-type = ["cdylib", "rlib"]
 game-core = { path = "../game-core" }
 player-meta = { path = "../player-meta" }
 game-rules = { path = "../game-rules" }
+# Legacy (v3-and-older) replay pump only: the engine carries no bot policy.
+bot-core = { path = "../bot-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

@@ -43,8 +43,29 @@ use crate::MatchMode;
 /// v4: bot seats record with `ai` off -- they are clients, and every command
 /// they take is in the body (`docs/BOT-DRIVE.md`). A v3-and-older record has
 /// no such commands: its bots were engine-driven, so a replay turns `ai` back
-/// on for them ([`Replayer::machine_seats`]) and lets the engine decide again.
+/// on for them ([`Replayer::machine_seats`]) and runs a host-installed policy
+/// for them ([`set_machine_pump`]).
 pub const RECORD_VERSION: u32 = 4;
+
+/// The host's machine-seat pump for a legacy (format < 4) replay.
+///
+/// The engine carries no policy, so a v3-and-older replay -- whose body has no
+/// bot commands -- cannot advance the seats it re-armed by itself. The host
+/// (the browser glue, a test) installs its own policy once; `None` leaves an
+/// old record replaying only up to its first bot decision.
+static MACHINE_PUMP: std::sync::OnceLock<fn(&mut crate::engine::Match) -> bool> =
+    std::sync::OnceLock::new();
+
+/// Install the machine-seat pump used for legacy replays (first call wins).
+pub fn set_machine_pump(f: fn(&mut crate::engine::Match) -> bool) {
+    let _ = MACHINE_PUMP.set(f);
+}
+
+fn pump_machines(m: &mut crate::engine::Match) {
+    if let Some(f) = MACHINE_PUMP.get() {
+        let _ = f(m);
+    }
+}
 
 /// The tick quantum. `tick_steps(k)` ticks `dt = k as f32 * STEP`, k in 1..=10,
 /// so replay recomputes the identical f32.
@@ -1123,6 +1144,24 @@ impl RecordedMatch {
         self.after_input();
     }
 
+    /// [`tick_steps`] for a log that will be stamped as a legacy (< 4)
+    /// format: those bots were engine-driven inside the tick, so the pump's
+    /// commands are played here too and left out of the body. They run before
+    /// the turn-boundary checkpoint, exactly as the replay runs them before
+    /// `check_checkpoint` ([`Replayer::apply_one_tick`]).
+    pub fn tick_steps_legacy(&mut self, k: u8) {
+        if k == 0 {
+            return;
+        }
+        self.m.tick(k as f32 * STEP);
+        pump_machines(&mut self.m);
+        if self.rec_done {
+            return;
+        }
+        self.rec.push_ticks(k);
+        self.after_input();
+    }
+
     pub fn act(&mut self, member: i32, msg: &NetMessage) -> Result<(), Msg> {
         let r = self.m.act(member, msg);
         if !self.rec_done {
@@ -1639,6 +1678,11 @@ impl Replayer {
             _ => return false,
         };
         self.m.tick(k as f32 * self.step);
+        // A legacy log's bots were engine-driven inside the tick; the host's
+        // pump stands in for the engine here, at the same cadence.
+        if self.header.engine.format < 4 {
+            pump_machines(&mut self.m);
+        }
         self.tick += 1;
         self.time += k as f32 * self.step;
         self.sub += 1;

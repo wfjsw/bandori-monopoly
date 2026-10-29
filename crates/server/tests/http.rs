@@ -1842,6 +1842,7 @@ fn parked_searchable_view() -> (Value, i32, i32) {
             let _ = m.act(1, &msg);
         }
         m.tick(0.25);
+        bot_core::sim::pump_bots(&mut m);
     }
     panic!("no searchable decision for member 1");
 }

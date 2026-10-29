@@ -86,9 +86,8 @@ fn held_action(money: i32) -> (String, i32, Vec<String>) {
     });
     let p = t.prompt().expect("prompt open");
     let keys: Vec<String> = p.options.iter().map(|o| o.key().to_string()).collect();
-    let cmd =
-        t.m.bot_action(1)
-            .expect("the held seat's own prompt is a bot_action surface");
+    let cmd = bot_core::policy::act_for(&t.m, 1)
+        .expect("the held seat's own prompt is a bot_action surface");
     (cmd.act, cmd.value, keys)
 }
 

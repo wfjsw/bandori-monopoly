@@ -58,3 +58,5 @@ bot-cost = ["game-core/bot-cost"]
 # `card-sdk`'s `ctx/sys.rs` resolve inside the one module. Pure guest wasm
 # modules (sandbox cards) leave this off and keep `wasm_import_module`.
 native-rules = ["card-sdk/native-rules", "rules-cond/compile"]
+[dev-dependencies]
+bot-core = { path = "../bot-core" }

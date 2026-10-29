@@ -18,8 +18,10 @@
 //!   snapshot. Stub: the partial world. Continuation of a mid-prompt fork is
 //!   approximate until `Match::view_routine_base` (below) lands.
 //! * `Pending.routine` -- which routine halted. Not in the view. Stub:
-//!   `Routine::Ai(turn)` so a completed prompt continues through the
-//!   heuristic step machine instead of the true routine's remainder.
+//!   `Routine::Ai(ask)`, which re-asks the same prompt (and nothing else):
+//!   the caller's answer comes back through the answer list, then the fork's
+//!   driver acts -- the engine decides nothing. The true routine's remainder
+//!   is still not reproduced.
 //! * `Ask.ai` / `Ask.ai_picked` / `Ask.worth` -- per-seat heuristic answers
 //!   and auction ceilings, computed at ask time. Only the *own* seat's entry
 //!   is public (`view_extra`). Stub: own seat from `aiAnswer`, others =
@@ -68,7 +70,7 @@ use crate::view::AiAnswer;
 pub enum RoutineMirror {
     Opening,
     NextTurn,
-    Ai(usize),
+    Ai(Box<Ask>),
     Act(usize, Box<NetMessage>),
     Leftovers(Vec<usize>),
 }
@@ -79,7 +81,6 @@ pub struct LiveMirror {
     pub ask: Ask,
     pub answers: Vec<i32>,
     pub picked: Vec<String>,
-    pub ai_at: Vec<Option<f32>>,
     pub time_left: f32,
     pub bid: i32,
     pub bidder: i32,
@@ -152,7 +153,7 @@ impl SavedMirror {
 pub struct PendingGaps {
     /// The routine restart base is the partial world, not the true snapshot.
     pub snapshot_is_partial: bool,
-    /// The halted routine was replaced by `Routine::Ai(turn)`.
+    /// The halted routine was replaced by `Routine::Ai(ask)`.
     pub routine_is_stub: bool,
     /// Other seats' `ask.ai` / `ask.worth` were filled from fallbacks/price.
     pub ask_ai_is_stub: bool,
@@ -161,14 +162,12 @@ pub struct PendingGaps {
 /// Rebuild a `Pending` for a mid-prompt fork from the view's prompt.
 ///
 /// `prompt` is the view's `MatchState.prompt` (already carrying `answers` /
-/// `bid` / `bidder` as the client sees them). `turn` is the current turn seat
-/// (the stub's `Routine::Ai` target). `ai_self` is the searching seat's public
-/// `aiAnswer`, when the prompt carries one.
+/// `bid` / `bidder` as the client sees them). `ai_self` is the searching
+/// seat's public `aiAnswer`, when the prompt carries one.
 pub fn stub_pending(
     data: &GameData,
     world: &World,
     prompt: &MatchPrompt,
-    turn: usize,
     ai_self: Option<(i32, &AiAnswer)>,
 ) -> (PendingMirror, PendingGaps) {
     let mut ai = vec![prompt.fallback; prompt.players.len()];
@@ -210,11 +209,11 @@ pub fn stub_pending(
     });
     let ask: Ask = serde_json::from_value(ask_json).expect("Ask mirrors its serde shape");
 
+    let routine = RoutineMirror::Ai(Box::new(ask.clone()));
     let live = LiveMirror {
         ask,
         answers: prompt.answers.clone(),
         picked: Vec::new(),
-        ai_at: vec![None; prompt.players.len()],
         time_left: prompt.time_left.max(0.0),
         bid: prompt.bid,
         bidder: prompt.bidder,
@@ -223,7 +222,7 @@ pub fn stub_pending(
         // Stub: continue through the heuristic step machine from the partial
         // world. See the module docs -- `Match::view_routine_base` makes this
         // exact.
-        routine: RoutineMirror::Ai(turn),
+        routine,
         snapshot: world.clone(),
         answers: Vec::new(),
         live,

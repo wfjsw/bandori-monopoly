@@ -50,8 +50,9 @@ fn stamp() -> EngineStamp {
     }
 }
 
-/// Drive every bot seat over the human interface, the harness counterpart of a
-/// host's bot driver (`docs/BOT-DRIVE.md`): setup prompts take the fallback,
+/// Drive every seat on `state.drive` over the human interface, the harness
+/// counterpart of a host's bot driver (`docs/BOT-DRIVE.md`): setup prompts
+/// take the fallback,
 /// then prompt answers and turn commands. Bots stay `ai = false` -- the
 /// recorded commands are what makes the replay clean. Goes through
 /// `RecordedMatch::act`, so the commands land in the record as a client's
@@ -59,7 +60,8 @@ fn stamp() -> EngineStamp {
 /// wrote. Bounded, so an endlessly refused command ends the pump.
 ///
 /// The setup phase answers every waiting seat (a human seat's mulligan too);
-/// during play only bots are driven, leaving the scripted human alone.
+/// during play the drive list decides -- bots and a spent-clocked seat (in
+/// Solo, the bots).
 fn pump(rm: &mut RecordedMatch) -> usize {
     let mut harness_acts = 0usize;
     loop {
@@ -91,14 +93,7 @@ fn pump(rm: &mut RecordedMatch) -> usize {
             break;
         }
     }
-    let members: Vec<i32> = rm
-        .inner()
-        .state()
-        .players
-        .iter()
-        .filter(|p| p.bot)
-        .map(|p| p.member)
-        .collect();
+    let members = common::drive_members(rm.inner());
     for member in members {
         let msg = {
             let st = rm.inner().state();
@@ -116,7 +111,7 @@ fn pump(rm: &mut RecordedMatch) -> usize {
                     ..NetMessage::act("answer")
                 }
             } else {
-                match rm.inner().bot_action(member) {
+                match common::bot_msg(rm.inner(), member) {
                     Some(msg) => msg,
                     None => continue,
                 }
@@ -160,13 +155,7 @@ fn pump_m(m: &mut Match) {
             break;
         }
     }
-    let members: Vec<i32> = m
-        .state()
-        .players
-        .iter()
-        .filter(|p| p.bot)
-        .map(|p| p.member)
-        .collect();
+    let members = common::drive_members(m);
     for member in members {
         let msg = {
             let st = m.state();
@@ -182,7 +171,7 @@ fn pump_m(m: &mut Match) {
                     ..NetMessage::act("answer")
                 }
             } else {
-                match m.bot_action(member) {
+                match common::bot_msg(m, member) {
                     Some(msg) => msg,
                     None => continue,
                 }
@@ -523,6 +512,9 @@ fn partial_snapshot_records() {
 /// This pins the one legacy path the pump-driven v4 tests no longer exercise.
 #[test]
 fn v3_records_replay_engine_driven_bots() {
+    // The engine carries no policy: stand in for the one a 2026-10 engine had,
+    // both while recording and while replaying.
+    game_core::record::set_machine_pump(bot_core::sim::pump_bots);
     let members = vec![
         member(1, true, BotMentality::Standard),
         member(2, true, BotMentality::Standard),
@@ -536,7 +528,7 @@ fn v3_records_replay_engine_driven_bots() {
     let mut events = Vec::new();
     let mut steps = 0u32;
     while !rm.inner().ended() {
-        rm.tick_steps(1);
+        rm.tick_steps_legacy(1);
         // Close the tick run (`member_back` is a no-op on a bot) so the
         // replayer reaches the run end -- where it re-arms `ai` -- at the same
         // point as this loop. An answering routine restores its pre-prompt

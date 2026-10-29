@@ -182,13 +182,11 @@ fn build_pending(
     if view.state.prompt.id == 0 {
         return None;
     }
-    let turn = view.state.turn.max(0) as usize;
     let ai_self = view.ai_answer.as_ref().map(|a| (view.player_id, a));
     Some(saved::stub_pending(
         data,
         world,
         &view.state.prompt,
-        turn,
         ai_self.as_ref().map(|(p, a)| (*p, *a)),
     ))
 }

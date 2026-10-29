@@ -16,6 +16,7 @@ use game_core::MatchMode;
 
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn members(n: i32) -> Vec<RoomMember> {
     (1..=n)
@@ -48,7 +49,7 @@ fn solo(seed: u64, rules: Arc<dyn CardRules>) -> Match {
         if m.state().prompt.id == 0 && !m.state().busy {
             break;
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     for i in 1..=3 {
         m.set_machine_seat(i, true);

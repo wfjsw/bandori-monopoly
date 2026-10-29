@@ -7,20 +7,24 @@
 //! answer, and [`act_for`] / [`act_for_view`] the seat-view entries every host
 //! calls.
 //!
-//! One copy is still in `game-core` (`engine/ai.rs`): it answers the seats
-//! that are **not** bots -- a human under 托管, timed out or gone -- and their
-//! setup, which `docs/BOT-DRIVE.md` step 3 deletes. `rules/tests/tests/`
-//! `policy_parity.rs` pins the two together; keep them identical until then.
+//! This is the only copy. What stayed in `game-core` is the prompt's
+//! *prefill* (`fill_ai` / `answer_for_entry`'s engine twin, `ai_wants_*`,
+//! `auto_mortgage`, the auction worth), which the engine forces onto a seat
+//! whose window ran out and ships as the `aiAnswer` hint -- not a decision
+//! anybody schedules. `rules/tests/tests/policy_parity.rs` pins this module's
+//! live entry and its view entry together.
 //!
 //! Every seat carries a [`BotMentality`] (only `bot` seats take one): **standard**
 //! is the standard policy (`docs/BOT.md`) and **chaos** is legal but maximally
 //! disruptive. The thresholds below are the standard policy; chaos replaces the
 //! money reserves with [`CHAOS_RESERVE`] and drops the "sometimes" rolls. The web
 //! client's 托管 (auto-play) toggle ports both policies to TypeScript over the
-//! public match view (`webui/src/game/autopilot.ts`); keep the two in sync.
+//! public match view (`webui/src/game/autopilot.ts`) for its fallback table;
+//! keep the two in sync.
 //!
-//! A human who times out or disconnects is answered with the **standard**
-//! policy even though `ai` flips on -- see [`bot_mentality`].
+//! A human who times out or disconnects carries the seat's own mentality into
+//! the same policy ([`bot_mentality`]): standard unless 托管's 混沌 mode tagged
+//! the seat `chaos`.
 //!
 //! **Standard reads its thresholds from the seat's resolved
 //! [`StrategyParams`]** (`docs/BOT.md` §3.8): the constants below are their
@@ -149,26 +153,22 @@ pub fn bot_wants_force_buy(m: BotMentality, money: i32, price: i32) -> bool {
     }
 }
 
-/// The policy this seat actually plays under. A human seat (including one
-/// taken over after a time-out / disconnect) is always [`BotMentality::Standard`]
-/// -- a mentality is a property of a *bot*, not of whoever is driving it.
+/// The policy this seat actually plays under: the seat's own mentality.
+/// A human seat carries [`BotMentality::Standard`] unless a host set
+/// otherwise -- 托管's 混沌 mode tags the human seat `chaos`
+/// (`botDrive.ts`'s frame rewrite), so a mentality is a property of the
+/// *seat*, not of whoever is driving it.
 ///
 /// Inlined and branch-light: this sits on every bot decision, and the
 /// standard path must not pay for the chaos one.
 #[inline]
 pub fn bot_mentality(cx: &Cx<'_>, i: usize) -> BotMentality {
-    let p = &cx.state().players[i];
-    if p.bot {
-        p.mentality
-    } else {
-        BotMentality::Standard
-    }
+    cx.state().players[i].mentality
 }
 
 #[inline]
 pub fn is_chaos(cx: &Cx<'_>, i: usize) -> bool {
-    let p = &cx.state().players[i];
-    p.bot && p.mentality == BotMentality::Chaos
+    cx.state().players[i].mentality == BotMentality::Chaos
 }
 
 /// The standard policy's parameters for seat `i` (`docs/BOT.md` §3.8).
@@ -531,7 +531,10 @@ pub fn turn_action(cx: &mut Cx<'_>, i: usize) -> Option<NetMessage> {
                     ..Default::default()
                 });
             }
-            if (cx.state().played_count as usize) < p.max_plays_per_turn.max(0) as usize
+            // The live world's play list, not `MatchState::played_count`: the
+            // `Cx` state is a snapshot only `Match::state()` refreshes, and
+            // every fork / live entry reads a `Cx`.
+            if cx.world().turn.played.len() < p.max_plays_per_turn.max(0) as usize
                 && cx.world_mut().rng.chance(p.play_card_chance())
             {
                 if let Some(card) = ai_card_choice(cx, i) {
@@ -553,10 +556,50 @@ pub fn turn_action(cx: &mut Cx<'_>, i: usize) -> Option<NetMessage> {
                 });
             }
         }
-        if cx.state().skip_move {
+        // Over the hand limit first: the end gate wants the hand down, and
+        // discard is legal in any step.
+        if cx.over_hand(i) {
+            let hand_len = cx.world().hidden[i].hand.len();
+            if hand_len > 0 {
+                let k = cx.world_mut().rng.below(hand_len);
+                return Some(NetMessage {
+                    act: "discard".into(),
+                    card: cx.world().hidden[i].hand[k].clone(),
+                    ..Default::default()
+                });
+            }
+        }
+        // The engine's own gates, mirrored from `why_not_act` (and the
+        // `MatchState::can_roll_here` / `can_end_here` fill in
+        // `engine/mod.rs`), **not** the re-derived `skip_move` latch: a card
+        // move that spent the main move this turn, a mid-turn layer or the
+        // roller all disagree with it, and a refused `roll` leaves a bot seat
+        // stalled forever -- nobody but its client can end its turn
+        // (`docs/BOT-DRIVE.md`). A `Cx` sees the live world, so `MatchState`
+        // convenience fields (only filled by `Match::state`) are stale here.
+        let (skip, main_moved) = (cx.world().st.skip_move, cx.world().turn.main_moved);
+        let turn = cx.state().turn;
+        let owes_roll = cx.state().step == stage::OPS && !skip && !main_moved;
+        let can_roll = turn == i as i32
+            && cx.state().step == stage::OPS
+            && !cx.state().busy
+            && !skip
+            && !main_moved
+            && cx.state().roller == turn;
+        let can_end = turn == i as i32
+            && !cx.state().busy
+            && cx.state().step != stage::MOVE
+            && !owes_roll
+            && !cx.over_hand(i);
+        if can_roll {
+            return Some(NetMessage::act("roll"));
+        }
+        if can_end {
             return Some(NetMessage::act("end"));
         }
-        return Some(NetMessage::act("roll"));
+        // Neither gate: the roll is owed but another seat holds the roller.
+        // Nothing this seat can send is accepted; leave it to the next pass.
+        return None;
     }
     if cx.state().step != stage::END {
         return None;
@@ -902,7 +945,35 @@ pub fn act_for(m: &Match, member: i32) -> Option<NetMessage> {
             ..Default::default()
         };
         match prompt.kind.as_str() {
-            "auction" => msg.value = a.worth,
+            "auction" => {
+                // Same shape as the page's table (`autopilot.ts`
+                // `auctionCommand`). The engine refuses a bid equal to the
+                // seat's own live one (`err.already_top_bid`) and one under the
+                // minimum (`err.bid_min`, +100 over the live bid); the old
+                // scheduler skipped the top bidder and passed an unaffordable
+                // raise. A refused answer here would hold the prompt open for
+                // its whole window, so pass in both cases and otherwise step
+                // the price up from the minimum by the seat's own bid step.
+                let min = if prompt.bid <= 0 {
+                    100
+                } else {
+                    prompt.bid + 100
+                };
+                let cap = a.worth.min(st.players[i].money);
+                if prompt.bidder == i as i32 || min > cap {
+                    msg.value = -1; // pass
+                } else {
+                    let mut cx = m.bot_cx();
+                    msg.value = if is_chaos(&cx, i) {
+                        let steps = ((cap - min) / 100 + 1).max(1) as usize;
+                        min + 100 * cx.world_mut().rng.below(steps) as i32
+                    } else {
+                        let p = strategy_of(&cx, i);
+                        let nudge = p.bid_nudge_steps.max(1) as usize;
+                        cap.min(min + p.bid_step * cx.world_mut().rng.below(nudge) as i32)
+                    };
+                }
+            }
             "mortgage" => msg.cards = a.picked,
             "pick" if !prompt.items.is_empty() => {
                 // Card picks answer with the card list; `compute_answer`

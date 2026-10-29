@@ -166,9 +166,6 @@ pub struct ViewExtra {
     /// The viewer's pressable skills (`skill:*` field instances with an
     /// `On::Play` entry), each gated through [`why_not_act`].
     pub skills: Vec<SkillAction>,
-    /// The policy's next command for the viewer ([`Match::bot_action`]) -- the
-    /// client 托管 driver sends it instead of re-deciding in TypeScript.
-    pub auto_action: Option<NetMessage>,
 }
 
 /// Cheap decision-surface probe: the fields the rollout loop needs, without
@@ -232,9 +229,14 @@ const AUCTION_EXTEND: f32 = 6.0;
 enum Routine {
     Opening,
     NextTurn,
-    Ai(usize),
     Act(usize, Box<NetMessage>),
     Leftovers(Vec<usize>),
+    /// Resume a halted prompt from a restored fork (`bot-core`'s
+    /// determinized view forks carry it in place of the true routine, which a
+    /// view cannot see): re-ask `ask` so the answers the caller supplies come
+    /// back through the answer list, then hand the turn back -- the engine
+    /// decides nothing, so the fork's driver acts next.
+    Ai(Box<Ask>),
 }
 
 /// The acting seat's clock is held until this seat acks `anim_done` for
@@ -257,7 +259,6 @@ struct Live {
     ask: Ask,
     answers: Vec<i32>,
     picked: Vec<String>,
-    ai_at: Vec<Option<f32>>,
     time_left: f32,
     bid: i32,
     bidder: i32,
@@ -280,7 +281,6 @@ impl Live {
         Self {
             answers: vec![-1; n],
             picked: vec![],
-            ai_at: vec![None; n],
             time_left: ask.view.time_left,
             bid: 0,
             bidder: -1,
@@ -297,7 +297,6 @@ impl Live {
         self.bid = amount;
         self.bidder = player_id as i32;
         self.time_left = self.time_left.max(AUCTION_EXTEND);
-        self.ai_at.iter_mut().for_each(|a| *a = None);
     }
 }
 
@@ -909,11 +908,49 @@ impl Match {
                     my_turn && !st.busy && st.step != stage::MOVE && !owes_roll && !over_hand;
             }
         }
+        st.drive = self.drive_seats();
         // Deed-popup tile texts (`docs/TILES.md` 「Tile text」): composed from
         // the rule instances' declared texts, in body-precedence order. View
         // only -- never part of `Match::save`.
         st.tile_texts = tile_text::compose(&self.world, &self.data, self.rules.as_ref());
         st
+    }
+
+    /// Members a driver must move right now -- see [`MatchState::drive`].
+    ///
+    /// The engine starts nothing for them (`docs/BOT-DRIVE.md`): a bot seat and
+    /// a machine-held human are answered by their client, and the acting seat
+    /// joins them once its own turn clock is spent, so a seat whose client has
+    /// gone quiet still finishes its turn.
+    /// Public twin of the `MatchState::drive` fill, for a host that wants the
+    /// list without a per-viewer frame.
+    pub fn drive(&self) -> Vec<i32> {
+        self.drive_seats()
+    }
+
+    fn drive_seats(&self) -> Vec<i32> {
+        if self.mode == MatchMode::Solo || self.ended() {
+            return Vec::new();
+        }
+        let st = &self.world.st;
+        // Before play only a prompt (初始重抽) is a drive surface; the rest of
+        // setup is engine-side.
+        if st.phase != "play" && st.prompt.id == 0 {
+            return Vec::new();
+        }
+        let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
+            st.roller as usize
+        } else {
+            st.turn.max(0) as usize
+        };
+        let spent =
+            st.phase == "play" && self.clock_hold.is_none() && self.pool_total(actor) <= 0.0;
+        st.players
+            .iter()
+            .enumerate()
+            .filter(|(i, p)| !p.bankrupt && (p.bot || p.ai || (*i == actor && spent)))
+            .map(|(_, p)| p.member)
+            .collect()
     }
 
     /// Seat `i`'s pool remaining (bonus + base), clamped at 0 for display.
@@ -1303,22 +1340,13 @@ impl Match {
     /// rollout / action abstraction). Same fields, no JSON round trip.
     pub fn view_extra_typed(&self, member: i32) -> ViewExtra {
         let t0 = rtimer::now();
-        let mut v = self.view_extra_parts(member);
-        v.auto_action = self.bot_action(member);
+        let v = self.view_extra_parts(member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
         v
     }
 
-    /// [`Self::view_extra_typed`] **without** the policy command. The search
-    /// reads `playable` / `estCost` / `aiAnswer` per node and never sends
-    /// `autoAction` itself, so the extra decision pass is dead weight there.
-    pub fn view_extra_typed_light(&self, member: i32) -> ViewExtra {
-        self.view_extra_parts(member)
-    }
-
     fn view_extra_inner(&self, member: i32) -> serde_json::Value {
-        let mut p = self.view_extra_parts(member);
-        p.auto_action = self.bot_action(member);
+        let p = self.view_extra_parts(member);
         let ai_answer = p.ai_answer.map(|a| {
             serde_json::json!({
                 "answer": a.answer,
@@ -1331,7 +1359,6 @@ impl Match {
             "playable": p.playable,
             "estCost": p.est_cost,
             "skills": p.skills,
-            "autoAction": p.auto_action,
         })
     }
 
@@ -1401,165 +1428,6 @@ impl Match {
             playable,
             est_cost,
             skills,
-            auto_action: None,
-        }
-    }
-
-    /// The engine's own answer for `member`'s live prompt, **computed** from
-    /// this world -- the seat-view engine's twin of [`Self::view_extra_typed`]'s
-    /// `ai_answer` (which reads the precomputed [`Ask`] fill the live match
-    /// stamped at prompt-open).
-    ///
-    /// A determinized fork has no precomputed fill (`bot-core`'s `stub_pending`
-    /// can only mirror the searching seat's public `aiAnswer`, which the online
-    /// frame no longer carries). This entry runs the same choice functions the
-    /// prompt-open fill ran:
-    ///
-    /// * [`Cx::ai_auction_worth`] for an auction ceiling,
-    /// * [`Cx::auto_mortgage`] for a mortgage selection,
-    /// * the `Ask::with_ai` policy tests the settle offers stamp -- "no"
-    ///   only when the fill said no ([`Cx::ai_wants_buy`] /
-    ///   [`Cx::ai_wants_build`] / [`Cx::ai_wants_force_buy`], 0 = accept),
-    /// * [`Cx::ai_agent_choice`] for the agent landing's tile pick
-    ///   (`rules/tiles`' `ask.agent.title`),
-    /// * [`Cx::ai_answer_for_entry`] for every other prompt (the fallback, or
-    ///   a counteraction propensity roll).
-    ///
-    /// The `with_ai` row matters: those fills are **not** the fallback. A
-    /// recompute that only ran `ai_answer_for_entry` answered a fundable buy
-    /// with the prompt's "decline" slot, and online 托管 (which trusts this
-    /// number over its own policy table) never bought a tile. Keep the
-    /// title-keyed rows in step with the `Ask::with_ai` sites in
-    /// [`super::play`] (`offer_buy` / `offer_build` / `offer_force_buy`) and
-    /// `rules/tiles` (`agent.rs`).
-    ///
-    /// `None` when the seat has no open prompt or has already answered. The
-    /// result is **not** bit-identical to the live match's precomputed fill
-    /// whenever that fill drew from the match RNG (auction ceilings, counteraction
-    /// propensity) -- the fork owns a fresh stream. That is expected and
-    /// listed in the hidden-state audit (`docs/BOT.md` §1). The rows above are
-    /// deterministic and must match exactly.
-    pub fn compute_ai_answer(&self, member: i32) -> Option<RawAiAnswer> {
-        let i = self.player_index(member)?;
-        let prompt = {
-            // The live routine's `Ask` while one is pending; otherwise the
-            // state's own `st.prompt` -- any question left over after the
-            // routine returned stays open there for the client to answer
-            // (`busy` is false between halves of a turn), and a frame read at
-            // such an idle prompt must still be answered.
-            let (view, answers) = match self.pending.as_ref() {
-                Some(p) => (p.live.ask.view.clone(), p.live.answers.clone()),
-                None => (
-                    self.world.st.prompt.clone(),
-                    self.world.st.prompt.answers.clone(),
-                ),
-            };
-            if view.id == 0 {
-                return None;
-            }
-            let k = view.player_index(i as i32)?;
-            if answers.get(k).copied().unwrap_or(-1) >= 0 {
-                return None;
-            }
-            view
-        };
-        let fallback = prompt.fallback;
-        let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
-        match prompt.kind.as_str() {
-            "auction" => {
-                let base = if prompt.tile >= 0 {
-                    purchase::quote_native(&self.data, &self.world.st, prompt.tile as usize).max(0)
-                } else {
-                    0
-                };
-                let worth = cx.ai_auction_worth(i, base);
-                Some(RawAiAnswer {
-                    answer: 0,
-                    picked: Vec::new(),
-                    worth,
-                })
-            }
-            "mortgage" => {
-                let need = prompt.bid;
-                let deeds: Vec<usize> =
-                    prompt.items.iter().filter_map(|s| s.parse().ok()).collect();
-                let picked = if deeds.is_empty() {
-                    cx.auto_mortgage(i, need)
-                } else {
-                    cx.auto_mortgage_from(i, need, deeds)
-                };
-                Some(RawAiAnswer {
-                    answer: 0,
-                    picked,
-                    worth: 0,
-                })
-            }
-            _ => {
-                // `Ask::with_ai` rows first: the settle offers stamp a policy
-                // test, not the fallback, and `ai_answer_for_entry` would
-                // return the prompt's "decline" / "none" slot for them. Title
-                // key is the marker (the client's `autopilot.ts` reads the
-                // same keys). 0 = accept the offer.
-                let t = prompt.tile;
-                let title = prompt.title.key();
-                let policy: Option<i32> = match title {
-                    "ask.buy.title" if t >= 0 => {
-                        Some(if cx.ai_wants_buy(i, t as usize) { 0 } else { 1 })
-                    }
-                    "ask.build.title" if t >= 0 => Some(if cx.ai_wants_build(i, t as usize) {
-                        0
-                    } else {
-                        1
-                    }),
-                    "ask.force_buy.title" if t >= 0 => {
-                        let price = if prompt.price >= 0 {
-                            prompt.price
-                        } else {
-                            purchase::quote_native(&self.data, &self.world.st, t as usize).max(0)
-                        };
-                        Some(if cx.ai_wants_force_buy(i, price) {
-                            0
-                        } else {
-                            1
-                        })
-                    }
-                    "ask.agent.title" => {
-                        let tiles: Vec<usize> =
-                            prompt.items.iter().filter_map(|s| s.parse().ok()).collect();
-                        Some(cx.ai_agent_choice(i, &tiles))
-                    }
-                    _ => None,
-                };
-                if let Some(answer) = policy {
-                    return Some(RawAiAnswer {
-                        answer,
-                        picked: Vec::new(),
-                        worth: 0,
-                    });
-                }
-                // `fill_ai`'s per-seat body, on a throwaway `Ask` view of the
-                // same prompt (the fallback / counteraction propensity path). The
-                // prompt's own `Ask` is already filled on a stubbed fork, so
-                // read the entry through the shared helper rather than
-                // `fill_ai` (which skips non-`AI_UNSET` slots).
-                let ask = Ask {
-                    view: prompt.clone(),
-                    ai: vec![cx::AI_UNSET],
-                    ai_picked: vec![Vec::new()],
-                    worth: vec![0],
-                    use_pool: true,
-                };
-                let answer = cx.ai_answer_for_entry(&ask, i);
-                Some(RawAiAnswer {
-                    answer: if answer == cx::AI_UNSET {
-                        fallback
-                    } else {
-                        answer
-                    },
-                    picked: Vec::new(),
-                    worth: 0,
-                })
-            }
         }
     }
 
@@ -1568,66 +1436,6 @@ impl Match {
     /// `bot-core::policy` decides on one of these.
     pub fn bot_cx(&self) -> Cx<'_> {
         Cx::new(self.world.clone(), &self.data, &*self.rules, &[])
-    }
-
-    /// The standard / chaos policy's **next command** for `member`, ready to
-    /// send through [`Self::act`] -- the single implementation shared by the
-    /// server's AI scheduler (`Cx::ai_step` for turn surfaces,
-    /// `compute_ai_answer` for prompts) and the seat-view extras
-    /// (`ViewExtras::auto_action`: client 托管 and the search fallback).
-    ///
-    /// `None` when the seat has nothing to decide: another seat's prompt or an
-    /// already-answered slot, not its turn, a live vote, or a phase the policy
-    /// does not drive (setup is engine-side -- `MatchPlayer::auto_setup`).
-    ///
-    /// Prompt answers come from [`Self::compute_ai_answer`], so an auction
-    /// ceiling, a mortgage selection and the settle offers' policy tests
-    /// travel with it. The RNG draws are the same ones the server would make
-    /// on this state, from this world's stream.
-    pub fn bot_action(&self, member: i32) -> Option<NetMessage> {
-        let i = self.player_index(member)?;
-        if self.world.st.phase != "play" {
-            return None;
-        }
-        // Votes are answered by the scheduler (`tick_vote`), not here; the
-        // client keeps the vote branch above this action in `plan`.
-        if self.world.st.vote.id > 0 {
-            return None;
-        }
-        if self.world.st.prompt.id > 0 {
-            // `compute_ai_answer` owns the waiting check (another seat's
-            // prompt, an answered slot) -- and reads the pending live `Ask`
-            // when a routine is running, the state's prompt when it is idle.
-            let prompt = match self.pending.as_ref() {
-                Some(p) => p.live.ask.view.clone(),
-                None => self.world.st.prompt.clone(),
-            };
-            let a = self.compute_ai_answer(member)?;
-            let mut m = NetMessage {
-                act: "answer".into(),
-                prompt: prompt.id,
-                ..Default::default()
-            };
-            match prompt.kind.as_str() {
-                "auction" => m.value = a.worth,
-                "mortgage" => m.cards = a.picked,
-                "pick" if !prompt.items.is_empty() => {
-                    // Card picks answer with the card list; `compute_ai_answer`
-                    // carries the selection in `picked` where the prompt has
-                    // one, else the fallback index names the item.
-                    m.cards = a.picked;
-                    if m.cards.is_empty() {
-                        if let Some(c) = prompt.items.get(a.answer.max(0) as usize) {
-                            m.cards.push(c.clone());
-                        }
-                    }
-                }
-                _ => m.value = a.answer,
-            }
-            return Some(m);
-        }
-        let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
-        cx.bot_turn_action(i)
     }
 
     // ------------------------------------------------------- simulation fork
@@ -1904,17 +1712,17 @@ impl Match {
         self.flushing_deferred = false;
     }
 
-    /// Is this prompt player answered by the machine (a human under 托管, or a
-    /// human who left)?
+    /// Is this seat driven without a human waiting on it -- a bot, a
+    /// machine-held human (`ai`) or one on its way out?
     ///
-    /// This is the **prompt** auto-answer ([`Self::tick_live`]). A **bot seat is
-    /// not** machine-answered here: every bot is a client driven over the human
-    /// interface (`view(member)` -> policy -> `act(member, cmd)`,
-    /// `docs/BOT-DRIVE.md`), so its prompts fall through to the driver. Setup is
-    /// the exception -- it stays engine-side ([`MatchPlayer::auto_setup`]).
-    /// Votes are different; see [`Self::auto_vote`].
+    /// Nobody here answers through the engine any more (`docs/BOT-DRIVE.md`):
+    /// this only marks who must be kept out of the **human-facing** clock
+    /// bookkeeping (the table-wide prompt countdown, the auction extension)
+    /// and who owes no presentation ack. Votes are different; see
+    /// [`Self::auto_vote`].
     fn auto_player(&self, player_id: usize) -> bool {
-        self.world.st.players[player_id].ai
+        let p = &self.world.st.players[player_id];
+        p.ai || p.bot
             || self
                 .deferred
                 .iter()
@@ -2249,11 +2057,17 @@ impl Match {
         } else {
             turn
         };
-        if !st.players[actor].ai {
+        // A bot or a taken-over (timed-out / gone) human is driven by its own
+        // client (`docs/BOT-DRIVE.md`): the engine only runs the clock under a
+        // human and stays out of the way, so there is no routine to start --
+        // the driver's `act` opens the next one.
+        if st.players[actor].ai || st.players[actor].bot {
+            return;
+        }
+        {
             // A solo match has nobody waiting on the local player: the turn
             // clock exists to keep a *networked* table moving, so here it never
-            // expires and the AI never takes a human's turn over. Bots still
-            // fall through below and act for themselves.
+            // expires and nothing takes a human's turn over.
             if self.mode == MatchMode::Solo {
                 return;
             }
@@ -2288,7 +2102,6 @@ impl Match {
                 );
             }
         }
-        self.start(Routine::Ai(turn));
     }
 
     /// `TickAsk` / `TickAuction` -- bots answer after a short delay; time-outs
@@ -2303,6 +2116,24 @@ impl Match {
     /// the old fixed-window behaviour.
     // Indexing by prompt player walks several parallel vectors at once.
     #[allow(clippy::needless_range_loop)]
+
+    /// `TickAsk` / `TickAuction` -- the pending prompt's clock.
+    ///
+    /// The engine answers nothing itself any more (`docs/BOT-DRIVE.md`): a bot
+    /// and a taken-over human alike answer through their driver, and this only
+    /// runs the clock under them so a seat's own server never waits on it
+    /// forever. A driver that stops answering can therefore only ever stall
+    /// its own seat -- once a seat's window is spent the prompt's precomputed
+    /// answer is applied for it.
+    ///
+    /// Under the post-settings clock an ordinary prompt (`use_pool`) draws on
+    /// each pending seat's own pool (bonus then base). `Live::time_left`
+    /// remains the prompt's own soft window and the all-seat fallback
+    /// deadline. Bankruptcy leftover auctions (`use_pool = false`) and every
+    /// pre-settings (`legacy_clock`) prompt keep the old fixed-window
+    /// behaviour.
+    // Indexing by prompt player walks several parallel vectors at once.
+    #[allow(clippy::needless_range_loop)]
     fn tick_live(&mut self, dt: f32) {
         let players: Vec<usize> = match &self.pending {
             Some(p) => p
@@ -2315,43 +2146,24 @@ impl Match {
                 .collect(),
             None => return,
         };
-        let auto: Vec<bool> = players.iter().map(|&s| self.auto_player(s)).collect();
-        let money: Vec<i32> = players
-            .iter()
-            .map(|&s| self.world.st.players[s].money)
-            .collect();
-        let can_pay: Vec<bool> = players
-            .iter()
-            .map(|&s| {
-                let x = &self.world.st.players[s];
-                !x.out() && self.world.gate_open(&*self.rules, Gate::Pay, s)
-            })
-            .collect();
-        // Standard's bid step / nudge read the seat's `StrategyParams`
-        // (`docs/BOT.md` §3.8). Chaos keeps the literals. Resolved up front so
-        // the `live` / `live_rng` borrows below remain disjoint.
-        let strat: Vec<crate::strategy::StrategyParams> = players
-            .iter()
-            .map(|&s| {
-                crate::strategy::for_seat_sha(
-                    &self.data,
-                    &self.world.st,
-                    s,
-                    Some(self.rules.ruleset_sha256().unwrap_or("stub")),
-                )
-            })
-            .collect();
         let solo = self.mode == MatchMode::Solo;
         let uses_pool = self
             .pending
             .as_ref()
             .is_some_and(|p| self.prompt_uses_pool(&p.live));
+        // Solo never drains a pool (nobody is waiting on the local player), so
+        // there the soft window alone paces the prompt.
+        let pool_clock = uses_pool && !solo;
+        // A machine seat answers in milliseconds, so its prompt countdown must
+        // not eat its clock: it neither drains its pool here nor holds the
+        // table open below (`grant_auction_extend` skips it the same way). A
+        // driver that stalls is still covered -- such a seat is force-defaulted
+        // onto the prefill once the prompt's own soft window runs out.
+        let auto: Vec<bool> = players.iter().map(|&s| self.auto_player(s)).collect();
         // Prompt pool drain (post-settings ordinary prompts only). Each
-        // pending human seat spends its own pool; the anim-ack hold pauses
+        // pending seat spends its own pool; the anim-ack hold pauses
         // consumption for the held seat so presentation never costs clock.
-        // Solo never forces *or drains* a local player's prompt -- nobody is
-        // waiting on them.
-        if uses_pool && !solo {
+        if pool_clock {
             let pending: Vec<bool> = self
                 .pending
                 .as_ref()
@@ -2366,30 +2178,34 @@ impl Match {
         }
         // Snapshot every prompted seat's pool total *before* the `live` borrow
         // so the force-default pass below can read them without fighting it.
-        let pool: Vec<f32> = players.iter().map(|&s| self.pool_total(s)).collect();
-        let rng = &mut self.live_rng;
+        let pool: Vec<f32> = if pool_clock {
+            players.iter().map(|&s| self.pool_total(s)).collect()
+        } else {
+            Vec::new()
+        };
         let p = self.pending.as_mut().expect("checked above");
         let l = &mut p.live;
         l.time_left -= dt;
         let before = (l.answers.clone(), l.bid);
         // A solo match never forces a *local* player's answer -- nobody is
-        // waiting on them. The countdown still runs, because the bots above
-        // schedule their own answers against it. The mode is the predicate,
-        // not the human count: an online room with one human still owes its
-        // table an answer.
-        let hold = solo && (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
-        let mut bid_grant = false;
-        // Force-default a pending human seat whose pool is exhausted past the
-        // grace window. Shared by the auction and ordinary-prompt branches.
+        // waiting on them. The countdown still runs, because the prompt's
+        // remaining seats and the walk-away fallback run on it. The mode is
+        // the predicate, not the seat count: an online room with one human
+        // still owes its table an answer.
+        let hold = solo && (0..players.len()).any(|k| l.answers[k] < 0);
+        // Force-default a pending seat whose pool is exhausted past the grace
+        // window -- or a machine seat whose driver let the soft window run out
+        // (it spends no pool, so nothing else would ever force it). Shared by
+        // the auction and ordinary-prompt branches.
         let force_exhausted = |l: &mut Live| {
-            if !uses_pool || hold {
+            if !pool_clock || hold {
                 return;
             }
             for k in 0..players.len() {
-                if l.answers[k] >= 0 || auto[k] {
+                if l.answers[k] >= 0 {
                     continue;
                 }
-                if pool[k] <= -REMOTE_GRACE {
+                if pool[k] <= -REMOTE_GRACE || (auto[k] && l.time_left <= 0.0) {
                     if matches!(l.kind(), "pick" | "mortgage") {
                         l.picked = l.ask.ai_picked[k].clone();
                         l.answers[k] = 0;
@@ -2401,117 +2217,30 @@ impl Match {
                 }
             }
         };
+        // Human seats whose window is spent but that are not yet forceable
+        // (inside the grace band) still hold the prompt open. A machine seat
+        // never does: it has no pool to spend.
+        let pooling = |l: &Live| {
+            pool_clock
+                && (0..players.len()).any(|k| {
+                    !auto[k]
+                        && l.answers[k] < 0
+                        && pool.get(k).copied().unwrap_or(0.0) > -REMOTE_GRACE
+                })
+        };
         let done = if l.kind() == "auction" {
-            for k in 0..players.len() {
-                if l.answers[k] >= 0 || l.bidder == players[k] as i32 || !auto[k] {
-                    continue;
-                }
-                match l.ai_at[k] {
-                    None => l.ai_at[k] = Some(l.time_left - (0.6 + rng.f64() as f32 * 1.4)),
-                    Some(at) if l.time_left <= at => {
-                        l.ai_at[k] = None;
-                        let seat = players[k];
-                        let chaos = {
-                            let x = &self.world.st.players[seat];
-                            x.bot && x.mentality == crate::state::BotMentality::Chaos
-                        };
-                        // Standard's raise step / nudge come from the seat's
-                        // `StrategyParams` (defaults == the old `100` /
-                        // `below(3)` formula). Chaos keeps the literals.
-                        let min = if chaos {
-                            if l.bid <= 0 {
-                                100
-                            } else {
-                                l.bid + 100
-                            }
-                        } else {
-                            strat[k].bid_min(l.bid)
-                        };
-                        let cap = l.ask.worth[k].min(money[k]);
-                        if min > cap || !can_pay[k] {
-                            l.answers[k] = 1;
-                        } else {
-                            // Standard nudges the minimum (up to +200 at the
-                            // default `bid_nudge_steps`) -- the original
-                            // formula, untouched at the defaults. Chaos raises
-                            // anywhere up to its ceiling, which `Ask::worth`
-                            // already capped at money - `CHAOS_RESERVE`. A
-                            // human seat is never chaos: a time-out keeps the
-                            // standard policy.
-                            let bid = if chaos {
-                                let steps = ((cap - min) / 100 + 1).max(1) as usize;
-                                min + 100 * rng.below(steps) as i32
-                            } else {
-                                let p = &strat[k];
-                                let step = p.bid_step;
-                                let nudge = p.bid_nudge_steps.max(1) as usize;
-                                cap.min(min + step * rng.below(nudge) as i32)
-                            };
-                            l.place_bid(seat, bid);
-                            bid_grant = true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
             force_exhausted(l);
             let open = (0..players.len())
                 .filter(|&k| l.answers[k] < 0 && l.bidder != players[k] as i32)
                 .count();
             if uses_pool {
-                // Per-seat pool deadline (with grace); the soft window alone
-                // must not force a human who still has pool left.
-                let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
-                open == 0 || (!humans_pending && l.time_left <= 0.0 && !hold)
+                open == 0 || (!pooling(l) && l.time_left <= 0.0 && !hold)
             } else {
                 open == 0 || (l.time_left <= 0.0 && !hold)
             }
         } else {
             let picks = matches!(l.kind(), "pick" | "mortgage");
-            let multi = l.kind() == "multi";
             let fallback = l.ask.view.fallback;
-            let max = if l.kind() == "tile" {
-                l.ask.view.items.len() as i32
-            } else {
-                l.ask.view.options.len() as i32 - 1
-            };
-            for k in 0..players.len() {
-                if l.answers[k] >= 0 || !auto[k] {
-                    continue;
-                }
-                if l.kind() == "mulligan" {
-                    // Machine seats decide at once. The barrier waits on
-                    // people; making a human sit out most of the window for a
-                    // bot's simulated thinking time is pure friction, and the
-                    // answer is already precomputed (`Ask::ai`).
-                    l.answers[k] = l.ask.ai[k].clamp(0, max.max(0));
-                    continue;
-                }
-                match l.ai_at[k] {
-                    None => l.ai_at[k] = Some(l.time_left - (0.4 + rng.f64() as f32 * 0.6)),
-                    Some(at) if l.time_left <= at => {
-                        if picks {
-                            l.picked = l.ask.ai_picked[k].clone();
-                            l.answers[k] = 0;
-                        } else if multi {
-                            // A bitmask answer must not be clamped to an option
-                            // index (that would destroy e.g. `0b0111`). Take
-                            // the precomputed mask when it is already valid;
-                            // otherwise the prompt's valid fallback mask.
-                            let v = l.ask.ai[k];
-                            let n = l.ask.view.options.len().min(31) as i32;
-                            let ok = v >= 0
-                                && n > 0
-                                && (v >> n) == 0
-                                && v.count_ones() as i32 == l.ask.view.count;
-                            l.answers[k] = if ok { v } else { fallback };
-                        } else {
-                            l.answers[k] = l.ask.ai[k].clamp(0, max.max(0));
-                        }
-                    }
-                    _ => {}
-                }
-            }
             if l.kind() == "mulligan" {
                 // 初始重抽 is a hard barrier (rulebook 时点流程 step 6 before
                 // 7/8): the game does not advance until every seat has an
@@ -2540,14 +2269,13 @@ impl Match {
                 }
             } else if uses_pool {
                 force_exhausted(l);
-                let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
                 if l.answers.iter().all(|&a| a >= 0) {
                     true
-                } else if hold || humans_pending {
-                    // A human still has pool (or Solo is holding for them).
+                } else if hold || pooling(l) {
+                    // The local player is held, or a seat still has pool to
+                    // spend on its decision.
                     false
                 } else if l.time_left > 0.0 {
-                    // Only bots left on the soft window's schedule.
                     false
                 } else {
                     for k in 0..players.len() {
@@ -2564,13 +2292,9 @@ impl Match {
                 }
             } else {
                 // Keep waiting while time is left, plus a short grace for remote humans.
-                let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
                 if l.answers.iter().all(|&a| a >= 0) {
                     true
-                } else if hold
-                    || l.time_left > 0.0
-                    || (l.time_left > -REMOTE_GRACE && !solo && humans_pending)
-                {
+                } else if hold || l.time_left > 0.0 || (l.time_left > -REMOTE_GRACE && !solo) {
                     false
                 } else {
                     for k in 0..players.len() {
@@ -2590,9 +2314,6 @@ impl Match {
         if (l.answers.clone(), l.bid) != before {
             self.changed = true;
             self.seq += 1;
-        }
-        if bid_grant {
-            self.grant_auction_extend();
         }
         if done {
             self.complete_prompt();
@@ -3088,8 +2809,11 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
     match r {
         Routine::Opening => cx.opening(),
         Routine::NextTurn => cx.next_turn(),
-        Routine::Ai(i) => cx.ai_step(*i),
         Routine::Leftovers(d) => cx.auction_leftovers(d.clone()),
+        Routine::Ai(ask) => {
+            cx.resume_prompt((**ask).clone())?;
+            Ok(())
+        }
         Routine::Act(i, m) => {
             let i = *i;
             let pos = cx.w.st.players[i].pos.max(0) as usize;

@@ -230,7 +230,8 @@ impl Table {
     }
 
     /// Mark `who` as a bot seat under `mentality`. Standard / chaos flip `ai`
-    /// on (the engine's bot schedule answers, via `Cx::fill_ai`); Advanced
+    /// on (a machine seat: the pump drives it and `Cx::fill_ai` prefills its
+    /// prompts); Advanced
     /// leaves `ai` off -- the seat is held for an external driver (bot-service
     /// / the browser worker) and its prompts time out to the fallback.
     pub fn make_bot(&mut self, who: usize, mentality: game_core::state::BotMentality) {
@@ -238,7 +239,6 @@ impl Table {
         let p = &mut self.m.world_mut().st.players[who];
         p.bot = true;
         p.mentality = mentality;
-        p.ai = mentality != BotMentality::Advanced;
     }
 
     /// Tick the host clock until `pred` (or the tick budget runs out). Lets a
@@ -248,6 +248,7 @@ impl Table {
             if pred(self) {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!("tick_until: {what} never happened: {}", self.dump_prompt());
@@ -284,6 +285,7 @@ impl Table {
             {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!(
@@ -796,7 +798,9 @@ impl Table {
         let cap = self.m.world().tok_max(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::gain_clamped(have, cap, n);
         if want > 0 {
-            self.m.world_mut().gain_marker(who as i32, bandori_std::fire::KEY, want);
+            self.m
+                .world_mut()
+                .gain_marker(who as i32, bandori_std::fire::KEY, want);
         }
         want
     }
@@ -1069,9 +1073,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m
-            .world()
-            .tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     /// A standing tile prop (`World::tile_prop`). Used to read per-player

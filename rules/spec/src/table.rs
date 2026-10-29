@@ -52,6 +52,7 @@ pub fn settle_match(m: &mut Match) {
         {
             return;
         }
+        bot_core::sim::pump_bots(m);
         m.tick(0.25);
     }
     panic!(
@@ -218,7 +219,6 @@ impl Table {
         let p = &mut self.m.world_mut().st.players[who];
         p.bot = true;
         p.mentality = mentality;
-        p.ai = mentality != BotMentality::Advanced;
     }
 
     /// Tick the host clock until `pred` (or the tick budget runs out). Lets a
@@ -228,6 +228,7 @@ impl Table {
             if pred(self) {
                 return;
             }
+            bot_core::sim::pump_bots(&mut self.m);
             self.m.tick(0.25);
         }
         panic!("tick_until: {what} never happened: {}", self.dump_prompt());
@@ -1007,9 +1008,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m
-            .world()
-            .tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

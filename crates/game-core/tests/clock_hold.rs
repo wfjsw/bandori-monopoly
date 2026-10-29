@@ -12,6 +12,7 @@ use game_core::state::stage;
 use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -69,7 +70,7 @@ fn answer_first(m: &mut Match, member: i32) {
 fn to_human_ops(m: &mut Match, human: i32) -> i32 {
     m.quick_start();
     for _ in 0..40 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     answer_first(m, human);
     let me = m
@@ -80,7 +81,7 @@ fn to_human_ops(m: &mut Match, human: i32) -> i32 {
         .unwrap() as i32;
     let mut guard = 0;
     while !(m.state().turn == me && m.state().step == stage::OPS && !m.state().busy) {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         answer_first(m, human);
         guard += 1;
         assert!(guard < 10_000, "never got a human OPS turn");
@@ -110,7 +111,7 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
 
     // Ticking while held must not consume base/bonus.
     for _ in 0..20 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(st.clock_paused, "still held without an ack");
@@ -122,7 +123,7 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     assert!(m.anim_done(me, seq), "matching ack releases");
     assert!(!m.state().clock_paused);
     for _ in 0..10 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(!st.clock_paused);
@@ -185,12 +186,12 @@ fn the_anim_hold_cap_releases_after_ten_seconds_of_ticks() {
     // 10s of ticks, no ack: the cap is reached and the clock starts.
     // ANIM_HOLD_CAP = 10.0; tick 9.9s first (still held), then over the cap.
     for _ in 0..99 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     assert!(m.state().clock_paused, "under the cap still holds");
     assert_eq!(m.state().time_left, total);
     for _ in 0..5 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     let st = m.state();
     assert!(!st.clock_paused, "the 10s cap releases the hold");
@@ -204,7 +205,7 @@ fn solo_never_holds_the_clock() {
     let mut m = new_match(&members, 3, MatchMode::Solo);
     m.quick_start();
     for _ in 0..200 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
         answer_first(&mut m, 1);
         if m.state().phase == "play" && m.state().step == stage::OPS && !m.state().busy {
             break;
@@ -218,7 +219,7 @@ fn solo_never_holds_the_clock() {
     );
     let base = st.base_time;
     for _ in 0..20 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
     }
     assert_eq!(m.state().base_time, base, "solo clock does not run down");
 }
@@ -231,7 +232,7 @@ fn a_bot_seat_never_holds_the_clock() {
     // Let the bots get into play; no seat is a human, so nothing holds.
     let mut saw_play = false;
     for _ in 0..400 {
-        m.tick(0.1);
+        m.pump_tick(0.1);
         if m.state().phase == "play" {
             saw_play = true;
             assert!(

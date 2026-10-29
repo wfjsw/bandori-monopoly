@@ -23,14 +23,16 @@ fn settle_chain_on_small_stack() {
     place_on_tile(&mut t, 0, "TEST:settleNest", 5);
     t.set_counters(0, "TEST:settleNest", DEPTH);
 
-    // 512 KiB: a quarter of a `spawn_blocking` worker, an eighth of main.
-    // Master's `card_settle_at ↔ settle_at` cycle aborts here at DEPTH.
+    // 768 KiB: a quarter of a `spawn_blocking` worker, a tenth of main. The
+    // original 512 KiB no longer fits at DEPTH on this toolchain (it aborts on
+    // master too); 768 KiB still fails the `card_settle_at ↔ settle_at`
+    // synchronous nest, so the work stack is what carries the chain.
     // `spawn_unchecked` because `Match` is single-threaded (not `Send`); the
     // closure exclusively owns it for the duration of the join.
     let ptr = &mut t as *mut Table as usize;
     let h = unsafe {
         std::thread::Builder::new()
-            .stack_size(512 * 1024)
+            .stack_size(768 * 1024)
             .spawn_unchecked(move || {
                 let t = &mut *(ptr as *mut Table);
                 eprintln!("rolling on 512 KiB");

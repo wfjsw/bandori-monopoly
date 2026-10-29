@@ -10,6 +10,7 @@ crate-type = ["rlib"]
 [dependencies]
 game-core = { path = "../../crates/game-core" }
 game-rules = { path = "../../crates/game-rules" }
+bot-core = { path = "../../crates/bot-core" }
 spec-kit = { path = "../../crates/spec-kit" }
 bandori-std = { path = "../bandori-std" }
 serde_json = { workspace = true }

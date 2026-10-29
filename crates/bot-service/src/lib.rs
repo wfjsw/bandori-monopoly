@@ -399,6 +399,7 @@ fn act(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         "ok": true,
         "answer": answer,
         "iterations": 0,
+        "elapsed_ms": started.elapsed().as_millis() as u64,
         "heuristic": true,
         "reused": false,
     }))

@@ -267,6 +267,10 @@ export interface MatchView {
   draw: string[];
   you: number;
   playerId: number;
+  /** Card ids already played this turn, in play order. */
+  played?: string[];
+  /** How many of `played` were hand-card plays. */
+  cardsPlayed?: number;
   /**
    * The engine's own AI answer for *this* player's live prompt, only while they
    * are still waiting on it (`Match::view_extra`). Never another seat's entry.
@@ -274,10 +278,6 @@ export interface MatchView {
    * back to the prompt's `fallback`.
    */
   aiAnswer?: { answer: number; picked: string[]; worth: number } | null;
-  /** The engine policy's next command for this seat (`Match::bot_action`):
-   *  托管 sends it as-is. Solo ships it on the frame; online derives it in the
-   *  seat-view worker (`viewExtras`). */
-  autoAction?: Command | null;
   /** Parallel to `hand`: would the engine allow each card right now? */
   playable?: boolean[];
   /**

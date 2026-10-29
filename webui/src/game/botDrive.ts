@@ -248,16 +248,15 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 // ---------------------------------------------------------------- seat set
 
 /**
- * Which seats the page drives: every `bot` seat the engine does **not** drive
- * (`ai` off -- `docs/BOT-DRIVE.md`; the engine no longer decides for anyone).
- * Every mentality is here: standard / chaos answer through the policy alone,
- * `advanced` searches. A seat the engine took over (`ai` flipped on after a
- * leave) is dropped.
+ * Which seats the page drives: **every** bot seat (`docs/BOT-DRIVE.md` -- the
+ * engine decides for nobody). Every mentality is here: standard / chaos
+ * answer through the policy alone, `advanced` searches. A bankrupt / left
+ * seat is out and needs nothing.
  */
 export function botSeats(v: MatchView): number[] {
   const out: number[] = [];
   for (const p of v.state.players) {
-    if (p.bot && !p.ai && !p.bankrupt && !p.left) {
+    if (p.bot && !p.bankrupt && !p.left) {
       out.push(p.member);
     }
   }

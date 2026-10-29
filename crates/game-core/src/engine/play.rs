@@ -451,7 +451,7 @@ impl Cx<'_> {
             .with_kind("mulligan");
             // Not an ordinary prompt: keep the seat's 恢复时间 pool out of it.
             ask.use_pool = false;
-            let answers: Vec<i32> = if all.iter().all(|&p| self.w.st.players[p].ai) {
+            let answers: Vec<i32> = if all.iter().all(|&p| self.w.st.players[p].auto_setup()) {
                 let mut a = Vec::with_capacity(all.len());
                 for &p in &all {
                     let v = self.ai_answer_for_entry(&ask, p);

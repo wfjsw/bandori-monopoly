@@ -1,9 +1,12 @@
-//! `bot-core::policy::act_for` == `Match::bot_action` on the same live state.
+//! The seat-view entry (`act_for_view`, what a real client calls) == the live
+//! one (`act_for`) on the same decision -- same command, same card / value /
+//! card list.
 //!
-//! S1 keeps the engine's copy next to the new policy module, so a parity test
-//! pins the two together before the engine copy is deleted: same command, same
-//! card / value / card list. Both sides decide on a throwaway clone of the same
-//! world, so the RNG streams are identical and every surface must agree.
+//! A bot seat is driven over the human interface (`docs/BOT-DRIVE.md`), so the
+//! online path (server / worker: `view` -> policy -> `act`) must decide exactly
+//! like the harness path on the live match. The view is determinized on a
+//! fixed seed; the seat's own zones are public to itself, so every covered
+//! surface has to agree.
 //!
 //! Covered surfaces: a rich and a low-cash [pass-reward] prompt, a turn start
 //! in 运营 (roll), a `skip_move` surface (end) and an over-hand discard.
@@ -13,19 +16,23 @@ use game_core::state::{stage, BotMentality};
 use rules_spec::global::movement::BOARD_TILES;
 use rules_spec::Table;
 
-/// Make `who` a held bot seat: a standard bot whose `ai` is off, so nothing
-/// answers its prompts during a tick and the two implementations decide.
+/// Make `who` a bot seat (the policy answers it either way).
 fn hold(t: &mut Table, who: usize) {
     t.make_bot(who, BotMentality::Standard);
-    t.m.world_mut().st.players[who].ai = false;
 }
 
 /// Both entries must produce the exact same command for `who`.
 fn assert_same(t: &Table, who: usize, label: &str) {
     let member = t.m.state().players[who].member;
-    let want = t.m.bot_action(member);
-    let got = act_for(&t.m, member);
-    assert_eq!(got, want, "{label}: act_for diverged from bot_action");
+    let want = act_for(&t.m, member);
+    let view = bot_core::view::SeatView::from_match(&t.m, member);
+    let rules: std::sync::Arc<dyn game_core::engine::CardRules> = rules_spec::rules();
+    let mut rng = bot_core::determinize::DeterminizerRng::new(0);
+    let got = bot_core::policy::act_for_view(&rules_spec::data(), &rules, &view, &mut rng);
+    assert_eq!(
+        got, want,
+        "{label}: the seat-view entry diverged from the live one"
+    );
 }
 
 /// Roll past CiRCLE from `money` and stop with the [pass-reward] prompt open.

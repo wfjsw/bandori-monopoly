@@ -361,6 +361,12 @@ impl MatchHandle {
         self.run(|_| Input::Ticks { k, n: 1 }, |s, e| e.tick(s, dt))
     }
 
+    /// Members a driver must move now (`MatchState::drive`), without building
+    /// a per-viewer frame -- the tick loop asks every playing room per tick.
+    pub fn drive(&self) -> Result<Vec<i32>, String> {
+        self.peek(|s, e| e.drive(s))
+    }
+
     pub fn ended(&self) -> Result<bool, String> {
         self.peek(|s, e| e.ended(s))
     }

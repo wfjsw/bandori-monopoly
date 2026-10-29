@@ -14,6 +14,7 @@
 // the clock/engine paths are the same — `ruleset.test.ts` covers the cards.
 
 import { strict as assert } from "node:assert";
+import type { MatchView } from "../core/types.ts";
 import { test } from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -90,11 +91,57 @@ test("a seeded SoloMatch plays to completion in the built wasm glue and seals a 
 
   // Tick it out the way the solo worker does. A wasm-side clock read or any
   // other trap in the engine dies right here instead of in a player's game.
+  //
+  // The engine decides nothing for a seat (`docs/BOT-DRIVE.md`), so the test
+  // is the host: after every tick it plays each seat's move over the same
+  // public `view` / `act` interface the page uses. Prompts take the engine's
+  // own prefill (`aiAnswer`), which is the policy answer the live match
+  // stamps at prompt-open; the turn surface rolls or ends. A few rounds in,
+  // the host ends the match (`finish`), so the scoring / end path runs too --
+  // this guard is about the engine in wasm, and a dumb host would otherwise
+  // never bankrupt anyone.
+  const ids = members.map((x) => x.id);
+  const act = (member: number, cmd: unknown) => m.act(member, JSON.stringify(cmd));
   let steps = 0;
   while (!m.ended()) {
     m.tick_steps(4);
     steps += 1;
-    assert.ok(steps < 200_000, `game did not finish in ${steps} tick calls`);
+    assert.ok(steps < 20_000, `game did not finish in ${steps} tick calls`);
+    const views = JSON.parse(m.views(JSON.stringify(ids))) as MatchView[];
+    for (const v of views) {
+      const S = v.state;
+      const me = v.playerId;
+      const p = S.prompt;
+      const member = v.you;
+      const asked =
+        p.id > 0 && p.players.includes(me) && (p.answers[p.players.indexOf(me)] ?? -1) < 0;
+      if (asked) {
+        const a = v.aiAnswer ?? {};
+        act(member, {
+          act: "answer",
+          prompt: p.id,
+          value: p.kind === "auction" ? (a.worth ?? 0) : (a.answer ?? p.fallback),
+          cards: a.picked ?? [],
+        });
+        continue;
+      }
+      const vote = S.vote;
+      const voting =
+        vote.id > 0 &&
+        vote.players.includes(me) &&
+        (vote.answers[vote.players.indexOf(me)] ?? -1) < 0;
+      if (voting) {
+        act(member, { act: "vote", value: 1 });
+        continue;
+      }
+      if (S.phase !== "play" || S.busy || S.turn !== me) continue;
+      if (S.step === 2) {
+        act(member, { act: S.roller === me || S.roller < 0 ? "roll" : "end" });
+      } else if (S.step === 4) {
+        act(member, { act: "end" });
+      }
+    }
+    if ((views[0]?.state.round ?? 0) > 4) m.finish();
   }
 
   const zst = m.record_zst("2026-10-09 12:00");

@@ -11,6 +11,7 @@ use game_core::MatchMode;
 
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -72,7 +73,7 @@ fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
     let mut m = solo(3);
     let mut saw_prompt = false;
     for _ in 0..4000 {
-        m.tick(0.25);
+        m.pump_tick(0.25);
         let st = m.state();
         if st.prompt.id > 0 {
             saw_prompt = true;
@@ -190,7 +191,7 @@ fn wait_ops(m: &mut Match, me: i32) {
                 let _ = m.act(me, &msg);
             }
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     panic!("never reached OPS for member {me}");
 }
@@ -290,7 +291,7 @@ fn skills_are_disabled_outside_the_ops_window() {
         if st.phase == "play" && !(st.step == stage::OPS && !st.busy) {
             break;
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     let extra = m.view_extra(1);
     let skills = extra["skills"].as_array().expect("skills list");

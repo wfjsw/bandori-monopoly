@@ -47,3 +47,4 @@ rand_core = { version = "0.6", default-features = false }
 zstd = "0.13"
 
 [dev-dependencies]
+bot-core = { path = "../bot-core" }

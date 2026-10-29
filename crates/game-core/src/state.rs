@@ -161,6 +161,13 @@ pub struct MatchState {
     /// per-turn play cap counts. Filled with [`Self::can_roll_here`] /
     /// [`Self::can_end_here`].
     pub played_count: i32,
+    /// Members a driver must move **right now** (`docs/BOT-DRIVE.md`): every
+    /// bot seat, every machine-held human (`ai` -- 托管 takeover, disconnect),
+    /// and the acting seat once its own clock is spent. The host (server /
+    /// page) probes exactly these; the engine decides for nobody. Empty in
+    /// Solo -- the page is the host there.
+    #[serde(default)]
+    pub drive: Vec<i32>,
     /// The movement this turn is taking.
     pub plan: MovePlan,
     pub time_left: f32,
@@ -249,6 +256,7 @@ impl Default for MatchState {
             can_roll_here: false,
             can_end_here: false,
             played_count: 0,
+            drive: vec![],
             plan: MovePlan::default(),
             time_left: 0.0,
             base_time: 0.0,

@@ -1156,6 +1156,16 @@ impl<'a> Cx<'a> {
         Err(Halt(HaltKind::Ask(Box::new(ask))))
     }
 
+    /// Re-ask a prompt a restored fork halted on (`Routine::Ai`). An answer
+    /// the caller already supplied comes back through the answer list; a seat
+    /// still missing halts here again. The `Ask` is the one the fork was saved
+    /// with, so its title, options and prefilled `ai` stay as the live match
+    /// had them.
+    pub(crate) fn resume_prompt(&mut self, ask: Ask) -> Flow<()> {
+        self.ask(ask)?;
+        Ok(())
+    }
+
     /// Replace every [`AI_UNSET`] entry of `ask.ai` with the answer this seat's
     /// policy would give. Standard (and every human seat, including one taken
     /// over after a time-out) takes the prompt's fallback. Chaos picks uniformly

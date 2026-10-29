@@ -7,6 +7,7 @@
 use std::sync::Arc;
 mod common;
 use common::data_arc as data;
+use common::Pump;
 
 #[cfg(debug_assertions)]
 use game_core::record::{EngineStamp, RecordedMatch, Replayer, RECORD_VERSION};
@@ -74,7 +75,7 @@ fn ready_game(mode: MatchMode) -> Match {
                 .unwrap();
             }
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     panic!("opening prompt did not finish");
 }
@@ -86,8 +87,7 @@ fn cheats_update_views_and_survive_save_restore() {
     let human = m.state().player_of(1) as usize;
     let bot = m.state().player_of(2) as usize;
     // Arrange a held-token row (fire is a skill counter, not a state key).
-    m.world_mut()
-        .set_tok(human as i32, "charge", 0, -1, 5);
+    m.world_mut().set_tok(human as i32, "charge", 0, -1, 5);
     m.act(1, &cheat("money", 50_000, -1)).unwrap();
     m.act(1, &cheat("tp", 10, bot as i32)).unwrap();
     let card = data().cards[0].id.clone();
@@ -109,8 +109,7 @@ fn cheats_update_views_and_survive_save_restore() {
     assert_eq!(st.players[bot].pos, 10);
     // Dumb storage: the engine stores the advertised cap for display and
     // does not police it. A raw token write is not clamped.
-    m.world_mut()
-        .set_tok(human as i32, "charge", 1_000, -1, 5);
+    m.world_mut().set_tok(human as i32, "charge", 1_000, -1, 5);
     let st = m.state();
     assert_eq!(st.players[human].token("charge"), 1_000);
     assert_eq!(st.players[human].token_max("charge"), 5);
@@ -170,7 +169,7 @@ fn pending_prompts_reject_cheats_without_losing_answers() {
         if m.state().prompt.id > 0 {
             break;
         }
-        m.tick(0.25);
+        m.pump_tick(0.25);
     }
     assert!(m.state().prompt.id > 0);
     let before = m.save();

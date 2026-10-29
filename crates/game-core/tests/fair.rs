@@ -64,7 +64,7 @@ fn pump(rm: &mut RecordedMatch) {
                         ..game_core::net::NetMessage::act("answer")
                     }
                 } else {
-                    match rm.inner().bot_action(member) {
+                    match common::bot_msg(rm.inner(), member) {
                         Some(msg) => msg,
                         None => continue,
                     }

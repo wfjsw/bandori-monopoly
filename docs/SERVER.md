@@ -101,20 +101,19 @@ button press would. The server's engine is never asked to drive the seat -- no
 new act flips `players[i].ai`, and `member_left` is not reused -- so the server
 is unchanged and the player's seat is still theirs.
 
-**There is one policy, and it is the engine's.** Every command comes from
-`Match::bot_action` -- the same implementation the server's AI scheduler runs
-for a bot seat -- shipped to the page as `MatchView.autoAction` (solo:
-`web-glue`'s `view_extra`; online: the seat-view worker `viewExtras`, which
-computes it on a determinized fork). The client does not re-decide: the
-takeover sends the command through the ordinary `act` path. The TS table in
-`autopilot.ts` only runs while `autoAction` is absent (an extras miss).
+**There is one policy, and it is `bot-core`'s.** Every 托管 decision comes
+from the same `policy::act_for_view` the server's bot driver runs for a bot
+seat, through the seat-view worker's `act` op on a determinized fork
+(`docs/BOT-DRIVE.md`). The takeover sends the command through the ordinary
+`act` path. The TS table in `autopilot.ts` only runs on the surfaces the
+worker does not drive (setup, vote, discard) and when the worker fails.
 
 **托管 (`bot`)** therefore inherits the standard bot policy exactly --
 redeem, the 70% card odds, roll, the buy / build reserves, the discard, the
-settle offers' own tests, and the prompt answers (`aiAnswer` is derived from
-the same command). Ban / pick choose a random free character; the deck phase
-submits the character's preset; a live vote is answered yes so the table is
-never left hanging -- those three are not `bot_action` surfaces.
+settle offers' own tests, and the prompt answers. Ban / pick choose a random
+free character; the deck phase submits the character's preset; a live vote is
+answered yes so the table is never left hanging -- setup and votes are
+engine-side (`MatchPlayer::auto_setup`, `Match::auto_vote`).
 
 **混沌 (`chaos`)** is legal but maximally disruptive -- it prefers whatever
 makes more things happen. Play every legal card (100%, no cap) and fire every
@@ -147,7 +146,8 @@ server refuses one.
 ### Bot mentality (engine bots)
 
 The auto-play takeover above is a *human* seat driven by the browser. A **bot**
-member is driven by the engine, and it carries a `BotMentality` on the seat
+member is driven the same way -- `view` -> policy -> `act` -- by the server
+probe (or the page, in solo), and it carries a `BotMentality` on the seat
 (`standard` / `chaos` / `advanced`, see
 [ENGINE.md](ENGINE.md#bot-ai-mentalities) and [BOT.md](BOT.md)). `POST
 /api/rooms/{id}/bots` takes `mentality` on `op: "add"` (default `standard`);

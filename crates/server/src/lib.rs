@@ -317,7 +317,7 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
                         Err(e) => eprintln!("room {id} tick failed: {e}"),
                     }
                     ended = m.ended().unwrap_or(false);
-                    drive = claim_bots(&server, &id);
+                    drive = claim_drive(&server, &id, m);
                 }
             }
             // 3. bookkeeping, again under the room lock.
@@ -488,33 +488,31 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
 
 // ------------------------------------------------------- advanced bots (B5)
 
-/// Members of `room` that a bot driver must move: **every** bot seat
-/// (`docs/BOT-DRIVE.md` -- the engine no longer decides for anyone; a standard
-/// / chaos seat is answered by the local policy, an advanced one by the
-/// service). Claims each one whose probe time is due via the store, so a seat
-/// is only ever asked about once even across processes (`docs/BOT.md` B5).
-fn claim_bots(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
-    let members: Vec<i32> = {
-        let Some(room) = server.room(room_id) else {
-            return Vec::new();
-        };
-        let r = room.lock().unwrap();
-        r.info
-            .members
-            .iter()
-            .filter(|m| m.bot)
-            .map(|m| m.id)
-            .collect()
+/// Members of `room` that a driver must move, from the match's own
+/// [`game_core::state::MatchState::drive`] list (`docs/BOT-DRIVE.md`: **every**
+/// bot seat, every machine-held human and a seat whose clock just ran out --
+/// the engine decides for nobody). Claims each one whose probe time is due via
+/// the store, so a seat is only ever asked about once even across processes
+/// (`docs/BOT.md` B5).
+///
+/// The list is seat-independent, so it needs no per-viewer frame: the worker
+/// answers `op: "drive"` straight off the match. This runs once per tick of
+/// every playing room, next to the tick itself.
+fn claim_drive(server: &Arc<Server>, room_id: &str, m: &room::MatchHandle) -> Vec<i32> {
+    let Ok(drive) = m.drive() else {
+        return Vec::new();
     };
-    members
+    drive
         .into_iter()
         .filter(|&m| botsvc::claim_seat(server.store.as_ref(), &server.instance, room_id, m))
         .collect()
 }
 
 /// One decision probe: look at the seat's view, and if it must act, ask the
-/// bot service and apply the answer (or the heuristic on failure). Runs as
-/// its own task -- the tick loop is already on to the next room.
+/// bot service and apply the answer (or the policy fallback on failure). Runs
+/// as its own task -- the tick loop is already on to the next room. This is
+/// the only thing that moves a bot seat, and it also covers a human whose
+/// clock ran out (`docs/BOT-DRIVE.md` §1).
 fn spawn_probe(
     server: Arc<Server>,
     bots: Option<Arc<botsvc::BotService>>,
@@ -577,10 +575,12 @@ async fn probe_one(
         return false;
     };
     let state = &seat.state;
+    // Only a bot seat searches: a machine-held human gets the policy alone
+    // (its own mentality still applies -- 托管's 混沌 tags the seat `chaos`).
     let advanced = state
         .players
         .get(seat.player_id.max(0) as usize)
-        .is_some_and(|p| p.mentality == game_core::state::BotMentality::Advanced);
+        .is_some_and(|p| p.bot && p.mentality == game_core::state::BotMentality::Advanced);
     let Some(prompt_id) = botsvc::decision_at(state, seat.player_id) else {
         // Nothing this seat must answer right now. Speculate on its **next
         // own decision** instead of the dead idle view (BOT-RESEARCH #5,
