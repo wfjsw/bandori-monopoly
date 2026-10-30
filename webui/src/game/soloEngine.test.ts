@@ -11,7 +11,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import { SoloEngine } from "./soloEngine.ts";
-import { tickQuanta, missingSeat, TICK_STEP, type SaveSnap, type SoloPush, type SoloWorkerLike } from "./soloProtocol.ts";
+import { tickQuanta, missingSeat, safeSavePoint, TICK_STEP, type SaveSnap, type SoloPush, type SoloWorkerLike } from "./soloProtocol.ts";
 import type { Msg } from "../i18n/msg.ts";
 
 // ---------------------------------------------------------------- fake worker
@@ -249,4 +249,13 @@ test("tickQuanta turns elapsed time into whole TICK_STEP quanta, capped at 10", 
   const under = tickQuanta(499, 0);
   assert.equal(under.k, 9);
   assert.ok(Math.abs(under.acc - 0.049) < 1e-9);
+});
+test("safeSavePoint allows a snapshot only where a command can be taken", () => {
+  // Saving mid-effect resumes halfway through it; the match must be waiting.
+  assert.equal(safeSavePoint({ busy: false, step: 2 }), true, "OPS");
+  assert.equal(safeSavePoint({ busy: false, step: 4 }), true, "END");
+  assert.equal(safeSavePoint({ busy: false, step: 0 }), true, "setup / between turns");
+  assert.equal(safeSavePoint({ busy: true, step: 2 }), false, "a pending routine");
+  assert.equal(safeSavePoint({ busy: false, step: 1 }), false, "the turn-start lift");
+  assert.equal(safeSavePoint({ busy: false, step: 3 }), false, "the move animation");
 });

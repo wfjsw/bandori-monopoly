@@ -39,6 +39,20 @@ export function missingSeat(seats: Iterable<number>, pushed: { has(k: number): b
   return null;
 }
 
+/**
+ * May the match be snapshotted in this state? Only where it waits for a
+ * command: no pending routine (`busy`) and not inside the turn-start lift or
+ * the move animation (`game-core::state::stage` START / MOVE). A restore then
+ * always lands on a surface a driver -- the human's buttons or `driveBots` --
+ * can act on, instead of halfway through an effect.
+ *
+ * `step` only carries meaning in play; setup (ban / pick / deck) idles at 0
+ * and is a prompt surface, so it passes.
+ */
+export function safeSavePoint(st: { busy: boolean; step: number }): boolean {
+  return !st.busy && st.step !== 1 && st.step !== 3;
+}
+
 /** Engine strings for one `SoloSave` (the envelope around them is the session's). */
 export interface SaveSnap {
   match: string;
