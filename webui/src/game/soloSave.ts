@@ -10,6 +10,10 @@
 // in-memory flag hydrated once at boot (`hydrateSoloSave`), not by a probe per
 // call. Writes coalesce -- the worker can push faster than a large transaction
 // settles -- and only one warning is printed until a write succeeds again.
+//
+// Only snapshots the worker took at a save point reach here (`soloProtocol.ts`
+// `safeSavePoint`): the match was waiting for a command, so a resume lands on
+// a surface that can be driven rather than mid-effect.
 
 import type { ScoreWeights } from "../core/types";
 import { committed, openDb, req } from "../core/idb.ts";

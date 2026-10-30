@@ -113,10 +113,14 @@ function view(over: Partial<MatchView> = {}): MatchView {
   } as MatchView;
 }
 
-/** A pool whose `decide` settles the way the test wants. */
-function fakePool(decide: () => Promise<BotDecideResult>): BotPool {
+/** A pool whose `decide` / `act` settle the way the test wants. */
+function fakePool(
+  decide: () => Promise<BotDecideResult>,
+  act: () => Promise<Command | null> = async () => null,
+): BotPool {
   return {
     decide,
+    act,
     ponder: async () => {},
     ensureLoaded: async () => {},
     dispose: () => {},
@@ -334,6 +338,25 @@ test("driveSeat falls back when the engine refuses the search's answer", async (
   );
   assert.equal(outcome, "fallback");
   assert.equal(h.sent.length, 2, "search first, then the policy");
+});
+
+test("driveSeat ends a turn whose main move a card already spent", async () => {
+  // The engine refuses `roll` with `err.roll_main_used` here, so re-sending
+  // the policy's roll candidate wedged the seat forever; the `canRollHere`
+  // gate switches the fallback to `end`.
+  const v = view({ state: state({ canRollHere: false, canEndHere: true }) });
+  const h = hooks();
+  const outcome = await driveSeat(
+    async (_m, cmd) => {
+      h.sent.push(cmd);
+      return null;
+    },
+    () => v,
+    1,
+    { ...h, search: false, pool: fakePool(async () => okAnswer("roll")) },
+  );
+  assert.equal(outcome, "heuristic");
+  assert.deepEqual(h.sent, [{ act: "end" }]);
 });
 
 test("driveSeat: a seat with no decision is a no-op", async () => {

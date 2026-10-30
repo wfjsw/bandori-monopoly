@@ -20,7 +20,7 @@ import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import { loadRulesetInto } from "../core/rulesetLoad.ts";
 import type { MatchEvent, MatchView, Command } from "../core/types.ts";
-import { tickQuanta, missingSeat, TICK_STEP, type EngineBoot, type SaveSnap, type SoloBootOpts, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
+import { tickQuanta, missingSeat, safeSavePoint, TICK_STEP, type EngineBoot, type SaveSnap, type SoloBootOpts, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
 
 /** The worker global (tsconfig has no WebWorker lib; only these are used). */
 const ctx = self as unknown as {
@@ -46,12 +46,18 @@ const TICK_MS = 50;
 const HIDDEN_TICK_MS = 1000;
 /** Push a save at most this often while dirty (the page writes it). */
 const SAVE_MS = 1000;
+/** Re-check the save point at most this often while it is not one. */
+const SAVE_CHECK_MS = 250;
 let timer = 0;
 let lastTick = 0;
 let acc = 0;
 let hidden = false;
 let dirty = false;
 let lastSavePush = 0;
+let lastSaveCheck = 0;
+/** The last snapshot actually pushed -- what an explicit `save` hands back
+ *  when the match is mid-effect (see `pushSave`). */
+let lastSave: SaveSnap | null = null;
 // ---------------------------------------------------------------- diff cache
 /** Last pushed human frame (JSON) -- a frame is re-posted only when it moves. */
 let viewJson = "";
@@ -184,6 +190,8 @@ function openMatch(m: Match, eventCursor: number): void {
   haveView = false;
   dirty = false;
   lastSavePush = 0;
+  lastSaveCheck = 0;
+  lastSave = null;
   lastTick = performance.now();
   acc = 0;
   setTickPeriod();
@@ -268,7 +276,7 @@ function pump(forceSave = false): void {
     post(push);
   }
   const now = performance.now();
-  if (forceSave || (dirty && now - lastSavePush >= SAVE_MS)) pushSave();
+  if (forceSave || (dirty && now - lastSavePush >= SAVE_MS)) pushSave(forceSave);
 }
 
 /**
@@ -307,12 +315,42 @@ function botFrames(frames: MatchView[]): { member: number; view: MatchView }[] {
   return out;
 }
 
-function pushSave(): void {
+/**
+ * Is the match at a point that can be snapshot? Only where it waits for a
+ * command (`safeSavePoint`): a save taken inside a pending routine or the move
+ * animation would resume on a half-applied effect. A skipped save is retried
+ * on a later pump (`dirty` stays set).
+ */
+function atSavePoint(force = false): boolean {
+  if (!match) return false;
+  const now = performance.now();
+  // The check serialises one frame, so do not run it on every 50 ms pump.
+  if (!force && now - lastSaveCheck < SAVE_CHECK_MS) return false;
+  lastSaveCheck = now;
+  try {
+    const frames = JSON.parse(match.views(JSON.stringify([you]))) as MatchView[];
+    const st = frames[0]?.state;
+    return st ? safeSavePoint(st) : false;
+  } catch {
+    return false;
+  }
+}
+
+function takeSnap(): SaveSnap {
+  const m = requireMatch();
+  return { match: m.save(), rec: m.record_state(), last };
+}
+
+function pushSave(force = false): void {
   if (!match) return;
+  if (!atSavePoint(force)) {
+    dirty = true;
+    return;
+  }
   lastSavePush = performance.now();
   dirty = false;
-  const snap: SaveSnap = { match: match.save(), rec: match.record_state(), last };
-  post({ push: "save", ...snap });
+  lastSave = takeSnap();
+  post({ push: "save", ...lastSave });
 }
 
 // ---------------------------------------------------------------- requests
@@ -391,8 +429,12 @@ function call(op: string, rest: Record<string, unknown>): unknown {
     case "view":
       return JSON.parse(requireMatch().view(rest.member as number)) as MatchView;
     case "save": {
-      const m = requireMatch();
-      return { match: m.save(), rec: m.record_state(), last } satisfies SaveSnap;
+      // The page is going away (pagehide / tab-hide), so a fresh snapshot
+      // outlives it -- but only one taken at a save point. Mid-effect the
+      // caller gets the last settled one, so a resume never opens halfway
+      // through an effect.
+      if (atSavePoint(true)) lastSave = takeSnap();
+      return lastSave ?? takeSnap();
     }
     case "export":
       return requireMatch().record_zst(rest.created as string);

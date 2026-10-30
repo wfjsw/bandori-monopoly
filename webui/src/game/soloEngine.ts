@@ -108,7 +108,9 @@ export class SoloEngine {
     return this.rpc<MatchView>("view", { member });
   }
 
-  /** A fresh engine snapshot right now (pagehide / tab-hide). */
+  /** The snapshot for pagehide / tab-hide: a fresh one when the match waits
+   *  for a command, else the last one taken at such a point (a mid-effect
+   *  snapshot would resume halfway through it). */
   save(): Promise<SaveSnap> {
     return this.rpc<SaveSnap>("save");
   }
