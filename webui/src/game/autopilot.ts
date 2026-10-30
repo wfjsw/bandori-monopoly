@@ -814,7 +814,12 @@ export const policies: Record<PolicyName, Policy> = {
           if (sk) out.push({ act: "skill", card: sk });
         }
         // A refused card must still let the turn move: roll (or end) is next.
-        if (S.roller === me) out.push({ act: "roll" });
+        // Both gates are the engine's own (`why_not_act`, mirroring
+        // `bot-core::policy` and `turnFlow.ts`): after a card move spent the
+        // main move the roll is refused (`err.roll_main_used`) and only `end`
+        // gets through -- re-sending `roll` would wedge the seat forever.
+        if (S.roller === me && (!myTurn || S.canRollHere)) out.push({ act: "roll" });
+        if (myTurn && S.canEndHere) out.push({ act: "end" });
         return out;
       }
       if (S.step !== 4 || !myTurn) return out; // 开始 lifts itself; 移动 is running
@@ -875,7 +880,10 @@ export const policies: Record<PolicyName, Policy> = {
           for (const t of redeemable(S, ctx.tiles, me, CHAOS_RESERVE)) out.push({ act: "redeem", value: t });
           if (S.skipMove && S.canEndHere) out.push({ act: "end" });
         }
-        if (S.roller === me) out.push({ act: "roll" });
+        // The engine's gates, like the standard branch: a spent main move
+        // refuses the roll and only `end` gets through.
+        if (S.roller === me && (!myTurn || S.canRollHere)) out.push({ act: "roll" });
+        if (myTurn && S.canEndHere) out.push({ act: "end" });
         return out;
       }
       if (S.step !== 4 || !myTurn) return out;
