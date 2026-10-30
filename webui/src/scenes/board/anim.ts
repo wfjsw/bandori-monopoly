@@ -35,6 +35,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  *  Explicit 4x replay fast-forwards both. */
 const FAST_QUEUE = 8;
 
+/** Per-step pace of every walk -- the main roll and a card's own move alike.
+ *  One constant on purpose: the engine cuts a walk into segments at every
+ *  tile whose hook logs (a `move` per cut), and a continuation that changed
+ *  pace would read as the token suddenly speeding up mid-walk. Matches the
+ *  token's CSS step transition (`Ring.module.css`), so each step lands as
+ *  the next begins. */
+const WALK_STEP_MS = 130;
+
 const EVENT_SFX: Record<string, string> = {
   gain: "coin_gain", pass: "bonus", lose: "coin_pay", draw: "draw", mulligan: "draw", discard: "card_play",
 };
@@ -584,6 +592,13 @@ export class Animator {
     return out;
   }
 
+  /** The per-step pace of a walk segment; 0 means the step is instant
+   *  (explicit 4x replay only -- live matches always show each movement
+   *  frame, at the one walk pace). */
+  private walkHop(): number {
+    return this.replay && this.speed >= 4 ? 0 : WALK_STEP_MS;
+  }
+
   private async walk(playerId: number, from: number, steps: number, hop: number, stepsLeft = 0): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
@@ -737,7 +752,7 @@ export class Animator {
         await wait(450);
         // A burst of reward/card events may fast-forward the log, but must
         // still show the path. Only explicit 4x replay skips movement frames.
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130, e.ahead ?? 0);
+        await this.walk(playerId, e.from, e.value, this.walkHop(), e.ahead ?? 0);
         break;
       }
       case "dice": {
@@ -771,7 +786,10 @@ export class Animator {
       case "move":
         if (!ok) break;
         this.showBanner(this.player(playerId), body);
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90, e.ahead ?? 0);
+        // One pace for every walk: a cut continuation (the engine publishes a
+        // `move` per tile whose hook logged) carries on exactly as the roll
+        // it continues.
+        await this.walk(playerId, e.from, e.value, this.walkHop(), e.ahead ?? 0);
         break;
       case "teleport":
         if (!ok || !this.pos) break;

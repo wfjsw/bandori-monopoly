@@ -43,6 +43,7 @@ registerHooks({
           export const useReducer = () => [0, () => {}];
           export const useRef = (v) => ({ current: v });
           export const useState = (v) => [typeof v === "function" ? v() : v, () => {}];
+          export const useSyncExternalStore = (_sub, snapshot) => snapshot();
           export const initReactI18next = { type: "3rdParty", init: () => {} };
           export default { t: (k) => k, use: () => ({ init: async () => {} }), init: async () => {}, changeLanguage: async () => {} };
         `),
@@ -368,7 +369,7 @@ test("Animator: a \"flash\" tile cue (no card) banners once and dedupes", async 
 test("Animator: two same-name field cards pulse one after the other", async () => {
   const bumps: number[] = [];
   const field = (uid: number) => ({ uid, card: "TEST:twin", faceDown: false });
-  const view = { state: { players: [{ field: [field(70), field(71)] }] } } as never;
+  const view = { state: { players: [{ field: [field(70), field(71)] }], prompt: { id: 0 } } } as never;
   const anim = new Animator(() => bumps.push(Date.now()), () => view, false);
   const seen: number[] = [];
   const t0 = Date.now();
@@ -387,7 +388,7 @@ test("Animator: two same-name field cards pulse one after the other", async () =
 });
 
 test("Animator: a skill rule's hook (not drawn in the field row) keeps the centre flash", async () => {
-  const view = { state: { players: [{ field: [{ uid: 5, card: "skill:A:B", faceDown: false }] }] } } as never;
+  const view = { state: { players: [{ field: [{ uid: 5, card: "skill:A:B", faceDown: false }] }], prompt: { id: 0 } } } as never;
   const anim = new Animator(() => {}, () => view, false);
   anim.push(frame({ id: 81, type: "card", card: "skill:A:B", kind: "hook", uid: 5, msg: { k: "log.effect_applied" }, flash: true }));
   let flashed = false;

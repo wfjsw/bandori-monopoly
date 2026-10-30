@@ -470,6 +470,7 @@
    position: absolute;
    width: 0;
    height: 0;
+   /* Keep in step with `WALK_STEP_MS` (anim.ts): one walk, one cadence. */
    transition: left 0.13s ease, top 0.13s ease;
 }
 
@@ -517,6 +518,7 @@
 }
 
 .hop.sd {
+   /* One hop per step -- the step interval is `WALK_STEP_MS` (anim.ts). */
    animation: hop 0.13s ease-out;
 }
 
