@@ -62,6 +62,19 @@ export function glyphOf(def: MarkerDef, n: number, name?: string): string {
   return def.glyph.replaceAll("{n}", `${n}`).replaceAll("{name}", name ?? "");
 }
 
+/** A glyph template split into its leading symbol (before `{n}`) and the
+ *  filled remainder, so a surface can draw the symbol itself instead of
+ *  printing it. Templates that open straight on the count stay whole in
+ *  `rest`. */
+export function chipParts(def: MarkerDef, n: number, name?: string): { glyph: string; rest: string } {
+  const at = def.glyph.indexOf("{n}");
+  if (at <= 0) return { glyph: "", rest: glyphOf(def, n, name) };
+  return {
+    glyph: def.glyph.slice(0, at).replaceAll("{name}", name ?? ""),
+    rest: `${n}${def.glyph.slice(at + 3).replaceAll("{name}", name ?? "")}`,
+  };
+}
+
 /** Whether a `⌛N` countdown should print: a number is scheduled to end and no
  *  other marker on the same face already carries it. The countdown stays in the
  *  data either way; this only decides whether the face prints it again. */

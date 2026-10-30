@@ -23,7 +23,8 @@ import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
 import { byTitle, cardKeys, showDeck, showDeedList } from "./Popups";
-import { fieldMarkers } from "./markers";
+import { fieldMarkers, type Marker } from "./markers";
+import { MarkerChip } from "./MarkerChip";
 import { useCompactValue } from "../../app/Stage";
 import { designBox } from "../../app/stageScale";
 import { BOARD_MID, COMPACT_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
@@ -89,13 +90,13 @@ type SkillSlot = {
  * dropped. A name with no display phrase is dropped too -- never printed as
  * its wire key.
  */
-export function skillMarks(p: Model["S"]["players"][number] | undefined, id: string): { key: string; label: string; title: string }[] {
+export function skillMarks(p: Model["S"]["players"][number] | undefined, id: string): { key: string; mk?: Marker; label?: string; title: string }[] {
   const fc = p?.field?.find((c) => c.card === id);
   if (!p || !fc) return [];
   // The instance's own markers, from the shared chip table (`markers.ts`) --
   // here rendered as the skill card's own corner chips.
-  const out: { key: string; label: string; title: string }[] =
-    fieldMarkers(fc).map((mk) => ({ key: mk.key, label: mk.chip, title: mk.note }));
+  const out: { key: string; mk?: Marker; label?: string; title: string }[] =
+    fieldMarkers(fc).map((mk) => ({ key: mk.key, mk, title: mk.note }));
   for (const tok of p.tokens ?? []) {
     if (tok.instance !== fc.uid || tok.value <= 0) continue;
     const label = stateLabel(tok.name);
@@ -242,7 +243,9 @@ const SkillStack = memo(function SkillStack({ m, sess, peek, unpeek }: {
               />
               {marks.length > 0 && (
                 <div className={s.skillMarks}>
-                  {marks.map((x) => <span key={x.key} className={s.skillMark} title={x.title}>{x.label}</span>)}
+                  {marks.map((x) => x.mk
+                    ? <MarkerChip key={x.key} def={x.mk.def} n={x.mk.n} name={x.mk.name} className={s.skillMark} title={x.title} />
+                    : <span key={x.key} className={s.skillMark} title={x.title}>{x.label}</span>)}
                 </div>
               )}
             </div>
