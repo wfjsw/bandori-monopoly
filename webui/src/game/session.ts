@@ -1,7 +1,7 @@
 // One interface for a match whether it runs on the server (online) or in the
 // browser's wasm engine (solo). Scenes only talk to `session`.
 //
-// Refresh recovery: a solo match is saved to localStorage (engine snapshot) and
+// Refresh recovery: a solo match is saved (engine snapshot, `soloSave.ts`) and
 // resumed on load; an online player is re-attached through the server session
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
@@ -18,6 +18,10 @@ import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
 import type { SaveSnap, SoloBootOpts, SoloPush } from "./soloProtocol";
+import { clearSoloSave, hasSoloSave, loadSoloSave, saveSoloSave } from "./soloSave.ts";
+import { kv } from "../core/kv.ts";
+
+const prefs = kv("prefs");
 
 type ViewCb = (v: MatchView) => void;
 type EventCb = (e: MatchEvent) => void;
@@ -231,16 +235,16 @@ class Autopilot {
 }
 
 /** Solo's per-decision search cap (`docs/BOT.md` §3.6, user ruling). Kept in
- *  localStorage so it survives a refresh; the solo setup screen edits it. */
-const SOLO_BOT_CAP_KEY = "bm.botSoloCapMs";
+ *  the settings store so it survives a refresh; the solo setup screen edits it. */
+const SOLO_BOT_CAP_KEY = "botSoloCapMs";
 
 export function botSoloCapMs(): number {
-  const raw = Number(localStorage.getItem(SOLO_BOT_CAP_KEY));
+  const raw = Number(prefs.get(SOLO_BOT_CAP_KEY));
   return Number.isFinite(raw) && raw >= 200 ? Math.min(12_000, raw) : SOLO_CAP_MS;
 }
 
 export function setBotSoloCapMs(ms: number): void {
-  localStorage.setItem(SOLO_BOT_CAP_KEY, String(Math.round(ms)));
+  prefs.set(SOLO_BOT_CAP_KEY, String(Math.round(ms)));
 }
 
 export abstract class GameSession {
@@ -390,21 +394,6 @@ export function endSession(): void {
 
 // ------------------------------------------------------------------ solo
 
-const SOLO_KEY = "bm.solo";
-const SOLO_VERSION = 1;
-
-interface SoloSave {
-  v: number;
-  match: string;
-  weights: ScoreWeights;
-  recorded: boolean;
-  last: number;
-  /** The recorder beside `match` (absent on saves from before records). */
-  rec?: string;
-  /** IndexedDB id of the `.bdrec` exported when the match ended. */
-  replayId?: string;
-}
-
 /** An engine worker booted ahead of a solo start, if any. */
 let warmEngine: SoloEngine | null = null;
 /** The source the warm worker was booted from (server / build / custom). */
@@ -435,7 +424,7 @@ function soloBootOpts(): SoloBootOpts {
 function soloSourceKey(): string {
   const opts = soloBootOpts();
   const c = customRulesActive() ? customRules() : null;
-  return `${sourceEpoch}\u0000${opts.rulesBase}\u0000${opts.dataBase}\u0000${c ? `${c.name}:${c.b64.length}` : "-"}`;
+  return `${sourceEpoch}\u0000${opts.rulesBase}\u0000${opts.dataBase}\u0000${c ? `${c.name}:${c.bytes.length}` : "-"}`;
 }
 
 /** Drop the warmed worker after a live source switch and warm the new source.
@@ -492,7 +481,7 @@ function takeSoloEngine(): SoloEngine {
  * One solo match. The `SoloMatch` (wasm), its 50 ms fixed-step tick loop and
  * the engine's standard bots run in a module worker (`soloWorker.ts`); this
  * class is the page-side half: it caches the frames the worker pushes, drives
- * the 进阶 seats through the bot pool, and keeps a `localStorage` save fresh.
+ * the 进阶 seats through the bot pool, and keeps a save fresh (`soloSave.ts`).
  *
  * `ready` resolves once the worker has booted (glue + data + ruleset) and
  * opened the match. Until then `view` is null and the UI waits -- the same
@@ -569,7 +558,7 @@ export class SoloSession extends GameSession {
     void this.ready.catch((e) => {
       console.warn("solo engine could not open the match:", e);
       if (this.closed) return;
-      localStorage.removeItem(SOLO_KEY);
+      clearSoloSave();
     });
     this.ponderTimer = window.setInterval(() => {
       if (!this.closed) this.driveBots();
@@ -617,34 +606,26 @@ export class SoloSession extends GameSession {
   /** The match saved before a refresh, if any. The save's engine strings go to
    *  the worker; a restore failure (a corrupt save) rejects `ready` and Play
    *  drops the session. */
-  static resume(): SoloSession | null {
-    const raw = localStorage.getItem(SOLO_KEY);
-    if (!raw) return null;
-    try {
-      const s: SoloSave = JSON.parse(raw);
-      if (s.v !== SOLO_VERSION) throw new Error("old save");
-      const engine = takeSoloEngine();
-      const out = new SoloSession(
-        engine,
-        s.weights,
-        async () => {
-          await engine.boot(soloBootOpts());
-          await engine.restore({ save: s.match, rec: s.rec, last: s.last, you: 1 });
-          engine.setVisibility(document.hidden);
-        },
-        s.replayId ?? null,
-      );
-      out.recorded = s.recorded;
-      return out;
-    } catch (e) {
-      console.warn("solo save dropped:", e);
-      localStorage.removeItem(SOLO_KEY);
-      return null;
-    }
+  static async resume(): Promise<SoloSession | null> {
+    const s = await loadSoloSave();
+    if (!s) return null;
+    const engine = takeSoloEngine();
+    const out = new SoloSession(
+      engine,
+      s.weights,
+      async () => {
+        await engine.boot(soloBootOpts());
+        await engine.restore({ save: s.match, rec: s.rec, last: s.last, you: 1 });
+        engine.setVisibility(document.hidden);
+      },
+      s.replayId ?? null,
+    );
+    out.recorded = s.recorded;
+    return out;
   }
 
   static hasSave(): boolean {
-    return !!localStorage.getItem(SOLO_KEY);
+    return hasSoloSave();
   }
 
   /** Worker pushes: events + frames (the UI's view), engine snapshots (the
@@ -789,14 +770,14 @@ export class SoloSession extends GameSession {
     };
   }
 
-  /** Write the cached engine snapshot to `localStorage` (the envelope fields
-   *  -- weights / recorded / replayId -- are the page's). Called on the
-   *  worker's save pushes (at most one a second while dirty) and on the way
-   *  out (`pagehide`); see `soloProtocol.ts` for why the snapshot is cached. */
+  /** Hand the cached engine snapshot to the save store (the envelope fields --
+   *  weights / recorded / replayId -- are the page's). Called on the worker's
+   *  save pushes (at most one a second while dirty) and on the way out
+   *  (`pagehide`); see `soloProtocol.ts` for why the snapshot is cached. */
   private persist(): void {
     if (this.closed || !this.snap.match) return;
-    const save: SoloSave = {
-      v: SOLO_VERSION,
+    saveSoloSave({
+      v: 1,
       match: this.snap.match,
       weights: this.weights,
       recorded: this.recorded,
@@ -805,12 +786,7 @@ export class SoloSession extends GameSession {
       last: this.snap.last,
       rec: this.snap.rec,
       replayId: this.replayId ?? undefined,
-    };
-    try {
-      localStorage.setItem(SOLO_KEY, JSON.stringify(save));
-    } catch (e) {
-      console.warn("could not save the solo match:", e);
-    }
+    });
   }
 
   /** Export the `.bdrec` once, when the match ends: zstd-frame it into
@@ -857,7 +833,7 @@ export class SoloSession extends GameSession {
 
   leave(): void {
     this.detach();
-    localStorage.removeItem(SOLO_KEY);
+    clearSoloSave();
   }
 
   /** Close the worker but keep the save: a source switch drops the live
@@ -905,13 +881,13 @@ export function startSolo(player: string, playerCharacter: string, bots: SoloBot
 /** Abandon the running / saved solo match. */
 export function discardSolo(): void {
   if (session instanceof SoloSession) endSession();
-  localStorage.removeItem(SOLO_KEY);
+  clearSoloSave();
 }
 
 /** The running solo match, or the one saved before a refresh. */
-export function resumeSolo(): SoloSession | null {
+export async function resumeSolo(): Promise<SoloSession | null> {
   if (session instanceof SoloSession) return session;
-  const s = SoloSession.resume();
+  const s = await SoloSession.resume();
   if (s) {
     endSession();
     session = s;

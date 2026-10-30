@@ -5,11 +5,11 @@
 // needs -- events, and a fresh view frame when the match (or that seat's frame)
 // actually changed.
 //
-// Persistence: the worker cannot write `localStorage`, and `pagehide` cannot
-// await it -- so the worker pushes a `SoloSave`-shaped snapshot (the engine
-// strings) every second it is dirty and after every command, and the session
-// keeps the newest one in memory to write synchronously when the page goes
-// away.
+// Persistence: the worker cannot write the page's storage, and `pagehide`
+// cannot await a round-trip -- so the worker pushes a `SoloSave`-shaped
+// snapshot (the engine strings) every second it is dirty and after every
+// command, and the page keeps the newest one in memory to write as the page
+// goes away.
 
 import type { Command, MatchView } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";

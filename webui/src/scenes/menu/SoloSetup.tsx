@@ -21,11 +21,13 @@ import { openModal } from "../../ui/Modal";
 import { DEFAULT_WEIGHTS, showScoreWeights } from "../../ui/ScoreWeights";
 import s from "./SoloSetup.module.css";
 import { t as tr } from "../../i18n/t";
+import { kv } from "../../core/kv.ts";
 
-const BOTS_KEY = "bm.soloBots";
-const MENT_KEY = "bm.soloMentality";
+const prefs = kv("prefs");
+const BOTS_KEY = "soloBots";
+const MENT_KEY = "soloMentality";
 /** Your last explicit character pick (absent = start on 随机). */
-const CHAR_KEY = "bm.soloChar";
+const CHAR_KEY = "soloChar";
 
 function botNames(player: string, n: number): string[] {
   const out: string[] = [];
@@ -131,11 +133,11 @@ function SoloSetup({ close }: { close: () => void }) {
     dropSave();
     void switchSource({ clearCustom: true }).then(invalidateSoloEngine).catch(() => {});
   };
-  const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(localStorage.getItem(BOTS_KEY) ?? 3) || 3)));
+  const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(prefs.get(BOTS_KEY)) || 3)));
   const [weights, setWeights] = useState<ScoreWeights>({ ...DEFAULT_WEIGHTS });
   /** The "all bots" default; a per-name `overrides` entry beats it. */
   const [mentality, setMentality] = useState<BotMentality>(() => {
-    const raw = localStorage.getItem(MENT_KEY);
+    const raw = prefs.get(MENT_KEY);
     return raw === "chaos" || raw === "advanced" ? raw : "standard";
   });
   /** 进阶 per-decision search cap, seconds (`docs/BOT.md` §3.6 user ruling). */
@@ -147,7 +149,7 @@ function SoloSetup({ close }: { close: () => void }) {
    * to 随机 when there is none.
    */
   const [chars, setChars] = useState<string[]>(() => {
-    const saved = localStorage.getItem(CHAR_KEY);
+    const saved = prefs.get(CHAR_KEY);
     const you = saved && D.persona(saved) ? saved : "";
     return [you, ...Array(bots).fill("")];
   });
@@ -168,7 +170,7 @@ function SoloSetup({ close }: { close: () => void }) {
   const setAll = (m: BotMentality) => {
     setMentality(m);
     setOverrides({});
-    localStorage.setItem(MENT_KEY, m);
+    prefs.set(MENT_KEY, m);
   };
 
   /** Characters named by other seats -- the picker disables those. */
@@ -185,8 +187,8 @@ function SoloSetup({ close }: { close: () => void }) {
     setChars((cs) => cs.map((x, i) => (i === seat ? name : x)));
     if (seat === 0) {
       // Only an explicit pick is remembered; 随机 is the no-history default.
-      if (name) localStorage.setItem(CHAR_KEY, name);
-      else localStorage.removeItem(CHAR_KEY);
+      if (name) prefs.set(CHAR_KEY, name);
+      else prefs.remove(CHAR_KEY);
     }
   };
 
@@ -207,7 +209,7 @@ function SoloSetup({ close }: { close: () => void }) {
   };
 
   const start = () => {
-    localStorage.setItem(BOTS_KEY, String(bots));
+    prefs.set(BOTS_KEY, String(bots));
     close();
     startSolo(
       player,
@@ -437,7 +439,17 @@ function Resume({ close }: { close: () => void }) {
       <p>{tr("solo.resumeText")}</p>
       <div className={s.resumeBtns}>
         <Btn onClick={() => { close(); discardSolo(); showSoloSetup(); }}>{tr("solo.resumeDrop")}</Btn>
-        <Btn kind="pink" onClick={() => { close(); if (resumeSolo()) navigate({ name: "play", id: "solo" }); }}>{tr("menu.resume")}</Btn>
+        <Btn
+          kind="pink"
+          onClick={() => {
+            close();
+            void resumeSolo().then((s) => {
+              if (s) navigate({ name: "play", id: "solo" });
+            });
+          }}
+        >
+          {tr("menu.resume")}
+        </Btn>
       </div>
     </div>
   );

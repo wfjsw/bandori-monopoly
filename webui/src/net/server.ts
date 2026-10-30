@@ -11,29 +11,23 @@
 // the base through here so a server switch cannot leave one path behind.
 
 import { useSyncExternalStore } from "react";
+import { kv } from "../core/kv.ts";
 
+const prefs = kv("prefs");
 /** Absolute game-server base URL; absent = this page's origin. */
-const SERVER_KEY = "bm.gameServer";
+const SERVER_KEY = "gameServer";
 /** Selected build id; absent = the server's default build. */
-const BUILD_KEY = "bm.build";
+const BUILD_KEY = "build";
 /** Human name of the selected build (the pill's label; the id is the truth). */
-const BUILD_NAME_KEY = "bm.buildName";
+const BUILD_NAME_KEY = "buildName";
 
 function read(key: string): string {
-  try {
-    return localStorage.getItem(key) ?? "";
-  } catch {
-    return "";
-  }
+  return prefs.get(key);
 }
 
 function write(key: string, value: string): void {
-  try {
-    if (value) localStorage.setItem(key, value);
-    else localStorage.removeItem(key);
-  } catch {
-    /* private mode / quota: the in-memory value is still this page's */
-  }
+  if (value) prefs.set(key, value);
+  else prefs.remove(key);
 }
 
 /**
@@ -64,6 +58,13 @@ const listeners = new Set<() => void>();
 function emit(): void {
   version++;
   listeners.forEach((cb) => cb());
+}
+
+/** Adopt the stored server / build once the store has hydrated (boot). */
+export function applyStoredServer(): void {
+  base = normalizeServer(read(SERVER_KEY));
+  build = read(BUILD_KEY);
+  buildName = read(BUILD_NAME_KEY);
 }
 
 /** The game-server base URL (`""` = this page's origin). */

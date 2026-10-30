@@ -270,7 +270,7 @@ seam) and now holds one of two streams, tagged by its JSON shape:
   stream, so an old `Init::Seed` record replays byte-identically
   (`game-core/tests/fair.rs`:
   `legacy_u64_records_still_replay_on_the_legacy_stream`) and an old solo
-  save in `localStorage` resumes on the same stream. New matches must use
+  save resumes on the same stream. New matches must use
   `Match::new_seeded(Seed256)`. Throwaway search forks (`bot-core`'s
   determinizer) also keep the legacy constructor — their stream is theirs
   alone and pinned by test.
