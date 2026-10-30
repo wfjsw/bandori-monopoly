@@ -11,7 +11,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import { SoloEngine } from "./soloEngine.ts";
-import { tickQuanta, TICK_STEP, type SaveSnap, type SoloPush, type SoloWorkerLike } from "./soloProtocol.ts";
+import { tickQuanta, missingSeat, TICK_STEP, type SaveSnap, type SoloPush, type SoloWorkerLike } from "./soloProtocol.ts";
 import type { Msg } from "../i18n/msg.ts";
 
 // ---------------------------------------------------------------- fake worker

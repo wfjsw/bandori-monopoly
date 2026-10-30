@@ -20,7 +20,7 @@ import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import { loadRulesetInto } from "../core/rulesetLoad.ts";
 import type { MatchEvent, MatchView, Command } from "../core/types.ts";
-import { tickQuanta, TICK_STEP, type EngineBoot, type SaveSnap, type SoloBootOpts, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
+import { tickQuanta, missingSeat, TICK_STEP, type EngineBoot, type SaveSnap, type SoloBootOpts, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
 
 /** The worker global (tsconfig has no WebWorker lib; only these are used). */
 const ctx = self as unknown as {
@@ -62,10 +62,12 @@ const botJson = new Map<number, string>();
  * the batched `views()` call. Seeded from the human frame (which carries every
  * seat), so on the very first pump `botSeats` is empty and only the human frame
  * comes back -- bots get their first frame one pump (~50 ms) later.
- * That lag is acceptable: `session.ts` `driveBots` already does
- * `if (!v) continue` for a seat with no frame. Seats only ever leave the set
- * mid-match (bankrupt / left), never join, so the request list does not grow
- * unbounded.
+ * A seat still missing its pushed frame re-broadcasts on the next pump even
+ * when nothing moved: after a resume the state is usually already settled on a
+ * bot's own decision, so `take_changed()` (cleared by the restore's first pump)
+ * never fires again and the page would otherwise hold no seat frame to drive
+ * from. Seats only ever leave the set mid-match (bankrupt / left), never join,
+ * so the request list does not grow unbounded.
  */
 const botSeats = new Set<number>();
 let haveView = false;
@@ -229,15 +231,21 @@ function tick(): void {
  * pump `botSeats` is empty, so only the human frame comes back and `botSeats`
  * is seeded for the next pump -- bots get their first frame one pump
  * (~50 ms) later. `session.ts` `driveBots` already does `if (!v)
- * continue` for a seat with no frame. Seats only ever leave the set mid-match
- * (bankrupt / left), never join, so the request list does not grow unbounded.
+ * continue` for a seat with no frame, so the pump also re-broadcasts while any
+ * seat still lacks one (`missingSeat`) -- a resume lands on a settled bot
+ * decision where nothing else moves. Seats only ever leave the set
+ * mid-match (bankrupt / left), never join, so the request list does not grow
+ * unbounded.
  */
 function pump(forceSave = false): void {
   if (!match) return;
   const evs: MatchEvent[] = JSON.parse(match.events_since(last));
   for (const e of evs) last = e.id;
   const taken = match.take_changed();
-  if (taken || evs.length > 0 || !haveView) {
+  // A seat with no pushed frame still has to go out (see `botSeats`): on a
+  // resume the state is typically already the bot's own decision, and nothing
+  // changes for `take_changed` to report.
+  if (taken || evs.length > 0 || !haveView || missingSeat(botSeats, botJson) != null) {
     dirty = true;
     haveView = true;
     const push: SoloPush = { push: "sync", events: evs };

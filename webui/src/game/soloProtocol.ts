@@ -28,6 +28,17 @@ export function tickQuanta(elapsedMs: number, acc: number): { k: number; acc: nu
   return { k: 0, acc: a };
 }
 
+/**
+ * The first driven seat whose frame is not in the pushed cache, else null.
+ * The worker's pump broadcasts while any seat still lacks a frame: a resume
+ * restores a match that is already settled on a bot's own decision, so nothing
+ * changes for `take_changed()` to report and the frame would never go out.
+ */
+export function missingSeat(seats: Iterable<number>, pushed: { has(k: number): boolean }): number | null {
+  for (const k of seats) if (!pushed.has(k)) return k;
+  return null;
+}
+
 /** Engine strings for one `SoloSave` (the envelope around them is the session's). */
 export interface SaveSnap {
   match: string;
