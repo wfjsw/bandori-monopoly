@@ -167,8 +167,18 @@ const ctx = (over: Partial<AutopilotCtx> = {}): AutopilotCtx => ({
 // ---------------------------------------------------------------- tests
 
 test("on your turn in 运营 it suggests roll", () => {
-  const cmd = suggest(view(), ctx());
+  const cmd = suggest(view({ state: state({ canRollHere: true, canEndHere: false }) }), ctx());
   assert.deepEqual(cmd, { act: "roll" });
+});
+
+test("a spent main move turns 运营 into end, not a refused roll", () => {
+  // A card move ran the main move this turn: the engine refuses `roll`
+  // (`err.roll_main_used`) and only `end` gets through (`why_not_act`).
+  // Re-sending the refused roll stalls the seat for good.
+  const v = view({ state: state({ canRollHere: false, canEndHere: true }) });
+  assert.deepEqual(plan(v, ctx(), "bot"), [{ act: "end" }]);
+  assert.deepEqual(plan(v, ctx(), "chaos"), [{ act: "end" }]);
+  assert.deepEqual(suggest(v, ctx()), { act: "end" });
 });
 
 test("after landing at 结束 it suggests end, never a buy act", () => {
@@ -552,7 +562,7 @@ test("chaos lists every playable card before rolling", () => {
   const v = view({
     hand: ["c1", "c2", "c3"],
     playable: [true, true, false],
-    state: state({ step: 2 }),
+    state: state({ step: 2, canRollHere: true, canEndHere: false }),
   });
   const list = plan(v, ctx({ random: rng(0.5) }), "chaos");
   assert.deepEqual(
