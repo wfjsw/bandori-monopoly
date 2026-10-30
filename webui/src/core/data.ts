@@ -205,13 +205,17 @@ function preloadRules(
 
 // ------------------------------------------------------------- custom ruleset
 
-/** One user-supplied ruleset module, kept as base64 in localStorage. */
-export interface CustomRules {
-  name: string;
-  b64: string;
-}
+export type { CustomRules } from "./customRules.ts";
+export { customRulesHash, currentCustomRules as customRules } from "./customRules.ts";
+import {
+  currentCustomRules as customRules,
+  customRulesHash,
+  forgetCustomRules,
+  hydrateCustomRules,
+  storeCustomRules,
+  type CustomRules,
+} from "./customRules.ts";
 
-const CUSTOM_RULES_KEY = "bm.customRules";
 /** A solo ruleset is one wasm module; 8 MiB is far above the shipped size. */
 export const CUSTOM_RULES_MAX = 8 * 1024 * 1024;
 
@@ -224,35 +228,9 @@ export function customRulesActive(): boolean {
   return !isRemote() && !buildId();
 }
 
-/** The stored custom ruleset, or null. */
-export function customRules(): CustomRules | null {
-  try {
-    const raw = localStorage.getItem(CUSTOM_RULES_KEY);
-    if (!raw) return null;
-    const v = JSON.parse(raw) as { name?: unknown; b64?: unknown };
-    if (typeof v?.b64 !== "string") return null;
-    return { name: typeof v.name === "string" ? v.name : "", b64: v.b64 };
-  } catch {
-    return null;
-  }
-}
-
-/** Decode one stored base64 module; null when unreadable. */
-function decodeCustom(b64: string): Uint8Array | null {
-  try {
-    const bin = atob(b64);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  } catch {
-    return null;
-  }
-}
-
-/** Decode the stored custom ruleset; null when absent or unreadable. */
+/** The custom module's bytes; null when absent. */
 export function customRulesBytes(): Uint8Array | null {
-  const c = customRules();
-  return c ? decodeCustom(c.b64) : null;
+  return customRules()?.bytes ?? null;
 }
 
 /**
@@ -260,7 +238,7 @@ export function customRulesBytes(): Uint8Array | null {
  * is too large or the browser's storage refuses it (toasted here). The caller
  * then switches the source (`switchSource`) so the roster / rules include it.
  */
-export function setCustomRules(bytes: Uint8Array, name: string): boolean {
+export async function setCustomRules(bytes: Uint8Array, name: string): Promise<boolean> {
   if (!bytes.length) {
     toast(tr("solo.buildEmpty"), "error");
     return false;
@@ -269,27 +247,16 @@ export function setCustomRules(bytes: Uint8Array, name: string): boolean {
     toast(tr("solo.buildTooLarge", { mb: Math.round(CUSTOM_RULES_MAX / 1024 / 1024) }), "error");
     return false;
   }
-  let bin = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + chunk)));
-  }
-  try {
-    localStorage.setItem(CUSTOM_RULES_KEY, JSON.stringify({ name, b64: btoa(bin) }));
-    return true;
-  } catch {
+  if (!(await storeCustomRules(bytes, name))) {
     toast(tr("solo.buildStoreError"), "error");
     return false;
   }
+  return true;
 }
 
 /** Forget the custom ruleset; the next boot uses the bundled / server build. */
-export function clearCustomRules(): void {
-  try {
-    localStorage.removeItem(CUSTOM_RULES_KEY);
-  } catch {
-    /* storage unavailable */
-  }
+export function clearCustomRules(): Promise<void> {
+  return forgetCustomRules();
 }
 
 /** The identity rows the built ruleset exports (`roster_json()`). */
@@ -494,6 +461,9 @@ async function loadInto(target: Target, fatal: boolean, onProgress?: (p: number)
  */
 export async function loadGameData(onProgress: (p: number) => void): Promise<void> {
   await init();
+  // The custom module rides the ruleset (below) and every later boot path reads
+  // it synchronously; load it out of the store first.
+  await hydrateCustomRules();
   // Resolve the selected build's rules / data directories before anything
   // reads them (an older server without `/builds/...` falls back to the
   // bundled set there, consistently for both).
@@ -548,16 +518,11 @@ function snapshotSettings(): SettingsSnapshot {
   };
 }
 
-function restoreSettings(s: SettingsSnapshot): void {
+async function restoreSettings(s: SettingsSnapshot): Promise<void> {
   setServer(s.server || null);
   setBuild(s.build || null, s.buildName);
-  if (s.custom) {
-    const bytes = decodeCustom(s.custom.b64);
-    if (bytes) setCustomRules(bytes, s.custom.name);
-    else clearCustomRules();
-  } else {
-    clearCustomRules();
-  }
+  if (s.custom) await setCustomRules(s.custom.bytes, s.custom.name);
+  else await clearCustomRules();
 }
 
 const sameSettings = (s: SettingsSnapshot): boolean => {
@@ -566,12 +531,11 @@ const sameSettings = (s: SettingsSnapshot): boolean => {
     serverBase() === s.server &&
     buildId() === s.build &&
     buildNameOf() === s.buildName &&
-    (custom?.name ?? "") === (s.custom?.name ?? "") &&
-    (custom?.b64 ?? "") === (s.custom?.b64 ?? "")
+    customRulesHash(custom) === customRulesHash(s.custom)
   );
 };
 
-function applyChange(change: SourceChange): void {
+async function applyChange(change: SourceChange): Promise<void> {
   if ("server" in change) {
     setServer(change.server ?? null);
     // `setServer` deliberately keeps the build when the base does not change,
@@ -580,10 +544,10 @@ function applyChange(change: SourceChange): void {
     if (!("build" in change)) setBuild(null);
   }
   if ("build" in change) setBuild(change.build ?? null, change.buildName ?? "");
-  if (change.custom && !setCustomRules(change.custom.bytes, change.custom.name)) {
+  if (change.custom && !(await setCustomRules(change.custom.bytes, change.custom.name))) {
     throw new Error(tr("solo.buildStoreError"));
   }
-  if (change.clearCustom) clearCustomRules();
+  if (change.clearCustom) await clearCustomRules();
 }
 
 /** Switches run one at a time: a second click while one is in flight waits
@@ -612,7 +576,7 @@ async function doSwitch(change: SourceChange): Promise<void> {
   try {
     // Inside the try: a storage refusal can throw after part of the change was
     // already persisted, and the page must not be left half-switched.
-    applyChange(change);
+    await applyChange(change);
     setLoad({ busy: true, stage: "rules", done: 0, total: 0 });
     const target = await resolveTargets();
     await loadInto(target, true);
@@ -621,7 +585,7 @@ async function doSwitch(change: SourceChange): Promise<void> {
     // only reload when something actually moved.
     if (!sameSettings(before)) {
       console.error("[rules] source switch failed; reverting", e);
-      restoreSettings(before);
+      await restoreSettings(before);
       try {
         const target = await resolveTargets();
         await loadInto(target, true);

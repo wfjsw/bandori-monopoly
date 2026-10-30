@@ -21,6 +21,7 @@ import {
   sniffRecord,
   type RecordHeader,
 } from "./record.ts";
+import { installFakeIdb } from "../core/idbFake.ts";
 
 // ---------------------------------------------------------------- fixtures
 
@@ -51,126 +52,6 @@ function header(over: Partial<RecordHeader> = {}): RecordHeader {
   };
 }
 
-// ------------------------------------------------- in-memory IndexedDB fake
-
-type Row = { id: string } & Record<string, unknown>;
-
-/** Just enough of the IndexedDB surface for `record.ts`: open / upgrade,
- *  a transaction, and put / get / getAll / delete on one object store. */
-function installFakeIdb(): Map<string, Row> {
-  const tables = new Map<string, Map<string, Row>>();
-  const later = (fn: () => void) => queueMicrotask(fn);
-
-  const request = <T>(get: () => T): IDBRequest<T> => {
-    const listeners: { success?: () => void; error?: () => void } = {};
-    const r = {
-      result: undefined as unknown as T,
-      error: null as DOMException | null,
-      set onsuccess(f: () => void) {
-        listeners.success = f;
-        later(() => {
-          try {
-            r.result = get();
-          } catch (e) {
-            r.error = e as DOMException;
-            listeners.error?.();
-            return;
-          }
-          listeners.success?.();
-        });
-      },
-      set onerror(f: () => void) {
-        listeners.error = f;
-      },
-    };
-    return r as unknown as IDBRequest<T>;
-  };
-
-  const storeOf = (table: Map<string, Row>): IDBObjectStore =>
-    ({
-      put(row: Row) {
-        request(() => {
-          table.set(row.id, row);
-          return row.id;
-        }).onsuccess = () => undefined;
-      },
-      get(id: string) {
-        return request(() => table.get(id)) as IDBRequest<Row | undefined>;
-      },
-      getAll() {
-        return request(() => [...table.values()]) as IDBRequest<Row[]>;
-      },
-      delete(id: string) {
-        request(() => {
-          table.delete(id);
-          return undefined;
-        }).onsuccess = () => undefined;
-      },
-    }) as unknown as IDBObjectStore;
-
-  const open = (name: string, _version: number): IDBOpenDBRequest => {
-    let table = tables.get(name);
-    const upgraders: (() => void)[] = [];
-    const db = {
-      objectStoreNames: { contains: (s: string) => tables.has(`${name}/${s}`) },
-      createObjectStore(key: string) {
-        tables.set(`${name}/${key}`, new Map());
-        return null;
-      },
-      transaction(_store: string, _mode: string) {
-        const key = `${name}/${_store}`;
-        const t = tables.get(key) ?? new Map();
-        tables.set(key, t);
-        const txListeners: { complete?: () => void; error?: () => void; abort?: () => void } = {};
-        const tx = {
-          objectStore: () => storeOf(t),
-          set oncomplete(f: () => void) {
-            txListeners.complete = f;
-            later(() => txListeners.complete?.());
-          },
-          set onerror(f: () => void) {
-            txListeners.error = f;
-          },
-          set onabort(f: () => void) {
-            txListeners.abort = f;
-          },
-        };
-        return tx as unknown as IDBTransaction;
-      },
-      close() {
-        return undefined;
-      },
-    };
-    const listeners: { success?: () => void; error?: () => void; upgrade?: () => void } = {};
-    const r = {
-      result: db as unknown as IDBDatabase,
-      error: null as DOMException | null,
-      set onsuccess(f: () => void) {
-        listeners.success = f;
-        later(() => {
-          if (!table) {
-            table = new Map();
-            tables.set(name, table);
-            listeners.upgrade?.();
-          }
-          listeners.success?.();
-        });
-      },
-      set onerror(f: () => void) {
-        listeners.error = f;
-      },
-      set onupgradeneeded(f: () => void) {
-        listeners.upgrade = f;
-        upgraders.push(f);
-      },
-    };
-    void upgraders;
-    return r as unknown as IDBOpenDBRequest;
-  };
-
-  (globalThis as { indexedDB?: unknown }).indexedDB = { open };
-  return tables;
-}
 
 // ---------------------------------------------------------------- framing
 

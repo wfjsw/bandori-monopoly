@@ -76,8 +76,8 @@ shipped `conds-*.bin` against a fresh host compile of every `pre`.
 Localization is documented in [I18N.md](I18N.md): the server sends message
 keys (`Msg`), the client renders them per player.
 
-Refresh recovery: a solo match is snapshotted to `localStorage` (`bm.solo`, the
-engine's `Match::save`) about once a second and on page hide, and resumed by
+Refresh recovery: a solo match is snapshotted about once a second and on page
+hide into IndexedDB (gzip-framed, under the `bm` database), and resumed by
 `/play/solo`; an online player is re-attached with the tab's session token
 (`sessionStorage`) and `GET /api/rooms/{id}/state`, within the presence timeout.
 
