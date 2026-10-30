@@ -3,6 +3,10 @@
 import type { Msg } from "../i18n/msg";
 import type { BotMentality, ClockSettings, Command, MatchEvent, MatchView, RoomInfo, ScoreWeights } from "../core/types";
 import { gameUrl, serverBase, subscribeServer } from "./server";
+import { kv } from "../core/kv.ts";
+
+/** Last tab-independent session per server (recovered when a tab closes). */
+const sessions = kv("session");
 
 /** One game server's advertised rule build (`GET /api/builds`). */
 export interface BuildView {
@@ -26,6 +30,12 @@ function tokenKey(): string {
 
 let token = sessionStorage.getItem(tokenKey()) ?? "";
 let tokenServer = serverBase();
+
+/** Re-read the tab's token after the stored server has hydrated (boot). */
+export function initToken(): void {
+  tokenServer = serverBase();
+  token = sessionStorage.getItem(tokenKey()) ?? "";
+}
 subscribeServer(() => {
   if (serverBase() === tokenServer) return;
   // A switch must not carry the old server's token anywhere -- not in memory,
@@ -80,7 +90,7 @@ export async function ensureSession(player: string, character = "", cnId = ""): 
     // room, so the player can rejoin their match. Otherwise tabs keep separate sessions. The key
     // is per server, so a token from another game server is never presented here.
     const key = tokenKey();
-    const last = localStorage.getItem(key) ?? "";
+    const last = sessions.get(key);
     if (last) {
       token = last;
       const me = await call<{ player: string; room: string | null }>("GET", "/api/session");
@@ -98,7 +108,7 @@ export async function ensureSession(player: string, character = "", cnId = ""): 
   token = r.data.token;
   const key = tokenKey();
   sessionStorage.setItem(key, token);
-  localStorage.setItem(key, token);
+  sessions.set(key, token);
   return true;
 }
 

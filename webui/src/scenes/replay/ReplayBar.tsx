@@ -2,7 +2,7 @@
 // bar with turn marks, and the perspective dropdown (any seat or spectator).
 // The bar itself can be docked (compact floating, or full-width flush to the
 // board's bottom edge, or a second chrome row under the TopBar) and hidden;
-// both choices stick in localStorage. The hide control is the strip's leftmost
+// both choices stick in the settings store. The hide control is the strip's leftmost
 // item in every dock mode, and the show handle takes that same slot when the
 // strip is gone -- toggle without moving the pointer. Transport shortcuts
 // (Space / arrows / H) keep working while the bar is hidden -- the handler
@@ -19,25 +19,27 @@ import type { ReplaySession } from "../../game/replay";
 import { Btn } from "../../ui/Button";
 import { TOPBAR_H } from "../../styles/layout";
 import { t as tr } from "../../i18n/t";
+import { kv } from "../../core/kv.ts";
 import s from "./Replay.module.css";
 
 /** Where the transport rides: floating over the board, or docked at an edge. */
 export type BarDock = "float" | "bottom" | "top";
 
-/** Saved transport chrome (localStorage `bm.replayBar`). */
+/** Saved transport chrome. */
 export interface BarPrefs {
   dock: BarDock;
   hidden: boolean;
 }
 
-const BAR_KEY = "bm.replayBar";
+const prefs = kv("prefs");
+const BAR_KEY = "replayBar";
 const DEFAULT_BAR: BarPrefs = { dock: "float", hidden: false };
 /** Fine keyboard seek: two seconds of the record's 50 ms tick quanta. */
 const SEEK_TICKS = 40;
 
 export function loadBarPrefs(): BarPrefs {
   try {
-    const p = JSON.parse(localStorage.getItem(BAR_KEY) ?? "{}") as Partial<BarPrefs>;
+    const p = JSON.parse(prefs.get(BAR_KEY) || "{}") as Partial<BarPrefs>;
     return {
       dock: p.dock === "bottom" || p.dock === "top" ? p.dock : "float",
       hidden: !!p.hidden,
@@ -48,11 +50,7 @@ export function loadBarPrefs(): BarPrefs {
 }
 
 function saveBarPrefs(p: BarPrefs): void {
-  try {
-    localStorage.setItem(BAR_KEY, JSON.stringify(p));
-  } catch {
-    /* private mode -- the choice just does not stick */
-  }
+  prefs.set(BAR_KEY, JSON.stringify(p));
 }
 
 export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => void }) {

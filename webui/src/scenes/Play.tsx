@@ -9,7 +9,7 @@ import { useBackdrop } from "../app/Stage";
 import { playSceneBgm } from "../core/audio";
 import { useMatchView } from "../core/hooks";
 import { useCrossfade } from "../hooks/scene";
-import { type GameSession, discardSolo, matchScene, resumeSolo } from "../game/session";
+import { type GameSession, type SoloSession, discardSolo, matchScene, resumeSolo } from "../game/session";
 import { toast } from "../ui/Toast";
 import { Board } from "./board/Board";
 import { useOnline } from "./lobby/Room";
@@ -26,8 +26,11 @@ import { useConsoleSession } from "../console/context";
  * asynchronously, so a failure there is the old "solo save dropped" path, one
  * tick later.
  */
-function useSoloResume(sess: ReturnType<typeof resumeSolo>): void {
+function useSoloResume(sess: SoloSession | null, loaded: boolean): void {
   useEffect(() => {
+    // The save lives in IndexedDB now, so the load is asynchronous: wait for
+    // it before deciding there is nothing to resume.
+    if (!loaded) return;
     if (!sess) {
       toast(tr("play.noSolo"));
       navigate({ name: "menu" }, { replace: true });
@@ -44,7 +47,7 @@ function useSoloResume(sess: ReturnType<typeof resumeSolo>): void {
     return () => {
       alive = false;
     };
-  }, [sess]);
+  }, [sess, loaded]);
 }
 
 /** Shown while the solo engine worker boots and opens the match. */
@@ -58,9 +61,21 @@ function Opening() {
 }
 
 function SoloPlay() {
-  const [sess] = useState(() => resumeSolo());
+  const [sess, setSess] = useState<SoloSession | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
-  useSoloResume(sess);
+  useSoloResume(sess, loaded);
+  useEffect(() => {
+    let alive = true;
+    void resumeSolo().then((s) => {
+      if (!alive) return;
+      setSess(s);
+      setLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     void sess?.ready.then(() => alive && setOpen(true), () => undefined);
@@ -68,6 +83,7 @@ function SoloPlay() {
       alive = false;
     };
   }, [sess]);
+  if (!loaded) return <Opening />;
   if (!sess) return null;
   return open ? <Match sess={sess} /> : <Opening />;
 }

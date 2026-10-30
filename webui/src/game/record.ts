@@ -8,6 +8,8 @@
 // Nothing here talks to the engine -- the callers pass bytes and the header in
 // -- so the module stays importable from node's test runner.
 
+import { committed, openDb, req } from "../core/idb.ts";
+
 /** Who built the engine that wrote the record (`EngineStamp`). */
 export interface EngineStamp {
   format: number;
@@ -206,8 +208,6 @@ export function readRecordFile(file: File): Promise<Uint8Array> {
 
 // ---------------------------------------------------------------- store
 
-const DB_NAME = "bm";
-const DB_VERSION = 1;
 const STORE = "replays";
 /** How many solo records the store keeps (the newest by `savedAt`). */
 export const REPLAY_KEEP = 10;
@@ -220,33 +220,6 @@ export interface ReplayEntry {
 
 interface ReplayRow extends ReplayEntry {
   bytes: Uint8Array;
-}
-
-function req<T>(r: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error ?? new Error("indexedDB request failed"));
-  });
-}
-
-function committed(t: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    t.oncomplete = () => resolve();
-    t.onerror = () => reject(t.error ?? new Error("indexedDB transaction failed"));
-    t.onabort = () => reject(t.error ?? new Error("indexedDB transaction aborted"));
-  });
-}
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const open = indexedDB.open(DB_NAME, DB_VERSION);
-    open.onupgradeneeded = () => {
-      const db = open.result;
-      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "id" });
-    };
-    open.onsuccess = () => resolve(open.result);
-    open.onerror = () => reject(open.error ?? new Error("indexedDB.open failed"));
-  });
 }
 
 /** Headers only, newest first. */

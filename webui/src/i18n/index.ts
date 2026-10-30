@@ -11,6 +11,7 @@
 
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { kv } from "../core/kv.ts";
 
 import enCards from "./locales/en/cards.json";
 import enGame from "./locales/en/game.json";
@@ -22,11 +23,20 @@ import zhUi from "./locales/zh-CN/ui.json";
 export const LANGS = ["zh-CN", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 export const LANG_LABEL: Record<Lang, string> = { "zh-CN": "简体中文", en: "English" };
-const KEY = "bm.lang";
+const prefs = kv("prefs");
+const KEY = "lang";
 
 export function savedLang(): Lang {
-  const v = localStorage.getItem(KEY);
+  const v = prefs.get(KEY);
   return v === "en" || v === "zh-CN" ? v : "zh-CN";
+}
+
+/** Apply the stored language once the store has hydrated (boot). */
+export async function applyStoredLang(): Promise<void> {
+  const lang = savedLang();
+  if (lang === i18n.language) return;
+  await i18n.changeLanguage(lang);
+  document.documentElement.lang = lang;
 }
 
 /** Every language change bumps this; `useLangVersion` re-renders the app on it. */
@@ -44,7 +54,7 @@ export function onLangChange(cb: () => void): () => void {
 
 /** Switch language at runtime (设定), and remember the choice. */
 export async function setLang(lang: Lang): Promise<void> {
-  localStorage.setItem(KEY, lang);
+  prefs.set(KEY, lang);
   await i18n.changeLanguage(lang);
   document.documentElement.lang = lang;
   version += 1;

@@ -1,11 +1,13 @@
-// Profile and sound settings, persisted in localStorage. All game logic (fire refill,
-// EXP, rewards, deck slots) runs in the shared Rust code via wasm.
+// Profile and sound settings, persisted in the `account` store. All game logic
+// (fire refill, EXP, rewards, deck slots) runs in the shared Rust code via wasm.
 
 import { DEFAULT_HOME_PERSONA, RULES_VERSION, rules } from "./data";
+import { kv } from "./kv.ts";
 import type { MatchReward, PlayerProfile, SoundSettings } from "./types";
 
-const PROFILE_KEY = "bm.profile";
-const SETTINGS_KEY = "bm.settings";
+const account = kv("account");
+const PROFILE_KEY = "profile";
+const SETTINGS_KEY = "settings";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 export function today(): string {
@@ -26,7 +28,7 @@ export function onProfile(cb: () => void): () => void {
 }
 
 function save(json: string): PlayerProfile {
-  localStorage.setItem(PROFILE_KEY, json);
+  account.set(PROFILE_KEY, json);
   profile = JSON.parse(json);
   listeners.forEach((cb) => cb());
   return profile!;
@@ -34,7 +36,7 @@ function save(json: string): PlayerProfile {
 
 /** The saved profile (repaired/migrated, fire refreshed for today), or null. */
 export function loadProfile(): PlayerProfile | null {
-  const raw = localStorage.getItem(PROFILE_KEY);
+  const raw = account.get(PROFILE_KEY);
   if (!raw) return null;
   try {
     let json = rules.profile_refresh_daily(rules.profile_load(raw), today());
@@ -81,7 +83,7 @@ export function patchProfile(patch: Partial<PlayerProfile>): PlayerProfile {
 }
 
 export function deleteProfile(): void {
-  localStorage.removeItem(PROFILE_KEY);
+  account.remove(PROFILE_KEY);
   profile = null;
   listeners.forEach((cb) => cb());
 }
@@ -124,13 +126,13 @@ const DEFAULT_SETTINGS: SoundSettings = { bgm: 1, voice: 2, se: 1.4, skipLine: t
 
 export function settings(): SoundSettings {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(account.get(SETTINGS_KEY) || "{}") };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
 }
 
 export function saveSettings(s: SoundSettings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  account.set(SETTINGS_KEY, JSON.stringify(s));
   listeners.forEach((cb) => cb());
 }
