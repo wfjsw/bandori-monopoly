@@ -1,0 +1,14 @@
+/* Drawn marker symbols. The crystal's diamond is a square on its corner in the
+   chip's own ink: U+25C6 is absent from the UI face and the system fallbacks
+   that fill in for it are tiny on desktop, full-size on phones. Drawn, it
+   keeps the chip's own scale on every platform. */
+.diamond {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.26em;
+  border-radius: 0.08em;
+  background: currentColor;
+  transform: rotate(45deg);
+  vertical-align: -0.02em;
+}

@@ -8,7 +8,7 @@ import { strict as assert } from "node:assert";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { glyphOf, planMarkers, showTurnsChip, type MarkerDef } from "./markerKinds.ts";
+import { chipParts, glyphOf, planMarkers, showTurnsChip, type MarkerDef } from "./markerKinds.ts";
 
 /** The exported rows' shape, in print order (see the drift test at the end). */
 const DEFS: MarkerDef[] = [
@@ -32,6 +32,13 @@ test("each row carries its own glyph", () => {
   assert.equal(glyphOf(DEFS[3], 2), "◆2");
   assert.equal(glyphOf(DEFS[4], 4), "CP4");
   assert.equal(glyphOf(DEFS[5], 2, "火罐"), "火罐×2");
+});
+
+test("a chip splits its leading symbol from the count", () => {
+  assert.deepEqual(chipParts(DEFS[3], 2), { glyph: "◆", rest: "2" });
+  assert.deepEqual(chipParts(DEFS[0], 3), { glyph: "⌛", rest: "3" });
+  assert.deepEqual(chipParts(DEFS[5], 2, "火罐"), { glyph: "火罐×", rest: "2" });
+  assert.deepEqual(chipParts({ ...DEFS[3], glyph: "{n}" }, 2), { glyph: "", rest: "2" });
 });
 
 test("a countdown carried by another marker is not repeated", () => {

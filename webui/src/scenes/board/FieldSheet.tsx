@@ -32,6 +32,7 @@ import { Avatar } from "../../ui/Character";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { designatedTiles, eventTiles, fieldCardTiles } from "./fieldTiles";
 import { eventMarkers, fieldMarkers, markerNote, type Marker } from "./markers";
+import { MarkerChip } from "./MarkerChip";
 import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
 import s from "./FieldSheet.module.css";
@@ -116,7 +117,9 @@ const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers,
       on={on}
       onClick={onClick}
     >
-      {markers.map((mk) => <span key={mk.key} className={s[mk.def.tone]} title={mk.note}>{mk.chip}</span>)}
+      {markers.map((mk) => (
+        <MarkerChip key={mk.key} def={mk.def} n={mk.n} name={mk.name} className={s[mk.def.tone]} title={mk.note} />
+      ))}
     </InspectCard>
   );
 });
