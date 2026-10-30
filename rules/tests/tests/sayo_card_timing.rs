@@ -315,6 +315,7 @@ fn reverse_move_and_existing_extra_steps_are_preserved() {
     let mut t = table();
     t.set_pos(0, 20);
     t.m.world_mut().turn.plan.reverse = true;
+    t.m.world_mut().turn.plan.reverse_fresh = true;
     t.m.world_mut().turn.plan.extra_steps = 2;
     t.dice(&[5]);
     t.roll(0).unwrap();

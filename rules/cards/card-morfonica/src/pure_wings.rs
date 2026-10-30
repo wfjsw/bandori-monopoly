@@ -57,17 +57,15 @@ fn pure_wings(player_id: i32) -> card_sdk::Asked {
     // move roll, walking from the jump's destination (not from where the card
     // was played). A `card_move` with no fixed step count rolls the plan's dice
     // and walks that far; the landing settles (the default). Clear the plan's
-    // destination so this is a walk, not another jump -- and leave `steps` unset
-    // (it is `None` on a fresh plan; `set_steps(-1)` would clamp to `Some(0)`, and
-    // an inherited count is not cleared).
-    // TODO(规则书)（立刻进行移动掷骰）: the book rolls here -- a `steps` left by an
-    //   earlier card makes `card_move` walk that count and emit no roll at all
-    //   (there is no ABI that clears it back to `None`).
+    // destination so this is a walk, not another jump -- and leave `steps`
+    // unset (it is `None` on a fresh plan; `set_steps(-1)` would clamp to
+    // `Some(0)`, and the engine drops a count an earlier move left behind at
+    // every move entry).
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Walk);
     ctx::plan::set_teleport_to(-1);
-    // TODO(ABI): the landing settle also inherits the shared `plan.pay_factor` (a
-    //   prior 祥，移动 leaves 500 and halves this walk's rent); no getter exists to
-    //   know whether to restore it.
+    // The landing settle also inherits the shared `plan.pay_factor` (a prior
+    // 祥，移动 leaves 500 and halves this walk's rent); the engine resets it
+    // to 1.0 at the move entry unless a body shaped this move.
     ctx::plan::set_resolve(true);
     ctx::card_move(player_id);
     ctx::log(

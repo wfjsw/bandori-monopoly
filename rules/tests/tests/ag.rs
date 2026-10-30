@@ -571,6 +571,7 @@ fn detour_counter_arms_the_next_roll_as_a_lingering_instance() {
     // The fixture cleared `resolve` for its own walk; the main move settles as
     // usual.
     t.m.world_mut().turn.plan.resolve = true;
+    t.m.world_mut().turn.plan.resolve_fresh = true;
     let from = t.pos(0);
     let mark = t.mark();
     t.roll(0).unwrap();

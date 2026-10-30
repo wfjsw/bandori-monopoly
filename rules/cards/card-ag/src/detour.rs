@@ -225,7 +225,11 @@ fn apply_plan(player_id: i32, pick: DetourPick) {
     match pick.plan {
         0 => {
             // Ran: `plan.Reverse = !plan.Reverse; plan.NoCircleReward = true`.
-            ctx::plan::set_reverse(ctx::plan::dir() >= 0);
+            // The walk already cloned the move, so a `set_reverse` here would
+            // not reach it; the reverse rides the next plan instead, applied
+            // by the `DiceRollPlan` hook ([`next_roll`]) that rewrites the
+            // roll -- the direction is read now, off the move being countered.
+            ctx::state::set(player_id, REVERSE, (ctx::plan::dir() >= 0) as i32);
             arm_no_reward(player_id);
         }
         2 => {
@@ -306,20 +310,29 @@ fn counteract_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
 /// Armed when the counteraction fired; the next plan is the one it rewrites.
 const NEXT_ROLL: &str = "detour_next_roll";
 
+/// The direction the reverse plan picked (1 = reverse the next walk), armed
+/// beside [`NEXT_ROLL`] and consumed with it.
+const REVERSE: &str = "detour_reverse";
+
 /// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `DiceRollPlan` is the moment the dice
 /// plan is being built, so this is where the override belongs. Pure: only the
-/// dice reshape. The one-shot latch is consumed by [`consume_next_roll`] on
-/// `DiceRollAfter`.
-fn next_roll(_player_id: i32, v: PlanValue) -> PlanValue {
+/// dice reshape (and the reverse plan's direction flip). The one-shot latches
+/// are consumed by [`consume_next_roll`] on `DiceRollAfter`.
+fn next_roll(player_id: i32, v: PlanValue) -> PlanValue {
     PlanValue {
         base: Some(Dice { count: 1, sides: 6 }),
+        reverse: (ctx::state::get(player_id, REVERSE) != 0)
+            .then_some(true)
+            .or(v.reverse),
         ..v
     }
 }
 
-/// Drop the one-shot [`NEXT_ROLL`] latch once the rewritten roll has landed.
+/// Drop the one-shot [`NEXT_ROLL`] / [`REVERSE`] latches once the rewritten
+/// roll has landed.
 fn consume_next_roll(player_id: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, NEXT_ROLL, 0);
+    ctx::state::set(player_id, REVERSE, 0);
     Ok(())
 }
 

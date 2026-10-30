@@ -126,6 +126,15 @@ silently turns the roll into a fixed walk. Expected: a dice roll from the
 teleport destination. **Root fix:** `plan::clear_steps` and a frame whose
 default is the post-teleport state (R1 + R2).
 
+*Fixed (2026-10-30)*: a per-move value an earlier move left is dropped at the
+next move's entry (`drop_stale_plan_shape`: `steps`, `stop_at`, `reverse`,
+`resolve`, and the payment factors), so the roll branch runs again. A
+`plan::set_*` write raises a per-field fresh mark, which the entry consumes
+and which keeps a value written for *this* move; an activation body that drove
+a move also drops its own trailing replay writes when it ends (an activation
+that drove none is shaping a later move and keeps them). The frame rework
+below is still the fuller answer (§4.3), this is the small one.
+
 **3. `pure-wings-stale-direction` — Mor:纯真振翅, row 290**
 
 > 「传送到移动方向20格后」
