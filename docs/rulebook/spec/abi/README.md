@@ -23,14 +23,14 @@ renumber only if the order actually changes, and then shift the whole table.
 | group | `ABI_VERSION` | `SAVE_VERSION` | engine kinds | Kani `Op` |
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
-| G01 | 104→105 | 12 | 111–113 | — |
-| G08 | 105→106 | 12→13 | 114–121 | — |
-| G02 | 106→107 | 13 | 122 | 341–350 |
-| G04 | 107→108 | 13 | — | 351–370 |
-| G03 | 108→109 | 13→14 | 123–125 | — |
-| G06 | 109→110 | 14→15 | — | 371–390 |
-| G05 + G13 | 110→111 | 15→16 | — | 391–400 |
-| G07 | 111→112 | 16 | — | 401–410 |
+| G01 | 104→105 | 12 | 111–112 | 341–349 |
+| G08 | 105→106 | 12→13 | 113–120 | — |
+| G02 | 106→107 | 13 | 121 | 350–359 |
+| G04 | 107→108 | 13 | — | 360–379 |
+| G03 | 108→109 | 13→14 | 122–124 | — |
+| G06 | 109→110 | 14→15 | — | 380–399 |
+| G05 + G13 | 110→111 | 15→16 | — | 400–409 |
+| G07 | 111→112 | 16 | — | 410–419 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
 | G11 | 114→115 | 17→18 | 132–133 | — |
@@ -39,6 +39,13 @@ renumber only if the order actually changes, and then shift the whole table.
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
+
+**2026-10-31 amendment.** G01's review found that its eight new imports need
+Kani `Op` ids, which the original table left blank; it also dropped its
+`Actions` offer kind in favour of G05's press surface. G01 now takes nine ops
+(341–349) and two kinds (111–112). The table above is renumbered as if G01 had
+already landed; the G08/G02/G03 kind rows moved down by one and every later
+`Op` band moved up by nine.
 
 Recommended landing order (foundation → dependent):
 

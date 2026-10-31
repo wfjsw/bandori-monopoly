@@ -540,8 +540,8 @@ are unchanged. The TODO is removed; the source comment keeps the C# provenance.
 
 ## 8. Versioning
 
-`ABI_VERSION` 116 → **117** (last group; next after current if the order holds; if G06
-`counteraction-and-join` lands first, this becomes 106 — one bump per delivery).
+`ABI_VERSION` 116 → **117** (last group in the README order; if the order ever
+changes, take the number the table then leaves free — one bump per delivery).
 Entry inserted immediately **below** the `pub const ABI_VERSION` line for
 newest-first order (`abi.rs:846`, where v104 already sits; the older entries
 live in the fenced list below the constant), matching the `/// vNNN:` style:
@@ -561,7 +561,7 @@ live in the fenced list below the constant), matching the `/// vNNN:` style:
 ///    hidden reads. SAVE_VERSION / RECORD_VERSION unchanged.
 ```
 
-The ABI bump is for the **import arity**, not for the prop: a v104 module
+The ABI bump is for the **import arity**, not for the prop: a v116 module
 calling two-arg `ruleset_draw` would misread the stack on a v117 host.
 
 Manifest line text (both prop modules, identical):

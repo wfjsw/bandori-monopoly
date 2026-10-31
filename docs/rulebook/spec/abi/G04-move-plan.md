@@ -373,7 +373,7 @@ Each new import is added at every layer, or the build fails:
 2. `crates/card-sdk/src/ctx/sys.rs` — `extern` under the
    `wasm32`/`native-rules` attribute pair, link name `ruleset_*`.
 3. `crates/card-sdk/src/ctx/sys_kani.rs` — `kani_host::call_*` stub.
-4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 351-370; this group uses 351-364).
+4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 360-379; this group uses 360-373).
 5. `rules/kani/src/host.rs` — arm (stub or model) and every affected card
    proof's `host_subset!`.
 6. `crates/game-rules/src/hostfns.rs` — `HostCtx` implementation.
@@ -541,20 +541,20 @@ main move's staging. `leave_plan_command` only drops the scope;
 
 | id | raw import | wrapper | signature (wire) | lifetime | kind |
 |---|---|---|---|---|---|
-| 351 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
-| 352 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
-| 353 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
-| 354 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
-| 355 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
-| 356 | `ruleset_move_teleport_to` | `plan::teleport_to() -> i32` | `() -> i32` | read | new |
-| 357 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
-| 358 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
-| 359 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
-| 360 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
-| 361 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
-| 362 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
-| 363 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
-| 364 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 360 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
+| 361 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
+| 362 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
+| 363 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
+| 364 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
+| 365 | `ruleset_move_teleport_to` | `plan::teleport_to() -> i32` | `() -> i32` | read | new |
+| 366 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
+| 367 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
+| 368 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
+| 369 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
+| 370 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
+| 371 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
+| 372 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 373 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
 
 Extended, wire-compatible:
 
@@ -1112,14 +1112,14 @@ pub const ABI_VERSION: i32 = 108;   // was 107 (fourth group)
 /// v108: **command-scoped move plans and walk control**. The turn plan is a
 ///    staging buffer; every move runs on a frame owned by its command
 ///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
-///    New imports: `ruleset_set_forced` (351), `ruleset_set_main_as` (352),
-///    `ruleset_void_walk` (353), `ruleset_clear_steps` (354),
-///    `ruleset_add_extra_steps` (355), `ruleset_move_teleport_to` (356),
-///    `ruleset_move_pay_factor` (357), `ruleset_move_rent_factor` (358),
-///    `ruleset_move_effective_steps` (359), `ruleset_move_forced` (360),
-///    `ruleset_trig_move_rolled` (361),
-///    `ruleset_trig_move_effective_steps` (362),
-///    `ruleset_tile_axis_nearest` (363), `ruleset_tile_axis_farthest` (364).
+///    New imports: `ruleset_set_forced` (360), `ruleset_set_main_as` (361),
+///    `ruleset_void_walk` (362), `ruleset_clear_steps` (363),
+///    `ruleset_add_extra_steps` (364), `ruleset_move_teleport_to` (365),
+///    `ruleset_move_pay_factor` (366), `ruleset_move_rent_factor` (367),
+///    `ruleset_move_effective_steps` (368), `ruleset_move_forced` (369),
+///    `ruleset_trig_move_rolled` (370),
+///    `ruleset_trig_move_effective_steps` (371),
+///    `ruleset_tile_axis_nearest` (372), `ruleset_tile_axis_farthest` (373).
 ///    `MoveCtx.forced` is the C# `Forced` flag --
 ///    a forced move of the turn player is still the main move when
 ///    `main_as` is set -- no longer "never the main move". `set_parity`

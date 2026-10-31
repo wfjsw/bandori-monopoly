@@ -348,8 +348,8 @@ pub enum OutCause { Bankrupt = 0, Forfeit = 1 }
 ### 4.2 Engine kinds
 
 Eight engine ids appended to the positional table, which currently ends at 110
-(`None = 0`, `PaySplitMulBefore = 110`); 111-113 belong to G01, which lands
-first, so the rows are `114-121` (this group's README band). Each gets an
+(`None = 0`, `PaySplitMulBefore = 110`); 111-112 belong to G01, which lands
+first, so the rows are `113-120` (this group's README band). Each gets an
 `ActionKind` constant (`abi.rs:1762+`), a `TriggerKind::engine(n)` const
 (`:2396+`), a matching `Action::…` const and an `action_kinds!` row
 (`crates/card-sdk/src/kinds.rs:638`); all are `hook_only` (passive — none opens
@@ -357,14 +357,14 @@ a counteraction window):
 
 | id | wire string | const | `hook_only` | payload |
 |---|---|---|---|---|
-| 114 | `cardLeaveBefore` | `CardLeaveBefore` | yes | uid, from, to, cause |
-| 115 | `cardLeft` | `CardLeft` | yes | uid, from, to, cause |
-| 116 | `cardRemoved` | `CardRemoved` | yes | uid, from, cause |
-| 117 | `handChanged` | `HandChanged` | yes | card, cards, to=Hand, cause, counted |
-| 118 | `cardFlipBefore` | `CardFlipBefore` | yes | uid, value = face it is about to become |
-| 119 | `cardFlipped` | `CardFlipped` | yes | uid, value = face it became |
-| 120 | `openingHandDealt` | `OpeningHandDealt` | yes | card, player, value = deal index |
-| 121 | `cardRehomed` | `CardRehomed` | yes | uid, from-seat, to-seat |
+| 113 | `cardLeaveBefore` | `CardLeaveBefore` | yes | uid, from, to, cause |
+| 114 | `cardLeft` | `CardLeft` | yes | uid, from, to, cause |
+| 115 | `cardRemoved` | `CardRemoved` | yes | uid, from, cause |
+| 116 | `handChanged` | `HandChanged` | yes | card, cards, to=Hand, cause, counted |
+| 117 | `cardFlipBefore` | `CardFlipBefore` | yes | uid, value = face it is about to become |
+| 118 | `cardFlipped` | `CardFlipped` | yes | uid, value = face it became |
+| 119 | `openingHandDealt` | `OpeningHandDealt` | yes | card, player, value = deal index |
+| 120 | `cardRehomed` | `CardRehomed` | yes | uid, from-seat, to-seat |
 
 Faces are the existing booleans flattened to `value` (`0` = face-up,
 `1` = face-down) on the two flip kinds; `from`/`to` of a zone kind ride new
@@ -508,7 +508,7 @@ No `MatchPlayer` vector is needed (alternative A2 keeps one).
 
 `ManifestOn` shape is unchanged. The wire break is the new **kind ids** carried
 in each entry's `triggers` list plus the new import table: a ruleset built
-against v106 references 114-121 and imports a v104 host does not have.
+against v106 references 113-120 and imports a v105 host does not have.
 `CardDef` sugar is table-only (`Action::CardLeft(…)` etc. write the ids), so
 nothing is translated at runtime.
 
@@ -516,15 +516,15 @@ nothing is translated at runtime.
 
 | item | NEW | EXTENDED | WIRE-BREAK | NO-WIRE |
 |---|---|---|---|---|
-| 1 | `CardFlipBefore/Flipped`, `set_face_down_at` semantics | two face flip wrappers | kind 115/116 | |
-| 2 | `rehome_card`, `set_field_owner`, `CardRehomed` | `move_now` `Field` arm | kind 118 | |
+| 1 | `CardFlipBefore/Flipped`, `set_face_down_at` semantics | two face flip wrappers | kind 117/118 | |
+| 2 | `rehome_card`, `set_field_owner`, `CardRehomed` | `move_now` `Field` arm | kind 120 | |
 | 3 | `OutCause`, `out_cause` payload/getter | `beforeOut` raise sites | `Trigger` out_cause | |
-| 4 | `OpeningHandDealt` | opening deal | kind 117 | |
+| 4 | `OpeningHandDealt` | opening deal | kind 119 | |
 | 5 | `PlayOutcome`, `play_hand_card`, hand-counter `cardPlayed` raise | `cardPlayed` site | `Trigger.play_outcome` | |
-| 6 | `HandChanged`, `add_to_hand`, `set_dest_unwatched` | `add_to_dest(Hand)`, `apply_dest` | kind 114 | |
+| 6 | `HandChanged`, `add_to_hand`, `set_dest_unwatched` | `add_to_dest(Hand)`, `apply_dest` | kind 116 | |
 | 7 | `set_ineffective`, `wasted` getter | `Discarded` raise sites | `Trigger.wasted` | |
 | 8 | attachment imports, `CardLeft` cascade | `FieldCard.on`, `place_card*` | `on` is save-only | |
-| 9 | `CardLeaveBefore/Left/Removed` | `unplace_at`, `take_card`, purge | kinds 114-116 | |
+| 9 | `CardLeaveBefore/Left/Removed` | `unplace_at`, `take_card`, purge | kinds 113-115 | |
 | 10 | — (A) | acquisition stamp + `firstTile` | | yes |
 
 The wire break is the new kind ids and import names; `FieldCard.on` and the
@@ -974,7 +974,7 @@ fallback.
 ///    play outcome and wasted discards, out cause**. Every zone change goes
 ///    through `zone_pre`/`zone_commit` and raises exactly one primary typed
 ///    transition (`cardLeft` + `cardRemoved`, `handChanged`, `cardFlipBefore`
-///    + `cardFlipped`); eight new hook-only engine kinds 114-121 are therefore
+///    + `cardFlipped`); eight new hook-only engine kinds 113-120 are therefore
 ///    a manifest wire change. `FieldCard.on` makes an attachment a placed
 ///    instance; `attach_card` / `detach_card` / `attached_cards` /
 ///    `attach_host` / `rehome_card` / `set_field_owner` / `self_owner`

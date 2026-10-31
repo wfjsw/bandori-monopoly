@@ -437,8 +437,8 @@ existing postcard `Msg` (`ptr`/`len`) and every log line keeps its current
 pub const ABI_VERSION: i32 = 107;              // was 106 (third group)
 
 // New action kind (this group's README band id; 104 retired).
-impl TriggerKind { pub const SpendBefore: Self = Self::engine(122); }
-impl ActionKind { pub const SpendBefore: Self = Self::engine(122); }
+impl TriggerKind { pub const SpendBefore: Self = Self::engine(121); }
+impl ActionKind { pub const SpendBefore: Self = Self::engine(121); }
 
 pub mod pay_kind {
     pub const CARD: i32 = 0; pub const RENT: i32 = 1; pub const BUY: i32 = 2;
@@ -606,10 +606,10 @@ remains the declared `p.rent` flag (not `kind == Rent`), so a rent rewritten to
 | `game-rules/src/native_shims.rs` | `op_pay_spec`, `op_trig_set_pay_kind`, … one per import; `ruleset_pay_spec` panics on a bad decode (host bug) |
 | `card-sdk/src/ctx/sys.rs` | externs with `#[link_name = "ruleset_*"]` |
 | `card-sdk/src/ctx/sys_kani.rs` | same wrappers over `kani_host::call_i32` |
-| `card-sdk/src/kani_host.rs` | `Op::pay_spec = 341`, `Op::trig_set_pay_kind = 342`, `Op::trig_set_pay_shape = 343`, `Op::mul_pay_factor = 344`, `Op::pay_factor = 345`, `Op::settle_tile = 346`, `Op::settle_outcome = 347`, `Op::paid_in_settle_for = 348`, `Op::rent_quote = 349`, `Op::build_cost_effective = 350` |
+| `card-sdk/src/kani_host.rs` | `Op::pay_spec = 350`, `Op::trig_set_pay_kind = 351`, `Op::trig_set_pay_shape = 352`, `Op::mul_pay_factor = 353`, `Op::pay_factor = 354`, `Op::settle_tile = 355`, `Op::settle_outcome = 356`, `Op::paid_in_settle_for = 357`, `Op::rent_quote = 358`, `Op::build_cost_effective = 359` |
 | `rules/kani/build.rs` | the same ten names appended in discriminant order; `op_*` HostOps arms in `conf_sym_ops.rs` |
 | `rules/kani/tests/conf_model.rs` | inline-host arms for all ten |
-| `card-sdk/src/lib.rs` `TriggerKind::from_str`/`spelling` | `spendBefore = 122` (asserted id); `game-rules/src/trigger_why.rs` puts it in the pay family |
+| `card-sdk/src/lib.rs` `TriggerKind::from_str`/`spelling` | `spendBefore = 121` (asserted id); `game-rules/src/trigger_why.rs` puts it in the pay family |
 
 `ApplyRedeem` and the auction debit raise `spendBefore`; `apply_redeem` and
 `redeem` become `Flow` so a prompt can suspend them (5.4).
@@ -991,7 +991,7 @@ pub const ABI_VERSION: i32 = 107;
 ```
 
 with a `v107` doc block immediately below it recording: new import `pay_spec`; new imports
-for kind/shape/factors/settle/quotes; new `ActionKind::SpendBefore = 122`; new
+for kind/shape/factors/settle/quotes; new `ActionKind::SpendBefore = 121`; new
 `pay_kind` / `pay_shape` / `pay_flag` / `pay_report` wire code tables; new
 `PayKind::Loss`, `PayShape`, `PayFactorScope`, `SettleOutcome`; `SAVE_VERSION`
 and `RECORD_VERSION` unchanged.
