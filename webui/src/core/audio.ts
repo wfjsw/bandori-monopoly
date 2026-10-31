@@ -13,7 +13,7 @@ const SCENE_TRACKS: Record<string, string> = {
   gallery: "04_Nobiri",
   deck: "21_Enjoy",
 };
-const FADE = 0.8;
+const FADE_MS = 800;
 
 // One AudioContext serves BGM, sfx and voice, and every clip is decoded once and
 // replayed as a buffer source. Nothing is an <audio>/<video> element, so nothing
@@ -38,15 +38,22 @@ function ctx(): AudioContext | null {
 }
 
 // --- Audio session ---------------------------------------------------------
-// The iOS ringer switch mutes the "ambient" session but not "playback". BGM
-// stays ambient, so it follows the switch; sfx and voice are bumped to
-// "playback" while they sound, so they are heard anyway. Safari-only -- Chrome
-// and Android have no Audio Session API, and their Web Audio already plays on
-// the media stream, which the ringer switch does not touch.
+// The page sits on "ambient" (mixable, follows the ringer switch), and sfx and
+// voice bump it to "transient" while they sound: short one-shot audio that
+// mixes on top instead of taking the page over. Both are short-form, mixable
+// types -- no lockscreen media card and no interruption of whatever else the
+// phone is playing. (WebKit maps both to AVAudioSessionCategoryAmbient, so this
+// split is about intent and other engines, not about the switch: on iOS both
+// are silenced by it. Only "playback" is heard through a silenced phone.)
+// Safari-only -- Chrome and Android have no Audio Session API, and their Web
+// Audio already plays on the media stream, which the ringer switch does not
+// touch.
 type SessionType = "auto" | "playback" | "transient" | "transient-solo" | "ambient" | "play-and-record";
 
 const BASE_SESSION: SessionType = "ambient";
-/** Keep the page on "playback" this long after the last sfx/voice ends. */
+/** What sfx and voice hold the page on; "transient" is the spec's "ping" type. */
+const HOLD_SESSION: SessionType = "transient";
+/** Keep the page on the held type this long after the last sfx/voice ends. */
 const RELEASE_MS = 400;
 
 function setSession(type: SessionType): void {
@@ -67,7 +74,10 @@ function holdAudible(): void {
     clearTimeout(releaseTimer);
     releaseTimer = 0;
   }
-  if (audible++ === 0) setSession("playback");
+  if (audible++ === 0) {
+    setSession(HOLD_SESSION);
+    duck(true);
+  }
 }
 
 function releaseAudible(): void {
@@ -75,7 +85,10 @@ function releaseAudible(): void {
   if (--audible > 0) return;
   releaseTimer = window.setTimeout(() => {
     releaseTimer = 0;
-    if (audible === 0) setSession(BASE_SESSION);
+    if (audible === 0) {
+      setSession(BASE_SESSION);
+      duck(false);
+    }
   }, RELEASE_MS);
 }
 
@@ -85,6 +98,29 @@ let current: Bgm | null = null;
 let pending: string | null = null;
 let seq = 0;
 let unlocked = false;
+
+// Sfx and voice play over a persistent BGM, so the BGM gets out of their way:
+// it dips for as long as the hold lasts (a normal sidechain), and comes back
+// with the session release. It also keeps the effect clear of the BGM if the
+// held type is ever "playback", where a silenced phone would otherwise hear the
+// whole mix un-muted instead of just the effect.
+const DUCK = 0.1;
+const DUCK_MS = 90;
+const UNDUCK_MS = 250;
+let ducked = false;
+
+function bgmTarget(b: Bgm): number {
+  return b.level * (ducked ? DUCK : 1);
+}
+
+function duck(on: boolean): void {
+  if (ducked === on) return;
+  ducked = on;
+  if (current) fadeTo(current, bgmTarget(current), on ? DUCK_MS : UNDUCK_MS);
+}
+
+/** Session/duck state, for DevTools on a handset where the switch cannot be read. */
+(window as unknown as Record<string, unknown>).__bgmDbg = () => ({ audible, ducked, level: current?.level ?? null, target: current ? bgmTarget(current) : null });
 
 /**
  * Browsers block audio until the first user gesture; every later gesture also
@@ -102,17 +138,17 @@ function startBgm(b: Bgm): void {
   if (b.started) return;
   b.started = true;
   b.source.start();
-  fadeTo(b, b.level);
+  fadeTo(b, bgmTarget(b), FADE_MS);
 }
 
 /** Fades a Bgm's gain; a newer fade (or `applyVolumes`) supersedes this one. */
-function fadeTo(b: Bgm, to: number, then?: () => void): void {
+function fadeTo(b: Bgm, to: number, ms: number, then?: () => void): void {
   const mine = ++b.fade;
   const from = b.gain.gain.value;
   const start = performance.now();
   const step = (t: number) => {
     if (mine !== b.fade) return;
-    const k = Math.min(1, (t - start) / (FADE * 1000));
+    const k = Math.min(1, (t - start) / ms);
     b.gain.gain.value = from + (to - from) * k;
     if (k < 1) requestAnimationFrame(step);
     else then?.();
@@ -126,7 +162,7 @@ function stopBgm(b: Bgm): void {
     b.gain.disconnect();
     return;
   }
-  fadeTo(b, 0, () => {
+  fadeTo(b, 0, FADE_MS, () => {
     b.source.stop();
     b.gain.disconnect();
   });
@@ -188,8 +224,8 @@ export function playSceneBgm(scene: string): void {
 export function applyVolumes(): void {
   if (!current) return;
   current.level = settings().bgm / 10;
-  current.fade++; // drop a fade-in still running, so it cannot overwrite this
-  current.gain.gain.value = current.level;
+  current.fade++; // drop a fade still running, so it cannot overwrite this
+  current.gain.gain.value = bgmTarget(current);
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
