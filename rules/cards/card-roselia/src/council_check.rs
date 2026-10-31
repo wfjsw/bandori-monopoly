@@ -11,7 +11,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{ActionKind, ChainKind, MoveKind, SettleOutcome, TriggerKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -28,10 +28,10 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         // 规则书[反击]: 「结算获得的资金」 -- the forced settle's rent is tracked so
         // the refund threshold below can compare against it.
         On::Action(Action::PayAfter("card.placed && pay_is_rent && target == owner", None, pay_after)).silent(),
-        // TODO(规则书)（未结算则获得发动此卡消耗的资金）: 书中把退款系于「此卡进入弃牌堆
-        //   时」，未结算也算；取消的结算 / 结算者出局时 SettleAfter 不抬，卡留在场上且
-        //   SLOT_STOP 不减 -- 缺一个「结算被取消」的点（或按实例存 paid/stop）.
-        On::Action(Action::SettleAfter("card.placed", None, settle_after)),
+        // 规则书[反击]: 「…或未结算」 -- `TileResolved` also fires for a settle
+        // that was cancelled (or whose payer went out), and the payload carries
+        // the outcome, so the refund no longer hangs on a rent that never ran.
+        On::Action(Action::TileResolved("card.placed", None, settle_ended)),
         // 规则书[反击]: 「若此卡进入弃牌堆时」 -- the refund happens on the discard
         // itself, so a copy removed by another effect while its stop is pending
         // (未结算) still hands the placement cost back. `trigger_card == card.id`
@@ -110,12 +110,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::ask_tile(player_id, &title, &text, &spots)?;
     // 规则书[反击]: 「支付那格一层房屋的建造价格一半」 -- C# `H._tiles[r.index].house / 2`.
     let amount = ctx::build_cost(tile) / 2;
-    let paid = ctx::pay(
+    let receipt = ctx::PayCommand::new(
         player_id,
+        -1,
         amount,
         &Msg::new(key!("council_check_why")).tile("tile", tile),
-    )?;
-    if paid < amount {
+    )
+    .send()?;
+    if !receipt.settled() {
         return Ok(());
     }
     // 规则书[反击]: 「将此卡放于那个格子上」 -- C# `H.PlaceFromPlay(c, i, r.index)`.
@@ -136,7 +138,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // **per player**, not a per-card map: two placed copies share these values
     // (the last placement wins) -- every reader therefore also compares
     // `trigger::tile()` with the copy's own tile.
-    ctx::set_slot(player_id, SLOT_PAID, amount);
+    // The refund stores the money actually spent, not the pre-scale figure.
+    ctx::set_slot(player_id, SLOT_PAID, receipt.amount());
     ctx::set_slot(player_id, SLOT_GOT, 0);
     ctx::set_slot(player_id, SLOT_STOP, 0);
     // 规则书[反击]: 「使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算」 /
@@ -213,10 +216,11 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardCouncilCheck.SettleAfter` -> `Done`: once the forced stop has settled,
-/// unplace to discard and refund the placement cost when the halved rent fell
-/// short of what the tile should have paid.
-fn settle_after(player_id: i32) -> card_sdk::Asked {
+/// C# `CardCouncilCheck.SettleAfter` -> `Done`: once the forced settle is over,
+/// unplace to discard and refund the placement cost -- unconditionally when the
+/// settle never happened, and when it did but the halved rent fell short of
+/// what the tile should have paid.
+fn settle_ended(player_id: i32) -> card_sdk::Asked {
     // `card.placed` is the pre.
     if ctx::slot(player_id, SLOT_STOP) == 0 {
         return Ok(());
@@ -235,7 +239,10 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「若此卡进入弃牌堆时」 -- C# `H.Unplace(this, "discard", ...)`.
     ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书[反击]: 「若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金」
-    if got < expect && paid > 0 {
+    // -- 「或未结算」 makes the refund independent of `got`; only a settle that
+    // ran is compared against the halved rent.
+    let settled = SettleOutcome::from_i32(trigger::settle_outcome()) == SettleOutcome::Settled;
+    if (!settled || got < expect) && paid > 0 {
         ctx::gain(
             player_id,
             paid,
@@ -309,8 +316,8 @@ pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn settle_after_kani(player_id: i32) -> card_sdk::Asked {
-    settle_after(player_id)
+pub fn settle_ended_kani(player_id: i32) -> card_sdk::Asked {
+    settle_ended(player_id)
 }
 
 #[cfg(kani)]

@@ -493,7 +493,10 @@ fn first_accident_blocks_pp_skill_2() {
             let hit = |k: &str| {
                 p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
             };
-            ["aya", "maya", "hina"]
+            // `maya` before `aya`: the substring `aya` is inside `maya`, so a
+            // maya prompt would otherwise be reported as aya and never match
+            // the allowed exception below.
+            ["maya", "aya", "hina"]
                 .into_iter()
                 .find(|&k| hit(k))
                 .map(|k| k.to_string())

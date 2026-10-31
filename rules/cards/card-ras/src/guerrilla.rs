@@ -198,7 +198,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
 /// 「场上已不存在可购买的此类格子」 -- derived tile scans. None of these
 /// are CEL (`paid_in_settle` / `lh_buildable` / discard contents).
 fn revive_applies(player_id: i32) -> bool {
-    if ctx::paid_in_settle() < 1000 {
+    if ctx::paid_in_settle_by(player_id) < 1000 {
         return false;
     }
     if ctx::owned_tiles(player_id)

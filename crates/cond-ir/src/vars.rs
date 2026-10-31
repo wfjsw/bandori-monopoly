@@ -87,7 +87,7 @@ pub const VARS: &[(VarId, &str, VarTy)] = &[
     (VarId::PayIsRent, "pay_is_rent", VarTy::Bool),
     (VarId::PayKind, "pay_kind", VarTy::Int),
     (VarId::PayIsFixed, "pay_is_fixed", VarTy::Int),
-    (VarId::PayTotalStage, "pay_total_stage", VarTy::Int),
+    (VarId::PayTotalStage, "pay_total_stage", VarTy::Bool),
     (VarId::ChargeIsSkill, "charge_is_skill", VarTy::Bool),
     (VarId::SettleTile, "settle_tile", VarTy::Int),
     (VarId::SettleOwner, "settle_owner", VarTy::Int),

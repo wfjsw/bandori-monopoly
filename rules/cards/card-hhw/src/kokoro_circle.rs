@@ -9,7 +9,7 @@
 //!
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{ActionKind, PayKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -37,12 +37,12 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「支付10000资金（视为买地花费）」 -- C# `PayCtx { amount = 10000, kind = "buy" }`.
-    // TODO(规则书)（视为买地花费）: the book treats the 10000 as a land purchase --
-    //   we pay a plain card payment (`PayKind::Card`), so `pay_factor` reducers
-    //   and 「买地」 riders do not see it; `ctx::pay_buy` would carry the kind but
-    //   drops the mandatory shortfall/bankrupt path.
-    let paid = ctx::pay(player_id, 10000, &Msg::new(key!("kokoro_circle_why")))?;
-    if paid < 10000 {
+    // `kind(Buy)` is the 「买地」 stamp for the [支付] riders; mandatory is the
+    // builder default, so a short payer still goes through the shortfall path.
+    let receipt = ctx::PayCommand::new(player_id, -1, 10000, &Msg::new(key!("kokoro_circle_why")))
+        .kind(PayKind::Buy)
+        .send()?;
+    if !receipt.settled() {
         // TODO(规则书)（支付10000资金（视为买地花费））: the book does not say what
         // happens when the 10000 cannot be paid -- we keep the card spent and
         // place nothing. (The foreign phrasing 「视为此卡未生效」 is the C#
@@ -64,9 +64,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
 /// -- C# `CardKokoroCircle.SettleAfter`: a settle on the card's tile by anyone
-/// but the owner pays the owner 6,000 as the tile's collection (rent). The
-/// payment currently runs as a plain card payment, not `PayKind::Rent`, and
-/// carries no tile (see the TODOs at the transfer). `SETTLE-STAGES.md` §4 M3:
+/// but the owner pays the owner 6,000 as the tile's collection (`PayKind::Rent`
+/// carrying the tile). `SETTLE-STAGES.md` §4 M3:
 /// an entry in the settle's effect list (行动阶段 15), so a body replace skips
 /// it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
@@ -89,9 +88,11 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if target < 0 || trigger::tile() != target {
         return Ok(());
     }
-    // C# `m.Seat == Seat` -- the owner settling there does not pay themselves.
+    // C# `m.Seat == Seat` -- the owner settling there does not pay themselves,
+    // and C# `H.CircleNormal` runs for the ordinary reward instead of the
+    // 6,000 on a settle redirected here (2.19).
     let mover = trigger::player_id();
-    if mover == player_id || mover < 0 {
+    if mover == player_id || mover < 0 || trigger::is_settle_redirect() {
         return Ok(());
     }
     // TODO(规则书)（若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款）:
@@ -99,25 +100,20 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     //   already ran), yet C# `H.CircleNormal(m, num)` skips the 6,000 there. That
     //   move-tag read is not on the trigger payload (BACKLOG ABI-02), so the
     //   6,000 is charged on every such settle by another player until it lands.
-    // 规则书: 「向所有者支付6000资金，视为格子的收款」
-    // TODO(ABI)（视为格子的收款）: the book makes this the tile's collection -- we
-    //   pay a plain card payment with no tile, so `pay_is_rent` is false (the
-    //   band skill and rent riders miss it), tile-keyed riders dead-end on
-    //   tile -1 and `paid_in_settle` stays cold. Needs a fixed-amount
-    //   `PayKind::Rent` payment carrying CiRCLE (`charge_rent` computes the
-    //   tile's own rent and CiRCLE is unowned).
-    let paid = ctx::transfer(
-        mover,
-        player_id,
-        6000,
-        &Msg::new(key!("kokoro_circle_rent")),
-    )?;
+    // 规则书: 「向所有者支付6000资金，视为格子的收款」 -- `kind(Rent)` is the
+    // 收款 stamp and `tile(target)` carries CiRCLE, so `pay_is_rent`, the
+    // tile-keyed riders and the *owner's* per-seat settle ledger all see it
+    // (`charge_rent` cannot: CiRCLE is unowned and the 6,000 is fixed).
+    let receipt = ctx::PayCommand::new(mover, player_id, 6000, &Msg::new(key!("kokoro_circle_rent")))
+        .kind(PayKind::Rent)
+        .tile(target)
+        .send()?;
     ctx::log(
         player_id,
         &Msg::new(key!("kokoro_circle_settled"))
             .player_id("who", mover)
             .tile("tile", target)
-            .n("amount", paid as i64),
+            .n("amount", receipt.amount() as i64),
     );
     Ok(())
 }

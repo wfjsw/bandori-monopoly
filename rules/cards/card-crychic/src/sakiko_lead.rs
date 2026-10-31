@@ -6,6 +6,7 @@
 //!
 //! record the players sharing your tile; they follow your next main move.
 
+use card_sdk::abi::PayFactorScope;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -67,14 +68,11 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「触发结算时进行的[支付]价格减半」 -- C# `LeadFx.Mark` on the player's
     // next main move (`m.PayFactor *= 0.5`). Milli-units: 500 = x0.5. Written on
     // the turn's move plan here at 「回合开始时」 (before the dice), the same
-    // `MoveCtx` the C# marks at `MoveBefore`; with the default factor of 1.0
-    // `*= 0.5` and `= 0.5` agree. The followers' replays carry the same plan,
-    // so their settle payments are halved too.
-    // TODO(规则书)（触发结算时进行的[支付]价格减半）: 两次减半应叠乘为 0.25 --
-    //   `set_pay_factor` 是赋值，同一结算上的第二次减半会把 0.5 覆盖回去。
-    // TODO(规则书)（触发结算时进行的[支付]价格减半）: 只该减该次移动的结算 --
-    //   因子写在整回合的 `plan` 上且无人清除，同回合之后的结算也被减半。
-    ctx::plan::set_pay_factor(500);
+    // `MoveCtx` the C# marks at `MoveBefore`; `mul` because the C# is `*=`.
+    // `NextMove` scopes it to the next main move, so two halvings compose to
+    // 0.25 and later settles of the turn are untouched. The followers'
+    // replays carry the same plan, so their settle payments are halved too.
+    ctx::plan::mul_pay_factor(500, PayFactorScope::NextMove);
     Ok(())
 }
 

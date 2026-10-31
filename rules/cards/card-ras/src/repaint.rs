@@ -6,7 +6,7 @@
 //!
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{ChainKind, PayFactorScope};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -91,11 +91,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .i("roll", now as i64),
     );
     // 规则书: 「对方此次结算的支付减半」 -- the settle of this move pays half
-    // (milli-units: 500 = x0.5).
-    // TODO(规则书)（对方此次结算的支付减半）: C# folds with `m.PayFactor *= 0.5`
-    //   -- we `set_pay_factor`, which replaces, so two halvings on one move do
-    //   not compose (the plan factor has no read export).
-    ctx::plan::set_pay_factor(500);
+    // (milli-units: 500 = x0.5). `mul` because the C# is `m.PayFactor *= 0.5`
+    // and `ThisMove` keeps it on the move in flight.
+    ctx::plan::mul_pay_factor(500, PayFactorScope::ThisMove);
     Ok(())
 }
 

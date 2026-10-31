@@ -27,11 +27,11 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // 支付[拥有者]星之鼓动山丘上房子数量×100的资金」 -- the surcharge joins the
         // rent payment at `paySplitAdd` (before `paySplitMul`), so a 「支付减半」
         // scaler sees the shaped total.
-        // TODO(规则书)（在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付）: the book
-        //   gates on the settle's tile -- we key on the payment (`pay_is_rent` + the
-        //   charged tile), so a rent-shaped 「收费」 outside a settle (练习室里的风暴)
-        //   also collects it; needs the settle tile on the pay payload.
-        On::Filter(Filter::PaySplitAdd("card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner", Some(pay_add_guard), pay_add)),
+        // 「在[拥有者]拥有的格子或梦开始的地方[结算]时」 keys on the **settle**
+        // (`settle.owner` / `settle.tile`), not on the payment's shape, so a
+        // rent-shaped 收费 outside a settle no longer collects it; 梦开始的地方
+        // is the unowned half of the clause.
+        On::Filter(Filter::PaySplitAdd("card.placed && actor != owner && (settle.owner == owner || settle.tile == tile_named('梦开始的地方'))", Some(pay_add_guard), pay_add)),
         // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
@@ -141,9 +141,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 fn pay_add_guard(_player_id: i32) -> bool {
     // 规则书: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付
     // [拥有者]星之鼓动山丘上房子数量×100的资金」
-    // `card.placed && pay_is_rent && actor != owner && tile.id >= 0 &&
-    // tile.owner == owner` is the pre. Still travelling / player_out /
-    // tax_due are residuals.
+    // `card.placed && actor != owner && (settle.owner == owner ||
+    // settle.tile == tile_named('梦开始的地方'))` is the pre. Still
+    // travelling / player_out / tax_due are residuals.
     if !in_play_area() && ctx::prop(PROP_STEP) < ROUTE.len() as i32 {
         return false;
     }

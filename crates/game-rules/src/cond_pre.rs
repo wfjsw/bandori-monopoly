@@ -130,8 +130,8 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
             .unwrap_or(0)
     }
-    fn pay_total_stage(&self) -> i64 {
-        self.trigger.pay.map(|p| p.total_stage as i64).unwrap_or(1)
+    fn pay_total_stage(&self) -> bool {
+        self.trigger.pay.map(|p| p.total_stage).unwrap_or(true)
     }
     fn charge_is_skill(&self) -> bool {
         self.trigger.charge_skill
@@ -1376,7 +1376,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .pay
             .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
             .unwrap_or(0),
-        pay_total_stage: t.pay.map(|p| p.total_stage as i64).unwrap_or(1),
+        pay_total_stage: t.pay.map(|p| p.total_stage).unwrap_or(true),
         charge_is_skill: t.charge_skill,
         settle_tile: t.settle_tile as i64,
         settle_owner: if t.settle_tile >= 0 {
@@ -1478,7 +1478,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         pay_is_rent: false,
         pay_kind: -1,
         pay_is_fixed: 0,
-        pay_total_stage: 1,
+        pay_total_stage: true,
         charge_is_skill: false,
         settle_tile: -1,
         settle_owner: -1,

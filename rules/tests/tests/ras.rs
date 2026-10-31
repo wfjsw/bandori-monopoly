@@ -1687,14 +1687,15 @@ fn guerrilla_special_offers_to_mark_a_deed_as_livehouse() {
 
 /// The shared table for the `paid_in_settle` cases: every buildable livehouse
 /// is owned (the [特]'s later clauses hold), the card is armed in the discard,
-/// and P0 owns the settle target (tile 11) plus 购物中心. `extra` is the card
-/// the caller plays afterwards (given up front, so the post-discard hand is at
-/// the limit and the play gate is open).
+/// P0 owns only 购物中心, and P1 owns the settle target (tile 11) so a P0 move
+/// there is a payment *by the card's owner*. `extra` is the card the caller
+/// plays afterwards (given up front, so the post-discard hand is at the limit
+/// and the play gate is open).
 fn guerrilla_tally_table(extra: &str) -> Table {
     let mut t = Table::vanilla(3);
-    t.own(1, &[DUB, BUDOKAN, SPACE, LH_GALAXY]);
+    t.own(1, &[DUB, BUDOKAN, SPACE, LH_GALAXY, 11]);
     t.own(2, &[RING1, 16, RING3, RING4]);
-    t.own(0, &[SHOPPING, 11]);
+    t.own(0, &[SHOPPING]);
     t.set_money(0, 20_000);
     t.set_money(1, 20_000);
     t.set_discard(0, &[]);
@@ -1722,32 +1723,40 @@ fn guerrilla_tally_table(extra: &str) -> Table {
 /// 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- a settle-caused
 /// payment counts even when it is **not** rent: 梦在前方's settle tax is a
 /// `PayKind::Card` transfer to the deed's owner. The rent alone (60, halved by
-/// 祥，移动's pay factor) stays under 1000, so only the tax can cross it.
+/// 祥，移动's pay factor) stays under 1000, so only the tax can cross it. The
+/// card owner (P0) is the payer -- `paid_in_settle_by` is per seat (G02 2.13),
+/// so the tax is paid to P1 and P0's own figure is what the [特] reads.
 #[test]
 fn guerrilla_tally_counts_non_rent_settle_payment() {
     let mut t = guerrilla_tally_table("Mujica:祥，移动");
-    t.place_raw(0, "PP:梦在前方，结彩当下");
-    t.set_state(0, "dream_ahead_x", 1_700); // fans 1 × 1700 + 300 = 2000; halved = 1000
-    t.set_state(0, "ppFansUp", 1);
-    t.set_pos(1, 8);
+    // P1's field card taxes any non-owner settling on P1's tile 11.
+    t.place_raw(1, "PP:梦在前方，结彩当下");
+    t.set_state(1, "dream_ahead_x", 1_700); // fans 1 × 1700 + 300 = 2000; halved = 1000
+    t.set_state(1, "ppFansUp", 1);
+    t.set_pos(1, 0);
     t.play(0, "Mujica:祥，移动").unwrap();
     let k = t.option("PlayerId(1)").expect("player pick");
     t.answer(0, k).unwrap();
     let k = t.option("saki_move_forward").expect("direction pick");
     t.answer(0, k).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(1), 11, "P1 settled on P0's deed");
+    // P0 walks from 8 onto P1's deed 11.
+    t.set_pos(0, 8);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 11, "P0 settled on P1's deed");
     assert!(
-        t.m.world().turn.paid_in_settle >= 1_000,
-        "the non-rent settle tax counts: {}",
-        t.m.world().turn.paid_in_settle
+        t.m.world().turn.paid_in_settle_by.first().copied().unwrap_or(0) >= 1_000,
+        "the non-rent settle tax counts for its payer: {:?}",
+        t.m.world().turn.paid_in_settle_by
     );
     t.m.world_mut().st.skip_move = true;
     t.end(0).unwrap();
     assert!(
         t.prompt().is_some() || t.on_field(0, "RAS:游击演出"),
-        "turn-end [特] window; paid_in_settle={} prompt={}",
-        t.m.world().turn.paid_in_settle,
+        "turn-end [特] window; paid_in_settle_by={:?} prompt={}",
+        t.m.world().turn.paid_in_settle_by,
         t.dump_prompt()
     );
 }

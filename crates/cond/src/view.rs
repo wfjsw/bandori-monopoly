@@ -44,8 +44,9 @@ pub trait CondView {
     fn pay_kind(&self) -> i64;
     /// 1 = the pending payment's shape is `Fixed` (`pay_is_fixed`).
     fn pay_is_fixed(&self) -> i64;
-    /// 1 = a command total (`pay_total_stage`); neutral `1` without a payment.
-    fn pay_total_stage(&self) -> i64;
+    /// Is the pending payment a command total (`pay_total_stage`); neutral
+    /// `true` without a payment.
+    fn pay_total_stage(&self) -> bool;
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     fn charge_is_skill(&self) -> bool;
     /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.

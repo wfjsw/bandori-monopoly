@@ -5461,6 +5461,9 @@ impl<M: CardModules> RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        // The pay kind / shape rewrite (`set_pay_kind` / `set_pay_shape`) rides
+        // the payment trigger; the engine folds it back before the shape is read.
+        t.pay = trigger.pay.map(unbridge_pay);
         // The `BuyAssign` deal rewrite (`set_deal_owner` / `set_deal_houses`) rides
         // the buy trigger; the engine reads it back off `t.buy` at the commit.
         t.buy = trigger.buy.map(unbridge_buy);
@@ -7577,6 +7580,17 @@ fn unbridge_buy(b: TriggerBuy) -> game_core::engine::rules::TriggerBuy {
     out
 }
 
+/// The reverse of [`bridge_trigger`]'s pay mapping: a guest-side kind / shape
+/// rewrite back to the engine payload the money pipeline folds.
+fn unbridge_pay(p: TriggerPay) -> game_core::engine::rules::TriggerPay {
+    game_core::engine::rules::TriggerPay {
+        kind: p.kind,
+        shape: p.shape,
+        is_rent: p.is_rent,
+        total_stage: p.total_stage,
+    }
+}
+
 /// Map a raw prompt answer to what the answer log should carry.
 /// `PromptKind::TileId` answers with the **tile id** (`Ask::tile`'s
 /// `items[i]`), or `-1` for the 「不选」 fallback -- stable across the
@@ -8227,8 +8241,8 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
             .unwrap_or(0)
     }
-    fn pay_total_stage(&self) -> i64 {
-        self.trigger.pay.map(|p| p.total_stage as i64).unwrap_or(1)
+    fn pay_total_stage(&self) -> bool {
+        self.trigger.pay.map(|p| p.total_stage).unwrap_or(true)
     }
     fn charge_is_skill(&self) -> bool {
         self.trigger.charge_skill
@@ -9977,6 +9991,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        // The pay kind / shape rewrite (`set_pay_kind` / `set_pay_shape`) rides
+        // the payment trigger; the engine folds it back before the shape is read.
+        t.pay = trigger.pay.map(unbridge_pay);
         // The `BuyAssign` deal rewrite (`set_deal_owner` / `set_deal_houses`) rides
         // the buy trigger; the engine reads it back off `t.buy` at the commit.
         t.buy = trigger.buy.map(unbridge_buy);

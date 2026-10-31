@@ -56,7 +56,7 @@ impl CondView for SnapshotView<'_> {
     fn pay_is_fixed(&self) -> i64 {
         self.win.pay_is_fixed
     }
-    fn pay_total_stage(&self) -> i64 {
+    fn pay_total_stage(&self) -> bool {
         self.win.pay_total_stage
     }
     fn charge_is_skill(&self) -> bool {

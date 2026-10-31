@@ -412,6 +412,59 @@ fn total_cut(player_id: i32, value: i32) -> i32 {
     out
 }
 
+/// `G02` §9 row 19 -- a 分摊 command whose **command total** is 12,000:
+/// every other live player is designated and the total divides by the
+/// designated count (three payers of 4,000 each). No shipped 分摊 card prints
+/// a total this large, and `pay_total_stage` (「一次性」) can only be seen on
+/// one.
+const SPLIT_12K: CardDef = CardDef::new("TEST:split12k", &[On::Play("", None, split_12k)]);
+
+fn split_12k(player_id: i32) -> card_sdk::Asked {
+    let others = ctx::others(player_id);
+    if others.is_empty() {
+        return Ok(());
+    }
+    ctx::split_pay(&others, player_id, 12_000, &Msg::new(key!("split12k_why")))?;
+    Ok(())
+}
+
+/// `G02` §9 row 24 -- a placed card whose `paySplitAdd` filter tries to write
+/// the payment shape too late. `set_pay_shape` returns whether the write
+/// reaches the payment; the body logs it so a test can read the answer.
+const SHAPE_LATE: CardDef = CardDef::new(
+    "TEST:shapeLate",
+    &[On::Filter(Filter::PaySplitAdd("", Some(total_cut_yes), shape_late))],
+);
+
+fn shape_late(player_id: i32, v: PayAddValue) -> PayAddValue {
+    let wrote = ctx::trigger::set_pay_shape(card_sdk::abi::PayShape::Fixed);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("shape_late_done")).i("wrote", wrote as i64),
+    );
+    v
+}
+
+/// `G02` §9 row 20 -- the raw 消耗 arm: a body that deletes money without a
+/// payment command, so the `spendBefore` window is the only place a responder
+/// can see it.
+const LOSE_RAW: CardDef = CardDef::new("TEST:loseRaw", &[On::Play("", None, lose_raw)]);
+
+fn lose_raw(player_id: i32) -> card_sdk::Asked {
+    ctx::lose_raw(player_id, 1000, &Msg::new(key!("lose_raw_why")));
+    Ok(())
+}
+
+/// `G02` §9 row 21 -- a **card-effect** fire spend (`ChargeSource::Other`), the
+/// sibling of a skill cost. A placed `MyGO:（灯）不再迷茫` must not offer its
+/// crystal swap for it.
+const SPEND_FIRE: CardDef = CardDef::new("TEST:spendFire", &[On::Play("", None, spend_fire)]);
+
+fn spend_fire(player_id: i32) -> card_sdk::Asked {
+    bandori_std::fire::spend(player_id, 1, &Msg::new(key!("spend_fire_why")))?;
+    Ok(())
+}
+
 /// `PIPELINE-AUDIT` B3 -- a `bankruptBefore` probe that tries to move money
 /// **for the dying player**. Once the seat is marked dead before the window
 /// (K2 / 规则书 L16+L81) the payment is refused and the probe's owner gains
@@ -1926,6 +1979,7 @@ card_sdk::ruleset!(&[
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
+    SPLIT_12K, SHAPE_LATE, LOSE_RAW, SPEND_FIRE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,

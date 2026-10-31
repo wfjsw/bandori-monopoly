@@ -3307,3 +3307,69 @@ fn anon_tokyo_limit_is_a_no_op() {
     })
     .expect("C-MYGO-anon-tokyo-01 no-op");
 }
+
+/// G02 row 7 / I12: the substitution window covers the **whole** skill cost
+/// even when every pot is a temp pot, and a cancelled substitution spends no
+/// crystal.
+///
+/// 规则书 `MyGO:（灯）不再迷茫` (2): 「你使用角色技能时可移除此卡上的一个[奇迹水晶]
+/// 以代替此次技能的火罐消耗」 -- 「此次技能的火罐消耗」 is the whole cost, and the
+/// temp pots are part of it (`bandori-std/src/fire.rs:309`).
+#[test]
+fn g02_tomori_full_temp_cost_substitutable() {
+    // 长崎素世's (2) costs one pot and is offered without a target. The
+    // applicability pre reads the pool (`charge(owner) >= 1`), so the pool
+    // holds the one pot as well -- but a temp pot is spent **first**, so the
+    // cost's actual movement is entirely temp and a cancel moves nothing.
+    let mut t = Table::new(&["长崎素世", "高松灯"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, TOMORI_CARD);
+    t.set_crystals(0, TOMORI_CARD, 2);
+    t.set_fire(0, 1, 1);
+    let uid = t.m.world().persona_skill_uid(0);
+    t.m.world_mut()
+        .set_tok(0, bandori_std::fire::TEMP_KEY, 1, uid, 0);
+    // The (2) offer runs right after the move roll and requires a **free**
+    // roll (`plan.fixed_roll == null`), so no loaded dice here; the landing's
+    // own prompts may come first.
+    t.roll(0).map_err(|e| format!("roll: {e}")).unwrap();
+    let mut accepted = false;
+    for _ in 0..20 {
+        let Some(p) = t.prompt() else { break };
+        if p.title.key().contains("soyo_") {
+            accepted = true;
+            accept_yes(&mut t, 0, "soyo_");
+            break;
+        }
+        t.decline();
+    }
+    assert!(accepted, "the (2) offer came up: {}", t.dump_prompt());
+    // One substitution window, carrying the full 1.
+    let mut windows = 0;
+    while let Some(p) = t.prompt() {
+        if p.title.key().contains("tomori_no_longer") {
+            windows += 1;
+            assert_eq!(
+                p.text.a.get("n"),
+                Some(&game_core::msg::Arg::I(1)),
+                "the window carries the whole cost: {}",
+                t.dump_prompt()
+            );
+        }
+        t.decline();
+    }
+    assert_eq!(windows, 1, "exactly one substitution window");
+    // Cancelled: the temp pot paid, the pool and the crystals did not move.
+    assert_eq!(t.charge(0), 1, "the pool pot is untouched");
+    assert_eq!(
+        t.token(0, bandori_std::fire::TEMP_KEY),
+        0,
+        "the temp pot is spent"
+    );
+    assert_eq!(
+        t.crystals(0, TOMORI_CARD).unwrap_or(-1),
+        2,
+        "no crystal was spent"
+    );
+}

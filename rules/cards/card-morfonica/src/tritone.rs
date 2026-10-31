@@ -17,12 +17,19 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const TRITONE: CardDef = CardDef::new(
     "Mor:迷茫之蝶们的三全音",
     &[
+        // 规则书[反击]: 「将要失去**或**支付资金时」 -- the clause is a
+        // disjunction, and one guard cannot express it (`effect.has(Pay)` is
+        // meaningless on a `spendBefore` link, where `pay_kind` is -1), so the
+        // body hangs on two links: `Effect` for a payment, `SpendBefore` for a
+        // raw loss.
         On::Counteract(
             &[ChainKind::Effect],
-            // TODO(规则书)（任意时刻当你将要失去或支付资金时打出此卡）: the book opens
-            // the window on 「失去」 too -- a raw loss (`ctx::lose_raw` /
-            // `adjust_money`) raises no `effect` chain, so only 「支付」 answers.
             "actor == owner && effect.has(Pay) && value > 0",
+            None,
+            counteract).counter_reason(key!("tritone_when")),
+        On::Counteract(
+            &[ChainKind::SpendBefore],
+            "actor == owner && value > 0",
             None,
             counteract).counter_reason(key!("tritone_when")),
         On::Action(Action::TurnEnd("", None, counteract)),
@@ -45,7 +52,31 @@ const OWED: &str = "owed";
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」 -- the payment's
+        // 规则书[反击]: 「将要失去…资金时」 -- a raw loss raises the `spendBefore`
+        // window (no payment, so no `pay` entry); the figure is the loss.
+        TriggerKind::SpendBefore => {
+            let amount = trigger::value();
+            let gained = ctx::gain_fixed(
+                player_id,
+                amount,
+                &Msg::new(key!("tritone_why")).n("money", amount as i64),
+            )?;
+            ctx::set_dest(ctx::Dest::Field);
+            ctx::place_card(
+                player_id,
+                "Mor:迷茫之蝶们的三全音",
+                &Msg::new(key!("tritone_note")).n("money", gained as i64),
+            );
+            ctx::set_crystals(3);
+            ctx::set_counter(OWED, gained);
+            ctx::log(
+                player_id,
+                &Msg::new(key!("tritone_placed"))
+                    .player_id("who", player_id)
+                    .n("money", gained as i64),
+            );
+        }
+        // 规则书[反击]: 「任意时刻当你将要…支付资金时打出此卡」 -- the payment's
         // declaration raises the `effect` chain (kind `Effect`) with a `pay` entry,
         // so the counter answers that link (C# folds this into `t.Kind == "pay"`).
         TriggerKind::Effect => {

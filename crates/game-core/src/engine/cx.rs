@@ -893,6 +893,13 @@ impl<'a> Cx<'a> {
         t.plan.resolve = f.plan.resolve;
         t.plan.pay_factor = f.plan.pay_factor;
         t.plan.rent_factor = f.plan.rent_factor;
+        // The one-shot scopes are read by the *next* settle / move a routine
+        // starts (`card_settle_at`, `move`), which runs after the body returns.
+        // A `NextSettle` / `NextMove` write made in the body lives on its copy
+        // and has to cross like the plan knobs, or the factor is dropped at the
+        // pause boundary.
+        t.next_settle_pay_factor = f.next_settle_pay_factor;
+        t.next_move_pay_factor = f.next_move_pay_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
         // Card-owned per-move tags are read by the routine's own raise payloads

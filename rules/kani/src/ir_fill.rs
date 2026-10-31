@@ -796,6 +796,27 @@ pub fn fill_from_world(
         w.trig_pay_is_rent
     };
     c.set_scalar(VarId::PayIsRent, pay_is_rent as i64);
+    // G02 pay shape / kind, matching `fill_window`'s derivations (an absent
+    // payment is kind -1, not fixed, and a total stage).
+    c.set_scalar(VarId::PayKind, w.trig_pay_kind as i64);
+    c.set_scalar(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
+    c.set_scalar(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
+    c.set_scalar(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
+    let settle = w.trig_settle_tile;
+    c.set_scalar(VarId::SettleTile, settle as i64);
+    c.set_scalar(VarId::SettleOutcome, w.trig_settle_outcome as i64);
+    if settle >= 0 && (settle as usize) < 60 {
+        c.set_scalar(VarId::SettleOwner, w.tiles[settle as usize].owner as i64);
+        c.set_scalar(VarId::SettleHouses, w.tiles[settle as usize].houses as i64);
+        c.set_scalar(
+            VarId::SettleMortgaged,
+            w.tiles[settle as usize].mortgaged as i64,
+        );
+    } else {
+        c.set_scalar(VarId::SettleOwner, -1);
+        c.set_scalar(VarId::SettleHouses, 0);
+        c.set_scalar(VarId::SettleMortgaged, 0);
+    }
     let roll_source = if ov.roll_source >= 0 {
         ov.roll_source
     } else {
@@ -1250,6 +1271,30 @@ pub fn fill_for_guard(
         VarId::PayIsRent,
         (ov.pay_is_rent || w.trig_pay_is_rent) as i64
     );
+    set_if!(VarId::PayKind, w.trig_pay_kind as i64);
+    set_if!(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
+    set_if!(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
+    set_if!(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
+    let settle = w.trig_settle_tile;
+    set_if!(VarId::SettleTile, settle as i64);
+    set_if!(VarId::SettleOutcome, w.trig_settle_outcome as i64);
+    if needs.needs_var(VarId::SettleOwner)
+        || needs.needs_var(VarId::SettleHouses)
+        || needs.needs_var(VarId::SettleMortgaged)
+    {
+        if settle >= 0 && (settle as usize) < 60 {
+            set_if!(VarId::SettleOwner, w.tiles[settle as usize].owner as i64);
+            set_if!(VarId::SettleHouses, w.tiles[settle as usize].houses as i64);
+            set_if!(
+                VarId::SettleMortgaged,
+                w.tiles[settle as usize].mortgaged as i64
+            );
+        } else {
+            set_if!(VarId::SettleOwner, -1);
+            set_if!(VarId::SettleHouses, 0);
+            set_if!(VarId::SettleMortgaged, 0);
+        }
+    }
     set_if!(
         VarId::RollSource,
         if ov.roll_source >= 0 {

@@ -393,8 +393,8 @@ publishes them as `trig_settle_facts`. The card's refund branch reads G02's
 Fragment: 「若其他玩家在该格[触发结算]则向所有者支付6000资金」 / the C#
 `H.CircleNormal(m, num)` carve-out at `kokoro_circle.rs:99-101`.
 
-**Demand:** the 6,000 is not charged on the settle a player walked into
-normally (the CiRCLE reward already ran).
+**Demand:** the 6,000 is not charged on a settle a **card** redirected here
+(the CiRCLE reward already ran there); a normal walk-in settle is charged.
 
 C# keys the carve-out on how the move was caused. The trigger already carries
 exactly that: `Move.settle_redirect` (`move_ctx.rs:173-175`), engine-set on
@@ -528,7 +528,7 @@ Testable invariants:
   raises funds and can bankrupt.
 - **I3 (payee half).** `PayeeHalf` captures the declared payee, settles the
   main leg as a delete to the bank, and then charges the captured payee
-  `floor(settled / 2)` as a `Fixed` leg to the payer. No half on cancel or
+  `floor(settled / 2)` as a `Fixed` bank-loss leg. No half on cancel or
   shortfall.
 - **I4 (factor scope).** `pay_factor()` returns the product of every factor
   scope live at this instant (4.5). A factor write outlives exactly its scope:
@@ -879,7 +879,9 @@ declared `to` before any response).
   `partner = to`; after the `pay` window (before affordability and commit)
   force `to = None`. After step 8,
   if `partner` is alive and `loss > 0`, run
-  `self.money(Pay { from: partner, to: Some(payer), amount: loss / 2, kind: Card, shape: Fixed, must: true, by_card, reason, .. })`.
+  `self.money(Pay { from: partner, to: None, amount: loss / 2, kind: Card, shape: Fixed, must: true, by_card, reason, .. })`
+  (`to: None` -- the half is another 失去 to the bank, mirroring the C#
+  `H.LoseR(to, amount / 2, must: true)`; the payer gets nothing back).
   The half leg is a fresh pipeline at `money_depth + 1`, so it logs, fires
   `paid` and counts in `paid_in_settle_by`. No half when the main leg was
   cancelled, short or the payer is out.
@@ -1144,7 +1146,8 @@ Add the redirect conjunct to the existing early return (2.19):
 if mover == player_id || mover < 0 || trigger::is_settle_redirect() { return Ok(()); }
 ```
 and delete the Open question's TODO. The TODO(ABI) block at `:102-108` goes
-with 6.5.
+with 6.5. The redirect conjunct is the carve-out: a card-redirected settle
+skips the 6,000 (the CiRCLE reward already ran); a walk-in is charged.
 
 ### 6.7 `tomori_no_longer.rs:61,84` (skill scope)
 
@@ -1367,7 +1370,7 @@ in the reason, per `docs/rulebook/TEST-FINDINGS.md` convention.
 | 15 | `g02_rana_half_composes_with_walk_factor` | a walk already at 0.5 pays 0.25 |
 | 16 | `g02_fire_bird_discounted_payment_places` | a 0.5 modifier settles 800 and the card is placed |
 | 17 | `g02_council_cancelled_settle_refunds` | a cancelled settle and a payer-out both read a non-`Settled` outcome, unplace, refund the cost, clear `SLOT_STOP`, and do not arm the next settle |
-| 18 | `g02_kokoro_normal_settle_skips_6000` | a walk-in settle charges nothing; a card-forced settle on CiRCLE charges 6000 |
+| 18 | `g02_kokoro_normal_settle_skips_6000` | a walk-in settle charges 6000; a card-redirected settle on CiRCLE charges nothing |
 | 19 | `g02_vocal_ignores_split_legs` | a 3×4000 分摊 offers once at the 12000 command total; a leg's own 4000 does not qualify |
 | 20 | `g02_tritone_answers_raw_loss` | `lose_raw` and a redeem raise `spendBefore` as a counteract window with the full cost; playing tritone gains the figure and a reduction lowers the bank debit |
 | 21 | `g02_tomori_skill_only` | a card-effect spend does not open the substitution; a skill cost does |

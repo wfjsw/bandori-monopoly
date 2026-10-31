@@ -45,12 +45,11 @@ const ID: &str = "R:Fire bird";
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「支付1600资金」 -- C# `PayCtx { amount = 1600, kind = "pay", must = false }`.
-    let paid = ctx::pay(player_id, 1600, &Msg::new(key!("fire_bird_why")))?;
-    if paid < 1600 {
+    let receipt = ctx::PayCommand::new(player_id, -1, 1600, &Msg::new(key!("fire_bird_why"))).send()?;
+    if !receipt.settled() {
         // TODO(规则书)（支付1600资金）: 书中只说付出 1600 并放置此卡，没有定义「付不满」
-        //   时的状态（C# 叫「视为此卡未生效」，CH-07 / C-Q5）-- 这里把付不满当无效返回；
-        //   另外 `pay` 返回的是实际搬走的钱，支付修正（如 0.5 倍）会让付足 1600 也被读成
-        //   不足（缺一个「支付成立 / 被打折」的信号）.
+        //   时的状态（C# 叫「视为此卡未生效」，CH-07 / C-Q5）-- 这里把付不满当无效返回。
+        //   `settled()` 是「支付成立」的信号，被打折到 1600 以下也算付出.
         return Ok(());
     }
     // 规则书: 「并为其添加X（自选）个奇迹水晶」 -- C# `H.AskNumber(i, ..., 1, 10, ...)`.

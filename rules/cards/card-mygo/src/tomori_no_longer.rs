@@ -49,16 +49,13 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // `ChargePaying` (the window `spend_charge` raises before the pots
         // move); `set_cancelled()` makes `raise` return false, i.e. cost
         // substituted and the skill body proceeds.
-        // TODO(规则书)（你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗）:
-        //   the book scopes the swap to character-skill costs -- `ChargePaying`
-        //   also opens for card-effect and event spends (`fire::spend` is the
-        //   shared verb) and for the band skill's turn-end drain, and the raise
-        //   carries no skill-vs-card source marker
-        //   (TODO(ABI): a source flag / hook point).
-        // 规则书: 「以代替此次技能的火罐消耗」 -- `fire::spend` opens this
-        //   window over the whole cost (temp pots included) before any pot
-        //   moves; one crystal replaces the entire fire cost.
-        On::Action(Actions::ChargePaying("actor == owner && card.counter('crystals') >= 1", None, cover)),
+        // 规则书: 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」
+        // -- `charge_is_skill` scopes the swap to a character-skill cost, so a
+        // card-effect or event spend (`fire::spend` is the shared verb) and the
+        // band skill's turn-end drain do not offer it. `fire::spend` opens this
+        // window over the whole cost (temp pots included) before any pot
+        // moves; one crystal replaces the entire fire cost.
+        On::Action(Actions::ChargePaying("charge_is_skill && actor == owner && card.counter('crystals') >= 1", None, cover)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不再迷茫"#)

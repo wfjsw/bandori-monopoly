@@ -215,11 +215,14 @@ fn link_rent(player_id: i32, v: PayAddValue) -> PayAddValue {
         return v;
     }
     // TODO(规则书)（被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半）:
-    // the figure should be half the partner's real 收费 -- a mortgaged partner
-    // levies none (C-Q13) and a dice-rent / rent-factor partner is not the table
-    // number, but the SDK exports only `rent_of` (note: ENG-CHARGE-RENT wants a
-    // pure rent *figure*; `charge_rent` would charge a second time).
-    let bonus = ctx::rent_of(other) / 2;
+    // the figure is the partner's real 收费 (quote: a fresh hypothetical landing
+    // by the payer, C-Q13 mortgage and the pay pipeline included); `-1` only
+    // when the payer could not settle it at all.
+    let quoted = ctx::rent_quote(trigger::player_id(), other);
+    if quoted < 0 {
+        return v;
+    }
+    let bonus = quoted / 2;
     if bonus <= 0 {
         return v;
     }

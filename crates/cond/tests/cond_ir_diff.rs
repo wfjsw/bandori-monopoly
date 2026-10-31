@@ -100,7 +100,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: FillVal) {
         VarId::PayIsRent => f.win.pay_is_rent = raw != 0,
         VarId::PayKind => f.win.pay_kind = raw,
         VarId::PayIsFixed => f.win.pay_is_fixed = raw,
-        VarId::PayTotalStage => f.win.pay_total_stage = raw,
+        VarId::PayTotalStage => f.win.pay_total_stage = raw != 0,
         VarId::ChargeIsSkill => f.win.charge_is_skill = raw != 0,
         VarId::SettleTile => f.win.settle_tile = raw,
         VarId::SettleOwner => f.win.settle_owner = raw,

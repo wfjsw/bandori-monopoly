@@ -34,7 +34,7 @@ fn window() -> WindowCtx {
         pay_is_rent: false,
         pay_kind: 1,
         pay_is_fixed: 0,
-        pay_total_stage: 1,
+        pay_total_stage: true,
         charge_is_skill: false,
         settle_tile: -1,
         settle_owner: -1,

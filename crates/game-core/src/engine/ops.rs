@@ -161,12 +161,20 @@ impl World {
             PayFactorScope::ThisSettle => {
                 self.turn.settle_pay_factor *= f64::from(milli) / 1000.0;
             }
+            // Both `next*` slots hold a milli **product** (1000 = x1.0), so a
+            // compose multiplies and re-normalises; the consumer divides by
+            // 1000 once more.
             PayFactorScope::NextMove => {
-                self.turn.next_move_pay_factor = self.turn.next_move_pay_factor.saturating_mul(milli);
+                self.turn.next_move_pay_factor = Self::milli_product(
+                    self.turn.next_move_pay_factor,
+                    milli,
+                );
             }
             PayFactorScope::NextSettle => {
-                self.turn.next_settle_pay_factor =
-                    self.turn.next_settle_pay_factor.saturating_mul(milli);
+                self.turn.next_settle_pay_factor = Self::milli_product(
+                    self.turn.next_settle_pay_factor,
+                    milli,
+                );
             }
         }
     }
@@ -175,8 +183,16 @@ impl World {
     /// settles. The per-payment rent factor, tile props and `milli_scale` are
     /// not in it (they need the pending payment).
     pub fn pay_factor(&self) -> i32 {
-        ((self.turn.plan.pay_factor * 1000.0) as i32)
-            .saturating_mul((self.turn.settle_pay_factor * 1000.0) as i32)
+        Self::milli_product(
+            (self.turn.plan.pay_factor * 1000.0) as i32,
+            (self.turn.settle_pay_factor * 1000.0) as i32,
+        )
+    }
+
+    /// Two milli factors folded into one (`1000` = x1.0), clamped rather than
+    /// wrapping: a runaway product saturates.
+    fn milli_product(a: i32, b: i32) -> i32 {
+        ((i64::from(a) * i64::from(b.max(0))) / 1000).clamp(0, i64::from(i32::MAX)) as i32
     }
 
     /// An unopened `this` scope falls forward to its next instance.

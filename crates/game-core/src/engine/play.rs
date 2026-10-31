@@ -1703,6 +1703,12 @@ impl Cx<'_> {
                 fm.cancelled = false;
                 fm.from = 0;
                 fm.to = 0;
+                // The replay carries the main move's `pay_factor` /
+                // `rent_factor` (「触发结算时进行的支付价格减半」 reaches the
+                // followers too). The settle reader reads the *plan*, which the
+                // main move's `move_resolved` already reset, so seed it here.
+                self.w.turn.plan.pay_factor = fm.pay_factor;
+                self.w.turn.plan.rent_factor = fm.rent_factor;
                 if fm.teleport_to.is_some() {
                     let to = fm.teleport_to.unwrap().0 as usize;
                     let resolve = fm.resolve;
@@ -3909,6 +3915,12 @@ impl Cx<'_> {
             )?;
             // Kind / shape writes land before the shape is read.
             Self::fold_pay_payload(&mut p, &t, &mut rent, &mut fixed);
+            // The shape may have arrived in this window; `PayeeHalf` still
+            // needs the declared payee as its half victim (the write may not
+            // have moved `to`).
+            if partner.is_none() && p.shape == PayShape::PayeeHalf {
+                partner = to;
+            }
             if !fixed && (t.is_cancelled() || !t.settles_for(side as i32)) {
                 raise!(
                     self,
@@ -4377,15 +4389,17 @@ impl Cx<'_> {
             gain,
             shortfall: false,
         };
-        // The `PayeeHalf` leg: the declared partner now loses half of what the
-        // payer just lost, as its own `Fixed` pipeline one depth down (so it
-        // logs, fires `paid` and counts in `paid_in_settle_by`). No half when
-        // the main leg was cancelled, short, or the payer is out.
+        // The `PayeeHalf` leg: the declared partner now *loses* half of what
+        // the payer just lost (规则书 「令此次支付的对象失去此次金额一半的资金」
+        // -- a delete, not a payment back), as its own `Fixed` pipeline one
+        // depth down (so it logs, fires `paid` and counts in
+        // `paid_in_settle_by`). No half when the main leg was cancelled, short,
+        // or the payer is out.
         if let (Some(partner), Some(payer_ix)) = (partner, p.from) {
             if loss > 0 && !self.out(partner) && !self.out(payer_ix) {
                 let mut half = Pay::new(loss / 2, PayKind::Card);
                 half.from = Some(partner);
-                half.to = Some(payer_ix);
+                half.to = None;
                 half.shape = PayShape::Fixed;
                 half.tile = p.tile;
                 half.must = true;

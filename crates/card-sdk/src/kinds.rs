@@ -709,6 +709,7 @@ action_kinds! {
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
+    SpendBefore;
 }
 
 #[cfg(test)]

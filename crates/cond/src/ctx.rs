@@ -136,8 +136,9 @@ pub struct WindowCtx {
     pub pay_kind: i64,
     /// 1 = the pending payment's shape is `Fixed` (`pay_is_fixed`).
     pub pay_is_fixed: i64,
-    /// 1 = a command total (`pay_total_stage`); neutral `1` without a payment.
-    pub pay_total_stage: i64,
+    /// Is the pending payment a command total (`pay_total_stage`); neutral
+    /// `true` without a payment, so a non-pay guard fails closed.
+    pub pay_total_stage: bool,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_is_skill: bool,
     /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
@@ -203,7 +204,7 @@ impl Default for WindowCtx {
             // outside a settle, instead of failing the build.
             pay_kind: -1,
             pay_is_fixed: 0,
-            pay_total_stage: 1,
+            pay_total_stage: true,
             charge_is_skill: false,
             settle_tile: -1,
             settle_owner: -1,
