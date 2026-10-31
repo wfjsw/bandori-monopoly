@@ -4,7 +4,7 @@ import { useCompactValue } from "../../app/Stage";
 import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { fireMaxOf, fireOf, stateOf } from "../../core/names";
 import { NO_HAND_LIMIT } from "../../core/hand";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type ReactNode } from "react";
 import { sceneImg } from "../../core/assets";
 import { cardTitle, cardArtUrl } from "../../core/data";
 import { cx } from "../../core/cx";
@@ -294,12 +294,18 @@ interface LogRow {
 
 function logRows(lines: LogLine[], colorOf?: (playerId: number) => string): LogRow[] {
   const rows: LogRow[] = [];
+  // The ordinal within the row's own event: the position in the group body
+  // shifts whenever history is slotted in, this one does not, so keys (and the
+  // heights cached under them) survive a merge.
+  const seen = new Map<number, number>();
   for (const g of turnGroups(lines)) {
     const bar = g.head && g.head.who != null && g.head.who >= 0 ? colorOf?.(g.head.who) : undefined;
     if (g.head) rows.push({ key: `h${g.head.id}`, head: true, group: true, end: !g.body.length, bar, line: g.head });
-    g.body.forEach((l, n) =>
-      rows.push({ key: `${l.id}:${n}`, head: false, group: !!g.head, end: n === g.body.length - 1, bar, line: l }),
-    );
+    g.body.forEach((l, n) => {
+      const ord = seen.get(l.id) ?? 0;
+      seen.set(l.id, ord + 1);
+      rows.push({ key: `${l.id}:${ord}`, head: false, group: !!g.head, end: n === g.body.length - 1, bar, line: l });
+    });
   }
   return rows;
 }
@@ -314,6 +320,14 @@ export const Log = memo(function Log({ lines, colorOf, children, titled = true }
   const onLeave = useCallback(() => undefined, []);
   const rows = useMemo(() => logRows(lines, colorOf), [lines, colorOf]);
   const keys = useMemo(() => rows.map((r) => r.key), [rows]);
+  // Only the window is in the DOM, so a copy would take just the visible rows.
+  // A selection inside the log therefore copies the whole log's text.
+  const onCopy = useCallback((e: ClipboardEvent<HTMLDivElement>) => {
+    const sel = document.getSelection();
+    if (!sel?.anchorNode || !ref.current?.contains(sel.anchorNode)) return;
+    e.clipboardData.setData("text/plain", rows.map((r) => r.line.text).join("\n"));
+    e.preventDefault();
+  }, [rows]);
   // Only the rows around the viewport are in the DOM; the spacers keep the
   // scrollbar honest for the whole match. The hook also owns the tail follow.
   const win = useWindowedList(ref, keys, { estimate: compact ? 18 : 22 });
@@ -321,12 +335,12 @@ export const Log = memo(function Log({ lines, colorOf, children, titled = true }
     <div className={s.log}>
       {titled && <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>}
       {children}
-      <div className={s.lines} ref={ref}>
+      <div className={s.lines} ref={ref} onCopy={onCopy}>
         <div className={s.spacer} style={{ height: win.top }} aria-hidden />
-        {rows.slice(win.start, win.end).map((r, k) => (
+        {rows.slice(win.start, win.end).map((r) => (
           <div
             key={r.key}
-            ref={win.row(r.key, win.start + k)}
+            ref={win.row(r.key)}
             className={cx(r.head && s.turnGroup, r.group && !r.head && s.turnGroupCont, r.group && r.end && s.turnEnd, r.line.stage && s.stageLine)}
             style={r.group && r.bar ? { ["--bar" as string]: r.bar } : undefined}
           >

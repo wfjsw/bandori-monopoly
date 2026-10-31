@@ -344,18 +344,14 @@ export class Animator {
   }
 
   /** The index of the first row whose event id is past `id` (`log.length`
-   *  when every id is older). */
+   *  when every event id is older). Local stage lines carry a negative id and
+   *  sit between events, so they mark no position: only event ids count. */
   private firstNewer(id: number): number {
-    let lo = 0;
-    let hi = this.log.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      const lid = this.log[mid].id;
-      if (lid >= 0 && lid <= id) lo = mid + 1;
-      else if (lid < 0) lo = mid + 1;
-      else hi = mid;
+    for (let i = 0; i < this.log.length; i++) {
+      const lid = this.log[i].id;
+      if (lid >= 0 && lid > id) return i;
     }
-    return lo;
+    return this.log.length;
   }
 
   /** Names for message arguments (players/tiles/cards of the running match). */
@@ -974,12 +970,19 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
       if (viewRef.current !== shownRef.current) set({ view: viewRef.current, at: performance.now() });
     };
     for (const e of sess.view?.state.events ?? []) a.addLog(e, { history: true });
-    // The state frame carries only a tail. Ask the session for everything it
-    // still has and slot the older rows in behind the ones just seeded; the
-    // fetch lands after the board is already drawing, so it never delays it.
-    void sess.historyEvents().then((evs) => a.mergeHistory(evs));
     animRef.current = a;
   }
+  // The state frame carries only a tail. Ask the session for everything it
+  // still has and slot the older rows in behind the ones just seeded, after a
+  // beat: a replay scrub remounts the board per seek, and only the mount that
+  // settles should pay for a whole-history fetch.
+  useEffect(() => {
+    const a = animRef.current!;
+    const t = setTimeout(() => {
+      void sess.historyEvents().then((evs) => a.mergeHistory(evs)).catch(() => undefined);
+    }, 150);
+    return () => clearTimeout(t);
+  }, [sess]);
   useEffect(() => {
     const a = animRef.current!;
     // Both the hand's live controls and replay transport drive local speed.

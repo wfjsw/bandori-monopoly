@@ -456,6 +456,20 @@ test("Animator: mergeHistory slots older rows in id order, ahead of the tail", (
   assert.equal(anim.log.length, 6);
 });
 
+test("Animator: mergeHistory puts history before a live stage line, not after it", () => {
+  const { anim } = makeAnim();
+  for (const id of [10, 11]) anim.addLog(frame({ id, type: "pass", msg: { k: "log.x" } }), { history: true });
+  // A stage change lands while the history fetch is in flight (negative id).
+  anim.stageTo(1, { step: 2, newTurn: false });
+  anim.addLog(frame({ id: 12, type: "pass", msg: { k: "log.x" } }), { history: true });
+
+  anim.mergeHistory([5, 6].map((id) => frame({ id, type: "pass", msg: { k: "log.x" } })));
+
+  assert.deepEqual(anim.log.slice(0, 2).map((l) => l.id), [5, 6]);
+  assert.deepEqual(anim.log.map((l) => l.id), [5, 6, 10, 11, anim.log[4].id, 12]);
+  assert.ok(anim.log[4].stage);
+});
+
 test("Animator: mergeHistory folds a walk's 继续前进 republish like the live ingest", () => {
   const { anim } = makeAnim();
   const mov = (id: number) => frame({ id, type: "pass", msg: { k: "log.move_on" } });

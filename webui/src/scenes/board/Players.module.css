@@ -72,11 +72,15 @@
    Windowed rows own their own spacing (padding, never margin) so a row's
    measured height is its whole visual height: the heading opens the block,
    every entry under it continues the bar, and the last one closes it. */
-.turnGroup { border-left: 4px solid var(--bar, var(--pink)); padding: 10px 0 0 8px; }
+/* `.stageLine` must precede the group rules: its `padding` shorthand would
+   otherwise zero the block's left indent (same specificity, later wins). */
+.stageLine { color: var(--sub); font-size: 12px; padding: 5px 0 2px; }
+.turnGroup { border-left: 4px solid var(--bar, var(--pink)); padding: 10px 0 2px 8px; }
 .turnGroupCont { border-left: 4px solid var(--bar, var(--pink)); padding-left: 8px; }
 .turnEnd { padding-bottom: 2px; }
-.groupHead { font-weight: 700; color: var(--text); margin-bottom: 2px; }
-.stageLine { color: var(--sub); font-size: 12px; padding: 5px 0 2px; }
+/* The heading's spacing is the row's own padding (a child's margin would
+   collapse out of the measured box). */
+.groupHead { font-weight: 700; color: var(--text); }
 .spacer { width: 100%; }
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
 
@@ -132,6 +136,6 @@
 :global(:root[data-compact]) .log { padding: 8px 10px 6px; }
 :global(:root[data-compact]) .lines { font-size: 12px; line-height: 1.45; margin-top: 4px; }
 :global(:root[data-compact]) .stageLine { font-size: 11px; padding: 3px 0 1px; }
-:global(:root[data-compact]) .turnGroup { padding: 6px 0 0 6px; }
+:global(:root[data-compact]) .turnGroup { padding: 6px 0 1px 6px; }
 :global(:root[data-compact]) .turnGroupCont { padding-left: 6px; }
 :global(:root[data-compact]) .turnEnd { padding-bottom: 1px; }

@@ -91,13 +91,12 @@ export function useWindowedList(
   scroller: RefObject<HTMLElement | null>,
   keys: readonly string[],
   opts: WindowOptions,
-): RowWindow & { row(key: string, index: number): (el: HTMLElement | null) => void } {
+): RowWindow & { row(key: string): (el: HTMLElement | null) => void } {
   const { estimate } = opts;
   const overscan = opts.overscan ?? 12;
   const [version, setVersion] = useState(0);
   const [view, setView] = useState({ scrollTop: 0, viewport: 0 });
   const heights = useRef(new Map<string, number>());
-  const els = useRef(new Map<string, HTMLElement>());
   const present = useRef(new Map<string, number>());
   const follow = useRef<ScrollFollow>({ atEnd: true, pinned: null });
   const win = useRef({ start: 0, end: 0 });
@@ -160,6 +159,9 @@ export function useWindowedList(
   const measure = useCallback((el: HTMLElement, key: string) => {
     // Design px: the stage is transform-scaled, and `scrollTop` is layout px.
     const h = designBox(el).height;
+    // A hidden pane (`display: none`) measures every row at 0; keep the real
+    // heights the list had, or the offsets would collapse while it is hidden.
+    if (h === 0) return;
     const prev = heights.current.get(key);
     if (prev === h) return;
     heights.current.set(key, h);
@@ -173,19 +175,19 @@ export function useWindowedList(
     setVersion((v) => v + 1);
   }, [scroller, estimateRef]);
 
+  // One stable ref callback per row key: a fresh closure per render would make
+  // React detach and re-attach every rendered row on every frame.
+  const callbacks = useRef(new Map<string, (el: HTMLElement | null) => void>());
   const row = useCallback(
-    (key: string, index: number) =>
-      (el: HTMLElement | null) => {
-        const old = els.current.get(key);
-        if (old && old !== el && old.dataset) delete old.dataset.winIndex;
-        if (!el) {
-          els.current.delete(key);
-          return;
-        }
-        els.current.set(key, el);
-        el.dataset.winIndex = String(index);
-        measure(el, key);
-      },
+    (key: string) => {
+      const cached = callbacks.current.get(key);
+      if (cached) return cached;
+      const cb = (el: HTMLElement | null) => {
+        if (el) measure(el, key);
+      };
+      callbacks.current.set(key, cb);
+      return cb;
+    },
     [measure],
   );
 
