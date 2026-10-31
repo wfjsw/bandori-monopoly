@@ -140,6 +140,7 @@ fn reverse_move_previews_and_extends_in_the_same_direction() {
     let mut t = sayo();
     t.set_pos(0, 20);
     t.m.world_mut().turn.plan.reverse = true;
+    t.m.world_mut().turn.plan.reverse_fresh = true;
     t.dice(&[5]);
     t.roll(0).unwrap();
     let p = t.expect_prompt();

@@ -546,6 +546,7 @@ fn s11_force_buy_ignores_a_pay_multiplier() {
     t.own(1, &[land]);
     t.set_mortgaged(land, true);
     t.m.world_mut().turn.plan.pay_factor = 0.5;
+    t.m.world_mut().turn.plan.pay_fresh = true;
     t.set_money(0, 10_000);
     settle_on(&mut t, 0, land);
     t.answer_one(0).unwrap();
@@ -1153,6 +1154,7 @@ fn o06_mortgage_and_redeem_ignore_pay_modifiers() {
     t.set_money(0, 10_000);
     // A paySplitMul halver armed for the turn must not touch the mortgage proceeds.
     t.m.world_mut().turn.plan.pay_factor = 0.5;
+    t.m.world_mut().turn.plan.pay_fresh = true;
     t.mortgage(0, land).unwrap();
     assert_eq!(
         t.money(0),
@@ -1161,6 +1163,7 @@ fn o06_mortgage_and_redeem_ignore_pay_modifiers() {
     );
     // And the redeem cost is the full 60%, not halved.
     t.m.world_mut().turn.plan.pay_factor = 0.5;
+    t.m.world_mut().turn.plan.pay_fresh = true;
     t.redeem(0, land).unwrap();
     assert_eq!(
         t.money(0),
@@ -1179,6 +1182,7 @@ fn p01_pay_mul_halves_a_settle_rent() {
     t.own(1, &[land]);
     t.set_money(0, 10_000);
     t.m.world_mut().turn.plan.pay_factor = 0.5;
+    t.m.world_mut().turn.plan.pay_fresh = true;
     settle_on(&mut t, 0, land);
     drain(&mut t);
     assert_eq!(t.money(0), 10_000 - 150, "300 halved at 支付前");

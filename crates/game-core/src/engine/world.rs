@@ -176,6 +176,15 @@ pub struct TurnCtx {
     /// not leak into the next one.
     #[serde(default)]
     pub extreme: Extreme,
+    /// The activation body being resolved (a hand Play, an event, a skill
+    /// press) drove at least one move. An activation that did is *spent* when
+    /// it ends -- its per-move plan writes were for the move it drove, and its
+    /// replay re-applies them afterwards; one that drove none wrote for a move
+    /// still to come (ran_red 「本次移动向后」, sakiko_lead's half price) and
+    /// keeps them (`Cx::drop_spent_plan_shape`). Reset at the activation's
+    /// entry alongside `extreme`.
+    #[serde(default)]
+    pub play_drove_move: bool,
     /// Whether the play being resolved came from the hand (`false` when it came
     /// from somewhere else). 「若此卡从手牌以外的地方打出」 reads this.
     #[serde(default)]
@@ -260,6 +269,7 @@ impl Default for TurnCtx {
             main_steps: 0,
             abnormal: Vec::new(),
             extreme: Extreme::Plain,
+            play_drove_move: false,
             play_from_hand: false,
             play_arg: Vec::new(),
             cancelled_designations: Vec::new(),

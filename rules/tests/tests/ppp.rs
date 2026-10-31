@@ -877,6 +877,31 @@ fn saaya_skill_offers_on_big_spend() {
     );
 }
 
+/// 规则书: 山吹沙绫「拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷
+/// 结果减1d10（计算后小等于0则移动到下一个可购买格子）」. The empty face moves
+/// the piece to the next buyable tile; the settle runs there.
+#[test]
+fn saaya_floor_moves_to_the_next_buyable_tile() {
+    let mut t = Table::new(&["山吹沙绫", "美竹兰"]);
+    t.clean();
+    t.set_pos(0, 20);
+    // The mark rides the persona-skill instance (MARKERS.md §7).
+    let uid = t.m.world().persona_skill_uid(0);
+    t.m.world_mut().set_tok(0, "saaya标记", 1, uid, 1);
+    t.dice(&[1, 10]); // face 1, cut 10 -> <= 0
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert_eq!(
+        t.pos(0),
+        21,
+        "the next buyable tile after 20: keys={:?}",
+        t.recent_keys(12)
+    );
+    assert_eq!(t.token(0, "saaya标记"), 0, "the mark is spent");
+}
+
 // 规则书: 牛込里美「（2）运营阶段可选择使用3个[火罐]立刻进入移动阶段，[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房」
 #[test]
 fn rimi_skill_teleports_to_farthest_agent() {
