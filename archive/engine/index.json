@@ -1,7 +1,45 @@
 {
  "version": 1,
- "current": "d5547d0df2867e878bb2718db61a95a42f2e370d516a93d682489d0d694070e2",
+ "current": "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060",
  "bundles": [
+  {
+   "id": "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060",
+   "created": "2026-10-31T17:35:21.086Z",
+   "glueSha256": "581864785b8fb063b9a476586eaadf704724a6cbcd66223646eaaa019c025bdd",
+   "bytes": 5937859,
+   "stamp": {
+    "format": 4,
+    "save_version": 13,
+    "abi": 104,
+    "ruleset_sha256": "19b22497f6a3cc17f9787f67d966b4c24db97e2afde4be5947390bcfa235c0e6",
+    "data_sha256": "",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060"
+   },
+   "key": "4|13|104|19b22497f6a3cc17f9787f67d966b4c24db97e2afde4be5947390bcfa235c0e6|",
+   "source_id": "af4b40203171a02765345fbbc125be557b9df6c10408dbe0533c491024afaf3b",
+   "ref": "refs/d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060.bdrec",
+   "ref_sha256": "da862e673521921ff63b8f55a88bd6ef02cace1fbab65a9eb0bda91311f78084",
+   "commit": "4d044376993dc6ee249de9967773b7645f87a6e8",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/bundle.json": "67cee17957d0570653ca119ae0bb85bc05de1b5924b29420dc221240c0e1ff8e",
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/data/board.json": "263add6d1e030e74fed36547714b67c9b48a13917ff5fb6e189e31a34e55d17a",
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/data/match_rules.json": "8b6e77c429e95ef9e0d6cf7c9aa72eec085e327d30d2dc3cc137195ab6788a2e",
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/glue.js": "9dea529fda45bbeb5b2903478c0adab590a350582724685aa71111e7fe66a5a4",
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/glue_bg.wasm": "e1a596cedb2855f1ba7fbefdf7db930847ad8809e82ca1fd19a02b56eeef01cb",
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/rules/conds-f4261bcf1891829b40276c468586d1bb59896e5e6cb9a93f98774618d8be2009.bin": "f4261bcf1891829b40276c468586d1bb59896e5e6cb9a93f98774618d8be2009",
+    "d1bbe80380622008861d8ade3d55c5632e2b8deb13076f7749cfa2b315c5d060/rules/index.json": "9903f2f59cca762fe985a7ab96da7019403a58e2e2c41dbafe843d15281c61ee",
+    "modules/1b1afc0da84772c3d7d7ba471949bf22b864fd96fffa0759c7b529df9cc73f3d.wasm": "1b1afc0da84772c3d7d7ba471949bf22b864fd96fffa0759c7b529df9cc73f3d"
+   }
+  },
   {
    "id": "d5547d0df2867e878bb2718db61a95a42f2e370d516a93d682489d0d694070e2",
    "created": "2026-10-31T04:41:44.136Z",
