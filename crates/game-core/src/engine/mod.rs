@@ -2947,6 +2947,11 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if st.step == stage::MOVE {
                 return Some(Msg::new("err.moving"));
             }
+            // The turn end is already queued: a duplicate `end` is a no-op
+            // (`end_turn_cmd`), so the over-hand gate must not toast it.
+            if cx.w.next_turn_pending && st.step == stage::END {
+                return None;
+            }
             if cx.over_hand(i) {
                 return Some(Msg::new("err.over_hand").i(
                     "limit",

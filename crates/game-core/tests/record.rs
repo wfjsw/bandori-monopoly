@@ -1399,3 +1399,30 @@ fn index_reports_how_far_it_has_reached() {
     assert!(last.done);
     assert_eq!(last.tick, file.header.total_ticks);
 }
+
+/// The end phase runs once per accepted `end`: a duplicate `end` (any seat's
+/// client re-sending while 结束 is up) must not log 「结束了回合」 again --
+/// that spam is exactly what a replay of the record shows (`play.rs`
+/// `end_turn_cmd`).
+#[test]
+fn accepted_ends_and_end_turn_lines_match() {
+    let (file, events) = run_bot_game(
+        9,
+        4,
+        BotMentality::Standard,
+        &mut |r| 1 + r.below(6) as u8,
+        8,
+    );
+    let logged = events
+        .iter()
+        .filter(|e| e.msg.key() == "log.end_turn")
+        .count();
+    let accepted = file
+        .body
+        .inputs
+        .iter()
+        .filter(|i| matches!(i, Input::Act { msg, ok: true, .. } if msg.act == "end"))
+        .count();
+    assert!(accepted > 0);
+    assert_eq!(logged, accepted);
+}
