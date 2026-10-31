@@ -11,6 +11,7 @@ import { test } from "node:test";
 
 import {
   answerFor,
+  autopilotAnswers,
   botSeats,
   decisionKey,
   decisionOf,
@@ -298,6 +299,15 @@ function auctionView(bid = 0, bidder = -1, seq = 12, money = 10_000): MatchView 
   const players = [player(), player({ member: 2, player: "B1", bot: true, money })];
   return view({ you: 2, playerId: 1, state: state({ seq, busy: true, players, prompt }) });
 }
+
+test("autopilotAnswers: an auction is the surface the setting can withhold", () => {
+  const auction = auctionView();
+  assert.equal(autopilotAnswers(auction, true), true, "托管 bids by default");
+  assert.equal(autopilotAnswers(auction, false), false, "left to the player");
+  // Every other surface is still the autopilot's either way.
+  const ops = view({ you: 2, playerId: 1, state: state({ seq: 3, busy: false }) });
+  assert.equal(autopilotAnswers(ops, false), true);
+});
 
 test("recordAnswer: a refusal re-arms unless the answer already stands", () => {
   const answered = new Map<number, Decision>();
