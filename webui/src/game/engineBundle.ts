@@ -106,7 +106,9 @@ let indexCache: Promise<ArchiveIndex | null> | null = null;
 export function archiveIndex(): Promise<ArchiveIndex | null> {
   indexCache ??= (async () => {
     try {
-      const r = await fetch("/assets/engine/index.json");
+      // no-store: a refetch after a deploy must not be answered from a
+      // heuristically cached copy (the index is the one mutable engine file).
+      const r = await fetch("/assets/engine/index.json", { cache: "no-store" });
       if (!r.ok) return null;
       const text = await r.text();
       // An SPA answers unknown paths with index.html and HTTP 200.
