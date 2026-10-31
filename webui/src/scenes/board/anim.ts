@@ -416,14 +416,20 @@ export class Animator {
     this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, fast, e.id);
   }
 
-  /** `uid` when that field instance is still face-up on a field (the event
-   *  recorded it was in play), else null -- the centre flash then plays. */
+  /** `uid` when that field instance is still face-up to the viewer (the event
+   *  recorded it was in play), else null -- the centre flash then plays. A
+   *  face-down card that is your own still shows its face: it lights its
+   *  slot. */
   private fieldUid(uid: number): number | null {
     if (uid < 0) return null;
-    for (const p of this.view()?.state.players ?? []) {
+    const v = this.view();
+    for (const p of v?.state.players ?? []) {
       // `skill:` rules are not drawn in the field row (FieldSheet), so a skill's
       // hook has no slot to light: it keeps the centre flash.
-      for (const c of p.field ?? []) if (c.uid === uid && !c.faceDown && !c.card.startsWith("skill:")) return uid;
+      for (const c of p.field ?? []) {
+        if (c.uid !== uid || c.card.startsWith("skill:")) continue;
+        if (!c.faceDown || c.owner === v?.playerId) return uid;
+      }
     }
     return null;
   }

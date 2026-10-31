@@ -264,7 +264,8 @@ export function showEffect(body: string, ms: number): void {
   window.setTimeout(close, ms);
 }
 
-export function showEventPile(S: MatchState): void {
+/** `me` is the viewer's seat: an own face-down event still shows its face. */
+export function showEventPile(S: MatchState, me: number): void {
   openModal(tr("board.eventDeck"), (
     <div className={s.info}>
       <p>{tr("events.left", { n: S.eventDeck })}</p>
@@ -273,11 +274,19 @@ export function showEventPile(S: MatchState): void {
           <b>{tr("events.active")}</b>
           <div className={s.pileCards}>
             {S.eventActive.map((e) => {
+              if (e.faceDown && !(me >= 0 && e.playerId === me)) {
+                return (
+                  <div key={e.id} className={s.fieldSlot}>
+                    <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>
+                    <small>{tr("board.faceDown")}</small>
+                  </div>
+                );
+              }
               const note = markerNote(e.note?.k ? fmtMsg(e.note, namesOf(S)) : "", eventMarkers(e));
               return (
                 <div key={e.id} className={s.fieldSlot}>
                   <InspectCard id={e.id} note={note} />
-                  {note && <small>{note}</small>}
+                  <small>{note || (e.faceDown ? tr("board.faceDown") : "")}</small>
                 </div>
               );
             })}
@@ -323,11 +332,16 @@ export function showGraveyard(m: Model, playerId: number): void {
 
 /** Every card in play (场上的卡), grouped by the player whose field it is on,
  *  drawn as card faces like the hand and graveyard. Skill rules (`skill:` ids) are bound on the field
- *  but are not cards, so they are left out; a face-down card stays face down.
- *  The active events (生效中的事件) are listed under the cards. */
+ *  but are not cards, so they are left out. A face-down card stays face down,
+ *  except on its owner's entries.
+ *  The active events (生效中的事件) are listed under the cards, the same way.
+ *  The blend the board plays over an own face-down card is left out here: this
+ *  is the read-it-all-when-you-need-it list. */
 export function showField(m: Model): void {
   const S = m.S;
   const names = namesOf(S);
+  /** Hidden from the viewer: face down and not the viewer's. */
+  const hidden = (fc: { faceDown: boolean; owner: number }) => fc.faceDown && !(m.playerId >= 0 && fc.owner === m.playerId);
   const rows = S.players
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
     .filter(([, f]) => f.length);
@@ -340,7 +354,7 @@ export function showField(m: Model): void {
           <div className={s.pileCards}>
             {f.map((fc) => {
               const note = markerNote(fc.note ? fmtMsg(fc.note, names) : "", fieldMarkers(fc));
-              return fc.faceDown ? (
+              return hidden(fc) ? (
                 <div key={fc.uid} className={s.fieldSlot}>
                   <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>
                   <small>{tr("board.faceDown")}</small>
@@ -348,7 +362,7 @@ export function showField(m: Model): void {
               ) : (
                 <div key={fc.uid} className={s.fieldSlot}>
                   <InspectCard id={fc.card} note={note} />
-                  {note && <small>{note}</small>}
+                  <small>{note || (fc.faceDown ? tr("board.faceDown") : "")}</small>
                 </div>
               );
             })}
@@ -360,11 +374,19 @@ export function showField(m: Model): void {
           <div className={s.who}><span>{tr("board.activeEvents")}</span></div>
           <div className={s.pileCards}>
             {events.map((e) => {
+              if (hidden({ faceDown: e.faceDown, owner: e.playerId })) {
+                return (
+                  <div key={e.id} className={s.fieldSlot}>
+                    <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>
+                    <small>{tr("board.faceDown")}</small>
+                  </div>
+                );
+              }
               const note = markerNote(e.note?.k ? fmtMsg(e.note, names) : "", eventMarkers(e));
               return (
                 <div key={e.id} className={s.fieldSlot}>
                   <InspectCard id={e.id} note={note} />
-                  {note && <small>{note}</small>}
+                  <small>{note || (e.faceDown ? tr("board.faceDown") : "")}</small>
                 </div>
               );
             })}

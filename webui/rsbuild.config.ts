@@ -1,4 +1,6 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, extname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type RequestHandler } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { pluginBlurQuery } from "./plugins/pluginBlurQuery";
@@ -36,6 +38,61 @@ const vdiagSink: RequestHandler = (req, res, next) => {
   });
 };
 
+// Dev only: the engine archive lives in `archive/engine/` + `data/engine-archive/`
+// (an `npm run build` copies it into `dist/assets/engine/`, which is what the
+// live site serves). Without this the dev server answers `/assets/engine/…`
+// with a 403, so "download replay, include engine" fails on every development
+// server with "no copy of engine bundle". Read-only; nothing is written.
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ENGINE_STORES = [join(ROOT, "data/engine-archive"), join(ROOT, "data/engine-cache")];
+// Hand-written assets of the same URL space (`replay-worker.js`, `bot-worker.js`,
+// `bot-glue/`) live in the public dir; the SPA fallback must not answer them.
+const ENGINE_PUBLIC = join(ROOT, "webui/public/assets/engine");
+const ENGINE_MIME: Record<string, string> = {
+  ".json": "application/json",
+  ".js": "text/javascript",
+  ".wasm": "application/wasm",
+};
+
+const engineSink: RequestHandler = (req, res, next) => {
+  const path = (req.url ?? "").split("?")[0];
+  const prefix = "/assets/engine/";
+  if (req.method !== "GET" || !path.startsWith(prefix)) return next();
+  // `/assets/engine/` itself, and a malformed escape, belong to the handlers
+  // behind this one -- a miss here must fall through, never throw a 500.
+  let rest: string;
+  try {
+    rest = decodeURIComponent(path.slice(prefix.length));
+  } catch {
+    return next();
+  }
+  if (!rest) return next();
+
+  let file: string | null = null;
+  if (rest === "index.json") {
+    file = join(ROOT, "archive", "engine", "index.json");
+  } else {
+    const [head, ...tail] = rest.split("/").filter(Boolean);
+    const isFile = (p: string) => existsSync(p) && statSync(p).isFile();
+    if (!tail.length) {
+      file = [...ENGINE_STORES, ENGINE_PUBLIC].map((s) => join(s, head)).find(isFile) ?? null;
+    } else {
+      const dirs = head === "modules" ? ENGINE_STORES.map((s) => join(s, "modules")) : [...ENGINE_STORES, ENGINE_PUBLIC].map((s) => join(s, head));
+      file = dirs.map((d) => join(d, ...tail)).find(isFile) ?? null;
+    }
+  }
+  if (!file || !existsSync(file)) {
+    // Anything else (nested public assets) is the built-in static handler's.
+    if (!rest.startsWith("index.json")) return next();
+    res.statusCode = 404;
+    res.end("no engine asset");
+    return;
+  }
+  res.statusCode = 200;
+  res.setHeader("content-type", ENGINE_MIME[extname(file)] ?? "application/octet-stream");
+  res.end(readFileSync(file));
+};
+
 export default defineConfig({
   plugins: [pluginReact(), pluginBlurQuery()],
   source: {
@@ -60,11 +117,11 @@ export default defineConfig({
     },
     // Registered here, ahead of the built-ins, so the history fallback never
     // answers the readout's POST.
-    setup: vdiagLog
-      ? (ctx) => {
-          if (ctx.action === "dev") ctx.server.middlewares.use(vdiagSink);
-        }
-      : undefined,
+    setup: (ctx) => {
+      if (ctx.action !== "dev") return;
+      ctx.server.middlewares.use(engineSink);
+      if (vdiagLog) ctx.server.middlewares.use(vdiagSink);
+    },
   },
   output: { dataUriLimit: 0, cssModules: { localIdentName: "[name]__[local]--[hash:base64:4]" } },
 });
