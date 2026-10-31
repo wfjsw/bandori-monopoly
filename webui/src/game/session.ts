@@ -13,7 +13,18 @@ import { startClockSync, clockSync, resyncLimiter } from "./clockSync";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx, type PolicyName } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
-import { botSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks } from "./botDrive";
+import {
+  answerFor,
+  botSeats,
+  decisionAt,
+  decisionOf,
+  driveSeat,
+  needsAnswer,
+  ponderUpcoming,
+  recordAnswer,
+  type Decision,
+  type DriveHooks,
+} from "./botDrive";
 import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
@@ -53,6 +64,9 @@ class Autopilot {
   private inFlight = false;
   private seq = -1;
   private tried = new Set<string>();
+  /** The surface this seat last answered (`needsAnswer`): a turn surface
+   *  outlives its answer, so re-asking lands `err.not_your_turn`. */
+  private answered = new Map<number, Decision>();
   private played = 0;
   private turnKey = "";
   private off: (() => void) | null = null;
@@ -81,6 +95,7 @@ class Autopilot {
     this.inFlight = false;
     this.seq = -1;
     this.tried.clear();
+    this.answered.clear();
     this.setSearching(false);
     this.off?.();
     this.off = null;
@@ -179,6 +194,9 @@ class Autopilot {
    */
   private stepDrive(v: MatchView, at: number, mode: PolicyName): void {
     const s = this.sess;
+    // Already answered: the frame still shows the decision this seat just
+    // answered (结束 holds after `end`), re-asking would be refused.
+    if (!needsAnswer(this.answered, s.you, v)) return;
     // Setup / discard / vote: the search does not cover them (and the server
     // keeps a bot's setup engine-side). Same policy as the mode's table.
     if (decisionAt(v.state, v.playerId) == null) {
@@ -186,12 +204,19 @@ class Autopilot {
       if (!cmd) return;
       this.tried.add(Autopilot.key(cmd));
       this.inFlight = true;
+      const answer = answerFor(v, cmd, decisionOf(v));
       Promise.resolve(s.act(cmd))
         .then((err) => {
           if (err) {
+            // This branch iterates candidates (via `tried`) on one surface, so
+            // a refusal must let the next one through.
+            this.answered.delete(s.you);
             console.warn("advanced: command refused", cmd, err);
             this.schedule();
-          } else if (cmd.act === "play") this.played++;
+          } else {
+            this.answered.set(s.you, answer);
+            if (cmd.act === "play") this.played++;
+          }
         })
         .finally(() => {
           this.inFlight = false;
@@ -214,6 +239,7 @@ class Autopilot {
       search: mode === "advanced",
       mentality: mode === "chaos" ? "chaos" : mode === "advanced" ? "advanced" : "standard",
       onThinking: (_m, on) => this.setSearching(on),
+      onApplied: (m, decision, ok) => recordAnswer(this.answered, m, decision, ok),
     };
     void driveSeat(
       (_member, cmd) => {
@@ -510,6 +536,9 @@ export class SoloSession extends GameSession {
   /** Per-seat decisions already spent this turn (the budget spread). */
   private botTurnKey = "";
   private botPlayed = new Map<number, number>();
+  /** The decision each seat has already answered (`needsAnswer`): a turn
+   *  surface outlives its answer, so re-asking it lands `err.not_your_turn`. */
+  private botAnswered = new Map<number, Decision>();
   /** Speculative `ponder` bookkeeping: one in flight per seat, rate-limited
    *  (`docs/BOT.md` §3.5 -- the same shape as the server's `spawn_ponder`). */
   private botPonderInFlight = new Set<number>();
@@ -676,6 +705,8 @@ export class SoloSession extends GameSession {
       if (!v) continue;
       const mentality = this.botMentality(member);
       if (decisionAt(v.state, v.playerId) == null) {
+        // The surface is gone, so a later one re-arms the seat.
+        this.botAnswered.delete(member);
         // Nothing to answer right now. Speculate on the seat's **next own
         // decision** when it is near (BOT-RESEARCH #5, `docs/BOT.md` §3.5) --
         // rate-limited like the server's idle probe, one in flight per seat.
@@ -709,6 +740,9 @@ export class SoloSession extends GameSession {
         }
         continue;
       }
+      // Already answered: the frame still shows the decision the seat just
+      // answered (结束 holds after `end`), re-asking would be refused.
+      if (!needsAnswer(this.botAnswered, member, v)) continue;
       // A live decision supersedes any speculative search in flight.
       this.botPonderInFlight.delete(member);
       this.botInFlight.add(member);
@@ -728,6 +762,7 @@ export class SoloSession extends GameSession {
           search: mentality === "advanced",
           mentality,
           onThinking: (m, on) => this.setBotThinking(m, on),
+          onApplied: (m, decision, ok) => recordAnswer(this.botAnswered, m, decision, ok),
         },
       ).finally(() => {
         this.botInFlight.delete(member);
