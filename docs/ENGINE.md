@@ -254,11 +254,40 @@ running, nested money pipelines skip X (`Cx::reentrant_hooks`). A safety cap
 (`MAX_MONEY_DEPTH = 32`) exists only to catch genuine runaway recursion and
 **traps loudly** (panics) rather than settling silently.
 
+### One window, many responders (the stage folds)
+
+A 支付阶段 window is *one* window in the sheet and holds any number of
+responders, so a stage composes its answers instead of letting the last one
+overwrite the rest (MONEY-01 / C-Q1, ruled 2026-10-31; G-MONEY-13). Every
+stage on the money pipeline is a [`Fold`] (`crates/game-core/src/engine/rules.rs`):
+
+* `Fold::Replace` -- the writable / plain stages: the answer is the figure
+  (the `*Before` prompts, `paySplitAt`, …).
+* `Fold::Add` -- the fixed-value row (支付阶段 2): each responder reads the
+  stage **input** and its `write − input` deltas are summed.
+* `Fold::Mul` -- the halve / double row (支付阶段 4): each responder reads the
+  stage **input** and its `write / input` factors are multiplied, in
+  millionths.
+
+Both folds are commutative, so declaration order cannot change the figure, and
+they are the same mechanism at every scale of the chain: the rent's own
+`rentAdd` / `rentMul`, the settle's `settleAdd` / `settleMul` (raised **once**
+per settle, stored on `Cx::settle_pay`, applied to every leg) and the payment's
+`payCombinedAdd` / `paySplitAdd` / `payCombinedMul` / `paySplitMul`. The single
+`ceil10_money` still runs once, after the whole chain. A body that wants to
+compose writes its own function of the input (`value + n`, `(value * 3 + 1) / 2`)
+-- an absolute rewrite is still fine, it just contributes that delta.
+
+The `*Before` interactive prompts stay `Replace`: they are a seat's declared
+figure, not a crowd of modifiers, and a body that writes there is the input of
+the fold it precedes.
+
 ### The pre-split stage (「分摊前」)
 
 A payment **command** runs a command-wide modifier stage on its total before
-any 「[分摊]」 divides it into shares: `payCombinedAdd` -> `payCombinedMul` ->
-`payCombinedCancel`, composing (`PIPELINE-AUDIT` Q2). This is the 「分摊前」 figure
+any 「[分摊]」 divides it into shares: `payCombinedAdd` (fold, sums) ->
+`payCombinedMul` (fold, multiplies) -> `payCombinedCancel` (the stop), composing
+(`PIPELINE-AUDIT` Q2). This is the 「分摊前」 figure
 of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)) and 「此次获得的分摊前数量
 增加Y×100」 (白鹭千圣 (2)); both hook `payCombinedAdd`. The per-share stages
 (`paySplitAdd` / `paySplitMulBefore` / `paySplitMul` / `paySplitChoose` / `paySplitAt`)
@@ -359,19 +388,26 @@ L81's removal list is cards and skill effects, not the marker vocabulary. The
 seat is marked dead **before** `bankruptBefore`, so the dying player's own
 sources cannot join that window (L16/L17/L81 read together).
 
-### 「支付减半」 rides `paySplitMul`
+### 「支付减半」 rides the mul row
 
-A rule that halves a settlement payment scales it at the pipeline's **`paySplitMul`
-stage** (`play.rs::scale_settle_payment`), not at `pay_rent`. That is the
-「支付减半」 ruling (2026-10-06): the scale covers the payment **as card effects
-have shaped it** -- a rent-region expansion that adds a surcharge, a forced
-stop-and-pay -- and not only the rent table's number. Two homes are read, both
-in milli-units (`prop::RENT_FACTOR` / `prop::PAY_FACTOR` on the tile's rule
-instance, and the move plan's `plan::set_rent_factor` / `set_pay_factor` for a
-hand card that shapes a settle and then leaves the field). A purchase
-(`buy` / `build`), a forced purchase (rulebook 「此次购买的价格不受任何资金变动
-效果影响」) and a print (`gain`) are never scaled. See
-[TILES.md](TILES.md) 「支付减半」 wording comparison.
+A rule that halves a settlement payment scales it at the pipeline's mul row,
+never at `pay_rent`. That is the 「支付减半」 ruling (2026-10-06): the scale
+covers the payment **as card effects have shaped it** -- a rent-region
+expansion that adds a surcharge, a forced stop-and-pay -- and not only the rent
+table's number. Two homes are read, both in milli-units (`prop::RENT_FACTOR` /
+`prop::PAY_FACTOR` on the tile's rule instance, and the move plan's
+`plan::set_rent_factor` / `set_pay_factor` for a hand card that shapes a settle
+and then leaves the field). The rent-shaped homes (`plan.rent_factor`,
+`RENT_FACTOR`, `Pay::milli_scale`) join the `rentMul` phase; the settle-shaped
+homes (`plan.pay_factor`, `PAY_FACTOR`) are the tail of the mul row
+(`play.rs::scale_settle_payment`). Two live writers of the same home multiply
+(`Ops::set_pay_factor` / `set_rent_factor`, MONEY-01), so a second halving is
+0.25, not a rewrite. The writes are kept as a list keyed by `(writer,
+ordinal)` (`MoveCtx::pay_writes` / `rent_writes`): a card body is re-executed
+from its start when its drive resumes after a suspension, and its replay must
+reproduce each contribution rather than fold it in twice. A purchase (`buy` / `build`), a forced purchase (rulebook
+「此次购买的价格不受任何资金变动效果影响」) and a print (`gain`) are never
+scaled. See [TILES.md](TILES.md) 「支付减半」 wording comparison.
 
 ### The purchase surface (`docs/PURCHASE.md`)
 

@@ -70,8 +70,6 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     // `MoveCtx` the C# marks at `MoveBefore`; with the default factor of 1.0
     // `*= 0.5` and `= 0.5` agree. The followers' replays carry the same plan,
     // so their settle payments are halved too.
-    // TODO(规则书)（触发结算时进行的[支付]价格减半）: 两次减半应叠乘为 0.25 --
-    //   `set_pay_factor` 是赋值，同一结算上的第二次减半会把 0.5 覆盖回去。
     // TODO(规则书)（触发结算时进行的[支付]价格减半）: 只该减该次移动的结算 --
     //   因子写在整回合的 `plan` 上且无人清除，同回合之后的结算也被减半。
     ctx::plan::set_pay_factor(500);

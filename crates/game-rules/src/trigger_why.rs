@@ -74,7 +74,11 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::PaySplitAt
         | TriggerKind::PayCombinedAdd
         | TriggerKind::PayCombinedMul
-        | TriggerKind::PayCombinedCancel => {
+        | TriggerKind::PayCombinedCancel
+        | TriggerKind::RentAdd
+        | TriggerKind::RentMul
+        | TriggerKind::SettleAdd
+        | TriggerKind::SettleMul => {
             if who < 0 {
                 Msg::new("log.why.gain")
                     .player_id("target", target)

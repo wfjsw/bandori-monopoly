@@ -115,8 +115,7 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     }
     // 规则书: 「由此卡效果导致[触发结算]时需支付资金减半」 -- the pay factor is
     // milli-units (500 = x0.5).
-    // TODO(规则书)（由此卡效果导致[触发结算]时需支付资金减半）: 与已生效的减半
-    //   应叠乘 -- `set_pay_factor` 是赋值，会把此前的倍率覆盖回 0.5。
+    // 与已生效的减半叠乘（MONEY-01）：写入是乘积的一部分，不是赋值。
     ctx::plan::set_pay_factor(500);
     if trigger::move_remaining() > 0 {
         // Mid-walk: stop on this tile -- the walk settles here.

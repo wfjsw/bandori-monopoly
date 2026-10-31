@@ -1099,11 +1099,10 @@ conventions as §1–§5: `R(t,h)`, loaded dice, `// 规则书:` quotes,
   (use `world_mut` to set state and crystals). P1 owns tile `t` with 0 houses.
   P0 lands on `t`.
 * **Act:** settle; P0 pays P1 `R(t,0)`.
-* **Expect (book):** each modifier scales the amount. Sheet does not fix the
-  order. Two candidates: `R(t,0) * 1.5 * 1.5` vs a sequential add-then-multiply.
-* **RULING:** the order of two multipliers on one amount. Record which the
-  engine does; the sheet does not settle it. Assert the money delta either way
-  and mark the order in the ignore reason.
+* **Expect:** each modifier is a factor of one product: `ceil10(R(t,0) * 2.25)`.
+* **RULED (MONEY-01, 2026-10-31):** every live factor of a rent / settle is one
+  product, applied at the stage it belongs to and read from the stage input, so
+  the order of two multipliers cannot matter (`rentMul`). G01 asserts.
 * **Loaded dice:** none (landing is arranged by `set_pos`).
 
 #### G02. multiply x clamp-floor: 摩卡 half-pay under 不要背负期待's +100
@@ -1113,10 +1112,8 @@ conventions as §1–§5: `R(t,h)`, loaded dice, `// 规则书:` quotes,
 * **Expect:** 不要背负期待 (2) raises a [支付] by 100 (pay +100), 摩卡 (2)
   halves every pay. Sheet: 「所有资金支付与消耗减半」 and 「[支付]资金时金额
   提高100」. Composition is unstated.
-* **RULING:** is the +100 added before the halving (so `(R+100)/2`) or after
-  (`R/2 + 100`)? The sheet's payment-stage description (AddDiff → MultDiff)
-  from the ileuxali notes suggests add-then-multiply, i.e. `(R+100)/2`.
-  Assert that; mark **RULING**.
+* **RULED (MONEY-01):** the add stage precedes every mul stage, so the +100 is
+  added before the halving: `ceil10((R+100)/2)`. G02 asserts.
 
 #### G03. cancel-one x split-share: 网络链接异常 drops one leg of a 分摊
 * **Cards:** `PP:[白鹭千圣]微笑的铁假面` (P0) played against P1+P2+P3, vs
@@ -1172,6 +1169,30 @@ conventions as §1–§5: `R(t,h)`, loaded dice, `// 规则书:` quotes,
   end).
 * **RULING:** does a negated redirect count as "had an effect"? Assert
   "draws 1"; record the alternative.
+
+#### G08/G09/G10. The rent / settle stage folds (MONEY-01, `rules/tests/tests/gap_money.rs`)
+
+The money pipeline's stages are shared windows with a fold, so several
+responders on one stage sum / multiply instead of the last one winning:
+
+* **G08** — `TEST:rentAdd100` + `TEST:rentMulHalf` on the tile plus 摩卡's
+  settle-agnostic 0.5x: the rent row composes to `(R+100)/8`, and the payment
+  stage folds the same way under it.
+* **G09** — `TEST:settleAdd100` + `TEST:settleMulHalf`: the settle's single
+  `settleAdd` / `settleMul` window shapes every leg of the settle, so the rent
+  leg is `(R+100)/2`.
+* **G10** — a nested settle cancelled at its declaration (`TEST:settleCancel`
+  on the other seat's settle) still reaches `tileResolved`; it must not pop the
+  outer settle's stored 支付价格 shaping on the way out (the frame records
+  whether it pushed).
+* **G11** — two responders on **one** `settleAdd` stage (`TEST:settleAdd100` +
+  `TEST:settleAdd50`) sum to `R+150`. The stage payload also mirrors the figure
+  onto `t.Move.Roll`, and the counteraction write-back must take the composed
+  `value` there, not the mirror (which holds only the last responder).
+* **G12** — a plan factor written before the body's own ask survives the
+  resume (STACK-01). The body is re-executed from its start, so
+  `plan::set_pay_factor` is idempotent per `(writer, ordinal)` write: two
+  settles after the resume each pay `R/2`, not `R/2` then `R/4`.
 
 ### G2. Roll
 
@@ -1435,9 +1456,11 @@ and the gap `RULING` tests) is
 [TEST-FINDINGS.md](TEST-FINDINGS.md) §6; the bullets below stay as the
 design record and the suggested order:
 
-* **R-1 (money multiply x multiply):** G01. Fire bird 1.5x vs Ave Mujica 1.5x
-  vs 摩卡 half vs HHW band double-pay. Suggest: AddDiff, then each MultDiff in
-  field-card age order (oldest first), then band, then character, then clamp.
+* **R-1 (money multiply x multiply) — RULED (MONEY-01):** G01. Fire bird 1.5x
+  vs Ave Mujica 1.5x vs 摩卡 half vs HHW band double-pay: one product of every
+  live factor (HHW's double is a choose-stage rewrite of the settled figure),
+  one `ceil10` at the very end. The `multiply_order_matters` fuzz case asserts
+  commutativity.
 * **R-2 (money flat-add x multiply):** FEVER!'s +X vs a rent multiplier. Does
   +X land on the base rent or on the multiplied rent?
 * **R-3 (money cancel-one x split-share):** G03. Does X recompute after a

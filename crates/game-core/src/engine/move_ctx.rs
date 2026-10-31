@@ -34,6 +34,24 @@ pub struct Roll {
     pub why: String,
 }
 
+/// One written money factor: who wrote it and which write of theirs it is.
+///
+/// A card body is re-executed from its start when its drive resumes after a
+/// suspension, replaying every write before the pause. The `(writer,
+/// ordinal)` pair names a contribution across passes, so the replay's write
+/// lands on its own earlier entry instead of stacking a second time.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct FactorWrite {
+    /// The writing instance's uid, or -- for a body with no instance on the
+    /// field (a hand play, a persona skill) -- its card id.
+    pub writer: String,
+    /// The writer's own write counter, so a body that halves twice keeps two
+    /// contributions where one re-executed write stays one.
+    pub ordinal: u32,
+    /// The factor in milli-units (500 = x0.5).
+    pub milli: i32,
+}
+
 impl Roll {
     /// `count`d`sides` (or a flat `count` when `sides == 0`).
     pub fn new(count: i32, sides: i32, why: impl Into<String>) -> Self {
@@ -163,6 +181,17 @@ pub struct MoveCtx {
     pub pay_factor: f64,
     /// Scale rent paid for this walk, same units.
     pub rent_factor: f64,
+    /// The `pay_factor` contributions one by one. `pay_factor` above is their
+    /// running product; the list is what makes a write idempotent -- a body
+    /// that suspends is re-executed from its start on the resume (STACK-01),
+    /// so the Nth write of a pass is the same contribution as the Nth write
+    /// of the pass before it and replaces it instead of multiplying again.
+    #[serde(default)]
+    pub pay_writes: Vec<FactorWrite>,
+    /// `rent_factor`'s contributions, same rule, kept apart so a body writing
+    /// both scales each on its own.
+    #[serde(default)]
+    pub rent_writes: Vec<FactorWrite>,
     /// Settle on another player's behalf.
     pub settle_as_agent: bool,
     /// This settle was initiated by a card (`card_settle_at`), not by the
@@ -187,6 +216,10 @@ pub struct MoveCtx {
     pub stop_at_fresh: bool,
     #[serde(default)]
     pub pay_fresh: bool,
+    /// The same scope for `rent_factor`, kept apart from `pay_fresh` so a body
+    /// that writes both fingers multiplies each on its own (MONEY-01).
+    #[serde(default)]
+    pub rent_fresh: bool,
     /// Same one-shot scope for the walk's *direction* (`reverse`) and whether
     /// it settles (`resolve`): a 「向反方向移动」 / 「不[结算]」 move must not
     /// send the next one backwards or silence its settle.
@@ -268,11 +301,14 @@ impl Default for MoveCtx {
             settle_tile: -1,
             pay_factor: 1.0,
             rent_factor: 1.0,
+            pay_writes: Vec::new(),
+            rent_writes: Vec::new(),
             settle_as_agent: false,
             settle_redirect: false,
             steps_fresh: false,
             stop_at_fresh: false,
             pay_fresh: false,
+            rent_fresh: false,
             reverse_fresh: false,
             resolve_fresh: false,
             can_build: true,

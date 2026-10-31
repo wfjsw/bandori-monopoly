@@ -21,10 +21,12 @@ Sources (re-counted 2026-10-27 against master `325845ba`):
   72, `rules/skills` 27, `rules/events` 21, `crates/` 23, other 19. Some are
   convention markers (a module doc naming the policy, not a gap); the
   convention-marker list is below.
-- **13** live `#[ignore = "RULING: …"]` rulebook tests in
+- **11** live `#[ignore = "RULING: …"]` rulebook tests in
   `rules/tests/tests/*.rs`, zero live `DISCREPANCY:` (comment mentions of the
   convention do not count). Plus 2 meta `q4_unintended` tooling ignores (soak /
-  report generator). `crates/game-rules/tests/` is clean.
+  report generator). `crates/game-rules/tests/` is clean. (13 until 2026-10-31:
+  the MONEY-01 pair `gap_money::g01` / `fuzz_found::multiply_order_matters`
+  was un-ignored with the ruling.)
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `crates/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
@@ -274,21 +276,6 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   `C-unwind`; revisit if a non-unwinding abort path appears.
 
 # HIGH
-
-## MONEY-01 — rent / settle multipliers do not have a composition rule
-- **kind**: rulebook divergence
-- **class**: C
-- **severity**: high
-- **suggested batch**: rent multipliers
-- **locations**
-  - `rules/tests/tests/gap_money.rs:117` `g01_fire_bird_times_ave_mujica_on_one_rent` `#[ignore = "RULING: order of two multipliers on one rent (Fire bird 1.5x x Ave Mujica 1.5x)"]`
-  - `rules/tests/tests/cross_tiles.rs:457` `t11_fire_bird_plus_hhw_double` — **D note**: ignore already removed (test still records the question; do not re-open as A)
-  - `rules/tests/tests/fuzz_found.rs:173` `multiply_order_matters` `#[ignore = "DISCREPANCY: two multiplicative money modifiers do not commute"]`
-  - TEST-FINDINGS §6 Timing/order R-1
-- **rulebook text**: Fire bird 「支付…的1.5倍」, Ave Mujica 状态2 「从[收取]与[支付]的资金改为1.5倍（只对自己结算）」, HHW band double-pay, 摩卡 half. All live in window `回合階段&註釋` `B30`/`C30` with no product/stack rule.
-- **current**: multipliers compose in declaration order; two muls do not commute (fuzz).
-- **expected**: one agreed composition (product? last-writer? one window once?).
-- **question (verbatim in §C list)**: C-Q1.
 
 ## MONEY-02 — 「支付减半」 vs cancel-one / 分摊 recompute order
 - **kind**: rulebook divergence
@@ -1762,8 +1749,19 @@ hole and it is older.
 
 # Verbatim C-class questions (ready to show the user)
 
-**C-Q1 (MONEY-01, rent multipliers).**
+**C-Q1 (MONEY-01, rent multipliers) — ANSWERED 2026-10-31: (a), plus (c)'s
+"one window each" as the *stage* frame.**
 When two multiplicative money modifiers apply to one rent / settle payment (e.g. Fire bird 「支付…的1.5倍」 × Ave Mujica 状态2 「从[收取]与[支付]的资金改为1.5倍」 × HHW band double-pay × 摩卡 half), in what order do they compose? Options: (a) product of all live multipliers, (b) apply in declaration order as written, (c) only one multiplier per window (「支付减半/翻倍」 applies once), (d) other.
+
+*Ruling:* the sheet's window is the 支付阶段 row (2 for fixed values, 4 for
+halve/double), and a window holds any number of responders. Within one stage
+the responders are **summed** (row 2) / **multiplied** (row 4), each reading
+the stage input, so declaration order cannot matter and the option (c)
+"applies once" reading is wrong once two cards are live. Rent and settle each
+get their own row-2 / row-4 stages ahead of the payment's, so the whole chain
+is one product of the figure with the single 「向上取整10」 after it. G-MONEY-13
+carries the ruling; `gap_money::g01` / `g08` / `g09` and the commutativity
+fuzz check pin it.
 
 **C-Q2 (MONEY-02, 分摊 × halving × cancel-one).**
 On a 分摊 leg: (1) if one designation is cancelled (网络链接异常 「取消一个指定」), does the per-payer share recompute from the remaining designations, or is it the pre-drop figure? (2) Does a 「支付减半」 apply before the split, to each share, or after? Options for (1): recompute / pre-drop. Options for (2): pre-split / per-share / post-split.

@@ -263,7 +263,9 @@ obligation, §9):
 | 125 | `diceRollAdd` | Filter (value) | yes | yes | the additive pass. Reads + writes the running face; payload reader sees purpose / rerolled. |
 
 110 (`paySplitMulBefore`) is the current maximum; 123..=125 are this group's
-README band (111-122 go to earlier-landing groups). Retired
+README band (111-122 go to earlier-landing groups — 111 `rentAdd`, 112
+`rentMul`, 113 `settleAdd`, 114 `settleMul` landed with MONEY-01 at ABI v105,
+leaving 115-122). Retired
 ids (16-20, 22, 94, 104) stay untouched. `diceRollValue` (102) is **redefined
 in place** as the final-settlement (multiplicative) stage; its numeric id and
 wire name do not move.

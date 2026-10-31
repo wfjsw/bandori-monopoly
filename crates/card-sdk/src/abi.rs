@@ -842,7 +842,19 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 104;
+pub const ABI_VERSION: i32 = 105;
+/// v105: **stage folds and rent / settle stages (MONEY-01)**. The amount
+///    stages no longer apply one responder after the other: every responder of
+///    an add stage reads the **stage input** and its deltas are summed, every
+///    responder of a mul stage reads the stage input and its factors are
+///    multiplied. Composition is therefore commutative and declaration order
+///    cannot change a figure. Four hook-only filter kinds carry the missing
+///    nouns: `rentAdd = 111` / `rentMul = 112` shape the 「收费」 figure before
+///    it becomes a payment, `settleAdd = 113` / `settleMul = 114` shape one
+///    settle's 支付价格 once (payload value = 0 and 1_000_000 in millionths).
+///    `plan::set_pay_factor` / `set_rent_factor` now **multiply** a live
+///    factor instead of overwriting it. Source-only for the wire
+///    (`ManifestOn` unchanged); SAVE_VERSION / RECORD_VERSION unchanged.
 /// v104: **turn snapshot carries money and the board arrays**. The
 ///    `ruleset_turn_snap` payload is the postcard struct
 ///    `(pos, state, money, owners, houses, mortgaged)` (was `(pos, state)`):
@@ -2197,6 +2209,30 @@ impl FilterKind {
     /// new figure; the host folds it into the leg amount.
     pub const PaySplitAt: Self = Self(TriggerKind::PaySplitAt);
 
+    /// Filter, hook-only. The rent figure's fixed-value stage (「收费」, 支付阶段
+    /// 2 on the table figure, before the payment stages). Payload: value = the
+    /// current rent figure, target = the owner, `pay_is_rent`. Bodies all read
+    /// the **stage input**; the host sums their deltas (MONEY-01), so order
+    /// cannot change the charge.
+    pub const RentAdd: Self = Self(TriggerKind::RentAdd);
+
+    /// Filter, hook-only. The rent figure's scale stage (支付阶段 4 on the rent
+    /// figure). Same payload as [`Self::RentAdd`]; bodies read the stage input
+    /// and the host multiplies their factors.
+    pub const RentMul: Self = Self(TriggerKind::RentMul);
+
+    /// Filter, hook-only. One settle's fixed-value 支付价格 stage -- raised
+    /// once per settle, before its body, folded into every payment the settle
+    /// carries. Payload: actor = the settling player, tile = the settle tile,
+    /// value = 0. Bodies read the stage input and the host sums their deltas.
+    pub const SettleAdd: Self = Self(TriggerKind::SettleAdd);
+
+    /// Filter, hook-only. One settle's 支付价格 scale, raised once per settle.
+    /// Payload: value = 1_000_000 (×1 in millionths). Bodies read the stage
+    /// input and return the scaled figure; the host multiplies the factors
+    /// (a 0.5 body answers 500_000 and two of them compose to a quarter).
+    pub const SettleMul: Self = Self(TriggerKind::SettleMul);
+
     /// Filter. The move's plan pass (行动阶段 8, before the dice are rolled).
     /// Payload: the move. Body rewrites the plan struct (roller, dice, steps,
     /// direction, settle flag, tiles, factors, and so on); the host applies only
@@ -2554,6 +2590,18 @@ impl TriggerKind {
 
     /// `paySplitAt`
     pub const PaySplitAt: Self = Self::engine(57);
+
+    /// `rentAdd`
+    pub const RentAdd: Self = Self::engine(111);
+
+    /// `rentMul`
+    pub const RentMul: Self = Self::engine(112);
+
+    /// `settleAdd`
+    pub const SettleAdd: Self = Self::engine(113);
+
+    /// `settleMul`
+    pub const SettleMul: Self = Self::engine(114);
 
     /// `discarded`
     pub const Discarded: Self = Self::engine(58);

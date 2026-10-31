@@ -159,11 +159,13 @@ pub fn check_negation(seed: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Commutativity: two multiplicative money modifiers must commute. With two
-/// multipliers on the same rent the product is order-independent, so the final
-/// money must be the same whichever is applied first. We place two 摩卡
-/// 0.5倍速 cards (each halves pays) in swapped field order on an otherwise
-/// identical board -- the rent halves twice either way.
+/// Commutativity: multiplicative money modifiers must commute. The mul stage
+/// folds every live writer as a product (MONEY-01 / C-Q1), so the final money
+/// must be the same whichever side's modifier was placed first. The pair has to
+/// use **different** factors -- two 摩卡 0.5倍速 commute under any composition
+/// and could not tell products from sequential rewrites -- so this places the
+/// payer's 0.5× (摩卡) against the owner's 1.5× (Fire bird) in swapped field
+/// order on an otherwise identical board.
 pub fn check_commutativity(seed: u64) -> Result<(), String> {
     let run = |swap: bool| -> Result<i32, String> {
         let chars = crate::common::characters();
@@ -177,11 +179,15 @@ pub fn check_commutativity(seed: u64) -> Result<(), String> {
         t.set_money(1, 10_000);
         t.set_pos(0, 2);
         t.set_pos(1, 0);
+        // Two **different** multipliers, on opposite sides of the transfer: the
+        // payer's 0.5× (摩卡) and the owner's 1.5× (Fire bird, on the landed
+        // tile 3). Identical factors commute under any composition, so the pair
+        // has to differ for this probe to decide the question.
         if swap {
             t.place_raw(0, "AG:（摩卡）0.5倍速");
-            t.place_raw(1, "AG:（摩卡）0.5倍速");
+            t.place_raw(1, "R:Fire bird");
         } else {
-            t.place_raw(1, "AG:（摩卡）0.5倍速");
+            t.place_raw(1, "R:Fire bird");
             t.place_raw(0, "AG:（摩卡）0.5倍速");
         }
         t.dice(&[1]);
@@ -196,7 +202,7 @@ pub fn check_commutativity(seed: u64) -> Result<(), String> {
     let b = run(true)?;
     if a != b {
         return Err(format!(
-            "commutativity: two 0.5x modifiers gave {a} vs {b} depending on placement order"
+            "commutativity: 0.5x + 1.5x modifiers gave {a} vs {b} depending on placement order"
         ));
     }
     Ok(())

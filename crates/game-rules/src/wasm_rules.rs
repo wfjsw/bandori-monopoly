@@ -214,6 +214,15 @@ pub struct Run {
     /// concrete so the native backend can hold one in a thread-local.
     props: Arc<std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>>,
     trigger: Trigger,
+    /// The last figure this run wrote through an amount setter -- see
+    /// [`Run::fig_write`]. Per run (a body), so two bodies writing the same
+    /// number still each fold.
+    fig: Option<i32>,
+    /// This pass's ordinal for `set_pay_factor` / `set_rent_factor` writes.
+    /// With the current uid (or card id) it names one contribution across a
+    /// re-run, so the replay of this body's prefix replaces its earlier write
+    /// instead of multiplying it in again.
+    factor_ordinal: u32,
     /// The seat whose activation this is (`Call::player_id`) -- the hand play's
     /// player, the counteraction's declarer. Distinct from
     /// [`Run::trigger`].`player_id`, which is the *answered* link's player on a
@@ -2223,17 +2232,10 @@ impl CardWorld for Run {
         self.trigger.clone()
     }
     fn set_trigger_move_roll(&mut self, roll: i32) {
-        // Rewrite the face on the move payload when one exists. A card-driven
-        // `roll` raise has no `t.Move`; there the face rides `value` and the
-        // writeback reads it from there (Y.O.L.O on 热气球's 4x3d20).
-        if let Some(m) = &mut self.trigger.mv {
-            m.roll = Some(roll);
-        } else {
-            self.trigger.value = roll;
-        }
+        self.fig_write(roll);
     }
     fn set_trigger_value(&mut self, value: i32) {
-        self.trigger.value = value;
+        self.fig_write(value);
     }
     fn set_trigger_target(&mut self, to: i32) {
         self.trigger.target = to;
@@ -2267,9 +2269,7 @@ impl CardWorld for Run {
         (self.trigger.card.as_deref() == Some(id)) as i32
     }
     fn set_trigger_price(&mut self, v: i32) {
-        if let Some(b) = &mut self.trigger.buy {
-            b.price = v;
-        }
+        self.fig_write(v);
     }
     fn set_trigger_deal_owner(&mut self, v: Option<game_kinds::Payee>) {
         if let Some(b) = &mut self.trigger.buy {
@@ -2464,15 +2464,17 @@ impl CardWorld for Run {
     }
     fn set_pay_factor(&mut self, v: i32) {
         self.stamp_skill_source();
-        self.world.set_pay_factor(v);
+        let (who, n) = self.factor_write_key();
+        self.world.set_pay_factor(v, &who, n);
         // Written for the move this body shapes, not for a later one.
         self.world.turn.plan.pay_fresh = true;
     }
     fn set_rent_factor(&mut self, v: i32) {
         self.stamp_skill_source();
-        self.world.set_rent_factor(v);
+        let (who, n) = self.factor_write_key();
+        self.world.set_rent_factor(v, &who, n);
         // Written for the move this body shapes, not for a later one.
-        self.world.turn.plan.pay_fresh = true;
+        self.world.turn.plan.rent_fresh = true;
     }
     fn set_can_build(&mut self, v: bool) {
         self.stamp_skill_source();
@@ -2572,6 +2574,50 @@ impl CardWorld for Run {
 }
 
 impl Run {
+    /// The one figure setter behind `set_trigger_value` / `_move_roll` /
+    /// `_price`.
+    ///
+    /// The guest's [`card_sdk::payload::drive_value`] writes every value-shaped
+    /// Filter answer through all three imports, because the figure lands in a
+    /// different place per kind (the move payload's face, the buy payload's
+    /// price, plain `value`). A plain assignment is idempotent, but a fold
+    /// stage (MONEY-01) is not, so this absorbs the sibling writes of the same
+    /// number and folds each distinct figure once.
+    fn fig_write(&mut self, v: i32) {
+        if self.fig == Some(v) {
+            return;
+        }
+        self.fig = Some(v);
+        // The face rides the move payload when one exists; a card-driven
+        // `roll` raise has no `t.Move` and the writeback reads `value`
+        // instead (Y.O.L.O on 热气球's 4x3d20).
+        if let Some(m) = &mut self.trigger.mv {
+            m.roll = Some(v);
+        }
+        // A price stage commits `buy.price`.
+        if let Some(b) = &mut self.trigger.buy {
+            b.price = v;
+        }
+        // `value`, composing on an amount fold.
+        self.trigger.fold_write(v);
+    }
+
+    /// The `(writer, ordinal)` key of the next factor write: the running
+    /// instance when there is one, else the seat plus the card id (a hand play
+    /// or a persona skill has no instance), plus this pass's counter. Stable
+    /// across the passes of one drive, so a re-run's write lands on its own
+    /// earlier entry instead of stacking a second halving.
+    fn factor_write_key(&mut self) -> (String, u32) {
+        let n = self.factor_ordinal;
+        self.factor_ordinal = self.factor_ordinal.wrapping_add(1);
+        let who = if self.current_uid >= 0 {
+            self.current_uid.to_string()
+        } else {
+            format!("{}#{}", self.activation_player, self.current_card)
+        };
+        (who, n)
+    }
+
     /// A card placing *itself* keeps its owner whichever field it lands on:
     /// the owner it carried off the field (a hop), else the player whose
     /// activation this is (a hand play). Placement alone stamps the field
@@ -3158,6 +3204,8 @@ impl<M: CardModules> RulesBridge<M> {
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: trigger.clone(),
+                fig: None,
+                factor_ordinal: 0,
                 activation_player: call.player_id(),
                 current_card: card_id.to_string(),
                 current_uid: uid,
@@ -3432,6 +3480,8 @@ impl<M: CardModules> RulesBridge<M> {
                         data: self.data.clone(),
                         props: self.modules_props(),
                         trigger: trigger.clone(),
+                        fig: None,
+                        factor_ordinal: 0,
                         activation_player: call.player_id(),
                         current_card: card_id.to_string(),
                         current_uid: uid,
@@ -5302,11 +5352,22 @@ impl<M: CardModules> RulesBridge<M> {
           // in `trigger.move_roll` (the shared `t.Move` the counteractions also
           // read); the pay amount is rewritten in `trigger.value`. The engine
           // reads the result back off `t.value` after `counteract` returns.
-        t.value = trigger
-            .mv
-            .as_ref()
-            .and_then(|m| m.roll)
-            .unwrap_or(trigger.value);
+        // A fold stage's figure is the composition on `value`; the move-face
+        // mirror only ever carries the **last** responder's raw write, so on a
+        // fold the composed `value` wins. Every other stage keeps the mirror (a
+        // dice face is written through `set_move_roll`).
+        t.value = if trigger.fold.is_fold() {
+            trigger.value
+        } else {
+            trigger
+                .mv
+                .as_ref()
+                .and_then(|m| m.roll)
+                .unwrap_or(trigger.value)
+        };
+        // The composed multiplier of a `Fold::Mul` stage (the settle stages
+        // read it back).
+        t.fold_milli = trigger.fold_milli;
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }
@@ -6646,6 +6707,8 @@ impl<M: CardModules> RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: top.clone(),
+            fig: None,
+            factor_ordinal: 0,
             activation_player: top.player_id,
             current_card: card.to_string(),
             current_uid: -1,
@@ -6908,6 +6971,8 @@ impl<M: CardModules> RulesBridge<M> {
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: top.clone(),
+                fig: None,
+                factor_ordinal: 0,
                 activation_player: top.player_id,
                 current_card: String::new(),
                 current_uid: -1,
@@ -7288,6 +7353,8 @@ impl<M: CardModules> RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: top.clone(),
+            fig: None,
+            factor_ordinal: 0,
             activation_player: s as i32,
             current_card: id.to_string(),
             current_uid: uid,
@@ -7386,6 +7453,9 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         target: t.target,
         tile: t.tile,
         value: t.value,
+        fold: t.fold,
+        fold_input: t.fold_input,
+        fold_milli: t.fold_milli,
         step: t.step,
         by_card: t.by_card,
         main: t.main,
@@ -8052,7 +8122,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         }
     }
     fn value(&self) -> i64 {
-        self.trigger.value as i64
+        self.trigger.shown_value() as i64
     }
     fn step(&self) -> i64 {
         self.trigger.step as i64
@@ -9179,6 +9249,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: Trigger::default(),
+            fig: None,
+            factor_ordinal: 0,
             activation_player: player_id as i32,
             current_card: card.to_string(),
             current_uid: uid,
@@ -9248,6 +9320,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: Trigger::default(),
+                fig: None,
+                factor_ordinal: 0,
                 activation_player: player_id as i32,
                 current_card: card.to_string(),
                 current_uid: uid,
@@ -9372,6 +9446,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: Trigger::default(),
+            fig: None,
+            factor_ordinal: 0,
             activation_player: -1,
             current_card: String::new(),
             current_uid: -1,
@@ -9757,11 +9833,22 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             }
         }
 
-        t.value = trigger
-            .mv
-            .as_ref()
-            .and_then(|m| m.roll)
-            .unwrap_or(trigger.value);
+        // A fold stage's figure is the composition on `value`; the move-face
+        // mirror only ever carries the **last** responder's raw write, so on a
+        // fold the composed `value` wins. Every other stage keeps the mirror (a
+        // dice face is written through `set_move_roll`).
+        t.value = if trigger.fold.is_fold() {
+            trigger.value
+        } else {
+            trigger
+                .mv
+                .as_ref()
+                .and_then(|m| m.roll)
+                .unwrap_or(trigger.value)
+        };
+        // The composed multiplier of a `Fold::Mul` stage (the settle stages
+        // read it back).
+        t.fold_milli = trigger.fold_milli;
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }
@@ -9789,6 +9876,10 @@ fn is_money_hook_kind(kind: TriggerKind) -> bool {
             | TriggerKind::PayCombinedAdd
             | TriggerKind::PayCombinedMul
             | TriggerKind::PayCombinedCancel
+            | TriggerKind::RentAdd
+            | TriggerKind::RentMul
+            | TriggerKind::SettleAdd
+            | TriggerKind::SettleMul
     )
 }
 

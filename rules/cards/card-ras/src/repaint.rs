@@ -93,8 +93,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「对方此次结算的支付减半」 -- the settle of this move pays half
     // (milli-units: 500 = x0.5).
     // TODO(规则书)（对方此次结算的支付减半）: C# folds with `m.PayFactor *= 0.5`
-    //   -- we `set_pay_factor`, which replaces, so two halvings on one move do
-    //   not compose (the plan factor has no read export).
+    //   -- match that, the write is a product contribution (MONEY-01), so two
+    //   halvings on one move compose to a quarter.
     ctx::plan::set_pay_factor(500);
     Ok(())
 }

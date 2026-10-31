@@ -527,10 +527,12 @@ fn t10b_ringing_bloom_tracks_a_later_build() {
 // T11. Fire bird plus HHW band (1) doubling
 // =====================================================================
 
-// 规则书: Fire bird 1.5× + HHW band (1) 「支付双倍价格」. RULING: order; both give 3×R.
+// 规则书: Fire bird 1.5× + HHW band (1) 「支付双倍价格」. MONEY-01 makes the row
+// one product, so the two commute to 3×R regardless of which raises first.
 #[test]
 fn t11_fire_bird_plus_hhw_double() {
-    let mut t = Table::new(&["弦卷心", "花园多惠"]);
+    // P1 (弦卷心) is the HHW payer; P0 owns the tile and the Fire bird.
+    let mut t = Table::new(&["花园多惠", "弦卷心"]);
     t.clean();
     t.begin_turn(1);
     let t48 = tile("山吹面包房");
@@ -540,22 +542,31 @@ fn t11_fire_bird_plus_hhw_double() {
     t.set_pos(1, t48 - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    // P1 chooses double (HHW band (1)).
-    loop {
-        let Some(_) = t.prompt() else { break };
-        let k = t.option("双倍").or_else(|| t.option("double"));
-        if let Some(k) = k {
-            t.answer(1, k).unwrap();
+    // P1 chooses double (HHW band (1)); the ask is an `ask_yes`, so the
+    // question lives in the prompt body, not in an option.
+    let mut doubled = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let d = t.dump_prompt();
+        if d.contains("倍") || d.contains("double") || d.contains("传播") {
+            doubled = true;
+            t.answer_one(0).unwrap();
         } else {
             t.decline();
         }
     }
+    assert!(doubled, "no HHW double prompt: {:?}", t.recent_keys(15));
     let r = rent(t48, 0);
-    eprintln!(
-        "t11 record (RULING: order): paid = {} (want 3×R = {}), P1 band crystals = {:?}",
-        10_000 - t.money(1),
-        r * 3,
-        t.crystals(1, &t.skill_id(1, "传播笑容"))
+    // MONEY-01: every live factor of the row is one product, so 1.5× and 2×
+    // commute to 3× (one `ceil10` at the end) -- not "whichever ran last".
+    let paid = 10_000 - t.money(1);
+    assert_eq!(
+        paid,
+        ceil10(r * 3),
+        "Fire bird 1.5× × HHW 双倍 = 3×R (paid {paid}, want {})",
+        ceil10(r * 3)
     );
 }
 

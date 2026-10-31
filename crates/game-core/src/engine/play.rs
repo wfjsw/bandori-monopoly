@@ -9,7 +9,7 @@
 use super::cx::{Ask, Cx, Flow, Halt};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
-use super::rules::{raise, Dest, Trigger, TriggerBuy, TriggerPay};
+use super::rules::{raise, Dest, Fold, Trigger, TriggerBuy, TriggerPay};
 use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
@@ -71,6 +71,20 @@ fn ceil10_money(x: i32) -> i32 {
         return x;
     }
     ((x as i64 + 9) / 10 * 10).clamp(0, i32::MAX as i64) as i32
+}
+
+/// Multiply `amount` by a milli factor (1_000_000 = ×1) -- the engine's own
+/// contribution to a mul phase, folded exactly like a responder's answer so it
+/// composes with the card stages whatever their order (MONEY-01).
+fn apply_milli_factor(amount: i32, milli: i64, modified: &mut bool) -> i32 {
+    if milli == 1_000_000 {
+        return amount;
+    }
+    *modified = true;
+    // Q3: no floor here. A scaled negative remains negative and is reversed
+    // after the chain resolves.
+    (i64::from(amount).saturating_mul(milli) / 1_000_000)
+        .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
 }
 
 /// The `log.dice` line a move-plan roll posts ([`Cx::card_do_move_roll`]).
@@ -2013,7 +2027,11 @@ impl Cx<'_> {
         }
         if !p.pay_fresh {
             p.pay_factor = 1.0;
+            p.pay_writes.clear();
+        }
+        if !p.rent_fresh {
             p.rent_factor = 1.0;
+            p.rent_writes.clear();
         }
         if !p.reverse_fresh {
             p.reverse = false;
@@ -2024,6 +2042,7 @@ impl Cx<'_> {
         p.steps_fresh = false;
         p.stop_at_fresh = false;
         p.pay_fresh = false;
+        p.rent_fresh = false;
         p.reverse_fresh = false;
         p.resolve_fresh = false;
     }
@@ -2037,6 +2056,7 @@ impl Cx<'_> {
         p.steps_fresh = false;
         p.stop_at_fresh = false;
         p.pay_fresh = false;
+        p.rent_fresh = false;
         p.reverse_fresh = false;
         p.resolve_fresh = false;
     }
@@ -2070,11 +2090,14 @@ impl Cx<'_> {
         p.resolve = true;
         p.pay_factor = 1.0;
         p.rent_factor = 1.0;
+        p.pay_writes.clear();
+        p.rent_writes.clear();
         p.steps_fresh = false;
         p.stop_at_fresh = false;
         p.reverse_fresh = false;
         p.resolve_fresh = false;
         p.pay_fresh = false;
+        p.rent_fresh = false;
     }
 
     /// Move the player to a plan-written destination, if a hook just wrote one.
@@ -2356,13 +2379,16 @@ impl Cx<'_> {
         // 「结算中」 for the payments the settle carries (RAS:游击演出's
         // 「本回合的[结算]…」). A suspended settle keeps its count: the parked
         // frame resumes here and decrements on its way out.
-        self.settle_open += 1;
+        if !frame.counted {
+            self.settle_open += 1;
+            frame.counted = true;
+        }
         let r = self.step_settle_run(frame);
         let suspended = r.as_ref().err().map(|e| e.is_suspended()).unwrap_or(false);
         if suspended {
             // Stage not advanced: the re-entered raise adopts
             // `counteract_resume`. Park this settle to resume after the
-            // nested work.
+            // nested work -- it stays counted across the pause.
             self.insert_work(crate::engine::work::ContinueSettleWork {
                 frame: frame.clone(),
             });
@@ -2388,8 +2414,36 @@ impl Cx<'_> {
                     if self.out(i) || t.is_cancelled() {
                         frame.stage = SettleStage::RaiseTileResolved;
                     } else {
-                        frame.stage = SettleStage::RaiseSettleBody;
+                        frame.stage = SettleStage::RaiseSettlePay;
                     }
+                    true
+                }
+                // The settle's 支付价格 shaping (MONEY-01): `settleAdd` sums,
+                // `settleMul` multiplies, both raised **once** for the whole
+                // settle and stored on [`Cx::settle_pay`] for every leg to
+                // fold ([`Cx::settle_pay`]). 「本次结算的支付减半」 is one contribution
+                // to one settle, not a rewrite per payment, so two of them
+                // compose to a quarter instead of the last one winning.
+                SettleStage::RaiseSettlePay => {
+                    let owner = frame.owner;
+                    let (i, at) = (frame.player, frame.at);
+                    let m = frame.m.clone();
+                    let mut scale = super::cx::PayScale::default();
+                    let t = raise!(
+                        self, "settleAdd", i, @m m, tile = at as i32, target = owner,
+                        value = 0, @f add
+                    )?;
+                    scale.add = t.value;
+                    let t = raise!(
+                        self, "settleMul", i, @m m, tile = at as i32, target = owner,
+                        value = 1_000_000, @f mul
+                    )?;
+                    scale.milli = t.fold_milli;
+                    // Pushed only once the pair came back (a suspension re-runs
+                    // this stage from the counteract resume).
+                    self.settle_pay.push(scale);
+                    frame.scaled = true;
+                    frame.stage = SettleStage::RaiseSettleBody;
                     true
                 }
                 SettleStage::AfterSettle => {
@@ -2432,6 +2486,12 @@ impl Cx<'_> {
                     let m = frame.m.clone();
                     raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
                     frame.stage = SettleStage::Done;
+                    // The settle's 支付价格 shaping ends with it -- only if this
+                    // frame is the one that pushed it (a settle cancelled before
+                    // `RaiseSettlePay` never did).
+                    if frame.scaled {
+                        self.settle_pay.pop();
+                    }
                     false
                 }
                 SettleStage::Done => false,
@@ -2738,23 +2798,67 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// The 「支付减半」 / 「地租」 scale, applied at the money pipeline's `paySplitMul`
-    /// stage (`docs/TILES.md`; 「支付减半」 ruling 2026-10-06).
+    /// Raise one amount stage and fold the answer into `amount` (MONEY-01).
     ///
-    /// Two homes, both read here rather than in `pay_rent`, plus the caller's
-    /// own [`Pay::milli_scale`]:
+    /// A [`Fold::Add`] / [`Fold::Mul`] stage hands every responder the stage
+    /// input and composes their writes (sum / product); a [`Fold::Replace`]
+    /// stage overwrites. `modified` records that some stage shaped the figure
+    /// (the single end-of-calc round reads it).
+    #[allow(clippy::too_many_arguments)]
+    fn apply_amount_stage(
+        &mut self,
+        kind: &str,
+        fold: Fold,
+        side: usize,
+        payer: i32,
+        to: &mut Option<usize>,
+        amount: &mut i32,
+        modified: &mut bool,
+        by_card: Option<i32>,
+        rent: bool,
+        tile: Option<usize>,
+    ) -> Flow<()> {
+        let before = *amount;
+        let target = to.map_or(-1, |t| t as i32);
+        let tile = tile.map_or(-1, |t| t as i32);
+        let t = match fold {
+            Fold::Replace => raise!(
+                self, kind, side, player_id = payer, target = target, value = before,
+                by_card = by_card, @p TriggerPay::new(rent), tile = tile
+            ),
+            Fold::Add => raise!(
+                self, kind, side, player_id = payer, target = target, value = before,
+                by_card = by_card, @p TriggerPay::new(rent), tile = tile, @f add
+            ),
+            Fold::Mul => raise!(
+                self, kind, side, player_id = payer, target = target, value = before,
+                by_card = by_card, @p TriggerPay::new(rent), tile = tile, @f mul
+            ),
+        }?;
+        if t.value != before {
+            *modified = true;
+        }
+        *amount = t.value;
+        if t.target >= 0 {
+            *to = Some(t.target as usize);
+        }
+        Ok(())
+    }
+
+    /// The 「支付」 scale home, applied at the mul phase's tail.
     ///
-    /// * `prop::PAY_FACTOR` / `prop::RENT_FACTOR` (milli-units, 500 = ×0.5) on
-    ///   the tile's rule instance -- a card that retunes a tile writes these
-    ///   (`ctx::set_tile_prop`). `RENT_FACTOR` only scales rent.
-    /// * the move plan's `plan::set_pay_factor` / `plan::set_rent_factor` -- a
-    ///   card that shapes a *settle* (祥，移动's 「触发结算时进行的支付价格减半」,
-    ///   Repaint's 「对方此次结算的支付减半」) arms these, because a hand card
-    ///   leaves the field and cannot leave a hook behind.
-    /// * `Pay::milli_scale` (1000 = ×1.0) -- the payment's own formula scale,
-    ///   `ctx::charge_rent`'s 「(4-X)/4倍价格」. Composes here so every add/mul
-    ///   of one figure lands at the same stage and the one end-of-calc `ceil10`
-    ///   sees the fully shaped amount (`spec/ROUNDING.md`).
+    /// * the move plan's `pay_factor` (`plan::set_pay_factor`) -- a card that
+    ///   shapes a settle (祥，移动's 「触发结算时进行的支付价格减半」, Repaint's
+    ///   「对方此次结算的支付减半」) arms it, because a hand card leaves the
+    ///   field and cannot leave a hook behind;
+    /// * the tile's `prop::PAY_FACTOR` -- a card that retunes a tile writes it
+    ///   (`ctx::set_tile_prop`). It applies to *any* payment on the tile, not
+    ///   only rent.
+    ///
+    /// The rent-side factors (`plan.rent_factor`, `prop::RENT_FACTOR`) and the
+    /// caller's [`Pay::milli_scale`] are applied by the `rentMul` phase; all of
+    /// them are multiplicative contributions, so the one end-of-calc `ceil10`
+    /// sees the fully shaped figure (`spec/ROUNDING.md`).
     ///
     /// Scope: a settlement loss. A purchase (`buy` / `build`), a forced
     /// purchase (rulebook 「此次购买的价格不受任何资金变动效果影响」) and a
@@ -2764,9 +2868,8 @@ impl Cx<'_> {
         &self,
         amount: i32,
         kind: PayKind,
-        rent: bool,
         tile: Option<usize>,
-        milli_scale: i32,
+        modified: &mut bool,
     ) -> i32 {
         if matches!(
             kind,
@@ -2774,28 +2877,11 @@ impl Cx<'_> {
         ) {
             return amount;
         }
-        let mut f = 1.0f64;
-        if rent {
-            f *= self.w.turn.plan.rent_factor;
-        }
-        f *= self.w.turn.plan.pay_factor;
-        // The caller's formula scale (1000 = ×1.0; 0 = free; negative clamps
-        // to 0). Always multiplied -- it is a milli-unit figure, not a
-        // 「0 means unset」 prop.
-        f *= f64::from(milli_scale.max(0)) / 1000.0;
-        // A prop the tile does not carry reads as its default `0`, which here
-        // means 「no scale」 (×1.0) rather than ×0 -- only a positive milli value
-        // is a scale. [`purchase::tile_money_scale`] is the single source for
-        // that tile half (the standing quote reads the same figure).
+        let mut milli = (self.w.turn.plan.pay_factor * 1_000_000.0).round() as i64;
         if let Some(t) = tile {
-            f *= purchase::tile_money_scale(&self.w, t, rent);
+            milli = milli.saturating_mul(purchase::tile_money_milli(&self.w, t, false)) / 1_000_000;
         }
-        if (f - 1.0).abs() <= f64::EPSILON {
-            return amount;
-        }
-        // Q3: adjustments compose freely -- no floor here. A scaled negative
-        // remains negative and is reversed after the chain resolves.
-        (amount as f64 * f) as i32
+        apply_milli_factor(amount, milli, modified)
     }
 
     /// Mortgaged land charges no rent but may be bought out at
@@ -3696,113 +3782,63 @@ impl Cx<'_> {
             amount = t.value;
             to = (t.target >= 0).then_some(t.target as usize);
         }
-        // ---- pre-split (command-wide) ------------------------------------
-        // `PIPELINE-AUDIT` Q2: `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`
-        // shape the **command total** -- the figure a 「[分摊]」 will divide --
-        // before any per-share stage touches a leg. A single-pair payment's
-        // command total is its own amount, so the same three stages run here.
-        // A 「[分摊]」 leg (`Pay::total_stage == false`) skips them: the card
-        // body has already shaped the total through [`Self::pay_total`].
+        // ---- amount stages ------------------------------------------------
+        // 规则书 支付阶段 2 「支付计算时：支付增加/减少(固定值)」 then row 4
+        // 「支付前：支付减半/翻倍」. Every fixed-value stage runs in the **add
+        // phase** and sums, every scale stage in the **mul phase** and
+        // multiplies; the responders of one phase all see the phase input and
+        // compose (MONEY-01, [`Fold`]), so declaration order cannot change the
+        // figure.
         //
-        // They run *after* the `effect` declaration, so a counter still hears
-        // the **declared** amount (`docs/ENGINE.md` 「Effect vs settlement」) --
-        // the same position the per-share `paySplitAdd` occupies, one level up.
-        if p.total_stage {
-            let mut to_slot = to;
-            let before_total = amount;
-            match self.pay_total_stages(
-                side,
-                payer,
-                &mut to_slot,
-                amount,
-                p.by_card,
-                rent,
-                p.tile,
-            )? {
-                // `payCombinedCancel` dropped the whole command.
-                None => {
-                    raise!(
-                        self,
-                        "payAfter",
-                        side,
-                        player_id = payer,
-                        target = to.map_or(-1, |t| t as i32),
-                        value = 0,
-                        by_card = p.by_card,
-                        @p TriggerPay::new(rent),
-                        tile = p.tile.map_or(-1, |t| t as i32)
-                    )?;
-                    return Ok(Paid::default());
-                }
-                Some(shaped) => {
-                    if shaped != before_total {
-                        modified = true;
-                    }
-                    amount = shaped;
-                    to = to_slot;
-                }
-            }
-        }
-        // ---- settlement -------------------------------------------------
-        // Modifiers run now, against the amount the effect settled on.
+        // The nouns pick the scope as well as the stage: 「收费」 (rent) stages
+        // shape the rent figure, `settle*` the whole settle's payments, the
+        // command-wide `payCombined*` the total a 「[分摊]」 divides, and
+        // `paySplit*` one settled leg. All run *after* the `effect`
+        // declaration, so a counter still hears the **declared** amount
+        // (`docs/ENGINE.md` 「Effect vs settlement」).
+        //
         // Q3: adjustments compose freely -- the stages do **not** clamp and do
         // **not** stop at zero. A figure driven negative is still in flight;
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
-        for kind in ["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"] {
-            // v78 / v96: interactive pre-stages. A prompt that used to live
-            // inside a pure Filter rides the matching `*Before` Action so the
-            // prompt is at the rulebook position and the pure Filter still
-            // applies here. The ask's `set_pay_amount` / `set_pay_target` fold
-            // here just like any other stage's rewrite.
-            //
-            // `paySplitMulBefore` (v96) is the writable stage between the
-            // `paySplitAdd` fold and the `paySplitMul` fold (规则书 支付阶段 3
-            // 「支付计算后」): `value` is the PaySplitMul input.
-            if kind == "paySplitMul" {
-                let ask = raise!(
-                    self,
-                    "paySplitMulBefore",
-                    side,
-                    player_id = payer,
-                    target = to.map_or(-1, |t| t as i32),
-                    value = amount,
-                    by_card = p.by_card,
-                    @p TriggerPay::new(rent),
-                    tile = p.tile.map_or(-1, |t| t as i32)
-                )?;
-                if ask.value != amount {
-                    modified = true;
-                }
-                amount = ask.value;
-                if ask.target >= 0 {
-                    to = Some(ask.target as usize);
-                }
+        let in_settle = self.settle_open > 0
+            && !matches!(
+                p.kind,
+                PayKind::Buy | PayKind::Build | PayKind::ForceBuy | PayKind::Gain
+            );
+        let settle_scale = self.settle_pay.last().copied().unwrap_or_default();
+        // ---- add phase ----
+        if rent {
+            self.apply_amount_stage(
+                "rentAdd",
+                Fold::Add,
+                side,
+                payer,
+                &mut to,
+                &mut amount,
+                &mut modified,
+                p.by_card,
+                rent,
+                p.tile,
+            )?;
+        }
+        if in_settle {
+            // The settle's `settleAdd` was composed **once** at the settle
+            // raise (`SettleStage::RaiseSettlePay`) and stored; every leg just
+            // takes the stored addend. Raising it per leg as well would count
+            // one responder twice.
+            if settle_scale.add != 0 {
+                amount = amount.saturating_add(settle_scale.add);
+                modified = true;
             }
-            if kind == "paySplitChoose" {
-                let ask = raise!(
-                    self,
-                    "paySplitChooseBefore",
-                    side,
-                    player_id = payer,
-                    target = to.map_or(-1, |t| t as i32),
-                    value = amount,
-                    by_card = p.by_card,
-                    @p TriggerPay::new(rent),
-                    tile = p.tile.map_or(-1, |t| t as i32)
-                )?;
-                if ask.value != amount {
-                    modified = true;
-                }
-                amount = ask.value;
-                if ask.target >= 0 {
-                    to = Some(ask.target as usize);
-                }
-            }
-            let before = amount;
-            let t = raise!(
+        }
+        if p.total_stage {
+            // v78: the interactive pre-stage sits at the rulebook position of
+            // its pure Filter (payCombinedAdd) and folds its ask like any
+            // other rewrite.
+            let ask = raise!(
                 self,
-                kind,
+                "payCombinedAddBefore",
                 side,
                 player_id = payer,
                 target = to.map_or(-1, |t| t as i32),
@@ -3811,18 +3847,101 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
-            // V5 (`NEGATION-AUDIT`) at the settlement stages: `paySplitChoose`
-            // is the Flag-shaped one -- a `false` Filter answer is folded to
-            // `set_cancelled()` by `drive_flag`, and that **stops the payment**
-            // (abi.rs `FilterKind::PaySplitChoose`: 「Body answers cancel: false
-            // stops the payment」). 规则书 支付阶段 5 「取消支付 / 无需失去资金」
-            // (G-MONEY-14, rulebook-doc.md:233) is exactly this row. The same
-            // flag is honoured by the `effect` declaration and the `pay`
-            // settlement window above/below; this stage used to fold only
-            // `t.value` / `t.target` and drop the cancel, so a CRYCHIC band-skill
-            // 「你无法获得或失去资金」 lock (or J11's stun cancel) was ignored.
-            // `payCombinedCancel` one level up already honours it; match that.
-            if kind == "paySplitChoose" && t.is_cancelled() {
+            if ask.value != amount {
+                modified = true;
+            }
+            amount = ask.value;
+            if ask.target >= 0 {
+                to = Some(ask.target as usize);
+            }
+            self.apply_amount_stage(
+                "payCombinedAdd",
+                Fold::Add,
+                side,
+                payer,
+                &mut to,
+                &mut amount,
+                &mut modified,
+                p.by_card,
+                rent,
+                p.tile,
+            )?;
+        }
+        self.apply_amount_stage(
+            "paySplitAdd",
+            Fold::Add,
+            side,
+            payer,
+            &mut to,
+            &mut amount,
+            &mut modified,
+            p.by_card,
+            rent,
+            p.tile,
+        )?;
+        // ---- mul phase ----
+        if rent {
+            self.apply_amount_stage(
+                "rentMul",
+                Fold::Mul,
+                side,
+                payer,
+                &mut to,
+                &mut amount,
+                &mut modified,
+                p.by_card,
+                rent,
+                p.tile,
+            )?;
+            // The plan's 「地租」 factor (`plan::set_rent_factor`,
+            // 香澄:大家我都喜欢哦's 「地租减半」), the rent's own formula scale
+            // (`ctx::charge_rent`'s 「(4-X)/4倍价格」) and the tile's standing
+            // 「收费」 factor (`RENT_FACTOR`) are contributions of the same
+            // phase.
+            let rf = (self.w.turn.plan.rent_factor * 1_000_000.0).round() as i64;
+            amount = apply_milli_factor(amount, rf, &mut modified);
+            // `milli_scale` is permille (1000 = ×1.0), `apply_milli_factor`
+            // takes millionths.
+            amount = apply_milli_factor(
+                amount,
+                i64::from(p.milli_scale.max(0)) * 1000,
+                &mut modified,
+            );
+            if let Some(t) = p.tile {
+                amount =
+                    apply_milli_factor(amount, purchase::tile_money_milli(&self.w, t, true), &mut modified);
+            }
+        }
+        if in_settle {
+            // Same for the settle's `settleMul`: composed once at the settle
+            // raise, applied to every leg as one factor of the leg's product.
+            amount = apply_milli_factor(amount, settle_scale.milli, &mut modified);
+        }
+        if p.total_stage {
+            self.apply_amount_stage(
+                "payCombinedMul",
+                Fold::Mul,
+                side,
+                payer,
+                &mut to,
+                &mut amount,
+                &mut modified,
+                p.by_card,
+                rent,
+                p.tile,
+            )?;
+            let t = raise!(
+                self,
+                "payCombinedCancel",
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = amount,
+                by_card = p.by_card,
+                @p TriggerPay::new(rent),
+                tile = p.tile.map_or(-1, |t| t as i32)
+            )?;
+            if t.is_cancelled() {
                 raise!(
                     self,
                     "payAfter",
@@ -3836,28 +3955,138 @@ impl Cx<'_> {
                 )?;
                 return Ok(Paid::default());
             }
-            if t.value != before {
+            // A non-cancelling answer still rewrites the figure / the payee,
+            // exactly as the `pay_total_cancel` twin does for a 「[分摊]」
+            // command total.
+            if t.value != amount {
                 modified = true;
             }
             amount = t.value;
-            // A stage may redirect the payee (`set_pay_target`, e.g. 无路矢's
-            // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」) or the
-            // payer; the payload's payer/payee is per-entry and each stage may
-            // reshape it.
             if t.target >= 0 {
                 to = Some(t.target as usize);
             }
-            // The 「支付」 / 「地租」 scalars ride the `paySplitMul` stage
-            // (`docs/TILES.md`): applied *after* `paySplitAdd` and the `effect`
-            // window, so the scale covers the payment as card effects have
-            // shaped it and not only `pay_rent`'s table number.
-            if kind == "paySplitMul" {
-                let before_scale = amount;
-                amount = self.scale_settle_payment(amount, p.kind, rent, p.tile, p.milli_scale);
-                if amount != before_scale {
-                    modified = true;
-                }
-            }
+        }
+        // v96: the writable prompt between the `paySplitAdd` fold and the
+        // `paySplitMul` fold (规则书 支付阶段 3 「支付计算后」) -- it reads the
+        // composed add figure and its write becomes the mul input.
+        let ask = raise!(
+            self,
+            "paySplitMulBefore",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = amount,
+            by_card = p.by_card,
+            @p TriggerPay::new(rent),
+            tile = p.tile.map_or(-1, |t| t as i32)
+        )?;
+        if ask.value != amount {
+            modified = true;
+        }
+        amount = ask.value;
+        if ask.target >= 0 {
+            to = Some(ask.target as usize);
+        }
+        self.apply_amount_stage(
+            "paySplitMul",
+            Fold::Mul,
+            side,
+            payer,
+            &mut to,
+            &mut amount,
+            &mut modified,
+            p.by_card,
+            rent,
+            p.tile,
+        )?;
+        // The 「支付」 scalars ride the mul phase *after* the card stages
+        // (`docs/TILES.md`): the scale covers the payment as card effects have
+        // shaped it, and never a purchase (rulebook 「此次购买的价格不受任何
+        // 资金变动效果影响」), a forced purchase or a print.
+        amount = self.scale_settle_payment(amount, p.kind, p.tile, &mut modified);
+        // ---- cancel / settle figure ----
+        let ask = raise!(
+            self,
+            "paySplitChooseBefore",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = amount,
+            by_card = p.by_card,
+            @p TriggerPay::new(rent),
+            tile = p.tile.map_or(-1, |t| t as i32)
+        )?;
+        if ask.value != amount {
+            modified = true;
+        }
+        amount = ask.value;
+        if ask.target >= 0 {
+            to = Some(ask.target as usize);
+        }
+        // V5 (`NEGATION-AUDIT`) at the settlement stages: `paySplitChoose` is
+        // the Flag-shaped one -- a `false` Filter answer is folded to
+        // `set_cancelled()` by `drive_flag`, and that **stops the payment**
+        // (abi.rs `FilterKind::PaySplitChoose`: 「Body answers cancel: false
+        // stops the payment」). 规则书 支付阶段 5 「取消支付 / 无需失去资金」
+        // (G-MONEY-14, rulebook-doc.md:233) is exactly this row. The same flag
+        // is honoured by the `effect` declaration and the `pay` settlement
+        // window below.
+        let before = amount;
+        let t = raise!(
+            self,
+            "paySplitChoose",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = amount,
+            by_card = p.by_card,
+            @p TriggerPay::new(rent),
+            tile = p.tile.map_or(-1, |t| t as i32)
+        )?;
+        if t.is_cancelled() {
+            raise!(
+                self,
+                "payAfter",
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = 0,
+                by_card = p.by_card,
+                @p TriggerPay::new(rent),
+                tile = p.tile.map_or(-1, |t| t as i32)
+            )?;
+            return Ok(Paid::default());
+        }
+        if t.value != before {
+            modified = true;
+        }
+        amount = t.value;
+        if t.target >= 0 {
+            to = Some(t.target as usize);
+        }
+        // `paySplitAt` (支付时, 「结算时」) is a plain overwrite stage: it is
+        // the last word on the figure, not a contribution.
+        let before = amount;
+        let t = raise!(
+            self,
+            "paySplitAt",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = amount,
+            by_card = p.by_card,
+            @p TriggerPay::new(rent),
+            tile = p.tile.map_or(-1, |t| t as i32)
+        )?;
+        if t.value != before {
+            modified = true;
+        }
+        amount = t.value;
+        // A stage may redirect the payee (`set_pay_target`, e.g. 无路矢's
+        // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」); the
+        // payload's payer/payee is per-entry and each stage may reshape it.
+        if t.target >= 0 {
+            to = Some(t.target as usize);
         }
         // `pay` is a settlement hook now: what the payment actually was. It
         // runs after the chain, so it can no longer be used to reconstruct
@@ -4096,19 +4325,61 @@ impl Cx<'_> {
         })
     }
 
-    /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2):
-    /// `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`, composing, on `total`.
+    /// One command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2) on `total`:
+    /// `payCombinedAdd` ([`Fold::Add`]) / `payCombinedMul` ([`Fold::Mul`]).
     ///
-    /// Returns the shaped total, or `None` when a `payCombinedCancel` hook dropped
-    /// the whole command. This is the 「分摊前」 figure: a 「[分摊]pay2000」
-    /// divides *this*, not the raw 2000, into shares (规则书 支付阶段 2/4/5
-    /// applied to the command rather than to one pair). A pre-split hook may
-    /// also redirect the payee; `to` is updated in place the same way the
-    /// per-share stages do it.
+    /// The figure is the 「分摊前」 total: a 「[分摊]pay2000」 divides the shaped
+    /// result, not the raw 2000, into shares (规则书 支付阶段 2/4 applied to the
+    /// command rather than to one pair). A pre-split hook may also redirect the
+    /// payee; `to` is updated in place the same way the per-share stages do it.
+    /// `payCombinedCancel` is [`Self::pay_total_cancel`], run once after both.
     ///
     /// Q3: the stages do not clamp -- a total driven negative is returned as
     /// such so the caller can reverse after the chain resolves.
-    fn pay_total_stages(
+    fn pay_total_stage(
+        &mut self,
+        kind: &str,
+        fold: Fold,
+        side: usize,
+        payer: i32,
+        to: &mut Option<usize>,
+        total: i32,
+        by_card: Option<i32>,
+        rent: bool,
+        tile: Option<usize>,
+    ) -> Flow<i32> {
+        let mut amount = total;
+        // v78: interactive pre-stage (see the paySplitChooseBefore note above).
+        // The ask's `set_pay_amount` / `set_pay_target` fold here just like any
+        // other stage's rewrite.
+        if fold == Fold::Add {
+            let ask = raise!(
+                self,
+                "payCombinedAddBefore",
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = amount,
+                by_card = by_card,
+                @p TriggerPay::new(rent),
+                tile = tile.map_or(-1, |t| t as i32)
+            )?;
+            amount = ask.value;
+            if ask.target >= 0 {
+                *to = Some(ask.target as usize);
+            }
+        }
+        // The total's shaping is not this function's to report: the caller's
+        // own add/mul runs re-read the figure and set its flag.
+        self.apply_amount_stage(
+            kind, fold, side, payer, to, &mut amount, &mut false, by_card, rent, tile,
+        )?;
+        Ok(amount)
+    }
+
+    /// `payCombinedCancel`: `None` when the whole command is dropped.
+    #[allow(clippy::too_many_arguments)]
+    fn pay_total_cancel(
         &mut self,
         side: usize,
         payer: i32,
@@ -4118,51 +4389,27 @@ impl Cx<'_> {
         rent: bool,
         tile: Option<usize>,
     ) -> Flow<Option<i32>> {
-        let mut amount = total;
-        for kind in ["payCombinedAdd", "payCombinedMul", "payCombinedCancel"] {
-            // v78: interactive pre-stage (see the paySplitChooseBefore note above).
-            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
-            // any other stage's rewrite.
-            if kind == "payCombinedAdd" {
-                let ask = raise!(
-                    self,
-                    "payCombinedAddBefore",
-                    side,
-                    player_id = payer,
-                    target = to.map_or(-1, |t| t as i32),
-                    value = amount,
-                    by_card = by_card,
-                    @p TriggerPay::new(rent),
-                    tile = tile.map_or(-1, |t| t as i32)
-                )?;
-                amount = ask.value;
-                if ask.target >= 0 {
-                    *to = Some(ask.target as usize);
-                }
-            }
-            let t = raise!(
-                self,
-                kind,
-                side,
-                player_id = payer,
-                target = to.map_or(-1, |t| t as i32),
-                value = amount,
-                by_card = by_card,
-                @p TriggerPay::new(rent),
-                tile = tile.map_or(-1, |t| t as i32)
-            )?;
-            if kind == "payCombinedCancel" && t.is_cancelled() {
-                return Ok(None);
-            }
-            amount = t.value;
-            if t.target >= 0 {
-                *to = Some(t.target as usize);
-            }
+        let t = raise!(
+            self,
+            "payCombinedCancel",
+            side,
+            player_id = payer,
+            target = to.map_or(-1, |t| t as i32),
+            value = total,
+            by_card = by_card,
+            @p TriggerPay::new(rent),
+            tile = tile.map_or(-1, |t| t as i32)
+        )?;
+        if t.is_cancelled() {
+            return Ok(None);
         }
-        Ok(Some(amount))
+        if t.target >= 0 {
+            *to = Some(t.target as usize);
+        }
+        Ok(Some(t.value))
     }
 
-    /// `Cx::pay_total` -- the public face of [`Self::pay_total_stages`]. A card
+    /// `Cx::pay_total` -- the public face of [`Self::pay_total_stage`]. A card
     /// body that is about to 「[分摊]」 a figure calls this first, so the
     /// command-wide stage shapes the **total**, then divides the result and
     /// runs each share through [`Self::money`] with `Pay::total_stage = false`
@@ -4185,7 +4432,30 @@ impl Cx<'_> {
         let mut to = to;
         let side = from.or(to).expect("a payment has a side");
         let payer = from.map_or(-1, |f| f as i32);
-        let shaped = self.pay_total_stages(side, payer, &mut to, total, by_card, false, None)?;
+        // 规则书 支付阶段 2 (sum) then 4 (product), then the stage-5 cancel.
+        let a = self.pay_total_stage(
+            "payCombinedAdd",
+            Fold::Add,
+            side,
+            payer,
+            &mut to,
+            total,
+            by_card,
+            false,
+            None,
+        )?;
+        let a = self.pay_total_stage(
+            "payCombinedMul",
+            Fold::Mul,
+            side,
+            payer,
+            &mut to,
+            a,
+            by_card,
+            false,
+            None,
+        )?;
+        let shaped = self.pay_total_cancel(side, payer, &mut to, a, by_card, false, None)?;
         // A cancelled command is `None`. A non-positive shaped total is nothing
         // to divide -- the per-leg `money()` calls (and their Q3 reversal) live
         // on the shares, not here.

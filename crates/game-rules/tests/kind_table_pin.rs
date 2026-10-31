@@ -165,6 +165,10 @@ fn typed_engine_consts_have_table_rows() {
         (108, "OnBoardGate"),
         (109, "TargetableGate"),
         (110, "PaySplitMulBefore"),
+        (111, "RentAdd"),
+        (112, "RentMul"),
+        (113, "SettleAdd"),
+        (114, "SettleMul"),
     ];
     for (id, name) in named {
         let row =
@@ -211,6 +215,10 @@ fn filter_payload_shape_mapping() {
         ("PayCombinedAdd", FilterShape::Value),
         ("PayCombinedMul", FilterShape::Value),
         ("PayCombinedCancel", FilterShape::Flag),
+        ("RentAdd", FilterShape::Value),
+        ("RentMul", FilterShape::Value),
+        ("SettleAdd", FilterShape::Value),
+        ("SettleMul", FilterShape::Value),
         ("ActGate", FilterShape::Gate),
         ("PayGate", FilterShape::Gate),
         ("MoveGate", FilterShape::Gate),

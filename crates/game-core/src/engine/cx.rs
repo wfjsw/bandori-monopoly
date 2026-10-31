@@ -21,6 +21,29 @@ use crate::state::MatchPrompt;
 use super::rules::{CardRules, ExclusiveAsk};
 use super::world::{Extreme, World};
 
+/// One open settle's 支付价格 shaping (MONEY-01).
+///
+/// The `settleAdd` / `settleMul` stages raise **once per settle**, before its
+/// body: every payment the settle carries folds the same addend and factor
+/// ([`Cx::settle_pay`]), so 「本次结算的支付减半」 is one contribution to one
+/// settle rather than one rewrite per leg, and two such cards multiply.
+#[derive(Clone, Copy, Debug)]
+pub struct PayScale {
+    /// Fixed addend to every payment of the settle (stage-2 semantics).
+    pub add: i32,
+    /// Scale factor in millionths (1_000_000 = ×1; stage-4 semantics).
+    pub milli: i64,
+}
+
+impl Default for PayScale {
+    fn default() -> Self {
+        Self {
+            add: 0,
+            milli: 1_000_000,
+        }
+    }
+}
+
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
 /// on with `?`.
 #[derive(Debug)]
@@ -460,6 +483,15 @@ pub struct Cx<'a> {
     /// Non-zero is 「结算中」 for the payments it carries -- RAS:游击演出's
     /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally. Transient.
     pub(crate) settle_open: u32,
+    /// The open settles' 支付价格 shaping, innermost last: the `settleAdd` /
+    /// `settleMul` stages raise once per settle, so every payment the settle
+    /// carries folds the same addend / factor. A settle pushes at
+    /// `SettleStage::RaiseSettlePay` and pops at its terminal stage, so the
+    /// entry is absent while a settle is still in its declaration window and
+    /// forever for a settle cancelled there (the frame's `scaled` flag ties the
+    /// pop to the push). `settle_pay.len()` is therefore at most
+    /// [`Self::settle_open`]. Transient.
+    pub(crate) settle_pay: Vec<PayScale>,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -839,6 +871,8 @@ impl<'a> Cx<'a> {
         t.plan.resolve = f.plan.resolve;
         t.plan.pay_factor = f.plan.pay_factor;
         t.plan.rent_factor = f.plan.rent_factor;
+        t.plan.pay_writes = f.plan.pay_writes.clone();
+        t.plan.rent_writes = f.plan.rent_writes.clone();
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
         // Card-owned per-move tags are read by the routine's own raise payloads
@@ -1035,6 +1069,7 @@ impl<'a> Cx<'a> {
             money_depth: 0,
             reentrant_hooks: Vec::new(),
             settle_open: 0,
+            settle_pay: Vec::new(),
             state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,

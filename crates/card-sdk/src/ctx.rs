@@ -2649,12 +2649,14 @@ pub mod plan {
         unsafe { sys::set_settle_tile(n) }
     }
 
-    /// Money paid on this walk, in milli-units (500 = x0.5).
+    /// Money paid on this walk, in milli-units (500 = x0.5). A second live
+    /// write multiplies into the first (MONEY-01).
     pub fn set_pay_factor(n: i32) {
         unsafe { sys::set_pay_factor(n) }
     }
 
-    /// Rent paid on this walk, in milli-units (500 = x0.5).
+    /// Rent paid on this walk, in milli-units (500 = x0.5). A second live
+    /// write multiplies into the first (MONEY-01).
     pub fn set_rent_factor(n: i32) {
         unsafe { sys::set_rent_factor(n) }
     }

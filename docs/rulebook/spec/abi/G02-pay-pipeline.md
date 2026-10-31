@@ -533,7 +533,12 @@ Testable invariants:
 - **I4 (factor scope).** `pay_factor()` returns the product of every factor
   scope live at this instant (4.5). A factor write outlives exactly its scope:
   next move, this move, next settle or this settle; the engine clears each at
-  the scope end.
+  the scope end. Two live writes of one scope **multiply** rather than
+  overwrite (MONEY-01 / C-Q1), and a factor is one contributor to the one
+  product of the chain: the rent and the settle each carry the row-2 / row-4
+  stages of their own (`rentAdd` / `rentMul`, `settleAdd` / `settleMul`) ahead
+  of the payment's, and within a stage every writer's delta / factor composes
+  from the stage input, so declaration order cannot matter.
 - **I5 (spend).** Every 消耗 money movement raises `spendBefore` with the full
   cost before any money moves. The link folds `t.value` exactly like the pay
   `*Before` stages; a cancel leaves the written value in place (a responder that

@@ -110,7 +110,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         }
     }
     fn value(&self) -> i64 {
-        self.trigger.value as i64
+        self.trigger.shown_value() as i64
     }
     fn step(&self) -> i64 {
         self.trigger.step as i64

@@ -219,6 +219,61 @@ pub struct Effect {
     pub value: i32,
 }
 
+/// How the responders of one amount stage combine their rewrites (MONEY-01).
+///
+/// The rulebook lists 支付增加/减少 (stage 2) and 支付减半/翻倍 (stage 4) as
+/// *one window each* and gives no order between two responders. The engine
+/// therefore composes within a stage instead of applying one responder after
+/// the other:
+///
+/// * [`Fold::Add`] -- every responder is shown the stage **input** and its
+///   `write - input` deltas are summed.
+/// * [`Fold::Mul`] -- every responder is shown the stage **input** and its
+///   factors (`write / input`) are multiplied (milli precision).
+///
+/// Both folds are commutative, so declaration order cannot change the figure.
+/// A single modifier still lands exactly as before; the one end-of-calc
+/// `ceil10` sees the composed figure.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Fold {
+    /// Each responder overwrites the running value (stages that are not
+    /// amount modifiers, and the writable `*Before` prompts).
+    #[default]
+    Replace,
+    /// Fixed-value stage: deltas sum.
+    Add,
+    /// Scale stage: factors multiply.
+    Mul,
+}
+
+impl Fold {
+    pub fn is_fold(self) -> bool {
+        self != Fold::Replace
+    }
+}
+
+/// Apply one responder's write `v` to a fold stage (MONEY-01). Shared by the
+/// engine trigger and the host's payload mirror.
+pub fn fold_apply(fold: Fold, input: i32, value: &mut i32, millis: &mut i64, v: i32) {
+    match fold {
+        Fold::Replace => *value = v,
+        Fold::Add => {
+            let delta = v.saturating_sub(input);
+            *value = value.saturating_add(delta);
+        }
+        Fold::Mul => {
+            if input == 0 {
+                *value = v;
+                return;
+            }
+            let factor = (i64::from(v) * 1_000_000) / i64::from(input);
+            *millis = millis.saturating_mul(factor).saturating_div(1_000_000);
+            *value = (i64::from(input).saturating_mul(*millis) / 1_000_000)
+                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        }
+    }
+}
+
 /// One link in a chain (Yu-Gi-Oh's `ChainLink`), and the engine's counteraction trigger.
 ///
 /// The kind name itself encodes pre/post (`"settleBefore"` vs `"settle"`,
@@ -236,6 +291,15 @@ pub struct Trigger {
     /// The card this trigger is about (`t.Card`), or `None`.
     pub card: Option<String>,
     pub value: i32,
+    /// How this stage composes its responders' rewrites ([`Fold`]).
+    pub fold: Fold,
+    /// The stage input: what every responder reads as `value` while `fold` is
+    /// set. Unused on [`Fold::Replace`].
+    pub fold_input: i32,
+    /// The running product of a [`Fold::Mul`] stage, in millionths (1_000_000
+    /// = ×1). Kept off `value` so the multiplication does not round at every
+    /// responder; `value` is recomputed from it after each write.
+    pub fold_milli: i64,
     /// The turn step (0/1/2/3) active when this trigger raised. Stamped by
     /// `Cx::counteract`, not by the raise site. Only meaningful for kinds that
     /// aren't step-specific (e.g. `mortgage` can raise during both step 1
@@ -297,6 +361,9 @@ impl Trigger {
             tile: -1,
             card: None,
             value: 0,
+            fold: Fold::Replace,
+            fold_input: 0,
+            fold_milli: 1_000_000,
             step: 0,
             by_card: None,
             main: false,
@@ -313,6 +380,32 @@ impl Trigger {
             reason: None,
             name: None,
         }
+    }
+
+    /// The figure a responder reads as `value`: the stage input on a fold
+    /// stage, the running figure otherwise.
+    pub fn shown_value(&self) -> i32 {
+        if self.fold.is_fold() {
+            self.fold_input
+        } else {
+            self.value
+        }
+    }
+
+    /// Open this stage as an amount fold: pin the input every responder sees
+    /// and reset the multiplier accumulator.
+    pub fn begin_fold(&mut self, fold: Fold) {
+        self.fold = fold;
+        self.fold_input = self.value;
+        self.fold_milli = 1_000_000;
+    }
+
+    /// A responder wrote `v`. Plain stages overwrite; an [`Fold::Add`] stage
+    /// adds the delta to the running sum; a [`Fold::Mul`] stage multiplies the
+    /// running product by `v / input` (millionths) and recomputes the figure.
+    /// This is what makes a stage commutative (MONEY-01).
+    pub fn fold_write(&mut self, v: i32) {
+        fold_apply(self.fold, self.fold_input, &mut self.value, &mut self.fold_milli, v);
     }
 
     /// Did a counter negate this link at all?
@@ -441,6 +534,28 @@ macro_rules! raise {
     };
     (@set $t:ident, $field:ident = $value:expr, $($rest:tt)+) => {
         $t.$field = $value;
+        raise!(@set $t, $($rest)+);
+    };
+    // `@f add` / `@f mul` open an amount fold on the value written so far --
+    // write it after the `value = ...` override it should fold.
+    (@set $t:ident, @f add) => {
+        $t.begin_fold(Fold::Add);
+    };
+    (@set $t:ident, @f add,) => {
+        $t.begin_fold(Fold::Add);
+    };
+    (@set $t:ident, @f add, $($rest:tt)+) => {
+        $t.begin_fold(Fold::Add);
+        raise!(@set $t, $($rest)+);
+    };
+    (@set $t:ident, @f mul) => {
+        $t.begin_fold(Fold::Mul);
+    };
+    (@set $t:ident, @f mul,) => {
+        $t.begin_fold(Fold::Mul);
+    };
+    (@set $t:ident, @f mul, $($rest:tt)+) => {
+        $t.begin_fold(Fold::Mul);
         raise!(@set $t, $($rest)+);
     };
 }

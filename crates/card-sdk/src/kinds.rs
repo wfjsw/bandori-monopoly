@@ -610,6 +610,10 @@ filter_kinds! {
     PaySplitAdd => payload(crate::payload::PayAddValue);
     PaySplitMul => value;
     PaySplitAt => value;
+    RentAdd => value;
+    RentMul => value;
+    SettleAdd => value;
+    SettleMul => value;
     DiceRollPlan => payload(crate::payload::PlanValue);
     AbnormalGuard => gate;
     ImmuneAll => gate;
@@ -731,7 +735,7 @@ mod tests {
 
     #[test]
     fn filter_kinds_registry_matches_table() {
-        assert_eq!(Filter::KINDS.len(), 27);
+        assert_eq!(Filter::KINDS.len(), 31);
         assert!(Filter::KINDS.iter().all(|k| k.is_filter));
         for k in Filter::KINDS {
             assert_eq!(k.kind.is_filter(), true, "{}", k.name);

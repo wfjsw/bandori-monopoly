@@ -11,8 +11,26 @@ use crate::data::GameData;
 use crate::msg::Msg;
 use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
+use super::move_ctx::FactorWrite;
 use super::world::World;
 use crate::engine::world::Extreme;
+
+/// Fold one factor write into `writes` and refresh the cached product.
+///
+/// A re-executed body (STACK-01 answer replay) makes the same `(writer,
+/// ordinal)` write again: it replaces that entry, so the reproduction of a
+/// contribution is not a second helping of it.
+fn write_factor(writes: &mut Vec<FactorWrite>, cached: &mut f64, milli: i32, writer: &str, ordinal: u32) {
+    match writes.iter_mut().find(|w| w.writer == writer && w.ordinal == ordinal) {
+        Some(w) => w.milli = milli,
+        None => writes.push(FactorWrite {
+            writer: writer.to_string(),
+            ordinal,
+            milli,
+        }),
+    }
+    *cached = writes.iter().map(|w| f64::from(w.milli) / 1000.0).product();
+}
 
 impl World {
     // ------------------------------------------- move shaping
@@ -134,13 +152,19 @@ impl World {
     pub fn set_settle_tile(&mut self, tile: i32) {
         self.turn.plan.settle_tile = tile;
     }
-    /// Scale money paid for this walk. Milli-units (500 = x0.5).
-    pub fn set_pay_factor(&mut self, milli: i32) {
-        self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
+    /// Scale money paid for this walk. Milli-units (500 = x0.5). Two live
+    /// writes **multiply** (MONEY-01): 0.5 × 0.5 is a quarter, and the order
+    /// they were written in cannot matter. `writer` / `ordinal` name the
+    /// contribution so a re-executed body replaces its own earlier write
+    /// rather than multiplying it in twice (see [`FactorWrite`]).
+    pub fn set_pay_factor(&mut self, milli: i32, writer: &str, ordinal: u32) {
+        let p = &mut self.turn.plan;
+        write_factor(&mut p.pay_writes, &mut p.pay_factor, milli, writer, ordinal);
     }
-    /// Scale rent paid for this walk, same units.
-    pub fn set_rent_factor(&mut self, milli: i32) {
-        self.turn.plan.rent_factor = f64::from(milli) / 1000.0;
+    /// Scale rent paid for this walk, same units and same rule.
+    pub fn set_rent_factor(&mut self, milli: i32, writer: &str, ordinal: u32) {
+        let p = &mut self.turn.plan;
+        write_factor(&mut p.rent_writes, &mut p.rent_factor, milli, writer, ordinal);
     }
     /// May build away from the landing (not just on it).
     pub fn set_can_build(&mut self, on: bool) {

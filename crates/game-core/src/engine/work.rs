@@ -41,6 +41,16 @@ pub struct SettleFrame {
     pub stage: SettleStage,
     /// Owner of `at` when the settle opened (read once, as today).
     pub owner: i32,
+    /// This frame pushed its [`Cx::settle_pay`](super::Cx) scale, so the
+    /// terminal stage must pop it. A settle cancelled before `RaiseSettlePay`
+    /// still reaches the terminal, and popping blindly would eat an outer
+    /// settle's scale.
+    pub scaled: bool,
+    /// This frame already raised [`Cx::settle_open`](super::Cx). A resumed
+    /// frame re-enters `step_settle` through [`ContinueSettleWork`]; counting
+    /// it again would leave the open count above zero for the rest of the
+    /// slice.
+    pub counted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +59,9 @@ pub enum SettleStage {
     RaiseSettle,
     /// After `settle` returned: cancel check, then body or terminal.
     AfterSettle,
+    /// Raise `settleAdd` / `settleMul` once for the settle and record the
+    /// composed 支付价格 shaping (`Cx::settle_pay`) for its legs.
+    RaiseSettlePay,
     /// Raise `settleBody` (field replace).
     RaiseSettleBody,
     /// Run `rules.settle_tile` unless the body cancelled.
@@ -69,6 +82,8 @@ impl SettleFrame {
             m,
             stage: SettleStage::RaiseSettle,
             owner: -1,
+            scaled: false,
+            counted: false,
         }
     }
 }

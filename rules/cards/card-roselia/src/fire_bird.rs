@@ -99,8 +99,9 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
     }
-    // TODO(规则书)（自己的所有格子收费变成1.5倍）: 「变成1.5倍」与其他倍率（Ave Mujica
-    //   1.5 倍、HHW 双倍、摩卡 0.5 倍）是叠乘还是取代未定（OPEN-R1 / MONEY-01）-- 这里叠乘.
+    // （自己的所有格子收费变成1.5倍）: 「变成1.5倍」 is one factor of the mul
+    //   stage, which folds every live multiplier as a commutative product
+    //   (MONEY-01 / C-Q1, ruled 2026-10-31) -- no ordering question is left here.
     let boosted = ((value as i64 * 3 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     ctx::log(
         player_id,
