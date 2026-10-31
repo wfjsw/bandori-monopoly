@@ -181,6 +181,8 @@
   "board.eventDeck": "事件卡",
   "board.exiled": "除外",
   "board.faceDown": "（盖着的卡）",
+  "board.faceDownStack": "盖着的牌（暂时不可用）",
+  "board.faceDownTag": "盖着",
   "board.field": "场上",
   "board.fieldEmpty": "场上还没有卡",
   "board.pillDesignee": "被指定：{{who}}",
