@@ -97,3 +97,69 @@ fn a_rich_view_takes_the_card() {
 fn a_poor_view_takes_the_money() {
     assert_eq!(pick(4_000), 0, "below the ramp the money option wins");
 }
+
+/// An auction view with a live bid raises from **that** bid, not from the
+/// opening 100 -- the engine refuses anything under `bid + 100`
+/// (`err.bid_min`), and a Solo prompt has no deadline, so a swallowed bid
+/// would park the table on the prompt forever.
+#[test]
+fn an_auction_view_raises_over_the_live_bid() {
+    let (data, rules, mut view) = poor_or_rich(100_000);
+    let me = view.player_id;
+    let other = 1 - me;
+    // A tile whose quote keeps the worth range above one raise.
+    let tile = data
+        .tiles
+        .iter()
+        .position(|t| t.is_buyable() && t.price >= 1_500)
+        .expect("a pricey buyable tile");
+    view.state.prompt = MatchPrompt {
+        id: 9,
+        kind: "auction".into(),
+        title: Msg::new("ask.auction.title"),
+        fallback: 1,
+        tile: tile as i32,
+        players: vec![other, me],
+        answers: vec![-1, -1],
+        bid: 300,
+        bidder: other,
+        ..MatchPrompt::default()
+    };
+    view.ai_answer = None;
+    let mut rng = DeterminizerRng::new(11);
+    let cmd = act_for_view(&data, &rules, &view, &mut rng).expect("an answer from the view");
+    assert_eq!(cmd.act, "answer");
+    assert!(
+        cmd.value >= 400,
+        "raise over the live bid 300 + 100, got {}",
+        cmd.value
+    );
+}
+
+/// Already the top bidder: pass instead of a repeat bid (`err.already_top_bid`).
+#[test]
+fn an_auction_view_passes_as_the_top_bidder() {
+    let (data, rules, mut view) = poor_or_rich(100_000);
+    let me = view.player_id;
+    let tile = data
+        .tiles
+        .iter()
+        .position(|t| t.is_buyable() && t.price >= 1_500)
+        .expect("a pricey buyable tile");
+    view.state.prompt = MatchPrompt {
+        id: 9,
+        kind: "auction".into(),
+        title: Msg::new("ask.auction.title"),
+        fallback: 1,
+        tile: tile as i32,
+        players: vec![me],
+        answers: vec![-1],
+        bid: 300,
+        bidder: me,
+        ..MatchPrompt::default()
+    };
+    view.ai_answer = None;
+    let mut rng = DeterminizerRng::new(11);
+    let cmd = act_for_view(&data, &rules, &view, &mut rng).expect("an answer from the view");
+    assert_eq!((cmd.act.as_str(), cmd.value), ("answer", -1));
+}

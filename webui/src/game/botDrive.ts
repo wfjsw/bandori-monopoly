@@ -52,9 +52,10 @@ export interface DriveHooks {
   onThinking?: (member: number, on: boolean) => void;
   /** Decision counter, for tests / logs. */
   onDone?: (member: number, outcome: DriveOutcome, iterations: number) => void;
-  /** A command was applied for `member` against `decision`; `ok` is false when
-   *  the engine refused it, so the caller can re-arm a revisitable surface. */
-  onApplied?: (member: number, decision: Decision, ok: boolean) => void;
+  /** A command was applied for `member` against `decision`; `err` is the
+   *  engine's refusal (null when it landed), so the caller can re-arm a
+   *  surface the engine did not take. */
+  onApplied?: (member: number, decision: Decision, err: Msg | null) => void;
 }
 
 /** `server/src/botsvc.rs::decision_at`, already ported in `botBudget`. */
@@ -129,17 +130,24 @@ export function needsAnswer(
   return prev.revisitable && prev.seq !== v.state.seq;
 }
 
-/** Record an applied answer. A refusal only re-arms a revisitable (运营)
- *  surface, where the next candidate is still legal on the same surface; a
- *  refused turn / prompt answer means the surface is already moving on. */
+/** Record an applied answer. A refusal means the engine did **not** take it:
+ *  the seat still owes the same answer and must be asked again -- `err.bid_min`
+ *  on an auction bid decided from a frame older than the live minimum is the
+ *  common case (solo has no clock, so a swallowed bid holds the table on the
+ *  prompt forever), and so is `err.over_hand`. Only a refusal that says the
+ *  answer already stands (`err.answered` / `err.auction_passed`) keeps it
+ *  recorded. A surface that moved on re-arms by itself (new decision key). */
 export function recordAnswer(
   answered: Map<number, Decision>,
   member: number,
   decision: Decision,
-  ok: boolean,
+  err: Msg | null,
 ): void {
-  if (!ok && decision.revisitable) answered.delete(member);
-  else answered.set(member, decision);
+  if (!err || err.k === "err.answered" || err.k === "err.auction_passed") {
+    answered.set(member, decision);
+    return;
+  }
+  answered.delete(member);
 }
 
 /**
@@ -164,11 +172,28 @@ export async function driveSeat(
 
   // Every applied command is reported against the decision it was read from,
   // so the caller can keep the seat from being asked the same decision twice.
-  const decision = decisionOf(v);
-  const apply = async (cmd: Command): Promise<Msg | null> => {
+  const applyAt = async (cmd: Command, from: MatchView): Promise<Msg | null> => {
     const err = await act(member, cmd);
-    hooks.onApplied?.(member, answerFor(v, cmd, decision), !err);
+    hooks.onApplied?.(member, answerFor(from, cmd, decisionOf(from)), err);
     return err;
+  };
+  const apply = (cmd: Command): Promise<Msg | null> => applyAt(cmd, v);
+
+  /** Retry once from the frame the engine has **now**. A refusal is usually a
+   *  stale view -- an auction minimum that moved while the seat was deciding
+   *  (`err.bid_min`), a change the seat has not seen yet -- so replaying the
+   *  answer computed from the old frame would just be refused again. Returns
+   *  whether the retry landed; `false` also when there is nothing to retry
+   *  with (no fresh frame / no plan). */
+  const retryFresh = async (what: string, cmd: Command, err: Msg): Promise<boolean> => {
+    console.warn(`bot ${member}: ${what} refused`, cmd, err);
+    const fresh = getMemberView(member);
+    if (!fresh) return false;
+    const again = firstPlan(fresh, hooks.ctx);
+    if (!again) return false;
+    const err2 = await applyAt(again, fresh);
+    if (err2) console.warn(`bot ${member}: retry refused`, again, err2);
+    return err2 == null;
   };
 
   const search = hooks.search ?? true;
@@ -217,8 +242,8 @@ export async function driveSeat(
       }
       const err = await apply(cmd);
       if (err) {
-        console.warn(`bot ${member}: policy answer refused`, cmd, err);
-        if (fallback) await apply(fallback);
+        const landed = await retryFresh("policy answer", cmd, err);
+        if (!landed && fallback) await apply(fallback);
         hooks.onDone?.(member, "fallback", 0);
         return "fallback";
       }
@@ -239,16 +264,16 @@ export async function driveSeat(
     const err = await apply(result.answer);
     if (err) {
       // The engine refused the search's answer (a stale view, an already-taken
-      // prompt). Never re-ask: drop the cached answer so it cannot be replayed,
-      // and fall back to the policy's candidate for this decision right now
-      // (`docs/BOT.md` §5 B6).
-      console.warn(`bot ${member}: search answer refused`, result.answer, err);
+      // prompt). Drop the cached answer so it cannot be replayed, then answer
+      // from the frame the engine has now -- the policy's candidate for this
+      // decision `docs/BOT.md` §5 B6).
       try {
         await pool.invalidate(result.decisionKey ?? "");
       } catch {
         /* best-effort */
       }
-      if (fallback) await apply(fallback);
+      const landed = await retryFresh("search answer", result.answer, err);
+      if (!landed && fallback) await apply(fallback);
       hooks.onDone?.(member, "fallback", result.iterations);
       return "fallback";
     }

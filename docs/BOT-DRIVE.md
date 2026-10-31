@@ -75,8 +75,13 @@ therefore remember the surface each seat answered (`botDrive.ts`
 seat until the surface changes. Only 运营 re-arms on a new state, because that
 one surface legitimately owes several decisions (card, skill, roll, `end`); an
 applied `end` is recorded against the turn's 结束 surface so the 运营 → 结束
-flip does not look like a new decision either. A refusal re-arms only 运营,
-where the next candidate is still legal on the same surface.
+flip does not look like a new decision either. A refusal re-arms **every**
+surface the engine did not take the answer on: a Solo prompt has no deadline,
+so a refused bid (`err.bid_min` -- the frame named an older bid than the engine
+enforces) recorded as an answer would park the table on the prompt forever.
+Only `err.answered` / `err.auction_passed` (the answer already stands) keep the
+record. A refused answer is also retried once from the frame the engine has
+**now**, never replayed from the stale one that produced it.
 
 ## 3. Staging (each step green on its own)
 
@@ -113,7 +118,9 @@ where the next candidate is still legal on the same surface.
   server's clock claim are the two backstops. A bot seat has no clock, so its
   own commands must be ones the engine accepts — the policy picks roll vs end
   by the engine's gates (`can_roll_here` / `can_end_here`, mirrored in
-  `policy::turn_action`), never by the `skip_move` latch.
+  `policy::turn_action`), never by the `skip_move` latch. The bid minimum is
+  the one gate a view decides blind (it moves between the frame and the act),
+  so a refused answer is re-armed and re-decided from the next frame (§2).
 * Every frame carries the turn's **public play history** (`played` /
   `cardsPlayed`). The determinized fork is the policy's only world, so without
   it the max-plays cap and the skill de-dup see an empty turn and a machine

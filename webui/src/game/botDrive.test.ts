@@ -15,11 +15,12 @@ import {
   decisionOf,
   driveSeat,
   needsAnswer,
+  recordAnswer,
   type Decision,
   type DriveHooks,
 } from "./botDrive.ts";
 import { decisionAt } from "./botBudget.ts";
-import type { Command, MatchView, MatchState, MatchPlayer } from "../core/types.ts";
+import type { Command, MatchView, MatchState, MatchPlayer, MatchPrompt } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
 import type { BotDecideResult, BotPool } from "./botPool.ts";
 
@@ -244,8 +245,8 @@ test("needsAnswer: an end at 运营 settles the turn", async () => {
       ...hooks(),
       search: false,
       pool: fakePool(async () => okAnswer("end"), async () => ({ act: "end" })),
-      onApplied: (m, d, ok) => {
-        if (!ok && d.revisitable) answered.delete(m);
+      onApplied: (m, d, err) => {
+        if (err) answered.delete(m);
         else answered.set(m, d);
       },
     },
@@ -267,11 +268,153 @@ test("driveSeat reports the applied decision and its outcome", async () => {
       ...hooks(),
       search: false,
       pool: fakePool(async () => okAnswer("end"), async () => ({ act: "end" })),
-      onApplied: (m, d, ok) => seen.push([m, d.key, ok]),
+      onApplied: (m, d, err) => seen.push([m, d.key, !err]),
     },
   );
   // An `end` is recorded against the turn's 结束 surface (see `settled`).
   assert.deepEqual(seen, [[1, decisionKey(END), true]]);
+});
+
+// ------------------------------------------------- auction minimum races
+
+/** A bid live on someone else's frame, the way an auction answer is decided:
+ *  `bid` / `bidder` are the bid under the seat, and a seat that holds the older
+ *  frame sees an older minimum than the engine enforces. */
+function auctionView(bid = 0, bidder = -1, seq = 12, money = 10_000): MatchView {
+  const prompt: MatchPrompt = {
+    ...REWARD_PROMPT,
+    id: 7,
+    kind: "auction",
+    title: { k: "ask.auction.title" },
+    text: { k: "ask.auction.text" },
+    fallback: 1,
+    price: 2_000,
+    players: [0, 1],
+    answers: [-1, -1],
+    bid,
+    bidder,
+  } as MatchPrompt;
+  const players = [player(), player({ member: 2, player: "B1", bot: true, money })];
+  return view({ you: 2, playerId: 1, state: state({ seq, busy: true, players, prompt }) });
+}
+
+test("recordAnswer: a refusal re-arms unless the answer already stands", () => {
+  const answered = new Map<number, Decision>();
+  const asked = auctionView();
+  const d = decisionOf(asked);
+  recordAnswer(answered, 2, d, null);
+  assert.equal(needsAnswer(answered, 2, asked), false);
+  // A duplicate refusal (`err.answered` / `err.auction_passed`) did record it.
+  recordAnswer(answered, 2, d, { k: "err.auction_passed" } as Msg);
+  assert.equal(needsAnswer(answered, 2, asked), false);
+  // A minimum refusal (`err.bid_min`) did not: the seat still owes a bid.
+  recordAnswer(answered, 2, d, { k: "err.bid_min" } as Msg);
+  assert.equal(needsAnswer(answered, 2, asked), true);
+});
+
+test("driveSeat retries a stale auction bid from the frame the engine has now", async () => {
+  // The seat decided against `stale` (no bid yet) while the human's 300 landed.
+  // The engine refuses its 100 (`err.bid_min`, min 400); the retry must read
+  // the fresh view and clear the live minimum instead of replaying 100.
+  const stale = auctionView(0, -1, 12);
+  const fresh = auctionView(300, 0, 13);
+  const answered = new Map<number, Decision>();
+  const values: number[] = [];
+  let reads = 0;
+  let calls = 0;
+  const outcome = await driveSeat(
+    async (_m, cmd) => {
+      values.push(cmd.value);
+      calls++;
+      return calls === 1
+        ? ({ k: "err.bid_min", a: { min: { n: 400 } } } as Msg)
+        : null;
+    },
+    () => (reads++ === 0 ? stale : fresh),
+    2,
+    {
+      ...hooks(),
+      search: false,
+      pool: fakePool(
+        async () => okAnswer("answer"),
+        async () => ({ act: "answer", prompt: 7, value: 100 }),
+      ),
+      onApplied: (m, d, err) => recordAnswer(answered, m, d, err),
+    },
+  );
+  assert.equal(outcome, "fallback");
+  assert.equal(values.length, 2, "the refused bid is retried once");
+  assert.ok(values[1] >= 400, `the retry honours the live minimum (got ${values[1]})`);
+  // Landed: recorded against the fresh surface, so the caller stops asking.
+  assert.equal(needsAnswer(answered, 2, fresh), false);
+});
+
+test("driveSeat passes when the live minimum is over the ceiling", async () => {
+  // The seat's ceiling (money - 1 000 reserve) is under the live minimum: the
+  // retry must pass, or the prompt would hold the table open on the decision.
+  const stale = auctionView(0, -1, 12, 1_300);
+  const fresh = auctionView(300, 0, 13, 1_300);
+  const values: number[] = [];
+  let reads = 0;
+  let calls = 0;
+  await driveSeat(
+    async (_m, cmd) => {
+      values.push(cmd.value);
+      calls++;
+      return calls === 1 ? ({ k: "err.bid_min", a: { min: { n: 400 } } } as Msg) : null;
+    },
+    () => (reads++ === 0 ? stale : fresh),
+    2,
+    {
+      ...hooks(),
+      // A ceiling under the new minimum.
+      ctx: { ...hooks().ctx, random: () => 0 },
+      search: false,
+      pool: fakePool(
+        async () => okAnswer("answer"),
+        async () => ({ act: "answer", prompt: 7, value: 100 }),
+      ),
+    },
+  );
+  assert.equal(values[values.length - 1], -1, "the seat passes");
+});
+
+test("a stale bid never parks the auction: the driver loop settles", async () => {
+  // The shape of `SoloSession::driveBots` -- keep asking while the seat owes an
+  // answer. A Solo auction has no deadline, so a refusal recorded as an answer
+  // parks the table on the prompt forever. The held frame lags the engine by
+  // one round (the human's 300 has landed on the engine, not on the page yet).
+  let engineBid = 300;
+  let engineBidder = 0;
+  let held = auctionView(0, -1, 12);
+  const answered = new Map<number, Decision>();
+  const act = async (_m: number, cmd: Command): Promise<Msg | null> => {
+    if (cmd.value < 0) return null;
+    const min = engineBid <= 0 ? 100 : engineBid + 100;
+    if (cmd.value < min) return { k: "err.bid_min", a: { min: { n: min } } } as Msg;
+    engineBid = cmd.value;
+    engineBidder = 1;
+    return null;
+  };
+  let rounds = 0;
+  while (needsAnswer(answered, 2, held)) {
+    if (++rounds > 20) break;
+    await driveSeat(act, () => held, 2, {
+      ...hooks(),
+      search: false,
+      // The worker policy always answers from the frame it was handed.
+      pool: fakePool(
+        async () => okAnswer("answer"),
+        async () => ({ act: "answer", prompt: 7, value: 100 }),
+      ),
+      onApplied: (m, d, err) => recordAnswer(answered, m, d, err),
+    });
+    held = auctionView(engineBid, engineBidder, 12 + rounds);
+  }
+  assert.ok(rounds < 20, `the loop settles (took ${rounds} rounds)`);
+  assert.equal(engineBidder, 1, "the seat ends up the top bidder");
+  assert.ok(engineBid >= 400, `at or over the live minimum (got ${engineBid})`);
+  assert.equal(needsAnswer(answered, 2, held), false, "and the seat stops being asked");
 });
 
 test("driveSeat reports a refused answer as not applied", async () => {
@@ -289,7 +432,7 @@ test("driveSeat reports a refused answer as not applied", async () => {
       ...hooks(),
       search: false,
       pool: fakePool(async () => okAnswer("end"), async () => ({ act: "end" })),
-      onApplied: (m, d, ok) => seen.push([m, d.key, ok]),
+      onApplied: (m, d, err) => seen.push([m, d.key, !err]),
     },
   );
   assert.deepEqual(seen, [
