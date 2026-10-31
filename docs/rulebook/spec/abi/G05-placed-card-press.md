@@ -648,7 +648,7 @@ actions, each gated separately.
 
 ### 5.6 Kani model
 
-* `Op::invoke_entry = 391` (132 `invoke_skill` retired, never reused; 391-400
+* `Op::invoke_entry = 427` (132 `invoke_skill` retired, never reused; 427-436
   is this group's README band);
   G13 §5.5's `arm_invoke_entry` / `invoke_n` / `last_invoke` are adopted as-is,
   plus the press binding: the record extends to `(card, entry, paid, by_uid)`

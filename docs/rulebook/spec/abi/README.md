@@ -28,10 +28,10 @@ the whole table.
 | G08 | 105→106 | 12→13 | 114–121 | 349–368 |
 | G02 | 106→107 | 13 | 122 | 369–377 |
 | G04 | 107→108 | 13 | — | 378–397 |
-| G03 | 108→109 | 13→14 | 123–125 | — |
-| G06 | 109→110 | 14→15 | — | 398–417 |
-| G05 + G13 | 110→111 | 15→16 | — | 418–427 |
-| G07 | 111→112 | 16 | — | 428–437 |
+| G03 | 108→109 | 13→14 | 123–125 | 398–406 |
+| G06 | 109→110 | 14→15 | — | 407–426 |
+| G05 + G13 | 110→111 | 15→16 | — | 427–436 |
+| G07 | 111→112 | 16 | — | 437–446 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
 | G11 | 114→115 | 17→18 | 132–133 | — |
@@ -49,6 +49,11 @@ order: G01 takes 341–348, G08 349–368, and every group from G02 on shifts te
 records the *pre-landing* value each document was written against, which is
 why G15/G01 say 12.
 
+**2026-10-31 second amendment (G03).** The G03 review found the draft asked
+for eight roll imports plus `trig_roll` while its Op row was still `—`. G03
+takes 398–406 (nine), and every group after it shifts nine: G06 407–426,
+G05+G13 427–436, G07 437–446. G04's landed 378–397 is untouched.
+
 Recommended landing order (foundation → dependent):
 
 1. **G15** Kani host — model-only, no version change.
@@ -56,7 +61,7 @@ Recommended landing order (foundation → dependent):
 3. **G08** zone lifecycle — the single zone writer, instance state, leave hooks.
 4. **G02** pay pipeline — payload/stage seams consumed by G09/G10/G12.
 5. **G04** move plan — plan frames and the blocked predicate.
-6. **G03** roll pipeline — stage ladder; reserves the 111+ kind band.
+6. **G03** roll pipeline — the cast ladder over G04's frame; kinds 123–125.
 7. **G06** counteraction/join — depends on G01 payload and G03 kinds.
 8. **G05 + G13** press/invoke — must land together (one `invoke_entry` shape).
 9. **G07** targeting — depends on G01 identity and G06 window.
@@ -74,6 +79,9 @@ Couplings a reviewer must keep in one head:
 - **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
   settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
   `paid`/`body_replaced` facts on top (G02 §12).
+- **G03 ↔ G04** share the window raise point: G04 owns the plan snapshot/fold,
+  G03 raises every roll window inside it and hands the plan-write item (G03
+  item 7) to G04 §4.3.
 - **G03 ↔ G11** share the drawAfter point; their kind bands are adjacent.
 - **G06 ↔ G12** share pending-window reads.
 - **G04 ↔ G12** share the blocked predicate (`cant_move_code_for_activation`).

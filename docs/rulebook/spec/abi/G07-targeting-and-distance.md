@@ -389,9 +389,9 @@ per-play cache — the set changes only on placement/removal.
 
 ### 4.6 Kani model
 
-* `kani_host::Op` gains two append-only ids: `nearest = 401`,
-  `nearest_exempt = 402` (340 is the current maximum; 401-410 is this group's
-  README band).
+* `kani_host::Op` gains two append-only ids: `nearest = 437`,
+  `nearest_exempt = 438` (G03 takes 341-406 ahead of this group; 437-446 is
+  this group's README band).
 * `sys_kani.rs` + `native_shims.rs` (`ruleset_nearest`,
   `ruleset_nearest_exempt`) + `host.rs` registration mirror the two imports.
 * `rules/kani/src/host.rs`:
