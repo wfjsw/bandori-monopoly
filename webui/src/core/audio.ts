@@ -38,15 +38,22 @@ function ctx(): AudioContext | null {
 }
 
 // --- Audio session ---------------------------------------------------------
-// The iOS ringer switch mutes the "ambient" session but not "playback". BGM
-// stays ambient, so it follows the switch; sfx and voice are bumped to
-// "playback" while they sound, so they are heard anyway. Safari-only -- Chrome
-// and Android have no Audio Session API, and their Web Audio already plays on
-// the media stream, which the ringer switch does not touch.
+// The page sits on "ambient" (mixable, follows the ringer switch), and sfx and
+// voice bump it to "transient" while they sound: short one-shot audio that
+// mixes on top instead of taking the page over. Both are short-form, mixable
+// types -- no lockscreen media card and no interruption of whatever else the
+// phone is playing. (WebKit maps both to AVAudioSessionCategoryAmbient, so this
+// split is about intent and other engines, not about the switch: on iOS both
+// are silenced by it. Only "playback" is heard through a silenced phone.)
+// Safari-only -- Chrome and Android have no Audio Session API, and their Web
+// Audio already plays on the media stream, which the ringer switch does not
+// touch.
 type SessionType = "auto" | "playback" | "transient" | "transient-solo" | "ambient" | "play-and-record";
 
 const BASE_SESSION: SessionType = "ambient";
-/** Keep the page on "playback" this long after the last sfx/voice ends. */
+/** What sfx and voice hold the page on; "transient" is the spec's "ping" type. */
+const HOLD_SESSION: SessionType = "transient";
+/** Keep the page on the held type this long after the last sfx/voice ends. */
 const RELEASE_MS = 400;
 
 function setSession(type: SessionType): void {
@@ -68,7 +75,7 @@ function holdAudible(): void {
     releaseTimer = 0;
   }
   if (audible++ === 0) {
-    setSession("playback");
+    setSession(HOLD_SESSION);
     duck(true);
   }
 }
@@ -92,10 +99,11 @@ let pending: string | null = null;
 let seq = 0;
 let unlocked = false;
 
-// Raising sfx/voice onto the "playback" session also un-mutes the BGM already
-// playing, which under the ringer switch is exactly the wrong half of the mix.
-// Duck it out of the way for as long as the bump lasts, so a silenced phone
-// hears only the effect (and an unmuted one gets a normal sidechain dip).
+// Sfx and voice play over a persistent BGM, so the BGM gets out of their way:
+// it dips for as long as the hold lasts (a normal sidechain), and comes back
+// with the session release. It also keeps the effect clear of the BGM if the
+// held type is ever "playback", where a silenced phone would otherwise hear the
+// whole mix un-muted instead of just the effect.
 const DUCK = 0.1;
 const DUCK_MS = 90;
 const UNDUCK_MS = 250;
