@@ -97,7 +97,7 @@ per-card probes.
 | `always` (no-op prefilter) | 19 | events `embers.rs:26` |
 
 Overall: **~75 % of guards fully expressible, ~20 % partial, ~5 % prefix-only**;
-0 guards need "no pre at all" beyond `always`.
+0 guards need "no condition at all" beyond `always`.
 
 ## 3. What dominates runtime
 
@@ -117,7 +117,7 @@ with it; 118 hook decls are exactly `mine`).
 
 | | A. closed atom set | B. CEL string (recommended) | C. CEL lowered to atoms |
 |---|---|---|---|
-| authoring | builder / const lists next to the guard | `pre: "actor == owner && move.roll < 6"` next to the guard | same as B |
+| authoring | builder / const lists next to the guard | `condition: "actor == owner && move.roll < 6"` next to the guard | same as B |
 | wire | postcard enum of atoms (~1–2 B/atom) | `Option<String>` in `ManifestOn` | atom IR, lowering at load |
 | eval | match ladder, ~0.1–0.5 µs | tree-walk over parsed AST, est. **1–5 µs** | as A |
 | deps / size | ~2 KB | `cel` 0.15.0 → antlr4rust + nom + serde (P0 spike: pure Rust, builds wasm32; **re-verify 0.15** after the crate rename) | host keeps `cel`; browser keeps only atoms |
@@ -142,8 +142,8 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
-| window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
+| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.is_main_move`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+| window | `turn_player`, `turn_key` | `PlayCtx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/hand/pos/out/stay/stun/exile/tiles` (count) | `World`/`Player` |
 | candidate | `card.id`, `card.placed`, `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
 
@@ -177,13 +177,13 @@ old kernel rows so precompiled blobs keep binding.
 
 | field | what it is |
 |---|---|
-| `cel` | the CEL spelling (`actor`, `move.main`, `tile_is`, `state`) |
+| `cel` | the CEL spelling (`actor`, `move.is_main_move`, `tile_is`, `state`) |
 | `aliases` | other CEL spellings that flatten to the same `flat` (`chain.count` for `effect.count`, `trigger.kind` for `kind`) |
 | `flat` | the flat identifier after the `root.field` rewrite (`move_main`) |
 | `scope` | `Window` / `Candidate` / `Func { arity, cand }` |
 | `ty` | `Int` / `Bool` / `OptInt` (binds `null` when `-1`) / `Str` (only `kind`) |
 | `get` | scalar fetch: `fn(&dyn CondView) -> i64` |
-| `fx` | function shape (`Fx::SeatInt` / `StrInt` / `IntHas` / `PairHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
+| `fx` | function shape (`hook::SeatInt` / `StrInt` / `IntHas` / `PairHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
 | `lower_as` | how the name lowers to the IR (`Direct` / `Call` / `CallEq` / `OwnerState`) |
 | `doc` | one line |
 
@@ -220,7 +220,7 @@ overflow):
 
 * `rules_cond::SnapshotView` (`view_impl.rs`) — the eager `WindowCtx` +
   `CandidateCtx` reference the tests and the precompiled-conds runtime use.
-* `game-rules::cond_pre::SnapView<S: SnapSrc>` — any `SnapSrc` (a
+* `game-rules::condition::SnapView<S: SnapSrc>` — any `SnapSrc` (a
   `CardWorld`, or `rules-native`'s linked world) plus the candidate being
   probed. This is the generic host accessor implementation.
 * `game-rules::wasm_rules::LiveSnap` — the live `World` + `GameData` +
@@ -231,9 +231,9 @@ overflow):
 
 | name | shape | doc |
 |---|---|---|
-| `card.counter('name')` (flat `card_counter`) | `Fx::StrInt`, candidate | the candidate instance's named counter; missing = 0. Host maps well-known wire names onto dedicated card fields, anything else is an instance counter |
+| `card.counter('name')` (flat `card_counter`) | `hook::StrInt`, candidate | the candidate instance's named counter; missing = 0. Host maps well-known wire names onto dedicated card fields, anything else is an instance counter |
 | `counter_name` (alias `trigger_name`) | window `Ty::Int` | the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling. Same encoding as `trigger_card` (`id_of`); `0` when empty |
-| `counter_is('name')` | `Fx::IntHas` | this window's `Trigger.name` is that counter / message |
+| `counter_is('name')` | `hook::IntHas` | this window's `Trigger.name` is that counter / message |
 
 **`card.cp` is gone.** The name was removed in de2fd9a9 and is **not** in
 `VOCAB`. Do not restore it — the old `card.cp` read `FieldCard::crystals`, not
@@ -252,8 +252,8 @@ window (`fill_window_ambient`) carries no `Trigger`, so the trigger names are
 defaults.
 
 That is the seat-view equivalence contract (`docs/BOT.md` §1.1): a CEL
-`pre` alone can never make `playable` / `skills` diverge between the
-server's `view_extra` and the client's determinized fork. A **residual wasm
+`condition` alone can never make `playable` / `skills` diverge between the
+server's `view_extras` and the client's determinized fork. A **residual wasm
 guard** (`OP_GUARD` / the card's `cant_play` body) still can -- the card SDK
 exposes `hand_count` / `cards_in` / `deck_count` / `ctx::roll` -- and those
 call sites are listed in `docs/BOT.md` §1.1.C. Do not add a hidden-state
@@ -288,10 +288,10 @@ guards the flat namespace.
 1. Add a `CondView` accessor in `rules-cond/src/view.rs` (if it reads
    something new).
 2. Add one `VOCAB` entry in `rules-cond/src/vocab.rs` (scalar: `get` points
-   at the accessor; function: `fx` picks an existing `Fx` shape and its
+   at the accessor; function: `fx` picks an existing `hook` shape and its
    `fill`/`field` closure calls the accessor).
 3. Implement the accessor on each host view: `SnapshotView`
-   (`view_impl.rs`), `SnapView` (`game-rules/cond_pre.rs`), `LiveSnap`
+   (`view_impl.rs`), `SnapView` (`game-rules/condition.rs`), `LiveSnap`
    (`game-rules/wasm_rules.rs`).
 4. If the name reads **new** world state, also extend `SnapSrc` /
    `fill_window` / `fill_candidate` (the eager snapshot mapping). A name
@@ -314,7 +314,7 @@ bodies.
 
 `On::Filter(FilterEntry)` / `On::Action(ActionEntry)` /
 `On::Settle` / `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` carry the same
-`pre` + residual-guard pair as `On::Action` (v49), so their conditions see the
+`condition` + residual-guard pair as `On::Action` (v49), so their conditions see the
 §4.2 schema. The window is built with `fill_window` from the **trigger / context
 the entry is dispatched on**; the candidate is `owner` = the entry's
 `player_id`. What is meaningful per kind (the rest of the schema still binds,
@@ -325,7 +325,7 @@ reading its default / sentinel):
 | `Gate` | the gate's own raise (`ImmuneAll` / `Untargetable` / `Redirect` / `BuyGate` / `AbnormalGuard`, …) | `kind`, `actor` (the protected seat / buyer / named target), `target` (`Redirect`'s current name), `tile` (`BuyGate`'s tile), `value`, `by` (the causing card's seat, `null` when not card-caused), `trigger_card`, `turn_player`, `turn_key` | a gate is asked per raise; `card.placed` is true by construction (only placed instances are asked) |
 | `DiceRollPlan` | `diceRollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
 | `AtEnd` (`On::Schedule`) | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
-| `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.main` | `actor`, `target`, `tile.*`, `move.main`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
+| `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.is_main_move` | `actor`, `target`, `tile.*`, `move.is_main_move`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
 | `Buy` / `Build` | a synthetic trigger (`kind = None`) on the perform: `actor` = the buyer / builder, `target` = the tile's owner, `tile` = the deed, `value` = the reason (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction); `buy.kind` is the [`BuyKind`] | `actor`, `target`, `tile.*`, `buy.kind`, `owner.*`, `turn_player`, `turn_key` | the body owns eligibility, the quote and the order of steps; `ctx::raise` / `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed` / `ctx::log` are the mechanism. Tile bodies do not flash |
 
@@ -359,13 +359,13 @@ exactly the G3 split.
 
 ### 4.3 ABI / authoring surface
 
-* Manifest: `ManifestOn { kind, triggers, pre: Option<String> }` (postcard,
+* Manifest: `ManifestOn { kind, triggers, condition: Option<String> }` (postcard,
   abi.rs:1446). No `exact` flag: a fully expressed guard is simply removed, so
-  "condition only" is `pre: Some(..)` + no guard.
-* `On::*` gains a `pre: &'static str` (`""` = none) immediately before the
+  "condition only" is `condition: Some(..)` + no guard.
+* `On::*` gains a `condition: &'static str` (`""` = none) immediately before the
   residual guard -- the declaration reads category → condition → guard → body,
-  matching the three layers above; or a const `.pre(..)` builder. ~490
-  declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
+  matching the three layers above; or a const `.condition(..)` builder. ~490
+  declaration sites. Sugar consts `condition::MINE` (`actor == owner`) replaces the
   118 `mine` guards outright; the 19 `always` guards are deleted. The condition
   sits beside the (now residual) guard fn, and each clause lives in exactly one
   of the two. **v49** extends the pair to `On::Filter(FilterEntry)` /
@@ -373,9 +373,9 @@ exactly the G3 split.
   `On::Mortgage` / `On::Redeem` too (§4.2c): no entry kind is unguarded any
   more, and an entry whose condition rejects runs no body (and so emits no
   `card` flash).
-* Load time: `RulesetBuilder::build` parses + compiles every `pre` once
+* Load time: `RulesetBuilder::build` parses + compiles every `condition` once
   (TypeRegistry with the §4.2 vars); parse/unknown-var/int-literal errors are
-  `RuleError::BadPre` and fail the build-ruleset check.
+  `RuleError::BadCondition` and fail the build-ruleset check.
 
 ### 4.4 Evaluation points
 
@@ -394,10 +394,10 @@ exactly the G3 split.
    `kind` absent.
 5. `can_counteract_now` (wasm_rules.rs:2922) and the `declares()` bitmask stay
    untouched (layer 0).
-6. **Every other path that reaches a guard** (UI `playable` / `why_not_act`,
+6. **Every other path that reaches a guard** (UI `playable` / `cant_act`,
    `ai_play`, any host request that asks another card's guard, the future
    `rules-native` bot build) goes through one host function
-   `admits(entry, ctx) = pre(ctx) && guard(ctx)`. No caller may call a guard
+   `admits(entry, ctx) = condition(ctx) && guard(ctx)`. No caller may call a guard
    directly — with clauses removed from the guards, skipping the condition
    would admit what it should reject. The guest-facing spelling of "ask
    another card's guard" is **`ctx::can_fire(player_id, id, kind, trigger)`**
@@ -419,11 +419,11 @@ any effect before the ask has been re-run once by the multi-pass replay.
 `docs/ACTIVATION.md`.
 
 **Play-gate messages (user ruling 2026-10-10).** A play gate (`On::Play`) must
-not trade a specific refusal `Msg` for the generic `err.play_pre` a `pre`-reject
+not trade a specific refusal `Msg` for the generic `err.play_pre` a `condition`-reject
 surfaces — the player reads that reason when a card will not play. So a clause
 whose old `cant_play` / `can_use` guard returned a *specific* `Msg` stays in the
 residual guard; only a clause whose old refusal was generic or absent (a silent
-body-top, or a guard that already returned `err.play_pre`) may live in the `pre`.
+body-top, or a guard that already returned `err.play_pre`) may live in the `condition`.
 Counteract / hook residuals are unaffected (they are a plain admit/reject with
 no message).
 
@@ -507,13 +507,13 @@ equivalence, not necessity.
 1. **Migration audit (finished 2026-10-14)**: during G3–G4 each migrated card
    kept its pre-migration guard as `legacy_*` under the `guard-audit` feature;
    on every probe the host evaluated both `legacy(ctx)` and
-   `kind ∧ pre(ctx) ∧ guard(ctx)` and **panicked** with card id + trigger dump
+   `kind ∧ condition(ctx) ∧ guard(ctx)` and **panicked** with card id + trigger dump
    on any mismatch. The final equivalence run on 2026-10-14
    (`cargo test -p game-rules --features guard-audit` and
    `cargo test -p ruleset-tests --features game-rules/guard-audit`) found the
    remaining `legacy_*` copies were stale `mine`-only snapshots (they omitted
-   body-top clauses the migrated `pre` correctly carries), not condition bugs;
-   the new `pre` text matched the rulebook on every mismatch. The scaffolding
+   body-top clauses the migrated `condition` correctly carries), not condition bugs;
+   the new `condition` text matched the rulebook on every mismatch. The scaffolding
    (`legacy_*`, `CardDef::legacy`, `has_legacy`, `OP_LEGACY_GUARD`,
    `legacy_probe` / `legacy_audit`, the `guard-audit` feature) was then deleted
    and ABI bumped to 61. The invariant below was therefore verified once, at
@@ -557,7 +557,7 @@ over `rent_of`, the rent table), `hey_kids` buildable_targets (the engine's
 **deferred** to the `mark-counter-api` branch, which is replacing the whole
 mark/token API with card-instance counters. Each residual keeps its
 kind/actor prefix (and, for the partials, the expressible head is now in
-`pre`).
+`condition`).
 
 **Moved into the schema** (2026-10-10, this batch): `meet_again` next_dist,
 `repaint` on_path, `misaki_card` between, `council_check` near/owned_within,
@@ -572,11 +572,11 @@ guard -- they are play gates whose refusal `Msg` is specific (§4.4).
 
 | phase | content | size | gate |
 |---|---|---|---|
-| G0 | ABI bump (42): `ManifestOn.pre/exact`, `On` trailing field or `.pre()` builder, `rt.rs` serialise | ~200 | manifest round-trip test |
+| G0 | ABI bump (42): `ManifestOn.condition/exact`, `On` trailing field or `.condition()` builder, `rt.rs` serialise | ~200 | manifest round-trip test |
 | G1 | **done** (2026-10-07, isolated `crates/rules-cond` — §8): `cel` 0.15.0 features off, wasm32 ok; `WindowCtx`/`CandidateCtx` + `compile`/`eval`; load-time errors; int-only lint; kind rejection | ~400 | load-time errors; int-only lint |
-| G2 | single `admits()` entry; evaluate at §4.4 (1)–(5); counters for skipped probes | ~250 | no direct guard calls left; no behaviour change with `pre` absent |
+| G2 | single `admits()` entry; evaluate at §4.4 (1)–(5); counters for skipped probes | ~250 | no direct guard calls left; no behaviour change with `condition` absent |
 | G3 | migration audit (`legacy_*` equivalence) + fuzz + replay corpus + `precheck` — **scaffolding removed 2026-10-14** after the final audit run (§5.1/§10.1) | ~300 | rb suite green under audit |
-| G4 | authoring pass: **move** clauses from guards into conditions and delete the kind checks (category filter owns them); 50 counteract + 62 `cant_play` + 35 skill gates; `mine` → `pre::MINE`, `always` guards deleted; **`legacy_*` removed 2026-10-14** | ~150 sites | audit clean on corpus, then `legacy_*` removed |
+| G4 | authoring pass: **move** clauses from guards into conditions and delete the kind checks (category filter owns them); 50 counteract + 62 `cant_play` + 35 skill gates; `mine` → `condition::MINE`, `always` guards deleted; **`legacy_*` removed 2026-10-14** | ~150 sites | audit clean on corpus, then `legacy_*` removed |
 | G5 | optional: lower the atom grammar to a match-ladder fast path / dep-free browser build (option C); re-run `bot_cost` | ~200 | BOT.md §5 numbers updated |
 
 Ordering note: G0–G2 must rebase over purchasing's host.rs/wasm_rules.rs edits;
@@ -621,7 +621,7 @@ AST is smaller and already in the dependency set.
 `--no-default-features --features runtime-only` (= `wire`).
 
 **Shipping the compiled form.** `tools/build-ruleset.mjs` compiles every
-shipped `pre` on the host (fail-closed) and publishes one postcard envelope,
+shipped `condition` on the host (fail-closed) and publishes one postcard envelope,
 `PrecompiledConds { version: u8, entries: Vec<{card, entry, blob}> }` (entries
 sorted by `(card, entry)`), as the content-addressed `conds-<sha256>.bin`
 listed in `dist/cards/index.json` (`"conds": {file, sha256, bytes, entries}`);
@@ -631,7 +631,7 @@ module bytes. The page (`webui/src/core/rulesetLoad.ts`, shared with the node
 gate) fetches it with the modules and feeds it through
 `RulesetBuilder::precompiled` before `ruleset_build`; `index.json` with no
 `conds` entry means no entry has a condition, and older bundles keep working.
-A `pre` with no blob on that path is a loud `BadPre` — never "treat as true" —
+A `condition` with no blob on that path is a loud `BadCondition` — never "treat as true" —
 and a blob for an entry that declares no condition (or a blob that disagrees
 with the host compile, checked whenever a native build is handed one) is
 refused the same way. Server / `rules-worker` / `rules-native` keep compiling
@@ -737,7 +737,7 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
   `character_is`, `band_is`, `blocked`, `neighbor` likewise. The 2026-10-10
   native batch adds `dist`, `players_on`, `next_dist`, `others_within`,
   `owned_within`, `on_path`, `between`, `gains_this_turn`, `targeted_count`
-  and the pure predicate `repeated_digits` (three new `Fx` shapes:
+  and the pure predicate `repeated_digits` (three new `hook` shapes:
   `IntIntConst` / `BinInt` / `IntPred`). The status-gate batch adds
   `state(p, 'key')` -- the seat's player-state value for an arbitrary string
   key (`'stay'` / `'stun'` / `'stunStart'` / `'exile'` / `'unstoppable'` /
@@ -758,34 +758,34 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 ### 9.1 What landed
 
 **G0 — surface.** `On::Counteract` / `On::Action` / `On::Play` (the guarded
-entries) carry a `pre: &'static str` condition immediately before the residual
-guard (`On::Counteract(kinds, pre, guard, body)`,
-`On::Action(Action::Name(pre, guard, body))`,
-`On::Play(pre, gate, body)`); `""` = none. `On::pre(..)` is
-the const builder and `card_sdk::pre::MINE` (`actor == owner`) the sugar.
-`ManifestOn` gains `pre: Option<String>` (the CEL source) and `ABI_VERSION`
+entries) carry a `condition: &'static str` condition immediately before the residual
+guard (`On::Counteract(kinds, condition, guard, body)`,
+`On::Action(Action::Name(condition, guard, body))`,
+`On::Play(condition, gate, body)`); `""` = none. `On::condition(..)` is
+the const builder and `card_sdk::condition::MINE` (`actor == owner`) the sugar.
+`ManifestOn` gains `condition: Option<String>` (the CEL source) and `ABI_VERSION`
 goes **44 → 45**. `rt::manifest` serialises it (postcard; never
 `skip_serializing_if` — postcard is not self-describing). ~640 declaration
 sites under `rules/` updated mechanically to the new arity.
 
 **Ruleset build.** `RulesetBuilder::build` compiles every condition once
-(`rules_cond::compile`, fail-closed → `RuleError::BadPre`) and stores the lean
-compiled form (`Cond::to_bytes(false)`) in `Inner.pre`, parallel to
+(`rules_cond::compile`, fail-closed → `RuleError::BadCondition`) and stores the lean
+compiled form (`Cond::to_bytes(false)`) in `Inner.condition`, parallel to
 `cards[i].on[j]`. The same strings are read and compiled by
 `crates/rules-native` from its linked `RULESET` table
-(`On::condition()` → `CompiledPre::compile`). The browser glue builds
+(`On::condition()` → `CompiledCondition::compile`). The browser glue builds
 `game-rules` against `rules-cond` with `runtime-only` (no parser) and loads
-the blob via `RulesetBuilder::precompiled` / `CompiledPre::from_bytes`; a
-source-only `pre` on that path is a build error (fail-closed), so the compiled
+the blob via `RulesetBuilder::precompiled` / `CompiledCondition::from_bytes`; a
+source-only `condition` on that path is a build error (fail-closed), so the compiled
 form is what crosses.
 
-**G2 — one `admits()`.** `game_rules::cond_pre` owns the single gate
+**G2 — one `admits()`.** `game_rules::condition` owns the single gate
 `admits(entry, window, candidate) = cond(window, candidate) && guard(...)`,
-plus `admits_gate` (the `On::Play` `Option<Msg>` shape) and `admits_pre`
+plus `admits_gate` (the `On::Play` `Option<Msg>` shape) and `admits_condition`
 (condition-only, for G4's deleted guards). `WindowCtx` is built once per
-trigger / chain window (`cond_pre::fill_window`, `WindowScope`) and reused
+trigger / chain window (`condition::fill_window`, `WindowScope`) and reused
 across candidates; `CandidateCtx` is filled per (card, seat) from `World`.
-Counters in `cond_pre::guard_cost` (`COND_EVALS` / `SKIPPED_BY_CONDITION` /
+Counters in `condition::guard_cost` (`COND_EVALS` / `SKIPPED_BY_CONDITION` /
 `GUARD_ASKED` / `COND_EVAL_NS`) are ready for G3/G4 measurement, same style as
 `bot_cost`.
 
@@ -804,8 +804,8 @@ Counters in `cond_pre::guard_cost` (`COND_EVALS` / `SKIPPED_BY_CONDITION` /
 Every other path already goes through one of these:
 `declare_one` (the 48 900-call counteract probe loop, `wasm_rules.rs`) calls
 `can_counteract_scoped` with one `WindowScope` per offer window; the view's
-`playable` flags (`engine/mod.rs` `view_extra`), `why_not_act`,
-`ai_card_choice` / `ai_skill_choice` (`engine/ai.rs`) and `Cx::cant_play`
+`playable` flags (`engine/mod.rs` `view_extras`), `cant_act`,
+`ai_card_choice` / `ai_skill_choice` (`engine/ai.rs`) and `PlayCtx::cant_play`
 (`engine/play.rs`) all call `cant_play`. No caller invokes a guard directly.
 
 Not routed (layer 0 / not a guard, by design):
@@ -826,22 +826,22 @@ guard half of `admits = cond && guard`, not a bypass.
 | §8.3 expectation (runtime-only evaluator alone) | ≈ +0.38 MB |
 
 The delta is larger than the evaluator-only spike because it also carries the
-`cond_pre` host plumbing (`fill_window` / `fill_candidate` / `admits`) and
+`condition` host plumbing (`fill_window` / `fill_candidate` / `admits`) and
 concurrent `game-rules` edits landing in the same build; the evaluator share
 matches §8.3's runtime-only figure. Host side (wasmtime / server) is
 unaffected either way.
 
 ### 9.4 Files
 
-* `crates/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `pre` before the guard,
-  `pre::MINE`, `On::pre()` builder, `ManifestOn.pre`, `ABI_VERSION = 45`.
-* `crates/game-rules/src/cond_pre.rs` (new) — `CompiledPre`, `PrecompiledConds`
+* `crates/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `condition` before the guard,
+  `condition::MINE`, `On::condition()` builder, `ManifestOn.condition`, `ABI_VERSION = 45`.
+* `crates/game-rules/src/condition.rs` (new) — `CompiledCondition`, `PrecompiledConds`
   (the shipped `conds-*.bin` envelope, §8.2), `admits` /
-  `admits_gate` / `admits_pre`, `fill_window` / `fill_window_ambient` /
+  `admits_gate` / `admits_condition`, `fill_window` / `fill_window_ambient` /
   `fill_candidate`, `guard_cost`.
 * `crates/game-rules/src/{host.rs,hostfns.rs,wasm_rules.rs,lib.rs}` —
-  `RuleError::BadPre`, `Inner.pre`, `RulesetBuilder::build` compile +
-  `precompiled()`, `RulesHandle::pre`, the three guard methods through
+  `RuleError::BadCondition`, `Inner.condition`, `RulesetBuilder::build` compile +
+  `precompiled()`, `RulesHandle::condition`, the three guard methods through
   `admits`, `declare_one`'s shared `WindowScope`.
 * `crates/rules-native/src/lib.rs` — same conditions from the linked table,
   the three guard methods through `admits`.
@@ -863,12 +863,12 @@ unaffected either way.
 
 ### 10.1 G3 — migration audit + `precheck` (scaffolding removed 2026-10-14)
 
-* The G3 migration audit (`cond_pre::legacy_audit` under the `guard-audit`
+* The G3 migration audit (`condition::legacy_audit` under the `guard-audit`
   feature, `export::OP_LEGACY_GUARD`, `CardDef::legacy` / `legacy_*` copies,
   `ManifestOn::has_legacy`, host `legacy_probe`) ran its final equivalence pass
   on **2026-10-14** over `ruleset-tests` + `game-rules` and a fuzz sim. The
   remaining mismatches were all stale `mine`-only `legacy_*` snapshots (the
-  migrated `pre` correctly carried body-top clauses the copy omitted); no
+  migrated `condition` correctly carried body-top clauses the copy omitted); no
   condition bugs. The scaffolding was deleted and ABI bumped 60 → 61.
 * **`precheck`** (`cargo run -p game-rules --example precheck`) loads the
   ruleset and reports the per-entry condition/guard split; flags guards that
@@ -883,7 +883,7 @@ Coverage after the first batch (precheck, 600 guarded entries):
 
 | | count | share |
 |---|---|---|
-| entries with a condition (`pre`) | **128** | 21 % |
+| entries with a condition (`condition`) | **128** | 21 % |
 | residual guard kept | 258 | 43 % |
 | guard deleted (`None`, condition-only or always) | **342** | 57 % |
 | `legacy_*` audit copies | 128 | — |
@@ -893,8 +893,8 @@ Coverage after the first batch (precheck, 600 guarded entries):
 
 What moved:
 
-* **`mine` → `pre::MINE`** (111 hook entries): the 118 `mine` guards
-  (`trigger::player_id() == player_id`) became `card_sdk::pre::MINE` on the
+* **`mine` → `condition::MINE`** (111 hook entries): the 118 `mine` guards
+  (`trigger::player_id() == player_id`) became `card_sdk::condition::MINE` on the
   entry; where the guard was *only* `mine` it is deleted (`None`). Two files
   that also call `mine()` in-body keep a forwarding alias.
 * **`always` deleted** (111 `Some(|_| true)`): the no-op prefilter is gone —
@@ -903,7 +903,7 @@ What moved:
   kind re-checks stripped (the category list owns them); actor/target/by
   relations, value thresholds, `effect.has(Pay)`/`effect.has(Abnormal)`/
   `effect.hits(owner)`, `move.roll`/`move.kind` fields, the `slot != turn_key`
-  once-per-turn flag all moved into `pre`. Residuals kept only for derived
+  once-per-turn flag all moved into `condition`. Residuals kept only for derived
   lists / geometry (`players_on`, `is_shop`, `abnormal_kind`, `card_is` —
   GUARDS.md §6).
 * **Play gates** unchanged this batch (the `Some(cant_play)` shape already
@@ -922,7 +922,7 @@ What moved:
 4. only survivors build a `Run` + `world_copy` and ask the residual wasm guard.
 
 Same for the hook dispatch (`Ruleset::hooks_to` bitmask) and every guard call
-stays behind `admits` / `admits_pre`. `rules-native` mirrors the shape.
+stays behind `admits` / `admits_condition`. `rules-native` mirrors the shape.
 
 ### 10.4 Measurements (AMD Ryzen 7 5800H, release, `bot-cost`)
 
@@ -940,7 +940,7 @@ stays behind `admits` / `admits_pre`. `rules-native` mirrors the shape.
 
 The instantiation cut is the index + condition pre-filter working; the modest
 rollout cut reflects that most counteract guards are **not yet** expressed as
-conditions (only 12/51 counteract entries carry a `pre`). The 20–40 ms
+conditions (only 12/51 counteract entries carry a `condition`). The 20–40 ms
 depth-2 target (BOT-RESEARCH #1) needs the remaining ~39 counteract bodies
 moved — the next batch. `cargo run -p game-core --release --example sim --
 50 4 200` is **320.1 ms/game** (≤ 323 budget) with counts identical to the
@@ -952,16 +952,16 @@ required set (buy 2899 / forcebuy 392 / auctions 255 / rent 19567 / bankrupt 96)
   `On::has_guard`/`no_guard`/`guard`, `ManifestOn::has_guard`. The G3 audit
   pieces (`CardDef::legacy`, `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`)
   shipped with G3 and were deleted at removal time (ABI **61**).
-* `crates/game-rules/src/cond_pre.rs` — `move.roll` sentinel filter in
+* `crates/game-rules/src/condition.rs` — `move.roll` sentinel filter in
   `fill_window` (the `legacy_audit` hook is gone).
 * `crates/game-rules/src/host.rs` — `counteract_mask`/`hook_mask`,
   `counteracts_to`/`hooks_to`/`counteract_pre_allows`/`guard_is_none`,
-  `CardModules::{counteracts_to,counteract_pre_allows,pre}` (no `legacy_probe`).
+  `CardModules::{counteracts_to,counteract_pre_allows,condition}` (no `legacy_probe`).
 * `crates/game-rules/src/wasm_rules.rs` — `declare_one` index + condition
   pre-filter before `Run`.
 * `crates/game-rules/examples/precheck.rs` — the §5.2 lint.
-* `crates/rules-native/src/lib.rs` — `has_guard`, `pre` on `CardModules`.
-* `rules/**` — 111 `mine` → `pre::MINE`, 111 `always` deleted,
+* `crates/rules-native/src/lib.rs` — `has_guard`, `condition` on `CardModules`.
+* `rules/**` — 111 `mine` → `condition::MINE`, 111 `always` deleted,
   12 counteract clause moves; every `legacy_*` audit copy deleted 2026-10-14.
 
 ### 10.6 Replay re-run cache (considered, deferred)
@@ -983,7 +983,7 @@ counters to see what a cache would still save.
 `cargo run -p game-core --release --example sim -- 50 4 200` (StubRules) read
 **320.1 ms/game** after G3/G4 + index vs ~270 before. The G2/G3/G4 plumbing
 cannot be the cause: `game-core` does not depend on `game-rules` at all
-(`cargo tree -p game-core`), so `admits()` / `cond_pre` / the legacy audit /
+(`cargo tree -p game-core`), so `admits()` / `condition` / the legacy audit /
 the counteract index are not on the StubRules path. The 320 reading was taken
 under concurrent build load (RESUME.md: "Perf can't be measured reliably under
 concurrent load"); an idle-machine reading of the same tree was **293 ms/game**.
@@ -1027,7 +1027,7 @@ now checks the new path. A single `cargo test` over all crates links.
 
 ### 11.3 `pre_*` fixture tests isolated
 
-The `TEST:pre*` guard-condition tests assert on the **process-global**
+The `TEST:condition*` guard-condition tests assert on the **process-global**
 `guard_cost` counters, which every other test in `ruleset.rs` bumps through
 `can_counteract` / `run_hook` / `cant_play`. Under parallel test threads the
 absolute assertions raced (and a panicking test poisoned the shared `Mutex`).
@@ -1037,7 +1037,7 @@ binaries include via `#[path]`.
 
 ### 11.4 `slot()` read the wrong key (audit catch)
 
-`cond_pre::fill_candidate_extras` looked the CEL `slot('name')` up under a
+`condition::fill_candidate_extras` looked the CEL `slot('name')` up under a
 `slot:<name>`-prefixed player-state key, while the guest's `ctx::slot(player_id,
 name)` reads the **bare** key through `CardWorld::slot`. Every `slot('…')`
 condition therefore read `0`: `slot('lastWalk') > 0` silently closed
@@ -1048,19 +1048,19 @@ hardcoded `["asUsualTurn"]`. Fixed: the bare key (matching the guest),
 `SLOT_NAMES` covers `asUsualTurn` + `lastWalk`, and `fill_candidate` always
 fills them (the old `fill_candidate_extras` call site had been forgotten —
 `slots` was always empty). Extend `SLOT_NAMES` when a new `slot('…')` shows up
-in a `pre`.
+in a `condition`.
 
 ### 11.5 G4 batch 2 coverage (2026-10-08)
 
 | | batch 1 | batch 2 |
 |---|---|---|
-| entries with a condition (`pre`) | 128 | **139** |
+| entries with a condition (`condition`) | 128 | **139** |
 | residual guard kept | 258 | 250 |
 | guard deleted (`None`) | 342 | **350** |
 | kind re-checks (precheck) | 34 | **0** |
 | `legacy_*` audit copies | 128 | 137 (all deleted 2026-10-14) |
 
-Counteract entries migrated in batch 2 (expressible clauses into `pre`,
+Counteract entries migrated in batch 2 (expressible clauses into `condition`,
 `legacy_*` kept for the audit until 2026-10-14): `elegant_shout`, `taki_even_if`, `marina_work`,
 `layer_keep` (`roll_source == 1`), `two_in_one` (`character_is`), `hold_hands_again`
 (`actor == neighbor(owner, -1)`), `even_lost` / `mana_champion`
@@ -1077,7 +1077,7 @@ stripped the same way. `cargo run -p game-rules --example precheck` now prints
 
 Still open for a later batch: the `cant_play` money/fire/crystal thresholds and
 the `skill_blocked` / once-flag play gates (their *expression* can move into
-`pre`; marker press checks stay as gates per the user's ruling), and the
+`condition`; marker press checks stay as gates per the user's ruling), and the
 geometry / derived-list residuals GUARDS.md §6 lists (`meet_again` `next_dist`,
 `repaint` `on_path`, `secret_rainbow` grades, …).
 

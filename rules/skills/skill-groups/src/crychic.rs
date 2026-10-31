@@ -28,7 +28,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
         On::Action(Action::TurnStartBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             None,
             at_turn_start,
         ))
@@ -36,12 +36,12 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // 规则书（3）: 「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶」 -- a
         // **field** point: `Drawn` is the drawn card's own hook (the field walk is
         // skipped for it), so this placed skill has to ride `Drew`.
-        On::Action(Action::Drew(card_sdk::pre::MINE, None, on_drawn)),
+        On::Action(Action::Drew(card_sdk::condition::MINE, None, on_drawn)),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Action(Action::TurnEndBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(decks_empty),
             at_turn_end,
         )),
@@ -140,7 +140,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         crate::spend_crystals(player_id, x)?;
     }
     // 规则书（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
-    // 「移除」 is the out-of-game keyword (`apply_dest`'s Banished = "just
+    // 「移除」 is the out-of-game keyword (`apply_fate`'s Banished = "just
     // gone"), so the cards leave the game rather than land in a discard pile.
     // 「此卡」 is the band skill instance itself (`skill:CRYCHIC:美好的往日幻影`),
     // whose id does not start with `CRYCHIC:` -- it was skipped by the old
@@ -166,7 +166,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         // The field copy (3) places: unplace it into the draw pile below.
         if shout_at(player_id, c) {
             if ctx::unplace_at(uid) >= 0 {
-                ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
+                ctx::add_to_fate(player_id, SHOUT, ctx::Fate::DeckRandom);
             }
             continue;
         }
@@ -177,7 +177,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     for c in ctx::cards_in(player_id, CardPile::Hand) {
         if shout_at(player_id, c) {
             ctx::take_card(player_id, c.as_str(), CardPile::Hand);
-            ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
+            ctx::add_to_fate(player_id, SHOUT, ctx::Fate::DeckRandom);
             continue;
         }
         if c.as_str().starts_with("CRYCHIC:") {
@@ -189,7 +189,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             if shout_at(player_id, c) {
                 if pile != CardPile::Deck {
                     ctx::take_card(player_id, c.as_str(), pile);
-                    ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
+                    ctx::add_to_fate(player_id, SHOUT, ctx::Fate::DeckRandom);
                 }
                 continue;
             }
@@ -212,10 +212,10 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("crychic_which")),
     )?;
     while ctx::deck_count(player_id) < 10 {
-        ctx::add_to_dest(
+        ctx::add_to_fate(
             player_id,
             if mygo { "MyGO" } else { "Ave Mujica" },
-            ctx::Dest::DeckTop,
+            ctx::Fate::DeckTop,
         );
     }
     ctx::shuffle_into_deck(player_id, false, true);
@@ -268,8 +268,8 @@ fn force_card(player_id: i32) -> card_sdk::Asked {
 fn can_transform(player_id: i32) -> Option<Msg> {
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
     // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
-    if let Some(why) = crate::copy_sticker_gate(player_id) {
-        return Some(why);
+    if let Some(reason) = crate::copy_sticker_gate(player_id) {
+        return Some(reason);
     }
     if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
         return Some(Msg::new(key!("crychic_not_empty")));

@@ -1,4 +1,3 @@
-//! `AG:ONE OF US` -- C# `CardOneOfUs` (MatchHost.cs:1378-1546):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:ONE OF US`）:
 //! > ONE OF US：
@@ -25,7 +24,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
         // 将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契
-        On::Play("", Some(play_guard), play),
+        On::Play("", Some(cant_play), play),
         // 规则书: 「当其中一方破产时」 -- the leaver is one of the pair.
         // TODO(规则书)（当其中一方破产时）: the sheet names 破产 only -- `beforeOut`
         //   also fires on forfeit / leave and carries no cause, so a forfeit
@@ -88,7 +87,7 @@ fn candidates(player_id: i32) -> Vec<i32> {
 }
 
 /// refuses without deeds or without a partner.
-fn play_guard(player_id: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::owned_count(player_id) == 0 {
         return Some(Msg::new(key!("one_of_us_no_deeds")));
     }
@@ -122,8 +121,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("one_of_us_partner")),
         &cands,
     )?;
-    // 规则书: 「指定双方各一块地契」; 「必须优先指定商店街格子」 -- C# `Prefer`
-    // restricts each side's pick to its shop deeds when it has any.
     let mine = prefer(player_id);
     if mine.is_empty() {
         return Ok(());
@@ -144,11 +141,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("one_of_us_theirs")).player_id("who", partner),
         &theirs,
     )?;
-    // 规则书: 「指定双方各一块地契」 -- C# `H.TargetTile(c, b, tt)` designates
-    // the partner's deed (and so the partner, through ImmuneAll + the
-    // targeted/target window). The C# does not gate the own deed `a`; we run
-    // the same target gate on the own pick too, so a `noTarget` own deed
-    // aborts the play where the C# would still have played it.
 
     if !ctx::target_tile(a) {
         return Ok(());
@@ -157,8 +149,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if !ctx::target_tile(b) {
         return Ok(());
     }
-    // 规则书: 「将此卡放置在场上」 -- C# `H.PlaceFromPlay(c)` after `H.TargetTile`.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(
         player_id,
         "AG:ONE OF US",
@@ -206,14 +197,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     ctx::set_prop(MINE, a_ref.into());
     ctx::set_prop(THEIRS, b_ref.into());
-    // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金
-    // 直接增加，不受其他任何效果影响）」 -- the split is `measure_rent` +
-    // `share_at_resolved` below: the settle completes at the original owner
-    // (`tileResolved`), then the other side's half lands as a **raw** money
-    // add (`ctx::adjust_money`), so no payment hook can boost it.
-    // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
-    // -- the deed hand-over is `On::Action(Action::BeforeBankrupt, ...)` below
-    // (C# `CardOneOfUs.BeforeOut`).
+    // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金 直接增加，不受其他任何效果影响）」 -- the split is
+    // `measure_rent` + `share_at_resolved` below: the settle completes at the
+    // original owner (`tileResolved`), then the other side's half lands as a **raw**
+    // money add (`ctx::adjust_money`), so no payment hook can boost it.
     Ok(())
 }
 
@@ -224,11 +211,9 @@ fn designated(tile: i32) -> bool {
     tile >= 0 && ctx::designates(tile)
 }
 
-/// Measure the rent income a designated deed just produced (`Fx.PayAfter`).
-/// `t.Pay.tile` rides the pay trigger (ABI v42), so the designated-tile match
-/// is exact. Recorded on an instance prop; `share_at_resolved` spends it.
-/// Residual guard for [`measure_rent`] -- the designated-tile check is a
-/// derived lookup (GUARDS.md §6).
+/// Recorded on an instance prop; `share_at_resolved` spends it. Residual guard
+/// for [`measure_rent`] -- the designated-tile check is a derived lookup
+/// (GUARDS.md §6).
 fn measure_rent_guard(_owner: i32) -> bool {
     ctx::prop(PARTNER) > 0 && designated(trigger::tile())
 }
@@ -303,17 +288,14 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
-/// when either side of the pair leaves, the designated deeds it still owns go to the survivor and the
-/// pair is cleared. (The C# transfers ownership directly; it does not park the
-/// deeds on the card.)
+/// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」 when either side of the
+/// pair leaves, the designated deeds it still owns go to the survivor and the
+/// pair is cleared.
 fn before_out(owner: i32) -> card_sdk::Asked {
-    // `owner` is the card's player; `trigger::player_id()` is the player leaving (C#
-    // `BeforeOut(int player_id)`). [`before_out_applies`] is the actor test.
+    // [`before_out_applies`] is the actor test.
     let partner = ctx::prop(PARTNER) - 1;
     let out = trigger::player_id();
     let survivor = if out == owner { partner } else { owner };
-    // C# `if (H.Out(num) && num != player_id) return Ok(());`.
     if ctx::player_out(survivor) && survivor != out {
         return Ok(());
     }
@@ -327,13 +309,12 @@ fn before_out(owner: i32) -> card_sdk::Asked {
             continue;
         }
         let t = r.tile();
-        // C# `owners[num2] == player_id` -> `owners[num2] = num`.
-        // TODO(规则书)（当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契）:
-        //   the book parks 「两张」 designated deeds on the card (「放置在该卡上」), moves the
-        //   card into the survivor's area and only deems them the owner (「视为拥有」) -- we
-        //   park nothing, rewrite the real owner, skip a deed already sold to a third party,
-        //   and leave the card itself to the bankrupt field clear. BACKLOG W3-ONEOFUS-01 / C-Q50.
-        // 规则书: 「将两张被指定地契放置在该卡上并转移到存活方的游戏区」
+        // TODO(规则书)（当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契）: the book parks 「两张」
+        // designated deeds on the card (「放置在该卡上」), moves the card into the survivor's
+        // area and only deems them the owner (「视为拥有」) -- we park nothing, rewrite the
+        // real owner, skip a deed already sold to a third party, and leave the card
+        // itself to the bankrupt field clear. BACKLOG W3-ONEOFUS-01 / C-Q50. 规则书:
+        // 「将两张被指定地契放置在该卡上并转移到存活方的游戏区」
         if t >= 0 && ctx::tile_owner(t) == out {
             ctx::set_owner(t, survivor);
             ctx::log(
@@ -345,7 +326,6 @@ fn before_out(owner: i32) -> card_sdk::Asked {
             );
         }
     }
-    // C# `Mem["partner"] = -1` -- the pair is done.
     ctx::set_prop(PARTNER, 0);
     Ok(())
 }

@@ -7,7 +7,7 @@
 //!
 //! Never derived from engine behaviour. Each function is the clause's
 //! Trigger / Condition / Effect / Frame as an executable predicate on
-//! pre + effect-log + post.
+//! condition + effect-log + post.
 //!
 //! Sources (verbatim quotes in `docs/rulebook/spec/cards/*.md` and
 //! `docs/rulebook/cards.json`).
@@ -47,7 +47,7 @@ pub fn is_poorest(money: &[i32; 4], out: &[bool; 4], n: i32, owner: i32) -> bool
     true
 }
 
-/// The post `pay_amount` the clause demands, given the pre amount.
+/// The post `pay_amount` the clause demands, given the condition amount.
 pub fn aya_haruka_02_amount(pre_amount: i32, x: i32) -> i32 {
     (pre_amount - x).max(0)
 }
@@ -86,8 +86,8 @@ pub fn tae_sound_post_ok(post: &Snapshot, player: i32, shop: i32, pre_fire: i32)
 // Frame: user's field / hand / discard only.
 // ===========================================================================
 
-/// Spec for the play body when the discard is non-empty at pre:
-/// 1. place this card on the user's field (dest = Field);
+/// Spec for the play body when the discard is non-empty at condition:
+/// 1. place this card on the user's field (fate = Field);
 /// 2. move exactly one pre-existing discard card into hand.
 /// Prompt: any pick among the distinct discard cards is legal; the chosen
 /// one is the one that moves.
@@ -101,12 +101,12 @@ pub fn aya_haruka_01_effects_ok(
     if effects.len() != 3 {
         return false;
     }
-    // 1. PlaceCard on Field (dest 2 = Dest::Field)
+    // 1. PlaceCard on Field (fate 2 = Fate::Field)
     if !matches!(
         effects[0],
         Effect::PlaceCard {
             player: p,
-            dest: 2,
+            fate: 2,
             card
         } if p == player && card == this_card
     ) {
@@ -135,7 +135,7 @@ pub fn aya_haruka_01_effects_ok(
     pre_discard[picked as usize]
 }
 
-/// When the discard is empty at pre the book's second half has no legal
+/// When the discard is empty at condition the book's second half has no legal
 /// target: the first half (「将此卡放置在[使用者]的[场地]」) still applies and
 /// nothing else does.
 pub fn aya_haruka_01_empty_discard_ok(effects: &[Effect], player: i32, this_card: u8) -> bool {
@@ -144,7 +144,7 @@ pub fn aya_haruka_01_empty_discard_ok(effects: &[Effect], player: i32, this_card
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                dest: 2,
+                fate: 2,
                 card
             } if p == player && card == this_card
         )

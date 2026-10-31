@@ -63,7 +63,7 @@ pub fn aya_haruka_01_prompt_all_picks_iff() {
         w.answers[0] = pick;
         let player = w.trig_player;
         let pre_discard = w.discard;
-        let pre = {
+        let condition = {
             world::reset_world(w);
             world::snapshot()
         };
@@ -98,8 +98,8 @@ pub fn aya_haruka_01_prompt_all_picks_iff() {
             spec::aya_haruka_01_post_ok(&post, player, picked, &pre_discard),
             "C-PP-aya-haruka-01: post hand/discard move exactly the picked card"
         );
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
     }
 }
 

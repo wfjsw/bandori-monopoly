@@ -5,7 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -37,7 +37,7 @@ fn always(_player_id: i32) -> bool {
 /// 牌堆顶部」 -- keep the event and seed the derived card face-down on top of the
 /// event deck (`docs/EVENTS.md`).
 /// 规则书: 「此卡在场时不可在造价1500及以上的格子上加盖房屋」 -- arm
-/// `prop::NO_BUILD_ABOVE` on this instance so `why_not_build_on` refuses the
+/// `prop::NO_BUILD_ABOVE` on this instance so `cant_build_on` refuses the
 /// build before the player is even offered it (the `BuildBefore` hook below is
 /// the belt to that brace).
 fn play(player_id: i32) -> card_sdk::Asked {

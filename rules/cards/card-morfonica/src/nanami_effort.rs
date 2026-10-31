@@ -1,4 +1,3 @@
-//! `Mor:（NNM）稍微努力了一下` -- C# `CardNanamiEffort` (MatchHost.cs:4805-4899): spend
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（NNM）稍微努力了一下`）:
 //! > （NNM）稍微努力了一下：
@@ -64,8 +63,11 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
 /// once placed the (3) press needs a crystal and a bound owner skill.
 fn cant_play(player_id: i32) -> Option<Msg> {
     if !ctx::is_placed() {
-        let names = ctx::tok_names(player_id, TOKEN_PREFIX);
-        let total: i32 = names.iter().map(|n| ctx::tok(player_id, n.as_str())).sum();
+        let names = ctx::held_names(player_id, TOKEN_PREFIX);
+        let total: i32 = names
+            .iter()
+            .map(|n| ctx::held_count(player_id, n.as_str()))
+            .sum();
         if total > 0 {
             return None;
         }
@@ -79,7 +81,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     }
     // The press runs the skill's (3) body, which spends a mark -- without one the
     // crystal would be burned for nothing.
-    if ctx::tok_names(player_id, TOKEN_PREFIX).is_empty() {
+    if ctx::held_names(player_id, TOKEN_PREFIX).is_empty() {
         return Some(Msg::new(key!("nanami_effort_no_mark")));
     }
     None
@@ -96,8 +98,11 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」 -- the tokens are the
     // `角色标记:*` counters; x is chosen from what the player actually holds, then
     // they are spent and one effect is picked.
-    let names = ctx::tok_names(player_id, TOKEN_PREFIX);
-    let total: i32 = names.iter().map(|n| ctx::tok(player_id, n.as_str())).sum();
+    let names = ctx::held_names(player_id, TOKEN_PREFIX);
+    let total: i32 = names
+        .iter()
+        .map(|n| ctx::held_count(player_id, n.as_str()))
+        .sum();
     if total <= 0 {
         ctx::log(
             player_id,
@@ -118,14 +123,14 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         if left <= 0 {
             break;
         }
-        let take = ctx::tok(player_id, name.as_str()).min(left);
+        let take = ctx::held_count(player_id, name.as_str()).min(left);
         if take > 0 {
-            ctx::add_tok(player_id, name.as_str(), -take, i32::MAX)?;
+            ctx::add_held_by_name(player_id, name.as_str(), -take, i32::MAX)?;
             left -= take;
         }
     }
     // 「发动以下效果中的一个」
-    let k = ctx::ask_pick(
+    let k = ctx::ask_choice(
         player_id,
         &Msg::new(key!("nanami_effort_pick_title")),
         &Msg::new(key!("nanami_effort_pick_text")),
@@ -152,7 +157,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         // (3) 「将此卡放置在场上并放置x个奇迹水晶」 -- placed with x crystals
         // on it; (4) is its exhaustion.
         2 => {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_fate(ctx::Fate::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
             ctx::add_crystals(x, 0)?;
             ctx::log(
@@ -197,7 +202,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("nanami_effort_exhausted")).player_id("who", player_id),
@@ -205,11 +210,6 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Effect (1) 「抽x张卡（可超过上限），回合结束后将手牌弃置到五张」 -- C# case 0 of
-/// the play's `H.AskPick` (`MatchHost.cs:4874-4878`). The discard-down half is
-/// C# `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))` =
-/// `ctx::before_turn_end` (C# `AtEnd`, pre-wear-off) queuing the `On::Schedule`
-/// body below.
 fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     // 规则书（1）: 「抽x张卡（可超过上限）」 -- 「可超过上限」 is the hand limit
     // itself, so lift it for the draw and put it back (the limit is keyed state,
@@ -226,15 +226,12 @@ fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     );
     ctx::draw(player_id, x)?;
     ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
-    // 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C#
-    // `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))`.
     ctx::before_turn_end(player_id, "discard_down_to_five");
     Ok(())
 }
 
-/// 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C# `H._turnCtx.AtEnd.Add(() =>
-/// H.DiscardDownTo(i, 5, CardName))`. Scheduled by the play's effect (1) via
-/// `ctx::before_turn_end(player_id, "discard_down_to_five")`.
+/// Scheduled by the play's effect (1) via `ctx::before_turn_end(player_id,
+/// "discard_down_to_five")`.
 fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let mut extra = hand.len() as i32 - 5;

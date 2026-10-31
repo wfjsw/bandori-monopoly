@@ -11,10 +11,9 @@ external spec says "reaction" — translate. Never say "reaction" for our engine
 
 Reference data (external project, **not** a spec for us):
 `target/scratch/specs/TILE_RESOLUTION_PIPELINE.md`,
-`EFFECT_ACTIVATION_RESOLUTION_RESPONSIBILITY.md`,
-`PLAYER_MOVEMENT_LOGIC.md`, `PLAYER_MOVEMENT_RESPONSIBILITY.md`.
-Ground truth: `data/rules.txt` and the 规则书 timing tables in
-`docs/rulebook/rulebook-doc.md` (时点流程 / 行动阶段). C# is not a spec.
+`EFFECT_ACTIVATION_RESOLUTION_RESPONSIBILITY.md`, `PLAYER_MOVEMENT_LOGIC.md`,
+`PLAYER_MOVEMENT_RESPONSIBILITY.md`. Ground truth: `data/rules.txt` and the 规则书 timing tables in
+`docs/rulebook/rulebook-doc.md` (时点流程 / 行动阶段).
 
 ---
 
@@ -51,10 +50,9 @@ Two more book facts that decide the model:
 
 > **STACK-01 (2026-10-10):** the stages below are unchanged, but they now run
 > as a **work-stack state machine** (`step_settle` / `engine/work.rs`) so a
-> nested `card_settle_at` suspends and resumes instead of recursing. Order is
+> nested `settle_tile_at` suspends and resumes instead of recursing. Order is
 > the old synchronous nest (the nested settle finishes before the outer
 > settle's next stage). See `docs/ENGINE.md` "Settle work stack".
-
 
 ```
 walk, per step:            passBefore → passTile → pass          (行动阶段 12)
@@ -71,7 +69,7 @@ after_walk:
   always:                  moveResolved                            (16's 「主要移动阶段后」 half)
 ```
 
-`settle_at` (`play.rs:1323-1360`) threads one `at` through the whole pipeline.
+`settle_tile_at` (`play.rs:1323-1360`) threads one `at` through the whole pipeline.
 `settle` cancel → no body, no `settleAfter`, but `tileResolved` still fires
 (complete-as-nothing). `settleBody` cancel → skip the body only, `settleAfter`
 still runs. There is **no `moveAfter`** kind; `moveResolved` fires *after* the
@@ -104,7 +102,7 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 | `skill:学生会的检查` (council_check) [反击] | 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」 | `ChainKind::SettleBefore` `council_check.rs:20` | 14 (condition 「移动结束后」 = 13) | OK |
 | `CRYCHIC:想要抓住...` （2） | 「当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]」 | `HookKind::SettleBefore` `want_to_grab.rs:30` (+ `PassPlayer` `:29`) | 14 window is right; the trigger 「经过你」 is 12, not 13 | PASS |
 | `CRYCHIC:我的问题呢` (my_own_problem) （1） | 「主要移动结束时，[触发结算]前打出此卡，使自己额外远离…一格」 | `ChainKind::SettleBefore` `my_own_problem.rs:19` | 14 (anchor 13) | OK |
-| `CRYCHIC:春日影` （2） | 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 (C# `settleBefore` branch) | `ChainKind::SettleBefore` `haruhikage.rs:25` | generic [反击] at the settle's pre-window | OK |
+| `CRYCHIC:春日影` （2） | 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 | `ChainKind::SettleBefore` `haruhikage.rs:25` | generic [反击] at the settle's pre-window | OK |
 | `skill:三角初华:Imprisoned XII` 状态2 | 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 | `HookKind::SettleBefore` `uika.rs:43` | 14 | OK |
 | `skill:要乐奈:投币式停车场的猫` （2） | 「在space上结算时，若space已属于其他玩家，免除付款并抽1张卡；若自己为space的拥有者，则可选择**将该次结算改为**在space格子上添加一个"抹茶芭菲"」 | `HookKind::SettleBefore` `rana.rs:35` | 15 「[结算]时」 + a **body replace** (「将该次结算改为」) | **BODY/AT** |
 | `event:火种燃尽之后会怎么样呢？` | 「**触发结算时**，格子上每有一张此卡的复制品，那名玩家失去10资金」 | `HookKind::SettleBefore` `embers.rs:27` | 15 「触发结算时」 | **AT** |
@@ -298,7 +296,7 @@ fights the 规则书.
 | `ActivateSpecialResolution` | a post-default window where "special tile behaviour is NOT the default" and effects respond one at a time | **this split is wrong for us.** The 规则书 names special-tile behaviour *as* the tile's [结算] (「CiRCLE的[结算]是：抽取一张手卡」). It is a body entry beside the property default, not a post-default responder ring. |
 | `EffectReactionController` (round-robin, one effect at a time) | the responder ring | this is the **[反击] ring** we already run per chain link (其他规则注意事项 3: from the next player in action order). It is not a second, special-only window. The settle's body list runs in instance order — the book does not order multiple effects on one tile beyond L6. |
 | `AfterTileResolution` / `TileResolved` | after window / terminal | our `settleAfter` / `tileResolved`. Keep both; keep the split from `moveResolved`. |
-| "position re-read before each stage; relocation never re-runs the default" | fresh snapshots | adopt the *re-read*, but not "never re-runs": see Q7 below. The default body still runs exactly once per `settle_at`. |
+| "position re-read before each stage; relocation never re-runs the default" | fresh snapshots | adopt the *re-read*, but not "never re-runs": see Q7 below. The default body still runs exactly once per `settle_tile_at`. |
 
 **Answer to "does some of these effects belong to other hooks?"** — yes, in
 three directions: (1) move-end effects (M1) belong on a move-end point that
@@ -319,8 +317,8 @@ controller split are not ours.
 | move end vs tile resolution | `MovementFinished` → `AfterMoving` → `MovementEnd` → `MovementEnded`, **then** an eligibility gate, **then** the tile-resolution pipeline | `after_walk` raises `settleBefore`/`settle`… and only then `moveResolved` — the move's terminal is *after* the settle | **adopt the boundary**: the move is over at 行动阶段 13, before any settle stage. Introduce `moveAfter` (see §7). |
 | 「不触发结算」 | eligibility gate: skip tile resolution entirely; `PlayerLandedOnTile` still fires | `m.resolve == false` skips `settleBefore`/`settle`/… but still raises `passPlayer` + `moveResolved`; a no-settle **teleport** skips `passTile`/`passPlayer` too | the walk side is right (1.2 「是否[结算]」 gates only the settle); the teleport side is wrong — see M6a. |
 | arrival vs settle | `PlayerLandedOnTile` fires even when tile resolution is prohibited | the last step's `passTile` is the arrival; no separate landed point | fine — `passTile` + `moveAfter` cover it. Do not add a third. |
-| pass-through (经过) | one `PlayerPassedTile` per entered tile, carrying prev/dest indexes + remaining spaces (0 = destination pass; teleport carries 0) | `passBefore` → `passTile` → `pass` per step; `m.remaining` distinguishes intermediate vs destination | equivalent. Keep our three (they are 12's three phrases: declaration / step / the generic 「[经过]」). |
-| teleport vs walk | teleport: `PlayerTeleported` → dest `PlayerPassedTile` (remaining 0) → `PlayerLandedOnTile` — **pass and landing always fire** | `teleported` is raised **after** the settle (C# 24390) for a settling teleport, and alone for a no-settle one; B41 「依次触发[经过],[重叠],和[结算]」 names the order as 经过→重叠→结算 and does not name `teleported` | keep our `teleported` placement (C#-carried, no book conflict), but **M6a**: a 「不[触发结算]」 teleport must still fire `passTile` + `passPlayer` at the destination. `move_ctx.rs:101-103`'s "a teleport with this clear resolves nothing" over-reads 「是否[结算]」. |
+| pass-through (经过) | one `PlayerPassedTile` per entered tile, carrying prev/fate indexes + remaining spaces (0 = destination pass; teleport carries 0) | `passBefore` → `passTile` → `pass` per step; `m.remaining` distinguishes intermediate vs destination | equivalent. Keep our three (they are 12's three phrases: declaration / step / the generic 「[经过]」). |
+| teleport vs walk | teleport: `PlayerTeleported` → fate `PlayerPassedTile` (remaining 0) → `PlayerLandedOnTile` — **pass and landing always fire** | `teleported` is raised **after** the settle for a settling teleport, and alone for a no-settle one; B41 「依次触发[经过],[重叠],和[结算]」 names the order as 经过→重叠→结算 and does not name `teleported` | `move_ctx.rs:101-103`'s "a teleport with this clear resolves nothing" over-reads 「是否[结算]」. |
 | zero-step move | raises pass + landed | raises `passPlayer` only (0-move); `passTile` is a `TODO(规则书)` at `play.rs:1063-1069` | E14 names only 重叠 for the 0-move. Keep ours; the spec's extra landed event is not needed. |
 | redirects / relocation | LIFO relocation stack, same-player **replacement** (newest same-player op stops the older) | effects just write `pos` / the plan; no stack | not required by the book. Adopt only if a card needs nested move replacement. |
 | mid-settle relocation | re-read position before every lifecycle stage; "later relocation does not rerun default" | `settle` re-reads `pos` (so a `settleBefore` relocation redirects); later stages keep the original `at` | see Q7 below — we go further than both. |
@@ -415,7 +413,7 @@ standing after that). Test: `settle_stages::q7_settle_before_relocation_settles_
   as `MAX_NESTING = 8`) and skip tiles already visited in this settle chain.
 * `settle` / `settleBody` relocation → the originally named tile finishes
   (「落点效果」, 行动阶段 15). The default body runs exactly once per
-  `settle_at` — the spec's "never re-runs the default" holds *here*.
+  `settle_tile_at` — the spec's "never re-runs the default" holds *here*.
 * `settleAfter` / `tileResolved` relocation → nothing re-runs; the resolve
   already happened.
 * A relocation inside a no-settle move's tail only moves `moveAfter` /
@@ -456,11 +454,10 @@ about which tile is being settled.
   sees it) or a body replace (「将本次结算改为…」 for the owner branch only)?
   The text uses 「免除付款」 for one branch and 「将该次结算改为」 for the other —
   **Ruled (user 2026-10-07):** 「免除付款」 is a payment-stage cancel (`payCombinedCancel`); 「将该次结算改为」 is a settleBody replace. Implemented in `rana.rs`.
-* **R5 — `want_to_grab` 「当第一位其他玩家经过你」**: 经过 (passTile, first
-  passer mid-move) or 重叠 (passPlayer)? **Pending.** Left as-is with a
-  `TODO(规则书) R5` marker. The C# GrabFx used PassPlayer. The force-move is 「在那名玩家[触发结算]前」, which only exists if
-  that move settles — so a mid-move 经过 reading is the one that can force-stop
-  before the settle.
+* **R5 — `want_to_grab` 「当第一位其他玩家经过你」**: 经过 (passTile, first passer mid-move) or 重叠 (passPlayer)?
+  **Pending.** Left as-is with a `TODO(规则书) R5` marker. The force-move is 「在那名玩家[触发结算]前」, which only
+  exists if that move settles — so a mid-move 经过 reading is the one that can force-stop before the
+  settle.
 
 ---
 
@@ -468,7 +465,7 @@ about which tile is being settled.
 
 | what | where |
 | --- | --- |
-| the settle pipeline | `crates/game-core/src/engine/play.rs` `after_walk` (Q7 loop) / `settle` / `settle_at` |
+| the settle pipeline | `crates/game-core/src/engine/play.rs` `after_walk` (Q7 loop) / `settle` / `settle_tile_at` |
 | the walk / teleport | `play.rs` `walk` / `teleport_as` / `move_after` / `move_resolved`; `move_ctx.rs` (`MoveCtx::resolve`) |
 | kind lists | `crates/card-sdk/src/abi.rs` `TriggerKind` / `ChainKind` / `HookKind` / `OnKind::Settle` |
 | tile bodies | `rules/tiles/src/*`, `docs/TILES.md` |

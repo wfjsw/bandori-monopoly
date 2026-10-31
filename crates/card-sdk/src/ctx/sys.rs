@@ -10,7 +10,7 @@
 // `C-unwind` on native so a host import can abort the run with a panic
 // that `rules-native`'s `catch_unwind` turns into "this card is out"
 // (the sandbox trap contract). Same calling convention as `C` on wasm32.
-// Kani cannot resolve these as foreign imports to host shims (kani#2423),
+// Kani cannot settles these as foreign imports to host shims (kani#2423),
 // and `extern "C-unwind"` monomorphizes `catch_unwind`, which ICEs
 // kani-compiler 0.68.0. Under `cfg(kani)` the same names are ordinary Rust
 // (see `sys_kani.rs`) dispatching through [`crate::kani_host`].
@@ -321,9 +321,9 @@ mod abi {
         pub fn offer_build(player_id: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_dest"
+            link_name = "ruleset_add_to_fate"
         )]
-        pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32);
+        pub fn add_to_fate(player_id: i32, ptr: i32, len: i32, fate: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_take_card"
@@ -382,24 +382,24 @@ mod abi {
         pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_set_dest"
+            link_name = "ruleset_set_fate"
         )]
-        pub fn set_dest(dest: i32);
+        pub fn set_fate(fate: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_set_transfer_to_dest"
+            link_name = "ruleset_set_transfer_to_fate"
         )]
-        pub fn set_transfer_to_dest(to: i32, dest: i32);
+        pub fn set_transfer_to_fate(to: i32, fate: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_send_to_dest"
+            link_name = "ruleset_send_to_fate"
         )]
-        pub fn send_to_dest(dest: i32) -> i32;
+        pub fn send_to_fate(fate: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_transfer_to_dest"
+            link_name = "ruleset_transfer_to_fate"
         )]
-        pub fn transfer_to_dest(to: i32, dest: i32) -> i32;
+        pub fn transfer_to_fate(to: i32, fate: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_rent_unit_mult"
@@ -651,9 +651,9 @@ mod abi {
         pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32, max: i32, instance: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_tok_max"
+            link_name = "ruleset_held_max"
         )]
-        pub fn tok_max(np: i32, nl: i32, player_id: i32) -> i32;
+        pub fn held_max(np: i32, nl: i32, player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_move_units"
@@ -697,17 +697,17 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_msg_a"
         )]
-        pub fn msg_a() -> i32;
+        pub fn msg_arg0() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_msg_b"
         )]
-        pub fn msg_b() -> i32;
+        pub fn msg_arg1() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_msg_c"
         )]
-        pub fn msg_c() -> i32;
+        pub fn msg_arg2() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_msg_tile"
@@ -856,7 +856,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_teleport_as"
         )]
-        pub fn teleport_as(player_id: i32, tile: i32, resolve: i32, as_main: i32);
+        pub fn teleport_as(player_id: i32, tile: i32, settles: i32, is_main_move: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_log_as"
@@ -1002,9 +1002,9 @@ mod abi {
         pub fn trig_move_kind() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_trig_move_resolve"
+            link_name = "ruleset_trig_move_settles"
         )]
-        pub fn trig_move_resolve() -> i32;
+        pub fn trig_move_settles() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_move_tag"
@@ -1030,7 +1030,6 @@ mod abi {
             link_name = "ruleset_trig_move_remaining"
         )]
         pub fn trig_move_remaining() -> i32;
-        // v50: `t.Move.From` -- the move's 移动起点, or -1 when no move is in flight.
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_move_from"
@@ -1213,9 +1212,9 @@ mod abi {
         pub fn play_card(id_ptr: i32, id_len: i32, player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_card_move"
+            link_name = "ruleset_run_planned_move"
         )]
-        pub fn card_move(player_id: i32) -> i32;
+        pub fn run_planned_move(player_id: i32) -> i32;
         /// Cross-card applicability query by named entry id
         /// (docs/ACTIVATION.md §3).
         #[cfg_attr(
@@ -1263,9 +1262,9 @@ mod abi {
         pub fn set_parity(n: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_set_resolve"
+            link_name = "ruleset_set_settles"
         )]
-        pub fn set_resolve(on: i32);
+        pub fn set_settles(on: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_settle_tile"
@@ -1385,9 +1384,9 @@ mod abi {
         pub fn move_parity() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_move_resolve"
+            link_name = "ruleset_move_settles"
         )]
-        pub fn move_resolve() -> i32;
+        pub fn move_settles() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_move_steps"
@@ -1417,7 +1416,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_target"
         )]
-        pub fn target(player_id: i32, tile: i32, single: i32) -> i32;
+        pub fn target(player_id: i32, tile: i32, single_target: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_targeted_count"
@@ -1545,12 +1544,12 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_apply_mortgage"
         )]
-        pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32;
+        pub fn commit_mortgage(player_id: i32, tile: i32, amount: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_apply_redeem"
         )]
-        pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32;
+        pub fn commit_redeem(player_id: i32, tile: i32, amount: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_pay_buy"
@@ -1638,7 +1637,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_turn_snap"
         )]
-        pub fn turn_snap(player_id: i32, buf: i32) -> i32;
+        pub fn turn_snapshot(player_id: i32, buf: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_turn_start_pos"
@@ -1651,9 +1650,9 @@ mod abi {
         pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_tok_names"
+            link_name = "ruleset_held_names"
         )]
-        pub fn tok_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32;
+        pub fn held_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_designations"
@@ -1686,9 +1685,9 @@ mod abi {
         pub fn gate(player_id: i32, kind: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_card_settle_at"
+            link_name = "ruleset_settle_tile_at"
         )]
-        pub fn card_settle_at(player_id: i32, tile: i32, main: i32) -> i32;
+        pub fn settle_tile_at(player_id: i32, tile: i32, is_main_move: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_card_offer_build"

@@ -125,10 +125,8 @@ pub fn window_of_exclusive(
                 .get(i)
                 .map(|s| s.persona.clone())
                 .unwrap_or_default();
-        p.state.insert(
-            bandori_std::cel::KEY_PERSONA.to_string(),
-            id_of(&ch),
-        );
+        p.state
+            .insert(bandori_std::cel::KEY_PERSONA.to_string(), id_of(&ch));
         p.state.insert(
             bandori_std::cel::KEY_GROUP.to_string(),
             id_of(

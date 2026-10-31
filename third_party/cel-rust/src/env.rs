@@ -34,14 +34,6 @@ use std::sync::Arc;
 /// ```
 /// use cel::{Env, StructDef, common::types, common::types::CelString};
 ///
-/// let mut env = Env::stdlib();
-/// env.add_type(
-///     StructDef::new("cel.MyStruct".to_owned())
-///         .add_field("some_field".to_owned(), types::STRING_TYPE)
-///         .add_field_with_default("with_default".to_owned(), Box::new(CelString::from("default_value")))
-/// ).unwrap();
-/// ```
-///
 /// ## Function Overloads
 ///
 /// You can add custom function overloads to the environment.
@@ -442,9 +434,7 @@ impl Env {
     /// assert_eq!(program.execute(&context), Ok(Value::Bool(true)));
     /// ```
     ///
-    /// Registering a `StructType`, e.g. a `StructDef`, also lets struct
-    /// literals construct it:
-    /// `cel.MyStruct{some_field: 'value'}`.
+    /// Registering a `StructType`, e.g.
     ///
     /// # Errors
     ///
@@ -529,9 +519,8 @@ impl Env {
     /// Sets whether a map literal that repeats a key is an error.
     ///
     /// On by default, as the spec requires. Turning it off keeps the last entry
-    /// instead, so `{'a': 1, 'a': 2}` evaluates to `{'a': 2}`, which is what
-    /// cel-go does. Mirrors cel-java's `CelOptions.errorOnDuplicateMapKeys`,
-    /// where the shipped default (`CelOptions.DEFAULT`) also errors.
+    /// instead, so `{'a': 1, 'a': 2}` evaluates to `{'a': 2}`, which is what cel-go
+    /// does.
     ///
     /// Numeric keys compare by value, as the spec requires, so `{0: 1, 0u: 2}`
     /// repeats a key too, which cel-java doesn't catch. With the check off, both
@@ -585,8 +574,6 @@ pub struct StructDef {
 impl StructDef {
     /// Creates a new struct definition with the given name.
     ///
-    /// The name should be the fully qualified name of the struct as it will be
-    /// referenced in CEL expressions (e.g., `cel.MyStruct`).
     pub fn new(name: String) -> Self {
         Self {
             r#type: Type::new_struct(name),

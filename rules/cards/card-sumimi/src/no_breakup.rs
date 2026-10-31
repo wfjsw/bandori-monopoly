@@ -1,4 +1,3 @@
-//! `Sumimi:Sumimi不会解散哦` -- C# `CardNoBreakup` (MatchHost.cs:11038-11118):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sumimi不会解散哦`）:
 //! > Sumimi不会解散哦：
@@ -15,7 +14,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
     &[On::Play(
-        // The repeated-digit clause stays in the residual guard (not `pre`):
+        // The repeated-digit clause stays in the residual guard (not `condition`):
         // a play gate must not trade its specific refusal
         // (`no_breakup_repeated`) for the generic `err.play_pre` a pre-reject
         // surfaces (GUARDS.md §4.4).
@@ -30,9 +29,8 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         // sheet cell L3
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
-/// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
-/// 规则书: 「资金不含有相同数字」 (the gate); 「拥有相同数字」 reuses it though
-/// the target reading is open -- see the TODO at the `good` predicate.
+/// 规则书: 「资金不含有相同数字」 (the gate); 「拥有相同数字」 reuses it though the target reading is
+/// open -- see the TODO at the `good` predicate.
 fn repeated_digits(money: i32) -> bool {
     let mut x = money.unsigned_abs();
     let mut seen: u16 = 0;
@@ -50,17 +48,9 @@ fn repeated_digits(money: i32) -> bool {
     false
 }
 
-/// C# `CardNoBreakup.Predict` -- money after settling on `t` (rent if other-owned).
-/// C# `H.RentOf` pays nothing to an out-of-game or mortgaged owner.
-/// 规则书: 「进行一次可使你的资金变动为拥有相同数字的传送」 -- the destination
-/// set the body asks from.
-/// TODO(规则书)（进行一次可使你的资金变动为拥有相同数字的传送）: the sheet
-///   lets any teleport that *makes* the money a repeated number be chosen, but
-///   only table rent is modelled (the C# `RentOf` shape) -- an unowned purchase,
-///   a build, a mortgaged force-buy, the agent half-charge or an event settle is
-///   predicted unchanged, so a tile that would in fact reach the target is only
-///   offered when no rent-predicted tile exists. Dice rent is not modelled
-///   either (it cannot be predicted).
+/// TODO(规则书)（进行一次可使你的资金变动为拥有相同数字的传送）: 规则书: 「进行一次可使你的资金变动为拥有相同数字的传送」 -- the
+/// destination set the body asks from. Dice rent is not modelled either (it
+/// cannot be predicted).
 fn predict(player_id: i32, t: i32) -> i32 {
     let money = ctx::money_of(player_id);
     let owner = ctx::tile_owner(t);
@@ -71,8 +61,8 @@ fn predict(player_id: i32, t: i32) -> i32 {
     }
 }
 
-/// C# `CardNoBreakup.WhyNot` -- playability gates. The repeated-digit refusal
-/// is the specific `no_breakup_repeated`, so it lives here, not in `pre`.
+/// The repeated-digit refusal is the specific `no_breakup_repeated`, so it lives
+/// here, not in `condition`.
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「当你本回合未进行过抵押/赎回操作」 -- both actions record
     // themselves and clear at the turn end, so the gate is just those records.
@@ -80,13 +70,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::state::get(player_id, "mortgaged") != 0 || ctx::state::get(player_id, "redeemed") != 0 {
         return Some(Msg::new(key!("no_breakup_mortgaged")));
     }
-    // 规则书: 「资金不含有相同数字时可打出」 -- C# refuses with 「资金里有相同的数字」
-    // when `RepeatedDigits(H.State.seats[player_id].money)`.
     if repeated_digits(ctx::money_of(player_id)) {
         return Some(Msg::new(key!("no_breakup_repeated")));
     }
-    // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
-    // C# `H.MoveWhyNot` gate applies.
     rules_status::move_blocked(player_id)
 }
 
@@ -96,9 +82,6 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    // 规则书: 「进行一次可使你的资金变动为拥有相同数字的传送」 -- C# prefers the
-    // tiles whose predicted post-settle money has a repeated digit, else all tiles
-    // but the current one.
     let mut all: Vec<i32> = Vec::new();
     let mut good: Vec<i32> = Vec::new();
     for t in 0..n {
@@ -124,34 +107,20 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("no_breakup_ask")),
         picks,
     )?;
-    // 规则书: 「进行一次…传送，视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
-    // { TeleportTo = teleportTo })` (`Resolve` defaults to true) =
-    // `set_teleport_to(to)` + `set_resolve(true)` + `card_move(player_id)`.
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     ctx::plan::set_teleport_to(to);
-    ctx::plan::set_resolve(true);
-    ctx::card_move(player_id);
+    ctx::plan::set_settles(true);
+    ctx::run_planned_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("no_breakup_moved"))
             .player_id("who", player_id)
             .tile("tile", to),
     );
-    // 规则书: 「视为你的主要移动」 -- `card_move` runs `MainMoveAs`
-    // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
-    // player; that is exactly `card_move`'s bookkeeping.
-    // 规则书: 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」
-    // -- C# snapshots pos / stay / stun / exile / every player's money / owners /
-    // houses / mortgaged before the move and restores them all when
-    // `!RepeatedDigits(money) && !H.Out(i)` after the settle.
-    // TODO(规则书) R3 (`SETTLE-STAGES.md` §9) [judgement]: is 「触发结算后」
-    //   `settleAfter` or the `tileResolved` terminal? "取消所有受到的效果"
-    //   (undo everything the settle did) is easier at `tileResolved`
-    //   (complete-as-nothing) than after the body has run. And the revert half
-    //   itself -- a world-snapshot / restore (C# `CardNoBreakup.Play`) -- is
-    //   not wired: the teleport now settles and consumes the main move, but
-    //   nothing rolls the world back when the money still lacks a repeated
-    //   digit. Left as-is pending the ruling.
+    // TODO(规则书) R3 (`SETTLE-STAGES.md` §9) [judgement]: is 「触发结算后」 `settleAfter` or
+    // the `tileResolved` terminal? "取消所有受到的效果" (undo everything the settle did) is
+    // easier at `tileResolved` (complete-as-nothing) than after the body has run.
+    // Left as-is pending the ruling.
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 //!
 //! This is the remaining trusted base of the single-source design: the
 //! lowering from engine world → condition context fields. Production fills
-//! the same fields via `game_rules::cond_pre::{fill_window, fill_candidate}`;
+//! the same fields via `game_rules::condition::{fill_window, fill_candidate}`;
 //! the differential tests pin the *evaluator*, and this module pins the
 //! *binding*.
 //!
@@ -96,8 +96,8 @@
 //!   `conf_fill_diff`-style per-program filling.
 
 use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId, NAMED_CAP};
-use rules_cond_ir::vars::{VarId, VarTy, VARS};
-use rules_cond_ir::Val;
+use rules_cond_ir::vars::{VarId, VarType, VARS};
+use rules_cond_ir::Value;
 
 use crate::board;
 use crate::intern::{self, NameId};
@@ -769,7 +769,7 @@ pub fn fill_from_world(
                 let i = outer * 8 + k;
                 if i < VARS.len() {
                     let (id, _, ty) = VARS[i];
-                    if ty == VarTy::OptInt {
+                    if ty == VarType::OptInt {
                         c.set_scalar(id, -1);
                     }
                 }
@@ -1213,7 +1213,7 @@ pub fn fill_for_guard(
                             let vi = vo * 8 + vk;
                             if vi < VARS.len() {
                                 let (vid, _, ty) = VARS[vi];
-                                if (vid as u16) == id && ty == VarTy::OptInt {
+                                if (vid as u16) == id && ty == VarType::OptInt {
                                     c.set_scalar(vid, -1);
                                 }
                             }
@@ -1587,7 +1587,7 @@ pub fn eval_bool(p: &rules_cond_ir::Program, c: &IrCtx) -> bool {
 }
 
 /// Value-level helper for the proofs.
-pub fn eval_val(p: &rules_cond_ir::Program, c: &IrCtx) -> Val {
+pub fn eval_val(p: &rules_cond_ir::Program, c: &IrCtx) -> Value {
     p.eval(c)
 }
 

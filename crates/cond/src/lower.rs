@@ -48,7 +48,7 @@ pub struct OwnedProgram {
 }
 
 impl OwnedProgram {
-    pub fn eval(&self, ctx: &rules_cond_ir::IrCtx) -> rules_cond_ir::Val {
+    pub fn eval(&self, ctx: &rules_cond_ir::IrCtx) -> rules_cond_ir::Value {
         rules_cond_ir::eval_node(&self.nodes, self.root, ctx)
     }
 
@@ -129,7 +129,7 @@ fn lower_ident(name: &str, nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16,
     if let Some((idx, _)) = by_flat(name) {
         return push(nodes, Node::leaf_var(idx));
     }
-    // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarTy::Str`
+    // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarType::Str`
     // scalar holds and the same hash a string literal bakes to. Eq compares
     // hashes; no string pool.
     if let Some((_, s)) = v.str_constants().find(|(n, _)| *n == name) {
@@ -142,7 +142,12 @@ fn lower_ident(name: &str, nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16,
     Err(CondError::UnknownVar(name.to_string()))
 }
 
-fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
+fn lower_call(
+    name: &str,
+    args: &[IdedExpr],
+    nodes: &mut Vec<Node>,
+    v: &ext::Vocab,
+) -> Result<u16, CondError> {
     // Operator names (post-parse).
     match name {
         operators::ADD => return bin(Kind::Add, args, nodes, v),
@@ -207,8 +212,7 @@ fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Voc
     }
     match n.lower_as {
         LowerAs::Direct => {
-            let fid = direct_fn_id(n.flat)
-                .ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
+            let fid = direct_fn_id(n.flat).ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
             let first = nodes.len() as u16;
             for a in args {
                 lower_expr(a, nodes, v)?;
@@ -240,7 +244,10 @@ fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Voc
                 }
             }
             let arity = user_arity + bake.len();
-            push(nodes, Node::new(Kind::Call, fid as i64, first, arity as u16, 0))
+            push(
+                nodes,
+                Node::new(Kind::Call, fid as i64, first, arity as u16, 0),
+            )
         }
         LowerAs::CallEq { fid, bake } => {
             // `Eq(Call(fid, [user_args[..n-1]…, Const(id_of(bake))…]),
@@ -267,7 +274,12 @@ fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Voc
     }
 }
 
-fn bin(kind: Kind, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
+fn bin(
+    kind: Kind,
+    args: &[IdedExpr],
+    nodes: &mut Vec<Node>,
+    v: &ext::Vocab,
+) -> Result<u16, CondError> {
     require_arity("binop", args, 2)?;
     let a = lower_expr(&args[0], nodes, v)?;
     let b = lower_expr(&args[1], nodes, v)?;
@@ -336,7 +348,7 @@ pub fn lower_with_src(src: &str, v: &ext::Vocab) -> Result<OwnedProgram, CondErr
 pub fn inventory_guards(root: &std::path::Path) -> Vec<String> {
     let mut out = Vec::new();
     collect_dir(root, &mut out);
-    out.push("actor == owner".to_string()); // `pre::MINE`
+    out.push("actor == owner".to_string()); // `condition::MINE`
     out.sort();
     out.dedup();
     out
@@ -457,8 +469,8 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
         // Comments are not registrations. A `// ... On::Message("place")` note
         // otherwise lands its quoted word in the inventory as a fake guard.
         let text = strip_rust_comments(&text);
-        // Phase 3 typed DSL: `On::Filter(Filter::Name(pre, …))` /
-        // `On::Action(Action::Name(pre, …))` (and ruleset `Filters::` /
+        // Phase 3 typed DSL: `On::Filter(Filter::Name(condition, …))` /
+        // `On::Action(Action::Name(condition, …))` (and ruleset `Filters::` /
         // `Actions::` namespaces). Retired `On::FilterFlag` / `On::FilterValue`
         // are not recognized.
         for kind in [
@@ -478,9 +490,11 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             let mut rest = text.as_str();
             while let Some(i) = rest.find(&pat) {
                 rest = &rest[i + pat.len()..];
-                if let Some(s) =
-                    on_pre_string(rest, kind == "Filter" || kind == "Action", kind == "Schedule")
-                {
+                if let Some(s) = on_pre_string(
+                    rest,
+                    kind == "Filter" || kind == "Action",
+                    kind == "Schedule",
+                ) {
                     if !s.is_empty() {
                         out.push(s);
                     }
@@ -490,13 +504,13 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
     }
 }
 
-/// After `On::Kind(`, the `pre` argument.
+/// After `On::Kind(`, the `condition` argument.
 ///
 /// `On::Filter` / `On::Action` take one nested ctor
-/// (`Ns::Name(pre, …)` / `Ns::Name(pre, guard, body)`); `pre` is ctor
+/// (`Ns::Name(condition, …)` / `Ns::Name(condition, guard, body)`); `condition` is ctor
 /// arg 1 inside the inner parentheses. The namespace is whatever the ruleset
 /// named it (`Filter`/`Action` engine, `Filters`/`Actions`/… downstream).
-/// `On::Schedule(id, pre, …)` takes a leading id slug; `pre` is the second
+/// `On::Schedule(id, condition, …)` takes a leading id slug; `condition` is the second
 /// top-level argument. Everything else keeps the flat first-arg shape (no
 /// `&[kinds]` slice since the multi-kind lists are gone).
 fn on_pre_string(after: &str, nested: bool, skip_id: bool) -> Option<String> {
@@ -507,10 +521,10 @@ fn on_pre_string(after: &str, nested: bool, skip_id: bool) -> Option<String> {
         return pre_string(first);
     }
     if skip_id {
-        // `On::Schedule(id, pre, …)` -- skip the leading id slug.
+        // `On::Schedule(id, condition, …)` -- skip the leading id slug.
         return nth_top_arg(after, 1).and_then(|s| pre_string(s.as_str()));
     }
-    // Flat: skip an optional `&[...]` leftover, then first string / `pre::MINE`.
+    // Flat: skip an optional `&[...]` leftover, then first string / `condition::MINE`.
     pre_string(after)
 }
 
@@ -644,7 +658,7 @@ fn first_top_arg(inner: &str) -> Option<&str> {
     }
 }
 
-/// The `pre` argument: a string literal, `pre::MINE`, or a known guard const.
+/// The `condition` argument: a string literal, `condition::MINE`, or a known guard const.
 /// Only the first argument is read — a later `key!("…")` / `name` is not a
 /// guard.
 fn pre_string(s: &str) -> Option<String> {
@@ -681,17 +695,21 @@ fn pre_string(s: &str) -> Option<String> {
         .strip_prefix(',')
         .map(|r| r.trim_start())
         .unwrap_or(rest.trim_start());
-    // `pre::MINE` sugar (any path prefix: `pre::MINE`, `card_sdk::pre::MINE`).
+    // `condition::MINE` sugar (any path prefix: `condition::MINE`, `card_sdk::condition::MINE`).
     // Known guard-const path references (content `guards::OWN_START` paths)
     // — resolve through the installed extension.
     let path_end = rest
         .find(|c: char| !(c.is_ascii_alphanumeric() || c == ':' || c == '_'))
         .unwrap_or(rest.len());
     let path = &rest[..path_end];
-    if path == "pre::MINE" || path.ends_with("::pre::MINE") {
+    if path == "condition::MINE" || path.ends_with("::condition::MINE") {
         return Some("actor == owner".to_string());
     }
-    if let Some(lit) = ext::ext().guard_consts.iter().find(|(p, _)| *p == path).map(|(_, lit)| *lit)
+    if let Some(lit) = ext::ext()
+        .guard_consts
+        .iter()
+        .find(|(p, _)| *p == path)
+        .map(|(_, lit)| *lit)
     {
         return Some(lit.to_string());
     }

@@ -126,7 +126,7 @@ mod opt_i32_neg1 {
 /// two in step (the postcard payload has no field names).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct TurnSnap {
+pub struct TurnSnapshot {
     pub pos: i32,
     pub state: std::collections::BTreeMap<String, i32>,
     pub money: i32,
@@ -181,7 +181,7 @@ pub struct TurnCtx {
     /// it ends -- its per-move plan writes were for the move it drove, and its
     /// replay re-applies them afterwards; one that drove none wrote for a move
     /// still to come (ran 「本次移动向后」, sakiko_lead's half price) and
-    /// keeps them (`Cx::drop_spent_plan_shape`). Reset at the activation's
+    /// keeps them (`PlayCtx::drop_spent_plan_shape`). Reset at the activation's
     /// entry alongside `extreme`.
     #[serde(default)]
     pub play_drove_move: bool,
@@ -217,7 +217,7 @@ pub struct TurnCtx {
     /// Each player's pos / the layer counters when the turn started.
     /// 「回到起始地点并取消所有受到的效果」 restores from here.
     #[serde(default)]
-    pub turn_snap: Vec<TurnSnap>,
+    pub turn_snapshot: Vec<TurnSnapshot>,
     /// Every face rolled this turn, in order. 「与本回合内你骰出过的所有骰点
     /// 都不同」 compares against this.
     #[serde(default)]
@@ -276,7 +276,7 @@ impl Default for TurnCtx {
             play_doubled: None,
             paid_in_settle: 0,
             turn_start_pos: Vec::new(),
-            turn_snap: Vec::new(),
+            turn_snapshot: Vec::new(),
             turn_rolls: Vec::new(),
             build_discount: 0,
             build_discount_layers: 0,
@@ -372,7 +372,7 @@ struct WindowCache {
     events: Arc<Vec<MatchEvent>>,
 }
 
-/// One pending walk segment awaiting lazy flush (`Cx::walk`).
+/// One pending walk segment awaiting lazy flush (`PlayCtx::walk`).
 ///
 /// A walk's `roll` / `move` event is not logged per step: steps accumulate
 /// here and the segment is published when the walk reaches the start square / its last
@@ -396,7 +396,7 @@ pub struct WalkSeg {
     pub pending_first: bool,
     /// The walk is the turn's main move: the first publish is kind `roll`
     /// carrying `dice = roll`, not a bare `move`.
-    pub main: bool,
+    pub is_main_move: bool,
     /// The dice face the head `roll` event shows (`m.roll`).
     pub roll: i32,
     /// Prebuilt head text (`head(false)` -- 「…n格」 without 「原地」).
@@ -411,10 +411,10 @@ pub struct WalkSeg {
 /// [`World`] would otherwise drag a mid-walk `Some` into a mismatch.
 #[derive(Debug, Default, Clone)]
 pub struct WalkFlush {
-    /// Innermost last: `Cx::walk` pushes, so a nested walk's first event must
+    /// Innermost last: `PlayCtx::walk` pushes, so a nested walk's first event must
     /// still flush the outer approach first (see [`World::flush_walk`]).
     stack: Vec<WalkSeg>,
-    /// Presentation time owed to the host for flushed segments. [`crate::engine::cx::Cx::wait`]
+    /// Presentation time owed to the host for flushed segments. [`crate::engine::cx::PlayCtx::wait`]
     /// drains it into `delay`.
     delay: f32,
     /// Re-entrancy guard: the flush itself logs.
@@ -714,7 +714,7 @@ pub struct World {
     #[serde(skip)]
     pub flash: SharedFlash,
     /// Match clock / timer settings (see [`crate::clock`]). Constant for the
-    /// life of the match; rides here so a routine's [`super::Cx`] can read the
+    /// life of the match; rides here so a routine's [`super::PlayCtx`] can read the
     /// setup windows and refill caps. `#[serde(default)]` so a World snapshot
     /// written before this field still loads (pre-settings values).
     #[serde(default)]
@@ -908,10 +908,10 @@ impl World {
         // `log` takes `&mut self`, so the stack cannot remain borrowed.
         let mut pending = Vec::new();
         for seg in self.walk_flush.stack.iter_mut() {
-            if seg.value == 0 && !(seg.pending_first && seg.main) {
+            if seg.value == 0 && !(seg.pending_first && seg.is_main_move) {
                 continue;
             }
-            let ek = if seg.pending_first && seg.main {
+            let ek = if seg.pending_first && seg.is_main_move {
                 "diceRollBefore"
             } else {
                 "move"
@@ -921,7 +921,7 @@ impl World {
             } else {
                 Msg::new("log.move_on").player_id("who", seg.player)
             };
-            let dice = if seg.pending_first && seg.main {
+            let dice = if seg.pending_first && seg.is_main_move {
                 seg.roll
             } else {
                 0
@@ -940,7 +940,7 @@ impl World {
             e.value = value;
             e.dice = dice;
             e.ahead = ahead;
-            // Same pacing the old per-publish `Cx::wait` applied (1.5s for the
+            // Same pacing the old per-publish `PlayCtx::wait` applied (1.5s for the
             // head `roll`, 0.3s for a continuation, plus 0.15s/step).
             let pace = if ek == "diceRollBefore" { 1.5 } else { 0.3 };
             self.walk_flush.delay += pace + value.unsigned_abs() as f32 * 0.15;
@@ -949,17 +949,17 @@ impl World {
     }
 
     /// Drain the presentation time [`Self::flush_walk`] accumulated since the
-    /// last drain (the host's `Cx::wait` equivalent).
+    /// last drain (the host's `PlayCtx::wait` equivalent).
     pub fn take_walk_delay(&mut self) -> f32 {
         std::mem::take(&mut self.walk_flush.delay)
     }
 
-    /// Arm a new innermost walk segment (`Cx::walk` on entry).
+    /// Arm a new innermost walk segment (`PlayCtx::walk` on entry).
     pub fn push_walk_seg(&mut self, seg: WalkSeg) {
         self.walk_flush.stack.push(seg);
     }
 
-    /// Drop the innermost walk segment (`Cx::walk` on exit, after flushing).
+    /// Drop the innermost walk segment (`PlayCtx::walk` on exit, after flushing).
     pub fn pop_walk_seg(&mut self) {
         self.walk_flush.stack.pop();
     }

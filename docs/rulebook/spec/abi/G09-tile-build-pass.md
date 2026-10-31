@@ -40,7 +40,7 @@ Book (`通用:[月岛麻里奈]今天也要加油工作喔`):
 > [反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。
 
 **Current.** `marina_work.rs:20-32` counteracts
-`bandori_std::kind::PassRewardAffected` with `pre::MINE` and no residual guard;
+`bandori_std::kind::PassRewardAffected` with `condition::MINE` and no residual guard;
 its body (`:48-64`) only logs. Both missing conjuncts are unreadable and the
 window is at the wrong point:
 
@@ -66,7 +66,7 @@ Book (`HHW:笑容大游行` (3)):
 
 **Current.** `smile_parade.rs:196-253` hand-rolls a **settle** swap: the
 `SettleBody` entry claims the body with `set_cancelled`, then calls
-`card_settle_at` on the partner tile and suppresses re-entry with a move tag.
+`settle_tile_at` on the partner tile and suppresses re-entry with a move tag.
 The [经过] half does not exist: passing the card's square still runs that
 square's own pass rule, and passing 弦卷集团 still runs none of the card's
 square's. The `[持续]` clause is one continuous statement; only half of it is
@@ -127,12 +127,9 @@ Book (`AG:宣战布告`):
 > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
 
 **Current.** `declare_war.rs:52-74` already reads the whole effect list —
-`ctx::effect::hits(player_id)` for the seat half and `ctx::effect::tile(i)` +
-`ctx::tile_owner(t)` for the 「或你拥有的格子」 half. But tile writes
-(`hostfns.rs:798-820` `set_houses` / `add_house` / `set_owner`) mutate the world
-directly: no `Effect` is appended and no `effect` window opens. An
-`add_house` from another player's card is therefore invisible, and the row
-comment at `declare_war.rs:45-49` admits the same gap as C# (rows 36, 38, 989).
+`ctx::effect::hits(player_id)` for the seat half and `ctx::effect::tile(i)` + `ctx::tile_owner(t)`
+for the 「或你拥有的格子」 half. But tile writes (`hostfns.rs:798-820` `set_houses` / `add_house` /
+`set_owner`) mutate the world directly: no `Effect` is appended and no `effect` window opens.
 
 **Expected.** Every tile write declares
 `Effect { kind, tile, target: owner }` on the running link **and opens the
@@ -194,7 +191,7 @@ symmetric half of `houseAdded` and fires on every downward house write.
   (and 6, because `add_house` is the shared write).
 * **R5 — move facts are step-local snapshots.** `Move.tags` is copied to the
   trigger at raise time, but `plan::set_tag` only writes the plan and the walk
-  syncs only `stop_at` / `resolve` (`play.rs:1812-1817`); `fold_plan_delta`
+  syncs only `stop_at` / `settles` (`play.rs:1812-1817`); `fold_plan_delta`
   copies tags only when they changed since move start (`:173-175`); `Move.path`
   never reaches a trigger, and money raised during a settle carries no move.
   Items 1 and 5.
@@ -374,7 +371,7 @@ pub fn build_price(tile: i32) -> i32;
 /// The current turn's build percentage (100 = full) and layered cut.
 pub fn build_cost_pct() -> i32;
 pub fn build_discount() -> i32;
-/// `why_not_build_on` minus the ownership test (still includes the buyable,
+/// `cant_build_on` minus the ownership test (still includes the buyable,
 /// ring, `NO_BUILD`, `NO_BUILD_ABOVE`, lingering, mortgage, cap, full and out
 /// refusals; the `Gate::Pay` layers remain the caller's question). For a free
 /// build on someone else's tile.
@@ -434,7 +431,7 @@ The import passes the enum as `i32`; an unknown value falls back to
   `tile_buildable` / `tile_extra_count` / `square` / `tile_pos` / `move_path*`
   are pure reads.
 * `ctx::set_tile_swap` is sugar over `set_prop`; no import.
-* Condition vocabulary (`crates/game-rules/src/cond_pre.rs:1298`, the
+* Condition vocabulary (`crates/game-rules/src/condition.rs:1298`, the
   `TileRef` scope): `tile.square` joins `tile.id`; the `TileSnap` initializer
   gains `square: t.square as i64` beside `id`. `tile.id` stays the square,
   `tile.square` is the event position. No other CEL field changes; a placed
@@ -446,7 +443,7 @@ The import passes the enum as `i32`; an unknown value falls back to
   the binding instance uid), `World::square_at(pos) -> i32` and
   `World::pos_of_square(square) -> i32`. Derived from instances carrying
   `prop::TILE_SWAP`; no new world field (§7).
-* `Cx::settle_move: Vec<TriggerMove>` (the nesting stack described in 5.6).
+* `PlayCtx::settle_move: Vec<TriggerMove>` (the nesting stack described in 5.6).
 * `SettleFrame.square` (the governed square, decided when the frame opens:
   `SettleFrame::new` takes it as an argument; 5.1).
 
@@ -549,7 +546,7 @@ moves to `pos =`; each must change (the number is the line today):
   takes the square the landing step already resolved (the move's last
   `path_square` entry, falling back to `square_at(at)` only for a move-less
   settle), so the landing pass and its settle cannot disagree on the square;
-  `card_settle_at` pins it instead (5.1). The frame passes
+  `settle_tile_at` pins it instead (5.1). The frame passes
   `tile = frame.square, pos = frame.at` in that order -- arms assign in
   written order, so the explicit `pos` overwrites the `tile =` derivation
   -- and the frame, `settle_tile` and `tileResolved` agree even if a binding
@@ -594,11 +591,6 @@ working -- no per-guard edit. Four follow-ups:
   discard pile stay positional. Without the first, a swap would run the right
   rule under the wrong picture.
 
-That a card lying on a square travels with it is the choice; the opposite
-("the card stays with the physical slot") would desynchronise the settle
-redirect the card itself performs (pre-swap C# redirects the settle to the
-partner, so the partner's extras fire) and is listed as A8.
-
 **Settle body.** `settle_tile` (`wasm_rules.rs:8926`) takes the frame's move
 and both frame fields -- `(player_id, at, square, m, main)` from the
 `SettleTile` stage (`play.rs:2196`, today
@@ -615,7 +607,7 @@ stamping stack). The built-in fallback becomes
 `landed` take the position, `self.tile(square)`, `owners[square]`, the
 `log.land` `tile` field and the `offer_buy` / `offer_build` / `pay_rent` calls
 take the square. Those and
-`rent_figure` / `build_cost` / `why_not_build_on` /
+`rent_figure` / `build_cost` / `cant_build_on` /
 `tile_buildable` / `build_price` are **square-keyed** throughout
 (`owners[t]`, `houses[t]`, `mortgaged[t]`, `tile_prop(t)`, the static rent
 table and the message/`Pay.tile` field), which is the same value tile rule
@@ -625,7 +617,7 @@ where it is physical: `prep_land` / `landed`, the frame's `at`, the walk,
 `players_on`'s internal `square_at(player_pos)` (5.1) and the view-only
 `with_tile` / `auction_tile` highlight (`pos_of_square(t)`), while message
 `tile` fields keep the square.
-`card_settle_at(player, square, main)` maps the argument through
+`settle_tile_at(player, square, main)` maps the argument through
 `pos_of_square` before pushing the frame, and the frame **pins**
 `frame.square = square` (the named identity) instead of calling `square_at` --
 a card-initiated settle names a tile identity, and a swap already bound by
@@ -710,15 +702,15 @@ normal.
 
 `tile_extra_count(tile)` implements the same classification for guards (counts
 board + player instances on `tile` whose id is not `tile:`). It is the
-residual guard's 「受到其他效果影响」 test; the CEL pre keeps only
-`tile_is(tile.id, "circle")` (6.1), and `pre::MINE`'s text carries the
+residual guard's 「受到其他效果影响」 test; the CEL condition keeps only
+`tile_is(tile.id, "circle")` (6.1), and `condition::MINE`'s text carries the
 「[使用者]」 half.
 
 ### 5.3 The one build pipeline (item 3)
 
 Move the existing body of `build()` (`play.rs:3033-3134`) into one engine
 routine. `build()` itself raises `buildBefore` before any guard (out/playing
-only), while the real gate is `why_not_build_on` (`play.rs:2887`), checked in
+only), while the real gate is `cant_build_on` (`play.rs:2887`), checked in
 `card_build` (`:1280`) -- outside the moved body. Keep that split in the
 routine: the gate stays at the callers, the pipeline starts at `buildBefore`,
 so a card path that already gated does not re-prompt.
@@ -731,8 +723,8 @@ pub fn build_task(
 
 Order (today's `card_build` gate first, then the routine):
 
-1. out / playing / gate: `require_owner ? why_not_build_on : why_not_buildable`.
-   A refusal is logged (as today, `card_build` logs `why`) and returns false.
+1. out / playing / gate: `require_owner ? cant_build_on : guard_buildable`.
+   A refusal is logged (as today, `card_build` logs `reason`) and returns false.
 2. `buildBefore` raise (`@tile`), veto on `is_cancelled`.
 3. price: `base = build_cost(t)`; for `Effective` apply `pct.clamp(0,100)`
    then the layered cut (exact current block, including the overflow refund);
@@ -778,8 +770,8 @@ body still runs it on the step path but not on a card build (open question
 10). `standalone_build` (`purchase.rs:191`, the no-body fallback) becomes
 `card_build_as(…, Effective, 0, 0, true)` too.
 
-`why_not_build_on` splits into `why_not_build_on` (owned) and
-`why_not_buildable` (the same checks minus the owner comparison; the buyable,
+`cant_build_on` splits into `cant_build_on` (owned) and
+`guard_buildable` (the same checks minus the owner comparison; the buyable,
 ring, `NO_BUILD`, `NO_BUILD_ABOVE`, lingering, mortgage, tier cap, full and
 out arms all stay), both still `Option<Msg>` so the refusal keeps its reason;
 the guest import `tile_buildable` is the bool wrapper (`is_none`) that a card
@@ -804,7 +796,7 @@ pub enum HouseWrite { Set(i32), Add(i32) } // signed delta allowed on Add
 impl Match {
     /// Declare `houseAdd` / `houseRemove` for `tile` on a fresh `effect`
     /// window, then apply. `Flow<i32>` = the post count; a cancellation
-    /// answers the pre count.
+    /// answers the condition count.
     pub fn write_houses(&mut self, by: usize, t: usize, w: HouseWrite) -> Flow<i32>;
 
     /// Declare `ownerSet` for `tile`, then apply. `Flow<i32>` = the new owner;
@@ -840,13 +832,13 @@ Ok(after)
 `value = owner`.
 
 **Guest path.** `hostfns::set_houses` / `add_house` / `set_owner` cannot reach
-`Cx`, so each becomes a `HostRequest::TileWrite { op, tile, value }` request
+`PlayCtx`, so each becomes a `HostRequest::TileWrite { op, tile, value }` request
 (`op`: `0` = set houses, `1` = add houses, `2` = set owner) answered inline by
 a handler beside `Build` (`wasm_rules.rs:3959`) that calls the method above.
 The handler also does the run bookkeeping a guest add always did:
 `flush_header()` and, for a non-zero delta on an owned tile,
 `house_log.push((owner, tile, now, delta))` (5.5). The request answers the
-post value, or the pre value when cancelled. The return shapes are unchanged:
+post value, or the condition value when cancelled. The return shapes are unchanged:
 `add_house` still answers the count, `set_houses` / `set_owner` answer nothing.
 The pause is required for replay correctness: `add_house` is not idempotent,
 and a request answer is skipped on the body's replay pass.
@@ -885,7 +877,7 @@ card armed.
   after every `tileEffectBefore`/settle stage.
 * At `moveResolved` and at teleport completion (and on either cancellation
   path) `m.tags.clear()` and `turn.plan.tags.clear()` — the tag is one move.
-* `step_settle_run` pushes the frame's `TriggerMove` onto `Cx::settle_move`
+* `step_settle_run` pushes the frame's `TriggerMove` onto `PlayCtx::settle_move`
   before its first stage and pops at `Done`. The bridge's `counteract` entry
   (`wasm_rules.rs:9465`, the single point both engine `raise!` and
   `raise_core` reach) stamps `t.mv = cx.settle_move.last().cloned()` when the
@@ -946,7 +938,7 @@ ctx::log(player_id, &Msg::new(key!("marina_work_normal"))
 ```
 
 The log's tile is now real rather than a static "#1". The condition spells
-`pre::MINE`'s text (`actor == owner`; `pre` is a `&'static str`, so the half
+`condition::MINE`'s text (`actor == owner`; `condition` is a `&'static str`, so the half
 cannot be a constant reference) and adds `tile_is(tile.id, "circle")` -- the
 book's "#1格子" (`ctx::is_start` is that same test). `tile.id` is the
 governing square, so a swapped start square still passes, and
@@ -956,7 +948,7 @@ square; the re-home only re-points the effects).
 ### 6.2 `smile_parade` (item 2)
 
 **Before** (`:52, 178-253`): one `SettleBody` entry hand-redirects (1) and (3)
-through `card_settle_at`, keyed `TAG_REDIRECT` / `TAG_AS_AGENT`; no pass half.
+through `settle_tile_at`, keyed `TAG_REDIRECT` / `TAG_AS_AGENT`; no pass half.
 
 **After.** Two mechanisms share the card, each where it belongs:
 
@@ -973,9 +965,9 @@ through `card_settle_at`, keyed `TAG_REDIRECT` / `TAG_AS_AGENT`; no pass half.
   move_tag(TAG_AS_AGENT) != 0`.
 * (1), 「当次移动的移动终点视为"弦卷集团"地产商」, is not a swap of two
   squares: the card sits on group while the *endpoint* must settle as the
-  agent. Keep the `TAG_AS_AGENT` branch and its `card_settle_at(player, group,
-  main = true)`; the as-agent half rides the tag, which the settle reads.
-  `card_settle_at` pins the named square, so a swap bound by an older copy
+  agent. Keep the `TAG_AS_AGENT` branch and its `settle_tile_at(player, group,
+  is_main_move = true)`; the as-agent half rides the tag, which the settle reads.
+  `settle_tile_at` pins the named square, so a swap bound by an older copy
   cannot turn the nested settle back into that copy's square.
   `TAG_REDIRECT` survives only as the card-local re-entry/latch marker
   (`resolve_guard`, `on_resolved`); `TAG_AS_AGENT` stays.
@@ -1277,13 +1269,13 @@ suppressed, so the square-valued tag is pinned too.
   self_tile)`),
   `card-mygo/src/haneoka.rs:39-48,80-84` (`pos = player_pos` handed to
   `tile_owner` / `houses_of` / `can_build_on` / `add_house`),
-  `card-ag/src/ran_as_usual.rs:101` (`turn_snap().pos` in a message `tile`),
+  `card-ag/src/ran_as_usual.rs:101` (`turn_snapshot().pos` in a message `tile`),
   `card-mygo/src/endless_journey.rs:44` and `card-ras/src/studio_storm.rs:72`
   (`place_card_on(player_pos)`), and `smile_parade`'s (3) discard
   (`trigger::square() == card_t`, 6.2). Already
   square-to-square and
   unchanged: `card.tile`, `self_tile`, name lookups, `ask_tile` over
-  `owned_tiles`, and the CEL `card.tile == tile.id` pre
+  `owned_tiles`, and the CEL `card.tile == tile.id` condition
   (`card-mygo/src/rana_funny.rs:24`, `card-ppp/src/kasumi_love_all.rs:28`).
   Pure position pairs (`clear_cp`'s free-square scan, `surprise_duel`'s
   `tile_forward`, `tomori_inner_shout`'s `dist`) stay positions.
@@ -1411,9 +1403,7 @@ placed `tile:` card would need a third rule.
    `build_cost_pct` / discount, which a `Fixed` charge ignores by design.
    Should a hook's discount on a `Fixed` build reduce it (and how is the
    already-paid `to_the_peak` refund handled)?
-8. **Miracle's "可"** — the design still always spends when it can. C# reads
-   the effective price; whether the player chooses per build or the card
-   auto-takes is a judgement call (`OPEN-视为房屋数` neighbourhood).
+8. **Miracle's "可"** — the design still always spends when it can.
 9. **`tile_extra_count` and immunity.** An extra whose own card is immune /
    face-down still counts as "受到其他效果影响"; should the count follow the
    dispatch's face-down filter?
@@ -1421,10 +1411,6 @@ placed `tile:` card would need a third rule.
     tile's `On::Build` body, so a custom body runs on the step path only. Is
     that acceptable, or should the verb dispatch the body and the body call a
     second, non-dispatching entry?
-11. **Discard on the swapped fraction.** (3)'s discard is keyed to the
-    placement slot the card sits at, so the settle on the endpoint it was
-    placed on discards (after the agent body). A settle on 弦卷集团's own home
-    slot, which now runs the card's square's rule, does not. The alternative
-    reading -- discard whenever the card's *square* was the one settled,
-    wherever it stands -- is equally text-supported; C# and the pre-swap
-    behaviour are the placement-slot reading, which the design keeps.
+11. **Discard on the swapped fraction.** (3)'s discard is keyed to the placement slot the card sits
+  at, so the settle on the endpoint it was placed on discards (after the agent body). A settle on
+  弦卷集团's own home slot, which now runs the card's square's rule, does not.

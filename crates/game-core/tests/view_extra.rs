@@ -1,4 +1,4 @@
-//! `Match::view_extra` -- the per-viewer fields the browser's 托管 autopilot
+//! `Match::view_extras` -- the per-viewer fields the browser's 托管 autopilot
 //! reads on top of the shared `MatchState`: the engine's own AI answer for the
 //! viewer's own prompt, and which hand cards `cant_play` would allow.
 
@@ -47,7 +47,7 @@ fn solo(seed: u64) -> Match {
 #[test]
 fn view_extra_is_empty_for_an_unknown_member() {
     let m = solo(1);
-    let extra = m.view_extra(99);
+    let extra = m.view_extras(99);
     assert_eq!(extra["aiAnswer"], serde_json::Value::Null);
     assert_eq!(extra["playable"], serde_json::json!([]));
 }
@@ -56,7 +56,7 @@ fn view_extra_is_empty_for_an_unknown_member() {
 fn view_extra_reports_the_viewers_own_hand_playability() {
     let m = solo(2);
     let hand = m.hand_of(1);
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     let playable = extra["playable"].as_array().expect("playable list");
     assert_eq!(playable.len(), hand.len(), "one flag per hand card");
     // The opening hand is dealt before the first turn, so no card is playable
@@ -80,7 +80,7 @@ fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
             // `aiAnswer` is only for the asked player's own member; a seat that
             // is not asked must see `null` (the auction ceiling is hidden).
             for (seat, p) in st.players.iter().enumerate() {
-                let extra = m.view_extra(p.member);
+                let extra = m.view_extras(p.member);
                 let waiting = st.prompt.waiting(seat as i32);
                 if waiting {
                     let ai = &extra["aiAnswer"];
@@ -106,7 +106,7 @@ fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
 }
 // ---- the viewer's skill list (`ViewExtra::skills`) ---------------------------
 
-use game_core::engine::{CardRules, Cx, Dest, Flow};
+use game_core::engine::{CardRules, Fate, Flow, PlayCtx};
 use game_core::msg::Msg;
 use game_core::net::NetMessage;
 use game_core::state::stage;
@@ -123,17 +123,17 @@ impl CardRules for TestRules {
     fn has_play(&self, card: &str) -> bool {
         self.play.iter().any(|c| c == card)
     }
-    fn cant_play(&self, _cx: &Cx, _player: usize, card: &str) -> Option<Msg> {
+    fn cant_play(&self, _cx: &PlayCtx, _player: usize, card: &str) -> Option<Msg> {
         if self.has_play(card) {
             self.refuse.clone()
         } else {
             None
         }
     }
-    fn play(&self, _cx: &mut Cx, _player: usize, _card: &str) -> Flow<Dest> {
-        Ok(Dest::Field)
+    fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Fate> {
+        Ok(Fate::Field)
     }
-    fn event(&self, _cx: &mut Cx, _player: usize, _id: &str) -> Flow<bool> {
+    fn event(&self, _cx: &mut PlayCtx, _player: usize, _id: &str) -> Flow<bool> {
         Ok(false)
     }
 }
@@ -208,7 +208,7 @@ fn skill_ids(m: &Match, me: i32) -> Vec<String> {
 fn skills_are_empty_before_the_play_phase() {
     // A brand-new match is still in ban / pick: no field skills, no list.
     let m = solo_with(Arc::new(StubRules), 4);
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     // `StubRules` never reports `has_play`, so even a placed skill is absent.
     assert_eq!(extra["skills"], serde_json::json!([]));
 }
@@ -232,7 +232,7 @@ fn skills_list_only_activatable_rules_during_ops() {
     // Rebuild with the right `has_play` list (the match is cheap to restart).
     let mut m = solo_with(rules, 5);
     wait_ops(&mut m, 1);
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     let skills = extra["skills"].as_array().expect("skills list");
     assert_eq!(skills.len(), 1, "passive skills are absent: {skills:?}");
     assert_eq!(skills[0]["id"], serde_json::json!(ids[0]));
@@ -259,7 +259,7 @@ fn skills_carry_the_engine_gate_reason_when_blocked() {
         6,
     );
     wait_ops(&mut m, 1);
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     let skills = extra["skills"].as_array().expect("skills list");
     assert_eq!(skills.len(), 1);
     assert_eq!(skills[0]["enabled"], serde_json::json!(false));
@@ -293,7 +293,7 @@ fn skills_are_disabled_outside_the_ops_window() {
         }
         m.pump_tick(0.25);
     }
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     let skills = extra["skills"].as_array().expect("skills list");
     assert_eq!(skills.len(), 1);
     assert_eq!(
@@ -308,7 +308,7 @@ fn skills_are_disabled_outside_the_ops_window() {
 }
 
 #[test]
-fn skills_press_through_why_not_act_matches_the_list() {
+fn skills_press_through_cant_act_matches_the_list() {
     // The list's `enabled` flag must agree with a real `act: "skill"`: when the
     // list says enabled the engine accepts, and when it says disabled the
     // engine refuses with the same reason.
@@ -328,7 +328,7 @@ fn skills_press_through_why_not_act_matches_the_list() {
         8,
     );
     wait_ops(&mut m, 1);
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     let skills = extra["skills"].as_array().expect("skills list");
     assert_eq!(skills.len(), 1);
     assert_eq!(skills[0]["enabled"], serde_json::json!(true));
@@ -343,7 +343,7 @@ fn skills_press_through_why_not_act_matches_the_list() {
     );
     // After the press the window may have moved on; a second press of a
     // now-refused skill must carry the list's reason.
-    let extra = m.view_extra(1);
+    let extra = m.view_extras(1);
     let skills = extra["skills"].as_array().expect("skills list");
     if let Some(s) = skills.first() {
         if s["enabled"] == serde_json::json!(false) {

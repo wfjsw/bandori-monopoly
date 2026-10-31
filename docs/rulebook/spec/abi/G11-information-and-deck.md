@@ -110,10 +110,7 @@ that. The card keys `Action::Drew("… value > 0", …)` at
 `infinite_possibility.rs:31`, so a two-card draw makes two decisions: two
 crystals, and at the cap a clear-then-refill-then-grow in one action.
 
-The sheet keys on the **draw action** (「进行抽卡动作后」), not on a card, and
-the C# `CardInfinitePossibility.Drew` was a batch point (`value` = count, the
-source comment at `infinite_possibility.rs:57-59` records the difference). The
-clause wants one decision per action.
+The clause wants one decision per action.
 
 ### 2.2 Shared root causes
 
@@ -142,13 +139,13 @@ Invariants (each gets a §9 test or Kani obligation):
   cards from the deck top into the frame, top-first. They are readable
   (`cards_in(Inspect)`) and takeable (`take_card(.., Inspect)`); a card is
   never in the frame and in a pile at once, so filing it anywhere is
-  take + `add_to_dest`.
+  take + `add_to_fate`.
 * **I2 No refill while open.** While any frame has `owner == p`, the pile
-  writes that today refill eagerly (`to_discard`, `add_to_dest(Graveyard)`,
+  writes that today refill eagerly (`to_discard`, `add_to_fate(Graveyard)`,
   `take_card(Deck)`, `discard_from_hand`) do **not** refill. `draw` still does:
   a draw during a look must find cards.
 * **I3 One release per card.** A held card leaves by `take_card(Inspect)`
-  followed by exactly one fate (`add_to_dest` / `place_card` / `to_discard`
+  followed by exactly one fate (`add_to_fate` / `place_card` / `to_discard`
   once it is out). `inspect_end` releases whatever is left in the frame, in order
   (top restored) or shuffled, per its `shuffle` flag; it returns the count.
   Exactly one release applies — `take_card` returning `false` for a card no
@@ -160,7 +157,7 @@ Invariants (each gets a §9 test or Kani obligation):
   and logged.
 * **I5 Order.** Frame order is deck order, top-first. `inspect_end(shuffle =
   false)` restores the original prefix exactly; `shuffle = true` returns the
-  leftovers shuffled (`Dest::DeckRandom` semantics) and is only for clauses
+  leftovers shuffled (`Fate::DeckRandom` semantics) and is only for clauses
   that say 「洗回卡组」.
 * **I6 Reveal is output.** `reveal_card` / `reveal_pile` publish card ids to
   every seat through an event and a state overlay and mutate no pile. A public
@@ -198,12 +195,12 @@ pub enum CardPile {
 }
 ```
 
-`CardPile::from_i32` gains `4`. `add_to_dest` does **not** take an
-`Inspect` dest (the many 4/5/6 codes are `Dest`'s); a body that wants a held
+`CardPile::from_i32` gains `4`. `add_to_fate` does **not** take an
+`Inspect` fate (the many 4/5/6 codes are `Fate`'s); a body that wants a held
 card moved takes it first. `take_card(Inspect)` returns `false` for a card not
 held; on success it removes the frame entry. `to_discard` keeps its current
 hand-then-push behaviour unchanged, so a held card is discarded as
-`take_card(Inspect)` + `add_to_dest(Graveyard)` — which also routes the
+`take_card(Inspect)` + `add_to_fate(Graveyard)` — which also routes the
 `discarded` raise and the refill guard through one place.
 
 ### 4.2 Imports (new; `ruleset_*`)
@@ -215,9 +212,6 @@ hand-then-push behaviour unchanged, so a held card is discarded as
 | `ruleset_reveal` | `(player, pile, msg_ptr, msg_len)` | — | none | publishes the pile's ids |
 | `ruleset_reveal_card` | `(player, card_ptr, card_len, msg_ptr, msg_len)` | — | none | publishes one id |
 
-`looker` is the acting seat (`by_card` on the raise), `owner` the deck's seat;
-all shipped uses pass `looker == owner`, but the C# `H.Present` path and
-possibility's own wording (it fires for an opponent's look too) keep the two.
 `n` is clamped to the deck size. `public` `0/1`.
 
 `msg` is the reason line (`log.*` key) shown with the reveal; it is display
@@ -302,7 +296,7 @@ pub fn inspect_begin(
 
 /// Close `player_id`'s own innermost frame (the caller as **looker**, whatever
 /// seat owns the deck). Leftovers go back to the deck **top in their original
-/// order**; `shuffle` sends them back shuffled instead (`Dest::DeckRandom`).
+/// order**; `shuffle` sends them back shuffled instead (`Fate::DeckRandom`).
 /// Returns the count returned.
 pub fn inspect_end(player_id: i32, shuffle: bool) -> i32;
 
@@ -316,15 +310,12 @@ pub fn reveal_card(player_id: i32, card: &str, reason: &Msg);
 `inspect_cards(player_id)` is not a wrapper: `ctx::cards_in(player_id,
 CardPile::Inspect)` is the list, and `ctx::distinct_cards_in` works on it.
 
-**Seat addressing.** The `Inspect` pile is addressed by **deck owner**, not by
-looker: `cards_in(owner, Inspect)` and `take_card(owner, card, Inspect)` reach
-the open frames on that seat's deck whatever seat is looking. Only
-`inspect_begin`'s `looker` and `inspect_end`'s argument name the acting seat.
-Frames on one deck stack (innermost last, `looker` recorded); `cards_in` lists
-the held cards innermost-frame-first, `take_card` removes from the innermost
-frame that holds the card, and `inspect_end` pops the caller's own innermost
-frame. That is what lets a third-party look (the kept C# `Present` path) pick
-out of another seat's deck without confusing the two seats.
+**Seat addressing.** The `Inspect` pile is addressed by **deck owner**, not by looker:
+`cards_in(owner, Inspect)` and `take_card(owner, card, Inspect)` reach the open frames on that
+seat's deck whatever seat is looking. Only `inspect_begin`'s `looker` and `inspect_end`'s argument
+name the acting seat. Frames on one deck stack (innermost last, `looker` recorded); `cards_in` lists
+the held cards innermost-frame-first, `take_card` removes from the innermost frame that holds the
+card, and `inspect_end` pops the caller's own innermost frame.
 
 ---
 
@@ -418,7 +409,7 @@ fn refill_after_write(&mut self, i: usize) -> bool {
 }
 ```
 
-Call sites: `World::to_discard` (`ops.rs:1055`), `HostCtx::add_to_dest`'s
+Call sites: `World::to_discard` (`ops.rs:1055`), `HostCtx::add_to_fate`'s
 Graveyard branch (`wasm_rules.rs:1052-1054`), `HostCtx::take_card`'s Deck branch
 (`wasm_rules.rs:1105-1110`), `HostCtx::discard_from_hand`
 (`wasm_rules.rs:2061-2063`). `play::refill_draw_pile` and
@@ -426,8 +417,8 @@ Graveyard branch (`wasm_rules.rs:1052-1054`), `HostCtx::take_card`'s Deck branch
 look still refills and still raises `reshuffled`.
 
 `World::to_discard` is unchanged: a held card is filed with `take_card(Inspect)`
-+ `add_to_dest(Graveyard)`, so nothing can be double-filed and the `discarded`
-raise keeps its single producer. (The Graveyard branch of `add_to_dest` is one
++ `add_to_fate(Graveyard)`, so nothing can be double-filed and the `discarded`
+raise keeps its single producer. (The Graveyard branch of `add_to_fate` is one
 of the guarded refill sites.)
 
 ### 5.4 `inspect_end`
@@ -519,10 +510,10 @@ ctx::inspect_begin(player_id, player_id, 2, false)?;
 let top: Vec<NameId> = ctx::cards_in(player_id, CardPile::Inspect);
 // … the same asks over `top` …
 ctx::take_card(player_id, id.as_str(), CardPile::Inspect);
-ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Graveyard);   // no refill
+ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::Graveyard);   // no refill
 // keepers:
 ctx::take_card(player_id, id.as_str(), CardPile::Inspect);
-ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
+ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::DeckTop);
 ctx::inspect_end(player_id, false);             // nothing left normally
 ```
 
@@ -539,7 +530,7 @@ ctx::inspect_begin(player_id, player_id, n, true)?;   // public whole-deck look
 // … rival picks one from cards_in(Hand) (unchanged) …
 // the two picks read cards_in(Inspect) and release with
 ctx::take_card(player_id, id, CardPile::Inspect);
-ctx::add_to_dest(player_id, id, ctx::Dest::Hand);
+ctx::add_to_fate(player_id, id, ctx::Fate::Hand);
 ctx::inspect_end(player_id, false);                   // leftovers back in order
 // … then shuffle_into_deck as today
 ```
@@ -578,13 +569,12 @@ fn seen(player_id: i32) -> card_sdk::Asked {
 }
 ```
 
-No `set_dest` (not a hand play). The [持续]（2） press and `can_swap` stay.
+No `set_fate` (not a hand play). The [持续]（2） press and `can_swap` stay.
 
 **3. `infinite_possibility.rs` clause (1)** (B core; card half A)
 
-Entry `Action::Drew` → `Action::DrawAfter`; the guard `actor == owner &&
-card.placed && value > 0` stays; the body is unchanged (it now runs once per
-action). The header comment about C#'s batch shape is resolved.
+Entry `Action::Drew` → `Action::DrawAfter`; the guard `actor == owner && card.placed && value > 0`
+stays; the body is unchanged (it now runs once per action).
 
 **4. Same-family lookers (not group items, same migration).**
 `maya.rs:60-97` and `ako.rs:52-144` change their `cards_in(Deck)`
@@ -592,7 +582,7 @@ snapshot plus post-prompt `take_card(Deck)` into `inspect_begin` /
 `take_card(Inspect)`; maya's tail becomes `inspect_end(player, true)`
 (「剩余观看的牌洗回卡组」), ako's per-card release either places
 (`take_card(Inspect)` + `place_card`) or discards (`take_card(Inspect)` +
-`add_to_dest(Graveyard)`), then `inspect_end(false)` for anything left. Both are private looks and reveal
+`add_to_fate(Graveyard)`), then `inspect_end(false)` for anything left. Both are private looks and reveal
 nothing.
 
 ---
@@ -710,7 +700,7 @@ parses as an Action entry).
 
 ## 10. Alternatives
 
-1. **A `defer_refill` boolean on `take_card` / `to_discard` / `add_to_dest`.**
+1. **A `defer_refill` boolean on `take_card` / `to_discard` / `add_to_fate`.**
    Smallest possible change, but every looker must thread the flag through
    every call, a missed call silently restores the bug, and the looked cards
    still have no identity to show. Rejected; the frame is the state the flag
@@ -730,15 +720,8 @@ parses as an Action entry).
    `index == 0`.** No new kind, but the point still fires *inside* the action,
    the latch is per card (every future card repeats it), and the book says
    「后」. Rejected.
-5. **Make `drew` the batch point (C# shape) and move the per-card consumers to
-   `drawn`.** Closest to C#, but it silently changes 梦在前方, Here the world,
-   若宫伊芙, the CRYCHIC band and 如果能一直持续下去… in one batch, and `drawn`
-   is the drawn card's own hook, not a field point. Keeping `drew` and adding
-   `drawAfter` is additive. Rejected.
-6. **Put the held cards in `Hidden` instead of a frame stack.** Fine for
-   `looker == owner`, but a look of another seat's deck (the [特] wording and
-   the C# `Present` path allow it) needs the owner recorded, and nested looks
-   need a stack. The frame carries both. Chosen.
+5. Keeping `drew` and adding `drawAfter` is additive. Rejected.
+6. The frame carries both. Chosen.
 
 ---
 
@@ -747,24 +730,19 @@ parses as an Action entry).
 1. **Is a private peek an 「观看卡组」 for 可能性为∞?** The [特] says only
    「观看卡组」. This design fires on every `inspect_begin`, private or public,
    by owner or opponent. Confirm — otherwise the hook must test `frame.public`.
-2. **Does the [特] fire when the owner looks, not only a third party?**
-   (Same wording; design: yes.) The C# path is a `Present`/`Fx` hook with no
-   actor restriction, but this is a reading.
-3. **How literal is 「优先于其他后续效果」?** The design places the card
+2. 3. **How literal is 「优先于其他后续效果」?** The design places the card
    before the look body's next statement and therefore before any "choose N
    from the deck" that follows in the same body. If the ruling is only "before
    the *next effect of the look*", the observable difference is a later pick
    offering that card. Confirm.
 4. **Does a flipped backstage card become a `discarded` trigger immediately
    (at commit) or after the 1000 gain?** The design drops it with
-   `take_card(Inspect)` + `add_to_dest(Graveyard)`, so it never passes through
+   `take_card(Inspect)` + `add_to_fate(Graveyard)`, so it never passes through
    the hand and cannot consume a same-named hand copy; the gain is logged per
    card in between. Cards listening to `Discarded` (RAS 游击演出, MyGO (3)) see
    it in arrival order. Confirm this is intended for 「翻入弃牌堆」.
-5. **Is the opening deal a 「抽卡动作」 for `drawAfter`?** Design: no (the
-   opening draws with `hooks = false`, as today, and C# raises nothing there).
-   If it should, the possibility's `card.placed` guard cannot hold anyway
-   (it is placed by its [特], after the deal).
+5. If it should, the possibility's `card.placed` guard cannot hold anyway (it is placed by its [特],
+  after the deal).
 6. **Does a `drewBefore` replacement belong to the same action's batch?**
    Design: yes — the replacement **is** the draw (`abi.rs:2064-2071`). A
    replacement from a *different* player's effect (a redirect) still belongs to

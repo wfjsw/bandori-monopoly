@@ -7,11 +7,11 @@
 //!
 //! | scope | CEL spelling | binding |
 //! |---|---|---|
-//! | [`Scope::Window`] | `actor`, `move.main`, … | a flat window variable |
+//! | [`Scope::Window`] | `actor`, `move.is_main_move`, … | a flat window variable |
 //! | [`Scope::Candidate`] | `owner`, `card.counter('name')`, … | a flat candidate variable |
 //! | [`Scope::Func`] | `slot(…)`, `is_circle(…)`, … | a CEL function over the view |
 //!
-//! Window / candidate names with a dotted spelling (`move.main`) rewrite to a
+//! Window / candidate names with a dotted spelling (`move.is_main_move`) rewrite to a
 //! flat `move_main` identifier (see [`crate::schema`]); the table carries both.
 //! Extra CEL spellings that flatten to the same identifier live in
 //! [`Name::aliases`] (`chain.count` is an alias of `effect.count`).
@@ -33,7 +33,7 @@ pub enum Scope {
 /// CEL type of a name. Scalars are ints / bools / one string (`kind`);
 /// `OptInt` binds `null` when the value is absent (`-1`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Ty {
+pub enum Type {
     Int,
     Bool,
     /// `null` when the accessor returns `-1` (e.g. `move.roll` with no face).
@@ -52,7 +52,7 @@ pub type StrGetter = fn(&dyn CondView) -> std::borrow::Cow<'_, str>;
 /// How a function name is served. Each variant names the CEL call shape and
 /// the hidden context variable the (eager) evaluator bakes from the view.
 #[derive(Clone, Copy, Debug)]
-pub enum Fx {
+pub enum FuncKind {
     /// `f(seat: int) -> int` over a per-seat map baked as `_<var>`.
     SeatInt {
         var: &'static str,
@@ -124,7 +124,7 @@ pub enum Fx {
         fill: fn(&dyn CondView) -> Vec<(i64, i64, String)>,
     },
     /// `f(seat: int, key: string) -> int` over a baked `(seat, key) -> v` map
-    /// (`state` is the only user). Missing = 0. Mirrors [`Fx::TileAttr`].
+    /// (`state` is the only user). Missing = 0. Mirrors [`FuncKind::TileAttr`].
     SeatStrInt {
         var: &'static str,
         fill: fn(&dyn CondView) -> Vec<(i64, String, i64)>,
@@ -133,7 +133,7 @@ pub enum Fx {
 
 /// One vocabulary name.
 pub struct Name {
-    /// CEL spelling (`"actor"`, `"move.main"`, `"is_circle"`).
+    /// CEL spelling (`"actor"`, `"move.is_main_move"`, `"is_circle"`).
     pub cel: &'static str,
     /// Other CEL spellings that flatten to the same `flat` identifier
     /// (`chain.count` for `effect.count`, `trigger.kind` for `kind`).
@@ -142,14 +142,14 @@ pub struct Name {
     /// `"move_main"`, `"is_circle"`). Same as `cel` for bare names.
     pub flat: &'static str,
     pub scope: Scope,
-    pub ty: Ty,
+    pub ty: Type,
     /// Scalar fetch (`Scope::Window` / `Scope::Candidate`); zero for funcs.
-    /// Unused when `ty == Ty::Str` (see [`Self::get_str`]).
+    /// Unused when `ty == Type::Str` (see [`Self::get_str`]).
     pub get: Getter,
-    /// String-scalar fetch; only `kind` is `Ty::Str` today.
+    /// String-scalar fetch; only `kind` is `Type::Str` today.
     pub get_str: StrGetter,
-    /// Function shape (`Scope::Func`); `Fx::Neighbor` unused otherwise.
-    pub fx: Fx,
+    /// Function shape (`Scope::Func`); `FuncKind::Neighbor` unused otherwise.
+    pub func: FuncKind,
     /// How this name lowers to the IR. Kernel rows are [`LowerAs::Direct`].
     pub lower_as: crate::ext::LowerAs,
     /// One-line doc (kept in `docs/GUARDS.md`'s vocabulary table).
@@ -158,7 +158,7 @@ pub struct Name {
 
 const NO_GET: Getter = |_| 0;
 const NO_GET_STR: StrGetter = |_| std::borrow::Cow::Borrowed("");
-const NO_FX: Fx = Fx::Neighbor;
+const NO_FUNC: FuncKind = FuncKind::Neighbor;
 
 /// The vocabulary. **The** definition of every condition name.
 pub const VOCAB: &[Name] = &[
@@ -168,10 +168,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &["trigger.kind"],
         flat: "kind",
         scope: Scope::Window,
-        ty: Ty::Str,
+        ty: Type::Str,
         get: NO_GET,
         get_str: |v| v.kind(),
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "trigger kind wire spelling (`trigger.kind` is an alias)",
     },
@@ -180,10 +180,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "actor",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.actor(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "trigger actor seat, -1 = none",
     },
@@ -192,10 +192,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "target",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.target(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "trigger target seat, -1 = none",
     },
@@ -204,10 +204,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "value",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.value(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the amount involved",
     },
@@ -216,10 +216,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "step",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.step(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "turn stage (0 = no turn)",
     },
@@ -228,10 +228,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "by",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.by(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "`by_card` owner seat, -1 = none",
     },
@@ -240,10 +240,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "pay_is_rent",
         scope: Scope::Window,
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: |v| v.pay_is_rent() as i64,
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "is this pay rent",
     },
@@ -252,10 +252,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "roll_source",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.roll_source(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "where a roll came from, 0 = none (roll_source::NONE)",
     },
@@ -264,10 +264,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "abnormal",
         scope: Scope::Window,
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: |v| v.abnormal() as i64,
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the AbnormalGate window",
     },
@@ -276,10 +276,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "turn_player",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.turn_player(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "whose turn it is",
     },
@@ -288,10 +288,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "turn_key",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.turn_key(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "once-per-turn key; compared against `slot(…)`",
     },
@@ -300,22 +300,22 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "plan_fixed_roll",
         scope: Scope::Window,
-        ty: Ty::OptInt,
+        ty: Type::OptInt,
         get: |v| v.plan_fixed_roll(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
-        doc: "this turn's fixed main-move roll; `null` when unset",
+        doc: "this turn's fixed is_main_move-move roll; `null` when unset",
     },
     Name {
         cel: "trigger_card",
         aliases: &[],
         flat: "trigger_card",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.trigger_card(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the trigger's card id hash; comparable to `card.id`",
     },
@@ -324,10 +324,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "counter_name",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.counter_name(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling",
     },
@@ -336,10 +336,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_id",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.tile_id(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the trigger's tile, -1 = none",
     },
@@ -348,10 +348,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_owner",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.tile_owner(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "owning seat, -1 = unowned",
     },
@@ -360,10 +360,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_houses",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.tile_houses(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "house count",
     },
@@ -372,10 +372,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_mortgaged",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.tile_mortgaged(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "1 = mortgaged",
     },
@@ -384,10 +384,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_price",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.tile_price(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "price",
     },
@@ -396,10 +396,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "move_roll",
         scope: Scope::Window,
-        ty: Ty::OptInt,
+        ty: Type::OptInt,
         get: |v| v.move_roll(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "face shown; `null` when none",
     },
@@ -408,10 +408,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "move_kind",
         scope: Scope::Window,
-        ty: Ty::OptInt,
+        ty: Type::OptInt,
         get: |v| v.move_kind(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "move kind; `null` when no move",
     },
@@ -420,34 +420,34 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "move_remaining",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.move_remaining(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "steps left",
     },
     Name {
-        cel: "move.main",
+        cel: "move.is_main_move",
         aliases: &[],
         flat: "move_main",
         scope: Scope::Window,
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: |v| v.move_main() as i64,
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
-        doc: "was this the turn's main move",
+        doc: "was this the turn's is_main_move move",
     },
     Name {
         cel: "move.by_skill",
         aliases: &[],
         flat: "move_by_skill",
         scope: Scope::Window,
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: |v| v.move_by_skill() as i64,
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the move was shaped or started by a skill",
     },
@@ -456,10 +456,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "move_dir",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.move_dir(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "1 forward, -1 backward; 1 when no move",
     },
@@ -468,10 +468,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &["chain.count"],
         flat: "effect_count",
         scope: Scope::Window,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.chain_count(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "effect-chain length (`chain.count` is an alias)",
     },
@@ -481,10 +481,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the candidate's owner seat",
     },
@@ -493,10 +493,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_id",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "same as `owner`",
     },
@@ -505,10 +505,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_money",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_money(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's money",
     },
@@ -517,10 +517,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_hand",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_hand(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's hand size",
     },
@@ -529,10 +529,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_pos",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_pos(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's board position",
     },
@@ -541,10 +541,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_out",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_out(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "1 = the owner is out of the game",
     },
@@ -553,10 +553,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_stay",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_stay(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's stay count",
     },
@@ -565,10 +565,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_stun",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_stun(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's stun count",
     },
@@ -577,10 +577,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_exile",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_exile(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's exile flag",
     },
@@ -589,10 +589,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owner_tiles",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.owner_tiles(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the owner's owned-tile count",
     },
@@ -601,10 +601,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "card_id",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.card_id(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "candidate card id hash",
     },
@@ -613,10 +613,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "card_placed",
         scope: Scope::Candidate,
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: |v| v.card_placed() as i64,
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "is the running instance in play",
     },
@@ -625,10 +625,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "card_tile",
         scope: Scope::Candidate,
-        ty: Ty::Int,
+        ty: Type::Int,
         get: |v| v.card_tile(),
         get_str: NO_GET_STR,
-        fx: NO_FX,
+        func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "the instance's tile; -1 = with its owner, -2 = not placed",
     },
@@ -638,10 +638,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "slot",
         scope: Scope::Func { arity: 1, cand: true },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::StrInt {
+        func: FuncKind::StrInt {
             var: "_slots",
             missing: 0,
             fill: |v| v.slot_table(),
@@ -654,13 +654,13 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tok",
         scope: Scope::Func { arity: 1, cand: true },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::StrInt {
+        func: FuncKind::StrInt {
             var: "_toks",
             missing: 0,
-            fill: |v| v.tok_named_table(),
+            fill: |v| v.held_named_table(),
         },
         lower_as: crate::ext::LowerAs::Direct,
         doc: "tok('name') -> the owner's token counter; missing = 0",
@@ -670,10 +670,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "move_tag",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::StrInt {
+        func: FuncKind::StrInt {
             var: "_move_tags",
             missing: 0,
             fill: |v| v.move_tag_table(),
@@ -686,10 +686,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &["card.counter"],
         flat: "card_counter",
         scope: Scope::Func { arity: 1, cand: true },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::StrInt {
+        func: FuncKind::StrInt {
             var: "_card_counters",
             missing: 0,
             fill: |v| v.card_counter_table(),
@@ -702,10 +702,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "counter_is",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::IntHas {
+        func: FuncKind::IntHas {
             var: "_counter_name",
             fill: |v| {
                 let h = v.counter_name();
@@ -724,10 +724,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "card_is",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::IntHas {
+        func: FuncKind::IntHas {
             var: "_trigger_card",
             fill: |v| {
                 let h = v.trigger_card();
@@ -746,10 +746,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_named",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::StrInt {
+        func: FuncKind::StrInt {
             var: "_tile_ids",
             missing: -1,
             fill: |v| v.tile_id_table(),
@@ -763,10 +763,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_is",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::TileIs {
+        func: FuncKind::TileIs {
             var: "_tile_is",
             fill: |v| {
                 // Unique kinds the board stamps (ruleset data, no engine list).
@@ -791,10 +791,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_attr",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::TileAttr {
+        func: FuncKind::TileAttr {
             var: "_tile_attr",
             fill: |v| {
                 let attrs = ["group", "tier", "price", "house", "area", "rent", "index"];
@@ -816,10 +816,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tile_in",
         scope: Scope::Func { arity: 3, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::TileIn {
+        func: FuncKind::TileIn {
             var: "_tile_in",
             fill: |v| v.tile_in_rows(),
         },
@@ -831,10 +831,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "money",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_money",
             field: |v, s| v.money(s),
         },
@@ -846,10 +846,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "hand",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_hand",
             field: |v, s| v.hand(s),
         },
@@ -861,10 +861,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "pos",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_pos",
             field: |v, s| v.pos(s),
         },
@@ -876,10 +876,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "tiles",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_tiles",
             field: |v, s| v.tiles(s),
         },
@@ -891,10 +891,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "cand_has",
         scope: Scope::Func { arity: 2, cand: true },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::PairHas {
+        func: FuncKind::PairHas {
             var: "_cand_pairs",
             fill: fill_cand_pairs,
         },
@@ -906,10 +906,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "neighbor",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::Neighbor,
+        func: FuncKind::Neighbor,
         lower_as: crate::ext::LowerAs::Direct,
         doc: "neighbor(p, delta) -> seat id, wrapping",
     },
@@ -918,10 +918,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "chain_has",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::IntHas {
+        func: FuncKind::IntHas {
             var: "_chain_kinds",
             // Spellings -> `id_of` hashes (the IR `SetId::ChainKinds` keys).
             fill: |v| v.chain_kinds().iter().map(|s| crate::id_of(s)).collect(),
@@ -934,10 +934,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "chain_hits",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::IntHas {
+        func: FuncKind::IntHas {
             var: "_hit_seats",
             fill: |v| v.chain_hits(),
         },
@@ -950,10 +950,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "gains_this_turn",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_gains",
             field: |v, s| v.gains_this_turn(s),
         },
@@ -965,10 +965,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "targeted_count",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_targeted",
             field: |v, s| v.targeted_count(s),
         },
@@ -981,10 +981,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "state",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatStrInt {
+        func: FuncKind::SeatStrInt {
             var: "_state",
             fill: |v| v.state_table(),
         },
@@ -997,10 +997,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "repeated_digits",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
+        ty: Type::Bool,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::IntPred {
+        func: FuncKind::IntPred {
             calc: |n| {
                 let mut x = n.unsigned_abs();
                 let mut seen: u16 = 0;
@@ -1027,10 +1027,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "dist",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::IntIntConst {
+        func: FuncKind::IntIntConst {
             var: "_tile_count",
             calc: |a, b, n| {
                 if n <= 0 {
@@ -1048,10 +1048,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "players_on",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::BinInt {
+        func: FuncKind::BinInt {
             var: "_on_tile",
             fill: |v| {
                 let mut out = Vec::new();
@@ -1071,10 +1071,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "next_dist",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::BinInt {
+        func: FuncKind::BinInt {
             var: "_next_dist",
             fill: |v| {
                 let mut out = Vec::new();
@@ -1094,10 +1094,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "others_within",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::BinInt {
+        func: FuncKind::BinInt {
             var: "_others_within",
             fill: |v| {
                 let mut out = Vec::new();
@@ -1117,10 +1117,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "owned_within",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::BinInt {
+        func: FuncKind::BinInt {
             var: "_owned_within",
             fill: |v| {
                 let mut out = Vec::new();
@@ -1140,10 +1140,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "on_path",
         scope: Scope::Func { arity: 2, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::BinInt {
+        func: FuncKind::BinInt {
             var: "_on_path",
             fill: |v| {
                 let mut out = Vec::new();
@@ -1163,10 +1163,10 @@ pub const VOCAB: &[Name] = &[
         aliases: &[],
         flat: "between",
         scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
+        ty: Type::Int,
         get: NO_GET,
         get_str: NO_GET_STR,
-        fx: Fx::SeatInt {
+        func: FuncKind::SeatInt {
             var: "_between",
             field: |v, s| v.between(s),
         },
@@ -1177,9 +1177,7 @@ pub const VOCAB: &[Name] = &[
 
 /// Kernel ++ installed-extension names.
 fn all_names() -> impl Iterator<Item = &'static Name> {
-    VOCAB
-        .iter()
-        .chain(crate::ext::ext().names.iter())
+    VOCAB.iter().chain(crate::ext::ext().names.iter())
 }
 
 /// Eager `cand_has` table: every `(id_of(key), member)` pair the host
@@ -1273,7 +1271,7 @@ pub fn struct_roots() -> Vec<(&'static str, Vec<&'static str>)> {
 
 /// The value shape a scalar binding produces.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Val {
+pub enum Value {
     Int(i64),
     Bool(bool),
     /// A CEL string (kind spelling). The IR bakes this to `id_of`.
@@ -1281,7 +1279,7 @@ pub enum Val {
     Null,
 }
 
-/// The eager function-table shape a [`Fx`] bakes from the view. The evaluator
+/// The eager function-table shape a [`FuncKind`] bakes from the view. The evaluator
 /// turns this into the hidden CEL variable (`_<var>`) the closure reads.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Table {
@@ -1305,28 +1303,28 @@ pub enum Table {
     TripleSet(Vec<(i64, i64, String)>),
 }
 
-fn opt(v: i64) -> Val {
+fn opt(v: i64) -> Value {
     if v < 0 {
-        Val::Null
+        Value::Null
     } else {
-        Val::Int(v)
+        Value::Int(v)
     }
 }
 
-fn val_of(n: &Name, v: &dyn CondView) -> Val {
+fn val_of(n: &Name, v: &dyn CondView) -> Value {
     match n.ty {
-        Ty::Int => Val::Int((n.get)(v)),
-        Ty::Bool => Val::Bool((n.get)(v) != 0),
-        Ty::OptInt => opt((n.get)(v)),
-        Ty::Str => Val::Str((n.get_str)(v).to_string()),
+        Type::Int => Value::Int((n.get)(v)),
+        Type::Bool => Value::Bool((n.get)(v) != 0),
+        Type::OptInt => opt((n.get)(v)),
+        Type::Str => Value::Str((n.get_str)(v).to_string()),
     }
 }
 
-/// Bind one name against a view into a `name -> Val` sink. Used by the
+/// Bind one name against a view into a `name -> Value` sink. Used by the
 /// evaluator to fill the CEL context from a [`CondView`] (eagerly for the
 /// window half, and for only the names `cond.used_vars()` reads on the
 /// candidate half).
-pub fn bind_one(emit: &mut dyn FnMut(&str, Val), flat: &str, view: &dyn CondView) {
+pub fn bind_one(emit: &mut dyn FnMut(&str, Value), flat: &str, view: &dyn CondView) {
     let Some(n) = by_flat(flat) else {
         return;
     };
@@ -1337,13 +1335,13 @@ pub fn bind_one(emit: &mut dyn FnMut(&str, Val), flat: &str, view: &dyn CondView
 }
 
 /// Fetch a scalar's value straight from the view (same mapping as [`bind_one`]).
-pub fn fetch(flat: &str, view: &dyn CondView) -> Option<Val> {
+pub fn fetch(flat: &str, view: &dyn CondView) -> Option<Value> {
     let n = by_flat(flat)?;
     fetch_name(n, view)
 }
 
 /// Fetch a known [`Name`]'s scalar value (no table lookup).
-pub fn fetch_name(n: &Name, view: &dyn CondView) -> Option<Val> {
+pub fn fetch_name(n: &Name, view: &dyn CondView) -> Option<Value> {
     if matches!(n.scope, Scope::Func { .. }) {
         return None;
     }
@@ -1351,32 +1349,32 @@ pub fn fetch_name(n: &Name, view: &dyn CondView) -> Option<Val> {
 }
 
 /// Build the hidden table a function's eager closure reads, from the view.
-/// The hidden variable name is the one in [`Fx`] (`_slots`, `_money`, …).
+/// The hidden variable name is the one in [`FuncKind`] (`_slots`, `_money`, …).
 pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> {
-    match n.fx {
-        Fx::SeatInt { var, field } => {
+    match n.func {
+        FuncKind::SeatInt { var, field } => {
             let rows = (0..view.seat_count())
                 .map(|s| (s, field(view, s)))
                 .collect();
             Some((var, Table::IntMap(rows)))
         }
-        Fx::SeatIntIs { var, field } => {
+        FuncKind::SeatIntIs { var, field } => {
             let rows = (0..view.seat_count())
                 .map(|s| (s, field(view, s)))
                 .collect();
             Some((var, Table::IntMap(rows)))
         }
-        Fx::StrInt { var, fill, .. } => Some((var, Table::StrMap(fill(view)))),
-        Fx::IntInt { var, fill } => Some((var, Table::IntMap(fill(view)))),
-        Fx::IntHas { var, fill } => Some((var, Table::IntList(fill(view)))),
-        Fx::PairHas { var, fill } => Some((var, Table::PairList(fill(view)))),
-        Fx::Neighbor => Some(("_seats", Table::Seats(view.seat_count()))),
-        Fx::IntIntConst { var, .. } => Some((var, Table::Seats(view.tile_count()))),
-        Fx::BinInt { var, fill } => Some((var, Table::BinMap(fill(view)))),
-        Fx::IntPred { .. } => None,
-        Fx::TileIs { var, fill } => Some((var, Table::StrIntList(fill(view)))),
-        Fx::TileAttr { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
-        Fx::TileIn { var, fill } => Some((var, Table::TripleSet(fill(view)))),
-        Fx::SeatStrInt { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
+        FuncKind::StrInt { var, fill, .. } => Some((var, Table::StrMap(fill(view)))),
+        FuncKind::IntInt { var, fill } => Some((var, Table::IntMap(fill(view)))),
+        FuncKind::IntHas { var, fill } => Some((var, Table::IntList(fill(view)))),
+        FuncKind::PairHas { var, fill } => Some((var, Table::PairList(fill(view)))),
+        FuncKind::Neighbor => Some(("_seats", Table::Seats(view.seat_count()))),
+        FuncKind::IntIntConst { var, .. } => Some((var, Table::Seats(view.tile_count()))),
+        FuncKind::BinInt { var, fill } => Some((var, Table::BinMap(fill(view)))),
+        FuncKind::IntPred { .. } => None,
+        FuncKind::TileIs { var, fill } => Some((var, Table::StrIntList(fill(view)))),
+        FuncKind::TileAttr { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
+        FuncKind::TileIn { var, fill } => Some((var, Table::TripleSet(fill(view)))),
+        FuncKind::SeatStrInt { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
     }
 }

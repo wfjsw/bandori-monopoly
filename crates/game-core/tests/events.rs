@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use game_core::data::event_rule_id;
-use game_core::engine::{CardRules, Cx, Dest, Flow, Match, StubRules};
+use game_core::engine::{CardRules, Fate, Flow, Match, PlayCtx, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BOARD_OWNER;
@@ -28,10 +28,10 @@ impl CardRules for OneEvent {
     fn has_rule(&self, id: &str) -> bool {
         id == "event:EVT1"
     }
-    fn play(&self, _cx: &mut Cx, _player_id: usize, _card: &str) -> Flow<Dest> {
-        Ok(Dest::Graveyard)
+    fn play(&self, _cx: &mut PlayCtx, _player_id: usize, _card: &str) -> Flow<Fate> {
+        Ok(Fate::Graveyard)
     }
-    fn event(&self, _cx: &mut Cx, _player_id: usize, id: &str) -> Flow<bool> {
+    fn event(&self, _cx: &mut PlayCtx, _player_id: usize, id: &str) -> Flow<bool> {
         Ok(id == "EVT1")
     }
 }
@@ -104,7 +104,11 @@ fn active_event_mirrors_the_turns_left_prop() {
     let d = data();
     m.quick_start();
     let uid = m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
-    assert_eq!(m.state().event_active[0].turns_left, 0, "absent = no marker");
+    assert_eq!(
+        m.state().event_active[0].turns_left,
+        0,
+        "absent = no marker"
+    );
     m.world_mut()
         .st
         .board_field

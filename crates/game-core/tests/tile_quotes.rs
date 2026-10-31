@@ -274,15 +274,15 @@ fn a_buy_price_modifier_is_reflected() {
     impl CardRules for DiscountRules {
         fn play(
             &self,
-            cx: &mut game_core::engine::Cx,
+            cx: &mut game_core::engine::PlayCtx,
             player_id: usize,
             card: &str,
-        ) -> game_core::engine::Flow<game_core::engine::Dest> {
+        ) -> game_core::engine::Flow<game_core::engine::Fate> {
             StubRules.play(cx, player_id, card)
         }
         fn event(
             &self,
-            cx: &mut game_core::engine::Cx,
+            cx: &mut game_core::engine::PlayCtx,
             player_id: usize,
             id: &str,
         ) -> game_core::engine::Flow<bool> {

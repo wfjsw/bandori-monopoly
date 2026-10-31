@@ -176,8 +176,6 @@ Checked: `card_sdk::abi::ABI_VERSION = 39`,
 
 ## Conventions
 
-* The rulebook / the event's `CardMeta` text decides *what*; the C# port is not
-  a spec.
 * No raw money pokes, no side-channel flags, no prose-keyed behaviour.
 * 「…时」 clauses go in event handlers on that state's change, not inline
   checks at each spend site.
@@ -194,7 +192,7 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
   「不消耗」 -- two of the behaviour tests are written against `drain()`
   auto-paying. Flipping the default needs those expectations updated.
 * **No auction primitive** (弦卷集团地产开发): the body runs a sealed high-bid
-  over `ask_pick` (narrowed candidates), not the engine's raise-and-bend
+  over `ask_choice` (narrowed candidates), not the engine's raise-and-bend
   auction. A tie goes to the earliest seat.
 * **No global hand-effect veto** (A！A！O！'s 「不能使用卡牌的[手]效果」).
 * **No skin change** (EX任务挑战) -- cosmetic only, so the body logs eligibility.

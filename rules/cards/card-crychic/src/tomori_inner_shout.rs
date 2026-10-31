@@ -1,4 +1,3 @@
-//! `CRYCHIC:（灯）内心的呐喊` -- C# `CardTomoriInnerShout` (MatchHost.cs:3217-3294):
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（灯）内心的呐喊`）:
 //! > （灯）内心的呐喊：
@@ -27,8 +26,8 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // `fire::spend`, which opens its substitution window even on an empty
         // pool, so no pool gate here (「消耗1火罐」 may be covered by a crystal).
         // TODO(规则书)（使用一次高松灯（MyGO!!!!!）的（2）技能）: (2) 在其他玩家的
-        //   任意[移动终点]都可发动 -- the pre narrows it to the main move.
-        On::Action(Action::SettleBefore("actor != owner && move.main && card.placed && dist(pos(actor), pos(owner)) <= 5 && dist(pos(owner), card.tile) <= 5", Some(not_latched), pull)),
+        //   任意[移动终点]都可发动 -- the condition narrows it to the main move.
+        On::Action(Action::SettleBefore("actor != owner && move.is_main_move && card.placed && dist(pos(actor), pos(owner)) <= 5 && dist(pos(owner), card.tile) <= 5", Some(not_latched), pull)),
         // Once-per-move latch drop (the redirect re-raises `settleBefore` at the
         // destination; see `pull`).
         On::Action(Action::MoveResolved("", None, clear_latch)),
@@ -54,20 +53,13 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"高松灯（CRYCHIC）"#)]));
 
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得
-    // 两个X差值*120的资金。」 -- C# finds this player's placed `CardWantHuman` and
-    // re-declares its `Mem["x"]`. The player-scoped slot `want_human_x` is the
-    // stand-in for that card's X, but it outlives the instance (nothing clears
-    // it when the card leaves), so the live-instance check below is what stands
-    // in for "the card is placed"; 0 means "no X was ever written down".
-    // TODO(规则书)（你可重置一次“想要成为人类”所声明的X）: X belongs to the placed
-    //   card instance (C# `Mem`) -- we keep it in a player slot, so it survives
-    //   the card and two copies share it.
+    // TODO(规则书)（你可重置一次“想要成为人类”所声明的X）: The player-scoped slot `want_human_x` is the
+    // stand-in for that card's X, but it outlives the instance (nothing clears it
+    // when the card leaves), so the live-instance check below is what stands in for
+    // "the card is placed"; 0 means "no X was ever written down".
     let old = ctx::slot(player_id, SLOT_X);
     let mut reset = old > 0 && want_human_placed(player_id);
     if reset {
-        // 规则书（1）: 「你可重置一次」 -- optional: ask first, then the new X
-        // (`H.AskNumber(i, ..., 1, 20, ...)`).
         reset = ctx::ask_yes(
             player_id,
             &Msg::new(key!("tomori_inner_shout_title")),
@@ -75,7 +67,6 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         )?;
     }
     if reset {
-        // 规则书（1）: 「重置一次“想要成为人类”所声明的X」 -- C# `H.AskNumber(i, ..., 1, 20, ...)`.
         let x = ctx::ask_number(
             player_id,
             &Msg::new(key!("tomori_inner_shout_title")),
@@ -94,9 +85,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", player_id)
                 .i("n", x as i64),
         );
-        // 规则书（1）: 「并获得两个X差值*120的资金」 -- C# `H.GainR(i, |new-old| * 120, ...)`.
-        // TODO(规则书)（获得两个X差值*120的资金）: 「两个」读作 ×2 (OPEN-两个X差值) --
-        //   现按 |ΔX| * 120（1×）支付。
+        // TODO(规则书)（获得两个X差值*120的资金）: 「两个」读作 ×2 (OPEN-两个X差值) -- 现按 |ΔX| * 120（1×）支付。
         let diff = (x - old).abs();
         if diff > 0 {
             ctx::gain(
@@ -106,11 +95,8 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
             )?;
         }
     }
-    // 规则书（2）: 「此卡不会被你乐队技能的（2）效果移除」 -- see the band
-    // skill's (2) sweep, which spares this card.
-    // 规则书（3）: 「若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上」
-    // -- C# `H.InBand(i, "MyGO!!!!!")` then `H.PlaceFromPlay(c, i, tile)` at the
-    // first owned tile (`H.V(i, "firstTile") - 1` falling back to `list.Min()`).
+    // 规则书（2）: 「此卡不会被你乐队技能的（2）效果移除」 -- see the band skill's (2) sweep, which spares
+    // this card.
     //
     // TODO(规则书)（3）「最早拥有的格子」 (LOY-TOMORI-03) -- **class B**. The engine
     //   has no tile-acquisition order: `owners` is tile→owner only,
@@ -137,7 +123,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
             } else {
                 first
             };
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_fate(ctx::Fate::Field);
             ctx::place_card_on(
                 player_id,
                 tile,
@@ -152,8 +138,6 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
             );
         }
     }
-    // （3）「你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯
-    // （MyGO!!!!!）的（2）技能」 -- `pull` below is the Fx.SettleBefore half.
     Ok(())
 }
 

@@ -3,11 +3,11 @@
 // Parses the Phase 3 call shape:
 //
 // ```ignore
-// On::Filter(Filter::DiceRollPlan(pre, guard, body)),
-// On::Filter(bandori_std::kind::Filters::MyRewrite(pre, guard, body)),
-// On::Action(Action::TurnStart(pre, guard, body).counter_reason(..)),
-// On::Action(Actions::Exile(pre, guard, body).counter_reason(..)),
-// On::Play(pre, why_not, body).counter_reason(..),   // and the other non-Filter variants
+// On::Filter(Filter::DiceRollPlan(condition, guard, body)),
+// On::Filter(bandori_std::kind::Filters::MyRewrite(condition, guard, body)),
+// On::Action(Action::TurnStart(condition, guard, body).counter_reason(..)),
+// On::Action(Actions::Exile(condition, guard, body).counter_reason(..)),
+// On::Play(condition, guard, body).counter_reason(..),   // and the other non-Filter variants
 // ```
 //
 // Included by `build.rs` (body trampolines) and `tests/on_parse.rs` (loud-miss
@@ -364,7 +364,7 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
         let inner = &src[p + 1..j - 1];
 
         if variant == "Filter" || variant == "Action" {
-            // `On::Filter(Ns::Kind(pre, …, body))` — one ctor call.
+            // `On::Filter(Ns::Kind(condition, …, body))` — one ctor call.
             if inner.contains("FilterBody::") {
                 panic!("on_parse: retired `FilterBody::` arm in `On::{variant}` at byte {start}");
             }
@@ -441,12 +441,7 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
 /// * `.declare(pick)` -- decline-only; the body stays `fn(i32) -> Asked`.
 /// * `.declare_arg(pick, body)` -- the body becomes `fn(i32, i32) -> Asked`
 ///   and the trampoline must hand it an arg.
-fn apply_declare(
-    src: &str,
-    after: usize,
-    body: String,
-    shape: BodyShape,
-) -> (String, BodyShape) {
+fn apply_declare(src: &str, after: usize, body: String, shape: BodyShape) -> (String, BodyShape) {
     let tail = src[after..].trim_start();
     if let Some(rest) = tail.strip_prefix(".declare_arg(") {
         // `rest` starts *inside* the call; `paren_end` indexes the `(` itself,
@@ -488,13 +483,13 @@ pub fn default_expr(shape: BodyShape) -> &'static str {
     }
 }
 
-/// First-argument `pre` of an `On::*` constructor.
+/// First-argument `condition` of an `On::*` constructor.
 ///
-/// - `On::Filter` / `On::Action`: `pre` is ctor arg 1 of the inner
-///   `Ns::Kind(pre, …)` call.
-/// - `On::Schedule(id, pre, …)`: `pre` is the second top-level argument.
+/// - `On::Filter` / `On::Action`: `condition` is ctor arg 1 of the inner
+///   `Ns::Kind(condition, …)` call.
+/// - `On::Schedule(id, condition, …)`: `condition` is the second top-level argument.
 /// - Everything else: the first top-level argument (string literal or
-///   `pre::MINE` / guard const).
+///   `condition::MINE` / guard const).
 pub fn on_pre_string(after_on: &str) -> Option<String> {
     // `after_on` is the text starting at `On::Variant`'s trailing `(` content
     // (i.e. just after `(`).
@@ -512,7 +507,7 @@ pub fn on_pre_string(after_on: &str) -> Option<String> {
         let first = args.iter().find(|p| !p.trim().is_empty())?;
         return pre_string(first.trim());
     }
-    // Flat args: first top-level arg is pre (second for `On::Schedule(id, pre, …)`,
+    // Flat args: first top-level arg is condition (second for `On::Schedule(id, condition, …)`,
     // whose leading id slug is not a condition -- callers that care pass the
     // second arg via `pre_string` on the split list).
     // `after_on` starts *inside* the outer `(`, so depth 0 + `)` is the closer.
@@ -534,7 +529,7 @@ pub fn on_pre_string(after_on: &str) -> Option<String> {
     pre_string(first.trim())
 }
 
-/// `On::Schedule`'s `pre` (second ctor arg) -- the leading id slug is skipped.
+/// `On::Schedule`'s `condition` (second ctor arg) -- the leading id slug is skipped.
 pub fn on_schedule_pre_string(after_on: &str) -> Option<String> {
     let b = after_on.as_bytes();
     let mut depth = 0usize;
@@ -555,11 +550,11 @@ pub fn on_schedule_pre_string(after_on: &str) -> Option<String> {
     pre_string(second.trim())
 }
 
-/// `pre` argument: a string literal, `pre::MINE`, or a known guard const.
-/// (Also used for the flat `On::Play(pre, …)` shape.)
+/// `condition` argument: a string literal, `condition::MINE`, or a known guard const.
+/// (Also used for the flat `On::Play(condition, …)` shape.)
 pub fn pre_string(s: &str) -> Option<String> {
     let rest = s.trim_start();
-    if rest.starts_with("pre::MINE") {
+    if rest.starts_with("condition::MINE") {
         return Some("actor == owner".to_string());
     }
     // Known guard-const path references (`bandori_std::guards::OWN_START`, …)

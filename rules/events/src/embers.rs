@@ -7,7 +7,7 @@ use bandori_std::ctx::{self, trigger};
 use bandori_std::kind::Actions;
 use bandori_std::state_key;
 use card_sdk::abi::{AbKind, ActionKind, MarkFilter, TriggerKind};
-use card_sdk::{CardText, it};
+use card_sdk::{it, CardText};
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{all_players, keep};

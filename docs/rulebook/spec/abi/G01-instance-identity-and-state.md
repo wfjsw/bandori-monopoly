@@ -113,12 +113,9 @@ they answer the same pass.
 
 > 将此卡置于场上并从1-20间选择并声明X，将其写下
 
-`want_human` writes X to a **player** slot (`rules/cards/card-crychic/src/want_human.rs:61`,
-key `:39`) and every reader/„reset" goes through `ctx::slot`
-(`want_human.rs:95,110,139,145`; `tomori_inner_shout.rs:66,91`). The comment at
-`want_human.rs:57-60` states the defect: the value survives the card and two
-copies share it, where C# `Mem["x"]` belongs to the instance. `boost` and
-`abBefore` (`:79`, `:84`) have the same shape.
+`want_human` writes X to a **player** slot (`rules/cards/card-crychic/src/want_human.rs:61`, key
+`:39`) and every reader/„reset" goes through `ctx::slot` (`want_human.rs:95,110,139,145`;
+`tomori_inner_shout.rs:66,91`). `boost` and `abBefore` (`:79`, `:84`) have the same shape.
 
 `tomori_inner_shout` already implements the cross-instance half by hand:
 `want_human_placed` scans `field_instances` (`:191-195`) precisely because the
@@ -141,7 +138,7 @@ reaches placed (or lingering) instances, so neither ever runs; the TODO at
 
 `hook` (`rules/cards/card-hhw/src/hagumi_marks.rs:141-191`) asks, gains 2000
 and removes one mark per job. Two stand-ins mean two asks, 4000 and two marks
-for one pass. The cleanup `if !any_marks(player_id) { ctx::set_dest(…) }`
+for one pass. The cleanup `if !any_marks(player_id) { ctx::set_fate(…) }`
 (`:184-186`) files only the copy that reaches it after the *last* removal
 (TODO `:181-183`).
 
@@ -161,19 +158,15 @@ add can take the count to 3, and `turn_end` then pays a third extra turn.
 The user is written to the **holder's** slot `umiri_user`
 (`rules/cards/card-mujica/src/umiri_card.rs:78-83`, read at `:32,36,132,170,198`),
 so two copies on one holder overwrite each other. The TODO at `:78-82` says
-per-instance state exists (`set_prop`) "but a pre cannot read props".
+per-instance state exists (`set_prop`) "but a condition cannot read props".
 
 ### 2.10 `hina-clause-2-swap-missing` — rows 487, 488, 490, 1555
 
 > （2）[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。
 
-`rules/cards/card-pp/src/hina_sound.rs:87-96` has two TODOs: there is no
-RealId marking on the placed substitute and no `Fx.Actions` surface to offer
-the swap. The card marks nothing after `ctx::play_card` (`:81`) and leaves play
-(`:86`), so no later code can find the substitute. The offer surface today only
-enumerates `skill:*` field instances with an `On::Play`
-(`crates/game-core/src/engine/mod.rs:1316-1331`); a non-skill card cannot be
-pressed.
+The card marks nothing after `ctx::play_card` (`:81`) and leaves play (`:86`), so no later code can
+find the substitute. The offer surface today only enumerates `skill:*` field instances with an
+`On::Play` (`crates/game-core/src/engine/mod.rs:1316-1331`); a non-skill card cannot be pressed.
 
 `[共鸣]` is the derived fuel card `PP:[衍生]共鸣`, spent by
 `resonance::try_resonance` (`rules/cards/card-pp/src/resonance.rs:44-75`); the
@@ -205,7 +198,7 @@ card, including one already at its printed 上限, then overfills it. The TODO a
 5. **The offer surface is `skill:`-only.** A placed instance cannot expose a
    named action, and no per-instance identity (`RealId`) is stored.
 6. **Per-instance stores exist but are not reached.** `props`/`counters` target
-   `current_uid`; a pre needs an instance accessor over the candidate
+   `current_uid`; a condition needs an instance accessor over the candidate
    (`card.counter` already exists), and a hand-played counter needs a live
    instance to dispatch to.
 
@@ -321,11 +314,11 @@ pub const MarkChanged: Self = Self::engine(112);  // wire "markChanged", hook-on
 pub const Actions: Self = Self::engine(113);      // wire "action", offer-only
 ```
 
-- `Action::SkillFired(pre, guard, body)`,
-  `Action::MarkChanged(pre, guard, body)` — added to the `action_kinds!`
+- `Action::SkillFired(condition, guard, body)`,
+  `Action::MarkChanged(condition, guard, body)` — added to the `action_kinds!`
   engine table (`kinds.rs:638`); both are `is_hook_only` so no counteraction
   window opens.
-- `Action::Actions(pre, guard, body)` — offer-only; the entry **must** carry
+- `Action::Actions(condition, guard, body)` — offer-only; the entry **must** carry
   `On::id("action")`, and `abi::entry::ACTION` (`"action"`) is a new constant
   beside `PRESS`, so `build-ruleset` reserves the id: a card already declaring
   `On::id("action")` must be caught by the duplicate-id check before this
@@ -422,11 +415,11 @@ listener's own write to be idempotent (black's `sync_circle_instance` is).
 
 ### 5.4 Resolution stack and `skillFired`
 
-- `Cx.resolving: Vec<(String, i32)>` — transient. Pushed in
+- `PlayCtx.resolving: Vec<(String, i32)>` — transient. Pushed in
   `Ruleset::drive_inner_body_from` (`wasm_rules.rs:3064`) at body entry when
   the top is not already `(card_id, uid)`; popped when the body completes.
   A body that halts (ask / suspend) leaves its frame: an ask re-runs the
-  routine from a snapshot with a fresh `Cx`, and a suspend resumes the same
+  routine from a snapshot with a fresh `PlayCtx`, and a suspend resumes the same
   drive, so the top check prevents a duplicate and the resume's completion
   pops it.
 - The stack is mirrored into `World.resolving: Vec<String>` (`#[serde(skip)]`)
@@ -483,19 +476,19 @@ listener's own write to be idempotent (black's `sync_circle_instance` is).
   entry.
 - `view_extra_parts` (`mod.rs:1280-1348`) gains a second loop over the
   viewer's field instances carrying a `real_id` whose card declares an
-  `"action"` entry. Per offer: pre + guard are probed with `current_uid = uid`
+  `"action"` entry. Per offer: condition + guard are probed with `current_uid = uid`
   (the same `admits` machinery as the skill offer, `mod.rs:1318-1331`);
   `enabled` is the probe result, `reason` the refusal; `act = "action"`,
   `uid`, `id` = host id. Guards must be pure (they run inside a view build).
-- `why_not_act` (`mod.rs:2932`) gains `"action"`: ops stage + `!busy`, uid
+- `cant_act` (`mod.rs:2932`) gains `"action"`: ops stage + `!busy`, uid
   exists, holder is `i`, card face up, not immune, and the provider entry
   admits. `Routine::Act` (`:2901`) dispatches `"action"` to a new
-  `Cx::use_action(i, uid)` which resolves `real_id`, then
+  `PlayCtx::use_action(i, uid)` which resolves `real_id`, then
   `rules.act(cx, i, provider, uid)`: `Call::Play` with the host uid bound as
   `current_uid` (the `drive` parameter, like `rules.play`'s skill binding at
   `wasm_rules.rs:9392-9400`). No `cardUsed` / `skillFired` is raised for an
   action.
-- The host id stays the instance; the provider's `pre` sees `card.placed`
+- The host id stays the instance; the provider's `condition` sees `card.placed`
   true, `actor` = the presser and `owner` = the host instance's owner.
 
 ### 5.8 Kani model representation
@@ -509,7 +502,7 @@ listener's own write to be idempotent (black's `sync_circle_instance` is).
   counter set with a cap and then set uncapped is no longer clamped; a
   `created_by` child disappears from the field after the parent's
   `unplace_at`; `real_is_at` is true only after `set_real_id_at` and false
-  after the instance is unplaced; `set_dest` applies to `last_uid`; a
+  after the instance is unplaced; `set_fate` applies to `last_uid`; a
   non-empty `resolving` contains the currently driven id.
 
 ---
@@ -521,7 +514,7 @@ listener's own write to be idempotent (black's `sync_circle_instance` is).
 ```rust
 // before (rui_devil.rs:29-50)
 for &o in &others {
-    ctx::transfer(player_id, o, 100, &why)?;
+    ctx::transfer(player_id, o, 100, &reason)?;
     ctx::set_slot(player_id, X, 5);          // unconditional
 }
 …
@@ -529,7 +522,7 @@ ctx::set_slot(player_id, X, 5);              // trailing, unconditional
 
 // after
 // `actor` is the fired skill's owner and `owner` is this card's user, so the
-// pre already says 「你的技能」; `resolving` keeps it inside this resolution.
+// condition already says 「你的技能」; `resolving` keeps it inside this resolution.
 On::Action(Action::SkillFired(
     "resolving('Mor:（Rui）正论恶魔') && actor == owner", None, on_skill))
 …
@@ -566,10 +559,10 @@ hook.
 // before (black_suits.rs:58-67, before the instance exists)
 ctx::place_mark(group, MARK, "", player_id, ctx::self_uid(), 1, &note, Fresh);
 …
-if !ctx::is_placed() { ctx::set_dest(Field); ctx::place_card(player_id, ID, &note); }
+if !ctx::is_placed() { ctx::set_fate(Field); ctx::place_card(player_id, ID, &note); }
 
 // after: place first, then mark, so the row is bound to the stand-in
-if !ctx::is_placed() { ctx::set_dest(Field); ctx::place_card(player_id, ID, &note); }
+if !ctx::is_placed() { ctx::set_fate(Field); ctx::place_card(player_id, ID, &note); }
 let row = ctx::place_mark(group, MARK, "", player_id, ctx::self_uid(), 1, &note, Fresh);
 ```
 
@@ -592,7 +585,7 @@ fn pass_tile(player_id: i32) -> Asked {
         ctx::bump_mark(t, &MarkFilter::any().kind(MARK).owner(player_id), -1);
     }
     sync_circle_instance(t);
-    if own_crystals(t, player_id) == 0 { ctx::set_dest(ctx::Dest::Graveyard); }
+    if own_crystals(t, player_id) == 0 { ctx::set_fate(ctx::Fate::Graveyard); }
     Ok(())
 }
 ```
@@ -642,7 +635,7 @@ ctx::state::set(player_id, NEXT_ROLL, 1);
 ```
 
 The existing `DiceRollPlan` / `DiceRollAfter` entries then dispatch to the
-lingering instance and the pre `slot('detour_next_roll') != 0` still owns the
+lingering instance and the condition `slot('detour_next_roll') != 0` still owns the
 gate. The instance is cleared at turn start (`TurnCtx.lingering`), so no
 cleanup is added.
 
@@ -652,7 +645,7 @@ cleanup is added.
 // before (hagumi_marks.rs:170-186) — every job asks and pays
 ctx::gain(player_id, 2000, …)?;
 ctx::bump_mark(t, &mark_filter(player_id), -1);
-if !any_marks(player_id) { ctx::set_dest(ctx::Dest::Graveyard); }
+if !any_marks(player_id) { ctx::set_fate(ctx::Fate::Graveyard); }
 
 // after — claim per raise, every copy files itself
 let key = alloc::format!("hagumi.stop.{}", trigger::uid());
@@ -664,11 +657,11 @@ if ctx::slot(player_id, &key) == 0 {
     ctx::gain(player_id, 2000, …)?;
     ctx::bump_mark(t, &mark_filter(player_id), -1);
 }
-if !any_marks(player_id) { ctx::set_dest(ctx::Dest::Graveyard); }
+if !any_marks(player_id) { ctx::set_fate(ctx::Fate::Graveyard); }
 ```
 
-`set_dest` already applies to the drive's `current_uid` (the acting copy) at
-`commit_after` (`wasm_rules.rs:4920`), so no per-uid dest import is needed.
+`set_fate` already applies to the drive's `current_uid` (the acting copy) at
+`commit_after` (`wasm_rules.rs:4920`), so no per-uid fate import is needed.
 
 ### 6.8/6.11 `sparkler` and `crystal_swap`
 
@@ -855,13 +848,13 @@ bankruptcy purge, and asserts the borrowed `tile:circle` is gone.
   attach/drop; a child with `created_by` leaves the field on
   `unplace_at(parent)`.
 - `proofs/hhw.rs::C-HHW-black-suits-03` — two drives with one raise id produce
-  one `BumpMark(-1)` and two `set_dest` rows.
+  one `BumpMark(-1)` and two `set_fate` rows.
 - `proofs/crychic.rs::C-CRY-want-human-04` — X written on instance A is not
   readable from B, and disappears after A leaves.
 - `proofs/ag.rs::C-AG-detour-02` — a lingering instance hears `DiceRollPlan`
   and the plan base becomes 1d6.
 - `proofs/hhw.rs::C-HHW-hagumi-03` — one mark, two drives, one `Gain`, two
-  dest writes.
+  fate writes.
 - `proofs/mujica.rs::C-MUJICA-sparkler-02` — with the cap set, an external
   `add_counter_at` stops at the cap; clearing the cap unclamps.
 - `proofs/mujica.rs::C-MUJICA-umiri-02` — two instances keep separate
@@ -884,7 +877,7 @@ Bounded-stub invariants per new op are in §5.8. Every new `Op` also lands in
    express "this copy's counter".
 2. **Per-card slots with a card-instance suffix key** (the tomori latch
    pattern, `tomori_inner_shout.rs:164-170`). Rejected as the general answer:
-   the key needs `self_uid()` in every reader and writer, which a **pre** for
+   the key needs `self_uid()` in every reader and writer, which a **condition** for
    umiri/black cannot call; and item 5's whole defect is that slots survive the
    card and are shared. Kept for claim latches where an instance-qualified
    string suffices.
@@ -892,7 +885,7 @@ Bounded-stub invariants per new op are in §5.8. Every new `Op` also lands in
    provenance, not a lifetime owner, and the marks are currently stamped with
    no instance at all; `instance` is the owner the purge already uses.
 4. **A per-uid `set_dest_at` import** for hagumi/black. Rejected after
-   checking `commit_after`: `set_dest` already applies to the drive's
+   checking `commit_after`: `set_fate` already applies to the drive's
    `current_uid` (`wasm_rules.rs:4920`), and a hook job binds `current_uid` to
    the acting copy, so per-copy filing is a card change.
 5. **A boolean `mark_added` flag on `counterChanged`.** Rejected: a mark

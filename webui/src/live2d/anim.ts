@@ -1,5 +1,3 @@
-// Live2D stand animation: the frame semantics of
-// `BandoriMonopoly.UI.Live2DPortrait.RenderFrame()`.
 //
 //   loadParam()                                  // restore the saved base
 //   if (motions.isFinished()) {                  // idle restarts the queue
@@ -22,7 +20,7 @@ import { Live2DMotion, MotionQueueManager, type MotionEnt, type ParamTarget, typ
 import { L2DPhysics, type PhysicsHairSpec } from "./physics.ts";
 import type { ModelParam } from "./types.ts";
 
-/** The parameter array of `ModelContext`, with C# `setParamFloat` semantics. */
+/** */
 export class ParamStore implements ParamTarget {
   readonly ids: string[] = [];
   values: Float64Array;
@@ -130,12 +128,9 @@ export class ParamStore implements ParamTarget {
 }
 
 /**
- * `live2d.framework.L2DEyeBlink` -- the game runs it enabled next to the idle
- * (`blink.SetEnabled(true)`), and `updateParam` *overwrites*
- * `PARAM_EYE_L_OPEN` / `PARAM_EYE_R_OPEN` after the motion bake. The eye
- * blinks baked into `idle.mtn` are therefore replaced at runtime; only during a
- * reaction is the blink suppressed so the reaction's own eye curves show.
- */
+ * The eye blinks baked into `idle.mtn` are therefore replaced at runtime; only
+ * during a reaction is the blink suppressed so the reaction's own eye curves
+ * show. */
 export class EyeBlink {
   enabled = true;
   closeIfZero = true;
@@ -246,7 +241,7 @@ export interface AnimState {
   propKeys: Set<string>;
 }
 
-/** `Live2DMotion.LoadOneShot`: one-shot reaction, fades 250/350. */
+/** */
 function toReaction(data: ParsedMotion): Live2DMotion {
   const m = new Live2DMotion(data);
   m.setLoop(false);
@@ -311,10 +306,7 @@ export function saveParam(state: AnimState): void {
 }
 
 /**
- * `Live2DPortrait.TryPlayReaction`: pick a random reaction (never the one that
- * just played, when there is a choice) and start it. Returns false while a
- * reaction is already playing -- reactions do not stack.
- */
+ * Returns false while a reaction is already playing -- reactions do not stack. */
 export function playReaction(state: AnimState): boolean {
   if (state.reactions.length === 0 || state.isPlayingReaction) return false;
   const n = state.reactions.length;

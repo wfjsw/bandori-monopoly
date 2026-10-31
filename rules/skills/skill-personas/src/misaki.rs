@@ -67,7 +67,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （2）「你的回合开始时，你可以消耗一个火罐，使你的移动掷骰额外获得一个1d10，
 /// 且你的移动视为[传送]」.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    // `charge(owner) >= 1` is the pre (「你可以消耗一个火罐」).
+    // `charge(owner) >= 1` is the condition (「你可以消耗一个火罐」).
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("misaki_title")),

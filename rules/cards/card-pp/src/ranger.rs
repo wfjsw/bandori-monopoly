@@ -1,4 +1,3 @@
-//! `PP:[衍生]魔法战队Pastel✽Ranger` -- C# `CardRanger` (MatchHost.cs:7766-7814):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]魔法战队Pastel✽Ranger`）:
 //! > [衍生]魔法战队Pastel✽Ranger：
@@ -32,8 +31,8 @@ pub const RANGER: CardDef = CardDef::new(
         // status lives on the player, so its build hooks must outlive the body;
         // the card stands on the field as the listener (spec C-PP-ranger-01:
         // 「场上你拥有的卡」 counts the Ranger itself once played).
-        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, before_build)),
-        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, after_build)).silent(),
+        On::Action(Action::BuildBefore(card_sdk::condition::MINE, None, before_build)),
+        On::Action(Action::BuildAfter(card_sdk::condition::MINE, None, after_build)).silent(),
     ],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 2000)])
@@ -62,13 +61,7 @@ pub const RANGER: CardDef = CardDef::new(
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]),
 );
 
-/// 粉丝数量 for the [特] range: up + down fan tokens (`fans::total`, the
-/// `ppFansUp`/`ppFansDown` counters; C# `H.FansUp` / `H.FansDown`).
-
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书[特]: 「仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用」
-    // C# `CardRanger.WhyNot`: `range = 30 - H.Fans(player_id)`, refuse unless some
-    // owned tile has houses and `H.Dist(pos, t) <= range`.
     let range = 30 - (fans::total(player_id));
     let pos = ctx::player_pos(player_id);
     let ok = ctx::owned_tiles(player_id)
@@ -77,12 +70,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if !ok {
         // Same (unclamped) figure as the gate above, so the message cannot
         // advertise a reach the comparison does not use.
-        return Some(Msg::new(key!("ranger_why_not")).i("n", range as i64));
+        return Some(Msg::new(key!("ranger_blocked")).i("n", range as i64));
     }
     None
 }
 
-/// 规则书[手]: 「根据场上你拥有的卡数量」 -- C# `H.PlacedOf(i).Count`.
 fn placed_count(player_id: i32) -> i32 {
     // TODO(规则书)（根据场上你拥有的卡数量）: 打出中的此卡自身也应计入（spec
     // C-PP-ranger-01）-- 现在只数结算时已经在场的卡，自身不算
@@ -103,7 +95,7 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
         ctx::gain(
             player_id,
             500,
-            &Msg::new(key!("ranger_why")).i("n", n as i64),
+            &Msg::new(key!("ranger_reason")).i("n", n as i64),
         )?;
     }
     // 规则书[手]2: 「数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
@@ -117,13 +109,11 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
         ctx::add_group_crystals(player_id, -4, i32::MAX);
         ctx::draw(player_id, 1)?;
     }
-    // 规则书[手]4: 「数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），
-    // 盖房后减少1层”」 -- the 2,000 loss is `H.LoseR(i, 2000, CardName)`.
     if n >= 5 {
         ctx::pay(
             player_id,
             2000,
-            &Msg::new(key!("ranger_why")).i("n", n as i64),
+            &Msg::new(key!("ranger_reason")).i("n", n as i64),
         )?;
         // 规则书[手]4: 「下次盖房时减免2000（可溢出），盖房后减少1层」 -- bank
         // one layer on the player (persistent across turns). `before_build`
@@ -135,11 +125,11 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
         ctx::state::add(player_id, BUILD_OFF, 1);
         // The hooks ride this instance, so the card stays in play (it also
         // counts for a later Ranger's 「场上你拥有的卡数量」).
-        ctx::set_dest(ctx::Dest::Field);
+        ctx::set_fate(ctx::Fate::Field);
         ctx::place_card(
             player_id,
             ID,
-            &Msg::new(key!("ranger_why")).i("n", n as i64),
+            &Msg::new(key!("ranger_reason")).i("n", n as i64),
         );
     }
     // 规则书[手]5: 「数量至少为6则抽1张卡」

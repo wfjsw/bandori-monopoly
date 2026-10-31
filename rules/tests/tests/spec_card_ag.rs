@@ -90,7 +90,7 @@ fn declaration_pays_500_and_draws() {
         t.give(1, &["AG:宣战布告"]);
         t.give(0, &["通用:登上武道馆"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
 
         // P0 plays a targeting card (登上武道馆 affects every other player).
@@ -139,7 +139,7 @@ fn declaration_pays_500_and_draws() {
         // Frame: the whole interaction only touched the two money slots and
         // the two players' card zones (budokan is a multi-target pay).
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -185,10 +185,6 @@ fn declaration_offered_against_targeting_card() {
     .expect("C-AG-declaration-01");
 }
 
-// =====================================================================
-// C-AG-yolo-*  AG:Y.O.L.O
-// =====================================================================
-
 /// C-AG-yolo-01 -- 「你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字」
 ///
 /// The card is a [反击]-timed hand card on the user's own roll. The contract
@@ -203,13 +199,10 @@ fn yolo_adds_1d4() {
         let yolo = rng.range(1, 4); // 1d4
         t.set_pos(0, start as usize);
         t.give(0, &["AG:Y.O.L.O"]);
-        // Keep a non-empty draw pile so the used Y.O.L.O stays in 弃卡区
-        // (an empty draw recycles the discard and a landing draw can pull it
-        // back into hand -- rulebook-doc.md:126 still holds).
         t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
         t.dice(&[face, yolo]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
         // The window may be a [反击] offer, or a play that opens one.
         if t.counteract_offered("AG:Y.O.L.O") {
@@ -251,7 +244,7 @@ fn yolo_adds_1d4() {
         }
 
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P0",
@@ -300,7 +293,7 @@ fn glory_swaps_half_of_dearest_deeds() {
         let m1 = t.money(1);
         t.give(0, &["AG:刻入天穹傲岸的烈光"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
         if !t.counteract_offered("AG:刻入天穹傲岸的烈光") {
             return Err(format!(
@@ -331,7 +324,7 @@ fn glory_swaps_half_of_dearest_deeds() {
         }
 
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -386,7 +379,7 @@ fn sunset_demolishes_and_charges() {
         let m0 = t.money(0);
         let m1 = t.money(1);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.give_play(0, "AG:即使夕阳落山")
             .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
@@ -415,7 +408,7 @@ fn sunset_demolishes_and_charges() {
         }
 
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -473,25 +466,25 @@ fn childhood_teleports_to_nth_shop_tile() {
             _ => vec![YAMABUKI, GALAXY_RAMEN, KITAZAWA],
         };
         t.own(0, &owned);
-        let dest = owned[n as usize - 1];
+        let fate = owned[n as usize - 1];
         t.set_money(0, 10_000 + rng.range(0, 5) * 100);
         t.dice(&[n]);
         t.give(0, &["AG:商店街的青梅竹马"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:商店街的青梅竹马")
             .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
 
-        if t.pos(0) != dest {
+        if t.pos(0) != fate {
             return Err(format!(
-                "C-AG-childhood-01: pos {}, expected {dest} (1d6={n}, owned {owned:?})",
+                "C-AG-childhood-01: pos {}, expected {fate} (1d6={n}, owned {owned:?})",
                 t.pos(0)
             ));
         }
 
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P0",
@@ -538,7 +531,7 @@ fn childhood_is_main_move() {
         let mut t = Table::vanilla(2);
         t.own(0, &[YAMABUKI]);
         t.set_pos(0, 10 + rng.range(0, 4) as usize);
-        t.dice(&[1, 5]); // teleport, then a would-be main roll face
+        t.dice(&[1, 5]); // teleport, then a would-be is_main_move roll face
         t.give_play(0, "AG:商店街的青梅竹马")
             .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
@@ -603,7 +596,7 @@ fn colors_1_gains_1500() {
         t.set_money(0, m);
         t.dice(&[1]);
         t.give(0, &["AG:无论是何种颜色的夕阳"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:无论是何种颜色的夕阳")
             .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
@@ -615,7 +608,7 @@ fn colors_1_gains_1500() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
         )
@@ -635,7 +628,7 @@ fn colors_3_draws_one() {
         t.set_money(0, 10_000 + rng.range(0, 5) * 100);
         t.dice(&[3]);
         t.give(0, &["AG:无论是何种颜色的夕阳"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:无论是何种颜色的夕阳")
             .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
@@ -650,7 +643,7 @@ fn colors_3_draws_one() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
         )
@@ -704,7 +697,7 @@ fn colors_6_picks_three_distinct() {
         t.set_draw(0, &["通用:GREAT", "通用:安可"]);
         t.dice(&[6]);
         t.give(0, &["AG:无论是何种颜色的夕阳"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:无论是何种颜色的夕阳")
             .map_err(|e| format!("play rejected: {e}"))?;
         let p = t.expect_prompt();
@@ -765,7 +758,7 @@ fn colors_6_picks_three_distinct() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
         )
@@ -786,7 +779,7 @@ fn colors_2_puts_a_discard_card_on_deck_top() {
         t.set_money(0, 10_000 + rng.range(0, 5) * 100);
         t.dice(&[2]);
         t.give(0, &["AG:无论是何种颜色的夕阳"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:无论是何种颜色的夕阳")
             .map_err(|e| format!("play rejected: {e}"))?;
         let k = t.option(take).ok_or_else(|| {
@@ -812,7 +805,7 @@ fn colors_2_puts_a_discard_card_on_deck_top() {
             return Err(format!("C-AG-colors-03: {keep} left the discard: {disc:?}"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
         )
@@ -838,8 +831,6 @@ fn colors_2_with_empty_discard_does_not_prompt() {
     assert!(t.discard(0).iter().all(|c| c == "AG:无论是何种颜色的夕阳"));
 }
 
-/// The discard pick is over card *titles* (C# `Distinct()`): two copies of one
-/// card offer one option, not two.
 #[test]
 fn colors_pick_offers_each_discard_title_once() {
     let mut t = Table::vanilla(2);
@@ -870,7 +861,7 @@ fn colors_5_puts_a_discard_card_in_hand() {
         t.set_money(0, 10_000 + rng.range(0, 5) * 100);
         t.dice(&[5]);
         t.give(0, &["AG:无论是何种颜色的夕阳"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:无论是何种颜色的夕阳")
             .map_err(|e| format!("play rejected: {e}"))?;
         let k = t.option(take).ok_or_else(|| {
@@ -896,7 +887,7 @@ fn colors_5_puts_a_discard_card_in_hand() {
             return Err(format!("C-AG-colors-06: {keep} left the discard: {disc:?}"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "hand:P0", "draw:P0", "discard:P0", "roll:P0"],
         )
@@ -1042,7 +1033,7 @@ fn soul_places_and_loads_crystals() {
         let m = 10_000 + rng.range(0, 5) * 100;
         t.set_money(0, m);
         t.give(0, &["AG:绯红之魂"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "AG:绯红之魂")
             .map_err(|e| format!("play rejected: {e}"))?;
         let p = t.expect_prompt();
@@ -1075,7 +1066,7 @@ fn soul_places_and_loads_crystals() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -1374,7 +1365,7 @@ fn band_free_house_on_cheap_buy() {
         t.set_pos(0, FUJIMI - 1);
         t.dice(&[1]);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.buy(0).map_err(|e| format!("buy rejected: {e}"))?;
         skip_all(&mut t);
 
@@ -1399,7 +1390,7 @@ fn band_free_house_on_cheap_buy() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",

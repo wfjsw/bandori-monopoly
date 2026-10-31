@@ -19,7 +19,7 @@ via `invoke::`. Classifications:
 | **OPEN** | the text is undefined; only the determinate fragment is proved |
 
 Host stubs that constrain this unit (see `rules/kani/src/host.rs`):
-`plan::*` structure-only, `card_move` always returns 1 (no walk simulated),
+`plan::*` structure-only, `run_planned_move` always returns 1 (no walk simulated),
 `give_extra_turn` silent (no `Effect`), `card_mortgage` stub, `target` returns 0,
 face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 `stay`. These are listed per row where they bite.
@@ -32,7 +32,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 |---|---|---|---|---|---|---|
 | C-MUJICA-人偶的箱庭-01 | 「向你支付X*20…X为…移动数」 | PROVEN (pay branch) | `doll_garden_pay_amount_iff`, `doll_garden_pay_amount_mutant_is_detected` | see run table | — | OPEN-触发结算 |
 | C-MUJICA-人偶的箱庭-02 | 「无法移动的玩家只能选择向你支付」 | PROTOCOL-LEVEL | — | — | prompt shape mid-window | — |
-| C-MUJICA-人偶的箱庭-03 | 「强制移动…掷骰数之和…视为主要移动」 | PROTOCOL-LEVEL | — | — | multi-walk + settle + `main_moved`; `card_move` stub | OPEN-箱庭0步 |
+| C-MUJICA-人偶的箱庭-03 | 「强制移动…掷骰数之和…视为主要移动」 | PROTOCOL-LEVEL | — | — | multi-walk + settle + `main_moved`; `run_planned_move` stub | OPEN-箱庭0步 |
 | C-MUJICA-水晶-01 | 「一个奇迹水晶移动到另一张…卡上」 | BLOCKED-HOST | — | — | `add_counter_at`/`counter_at` ignore uid — two instances share one key | — |
 | C-MUJICA-心の雨-01 | 「前方20格内的所有玩家各自骰1d20」 | PROVEN | `heart_rain_in_window_roll_stay_iff`, `heart_rain_fallback_stun_and_money_iff` | see run table | — | OPEN-前方20格 |
 | C-MUJICA-心の雨-02 | 「≤12…1层，≤3…变为2层」 | PROVEN | `heart_rain_stay_layers_iff`, `heart_rain_stay_layers_mutant_is_detected` | see run table | — | — |
@@ -45,13 +45,13 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-欢迎-03 | 「[反击] 当有其他玩家切换状态时…」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-花火-01 | 「放置于场上并放置2个奇迹水晶」 | PROVEN | `sparkler_places_two_crystals_iff`, `sparkler_crystal_count_mutant_is_detected` | see run table | — | — |
 | C-MUJICA-花火-02 | 「回合结束后自动移除一个…并…额外回合」 | BLOCKED-HOST / OPEN | `sparkler_burn` (partial) | — | `give_extra_turn` is a silent stub (no Effect); crystal removal is recordable | OPEN-花火额外回合 |
-| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun + dest) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_dest(Graveyard)`. Spec dest encoding fixed in triage3 batch 15 (`Dest::Graveyard = 0`, not 1). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
-| C-MUJICA-祥移动-01 | 「强制一名玩家…移动3格并[触发结算]」 | PROTOCOL-LEVEL | — | — | `card_move` stub; walk not simulated | OPEN-触发结算 |
+| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun + fate) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_fate(Graveyard)`. Spec fate encoding fixed in triage3 batch 15 (`Fate::Graveyard = 0`, not 1). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
+| C-MUJICA-祥移动-01 | 「强制一名玩家…移动3格并[触发结算]」 | PROTOCOL-LEVEL | — | — | `run_planned_move` stub; walk not simulated | OPEN-触发结算 |
 | C-MUJICA-祥移动-02 | 「（可在掷骰前…代替主要移动）」 | PROTOCOL-LEVEL | — | — | `main_moved` | — |
 | C-MUJICA-祥移动-03 | 「支付价格减半」 | PROTOCOL-LEVEL | — | — | settle chain; `plan::set_pay_factor` stub | OPEN-取整 |
 | C-MUJICA-骰子-01 | 「将此卡放置于自身场上」 | PROVEN | `dice_cast_places_on_own_field_iff`, `dice_cast_mutant_extra_money_is_detected` | see run table | — | — |
 | C-MUJICA-骰子-02 | 「无法从手牌中使用[反击]」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
-| C-MUJICA-骰子-03 | 「回合结束后放入弃牌堆」 | PROTOCOL-LEVEL | — | — | turn-end unplace scheduling (`set_dest` only) | — |
+| C-MUJICA-骰子-03 | 「回合结束后放入弃牌堆」 | PROTOCOL-LEVEL | — | — | turn-end unplace scheduling (`set_fate` only) | — |
 | C-MUJICA-骰子-04 | 「（此卡可以被反击）」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-黑色生日-01 | 「资金不多于1000…支付你800」 | PROVEN | `black_bday_low_pays_800_iff`, `black_bday_low_mutant_is_detected`, `black_bday_low_mutant_panics` | see run table | — | — |
 | C-MUJICA-黑色生日-02 | 「严格在1000以上…两次200」 | PROVEN | `black_bday_high_pays_400_iff` | see run table | — | — |
@@ -137,7 +137,7 @@ Notes on the counts:
     (水晶-01 two-instance crystal move)
   - `Op::card_mortgage` — must record `SetMortgaged` (祥子-01)
   - `Op::give_extra_turn` — must record an Effect (花火-02 extra turn)
-  - `Op::card_move` / `plan::*` — must simulate the walk (all move clauses)
+  - `Op::run_planned_move` / `plan::*` — must simulate the walk (all move clauses)
 
 ## Run table
 
@@ -208,7 +208,7 @@ What was attempted:
    under `cfg(kani)`, exposing `E0382 use of moved value: w.n_players` in
    `heart_rain_in_window_roll_stay_iff` (native `cargo build` does not
    compile `#[kani::proof]` bodies the same way). **Fixed** — `n` is now
-   read from `pre.n_players` before `reset_world` moves `w`.
+   read from `condition.n_players` before `reset_world` moves `w`.
 3. Third run (post-fix) is still waiting on a slot as of hand-off.
    Earlier `FAILED` rows in `target/kani-results/results.md` are that
    compile error, **not** proof disagreements.

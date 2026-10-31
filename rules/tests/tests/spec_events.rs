@@ -217,9 +217,9 @@ pub fn e_draw_03_reshuffle(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     // Only care about steps that emptied the deck or drew from a refill.
-    let pre_empty = step.pre.event_deck.is_empty();
+    let pre_empty = step.condition.event_deck.is_empty();
     let post_empty = step.post.event_deck.is_empty();
-    let pre_discard = step.pre.event_discard.len();
+    let pre_discard = step.condition.event_discard.len();
     let post_discard = step.post.event_discard.len();
     if !(pre_empty
         && post_discard > 0
@@ -243,8 +243,8 @@ pub fn e_draw_03_reshuffle(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     if drew
-        && step.pre.event_deck.is_empty()
-        && step.pre.event_discard.is_empty()
+        && step.condition.event_deck.is_empty()
+        && step.condition.event_discard.is_empty()
         && step.post.event_removed.is_empty()
         && step.post.event_discard.is_empty()
     {
@@ -289,7 +289,7 @@ fn draw_reveals_and_files_the_one_shot() {
         let money = 8_000 + rng.range(0, 20) * 100;
         t.set_money(0, money);
         t.set_draw(0, &["通用:GREAT"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(DRAW_CLAUSES);
         draw_event_quiet(&mut t, 0, "对邦", &[18, 16]);
         // Public draw + one-shot filed (not active).
@@ -321,7 +321,7 @@ fn draw_reveals_and_files_the_one_shot() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &allow(&[
                 "money:",
@@ -382,7 +382,7 @@ fn duobang_sheet_example_18_vs_16_is_100() {
         t.set_money(0, a);
         t.set_money(1, b);
         t.set_draw(0, &["通用:GREAT"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(DRAW_CLAUSES);
         draw_event_quiet(&mut t, 0, "对邦", &[18, 16]);
         let d0 = t.money(0) as i64 - a as i64;
@@ -394,7 +394,7 @@ fn duobang_sheet_example_18_vs_16_is_100() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &allow(&[
                 "money:",
@@ -454,7 +454,7 @@ fn estate_auction_grants_a_deed() {
         // Sealed high-bid over a `choice` of 0, 1000, …, 10000.
         let mut estate = None;
         if let Some(p) = t.prompt() {
-            if let Some(Arg::Tile(n)) = p.text.a.get("tile") {
+            if let Some(Arg::Tile(n)) = p.text.args.get("tile") {
                 estate = Some(*n as usize);
             }
         }
@@ -541,7 +541,7 @@ fn lulu_teleport_is_optional_and_costs_500() {
         t.set_pos(0, 0);
         t.set_pos(1, 5);
         t.set_draw(0, &["通用:GREAT"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(DRAW_CLAUSES);
         draw_event_card(&mut t, 0, "很噜的感觉", &[]);
         // Accept the first optional teleport offer for P0, decline the rest.
@@ -574,7 +574,7 @@ fn lulu_teleport_is_optional_and_costs_500() {
             return Err(format!("E-lulu-01: P0 money delta {d}, expected -500"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &allow(&[
                 "money:",
@@ -1508,10 +1508,10 @@ fn kizuna_teleports_all_to_roll_mod_60() {
         // Empty decks: X = 0, so the roll is just 1d20. Landing face 1 then 11.
         t.set_draw(0, &["通用:GREAT"]);
         draw_event_quiet(&mut t, 0, "Kizuna Music", &[11]);
-        let dest = 11 % 60;
-        if t.pos(0) != dest || t.pos(1) != dest {
+        let fate = 11 % 60;
+        if t.pos(0) != fate || t.pos(1) != fate {
             return Err(format!(
-                "E-kizuna-01: positions ({},{}), expected ({dest},{dest})",
+                "E-kizuna-01: positions ({},{}), expected ({fate},{fate})",
                 t.pos(0),
                 t.pos(1)
             ));
@@ -2587,7 +2587,7 @@ fn estate_grants_only_the_auctioned_tile() {
         t.set_draw(0, &["通用:GREAT"]);
         draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
         let p = t.expect_prompt();
-        let estate = match p.text.a.get("tile") {
+        let estate = match p.text.args.get("tile") {
             Some(Arg::Tile(n)) => *n as usize,
             _ => {
                 return Err(format!(

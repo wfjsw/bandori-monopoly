@@ -215,19 +215,19 @@ fn a_card_whose_named_counters_run_out_leaves_the_field() {
 
 #[test]
 fn an_immediate_dest_move_lands_before_the_rest_of_the_run() {
-    // TEST:dest_now places itself and `send_to_dest`s straight out, then logs
-    // `is_placed`. `set_dest` would still have it on the field there.
-    let mut m = match_with_rules("TEST:dest_now", rules_with_fixtures());
-    m.act(1, &play("TEST:dest_now")).expect("play");
+    // TEST:fate_now places itself and `send_to_fate`s straight out, then logs
+    // `is_placed`. `set_fate` would still have it on the field there.
+    let mut m = match_with_rules("TEST:fate_now", rules_with_fixtures());
+    m.act(1, &play("TEST:fate_now")).expect("play");
     let st = m.state();
-    let left: Vec<i64> = fixture_events(&st, "dest_now_left")
+    let left: Vec<i64> = fixture_events(&st, "fate_now_left")
         .iter()
         .map(|e| int_arg(e, "placed"))
         .collect();
     assert_eq!(left, vec![0], "the card was gone before its effect ended");
     let me = st.players.iter().find(|p| p.member == 1).expect("human");
     assert!(
-        me.discard.iter().any(|c| c == "TEST:dest_now"),
+        me.discard.iter().any(|c| c == "TEST:fate_now"),
         "and it landed in the discard: {:?}",
         me.discard
     );
@@ -235,20 +235,20 @@ fn an_immediate_dest_move_lands_before_the_rest_of_the_run() {
 
 #[test]
 fn a_transferred_dest_lands_in_the_named_players_pile() {
-    // TEST:dest_to names the *other* player's discard -- 「将此卡放入[使用者]
+    // TEST:fate_to names the *other* player's discard -- 「将此卡放入[使用者]
     // 弃卡区」 when the user is not the holder.
-    let mut m = match_with_rules("TEST:dest_to", rules_with_fixtures());
-    m.act(1, &play("TEST:dest_to")).expect("play");
+    let mut m = match_with_rules("TEST:fate_to", rules_with_fixtures());
+    m.act(1, &play("TEST:fate_to")).expect("play");
     let st = m.state();
     let me = st.players.iter().find(|p| p.member == 1).expect("human");
     let user = st.players.iter().find(|p| p.member == 2).expect("the user");
     assert!(
-        me.discard.iter().all(|c| c != "TEST:dest_to"),
+        me.discard.iter().all(|c| c != "TEST:fate_to"),
         "not the holder's discard: {:?}",
         me.discard
     );
     assert!(
-        user.discard.iter().any(|c| c == "TEST:dest_to"),
+        user.discard.iter().any(|c| c == "TEST:fate_to"),
         "the user's discard: {:?}",
         user.discard
     );
@@ -258,7 +258,7 @@ fn a_transferred_dest_lands_in_the_named_players_pile() {
 /// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
 fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
     if msg.key() == "log.card_effect" {
-        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+        if let Some(Arg::Msg(m)) = msg.args.get("what") {
             return m;
         }
     }
@@ -281,8 +281,8 @@ fn fixture_events<'a>(
 }
 
 fn int_arg(msg: &game_core::msg::Msg, name: &str) -> i64 {
-    match msg.a.get(name) {
-        Some(Arg::I(v)) | Some(Arg::N(v)) => *v,
+    match msg.args.get(name) {
+        Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v,
         other => panic!("{name} is not an integer arg: {other:?}"),
     }
 }

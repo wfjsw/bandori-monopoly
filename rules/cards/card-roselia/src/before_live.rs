@@ -1,4 +1,3 @@
-//! `R:live前的准备` -- C# `CardBeforeLive` (MatchHost.cs:10673-10709): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:live前的准备`）:
 //! > live前的准备：
@@ -37,17 +36,15 @@ pub const BEFORE_LIVE: CardDef = CardDef::new(
 );
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && tile.id == tile_named('江户川乐器店')` is the pre;
-    // no residual guard.
-    // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.Counteract`:
-    // `m.Stopped = true; m.Resolve = true` behind `H.AbnormalGate`.
+    // `actor == owner && tile.id == tile_named('江户川乐器店')` is the condition; no residual
+    // guard.
     if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     let shop = ctx::tile_named("江户川乐器店");
     if shop >= 0 {
         ctx::plan::set_stop_at(shop);
-        ctx::plan::set_resolve(true);
+        ctx::plan::set_settles(true);
         // 规则书[反击]: 「使自己在江户川乐器店强制停下并触发结算」 -- logged
         // only once the gate let the stop through.
         ctx::log(

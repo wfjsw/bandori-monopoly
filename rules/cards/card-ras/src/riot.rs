@@ -1,4 +1,4 @@
-//! `RAS:R. I. O. T.` -- C# `CardRiot` (MatchHost.cs:9286-9320): [反击] everyone
+//! `RAS:R. I. O.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:R. I. O. T.`）:
 //! > R. I. O. T.：
@@ -39,12 +39,9 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书[反击]: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡」
-    // -- C# `H.DiscardFromHand` over every hand, then `H.DrawR(p, count)` for
-    // each player still in the game and `H.DrawR(player, 1)` last.
     // Every hand goes to the discard first, then everyone redraws -- so nobody
-    // redraws a card another player just discarded mid-pass.
-    // 规则书: 「所有玩家」 -- a seat that has left the game draws nothing.
+    // redraws a card another player just discarded mid-pass. 规则书: 「所有玩家」 -- a seat
+    // that has left the game draws nothing.
     let mut redraw: Vec<(i32, i32)> = Vec::new();
     for p in 0..ctx::player_count() {
         if ctx::player_out(p) {

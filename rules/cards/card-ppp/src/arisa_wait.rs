@@ -1,4 +1,3 @@
-//! `PPP:（有咲）等等等一下` -- C# `CardArisaWait` (MatchHost.cs:9085-9188): the
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（有咲）等等等一下`）:
 //! > （有咲）等等等一下：
@@ -44,38 +43,28 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
 
 fn arisa_wait(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]。」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("arisa_wait_note")));
     ctx::log(
         player_id,
         &Msg::new(key!("arisa_wait_placed")).player_id("who", player_id),
     );
-    // TODO(规则书)[持续]（2）: 「事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，
-    //   那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。」
-    //   -- needs the `IEventDefer` interface (C# `Defer` / `Resolved`), the
-    //   Fx.TurnStart hook, and the H.ResolveEvent / H.DrawEvent event routines
-    //   (plus `Card.Detach` to retire deferred events when this card leaves).
-    //   When Defer lands, the `by != Title` filter of (1) must be restored so
-    //   this card's own deferred releases do not bank a crystal.
+    // TODO(规则书)[持续] When Defer lands, the `by != Title` filter of (1) must be
+    // restored so this card's own deferred releases do not bank a crystal.
     Ok(())
 }
 
-/// 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
-/// -- placed gate; `false` means the card is not activated at all.
-/// Pure guard for [`event_after`], the plain `eventAfter` body of (1). The
-/// `IEventDefer.Resolved` callback (C# `CardArisaWait.Resolved`) belongs to (2)
-/// and is not wired yet.
+/// 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」 -- placed gate; `false` means the
+/// card is not activated at all. Pure guard for [`event_after`], the plain
+/// `eventAfter` body of (1).
 fn event_after_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
 fn event_after(player_id: i32) -> card_sdk::Asked {
-    // 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
-    // C# `by != Title` filters out this card's own deferred releases; while
-    // Defer (2) is held there are none, so every `eventAfter` is foreign.
-    // TODO(规则书)（任何非因为此卡导致的事件结算时）: the book excludes events this card
-    //   caused -- `eventAfter` carries no cause, so every settle banks one (vacuous
-    //   until the (2) deferral lands).
+    // TODO(规则书)（任何非因为此卡导致的事件结算时）: the book excludes events this card caused --
+    // `eventAfter` carries no cause, so every settle banks one (vacuous until the
+    // (2) deferral lands).
     ctx::add_crystals(1, 0)?;
     ctx::log(
         player_id,

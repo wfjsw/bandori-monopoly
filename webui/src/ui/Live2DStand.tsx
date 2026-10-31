@@ -3,12 +3,8 @@
 // whenever a model is missing. Model ids are the character art ids
 // (`D.artId(c)`), see core/data.ts and docs/LIVE2D.md.
 //
-// Fit mirrors the original `BandoriMonopoly.UI.Live2DPortrait`: the model draws
-// into a 3:4 window (the Unity portrait's 768x1024 render target, AspectRatio-
-// Fitter FitInParent) centred in the stand box, with `zoom` / `focusTop` /
-// `headroom` and the per-id `framing.json` measuring sheet shifting and scaling
-// the canvas exactly as Live2DPortrait.Draw does. All of that chain lives in
-// `useLive2DStand`; this component is the box, the art and the click.
+// All of that chain lives in `useLive2DStand`; this component is the box, the
+// art and the click.
 
 import { useLive2DStand } from "../hooks/live2d";
 import { useRestartAnimation } from "../hooks/timers";
@@ -29,7 +25,7 @@ export interface Live2DStandProps {
   onClick?: () => void;
   /** Parameter values for the model, e.g. `{ PARAM_ANGLE_X: 5 }`. */
   params?: Record<string, number>;
-  /** Display zoom (Live2DPortrait.Show); 1 fits the canvas to the window. */
+  /** */
   zoom?: number;
   /** Cap for the framing shift (0 = never push the focus further down). */
   focusTop?: number;
@@ -52,8 +48,6 @@ export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom, 
   useRestartAnimation(pulse, stand.animRef);
   const art = charArt(id, "stand");
 
-  // Clicking the stand plays a random reaction (Live2DPortrait.TryPlayReaction;
-  // reactions never stack) and still runs the scene's own click handler.
   const handleClick = () => {
     stand.modelHandle.current?.playReaction();
     onClick?.();

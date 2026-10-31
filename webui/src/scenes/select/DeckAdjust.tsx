@@ -132,7 +132,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
 
   function toggle(id: string): void {
     if (locked) return;
-    const why = rules.deck_why_not(c.name, id);
+    const why = rules.deck_blocked(c.name, id);
     if (why) return toast(why);
     if (!poolIds.has(id)) return toast(tr("deck.cannotAdd"));
     const has = buffer.includes(id);
@@ -164,7 +164,7 @@ function Adjust({ sess, view, at, auto, me, c }: {
     const next = [...buffer];
     for (const x of pool) {
       if (next.length >= SIZE) break;
-      if (!x.derived && !next.includes(x.id) && !rules.deck_why_not(c.name, x.id)) next.push(x.id);
+      if (!x.derived && !next.includes(x.id) && !rules.deck_blocked(c.name, x.id)) next.push(x.id);
     }
     setBuffer(next);
     toast(tr("deck.filled", { n: next.length - buffer.length }));

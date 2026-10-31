@@ -1,8 +1,7 @@
-//! `Mujica:（喵梦）` -- C# `CardNyamuCard` (MatchHost.cs:6080-6116): placed card
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（喵梦）`）:
 //! > （喵梦）
-//! >  
+//! >
 //! > （1）将此卡放置于场上
 //!
 //! > （2）
@@ -74,16 +73,14 @@ fn watch_flips(player_id: i32) -> card_sdk::Asked {
 }
 
 fn nyamu_card(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「将此卡放置于场上」 -- C# `H.PlaceFromPlay(c)`.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, "Mujica:（喵梦）", &Msg::new(key!("nyamu_note")));
     ctx::log(
         player_id,
         &Msg::new(key!("nyamu_placed")).player_id("who", player_id),
     );
-    // 规则书: 「每当此卡将从正面翻至背面时可选择失去2个火罐」
-    // TODO(规则书)[judgement]（每当此卡将从正面翻至背面时可选择失去2个火罐）: 翻至背面时可选失去 2 个火罐 -- 这里既不询问也不扣罐；C# `CardNyamuCard.Flipped(down: true)` 跑 `H.AskYes` + `H.SpendFire(Seat, 2)` 后也停在原地。书中没写这 2 罐换来什么，读作「付 2 罐让卡保持正面」，否则纯亏。
-    // 这是翻面前的触发，TurnEnd 采样太晚 -- 见 [`watch_flips`]；那里也记了 (2)2 的采样缺口。
+    // TODO(规则书)[judgement] 这是翻面前的触发，TurnEnd 采样太晚 -- 见 [`watch_flips`]；那里也记了 (2)2
+    // 的采样缺口。
     Ok(())
 }
 

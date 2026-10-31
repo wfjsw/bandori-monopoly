@@ -20,7 +20,7 @@ export function stateLabel(key: string): string | null {
 }
 
 /** Display name for an on-card counter. Same resolution as {@link stateLabel},
- *  but through the shared log phrase `trigger_why::counter_name` already puts
+ *  but through the shared log phrase `trigger_reason::counter_name` already puts
  *  in the log (`log.counter.*`). */
 export function counterLabel(name: string): string | null {
   const k = `log.counter.${name}`;

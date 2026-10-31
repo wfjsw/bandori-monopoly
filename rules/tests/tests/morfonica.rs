@@ -1340,7 +1340,7 @@ fn tsukushi_teleport_counts_as_the_main_move() {
     t.play(0, "Mor:（筑紫）迷茫的庭园").unwrap();
     decline_all(&mut t);
     // the main move is spent: no further roll this turn
-    assert!(t.roll(0).is_err(), "main move already used");
+    assert!(t.roll(0).is_err(), "is_main_move move already used");
 }
 
 // ============================================================ character skills

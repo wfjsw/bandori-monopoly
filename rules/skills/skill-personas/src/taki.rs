@@ -7,10 +7,7 @@
 //! （1） 「场上每有玩家」 is *anyone*, not just this player, so the `abnormal`
 //! outcome hook fires for every recipient and the clause counts each layer.
 //!
-//! （2） 「为你场上的任何一张卡」 -- the target is chosen among this player's own
-//! placed cards, and the crystal lands on that card (`Card.AddCrystals`), not
-//! on the band or the player. 「每回合限一次」 is a latch, which is what the
-//! keyed state is for.
+//! 「每回合限一次」 is a latch, which is what the keyed state is for.
 
 use bandori_std::counter;
 use bandori_std::ctx::{self, state, trigger};
@@ -28,7 +25,12 @@ pub const TAKI: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Abnormal("", None, on_abnormal)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, reset)).silent(),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::condition::MINE,
+            None,
+            reset,
+        ))
+        .silent(),
     ],
 )
 // 「（初始0，上限5）」
@@ -83,7 +85,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if field.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("taki_title")),
         &Msg::new(key!("taki_ask")),

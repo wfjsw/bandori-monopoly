@@ -51,8 +51,8 @@ def main() -> int:
         keep = drop_quote_block(lines)
         book = BOOK.get(cid)
         if book is None:
-            # the sheet is not exhaustive: a card it omits cites the C# instead
-            print(f"note    {src}: {cid} is not in docs/rulebook/cards.json (C# citation required)")
+            # the sheet is not exhaustive: a card it omits cites its source instead
+            print(f"note    {src}: {cid} is not in docs/rulebook/cards.json (citation required)")
             continue
         block = quote_block(cid, book)
         out = keep[:1] + block + keep[1:]

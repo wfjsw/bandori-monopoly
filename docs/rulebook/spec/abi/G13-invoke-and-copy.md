@@ -144,7 +144,7 @@ shout's cost (1 fire) and the shout's own [停留]-clearing schedule.
 
 **Demote to A:** the roll spelling (`ctx::roll(mover, 1, 20,
 RollPurpose::Effect, roll_source::SKILL)`), `rules_status::stay::add`, and
-`ctx::card_settle_at` all exist; a copy could be finished with no ABI. The B
+`ctx::settle_tile_at` all exist; a copy could be finished with no ABI. The B
 part is "run the borrowed body, not a copy".
 
 ### 2.3 Shared root causes
@@ -192,14 +192,14 @@ Invariants the implementation must hold (each gets a test or a Kani obligation,
   residual guard and play gate are *not* evaluated; a caller that must know
   first asks `ctx::query_guard` (which now seeds the same frame). `On::Filter`
   (a value fold) is not invocable.
-* **I6 Fate.** The import returns the inner body's `Dest`; moving the card is
+* **I6 Fate.** The import returns the inner body's `Fate`; moving the card is
   the caller's job (the `play_card` contract, `ctx.rs:2490-2497`). The engine
   never silently unplaces the target.
 * **I7 Determinism.** No import asks a player. Prompts inside the body pause the
   invocation through the existing sentinel; the ids are literals in the caller's
   body, so a replay re-derives the same call.
 * **I8 Totality.** The import exists in wasm, native and Kani; the Kani arm
-  records the call (card id, entry id, `paid`) and returns a symbolic `Dest`.
+  records the call (card id, entry id, `paid`) and returns a symbolic `Fate`.
 
 ---
 
@@ -254,7 +254,7 @@ pub fn invoke_frame(out_ptr: i32, cap: i32) -> i32;
 // `op_invoke_frame([i32; 6])`
 ```
 
-`invoke_entry` returns the inner `Dest` code, or `EXIT_NEED_INPUT`; six `i32`s,
+`invoke_entry` returns the inner `Fate` code, or `EXIT_NEED_INPUT`; six `i32`s,
 the native `[i32; 6]` maximum already in use. `invoke_frame` returns the
 postcard byte count (`out_ptr = 0` asks for the size only, the `group_skills`
 shape).
@@ -268,17 +268,17 @@ signature moves (§8).
 ```rust
 /// Run one named entry of `id` nested, as `player_id`, with its field instance
 /// bound. Body only -- ask `query_guard` first when the gate matters.
-pub fn invoke_entry(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
+pub fn invoke_entry(player_id: i32, id: &str, entry_id: &str) -> Result<Fate, Prompt> {
     invoke_entry_flags(player_id, id, entry_id, 0)
 }
 
 /// `invoke_entry` for an entry whose cost the caller has already paid:
 /// the body sees `ctx::invoke_paid()` and must not collect it again.
-pub fn invoke_entry_paid(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
+pub fn invoke_entry_paid(player_id: i32, id: &str, entry_id: &str) -> Result<Fate, Prompt> {
     invoke_entry_flags(player_id, id, entry_id, crate::abi::invoke::COST_PAID)
 }
 
-fn invoke_entry_flags(player_id: i32, id: &str, entry_id: &str, flags: i32) -> Result<Dest, Prompt>;
+fn invoke_entry_flags(player_id: i32, id: &str, entry_id: &str, flags: i32) -> Result<Fate, Prompt>;
 
 /// The innermost invocation frame, if this body is running inside one.
 pub fn invoke() -> Option<InvokeFrame>;
@@ -332,8 +332,8 @@ This is required, not cosmetic: a gate shaped as a reaction residual
 otherwise always false under a press and the probe is useless.
 
 The CEL scope needs the same fact. `fill_window_ambient` fills
-`actor = player_id` and `trigger_card = 0` (`cond_pre.rs:1393-1422`), and a
-reaction-shaped pre such as `"actor != owner && trigger_card != 0 && …"`
+`actor = player_id` and `trigger_card = 0` (`condition.rs:1393-1422`), and a
+reaction-shaped condition such as `"actor != owner && trigger_card != 0 && …"`
 (`nanami.rs:62-65`) therefore refuses. After the scope is built,
 `query_guard_entry` overwrites `scope.trigger_card = card` (and keeps
 `actor = player_id`) so the probe asks the question the invoke would answer. No
@@ -342,7 +342,7 @@ guards now see the real instance.
 
 ### 4.7 What does *not* move
 
-`ctx::play_card` (card play with a returned `Dest`), `ctx::invoke_skill` (press
+`ctx::play_card` (card play with a returned `Fate`), `ctx::invoke_skill` (press
 by `entry::PRESS`), `ruleset_send` and the declare/`declared_arg` machinery are
 untouched. `declare` is per-entry and unrelated to invocation: an invoke runs
 `OP_RUN` only, so a body with `declare` gets `T::default()` from
@@ -371,7 +371,7 @@ entry_id, flags)`:
    `OP_DECLARE`, no `cardUsed` raise;
 8. restore world/answers/asked/host_request, `leave_invoke(saved)`,
    `set_play_from_hand(was)`;
-9. `Ok(dest)`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`, other errors trap.
+9. `Ok(fate)`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`, other errors trap.
 
 `play_card` passes `entry::PRESS` and keeps its "card play" doc; `invoke_skill`
 passes `entry::PRESS`.
@@ -382,9 +382,9 @@ passes `entry::PRESS`.
 
 ```rust
 /// Open a nested invocation of `id` with the target instance `uid` (or -1).
-/// Saves the caller's card, dest, uid and trigger card payload.
+/// Saves the caller's card, fate, uid and trigger card payload.
 fn enter_invoke(&mut self, id: &str, uid: i32) -> InvokeSaved;
-/// Restore the caller's frame; returns the inner body's Dest.
+/// Restore the caller's frame; returns the inner body's Fate.
 fn leave_invoke(&mut self, saved: InvokeSaved) -> i32;
 ```
 
@@ -426,7 +426,7 @@ cost was paid three effects ago.
   (I5); it does not validate that anything was paid.
 * A trap inside the invoked body aborts the whole play (the play already
   committed); the no-op entry path returns `DEST_UNSET`.
-* `Dest`: returned only. A placed target that wants to leave uses
+* `Fate`: returned only. A placed target that wants to leave uses
   `ctx::unplace_at(ctx::self_uid())` in its own body (the band (2) sweep
   already does, `skill-groups/src/crychic.rs:196`).
 
@@ -441,7 +441,7 @@ pub fn arm_invoke_entry(a: Args) -> i64 {
         w.last_invoke = (name_id(a[1], a[2]), name_id(a[3], a[4]), a[5] & 1);
     });
     // symbolic fate: DEST_UNSET, Graveyard or Field, the three a borrowed body uses
-    world::with_world(|w| w.dest_hint) as i64   // a `dest_hint` field on the model
+    world::with_world(|w| w.fate_hint) as i64   // a `fate_hint` field on the model
 }
 ```
 
@@ -457,7 +457,7 @@ Nanami's gate becomes "a crystal, a persona skill, and its (2) admits":
 `ctx::query_guard(player_id, skill, "2")`. Because the query seeds the frame
 (4.6), `on_skill_applies` sees `trigger_cards = [skill]` and the pot precondition
 `charge(owner) >= 1`, so the probe answers (almost) exactly "would the (2) body
-do anything". One gap stays: the pre gates on **pots**, while `fire::spend` can
+do anything". One gap stays: the condition gates on **pots**, while `fire::spend` can
 substitute a 不再迷茫 crystal, so a 0-pot owner with a crystal is refused before
 the substitution window (open question 8). The press then invokes **unpaid**:
 the (2)'s own pot cost is part of the clause and is still collected by the
@@ -468,7 +468,7 @@ body's ask.
 ## 6. Card usage — before / after
 
 **G05 note.** The button/press *surface* — when a skill is offered, its
-`why_not` text, the `use_skill` dispatch — is the G05 group's. This document
+`guard` text, the `use_skill` dispatch — is the G05 group's. This document
 only guarantees what a press (and a card) can *address* and *bind*; the gate
 rewrites below are the minimum to keep the cards coherent with the clause and
 are G05's to finish.
@@ -478,7 +478,7 @@ are G05's to finish.
 ```rust
 // before: cant_play (:77-84)
 if owner_skill(player_id).is_none() { …no_skill }
-if ctx::tok_names(player_id, TOKEN_PREFIX).is_empty() { …no_mark }
+if ctx::held_names(player_id, TOKEN_PREFIX).is_empty() { …no_mark }
 // after: the (2) needs a pot, not a mark
 let Some(skill) = ctx::persona_skill(player_id) else { …no_skill };
 if !ctx::query_guard(player_id, &skill, "2") { …no_pot_or_cd }
@@ -547,12 +547,12 @@ fn before_settle(player_id: i32) -> Asked {
     let mover = ctx::trigger::player_id();
     // (3) is the owner's own landing near another (cost 1, *their* tile);
     // (2) is someone else's landing near the owner (cost 4, the owner's tile).
-    let (cost, dest) = if mover == player_id {
+    let (cost, fate) = if mover == player_id {
         (1, nearest_other_tile(player_id))
     } else {
         (4, ctx::player_pos(player_id))
     };
-    if dest < 0 { return Ok(()); }
+    if fate < 0 { return Ok(()); }
     if !ctx::invoke_paid() {                            // a borrower may have paid
         if !ask_yes(…) { return Ok(()); }
         if !fire::spend(player_id, cost, …)? { return Ok(()); }
@@ -573,10 +573,10 @@ fn after_offer_applies(player_id: i32) -> bool {
 fn before_settle_effect(player_id: i32) -> Asked {
     let mover = ctx::trigger::player_id();
     state::set(mover, OFFERED, 0);                      // one shot
-    let dest = if mover == player_id { nearest_other_tile(player_id) }
+    let fate = if mover == player_id { nearest_other_tile(player_id) }
                else { ctx::player_pos(player_id) };
-    if dest < 0 { return Ok(()); }
-    ctx::teleport_to(mover, dest);
+    if fate < 0 { return Ok(()); }
+    ctx::teleport_to(mover, fate);
     state::set(mover, ACTED, 1);
     if mover != player_id {                            // the (2) arm, not cost == 4
         let n = ctx::roll(mover, 1, 20, RollPurpose::Effect, roll_source::SKILL)?;
@@ -603,7 +603,7 @@ effect body, gated by the `OFFERED` latch (cleared on entry) or by
 `DUE` moves from the owner to the **mover** (`state::set(mover, DUE, 1)`), which
 makes the existing `half` filter correct as written: its body receives the payer
 and reads `state::get(player_id, DUE) > 0` (`tomori.rs:74-78`). The
-`TurnEnd` entry and its `actor == owner` pre go away; a schedule fires on the
+`TurnEnd` entry and its `actor == owner` condition go away; a schedule fires on the
 mover's next turn end (already skip-safe, `ctx.rs:2929-2934`), which is what
 「自己的下回合结束时」 means, and it survives the card not being placed — the
 borrowed case. `due_settle` clears `DUE` first, then settles.
@@ -622,7 +622,7 @@ ctx::log(...);                                            // 「使用一次…�
 
 `clear_latch` on `MoveResolved` clears `latch_key` and **`half_key`** (the forced
 settle is over). The shout adds its own `On::Schedule("due_settle", …)` entry:
-set `half_key`, `ctx::card_settle_at(mover, pos, true)`, clear `half_key`. One
+set `half_key`, `ctx::settle_tile_at(mover, pos, true)`, clear `half_key`. One
 fire (not four) because the shout paid before invoking (`COST_PAID`); the roll
 and delay come from the skill body.
 
@@ -696,7 +696,7 @@ Black-box tests use the existing `Table` harness and `t.option` / `answer_q`.
 | 1 | `crychic.rs::mutsumi_never_cash_out_is_zero_on_a_shortfall` — 1 crystal: all spent, no money |
 | ABI | `crates/game-rules/tests/card_activation.rs::invoke_binds_the_target_and_restores_the_outer_frame` — test card A invokes test card B; B reads `self_uid` = B's uid, A's `self_uid` is restored after |
 | ABI | `card_activation.rs::invoke_seeds_and_restores_the_trigger_card` / `::invoke_unknown_entry_is_a_noop` / `::invoke_unknown_card_traps` / `::invoke_filter_entry_traps` |
-| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Dest` and log as the PRESS slug |
+| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Fate` and log as the PRESS slug |
 | 2 | `crychic.rs::tomori_shout_pull_runs_the_borrowed_second_body` — the poem's own `tomori_moved` log appears (proves the body, not the copy), mover teleported to the controller's tile |
 | 2 | `crychic.rs::tomori_shout_pull_rolls_once_and_leans_on_six_or_less` — forced face 6 ⇒ `stay` 1 plus a scheduled settle; face 7 ⇒ none |
 | 2 | `crychic.rs::tomori_shout_delayed_settle_pays_half_at_the_movers_next_turn_end` — the settle runs on the mover's next turn end (not the controller's), at half, and then clears |
@@ -760,10 +760,8 @@ facts rather than running the nested guest):
    persona skill; if the sheet ever means the card's owner instead, the lookup
    moves to the card's owner (a new owner-of-instance reader) and the entry id
    stays.
-2. **Should an invoke run the gate too?** Body-only matches C# `Offer()` and the
-   press path, and 「不受数量或轮数限制」 depends on skipping. A
-   `invoke_entry_gated` wrapper could ask `query_guard` first if a clause ever
-   needs "normal limits".
+2. A `invoke_entry_gated` wrapper could ask `query_guard` first if a clause ever needs "normal
+  limits".
 3. **Trigger kind.** The invoked body inherits the caller's kind. Should an
    `Action` entry instead present its own declared kind for the frame? Today's
    bodies do not read it, but a future guard might.
@@ -782,7 +780,7 @@ facts rather than running the nested guest):
    invoked from a zone it is not placed in (a hand or pile card), where the
    lookup is empty and `is_placed()` false; if such an entry needs it true, the
    engine must materialize a transient instance. Today's bodies do not.
-8. **Pot gates vs the crystal substitution.** 七深's (2) pre says
+8. **Pot gates vs the crystal substitution.** 七深's (2) condition says
    `charge(owner) >= 1`; `fire::spend` can take a 不再迷茫 crystal instead
    (`tomori.rs:101-104` is the same question on the poem side and omits the
    gate). Should the (2) gate be `charge(owner) >= 1 || a substitute is armed`,

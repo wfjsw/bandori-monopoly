@@ -1,4 +1,3 @@
-//! `CRYCHIC:想要成为人类` -- C# `CardWantHuman` (MatchHost.cs:2502-2583): place the
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要成为人类`）:
 //! > 想要成为人类
@@ -33,20 +32,15 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
         // sheet cell M2
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
-/// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).
-/// A per-player slot stands in for the per-field-card `Mem` map; 0 means
-/// "never declared" (the C# default X is 10).
 pub(crate) const SLOT_X: &str = "want_human_x";
 
 fn want_human(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「将此卡置于场上」 -- C# `H.PlaceFromPlay(c)`.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(
         player_id,
         "CRYCHIC:想要成为人类",
         &Msg::new(key!("want_human_note")),
     );
-    // 规则书（1）: 「从1-20间选择并声明X，将其写下」 -- C# `H.AskNumber(..., 1, 20, ...)`.
     let x = ctx::ask_number(
         player_id,
         &Msg::new(key!("want_human_title")),
@@ -54,13 +48,9 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
         1,
         20,
     )?;
-    // 规则书（1）: 「将其写下」 -- `Mem["x"]`; the player slot is the stand-in.
-    // TODO(规则书)（将此卡置于场上并从1-20间选择并声明X，将其写下）: X / boost /
-    //   abBefore 属于该卡实例 (C# `Mem`) -- 都写在玩家 slot 上：卡离场不清，
-    //   同一玩家两张会共用。
+    // TODO(规则书)（将此卡置于场上并从1-20间选择并声明X，将其写下）: 规则书（1）: 「将其写下」 -- `Mem["x"]`; the player
+    // slot is the stand-in.
     ctx::set_slot(player_id, SLOT_X, x);
-    // Fresh placement: no boost snapshot from a previous instance (C# `Mem` is
-    // per-card-instance; the player slot persists across re-places).
     ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
     ctx::log(
         player_id,
@@ -68,24 +58,17 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", x as i64),
     );
-    // (1) and (2)'s boost are handled in `counteract`, which the Fx hook dispatch
+    // (1) and (2)'s boost are handled in `counteract`, which the hook dispatch
     // runs at `rollAfter` / `turnStart` / `turnEnd`.
     Ok(())
 }
 
-/// Where the armed boost is written down (C# `CardWantHuman.Mem["boost"]`),
-/// stored as the pending total **+ 1** so 0 still means "not armed" (X = 20
-/// arms a legitimate +0).
 const SLOT_BOOST: &str = "want_human_boost";
 
-/// Snapshot of `abnormal_count` taken when the boost was consumed (C#
-/// `CardWantHuman.Mem["abBefore"]`), stored as `count + 1` so that 0 means
-/// "boost not consumed this turn".
 const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 
-/// `Fx.DiceRollAfter` / `Fx.TurnStart` (C# `CardWantHuman.DiceRollAfter` / `TurnStart`).
-/// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
-/// `actor == owner && card.placed` is the pre; the arms branch on kind.
+/// Runs through the hook dispatch, so this is a field effect, not a [反击].
+/// `actor == owner && card.placed` is the condition; the arms branch on kind.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
@@ -111,8 +94,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if armed > 0 {
                 let boost = armed - 1;
                 ctx::set_slot(player_id, SLOT_BOOST, 0);
-                // 规则书（2）: snapshot the abnormal counter so 「若该次移动过程中受到
-                // 异常移动效果影响」 can be checked at turn end (C# `Mem["abBefore"]`).
                 ctx::set_slot(
                     player_id,
                     SLOT_AB_BEFORE,
@@ -155,12 +136,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                     .i("n", boost as i64),
             );
         }
-        // 规则书（2）: 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹
-        // 水晶。」 -- C# `TurnEnd`: `H._abnormalTurn[Player] > Mem["abBefore"]` when
-        // the boost was consumed this turn.
-        // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 --
-        //   这里是整回合的 `abnormal_count` 在回合结束时比，移动之后、回合结束
-        //   之前落下的异常也会算数。
+        // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 -- 这里是整回合的 `abnormal_count`
+        // 在回合结束时比，移动之后、回合结束 之前落下的异常也会算数。
         TriggerKind::TurnEnd => {
             let ab_before = ctx::slot(player_id, SLOT_AB_BEFORE);
             if ab_before <= 0 {

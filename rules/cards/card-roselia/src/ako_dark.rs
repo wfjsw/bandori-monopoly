@@ -1,8 +1,7 @@
-//! `R:（亚子）黑暗大魔姬亚子` -- C# `CardAkoDark` (MatchHost.cs:10781-10814): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（亚子）黑暗大魔姬亚子`）:
 //! > （亚子）黑暗大魔姬亚子：
-//! >  
+//! >
 //! > （1）[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。若此卡从手牌以外的地方打出，你抽一张卡。
 //!
 //! just before you pay another player: take a [眩晕] layer instead of paying.
@@ -37,9 +36,8 @@ pub const AKO_DARK: CardDef = CardDef::new(
         .fields(&[("group", r#"Roselia"#), ("owner", r#"宇田川亚子"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）[反击]: 「使自己获得一层[眩晕]」 -- C# `H.GiveStun(i, 1, i, "黑暗大魔姬亚子")`.
-    // The grant is refused behind [不可阻挡] / a cancelled abnormal window, so
-    // the log follows the layer count instead of the call.
+    // The grant is refused behind [不可阻挡] / a cancelled abnormal window, so the log
+    // follows the layer count instead of the call.
     let before = rules_status::stun::get(player_id);
     rules_status::stun::add(player_id, 1);
     if rules_status::stun::get(player_id) > before {
@@ -48,8 +46,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("ako_dark_stun")).player_id("who", player_id),
         );
     }
-    // 规则书（1）[反击]: the pay is waived once the player is stunned (C# CounteractHint:
-    // 「这笔就不用付了」) -- C# `c.Trigger.Pay.cancel = true` when `H.State.seats[i].Stunned`.
     if rules_status::stun::get(player_id) > 0 {
         trigger::set_pay_amount(0);
     }

@@ -4,7 +4,7 @@
 //! payload (who / target / tile / value / the chain link it answers). Bracketed
 //! terms ([pass], overlap, settle, pay…) match the rulebook's wording, the way
 //! existing `log.*` keys do. A kind with no dedicated phrase falls back to
-//! `log.why.{{kind}}`, so nothing ever renders blank.
+//! `log.reason.{{kind}}`, so nothing ever renders blank.
 //!
 //! Player / tile / card names ride [`game_core::msg::Arg`] and resolve on the
 //! client, so this is a pure function of the trigger.
@@ -13,10 +13,10 @@ use crate::world::Trigger;
 use crate::Msg;
 use crate::TriggerKind;
 
-/// The short reason a body ran -- the `{{why}}` of 「效果适用」.
+/// The short reason a body ran -- the `{{reason}}` of 「效果适用」.
 ///
 /// Every `TriggerKind` a shipped entry listens to has a dedicated phrase; the
-/// rest fall back to the kind name itself (`log.why.*` keyed by the wire
+/// rest fall back to the kind name itself (`log.reason.*` keyed by the wire
 /// spelling), so a new raise point still names itself until it gets a phrase.
 pub fn trigger_reason(t: &Trigger) -> Msg {
     let who = t.player_id;
@@ -36,22 +36,22 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::MoveAfter
         | TriggerKind::MoveResolved => {
             let key = if backward {
-                "log.why.pass_back"
+                "log.reason.pass_back"
             } else {
-                "log.why.pass"
+                "log.reason.pass"
             };
             Msg::new(key).player_id("who", who).tile("tile", tile)
         }
-        TriggerKind::PassPlayer => Msg::new("log.why.pass_player")
+        TriggerKind::PassPlayer => Msg::new("log.reason.pass_player")
             .player_id("who", who)
             .player_id("target", target),
         TriggerKind::DiceRollBefore
         | TriggerKind::DiceRollResult
         | TriggerKind::DiceRollAfter
-        | TriggerKind::DiceRollValue => Msg::new("log.why.roll")
+        | TriggerKind::DiceRollValue => Msg::new("log.reason.roll")
             .player_id("who", who)
             .i("value", value),
-        TriggerKind::Teleported => Msg::new("log.why.teleport")
+        TriggerKind::Teleported => Msg::new("log.reason.teleport")
             .player_id("who", who)
             .tile("tile", tile),
 
@@ -60,7 +60,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::SettleBefore
         | TriggerKind::SettleAfter
         | TriggerKind::SettleBody
-        | TriggerKind::TileResolved => Msg::new("log.why.settle")
+        | TriggerKind::TileResolved => Msg::new("log.reason.settle")
             .player_id("who", who)
             .tile("tile", tile),
 
@@ -76,15 +76,15 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::PayCombinedMul
         | TriggerKind::PayCombinedCancel => {
             if who < 0 {
-                Msg::new("log.why.gain")
+                Msg::new("log.reason.gain")
                     .player_id("target", target)
                     .i("value", value)
             } else if target < 0 {
-                Msg::new("log.why.pay_bank")
+                Msg::new("log.reason.pay_bank")
                     .player_id("who", who)
                     .i("value", value)
             } else {
-                Msg::new("log.why.pay")
+                Msg::new("log.reason.pay")
                     .player_id("who", who)
                     .player_id("target", target)
                     .i("value", value)
@@ -93,7 +93,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
 
         // ---- turn flow ---------------------------------------------------
         TriggerKind::TurnStart | TriggerKind::TurnStartBefore | TriggerKind::DeckAtGameStart => {
-            Msg::new("log.why.turn_start").player_id("who", who)
+            Msg::new("log.reason.turn_start").player_id("who", who)
         }
         TriggerKind::TurnEnd
         | TriggerKind::TurnEndBefore
@@ -103,35 +103,35 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::PayCombinedAddBefore
         | TriggerKind::PaySplitMulBefore
         | TriggerKind::EndTurnBefore
-        | TriggerKind::EndTurnAfter => Msg::new("log.why.turn_end").player_id("who", who),
-        TriggerKind::DeckBeforeGame => Msg::new("log.why.deck_before").player_id("who", who),
+        | TriggerKind::EndTurnAfter => Msg::new("log.reason.turn_end").player_id("who", who),
+        TriggerKind::DeckBeforeGame => Msg::new("log.reason.deck_before").player_id("who", who),
 
         // ---- cards in transit --------------------------------------------
         TriggerKind::Card | TriggerKind::CardAfter | TriggerKind::CardPlayed => match &card {
-            Some(c) => Msg::new("log.why.played")
+            Some(c) => Msg::new("log.reason.played")
                 .player_id("who", who)
                 .card("card", c.clone()),
-            None => Msg::new("log.why.played_no_card").player_id("who", who),
+            None => Msg::new("log.reason.played_no_card").player_id("who", who),
         },
         TriggerKind::Event | TriggerKind::EventAfter => match &card {
-            Some(c) => Msg::new("log.why.event").card("card", c.clone()),
-            None => Msg::new("log.why.event_no_card").player_id("who", who),
+            Some(c) => Msg::new("log.reason.event").card("card", c.clone()),
+            None => Msg::new("log.reason.event_no_card").player_id("who", who),
         },
         TriggerKind::Drawn | TriggerKind::Drew | TriggerKind::DrewBefore | TriggerKind::DrawOut => {
             match &card {
-                Some(c) => Msg::new("log.why.drew_card")
+                Some(c) => Msg::new("log.reason.drew_card")
                     .player_id("who", who)
                     .card("card", c.clone()),
-                None => Msg::new("log.why.drew").player_id("who", who),
+                None => Msg::new("log.reason.drew").player_id("who", who),
             }
         }
         TriggerKind::Discarded | TriggerKind::DiscardBefore | TriggerKind::DiscardAfter => {
             match &card {
-                Some(c) => Msg::new("log.why.discarded").card("card", c.clone()),
-                None => Msg::new("log.why.discarded_no_card").player_id("who", who),
+                Some(c) => Msg::new("log.reason.discarded").card("card", c.clone()),
+                None => Msg::new("log.reason.discarded_no_card").player_id("who", who),
             }
         }
-        TriggerKind::Reshuffled => Msg::new("log.why.reshuffled").player_id("who", who),
+        TriggerKind::Reshuffled => Msg::new("log.reason.reshuffled").player_id("who", who),
 
         // ---- property ----------------------------------------------------
         TriggerKind::Bought
@@ -141,18 +141,18 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BuyAdd
         | TriggerKind::BuyMul
         | TriggerKind::BuySet
-        | TriggerKind::BuyAssign => Msg::new("log.why.bought")
+        | TriggerKind::BuyAssign => Msg::new("log.reason.bought")
             .player_id("who", who)
             .tile("tile", tile),
-        TriggerKind::BuildBefore | TriggerKind::BuildAfter => Msg::new("log.why.build")
+        TriggerKind::BuildBefore | TriggerKind::BuildAfter => Msg::new("log.reason.build")
             .player_id("who", who)
             .tile("tile", tile),
-        TriggerKind::Mortgage | TriggerKind::MortgageBefore => Msg::new("log.why.mortgage")
+        TriggerKind::Mortgage | TriggerKind::MortgageBefore => Msg::new("log.reason.mortgage")
             .player_id("who", who)
             .tile("tile", tile),
 
         // ---- status / abnormal -------------------------------------------
-        TriggerKind::Abnormal | TriggerKind::AbnormalGuard => Msg::new("log.why.abnormal")
+        TriggerKind::Abnormal | TriggerKind::AbnormalGuard => Msg::new("log.reason.abnormal")
             .player_id("who", who)
             .player_id("target", target)
             .i("value", value),
@@ -161,51 +161,51 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BankruptBefore
         | TriggerKind::BankruptResolved
         | TriggerKind::LeaveBefore
-        | TriggerKind::LeaveAfter => Msg::new("log.why.out").player_id("who", who),
+        | TriggerKind::LeaveAfter => Msg::new("log.reason.out").player_id("who", who),
         TriggerKind::State
         | TriggerKind::ActGate
         | TriggerKind::PayGate
         | TriggerKind::MoveGate
         | TriggerKind::ExclusiveUse
         | TriggerKind::TurnBonusTime
-        | TriggerKind::TurnBaseTime => Msg::new("log.why.state").player_id("who", who),
+        | TriggerKind::TurnBaseTime => Msg::new("log.reason.state").player_id("who", who),
 
         // ---- targeting / gates -------------------------------------------
         TriggerKind::Target
         | TriggerKind::Targeted
         | TriggerKind::ImmuneAll
         | TriggerKind::Untargetable
-        | TriggerKind::Redirect => Msg::new("log.why.target")
+        | TriggerKind::Redirect => Msg::new("log.reason.target")
             .player_id("who", who)
             .player_id("target", target),
 
         // ---- counters / marks --------------------------------------------
-        TriggerKind::CounterChanged => Msg::new("log.why.counter_changed")
+        TriggerKind::CounterChanged => Msg::new("log.reason.counter_changed")
             .msg("name", counter_name(t.name.as_deref().unwrap_or("")))
             .i("value", value),
-        TriggerKind::MarkerSpend | TriggerKind::MarkerGain => Msg::new("log.why.marker")
+        TriggerKind::MarkerSpend | TriggerKind::MarkerGain => Msg::new("log.reason.marker")
             .player_id("who", who)
             .i("value", value),
 
         // ---- misc ---------------------------------------------------------
-        TriggerKind::Counteracted => Msg::new("log.why.counteracted")
+        TriggerKind::Counteracted => Msg::new("log.reason.counteracted")
             .player_id("who", who)
             .player_id("target", target),
         TriggerKind::Effect => match &card {
-            Some(c) => Msg::new("log.why.effect").card("card", c.clone()),
-            None => Msg::new("log.why.effect_no_card").player_id("who", who),
+            Some(c) => Msg::new("log.reason.effect").card("card", c.clone()),
+            None => Msg::new("log.reason.effect_no_card").player_id("who", who),
         },
-        TriggerKind::TwoCards => Msg::new("log.why.two_cards").player_id("who", who),
+        TriggerKind::TwoCards => Msg::new("log.reason.two_cards").player_id("who", who),
 
         // Generic fallback -- never blank. Names the wire kind so a new
         // raise point still says what it is until it gets a phrase.
-        other => Msg::new("log.why.generic")
+        other => Msg::new("log.reason.generic")
             .player_id("who", who)
             .msg("kind", kind_name(other.spelling().as_ref())),
     }
 }
 
-/// The `{{why}}` of a counteraction resolution: the answered link's card and what it
+/// The `{{reason}}` of a counteraction resolution: the answered link's card and what it
 /// was doing. `answered_card` names the link's card; the link's own [`Trigger`]
 /// supplies the rest.
 pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
@@ -213,7 +213,7 @@ pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
     if answered_card.is_empty() {
         what
     } else {
-        Msg::new("log.why.answering")
+        Msg::new("log.reason.answering")
             .card("card", answered_card.to_string())
             .msg("what", what)
     }

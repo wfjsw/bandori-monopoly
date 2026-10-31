@@ -8,7 +8,7 @@
 //! public match view (`webui/src/game/autopilot.ts`); keep the two in sync.
 //!
 //! A human who times out or disconnects is answered with the **standard**
-//! policy even though `ai` flips on -- see [`Cx::bot_mentality`].
+//! policy even though `ai` flips on -- see [`PlayCtx::bot_mentality`].
 //!
 //! **Standard reads its thresholds from the seat's resolved
 //! [`StrategyParams`]** (`docs/BOT.md` §3.8): the constants below are their
@@ -16,7 +16,7 @@
 //! not parameterised -- it keeps [`CHAOS_RESERVE`] and [`CHAOS_COUNTER_CHANCE`]
 //! as literals.
 
-use super::cx::Cx;
+use super::cx::PlayCtx;
 use crate::state::BotMentality;
 use crate::strategy::StrategyParams;
 
@@ -94,13 +94,13 @@ pub fn bot_wants_buy(m: BotMentality, money: i32, price: i32) -> bool {
 /// play the card and take the Q1 shortfall path. Standard keeps
 /// [`BUY_RESERVE`]; chaos keeps its own [`CHAOS_RESERVE`]. A cost of `0`
 /// (unknown / assume free) always passes.
-pub fn bot_wants_play_card(m: BotMentality, money: i32, est_cost: i32) -> bool {
-    if est_cost <= 0 {
+pub fn bot_wants_play_card(m: BotMentality, money: i32, estimated_cost: i32) -> bool {
+    if estimated_cost <= 0 {
         return true;
     }
     match m {
-        BotMentality::Standard | BotMentality::Advanced => money - est_cost >= BUY_RESERVE,
-        BotMentality::Chaos => money - est_cost >= CHAOS_RESERVE,
+        BotMentality::Standard | BotMentality::Advanced => money - estimated_cost >= BUY_RESERVE,
+        BotMentality::Chaos => money - estimated_cost >= CHAOS_RESERVE,
     }
 }
 
@@ -128,7 +128,7 @@ pub fn bot_wants_force_buy(m: BotMentality, money: i32, price: i32) -> bool {
     }
 }
 
-impl Cx<'_> {
+impl PlayCtx<'_> {
     /// The policy this seat actually plays under: the seat's own mentality.
     /// A human seat carries [`BotMentality::Standard`] unless a host set
     /// otherwise -- 托管's 混沌 mode tags the human seat `chaos`, and the

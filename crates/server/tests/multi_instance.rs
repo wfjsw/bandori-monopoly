@@ -321,7 +321,7 @@ async fn ticks_run_once_per_quantum_across_two_tickers() {
     tokio::time::sleep(wall).await;
     let elapsed = t0.elapsed().as_secs_f64();
 
-    let meta = store.rec_meta_get(&id).unwrap().expect("rec meta");
+    let meta = store.record_meta_get(&id).unwrap().expect("rec meta");
     let ticks = meta.ticks as f64;
     let quanta = elapsed / server::TICK_QUANTUM as f64;
     // Once per quantum: within 50%, and definitely not 2x (two tickers).
@@ -406,7 +406,7 @@ async fn a_rebuilt_server_resumes_a_match_mid_play() {
     }
     cross_mulligan(&host, &id).await;
     let before = store.match_get(&id).unwrap().expect("blob");
-    let ticks_before = store.rec_meta_get(&id).unwrap().unwrap().ticks;
+    let ticks_before = store.record_meta_get(&id).unwrap().unwrap().ticks;
 
     // Kill the server (ticker + handle) and build a new one over the same
     // store -- what a restart (or a second process taking over) looks like.
@@ -422,7 +422,7 @@ async fn a_rebuilt_server_resumes_a_match_mid_play() {
     m.tick(0.05, 1).unwrap();
     let after = store.match_get(&id).unwrap().unwrap();
     assert_ne!(after, before, "the match advanced");
-    let ticks_after = store.rec_meta_get(&id).unwrap().unwrap().ticks;
+    let ticks_after = store.record_meta_get(&id).unwrap().unwrap().ticks;
     assert!(ticks_after > ticks_before, "tick bookkeeping carried over");
 
     // A client session from before the rebuild still works.

@@ -1620,7 +1620,7 @@ fn band_skill_accept_makes_the_next_main_move_a_teleport() {
     drain(&mut t);
     assert!(
         t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
-        "the main move is the teleport to a livehouse, not a walk: was {before} pos={} keys={:?}",
+        "the is_main_move move is the teleport to a livehouse, not a walk: was {before} pos={} keys={:?}",
         t.pos(0),
         t.recent_keys(15)
     );
@@ -1823,8 +1823,6 @@ fn interaction_exist_does_not_absorb_budokan() {
 
 #[test]
 fn interaction_repaint_vs_yolo() {
-    // AG:Y.O.L.O (adds 1d4 to the mover's roll) chained with RAS:Repaint
-    // (cuts the move by the counterer's path tiles).
     let mut t = Table::vanilla(3);
     t.own(0, &[EDOGAWA_PARK]);
     t.set_pos(1, 5);
@@ -1832,9 +1830,8 @@ fn interaction_repaint_vs_yolo() {
     t.give(0, &["RAS:Repaint"]);
     t.begin_turn(1);
     drain(&mut t);
-    t.dice(&[6, 2]); // base 6, Y.O.L.O adds 1d4 -> clamped: 2 on a d4
+    t.dice(&[6, 2]);
     t.roll(1).unwrap();
-    // Y.O.L.O is a [手] played before the roll settles -- see if a window opens.
     if t.counteract_offered("AG:Y.O.L.O") {
         t.counteract(1, "AG:Y.O.L.O").unwrap();
         drain(&mut t);

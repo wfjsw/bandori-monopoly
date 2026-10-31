@@ -37,7 +37,7 @@ pub struct PlanValue {
     /// Walk | Teleport.
     pub move_kind: Option<MoveKind>,
     pub teleport_to: Option<Tile>,
-    pub resolve: Option<bool>,
+    pub settles: Option<bool>,
     /// One-shot: `true` clears the extra dice now.
     pub clear_dice: bool,
     pub min_roll: Option<i32>,
@@ -54,7 +54,7 @@ pub struct RollValue {
     pub value: i32,
     /// Host-supplied recorded roll (`None` = none for this raise).
     pub recorded_roll: Option<i32>,
-    pub resolve: Option<bool>,
+    pub settles: Option<bool>,
 }
 
 /// BuyAssign -- deal rewrite before the ownership write.
@@ -277,9 +277,9 @@ impl FilterPayload for PlanValue {
                     plan::set_teleport_to(t.0);
                 }
             }
-            if let Some(on) = after.resolve {
-                if before.resolve != Some(on) {
-                    plan::set_resolve(on);
+            if let Some(on) = after.settles {
+                if before.settles != Some(on) {
+                    plan::set_settles(on);
                 }
             }
             if after.clear_dice {
@@ -319,7 +319,7 @@ impl FilterPayload for RollValue {
                 value: crate::ctx::trigger::move_roll()
                     .unwrap_or_else(|| crate::ctx::trigger::value()),
                 recorded_roll: crate::ctx::plan::recorded_roll(),
-                resolve: None,
+                settles: None,
             }
         }
         #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
@@ -334,9 +334,9 @@ impl FilterPayload for RollValue {
             if after.value != before.value {
                 crate::ctx::trigger::set_move_roll(after.value);
             }
-            if let Some(on) = after.resolve {
-                if before.resolve != Some(on) {
-                    crate::ctx::plan::set_resolve(on);
+            if let Some(on) = after.settles {
+                if before.settles != Some(on) {
+                    crate::ctx::plan::set_settles(on);
                 }
             }
         }

@@ -55,7 +55,7 @@ crate::host_subset!(heart_rain_dispatch {
 /// GAP: `arm_turn_key` is still inlined in `host::dispatch` — see
 /// [`dice_cast_dispatch`].
 crate::host_subset!(dice_cast_subset {
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     state_get => arm_state_get,
     state_set => arm_state_set,
     place_card_at => arm_place_card_at,
@@ -72,7 +72,7 @@ fn dice_cast_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args)
 
 /// `Mujica:燃尽前的线香花火` play — place + 2 crystals.
 crate::host_subset!(sparkler_play_dispatch {
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     place_card_at => arm_place_card_at,
     add_counter_self => arm_add_counter_self,
     log | effect => arm_log,
@@ -80,7 +80,7 @@ crate::host_subset!(sparkler_play_dispatch {
 
 /// `Mujica:燃尽前的线香花火` `on_crystals_changed` — discard + 2 stun.
 crate::host_subset!(sparkler_changed_dispatch {
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     apply_abnormal => arm_apply_abnormal,
     log | effect => arm_log,
 });
@@ -99,15 +99,15 @@ crate::host_subset!(doll_garden_subset {
     opt_str | opt_int | opt_tile => arm_opt,
     pay_to => arm_pay_to,
     roll => arm_roll,
-    // Isolated move branch: `ctx::plan::set_steps` / `set_resolve` (stubs).
-    set_steps | set_resolve => arm_stub_zero,
-    card_move => arm_card_move,
+    // Isolated move branch: `ctx::plan::set_steps` / `set_settles` (stubs).
+    set_steps | set_settles => arm_stub_zero,
+    run_planned_move => arm_card_move,
     log | effect => arm_log,
 });
 
 /// `Mujica:（喵梦）` play — place on own field.
 crate::host_subset!(nyamu_dispatch {
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -116,7 +116,7 @@ crate::host_subset!(nyamu_dispatch {
 crate::host_subset!(umiri_dispatch {
     player_count => arm_player_count,
     player_out => arm_player_out,
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     place_card_at => arm_place_card_at,
     state_set => arm_state_set,
     group_skills => arm_band_skills,
@@ -175,7 +175,7 @@ fn black_bday_low_iff_at(user: i32) {
         w.money[user as usize] = 500;
         w.money[other as usize] = 1_000;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::black_birthday::black_birthday_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -192,15 +192,15 @@ fn black_bday_low_iff_at(user: i32) {
             &post,
             other,
             user,
-            pre.money[other as usize],
-            pre.money[user as usize]
+            condition.money[other as usize],
+            condition.money[user as usize]
         ),
         "C-MUJICA-黑色生日-01: money moved 800"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
-    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
+    crate::kassert!(world::arr8b_eq(post.hand, condition.hand), "frame: hand");
 }
 
 /// Low-bracket iff at seat 0.
@@ -227,7 +227,7 @@ fn black_bday_high_iff_at(user: i32) {
         w.money[user as usize] = 500;
         w.money[other as usize] = 1_001;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::black_birthday::black_birthday_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -244,8 +244,8 @@ fn black_bday_high_iff_at(user: i32) {
             &post,
             other,
             user,
-            pre.money[other as usize],
-            pre.money[user as usize]
+            condition.money[other as usize],
+            condition.money[user as usize]
         ),
         "C-MUJICA-黑色生日-02: money moved 400"
     );
@@ -363,7 +363,7 @@ fn heart_rain_fallback_iff_at(user: i32) {
         w.pos[user as usize] = 0;
         w.pos[other as usize] = 0;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::heart_rain::heart_rain_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -376,18 +376,18 @@ fn heart_rain_fallback_iff_at(user: i32) {
         "C-MUJICA-心の雨-03: fallback is GiveStun(user,1) + GainMoney(user,1000)"
     );
     crate::kassert!(
-        post.stun[user as usize] == pre.stun[user as usize] + 1,
+        post.stun[user as usize] == condition.stun[user as usize] + 1,
         "user stun layer"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + 1000,
+        post.money[user as usize] == condition.money[user as usize] + 1000,
         "user +1000"
     );
     crate::kassert!(
-        post.money[other as usize] == pre.money[other as usize],
+        post.money[other as usize] == condition.money[other as usize],
         "frame: other money"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Fallback iff at seat 0.
@@ -418,7 +418,7 @@ fn heart_rain_in_window_iff_at(user: i32) {
         w.pos[user as usize] = 10;
         w.pos[other as usize] = 15;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::heart_rain::heart_rain_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -426,7 +426,7 @@ fn heart_rain_in_window_iff_at(user: i32) {
     let effects = &ebuf[..log_n];
 
     // Recover the roll from the stay delta (0 / 1 / 2 layers).
-    let gained = post.stay[other as usize] - pre.stay[other as usize];
+    let gained = post.stay[other as usize] - condition.stay[other as usize];
     kani::cover!(gained == 2, "roll ≤ 3");
     kani::cover!(gained == 1, "roll 4–12");
     kani::cover!(gained == 0, "roll ≥ 13 (fallback)");
@@ -440,7 +440,7 @@ fn heart_rain_in_window_iff_at(user: i32) {
             "C-MUJICA-心の雨-02: exactly one GiveStay for the in-window player"
         );
         crate::kassert!(
-            spec::stay_frame_ok(&pre, &post, &[other], pre.n_players),
+            spec::stay_frame_ok(&condition, &post, &[other], condition.n_players),
             "frame: only the in-window player's stay moves"
         );
     } else {
@@ -478,7 +478,7 @@ fn dice_cast_place_iff_at(user: i32) {
     sparse2(dice_cast_dispatch, user, |w| {
         w.turn_key = 7;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::dice_cast::play_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -491,11 +491,11 @@ fn dice_cast_place_iff_at(user: i32) {
         "C-MUJICA-骰子-01: PlaceCard(user, Field) plus the latch SetState"
     );
     crate::kassert!(
-        world::arr8b_eq(post.hand, pre.hand),
+        world::arr8b_eq(post.hand, condition.hand),
         "frame: hand (play leaves hand outside this body)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Dice-cast place iff at seat 0.
@@ -544,7 +544,7 @@ pub fn dice_cast_mutant_extra_money_is_detected() {
 fn sparkler_place_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2(sparkler_play_dispatch, user, |_| {});
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::sparkler::sparkler_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -556,8 +556,8 @@ fn sparkler_place_iff_at(user: i32) {
         spec::sparkler_place_effects(effects, user, 2),
         "C-MUJICA-花火-01: PlaceCard + AddCounter(+2)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Sparkler place iff at seat 0.
@@ -600,7 +600,7 @@ pub fn sparkler_crystal_count_mutant_is_detected() {
 fn sparkler_last_crystal_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2(sparkler_changed_dispatch, user, |_| {});
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::sparkler::on_crystals_changed_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -612,13 +612,13 @@ fn sparkler_last_crystal_iff_at(user: i32) {
         spec::sparkler_last_crystal_effects(effects, user),
         "C-MUJICA-花火-03: GiveStun(user, 2)"
     );
-    let dest = world::with_world(|ww| ww.dest);
+    let fate = world::with_world(|ww| ww.fate);
     crate::kassert!(
-        spec::sparkler_last_crystal_dest(dest),
-        "C-MUJICA-花火-03: dest becomes Graveyard"
+        spec::sparkler_last_crystal_fate(fate),
+        "C-MUJICA-花火-03: fate becomes Graveyard"
     );
     crate::kassert!(
-        post.stun[user as usize] == pre.stun[user as usize] + 2,
+        post.stun[user as usize] == condition.stun[user as usize] + 2,
         "user gains 2 stun layers"
     );
 }
@@ -684,7 +684,7 @@ fn doll_garden_pay_iff_at(user: i32) {
         // [无法移动] so the prompt has only the pay branch.
         w.stay[other as usize] = 1;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::doll_garden::doll_garden_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -698,11 +698,11 @@ fn doll_garden_pay_iff_at(user: i32) {
     );
     let amount = spec::doll_garden_pay_amount(x);
     crate::kassert!(
-        post.money[other as usize] == pre.money[other as usize] - amount,
+        post.money[other as usize] == condition.money[other as usize] - amount,
         "payer debited X*20"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + amount,
+        post.money[user as usize] == condition.money[user as usize] + amount,
         "user credited X*20"
     );
 }
@@ -813,7 +813,7 @@ pub fn welcome_no_state2_mutant_is_detected() {
 fn nyamu_place_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2(nyamu_dispatch, user, |_| {});
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::nyamu_card::nyamu_card_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -825,7 +825,7 @@ fn nyamu_place_iff_at(user: i32) {
         spec::nyamu_place_effects(effects, user, 2),
         "C-MUJICA-喵梦-01: PlaceCard(user, Field)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// Nyamu place iff at seat 0.
@@ -856,7 +856,7 @@ fn umiri_place_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let holder = 1 - user;
     sparse2(umiri_dispatch, user, |_| {});
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::umiri_card::umiri_card_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -870,7 +870,7 @@ fn umiri_place_iff_at(user: i32) {
         spec::umiri_place_effects(effects, holder, 2),
         "C-MUJICA-海铃-01: PlaceCard on the next actor's field"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// Umiri place iff at seat 0.
@@ -900,7 +900,7 @@ pub fn umiri_user1_places_on_next_actors_field_iff() {
 fn mortis_inert_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2(mortis_dispatch, user, |_| {});
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mujica::mortis_instinct::play_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -912,7 +912,7 @@ fn mortis_inert_iff_at(user: i32) {
         spec::mortis_inert_is_noop(effects),
         "C-MUJICA-睦-01: no prior copyable card → empty effect log"
     );
-    crate::kassert!(post == pre, "frame untouched");
+    crate::kassert!(post == condition, "frame untouched");
 }
 
 /// Mortis inert iff at seat 0.
@@ -934,7 +934,7 @@ pub fn mortis_user1_nothing_to_copy_is_inert() {
 // ===========================================================================
 // C-MUJICA-祥移动-01 (destination arithmetic)
 // 「强制一名玩家向你选择的方向移动3格」
-// The walk itself is `card_move` + `plan::set_steps(3)` (host stubs) —
+// The walk itself is `run_planned_move` + `plan::set_steps(3)` (host stubs) —
 // PROTOCOL-LEVEL for the motion. The 3-tile destination arithmetic is the
 // text's determinate part. Pure-formula harness — no body call.
 // ===========================================================================
@@ -947,7 +947,7 @@ pub fn saki_move_dest_is_three_tiles() {
     kani::assume((0..60).contains(&from));
     let dir: i32 = kani::any();
     kani::assume(dir == 1 || dir == -1);
-    let dest = spec::saki_move_dest(from, dir, 60);
+    let fate = spec::saki_move_fate(from, dir, 60);
     kani::cover!(dir == 1, "clockwise 3");
     kani::cover!(dir == -1, "counter-clockwise 3");
     crate::kassert!(
@@ -960,8 +960,8 @@ pub fn saki_move_dest_is_three_tiles() {
         (((from - 3) % 60) + 60) % 60
     };
     crate::kassert!(
-        dest == expected,
-        "C-MUJICA-祥移动-01: dest is from±3 mod 60"
+        fate == expected,
+        "C-MUJICA-祥移动-01: fate is from±3 mod 60"
     );
 }
 
@@ -974,8 +974,8 @@ pub fn saki_move_dest_mutant_is_detected() {
     kani::assume((0..60).contains(&from));
     let dir = 1i32;
     crate::kassert!(
-        spec::saki_move_dest(from, dir, 60) != spec::saki_move_dest_mutant(from, dir, 60),
-        "mutant: 3-tile dest ≠ 4-tile dest"
+        spec::saki_move_fate(from, dir, 60) != spec::saki_move_dest_mutant(from, dir, 60),
+        "mutant: 3-tile fate ≠ 4-tile fate"
     );
 }
 

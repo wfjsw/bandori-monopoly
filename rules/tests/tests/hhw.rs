@@ -136,7 +136,7 @@ fn hagumi_mark_stops_the_walk_and_settles_there() {
         .find(|e| log_key(e) == "log.rent")
         .expect("a rent at the landing");
     assert_eq!(
-        format!("{:?}", rent.msg.a.get("tile")),
+        format!("{:?}", rent.msg.args.get("tile")),
         format!("Some({:?})", game_core::msg::Arg::Tile(51)),
         "the settle is on the stop tile"
     );
@@ -584,7 +584,7 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
     );
 }
 
-fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
+fn set_held(t: &mut Table, who: usize, name: &str, value: i32) {
     t.m.world_mut().st.players[who]
         .tokens
         .push(game_core::state::Counter {
@@ -620,7 +620,7 @@ fn wacha_mocha_press_refused_below_nine_markers() {
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
-    set_tok(&mut t, 0, "水母标记", 8);
+    set_held(&mut t, 0, "水母标记", 8);
     assert!(
         t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").is_err(),
         "press below 9 markers is refused"
@@ -637,7 +637,7 @@ fn wacha_mocha_jump_at_nine_markers() {
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
-    set_tok(&mut t, 0, "水母标记", 9);
+    set_held(&mut t, 0, "水母标记", 9);
     t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
     // 「传送到#4水族馆或者 #30弦卷豪宅」 -- a tile pick between the two.
     let p = t.expect_prompt();
@@ -669,13 +669,13 @@ fn wacha_mocha_jump_at_nine_markers() {
 #[test]
 fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
     // 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动」 -- the jump runs the
-    // teleport now (`ctx::card_move`), and that teleport is the turn's main move:
+    // teleport now (`ctx::run_planned_move`), and that teleport is the turn's main move:
     // no dice are cast and the piece lands on the pick, not `pos + roll`.
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
-    set_tok(&mut t, 0, "水母标记", 9);
+    set_held(&mut t, 0, "水母标记", 9);
     t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
@@ -690,13 +690,13 @@ fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
     assert_eq!(
         t.pos(0),
         aquarium,
-        "the main move is the jump's teleport, not a walk: keys={:?}",
+        "the is_main_move move is the jump's teleport, not a walk: keys={:?}",
         t.recent_keys(15)
     );
     // 「视为本次主要移动」 -- the main move is spent now, so a later roll is refused.
     assert!(
         t.roll(0).is_err(),
-        "the jump consumed the main move: keys={:?}",
+        "the jump consumed the is_main_move move: keys={:?}",
         t.recent_keys(15)
     );
 }
@@ -937,7 +937,7 @@ fn hagumi_cash_trades_four_croquettes_for_1000() {
     t.clean();
     t.begin_turn(0);
     drain(&mut t);
-    set_tok(&mut t, 0, "可乐饼", 4);
+    set_held(&mut t, 0, "可乐饼", 4);
     let money = t.money(0);
     t.skill(0, "skill:北泽育美:全垒打！").unwrap();
     drain(&mut t);
@@ -952,7 +952,7 @@ fn hagumi_cash_refused_below_four_croquettes() {
     t.clean();
     t.begin_turn(0);
     drain(&mut t);
-    set_tok(&mut t, 0, "可乐饼", 3);
+    set_held(&mut t, 0, "可乐饼", 3);
     let money = t.money(0);
     assert!(t.skill(0, "skill:北泽育美:全垒打！").is_err());
     drain(&mut t);
@@ -967,7 +967,7 @@ fn hagumi_gives_croquettes_when_passing_another_player() {
     t.clean();
     t.begin_turn(0);
     drain(&mut t);
-    set_tok(&mut t, 0, "可乐饼", 5);
+    set_held(&mut t, 0, "可乐饼", 5);
     t.set_pos(0, 5);
     t.set_pos(1, 7);
     t.dice(&[2]); // 5 -> 7, stepping onto P1's tile
@@ -1012,7 +1012,7 @@ fn hagumi_overflow_removes_all_and_stays_one_turn() {
     t.clean();
     t.begin_turn(0);
     drain(&mut t);
-    set_tok(&mut t, 1, "可乐饼", 4);
+    set_held(&mut t, 1, "可乐饼", 4);
     // The standing sweep runs at each turn end (the count-change sites are this
     // skill's own writes; the tick is the catch-all). Finish P0's main move
     // first so the turn can end.
@@ -1025,9 +1025,6 @@ fn hagumi_overflow_removes_all_and_stays_one_turn() {
     assert_eq!(t.state(1, "stay"), 1, "one [停留] layer");
 }
 
-// 规则书: 「将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000」 --
-// the sheet prints no one-copy limit: two copies on CiRCLE each keep their own
-// settle body and each charge the 6000 (C# refused the second play).
 #[test]
 fn kkr_two_copies_each_charge_6000() {
     let kkr = "HHW:（kkr）前往笑容集结的地方！";

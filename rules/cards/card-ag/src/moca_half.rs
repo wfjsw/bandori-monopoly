@@ -1,4 +1,3 @@
-//! `AG:（摩卡）0.5倍速` -- C# `CardMocaHalf` (MatchHost.cs:1161-1197):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（摩卡）0.5倍速`）:
 //! > （摩卡）0.5倍速：
@@ -23,7 +22,7 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 ///
 /// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
 /// trigger::name() == bandori_std::counter::CRYSTALS`) is folded into this
-/// pre as `trigger_card == card.id && counter_is('crystals')`. The cond
+/// condition as `trigger_card == card.id && counter_is('crystals')`. The cond
 /// vocabulary has no `card_is` function; `trigger_card` / `card.id` are the
 /// same `id_of` hashes and this entry only runs as this card, so the
 /// comparison is the exact `trigger::card_is(ID)` spelling.
@@ -50,7 +49,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
 
         // > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）
         // TODO: Check 最终结算
-        On::Action(Action::DiceRollAfter("actor == owner && move.main && card.placed", None, roll_half)),
+        On::Action(Action::DiceRollAfter("actor == owner && move.is_main_move && card.placed", None, roll_half)),
 
         // 且你的所有资金支付与消耗减半。
         // Note: Mul happens after Add
@@ -72,7 +71,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(1): 「将此卡放置在场上」 -- the place-now + fate-later fold
-    // (`place_card` creates the instance, `Dest::Field` stops the commit from
+    // (`place_card` creates the instance, `Fate::Field` stops the commit from
     // also spending the hand card); see `ctx::place_self_to_field`.
     ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
     // 规则书(1): 「并获得3个奇迹水晶」
@@ -95,7 +94,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_decayed")).player_id("who", player_id),
@@ -103,11 +102,8 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- C#
-/// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
-/// main-move roll. An `Action::DiceRollAfter` body rewriting the face
-/// (`trigger::set_move_roll`) -- `DiceRollAfter` is the event, `DiceRollValue`
-/// the pure reshape stage.
+/// An `Action::DiceRollAfter` body rewriting the face (`trigger::set_move_roll`)
+/// -- `DiceRollAfter` is the event, `DiceRollValue` the pure reshape stage.
 ///
 /// TODO(规则书) composition with another roll reshape. 「最终结算」 reads as
 /// *after* additive modifiers (`docs/rulebook/spec/cards/ag.md`

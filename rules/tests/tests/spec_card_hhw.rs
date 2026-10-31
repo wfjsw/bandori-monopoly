@@ -23,7 +23,7 @@ fn drain(t: &mut Table) {
 
 /// Put `value` of a named player counter on `who` (arrangement).
 /// The Table harness exposes no token setter; this is a local seam.
-fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
+fn set_held(t: &mut Table, who: usize, name: &str, value: i32) {
     use game_core::state::Counter;
     let w = t.m.world_mut();
     let p = &mut w.st.players[who];
@@ -96,7 +96,7 @@ pub fn believe_frame(step: &Step<'_>) -> Result<(), String> {
         format!("discard_pub:P{who}"),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 pub const BELIEVE_CLAUSES: &[Clause] = &[
@@ -138,7 +138,7 @@ fn believe_contract() {
             0,
             &["HHW:热气球演出", "HHW:爱心义演", "HHW:运动的天赋", "HHW:Happy, Lucky, Smile, Yeah！"],
         );
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(BELIEVE_CLAUSES);
         t.play(0, BELIEVE).map_err(|e| format!("play rejected: {e}"))?;
         // Answer the chooser / pick prompts with defaults (the count is what
@@ -204,7 +204,7 @@ fn believe_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -255,7 +255,7 @@ fn backstage_pays_1000_per_discard() {
         t.set_money(0, money);
         t.set_draw(0, &["HHW:微笑巡逻队", "HHW:热气球演出", "HHW:爱心义演"]);
         t.give(0, &[BACKSTAGE]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(BACKSTAGE_CLAUSES);
         t.play(0, BACKSTAGE)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -292,7 +292,7 @@ fn backstage_pays_1000_per_discard() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -347,7 +347,7 @@ fn athletic_places_three_crystals() {
         let mut t = Table::vanilla(2);
         t.set_money(0, 10_000 + rng.range(0, 5) * 100);
         t.give(0, &[ATHLETIC]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(ATHLETIC_CLAUSES);
         t.play(0, ATHLETIC)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -363,7 +363,7 @@ fn athletic_places_three_crystals() {
             return Err(format!("C-HHW-athletic-01: crystals {c}, expected 3"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -452,7 +452,7 @@ pub fn patrol_frame(step: &Step<'_>) -> Result<(), String> {
         "owner:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 pub const PATROL_CLAUSES: &[Clause] = &[Clause::new(
@@ -473,7 +473,7 @@ fn patrol_paid_build() {
         t.set_houses(blue, 1);
         let pre_houses = t.houses(blue);
         let pre_money = t.money(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(PATROL_CLAUSES);
         // 3d20 loaded to a low sum so the free house lands on a non-buildable
         // or far tile and the paid build is the only certain +1.
@@ -507,7 +507,7 @@ fn patrol_paid_build() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -545,7 +545,7 @@ pub fn hlsy_frame(step: &Step<'_>) -> Result<(), String> {
         "turn.".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 pub const HLSY_CLAUSES: &[Clause] = &[Clause::new(
@@ -584,7 +584,7 @@ fn hlsy_teleports_and_is_the_main_move() {
     drain(&mut t);
     if t.pos(0) != after {
         panic!(
-            "C-HHW-hlsy-02: a further roll moved the piece {} -> {}; the teleport was not the main move",
+            "C-HHW-hlsy-02: a further roll moved the piece {} -> {}; the teleport was not the is_main_move move",
             after,
             t.pos(0)
         );
@@ -612,7 +612,7 @@ pub fn balloon_frame(step: &Step<'_>) -> Result<(), String> {
         "turn.".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 pub const BALLOON_CLAUSES: &[Clause] = &[Clause::new(
@@ -776,7 +776,7 @@ fn kkr_pays_10000() {
         let money = 10_000 + rng.range(0, 30) * 100;
         t.set_money(0, money);
         t.give(0, &[KKR]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(KKR_CLAUSES);
         t.play(0, KKR).map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
@@ -806,7 +806,7 @@ fn kkr_pays_10000() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -895,7 +895,7 @@ fn wacha_jump_at_nine_markers() {
     // landing check would pass with no move at all.
     t.set_pos(0, 0);
     t.place_raw(0, WACHA);
-    set_tok(&mut t, 0, "水母标记", 9);
+    set_held(&mut t, 0, "水母标记", 9);
     t.skill(0, WACHA)
         .unwrap_or_else(|e| panic!("press refused: {e}"));
     let p = t.expect_prompt();
@@ -952,7 +952,7 @@ pub fn supply_seeds(step: &Step<'_>) -> Result<(), String> {
             || m.note.key().contains("crystal")
     };
     let before = step
-        .pre
+        .condition
         .st
         .marks
         .iter()
@@ -1523,12 +1523,12 @@ fn kanon_silence_second_roll_logs_the_extra_d4() {
     let msg = &dice
         .iter()
         .map(|e| &e.msg)
-        .find(|m| m.a.contains_key("extra"))
+        .find(|m| m.args.contains_key("extra"))
         .unwrap_or_else(|| panic!("no dice line carried the +1d4 term; {dice:?}"));
     assert_eq!(msg.key(), "log.dice", "{msg:?}");
     assert_eq!(rules_spec::int_arg(msg, "count"), Some(1), "{msg:?}");
     assert_eq!(rules_spec::int_arg(msg, "sides"), Some(20), "{msg:?}");
-    match msg.a.get("extra") {
+    match msg.args.get("extra") {
         Some(game_core::msg::Arg::Text(s)) => assert_eq!(s, "+1d4", "{msg:?}"),
         other => panic!("extra is not the +1d4 term: {other:?} in {msg:?}"),
     }
@@ -1543,7 +1543,7 @@ fn hagumi_extra_d2_per_croquette() {
     t.clean();
     t.begin_turn(0);
     drain(&mut t);
-    set_tok(&mut t, 0, "可乐饼", 2);
+    set_held(&mut t, 0, "可乐饼", 2);
     let start = t.pos(0);
     // 1d20 face 5 plus two 1d2 faces 2 and 1 → 5+2+1 = 8.
     t.dice(&[5, 2, 1]);

@@ -1,4 +1,3 @@
-//! `Mor:（小白）` -- C# `CardMashiroPay` (MatchHost.cs:4996-5028): rewrite a pay
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（小白）`）:
 //! > （小白）：
@@ -32,18 +31,14 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     let to = trigger::target();
-    // 规则书[反击]: 「此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金」
-    // C# rewrites the pending `PayCtx` (`pay.to = -1; pay.kind = "lose"`) and then
-    // `H.LoseR(to, amount / 2, ..., must: true)`. Redirecting to the bank is what
-    // turns the transfer into a pure loss; the forced half-loss is a separate
-    // card-driven pay, which is itself a [反击] point.
-    // TODO(ABI): `set_pay_target(-1)` only rewrites the payee -- `p.kind` and the
-    //   `rent`/tile scales still apply to the redirected leg (500 rent factor:
-    //   250/250 instead of 250/125), and the payee's half is read off the pre-scale
-    //   `trigger::value()`, so `milli_scale`/PAY_FACTOR never reach it.
-    // TODO(规则书)（向其他玩家支付）: the redirected settle still counts toward
-    //   「本回合的[结算]向其他玩家支付」 (`turn.paid_in_settle`), though the money now
-    //   went to the bank.
+    // TODO(ABI): TODO(规则书)（向其他玩家支付）: Redirecting to the bank is what turns the
+    // transfer into a pure loss; the forced half-loss is a separate card-driven pay,
+    // which is itself a [反击] point. `set_pay_target(-1)` only rewrites the payee --
+    // `p.kind` and the `rent`/tile scales still apply to the redirected leg (500
+    // rent factor: 250/250 instead of 250/125), and the payee's half is read off the
+    // pre-scale `trigger::value()`, so `milli_scale`/PAY_FACTOR never reach it. the
+    // redirected settle still counts toward 「本回合的[结算]向其他玩家支付」
+    // (`turn.paid_in_settle`), though the money now went to the bank.
     trigger::set_pay_target(-1);
     ctx::log(
         player_id,

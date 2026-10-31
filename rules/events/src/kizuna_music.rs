@@ -5,7 +5,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{prop, CardPile};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
@@ -54,10 +54,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("n", face as i64),
     );
     // 「投掷结果mod60所对应的格子」 -- the board is 60 tiles (0..=59).
-    let dest = face.rem_euclid(60);
+    let fate = face.rem_euclid(60);
     for &p in &all_players() {
         // 「[传送]」 -- a position write, not a move; no landing settle.
-        ctx::teleport_to(p, dest);
+        ctx::teleport_to(p, fate);
         // 「并获得1层[除外]」 -- one plain exile layer; the engine ticks it off
         // at the player's next turn start (`game-core` exile tick).
         rules_status::exile::send(p, 1, -1);
@@ -65,7 +65,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             player_id,
             &Msg::new("log.event.kizuna_tp")
                 .player_id("who", p)
-                .tile("tile", dest),
+                .tile("tile", fate),
         );
     }
     Ok(())

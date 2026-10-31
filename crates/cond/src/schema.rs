@@ -107,7 +107,9 @@ pub fn ident_known(name: &str) -> bool {
 /// Hermetic unknown-var check against an explicit [`Vocab`].
 pub fn ident_known_with(name: &str, v: &Vocab) -> bool {
     if v.str_constants().any(|(n, _)| n == name)
-        || crate::kinds::int_constants().iter().any(|(n, _)| *n == name)
+        || crate::kinds::int_constants()
+            .iter()
+            .any(|(n, _)| *n == name)
     {
         return true;
     }

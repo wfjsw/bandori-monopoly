@@ -1,4 +1,3 @@
-//! `通用:[都筑诗船]Parking Space` -- C# `CardParkingSpace` (MatchHost.cs:2430-2501):
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[都筑诗船]Parking Space`）:
 //! > [都筑诗船]Parking Space：
@@ -20,15 +19,12 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
 
-/// Where the deferred [停留] layers are written down (C# `H.IncV(who, "parkingStay")`).
 const SLOT_STAY: &str = "parking_space_stay";
 
 pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[
         On::Play("", Some(cant_play), play),
-        // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」
-        // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
         On::Action(Action::SettleBody(
             "",
             Some(counteract_guard),
@@ -59,8 +55,6 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
         .fields(&[("group", r#"通用"#), ("owner", r#"都筑诗船"#)]),
 );
 
-/// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile
-/// (`没有 Space`).
 fn cant_play(_player: i32) -> Option<Msg> {
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- 没有 Space 格则不能打出.
     if ctx::tile_named("Space") >= 0 {
@@ -70,9 +64,7 @@ fn cant_play(_player: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]: 「将此卡放置于“Space”格子上」 -- C# `H.PlaceFromPlay(c, i, s)`
-    // with `s = H.TileNamed("Space")`.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     let space = ctx::tile_named("Space");
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- bound to the Space tile, not
     // to the player's field.
@@ -94,11 +86,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
             card_sdk::abi::Stack::Fresh,
         );
     }
-    // 规则书[手]: 「将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）」
-    // -- C# takes `H.State.houses[s]` houses off the Space tile, whoever owns it
-    // (the cell does not require the user to own Space), and hands one to each of
-    // the player's other owned tiles (`H.State.houses[s]--` then
-    // `H.AddHouse(i, item, ...)`, at most one per destination).
     let mut num = if space >= 0 { ctx::houses_of(space) } else { 0 };
     for t in ctx::owned_tiles(player_id) {
         // TODO(规则书)（将其上的房屋转移至其他你拥有的格子上）: 书要把其上的房屋
@@ -121,21 +108,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardParkingSpace.SettleBody` / `TurnEndAfter` (MatchHost.cs:2469-2495).
-/// Runs through the Fx hook dispatch, so these are field effects, not [反击].
-/// Pure guard for [`counteract`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// Runs through the hook dispatch, so these are field effects, not [反击]. Pure
+/// guard for [`counteract`] -- the activation gate. `false` means the card is not
+/// activated at all.
 fn counteract_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」 -- C#
-        // `CardParkingSpace.SettleBody`: when the settle lands on the card's
-        // tile, replace the tile's effect (`H.IncV(who, "parkingStay")`) and
-        // cancel the settle body. First card to claim the settle wins, so bail
-        // out once another has (`trigger::cancelled()`).
+        // First card to claim the settle wins, so bail out once another has
+        // (`trigger::cancelled()`).
         TriggerKind::SettleBody => {
             if trigger::cancelled() {
                 return Ok(());
@@ -147,24 +130,16 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             let who = trigger::player_id();
-            // C# `((m.SettleTile >= 0) ? m.SettleTile : m.Seat.pos) != Tile` --
-            // the host raises the trigger with the landing tile; the plan's
-            // `set_settle_tile` override is not read back yet (engine-side).
-            // C# `H.Log("text", who, ... 在「Parking Space」所在的格子结算：回合结束后获得 1 层 [停留])`.
+            // 在「Parking Space」所在的格子结算：回合结束后获得 1 层 [停留])`.
             ctx::log(
                 who,
                 &Msg::new(key!("parking_space_park")).player_id("who", who),
             );
             ctx::inc_slot(who, SLOT_STAY, 1);
-            // C# returns a non-null enumerator, which the engine takes as
-            // "the tile's own effect is replaced"; the ABI signals that by
-            // cancelling the settle body.
             trigger::set_cancelled();
         }
-        // 规则书（1）[持续]: the deferred layers land at the end of the mover's
-        // own turn -- C# `CardParkingSpace.TurnEndAfter` (`H.V(turn, "parkingStay")`
-        // -> `H.GiveStay(turn, layers, Seat, "Parking Space")`). Any player's turn
-        // end counts: the counter sits on the mover, not on the card's owner.
+        // Any player's turn end counts: the counter sits on the mover, not on the card's
+        // owner.
         TriggerKind::TurnEndAfter => {
             let turn = trigger::player_id();
             let layers = ctx::slot(turn, SLOT_STAY);
@@ -172,10 +147,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             ctx::set_slot(turn, SLOT_STAY, 0);
-            // C# `H.GiveStay(turn, layers, Seat, "Parking Space")` -> `AddStay`.
-            // Our line names the source up front: 「Parking Space 的效果：…」.
-            // TODO(规则书)（回合结束后获得一层[停留]）: 结算已改，[停留]应在回合末
-            //   照付 -- 卡离场后这个场上钩子不再运行，层数留在槽里.
+            // TODO(规则书)（回合结束后获得一层[停留]）: Our line names the source up front: 「Parking Space
+            // 的效果：…」. 结算已改，[停留]应在回合末 照付 -- 卡离场后这个场上钩子不再运行，层数留在槽里.
             rules_status::stay::add(turn, layers);
             ctx::log(
                 turn,

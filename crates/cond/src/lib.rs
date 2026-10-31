@@ -51,13 +51,11 @@ pub use compile::compile;
 #[cfg(feature = "compile")]
 pub use compile::compile_with;
 pub use compile::Cond;
-pub use ext::{
-    ext, install_ext, vocab, AlreadyInstalled, CondExt, LowerAs, Vocab, EMPTY_EXT,
-};
 pub use ctx::{
     fill_named_layers, CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx,
 };
 pub use eval::{EvalError, WindowScope};
+pub use ext::{ext, install_ext, vocab, AlreadyInstalled, CondExt, LowerAs, Vocab, EMPTY_EXT};
 pub use kinds::{ident_known, int_constants, mv, str_constants, trig};
 
 /// Stable int id for a string identity (card id, content name, wire kind).
@@ -76,7 +74,7 @@ pub fn id_of(name: &str) -> i64 {
 
 /// Why a condition failed to compile. Fail-closed at build: an unparsable or
 /// rejected condition is a `build-ruleset` error (G2 maps this to
-/// `RuleError::BadPre`), never "treat as true" — the clauses it carries would
+/// `RuleError::BadCondition`), never "treat as true" — the clauses it carries would
 /// otherwise be gone from the guard too.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CondError {

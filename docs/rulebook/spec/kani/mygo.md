@@ -42,10 +42,10 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 | ID | book quote (short) | classification | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | `C-MYGO-rinpuu-01` | 「使自己获得一层[停留]」 | **PROVEN** | `rinpuu_01_give_stay_iff`, `rinpuu_01_mutant_is_detected`, `rinpuu_01_mutant_two_layers` | iff SUCCESSFUL 403s (2/2 covers); `rinpuu_01_mutant_two_layers` SUCCESSFUL (panic as expected) | — | — |
-| `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::Action(&[AtEnd])` + `card_settle_at` protocol stub) | OPEN-触发结算 |
+| `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::Action(&[AtEnd])` + `settle_tile_at` protocol stub) | OPEN-触发结算 |
 | `C-MYGO-journey-01` | 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」 | **PROVEN** | `journey_01_place_four_crystals_iff`, `journey_01_mutant_is_detected` | mutant companion SUCCESSFUL; iff verdict pending | — | — |
 | `C-MYGO-journey-02` | 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶」 | **BLOCKED-HOST** | — | — | `turn_main_steps` is a protocol stub returning 0; the `>6` drain never runs under Kani. Missing: real `turn_main_steps` / main-move step count | — |
-| `C-MYGO-journey-03` | 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | CounterChanged → set_dest(Graveyard) is a zone move; the emptying write itself is engine-side | — |
+| `C-MYGO-journey-03` | 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | CounterChanged → set_fate(Graveyard) is a zone move; the emptying write itself is engine-side | — |
 | `C-MYGO-journey-04` | 「（2）[持续] 触发结算时，获得X*60资金」 | **BLOCKED-HOST** | — | — | `trigger::move_total` is a protocol stub returning 0; the `X*60` gain never runs. Missing: `trig_move_total` | OPEN-触发结算 |
 | `C-MYGO-hitoshizuku-01` | 「清除场上所有[停留]与[眩晕]效果」 | PROVEN (with -02) | `hitoshizuku_money_iff` | pending | world now has distinct `stay` / `stun` arrays | — |
 | `C-MYGO-hitoshizuku-02` | 「所有玩家…每清除一种效果则支付…1000资金」 | PROVEN (body matches book) | `hitoshizuku_money_iff` | pending | book: 1000 per type **per affected player** (ruling 2026-10-06). Body `transfer(j,user,1000*n)` is per-player. The older "body charges 1000×global kinds" note is **stale** | — |
@@ -55,7 +55,7 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 | `C-MYGO-haneoka-02` | 「若出目至少为10则…免费加盖一层房屋」 | **PROVEN** | `haneoka_thresholds_iff` | pending | free house, money unchanged | — |
 | `C-MYGO-haneoka-03` | 「若出目至少为15，则额外抽一张卡」 | **PROVEN** | `haneoka_thresholds_iff` | pending | Draw 1 | — |
 | `C-MYGO-haneoka-04` | 「至少为20，则将此卡放置在自己场上…抵消一次任意付款」 | **PROVEN** (place leg) / **PROTOCOL-LEVEL** (later cancel) | `haneoka_thresholds_iff` | pending | placement proven; the later PaySplitChoose cancel is a separate window | — |
-| `C-MYGO-haneoka-05` | 「若小于10，此卡放入弃牌堆且视为此卡未生效」 | **PROVEN** | `haneoka_thresholds_iff`, `haneoka_05_mutant_is_detected` | pending | empty body log; discard is the play pipeline's default dest | — |
+| `C-MYGO-haneoka-05` | 「若小于10，此卡放入弃牌堆且视为此卡未生效」 | **PROVEN** | `haneoka_thresholds_iff`, `haneoka_05_mutant_is_detected` | pending | empty body log; discard is the play pipeline's default fate | — |
 | `C-MYGO-rainday-01` | 「将此卡放置于自己场上并为其放置5个奇迹水晶」 | **PROVEN** | `rainday_01_place_five_crystals_iff`, `rainday_01_mutant_is_detected` | pending | — | — |
 | `C-MYGO-rainday-02` | 「打出此卡时及你的每回合开始时投掷1d10…获得一层[停留]」 | **PROVEN** (play leg shape) / **PROTOCOL-LEVEL** (turn-start leg) | `rainday_01_place_five_crystals_iff` (covers stay) | pending | zone set is the body's AGENTS table (implementation reading of 「地产商」 order) | OPEN-rainday-d10 |
 | `C-MYGO-rainday-03` | 「每回合结束时移除一个奇迹水晶…放入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | turn-end decay + CounterChanged discard is a multi-hook pipeline | — |
@@ -129,7 +129,7 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 
 | harness | verdict | time (s) | notes |
 |---|---|---:|---|
-| `rinpuu_01_give_stay_iff` | **SUCCESSFUL** | 403.0 / 563.1 | 0/20884 failed, **2/2 covers** (pre stay 0 / nonzero). Runner labeled UNMODELED* (false positive on the `unmodeled host op` property string); log `VERIFICATION:- SUCCESSFUL`. |
+| `rinpuu_01_give_stay_iff` | **SUCCESSFUL** | 403.0 / 563.1 | 0/20884 failed, **2/2 covers** (condition stay 0 / nonzero). Runner labeled UNMODELED* (false positive on the `unmodeled host op` property string); log `VERIFICATION:- SUCCESSFUL`. |
 | `rinpuu_01_mutant_two_layers` | **SUCCESSFUL (panic as expected)** | ~600 | 1/20810 failed = the mutant assert — non-vacuous |
 | `rinpuu_01_mutant_is_detected` | written, verdict pending | — | companion of the should_panic twin |
 | `journey_01_place_four_crystals_iff` | written, verdict pending | — | queued |
@@ -201,10 +201,10 @@ Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf.
 
 | harness | before | class | root cause | fix | re-time |
 |---|---|---|---|---|---|
-| `band_02_crystal_on_16_iff` | FAILED 196 s | **B** then **D** | (1) harness read `key_get(user,"crystals")` but `arm_add_counter_self` stores on `field_crystals(last_uid)` / `self_crystals` (class B — same as `events.rs`). Covers unreachable behind the failing assert. (2) After the storage fix the book formula `if pre<1 {1} else {pre}` FAILS at `pre∈{2,3}`: body `add_crystals(1,1)` + production `add_counter_at` `(*slot+n).max(0).min(max)` **clamps down** and eats (3)'s over-cap crystals | storage → `self_crystals()`; log pins host clamped delta. Book formula kept — **D kept FAILING** | yes |
+| `band_02_crystal_on_16_iff` | FAILED 196 s | **B** then **D** | (1) harness read `key_get(user,"crystals")` but `arm_add_counter_self` stores on `field_crystals(last_uid)` / `self_crystals` (class B — same as `events.rs`). Covers unreachable behind the failing assert. (2) After the storage fix the book formula `if condition<1 {1} else {condition}` FAILS at `condition∈{2,3}`: body `add_crystals(1,1)` + production `add_counter_at` `(*slot+n).max(0).min(max)` **clamps down** and eats (3)'s over-cap crystals | storage → `self_crystals()`; log pins host clamped delta. Book formula kept — **D kept FAILING** | yes |
 | `band_02_user1_crystal_on_16_iff` | FAILED 209 s | **B**+**D** | same | same | FAILED (D) |
 | `band_02_mutant_is_detected` | SUCCESSFUL 154 s | — | — | — | — |
-| `band_04_ineffective_overcap_iff` | FAILED 220 s → **SUCCESSFUL** 3/3 | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(pre,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `pre>=3 ? pre : pre+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
+| `band_04_ineffective_overcap_iff` | FAILED 220 s → **SUCCESSFUL** 3/3 | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(condition,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `condition>=3 ? condition : condition+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
 | `band_04_user1_ineffective_overcap_iff` | FAILED 202 s → **SUCCESSFUL** 3/3 | **B** | same | same | **SUCCESSFUL** 3/3 covers |
 | `band_04_mutant_is_detected` | SUCCESSFUL 157 s | — | — | — | — |
 
@@ -226,7 +226,7 @@ Clause doc: the (2) cap applies to the **roll gain**; (3)'s over-cap crystals
 are a different clause. Body `ctx::add_crystals(1, 1)` and production
 `game-core/src/engine/ops.rs` `add_counter_at` (`min(was+n, max)`) force the
 held total down to 1, destroying over-cap crystals. Setup is legal
-(`pre ∈ 0..=3`, which (3) can produce). Proof kept FAILING.
+(`condition ∈ 0..=3`, which (3) can produce). Proof kept FAILING.
 
 Hitoshizuku is **not** D: body and book agree on per-player kinds.
 

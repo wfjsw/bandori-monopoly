@@ -1,4 +1,3 @@
-//! `Mor:夏日合宿` -- C# `CardSummerCamp` (MatchHost.cs:4584-4643): stay untargetable
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:夏日合宿`）:
 //! > 夏日合宿：
@@ -13,18 +12,14 @@ use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";
 
-/// C# `Mem["blocked"]` -- how many targetings this card negated.
 const SLOT_BLOCKED: &str = "summer_camp_blocked";
 
 pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
         On::Play("", None, summer_camp),
-        // The body-top applicability checks are the condition now: only our own
-        // seat, and only against another player's effect (C#
-        // `if (seat != Seat || by == Seat) return false;`). `by` is the causer's
-        // seat and is always bound at this gate (a card's or a skill's
-        // controller), so `by >= 0` is a defensive no-op; `by != owner` decides.
+        // `by` is the causer's seat and is always bound at this gate (a card's or a
+        // skill's controller), so `by >= 0` is a defensive no-op; `by != owner` decides.
         // 规则书: 「你只会被自己发动的效果指定」
         On::Filter(Filter::Untargetable("actor == owner && by >= 0 && by != owner", None, untargetable)),
         // TODO(ABI) leave-field hook: the end path is the owner's turn start only
@@ -41,25 +36,19 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn summer_camp(player_id: i32) -> card_sdk::Asked {
-    // TODO(ABI) ai-play: C# `AiPlay => false` -- bots never play this card;
-    // `CardDef` has no AiPlay hook, so a bot prompt still offers it.
-    // 规则书: 「打出此卡，直到下个自己的回合开始前」 -- C# `H.PlaceFromPlay(c)`.
-    ctx::set_dest(ctx::Dest::Field);
+    // TODO(ABI)
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("summer_camp_note")));
     ctx::log(
         player_id,
         &Msg::new(key!("summer_camp_placed")).player_id("who", player_id),
     );
-    // 规则书: 「你只会被自己发动的效果指定」 -- the Untargetable hook below refuses
-    //   any `by != player_id` and counts each refusal in `SLOT_BLOCKED`.
-    // The Fx.TurnStart hook below ends the effect on the owner's next turn.
+    // 规则书: 「你只会被自己发动的效果指定」 -- the Untargetable hook below refuses any `by !=
+    // player_id` and counts each refusal in `SLOT_BLOCKED`.
     Ok(())
 }
 
-/// `Fx.Untargetable` (C# `CardSummerCamp.Untargetable`): while placed, only the
-/// owner's own effects may target them. Counts negations for the draw gate.
-/// Applicability is the entry's condition (`actor == owner && by >= 0 &&
-/// by != owner` -- C# `if (seat != Seat || by == Seat) return false;`).
+/// Counts negations for the draw gate.
 fn untargetable(player_id: i32, mut g: GateValue) -> GateValue {
     // 规则书: 「你只会被自己发动的效果指定」 -- one negation per refusal; the draw
     //   when the effect ends is gated on none having happened.
@@ -68,18 +57,13 @@ fn untargetable(player_id: i32, mut g: GateValue) -> GateValue {
     g
 }
 
-/// `Fx.TurnStart` (C# `CardSummerCamp.TurnStart` -> `End`): the effect ends at
-/// the owner's next turn start; draw 1 when nothing was negated.
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && card.placed` is the pre.
-    // 规则书: 「当此卡效果结束」 -- C# `H.Unplace(this, "discard", "效果结束了")`.
-    ctx::set_dest(ctx::Dest::Graveyard);
+    // `actor == owner && card.placed` is the condition.
+    ctx::set_fate(ctx::Fate::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("summer_camp_end")).player_id("who", player_id),
     );
-    // 规则书: 「你没有因为此卡效果无效化任何影响则抽一张牌」 -- C# `End`:
-    // `H.DrawR(Seat, 1, ...)` when `Blocked == 0`.
     let blocked = ctx::slot(player_id, SLOT_BLOCKED);
     ctx::set_slot(player_id, SLOT_BLOCKED, 0);
     if blocked == 0 {

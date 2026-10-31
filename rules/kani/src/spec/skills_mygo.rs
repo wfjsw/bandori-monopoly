@@ -15,25 +15,25 @@ use crate::world::Effect;
 // Frame: only the band-card crystal count moves.
 // ===========================================================================
 
-/// Post crystals after a roll-gain: min(pre + 1, 1) when pre < 1, else pre.
+/// Post crystals after a roll-gain: min(condition + 1, 1) when condition < 1, else condition.
 /// The cap (上限1) applies to this roll gain; (3)'s over-cap crystals are a
 /// different clause.
-pub fn band_02_crystals_after(pre: i32) -> i32 {
-    if pre < 1 {
+pub fn band_02_crystals_after(condition: i32) -> i32 {
+    if condition < 1 {
         1
     } else {
-        pre
+        condition
     }
 }
 
 /// Exact effect log of the roll-gain body: one AddCounter on the band card
 /// whose `n` is the host's clamped delta (`now - was`) for
-/// `add_crystals(1, 1)`. When `pre < 1` the gain lands (+1); at/above the
+/// `add_crystals(1, 1)`. When `condition < 1` the gain lands (+1); at/above the
 /// roll cap the host clamps the post value to `max=1`, so the logged delta is
-/// `min(pre + 1, 1) - pre` (0 at the cap, negative if over-cap crystals are
+/// `min(condition + 1, 1) - condition` (0 at the cap, negative if over-cap crystals are
 /// present — bookkeeping of the clamp, not a second gain).
-pub fn band_02_log_ok(effects: &[Effect], owner: i32, pre: i32) -> bool {
-    let want_n = spec_clamped_delta(pre, 1, 1);
+pub fn band_02_log_ok(effects: &[Effect], owner: i32, condition: i32) -> bool {
+    let want_n = spec_clamped_delta(condition, 1, 1);
     effects.len() == 1
         && matches!(
             effects[0],
@@ -107,12 +107,12 @@ pub fn band_05_log_ok_mutant(effects: &[Effect], owner: i32) -> bool {
 
 /// Post crystals after an ineffective-discard gain. The +1 may exceed the roll
 /// cap of 1; the held total never exceeds 3 (「最多超出2个」). The gain is
-/// refused once `pre >= 3`.
-pub fn band_04_crystals_after(pre: i32) -> i32 {
-    if pre >= 3 {
-        pre
+/// refused once `condition >= 3`.
+pub fn band_04_crystals_after(condition: i32) -> i32 {
+    if condition >= 3 {
+        condition
     } else {
-        pre + 1
+        condition + 1
     }
 }
 

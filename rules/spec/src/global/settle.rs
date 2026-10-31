@@ -50,7 +50,14 @@ pub fn table_rent_at(step: &Step<'_>, tile: usize) -> Option<i32> {
     if t.kind.as_str() == "ring" || t.rent.is_empty() {
         return None;
     }
-    let h = step.pre.st.houses.get(tile).copied().unwrap_or(0).max(0) as usize;
+    let h = step
+        .condition
+        .st
+        .houses
+        .get(tile)
+        .copied()
+        .unwrap_or(0)
+        .max(0) as usize;
     Some(t.rent[h.min(t.rent.len() - 1)])
 }
 
@@ -60,7 +67,7 @@ pub fn deed_value(step: &Step<'_>, tile: usize) -> i32 {
     let Some(t) = step.data.tiles.get(tile) else {
         return 0;
     };
-    t.price + step.pre.st.houses.get(tile).copied().unwrap_or(0) * t.house
+    t.price + step.condition.st.houses.get(tile).copied().unwrap_or(0) * t.house
 }
 
 /// Per-tile level cap: the rent table's last level (0 for RiNG, which has an
@@ -111,13 +118,13 @@ fn has_funding_or_auction(step: &Step<'_>) -> bool {
 /// (BuyAdd / BuyMul / BuySet on a previously played card). Amount clauses
 /// skip those; scenario tests cover the clean figure.
 fn has_lingering_modifiers(step: &Step<'_>) -> bool {
-    step.pre
+    step.condition
         .st
         .players
         .iter()
         .any(|p| p.field.iter().any(|f| !f.card.starts_with("skill:")))
         || step
-            .pre
+            .condition
             .st
             .board_field
             .iter()
@@ -157,7 +164,7 @@ pub fn agent_colour_set(step: &Step<'_>, agent: usize) -> Vec<usize> {
 /// * **Trigger:** an observed input whose event window contains a `rent` leg
 ///   attributed to a landed settle on tile `T`.
 /// * **Condition:** `T` is a player-owned buyable tile that is mortgaged in
-///   `pre`.
+///   `condition`.
 /// * **Effect:** no `rent` event for `T` in this window.
 /// * **Frame:** n/a (read of the event window).
 /// * **Rulings & OPEN:** the force-buy branch of a mortgaged tile
@@ -184,7 +191,7 @@ pub fn g_settle_01(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let t = tile as usize;
-        if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!(
                 "rent paid on mortgaged tile {t} (value {}, owner {})",
                 e.value, e.other
@@ -376,9 +383,9 @@ pub fn g_settle_04(step: &Step<'_>) -> Result<(), String> {
 /// * **ID:** G-SETTLE-05
 /// * **Source:** `rulebook-doc.md:154`
 /// * **Quote:** 「如果没有事件可抽取则将事件弃卡区洗切并当作新的事件卡堆来抽取。」
-/// * **Trigger:** an observed input that draws an event while `pre`'s event
+/// * **Trigger:** an observed input that draws an event while `condition`'s event
 ///   deck is empty.
-/// * **Condition:** `pre.event_deck` is empty and `pre.event_discard` is
+/// * **Condition:** `condition.event_deck` is empty and `condition.event_discard` is
 ///   non-empty at the moment of the draw.
 /// * **Effect:** the draw succeeds (an `event` is logged).
 /// * **Frame:** n/a.
@@ -398,7 +405,7 @@ pub fn g_settle_05(step: &Step<'_>) -> Result<(), String> {
     if !drew {
         return Ok(());
     }
-    if !step.pre.event_deck.is_empty() || step.pre.event_discard.is_empty() {
+    if !step.condition.event_deck.is_empty() || step.condition.event_discard.is_empty() {
         return Ok(());
     }
     let any_event = step
@@ -419,7 +426,7 @@ pub fn g_settle_05(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:155`
 /// * **Quote:** 「无主的[可购买格子]的[结算]是：**可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子地契和拥有权。**」
 /// * **Trigger:** a `buy` event whose `to` is a buyable tile that was unowned
-///   in `pre`.
+///   in `condition`.
 /// * **Condition:** the window has no card activation (a BuyAdd / BuyMul /
 ///   BuySet hook reshapes the price -- L6).
 /// * **Effect:** the buyer's money falls by exactly
@@ -452,7 +459,7 @@ pub fn g_settle_06(step: &Step<'_>) -> Result<(), String> {
         }
         let t = t as usize;
         // Only the unowned-land buy (not force / acquire / auction).
-        if step.pre.st.owners.get(t).copied().unwrap_or(-1) >= 0 {
+        if step.condition.st.owners.get(t).copied().unwrap_or(-1) >= 0 {
             continue;
         }
         if !step
@@ -499,8 +506,8 @@ pub fn g_settle_06(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:157`
 /// * **Quote:** 「如果格子地契未抵押则**可选择[消耗]格子地契所标注的房屋建筑费进行升级建造**，每块地有标注的等级上限（例：所有RiNG不可升级，购物中心最大等级为三栋房屋）。」
 /// * **Trigger:** a `build` event whose `to` is a buyable tile owned by the
-///   builder in `pre`.
-/// * **Condition:** the tile was not mortgaged in `pre`; the window has no
+///   builder in `condition`.
+/// * **Condition:** the tile was not mortgaged in `condition`; the window has no
 ///   card activation (build-cost discounts are L6).
 /// * **Effect:** money falls by the tile's `house` cost; houses rise by 1.
 /// * **Frame:** only that player's money and that tile's houses move.
@@ -529,10 +536,12 @@ pub fn g_settle_07(step: &Step<'_>) -> Result<(), String> {
         }
         let t = t as usize;
         let who = e.player_id.max(0) as usize;
-        if step.pre.st.owners.get(t).copied().unwrap_or(-1) != who as i32 {
-            return Err(format!("build on tile {t} not owned by P{who} in pre"));
+        if step.condition.st.owners.get(t).copied().unwrap_or(-1) != who as i32 {
+            return Err(format!(
+                "build on tile {t} not owned by P{who} in condition"
+            ));
         }
-        if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!("build on mortgaged tile {t} (5.2: no effect)"));
         }
         let Some(tile) = step.data.tiles.get(t) else {
@@ -540,7 +549,7 @@ pub fn g_settle_07(step: &Step<'_>) -> Result<(), String> {
         };
         // Turn-scoped build discounts (build_cost_pct / build_discount) live on
         // turn state, not field cards -- skip the marked-cost check when armed.
-        if step.pre.turn.build_cost_pct != 100 || step.pre.turn.build_discount > 0 {
+        if step.condition.turn.build_cost_pct != 100 || step.condition.turn.build_discount > 0 {
             continue;
         }
         let cost = tile.house;
@@ -562,7 +571,7 @@ pub fn g_settle_07(step: &Step<'_>) -> Result<(), String> {
                 ));
             }
         }
-        let pre_h = step.pre.st.houses.get(t).copied().unwrap_or(0);
+        let pre_h = step.condition.st.houses.get(t).copied().unwrap_or(0);
         let post_h = step.post.st.houses.get(t).copied().unwrap_or(0);
         if post_h != pre_h + 1 {
             return Err(format!(
@@ -581,8 +590,8 @@ pub fn g_settle_07(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「每块地有标注的等级上限（例：所有RiNG不可升级，购物中心最大等级为三栋房屋）。」
 /// * **Trigger:** any observed input.
 /// * **Condition:** a `build` event, or a post-state house count on a tile
-///   whose `pre` count was already at or below the cap (arranged states are
-///   non-canonical -- skip when `pre` is already over).
+///   whose `condition` count was already at or below the cap (arranged states are
+///   non-canonical -- skip when `condition` is already over).
 /// * **Effect:** after a build, `houses[t] <= level_cap(t)`; a `build` never
 ///   lands on a `ring` tile; 购物中心 (and any tile whose rent table has 4
 ///   levels) caps at 3 houses.
@@ -623,9 +632,9 @@ pub fn g_settle_08(step: &Step<'_>) -> Result<(), String> {
             ));
         }
     }
-    // Also: a clean post-state must not sit above the cap if pre did not.
+    // Also: a clean post-state must not sit above the cap if condition did not.
     for t in 0..step.data.tiles.len() {
-        let pre_h = step.pre.st.houses.get(t).copied().unwrap_or(0);
+        let pre_h = step.condition.st.houses.get(t).copied().unwrap_or(0);
         let post_h = step.post.st.houses.get(t).copied().unwrap_or(0);
         let cap = level_cap(step, t);
         if pre_h <= cap && post_h > cap {
@@ -643,7 +652,7 @@ pub fn g_settle_08(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:160`
 /// * **Quote:** 「如果格子地契未抵押则**[支付]拥有格子的玩家格子地契所标记的现等级地租。**」
 /// * **Trigger:** a `rent` event on a buyable tile owned by someone else.
-/// * **Condition:** the tile was not mortgaged in `pre`; the window has no
+/// * **Condition:** the tile was not mortgaged in `condition`; the window has no
 ///   card activation and no lingering field-card modifier (「支付减半」 etc.
 ///   are L6); the tile is not a RiNG (OPEN-RING-RENT: no marked table); not an
 ///   agent half-charge window -- neither the all-owned sweep
@@ -693,18 +702,18 @@ pub fn g_settle_10(step: &Step<'_>) -> Result<(), String> {
         }) {
             continue;
         }
-        if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             continue; // G-SETTLE-01
         }
         // A 「房屋数视为…」 override (RENT_HOUSES) changes the counted level.
         let overridden = step
-            .pre
+            .condition
             .st
             .board_field
             .iter()
             .any(|f| f.tile == t as i32 && f.props.contains_key("rentHouses"))
             || step
-                .pre
+                .condition
                 .st
                 .players
                 .iter()
@@ -732,7 +741,7 @@ pub fn g_settle_10(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:161`
 /// * **Quote:** 「如果格子地契已抵押则可选择**[支付]拥有格子的玩家购买格子地契和建造已有房子的资金总价的两倍，从该玩家处强行购买该格地契，获得的地契仍为抵押状态**。」
 /// * **Trigger:** a `forcebuy` event on tile `T`.
-/// * **Condition:** `T` was mortgaged and owned by someone else in `pre`.
+/// * **Condition:** `T` was mortgaged and owned by someone else in `condition`.
 /// * **Effect:** the buyer pays exactly `2 * (price + houses * house_cost)`;
 ///   ownership moves to the buyer; `mortgaged[T]` stays true; houses are
 ///   unchanged.
@@ -759,9 +768,9 @@ pub fn g_settle_11(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let t = t as usize;
-        if !step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if !step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!(
-                "force-buy of {t} which was not mortgaged in pre (6.2 is the mortgaged branch)"
+                "force-buy of {t} which was not mortgaged in condition (6.2 is the mortgaged branch)"
             ));
         }
         let want = 2 * deed_value(step, t);
@@ -880,7 +889,7 @@ pub fn g_settle_12(step: &Step<'_>) -> Result<(), String> {
 /// * **Trigger:** a window that logs `log.agent_all_owned` and then a run of
 ///   `rent` legs on the agent's colour set.
 /// * **Condition:** every same-colour buyable was owned by someone else in
-///   `pre`; no card activation (a scale would be L6).
+///   `condition`; no card activation (a scale would be L6).
 /// * **Effect:** each tile charges `ceil(full / 2 / 10) * 10` where `full` is
 ///   its marked current-level rent; the charges appear in board
 ///   (「从前到后」) order.
@@ -903,7 +912,7 @@ pub fn g_settle_13(step: &Step<'_>) -> Result<(), String> {
     for e in step.events {
         if key_of(e) == "log.agent_all_owned" {
             if let Some(game_core::msg::Arg::Tile(t)) =
-                e.msg.a.get("agent").or_else(|| e.msg.a.get("tile"))
+                e.msg.args.get("agent").or_else(|| e.msg.args.get("tile"))
             {
                 agent = Some(*t as usize);
             }
@@ -920,13 +929,13 @@ pub fn g_settle_13(step: &Step<'_>) -> Result<(), String> {
     if set.is_empty() {
         return Ok(());
     }
-    // Every member must be owned by others in pre (the branch's condition).
+    // Every member must be owned by others in condition (the branch's condition).
     let who = step.player_of_act() as i32;
     for &t in &set {
-        let o = step.pre.st.owners.get(t).copied().unwrap_or(-1);
+        let o = step.condition.st.owners.get(t).copied().unwrap_or(-1);
         if o < 0 || o == who {
             return Err(format!(
-                "agent_all_owned announced but tile {t} is unowned or self-owned in pre"
+                "agent_all_owned announced but tile {t} is unowned or self-owned in condition"
             ));
         }
     }
@@ -945,7 +954,7 @@ pub fn g_settle_13(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         seen.push(t);
-        if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             continue; // unspecified -- see OPEN
         }
         if let Some(full) = table_rent_at(step, t) {
@@ -969,7 +978,7 @@ pub fn g_settle_13(step: &Step<'_>) -> Result<(), String> {
     // Completeness: every non-mortgaged member of the set is charged
     // (「需向…所有[可购买格子]…依次进行一次半价收费的[结算]」).
     for &t in &set {
-        if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             continue;
         }
         if let Some(_full) = table_rent_at(step, t) {
@@ -1014,7 +1023,7 @@ fn g_settle_13_half_note_only(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let t = t as usize;
-        if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if step.condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             continue;
         }
         let Some(full) = table_rent_at(step, t) else {
@@ -1047,17 +1056,17 @@ fn half_note_of(msg: &game_core::msg::Msg) -> Option<(i32, i32)> {
 fn half_note_walk(m: &game_core::msg::Msg) -> Option<(i32, i32)> {
     use game_core::msg::Arg;
     if m.key() == "log.part.rent_half" || m.key() == "log.part.rent_half_only" {
-        let full = match m.a.get("full") {
-            Some(Arg::N(v)) | Some(Arg::I(v)) => *v as i32,
+        let full = match m.args.get("full") {
+            Some(Arg::Number(v)) | Some(Arg::Integer(v)) => *v as i32,
             _ => return None,
         };
-        let cut = match m.a.get("cut") {
-            Some(Arg::N(v)) | Some(Arg::I(v)) => *v as i32,
+        let cut = match m.args.get("cut") {
+            Some(Arg::Number(v)) | Some(Arg::Integer(v)) => *v as i32,
             _ => return None,
         };
         return Some((full, cut));
     }
-    for v in m.a.values() {
+    for v in m.args.values() {
         if let Arg::Msg(inner) = v {
             if let Some(found) = half_note_walk(inner) {
                 return Some(found);
@@ -1076,7 +1085,7 @@ fn half_note_walk(m: &game_core::msg::Msg) -> Option<(i32, i32)> {
 /// * **Trigger:** a window that settles an agent and does **not** take the
 ///   all-owned-by-others branch (no `log.agent_all_owned`).
 /// * **Condition:** some same-colour buyable is unowned or self-owned in
-///   `pre`.
+///   `condition`.
 /// * **Effect:** at most one nested settle of a same-colour unowned-or-own
 ///   buyable. Other-owned tiles are never the chosen target of this branch.
 /// * **Frame:** n/a.
@@ -1133,7 +1142,7 @@ pub fn g_settle_14(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let t = t as usize;
-        let o = step.pre.st.owners.get(t).copied().unwrap_or(-1);
+        let o = step.condition.st.owners.get(t).copied().unwrap_or(-1);
         let who = step.player_of_act() as i32;
         if o >= 0 && o != who {
             return Err(format!(
@@ -1152,15 +1161,15 @@ pub fn g_settle_14(step: &Step<'_>) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 // pure verifiers (addendum: iff contracts)
 //
-// Each `verify_*` is a pure predicate over `(pre, post, events)`. The Clause
+// Each `verify_*` is a pure predicate over `(condition, post, events)`. The Clause
 // check wraps it; the mutant tests in `tests/g_settle.rs` clone a real
 // transition and apply LESS / MORE / WRONG perturbations, asserting the
 // verifier rejects each one.
 // ---------------------------------------------------------------------------
 
-/// G-SETTLE-01: no rent leg on a deed that was mortgaged in `pre`.
+/// G-SETTLE-01: no rent leg on a deed that was mortgaged in `condition`.
 pub fn verify_no_rent_on_mortgaged(
-    pre: &World,
+    condition: &World,
     _post: &World,
     events: &[MatchEvent],
 ) -> Result<(), String> {
@@ -1169,7 +1178,7 @@ pub fn verify_no_rent_on_mortgaged(
             continue;
         }
         let t = e.to as usize;
-        if pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!(
                 "LESS/MORE: rent paid on mortgaged tile {t} (value {})",
                 e.value
@@ -1182,7 +1191,7 @@ pub fn verify_no_rent_on_mortgaged(
 /// G-SETTLE-02: a clean circle/edogawa landing draws exactly the settle card
 /// (plus at most the CiRCLE-reward card).
 pub fn verify_draw_one(
-    pre: &World,
+    condition: &World,
     _post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1213,7 +1222,7 @@ pub fn verify_draw_one(
     if draws != want {
         return Err(format!(
             "LESS/WRONG: settle drew {draws} cards, expected {want} (pre-hand {})",
-            pre.hidden.get(who).map(|h| h.hand.len()).unwrap_or(0)
+            condition.hidden.get(who).map(|h| h.hand.len()).unwrap_or(0)
         ));
     }
     if !allow_reward && events.iter().any(|e| e.r#type == "event") {
@@ -1289,7 +1298,7 @@ pub fn verify_event_zone(_pre: &World, post: &World, events: &[MatchEvent]) -> R
 
 /// G-SETTLE-05: an empty-deck draw still succeeds (discard reshuffled).
 pub fn verify_event_reshuffle(
-    pre: &World,
+    condition: &World,
     _post: &World,
     events: &[MatchEvent],
 ) -> Result<(), String> {
@@ -1297,7 +1306,7 @@ pub fn verify_event_reshuffle(
     if !drew {
         return Ok(());
     }
-    if !pre.event_deck.is_empty() || pre.event_discard.is_empty() {
+    if !condition.event_deck.is_empty() || condition.event_discard.is_empty() {
         return Ok(());
     }
     if !events
@@ -1311,7 +1320,7 @@ pub fn verify_event_reshuffle(
 
 /// G-SETTLE-06: unowned buy charges deed+houses and transfers ownership.
 pub fn verify_unowned_buy(
-    pre: &World,
+    condition: &World,
     post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1324,7 +1333,7 @@ pub fn verify_unowned_buy(
             continue;
         }
         let t = e.to as usize;
-        if pre.st.owners.get(t).copied().unwrap_or(-1) >= 0 {
+        if condition.st.owners.get(t).copied().unwrap_or(-1) >= 0 {
             continue;
         }
         if !data.tiles.get(t).map(|x| x.is_buyable()).unwrap_or(false) {
@@ -1336,7 +1345,7 @@ pub fn verify_unowned_buy(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        let want = tile.price + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house;
+        let want = tile.price + condition.st.houses.get(t).copied().unwrap_or(0) * tile.house;
         let Some(logged) = int_arg(&e.msg, "price") else {
             continue;
         };
@@ -1356,7 +1365,7 @@ pub fn verify_unowned_buy(
 
 /// G-SETTLE-07: build charges the marked house cost and raises houses by 1.
 pub fn verify_build(
-    pre: &World,
+    condition: &World,
     post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1370,10 +1379,10 @@ pub fn verify_build(
         }
         let t = e.to as usize;
         let who = e.player_id.max(0) as usize;
-        if pre.st.owners.get(t).copied().unwrap_or(-1) != who as i32 {
+        if condition.st.owners.get(t).copied().unwrap_or(-1) != who as i32 {
             return Err(format!("MORE: build on tile {t} not owned by P{who}"));
         }
-        if pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!(
                 "MORE: build on mortgaged tile {t} (5.2: no effect)"
             ));
@@ -1381,7 +1390,7 @@ pub fn verify_build(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        if pre.turn.build_cost_pct != 100 || pre.turn.build_discount > 0 {
+        if condition.turn.build_cost_pct != 100 || condition.turn.build_discount > 0 {
             continue;
         }
         let cost = tile.house;
@@ -1393,7 +1402,7 @@ pub fn verify_build(
                 "WRONG: build on {t} charged {logged}, expected marked cost {cost}"
             ));
         }
-        let pre_h = pre.st.houses.get(t).copied().unwrap_or(0);
+        let pre_h = condition.st.houses.get(t).copied().unwrap_or(0);
         let post_h = post.st.houses.get(t).copied().unwrap_or(0);
         if post_h != pre_h + 1 {
             return Err(format!(
@@ -1406,7 +1415,7 @@ pub fn verify_build(
 
 /// G-SETTLE-08: houses never exceed the marked level cap; RiNG never builds.
 pub fn verify_level_cap(
-    pre: &World,
+    condition: &World,
     post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1429,7 +1438,7 @@ pub fn verify_level_cap(
         }
     }
     for t in 0..data.tiles.len() {
-        let pre_h = pre.st.houses.get(t).copied().unwrap_or(0);
+        let pre_h = condition.st.houses.get(t).copied().unwrap_or(0);
         let post_h = post.st.houses.get(t).copied().unwrap_or(0);
         let cap = data.tiles[t].rent.len().saturating_sub(1) as i32;
         if data.tiles[t].kind.as_str() == "ring" {
@@ -1446,7 +1455,7 @@ pub fn verify_level_cap(
 
 /// G-SETTLE-10: rent equals the marked current-level figure on a clean window.
 pub fn verify_rent_amount(
-    pre: &World,
+    condition: &World,
     _post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1456,12 +1465,12 @@ pub fn verify_rent_amount(
     }
     // L6 linger: a non-skill field card / non-tile board card can reshape the
     // charge outside this window (same skip as [`has_lingering_modifiers`]).
-    let lingering = pre
+    let lingering = condition
         .st
         .players
         .iter()
         .any(|p| p.field.iter().any(|f| !f.card.starts_with("skill:")))
-        || pre
+        || condition
             .st
             .board_field
             .iter()
@@ -1480,15 +1489,15 @@ pub fn verify_rent_amount(
         }) {
             continue;
         }
-        if pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             continue;
         }
-        let overridden = pre
+        let overridden = condition
             .st
             .board_field
             .iter()
             .any(|f| f.tile == t as i32 && f.props.contains_key("rentHouses"))
-            || pre
+            || condition
                 .st
                 .players
                 .iter()
@@ -1502,7 +1511,7 @@ pub fn verify_rent_amount(
         if tile.kind.as_str() == "ring" || tile.rent.is_empty() {
             continue;
         }
-        let h = pre.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;
+        let h = condition.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;
         let full = tile.rent[h.min(tile.rent.len() - 1)];
         if e.value != full {
             return Err(format!(
@@ -1516,7 +1525,7 @@ pub fn verify_rent_amount(
 
 /// G-SETTLE-11: force-buy is 2x (deed+houses), stays mortgaged.
 pub fn verify_force_buy(
-    pre: &World,
+    condition: &World,
     post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1526,13 +1535,13 @@ pub fn verify_force_buy(
             continue;
         }
         let t = e.to as usize;
-        if !pre.st.mortgaged.get(t).copied().unwrap_or(false) {
+        if !condition.st.mortgaged.get(t).copied().unwrap_or(false) {
             return Err(format!("MORE: force-buy of {t} which was not mortgaged"));
         }
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        let want = 2 * (tile.price + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house);
+        let want = 2 * (tile.price + condition.st.houses.get(t).copied().unwrap_or(0) * tile.house);
         if e.value != want {
             return Err(format!(
                 "WRONG: force-buy of {t} charged {}, expected 2x = {want}",
@@ -1556,7 +1565,7 @@ pub fn verify_force_buy(
 
 /// G-SETTLE-12: force-buy amount is immune to modifiers.
 pub fn verify_force_buy_immune(
-    pre: &World,
+    condition: &World,
     _post: &World,
     events: &[MatchEvent],
     data: &GameData,
@@ -1569,7 +1578,7 @@ pub fn verify_force_buy_immune(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        let want = 2 * (tile.price + pre.st.houses.get(t).copied().unwrap_or(0) * tile.house);
+        let want = 2 * (tile.price + condition.st.houses.get(t).copied().unwrap_or(0) * tile.house);
         if e.value != want {
             return Err(format!(
                 "WRONG: force-buy of {t} charged {} under modifiers, expected fixed 2x = {want}",

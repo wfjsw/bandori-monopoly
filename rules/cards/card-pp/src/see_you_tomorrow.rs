@@ -1,4 +1,3 @@
-//! `PP:[衍生]明天见` -- C# `CardSeeYouTomorrow`: flip the player's face-down
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]明天见`）:
 //! > [衍生]明天见：
@@ -45,14 +44,11 @@ pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
 );
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书[特]（1）: 「只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用」
-    // 规则书[特]（2）: 「[共鸣]无视此卡的[特]效果（1）」 -- C# `CardSeeYouTomorrow.WhyNot`
-    // opens the gate while `H.HasResonance(seat)` (「PP:[衍生]共鸣」 is in hand).
     let up = fans::up(player_id);
     let down = fans::down(player_id);
     let has_resonance = ctx::hand_count(player_id, "PP:[衍生]共鸣") > 0;
     if up > down && !has_resonance {
-        return Some(Msg::new(key!("see_you_tomorrow_why_not")));
+        return Some(Msg::new(key!("see_you_tomorrow_blocked")));
     }
     None
 }
@@ -63,7 +59,7 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     // 规则书[特]（2）: 「[共鸣]无视此卡的[特]效果（1）」 -- when the gate was passed
     // only because a 共鸣 is in hand, paying that 共鸣 is the cost of the play.
     // TODO(规则书)（1）: 「才可使用」 -- declining undoes the play and the card goes
-    //   back to the hand instead of the discard pile (`Dest::Hand`), but the play
+    //   back to the hand instead of the discard pile (`Fate::Hand`), but the play
     //   was already announced by the time this body runs: the log, the `card`
     //   window and the played/two-cards counters all ran, so a refused 共鸣 still
     //   counts as a played card and can be counteracted. The collector exists now
@@ -76,7 +72,7 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     //   who could already play can never pay it (and its +2 crystals). BACKLOG
     //   LOY-SEEYOU-02.
     if up > down && !crate::resonance::try_resonance(player_id)? {
-        ctx::set_dest(ctx::Dest::Hand);
+        ctx::set_fate(ctx::Fate::Hand);
         return Ok(());
     }
     // 规则书[手]: 「将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正」 -- X is the

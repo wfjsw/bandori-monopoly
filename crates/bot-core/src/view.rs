@@ -9,7 +9,7 @@ use game_core::engine::Match;
 use game_core::state::{stage, MatchPlayer, MatchPrompt, MatchState, MovePlan};
 
 /// The engine's own heuristic answer for **this** seat's live prompt
-/// (`Match::view_extra`'s `aiAnswer`). Never another seat's entry.
+/// (`Match::view_extras`'s `aiAnswer`). Never another seat's entry.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct AiAnswer {
@@ -53,7 +53,7 @@ pub struct SeatView {
     /// Parallel to [`Self::hand`]: the card's bot-only **estimated execution
     /// cost** (`prop::EST_COST`, user ruling 2026-10-07). Reserve check only,
     /// never legality. `0` = unknown / assume free.
-    pub est_cost: Vec<i32>,
+    pub estimated_cost: Vec<i32>,
 }
 
 impl Default for SeatView {
@@ -68,19 +68,19 @@ impl Default for SeatView {
             played: Vec::new(),
             cards_played: 0,
             playable: Vec::new(),
-            est_cost: Vec::new(),
+            estimated_cost: Vec::new(),
         }
     }
 }
 
 impl SeatView {
     /// The view frame for `member`, from the public [`Match`] accessors only
-    /// (`state` / `hand_of` / `draw_of` / `view_extra`). This is what a remote
+    /// (`state` / `hand_of` / `draw_of` / `view_extras`). This is what a remote
     /// bot service would be sent; nothing else is read.
     pub fn from_match(m: &Match, member: i32) -> Self {
         let state = m.state();
         let player_id = state.player_of(member);
-        let extra = m.view_extra_typed(member);
+        let extra = m.view_extras_typed(member);
         let (played, cards_played) = m.played_context();
         let ai_answer = extra.ai_answer.map(|a| AiAnswer {
             answer: a.answer,
@@ -97,7 +97,7 @@ impl SeatView {
             played: played.to_vec(),
             cards_played,
             playable: extra.playable,
-            est_cost: extra.est_cost,
+            estimated_cost: extra.estimated_cost,
         }
     }
 
@@ -267,7 +267,7 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         s.skip_move = false;
         s.prompt = MatchPrompt::default();
         s.plan = MovePlan::default();
-        // Roll is owed, so `end` is gated off (`why_not_act`). No settle
+        // Roll is owed, so `end` is gated off (`cant_act`). No settle
         // offer exists at a position that has not been reached.
         s.can_roll_here = true;
         s.can_end_here = false;
@@ -291,7 +291,7 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
     // a no-op -- which is exactly what the pre-C1 idle polls did. Mark every
     // hand card as a candidate instead: the search's own `MatchSim` recomputes
     // real `cant_play` on each fork and only branches on what the engine
-    // accepts. `est_cost` is a static card property and remains.
+    // accepts. `estimated_cost` is a static card property and remains.
     next.playable = vec![true; next.hand.len()];
     next.ai_answer = None;
     Some(next)

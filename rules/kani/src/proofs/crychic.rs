@@ -71,7 +71,7 @@ crate::host_subset!(vocalist_dispatch {
 crate::host_subset!(grab_dispatch {
     apply_abnormal => arm_apply_abnormal,
     state_set => arm_state_set,
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -93,18 +93,18 @@ crate::host_subset!(forever_play_dispatch {
     group_pool => arm_band_crystals,
     add_group_pool => arm_add_band_crystals,
     gain | gain_typed | gain_fixed => arm_gain,
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
 
-/// `CRYCHIC:如果能一直持续下去...` on_drew — dest to graveyard + narration.
-/// Book 「立即置入弃牌堆」 is `ctx::send_to_dest(Graveyard)` (applies now);
+/// `CRYCHIC:如果能一直持续下去...` on_drew — fate to graveyard + narration.
+/// Book 「立即置入弃牌堆」 is `ctx::send_to_fate(Graveyard)` (applies now);
 /// the host commits the instance to the discard pile as world state
-/// (no `UnplaceCard` effect — same shape as `set_dest`'s deferred commit).
+/// (no `UnplaceCard` effect — same shape as `set_fate`'s deferred commit).
 crate::host_subset!(forever_on_drew_dispatch {
-    set_dest => arm_set_dest,
-    send_to_dest => arm_send_to_dest,
+    set_fate => arm_set_fate,
+    send_to_fate => arm_send_to_fate,
     log | effect => arm_log,
 });
 
@@ -153,7 +153,7 @@ fn sparse2(dispatch: card_sdk::kani_host::Backend, user: i32, f: impl FnOnce(&mu
 fn soyoreturn_02_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2(soyoreturn_play_dispatch, user, |_| {});
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_crychic::soyo_back::soyo_back_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -166,19 +166,22 @@ fn soyoreturn_02_iff_at(user: i32) {
         "C-CRYCHIC-soyoreturn-02: exactly GainMoney{player, 500}"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + spec::soyoreturn_02_amount(),
+        post.money[user as usize] == condition.money[user as usize] + spec::soyoreturn_02_amount(),
         "C-CRYCHIC-soyoreturn-02: money +500"
     );
     // frame
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
-    crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(
+        world::arr8b_eq(post.hand, condition.hand),
+        "frame: hand bitset"
+    );
+    crate::kassert!(post.pay_amount == condition.pay_amount, "frame: pay_amount");
     for q in 0..MAX_PLAYERS {
         if q != user as usize {
             crate::kassert!(
-                post.money[q] == pre.money[q],
+                post.money[q] == condition.money[q],
                 "frame: other players' money unchanged"
             );
         }
@@ -243,7 +246,7 @@ fn vocalist_01_iff_at(user: i32) {
     kani::cover!(value == 5000, "at the 5000 floor");
     kani::cover!(value > 5000, "above the floor");
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_crychic::vocal_too_hard::counteract_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -260,10 +263,10 @@ fn vocalist_01_iff_at(user: i32) {
         "C-CRYCHIC-vocalist-01: payment waived"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money (waive is at rewrite time)"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Waive iff at seat 0.
@@ -315,7 +318,7 @@ fn grab_01_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2(grab_dispatch, user, |_| {});
     let passer_key = intern::intern("want_to_grab_passer").0;
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_crychic::want_to_grab::want_to_grab_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -330,15 +333,15 @@ fn grab_01_iff_at(user: i32) {
         "C-CRYCHIC-grab-01: GiveStay{{1}} + SetState(PASSER, -1) + PlaceCard(Field)"
     );
     crate::kassert!(
-        post.stay[user as usize] == pre.stay[user as usize] + 1,
+        post.stay[user as usize] == condition.stay[user as usize] + 1,
         "C-CRYCHIC-grab-01: stay +1"
     );
     crate::kassert!(
         key_get(user, intern::NameId(passer_key)) == -1,
         "C-CRYCHIC-grab-01: PASSER latch is -1 (unset sentinel)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Stay iff at seat 0.
@@ -431,7 +434,7 @@ fn debut_02_iff_at(user: i32) {
     });
 
     let pre_crystals = band_crystals_of(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_crychic::debut_success::at_end_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -450,12 +453,12 @@ fn debut_02_iff_at(user: i32) {
     );
     // `give_stun` writes the stun store (not stay).
     crate::kassert!(
-        post.stun[user as usize] == pre.stun[user as usize] + 1,
+        post.stun[user as usize] == condition.stun[user as usize] + 1,
         "C-CRYCHIC-debut-02: stun layer +1"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
 }
 
 /// Turn-end leaf iff at seat 0.
@@ -508,7 +511,7 @@ fn ifonly_01_iff_at(user: i32) {
         w.group_pool[user as usize] = x;
     });
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let field0 = world::with_world(|w| w.field_n as usize);
     invoke::unwrap_done(card_crychic::forever::forever_kani(user));
     kani::cover!(true, "body returned");
@@ -527,7 +530,7 @@ fn ifonly_01_iff_at(user: i32) {
         "C-CRYCHIC-ifonly-01: GainMoney{2000+500X} + PlaceCard on field"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + spec::ifonly_01_amount(x),
+        post.money[user as usize] == condition.money[user as usize] + spec::ifonly_01_amount(x),
         "C-CRYCHIC-ifonly-01: money +2000+500X"
     );
     crate::kassert!(
@@ -538,7 +541,7 @@ fn ifonly_01_iff_at(user: i32) {
         field1 == field0 + 1,
         "C-CRYCHIC-ifonly-01: card placed as [持续]"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Cash-out iff at seat 0.
@@ -585,9 +588,9 @@ pub fn ifonly_01_mutant_is_detected() {
 // The hook condition `card.placed && owner.hand >= 7` is the entry's CEL.
 // The body is driven directly (ppcost). Seat-symmetric.
 //
-// Book 「此卡立即置入弃牌堆」 is `ctx::send_to_dest(Graveyard)`: the host
+// Book 「此卡立即置入弃牌堆」 is `ctx::send_to_fate(Graveyard)`: the host
 // commits the instance to the discard pile as world state (same deferred
-// shape as `set_dest` — no in-run `UnplaceCard` effect).
+// shape as `set_fate` — no in-run `UnplaceCard` effect).
 // ===========================================================================
 
 /// Shared leaf at a **concrete** user seat.
@@ -611,7 +614,7 @@ fn ifonly_02_iff_at(user: i32) {
     });
     let field0 = world::with_world(|w| w.field_n as usize);
     let discard0 = world::with_world(|w| w.discard_n as usize);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_crychic::forever::on_drew_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -623,14 +626,14 @@ fn ifonly_02_iff_at(user: i32) {
 
     // Book: 「此卡立即置入弃牌堆」 — the instance leaves the field and lands
     // in the owner's discard. Observed as a field-count drop + discard gain
-    // (host `send_to_dest` commits world state, not an in-run effect).
+    // (host `send_to_fate` commits world state, not an in-run effect).
     let unplaced = field1 < field0 && discard1 > discard0;
     crate::kassert!(
         unplaced,
         "C-CRYCHIC-ifonly-02: card must go to discard (field drop + discard pile)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Discard leaf iff at seat 0.
@@ -668,13 +671,13 @@ fn soyoreturn_01_branch2_iff_at(user: i32) {
         w.hand[0] = true;
         w.hand[2] = true;
         // Pin pick = 1 (option 2, 「获得1000资金并将此卡加入手牌」).
-        // `ask_yes` polarity is 0=yes; `ask_pick` is a raw option index.
+        // `ask_yes` polarity is 0=yes; `ask_choice` is a raw option index.
         w.symbolic_answers = false;
         w.next_answer = 0;
         w.answers[0] = 1;
     });
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_crychic::soyo_back::on_drawn_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -686,7 +689,7 @@ fn soyoreturn_01_branch2_iff_at(user: i32) {
         spec::soyoreturn_01_branch2_log_ok(effects, user),
         "C-CRYCHIC-soyoreturn-01 branch 2: exactly GainMoney{1000}"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Branch-2 leaf at seat 0.

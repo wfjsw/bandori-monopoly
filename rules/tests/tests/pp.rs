@@ -297,7 +297,7 @@ fn overlap_play_removes_accident() {
 
 /// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
 /// 的“初次演出事故”（如果有）」 (LOY-OVERLAP-01) -- the discard hook banishes
-/// the accident. `[移除]` = banish (`Dest::Banished`), not a discard.
+/// the accident. `[移除]` = banish (`Fate::Banished`), not a discard.
 #[test]
 fn overlap_discard_hook_banishes_accident() {
     let mut t = Table::vanilla(2);
@@ -409,7 +409,7 @@ fn seeyou_declined_echo_keeps_card_in_hand() {
 // ============================================================ PP:不要背负期待
 
 /// 规则书: 「将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。」
-/// 「加入卡组」 shuffles the card in (`ctx::add_to_dest(..., Dest::DeckRandom)`), so
+/// 「加入卡组」 shuffles the card in (`ctx::add_to_fate(..., Fate::DeckRandom)`), so
 /// which of the two cards the 「抽1张牌」 takes is not specified. Assert what the
 /// text says: 共鸣 is in the deck (draw ∪ hand -- it may be the card drawn), and
 /// one card was drawn.
@@ -464,7 +464,7 @@ fn expect_face_zero_shave_does_not_settle() {
 }
 
 /// 规则书: 「如果为0则此次移动不[结算]」 -- standing *on* a foreign rent tile
-/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.resolve`
+/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.settles`
 /// before the walk so a 0-step move honours the clear (the mid-step sync only
 /// runs when at least one step is taken).
 #[test]

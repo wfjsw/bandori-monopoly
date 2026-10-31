@@ -119,7 +119,7 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
     kani::assume(crystals >= 0 && crystals <= 8);
     band_02_world(owner, crystals, pre_amount);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let crystals = self_crystals();
 
     kani::cover!(crystals > 0, "crystals > 0 (bonus applies)");
@@ -139,14 +139,14 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
     );
     crate::kassert!(
         folded == expected,
-        "C-SUMIMI-band-02: return must be pre + crystals*100"
+        "C-SUMIMI-band-02: return must be condition + crystals*100"
     );
     if crystals <= 0 {
         crate::kassert!(folded == pre_amount, "no crystals: amount untouched");
     }
     // Frame: money of every seat untouched at rewrite time.
     for p in 0..MAX_PLAYERS {
-        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.money[p] == condition.money[p], "frame: money");
     }
 }
 
@@ -223,7 +223,7 @@ fn band_01_clear_iff_at(owner: i32) {
     kani::assume(crystals >= 0 && crystals <= 8);
     band_01_world(owner, got, crystals);
 
-    // Source guard is `pre::MINE` ("actor == owner") — both halves live in
+    // Source guard is `condition::MINE` ("actor == owner") — both halves live in
     // the body. The old `slot('skill.sumimi.got') == 0` guard only ever
     // admitted the clear branch (FINDINGS C-SUMIMI-band-01).
     let gid = crate::guard_id!("actor == owner");
@@ -241,7 +241,7 @@ fn band_01_clear_iff_at(owner: i32) {
 
     crate::kassert!(admitted, "guard admits when actor == owner");
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // DIRECT body call (ppcost).
     invoke::unwrap_done(skill_groups::sumimi::at_turn_end_kani(owner));
     let post = world::snapshot();
@@ -264,9 +264,9 @@ fn band_01_clear_iff_at(owner: i32) {
     }
     // Frame: money / pos / charge untouched by either half.
     for p in 0..MAX_PLAYERS {
-        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
-        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
-        crate::kassert!(post.charge[p] == pre.charge[p], "frame: charge");
+        crate::kassert!(post.money[p] == condition.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
+        crate::kassert!(post.charge[p] == condition.charge[p], "frame: charge");
     }
 }
 

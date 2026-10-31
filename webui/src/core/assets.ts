@@ -34,7 +34,7 @@ function m(): Manifest {
 
 const url = (p?: string) => (p ? BASE + p : "");
 
-/** `Resources.Load(path)` -- case-insensitive, like Unity. */
+/** Resolve a resource path from the loaded asset manifest. */
 export function res(path: string): string {
   return url(m().resources[path.toLowerCase()]);
 }

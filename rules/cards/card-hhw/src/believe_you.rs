@@ -1,4 +1,3 @@
-//! `HHW:因为我一直相信着你` -- C# `CardBelieveYou` (MatchHost.cs:3529-3596): pay
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:因为我一直相信着你`）:
 //! > 因为我一直相信着你：
@@ -25,20 +24,16 @@ pub const BELIEVE_YOU: CardDef =
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // C# `CardBelieveYou.WhyNot`: refuses without another hand card / 800 money
-    // / a living rival. NEGATION-AUDIT V2 (settled): the **money** half is gone -- the
-    // 「消耗800资金」 is effect content, not an activation cost.
-    // 规则书: 「至少有另一张手牌时可发动」 -- a real [限] on hand count, kept.
-    // The played copy is still in hand here (it leaves only after `cant_play`),
-    // so drop exactly that one copy -- not every copy, which would miscount a
-    // second copy of this same card as no other hand card.
+    // NEGATION-AUDIT V2 (settled): the **money** half is gone -- the 「消耗800资金」 is
+    // effect content, not an activation cost. 规则书: 「至少有另一张手牌时可发动」 -- a real [限] on
+    // hand count, kept. The played copy is still in hand here (it leaves only after
+    // `cant_play`), so drop exactly that one copy -- not every copy, which would
+    // miscount a second copy of this same card as no other hand card.
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let others_in_hand = hand.len() - usize::from(hand.iter().any(|c| c == ID));
     if others_in_hand < 1 {
         return Some(Msg::new(key!("believe_you_no_hand")));
     }
-    // 规则书: 「选择一名玩家」 -- C# `CardBelieveYou.WhyNot` also needs a living
-    // rival to ask.
     if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_rival")));
     }
@@ -46,19 +41,12 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「消耗800资金」 -- C# `PayCtx { amount = 800, kind = "lose", must = false }`.
     let paid = ctx::pay(player_id, 800, &Msg::new(key!("believe_you_pay")))?;
     // TODO(规则书)（消耗800资金）: the book does not gate the rest on a full payment
     // -- a short/cancelled 800 drops the whole effect (C-Q5 / CH-07 wasted flag).
     if paid < 800 {
-        // C# `c.Effective = false` when the payment does not go through (the play
-        // is wasted, `H.ToDiscard(..., wasted: true)`); the ABI has no
-        // set_effective hook.
         return Ok(());
     }
-    // 规则书: 「公开你的卡组与手牌」 -- C# `H.Log` of both piles + `H.RevealSeen`
-    // (the public peek itself is not in the vocabulary; the log names the sizes
-    // and the picks below show each card's title).
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let deck = ctx::cards_in(player_id, CardPile::Deck);
     // TODO(ABI)（公开你的卡组与手牌）: no reveal/publish-pile hostcall -- only the
@@ -73,9 +61,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("hand", hand.len() as i64)
             .i("deck", deck.len() as i64),
     );
-    // 规则书: 「选择一名玩家，使其从你的手牌中选择一张放入弃牌堆」 -- C#
-    // `H.AskSeat` then `H.AskCard(who, ..., h.hand.ToList())` +
-    // `H.DiscardFromHand`.
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("believe_you_title")),
@@ -102,8 +87,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
                 .card("card", id),
         );
     }
-    // 规则书: 「然后从你的卡组中选择两张加入你的手牌」 -- C# loops twice:
-    // `H.AskCard(i, ..., h.draw.ToList())` then `h.draw.Remove` + `H.AddToHand`.
     for k in 0..2 {
         let deck = ctx::cards_in(player_id, CardPile::Deck);
         if deck.is_empty() {
@@ -118,17 +101,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
         )?;
         let id = ids[pick.min(ids.len() - 1)];
         if ctx::take_card(player_id, id, CardPile::Deck) {
-            ctx::add_to_dest(player_id, id, ctx::Dest::Hand);
+            ctx::add_to_fate(player_id, id, ctx::Fate::Hand);
             ctx::log(
                 player_id,
                 &Msg::new(key!("believe_you_kept")).card("card", id),
             );
         }
     }
-    // 规则书: 「重洗你的抽牌堆」 -- C# `H.Shuffle(h.draw)`. `shuffle_into_deck`
-    // (both flags off) shuffles the pile in place and raises `reshuffled` on
-    // commit; the old take/`DeckRandom` loop let an emptied deck refill from the
-    // discard and raised no hook at all on an empty pile.
+    // `shuffle_into_deck` (both flags off) shuffles the pile in place and raises
+    // `reshuffled` on commit; the old take/`DeckRandom` loop let an emptied deck
+    // refill from the discard and raised no hook at all on an empty pile.
     ctx::shuffle_into_deck(player_id, false, false);
     if ctx::deck_count(player_id) > 0 {
         ctx::log(

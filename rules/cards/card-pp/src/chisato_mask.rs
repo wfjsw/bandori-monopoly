@@ -1,4 +1,3 @@
-//! `PP:[白鹭千圣]微笑的铁假面` -- C# `CardChisatoMask`: stay in play, every other
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[白鹭千圣]微笑的铁假面`）:
 //! > [白鹭千圣]微笑的铁假面：
@@ -36,9 +35,6 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
         On::Action(Action::Reshuffled("", Some(reshuffled_guard), reshuffled)),
     ],
 )
-// 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
-// play's designations (`Card.Def.Targeting`), so 网络链接异常 「取消其对目标
-// 之一的[指定]」 can drop one leg of the split.
 .props(&[(card_sdk::abi::prop::DESIGNATES, 1)])
 .meta(
     &card_sdk::meta::CardMeta::new()
@@ -72,7 +68,7 @@ fn chisato_mask(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(
         player_id,
         "PP:[白鹭千圣]微笑的铁假面",
@@ -83,7 +79,7 @@ fn chisato_mask(player_id: i32) -> card_sdk::Asked {
         &ctx::others(player_id),
         player_id,
         2000,
-        &Msg::new(key!("chisato_mask_why")),
+        &Msg::new(key!("chisato_mask_reason")),
     )?;
     Ok(())
 }
@@ -101,11 +97,9 @@ fn offer_resonance(player_id: i32) -> card_sdk::Asked {
     )
 }
 
-/// C# `CardChisatoMask.Reshuffled` -- when the owner's discard pile is shuffled
-/// back into the draw pile, the other players split-pay the owner 500.
-/// 规则书[持续]（1）: 「[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金」
-/// Pure guard for [`reshuffled`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// 规则书[持续]（1）: 「[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金」 Pure guard for
+/// [`reshuffled`] -- the activation gate. `false` means the card is not activated
+/// at all.
 fn reshuffled_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
 }
@@ -116,18 +110,17 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
         &ctx::others(player_id),
         player_id,
         500,
-        &Msg::new(key!("chisato_mask_why")),
+        &Msg::new(key!("chisato_mask_reason")),
     )?;
     Ok(())
 }
 
-/// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
 ///
 /// `PIPELINE-AUDIT` Q2: the command-wide **pre-split** stage (`payCombinedAdd` /
 /// `payCombinedMul` / `payCombinedCancel`) shapes `total` before it divides -- the
 /// 「分摊前」 figure of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)). Each share
 /// then runs the per-share pipeline through `ctx::pay_leg`.
-fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
+fn split_pay(payers: &[i32], to: i32, total: i32, reason: &Msg) -> card_sdk::Asked {
     let candidates: Vec<i32> = payers
         .iter()
         .copied()
@@ -150,7 +143,7 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
         return Ok(());
     }
     // The command-wide pre-split stage on the **total**, before any division.
-    let Some(shaped) = ctx::pay_total(list[0], to, total, why)? else {
+    let Some(shaped) = ctx::pay_total(list[0], to, total, reason)? else {
         return Ok(());
     };
     let per = (shaped + n - 1) / n;
@@ -159,7 +152,7 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
         if ctx::designation_cancelled(p) {
             continue;
         }
-        ctx::pay_leg(p, to, share, why)?;
+        ctx::pay_leg(p, to, share, reason)?;
     }
     Ok(())
 }

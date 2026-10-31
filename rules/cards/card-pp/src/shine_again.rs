@@ -1,4 +1,3 @@
-//! `PP:再次闪耀` -- C# `CardShineAgain` (MatchHost.cs:7145-7243): stay in play;
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:再次闪耀`）:
 //! > 再次闪耀：
@@ -13,9 +12,6 @@
 //! > （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。
 //!
 //! while short on cash the owner may record a colour and take a rescue.
-//! The rescue runs in the `PaySplitChooseBefore` hook; the recorded colours live
-//! on the card instance (a bitset prop, the stand-in for the C# per-card
-//! `HashSet<int> _colors`).
 
 use alloc::vec::Vec;
 
@@ -39,12 +35,10 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // shortfall is CEL; the colour scan is residual.
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
-        // The pre's `money(owner) < value` still gates on the figure in flight.
+        // The condition's `money(owner) < value` still gates on the figure in flight.
         On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0 && money(owner) < value", Some(has_unrecorded_color), pay_choose).counter_reason(key!("shine_again_when"))),
-        // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
-        // owner's turn start (the text gives no narrower timing).
-        // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
-        //   turn-start offer is a stand-in for the C# action window.
+        // TODO(规则书)（2）: 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the owner's turn
+        // start (the text gives no narrower timing).
         On::Action(Action::TurnStart("actor == owner && card.placed", None, offer_resonance)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -68,35 +62,26 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // sheet cell D2
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
-/// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset prop of the
-/// colour groups already recorded, on this card instance (「此卡未记录」).
 const PROP_COLORS: &str = "shine_again_colors";
 
 fn shine_again(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(
         player_id,
         "PP:再次闪耀",
         &Msg::new(key!("shine_again_note")),
     );
-    // 规则书[持续]（1）: 「记录一个此卡未记录的颜色」 -- the recorded set starts
-    // empty (C# `new HashSet<int>()` on the card) and is this instance's own.
     ctx::set_prop(PROP_COLORS, 0);
-    // 规则书[特]: 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」 -- C#
-    // `Card.Immune`. A plain flag on the card, read causer-blind, so the owner's
-    // own effects skip it too.
-    // TODO(规则书)（此卡不受除拥有此卡的玩家以外的玩家的效果影响）: the book
-    //   exempts the *owner's* effects, but `set_self_immune` is 「不受任何效果影响」
-    //   and every `is_immune_at` consumer skips the card whoever caused the effect.
-    //   Needs an owner-exempt immunity flavour (a by-causer read).
+    // TODO(规则书)（此卡不受除拥有此卡的玩家以外的玩家的效果影响）: A plain flag on the card, read
+    // causer-blind, so the owner's own effects skip it too. the book exempts the
+    // *owner's* effects, but `set_self_immune` is 「不受任何效果影响」 and every
+    // `is_immune_at` consumer skips the card whoever caused the effect. Needs an
+    // owner-exempt immunity flavour (a by-causer read).
     ctx::set_self_immune(true);
     Ok(())
 }
 
-/// 规则书[持续]（1）: 「记录一个此卡未记录且[拥有者]拥有同色地契的颜色」
-/// Colour groups of buyable tiles the owner holds, minus this instance's
-/// recorded set (C# `CardShineAgain.Colors(owned: true)`).
 fn unrecorded_owned_colors(player_id: i32) -> Vec<i32> {
     let recorded = ctx::prop(PROP_COLORS);
     let mut out: Vec<i32> = Vec::new();
@@ -122,8 +107,6 @@ fn has_unrecorded_color(player_id: i32) -> bool {
     !unrecorded_owned_colors(player_id).is_empty()
 }
 
-/// C# `CardShineAgain.PaySplitChoose` -- while the owner cannot cover a payment,
-/// record a colour and take that colour's top deed price / 5 plus a fan.
 /// Applicability is `money(owner) < value` + `has_unrecorded_color`.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let colors = unrecorded_owned_colors(player_id);
@@ -132,7 +115,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     for &g in &colors {
         options.push(Msg::new(key!("shine_again_color")).i("g", g as i64));
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("shine_again_title")),
         &Msg::new(key!("shine_again_ask")).i("n", trigger::value() as i64),
@@ -140,10 +123,8 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     )?;
     let g = colors[pick.min(colors.len() - 1)];
     ctx::set_prop(PROP_COLORS, ctx::prop(PROP_COLORS) | (1 << g));
-    // 规则书[持续]（1）: 「[拥有者]拥有的1个同色地契的购买价格」÷5 -- C# `Max(price)`
-    // over the owner's deeds in that colour (`H._tiles[t].price`).
-    // TODO(规则书)（[拥有者]拥有的1个同色地契的购买价格）: the book does not say which
-    //   deed when several in the colour match -- we take the dearest.
+    // TODO(规则书)（[拥有者]拥有的1个同色地契的购买价格）: the book does not say which deed when several
+    // in the colour match -- we take the dearest.
     let mut best = 0;
     for t in ctx::owned_tiles(player_id) {
         if ctx::is_buyable(t) && ctx::tile_group(t) == g {
@@ -153,14 +134,12 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    // 规则书[持续]（1）: 「[拥有者][获得]……资金和1个正面[P✽P粉丝]」 -- C#
-    // `H.GainFans(Seat, 1, up: true)` + `H.GainR(Seat, maxPrice / 5)`.
-    // Dict writes (`ctx::state`) do not open a `markerGain` [反击] window,
-    // so this grant is safe nested in the pay pipeline.
+    // Dict writes (`ctx::state`) do not open a `markerGain` [反击] window, so this
+    // grant is safe nested in the pay pipeline.
     let _ = fans::grant(player_id, 1, 0)?;
     // 规则书[持续]（1）: 「[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金」
     // -- a printed 获得, so it belongs in the ordinary Money pipeline, but that is
-    // deferred: `gain_raw` here. Re-entry is not the reason (the (1) pre is
+    // deferred: `gain_raw` here. Re-entry is not the reason (the (1) condition is
     // `actor == owner`, a bank gain's actor is -1, and `is_money_hook_kind`
     // guards the rest).
     // TODO(ABI)（[拥有者][获得]“…÷5的资金”） ctx::gain: inside a
@@ -173,7 +152,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         ctx::gain_raw(
             player_id,
             money,
-            &Msg::new(key!("shine_again_why")).i("n", money as i64),
+            &Msg::new(key!("shine_again_reason")).i("n", money as i64),
         );
     }
     Ok(())
@@ -218,7 +197,7 @@ fn record(player_id: i32) -> card_sdk::Asked {
         .iter()
         .map(|&g| Msg::new(key!("shine_again_colour")).i("n", g as i64))
         .collect();
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("shine_again_title")),
         &Msg::new(key!("shine_again_which")),

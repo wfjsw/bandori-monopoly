@@ -19,16 +19,16 @@
 
 use rules_cond_ir::eval::{eval_and, eval_binop, eval_or, eval_unop};
 use rules_cond_ir::nodes::Kind;
-use rules_cond_ir::{spec, Val};
+use rules_cond_ir::{spec, Value};
 
-fn symbolic_val() -> Val {
+fn symbolic_val() -> Value {
     let x: i64 = kani::any();
     let which: u8 = kani::any();
     kani::assume(which < 3);
     match which {
-        0 => Val::Int(x),
-        1 => Val::Bool(x != 0),
-        _ => Val::Null,
+        0 => Value::Int(x),
+        1 => Value::Bool(x != 0),
+        _ => Value::Null,
     }
 }
 
@@ -201,18 +201,18 @@ pub fn ir_div_rem_error_class_matches_spec() {
         "rem error-ness matches spec"
     );
     match (a, b) {
-        (Val::Int(x), Val::Int(y)) => {
+        (Value::Int(x), Value::Int(y)) => {
             let err = (y == 0) || (x == i64::MIN && y == -1);
             assert_eq!(de.is_err(), err, "div Err exactly on y==0 or MIN/-1");
             assert_eq!(re.is_err(), err, "rem Err exactly on y==0 or MIN/-1");
             if !err {
-                crate::kassert!(matches!(de, Val::Int(_)), "non-error div is Ok(Int)");
-                crate::kassert!(matches!(re, Val::Int(_)), "non-error rem is Ok(Int)");
+                crate::kassert!(matches!(de, Value::Int(_)), "non-error div is Ok(Int)");
+                crate::kassert!(matches!(re, Value::Int(_)), "non-error rem is Ok(Int)");
             }
         }
         _ => {
-            assert_eq!(de, Val::Err, "non-Int div is Err");
-            assert_eq!(re, Val::Err, "non-Int rem is Err");
+            assert_eq!(de, Value::Err, "non-Int div is Err");
+            assert_eq!(re, Value::Err, "non-Int rem is Err");
         }
     }
 }
@@ -242,18 +242,18 @@ pub fn ir_div_rem_error_class_matches_spec() {
 pub fn ir_div_matches_spec() {
     let x: i64 = kani::any();
     let y: i64 = kani::any();
-    let de = eval_binop(Kind::Div, Val::Int(x), Val::Int(y));
-    let re = eval_binop(Kind::Rem, Val::Int(x), Val::Int(y));
+    let de = eval_binop(Kind::Div, Value::Int(x), Value::Int(y));
+    let re = eval_binop(Kind::Rem, Value::Int(x), Value::Int(y));
     let err = (y == 0) || (x == i64::MIN && y == -1);
     if err {
-        assert_eq!(de, Val::Err, "div error class");
-        assert_eq!(re, Val::Err, "rem error class");
+        assert_eq!(de, Value::Err, "div error class");
+        assert_eq!(re, Value::Err, "rem error class");
         return;
     }
     // Bit-width split for the Ok value (see the doc comment).
     kani::assume(x >= i16::MIN as i64 && x <= i16::MAX as i64);
     kani::assume(y >= i16::MIN as i64 && y <= i16::MAX as i64);
-    let (Val::Int(q), Val::Int(r)) = (de, re) else {
+    let (Value::Int(q), Value::Int(r)) = (de, re) else {
         panic!("non-error div/rem must be Ok(Int)");
     };
     assert_trunc_divrem(x, y, q, r);
@@ -269,16 +269,16 @@ pub fn ir_div_matches_spec() {
 pub fn ir_rem_matches_spec() {
     let x: i64 = kani::any();
     let y: i64 = kani::any();
-    let re = eval_binop(Kind::Rem, Val::Int(x), Val::Int(y));
+    let re = eval_binop(Kind::Rem, Value::Int(x), Value::Int(y));
     let err = (y == 0) || (x == i64::MIN && y == -1);
     if err {
-        assert_eq!(re, Val::Err, "rem error class");
+        assert_eq!(re, Value::Err, "rem error class");
         return;
     }
     kani::assume(x >= i16::MIN as i64 && x <= i16::MAX as i64);
     kani::assume(y >= i16::MIN as i64 && y <= i16::MAX as i64);
-    let de = eval_binop(Kind::Div, Val::Int(x), Val::Int(y));
-    let (Val::Int(q), Val::Int(r)) = (de, re) else {
+    let de = eval_binop(Kind::Div, Value::Int(x), Value::Int(y));
+    let (Value::Int(q), Value::Int(r)) = (de, re) else {
         panic!("non-error div/rem must be Ok(Int)");
     };
     assert_trunc_divrem(x, y, q, r);
@@ -291,16 +291,16 @@ pub fn ir_rem_matches_spec() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(4)]
 pub fn ir_div_mutant_wrong_error_case_is_detected() {
-    let ov = eval_binop(Kind::Div, Val::Int(i64::MIN), Val::Int(-1));
-    assert_eq!(ov, Val::Err, "MIN/-1 is Err");
+    let ov = eval_binop(Kind::Div, Value::Int(i64::MIN), Value::Int(-1));
+    assert_eq!(ov, Value::Err, "MIN/-1 is Err");
     assert_ne!(
         ov,
-        Val::Int(i64::MIN.wrapping_div(-1)),
+        Value::Int(i64::MIN.wrapping_div(-1)),
         "mutant wrapping MIN/-1 must not match"
     );
-    let z = eval_binop(Kind::Rem, Val::Int(7), Val::Int(0));
-    assert_eq!(z, Val::Err, "rem by 0 is Err");
-    assert_ne!(z, Val::Int(0), "mutant x % 0 == 0 must not match");
+    let z = eval_binop(Kind::Rem, Value::Int(7), Value::Int(0));
+    assert_eq!(z, Value::Err, "rem by 0 is Err");
+    assert_ne!(z, Value::Int(0), "mutant x % 0 == 0 must not match");
 }
 
 /// MUTANT (wrong rounding direction): see `reject_floor_mutant` — the
@@ -318,9 +318,9 @@ pub fn ir_div_mutant_floor_rounding_is_detected() {
     kani::assume(!(x == i64::MIN && y == -1));
     kani::assume(x >= i16::MIN as i64 && x <= i16::MAX as i64);
     kani::assume(y >= i16::MIN as i64 && y <= i16::MAX as i64);
-    let de = eval_binop(Kind::Div, Val::Int(x), Val::Int(y));
-    let re = eval_binop(Kind::Rem, Val::Int(x), Val::Int(y));
-    let (Val::Int(q), Val::Int(r)) = (de, re) else {
+    let de = eval_binop(Kind::Div, Value::Int(x), Value::Int(y));
+    let re = eval_binop(Kind::Rem, Value::Int(x), Value::Int(y));
+    let (Value::Int(q), Value::Int(r)) = (de, re) else {
         panic!("non-error div/rem must be Ok(Int)");
     };
     assert_trunc_divrem(x, y, q, r);
@@ -359,14 +359,14 @@ pub fn ir_neg_not_match_spec() {
 pub fn error_root_is_false() {
     let x: i64 = kani::any();
     // `1 / x` is an error exactly when x == 0.
-    let v = eval_binop(Kind::Div, Val::Int(1), Val::Int(x));
+    let v = eval_binop(Kind::Div, Value::Int(1), Value::Int(x));
     if x == 0 {
-        assert_eq!(v, Val::Err);
+        assert_eq!(v, Value::Err);
         crate::kassert!(!v.as_cond_bool());
     } else {
-        assert_eq!(v, Val::Int(1 / x));
+        assert_eq!(v, Value::Int(1 / x));
         // A bool root that is an error is also false.
-        crate::kassert!(!Val::Err.as_cond_bool());
+        crate::kassert!(!Value::Err.as_cond_bool());
     }
 }
 
@@ -381,8 +381,14 @@ pub fn ir_tern_matches_spec() {
     // The tree form evaluates only the taken arm; the value-level spec_tern
     // is the table. They agree on the value of the taken arm.
     match c.try_bool() {
-        Ok(true) => assert_eq!(spec::spec_tern(c, Val::Int(t), Val::Int(f)), Val::Int(t)),
-        Ok(false) => assert_eq!(spec::spec_tern(c, Val::Int(t), Val::Int(f)), Val::Int(f)),
-        Err(()) => assert_eq!(spec::spec_tern(c, Val::Int(t), Val::Int(f)), Val::Err),
+        Ok(true) => assert_eq!(
+            spec::spec_tern(c, Value::Int(t), Value::Int(f)),
+            Value::Int(t)
+        ),
+        Ok(false) => assert_eq!(
+            spec::spec_tern(c, Value::Int(t), Value::Int(f)),
+            Value::Int(f)
+        ),
+        Err(()) => assert_eq!(spec::spec_tern(c, Value::Int(t), Value::Int(f)), Value::Err),
     }
 }

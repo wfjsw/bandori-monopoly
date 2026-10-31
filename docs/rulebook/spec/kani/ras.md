@@ -38,10 +38,10 @@ table lists the **primary** classification. OPEN ids are in the last column.
 |---|---|---|
 | `tile_named` resolves only 「江户川乐器店」 | `Op::tile_named` | every clause that names 白雪学园 / 艺术学院高中 / 瑟罗希亚国际学校 / 银河拉面馆 / 旭汤澡堂 / CHUCHU的公寓 / Live House / RiNG* / 武道馆 / Space / Live House Galaxy / Bandori车站 / 东京外 / CiRCLE cannot look the tile up → teleport/place-on-tile branches never run |
 | `gain_fire` does not clamp to `fire_max` | `Op::gain_fire` | fire-pot caps 「上限1」「上限2」 unprovable (real engine: `game-core::engine::ops::gain_fire` clamps) |
-| `add_held` / `add_tok` ignore the `max` argument | `Op::add_held` | PAREO cap 3 unprovable (real: `(was+n).clamp(0,max)-was`) |
+| `add_held` / `add_held_by_name` ignore the `max` argument | `Op::add_held` | PAREO cap 3 unprovable (real: `(was+n).clamp(0,max)-was`) |
 | `state_set` / `state_get` ignore MIN/MAX/EXPIRES field columns | `Op::state_set` | `fire_pot` / `state::set_bounds` cannot declare a cap under Kani |
 | `target` always returns 0 | `Op::target` | `ctx::target(who)` becomes `Some(0)`, so multi-player placement cannot pick the chosen seat |
-| `card_move` + all `plan::*` / `set_build_cost_pct` / `set_fixed_roll` are protocol stubs (return 0) | see `host.rs` move-plan arm | teleport-as-main-move, +Xd20/+Xd10 dice, half/free build cost are PROTOCOL-LEVEL |
+| `run_planned_move` + all `plan::*` / `set_build_cost_pct` / `set_fixed_roll` are protocol stubs (return 0) | see `host.rs` move-plan arm | teleport-as-main-move, +Xd20/+Xd10 dice, half/free build cost are PROTOCOL-LEVEL |
 | `cards_in(Hand)` has no per-player pile (only `hand_resonance` + a global bitset) | `Op::cards_in` | riot cycle proved over the `hand_resonance` view |
 
 These are **not** body bugs. A proof that needs them is BLOCKED-HOST or
@@ -98,7 +98,7 @@ PROTOCOL-LEVEL, never a silent zero.
 | ID | book quote (short) | class | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | C-RAS-unstoppable-card-01 | 「投掷1d6…传送至白雪学园…CHUCHU的公寓」 | BLOCKED-HOST | — | — | `tile_named` cannot resolve the six destinations; `plan::set_teleport_to` is a stub | OPEN-unstoppable-mod |
-| C-RAS-unstoppable-card-02 | 「本次传送不触发结算，视为你的主要移动」 | PROTOCOL-LEVEL | — | — | move-plan `set_resolve(false)` + `card_move` | — |
+| C-RAS-unstoppable-card-02 | 「本次传送不触发结算，视为你的主要移动」 | PROTOCOL-LEVEL | — | — | move-plan `set_settles(false)` + `run_planned_move` | — |
 | C-RAS-unstoppable-card-03 | 「若骰点为1-3获得2000资金，若为4-6则获得1000资金」 | **PROVEN** | `unstoppable_card_03_money_iff`, `…_noop_when_out`, `…_mutant_is_detected` | SUCCESSFUL 122s / 104s / 116s | money half is fully observable (`GainMoney`) | OPEN-unstoppable-mod (face 6) |
 
 ### RAS:成为最强 — 3 clauses
@@ -107,7 +107,7 @@ PROTOCOL-LEVEL, never a silent zero.
 |---|---|---|---|---|---|---|
 | C-RAS-become-strongest-01 | 「roll 1d10，传送到livehouse对应的格子…」 | BLOCKED-HOST | — | — | `tile_named` cannot resolve the livehouse table; destination unobservable | OPEN-livehouse, OPEN-become-strongest-table |
 | C-RAS-become-strongest-02 | 「若你没有Livehouse格子，传送到"Live House"」 | BLOCKED-HOST | — | — | same `tile_named` gap | OPEN-livehouse |
-| C-RAS-become-strongest-03 | 「视为你的主要移动」 | PROTOCOL-LEVEL | — | — | `card_move` is a move-plan stub | — |
+| C-RAS-become-strongest-03 | 「视为你的主要移动」 | PROTOCOL-LEVEL | — | — | `run_planned_move` is a move-plan stub | — |
 
 ### RAS:游击演出 — 4 clauses
 
@@ -141,7 +141,7 @@ PROTOCOL-LEVEL, never a silent zero.
 |---|---|---|---|---|---|---|
 | C-RAS-lock-01 | 「抽取游戏开始的2手牌前…放置在自身场上」 | PROTOCOL-LEVEL | — | — | opening-deal replacement is engine setup | — |
 | C-RAS-lock-02 | 「游戏开始时[传送]到"东京外"获得3层[除外]」 | BLOCKED-HOST | — | — | `tile_named("东京外")` unmodeled; game-start teleport is setup | — |
-| C-RAS-lock-03 | 「主要移动[经过]了"Bandori车站"则…终点改为"旭汤澡堂"…[移除]」 | BLOCKED-HOST | — | — | `tile_named` for both tiles; `send_to_dest` / move-plan | — |
+| C-RAS-lock-03 | 「主要移动[经过]了"Bandori车站"则…终点改为"旭汤澡堂"…[移除]」 | BLOCKED-HOST | — | — | `tile_named` for both tiles; `send_to_fate` / move-plan | — |
 
 ### RAS:（MASKING）CRUSH ON THE DRUM!!! — 2 clauses
 
@@ -154,7 +154,7 @@ PROTOCOL-LEVEL, never a silent zero.
 
 | ID | book quote (short) | class | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-RAS-pareo-01 | 「获得2个PAREO标记」 | PROVEN-LEAF (sub-cap) + BLOCKED-HOST (cap) | `pareo_01_marks_iff`, `pareo_01_marks_mutant_is_detected` | written, pending | +2 marks is exact when pre ≤ 1; `add_held` ignores max=3 | — |
+| C-RAS-pareo-01 | 「获得2个PAREO标记」 | PROVEN-LEAF (sub-cap) + BLOCKED-HOST (cap) | `pareo_01_marks_iff`, `pareo_01_marks_mutant_is_detected` | written, pending | +2 marks is exact when condition ≤ 1; `add_held` ignores max=3 | — |
 | C-RAS-pareo-02 | 「视为你的房屋总数增加」 | PROTOCOL-LEVEL | — | — | listener offer (鳰原令王那 (2)) is a cross-skill hook | — |
 | C-RAS-pareo-03 | 「可选择移除任意你拥有的格子上的一层房屋」 | PROTOCOL-LEVEL | — | — | optional prompt + `add_house` is covered only in the full play; isolated as declined in the mark proof | — |
 
@@ -239,7 +239,7 @@ Filled from `tools/kani/run.sh --unit ras` / `--unit skills_ras`
 | `unstoppable_card_03_money_mutant_is_detected` | ras | **SUCCESSFUL** | 116 | mutant detected (1100 ≠ 1000) |
 | `riot_02_03_cycle_iff` | ras | **TIMEOUT** | 900 | CBMC stuck unwinding `Vec` drop from `ctx::cards_in` / `Vec<u8>` in the unmodified body |
 | `riot_03_extra_draw_mutant_is_detected` | ras | written, pending | | same body; not yet run to a verdict (shared box saturated) |
-| `pareo_01_marks_iff` | ras | written, pending | | +2 PAREO, pre ≤ 1 |
+| `pareo_01_marks_iff` | ras | written, pending | | +2 PAREO, condition ≤ 1 |
 | `pareo_01_marks_mutant_is_detected` | ras | written, pending | | +3 ≠ +2 |
 | `masking_01_fire_gain_leaf` | skills_ras | written, pending | | +1 GainFire leaf |
 | `rio_01_fire_gain_leaf` | skills_ras | written, pending | | +1 GainFire leaf |

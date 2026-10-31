@@ -1,4 +1,3 @@
-//! `R:NFO` -- C# `CardNfo` (MatchHost.cs:10517-10628): roll 1d6 (wrapping above 6)
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:NFO`）:
 //! > NFO：
@@ -25,17 +24,13 @@ pub const NFO: CardDef = CardDef::new(
         // `gain_guard` keeps only a `pay` effect aimed at this player.
         On::Action(Action::Effect("", Some(gain_guard), gain_bump)),
         On::Play("", None, play),
-        // 规则书: 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
-        // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
-        // by a paired Action (Filter cannot `set_dest`). The unplace rides
-        // PayAfter (always raised, so a shave-to-0 still uses the card up).
-        // TODO(规则书): a payment cancelled *before* PaySplitAt (effect window /
-        //   payCombinedCancel) never reaches the shave, so the card should stay;
-        //   the book ties 「置入弃牌堆」 to 「减免1000」 and the old C# body
-        //   unplaced only when `PaySplitAt` ran. PayAfter fires for cancelled /
-        //   zeroed payments too and carries no "PaySplitAt ran" bit, and a Filter
-        //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
-        //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
+        // TODO(规则书): 规则书: 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74 Pattern A/D: pure
+        // amount shave on Filter(PaySplitAt); the card is used up by a paired Action
+        // (Filter cannot `set_fate`). The unplace rides PayAfter (always raised, so a
+        // shave-to-0 still uses the card up). PayAfter fires for cancelled / zeroed
+        // payments too and carries no "PaySplitAt ran" bit, and a Filter cannot latch
+        // one (`state::set` is refuse_if_filter'd) -- so the unplace cannot tell
+        // cancelled-before-PaySplitAt from shave-to-0.
         On::Filter(Filter::PaySplitAt("actor == owner && card.placed && value > 0", None, pay_shave)),
         On::Action(Action::PayAfter("actor == owner && card.placed", None, pay_unplace)),
         On::Schedule("at_end", "", None, at_end),
@@ -64,8 +59,8 @@ fn add_character_crystals(player_id: i32, n: i32) -> card_sdk::Asked {
             ctx::add_card_crystals(player_id, &persona, n, 0);
         }
         None => {
-            // `add_tok` raises the marker window; propagate its pause.
-            ctx::add_tok(player_id, counter::CRYSTALS, n, i32::MAX)?;
+            // `add_held_by_name` raises the marker window; propagate its pause.
+            ctx::add_held_by_name(player_id, counter::CRYSTALS, n, i32::MAX)?;
         }
     }
     Ok(())
@@ -74,11 +69,10 @@ fn add_character_crystals(player_id: i32, n: i32) -> card_sdk::Asked {
 fn character_crystals(player_id: i32) -> i32 {
     match ctx::persona_skill(player_id) {
         Some(persona) => ctx::card_crystals(player_id, &persona),
-        None => ctx::tok(player_id, counter::CRYSTALS),
+        None => ctx::held_count(player_id, counter::CRYSTALS),
     }
 }
 
-/// The nearest other player strictly ahead of `player_id` on the ring (C# `H.NearestAhead`).
 fn nearest_ahead(player_id: i32) -> i32 {
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);
@@ -104,12 +98,9 @@ fn nearest_ahead(player_id: i32) -> i32 {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「投掷1d6」 -- C# `(H.Roll(i, 1, 6, "NFO") - 1) % 6 + 1` wraps above 6.
     let roll = ctx::roll(player_id, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书: 「（若结果严格大于6，则从1开始重新计数）」
     let k = (roll - 1).rem_euclid(6) + 1;
-    // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H._turnCtx.AfterEnd.Add(() =>
-    // H.GiveStay(i, 1, i, "NFO"))`; the scheduled body is `at_end`.
     ctx::at_turn_end(player_id, "at_end");
     if k == 6 {
         // 规则书: 「若结果为6，依次获得结果1-5的全部效果。」
@@ -127,10 +118,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `H._turnCtx.AfterEnd` -- the [停留] layer lands after the turn's status
-/// wear-off (so it survives into the next turn).
 fn at_end(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, "NFO")`.
     rules_status::stay::add(player_id, 1);
     ctx::log(
         player_id,
@@ -146,7 +134,7 @@ fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
     match k {
         // 规则书: 「若投掷结果为1，获得1500资金」
         1 => {
-            ctx::gain(player_id, 1500, &Msg::new(key!("nfo_why")))?;
+            ctx::gain(player_id, 1500, &Msg::new(key!("nfo_reason")))?;
         }
         // 规则书: 「若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]」
         2 => {
@@ -157,19 +145,11 @@ fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
             }
             let pos = ctx::player_pos(player_id);
             let pos2 = ctx::player_pos(num);
-            // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- `H.SeatsOn(pos2, i)`.
             let payers: Vec<i32> = ctx::players_on(pos2, player_id);
-            // 规则书: 「立刻移动到你前方最近一名玩家的前方一格」 -- C#
-            // `H.CardMove(c, new MoveCtx { Steps = H.Forward(pos, pos2) + 1,
-            // Resolve = false })`: a forward walk of that many steps lands one
-            // tile past that player.
             let steps = ctx::tile_forward(pos, pos2) + 1;
             ctx::plan::set_steps(steps);
-            // 规则书: 「不[触发结算]」 -- C# `Resolve = false`.
-            ctx::plan::set_resolve(false);
-            // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove` (`MainMoveAs`)
-            // consumes the turn's main move and walks the plan immediately.
-            ctx::card_move(player_id);
+            ctx::plan::set_settles(false);
+            ctx::run_planned_move(player_id);
             let to = ctx::tile_steps_ahead(player_id, steps);
             if to >= 0 {
                 ctx::log(
@@ -179,15 +159,13 @@ fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
                         .tile("tile", to),
                 );
             }
-            // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- C# `H.SplitPay(payers, i,
-            // 1000, ...)`, only if the move did not knock the player_id out (C# `if (!H.Out(i))`).
             if !ctx::player_out(player_id) {
                 split_pay(&payers, player_id, 1000, &Msg::new(key!("nfo_pay")))?;
             }
         }
         // 规则书: 「若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」
         3 => {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_fate(ctx::Fate::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nfo_note")));
             ctx::log(
                 player_id,
@@ -224,10 +202,9 @@ fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- distinct discard
-/// titles filtered to the ones [`ctx::query_guard`] admits on
-/// [`ctx::entry::PRESS`], then [`ctx::pick_take_from`] (the card leaves the
-/// discard before it resolves). `H.PlayCard` then applies the card's own `Dest`.
+/// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- distinct discard titles filtered to the ones
+/// [`ctx::query_guard`] admits on [`ctx::entry::PRESS`], then
+/// [`ctx::pick_take_from`] (the card leaves the discard before it resolves).
 fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     // Only cards the press entry admits. The resolving NFO is not in the
     // discard while this runs (a hand play removed it from the hand; a replayed
@@ -266,37 +243,33 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .card("card", id.as_str()),
     );
-    // C# `H.PlayCard(...)` runs the effect and then applies that card's `Dest`.
-    let dest = ctx::play_card(id.as_str(), player_id)?;
-    apply_dest(player_id, id.as_str(), dest);
+    let fate = ctx::play_card(id.as_str(), player_id)?;
+    apply_fate(player_id, id.as_str(), fate);
     Ok(())
 }
 
-/// Land a card just replayed out of the discard on its own `Dest` (C#
-/// `PlayCard`'s `switch (c.Dest)`). `Field` / `Banished` need nothing here:
-/// the inner card already placed itself, or is simply out of the game.
-fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
-    match dest {
-        ctx::Dest::Graveyard => ctx::to_discard(player_id, id),
-        ctx::Dest::Field | ctx::Dest::Banished => {}
-        ctx::Dest::Hand | ctx::Dest::DeckTop | ctx::Dest::DeckBottom | ctx::Dest::DeckRandom => {
-            ctx::add_to_dest(player_id, id, dest)
+/// `Field` / `Banished` need nothing here: the inner card already placed itself,
+/// or is simply out of the game.
+fn apply_fate(player_id: i32, id: &str, fate: ctx::Fate) {
+    match fate {
+        ctx::Fate::Graveyard => ctx::to_discard(player_id, id),
+        ctx::Fate::Field | ctx::Fate::Banished => {}
+        ctx::Fate::Hand | ctx::Fate::DeckTop | ctx::Fate::DeckBottom | ctx::Fate::DeckRandom => {
+            ctx::add_to_fate(player_id, id, fate)
         }
     }
 }
 
-/// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
-/// `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes `total` before
-/// it divides (`ctx::split_pay`).
-fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
-    ctx::split_pay(payers, to, total, why)?;
+/// `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes `total` before it
+/// divides (`ctx::split_pay`).
+fn split_pay(payers: &[i32], to: i32, total: i32, reason: &Msg) -> card_sdk::Asked {
+    ctx::split_pay(payers, to, total, reason)?;
     Ok(())
 }
 
-/// C# `CardNfo.PaySplitAt` (effect 3, while placed): the owner's next payment is cut
-/// by 1000. Pure Filter half (ABI v74) -- returns the shaved figure and logs.
-/// Runs through the Fx hook dispatch at `paySplitAt` (after `PaySplitChoose`, before the
-/// `pay` [反击] window).
+/// Pure Filter half (ABI v74) -- returns the shaved figure and logs. Runs through
+/// the hook dispatch at `paySplitAt` (after `PaySplitChoose`, before the `pay`
+/// [反击] window).
 fn pay_shave(player_id: i32, value: i32) -> i32 {
     // 规则书: 「你下次付款时自动减免1000资金的消耗」
     let cut = (value - 1000).max(0);
@@ -310,9 +283,9 @@ fn pay_shave(player_id: i32, value: i32) -> i32 {
 }
 
 /// Action half of [`pay_shave`]: 「并将此卡置入弃牌堆」 -- the card is used up.
-/// Rides PayAfter (Filter cannot `set_dest`); see the TODO on the entry.
+/// Rides PayAfter (Filter cannot `set_fate`); see the TODO on the entry.
 fn pay_unplace(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     let _ = player_id;
     Ok(())
 }
@@ -325,8 +298,6 @@ fn gain_guard(player_id: i32) -> bool {
         && character_crystals(player_id) > 0
 }
 
-/// 规则书: 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 -- C#
-/// `NfoCrystalsFx.PaySplitChoose`, keyed on `p.to == Player` (the gainer).
 fn gain_bump(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
         return Ok(());

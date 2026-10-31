@@ -474,13 +474,12 @@ fn fever_leaves_to_the_users_discard_pile() {
     );
 }
 
-/// C# `Card.User` is per-card-instance Mem, so it has to live on the **placed**
-/// field card. `place_card` returns that uid precisely because `ctx::set_prop`
-/// (self) writes the play run's instance, which is not what （2）'s `turn_start`
-/// runs as -- a write there is lost and 「放入[使用者]弃卡区」 silently degrades
-/// to `set_dest`'s own-owner pile. That degradation is invisible whenever
-/// owner == user (the normal case: 「将此卡放置在[使用者]的[场地]」), so pin the
-/// placement itself rather than the discard.
+/// `place_card` returns that uid precisely because `ctx::set_prop` (self) writes
+/// the play run's instance, which is not what （2）'s `turn_start` runs as -- a
+/// write there is lost and 「放入[使用者]弃卡区」 silently degrades to `set_fate`'s
+/// own-owner pile. That degradation is invisible whenever owner == user (the
+/// normal case: 「将此卡放置在[使用者]的[场地]」), so pin the placement itself rather than the
+/// discard.
 #[test]
 fn fever_user_mem_lands_on_the_placed_instance() {
     let mut t = Table::vanilla(2);
@@ -574,7 +573,7 @@ fn recruit_refuses_a_second_play() {
     let r = t.play(0, "通用:10次招募（1回限定）");
     let e = r.expect_err("「1回限定」: the second copy must be refused");
     assert!(
-        e.contains("gacha10_why"),
+        e.contains("gacha10_reason"),
         "refused by the once-only gate: {e}"
     );
     assert_eq!(t.money(0), 8_500, "the refused play costs nothing");
@@ -600,13 +599,10 @@ fn recruit_is_per_player() {
 // 通用:该清CP了
 // =====================================================================
 
-// Sheet 2026-10-06 新卡组卡 E3: 「向抽牌堆中加入一张“觉悟”」 (was 「压」).
-// The sheet gives this card a play *window*, not a [反击] tag and not a [手]
-// tag: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-// (rulebook 时点流程 13–15: 移动后 → 结算前/[移动终点] → 触发结算). Window
-// plays like this one -- cf. AG:Y.O.L.O 「你的任意掷骰结算前打出此卡」 -- are
-// offered in the engine's counteract ring, so the card is triggered there,
-// not played as a normal 运营-phase hand card.
+// Sheet 2026-10-06 新卡组卡 E3: 「向抽牌堆中加入一张“觉悟”」 (was 「压」). The sheet gives this card
+// a play *window*, not a [反击] tag and not a [手] tag:
+// 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」 (rulebook 时点流程 13–15: 移动后 → 结算前/[移动终点] →
+// 触发结算). Window plays like this one -- cf.
 #[test]
 fn student_council_check_adds_juewu_not_ya() {
     let mut t = Table::vanilla(2);
@@ -693,13 +689,13 @@ fn cp_places_one_tile_mark_and_six_on_card_cp() {
     // 「格子上」. `log.cp_place` interpolates `{{who}}`/`{{tile}}`/`{{n}}`, so the
     // note must carry all three -- a bare key renders as blank slots. `who` is
     // the acting seat from the `place` payload's `Message.seat` (not the host's
-    // `turn_player`); `n` is the count arg (`Arg::I`, not `Arg::N` -- `N` is
+    // `turn_player`); `n` is the count arg (`Arg::Integer`, not `Arg::Number` -- `N` is
     // money and gets thousands separators).
     let note = &marks[0].note;
     assert_eq!(note.key(), "log.cp_place", "note {note}");
-    assert_eq!(note.a.get("who"), Some(&Arg::PlayerId(0)), "note {note}");
-    assert_eq!(note.a.get("tile"), Some(&Arg::Tile(5)), "note {note}");
-    assert_eq!(note.a.get("n"), Some(&Arg::I(1)), "note {note}");
+    assert_eq!(note.args.get("who"), Some(&Arg::PlayerId(0)), "note {note}");
+    assert_eq!(note.args.get("tile"), Some(&Arg::Tile(5)), "note {note}");
+    assert_eq!(note.args.get("n"), Some(&Arg::Integer(1)), "note {note}");
     // The **on-card** [CP点]: 6 on this card instance, not a player counter.
     assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(6));
     // The card itself stays on the field as a lasting piece.
@@ -1058,8 +1054,8 @@ fn harvest_moves_chosen_distance_and_settles() {
     let p = t.expect_prompt();
     assert_eq!(p.options.len(), 6, "1..=6: {}", t.dump_prompt());
     for (i, option) in p.options.iter().enumerate() {
-        assert_eq!(option.a.get("n"), Some(&Arg::I(i as i64 + 1)));
-        assert_eq!(option.a.get("tile"), Some(&Arg::Tile(i as i32 + 1)));
+        assert_eq!(option.args.get("n"), Some(&Arg::Integer(i as i64 + 1)));
+        assert_eq!(option.args.get("tile"), Some(&Arg::Tile(i as i32 + 1)));
     }
     t.answer(0, 3).unwrap(); // 4
     assert_eq!(t.pos(0), 4, "events {:?}", t.recent_keys(8));
@@ -1116,7 +1112,7 @@ fn harvest_previews_each_distance_with_wraparound_and_reverse() {
             } else {
                 (58 + n) % 60
             };
-            assert_eq!(option.a.get("tile"), Some(&Arg::Tile(tile)));
+            assert_eq!(option.args.get("tile"), Some(&Arg::Tile(tile)));
         }
         let destination = if reverse { 58 } else { 2 };
         t.answer(0, 3).unwrap(); // four tiles
@@ -1749,7 +1745,7 @@ fn is_money_line(typ: &str) -> bool {
 }
 
 /// Every money line must be the standard action line naming who acted and how
-/// much; the cause rides along in parentheses (`log.part.why`). A line keyed by
+/// much; the cause rides along in parentheses (`log.part.reason`). A line keyed by
 /// a card locale key is the old bare-name spam.
 fn assert_money_lines_carry_action(events: &[MatchEvent]) {
     for e in events {
@@ -1770,16 +1766,16 @@ fn assert_money_lines_carry_action(events: &[MatchEvent]) {
         if k == "log.with_received" {
             // A transfer where the payee got less than the payer lost: the
             // action line is nested in `base`.
-            assert!(e.msg.a.contains_key("base"), "no base line: {:?}", e.msg);
+            assert!(e.msg.args.contains_key("base"), "no base line: {:?}", e.msg);
             continue;
         }
         assert!(
-            e.msg.a.contains_key("who"),
+            e.msg.args.contains_key("who"),
             "money line has no actor: {:?}",
             e.msg
         );
         assert!(
-            e.msg.a.contains_key("amount"),
+            e.msg.args.contains_key("amount"),
             "money line has no amount: {:?}",
             e.msg
         );
@@ -1848,7 +1844,7 @@ fn budokan_pay_lines_carry_the_action() {
     for e in &pays {
         // 「P1 向 P0 支付 670（登上武道馆）」 -- actor, counterparty, amount.
         assert_eq!(e.msg.key(), "log.pay", "{:?}", e.msg);
-        assert!(e.msg.a.contains_key("to"), "no payee: {:?}", e.msg);
+        assert!(e.msg.args.contains_key("to"), "no payee: {:?}", e.msg);
     }
 }
 

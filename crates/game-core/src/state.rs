@@ -27,7 +27,7 @@ pub struct MovePlan {
     /// `MoveCtx` is gone by then.
     pub can_build: bool,
     /// Whether this move may build away from the landing
-    /// (`MoveCtx::build_anywhere`, HOST-08). Was: lifts `why_not_build`'s
+    /// (`MoveCtx::build_anywhere`, HOST-08). Was: lifts `guard_build`'s
     /// landing-only check. Skipped when `false` so saves (and ckpt_equiv
     /// turn hashes) remain byte-identical to the pre-HOST-08 shape.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -146,7 +146,7 @@ pub struct MatchState {
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
     /// Would `act {act:"diceRollBefore"}` be accepted
-    /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
+    /// (`cant_act`'s roll branch: the live `skip_move` latch, the
     /// `main_moved` flag, and the roller).
     pub can_roll_here: bool,
     /// The same for `act {act:"end"}` (the end branch:
@@ -156,7 +156,7 @@ pub struct MatchState {
     /// mid-turn layer grants -- a bot trusting it sent `end` into
     /// `err.roll_first`). True as well once the end is already queued: a
     /// duplicate `end` is accepted there and folds into the phase
-    /// (`Cx::end_already_queued`), prompts and hand overflow included.
+    /// (`PlayCtx::end_already_queued`), prompts and hand overflow included.
     pub can_end_here: bool,
     /// How many hand cards / skills the turn has already played
     /// (`world.turn.played.len()`) -- what the standard policy's
@@ -505,7 +505,7 @@ pub mod prop {
     pub const PAY_FACTOR: &str = "payFactor";
     /// 「owner不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
-    /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
+    /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `cant_build_on`
     /// refuses a build whose house cost is `>=` this. On a board-owned instance;
     /// `0` disables. Mirrors `card_sdk::abi::prop::NO_BUILD_ABOVE`.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
@@ -1357,7 +1357,7 @@ impl MarkFilter<'_> {
     }
 }
 
-/// One pressable skill in a viewer's list (`Match::view_extra`'s `skills`).
+/// One pressable skill in a viewer's list (`Match::view_extras`'s `skills`).
 /// View-only -- not part of saved state. `id` is the rule id
 /// (`skill:<owner>:<name>`); the client resolves name / body from it
 /// (`cardTitle` / `cardText`). `enabled` / `reason` come from the same gate

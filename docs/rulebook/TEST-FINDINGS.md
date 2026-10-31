@@ -128,14 +128,11 @@ move and never updated.
 * **Hand-over commits before the `bought` chain** (`tomoe_savior_buy_listener_places_the_free_house`).
   `ctx::set_owner` was a write on the card's world *copy*; `ctx::raise_bought`
   ran the hook chain on the live world, so Afterglow's
-  「自动免费在上面加盖一栋房子」 hit `err.build_not_own`. `Cx::card_raise_bought`
+  「自动免费在上面加盖一栋房子」 hit `err.build_not_own`. `PlayCtx::card_raise_bought`
   now commits the transfer (and the un-mortgage, see the RULING in §6) before
   raising.
-* **Every 「购买地契」 listener hears the hand-over**
-  (`tomoe_savior_buy_listener_pays_the_chuchu_bonus`). `raise_bought` raised
-  only `bought`; `RAS:（chuchu）演奏我的音乐吧` sat on `BuyAfter`. Both
-  acquisition hooks now fire (the same pair `buy()` raises), and chuchu moved
-  to `HookKind::Bought` (C# `CardChuchuMusic.Bought` = `Fx.Bought`).
+* **Every 「购买地契」 listener hears the hand-over** (`tomoe_savior_buy_listener_pays_the_chuchu_bonus`).
+  `raise_bought` raised only `bought`; `RAS:（chuchu）演奏我的音乐吧` sat on `BuyAfter`.
 * **CRYCHIC (2) 「移除此卡与你所有区域的所有"CRYCHIC"卡」**
   (`mutsumi_never_2_band_2_removes_the_crychic_cards`). The zone sweep matched
   `starts_with("CRYCHIC:")`, which misses 「此卡」 itself -- the band skill's id
@@ -175,7 +172,7 @@ Landed themes only; the per-item history is gone from this file.
   scoping; all six `unintended_found` repros green.
 * **Fuzz findings** -- `fire_over_cap`, `negative_status_leak`,
   `money_ledger_gap`, `settle_loop_stuck`, `money_depth_opens_windows`
-  (loud safety cap, `Cx::reentrant_hooks`), `returns_prompt_storm`
+  (loud safety cap, `PlayCtx::reentrant_hooks`), `returns_prompt_storm`
   (2026-10-08: a raw `state_set("stun", n)` left a permanent [晕眩] that
   skipped every later turn and turned PPP:Returns' turn-start band borrow
   into a prompt storm -- `MatchPlayer::state_set` now stamps the rulebook's
@@ -189,16 +186,11 @@ Landed themes only; the per-item history is gone from this file.
   寄于指尖), Ringing Bloom / 椎名立希 (1) / 丰川祥子 (1) / CRYCHIC (2) /
   乐奈 tile lookup fixes.
 * **Rename:** [反击] is `counteract` throughout (ABI v28).
-* **Bot seats in the [反击] ring** (2026-10-08) -- `can_counteract_now`
-  (`wasm_rules.rs`) rejected `player_id.ai`, a C# carry-over ("out / AI /
-  exiled never open a window") that did **less than the book**: out / [除外] /
-  `CannotPlay` are the only eligibility cuts, and "is a bot" is not one. Bots
-  of every mentality are now offered like humans (answered through
-  `Cx::fill_ai`: standard `CounterParams` propensity, default
-  `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ per offered card -- user ruling
-  2026-10-08, "bots must be able to counteract"; a book entry at 0 holds a card
-  back; chaos `CHAOS_COUNTER_CHANCE`; advanced as an ordinary held prompt,
-  deadline fallback = the skip). Pinned by `crates/game-rules/tests/chain_bot.rs`.
+Bots of every mentality are now offered like humans (answered through `PlayCtx::fill_ai`: standard
+`CounterParams` propensity, default `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ per offered card --
+user ruling 2026-10-08, "bots must be able to counteract"; a book entry at 0 holds a card back;
+chaos `CHAOS_COUNTER_CHANCE`; advanced as an ordinary held prompt, deadline fallback = the skip).
+Pinned by `crates/game-rules/tests/chain_bot.rs`.
 
 ## Rulebook doc check (2026-10-06)
 
@@ -236,16 +228,9 @@ agent 「同色」, RiNG mortgageability, 强制购买 pay-hook scope).
 Two agents are on the remaining ABI holes right now (**in progress (ABI
 batch)**); entries below marked that way are theirs.
 
-* ~~网络链接异常: cancel *one* designation.~~ **Done (2026-10-06, Group A).**
-  The **static targeting query** (`ctx::designations`, C#
-  `H.Db.Card(id).Targeting` + `H.Others`, declared via `prop::DESIGNATES`) and
-  **per-pair cancel** (`ctx::cancel_designation` / `designation_cancelled`,
-  C# `play.Tags["immune"+seat]`) landed: one designation drops, the rest of the
-  play's designations land. `money::per_pair_cancel_drops_one_designation`,
-  `gap_money::g03_net_error_drops_one_leg_of_a_split` and
-  `general::net_cancels_one_target_not_all` are green and un-ignored.
-  The share is the **pre-drop** figure (RULING; `g04`'s halving-vs-cancel
-  order stays RULING).
+`money::per_pair_cancel_drops_one_designation`, `gap_money::g03_net_error_drops_one_leg_of_a_split`
+and `general::net_cancels_one_target_not_all` are green and un-ignored. The share is the
+**pre-drop** figure (RULING; `g04`'s halving-vs-cancel order stays RULING).
 * ~~育美 (2) / `hagumi_marks` (2): count gains during the turn.~~
   **Done (2026-10-06, Group A).** 「资金变动」 (支付阶段 7) merges into
   `payAfter`, which now fires on **any** money change (a `gain` and a
@@ -254,7 +239,7 @@ batch)**); entries below marked that way are theirs.
   start) is what 「当前回合内你每获得过一次资金」 reads, so a pure-hand (2) sees
   the count with no field stand-in.
 * ~~壱雫空: the host routine needs a merged guest-state view.~~
-  **Done (2026-10-06, Group A).** `Cx::overlay_guest_state` /
+  **Done (2026-10-06, Group A).** `PlayCtx::overlay_guest_state` /
   `restore_guests_to`: the guest's pending player state (status + money) is
   overlaid on the live world for a host routine's duration and dropped again,
   keeping only the routine's own effects -- so a status clear reaches
@@ -271,28 +256,14 @@ batch)**); entries below marked that way are theirs.
   `umiri_card`, `pareo_far`: remaining card-side hooks.~~
   **Done (ABI v35, 2026-10-06, Group B).** One general skill / band / follow
   surface landed, not five one-offs:
-  * `ctx::band_skill` / `ctx::character_skill` / `ctx::band_skills` /
-    `ctx::add_band_skill` -- the skill **attachment surface** (C#
-    `H._fx[i].bands` / `.skill` / `H.MakeBand`). `extra` is a 「拿取」 copy:
-    「相同乐队技能卡的效果不可叠加」 (`add_band_skill` refuses an id already
-    attached) and 「不视为那个乐队的角色」 (`in_band` still reads only the
-    character).
-  * `ctx::invoke_skill(player_id, skill_id)` -- run a skill rule's press entry
-    (`On::Play`) for a player, nested like `play_card` (C#
-    `BandCrychic.TransformNow()` / `SkillPareo -> Offer()`). No `skillUsed`
-    raise -- that is the player's own press.
-  * `ctx::raise_bought(player_id, tile)` -- C# `f.Bought(i, t)`: a card that
-    handed a deed over (tomoe_savior) announces the acquisition so the `bought`
-    hook chain (Afterglow's free house, ...) hears it.
+`extra` is a 「拿取」 copy: 「相同乐队技能卡的效果不可叠加」 (`add_band_skill` refuses an id already attached) and
+「不视为那个乐队的角色」 (`in_band` still reads only the character).
+No `skillUsed` raise -- that is the player's own press.
   * `ctx::plan::add_follower(player_id)` -- 「使你的下次主要移动结果对那些玩家
     一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算」: the engine
     replays the move's result for each follower after the mover settles, in the
     recorded order, carrying the same plan / `pay_factor`.
   * `m27_sakiko_leads` is **green and un-ignored**.
-  * Remaining `TODO(规则书)` on the five: mutsumi_never's C# narrows (2) to
-    `BandCrychic` specifically (the port takes the wider 「乐队技能」 reading);
-    umiri_card's 「置入弃牌堆」 for a *taken band-skill card* has no home in the
-    attachment model (C# `Drop` only detaches it) -- detached, not discarded.
 * Anon Tokyo uses a field stand-in and slots, because the original
   attachment model / mark notes are not readable.
 
@@ -303,9 +274,6 @@ The `#[ignore]` reasons are authoritative. This list is the current
 either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
 
 * **general** (0)
-  * ~~CiRCLE band (2) doubling is unported.~~ **Fixed 2026-10-09** (GREAT
-    tags the 2000 via `ctx::n`, the skill rides the pre-effect `card` hook,
-    `PlayCtx.Doubled` lives on `TurnCtx`).
 * **ag** (1)
   * ~~绯红之魂 (1) pays the 500 after rule (3) may have discarded the card
     (last-crystal [支付] lost the payee their 500).~~ **Fixed 2026-10-10**
@@ -352,7 +320,7 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     multi-activation.
 * **ras** (2)
   * ~~游击演出 lands one tile past the chosen one.~~ **Fixed 2026-10-09**
-    (`card_settle_at` no longer inherits the turn's walk).
+    (`settle_tile_at` no longer inherits the turn's walk).
   * ~~游击演出's [特] never opens at turn end.~~ **Fixed 2026-10-13**
     (own-card `Discarded` dispatch + arm hook; DRAW-03).
   * ~~Repaint halves a shaped settlement payment only partially (the
@@ -364,13 +332,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     **Fixed 2026-10-13** (`FirePaying` = 78; CRYSTAL-01, two tests).
   * A mid-turn [停留] doesn't stop the move (also an ambiguity -- §6).
   * ~~要乐奈's Space teleport spends the 3 fire but leaves the piece at the
-    origin.~~ **Fixed 2026-10-09** (`card_move` now runs the plan).
+    origin.~~ **Fixed 2026-10-09** (`run_planned_move` now runs the plan).
   * MyGO band (2)'s 2-crystal **draw** half is unreachable: the band skill
     declares two `On::Play` activations and `use_skill` runs only the first
     (the move-1 half). See §6 multi-activation.
-  * ~~`inter_yolo_pushes_haneoka_over_20` (CROSS-AGENT, §6 Y.O.L.O timing).~~
-    **Fixed 2026-10-10** (un-ignored, green; the +1d4 is additive on the
-    card's own roll).
 * **mujica** (0)
 * **sumimi** (1)
   * ~~Sweet Escape's 「收费标价」 gate is a ruling (§6).~~ **Fixed
@@ -478,22 +443,16 @@ only.
     `mark::CP_FIELD_TOK` is gone (ABI v38).
     Tests: `general::cp_places_one_tile_mark_and_six_on_card_cp`,
     `general::cp_on_card_count_rides_the_field_card`.
-  * **The settle clause spends both kinds and pays the settler.** 「在拥有[CP]
-    点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」:
-    any player's [结算] on a tile carrying a [CP点] removes the tile mark
-    **and** one on-card [CP点] from the 该清CP了 card the mark is attached to
-    (`TileMark.src`; that card must hold ≥1), and the **settler** gains 800.
-    「自己[场上]1个[CP点]」 is the card's own count per the ruling above; the
-    card is found through the mark's `src`. **Who gains 800** (recorded): the
-    settling player -- the subject of 「在…[结算]时」 carries over to 「移除…，
-    [获得]…」, and the rulebook tip (rulebook.txt 2067 「短时间内吃多个CP点达到
-    2000以上收益」) has the eater profit 800 a bite; house style names 「你」/
-    「[使用者]」 when the card's user is the subject. C# (`CPControl.Clean`)
-    instead paid `Seat` after gating the clause on `m.Seat == Seat` (so settler
-    and controller coincided) and spent a per-player `Tok(Seat, "CP点")`; the
-    ruling replaces the counter and this reading drops the gate.
-    Tests: `general::cp_settle_on_marked_tile_pays_800`,
-    `general::cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler`.
+* **The settle clause spends both kinds and pays the settler.** 「在拥有[CP]
+  点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」: any player's [结算] on a tile carrying a [CP点]
+  removes the tile mark **and** one on-card [CP点] from the 该清CP了 card the mark is attached to
+  (`TileMark.src`; that card must hold ≥1), and the **settler** gains 800. 「自己[场上]1个[CP点]」 is the
+  card's own count per the ruling above; the card is found through the mark's `src`. **Who gains
+  800** (recorded): the settling player -- the subject of 「在…[结算]时」 carries over to 「移除…， [获得]…」,
+  and the rulebook tip (rulebook.txt 2067 「短时间内吃多个CP点达到 2000以上收益」) has the eater profit 800 a bite;
+  house style names 「你」/ 「[使用者]」 when the card's user is the subject. Tests:
+  `general::cp_settle_on_marked_tile_pays_800`,
+  `general::cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler`.
   * **The card is graveyarded as soon as its on-card [CP点] is empty.** 「The
     attached on-card cp mark」 is `FieldCard::cp` on this instance (the same
     ruling), **not** the tile marks it placed (the older reading). When that
@@ -583,12 +542,9 @@ rulings above.
      `mujica::heart_rain_fallback_stun_and_money`,
      `heart_rain_nobody_in_range_fallback`.
 
-9. **RiNG rent.** 「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」 and the
-   「至少1个」 floor are `data/match_rules.json` notes, not rulebook text.
-   「所有RiNG不可升级」 is the only RiNG clause in the book.
-   `docs/TILES.md` `TODO(规则书)`; `rules/tiles/src/ring.rs`.
-   (`game-core`'s `ring_rent_is_rings_times_multiplier_times_d20` pins the
-   C# shape.) No black-box test.
+9. **RiNG rent.** 「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」 and the 「至少1个」 floor are
+  `data/match_rules.json` notes, not rulebook text. 「所有RiNG不可升级」 is the only RiNG clause in the
+  book. `docs/TILES.md` `TODO(规则书)`; `rules/tiles/src/ring.rs`.
 10. **Agent 「同色」.** 「每种颜色拥有一个地产商格子」 never says whether
     `extraColor` / 「该格获得所有颜色」 widens the colour group.
     **Settled 2026-10-13** (`closeout-4-tiles`): it does (`ctx::is_color` /
@@ -622,7 +578,7 @@ rulings above.
       6 says 「如果格子地契已抵押则无效果」 for building -- so a hand-over that
       kept the mortgage would make Afterglow's 「自动免费在上面加盖一栋房子」
       permanently dead on this path (the trigger is always a mortgage).
-      Engine now: `Cx::card_raise_bought` commits the transfer **and** the
+      Engine now: `PlayCtx::card_raise_bought` commits the transfer **and** the
       un-mortgage before raising, the same post-state `buy()` leaves.
       Reading the other way (keep the mortgage; let 「自动」 bypass the build
       gate) needs a card text that says so.
@@ -665,13 +621,10 @@ rulings above.
 
 **Timing / order (CROSS-TESTS §G12 R-1..R-7 and the gap `RULING` tests):**
 
-* **Y.O.L.O timing (R-4).** Now that Y.O.L.O is own-roll-only, when is its
-  +1d4 added relative to the card's own roll and to other additive dice
-  modifiers? `mygo::inter_yolo_pushes_haneoka_over_20` was `CROSS-AGENT`
-  on this; **un-ignored 2026-10-10**, green. Engine now: the +1d4 is
-  added to the card's own roll result.
-  Sheet HINT (`新卡组卡` `C3` 「任意掷骰结算前…使结果增加1d4」) says additive
-  before the roll is finalised, but not the order against other adders.
+`mygo::inter_yolo_pushes_haneoka_over_20` was `CROSS-AGENT` on this; **un-ignored 2026-10-10**,
+green. Engine now: the +1d4 is added to the card's own roll result. Sheet HINT (`新卡组卡` `C3`
+「任意掷骰结算前…使结果增加1d4」) says additive before the roll is finalised, but not the order against other
+adders.
 * **Fan-flip trigger.** PP band (2) is a passive 「你因任意原因受到将X个
   反面[P✽P粉丝]变正的效果且X大于拥有数时」 hook on a fan-*flip*.
   There is no flip-effect trigger to observe, so the X>owned overflow never
@@ -1119,7 +1072,7 @@ ruling list in §6 and the open sections below.
   Engine fix; un-ignored and green.
 * **要乐奈 (2) Space teleport** (`rana_cat_space_teleport_spends_three_fire`).
   「传送至space代替本回合的移动」 -- the press *is* the main move.
-  `rana::use_skill` set the plan but never ran `ctx::card_move`, so
+  `rana::use_skill` set the plan but never ran `ctx::run_planned_move`, so
   the piece stayed put (fire was spent). Now executes the plan (and marks
   `MainMoved`). Un-ignored and green.
 * **凑友希那 (3) stop-pot prompt match**
@@ -1155,19 +1108,16 @@ ruling list in §6 and the open sections below.
   2. `skill:CiRCLE:后勤人员的努力` hung on the post-effect `cardPlayed`
      hook; 「在你打出的"通用"卡生效时」 is the **pre-effect** `card` hook, so
      `set_play_doubled` has to land before the body reads `ctx::n`.
-  3. `PlayCtx.Doubled` lived on the per-guest-run state (a new run per
-     invocation), so a hook's write died with its run. It now lives on
-     `TurnCtx.play_doubled` (the play being resolved), cleared at each play's
-     start -- the same home as `cancelled_designations`. The `card` raise also
-     fills `t.cards` (the `skillUsed` pattern) so `trigger::cards()` names the
-     played card.
+3. It now lives on `TurnCtx.play_doubled` (the play being resolved), cleared at each play's start --
+  the same home as `cancelled_designations`. The `card` raise also fills `t.cards` (the `skillUsed`
+  pattern) so `trigger::cards()` names the played card.
 
   Un-ignored and green. No ABI bump: the surface already had
   `set_play_doubled` / `ctx::n` / `HookKind::Card`; only their homes were
   wrong.
 * **游击演出 ends on the chosen tile** (`guerrilla_ends_on_the_chosen_tile`).
-  `card_settle_at` cloned the turn's walk plan, so a `teleport_to` +
-  `card_settle_at` left the piece one tile past the destination. The settle
+  `settle_tile_at` cloned the turn's walk plan, so a `teleport_to` +
+  `settle_tile_at` left the piece one tile past the destination. The settle
   now keeps the plan's payment shaping (`pay_factor`, tags) and pins
   from/to/steps to the settle tile. Un-ignored and green.
 
@@ -1186,14 +1136,13 @@ Fixed and un-ignored (green):
   `light_removed_when_crystals_run_out`). New `TriggerKind::FirePaying` (78)
   raised inside `ctx::spend_fire` before the pots move; a hook that substitutes
   cancels the link. 不再迷茫 (2) hooks it and burns one crystal; (3) sweeps at
-  0 via `CounterChanged` (`Dest::Banished`). The 诗超绊 (2)/(3) gate no longer
+  0 via `CounterChanged` (`Fate::Banished`). The 诗超绊 (2)/(3) gate no longer
   requires `fire >= cost` (a crystal can stand in).
 * **DRAW-01 / Maya drew** (`g28_maya_look_at_top_still_counts_as_a_draw`). A
   `DrewBefore` replacement's `add_to_hand` now pushes to `draw_log`, so the
   after points fire for the kept card.
-* **DRAW-02 / 星月夜 even-roll** (`starry_even_roll_of_another_player_offers_crystal_removal`).
-  The hook did prompt; `attack` billed the roller (C#) while the sheet's
-  omitted subject of 「可消耗」 is the card controller. The owner now pays.
+* **DRAW-02 / 星月夜 even-roll** (`starry_even_roll_of_another_player_offers_crystal_removal`). The
+  owner now pays.
 * **DRAW-03 / 游击演出 [特]** (`guerrilla_special_offers_to_mark_a_deed_as_livehouse`).
   Own-card `Discarded` dispatch + a `Discarded` hook that arms the turn-end
   check. The test discards through the engine (over-hand `discard_card`).
@@ -1237,8 +1186,8 @@ or A/B items that need a wider surface than this batch:
   m12a/m12b declined the `ask_yes` offer (option matcher missed `ask.yes`);
   m15 used `place_raw` (tile:-1). Un-ignored and green twice.
 * **A, engine:** 游击演出 ends on chosen+1 after `teleport_to` +
-  `card_settle_at` (the settle inherits the turn's walk plan). Fix:
-  `card_settle_at` must not clone `turn.plan` for an arbitrary tile.
+  `settle_tile_at` (the settle inherits the turn's walk plan). Fix:
+  `settle_tile_at` must not clone `turn.plan` for an arbitrary tile.
   ~~**Fixed 2026-10-09.**~~
 * **C:** everything whose `#[ignore]` says `RULING` / `CROSS-AGENT`, plus the
   §6 open list and the Timing / order block. Collected as numbered questions
@@ -1263,21 +1212,20 @@ or A/B items that need a wider surface than this batch:
   `Table::dice` after `t.roll` (the `diceRollResult` [反击] window is a pending
   routine). Faces must be queued before `t.roll` — routines replay from their
   start-time snapshot. Card / `do_move_roll` / `set_move_roll` unchanged.
-* **MOVE-02 (2026-10-10, test drive shape):** `m10_rinko_while_stunned` /
-  `m11_rinko_plus_yolo` un-ignored. The press is a pre-roll shape
-  (`set_fixed_roll`); the tests omitted the main `t.roll(0)`. Same drive as the
-  green `rinko_skill_2_fixes_the_move_roll_to_x_times_six` / `g09_*` twins.
-  m11 records 14 (Y.O.L.O +2 over the fixed 12).
+* **MOVE-02 (2026-10-10, test drive shape):** `m10_rinko_while_stunned` / `m11_rinko_plus_yolo`
+  un-ignored. The press is a pre-roll shape (`set_fixed_roll`); the tests omitted the main
+  `t.roll(0)`. Same drive as the green `rinko_skill_2_fixes_the_move_roll_to_x_times_six` / `g09_*`
+  twins.
 * **SKILL-08 (2026-10-10):** 要乐奈 (3) 「你与其他玩家重合时」 now fires. The body
-  read `trigger::player_id()` as "the other" under a `MINE` pre (always the
+  read `trigger::player_id()` as "the other" under a `MINE` condition (always the
   owner) and bailed; it now reads `trigger::target()`. New test
   `rana_cat_overlap_takes_800_and_gives_a_parfait`. Amount 800 (sheet).
-* **SKILL-09 (stale):** kaoru Pass half is already `pre::MINE` +
+* **SKILL-09 (stale):** kaoru Pass half is already `condition::MINE` +
   filtered `PassTile`; live `kaoru_skill_1_*` tests pin it.
 * **MOVE-01 (2026-10-10, test drive / arrangement):** `m12a_yukina_forced_stop`
   / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` un-ignored.
   Engine `set_stop_at` landing was already correct. m12 declined the `ask_yes`
-  offer; m15 used `place_raw` (tile:-1). m12b asserts 37 (the rolled dest).
+  offer; m15 used `place_raw` (tile:-1). m12b asserts 37 (the rolled fate).
 * **TILE-04 / TILE-05 (2026-10-10, test window / arrangement):**
   `t12_student_council_check` / `t24_parking_space` un-ignored. t12 played a
   SettleBefore [反击] as a free [手] (silent no-op) and declined the allowNone
@@ -1354,11 +1302,9 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
 Six ignored DISCREPANCY tests un-ignored and green. Root causes split
 **D** (test drive) from **A** (engine / card):
 
-* **D, `m03_eve_then_yolo` (MOVE-10):** Eve's (2) is an `ask_number` 0..=up
-  choice (options are `ask.intOption`); the old matcher looked for 「若宫伊芙」
-  /「粉丝」 in the options and declined. Drive is `answer(0, 2)` (Y = 2), same
-  as the green twins `g10` / `g32`. Additive timing Eve `DiceRollAfter` → Y.O.L.O
-  `DiceRollValue` was already correct (4 + 2d4 + 1d4 = 8).
+* **D, `m03_eve_then_yolo` (MOVE-10):** Eve's (2) is an `ask_number` 0..=up choice (options are
+  `ask.intOption`); the old matcher looked for 「若宫伊芙」 /「粉丝」 in the options and declined. Drive is
+  `answer(0, 2)` (Y = 2), same as the green twins `g10` / `g32`.
 * **D, `m22_mygo_band_move1` (MOVE-03):** 「于移动掷骰前选择移动1格以替代
   移动掷骰」 is a skill press *before* the roll (`t.skill`), not a window
   inside `t.roll`. The multi-activation half was already merged into one
@@ -1386,13 +1332,11 @@ Six ignored DISCREPANCY tests un-ignored and green. Root causes split
   (`saki_move_dir` option 0) — without that the force-move never landed.
 * **A + D, `m09_ras_band_first_abnormal_only` (MOVE-12):** RAS band (1)'s
   drop of the second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late
-  to cancel) with pre `actor == owner` (the causer). Moved to
-  `On::FilterFlag(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
+  to cancel) with condition `actor == owner` (the causer). Moved to
+  `On::FilterFlag(&[GateKind::AbnormalGuard])` with condition `target == owner` (the
   recipient). Same saki_move drive fix as MOVE-11.
 
-**Pre-existing (not this batch):** `inter_yolo_pushes_haneoka_over_20` fails
-with `err.play_timing` on master source too — `t.play(0, "AG:Y.O.L.O")` is a
-counteract-only card with no `On::Play`. Left as-is.
+Left as-is.
 
 ## Batch 3 — counteraction windows and card interactions (2026-10-13, `closeout-3-windows`)
 

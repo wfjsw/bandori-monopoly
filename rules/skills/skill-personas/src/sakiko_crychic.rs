@@ -30,14 +30,14 @@ pub const SAKIKO_CRYCHIC: CardDef = CardDef::new(
         // （3） 「你可消耗1火罐…」 -- the self-nudge offer needs a pot. Fire is
         // CEL; split from (2) so the other-mover arm is not gated on it.
         On::Action(Action::SettleBefore(
-            "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1",
+            "actor == owner && move.is_main_move && tile.id >= 0 && charge(owner) >= 1",
             Some(within5),
             before_settle_self,
         )),
         // （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」
         // -- the other-mover offer (the mover is prompted to pay).
         On::Action(Action::SettleBefore(
-            "actor != owner && move.main && tile.id >= 0",
+            "actor != owner && move.is_main_move && tile.id >= 0",
             Some(within5),
             before_settle_other,
         )),
@@ -50,7 +50,7 @@ pub const SAKIKO_CRYCHIC: CardDef = CardDef::new(
 ]);
 
 /// Residual guard for 「若在你的前后5格内」 -- `dist` stays here (not yet in
-/// the condition vocabulary). `move.main && tile.id >= 0` is the pre.
+/// the condition vocabulary). `move.is_main_move && tile.id >= 0` is the condition.
 fn within5(player_id: i32) -> bool {
     let landing = ctx::trigger::tile();
     let at = ctx::player_pos(player_id);
@@ -73,7 +73,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 ///
 /// `SETTLE-STAGES.md` §4 M1: the anchor is 「主要移动结束时」 (行动阶段 13) but
 /// the window is 「[触发结算]前」 (行动阶段 14), so this stays on `settleBefore`
-/// and reads "the move ended" as a **fact** -- `move.main` is the pre, not "a
+/// and reads "the move ended" as a **fact** -- `move.is_main_move` is the condition, not "a
 /// settle is happening". It runs for any completed main move's settle window;
 /// a 「不触发结算」 move has no such window and so never reaches here. The
 /// within-5 geometry is the residual guard (`within5`).

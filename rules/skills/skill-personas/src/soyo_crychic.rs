@@ -99,7 +99,7 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
     let t = state::get(player_id, TILE);
     v.move_kind = Some(MoveKind::Teleport);
     v.teleport_to = Some(Tile(t));
-    v.resolve = Some(true);
+    v.settles = Some(true);
     ctx::log(
         player_id,
         &Msg::new(key!("soyo_crychic_moved")).tile("tile", t),

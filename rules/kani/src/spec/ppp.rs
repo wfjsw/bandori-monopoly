@@ -4,7 +4,7 @@
 //! `docs/rulebook/cards.json`. Never derive a spec from engine behaviour.
 //!
 //! Each pure function is one clause's Trigger / Condition / Effect / Frame
-//! as a predicate over (pre + effect-log + post).
+//! as a predicate over (condition + effect-log + post).
 
 use crate::intern::{self, NameId};
 use crate::world::{Effect, Snapshot, World, MAX_PLAYERS};
@@ -14,9 +14,9 @@ use crate::world::{Effect, Snapshot, World, MAX_PLAYERS};
 // ---------------------------------------------------------------------------
 
 /// 「[移除]」 = leave every private / public zone (not the discard).
-/// Expressed by `ctx::set_dest(Dest::Banished)`.
+/// Expressed by `ctx::set_fate(Fate::Banished)`.
 pub const DEST_BANISHED: i32 = 3;
-/// `ctx::Dest::Field`.
+/// `ctx::Fate::Field`.
 pub const DEST_FIELD: i32 = 2;
 
 pub const CARD_POPIPA: &str = "PPP:Popipa";
@@ -55,7 +55,7 @@ pub fn deck_count_named(w: &World, name: &str) -> i32 {
 
 /// Exact effect log the clause allows, in order.
 /// Deck insert is a pile mutation (no typed Effect arm); the banish is the
-/// played-card destination (`w.dest`).
+/// played-card destination (`w.fate`).
 pub fn popipa_effects_ok(effects: &[Effect], player: i32) -> bool {
     if effects.len() != 2 {
         return false;
@@ -73,12 +73,12 @@ pub fn popipa_post_ok(
     post_money: i32,
     deck_pipopa: i32,
     hand_n: i32,
-    dest: i32,
+    fate: i32,
 ) -> bool {
     post_money == pre_money + 1000
         && deck_pipopa == pre_deck_pipopa + 1
         && hand_n == pre_hand_n + 1
-        && dest == DEST_BANISHED
+        && fate == DEST_BANISHED
 }
 
 /// Mutant: reference demands +1100 money. Card must FAIL to match.
@@ -109,14 +109,14 @@ pub fn pipopa_effects_ok(effects: &[Effect], player: i32, popipapapipopa_slot: u
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                dest: DEST_FIELD,
+                fate: DEST_FIELD,
                 card
             } if p == player && card == popipapapipopa_slot
         )
 }
 
-pub fn pipopa_post_ok(pre_money: i32, post_money: i32, dest: i32, field_has_new: bool) -> bool {
-    post_money == pre_money + 1000 && dest == DEST_BANISHED && field_has_new
+pub fn pipopa_post_ok(pre_money: i32, post_money: i32, fate: i32, field_has_new: bool) -> bool {
+    post_money == pre_money + 1000 && fate == DEST_BANISHED && field_has_new
 }
 
 /// Mutant: reference wants a 2000 gain.
@@ -129,7 +129,7 @@ pub fn pipopa_effects_ok_mutant(effects: &[Effect], player: i32, popipapapipopa_
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                dest: DEST_FIELD,
+                fate: DEST_FIELD,
                 card
             } if p == player && card == popipapapipopa_slot
         )
@@ -144,8 +144,8 @@ pub fn pipopa_effects_ok_mutant(effects: &[Effect], player: i32, popipapapipopa_
 
 /// Exact log for the crystal leg (host models band crystals as `group_pool`
 /// and/or `AddCounter` on the band-skill instance).
-pub fn bang_dream_01_crystals_after(pre: i32) -> i32 {
-    pre + 1
+pub fn bang_dream_01_crystals_after(condition: i32) -> i32 {
+    condition + 1
 }
 
 // ===========================================================================
@@ -188,7 +188,7 @@ pub fn auction_off_01_effects_ok(effects: &[Effect], player: i32, this_slot: u8)
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                dest: DEST_FIELD,
+                fate: DEST_FIELD,
                 card
             } if p == player && card == this_slot
         )
@@ -201,11 +201,11 @@ pub fn auction_off_01_effects_ok(effects: &[Effect], player: i32, this_slot: u8)
 // Condition: card on owner's field; crystal count < 10.
 // ===========================================================================
 
-pub fn popipapapipopa_c1_crystals_after(pre: i32) -> i32 {
-    if pre >= 10 {
-        pre
+pub fn popipapapipopa_c1_crystals_after(condition: i32) -> i32 {
+    if condition >= 10 {
+        condition
     } else {
-        pre + 1
+        condition + 1
     }
 }
 
@@ -234,17 +234,17 @@ pub fn popipapapipopa_c1_log_ok(
 // Effect: 香澄's [火罐] rises by exactly 1, never past 1; initial 0.
 // ===========================================================================
 
-pub fn kasumi_skill_01_fire_after(pre: i32) -> i32 {
-    if pre >= 1 {
-        pre
+pub fn kasumi_skill_01_fire_after(condition: i32) -> i32 {
+    if condition >= 1 {
+        condition
     } else {
-        pre + 1
+        condition + 1
     }
 }
 
-pub fn kasumi_skill_01_effects_ok(effects: &[Effect], player: i32, pre: i32) -> bool {
-    let after = kasumi_skill_01_fire_after(pre);
-    if after == pre {
+pub fn kasumi_skill_01_effects_ok(effects: &[Effect], player: i32, condition: i32) -> bool {
+    let after = kasumi_skill_01_fire_after(condition);
+    if after == condition {
         return effects.is_empty();
     }
     effects.len() == 1
@@ -410,7 +410,7 @@ pub fn auction_off_01_effects_ok_mutant(effects: &[Effect], player: i32, this_sl
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                dest: DEST_BANISHED,
+                fate: DEST_BANISHED,
                 card
             } if p == player && card == this_slot
         )
@@ -423,8 +423,8 @@ pub fn auction_off_01_effects_ok_mutant(effects: &[Effect], player: i32, this_sl
 // (Host models the continuous +1 as a one-shot `add_charge_max` at placement.)
 // ===========================================================================
 
-pub fn auction_off_c1_charge_max_after(pre: i32) -> i32 {
-    pre + 1
+pub fn auction_off_c1_charge_max_after(condition: i32) -> i32 {
+    condition + 1
 }
 
 // ===========================================================================
@@ -437,13 +437,13 @@ pub fn auction_off_c1_charge_max_after(pre: i32) -> i32 {
 
 pub const STAR_BEAT_LAYERS_KEY: &str = "star_beat.layers";
 
-pub fn star_beat_01_layers_after(pre: i32) -> i32 {
-    pre + 1
+pub fn star_beat_01_layers_after(condition: i32) -> i32 {
+    condition + 1
 }
 
 /// Mutant: reference wants +2 layers.
-pub fn star_beat_01_layers_after_mutant(pre: i32) -> i32 {
-    pre + 2
+pub fn star_beat_01_layers_after_mutant(condition: i32) -> i32 {
+    condition + 2
 }
 
 // ===========================================================================
@@ -508,7 +508,7 @@ pub fn wait_aoki_01_effects_ok(effects: &[Effect], player: i32, this_slot: u8) -
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                dest: DEST_FIELD,
+                fate: DEST_FIELD,
                 card
             } if p == player && card == this_slot
         )
@@ -521,7 +521,7 @@ pub fn wait_aoki_01_effects_ok_mutant(effects: &[Effect], player: i32, this_slot
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                dest: DEST_BANISHED,
+                fate: DEST_BANISHED,
                 card
             } if p == player && card == this_slot
         )
@@ -549,7 +549,7 @@ pub fn random_star_01_effects_ok(
     auction_slot: u8,
 ) -> bool {
     // PlaceCard(this) is the only typed effect the host models on this body
-    // (`add_to_dest` is a pile mutation with no Effect arm).
+    // (`add_to_fate` is a pile mutation with no Effect arm).
     if effects.len() != 1 {
         return false;
     }
@@ -558,7 +558,7 @@ pub fn random_star_01_effects_ok(
         effects[0],
         Effect::PlaceCard {
             player: p,
-            dest: DEST_FIELD,
+            fate: DEST_FIELD,
             card
         } if p == player && card == this_slot
     )
@@ -583,7 +583,7 @@ pub fn random_star_01_deck_bottom_ok_mutant(
 // ===========================================================================
 // C-PPP-star-beat-03 (sticker leg)
 // 「1. 获得2个星星贴纸，本回合的主要移动改为[传送]到(45×…) mod 60格并结算」
-// Stickers +2 on option 1. The teleport/settle is PROTOCOL-LEVEL (`card_move`).
+// Stickers +2 on option 1. The teleport/settle is PROTOCOL-LEVEL (`run_planned_move`).
 // ===========================================================================
 
 pub const TOK_STAR_STICKER: &str = "星星贴纸";
@@ -608,7 +608,7 @@ pub fn star_beat_03_stickers_ok(
 
 /// Destination formula: `(45 * (F + 1)) mod 60` where `F` counts living
 /// players whose money decimal form contains the digit 5.
-pub fn star_beat_03_dest(f: i32) -> i32 {
+pub fn star_beat_03_fate(f: i32) -> i32 {
     (45 * (f + 1)).rem_euclid(60)
 }
 
@@ -693,13 +693,13 @@ pub fn maze_01_playable(pos: i32) -> bool {
 // ===========================================================================
 // C-PPP-far-away-01
 // 「[传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]」
-// The teleport+settle is a `card_move` plan (PROTOCOL stub). Spec pins the
+// The teleport+settle is a `run_planned_move` plan (PROTOCOL stub). Spec pins the
 // destination: a tile occupied by a player at maximum circular distance.
 // OPEN: ties among equally-far players are a free pick (「任意」).
 // ===========================================================================
 
 pub fn far_away_01_dest_is_farthest(
-    dest: i32,
+    fate: i32,
     me_pos: i32,
     other_pos: &[i32],
     n_others: usize,
@@ -718,7 +718,7 @@ pub fn far_away_01_dest_is_farthest(
     }
     let mut j = 0;
     while j < n_others {
-        if abs_dist(me_pos, other_pos[j]) == best && other_pos[j] == dest {
+        if abs_dist(me_pos, other_pos[j]) == best && other_pos[j] == fate {
             return true;
         }
         j += 1;
@@ -750,10 +750,10 @@ pub fn players_ok(n: i32) -> bool {
 }
 
 /// Frame: other players' money untouched.
-pub fn frame_others_money(pre: &Snapshot, post: &Snapshot, me: i32) -> bool {
+pub fn frame_others_money(condition: &Snapshot, post: &Snapshot, me: i32) -> bool {
     let mut p = 0;
     while p < MAX_PLAYERS {
-        if p as i32 != me && pre.money[p] != post.money[p] {
+        if p as i32 != me && condition.money[p] != post.money[p] {
             return false;
         }
         p += 1;

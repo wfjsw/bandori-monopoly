@@ -38,7 +38,7 @@ use std::sync::{Arc, OnceLock};
 
 use game_core::data::{GameData, Roster};
 use game_core::engine::{
-    AnswerProvider, Answered, Ask, CardRules, Cx, Dest, Flow, Match, StubRules,
+    AnswerProvider, Answered, Ask, CardRules, Fate, Flow, Match, PlayCtx, StubRules,
 };
 use game_core::msg::Msg;
 use game_core::net::RoomMember;
@@ -315,15 +315,21 @@ fn equivalence(seed: u64, n: usize, rules: Arc<dyn CardRules>) -> (usize, usize)
 struct AskingStub;
 
 impl CardRules for AskingStub {
-    fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, card: &str) -> Flow<Fate> {
         StubRules.play(cx, player_id, card)
     }
-    fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool> {
+    fn event(&self, cx: &mut PlayCtx, player_id: usize, id: &str) -> Flow<bool> {
         StubRules.event(cx, player_id, id)
     }
-    fn settle_tile(&self, cx: &mut Cx, player_id: usize, tile: usize, main: bool) -> Flow<()> {
-        cx.land_at_built_in(player_id, tile, main)?;
-        if main {
+    fn settle_tile(
+        &self,
+        cx: &mut PlayCtx,
+        player_id: usize,
+        tile: usize,
+        is_main_move: bool,
+    ) -> Flow<()> {
+        cx.land_at_built_in(player_id, tile, is_main_move)?;
+        if is_main_move {
             let ask = Ask::choice(
                 vec![player_id],
                 Msg::new("ask.buy.title"),

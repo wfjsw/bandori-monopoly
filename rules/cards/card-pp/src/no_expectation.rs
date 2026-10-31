@@ -1,4 +1,3 @@
-//! `PP:不要背负期待` -- C# `CardNoExpectation`: stay in play, 「共鸣」 joins the
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:不要背负期待`）:
 //! > 不要背负期待：
@@ -12,7 +11,7 @@
 //!
 //! > （2）以下效果此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次：[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）。
 //!
-//! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
+//! deck, draw 1. The roll shave and the pay bends live in the hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
 use bandori_std::ctx::{self, trigger};
@@ -50,10 +49,8 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         On::Action(Action::Reshuffled("actor == owner && card.placed", None, reshuffled)).silent(),
     ],
 )
-// 规则书[特]: 「此卡不受任何其他效果影响」 -- static [特] property, stamped at
-// placement (`FieldCard.immune`). 规则书[持续]（1）: 「手卡上限数量减1」 -- the
-// `handLimitDelta` property (C# `Card.HandLimitDelta`), continuous while this
-// instance sits on the field.
+// 规则书[特]: 「此卡不受任何其他效果影响」 -- static [特] property, stamped at placement
+// (`FieldCard.immune`).
 .props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::IMMUNE, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不要背负期待"#)
         .raw_name(r#"不要背负期待"#)
@@ -75,8 +72,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // sheet cell D7
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
-/// C# `Mem["stacks"]` -- how many times the pay bend is stacked (2 on place,
-/// +2 per reshuffle). On the placed instance, so copies do not share a count.
+/// On the placed instance, so copies do not share a count.
 const PROP_STACKS: &str = "no_expectation.stacks";
 
 fn stacks() -> i32 {
@@ -85,19 +81,17 @@ fn stacks() -> i32 {
 
 fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(
         player_id,
         "PP:不要背负期待",
         &Msg::new(key!("no_expectation_note")),
     );
-    // 规则书[持续]（2）: 「此卡放入[场地]……对[拥有者]生效2次」 -- C#
-    // `H.PlaceFromPlay(c).Mem["stacks"] = 2`.
-    // TODO(规则书)（此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次）:
-    // 窗口的另一端（何时作废）未印（OPEN-window2）-- 现只在一次实际加减时耗尽
+    // TODO(规则书)（此卡放入[场地]或每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次）: 窗口的另一端（何时作废）未印（OPEN-window2）--
+    // 现只在一次实际加减时耗尽
     ctx::set_prop(PROP_STACKS, 2);
     // 规则书[手]: 「并将1张“共鸣”加入卡组」
-    ctx::add_to_dest(player_id, "PP:[衍生]共鸣", ctx::Dest::DeckRandom);
+    ctx::add_to_fate(player_id, "PP:[衍生]共鸣", ctx::Fate::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("no_expectation_added"))
@@ -106,17 +100,14 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[手]: 「然后抽1张牌」
     ctx::draw(player_id, 1)?;
-    // 规则书[特]: 「此卡不受任何其他效果影响」 -- C# `Card.Immune`. A flag on the
-    // card: effects that would touch it read `card_immune` and skip.
+    // A flag on the card: effects that would touch it read `card_immune` and skip.
     ctx::set_self_immune(true);
     Ok(())
 }
 
-/// 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
-/// `CardNoExpectation` (1): 「投掷结果减少2（…如果为0则此次移动不[结算]）」.
 /// Pure RollValue at DiceRollValue (v79): shaves the face by 2 and, when the
-/// result is 0, clears `resolve` so the walk does not settle. `card.placed`
-/// is the pre; only the owner's rolls are shaved.
+/// result is 0, clears `resolve` so the walk does not settle. `card.placed` is
+/// the condition; only the owner's rolls are shaved.
 fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
     // TODO(规则书)（非回合开始时进行投掷的投掷结果减少2）: 与减半卡（moca_half）的
     // 先后未定 -- 现在按摆放顺序折叠，未按「最终结果」复核（OPEN-ROLLRESHAPE-01）
@@ -135,7 +126,7 @@ fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
     if cut == 0 {
         // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
         // (the clause keys on 「为0」, not on the shave having done work).
-        out.resolve = Some(false);
+        out.settles = Some(false);
         ctx::log(
             player_id,
             &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
@@ -144,9 +135,7 @@ fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
     out
 }
 
-/// 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
-/// -- C# `CardNoExpectation.PaySplitAdd`, once per stack. Pure Filter (ABI v74):
-/// returns the bent figure.
+/// Pure Filter (ABI v74): returns the bent figure.
 fn pay_add(player_id: i32, v: PayAddValue) -> PayAddValue {
     let n = stacks();
     if n <= 0 {
@@ -183,10 +172,8 @@ fn consume(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
-/// shuffled back into the draw pile, the pay/gain bend gains 2 more stacks.
-/// 规则书[持续]（2）: 「每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次」
-/// `actor == owner && card.placed` is the pre.
+/// 规则书[持续]（2）: 「每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次」 `actor == owner && card.placed` is
+/// the condition.
 fn reshuffled(_player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次）: 窗口何时作废
     // 未印（OPEN-window2）-- 现只在一次实际加减时耗尽

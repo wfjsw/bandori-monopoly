@@ -60,7 +60,7 @@ impl CondView for SnapshotView<'_> {
         self.win.mv.remaining
     }
     fn move_main(&self) -> bool {
-        self.win.mv.main
+        self.win.mv.is_main_move
     }
     fn move_by_skill(&self) -> bool {
         self.win.mv.by_skill
@@ -150,8 +150,8 @@ impl CondView for SnapshotView<'_> {
     fn slot(&self, name: &str) -> i64 {
         self.cand.slot(name)
     }
-    fn tok_named(&self, name: &str) -> i64 {
-        self.cand.tok_named(name)
+    fn held_named(&self, name: &str) -> i64 {
+        self.cand.held_named(name)
     }
     fn cand_set(&self, key: &str) -> Vec<i64> {
         match key {
@@ -239,9 +239,9 @@ impl CondView for SnapshotView<'_> {
             .map(|(k, v)| (k.clone(), *v))
             .collect()
     }
-    fn tok_named_table(&self) -> Vec<(String, i64)> {
+    fn held_named_table(&self) -> Vec<(String, i64)> {
         self.cand
-            .tok_names
+            .held_names
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()
@@ -335,7 +335,6 @@ impl CondView for SnapshotView<'_> {
             if q < 0 {
                 continue;
             }
-            // C# `Next`: `tile_forward(pos, q)` forward, `tile_forward(q, pos)` back.
             let fwd = {
                 let f = ((q - pos) % n + n) % n;
                 if dir >= 0 {

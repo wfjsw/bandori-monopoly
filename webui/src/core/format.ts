@@ -1,6 +1,6 @@
 // Text helpers shared by the scenes.
 
-/** C# `ToString("N0")`. */
+/** Thousands separators, en-US. */
 export function n0(v: number): string {
   return Math.round(v).toLocaleString("en-US");
 }
@@ -24,7 +24,6 @@ export function richText(s: string): string {
     .replace(/\n/g, "<br>");
 }
 
-/** Pick readable text color for a background (BDTheme.ReadableOn). */
 /** True when dark ink reads better than white on `hex` (higher WCAG contrast
  *  ratio wins; the plain luma cut-off leaves mid tones at ~3:1 with white). */
 export function prefersDarkInk(hex: string): boolean {

@@ -1,4 +1,4 @@
-//! STACK-01: nested `card_settle_at` must not recurse the Rust stack.
+//! STACK-01: nested `settle_tile_at` must not recurse the Rust stack.
 //!
 //! A placed `TEST:settleNest` re-settles its tile while its named counter counter
 //! lasts -- a deep settle chain of depth N. The engine's work stack has to
@@ -25,7 +25,7 @@ fn settle_chain_on_small_stack() {
 
     // 768 KiB: a quarter of a `spawn_blocking` worker, a tenth of main. The
     // original 512 KiB no longer fits at DEPTH on this toolchain (it aborts on
-    // master too); 768 KiB still fails the `card_settle_at ↔ settle_at`
+    // master too); 768 KiB still fails the `settle_tile_at ↔ settle_tile_at`
     // synchronous nest, so the work stack is what carries the chain.
     // `spawn_unchecked` because `Match` is single-threaded (not `Send`); the
     // closure exclusively owns it for the duration of the join.

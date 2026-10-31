@@ -1,4 +1,3 @@
-//! `HHW:（花音）Wacha Mocha 啪嗒进行曲` -- C# `CardKanonMarch` (MatchHost.cs:4234-4291).
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（花音）Wacha Mocha 啪嗒进行曲`）:
 //! > （花音）Wacha Mocha 啪嗒进行曲：[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。
@@ -23,9 +22,8 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // 规则书: 「主要阶段中」 -- the engine's play/skill gates only open in
         // the owner's OPS stage, so the entry needs no stage check of its own.
         On::Play("", Some(cant_play), play),
-        // 「花音每次倒走时」 -- once per completed backward walk that is not a
-        // teleport (C# `m.Reverse && !m.Teleport`). `move.dir < 0` is the
-        // direction clause; `moveAfter` fires once per move, not once per tile.
+        // `move.dir < 0` is the direction clause; `moveAfter` fires once per move, not
+        // once per tile.
         On::Action(Action::MoveAfter("actor == owner && move.kind != Teleport && move.dir < 0", None, on_pass)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -51,7 +49,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::hand_count(player_id, ID) > 0 || !ctx::is_placed() {
         return None;
     }
-    if ctx::tok(player_id, JELLY) >= 9 {
+    if ctx::held_count(player_id, JELLY) >= 9 {
         // 「视为本次主要移动」 -- the jump is refused while that move is shut.
         return rules_status::move_blocked(player_id);
     }
@@ -62,8 +60,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // The play's origin decides the branch: a hand (or forced) play places the
     // [场] card, a press on the placed copy (`use_skill`) is the jump.
     if ctx::play_from_hand() || !ctx::is_placed() {
-        // 规则书: 「[场]」 -- a field card; C# `H.PlaceFromPlay(c)`.
-        ctx::set_dest(ctx::Dest::Field);
+        ctx::set_fate(ctx::Fate::Field);
         ctx::place_card(
             player_id,
             "HHW:（花音）Wacha Mocha 啪嗒进行曲",
@@ -73,7 +70,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             player_id,
             &Msg::new(key!("kanon_march_placed")).player_id("who", player_id),
         );
-        ctx::add_tok(player_id, JELLY, 0, 9)?;
+        ctx::add_held_by_name(player_id, JELLY, 0, 9)?;
         return Ok(());
     }
     // TODO(规则书)（视为本次主要移动）: the jump needs a press of the placed copy,
@@ -82,15 +79,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     jump(player_id)
 }
 
-/// 「花音每次倒走时此卡获得一个水母标记」 -- C# `CardKanonMarch.Arrive`
-/// (`m.Reverse && !m.Teleport`), fired once per completed backward walk.
 /// Applicability is the entry's condition (`move.dir < 0`).
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「花音每次倒走时此卡获得一个水母标记」
-    ctx::add_tok(player_id, JELLY, 1, 9)?;
+    ctx::add_held_by_name(player_id, JELLY, 1, 9)?;
     ctx::log(
         player_id,
-        &Msg::new(key!("kanon_march_mark")).i("n", ctx::tok(player_id, JELLY) as i64),
+        &Msg::new(key!("kanon_march_mark")).i("n", ctx::held_count(player_id, JELLY) as i64),
     );
     Ok(())
 }
@@ -101,11 +96,11 @@ fn jump(player_id: i32) -> card_sdk::Asked {
     // 「至少9个水母标记」 is the play gate's (`cant_play`) clause; a press on
     // the placed copy can pass that gate below 9 markers while a second copy is
     // held (the gate then admits the hand play), so re-check here. The re-run
-    // after `card_move` still reads the pre-clear count (the clear is written
+    // after `run_planned_move` still reads the pre-clear count (the clear is written
     // after the pause), so this check is replay-safe; a `move_blocked` check
     // would not be (the move has already stamped `main_moved`), so the main
     // move stays the gate's job.
-    if ctx::tok(player_id, JELLY) < 9 {
+    if ctx::held_count(player_id, JELLY) < 9 {
         return Ok(());
     }
     let a = ctx::tile_named("水族馆");
@@ -132,19 +127,19 @@ fn jump(player_id: i32) -> card_sdk::Asked {
     )?;
     // 规则书: 「清除所有标记」 -- every 水母标记 on this card; the discard is
     // the 「然后此卡置入弃牌堆」 at the tail of the body.
-    ctx::set_tok(player_id, JELLY, 0, 0, -1);
+    ctx::set_held(player_id, JELLY, 0, 0, -1);
     // 规则书: 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)」
-    // -- the jump runs now, as the turn's main move (`card_move`).
+    // -- the jump runs now, as the turn's main move (`run_planned_move`).
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(pick);
-    ctx::plan::set_resolve(true);
-    ctx::card_move(player_id);
+    ctx::plan::set_settles(true);
+    ctx::run_planned_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("kanon_march_jump")).tile("tile", pick),
     );
     // 规则书: 「然后此卡置入弃牌堆」
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     Ok(())
 }
 

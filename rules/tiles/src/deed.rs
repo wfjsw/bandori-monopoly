@@ -18,7 +18,7 @@
 //!
 //! The upgrade-funding exclusion (「升级所[消耗]的资金不可通过[抵押]正在升级的
 //! 格子地契获得」) is enforced by the pay pipeline's optional-funding arm
-//! (`Cx::offer_mortgage_funds`'s `exclude`), not by a flag here: the deed
+//! (`PlayCtx::offer_mortgage_funds`'s `exclude`), not by a flag here: the deed
 //! being built on is never offered in the raise-funds prompt.
 //!
 //! Force-buy money is likewise unaffected by effects (「此次购买的价格不受任何
@@ -27,7 +27,7 @@
 //!
 //! The `On::Mortgage` / `On::Redeem` bodies in [`super::property`] own
 //! eligibility (including the phase/turn gate) and the amount, and call
-//! `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write + direct
+//! `ctx::commit_mortgage` / `ctx::commit_redeem` for the flag write + direct
 //! money move. The upgrade-funding exclusion stays in the pay pipeline's
 //! `offer_mortgage_funds` `exclude`.
 

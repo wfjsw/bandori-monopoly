@@ -6,8 +6,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 
@@ -60,7 +60,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // 1000 up to `max` / `max` itself (the game's money unit is 1000 --
         // 「支付X次1000资金」 elsewhere).
         // TODO(规则书)/TODO(engine): 「竞价」 should let a player name any
-        // amount. There is no `ask_money`; `ask_number` is an `ask_pick` over
+        // amount. There is no `ask_money`; `ask_number` is an `ask_choice` over
         // the whole range. A free-amount ask is the missing surface.
         let mut steps: Vec<i32> = Vec::new();
         steps.push(0);
@@ -76,7 +76,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .iter()
             .map(|&b| Msg::new("ask.intOption").i("n", b as i64))
             .collect();
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             p,
             &Msg::new("log.event.estate_bid_title").tile("tile", tile),
             &Msg::new("log.event.estate_bid_ask")

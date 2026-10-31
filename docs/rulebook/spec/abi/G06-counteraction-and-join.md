@@ -77,10 +77,8 @@ trigger. Two missing predicates:
    (YOLO's `1d4`, ycm's `3d10`) qualify; a die-face *table* (夕阳's `1d6`
    branching) does not. Nothing on the link or the entry says which a played
    card is.
-2. **not already armed** — C# `t.Play.Extreme == 0`: a second copy must not
-   re-arm an extreme. `turn.extreme` is only written at *resolution*
-   (`set_extreme`), and all offers for one window are collected before any
-   body runs, so a second offer never sees the first.
+2. `turn.extreme` is only written at *resolution* (`set_extreme`), and all offers for one window are
+  collected before any body runs, so a second offer never sees the first.
 
 The extreme itself also has the wrong lifetime for events (see 1.4) and the
 `@Tsugu ycm` exception is unreachable: the filter cannot name the exception
@@ -103,9 +101,9 @@ Both halves are A: `ChainKind::Event` is an existing constant, and
 Book: 「一次性向其他玩家支付至少5000资金时，免除此次支付。」
 
 「一次性」 is one transfer, excluding a 「[分摊]」 share. Every split leg raises
-its own `effect` window with the share as `value` and `Pay::total_stage =
+its own `effect` window with the share as `value` and `Pay::runs_total_stage =
 false` (`play.rs:285`, `316`; the raise sits in `money_inner`,
-`play.rs:3445-3464`), and the pay trigger carries no `total_stage`. So
+`play.rs:3445-3464`), and the pay trigger carries no `runs_total_stage`. So
 `vocal_too_hard` (`vocal_too_hard.rs:24`) matches a 600 share of a 6000 total
 and waives one leg of a single payment. The TODO is at
 `vocal_too_hard.rs:20-21`.
@@ -136,7 +134,7 @@ CH-09). Repaint must be able to answer an inner counter on the *same* roll
 
 * a counter link is synthesized bare (`CoreTrigger::new("card"|"cardUsed",
   cursor)`, `wasm_rules.rs:6140-6155`) — no `mv`, so `move.roll != null` in the
-  pre (`repaint.rs:21`) fails and the body early-returns at
+  condition (`repaint.rs:21`) fails and the body early-returns at
   `repaint.rs:61-63`;
 * the link's *kind* is `card`/`cardUsed`, never `DiceRollResult`, so a card
   declaring only `DiceRollResult` is not offered at all.
@@ -310,7 +308,7 @@ imports.
 ### 4.1 `card_sdk::abi` — entry contract
 
 `CounteractEntry` (`lib.rs:570-601`) gains three fields and one defaulted
-builder each. The positional `On::Counteract(&[…], pre, guard, body)` signature
+builder each. The positional `On::Counteract(&[…], condition, guard, body)` signature
 is unchanged; the new fields default.
 
 ```rust
@@ -375,11 +373,8 @@ impl On {
 }
 ```
 
-`prop::RANGE_CARD = "rangeCard"` — NEW card property, `1` = the card's result
-is a pure number interval. Declared by `AG:Y.O.L.O`,
-`通用:@Tsugu ycm` (the book's own exception) and any future interval card.
-`AG:无论是何种颜色的夕阳` does **not** declare it (the book's own negative
-example).
+`prop::RANGE_CARD = "rangeCard"` — NEW card property, `1` = the card's result is a pure number
+interval. `AG:无论是何种颜色的夕阳` does **not** declare it (the book's own negative example).
 
 ### 4.2 `ManifestOn` — wire fields
 
@@ -396,10 +391,10 @@ self-describing):
 ### 4.3 Trigger payload / link state
 
 ```rust
-pub struct TriggerPay { pub is_rent: bool, pub total_stage: bool, .. }
+pub struct TriggerPay { pub is_rent: bool, pub runs_total_stage: bool, .. }
 // G02 lands first and already extends the struct to `{ is_rent, total_stage }`
 // (its `settle_tile` sits on `Trigger`, not here) with the `pay_total_stage` /
-// `pay_is_rent` / `settle.*` pre scalars. A 分摊 leg is `!total_stage`; there
+// `pay_is_rent` / `settle.*` condition scalars. A 分摊 leg is `!total_stage`; there
 // is no separate `split_leg` field or sugar. Take G02's struct as the base.
 pub struct Trigger {
     // …
@@ -505,7 +500,7 @@ pub struct CounterRecord { pub declarer: i32, pub countered: i32, pub card: Stri
 | 2 | `join::shield` replaces `set_join_used` | `join_used` alias | | yes |
 | 3 | `NumericShape`, `prop::RANGE_CARD`, `extreme_armed`, `pending_negation`, `AnswerEffect::ARMS_EXTREME` | `CounteractEntry` | `ManifestOn.numeric` | |
 | 4 | — | card link list | | yes |
-| 5 | `AnswerPayShape` (reads G02's `total_stage`) | `TriggerPay` (read only) | `ManifestOn.pay_shape` | |
+| 5 | `AnswerPayShape` (reads G02's `runs_total_stage`) | `TriggerPay` (read only) | `ManifestOn.pay_shape` | |
   (`PayShape` is G02's; this group's enum is `AnswerPayShape` so both can land.)
 | 6 | `ManifestOn.all_kinds` | matcher | `ManifestOn.all_kinds` | |
 | 7 | `subject_card`, `chain_depth`, `answered_kind` | counter-link build, `bridge_trigger` | | |
@@ -548,7 +543,7 @@ fn contract_admits(&self, card: i32, t: &Trigger) -> bool {
         AnswerPayShape::Any => {}
         AnswerPayShape::Whole => {
             let Some(p) = t.pay else { return false };
-            if !p.total_stage { return false; }   // a 分摊 leg (G02's field)
+            if !p.runs_total_stage { return false; }   // a 分摊 leg (G02's field)
         }
     }
     true
@@ -626,16 +621,14 @@ rather than reset both to `None`/`false`.
 
 ### 5.4 Join window (items 1, 2, 9, 10)
 
-**Seat set.** `Join::seats` = every live, on-board seat except the opener, in
-seat order (C# `H.Others(i)`; the book's 「场上其他玩家」). Captured at
-`open()`, not at declaration, so a seat that leaves mid-window is dropped by
+Captured at `open()`, not at declaration, so a seat that leaves mid-window is dropped by
 `can_counteract_now`.
 
-**Opening.** `join::open()` is a paused host op (same shape as `card_move`,
+**Opening.** `join::open()` is a paused host op (same shape as `run_planned_move`,
 `hostfns.rs:2038-2057`, **including** the pause itself): a new
 `HostRequest::JoinOpen { chain, seats }` is answered by a new
 `HostCtx::join_open` arm, which parks a `JoinResume { chain, order, next,
-join_at }` on the Cx, appends a nested round on the answered link and runs
+join_at }` on the PlayCtx, appends a nested round on the answered link and runs
 `resolve_jobs` over it, suspending the opener's body. On re-entry, `opened`
 short-circuits and the parked job continues. On completion the opener's body
 resumes at the `?`. `HostRequest` is not serialized (like `Move`), so no save
@@ -695,7 +688,7 @@ the default scope.
 `let targets = ctx::countered_by_this_turn(player_id);` and returns only when
 that is empty — true for the play entry (empty set on a fresh turn) and for the
 counter entry (the immediate counterer is already in the list). The
-`target == owner && actor != owner` pre stays for the counter entry.
+`target == owner && actor != owner` condition stays for the counter entry.
 
 ### 5.6 Extreme lifetime (item 4)
 
@@ -761,7 +754,7 @@ judgement TODOs). No ycm special case: ycm declares `RANGE_CARD`.
 
 ### 5 — `vocal_too_hard`
 
-`.answers_whole_payments()` on the entry; pre unchanged (the `value >= 5000`
+`.answers_whole_payments()` on the entry; condition unchanged (the `value >= 5000`
 comparison still reads the declared amount, CROSS-TESTS C20).
 
 ### 6 — `mortis_instinct`
@@ -772,7 +765,7 @@ offered (`can_counteract` still returns `false` until CH-05).
 ### 7 — `repaint`
 
 Add `ChainKind::Card` to the links and declare `chain_depth() == 1` in the
-body; the pre's `move.roll != null` now passes because the payload rides
+body; the condition's `move.roll != null` now passes because the payload rides
 forward. No other change.
 
 ### 8 — `cant_look_away`
@@ -796,7 +789,7 @@ by every card that can `set_cancelled` (net_error, and the sweep in 9.3).
 * **RECORD_VERSION stays 3.** No input-stream shape changes; the record's
   `EngineStamp.save_version` moves with `SAVE_VERSION`.
 * **Join state is not saved.** It lives on the in-flight chain (`CounteractResume`
-  is `Box<dyn Any>` on `Cx`), exactly like the rest of the chain (STACK-01). A
+  is `Box<dyn Any>` on `PlayCtx`), exactly like the rest of the chain (STACK-01). A
   save taken *mid-chain* already loses the chain; joins add nothing new. A
   suspend (a joiner's prompt) writes `on_link` back before parking, so the
   in-memory resume keeps `join`.
@@ -912,18 +905,14 @@ shielded" collapse into one bool, a single-target effect still offers no
 bystander, and every joining card must re-implement the draw. Kept as the
 compatibility alias inside the chosen design.
 
-**A2 — a full per-seat `PlayCtx` copy (C#'s literal `H.Counteract(copy, p)`).**
-Each joiner gets a cloned link + chain. Truest to C#, but duplicates the answer
-tree per seat and breaks one shared LIFO order (a counter to a joiner could not
-see the other joiners' results). Rejected for the shared-link-plus-override in
-5.4.
+Rejected for the shared-link-plus-override in 5.4.
 
 **A3 — a dynamic counteract mask (`fn() -> &'static [ChainKind]`) for Mortis.**
 Closures cannot see the copied card at ruleset-build time; a runtime call per
 offer costs more than a bitmask shift. Rejected in favour of empty = all, which
 is one line in the matcher and already expressible in the manifest.
 
-**A4 — express range/pay contracts only as CEL pre conditions**
+**A4 — express range/pay contracts only as CEL condition conditions**
 (`subject_range_card`, the pay-shape test) with no entry fields. Simplest surface,
 but every offer then pays a world copy + scope + CEL eval to discover the card
 is ineligible. Chosen design keeps the entry fields as the cheap index and the
@@ -942,7 +931,7 @@ links and would silently close. Deferred to an open question (11).
 
 ## 11. Open questions
 
-1. **vocal / 「一次性」**: is `total_stage == false` the whole test, or must the
+1. **vocal / 「一次性」**: is `runs_total_stage == false` the whole test, or must the
    leg also belong to a `ctx::split_pay` (a bare `transfer_leg` outside a split
    would then still qualify)? Design assumes "any leg".
 2. **Negated joiner**: does a joiner whose counter was negated still bar the
@@ -953,9 +942,8 @@ links and would silently close. Deferred to an open question (11).
 4. **`@Tsugu ycm` exception**: does 「除@Tsugu ycm以外无法直接改变骰子点数」 mean
    ycm *is* a legal target (design assumption, via `RANGE_CARD`), or that it is
    excluded? OPEN-@Tsugu / C-AG-tiny-can-02.
-5. **Is "pure number interval" a card property or a per-effect flag?** A card
-   could have one interval effect and one table effect. Design assumes card
-   level (C# `Def.RangeCard`).
+5. **Is "pure number interval" a card property or a per-effect flag?** A card could have one
+  interval effect and one table effect.
 6. **Nested joins**: can a join window open inside a join window (a joiner
    plays another `SELF_REDIRECT` counter)? Design allows it; needs a depth cap
    decision.

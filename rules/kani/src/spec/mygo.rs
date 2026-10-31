@@ -5,7 +5,7 @@
 //!
 //! Clause ids are `C-MYGO-<slug>-<n>`. Each pure function is one clause's
 //! Trigger / Condition / Effect / Frame as a predicate over
-//! `(pre, effect-log, post)`.
+//! `(condition, effect-log, post)`.
 
 use crate::world::{Effect, Snapshot, MAX_PLAYERS};
 
@@ -33,16 +33,16 @@ pub fn rinpuu_01_log_ok(effects: &[Effect], player: i32) -> bool {
 }
 
 /// Post: user's stay rose by exactly 1; every other snapshot field unchanged.
-pub fn rinpuu_01_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
+pub fn rinpuu_01_post_ok(condition: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
-    post.stay[p] == pre.stay[p].saturating_add(1)
-        && crate::world::arr4_eq(post.money, pre.money)
-        && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.charge, pre.charge)
-        && crate::world::arr8b_eq(post.hand, pre.hand)
-        && crate::world::arr8b_eq(post.discard, pre.discard)
-        && post.pay_amount == pre.pay_amount
-        && (0..MAX_PLAYERS).all(|i| i == p || post.stay[i] == pre.stay[i])
+    post.stay[p] == condition.stay[p].saturating_add(1)
+        && crate::world::arr4_eq(post.money, condition.money)
+        && crate::world::arr4_eq(post.pos, condition.pos)
+        && crate::world::arr4_eq(post.charge, condition.charge)
+        && crate::world::arr8b_eq(post.hand, condition.hand)
+        && crate::world::arr8b_eq(post.discard, condition.discard)
+        && post.pay_amount == condition.pay_amount
+        && (0..MAX_PLAYERS).all(|i| i == p || post.stay[i] == condition.stay[i])
 }
 
 /// MUTANT: demands two stay layers instead of one. A correct card must FAIL
@@ -69,14 +69,14 @@ pub fn rinpuu_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // and `set_crystals` logs one `AddCounter`.
 // ===========================================================================
 
-/// Dest::Field discriminant (`card_sdk::ctx::Dest::Field`). `place_card_at`
-/// logs this as `PlaceCard { dest }`; `place_card_on` instead logs the landing
+/// Fate::Field discriminant (`card_sdk::ctx::Fate::Field`). `place_card_at`
+/// logs this as `PlaceCard { fate }`; `place_card_on` instead logs the landing
 /// **tile index** (see `journey_01_log_ok`).
 pub const DEST_FIELD: i32 = 2;
 
 /// Exact effect log of the play body: `PlaceCard` on the current tile then
-/// `AddCounter(4)`. Host note: `place_card_on` logs `PlaceCard { dest }` with
-/// `dest` = the landing tile index (not `Dest::Field`); `set_crystals(4)` is
+/// `AddCounter(4)`. Host note: `place_card_on` logs `PlaceCard { fate }` with
+/// `fate` = the landing tile index (not `Fate::Field`); `set_crystals(4)` is
 /// `set_counter_self`, which logs one `AddCounter { n: 4 }` on the instance.
 /// Narration is not the frame.
 pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8, tile: i32) -> bool {
@@ -85,9 +85,9 @@ pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8, tile: i32) -
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                dest,
+                fate,
                 card: c
-            } if p == player && dest == tile && c == card
+            } if p == player && fate == tile && c == card
         )
         && matches!(
             effects[1],
@@ -125,7 +125,7 @@ pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8, tile:
 //  至少为20，则将此卡放置在自己场上…若小于10，此卡放入弃牌堆且视为此卡未生效」
 // Card: `MyGO:羽丘的不可思议女孩` On::Play (gated on own tile).
 // Thresholds inclusive (sheet 2026-10-06). `add_house` is free (no money).
-// The `<10` branch's 「放入弃牌堆」 is the play pipeline's default dest, not a
+// The `<10` branch's 「放入弃牌堆」 is the play pipeline's default fate, not a
 // body effect — the body only `ctx::log`s the rolled face there (narration is
 // not an Effect).
 // ===========================================================================
@@ -159,8 +159,8 @@ pub fn haneoka_effects_ok(effects: &[Effect], player: i32, tile: i32, r: i32, ca
         if i >= effects.len() {
             return false;
         }
-        if !matches!(effects[i], Effect::PlaceCard { player: p, dest, card: c }
-            if p == player && dest == DEST_FIELD && c == card)
+        if !matches!(effects[i], Effect::PlaceCard { player: p, fate, card: c }
+            if p == player && fate == DEST_FIELD && c == card)
         {
             return false;
         }
@@ -205,9 +205,9 @@ pub fn rainday_01_place_ok(effects: &[Effect], player: i32, card: u8) -> bool {
             *e,
             Effect::PlaceCard {
                 player: p,
-                dest,
+                fate,
                 card: c
-            } if p == player && dest == DEST_FIELD && c == card
+            } if p == player && fate == DEST_FIELD && c == card
         )
     })
 }
@@ -372,7 +372,7 @@ pub fn hitoshizuku_body_global_pay_ok(
 // 「（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡
 //  置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数」
 // Card: `MyGO:（灯）不再迷茫` On::Play.
-// Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the `cards_in` /
+// Isolation: empty hand at condition (X=0 ⇒ crystals=1) so the `cards_in` /
 // `discard_from_hand` String loop is a no-op (the prompt pilot's memcmp cliff).
 // The general X>0 case is the same shape plus X DiscardFromHand effects.
 // ===========================================================================
@@ -387,9 +387,9 @@ pub fn tomori_card_02_empty_hand_log_ok(effects: &[Effect], player: i32, card: u
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                dest,
+                fate,
                 card: c
-            } if p == player && dest == DEST_FIELD && c == card
+            } if p == player && fate == DEST_FIELD && c == card
         )
         && matches!(
             effects[2],
@@ -409,9 +409,9 @@ pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, 
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                dest,
+                fate,
                 card: c
-            } if p == player && dest == DEST_FIELD && c == card
+            } if p == player && fate == DEST_FIELD && c == card
         )
         && matches!(
             effects[2],

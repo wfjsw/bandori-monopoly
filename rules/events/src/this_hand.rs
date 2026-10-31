@@ -4,8 +4,8 @@
 //! > 所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反方向移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 
@@ -18,8 +18,8 @@ pub const THIS_HAND: CardDef = CardDef::new("event:这只手我不会放开", &[
 
 /// 规则书: 「所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反
 /// 方向移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）」 -- three bare
-/// 1d20 per player, `X = a - b + c`; a negative X walks backwards. `card_move`
-/// shaped by `plan::set_steps` / `set_reverse` / `set_resolve(false)` is the
+/// 1d20 per player, `X = a - b + c`; a negative X walks backwards. `run_planned_move`
+/// shaped by `plan::set_steps` / `set_reverse` / `set_settles(false)` is the
 /// forced no-settle walk (`fate_together.rs` pattern).
 fn play(_player_id: i32) -> card_sdk::Asked {
     for p in all_players() {
@@ -45,8 +45,8 @@ fn play(_player_id: i32) -> card_sdk::Asked {
             ctx::plan::set_steps(x);
         }
         // 「不触发场地效果」 -- the landing does not settle.
-        ctx::plan::set_resolve(false);
-        ctx::card_move(p);
+        ctx::plan::set_settles(false);
+        ctx::run_planned_move(p);
     }
     Ok(())
 }

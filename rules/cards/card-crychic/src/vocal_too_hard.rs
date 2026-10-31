@@ -1,4 +1,3 @@
-//! `CRYCHIC:主唱太拼命了` -- C# `CardVocalTooHard` (MatchHost.cs:3120-3145): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:主唱太拼命了`）:
 //! > 主唱太拼命了：

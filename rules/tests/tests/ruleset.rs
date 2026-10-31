@@ -107,7 +107,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let PromptOption::Str(opt) = &p.options[pick as usize] else {
         panic!("roll options are labelled")
     };
-    let Some(game_core::msg::Arg::Tile(expected_tile)) = opt.a.get("tile") else {
+    let Some(game_core::msg::Arg::Tile(expected_tile)) = opt.args.get("tile") else {
         panic!("the option carries its tile: {opt:?}")
     };
     let expected_tile = *expected_tile;
@@ -153,9 +153,9 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
         player_id: 0,
         mv: Some(game_rules::TriggerMove {
             kind: game_rules::MoveKind::Walk,
-            resolve: true,
+            settles: true,
             tags: Vec::new(),
-            main: true,
+            is_main_move: true,
             dir: game_core::engine::rules::Dir::Forward,
             from: 0,
             remaining: 0,
@@ -273,7 +273,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     let PromptOption::Str(opt) = &p.options[0] else {
         panic!()
     };
-    let Some(game_core::msg::Arg::Tile(t)) = opt.a.get("tile") else {
+    let Some(game_core::msg::Arg::Tile(t)) = opt.args.get("tile") else {
         panic!()
     };
     assert_eq!(after.marks[0].0, *t);

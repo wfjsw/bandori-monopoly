@@ -7,7 +7,7 @@ Destination: `card-sdk` (generic) | `rules/bandori-std` (new game crate) | `rule
 | # | Item | Kind | Destination | Notes |
 |---|------|------|-------------|-------|
 | 1 | `CardDef` / `On` entry kinds / manifest / `ruleset_on` export | generic | `card-sdk` | wire + authoring mechanism |
-| 2 | condition-pre plumbing (`On::pre`, guard fn plumbing) | generic | `card-sdk` | not the game's sugar |
+| 2 | condition-condition plumbing (`On::condition`, guard fn plumbing) | generic | `card-sdk` | not the game's sugar |
 | 3 | `Msg` + i18n key mechanism | generic | `card-sdk` | keys only; game strings live in card locales |
 | 4 | `Prompt` / `ask_*` | generic | `card-sdk` | |
 | 5 | `trigger::*` access | generic | `card-sdk` | |
@@ -30,7 +30,7 @@ Destination: `card-sdk` (generic) | `rules/bandori-std` (new game crate) | `rule
 | 22 | `is_live_house_for` / `is_color` sugar | game | `bandori-std` | becomes `tile_in(p, t, …)` / class override |
 | 23 | `ring_multiplier` / `add_ring_bonus` | game | `bandori-std` | RiNG rent convention |
 | 24 | `pay_rent` / `offer_buy` / `offer_force_buy` / `offer_build` / buy-kind conventions | game | `bandori-std` | this ruleset's purchase verbs |
-| 25 | `pre::MINE` (`actor == owner`) | generic | `card-sdk` | card-ownership pre, not game vocab |
+| 25 | `condition::MINE` (`actor == owner`) | generic | `card-sdk` | card-ownership condition, not game vocab |
 | 26 | shared guards `crystals_changed_guard` (x11), `mine` (x7), `always` (x4), `any` (x3) | game | `bandori-std` | dedupe into shared fns |
 | 27 | `legacy_*` audit copies (~60) | game | deleted 2026-10-14 (ABI 61) | was NEGATION-AUDIT.md / GUARDS.md §5.1; do not port |
 | 28 | `ActionKind`/`TriggerKind`/`ChainKind`/`FilterKind` | generic | `card-sdk` | transparent i32 newtypes (ABI v70); only engine-generic named consts |
@@ -72,7 +72,7 @@ String fields (`area`) parse as i32 when numeric; `kind`/`color` answered by `ti
 ## CEL three host views
 
 1. `rules/cond/src/view_impl.rs` — `SnapshotView`
-2. `crates/game-rules/src/cond_pre.rs` — `SnapView` / `SnapSrc`
+2. `crates/game-rules/src/condition.rs` — `SnapView` / `SnapSrc`
 3. `crates/game-rules/src/wasm_rules.rs` — `LiveSnap`
 
 ## Out of scope / already done

@@ -81,14 +81,8 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]: 「将此卡放置在[使用者]的[场地]，然后选择[消耗]1到5次500资金」
-    // -- C# `H.PlaceFromPlay(c, -1, -1, num)`: the card is placed first.
     ctx::place_self_to_field(player_id, ID, &Msg::new(key!("crimson_soul_note")));
-    // 规则书[手]: 「选择[消耗]1到5次500资金」 -- the printed range is **1到5**,
-    // unconditionally. C# narrowed it to `Math.Max(1, min(5, money/500))`, a
-    // leftover of the old money play gate; NEGATION-AUDIT V2 removed that gate,
-    // so a shortfall is reachable at any n in 1..=5 and the choice must not be
-    // pre-capped by cash on hand.
+    // 规则书[手]: 「选择[消耗]1到5次500资金」 -- the printed range is **1到5**, unconditionally.
     let n = ctx::ask_number(
         player_id,
         &Msg::new(key!("crimson_soul_title")),
@@ -103,7 +97,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if ctx::player_out(player_id) {
             break;
         }
-        ctx::pay(player_id, 500, &Msg::new(key!("crimson_soul_why")))?;
+        ctx::pay(player_id, 500, &Msg::new(key!("crimson_soul_reason")))?;
     }
     // 规则书[手]: 「并在这张卡上放置对应数量的[奇迹水晶]」.
     ctx::set_crystals(n);
@@ -119,7 +113,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// [消耗]或[支付]金额减少1000」
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
-    // C# `H.AskYes(Seat, CardName, "要付 …：移除 1 个 [奇迹水晶] 让这次 −1,000 吗？…", r, p.amount >= 800)`.
     let to = trigger::target();
     let ask = if to >= 0 && !ctx::player_out(to) {
         Msg::new(key!("crimson_soul_pay_ask_to"))
@@ -187,8 +180,6 @@ fn skill_used(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[持续]（3）: 「此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区」 -- C# `Check` ->
-/// `H.Unplace(this, "discard", "奇迹水晶用完了")`.
 ///
 /// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at each spend site, so a
@@ -213,15 +204,15 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（3）: 「将此卡放入[使用者]弃卡区」
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     // `value == 0`: a write that landed on the already-zero count
     // 「没有奇迹水晶」; `value < 0`: the last crystal spent 「奇迹水晶用完了」.
-    let why = if trigger::value() < 0 {
+    let reason = if trigger::value() < 0 {
         key!("crimson_soul_empty")
     } else {
         key!("crimson_soul_no_crystals")
     };
-    ctx::log(player_id, &Msg::new(why).player_id("who", player_id));
+    ctx::log(player_id, &Msg::new(reason).player_id("who", player_id));
     Ok(())
 }
 

@@ -27,8 +27,8 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | `give_exile` logs only (no `EXILE` key) | exile layer count not in world state |
 | `give_stun` / `give_stay` share `w.stay[]` | stun frame polluted by host |
 | `set_prop` (self) is a no-op | drawer/turns props invisible |
-| `set_build_discount` / `raise_bought` / `card_move` / `remove_marks_f` / `plan::set_*` / `card_text_mentions` = stubs | see per-clause rows |
-| `trig_move_roll` / `trig_move_resolve` / `trig_move_remaining` = **unmodeled** | moca halve, heat_head phase-2, circle_rebuild pass reward |
+| `set_build_discount` / `raise_bought` / `run_planned_move` / `remove_marks_f` / `plan::set_*` / `card_text_mentions` = stubs | see per-clause rows |
+| `trig_move_roll` / `trig_move_settles` / `trig_move_remaining` = **unmodeled** | moca halve, heat_head phase-2, circle_rebuild pass reward |
 
 ## Unit table
 
@@ -47,14 +47,14 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-habinel-01 | 每人获得X层[除外] X=1d2 | PROVEN (log) | `habinel_01_grants_exiles` | TBD | `GiveExile.to` = 微笑号 (26); no EXILE key in world | — |
 | E-habinel-02 | 回合开始时移除1层 | PROTOCOL-LEVEL | — | — | engine status tick | — |
 | E-habinel-03 | 结束后传送到微笑号 | OPEN | — | — | 「结束后」 timing unbound; return stored on the exile grant | OPEN-habinel-end |
-| E-this-hand-01 | 移动X，X=1d20-1d20+1d20 | PROTOCOL-LEVEL (PROVEN as stub) | `this_hand_01_move_is_protocol` **SUCCESSFUL 315 s** | — | `card_move` + `plan::set_*` stubs; no pos change | — |
+| E-this-hand-01 | 移动X，X=1d20-1d20+1d20 | PROTOCOL-LEVEL (PROVEN as stub) | `this_hand_01_move_is_protocol` **SUCCESSFUL 315 s** | — | `run_planned_move` + `plan::set_*` stubs; no pos change | — |
 | E-this-hand-02 | X负数则反方向 | PROTOCOL-LEVEL | — | — | `plan::set_reverse` stub | — |
 | E-this-hand-03 | 不触发场地效果 | PROTOCOL-LEVEL | — | — | settle suppression is engine | — |
 | E-pico-swap-01 | 未[除外]者传送到下一位未[除外]者位置 | PROVEN | `pico_swap_01_rotates_positions` SUCCESSFUL 1767 s | latch `SetState` skipped in `log_is_teleports` | — | — |
 | E-pico-swap-02 | [除外]者不动、跳过 | PROVEN | `pico_swap_02_skips_exiled_players`, `pico_swap_mutant_is_detected` | TBD | — | — |
 | E-circle-rebuild-01 | 放置于场地中央，5个奇迹水晶 | PROVEN (activation) | `circle_rebuild_01_activation_five_crystals` SUCCESSFUL | host `self_crystals` fallback | — | — |
 | E-circle-rebuild-02 | counter 镜像水晶数 | PROVEN (if crystals modeled) | (same) | TBD | — | — |
-| E-circle-rebuild-03 | 经过CiRCLE移除一个，为0放入弃牌 | BLOCKED-HOST | — | — | `trig_move_resolve` / `trig_move_remaining` unmodeled on the pass hook | — |
+| E-circle-rebuild-03 | 经过CiRCLE移除一个，为0放入弃牌 | BLOCKED-HOST | — | — | `trig_move_settles` / `trig_move_remaining` unmodeled on the pass hook | — |
 | E-circle-rebuild-04 | 触发结算改为 2停留 或 -500 | OPEN + PROTOCOL | — | — | [触发结算] undefined; priority claim untestable | OPEN-触发结算 |
 | E-circle-rebuild-05 | CiRCLE效果迁移至咖啡厅 | PROTOCOL-LEVEL | — | — | tile-effect migration is engine | — |
 | E-front-or-back-01 | X=Y ⇒ 全员+500 | PROVEN | `front_or_back_01_*` | TBD | — | — |
@@ -64,14 +64,14 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-bear-cookie-01 | 衍生冲榜背面朝上置顶 | PROTOCOL-LEVEL | — | — | `event_deck_push` stub | — |
 | E-bear-cookie-02 | 下次事件抽到冲榜 | PROTOCOL-LEVEL | — | — | same | — |
 | E-bear-cookie-03 | 火罐玩家可补X并付X×1000 | BLOCKED-HOST | — | — | `card_text_mentions` stub → nobody eligible | X/cap = skill text |
-| E-asukayama-01 | 全员传送到飞鸟山公园，抽卡者移动1d20 | BLOCKED-HOST | — | — | `tile_named(飞鸟山公园)`; `card_move` stub | — |
+| E-asukayama-01 | 全员传送到飞鸟山公园，抽卡者移动1d20 | BLOCKED-HOST | — | — | `tile_named(飞鸟山公园)`; `run_planned_move` stub | — |
 | E-asukayama-02 | 上一位2眩晕 / 下一位锁手 / 其余1除外 | PROVEN (status, seat neighbour) | `asukayama_02_status_spread_blocked_neighbor` SUCCESSFUL 989 s | host `neighbor` fixed to next present seat | — |
 | E-asukayama-03 | 状态回合开始衰减 | PROTOCOL-LEVEL | — | — | engine status tick | — |
-| E-school-time-01 | 移到学校格并+1除外 | PROVEN (exile leg) | `school_time_01_exile_leg` | TBD | dest = school / 周边学区 (17); `give_exile` modeled | — |
+| E-school-time-01 | 移到学校格并+1除外 | PROVEN (exile leg) | `school_time_01_exile_leg` | TBD | fate = school / 周边学区 (17); `give_exile` modeled | — |
 | E-school-time-02 | 无学校 → 周边学区 | PROVEN (exile leg) | same | TBD | same | — |
 | E-tears-01 | 同色 ⇒ 下一位付当前700 | PROVEN | `tears_01_same_colour_next_pays_700` **SUCCESSFUL 724 s** (covers sat) | class A 60-tile clear deleted | — | OPEN-tears-colour |
 | E-tears-02 | 否则当前付下一位300 | PROVEN | `tears_02_different_colour_current_pays_300` **SUCCESSFUL 761 s**, `tears_mutant_is_detected` **SUCCESSFUL 609 s** | same | — | — |
-| E-kizuna-01 | 投X+1d20，全员传送 mod60 +1除外 | PARTIAL / BLOCKED-HOST | — | — | teleport dest is `face%60` (no `tile_named`) — effect log of `Teleport`+`GiveExile` provable; song X undefined | OPEN-kizuna-song |
+| E-kizuna-01 | 投X+1d20，全员传送 mod60 +1除外 | PARTIAL / BLOCKED-HOST | — | — | teleport fate is `face%60` (no `tile_named`) — effect log of `Teleport`+`GiveExile` provable; song X undefined | OPEN-kizuna-song |
 | E-chart-rush-01 | 失去所有火罐，投Xd20 X=lost+1 | PROVEN | `chart_rush_01_spends_fire` **SUCCESSFUL 654 s** (2/2 covers) | — | raise polarity C fixed on master | — |
 | E-chart-rush-02 | 名次 2000/1500/1000/500，同点共高档 | PROVEN | `chart_rush_02_*` | TBD | — | OPEN-chart-rush-or, OPEN-chart-rush-tie |
 | E-fix-note-01 | 指定格加盖金额减半 | PROTOCOL-LEVEL | — | — | `set_build_discount` stub | — |
@@ -103,7 +103,7 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-lost-chase-02 | 否则一切不会结束置顶 | PROTOCOL-LEVEL | — | — | same | — |
 | E-end-it-all-01 | 选3个非衍生移除，永久在场 | PROVEN (keep + 3 picks) / PROTOCOL (banish) | `end_it_all_01_*` | TBD | `event_banish` stub | — |
 | E-end-it-all-02 | 在场时迷子不再推让我来结束一切 | PROVEN | `end_it_all_02_*` | TBD | `event_is_active` modeled | — |
-| E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | PROVEN (log) / class E cost | `never_ends_01_teleport_and_exile` | TBD | dest RiNG 1..4 = 8/16/36/53; body `format!` is a class-E cliff | — |
+| E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | PROVEN (log) / class E cost | `never_ends_01_teleport_and_exile` | TBD | fate RiNG 1..4 = 8/16/36/53; body `format!` is a class-E cliff | — |
 
 ## Summary counts (clause-level)
 
@@ -140,9 +140,9 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 
 4. **HOST LESS — `Op::pay_total` both shapes *and* transfers.** The real pipeline only shapes the pre-split total; the host also emits a bank `PayTo` of 1000. front_or_back proofs treat that first `PayTo` as a protocol artifact and pin the per-winner share legs (`1000/n`).
 
-5. **PROTOCOL stubs used by event bodies:** `event_deck_push`, `event_banish`, `draw_event`, `card_move`, `raise_bought`, `set_build_discount`, `set_self_prop`, `remove_marks_f`, `schedule_turn_end`, `card_text_mentions`, `plan::set_*`.
+5. **PROTOCOL stubs used by event bodies:** `event_deck_push`, `event_banish`, `draw_event`, `run_planned_move`, `raise_bought`, `set_build_discount`, `set_self_prop`, `remove_marks_f`, `schedule_turn_end`, `card_text_mentions`, `plan::set_*`.
 
-6. **UNMODELED (loud fail):** `trig_move_roll` (moca halve, heat_head sub_die), `trig_move_resolve` / `trig_move_remaining` (circle_rebuild pass reward). Proofs avoid these paths; the clauses stay BLOCKED-HOST.
+6. **UNMODELED (loud fail):** `trig_move_roll` (moca halve, heat_head sub_die), `trig_move_settles` / `trig_move_remaining` (circle_rebuild pass reward). Proofs avoid these paths; the clauses stay BLOCKED-HOST.
 
 ## Notes on methodology
 

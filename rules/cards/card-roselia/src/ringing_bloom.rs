@@ -1,4 +1,3 @@
-//! `R:（燐子）Ringing Bloom` -- C# `CardRingingBloom` (MatchHost.cs:10815-10847):
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（燐子）Ringing Bloom`）:
 //! > （燐子）Ringing Bloom：
@@ -20,7 +19,6 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
-        // 规则书（1）: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
         On::Play("", None, play),
         On::Action(Action::PayAfter(
             "card.placed && pay_is_rent && target == owner",
@@ -95,8 +93,7 @@ fn raised_tiles(player_id: i32, max_h: i32) -> alloc::vec::Vec<i32> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("ringing_bloom_note")));
     ctx::log(
         player_id,
@@ -104,8 +101,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书（2）: the 「视为」 view.
     apply_view(player_id);
-    // 规则书（3）: 「你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。」
-    //   -- `CardRingingBloom.PayAfter` -> `Done`, see `pay_after`.
     Ok(())
 }
 
@@ -148,20 +143,15 @@ fn on_house_added(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardRingingBloom.PayAfter` -> `Done`: after a non-RiNG rent lands on this
-/// player, unplace to discard and gain 500 per counted (「视为」) house on the
-/// charged tile.
-/// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
-/// Pure guard for [`pay_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// Runs through the hook dispatch, so this is a field effect, not a [反击]. Pure
+/// guard for [`pay_after`] -- the activation gate. `false` means the card is not
+/// activated at all.
 fn pay_after(player_id: i32) -> card_sdk::Asked {
-    // 规则书（3）: 「你的任意非RiNG格子收费后」 -- C#
-    // `p.tile < 0 || H._tiles[p.tile].kind == "ring"`: skip RiNG (and tile-less) pays.
-    // TODO(规则书)（你的任意非RiNG格子收费后）: 「收费后」 can also be read as a pay
-    //   that collected nothing (fully counteracted, or a blocked payee) -- the
-    //   engine still raises `payAfter` there with `value` 0, and we discard and
-    //   pay out on it anyway (in a reflected rent only the 0-value parent pay
-    //   carries `target == owner`, so the card can never fire on the real leg).
+    // TODO(规则书)（你的任意非RiNG格子收费后）: 「收费后」 can also be read as a pay that collected
+    // nothing (fully counteracted, or a blocked payee) -- the engine still raises
+    // `payAfter` there with `value` 0, and we discard and pay out on it anyway (in a
+    // reflected rent only the 0-value parent pay carries `target == owner`, so the
+    // card can never fire on the real leg).
     let tile = trigger::tile();
     if tile < 0 || ctx::is_deed(tile) {
         return Ok(());
@@ -184,15 +174,13 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
         }
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
     }
-    // 规则书（3）: 「此卡置入弃牌堆」 -- C# `H.Unplace(this, "discard", "自己的格子收了费")`.
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("ringing_bloom_done"))
             .player_id("who", player_id)
             .tile("tile", tile),
     );
-    // 规则书（3）: 「然后你获得500*X资金」 -- C# `H.GainR(Seat, 500 * x, ...)`.
     if x > 0 {
         ctx::gain(
             player_id,

@@ -24,7 +24,11 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
-        On::Action(Action::DiceRollAfter(card_sdk::pre::MINE, None, on_roll)),
+        On::Action(Action::DiceRollAfter(
+            card_sdk::condition::MINE,
+            None,
+            on_roll,
+        )),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
         On::Schedule("settle_now", "owner.pos >= 0", None, settle_now),
@@ -89,12 +93,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （3）「并在回合结束时触发结算」 -- `H.SettleAt` on the square the player is
-/// standing on (`docs/TILES.md`: a scheduling clause, not an engine counter).
 /// Standing on a square is the entry's condition (`owner.pos >= 0`).
 fn settle_now(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
-    ctx::card_settle_at(player_id, at, false);
+    ctx::settle_tile_at(player_id, at, false);
     Ok(())
 }
 

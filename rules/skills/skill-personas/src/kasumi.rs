@@ -102,7 +102,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         .iter()
         .map(|&t| Msg::new(key!("kasumi_option")).tile("tile", t))
         .collect();
-    let k = ctx::ask_pick(
+    let k = ctx::ask_choice(
         player_id,
         &Msg::new(key!("kasumi_pick_title")),
         &Msg::new(key!("kasumi_pick_text")),
@@ -115,7 +115,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // normal rule (`can_build` defaults to true, and `false` is the exception).
     plan::set_kind(MoveKind::Teleport);
     plan::set_teleport_to(to);
-    ctx::card_move(player_id);
+    ctx::run_planned_move(player_id);
     Ok(())
 }
 

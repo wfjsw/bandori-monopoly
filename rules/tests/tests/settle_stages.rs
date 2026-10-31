@@ -286,7 +286,7 @@ fn m4_kaoru_thief_force_stop_stops_on_the_marked_player() {
     assert_eq!(
         t.pos(0),
         10,
-        "stops on the marked player's tile, not the rolled dest 12: pos={}",
+        "stops on the marked player's tile, not the rolled fate 12: pos={}",
         t.pos(0)
     );
 }
@@ -386,7 +386,7 @@ fn rana_transfer_setup() -> Table {
 #[test]
 fn rana_parfait_transfer_voids_the_space_payment() {
     let mut t = rana_transfer_setup();
-    t.m.world_mut().set_tok(2, "抹茶芭菲", 1, -1, 0); // arrange-only row
+    t.m.world_mut().set_held(2, "抹茶芭菲", 1, -1, 0); // arrange-only row
     let money_before = t.money(2);
     let owner_before = t.money(1);
     t.begin_turn(2);
@@ -427,7 +427,7 @@ fn rana_parfait_transfer_voids_the_space_payment() {
 #[test]
 fn rana_parfait_transfer_declined_pays_the_rent() {
     let mut t = rana_transfer_setup();
-    t.m.world_mut().set_tok(2, "抹茶芭菲", 1, -1, 0); // arrange-only row
+    t.m.world_mut().set_held(2, "抹茶芭菲", 1, -1, 0); // arrange-only row
     let money_before = t.money(2);
     t.begin_turn(2);
     drain(&mut t);

@@ -1,15 +1,9 @@
-//! The encoders extension library: `base64.encode` and `base64.decode`,
-//! following cel-go's `ext.Encoders()`.
-
 use crate::common::types::{CelBytes, CelString};
 use crate::{DeclarationError, Env, ExecutionError};
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use base64::prelude::*;
 
-/// The standard alphabet, as lenient as Go's `base64.StdEncoding`, which
-/// cel-go falls back to `RawStdEncoding` from: padding is optional, and
-/// non-zero trailing bits are ignored.
 const DECODER: GeneralPurpose = GeneralPurpose::new(
     &alphabet::STANDARD,
     GeneralPurposeConfig::new()

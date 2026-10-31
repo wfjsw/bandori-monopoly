@@ -2,7 +2,7 @@
 //! stability, duplicate ids, fuel / nesting traps. Build the modules first:
 //! `node tools/build-ruleset.mjs`.
 //!
-//! The `TEST:pre*` guard-condition tests live in `pre_conditions.rs` (their
+//! The `TEST:condition*` guard-condition tests live in `pre_conditions.rs` (their
 //! own binary): they assert on the process-global `guard_cost` counters,
 //! which every test here would otherwise race.
 //!
@@ -66,7 +66,7 @@ fn runaway_nesting_is_stopped() {
             Call::Play {
                 card,
                 player_id: 0,
-                arg: Vec::new()
+                arg: Vec::new(),
             },
             &[],
             None,

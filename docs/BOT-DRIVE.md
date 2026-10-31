@@ -2,7 +2,7 @@
 
 Status: landed (2026-10-28). Supersedes the "policy lives in `game-core`"
 arrangement (`engine/ai.rs`'s turn code, `Match::bot_action`,
-`Cx::ai_step`, the `tick_live` scheduler).
+`PlayCtx::ai_step`, the `tick_live` scheduler).
 
 All four staging steps are in. The decision code lives in
 `bot-core/src/policy.rs`; every seat that has no human actively answering it --
@@ -22,12 +22,12 @@ Consequences, all deliberate:
 
 * `game-core` carries **no policy**. It keeps the seat-view gates
   (`playable` / `estCost` / `skills`), `SeatView` accessors, `Match::act`,
-  `Match::tick` and the public `Cx` queries. `ai.rs`'s turn code
+  `Match::tick` and the public `PlayCtx` queries. `ai.rs`'s turn code
   (`bot_turn_action`, `ai_card_choice` / `ai_skill_choice` /
   `ai_redeem_choice`, `ai_step`), `Match::bot_action` and `compute_ai_answer`
   are gone.
 * The **policy is `bot-core`'s** (`policy.rs`), next to the determinizer, the
-  extras and the search that already consume it. It takes `&mut Cx` (a
+  extras and the search that already consume it. It takes `&mut PlayCtx` (a
   throwaway world: a determinized fork for a view, a clone for a live match)
   and returns a `NetMessage` / an answer index.
 * Nobody decides on hidden information the client cannot see (§1.1 of
@@ -82,12 +82,12 @@ where the next candidate is still legal on the same surface.
 
 1. **Policy out of `game-core`.** Create `bot-core/src/policy.rs` with the
    turn and prompt decisions moved verbatim; add `Match::bot_cx()` and
-   `MatchState::played_count`; `view_extra` loses `auto_action`; every caller
+   `MatchState::played_count`; `view_extras` loses `auto_action`; every caller
    (`extras`, `sim`, the server fallback, `web-glue`'s frame, the page) now
    goes through `bot-core`. **Done.**
 2. **Drive online.** `claim_advanced` → every bot seat; the page drives every
    bot seat too; `tick_ask` stops answering bot seats. **Done.**
-3. **Delete the engine drive.** `Routine::Ai`, `Cx::ai_step`, the `ai_*` turn
+3. **Delete the engine drive.** `Routine::Ai`, `PlayCtx::ai_step`, the `ai_*` turn
    choice fns, `bot_action`, `compute_ai_answer`, the `tick_live` answer
    schedule (`ai_at`, instant mulligan fill, auction bids); `MatchState::drive`
    and the server claim carry the reset seats instead; the prompt force path

@@ -45,10 +45,10 @@ pub enum Action {
     /// Play a hand card.
     Play { card: String },
     /// End the turn (`act: "end"` at 结束). Buy / build are no longer turn
-    /// acts -- they happen only by answering a settle Ask (`Action::Offer`).
+    /// acts -- they happen only by answering a settle Ask (`Action::Answer`).
     Decline,
     /// A buy / build / force-buy offer prompt: option index.
-    Offer { index: i32 },
+    Answer { index: i32 },
     /// An auction bid (`amount < 0` = pass).
     Bid { amount: i32 },
     /// A counteraction offer: declare a card, or skip (`None`).
@@ -114,12 +114,12 @@ pub fn legal_actions_with_cost(
     st: &MatchState,
     hand: &[String],
     playable: &[bool],
-    est_cost: &[i32],
+    estimated_cost: &[i32],
     seat: usize,
 ) -> Vec<Action> {
     match surface(st, seat) {
         None => Vec::new(),
-        Some(Surface::Turn) => turn_actions(data, st, hand, playable, est_cost, seat),
+        Some(Surface::Turn) => turn_actions(data, st, hand, playable, estimated_cost, seat),
         Some(Surface::Prompt(p)) => prompt_actions(data, st, &p, seat),
     }
 }
@@ -133,7 +133,7 @@ pub fn searchable_prompt(p: &MatchPrompt) -> bool {
             if n <= 1 {
                 return false;
             }
-            let title = p.title.k.as_ref();
+            let title = p.title.key.as_ref();
             // Force-buy / buy / build offers, counteraction chains, and non-trivial
             // choices (pay / target / card-rule prompts) are all searched.
             // Mulligan and other 2-option defaults fall out via the caller's
@@ -153,7 +153,7 @@ fn turn_actions(
     st: &MatchState,
     hand: &[String],
     playable: &[bool],
-    est_cost: &[i32],
+    estimated_cost: &[i32],
     seat: usize,
 ) -> Vec<Action> {
     let mut out = Vec::new();
@@ -167,7 +167,7 @@ fn turn_actions(
             if !playable.get(i).copied().unwrap_or(true) {
                 continue;
             }
-            let est = est_cost.get(i).copied().unwrap_or(0);
+            let est = estimated_cost.get(i).copied().unwrap_or(0);
             if est > 0 && money - est < params.play_card_reserve_for(c) {
                 continue;
             }
@@ -176,7 +176,7 @@ fn turn_actions(
         return out;
     }
     if st.step == stage::END {
-        // Buy / build are settle-prompt answers (`Action::Offer` via
+        // Buy / build are settle-prompt answers (`Action::Answer` via
         // `prompt_actions`), never turn acts. The END surface is just end.
         //
         // A/B: `BOT_STRENGTH_AB_NO_DECLINE` drops the option entirely;
@@ -196,7 +196,7 @@ fn turn_actions(
 /// `MatchPrompt::card` is the *answered* link's card, not the offered one, so
 /// the per-option label is the only place an offered card id lives.
 pub fn option_card_id(m: &game_core::msg::Msg) -> Option<String> {
-    match m.a.get("card") {
+    match m.args.get("card") {
         Some(game_core::msg::Arg::Card(id)) => Some(id.clone()),
         _ => None,
     }
@@ -209,7 +209,7 @@ pub fn counteract_action(p: &MatchPrompt, index: i32) -> Action {
     // Sayo's distance choice carries source metadata for the heuristic, but
     // +1 and +2 must remain separate choices before a source is declared.
     if p.text.key() == "ask.counteract.move_extension" {
-        return Action::Offer {
+        return Action::Answer {
             index: if index < 0 { p.fallback } else { index },
         };
     }
@@ -336,7 +336,7 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
             }
         }
         "choice" => {
-            let title = p.title.k.as_ref();
+            let title = p.title.key.as_ref();
             if title == "ask.counteract.title" {
                 // counteraction offer: one declaration per offered card (the option
                 // label names it -- `MatchPrompt::card` is the answered link,
@@ -350,13 +350,13 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
             } else {
                 // buy / build / force-buy offers and other non-trivial choices.
                 for i in 0..p.options.len() {
-                    out.push(Action::Offer { index: i as i32 });
+                    out.push(Action::Answer { index: i as i32 });
                 }
             }
         }
         "multi" => {
             // One action per valid bitmask of exactly `count` options. The
-            // answer is the mask itself (`Action::Offer` already sends it as
+            // answer is the mask itself (`Action::Answer` already sends it as
             // `value`). Cap the fan-out so a wide multi cannot explode the
             // search -- past the cap just offer the valid fallback mask.
             let n = p.options.len().min(31) as u32;
@@ -368,7 +368,7 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
                 let mut mask = (1u32 << want) - 1;
                 let limit = 1u32 << n;
                 while mask < limit && emitted < 32 {
-                    out.push(Action::Offer { index: mask as i32 });
+                    out.push(Action::Answer { index: mask as i32 });
                     emitted += 1;
                     let c = mask & mask.wrapping_neg();
                     let r = mask.wrapping_add(c);
@@ -379,7 +379,7 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
                 }
             }
             if emitted == 0 {
-                out.push(Action::Offer {
+                out.push(Action::Answer {
                     index: p.fallback.max(0),
                 });
             }
@@ -409,7 +409,7 @@ pub fn to_net_message(action: &Action, st: &MatchState, seat: usize) -> game_cor
             ..Default::default()
         },
         Action::Decline => NetMessage::act("end"),
-        Action::Offer { index } => NetMessage {
+        Action::Answer { index } => NetMessage {
             act: "answer".into(),
             prompt: st.prompt.id,
             value: *index,
@@ -491,13 +491,13 @@ impl WithSeat for game_core::net::NetMessage {
 /// one preference number per abstracted action. The heuristic's own choice
 /// gets `1.0`; alternatives get a kind-specific base (card plays are cheaper =
 /// better, a counteraction skip is the default). This is *search* guidance only
-/// -- never legality, never the answer. `hand` / `est_cost` are parallel view
+/// -- never legality, never the answer. `hand` / `estimated_cost` are parallel view
 /// columns.
 pub fn action_priors(
     data: &GameData,
     st: &MatchState,
     hand: &[String],
-    est_cost: &[i32],
+    estimated_cost: &[i32],
     ai_answer: Option<&crate::view::AiAnswer>,
     seat: usize,
     actions: &[Action],
@@ -509,7 +509,7 @@ pub fn action_priors(
     let est_of = |card: &str| -> Option<i32> {
         hand.iter()
             .position(|c| c == card)
-            .and_then(|i| est_cost.get(i).copied())
+            .and_then(|i| estimated_cost.get(i).copied())
     };
     // Cheapest known estCost among the playable cards in this action list.
     let cheapest = actions
@@ -529,7 +529,7 @@ pub fn action_priors(
             match a {
                 Action::Decline => {
                     // The heuristic's default at 结束; the settle buy / build
-                    // offers are `Action::Offer`, answered at the prompt.
+                    // offers are `Action::Answer`, answered at the prompt.
                     if preferred.is_none() {
                         1.0
                     } else {
@@ -556,7 +556,7 @@ pub fn action_priors(
                     }
                     base
                 }
-                Action::Offer { index } | Action::Pick { index } => {
+                Action::Answer { index } | Action::Pick { index } => {
                     if ai_answer.map(|a| a.answer) == Some(*index) {
                         1.0
                     } else {
@@ -616,7 +616,7 @@ pub fn action_priors(
 
 /// The engine's own heuristic choice at this decision (the progressive-bias
 /// anchor): `aiAnswer` mapped onto an abstracted action for prompts; at 结束
-/// the only turn action is Decline (buy / build ride settle `Action::Offer`).
+/// the only turn action is Decline (buy / build ride settle `Action::Answer`).
 fn heuristic_preferred(
     _data: &GameData,
     st: &MatchState,
@@ -628,7 +628,7 @@ fn heuristic_preferred(
         let a = ai_answer?;
         // A counteraction offer maps through the per-option card label; the generic
         // path only sees `MatchPrompt::card` (the answered link).
-        if st.prompt.title.k.as_ref() == "ask.counteract.title" {
+        if st.prompt.title.key.as_ref() == "ask.counteract.title" {
             return Some(counteract_action(&st.prompt, a.answer));
         }
         return crate::sim::ai_answer_to_action(st, a, seat);
@@ -694,7 +694,7 @@ fn has_stakes(a: &Action) -> bool {
         // Offers (settle buy / build / force-buy) commit money on the
         // non-fallback option; treat any offer as staked -- the fallback alone
         // would have been a 1-action root.
-        Action::Offer { .. } => true,
+        Action::Answer { .. } => true,
         // Agent picks and tile choices are searched by design.
         Action::Pick { .. } => true,
         // A card play moves the board even at estCost 0.

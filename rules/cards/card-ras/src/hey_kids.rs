@@ -1,4 +1,3 @@
-//! `RAS:狂乱Hey Kids!!` -- C# `CardHeyKids` (MatchHost.cs:9368-9440): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:狂乱Hey Kids!!`）:
 //! > 狂乱Hey Kids!!：
@@ -21,12 +20,9 @@ pub const HEY_KIDS: CardDef = CardDef::new(
     // happened」.
     &[On::Counteract(
         &[ChainKind::SettleBody],
-        // 规则书[反击]: 「在属于你的格子上结算时」 -- on *another* player's
-        // settle on my tile. A mortgaged deed charges no rent (the settle offers
-        // a forced purchase instead), so it does not open this.
-        // TODO(规则书)（在属于你的格子上结算时）: any settle on my tile is
-        // printed -- the `mortgaged == 0` and `houses > 0` gates are C#'s
-        // (「将本格上的房屋转移到…」 is a step, not a precondition).
+        // TODO(规则书)（在属于你的格子上结算时）: 规则书[反击]: 「在属于你的格子上结算时」 -- on *another* player's settle
+        // on my tile. A mortgaged deed charges no rent (the settle offers a forced
+        // purchase instead), so it does not open this.
         "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
         Some(can_counteract),
         counteract).counter_reason(key!("hey_kids_when"))],
@@ -39,9 +35,8 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         // sheet cell H4
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
-/// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
-/// would allow. 「属于你的可建造格子」 -- the same gate the build step uses, so a
-/// transfer target cannot be one the engine would refuse to build on.
+/// 「属于你的可建造格子」 -- the same gate the build step uses, so a transfer target cannot
+/// be one the engine would refuse to build on.
 fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
     ctx::owned_tiles(player_id)
         .into_iter()
@@ -56,16 +51,14 @@ fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
 /// my square, not my own. A non-rent payment (a card's [支付] that is not a
 /// tile [结算]) does not open the window.
 fn can_counteract(player_id: i32) -> bool {
-    // The settler / tile shape is the pre; there must be a buildable target to
+    // The settler / tile shape is the condition; there must be a buildable target to
     // transfer the houses onto (`can_build_on` is an engine predicate).
     !buildable_targets(player_id, trigger::tile()).is_empty()
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书[反击]: 「将本次结算改为：将本格上的房屋转移到属于你的可建造格子上」
-    // -- C# `c.Trigger.Cancelled = true` then `H.AskNumber` + `H.AskTileOf` +
-    // `H.AddHouse` per target. Cancelling the settle is what makes the transfer
-    // *replace* it rather than happen on top of it.
+    // Cancelling the settle is what makes the transfer *replace* it rather than
+    // happen on top of it.
     trigger::set_cancelled();
     let from = trigger::tile();
     if from < 0 {
@@ -75,10 +68,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if targets.is_empty() {
         return Ok(());
     }
-    // 规则书[反击]: 「转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋」
-    // -- the C# moves one house per picked target in a loop, so each target
-    // gains at most 1; `H.AskNumber` clamps `k` to `min(houses[from],
-    // targets.Count)`.
     let houses = ctx::houses_of(from);
     let max = houses.min(targets.len() as i32);
     if max < 1 {
@@ -121,8 +110,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         if ctx::houses_of(from) <= 0 {
             break;
         }
-        // 规则书[反击]: 「转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋」
-        // -- `add_house(t, 1)` clamps at the C# max, matching `H.AddHouse`.
         ctx::add_house(from, -1);
         cost_out += ctx::build_cost(from);
         ctx::add_house(t, 1);
@@ -138,9 +125,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .tile("tile", from)
             .i("count", moved as i64),
     );
-    // 规则书[反击]: 「转移时，消耗的房屋造价等于获得的房屋总造价，超出的部分作为现金获得」
-    // -- C# `H.GainR(i, num - gained, ...)` when the consumed house build cost
-    // exceeds the total build cost of the houses placed on the targets.
     if cost_out > cost_in {
         ctx::gain(
             player_id,
@@ -148,8 +132,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("hey_kids_gain_diff")),
         )?;
     }
-    // 规则书[反击]: 「随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金」
-    // -- C# `H.LoseR(i, gained - picked.Count * 500, ...)` when positive.
     let fee = cost_in - moved * 500;
     if fee > 0 {
         ctx::pay(player_id, fee, &Msg::new(key!("hey_kids_lose_fee")))?;

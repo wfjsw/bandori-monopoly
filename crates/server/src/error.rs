@@ -42,7 +42,6 @@ impl ApiError {
         Self::new(StatusCode::FORBIDDEN, message)
     }
 
-    /// Joining was refused (`NetProtocol.Reject*`), with the original message.
     pub fn reject(code: &'static str) -> Self {
         let status = if code == net::reject::PASSWORD {
             StatusCode::FORBIDDEN

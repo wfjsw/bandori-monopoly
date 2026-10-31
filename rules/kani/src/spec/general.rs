@@ -4,10 +4,10 @@
 //! `docs/rulebook/cards.json` keys `通用:*`. Never derived from engine behaviour.
 //!
 //! Effect-log notes (host model limits, not book re-reads):
-//! * `Op::add_to_dest` / `Op::to_discard` mutate piles but push **no** `Effect`
+//! * `Op::add_to_fate` / `Op::to_discard` mutate piles but push **no** `Effect`
 //!   (there is no `AddToDeck` / `ToDiscard` variant). Those halves are checked
 //!   on post-state (pile membership / counts).
-//! * `Op::set_dest` writes `World::dest` only (no `Effect`). The dest is part
+//! * `Op::set_fate` writes `World::fate` only (no `Effect`). The fate is part
 //!   of the body's contract and is checked on post-state.
 //! * `Op::play_doubled` is a protocol stub returning `0`, and `ctx::n(0, v)`
 //!   therefore doubles every tagged-0 number. Specs of clauses whose printed
@@ -40,7 +40,7 @@ pub fn recruit_01_log_ok(effects: &[Effect], player: i32) -> bool {
         && matches!(effects[1], Effect::Draw { player: p, n } if p == player && n == 1)
 }
 
-/// Post: user's money is pre - 1500 (pre >= 1500 by the clause condition).
+/// Post: user's money is condition - 1500 (condition >= 1500 by the clause condition).
 pub fn recruit_01_post_ok(post: &Snapshot, player: i32, pre_money: i32) -> bool {
     post.money[player as usize] == pre_money - 1500
 }
@@ -56,31 +56,31 @@ pub fn recruit_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // C-GEN-great-01 / 02 / 03
 // 「依次进行以下操作：1. [移除]此卡；2. 将一张“PERFECT“加入抽卡区并洗切；
 //   3. [获得]2000资金。」
-// 01: the card leaves every zone (dest = Banished).
+// 01: the card leaves every zone (fate = Banished).
 // 02: exactly one 通用:[衍生]PERFECT is in the user's draw pile.
 // 03: user's money rises by exactly 2000.
 // ===========================================================================
 
-/// Dest constant for 「[移除]」 (`Dest::Banished`).
+/// Fate constant for 「[移除]」 (`Fate::Banished`).
 pub const DEST_BANISHED: i32 = 3;
 
 /// Exactly one logged effect: the +2000 gain.
-/// (add_to_dest / set_dest are unlogged in the host model; see module docs.)
+/// (add_to_fate / set_fate are unlogged in the host model; see module docs.)
 pub fn great_01_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == 2000)
 }
 
-/// Post 01: dest is Banished. Post 02: deck holds exactly one more PERFECT
+/// Post 01: fate is Banished. Post 02: deck holds exactly one more PERFECT
 /// (count may include a pre-existing one; the delta is +1). Post 03: money +2000.
 pub fn great_post_ok(
-    post_dest: i32,
+    post_fate: i32,
     pre_deck_perfect: i32,
     post_deck_perfect: i32,
     pre_money: i32,
     post_money: i32,
 ) -> bool {
-    post_dest == DEST_BANISHED
+    post_fate == DEST_BANISHED
         && post_deck_perfect == pre_deck_perfect + 1
         && post_money == pre_money + 2000
 }
@@ -95,7 +95,7 @@ pub fn great_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // C-GEN-perfect-01 / 02 / 03
 // 「依次进行以下操作：1. [移除]此卡；2. 将一张“FEVER!“加入弃卡区；
 //   3. [获得]3000资金。」
-// 01: dest = Banished. 02: one 通用:[衍生]FEVER! enters the discard.
+// 01: fate = Banished. 02: one 通用:[衍生]FEVER! enters the discard.
 // 03: money +3000.
 // ===========================================================================
 
@@ -105,15 +105,15 @@ pub fn perfect_01_log_ok(effects: &[Effect], player: i32) -> bool {
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == 3000)
 }
 
-/// Post: dest Banished, discard holds one more FEVER!, money +3000.
+/// Post: fate Banished, discard holds one more FEVER!, money +3000.
 pub fn perfect_post_ok(
-    post_dest: i32,
+    post_fate: i32,
     pre_discard_fever: i32,
     post_discard_fever: i32,
     pre_money: i32,
     post_money: i32,
 ) -> bool {
-    post_dest == DEST_BANISHED
+    post_fate == DEST_BANISHED
         && post_discard_fever == pre_discard_fever + 1
         && post_money == pre_money + 3000
 }
@@ -130,7 +130,7 @@ pub fn perfect_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // Effect: a field instance sits on the user's field (owner == user == player).
 // ===========================================================================
 
-/// Dest constant for 「[场地]」 (`Dest::Field`).
+/// Fate constant for 「[场地]」 (`Fate::Field`).
 pub const DEST_FIELD: i32 = 2;
 
 /// Exactly one logged effect: PlaceCard on Field.
@@ -138,16 +138,16 @@ pub fn fever_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> bool {
     effects.len() == 1
         && matches!(
             effects[0],
-            Effect::PlaceCard { player: p, dest, card } if p == player && dest == DEST_FIELD && card == this_card
+            Effect::PlaceCard { player: p, fate, card } if p == player && fate == DEST_FIELD && card == this_card
         )
 }
 
-/// MUTANT: the reference wants dest = Graveyard.
+/// MUTANT: the reference wants fate = Graveyard.
 pub fn fever_01_log_ok_mutant(effects: &[Effect], player: i32, this_card: u8) -> bool {
     effects.len() == 1
         && matches!(
             effects[0],
-            Effect::PlaceCard { player: p, dest, card } if p == player && dest == 0 && card == this_card
+            Effect::PlaceCard { player: p, fate, card } if p == player && fate == 0 && card == this_card
         )
 }
 
@@ -169,12 +169,8 @@ pub fn fever_x(n_cards: i32) -> i32 {
     600 - 200 * n_cards
 }
 
-/// Post pay-amount the clause demands (floor 0).
-/// Book: 「将金额额外提高X」 -- amount becomes max(amount + X, 0).
-/// (The body also floors at 0; the book's 「提高」 with a negative X is a
-/// lower, still floored by the C#-equivalent `max(0, …)` the source uses.
-/// The printed text does not name a floor; the source's `Math.Max(0, …)` is
-/// the standing reading -- OPEN-GEN-fever-floor if the sheet later says else.)
+/// Post pay-amount the clause demands (floor 0). Book: 「将金额额外提高X」 -- amount
+/// becomes max(amount + X, 0).
 pub fn fever_02_amount(pre_amount: i32, x: i32) -> i32 {
     (pre_amount + x).max(0)
 }
@@ -192,22 +188,22 @@ pub fn fever_x_mutant(n_cards: i32) -> i32 {
 // ===========================================================================
 // C-GEN-fever-04
 // 「[持续]（2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。」
-// Effect: the instance leaves the field; dest becomes Graveyard (弃卡区).
+// Effect: the instance leaves the field; fate becomes Graveyard (弃卡区).
 // Note: the destination is the **user**'s discard when owner != user
 // (normal play: same seat).
 // ===========================================================================
 
-/// Dest constant for 「弃卡区」 (`Dest::Graveyard`).
+/// Fate constant for 「弃卡区」 (`Fate::Graveyard`).
 pub const DEST_GRAVEYARD: i32 = 0;
 
-/// Exactly zero logged effects (set_dest is unlogged); post dest is Graveyard.
+/// Exactly zero logged effects (set_fate is unlogged); post fate is Graveyard.
 pub fn fever_04_log_ok(effects: &[Effect]) -> bool {
     effects.is_empty()
 }
 
-/// MUTANT: the reference wants dest = Banished.
-pub fn fever_04_dest_ok_mutant(post_dest: i32) -> bool {
-    post_dest == DEST_BANISHED
+/// MUTANT: the reference wants fate = Banished.
+pub fn fever_04_dest_ok_mutant(post_fate: i32) -> bool {
+    post_fate == DEST_BANISHED
 }
 
 // ===========================================================================
@@ -564,10 +560,10 @@ pub fn money_is(post: &Snapshot, player: i32, expected: i32) -> bool {
 }
 
 /// Frame: every other player's money is unchanged.
-pub fn others_money_unchanged(pre: &Snapshot, post: &Snapshot, n: i32, except: i32) -> bool {
+pub fn others_money_unchanged(condition: &Snapshot, post: &Snapshot, n: i32, except: i32) -> bool {
     let mut p = 0i32;
     while p < n && p < MAX_PLAYERS as i32 {
-        if p != except && pre.money[p as usize] != post.money[p as usize] {
+        if p != except && condition.money[p as usize] != post.money[p as usize] {
             return false;
         }
         p += 1;
@@ -577,10 +573,10 @@ pub fn others_money_unchanged(pre: &Snapshot, post: &Snapshot, n: i32, except: i
 
 /// Frame: the two card-slot bitsets are unchanged (used when the clause does
 /// not move cards through the bitset views).
-pub fn bits_unchanged(pre: &Snapshot, post: &Snapshot) -> bool {
+pub fn bits_unchanged(condition: &Snapshot, post: &Snapshot) -> bool {
     let mut i = 0usize;
     while i < MAX_CARDS {
-        if pre.hand[i] != post.hand[i] || pre.discard[i] != post.discard[i] {
+        if condition.hand[i] != post.hand[i] || condition.discard[i] != post.discard[i] {
             return false;
         }
         i += 1;

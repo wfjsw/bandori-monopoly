@@ -10,7 +10,7 @@ use game_core::net::NetMessage;
 use game_core::state::stage;
 
 // ---------------------------------------------------------- local helpers
-// `Table::settle` treats `stage::MOVE` as "not at rest", but `card_move` for a
+// `Table::settle` treats `stage::MOVE` as "not at rest", but `run_planned_move` for a
 // non-turn player (祥，移动 etc.) leaves `step` at MOVE. These helpers tolerate
 // that and restore the step afterwards.
 

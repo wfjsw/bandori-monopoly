@@ -39,7 +39,11 @@ pub const HINA: CardDef = CardDef::new(
             None,
             at_start,
         )),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, roll)),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::condition::MINE,
+            None,
+            roll,
+        )),
     ],
 );
 
@@ -47,7 +51,7 @@ pub const HINA: CardDef = CardDef::new(
 /// 的（2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
+    // the grantees of the (2) below -- the `group_is(owner, …)` condition owns that.
     let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {

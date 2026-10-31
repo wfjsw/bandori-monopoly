@@ -28,7 +28,11 @@ struct BuildSpec {
 }
 
 /// Resolve the build list. No `--builds` = the lone `--rules` set as `default`.
-fn read_builds(dir: &std::path::Path, rules: &std::path::Path, data: &std::path::Path) -> Vec<BuildSpec> {
+fn read_builds(
+    dir: &std::path::Path,
+    rules: &std::path::Path,
+    data: &std::path::Path,
+) -> Vec<BuildSpec> {
     if dir.as_os_str().is_empty() {
         return vec![BuildSpec {
             id: "default".into(),
@@ -45,7 +49,12 @@ fn read_builds(dir: &std::path::Path, rules: &std::path::Path, data: &std::path:
         serde_json::from_str(&text).unwrap_or_else(|e| panic!("bad builds.json: {e}"));
     let mut seen = std::collections::HashSet::new();
     for s in &mut specs {
-        if s.id.is_empty() || !s.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        if s.id.is_empty()
+            || !s
+                .id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
             panic!("bad build id {:?} (ASCII letters/digits/-/_ only)", s.id);
         }
         if !seen.insert(s.id.clone()) {
@@ -58,7 +67,9 @@ fn read_builds(dir: &std::path::Path, rules: &std::path::Path, data: &std::path:
             s.rules = dir.join(&s.rules).to_string_lossy().into_owned();
         }
         s.data = Some(match &s.data {
-            Some(d) if !std::path::Path::new(d).is_absolute() => dir.join(d).to_string_lossy().into_owned(),
+            Some(d) if !std::path::Path::new(d).is_absolute() => {
+                dir.join(d).to_string_lossy().into_owned()
+            }
             Some(d) => d.clone(),
             None => data.to_string_lossy().into_owned(),
         });
@@ -75,19 +86,28 @@ fn load_build(spec: BuildSpec, workers: usize) -> (server::state::Build, usize) 
     let ruleset = match game_rules::Ruleset::load_dir(&rules_path) {
         Ok(Some(set)) => Some(set),
         Ok(None) => {
-            eprintln!("no card modules in {} -- cards have no effect", rules_path.display());
+            eprintln!(
+                "no card modules in {} -- cards have no effect",
+                rules_path.display()
+            );
             None
         }
         Err(e) => {
-            eprintln!("card modules in {} failed to load: {e:?} -- falling back to no effects", rules_path.display());
+            eprintln!(
+                "card modules in {} failed to load: {e:?} -- falling back to no effects",
+                rules_path.display()
+            );
             None
         }
     };
     let modules = ruleset.as_ref().map(|s| s.module_count()).unwrap_or(0);
     let roster = ruleset.as_ref().map(|s| s.roster()).unwrap_or_default();
     let data = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(data_path.join(f)).map_err(|e| e.to_string()), roster)
-            .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_path.display())),
+        GameData::load(
+            |f| std::fs::read_to_string(data_path.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_path.display())),
     );
     let rules: Arc<dyn CardRules> = match ruleset {
         Some(set) => Arc::new(game_rules::WasmRules::new(set, data.clone())),
@@ -168,9 +188,17 @@ async fn main() {
     if builds.is_empty() {
         panic!("no rule builds (pass --rules or --builds)");
     }
-    let default = builds.get(&default_id).or_else(|| builds.values().next()).cloned().expect("a build");
+    let default = builds
+        .get(&default_id)
+        .or_else(|| builds.values().next())
+        .cloned()
+        .expect("a build");
     let default_id = default.id.clone();
-    let (data, rules, engine) = (default.data.clone(), default.rules.clone(), default.engine());
+    let (data, rules, engine) = (
+        default.data.clone(),
+        default.rules.clone(),
+        default.engine(),
+    );
     // Card modules for the bot service and the in-process fallback load from
     // the default build.
     let rules_dir = default.rules_path.clone();

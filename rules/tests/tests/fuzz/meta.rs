@@ -202,15 +202,12 @@ pub fn check_commutativity(seed: u64) -> Result<(), String> {
     Ok(())
 }
 
-/// Monotonicity: adding a +N roll card (AG:Y.O.L.O adds 1d4) never shortens a
-/// move. The check measures the **walk length** (`lastWalk` / `main_steps`),
-/// not the net board displacement -- a longer walk that lands on a teleporting
-/// tile can end closer to where it started without the roll having been
-/// shortened. A vanilla board keeps the walk unimpeded so the face itself is
-/// what is compared.
+/// The check measures the **walk length** (`lastWalk` / `main_steps`), not the
+/// net board displacement -- a longer walk that lands on a teleporting tile can
+/// end closer to where it started without the roll having been shortened. A
+/// vanilla board keeps the walk unimpeded so the face itself is what is compared.
 pub fn check_monotonicity(seed: u64) -> Result<(), String> {
     let _ = seed;
-    // Move length: with Y.O.L.O the walk must be >= without it.
     let walk = |with_yolo: bool| -> Result<i32, String> {
         let mut t = crate::common::Table::vanilla(2);
         t.set_pos(0, 0);
@@ -221,7 +218,6 @@ pub fn check_monotonicity(seed: u64) -> Result<(), String> {
         t.dice(&[3]);
         t.begin_turn(0);
         let _ = t.roll(0);
-        // Answer the Y.O.L.O counteract window by declaring it.
         if with_yolo {
             if t.counteract_offered("AG:Y.O.L.O") {
                 let who = t.asked().first().copied().unwrap_or(0);

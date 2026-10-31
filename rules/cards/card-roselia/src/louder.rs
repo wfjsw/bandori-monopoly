@@ -1,4 +1,3 @@
-//! `R:（ykn）louder` -- C# `CardLouder`: ring price base multiplier (「价格基础乘数」) +5.
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（ykn）louder`）:
 //! > （ykn）louder：

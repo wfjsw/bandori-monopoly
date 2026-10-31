@@ -7,13 +7,13 @@
 //!
 //! A divergence is a FINDING — report it, do not paper over it.
 
-use rules_cond::vocab::Val as FillVal;
+use rules_cond::vocab::Value as IrValue;
 use rules_cond::{compile, CandidateCtx, WindowCtx};
 use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId};
 use rules_cond_ir::eval::values_cmp;
 use rules_cond_ir::nodes::{Kind, Node};
-use rules_cond_ir::vars::{VarId, VarTy, VARS};
-use rules_cond_ir::{spec, Val};
+use rules_cond_ir::vars::{VarId, VarType, VARS};
+use rules_cond_ir::{spec, Value};
 
 mod common;
 
@@ -28,27 +28,27 @@ struct Fixture {
     ir: IrCtx,
 }
 
-fn boundary() -> [FillVal; 6] {
+fn boundary() -> [IrValue; 6] {
     [
-        FillVal::Int(i64::MIN),
-        FillVal::Int(-1),
-        FillVal::Int(0),
-        FillVal::Int(1),
-        FillVal::Int(i64::MAX),
-        FillVal::Null,
+        IrValue::Int(i64::MIN),
+        IrValue::Int(-1),
+        IrValue::Int(0),
+        IrValue::Int(1),
+        IrValue::Int(i64::MAX),
+        IrValue::Null,
     ]
 }
 
-/// Boundary values for a `VarTy::Str` scalar: a few spellings plus the empty
+/// Boundary values for a `VarType::Str` scalar: a few spellings plus the empty
 /// one. The IR stores `id_of(spelling)`; CEL compares the string.
-fn str_boundary() -> [FillVal; 6] {
+fn str_boundary() -> [IrValue; 6] {
     [
-        FillVal::Str(String::new()),
-        FillVal::Str("pay".to_string()),
-        FillVal::Str("turnStart".to_string()),
-        FillVal::Str("r:bandori:21".to_string()),
-        FillVal::Str("diceRollResult".to_string()),
-        FillVal::Str("k0".to_string()),
+        IrValue::Str(String::new()),
+        IrValue::Str("pay".to_string()),
+        IrValue::Str("turnStart".to_string()),
+        IrValue::Str("r:bandori:21".to_string()),
+        IrValue::Str("diceRollResult".to_string()),
+        IrValue::Str("k0".to_string()),
     ]
 }
 
@@ -63,7 +63,7 @@ fn fixture_empty() -> Fixture {
     // Align IR defaults with WindowCtx/CandidateCtx defaults:
     // OptInt fields whose snapshot default is `None` must read as null.
     for (id, _, ty) in VARS {
-        if *ty == VarTy::OptInt {
+        if *ty == VarType::OptInt {
             f.ir.set_scalar(*id, -1);
         }
     }
@@ -74,21 +74,21 @@ fn fixture_empty() -> Fixture {
 }
 
 /// Fill a scalar into both sides, honouring OptInt/Bool/Str typing.
-/// `Str` scalars (`kind`) carry the **spelling** in `FillVal::Str`; the IR
+/// `Str` scalars (`kind`) carry the **spelling** in `IrValue::Str`; the IR
 /// stores `id_of(spelling)` and the CEL snapshot stores the string.
-fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: FillVal) {
+fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: IrValue) {
     let raw = match &v {
-        FillVal::Int(i) => *i,
-        FillVal::Bool(b) => *b as i64,
-        FillVal::Str(s) => rules_cond_ir::ctx::id_of(s),
-        FillVal::Null => -1,
+        IrValue::Int(i) => *i,
+        IrValue::Bool(b) => *b as i64,
+        IrValue::Str(s) => rules_cond_ir::ctx::id_of(s),
+        IrValue::Null => -1,
     };
-    f.ir.set_scalar_ty(id, ty, raw, matches!(v, FillVal::Null));
+    f.ir.set_scalar_ty(id, ty, raw, matches!(v, IrValue::Null));
     // Mirror into the cel snapshots by flat name.
     match id {
         VarId::Kind => {
             f.win.kind = match &v {
-                FillVal::Str(s) => s.clone(),
+                IrValue::Str(s) => s.clone(),
                 _ => String::new(),
             }
         }
@@ -117,7 +117,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: FillVal) {
         VarId::MoveRoll => f.win.mv.roll = if raw == -1 { None } else { Some(raw) },
         VarId::MoveKind => f.win.mv.kind = if raw == -1 { None } else { Some(raw) },
         VarId::MoveRemaining => f.win.mv.remaining = raw,
-        VarId::MoveMain => f.win.mv.main = raw != 0,
+        VarId::MoveMain => f.win.mv.is_main_move = raw != 0,
         VarId::MoveDir => f.win.mv.dir = raw,
         VarId::MoveBySkill => f.win.mv.by_skill = raw != 0,
         VarId::EffectCount => {
@@ -205,12 +205,22 @@ fn two_op_exprs(op: &str) -> Vec<String> {
 #[test]
 fn diff_operators_boundary_grid() {
     let mut f = fixture_empty();
-    set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(i64::MIN));
-    set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(-1));
-    set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(1));
-    set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, FillVal::Null);
-    set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
-    set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, FillVal::Bool(false));
+    set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(i64::MIN));
+    set_scalar(&mut f, VarId::Target, VarType::Int, IrValue::Int(-1));
+    set_scalar(&mut f, VarId::Value, VarType::Int, IrValue::Int(1));
+    set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, IrValue::Null);
+    set_scalar(
+        &mut f,
+        VarId::CardPlaced,
+        VarType::Bool,
+        IrValue::Bool(true),
+    );
+    set_scalar(
+        &mut f,
+        VarId::PayIsRent,
+        VarType::Bool,
+        IrValue::Bool(false),
+    );
 
     // Also sweep the vars over the boundary grid in a second pass.
     let ops = ["==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"];
@@ -298,7 +308,7 @@ fn diff_operators_boundary_grid() {
 #[test]
 fn diff_every_scalar_over_boundary() {
     for (idx, (_id, flat, ty)) in VARS.iter().enumerate() {
-        let vals: Vec<FillVal> = if *ty == VarTy::Str {
+        let vals: Vec<IrValue> = if *ty == VarType::Str {
             str_boundary().to_vec()
         } else {
             boundary().to_vec()
@@ -306,16 +316,21 @@ fn diff_every_scalar_over_boundary() {
         for v in vals {
             let mut f = fixture_empty();
             // Give the partner vars some non-default values so comparisons bite.
-            set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(1));
-            set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(1));
-            set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(1));
-            set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
-            set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
-            set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, FillVal::Int(3));
+            set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(1));
+            set_scalar(&mut f, VarId::Value, VarType::Int, IrValue::Int(1));
+            set_scalar(&mut f, VarId::Target, VarType::Int, IrValue::Int(1));
+            set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
+            set_scalar(
+                &mut f,
+                VarId::CardPlaced,
+                VarType::Bool,
+                IrValue::Bool(true),
+            );
+            set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, IrValue::Int(3));
             set_scalar(&mut f, id_at(idx).unwrap(), *ty, v);
             // String scalars only compare as strings; the int grid below is
             // for Int/Bool/OptInt.
-            let exprs: Vec<String> = if *ty == VarTy::Str {
+            let exprs: Vec<String> = if *ty == VarType::Str {
                 vec![
                     format!("{flat} == \"pay\""),
                     format!("{flat} != \"pay\""),
@@ -397,8 +412,8 @@ fn diff_state_function() {
             ..rules_cond::PlayerSnap::default()
         },
     ];
-    set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
-    set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(1));
+    set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
+    set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(1));
 
     for src in [
         "state(actor,'stay') > 0 && state(actor,'unstoppable') == 0",
@@ -543,34 +558,39 @@ fn diff_all_inventory_guards() {
         }
         // Default fixture.
         let mut f = fixture_empty();
-        set_scalar(&mut f, VarId::Actor, VarTy::Int, FillVal::Int(0));
-        set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
-        set_scalar(&mut f, VarId::Value, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f, VarId::Target, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f, VarId::By, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f, VarId::TurnPlayer, VarTy::Int, FillVal::Int(0));
-        set_scalar(&mut f, VarId::TurnKey, VarTy::Int, FillVal::Int(7));
+        set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f, VarId::Value, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f, VarId::Target, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f, VarId::By, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f, VarId::TurnPlayer, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f, VarId::TurnKey, VarType::Int, IrValue::Int(7));
         set_scalar(
             &mut f,
             VarId::Kind,
-            VarTy::Str,
-            FillVal::Str("pay".to_string()),
+            VarType::Str,
+            IrValue::Str("pay".to_string()),
         );
-        set_scalar(&mut f, VarId::CardId, VarTy::Int, FillVal::Int(42));
-        set_scalar(&mut f, VarId::TriggerCard, VarTy::Int, FillVal::Int(42));
-        set_scalar(&mut f, VarId::CardPlaced, VarTy::Bool, FillVal::Bool(true));
-        set_scalar(&mut f, VarId::MoveMain, VarTy::Bool, FillVal::Bool(true));
-        set_scalar(&mut f, VarId::MoveRoll, VarTy::OptInt, FillVal::Int(3));
-        set_scalar(&mut f, VarId::MoveKind, VarTy::OptInt, FillVal::Int(0));
-        set_scalar(&mut f, VarId::PayIsRent, VarTy::Bool, FillVal::Bool(true));
-        set_scalar(&mut f, VarId::TileId, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f, VarId::TileOwner, VarTy::Int, FillVal::Int(0));
-        set_scalar(&mut f, VarId::TileHouses, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f, VarId::OwnerPos, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f, VarId::OwnerOut, VarTy::Int, FillVal::Int(0));
-        set_scalar(&mut f, VarId::OwnerMoney, VarTy::Int, FillVal::Int(500));
-        set_scalar(&mut f, VarId::OwnerHand, VarTy::Int, FillVal::Int(2));
-        set_scalar(&mut f, VarId::PlanFixedRoll, VarTy::OptInt, FillVal::Null);
+        set_scalar(&mut f, VarId::CardId, VarType::Int, IrValue::Int(42));
+        set_scalar(&mut f, VarId::TriggerCard, VarType::Int, IrValue::Int(42));
+        set_scalar(
+            &mut f,
+            VarId::CardPlaced,
+            VarType::Bool,
+            IrValue::Bool(true),
+        );
+        set_scalar(&mut f, VarId::MoveMain, VarType::Bool, IrValue::Bool(true));
+        set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, IrValue::Int(3));
+        set_scalar(&mut f, VarId::MoveKind, VarType::OptInt, IrValue::Int(0));
+        set_scalar(&mut f, VarId::PayIsRent, VarType::Bool, IrValue::Bool(true));
+        set_scalar(&mut f, VarId::TileId, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f, VarId::TileOwner, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f, VarId::TileHouses, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f, VarId::OwnerPos, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f, VarId::OwnerOut, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f, VarId::OwnerMoney, VarType::Int, IrValue::Int(500));
+        set_scalar(&mut f, VarId::OwnerHand, VarType::Int, IrValue::Int(2));
+        set_scalar(&mut f, VarId::PlanFixedRoll, VarType::OptInt, IrValue::Null);
         // Sugar `state(p, key)` rows (shared list in the content tables).
         common::set_sugar_state(&mut f.win.players, &mut f.ir, 0, 1, 0, 0, 0, 0);
         common::set_sugar_state(&mut f.win.players, &mut f.ir, 1, 1, 0, 0, 0, 0);
@@ -591,21 +611,21 @@ fn diff_all_inventory_guards() {
         f.ir.named_set(rules_cond_ir::ctx::id_of("skillState"), 2);
         f.ir.named_set(rules_cond_ir::ctx::id_of("PAREO标记"), 1);
         f.cand.slots.insert("skillState".into(), 2);
-        f.cand.tok_names.insert("PAREO标记".into(), 1);
+        f.cand.held_names.insert("PAREO标记".into(), 1);
         assert_agree(src, &f);
         agree += 1;
 
         // A second fixture that flips several fields — more coverage per guard.
         let mut f2 = f.clone();
-        set_scalar(&mut f2, VarId::Actor, VarTy::Int, FillVal::Int(1));
-        set_scalar(&mut f2, VarId::Value, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f2, VarId::Actor, VarType::Int, IrValue::Int(1));
+        set_scalar(&mut f2, VarId::Value, VarType::Int, IrValue::Int(0));
         set_scalar(
             &mut f2,
             VarId::CardPlaced,
-            VarTy::Bool,
-            FillVal::Bool(false),
+            VarType::Bool,
+            IrValue::Bool(false),
         );
-        set_scalar(&mut f2, VarId::MoveRoll, VarTy::OptInt, FillVal::Null);
+        set_scalar(&mut f2, VarId::MoveRoll, VarType::OptInt, IrValue::Null);
         assert_agree(src, &f2);
         agree += 1;
     }
@@ -701,43 +721,43 @@ fn diff_random_expression_trees() {
         set_scalar(
             &mut f,
             VarId::Actor,
-            VarTy::Int,
-            FillVal::Int(rng.below(4) as i64 - 1),
+            VarType::Int,
+            IrValue::Int(rng.below(4) as i64 - 1),
         );
         set_scalar(
             &mut f,
             VarId::Target,
-            VarTy::Int,
-            FillVal::Int(rng.below(4) as i64 - 1),
+            VarType::Int,
+            IrValue::Int(rng.below(4) as i64 - 1),
         );
         set_scalar(
             &mut f,
             VarId::Value,
-            VarTy::Int,
-            FillVal::Int(rng.next() as i64),
+            VarType::Int,
+            IrValue::Int(rng.next() as i64),
         );
-        set_scalar(&mut f, VarId::Owner, VarTy::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
         set_scalar(
             &mut f,
             VarId::Kind,
-            VarTy::Str,
-            FillVal::Str(format!("k{}", rng.below(96))),
+            VarType::Str,
+            IrValue::Str(format!("k{}", rng.below(96))),
         );
         set_scalar(
             &mut f,
             VarId::CardPlaced,
-            VarTy::Bool,
-            FillVal::Bool(rng.below(2) == 0),
+            VarType::Bool,
+            IrValue::Bool(rng.below(2) == 0),
         );
         let roll = rng.below(3);
         set_scalar(
             &mut f,
             VarId::MoveRoll,
-            VarTy::OptInt,
+            VarType::OptInt,
             if roll == 0 {
-                FillVal::Null
+                IrValue::Null
             } else {
-                FillVal::Int(roll as i64)
+                IrValue::Int(roll as i64)
             },
         );
         assert_agree(&expr, &f);
@@ -754,15 +774,15 @@ fn diff_random_expression_trees() {
 fn ir_eval_matches_written_spec() {
     // Value-level operator tables.
     let scalars = [
-        Val::Int(i64::MIN),
-        Val::Int(-1),
-        Val::Int(0),
-        Val::Int(1),
-        Val::Int(i64::MAX),
-        Val::Bool(true),
-        Val::Bool(false),
-        Val::Null,
-        Val::Err,
+        Value::Int(i64::MIN),
+        Value::Int(-1),
+        Value::Int(0),
+        Value::Int(1),
+        Value::Int(i64::MAX),
+        Value::Bool(true),
+        Value::Bool(false),
+        Value::Null,
+        Value::Err,
     ];
     for a in scalars {
         for b in scalars {
@@ -777,8 +797,8 @@ fn ir_eval_matches_written_spec() {
                     ];
                     // Use the value-level helpers instead of a tree:
                     match (a, b) {
-                        (Val::Err, _) | (_, Val::Err) => Val::Err,
-                        (x, y) => Val::Bool(rules_cond_ir::eval::values_eq(x, y)),
+                        (Value::Err, _) | (_, Value::Err) => Value::Err,
+                        (x, y) => Value::Bool(rules_cond_ir::eval::values_eq(x, y)),
                     }
                 },
                 "eq({a:?},{b:?})"
@@ -786,8 +806,8 @@ fn ir_eval_matches_written_spec() {
             assert_eq!(
                 spec::spec_ne(a, b),
                 match (a, b) {
-                    (Val::Err, _) | (_, Val::Err) => Val::Err,
-                    (x, y) => Val::Bool(!rules_cond_ir::eval::values_eq(x, y)),
+                    (Value::Err, _) | (_, Value::Err) => Value::Err,
+                    (x, y) => Value::Bool(!rules_cond_ir::eval::values_eq(x, y)),
                 },
                 "ne({a:?},{b:?})"
             );
@@ -813,16 +833,16 @@ fn ir_eval_matches_written_spec() {
             ] {
                 let s = spec::spec_cmp(a, b, op);
                 let i = match imp {
-                    Some(v) => Val::Bool(v),
-                    None => Val::Err,
+                    Some(v) => Value::Bool(v),
+                    None => Value::Err,
                 };
                 assert_eq!(s, i, "cmp({op:?}, {a:?}, {b:?})");
             }
             for (op, imp) in [(
                 spec::Arith::Add,
                 match (a, b) {
-                    (Val::Int(x), Val::Int(y)) => x.checked_add(y),
-                    (Val::Err, _) | (_, Val::Err) => Some(i64::MIN), // marker
+                    (Value::Int(x), Value::Int(y)) => x.checked_add(y),
+                    (Value::Err, _) | (_, Value::Err) => Some(i64::MIN), // marker
                     _ => Some(i64::MIN),
                 },
             )] {
@@ -838,7 +858,7 @@ fn ir_eval_matches_written_spec() {
             ] {
                 let s = spec::spec_arith(a, b, op);
                 let i = match (a, b) {
-                    (Val::Int(x), Val::Int(y)) => {
+                    (Value::Int(x), Value::Int(y)) => {
                         let r = match op {
                             spec::Arith::Add => x.checked_add(y),
                             spec::Arith::Sub => x.checked_sub(y),
@@ -859,12 +879,12 @@ fn ir_eval_matches_written_spec() {
                             }
                         };
                         match r {
-                            Some(z) => Val::Int(z),
-                            None => Val::Err,
+                            Some(z) => Value::Int(z),
+                            None => Value::Err,
                         }
                     }
-                    (Val::Err, _) | (_, Val::Err) => Val::Err,
-                    _ => Val::Err,
+                    (Value::Err, _) | (_, Value::Err) => Value::Err,
+                    _ => Value::Err,
                 };
                 assert_eq!(s, i, "arith({op:?}, {a:?}, {b:?})");
             }
@@ -879,10 +899,10 @@ fn ir_eval_matches_written_spec() {
                     let lb = l.try_bool();
                     let rb = r.try_bool();
                     match (lb, rb) {
-                        (Ok(true), Ok(b)) => Val::Bool(b),
-                        (Ok(false), _) => Val::Bool(false),
-                        (Err(()), Ok(false)) => Val::Bool(false),
-                        _ => Val::Err,
+                        (Ok(true), Ok(b)) => Value::Bool(b),
+                        (Ok(false), _) => Value::Bool(false),
+                        (Err(()), Ok(false)) => Value::Bool(false),
+                        _ => Value::Err,
                     }
                 },
                 "and({l:?},{r:?})"
@@ -893,10 +913,10 @@ fn ir_eval_matches_written_spec() {
                     let lb = l.try_bool();
                     let rb = r.try_bool();
                     match (lb, rb) {
-                        (Ok(true), _) => Val::Bool(true),
-                        (Ok(false), Ok(b)) => Val::Bool(b),
-                        (Err(()), Ok(true)) => Val::Bool(true),
-                        _ => Val::Err,
+                        (Ok(true), _) => Value::Bool(true),
+                        (Ok(false), Ok(b)) => Value::Bool(b),
+                        (Err(()), Ok(true)) => Value::Bool(true),
+                        _ => Value::Err,
                     }
                 },
                 "or({l:?},{r:?})"

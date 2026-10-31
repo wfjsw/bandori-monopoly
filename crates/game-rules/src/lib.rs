@@ -44,11 +44,11 @@ mod world;
 /// G0/G2 guard prefilter (docs/GUARDS.md): the serialized condition per
 /// guarded entry and the one shared `admits()` every guard call site goes
 /// through.
-pub mod cond_pre;
+pub mod condition;
 
 pub use card_sdk::abi::{AbKind, CardPile, MoveKind, OnKind, PromptKind, TriggerKind, ABI_VERSION};
-pub use cond_pre::{
-    admits, admits_gate, admits_pre, CompiledPre, PrecompiledCond, PrecompiledConds,
+pub use condition::{
+    admits, admits_condition, admits_gate, CompiledCondition, PrecompiledCond, PrecompiledConds,
     PRECOMPILED_CONDS_VERSION,
 };
 pub use game_core::msg::Msg;
@@ -56,7 +56,7 @@ pub use game_core::msg::Msg;
 /// fuel budget the nested-call plumbing shares.
 pub use host::{engine_msg, DEFAULT_FUEL};
 pub use host::{
-    Call, CallOut, CardInfo, CardModules, DeclareOut, GuestMem, HookRun, HostCtx, HostErr,
+    Call, CallOut, CardInfo, CardModules, DeclareOut, GuestMem, HookRun, HostCtx, HostError,
     HostRequest, HostState, KindMask, Outcome, Prompt, PromptOption, RuleError, RulesHandle,
     MAX_NESTING,
 };
@@ -71,9 +71,9 @@ pub use kind_flags::{hook_only, set_kind_flags};
 #[cfg(feature = "sandbox")]
 pub use wasm_rules::WasmRules;
 pub use wasm_rules::{take_silent_visible, RulesBridge, Run};
-mod trigger_why;
+mod trigger_reason;
 /// The 「效果适用」 why-clause builder.
-pub use trigger_why::{
+pub use trigger_reason::{
     counter_name, counteract_reason, mark_kind_name, state_key_name, trigger_reason,
 };
 pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};

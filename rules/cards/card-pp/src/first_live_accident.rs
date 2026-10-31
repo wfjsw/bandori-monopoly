@@ -1,4 +1,3 @@
-//! `PP:初次演出事故` -- C# `CardFirstLiveAccident`: stay in play, 「重叠的声音」
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:初次演出事故`）:
 //! > 初次演出事故：
@@ -8,11 +7,7 @@
 //! > [拥有者]不可使用任何Pastel✽Palettes角色的
 //! > （2）技能。
 //!
-//! joins the draw pile, draw 1. The [持续] skill lock is a `skillBlock:Pastel✽Palettes`
-//! token bound to the placed instance -- each P✽P (2) skill has to call
-//! `skill_blocked` itself (there is no central dispatch gate), unlike the C# live scan
-//! (`H.FanSkillBlocked`: `PlacedOf(player_id).Any(c => c.Live && c is
-//! CardFirstLiveAccident)`).
+//! joins the draw pile, draw 1.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{para, sec, CardText};
@@ -40,7 +35,7 @@ pub const FIRST_LIVE_ACCIDENT: CardDef = CardDef::new(
 
 fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     let uid = ctx::place_card(
         player_id,
         "PP:初次演出事故",
@@ -53,9 +48,9 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。）: a guest
     //   write does not reach the host routine that raises this body's own draw
     //   hook (BACKLOG HOST-02), so a (2) window on that very draw still opens.
-    ctx::set_tok(player_id, "skillBlock:Pastel✽Palettes", 1, 0, uid);
+    ctx::set_held(player_id, "skillBlock:Pastel✽Palettes", 1, 0, uid);
     // 规则书[手]: 「并将1张“重叠的声音”加入抽卡区并洗切」
-    ctx::add_to_dest(player_id, "PP:[衍生]重叠的声音", ctx::Dest::DeckRandom);
+    ctx::add_to_fate(player_id, "PP:[衍生]重叠的声音", ctx::Fate::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("first_live_added"))

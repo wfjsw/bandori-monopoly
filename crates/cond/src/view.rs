@@ -45,15 +45,10 @@ pub trait CondView {
     /// Move kind (`move.kind`), `-1` = none (binds CEL `null`).
     fn move_kind(&self) -> i64;
     fn move_remaining(&self) -> i64;
-    /// `t.Move.Main` (`move.main`).
     fn move_main(&self) -> bool;
     /// `move.by_skill` -- the move was shaped or started by a skill.
     fn move_by_skill(&self) -> bool;
-    /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward; `1` when the
-    /// window has no move (matches the guest's `trigger::move_dir()`).
     fn move_dir(&self) -> i64;
-    /// `move.tag(name)` -- the move's per-card tag counter
-    /// (`t.Move.Tags`, `trigger::move_tag(name)`); missing name = 0.
     fn move_tag_named(&self, name: &str) -> i64;
     /// Eager table for `move.tag(name)` (window-scope, not per-candidate).
     fn move_tag_table(&self) -> Vec<(String, i64)>;
@@ -109,7 +104,7 @@ pub trait CondView {
     fn slot(&self, name: &str) -> i64;
     /// Per-card token counter (`tok('name')`, the guest's `ctx::tok(owner,
     /// name)`); missing = 0.
-    fn tok_named(&self, name: &str) -> i64;
+    fn held_named(&self, name: &str) -> i64;
     /// Membership list behind `cand_has(key, x)`. Missing key = empty list.
     /// The key is the host's set name (the bake string content installs).
     fn cand_set(&self, key: &str) -> Vec<i64>;
@@ -191,7 +186,7 @@ pub trait CondView {
     /// eager function closures; a live view may answer from the world.
     fn slot_table(&self) -> Vec<(String, i64)>;
     /// Every `tok('name')` counter (non-zero ones; missing = 0).
-    fn tok_named_table(&self) -> Vec<(String, i64)>;
+    fn held_named_table(&self) -> Vec<(String, i64)>;
     /// Every `card.counter('name')` counter on the candidate instance
     /// (non-zero ones; missing = 0).
     fn card_counter_table(&self) -> Vec<(String, i64)>;

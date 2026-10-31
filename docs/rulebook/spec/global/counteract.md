@@ -229,7 +229,7 @@ authoritative. TEST-FINDINGS §6 rulings unless superseded by newer sheet text.
 * **Source:** `rulebook-doc.md:72`
 * **Quote:** 「[拥有者]：[场地]存在此卡的玩家。」
 * **Trigger:** a `"card"` hook (`kind == "hook"`) of a placed `[持续]` card.
-* **Condition:** the card is on some player's field in `pre` or `post`.
+* **Condition:** the card is on some player's field in `condition` or `post`.
 * **Effect:** the hook's `player_id` is that owner.
 * **Frame:** n/a.
 * **Rulings & OPEN:** board-owned instances (an event card on the board) have
@@ -246,7 +246,7 @@ authoritative. TEST-FINDINGS §6 rulings unless superseded by newer sheet text.
 * **Quote:** 「[持续]：卡在任何玩家的[场地]或格子上时持续生效的效果。」
 * **Trigger:** a `"card"` activation with `kind == "hook"` whose printed text
   carries `[持续]`.
-* **Condition:** the card is on some player's field (or the board) in `pre`
+* **Condition:** the card is on some player's field (or the board) in `condition`
   or `post`, or a place event in the window.
 * **Effect:** a [持续] effect cannot fire for a card that is not placed.
 * **Frame:** n/a.

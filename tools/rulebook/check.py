@@ -6,7 +6,7 @@ book passage.
 The rule book (docs/rulebook/cards-sheet.csv -> cards.json via extract.py) is the
 spec; a card's file quotes the passage (`//! > …`) and its code lines cite the
 sentents they implement (`// 规则书: …`). A card the sheet omits must say so and
-cite the C# class it was translated from instead.
+cite the source it was translated from instead.
 
 Tile rules (rules/tiles/src/*.rs) and tile-mark rules
 (rules/markers/src/*.rs) have no ids in the roster, so their quotes live in
@@ -82,10 +82,10 @@ def main() -> int:
         book = BOOK.get(cid)
         if book is None:
             # the sheet is the spec but not exhaustive: a card it omits must cite
-            # the C# class it was translated from instead
-            if "C#" not in text:
+            # the source it was translated from on a `// 规则书: …` line instead
+            if not CITES.search(text):
                 bad += 1
-                print(f"{rel}: {cid} has no rule book entry and no C# citation")
+                print(f"{rel}: {cid} has no rule book entry and no citation")
             continue
         if norm(book) not in norm(quoted_text(text)):
             bad += 1

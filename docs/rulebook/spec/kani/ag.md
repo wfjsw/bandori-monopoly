@@ -47,9 +47,9 @@ TIMEOUT/OOM.
 | C-AG-sunset-05 | 「所有被[指定]的玩家[支付][使用者]X资金」 | PROVEN* (harness written) | covered by sunset play | pending | `transfer` → `PayTo` | — |
 | C-AG-childhood-01 | 「投掷1d6并[传送]到商店街自己拥有的对应的格子」 | BLOCKED-HOST | — | — | `tile_named("商店街")` = −1 and `is_shop` wrong | — |
 | C-AG-childhood-02 | 「如果投掷结果大于…则[传送]到商店街」 | BLOCKED-HOST | — | — | same (`tile_named`) | — |
-| C-AG-childhood-03 | 「视为你的主要移动」 | PROTOCOL-LEVEL | — | — | `plan::*` / `card_move` are protocol stubs | OPEN-传送主要移动结算 |
+| C-AG-childhood-03 | 「视为你的主要移动」 | PROTOCOL-LEVEL | — | — | `plan::*` / `run_planned_move` are protocol stubs | OPEN-传送主要移动结算 |
 | C-AG-detour-01 | 「(1)此卡可作为反击使用」 | PROTOCOL-LEVEL | — | — | counteract window; (1) prints no trigger X | — |
-| C-AG-detour-02 | 「进行一次 "afterglow"式的移动」 | OPEN | — | — | body is a 4-way C# pick, not the book | OPEN-afterglow式移动 |
+| C-AG-detour-02 | 「进行一次 "afterglow"式的移动」 | OPEN | — | — | body is a 4-way pick, not the book | OPEN-afterglow式移动 |
 | C-AG-detour-03 | 「将下一次的移动掷骰变更为1d6」 | BLOCKED-HOST / OPEN | — | — | depends on (2); `set_base_dice` is a plan stub | — |
 | C-AG-declaration-01 | 「[反击]当你或你拥有的格子被其他玩家的卡效果影响时」 | PROTOCOL-LEVEL + BLOCKED-HOST | — | — | offer window + `trig_by_card`/`effect::*` stubs | — |
 | C-AG-declaration-02 | 「[指定]那名玩家。」 | BLOCKED-HOST | — | — | `ctx::target` stub always Some(0) | — |
@@ -68,11 +68,11 @@ TIMEOUT/OOM.
 | C-AG-soul-01 | 「选择[消耗]1到5次500资金并…放置对应数量的[奇迹水晶]」 | PROVEN* (harness written) | `soul_01_place_and_load_iff`, `soul_01_mutant_is_detected` | pending | host `pay` always returns the amount (floors money at 0); harness assumes sufficient money | — |
 | C-AG-soul-02 | 「金额减少1000（最少为0，若为[支付]则被[支付]玩家[获得]500）」 | PROVEN* (harness written) | `soul_02_pay_choose_yes_iff`, `soul_02_mutant_is_detected` | pending | quote 「因导致的」 truncated in `cards.json`; determined half proved | — |
 | C-AG-soul-03 | 「使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」 | PROVEN* (harness written) | `soul_03_skill_used_iff` | pending | — | — |
-| C-AG-soul-04 | 「此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区」 | PROVEN (partial) | dest write via soul-02/03 emptying | pending | `set_dest(Graveyard)` is silent in the log (host) | — |
+| C-AG-soul-04 | 「此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区」 | PROVEN (partial) | fate write via soul-02/03 emptying | pending | `set_fate(Graveyard)` is silent in the log (host) | — |
 | C-AG-savior-01 | 「支付常规收购价一半…收购该地契」 | PROTOCOL-LEVEL + BLOCKED-HOST | — | — | Mortgage window + `acquire` stub + `is_shop` wrong | OPEN (mortgaged-after) |
 | C-AG-savior-02 | 「额外获得一份抵押收益并将地契翻回」 | PROTOCOL-LEVEL | — | — | mortgage pipeline | — |
 | C-AG-half-speed-01 | 「将此卡放置在场上并获得3个奇迹水晶」 | **PROVEN** | `half_speed_01_place_iff` SUCCESSFUL ~270 s; `half_speed_01_mutant_is_detected` pending | SUCCESSFUL | crystals are post-state (`set_counter_self` silent) | — |
-| C-AG-half-speed-02 | 「回合结束时移除一个奇迹水晶，…为0时放入弃牌堆」 | PROVEN* (harness written) | `half_speed_02_decay_iff`, `half_speed_02_mutant_is_detected` | pending | empty-at-zero is `set_dest(Graveyard)` (silent) | — |
+| C-AG-half-speed-02 | 「回合结束时移除一个奇迹水晶，…为0时放入弃牌堆」 | PROVEN* (harness written) | `half_speed_02_decay_iff`, `half_speed_02_mutant_is_detected` | pending | empty-at-zero is `set_fate(Graveyard)` (silent) | — |
 | C-AG-half-speed-03 | 「移动掷骰的最终结算/2（向上取整）」 | BLOCKED-HOST | — | — | needs `trig_move_roll` get+set | — |
 | C-AG-half-speed-04 | 「所有资金支付与消耗减半」 | PROVEN* (harness written) | `half_speed_04_pay_mul_iff`, `half_speed_04_mutant_is_detected` | pending | body is `CeilTo(amount/2, 10)`; even 10-multiples match plain /2 | OPEN-减半取整 |
 | C-AG-not-ok-01 | 「掷骰小于6时…使结果+1」 | BLOCKED-HOST | — | — | needs `trig_move_roll` get+set | — |

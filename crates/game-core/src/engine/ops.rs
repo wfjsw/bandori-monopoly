@@ -3,7 +3,7 @@
 //! A rules host (`game-rules`) runs card modules against a copy of the world and
 //! calls these; they are pure state moves and log lines, so a module's replay
 //! remains deterministic. Anything that needs a player decision is *not* here --
-//! those go through `Cx::ask`, which halts and replays like any engine routine.
+//! those go through `PlayCtx::ask`, which halts and replays like any engine routine.
 
 use std::collections::BTreeMap;
 
@@ -43,8 +43,8 @@ impl World {
     }
     /// Settle at the [move end] (「到达终点后是否settle」). Clear it to skip
     /// settle entirely; the player still moves.
-    pub fn set_resolve(&mut self, on: bool) {
-        self.turn.plan.resolve = on;
+    pub fn set_settles(&mut self, on: bool) {
+        self.turn.plan.settles = on;
     }
     /// How the move gets there: 0 = walk the path, 1 = teleport.
     pub fn set_kind(&mut self, kind: i32) {
@@ -71,13 +71,13 @@ impl World {
     /// Passing the start square pays nothing on this walk.
 
     /// The tile the walk begins on instead of where the player stands
-    /// (`None` = the player's own tile). `why` names the effect on the log line.
-    pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, why: &str) {
+    /// (`None` = the player's own tile). `reason` names the effect on the log line.
+    pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, reason: &str) {
         self.turn.plan.start = tile;
-        self.turn.plan.start_why = why.to_string();
+        self.turn.plan.start_reason = reason.to_string();
     }
     /// The movement is a teleport to this tile (`None` = a walk / clear).
-    /// `card_move` branches on this.
+    /// `run_planned_move` branches on this.
     pub fn set_teleport_to(&mut self, tile: Option<game_kinds::Tile>) {
         self.turn.plan.teleport_to = tile;
         // Naming a destination makes it a teleport.
@@ -90,27 +90,27 @@ impl World {
     /// Replace the dice the roll starts from (default 1d20). Each
     /// entry is `count`d`sides`, summed into the face. `sides == 0` is a flat
     /// `count` (see [`crate::engine::move_ctx::Roll`]).
-    pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+    pub fn set_base_dice(&mut self, count: i32, sides: i32, reason: &str) {
         // A rewrite of the dice is the new face: drop a stale `fixed_roll` so a
         // card played after `set_fixed_roll` (e.g. STAR BEAT's `set_base_dice` +
-        // `card_move`) gets its own dice instead of the pinned face.
+        // `run_planned_move`) gets its own dice instead of the pinned face.
         self.turn.fixed_roll = None;
         self.turn.plan.base.clear();
         if count > 0 && sides >= 0 {
             self.turn
                 .plan
                 .base
-                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
+                .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
     /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
-    pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+    pub fn add_base_dice(&mut self, count: i32, sides: i32, reason: &str) {
         if count > 0 && sides >= 0 {
             self.turn
                 .plan
                 .base
-                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
+                .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
     /// Drop every extra die another effect added. A rewrite that
@@ -120,13 +120,13 @@ impl World {
         self.turn.plan.dice.clear();
     }
     /// Extra dice added to the roll (summed into the face). A flat add
-    /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
-    pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
+    /// is a `0`-sided term: `add_extra_dice(n, 0, reason)`.
+    pub fn add_extra_dice(&mut self, count: i32, sides: i32, reason: &str) {
         if count > 0 && sides >= 0 {
             self.turn
                 .plan
                 .dice
-                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
+                .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
 
@@ -195,8 +195,8 @@ impl World {
         self.turn.plan.parity
     }
     /// Does the planned move settle at its [move end]?
-    pub fn move_resolve(&self) -> bool {
-        self.turn.plan.resolve
+    pub fn move_settles(&self) -> bool {
+        self.turn.plan.settles
     }
     /// How the move gets there: 0 = walk, 1 = teleport.
     pub fn move_kind(&self) -> i32 {
@@ -485,8 +485,8 @@ impl World {
         self.state_set(player_id, key, value);
     }
 
-    pub fn inc_slot(&mut self, player_id: i32, key: &str, by: i32) -> i32 {
-        self.state_add(player_id, key, by)
+    pub fn inc_slot(&mut self, player_id: i32, key: &str, n: i32) -> i32 {
+        self.state_add(player_id, key, n)
     }
 
     // ------------------------------------------------------------- tokens
@@ -494,7 +494,7 @@ impl World {
     /// Board markers, kept out of the keyed state on purpose: they render on
     /// the board rather than being a value a rule enforces.
     /// Names of the player's counters whose name starts with `prefix`, in the
-    /// order they were added. The listing half of a counter query -- [`Self::tok`]
+    /// order they were added. The listing half of a counter query -- [`Self::held_count`]
     /// reads one of them by name.
     /// Sum the move plan's `base` + `dice` tables into one
     /// face. Flat terms (`sides <= 0`) add their `count` directly, which is how a
@@ -550,7 +550,7 @@ impl World {
                 .opt("detail", None),
         )
         // The event carries the result so the client can show it on the dice
-        // rather than only in the log line (same as `Cx::roll`).
+        // rather than only in the log line (same as `PlayCtx::roll`).
         .value = total;
         total
     }
@@ -582,7 +582,7 @@ impl World {
     /// The ledger still closes: the movement is logged as a `gain` event with
     /// its bank leg (`value`), even though it bypasses the `paySplitAdd`/`paySplitMul`/
     /// `paySplitChoose` modifier pipeline.
-    pub fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::msg::Msg) -> i32 {
+    pub fn gain_fixed(&mut self, player_id: i32, amount: i32, reason: crate::msg::Msg) -> i32 {
         if amount == 0 {
             return 0;
         }
@@ -594,12 +594,12 @@ impl World {
         if amount > 0 {
             self.bump_gain(player_id, 1);
         }
-        let e = self.log("gain", player_id, why);
+        let e = self.log("gain", player_id, reason);
         e.value = amount;
         amount
     }
 
-    pub fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+    pub fn held_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
         self.player_id(player_id)
             .map(|s| {
                 s.tokens
@@ -611,7 +611,7 @@ impl World {
             .unwrap_or_default()
     }
 
-    pub fn tok(&self, player_id: i32, name: &str) -> i32 {
+    pub fn held_count(&self, player_id: i32, name: &str) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.tokens.iter().find(|c| c.name == name))
             .map_or(0, |c| c.value)
@@ -625,14 +625,14 @@ impl World {
     /// dropping the row; `< 0` leaves any stored ceiling alone). A row with
     /// `max > 0` is kept even at `value == 0` so the declaration latch survives
     /// a spent pool.
-    pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32, instance: i32, max: i32) {
+    pub fn set_held(&mut self, player_id: i32, name: &str, value: i32, instance: i32, max: i32) {
         if let Some(s) = self.player_mut(player_id) {
             set_named(&mut s.tokens, name, value, instance, max);
         }
     }
 
     /// The live ceiling stored on the held row (`0` = uncapped / undeclared).
-    pub fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+    pub fn held_max(&self, player_id: i32, name: &str) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.tokens.iter().find(|c| c.name == name))
             .map_or(0, |c| c.max)
@@ -643,12 +643,19 @@ impl World {
     /// `instance` is stamped on a new row. `max` is stored on the row (the
     /// declared ceiling); `0` leaves any already-stored ceiling alone and
     /// clamps at `i32::MAX`.
-    pub fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32, instance: i32) -> i32 {
-        let was = self.tok(player_id, name);
-        let stored_max = self.tok_max(player_id, name);
+    pub fn add_held_by_name(
+        &mut self,
+        player_id: i32,
+        name: &str,
+        n: i32,
+        max: i32,
+        instance: i32,
+    ) -> i32 {
+        let was = self.held_count(player_id, name);
+        let stored_max = self.held_max(player_id, name);
         let ceiling = if max > 0 { max } else { i32::MAX };
         let now = (was + n).clamp(0, ceiling);
-        self.set_tok(
+        self.set_held(
             player_id,
             name,
             now,
@@ -831,7 +838,7 @@ impl World {
     /// `pull_under_cap`, applied 「在任意时刻」). The name is data -- the frozen
     /// wire key is just one caller.
     pub fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
-        let cap = self.tok_max(player_id, name).saturating_add(n).max(0);
+        let cap = self.held_max(player_id, name).saturating_add(n).max(0);
         // Keep any already-bound instance; a fresh row is unowned until a
         // re-declare stamps the creating rule (user ruling 2026-10-10).
         let inst = self
@@ -839,7 +846,7 @@ impl World {
             .and_then(|s| s.tokens.iter().find(|t| t.name == name))
             .and_then(|t| t.instance)
             .unwrap_or(-1);
-        self.set_tok(player_id, name, self.tok(player_id, name), inst, cap);
+        self.set_held(player_id, name, self.held_count(player_id, name), inst, cap);
         cap
     }
 
@@ -926,13 +933,13 @@ impl World {
             Msg::new("log.gain")
                 .player_id("who", player_id)
                 .n("amount", amount)
-                .msg("src", Msg::new("log.part.why").msg("why", src)),
+                .msg("src", Msg::new("log.part.reason").msg("reason", src)),
         );
         amount
     }
 
     /// Money out (「pay」), logged. Routines that may need to raise funds are
-    /// driven through `Cx` instead (they prompt).
+    /// driven through `PlayCtx` instead (they prompt).
     pub fn pay_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         if amount > 0 && self.money_locked(player_id) {
             self.log(
@@ -958,7 +965,7 @@ impl World {
             Msg::new("log.lose")
                 .player_id("who", player_id)
                 .n("amount", paid)
-                .msg("src", Msg::new("log.part.why").msg("why", src)),
+                .msg("src", Msg::new("log.part.reason").msg("reason", src)),
         );
         paid
     }
@@ -1063,7 +1070,7 @@ impl World {
     /// May this player build on this tile at all? The one
     /// build gate, asked both by the engine's build step and by a card choosing
     /// a destination. `None` = yes; otherwise the reason.
-    pub fn why_not_build_on(
+    pub fn cant_build_on(
         &self,
         data: &crate::data::GameData,
         player_id: i32,
@@ -1501,7 +1508,7 @@ impl World {
 
     /// Take the instance at `uid` off the field; returns the **player index**
     /// it left (or -1 when there was no such instance -- including a board-owned
-    /// tile rule, which goes nowhere on removal). Dest routing
+    /// tile rule, which goes nowhere on removal). Fate routing
     /// (`to_discard` and kin) keys on the player index, not the room member id.
     ///
     /// An **event rule** instance leaving the field is the event expiring
@@ -1871,7 +1878,7 @@ impl World {
     //
     // A **tile mark** is a unit of some card instance's named counter, bound to
     // a tile. The same counter may also have units bound to a holder
-    // ([`Self::add_tok`] / `Counter`) or sitting on the card itself
+    // ([`Self::add_held_by_name`] / `Counter`) or sitting on the card itself
     // ([`Self::counter_at`]). Destroying the owning instance destroys every
     // unit, wherever it sits ([`Self::destroy_instance_units`]).
     //

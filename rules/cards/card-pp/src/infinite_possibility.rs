@@ -1,4 +1,3 @@
-//! `PP:[大和麻弥]可能性为∞` -- C# `CardInfinitePossibility`
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[大和麻弥]可能性为∞`）:
 //! > [大和麻弥]可能性为∞：
@@ -10,12 +9,8 @@
 //!
 //! > （2）[共鸣]交换[拥有者]的抽卡区和弃卡区。
 //!
-//! (MatchHost.cs:8064-8123): placed when revealed while looking through the
-//! deck; crystals feed the band card.
-//! Not a hand play (C# `Normal => false`, no `Play` override): the [特] places it
-//! out of a deck inspection. The `On::Play` below is the [持续]（2） press,
-//! refused while the card is not placed (`can_swap`); the crystal growth runs on
-//! the `Drew` hook.
+//! The `On::Play` below is the [持续]（2） press, refused while the card is not
+//! placed (`can_swap`); the crystal growth runs on the `Drew` hook.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
@@ -48,18 +43,9 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
         // sheet cell D17
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"大和麻弥"#)]));
 
-// TODO(规则书): [特]「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]
-// （次效果优先于其他后续效果，比如观看卡组后将一张牌加入手牌）」 -- needs a
-// deck-inspection hook (C# `H.Present` / the reveal-while-looking path) that
-// interrupts the look, shows this card, and `H.PlaceCard`s it before the rest of
-// the look resolves. Nothing in the vocabulary observes a deck inspection.
-/// C# `CardInfinitePossibility.Drew` -- grow the crystal counter per card drawn
-/// (cap 4); at the cap the crystals become one band crystal instead. C# raises
-/// `Drew` once per draw batch with `t.value` = count; the Rust `Drew` raise is
-/// per single card, `value` = 1.
+// TODO(规则书): Nothing in the vocabulary observes a deck inspection.
 /// 规则书[持续]（1）: 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡
-/// 添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个
-/// [奇迹水晶]」
+/// 添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个 [奇迹水晶]」
 fn drew(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() < 4 {
         ctx::add_crystals(1, 4)?;
@@ -96,19 +82,19 @@ fn swap(player_id: i32) -> card_sdk::Asked {
     // An exchange, not a copy: each card leaves its pile first. The discard is
     // emptied into the deck before the deck is emptied, so the draw pile never
     // runs dry mid-swap (an empty draw pile reshuffles the discard back in).
-    // The deck half files with the create-only `add_to_dest(Graveyard)` --
+    // The deck half files with the create-only `add_to_fate(Graveyard)` --
     // `to_discard` would first consume a same-named hand copy.
     for c in &disc {
         ctx::take_card(player_id, c.as_str(), ctx::CardPile::Graveyard);
     }
     for c in &disc {
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckTop);
+        ctx::add_to_fate(player_id, c.as_str(), ctx::Fate::DeckTop);
     }
     for c in &deck {
         ctx::take_card(player_id, c.as_str(), ctx::CardPile::Deck);
     }
     for c in &deck {
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Graveyard);
+        ctx::add_to_fate(player_id, c.as_str(), ctx::Fate::Graveyard);
     }
     ctx::log(player_id, &Msg::new(key!("infinite_possibility_swapped")));
     Ok(())

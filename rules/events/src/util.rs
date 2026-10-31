@@ -45,7 +45,7 @@ pub fn rule_id(id: &str) -> String {
 ///
 /// 规则书: 「将此卡放置于场地中央」 -- staying is what that means mechanically.
 pub fn keep() {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
 }
 
 /// 「放入事件弃牌」 -- expire the active event `id` into the discard.
@@ -58,16 +58,9 @@ pub fn expire_removed(id: &str) {
     ctx::event_expire(id, true);
 }
 
-/// `X = count d sides` from the match RNG, summed. Opens the 「掷骰结算前」
-/// [反击] window (the default -- an event's 「掷骰」 is a real roll). A roll that
-/// only measures something and must not be answered takes `ctx::roll_direct`
-/// instead; a roll cast *inside* a roll-window counteraction (Y.O.L.O's boost)
-/// must.
-pub fn roll(
-    player_id: i32,
-    count: i32,
-    sides: i32,
-) -> Result<i32, card_sdk::Prompt> {
+/// `X = count d sides` from the match RNG, summed. Opens the 「掷骰结算前」 [反击] window
+/// (the default -- an event's 「掷骰」 is a real roll).
+pub fn roll(player_id: i32, count: i32, sides: i32) -> Result<i32, card_sdk::Prompt> {
     ctx::roll(
         player_id,
         count,

@@ -52,7 +52,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Residual guard for （2） -- `fixed_roll` stays here (not yet in the condition
-/// vocabulary). `charge(owner) >= 1` is the pre.
+/// vocabulary). `charge(owner) >= 1` is the condition.
 fn roll_unfixed(_player_id: i32) -> bool {
     ctx::fixed_roll().is_none()
 }
@@ -75,7 +75,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     // 「[反击] 当你使用火罐进行掷骰时」 rings on it.
     let again = ctx::roll(player_id, 0, 0, RollPurpose::Move, roll_source::CHARGE)?.max(0);
     // 「择其一执行」 -- keep whichever the player names.
-    let keep = ctx::ask_pick(
+    let keep = ctx::ask_choice(
         player_id,
         &Msg::new(key!("layer_pick_title")),
         &Msg::new(key!("layer_pick_text")),

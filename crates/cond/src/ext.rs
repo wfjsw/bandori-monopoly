@@ -41,7 +41,7 @@ pub struct CondExt {
     /// Bare-ident CEL string constants: (`"SomeKind"`, `"wire:ns:id"`).
     /// Merged into `kinds::str_constants()` at lookup time.
     pub kind_consts: &'static [(&'static str, &'static str)],
-    /// Source-scanner expansions for Rust const refs in `pre` position:
+    /// Source-scanner expansions for Rust const refs in `condition` position:
     /// (`"content::guards::OWN_START"`,
     ///  `"actor == owner && tile_is(tile.id, \"kind\")")`).
     pub guard_consts: &'static [(&'static str, &'static str)],
@@ -96,7 +96,9 @@ impl Vocab<'static> {
 impl<'a> Vocab<'a> {
     /// The merged name set (kernel first, then extension).
     pub fn names(&self) -> impl Iterator<Item = &'static Name> + 'a {
-        vocab::VOCAB.iter().chain(self.ext.map(|e| e.names.iter()).into_iter().flatten())
+        vocab::VOCAB
+            .iter()
+            .chain(self.ext.map(|e| e.names.iter()).into_iter().flatten())
     }
 
     pub fn by_cel(&self, s: &str) -> Option<&'static Name> {
@@ -115,13 +117,15 @@ impl<'a> Vocab<'a> {
 
     /// Kernel kind spellings ++ extension kind constants.
     pub fn str_constants(&self) -> impl Iterator<Item = (&'static str, &'static str)> + 'a {
-        crate::kinds::engine_str_constants()
-            .iter()
-            .copied()
-            .chain(self.ext.map(|e| e.kind_consts.iter().copied()).into_iter().flatten())
+        crate::kinds::engine_str_constants().iter().copied().chain(
+            self.ext
+                .map(|e| e.kind_consts.iter().copied())
+                .into_iter()
+                .flatten(),
+        )
     }
 
-    /// Expansion for a Rust const path in `pre` position.
+    /// Expansion for a Rust const path in `condition` position.
     pub fn guard_const(&self, path: &str) -> Option<&'static str> {
         self.ext?
             .guard_consts

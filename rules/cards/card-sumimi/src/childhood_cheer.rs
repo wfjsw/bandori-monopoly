@@ -1,15 +1,7 @@
-//! `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` -- C# `CardChildhoodCheer`
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励`）:
 //! > (初华（Sumimi）)儿时玩伴的鼓励：
 //! >  可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。
-//!
-//! (MatchHost.cs:11481-11498): move starts from 小豆岛, +1 fire afterwards.
-//! C# arms `H.ExtraOf<AfterMoveFireFx>(seat)` (a player attachment, not a placed
-//! card). The hook surface only dispatches to *placed* cards, so the play body
-//! places this card as the `AfterMoveFireFx` stand-in and files it to the
-//! discard pile when the effect finishes (or at turn end, C#
-//! `AfterMoveFireFx.TurnEndAfter`).
 //!
 //! 「移动后」 is 行动阶段 13 (`SETTLE-STAGES.md` §4 M1): it fires when the move
 //! ends **whether or not it settles** (其他规则注意事项 1.2 gates only the
@@ -28,7 +20,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
         On::Action(Action::MoveAfter(
-            "actor == owner && move.main && card.placed",
+            "actor == owner && move.is_main_move && card.placed",
             None,
             after_move,
         )),
@@ -52,19 +44,13 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 
-/// C# `CardChildhoodCheer.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「可在移动掷骰前打出此卡」 -- only while the turn's main move is
-    // still open (C# `H.MoveWhyNot`).
     rules_status::move_blocked(player_id)
 }
 
 fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「使本次移动以“小豆岛”为起点」 -- C# `H._turnCtx.Plan.Start =
-    // H.TileNamed("小豆岛"); Plan.StartWhy = CardName` =
-    // `plan::set_start(tile, why)`. The player stays put until the walk runs;
-    // the start is one-shot -- the engine drops it when the move ends, so a
-    // later walk in the same turn is not re-based.
+    // The player stays put until the walk runs; the start is one-shot -- the engine
+    // drops it when the move ends, so a later walk in the same turn is not re-based.
     let start = ctx::tile_named("小豆岛");
     if start >= 0 {
         ctx::plan::set_start(start, ID);
@@ -75,38 +61,31 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
                 .tile("tile", start),
         );
     }
-    // 规则书: 「并在移动后获得一个火罐」 -- C# `H.ExtraOf<AfterMoveFireFx>(seat)`.
-    // TODO(规则书)（并在移动后获得一个火罐）: 书里只有“改起点、移动后得一个火罐” --
-    // 我们把此卡放在场上当挂件，两个钩子都因此挂在 `card.placed` 上。
-    ctx::set_dest(ctx::Dest::Field);
+    // TODO(规则书)（并在移动后获得一个火罐）: 书里只有“改起点、移动后得一个火罐” -- 我们把此卡放在场上当挂件，两个钩子都因此挂在
+    // `card.placed` 上。
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("childhood_cheer_note")));
-    // C# `AfterMoveFireFx.TurnEndAfter` drops the attachment at the owner's
-    // turn end if the move never landed it.
     ctx::at_turn_end(player_id, "at_end");
     Ok(())
 }
 
-/// C# `AfterMoveFireFx.Arrive` -- after the owner's main move, +1 fire and drop.
-/// Runs through the Fx hook dispatch (`moveAfter`), so this is a field effect,
-/// not a [反击].
-/// The effect body of the `On::Action(MoveAfter)` entry above: its CEL
-/// condition (`actor == owner && move.main && card.placed`) is the activation
+/// Runs through the hook dispatch (`moveAfter`), so this is a field effect,
+/// not a [反击]. The effect body of the `On::Action(MoveAfter)` entry above: its
+/// CEL condition (`actor == owner && move.is_main_move && card.placed`) is the activation
 /// gate, not this fn.
 fn after_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在移动后获得一个火罐」 -- 行动阶段 13, after [重叠] and
     // before any settle. Fires for a 「不触发结算」 move too.
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     Ok(())
 }
 
-/// C# `AfterMoveFireFx.TurnEndAfter` -- drop the attachment at the owner's turn
-/// end if `Arrive` never ran. Scheduled by `ctx::at_turn_end` in the play body.
-/// Still-on-the-field is the entry's condition (`card.placed`).
+/// Scheduled by `ctx::at_turn_end` in the play body. Still-on-the-field is the
+/// entry's condition (`card.placed`).
 fn at_end(_player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（并在移动后获得一个火罐）: 书里不说此卡何时离场 -- 回合结束的
-    // 弃置只来自 C# `AfterMoveFireFx.TurnEndAfter`。
-    ctx::set_dest(ctx::Dest::Graveyard);
+    // TODO(规则书)（并在移动后获得一个火罐）:
+    ctx::set_fate(ctx::Fate::Graveyard);
     Ok(())
 }
 

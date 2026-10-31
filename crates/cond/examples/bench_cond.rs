@@ -36,7 +36,7 @@ fn window() -> WindowCtx {
             roll: Some(5),
             kind: Some(rules_cond::mv::Walk),
             remaining: 5,
-            main: true,
+            is_main_move: true,
             dir: 1,
             tags: Vec::new(),
             by_skill: false,
@@ -87,7 +87,7 @@ fn candidate(owner: i64) -> CandidateCtx {
         owner_money: 500 + owner * 100,
         card_id: 42,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
-        tok_names: [("水母标记".to_string(), 1)].into_iter().collect(),
+        held_names: [("水母标记".to_string(), 1)].into_iter().collect(),
         ..CandidateCtx::default()
     }
 }

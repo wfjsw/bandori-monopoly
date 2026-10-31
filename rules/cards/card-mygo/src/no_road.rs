@@ -1,4 +1,3 @@
-//! `MyGO:无路矢` -- C# `CardNoRoad` (MatchHost.cs:6416): pick another player's
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:无路矢`）:
 //! > 无路矢：
@@ -18,7 +17,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // 规则书: 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- only while
         // the exile lasts, only for this player's own tile rent, and only with a
         // live partner. The clause is residual (live exile count + the pay
-        // shape); `card.placed` is the `pre`.
+        // shape); `card.placed` is the `condition`.
         //
         // ABI v75: the payee rewrite is `PayAddValue.payee` (the body returns
         // the new target; the wrapper calls `set_pay_target`). Pure.
@@ -48,11 +47,9 @@ fn on_board_others(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-/// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
-/// refuses the card with no other player alive ("没有别的玩家").
 fn cant_play(player_id: i32) -> Option<Msg> {
     if on_board_others(player_id).is_empty() {
-        return Some(Msg::new(key!("no_road_why_not_none")));
+        return Some(Msg::new(key!("no_road_blocked_none")));
     }
     None
 }
@@ -62,41 +59,27 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
-    // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `H.PickTarget` asks among
-    // `H.Others` and then runs the `H.Target` gate; the seat that lands
-    // (`t.index`, possibly redirected) is the one used below.
     let picked = ctx::ask_player(
         player_id,
         &Msg::new(key!("no_road_title")),
         &Msg::new(key!("no_road_ask")),
         &others,
     )?;
-    // C# `H.Target(c, r.index, t)` after the prompt (ImmuneAll / Untargetable /
-    // redirect / the `target` [反击] window); on failure PlayCtx is marked
-    // non-effective and the card does nothing.
     let who = match ctx::target(picked) {
         Some(hit) => hit,
         None => {
-            // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
-            // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
-            // side channel and is not being ported (a routine should *return* whether
-            // it took effect); but before that lands, what "not effective" changes has
-            // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
-            // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
-            // implies no)? And what counts a use that this would suppress?
+            // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without saying
+            // what observes it. And what counts a use that this would suppress?
             return Ok(());
         }
     };
     let tile = ctx::player_pos(who);
-    // 规则书: 「获得2层[除外]并在[除外]层数归0后[传送]至该格子」
-    // `H.GiveExile(seat, 2, tile)` stores the return Ok(tile); the engine teleports
-    // there when the last layer ticks away. That engine-owned return stays the
-    // functional storage -- it is what the exile tick reads -- so it is **not**
-    // replaced by a designation mark.
-    // Glossary 14 [不可阻挡] 「无法获得新的[除外]层数」: the exile is the cost of
-    // the teleport, so a refused gain negates the whole card (「视为此卡未生效」,
-    // CH-07 minimal -- the card is spent, no place / no designate / no later
-    // teleport). C-Q26-adjacent ruling recorded by `g23_unstoppable_refuses_the_exile_cost`.
+    // That engine-owned return stays the functional storage -- it is what the exile
+    // tick reads -- so it is **not** replaced by a designation mark. Glossary 14
+    // [不可阻挡] 「无法获得新的[除外]层数」: the exile is the cost of the teleport, so a refused
+    // gain negates the whole card (「视为此卡未生效」, CH-07 minimal -- the card is spent, no
+    // place / no designate / no later teleport). C-Q26-adjacent ruling recorded by
+    // `g23_unstoppable_refuses_the_exile_cost`.
     let before = ctx::state::get(player_id, bandori_std::state_key::EXILE);
     rules_status::exile::send(player_id, 2, tile);
     if ctx::state::get(player_id, bandori_std::state_key::EXILE) <= before {
@@ -106,13 +89,11 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`. The
-    // engine's exile tick reads this slot and consumes the turn's main move,
-    // and its return teleport now settles the landing (`resolve = true`,
-    // `rules/status/src/exile.rs`).
-    // TODO(规则书)（视为当回合的主要移动）: C-Q21 / MOVE-07 may instead rule the
-    //   immediate-`offer_buy` shape -- the return currently takes the ordinary
-    //   main-move landing settle.
+    // TODO(规则书)（视为当回合的主要移动）: The engine's exile tick reads this slot and consumes
+    // the turn's main move, and its return teleport now settles the landing
+    // (`resolve = true`, `rules/status/src/exile.rs`). C-Q21 / MOVE-07 may instead
+    // rule the immediate-`offer_buy` shape -- the return currently takes the
+    // ordinary main-move landing settle.
     ctx::set_slot(player_id, bandori_std::state_key::EXILE_MAIN, 1);
     // 规则书: 「在[除外]层数归0后[传送]至该格子」 -- the log names both the
     // destination and the redirect below.
@@ -131,7 +112,7 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // hook's own `exile > 0` guard stops it once the exile ticks away, and the
     // `TurnStart` retire above takes the stand-in off the field at that point
     // (the exile ends in `turnStartBefore`, exactly one layer at a time).
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, "MyGO:无路矢", &Msg::new(key!("no_road_log")));
     ctx::set_slot(player_id, "noRoad.who", who);
     // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- the lasting [指定] while
@@ -153,7 +134,7 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Residual guard for [`redirect`]: the live exile count, a live partner, and
-/// this player's own tile rent. `turn_snap` is the turn-start snapshot and is
+/// this player's own tile rent. `turn_snapshot` is the turn-start snapshot and is
 /// stale for a layer granted mid-turn (docs/GUARDS.md §4.2).
 fn redirect_applies(player_id: i32) -> bool {
     ctx::state::get(player_id, bandori_std::state_key::EXILE) > 0
@@ -173,14 +154,12 @@ fn retire_guard(player_id: i32) -> bool {
 /// applies (`unplace_self` alone would banish it).
 fn retire(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "noRoad.who", -1);
-    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::send_to_fate(ctx::Fate::Graveyard);
     Ok(())
 }
 
-/// 规则书: 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
-/// `NoRoadFx.RedirectReceiver`. Applicability is the `pre` +
-/// [`redirect_applies`]; this side only reroutes the pay target.
-/// Pure: the new payee rides `PayAddValue.payee` (amount unchanged).
+/// Applicability is the `condition` + [`redirect_applies`]; this side only reroutes the
+/// pay target. Pure: the new payee rides `PayAddValue.payee` (amount unchanged).
 fn redirect(player_id: i32, v: PayAddValue) -> PayAddValue {
     let who = ctx::slot(player_id, "noRoad.who");
     ctx::log(
@@ -192,12 +171,6 @@ fn redirect(player_id: i32, v: PayAddValue) -> PayAddValue {
         ..v
     }
 }
-
-// `exileMain` is honoured by the engine now (2026-10-06): `game-core`'s exile
-// tick reads the slot at 「在[除外]层数归0后」 and runs the return teleport as
-// that turn's main move -- `TurnCtx::main_moved` is set, so 「一回合只能触发
-// 一次［主要移动］」 keeps the player from rolling as well (C#
-// `H.MoveWhyNot` / `_turnCtx.MainMoved`).
 
 //
 

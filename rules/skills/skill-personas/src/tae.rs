@@ -30,14 +30,14 @@ pub const TAE: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Actions::PassRewardAffected(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             None,
             on_circle,
         )),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
-        // applicability (residual guard; `pre::MINE` already states the actor).
+        // applicability (residual guard; `condition::MINE` already states the actor).
         On::Action(Action::Pass(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(on_pass_has_rabbits),
             on_pass,
         )),

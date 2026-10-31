@@ -32,8 +32,8 @@ fn set_draw_n(t: &mut Table, who: usize, n: usize) {
 /// The card the open [反击] window's detail line names -- the timing it answers.
 fn answered_card(t: &Table) -> Option<String> {
     let p = t.prompt()?;
-    match p.text.a.get("detail") {
-        Some(Arg::Msg(m)) => match m.a.get("card") {
+    match p.text.args.get("detail") {
+        Some(Arg::Msg(m)) => match m.args.get("card") {
             Some(Arg::Card(id)) => Some(id.clone()),
             _ => None,
         },
@@ -47,9 +47,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -655,24 +655,22 @@ fn c12_exist_vs_summer_camp() {
     );
 }
 
-// =====================================================================
-// C13. R.I.O.T. and 宣战布告 on the same timing
+// ===================================================================== C13. and
+// 宣战布告 on the same timing
 // =====================================================================
 
 // 规则书: counters to one timing resolve newest first (ruling on 89).
-// R.I.O.T.: 所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡.
 #[test]
 fn c13_riot_and_war_declaration() {
     let mut t = Table::vanilla(3);
     set_draw_n(&mut t, 0, 5);
     set_draw_n(&mut t, 1, 5);
     set_draw_n(&mut t, 2, 5);
-    // Hands: P0 = 武道馆 + 2 fillers; P1 = R.I.O.T. + 1; P2 = 宣战布告 + 3.
+    // + 1; P2 = 宣战布告 + 3.
     t.give(0, &["通用:登上武道馆", FILL, FILL]);
     t.give(1, &["RAS:R. I. O. T.", FILL]);
     t.give(2, &["AG:宣战布告", FILL, FILL, FILL]);
     t.play(0, "通用:登上武道馆").unwrap();
-    // Round on X: P1 declares R.I.O.T., P2 declares 宣战布告.
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("RAS:R. I. O. T.") {
@@ -683,8 +681,7 @@ fn c13_riot_and_war_declaration() {
             t.decline();
         }
     }
-    // Newest first: 宣战布告 (P2) resolves first, then R.I.O.T. (P1), then X.
-    // After R.I.O.T.: P0 hand 2, P1 hand 1+1, P2 hand 3+1 (redrawn same count).
+    // (P1), then X.
     assert_eq!(t.hand(0).len(), 2, "P0: {:?}", t.hand(0));
     assert_eq!(t.hand(1).len(), 2, "P1 = 1 + 1: {:?}", t.hand(1));
     assert_eq!(t.hand(2).len(), 4, "P2 = 3 + 1: {:?}", t.hand(2));

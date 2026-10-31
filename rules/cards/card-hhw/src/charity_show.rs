@@ -1,15 +1,9 @@
-//! `HHW:爱心义演` -- C# `CardCharityShow` (MatchHost.cs:4164-4177): this turn,
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:爱心义演`）:
 //! > 爱心义演：
 //! > 打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）
 //!
 //! +2 steps the first time you pass each of your tiles, and half pay to others.
-//! C# arms `H._turnCtx.HalfPayToOthers` and `H.ExtraOf<CharityFx>(seat)` (a
-//! player attachment, not a placed card). The hook surface only dispatches to
-//! *placed* cards, so the play body places this card as the `CharityFx`
-//! stand-in and files it to the discard pile at the owner's turn end (C#
-//! `CharityFx.TurnEndAfter` -> `H.RemoveExtra(this)`).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind};
@@ -17,14 +11,10 @@ use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 
 const ID: &str = "HHW:爱心义演";
-/// C# `CardKokoroCircle` -- the card that makes CiRCLE count as yours (rule:
-/// 「若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子」).
 const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 
-/// C# `H._turnCtx.HalfPayToOthers` / `CharityFx.Turn` -- the turn key the
-/// half-pay is armed for (expires with the turn). Stored on the card instance
-/// (`FieldCard::props`), not in the player's keyed-state map, so the write
-/// stays inside this rule's scope.
+/// Stored on the card instance (`FieldCard::props`), not in the player's
+/// keyed-state map, so the write stays inside this rule's scope.
 const PROP_TURN: &str = "charity.turn";
 /// Running count of the walk's `+2` steps this turn (instance prop).
 const PROP_EXTRA: &str = "charity.extra";
@@ -43,9 +33,9 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
         // TODO(规则书)（你若进行掷骰移动）: the book wants a dice move -- we gate on
-        //   `move.main`, which also takes roll-less card walks and misses forced
+        //   `move.is_main_move`, which also takes roll-less card walks and misses forced
         //   dice moves; the `PassTile` payload carries no rolled flag.
-        On::Action(Action::PassTile("card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0", Some(pass_applies), pass_tile)),
+        On::Action(Action::PassTile("card.placed && actor == owner && move.kind != Teleport && move.is_main_move && tile.id >= 0", Some(pass_applies), pass_tile)),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
         On::Action(Action::TurnEndAfter("card.placed && actor == owner", None, turn_end_after)),
     ],
@@ -58,14 +48,10 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
-    // 规则书: 「打出此卡的回合内」 -- C# `H._turnCtx.HalfPayToOthers = true` and
-    // `CharityFx.Turn = H.TurnKey` live on the turn, not on the card.
-    // 规则书: 「打出此卡的回合内」 -- C# `H.ExtraOf<CharityFx>(seat)`. The hook
-    // dispatch only runs on placed cards, so this placement stands in for the
-    // player attachment (same pattern as `card-sumimi`'s 儿时玩伴的鼓励); the
+    // The hook dispatch only runs on placed cards, so this placement stands in for
+    // the player attachment (same pattern as `card-sumimi`'s 儿时玩伴的鼓励); the
     // `TurnEndAfter` hook below files it away at the owner's turn end.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("charity_show_note")));
     // Instance props (not player state): scoped to this placed card.
     ctx::set_prop(PROP_TURN, ctx::turn_key());
@@ -77,21 +63,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CharityFx.Mine` (MatchHost.cs:4200-4210) -- is tile `t` "yours" for the
-/// pass bonus? Your own land always is; CiRCLE counts when your
-/// `CardKokoroCircle` sits on it (rule: 「若弦卷心已将专属卡置于CiRCLE上，则
-/// CiRCLE也算作属于弦卷心的格子」).
+/// Your own land always is; CiRCLE counts when your `CardKokoroCircle` sits on it
+/// (rule: 「若弦卷心已将专属卡置于CiRCLE上，则 CiRCLE也算作属于弦卷心的格子」).
 fn mine(player_id: i32, t: i32) -> bool {
-    // 规则书: 「属于你的格子」 -- C# `H.State.owners[t] != Seat` falls through to
-    // the CiRCLE probe; owned land is yours.
     if ctx::tile_owner(t) == player_id {
         return true;
     }
-    // 规则书: 「（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）」
-    // -- C# `H._placed.Any(p => p is CardKokoroCircle && p.Seat == Player && p.Tile == t)`.
-    // `find_card` finds that player's Kokoro card instance and `tile_at` reads
-    // the tile it sits on; an unbound placement (tile `-1`) counts as on CiRCLE
-    // -- the only circle tile the rule names.
+    // `find_card` finds that player's Kokoro card instance and `tile_at` reads the
+    // tile it sits on; an unbound placement (tile `-1`) counts as on CiRCLE -- the
+    // only circle tile the rule names.
     if ctx::is_start(t) {
         return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_at) {
             Some(pt) => pt == t || pt < 0,
@@ -107,9 +87,8 @@ fn pay_applies(player_id: i32) -> bool {
     ctx::prop(PROP_TURN) == ctx::turn_key()
 }
 
-/// 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
-/// `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)`. `target >= 0 &&
-/// target != owner && value > 0` is the pre; [`pay_applies`] is the residual.
+/// `target >= 0 && target != owner && value > 0` is the condition; [`pay_applies`] is
+/// the residual.
 fn pay_mul(player_id: i32, value: i32) -> i32 {
     // `CeilTo(amount / 2.0, 10)` -- half, rounded up to a multiple of 10.
     let half = (value as i64 + 1) / 2;
@@ -144,12 +123,9 @@ fn pass_applies(player_id: i32) -> bool {
     ctx::prop(&key) != ctx::turn_key()
 }
 
-/// 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
-/// -- C# `CharityFx.PassTile`. Applicability is the `pre` + [`pass_applies`].
+/// Applicability is the `condition` + [`pass_applies`].
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
-    // C# `Seen.Add(t)` -- only the first pass of each tile counts
-    // (the prop holds the turn key that first saw it).
     let key = alloc::format!("charity.seen.{t}");
     ctx::set_prop(&key, ctx::turn_key());
     ctx::log(
@@ -158,10 +134,8 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", t),
     );
-    // 规则书: 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk.
-    // The walk loop bound is `steps + m.ExtraSteps`, re-read each
-    // step (play.rs). `set_extra_steps` assigns, so keep a running
-    // count on the instance and write the sum.
+    // `set_extra_steps` assigns, so keep a running count on the instance and write
+    // the sum.
     let mut extra = ctx::prop(PROP_EXTRA);
     if extra < 0 {
         extra = 0;
@@ -177,11 +151,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「打出此卡的回合内」 -- C# `CharityFx.TurnEndAfter`: both effects
-/// end with the turn.
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_TURN, 0);
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     Ok(())
 }
 

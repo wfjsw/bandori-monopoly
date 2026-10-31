@@ -29,7 +29,7 @@ listed in §6.
 | 5 | `hina-clause-2-swap-missing` (press half; G01 owns the uid half) | medium | 487, 488, 490, 1555 |
 
 Two items are **demoted to A**: #2 and #3. Their stated expectation ("appears
-pressable and reaches `why_not_act`") is reachable today by dropping the
+pressable and reaches `cant_act`") is reachable today by dropping the
 `skill:` filter in `engine/mod.rs:1315-1317` and deriving `source`; they are
 still migrated to the new press entries below because #4 needs the capability
 and a filter drop alone re-breaks every hand-only card. Item #1 and #4 are
@@ -183,9 +183,9 @@ Corollaries, which the surface below must make true:
 3. The pressed instance is the request's `uid`. Dispatch validates that the uid
    is in play, on the presser's field, and carries the requested card id; it
    never re-finds by id. All instance reads (`is_placed`, named counters,
-   `crystals`, props, `dest`) answer for that uid.
+   `crystals`, props, `fate`) answer for that uid.
 4. The offer is enumerated: for every field instance, every press entry the
-   card declares is offered and gated through the same `why_not_act` a request
+   card declares is offered and gated through the same `cant_act` a request
    takes, so "shown enabled" ⇔ "accepted". No prefix test remains, except the
    temporary skill-alias arm (§4.6, `has_press`).
 5. A press is an activation, not a hook: it is not re-entrancy-marked, it
@@ -216,9 +216,9 @@ is never a tile text):
 #[derive(Clone, Copy)]
 pub struct PressEntry {
     pub id: &'static str,
-    pub pre: &'static str,
+    pub condition: &'static str,
     pub counter_reason: Option<MsgKey>,
-    pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+    pub guard: Option<fn(player_id: i32) -> Option<Msg>>,
     pub body: *const (),
     pub drive: BodyDrive,
     pub shape: BodyShape,
@@ -235,7 +235,7 @@ Constructor, next to `On::Play` (`lib.rs:871`):
 ```rust
 impl On {
     /// Press this placed card: run `body` when the player activates clause
-    /// `id` of the instance. `pre` / `why_not` are the gate (the same pair,
+    /// `id` of the instance. `condition` / `guard` are the gate (the same pair,
     /// same meaning, as [`Self::Play`]); `body` is the effect.
     ///
     /// `id` is a required per-card-unique ASCII slug
@@ -246,8 +246,8 @@ impl On {
     #[allow(non_snake_case)]
     pub const fn Press(
         id: &'static str,
-        pre: &'static str,
-        why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+        condition: &'static str,
+        guard: Option<fn(player_id: i32) -> Option<Msg>>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self { /* PressBody(PressEntry { .. }) */ }
 }
@@ -263,7 +263,7 @@ gain `On::PressBody` for `.id`, `.label`, `.counter_reason`, `.declare`,
 ```rust
 pub enum OnKind {
     // …
-    /// v111: a placed card's **press** entry (`On::Press(id, pre, why_not,
+    /// v111: a placed card's **press** entry (`On::Press(id, condition, guard,
     /// body)`). Addressed by `uid` + the entry's required `id`; a press request
     /// raises `cardUsed` (the category `use_skill` raises). Id 15 (4/5/6 stay
     /// retired forever).
@@ -278,13 +278,13 @@ entry — the first `On::Press` entry, or, for a card not yet migrated, the firs
 `On::Play` (`play_entry_preferring_gated`). `"press"` stays undeclarable.
 `ctx::query_guard`'s doc example is unchanged in spelling, but its **answer can
 change**: a card that gains a press entry and also has a Play now resolves
-`PRESS` to the press (with its own `why_not`), not to the Play. Cards that read
+`PRESS` to the press (with its own `guard`), not to the Play. Cards that read
 `query_guard(PRESS)` to decide a hand activation must therefore read their Play
 by entry id after migration; the §9 tests pin one such card.
 
 No new exports: a press entry uses the existing `OP_GUARD` / `OP_DECLARE` /
 `OP_RUN` exactly as `PlayEntry` does (`rt.rs:230-280`). `rt.rs`'s `OP_GUARD`
-arm gains `On::PressBody(PressEntry { why_not, .. })` (identical body to the
+arm gains `On::PressBody(PressEntry { guard, .. })` (identical body to the
 Play arm), `declare_of` (`rt.rs:331-345`) gains the variant, and the body union
 gains `On::PressBody`. The `On` accessors `condition` / `has_guard` /
 `has_declare` / `id_of` / `label_of` / `header_of` each gain a `PressBody` arm
@@ -328,9 +328,9 @@ pub const COST_PAID: i32 = 1;
 /// (the invoke frame seeds `trigger::card` / `trigger::cards` instead).
 /// [`entry::PRESS`] resolves the card's default press entry (first press
 /// entry, else first `On::Play`).
-pub fn invoke_entry(player_id: i32, card_id: &str, entry_id: &str) -> Result<Dest, Prompt>;
+pub fn invoke_entry(player_id: i32, card_id: &str, entry_id: &str) -> Result<Fate, Prompt>;
 /// `invoke_entry` with the caller having paid the cost (`ctx::invoke_paid()`).
-pub fn invoke_entry_paid(player_id: i32, card_id: &str, entry_id: &str) -> Result<Dest, Prompt>;
+pub fn invoke_entry_paid(player_id: i32, card_id: &str, entry_id: &str) -> Result<Fate, Prompt>;
 pub fn invoke() -> Option<InvokeFrame>;
 pub fn invoke_paid() -> bool;
 ```
@@ -389,7 +389,7 @@ New `Ruleset` methods:
 pub fn has_press_entry(&self, card: i32) -> bool;
 /// The press entries as `(entry index, id, label)` in declaration order.
 pub fn press_entries(&self, card: i32) -> Vec<(i32, &str, &str)>;
-/// The press gate `why_not` for one entry, from a world copy with
+/// The press gate `guard` for one entry, from a world copy with
 /// `current_uid = uid` (probe: a prompting guard answers "no reason").
 pub fn press_cant_act<W: CardWorld>(
     &self, world: &W, card: i32, entry: i32, player_id: i32,
@@ -412,19 +412,19 @@ entry index).
 `wasm_rules.rs:9384`):
 
 ```rust
-fn press(&self, cx: &mut Cx, player_id: usize, card: &str, uid: i32, entry: &str)
-    -> Flow<Dest>
+fn press(&self, cx: &mut PlayCtx, player_id: usize, card: &str, uid: i32, entry: &str)
+    -> Flow<Fate>
 ```
 
-1. `ruleset.card(card)`; unknown -> `log.card_not_ported`, `Dest::Graveyard`.
+1. `ruleset.card(card)`; unknown -> `log.card_not_ported`, `Fate::Graveyard`.
 2. Validate `field_by_uid(uid)`, `holder_of(uid) == player_id`,
    `field.card == card`; else trap/log and no body.
 3. Resolve `entry_by_id(entry)`; missing -> `DEST_UNSET` no-op (G13 §4.4).
 4. `drive(cx, Call::Press { …, arg: take(press_arg) }, card, uid, &mut trigger)`.
-5. Dest applies to that uid (`drive_inner_body_from:4917-4922`), so
-   `Dest::Graveyard` / `Hand` unplace the pressed instance;
+5. Fate applies to that uid (`drive_inner_body_from:4917-4922`), so
+   `Fate::Graveyard` / `Hand` unplace the pressed instance;
    `DEST_FIELD` is a no-op for a press (the instance is already placed —
-   documented on `set_dest`).
+   documented on `set_fate`).
 
 The play gate fallback: `Ruleset::run`'s `Call::Play` arm and
 `hostfns::play_card`'s entry lookup resolve
@@ -465,19 +465,19 @@ fn has_press(&self, _card: &str) -> bool { false }
 /// `skill:` card (label = its first `On::Play`'s), so skills keep their button
 /// during the migration.
 fn press_decls(&self, _card: &str) -> std::sync::Arc<[PressDecl]> { Arc::from(Vec::new()) }
-/// The press gate `why_not` for `(uid, entry)`; `None` = pressable.
-fn press_cant_act(&self, _cx: &Cx, _player: usize, _card: &str, _uid: i32, _entry: &str) -> Option<Msg> { None }
+/// The press gate `guard` for `(uid, entry)`; `None` = pressable.
+fn press_cant_act(&self, _cx: &PlayCtx, _player: usize, _card: &str, _uid: i32, _entry: &str) -> Option<Msg> { None }
 /// Pre-commit argument (docs/ACTIVATION.md §2), as `declare_activation`.
-fn press_declare(&self, _cx: &mut Cx, _player: usize, _card: &str, _uid: i32, _entry: &str)
+fn press_declare(&self, _cx: &mut PlayCtx, _player: usize, _card: &str, _uid: i32, _entry: &str)
     -> Flow<Option<Vec<u8>>> { Ok(Some(Vec::new())) }
 /// Run the press. Returns the instance's fate.
-fn press(&self, cx: &mut Cx, player: usize, card: &str, uid: i32, entry: &str) -> Flow<Dest>;
+fn press(&self, cx: &mut PlayCtx, player: usize, card: &str, uid: i32, entry: &str) -> Flow<Fate>;
 ```
 
 `PressDecl { id: String, label: String }` is game-core's own shape (like
 `TileTextDecl`); `WasmRules` builds it from the manifest. `StubRules` keeps the
 defaults. The answer is memoised separately from `rules_cant_play`:
-`Cx::press_memo` keyed `(player, uid, entry)` with the same world-stamp reset
+`PlayCtx::press_memo` keyed `(player, uid, entry)` with the same world-stamp reset
 (`cx.rs:1051-1074`), because two copies of one card differ per uid and the
 existing `(player, card)` memo would cross-talk.
 
@@ -501,7 +501,7 @@ are per-card-unique, so the `(uid, entry)` key stays unambiguous either way.
 
 `use_skill` becomes the alias arm: entry `entry::PRESS`, uid 0.
 
-`why_not_act` (`mod.rs:2932`): a `"press"` arm, and `"skill"` delegates to it
+`cant_act` (`mod.rs:2932`): a `"press"` arm, and `"skill"` delegates to it
 with `entry = "press"` and `uid = first instance`. Order:
 
 1. `!playing() || step != OPS || busy` -> `err.press_not_now`.
@@ -585,8 +585,8 @@ only when present). `title` / `text` stay `ask.cardOption` card references;
 
 ### 5.1 Press request path
 
-`Match::act` routes `"press"` to `use_press`; `why_not_act` has already run the
-same checks in the same order (`act` calls `why_not_act` before dispatch as for
+`Match::act` routes `"press"` to `use_press`; `cant_act` has already run the
+same checks in the same order (`act` calls `cant_act` before dispatch as for
 every turn action). `"skill"` remains an accepted alias forever for records and
 third-party clients.
 
@@ -597,13 +597,13 @@ The gate is `press_cant_act` at offer. `press_declare` runs with the
 serves it in the body (the `drive` monomorphization already does this for any
 entry with a declare). A decline returns before any state write.
 
-### 5.3 Dest and instance reads
+### 5.3 Fate and instance reads
 
 The whole drive runs with `current_uid = uid`, so `is_placed` is true, named
-counters / `crystals` / props resolve on that card, and `add_tok` binds to it
-(`ctx::add_tok` -> `add_held(self_uid)`). `set_dest(Graveyard)` at effect end
-unplaces it and sends it to the discard (`apply_dest`, `wasm_rules.rs:5847`).
-`Dest::Field` from a press is a no-op (already placed); a press that wants a
+counters / `crystals` / props resolve on that card, and `add_held_by_name` binds to it
+(`ctx::add_held_by_name` -> `add_held(self_uid)`). `set_fate(Graveyard)` at effect end
+unplaces it and sends it to the discard (`apply_fate`, `wasm_rules.rs:5847`).
+`Fate::Field` from a press is a no-op (already placed); a press that wants a
 fresh instance must `unplace` first and `place_card`.
 
 ### 5.4 Cross-card invocation (`ctx::invoke_entry`)
@@ -624,7 +624,7 @@ additions marked:
    seed is what makes `trigger::cards()` answer inside the body.
 4. Run `OP_RUN` (after `OP_DECLARE` when `has_declare`; decline ->
    `EXIT_DECLINED`).
-5. `leave_card`; pop the frame; return the nested `Dest`; restore fuel.
+5. `leave_card`; pop the frame; return the nested `Fate`; restore fuel.
 
 Notes:
 
@@ -714,7 +714,7 @@ fn use_skill(p) -> Asked {
 
 The A-only fix (ship-now, if the group slips): delete the `skill:` test in
 `view_extra_parts`, derive `source` defensively; the card then appears and
-`why_not_act` reaches its gate. Known cost: hand-only cards appear too (#4).
+`cant_act` reaches its gate. Known cost: hand-only cards appear too (#4).
 
 Under G05, split the entry:
 
@@ -723,7 +723,7 @@ On::Play("", None, place),                     // hand play: place only
 On::Press("jump", "", Some(cant_jump), jump),  // placed press: jump only
 
 fn cant_jump(p) -> Option<Msg> {
-    if ctx::tok(p, JELLY) >= 9 { return rules_status::move_blocked(p); }
+    if ctx::held_count(p, JELLY) >= 9 { return rules_status::move_blocked(p); }
     Some(Msg::new(key!("kanon_march_need")))
 }
 ```
@@ -733,7 +733,7 @@ fn cant_jump(p) -> Option<Msg> {
   without `is_placed`.
 * `cant_play`'s `hand_count > 0 || !is_placed` (line 51) and both TODOs
   (lines 47-50, 79-81) go.
-* Bottom gate: hand play always allowed -> `why_not: None`; the placed copy
+* Bottom gate: hand play always allowed -> `guard: None`; the placed copy
   shows `kanon_march_need` below 9 and `move_blocked` after the main move.
 
 ### 6.3 `even-lost-not-pressable` (row 1521) — demote to A
@@ -834,7 +834,7 @@ fn hina_swap(player_id: i32) -> Asked {
 }
 
 /// uid of the instance of `card` placed since `before`; the play/place imports
-/// do not return the instance (`play_card` returns `Dest`, `place_card` returns
+/// do not return the instance (`play_card` returns `Fate`, `place_card` returns
 /// its own uid, so MAMI could skip the diff -- one path is cheaper to keep
 /// right).
 fn new_uid_since(p: i32, before: &[i32], card: &str) -> Option<i32> {
@@ -858,7 +858,7 @@ fn new_uid_since(p: i32, before: &[i32], card: &str) -> Option<i32> {
   `hina_sound_title` is reused.
 * G01 §6.10's sketch spells this as `On::Action(Action::Actions(…))`; on the
   press half that is superseded by `On::Press` (the `card.placed` condition and
-  the `actor == owner` pre drop out — a press is always a placed, owner-acted
+  the `actor == owner` condition drop out — a press is always a placed, owner-acted
   entry). Its marker and counter spellings are adopted verbatim.
 * Test `g05_hina_swap_keeps_crystals_and_re_mark` (two copied instances,
   different uids, same crystal count) pins the per-instance marker and counter
@@ -896,7 +896,7 @@ so pre-v111 wasm still links). Changelog block, placed after the
 
 ```rust
 /// v111: **press entries for placed cards**. A placed card's printed
-///    activation is its own `On::Press(id, pre, why_not, body)` entry with a
+///    activation is its own `On::Press(id, condition, guard, body)` entry with a
 ///    required ASCII slug id; `OnKind::Press = 15` (4/5/6 stay retired).
 ///    Requests address the field instance by `uid` and the clause by that id
 ///    (`act: "press"`, `NetMessage.uid` / `.entry`; `act: "skill"` is an
@@ -939,14 +939,14 @@ delegates to it with the alias):
   refuses, pressing A jumps).
 * 3 (even-lost): `rules/tests/tests/mygo.rs::even_lost_press_discards_and_moves_hand_size`;
   `…_press_needs_main_move`; `…_press_not_in_hand`.
-* 4 (surface): `crates/game-core/tests/view_extra.rs::press_list_has_uid_entry_label`,
+* 4 (surface): `crates/game-core/tests/view_extras.rs::press_list_has_uid_entry_label`,
   `…_hand_only_play_not_offered`, `…_stale_uid_refused`;
   `crates/game-core/tests/engine.rs::press_unknown`, `press_not_now`,
   `press_negated_by_counteraction` (raise cancelled -> no crystal spent).
 * 5 (hina): `rules/tests/tests/pp.rs::hina_press_swaps_sub_and_keeps_crystals`,
   `…_press_without_resonance_refused`, `…_press_binds_second_copy` (two marked
   substitutes; pressing B swaps B and leaves A's marker alone). Interface half
-  with 4: `view_extra.rs::press_offer_uses_effective_card` (the marked
+  with 4: `view_extras.rs::press_offer_uses_effective_card` (the marked
   substitute offers `press_swap` on the sub's uid, `source` = `HINA_SOUND`) and
   `…_substitute_own_entries_suppressed`.
 * ABI/ruleset: `crates/game-rules/tests/kind_table_pin.rs` kind 15;
@@ -970,7 +970,7 @@ Kani obligations (all in `rules/kani`):
   `paid = 0`, exactly one effect log, frame unchanged;
   `…_press_no_crystal_noop_at`; `…_press_binds_second_instance`.
 * `proofs/hhw.rs`: `kanon_jump_at_nine_iff` (markers cleared, teleport plan,
-  dest graveyard), `…_jump_below_nine_noop`.
+  fate graveyard), `…_jump_below_nine_noop`.
 * `proofs/pp.rs`: `hina_swap_iff_at(uid)` — the entry is offered only on a
   marked instance with resonance; post = that uid unplaced, exactly one new
   instance exists with `real_id = "PP:[冰川日菜]会发出怎样的声音呢？"` and the
@@ -1008,7 +1008,7 @@ a card that lists its press first silently breaks. Rejected.
 **A4 — raise-based press.** `ctx::raise` a new `cardPressed` kind and let a
 hook run the body; the client sends only `act:"press"` with the card id. No
 `Call`/`CardRules` additions. But a raise is synchronous fan-out with no return
-`Dest`, no declare barrier, and cancellation would have to abort by convention;
+`Fate`, no declare barrier, and cancellation would have to abort by convention;
 the existing `drive` already gives all three for a resolved entry. Rejected.
 
 ---
@@ -1031,14 +1031,14 @@ the existing `drive` already gives all three for a resolved entry. Rejected.
    payload identical, so no behavior change; confirm no ruling named
    `skillUsed` separately from `cardUsed`.
 4. **Opponent presses.** Every press is offered only to the instance's holder.
-   No card text today lets another seat press; if one appears, `why_not_act`
+   No card text today lets another seat press; if one appears, `cant_act`
    needs a holder override and the request a target seat.
-5. **`Dest::Field` on a press.** Documented no-op (already placed). Nanami's
+5. **`Fate::Field` on a press.** Documented no-op (already placed). Nanami's
    (3) hand play still places; a press that should re-place must unplace first.
    Confirm no clause wants a "return to field" press. Related: a press body
    reached through `ctx::play_card` from **hand** (the §4.5 fallback) has no
-   instance, so `send_to_dest` is a no-op there — such a body must use
-   `set_dest`, not `send_to_dest`, if both paths must move the card.
+   instance, so `send_to_fate` is a no-op there — such a body must use
+   `set_fate`, not `send_to_fate`, if both paths must move the card.
 6. **`entry::PRESS` for a multi-press card** resolves the *first* press entry;
    other clauses are queried by slug. Is "first" an acceptable default alias, or
    should `PRESS` mean "any press entry admits" for `query_guard`?

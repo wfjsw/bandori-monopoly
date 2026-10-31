@@ -20,7 +20,7 @@ use crate::world::Effect;
 //
 // Trigger: a single loss of ≥ 2000 money (「一次性」 = one loss event;
 // 「2000以上」 is inclusive of 2000).
-// Condition: the seat carries the Morfonica band skill (host pre
+// Condition: the seat carries the Morfonica band skill (host condition
 // `actor == owner`, i.e. the trigger is this seat's own money move) and the
 // move is a **loss** (the player is not the payee).
 // Effect: exactly one draw.
@@ -117,7 +117,7 @@ pub fn band_02_amount_mutant(taken: i32) -> i32 {
 // 「（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」
 //
 // Trigger: [经过] CiRCLE (the Pass hook onto a CiRCLE tile).
-// Condition: the seat's character is 桐谷透子 (host pre
+// Condition: the seat's character is 桐谷透子 (host condition
 // `actor == owner && is_start(tile.id)`).
 // Effect: one fire pot is gained, at most up to the cap of 1.
 // Frame: the fire counter.

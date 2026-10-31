@@ -6,12 +6,12 @@
 //! The constants here **mirror** those owning tables as the canonical wire
 //! **spellings** (`TriggerKind::spelling`) -- they are strings, never ids.
 //!
-//! CEL `kind` is `VarTy::Str`: a bare ident binds the spelling, and a string
+//! CEL `kind` is `VarType::Str`: a bare ident binds the spelling, and a string
 //! literal is the same spelling. Constants below are `&str` spellings
 //! (`"turnStart"`, plus the content `kind_consts` namespace rows). There is
 //! no int encoding of kinds at all.
 //!
-//! The IR bakes every spelling to `id_of(spelling)` (see `VarTy::Str`), so the
+//! The IR bakes every spelling to `id_of(spelling)` (see `VarType::Str`), so the
 //! CEL string and the IR hash are the same identity. `move.kind` stays an
 //! `int` -- [`mv`] is a closed engine enum with no namespace problem.
 //!

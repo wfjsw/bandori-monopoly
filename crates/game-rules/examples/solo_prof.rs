@@ -151,7 +151,7 @@ fn main() {
                 let _ = m.save();
                 saves.push(ms(t));
                 let t = Instant::now();
-                let _ = serde_json::to_string(&m.view_extra(1));
+                let _ = serde_json::to_string(&m.view_extras(1));
                 let _ = serde_json::to_string(&m.state());
                 views.push(ms(t));
             }
@@ -184,7 +184,7 @@ fn main() {
     let avg = |v: &Vec<f64>| v.iter().sum::<f64>() / v.len().max(1) as f64;
     let mx = |v: &Vec<f64>| v.iter().cloned().fold(0.0, f64::max);
     println!(
-        "save avg {:.2}ms max {:.2}; state+view_extra json avg {:.2}ms max {:.2}",
+        "save avg {:.2}ms max {:.2}; state+view_extras json avg {:.2}ms max {:.2}",
         avg(&saves),
         mx(&saves),
         avg(&views),

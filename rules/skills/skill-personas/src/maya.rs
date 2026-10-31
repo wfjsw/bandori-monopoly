@@ -43,7 +43,7 @@ pub const MAYA: CardDef = CardDef::new(
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
+    // the grantees of the (2) below -- the `group_is(owner, …)` condition owns that.
     let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
@@ -86,7 +86,7 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
     if look.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("maya_pick_title")),
         &Msg::new(key!("maya_pick_text")),
@@ -102,13 +102,13 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     if ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
-        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
+        ctx::add_to_fate(player_id, keep.as_str(), ctx::Fate::Hand);
         trigger::set_cancelled();
     }
     // 「剩余观看的牌洗回卡组」
     for c in look.iter().filter(|c| **c != keep) {
         ctx::take_card(player_id, c.as_str(), CardPile::Deck);
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckRandom);
+        ctx::add_to_fate(player_id, c.as_str(), ctx::Fate::DeckRandom);
     }
     // The fan tail, identical to the other three.
     if ctx::in_group(player_id, "Pastel✽Palettes") {

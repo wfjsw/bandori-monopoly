@@ -1,6 +1,6 @@
 //! An exhausted deck is restored before draw/event effects can observe it.
 use game_core::data::GameData;
-use game_core::engine::{CardRules, Cx, Dest, Flow, Match, StubRules, Trigger, World};
+use game_core::engine::{CardRules, Fate, Flow, Match, PlayCtx, StubRules, Trigger, World};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
@@ -45,10 +45,10 @@ struct Probe {
     cancel_draw: bool,
 }
 impl CardRules for Probe {
-    fn play(&self, _cx: &mut Cx, _player: usize, _card: &str) -> Flow<Dest> {
-        Ok(Dest::Graveyard)
+    fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Fate> {
+        Ok(Fate::Graveyard)
     }
-    fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
+    fn counteract(&self, cx: &mut PlayCtx, t: &mut Trigger) -> Flow<()> {
         if t.kind == "drewBefore" && self.cancel_draw {
             t.negate_activation();
         }
@@ -69,7 +69,7 @@ impl CardRules for Probe {
         }
         Ok(())
     }
-    fn event(&self, cx: &mut Cx, _player: usize, id: &str) -> Flow<bool> {
+    fn event(&self, cx: &mut PlayCtx, _player: usize, id: &str) -> Flow<bool> {
         let w = cx.world_copy();
         // Ruling 2026-10-07: the event deck does NOT refill mid-resolution --
         // the old discards wait in event_discard until the draw has fully
@@ -95,7 +95,7 @@ impl CardRules for Probe {
 fn last_card_refills_before_drawn_and_drew() {
     let (data, w) = setup();
     let rules = Probe::default();
-    let mut cx = Cx::new(w, &data, &rules, &[]);
+    let mut cx = PlayCtx::new(w, &data, &rules, &[]);
     assert_eq!(cx.draw_cards_with_hooks(0, 1, true).unwrap(), 1);
     assert_eq!(*rules.seen.lock().unwrap(), ["reshuffled", "drawn", "drew"]);
     let w = cx.world_copy();
@@ -108,7 +108,7 @@ fn last_card_refills_before_drawn_and_drew() {
 fn multi_draw_refills_between_cards_without_an_extra_draw() {
     let (data, w) = setup();
     let rules = Probe::default();
-    let mut cx = Cx::new(w, &data, &rules, &[]);
+    let mut cx = PlayCtx::new(w, &data, &rules, &[]);
     assert_eq!(cx.draw_cards_with_hooks(0, 2, true).unwrap(), 2);
     assert_eq!(
         *rules.seen.lock().unwrap(),
@@ -126,7 +126,7 @@ fn cancelled_draw_does_not_empty_or_shuffle_the_deck() {
         cancel_draw: true,
         ..Default::default()
     };
-    let mut cx = Cx::new(w, &data, &rules, &[]);
+    let mut cx = PlayCtx::new(w, &data, &rules, &[]);
     assert_eq!(cx.draw_cards_with_hooks(0, 1, true).unwrap(), 0);
     assert!(rules.seen.lock().unwrap().is_empty());
     let w = cx.world_copy();
@@ -157,7 +157,7 @@ fn last_event_refills_only_after_the_draw_resolves() {
     let rules = Probe::default();
     w.event_deck = vec!["EVT1".into()];
     w.event_discard = vec!["a".into(), "b".into()];
-    let mut cx = Cx::new(w, &data, &rules, &[]);
+    let mut cx = PlayCtx::new(w, &data, &rules, &[]);
     cx.card_draw_event(0).unwrap();
     let w = cx.world_copy();
     assert_eq!(*rules.seen.lock().unwrap(), ["body"]);

@@ -22,8 +22,8 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .map(|(_, o)| ManifestOn {
                     kind: o.kind() as i32,
                     triggers: o.triggers(),
-                    pre: {
-                        let p = o.condition();
+                    condition: {
+                        let p = o.condition_of();
                         if p.is_empty() {
                             None
                         } else {
@@ -253,10 +253,10 @@ pub fn on(
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (On::PlayBody(PlayEntry { why_not, .. }), export::OP_GUARD) => match why_not {
-            Some(why) => match why(player_id) {
+        (On::PlayBody(PlayEntry { guard, .. }), export::OP_GUARD) => match guard {
+            Some(g) => match g(player_id) {
                 None => 0,
-                // Kani: the Play `why` reason is a `Msg`; serialising it allocates
+                // Kani: the Play `reason` reason is a `Msg`; serialising it allocates
                 // a `Vec` (and the facade `Msg` is not the wire form). The
                 // symbolic host treats a non-zero reason as "has reason" and
                 // never reads the bytes. Production keeps the real postcard.
@@ -444,10 +444,6 @@ macro_rules! ruleset {
 
 /// Exports for a module holding exactly one card (the normal layout).
 ///
-/// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract).counter_reason(key!("yolo_when"))]);
-/// card_sdk::ruleset_card!(CARD);
-/// ```
 #[macro_export]
 macro_rules! ruleset_card {
     ($card:expr) => {

@@ -5,7 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, FilterKind, Seat};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue};
 
 use crate::util::{expire, keep};
@@ -66,11 +66,6 @@ fn prev_player(p: i32) -> i32 {
     p
 }
 
-/// 规则书: 「任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有
-/// 影响投掷的效果服从于原本进行投掷的玩家所收影响）」 -- the roller is the
-/// previous player; the move still belongs to the original one (and its
-/// modifiers key off them), which is what `v.roller` does: the log line
-/// shows 「by」, `t.Move.Main` / the mover are unchanged.
 fn on_plan(_owner: i32, mut v: PlanValue) -> PlanValue {
     let who = trigger::player_id();
     if who < 0 {

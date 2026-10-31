@@ -131,7 +131,7 @@ pub mod ctx {
         group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed,
         is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy,
         pay_rent, persona_is, persona_skill, remove_crystal, rent_unit_mult, ring_multiplier,
-        set_crystals, skill_blocked, turn_snap,
+        set_crystals, skill_blocked, turn_snapshot,
     };
 }
 
@@ -150,7 +150,7 @@ pub struct TurnRestore {
     pub mortgaged: Vec<bool>,
 }
 
-pub fn turn_snap(player_id: i32) -> TurnRestore {
+pub fn turn_snapshot(player_id: i32) -> TurnRestore {
     let snap = card_sdk::ctx::turn_snap_map(player_id);
     TurnRestore {
         pos: snap.pos,
@@ -276,7 +276,7 @@ pub fn group_crystals(player_id: i32) -> i32 {
 
 /// A named pool on the player's group-skill instance.
 pub fn group_pool(player_id: i32, name: &str) -> i32 {
-    let (p, l) = raw::s(name);
+    let (p, l) = raw::str_ptr(name);
     unsafe { raw::sys::group_pool(player_id, p, l) }
 }
 
@@ -285,7 +285,7 @@ pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
 }
 
 pub fn add_group_pool(player_id: i32, name: &str, n: i32, max: i32) -> i32 {
-    let (p, l) = raw::s(name);
+    let (p, l) = raw::str_ptr(name);
     unsafe { raw::sys::add_group_pool(player_id, p, l, n, max) }
 }
 
@@ -348,37 +348,37 @@ pub fn group_skills(player_id: i32) -> Vec<(i32, card_sdk::ctx::NameId, i32)> {
 
 /// Attach a band-skill instance to `player_id`. Returns the uid, or -1.
 pub fn add_group_skill(player_id: i32, id: &str, extra: bool) -> i32 {
-    let (p, l) = raw::s(id);
+    let (p, l) = raw::str_ptr(id);
     unsafe { raw::sys::add_group_skill(player_id, p, l, extra as i32) }
 }
 
 /// Run a skill rule's press entry for `player_id`.
-pub fn invoke_skill(player_id: i32, id: &str) -> Result<card_sdk::ctx::Dest, Prompt> {
-    let (p, l) = raw::s(id);
+pub fn invoke_skill(player_id: i32, id: &str) -> Result<card_sdk::ctx::Fate, Prompt> {
+    let (p, l) = raw::str_ptr(id);
     let v = raw::asked(unsafe { raw::sys::invoke_skill(player_id, p, l) })?;
-    Ok(card_sdk::ctx::Dest::from_i32(v))
+    Ok(card_sdk::ctx::Fate::from_i32(v))
 }
 
 /// Is `player_id` playing character `name`?
 pub fn persona_is(player_id: i32, name: &str) -> bool {
-    let (p, l) = raw::s(name);
+    let (p, l) = raw::str_ptr(name);
     unsafe { raw::sys::persona_is(player_id, p, l) != 0 }
 }
 
 /// Is `player_id` in band `name`?
 pub fn in_group(player_id: i32, name: &str) -> bool {
-    let (p, l) = raw::s(name);
+    let (p, l) = raw::str_ptr(name);
     unsafe { raw::sys::in_group(player_id, p, l) != 0 }
 }
 
 /// 「位于此卡所在格子上的玩家无法使用角色及乐队技能」 / one band's skills.
 pub fn skill_blocked(player_id: i32, group: &str) -> bool {
-    if card_sdk::ctx::tok(player_id, "skillBlock") > 0 {
+    if card_sdk::ctx::held_count(player_id, "skillBlock") > 0 {
         return true;
     }
     if !group.is_empty() {
         let key = format!("skillBlock:{}", group);
-        if card_sdk::ctx::tok(player_id, &key) > 0 {
+        if card_sdk::ctx::held_count(player_id, &key) > 0 {
             return true;
         }
     }

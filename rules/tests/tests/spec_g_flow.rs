@@ -593,7 +593,7 @@ fn turn_phases_and_immediate_next_turn() {
     assert_eq!(
         t.step(),
         stage::END,
-        "after the main move the stage is 结束"
+        "after the is_main_move move the stage is 结束"
     );
     assert!(t.world().turn.main_moved, "main_moved latch");
 
@@ -601,7 +601,7 @@ fn turn_phases_and_immediate_next_turn() {
     let pos = t.pos(0);
     let err = t.roll(0).expect_err("second [主要移动] must be refused");
     assert!(
-        err.contains("main") || err.contains("used") || err.contains("roll"),
+        err.contains("is_main_move") || err.contains("used") || err.contains("roll"),
         "unexpected second-roll refusal {err:?}"
     );
     assert_eq!(t.pos(0), pos, "second roll must not move the player");
@@ -727,7 +727,9 @@ fn stay_skips_main_move_but_not_ops() {
     t.begin_turn(0);
     assert_eq!(t.step(), stage::OPS, "[停留] does not skip 运营");
     assert!(t.st().skip_move, "skip_move latch for [停留]");
-    let err = t.roll(0).expect_err("[停留] must refuse the main move");
+    let err = t
+        .roll(0)
+        .expect_err("[停留] must refuse the is_main_move move");
     assert!(
         err.contains("stay") || err.contains("roll") || err.contains("move"),
         "unexpected stay-roll refusal {err:?}"

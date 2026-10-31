@@ -82,7 +82,7 @@ pub fn rui_demon_01_effects_ok(
 /// User: -100 per other (floored) then +300 per other (saturating).
 pub fn rui_demon_01_post_ok(
     post: &Snapshot,
-    pre: &Snapshot,
+    condition: &Snapshot,
     player: i32,
     n_players: i32,
     out: &[bool; MAX_PLAYERS],
@@ -94,14 +94,14 @@ pub fn rui_demon_01_post_ok(
             continue;
         }
         // Other: receives 100, then pays 300 (floored).
-        let m0 = pre.money[q];
+        let m0 = condition.money[q];
         let want_other = (m0.saturating_add(100) - 300).max(0);
         if post.money[q] != want_other {
             return false;
         }
     }
     // User: pays 100 per other (floored), then receives 300 per other.
-    let mut m = pre.money[p];
+    let mut m = condition.money[p];
     for q in 0..n_players {
         let q = q as usize;
         if (q as i32) == player || out[q] {
@@ -163,10 +163,10 @@ pub fn xiaobai_01_effects_ok(effects: &[Effect], payee: i32, amount: i32) -> boo
 /// Post: payee money decreased by `amount/2` (floored at 0); the counteruser's
 /// money is untouched by this body (the original payment rewrite is the
 /// engine's pending-pay leg, not this body).
-pub fn xiaobai_01_post_ok(post: &Snapshot, pre: &Snapshot, payee: i32, amount: i32) -> bool {
+pub fn xiaobai_01_post_ok(post: &Snapshot, condition: &Snapshot, payee: i32, amount: i32) -> bool {
     let half = amount / 2;
     let p = payee as usize;
-    post.money[p] == (pre.money[p] - half).max(0)
+    post.money[p] == (condition.money[p] - half).max(0)
 }
 
 /// MUTANT: demands the full amount, not the half.
@@ -261,8 +261,8 @@ pub fn garden_01_first_effect_ok(effects: &[Effect], player: i32) -> bool {
 /// Full play post (clauses 01–03, Kani-expressible legs): money +100, then
 /// the user is at `tile_steps_ahead(chosen, 1)`. The settle choice is a prompt;
 /// a skip must not move money from the landing.
-pub fn garden_gain_post_ok(post: &Snapshot, pre: &Snapshot, player: i32) -> bool {
-    post.money[player as usize] == pre.money[player as usize] + 100
+pub fn garden_gain_post_ok(post: &Snapshot, condition: &Snapshot, player: i32) -> bool {
+    post.money[player as usize] == condition.money[player as usize] + 100
 }
 
 // ===========================================================================
@@ -454,8 +454,8 @@ pub fn noble_02_mark_ok(effects: &[Effect], tile: i32) -> bool {
 // ===========================================================================
 
 /// Unowned / self-owned / owner-out: no money moves; effect log empty.
-pub fn courage_03_post_ok(post: &Snapshot, pre: &Snapshot) -> bool {
-    crate::world::arr4_eq(post.money, pre.money)
+pub fn courage_03_post_ok(post: &Snapshot, condition: &Snapshot) -> bool {
+    crate::world::arr4_eq(post.money, condition.money)
 }
 
 // ===========================================================================
@@ -480,8 +480,7 @@ pub fn toko_no_pair_ok(effects: &[Effect]) -> bool {
 // 「场地中央」 is not a board slot; the card is a field card of the user.
 // ===========================================================================
 
-/// X ∈ 1..=5 (engine offer; OPEN-X). The C# cash pre-cap is gone -- `ctx::pay`
-/// takes the shortfall path -- so cash on hand no longer narrows the range.
+/// X ∈ 1..=5 (engine offer; OPEN-X).
 pub fn starry_01_x_in_range(x: i32, _money: i32) -> bool {
     (1..=5).contains(&x)
 }
@@ -492,8 +491,8 @@ pub fn starry_01_amount(x: i32) -> i32 {
 }
 
 /// Exactly three effects in order: PayMoney(user, 1000·X), PlaceCard(user,
-/// Field), AddCounter(user, crystals, X). `set_dest(Field)` is folded into
-/// the PlaceCard dest (2 = Dest::Field). Counter owner is the trigger seat
+/// Field), AddCounter(user, crystals, X). `set_fate(Field)` is folded into
+/// the PlaceCard fate (2 = Fate::Field). Counter owner is the trigger seat
 /// (the play's player under a normal play).
 pub fn starry_01_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
     if effects.len() != 3 {
@@ -504,7 +503,7 @@ pub fn starry_01_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
         Effect::PayMoney { player: p, n } if p == player && n == 1000 * x
     ) && matches!(
         effects[1],
-        Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
+        Effect::PlaceCard { player: p, fate, .. } if p == player && fate == 2
     ) && matches!(
         effects[2],
         Effect::AddCounter { owner, n, .. } if owner == player && n == x
@@ -512,9 +511,9 @@ pub fn starry_01_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 }
 
 /// Post money: the pay floors at 0.
-pub fn starry_01_post_ok(post: &Snapshot, pre: &Snapshot, player: i32, x: i32) -> bool {
+pub fn starry_01_post_ok(post: &Snapshot, condition: &Snapshot, player: i32, x: i32) -> bool {
     let p = player as usize;
-    post.money[p] == (pre.money[p] - 1000 * x).max(0)
+    post.money[p] == (condition.money[p] - 1000 * x).max(0)
 }
 
 /// MUTANT of the pay amount: off-by-one high.
@@ -523,7 +522,7 @@ pub fn starry_01_amount_mutant(x: i32) -> i32 {
 }
 
 /// starry-06: every crystal removal pays the owner `1000 · removed`.
-/// Exactly one `GainMoney` (the empty-discard dest write is not an effect).
+/// Exactly one `GainMoney` (the empty-discard fate write is not an effect).
 pub fn starry_06_effects_ok(effects: &[Effect], owner: i32, removed: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainMoney { player, n } if player == owner && n == 1000 * removed)
@@ -536,10 +535,10 @@ pub fn starry_06_effects_ok_mutant(effects: &[Effect], owner: i32, removed: i32)
 }
 
 /// starry-02: empty crystals → the card is sent to the discard. Under Kani the
-/// body only writes `dest = Graveyard` (0); the engine's post-body unplace is
-/// outside the effect log. Pin: dest becomes 0 and (with -06) the gain ran.
-pub fn starry_02_dest_is_graveyard(dest: i32) -> bool {
-    dest == 0
+/// body only writes `fate = Graveyard` (0); the engine's post-body unplace is
+/// outside the effect log. Pin: fate becomes 0 and (with -06) the gain ran.
+pub fn starry_02_dest_is_graveyard(fate: i32) -> bool {
+    fate == 0
 }
 
 /// starry-05: owner passes CiRCLE → one crystal is removed.
@@ -602,7 +601,7 @@ pub fn nnm_04_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
     }
     matches!(
         effects[0],
-        Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
+        Effect::PlaceCard { player: p, fate, .. } if p == player && fate == 2
     ) && matches!(
         effects[1],
         Effect::AddCounter { owner, n, .. } if owner == player && n == x
@@ -610,20 +609,20 @@ pub fn nnm_04_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 }
 
 /// nnm-05 book pin: when the crystal count hits 0 the card is put into the
-/// discard. The engine's discard is `set_dest(Graveyard)` (+ unplace); under
-/// Kani the dest write is the observable. `true` when the body requested it.
-pub fn nnm_05_wants_discard(dest: i32) -> bool {
-    dest == 0
+/// discard. The engine's discard is `set_fate(Graveyard)` (+ unplace); under
+/// Kani the fate write is the observable. `true` when the body requested it.
+pub fn nnm_05_wants_discard(fate: i32) -> bool {
+    fate == 0
 }
 
 /// nnm-05 companion: the Play press with already-empty crystals is a no-op —
-/// no `UnplaceCard` and dest unchanged. Exhaustion is a CounterChanged clause,
+/// no `UnplaceCard` and fate unchanged. Exhaustion is a CounterChanged clause,
 /// not an inline check at the press site.
-pub fn nnm_05_press_empty_noop(effects: &[Effect], dest: i32, pre_dest: i32) -> bool {
+pub fn nnm_05_press_empty_noop(effects: &[Effect], fate: i32, pre_fate: i32) -> bool {
     !effects
         .iter()
         .any(|e| matches!(e, Effect::UnplaceCard { .. }))
-        && dest == pre_dest
+        && fate == pre_fate
 }
 
 // ===========================================================================
@@ -649,7 +648,7 @@ pub fn tritone_01_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bo
         Effect::GainMoney { player: p, n } if p == player && n == amount
     ) && matches!(
         effects[1],
-        Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
+        Effect::PlaceCard { player: p, fate, .. } if p == player && fate == 2
     ) && matches!(
         effects[2],
         Effect::AddCounter { owner: o, n, .. } if o == player && n == 3
@@ -667,7 +666,7 @@ pub fn tritone_01_crystals_ok(crystals: i32) -> bool {
 /// tritone-02 single turn-end tick. `pre_crystals` is the count before the
 /// tick; one crystal is removed. While any remain the tick is decay-only
 /// (exactly `AddCounter(owner, -1)`). When the count hits 0 the card is
-/// discarded (`dest = Graveyard`) and the owner pays back `owed` (a no-op when
+/// discarded (`fate = Graveyard`) and the owner pays back `owed` (a no-op when
 /// `owed == 0` — `arm_pay` logs nothing for a zero payment).
 /// OPEN-三全音收款人: the body `pay`s (bank); the clause pins the amount only.
 pub fn tritone_02_tick_effects_ok(
@@ -735,7 +734,7 @@ pub fn noble_02_not_yours_ok(effects: &[Effect]) -> bool {
 }
 
 /// noble-02, tile is yours: only the mark leg (forced settle is
-/// OPEN-触发结算 / a `card_settle_at` protocol stub).
+/// OPEN-触发结算 / a `settle_tile_at` protocol stub).
 pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::PlaceMark { tile: t, .. } if t == tile)
 }
@@ -751,7 +750,7 @@ pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
 /// the host folds that into the running amount. SPEC CHANGE (Action→Filter +
 /// PayAfter split): the old combined Action wrote `SetPayAmount{0}` itself;
 /// the pure Filter's no-less/no-more is the return value plus an empty effect
-/// log. The discard half (`dest = Graveyard`) is `pay_after` on PayAfter.
+/// log. The discard half (`fate = Graveyard`) is `pay_after` on PayAfter.
 pub fn again_02_effects_ok(effects: &[Effect]) -> bool {
     effects.is_empty()
 }
@@ -776,12 +775,12 @@ pub fn again_02_cancel_ok_mutant(cancelled: i32) -> bool {
 // ===========================================================================
 
 /// Destination = `pos + 20·dir` on the 60-tile ring.
-pub fn wing_01_dest(pos: i32, dir: i32) -> i32 {
+pub fn wing_01_fate(pos: i32, dir: i32) -> i32 {
     (pos + 20 * dir).rem_euclid(60)
 }
 
-/// Exactly one effect: `Teleport(user, dest)`. No settle / no money.
-pub fn wing_01_effects_ok(effects: &[Effect], player: i32, dest: i32) -> bool {
+/// Exactly one effect: `Teleport(user, fate)`. No settle / no money.
+pub fn wing_01_effects_ok(effects: &[Effect], player: i32, fate: i32) -> bool {
     effects.len() == 1
-        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == player && tile == dest)
+        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == player && tile == fate)
 }

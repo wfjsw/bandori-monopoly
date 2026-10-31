@@ -47,7 +47,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         Msg::new(opt_key(4)),
         Msg::new(opt_key(5)),
     ];
-    let picks = ctx::ask_pick_multi(
+    let picks = ctx::ask_choices(
         player_id,
         &Msg::new(key!("any_color_sunset_title")),
         &Msg::new(key!("any_color_sunset_pick")),
@@ -81,13 +81,13 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     match k {
         // 规则书: 「若为1则立刻获得1500资金」
         1 => {
-            ctx::gain(player_id, 1500, &Msg::new(key!("any_color_sunset_why")))?;
+            ctx::gain(player_id, 1500, &Msg::new(key!("any_color_sunset_reason")))?;
         }
         // 规则书: 「若为2则从弃牌堆中选择一张牌放置到抽牌堆顶」
         2 => {
             // TODO: Rename discard => graveyard
             if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_deck_ask"))? {
-                ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
+                ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::DeckTop);
             }
         }
         // 规则书: 「若为3则抽一张牌」
@@ -98,7 +98,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         4 => {
             // 规则书: 「若为4则可选择补满火罐或者获得2000资金」 -- the ask is
             // unconditional; filling an already-full pot is a no-op.
-            let take_money = ctx::ask_pick(
+            let take_money = ctx::ask_choice(
                 player_id,
                 &Msg::new(key!("any_color_sunset_title")),
                 &Msg::new(key!("any_color_sunset_fire_ask")),
@@ -110,7 +110,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 
             if take_money {
                 // 规则书: 「或者获得2000资金」
-                ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_why")))?;
+                ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_reason")))?;
             } else {
                 // 规则书: 「补满火罐」
                 let fire_to_fill =
@@ -118,14 +118,14 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                 bandori_std::fire::gain(
                     player_id,
                     fire_to_fill,
-                    &Msg::new(key!("any_color_sunset_why")),
+                    &Msg::new(key!("any_color_sunset_reason")),
                 )?;
             }
         }
         // 规则书: 「若为5则从弃牌堆中选择一张牌加入手牌」
         5 => {
             if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_hand_ask"))? {
-                ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
+                ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::Hand);
             }
         }
         _ => unreachable!(),

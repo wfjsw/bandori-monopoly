@@ -1,4 +1,3 @@
-//! `MyGO:那天的雨` -- C# `CardThatDayRain` (MatchHost.cs:6855-6914): a
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:那天的雨`）:
 //! > 那天的雨：
@@ -16,7 +15,6 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     "MyGO:那天的雨",
     &[
         On::Play("", None, that_day_rain),
-        // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
         On::Action(Action::TurnStart("", Some(hook_guard), hook)),
         On::Action(Action::TurnEnd("", Some(hook_guard), hook)),
         On::Action(Action::CounterChanged("", Some(crystals_changed_guard), on_crystals_changed)),
@@ -34,9 +32,6 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
 
 const ID: &str = "MyGO:那天的雨";
 
-/// C# `CardThatDayRain.Rain` -- the (地产商) agent tiles in board order with
-/// 东京外 excluded, each paired with the buyable tiles of its colour group
-/// (C# `H._tiles[t].kind == "agent"` / `.group` / `IsBuyable`).
 const AGENTS: &[(&str, &[&str])] = &[
     (
         "主要街道",
@@ -100,28 +95,22 @@ const AGENTS: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// C# `CardThatDayRain.TurnStart` (own turns -> `Rain`) and `DecayCard.TurnEnd`.
-/// Pure guard for [`hook`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// Pure guard for [`hook`] -- the activation gate. `false` means the card is not
+/// activated at all.
 fn hook_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
 fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        // 规则书: 「及你的每回合开始时投掷1d10并...」 -- C# `TurnStart(int turn)`
-        // refuses other players' turns (`turn != Player`).
         TriggerKind::TurnStart => {
             if trigger::player_id() == player_id {
                 rain(player_id)?;
             }
         }
-        // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
-        // -- C# `DecayCard.TurnEnd` / `Decay` (`AddCrystals(-1)`). The cell scopes
-        // only the roll with 「你的每回合开始时」; the decay is unscoped, so it
-        // burns at **every** turn end (spec C-MYGO-rainday-03), not the owner's.
-        // TODO(规则书)（每回合结束时）: 每回合结束都移除 -- C# `DecayCard` 只在拥有者
-        //   的回合结束移除；这里没有 `trigger::player_id()` 拥有者过滤。
+        // TODO(规则书)（每回合结束时）: The cell scopes only the roll with 「你的每回合开始时」; the decay is
+        // unscoped, so it burns at **every** turn end (spec C-MYGO-rainday-03), not the
+        // owner's.
         TriggerKind::TurnEnd => {
             // 「每回合结束时移除一个奇迹水晶」 -- the tick; also rolls the
             // static `⌛5` face marker down one turn.
@@ -133,7 +122,6 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「移除所有奇迹水晶后将其放入弃牌堆」 -- C# `H.Unplace(this, "discard", ...)`.
 ///
 /// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
@@ -152,7 +140,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_fate(ctx::Fate::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("that_day_rain_decayed")).player_id("who", player_id),
@@ -161,11 +149,8 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 fn that_day_rain(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「将此卡放置于自己场上并为其放置5个奇迹水晶」 -- C#
-    // `H.PlaceFromPlay(c, -1, -1, 5)`.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_fate(ctx::Fate::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("that_day_rain_note")));
-    // 规则书: 「并为其放置5个奇迹水晶」 -- C# `PlaceFromPlay(..., crystals: 5)`.
     ctx::set_crystals(5);
     ctx::log(
         player_id,
@@ -194,14 +179,8 @@ fn push_neighbours(area: &mut [i32; MAX_AREA], area_n: &mut usize, t: i32, n: i3
     }
 }
 
-/// C# `CardThatDayRain.Rain` -- the 1d10 -> agent -> colour-and-neighbours stay.
 fn rain(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「投掷1d10」 -- C# `H.Roll(Seat, 1, 10, CardName)`.
     let r = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::CARD)?;
-    // 规则书: 「按地产商格子顺序使（除“东京外”的）第n个地产商」
-    // 规则书: 「（骰点大于10则固定为高级住宅区对应颜色的格子）」 -- a d10 cannot
-    // exceed 10, so the fallback is only a safety net (C# `num > list.Count ||
-    // num > 10` -> `H.TileNamed("高级住宅区")`, the last agent in board order).
     let idx = if r as usize > AGENTS.len() {
         AGENTS.len() - 1
     } else {
@@ -226,8 +205,6 @@ fn rain(player_id: i32) -> card_sdk::Asked {
             .tile("tile", agent_tile)
             .card("card", ID),
     );
-    // 规则书: 「所有玩家获得一层[停留]」 -- C# `H.GiveStay(p, 1, Seat, CardName)`
-    // for every present player standing in `area`.
     for p in 0..ctx::player_count() {
         if ctx::player_out(p) {
             continue;

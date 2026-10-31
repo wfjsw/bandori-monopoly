@@ -6,7 +6,7 @@
 //! Every variable and function binding is **driven from [`crate::vocab::VOCAB`]
 //! through [`crate::view::CondView`]**: adding a name never edits this file's
 //! tables. The evaluator only knows the CEL `Value` plumbing and the few
-//! shapes of [`crate::vocab::Fx`] a function closure can take.
+//! shapes of [`crate::vocab::FuncKind`] a function closure can take.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use crate::compile::{shared_env, Cond};
 use crate::ctx::{CandidateCtx, WindowCtx};
 use crate::kinds;
 use crate::view::CondView;
-use crate::vocab::{self, Fx, Name, Scope, Table};
+use crate::vocab::{self, FuncKind, Name, Scope, Table};
 
 /// Shared empty [`CandidateCtx`] for the window-half binds. A `default()` on
 /// the caller's frame is ~240 B per probe; STACK-01's 512 KiB thread adds
@@ -159,16 +159,16 @@ impl std::error::Error for EvalError {}
 // bindings (driven from VOCAB through CondView)
 // ---------------------------------------------------------------------------
 
-fn emit_var(ctx: &mut Context<'_, '_>, name: &str, v: vocab::Val) {
+fn emit_var(ctx: &mut Context<'_, '_>, name: &str, v: vocab::Value) {
     ctx.add_variable_from_value(name, cel_value(&v));
 }
 
-fn cel_value(v: &vocab::Val) -> Value {
+fn cel_value(v: &vocab::Value) -> Value {
     match v {
-        vocab::Val::Int(i) => Value::Int(*i),
-        vocab::Val::Bool(b) => Value::Bool(*b),
-        vocab::Val::Str(s) => Value::String(Arc::new(s.clone())),
-        vocab::Val::Null => Value::Null,
+        vocab::Value::Int(i) => Value::Int(*i),
+        vocab::Value::Bool(b) => Value::Bool(*b),
+        vocab::Value::Str(s) => Value::String(Arc::new(s.clone())),
+        vocab::Value::Null => Value::Null,
     }
 }
 
@@ -314,7 +314,7 @@ fn bind_window(ctx: &mut Context<'static, 'static>, view: &dyn CondView) {
         if n.scope != Scope::Window {
             continue;
         }
-        let v = vocab::fetch_name(n, view).unwrap_or(vocab::Val::Null);
+        let v = vocab::fetch_name(n, view).unwrap_or(vocab::Value::Null);
         emit_var(ctx, n.flat, v);
     }
 
@@ -336,7 +336,7 @@ fn bind_candidate(ctx: &mut Context<'_, '_>, cond: &Cond, view: &dyn CondView) {
         if n.scope != Scope::Candidate {
             continue;
         }
-        let v = vocab::fetch_name(n, view).unwrap_or(vocab::Val::Null);
+        let v = vocab::fetch_name(n, view).unwrap_or(vocab::Value::Null);
         emit_var(ctx, n.flat, v);
     }
 
@@ -356,7 +356,7 @@ fn bind_candidate(ctx: &mut Context<'_, '_>, cond: &Cond, view: &dyn CondView) {
 }
 
 // ---------------------------------------------------------------------------
-// lookup functions (registered per window root, shaped by VOCAB's Fx)
+// lookup functions (registered per window root, shaped by VOCAB's `func`)
 // ---------------------------------------------------------------------------
 
 fn install_functions(ctx: &mut Context<'static, 'static>) {
@@ -373,8 +373,8 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
         return;
     }
     let fname = n.flat;
-    match n.fx {
-        Fx::SeatIntIs { var, .. } => {
+    match n.func {
+        FuncKind::SeatIntIs { var, .. } => {
             let var = var.to_string();
             // Second arg is either an int id or a string name (the guest's
             // `*_is(p, "name")` spelling). A string hashes through `id_of` --
@@ -397,7 +397,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::SeatInt { var, .. } => {
+        FuncKind::SeatInt { var, .. } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -407,7 +407,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::StrInt { var, missing, .. } => {
+        FuncKind::StrInt { var, missing, .. } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -418,7 +418,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::IntInt { var, .. } => {
+        FuncKind::IntInt { var, .. } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -429,7 +429,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::IntHas { var, .. } => {
+        FuncKind::IntHas { var, .. } => {
             let var = var.to_string();
             // The arg is an int id or a string name: a string hashes through
             // `id_of` -- the same name-stable id `counter_is('cp')` and the
@@ -454,13 +454,16 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::PairHas { var, .. } => {
+        FuncKind::PairHas { var, .. } => {
             let var = var.to_string();
             // `cand_has(key, member)`: key is an id or a string name (hashed
             // through `id_of`), member is an id. Table is key -> member list.
             ctx.add_function(
                 fname,
-                move |ftx: &FunctionContext, key: Value, member: i64| -> Result<bool, ExecutionError> {
+                move |ftx: &FunctionContext,
+                      key: Value,
+                      member: i64|
+                      -> Result<bool, ExecutionError> {
                     let want = match &key {
                         Value::Int(i) => *i,
                         Value::String(s) => crate::id_of(s.as_str()),
@@ -482,7 +485,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::Neighbor => {
+        FuncKind::Neighbor => {
             ctx.add_function(
                 fname,
                 |ftx: &FunctionContext, p: i64, delta: i64| -> Result<i64, ExecutionError> {
@@ -495,7 +498,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::IntIntConst { var, calc } => {
+        FuncKind::IntIntConst { var, calc } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -506,7 +509,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::BinInt { var, .. } => {
+        FuncKind::BinInt { var, .. } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -517,7 +520,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::IntPred { calc } => {
+        FuncKind::IntPred { calc } => {
             ctx.add_function(
                 fname,
                 move |_ftx: &FunctionContext, x: i64| -> Result<bool, ExecutionError> {
@@ -526,7 +529,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::TileIs { var, .. } => {
+        FuncKind::TileIs { var, .. } => {
             let var = var.to_string();
             // `tile_is(t, kind)` -- kind is a string (or an id_of hash we
             // cannot reverse, so only string args resolve).
@@ -557,7 +560,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::TileAttr { var, .. } => {
+        FuncKind::TileAttr { var, .. } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -575,7 +578,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::TileIn { var, .. } => {
+        FuncKind::TileIn { var, .. } => {
             let var = var.to_string();
             ctx.add_function(
                 fname,
@@ -594,7 +597,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
-        Fx::SeatStrInt { var, .. } => {
+        FuncKind::SeatStrInt { var, .. } => {
             let var = var.to_string();
             // `state(p, 'key')` -- the key is a string; missing = 0.
             ctx.add_function(

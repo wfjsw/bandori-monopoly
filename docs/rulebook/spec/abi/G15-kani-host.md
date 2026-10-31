@@ -365,7 +365,7 @@ fixture has a Livehouse). Under Kani the assertions are CBMC properties
 ```rust
 fn blue_rose_payout_iff_at(user: i32, live: &[i32], other: &[i32]) {
     deed_setup(user, live, other);              // install + owners + IN-2/IN-3
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let pre_pos = world::with_world(|w| w.pos);
     invoke::unwrap_done(card_roselia::blue_rose::play_kani(user));
     let post = world::snapshot();
@@ -384,7 +384,7 @@ fn blue_rose_payout_iff_at(user: i32, live: &[i32], other: &[i32]) {
     } else {
         crate::kassert!(effects.is_empty(), "C-R-…-01: zero payout logs no effect");
     }
-    crate::kassert!(spec::only_player_money_delta(&pre, &post, user, amount, 1),
+    crate::kassert!(spec::only_player_money_delta(&condition, &post, user, amount, 1),
         "C-R-…-01: only the user's money moves, by the payout");
     crate::kassert!(world::with_world(|w| w.pos) == pre_pos, "frame: pos");
     crate::kassert!(narration_n() == 0, "clause (1) does not log a move");
@@ -396,14 +396,14 @@ Every fixture price is a multiple of 100, so every sum is a multiple of 20 and
 same property over the whole livehouse price column). `deed_setup` sets
 `w.money = [10_000; MAX_PLAYERS]` concrete so the gain can
 never saturate; the payout is ≤ 1200 here. The harnesses also run the full
-frame through `assert_frame!(pre, post, pos, charge, stay, hand, discard)` and
+frame through `assert_frame!(condition, post, pos, charge, stay, hand, discard)` and
 assert every fixture tile's `owner` is unchanged (a payout never rewrites
 ownership).
 
 The not-rich harness (`blue_rose_not_rich_noop_at`) asserts the negation:
 effects empty, money unchanged for all seats, `narration_n() == 1` (the
 teleport log; `arm_log` pushes a narration counter, `host.rs:1960-1964`), and
-the frame unchanged. `pos` does not move under Kani because `card_move` is a
+the frame unchanged. `pos` does not move under Kani because `run_planned_move` is a
 protocol stub (`host.rs:1462-1466`) — that stays PROTOCOL-LEVEL for clause (2),
 but the running of clause (2) is now observable by the narration count and the
 absence of a gain.
@@ -425,8 +425,8 @@ crate::host_subset!(blue_rose_dispatch {
     owned_at => arm_owned_at,
     gain | gain_typed | gain_fixed => arm_gain,
     log | effect => arm_log,
-    set_kind | set_teleport_to | set_resolve => arm_protocol_stub,
-    card_move => arm_card_move,
+    set_kind | set_teleport_to | set_settles => arm_protocol_stub,
+    run_planned_move => arm_card_move,
 });
 ```
 
@@ -657,7 +657,7 @@ M1–M3.
    `TileData::is_buyable`) or kind `property|ring`? They coincide on the
    current board; `price > 0` is production and is the recommendation, with M1
    asserting the equivalence so a future board change is visible.
-3. **OQ3 — clause-(2) observability.** `card_move` is a stub, so a not-rich
+3. **OQ3 — clause-(2) observability.** `run_planned_move` is a stub, so a not-rich
    harness can only see "no gain + one narration". Is one narration assertion
    enough for the clause-(2) trigger, or should a later item make the move plan
    (destination, main-move latch) observable?

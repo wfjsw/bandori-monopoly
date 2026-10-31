@@ -43,10 +43,12 @@ pub const CIRCLE: CardDef = CardDef::new(
         // Deed-popup text (`docs/TILES.md` 「Tile text」): the two halves the
         // book splits (line 95 settle draw, line 96 [经过] reward) speak for
         // one slot each. `event:协助CiRCLE重建` replaces both while it is up.
-        On::Settle("", None, settle)
-            .texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
-        On::Action(Action::PassTile("", Some(pass_pays), on_pass))
-            .texts(&[(text_slot::PASS, "", "deed.note.circlePass")]),
+        On::Settle("", None, settle).texts(&[(text_slot::SETTLE, "", "deed.note.circleSettle")]),
+        On::Action(Action::PassTile("", Some(pass_pays), on_pass)).texts(&[(
+            text_slot::PASS,
+            "",
+            "deed.note.circlePass",
+        )]),
         // The cross-card face of the same reward body. No `pass_pays` here:
         // that residual is the [经过] arm's applicability (tile match, exile
         // gate, 「[移动起点]不为CiRCLE」). A message is a card asking for the
@@ -106,7 +108,6 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new("log.land_start").player_id("who", player_id),
     );
-    // 规则书: 「[结算]是：抽取一张手卡」 -- `H.DrawR`.
     ctx::draw(player_id, 1)?;
     Ok(())
 }
@@ -124,7 +125,7 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「获得」 wording differs for a stop on the start square as against a pass over it.
-    let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
+    let landing = trigger::move_settles() && trigger::move_remaining() <= 0;
     settle_reward(mover, landing)
 }
 
@@ -201,7 +202,7 @@ fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
                 "ask.pass_reward.card",
             )
         };
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             mover,
             &Msg::new("ask.pass_reward.title"),
             &Msg::new(text).player_id("who", mover),

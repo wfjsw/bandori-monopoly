@@ -138,7 +138,7 @@ function listSep(): string {
   return i18n.t("list", { ns: "game", defaultValue: ", " }) as string;
 }
 
-/** C# `ToString("N0")` -- thousands separators. */
+/** */
 export function n0(v: number): string {
   return Math.round(v).toLocaleString("en-US");
 }

@@ -6,7 +6,7 @@
 //! The index lets the server and browser fetch exactly the modules a match needs,
 //! cached by content hash.
 //!
-//! Guard **conditions** (`pre`, docs/GUARDS.md §8.2) are compiled here on the
+//! Guard **conditions** (`condition`, docs/GUARDS.md §8.2) are compiled here on the
 //! host and shipped as one lean postcard blob, `conds-<sha256>.bin`, named in
 //! the index. The browser glue is `runtime-only` (no CEL parser) and loads that
 //! blob via `RulesetBuilder::precompiled`; a compile error fails this build
@@ -26,7 +26,7 @@ struct ModuleEntry {
     cards: Vec<CardInfo>,
 }
 
-/// The precompiled-condition blob, when the set declares any `pre`
+/// The precompiled-condition blob, when the set declares any `condition`
 /// (`conds-<sha256>.bin` beside this index). Absent means no entry has a
 /// condition and every older loader keeps working unchanged.
 #[derive(Serialize)]
@@ -82,7 +82,7 @@ fn main() {
             cards: one.cards().to_vec(),
         });
     }
-    // Fails on duplicate card ids across modules, and on any `pre` that does
+    // Fails on duplicate card ids across modules, and on any `condition` that does
     // not compile (docs/GUARDS.md §5.3 -- fail-closed).
     let set = builder.build().unwrap_or_else(|e| panic!("{e}"));
     modules.sort_by(|a, b| a.cards[0].id.cmp(&b.cards[0].id));

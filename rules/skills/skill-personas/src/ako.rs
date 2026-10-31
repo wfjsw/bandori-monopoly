@@ -8,7 +8,7 @@
 //! > （3）若自己场上背面朝上放置的卡为[反击]卡，可在符合条件时将其直接打出。
 //!
 //! 「背面朝上放置在自己场上」 is a face-down field card, which is what
-//! `card_face_down` reads and `set_dest(ctx::Dest::Field)` + `place_card` writes.
+//! `card_face_down` reads and `set_fate(ctx::Fate::Field)` + `place_card` writes.
 //! (2) and (3) are both keyed on that flag.
 //!
 //! (1) 「若选择抽卡」 is the CiRCLE reward being the card, which is the
@@ -29,7 +29,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const AKO: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
     &[On::Action(Actions::PassRewardAffected(
-        card_sdk::pre::MINE,
+        card_sdk::condition::MINE,
         None,
         on_circle,
     ))],
@@ -59,7 +59,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     if !down.is_empty() {
         for (uid, c) in down {
             ctx::unplace_at(uid);
-            ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Hand);
+            ctx::add_to_fate(player_id, c.as_str(), ctx::Fate::Hand);
             ctx::log(
                 player_id,
                 &Msg::new(key!("ako_taken")).card("card", c.as_str()),
@@ -82,7 +82,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     // single card there is nothing to choose.
     let cap = deck.len().min(2);
     let n = if cap > 1 {
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             player_id,
             &Msg::new(key!("ako_count_title")),
             &Msg::new(key!("ako_count_ask")),
@@ -97,7 +97,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         cap
     };
     let look: alloc::vec::Vec<NameId> = deck[..n].to_vec();
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("ako_title")),
         &Msg::new(key!("ako_ask")),
@@ -112,7 +112,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     if !ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
         return Ok(());
     }
-    ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
+    ctx::add_to_fate(player_id, keep.as_str(), ctx::Fate::Hand);
     // 「选择其中1张加入手牌」 *is* the reward now -- cancel the tile's own draw
     // so the peek replaces it instead of stacking on it.
     ctx::trigger::set_cancelled();
@@ -128,7 +128,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("ako_place_ask")).card("card", c.as_str()),
         )?;
         if paid && ctx::pay(player_id, 500, &Msg::new(key!("ako_place_pay")))? > 0 {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_fate(ctx::Fate::Field);
             // Hold the uid `place_card` hands back: this is 「此卡」 -- the copy
             // just placed -- and re-resolving `c` by name would pick whichever
             // copy of that id is first on the field.

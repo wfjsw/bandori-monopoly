@@ -1,4 +1,3 @@
-//! `HHW:梦幻的回礼` -- C# `CardDreamReturn` (MatchHost.cs:4462-4523): [反击] an
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:梦幻的回礼`）:
 //! > 梦幻的回礼：[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。
@@ -16,14 +15,6 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
     "HHW:梦幻的回礼",
     &[On::Counteract(
         &[ChainKind::Effect],
-        // 规则书[反击]: 「在场上其他玩家即将被不属于你的格子收费时打出」 -- a
-        // rent payment (`pay_is_rent`) from a player who is not the holder, to a
-        // payee who is not the holder (`actor >= 0 && actor != owner &&
-        // target != owner`; C# `t.Pay.from >= 0 && t.Pay.from != player &&
-        // t.Pay.to != player`). `H.CanPay` and the `Targets` count stay
-        // residual: `H.CanPay` is `!out && !stunned() && exile == 0` where
-        // `stunned()` counts `stun + stunStart`, and `stunStart` is not in the
-        // CEL schema -- `owner.stun == 0` would wrongly admit a stunStart seat.
         // The rent-table `Targets` loop is engine logic.
         "pay_is_rent && actor >= 0 && actor != owner && target != owner",
         Some(can_counteract),
@@ -36,8 +27,6 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         // sheet cell F16
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
-/// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
-/// player, unmortgaged, and with a positive rent.
 fn targets(player_id: i32) -> Vec<i32> {
     let mut v: Vec<i32> = Vec::new();
     for t in 0..ctx::tile_count() {
@@ -45,11 +34,8 @@ fn targets(player_id: i32) -> Vec<i32> {
         if owner < 0 || owner == player_id || ctx::player_out(owner) {
             continue;
         }
-        // 规则书[反击]: 「向场上你以外的任意一名玩家的一个格子进行一次支付」 -- C#
-        // `CardDreamReturn.Targets` scans the other players' tiles; being
-        // unmortgaged (`!H.State.mortgaged[t]`) and having rent are our narrowing.
-        // TODO(规则书)（向场上你以外的任意一名玩家的一个格子进行一次支付）: the book
-        //   allows any tile -- we require it unmortgaged and with positive rent.
+        // TODO(规则书)（向场上你以外的任意一名玩家的一个格子进行一次支付）: the book allows any tile -- we require it
+        // unmortgaged and with positive rent.
         if ctx::mortgaged_of(t) {
             continue;
         }
@@ -61,10 +47,6 @@ fn targets(player_id: i32) -> Vec<i32> {
 }
 
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「向场上你以外的任意一名玩家的一个格子进行一次支付」 -- there
-    // must be such a tile (C# `Targets(player_id).Count > 0`). The rent / seat
-    // shape is the pre; `H.CanPay` (a stunStart-aware composite) and the
-    // `Targets` scan stay here.
     !targets(player_id).is_empty() && rules_status::can_pay(player_id)
 }
 
@@ -73,7 +55,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if list.is_empty() {
         return Ok(());
     }
-    // C# `H.AskTileOf` defaults to the cheapest rent among the targets.
     list.sort_by_key(|&t| ctx::rent_of(t));
     // 规则书[反击]: 「向场上你以外的任意一名玩家的一个格子进行一次支付」
     let to_tile = ctx::ask_tile(
@@ -86,13 +67,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if owner < 0 || owner == player_id {
         return Ok(());
     }
-    // 规则书[反击]: 「若成功进行支付，则自动使用一次你的乐队技能进行双倍支付」 -- C#
-    // pays `H.RentOf(num) * 2` to the tile owner, source 「（传播笑容：双倍）」.
-    // The band skill 「传播笑容」 (1) is emulated by hand here: a card `transfer`
-    // runs as `PayKind::Card`, not rent-shaped, so the skill's hook cannot fire
-    // (ENG-CHARGE-RENT).
-    // TODO(规则书)（向场上你以外的任意一名玩家的一个格子进行一次支付）: the book names
-    //   no amount -- we pay the tile's rent doubled (C# `RentOf`).
+    // TODO(规则书)（向场上你以外的任意一名玩家的一个格子进行一次支付）: The band skill 「传播笑容」 (1) is emulated by
+    // hand here: a card `transfer` runs as `PayKind::Card`, not rent-shaped, so the
+    // skill's hook cannot fire (ENG-CHARGE-RENT).
     let amount = ctx::rent_of(to_tile) * 2;
     let paid = ctx::transfer(
         player_id,
@@ -100,28 +77,21 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         amount,
         &Msg::new(key!("dream_return_pay")),
     )?;
-    // 规则书[反击]: 「若成功进行支付」 -- C# `if (p.paid)` runs the bookkeeping
-    // after `H.Money`.
     if paid <= 0 {
         return Ok(());
     }
-    // 规则书[反击]: 「并为乐队技能卡上添加两个...奇迹水晶」 -- C#
-    // `H.AddBandCrystals(i, 2, CardName + "：记录 ...")`.
-    // TODO(规则书)（并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶）: each crystal is
-    //   supposed to record a player -- ours is one pool and either name spends
-    //   any of its crystals (OPEN-HHW-RETURN-BOOK). The record/crystals are
-    //   also written only after `transfer` returns, so the skill's (2) cannot
-    //   consume them for this payment and records a later outer value.
+    // TODO(规则书)（并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶）: each crystal is supposed to record a
+    // player -- ours is one pool and either name spends any of its crystals
+    // (OPEN-HHW-RETURN-BOOK). The record/crystals are also written only after
+    // `transfer` returns, so the skill's (2) cannot consume them for this payment
+    // and records a later outer value.
     ctx::add_group_crystals(player_id, 2, i32::MAX);
     // 「分别记录这两名玩家」 -- the band skill 「传播笑容」 keeps the record in
     // `skill.hhw.who` / `skill.hhw.who2`; this writes both.
     ctx::state::set(player_id, "skill.hhw.who", owner);
     ctx::state::set(player_id, "skill.hhw.who2", trigger::player_id());
-    // 规则书[反击]: 「并为将要进行支付的那名玩家减免相当于你支付金额的数额」 -- C#
-    // `pay.amount = Math.Max(0, pay.amount - p.finalLoss)` on the in-flight pay
-    // (`trigger::set_pay_amount` is that write).
-    // TODO(规则书)（你支付金额）: could be the base or the doubled figure -- we use the
-    //   amount actually paid (OPEN-HHW-RETURN-RELIEF).
+    // TODO(规则书)（你支付金额）: could be the base or the doubled figure -- we use the amount
+    // actually paid (OPEN-HHW-RETURN-RELIEF).
     let relief = paid.min(trigger::value()).max(0);
     let left = (trigger::value() - relief).max(0);
     trigger::set_pay_amount(left);

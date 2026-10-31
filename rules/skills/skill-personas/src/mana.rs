@@ -128,7 +128,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「你的资金消耗减半」. `value > 0` is the pre.
+/// 「你的资金消耗减半」. `value > 0` is the condition.
 /// Pure Filter body (ABI v74 Pattern A): the ceil-half figure is the return.
 fn on_pay(_player_id: i32, value: i32) -> i32 {
     (value + 1) / 2

@@ -55,7 +55,7 @@ crate::host_subset!(skills_pp_dispatch {
     count_held | count_held_name => arm_count_held,
     set_held_name => arm_set_held_name,
     place_card_at => arm_place_card,
-    set_dest => arm_set_dest,
+    set_fate => arm_set_fate,
     add_group_pool => arm_add_band_crystals,
     group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
@@ -71,7 +71,7 @@ crate::host_subset!(skills_pp_dispatch {
     hand_count => arm_hand_count,
     take_card => arm_take_card,
     draw => arm_draw,
-    add_to_dest => arm_add_to_dest,
+    add_to_fate => arm_add_to_fate,
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,  // same keyed-add as inc_slot (real)
@@ -83,9 +83,9 @@ crate::host_subset!(skills_pp_dispatch {
     // Generic send/msg_* stay for any residual `ctx::send` (mark:cp / tests).
     send => arm_send,
     msg_name => arm_msg_name,
-    msg_a => arm_msg_a,
-    msg_b => arm_msg_b,
-    msg_c => arm_msg_c,
+    msg_arg0 => arm_msg_a,
+    msg_arg1 => arm_msg_b,
+    msg_arg2 => arm_msg_c,
     msg_seat => arm_msg_seat,
     msg_tile => arm_msg_tile,
     msg_reply => arm_msg_reply,
@@ -93,9 +93,9 @@ crate::host_subset!(skills_pp_dispatch {
     msg_sender_seat => arm_msg_sender_seat,
     msg_text => arm_msg_text,
     trig_value => arm_trig_value,
-    set_steps | set_resolve | set_stop_at | schedule_turn_end | linger
+    set_steps | set_settles | set_stop_at | schedule_turn_end | linger
     | card_offer_build | can_build_on => arm_protocol_stub,
-    card_move => arm_card_move,
+    run_planned_move => arm_card_move,
 });
 
 /// Sparse 2-seat world + skills_pp subset. `user` ∈ {0, 1} concrete.
@@ -276,7 +276,7 @@ fn aya_02_pay_discount_iff_at(user: i32) {
     let expected = spec::skills_pp::aya_02_amount(pre_amount, y);
     crate::kassert!(
         post.pay_amount == expected,
-        "C-PP-aya-with-02: pay amount = max(pre - Y*100, 0)"
+        "C-PP-aya-with-02: pay amount = max(condition - Y*100, 0)"
     );
     crate::kassert!(
         post.fans_neg[me as usize] >= y,
@@ -332,7 +332,7 @@ pub fn aya_02_mutant_is_detected() {
 //  [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
 //
 // SPEC NOTE (loud): the previous `band_idol_02_body_never_overflows` encoded
-// the OLD body (direct add_tok flip capped at `have`, so `X > down` was
+// the OLD body (direct add_held_by_name flip capped at `have`, so `X > down` was
 // unreachable and overflow never landed — LESS than the book). The new
 // `on_fans_flip` dict body **does** apply clause （2） to the effect X, so the
 // harness below proves `min(X-down, 10-held)` against the unmodified body
@@ -462,11 +462,11 @@ fn band_idol_04_tick_iff_at(user: i32) {
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
     w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
-    let pre = kani::any();
-    kani::assume(pre >= 0 && pre <= 10);
+    let condition = kani::any();
+    kani::assume(condition >= 0 && condition <= 10);
     // Crystals live on the on-card `crystals` counter (`field_crystals`),
     // not the player key `"奇迹水晶"` (class B triage3).
-    w.self_crystals = pre;
+    w.self_crystals = condition;
     w.trig_player = me;
     world::reset_world(w);
     invoke::unwrap_done(skill_groups::pastel::at_turn_start_kani(me));
@@ -475,11 +475,11 @@ fn band_idol_04_tick_iff_at(user: i32) {
     let cry = world::with_world(|ww| ww.field_crystals(ww.last_uid));
     // Automatic +1. The optional -5 / draw is a prompt; with symbolic answers
     // both branches run in this harness.
-    kani::cover!(cry == pre + 1, "option declined (just +1)");
-    kani::cover!(cry == pre + 1 - 5, "option taken (+1 -5)");
+    kani::cover!(cry == condition + 1, "option declined (just +1)");
+    kani::cover!(cry == condition + 1 - 5, "option taken (+1 -5)");
     crate::kassert!(
-        cry == spec::skills_pp::band_idol_04_crystals_after_tick(pre)
-            || cry == spec::skills_pp::band_idol_04_crystals_after_spend(pre),
+        cry == spec::skills_pp::band_idol_04_crystals_after_tick(condition)
+            || cry == spec::skills_pp::band_idol_04_crystals_after_spend(condition),
         "C-PP-band-idol-04: +1, optionally -5 and draw 1"
     );
 }
@@ -570,14 +570,14 @@ pub fn eve_02_extra_dice_formula() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn chisato_02_formula() {
-    let pre: i32 = kani::any();
+    let condition: i32 = kani::any();
     let y: i32 = kani::any();
     let up: i32 = kani::any();
-    kani::assume(pre >= 0 && pre <= 5_000);
+    kani::assume(condition >= 0 && condition <= 5_000);
     kani::assume(y >= 0 && y <= 20);
     kani::assume(up >= 0 && up <= 20);
     crate::kassert!(
-        spec::skills_pp::chisato_02_amount(pre, y) == pre + y * 100,
+        spec::skills_pp::chisato_02_amount(condition, y) == condition + y * 100,
         "receive += Y*100"
     );
     crate::kassert!(
@@ -695,7 +695,7 @@ fn first_accident_02_iff_at(me: i32) {
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("skill:丸山彩:With~"),
         1,
         me,

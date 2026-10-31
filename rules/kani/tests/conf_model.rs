@@ -22,7 +22,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use card_sdk::kani_host::{Args, Op};
 use game_rules::native_shims::{install_host, take_host, HostOps};
 use game_rules::{
-    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostErr, HostRequest,
+    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostError, HostRequest,
     HostState, InlineHost, Msg as EngineMsg, Prompt as EnginePrompt, RulesHandle,
 };
 
@@ -113,7 +113,7 @@ pub struct ConfWorld {
     pub state_flags: BTreeMap<(i32, String), u8>,
     /// Held / tokens.
     pub held: BTreeMap<(i32, String), i32>,
-    pub dest: i32,
+    pub fate: i32,
     pub trig_value: i32,
     pub trig_target: i32,
     pub trig_cancelled: bool,
@@ -127,7 +127,7 @@ pub struct ConfWorld {
     pub trig_pay_is_rent: bool,
     pub move_present: bool,
     pub move_kind: i32,
-    pub move_resolve: bool,
+    pub move_settles: bool,
     pub move_dir: i32,
     pub move_from: i32,
     pub move_remaining: i32,
@@ -167,7 +167,7 @@ impl ConfWorld {
             state: BTreeMap::new(),
             state_flags: BTreeMap::new(),
             held: BTreeMap::new(),
-            dest: 0,
+            fate: 0,
             trig_value: 0,
             trig_target: -1,
             trig_cancelled: false,
@@ -180,7 +180,7 @@ impl ConfWorld {
             trig_pay_is_rent: false,
             move_present: false,
             move_kind: -1,
-            move_resolve: false,
+            move_settles: false,
             move_dir: 1,
             move_from: -1,
             move_remaining: 0,
@@ -495,16 +495,16 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("draw {player_id} {n}"));
         n
     }
-    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
+    fn add_to_fate(&mut self, player_id: i32, card: &str, fate: i32) {
         let p = player_id.max(0) as usize % 4;
-        match dest {
+        match fate {
             0 => {
                 self.discards[p].push(card.to_string());
                 self.events.push(format!("to_discard {player_id} {card}"));
             }
             1 => {
                 self.hands[p].push(card.to_string());
-                self.events.push(format!("add_to_dest {player_id} {card}"));
+                self.events.push(format!("add_to_fate {player_id} {card}"));
             }
             4 | 5 | 6 => {
                 self.decks[p].push(card.to_string());
@@ -592,20 +592,20 @@ impl CardWorld for ConfWorld {
         self.next_uid += 1;
         uid
     }
-    fn set_dest(&mut self, dest: i32) {
-        self.dest = dest;
+    fn set_fate(&mut self, fate: i32) {
+        self.fate = fate;
     }
-    fn set_transfer_to_dest(&mut self, _to: i32, dest: i32) {
-        self.dest = dest;
+    fn set_transfer_to_fate(&mut self, _to: i32, fate: i32) {
+        self.fate = fate;
     }
-    fn send_to_dest(&mut self, dest: i32) -> Option<i32> {
+    fn send_to_fate(&mut self, fate: i32) -> Option<i32> {
         let p = self.turn_player.max(0) as usize % 4;
-        self.pos[p] = dest;
-        self.events.push(format!("send_to_dest {dest}"));
+        self.pos[p] = fate;
+        self.events.push(format!("send_to_fate {fate}"));
         Some(1)
     }
-    fn transfer_to_dest(&mut self, _to: i32, dest: i32) -> Option<i32> {
-        self.send_to_dest(dest)
+    fn transfer_to_fate(&mut self, _to: i32, fate: i32) -> Option<i32> {
+        self.send_to_fate(fate)
     }
     fn rent_unit_mult(&self) -> i32 {
         10
@@ -707,7 +707,7 @@ impl CardWorld for ConfWorld {
         0
     }
     // fire / stay
-    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _reason: EngineMsg) -> i32 {
         // Matches `game_core::engine::ops::gain_marker`: return the amount
         // actually gained (clamped under cap), not the new total.
         let p = player_id.max(0) as usize % 4;
@@ -722,7 +722,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("gain_marker {player_id} {got}"));
         got
     }
-    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _reason: EngineMsg) -> i32 {
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
             return 1;
@@ -787,19 +787,19 @@ impl CardWorld for ConfWorld {
         let mut t = game_rules::Trigger::default();
         t.value = self.trig_value;
         t.target = self.trig_target;
-        t.main = self.trig_main;
+        t.is_main_move = self.trig_main;
         t.roll_source = game_core::engine::rules::RollSource::from_i32(self.trig_roll_source);
         if self.move_present {
             t.mv = Some(game_rules::TriggerMove {
                 kind: game_rules::MoveKind::from_i32(self.move_kind)
                     .unwrap_or(game_rules::MoveKind::Walk),
-                resolve: self.move_resolve,
+                settles: self.move_settles,
                 tags: self
                     .move_tags
                     .iter()
                     .map(|(k, v)| (k.clone(), *v))
                     .collect(),
-                main: self.trig_main,
+                is_main_move: self.trig_main,
                 dir: game_core::engine::rules::Dir::from_i32(self.move_dir),
                 from: self.move_from,
                 remaining: self.move_remaining,
@@ -946,17 +946,17 @@ impl HostCtx for ConfHost {
     fn st_mut(&mut self) -> &mut HostState<ConfWorld, ConfRules> {
         &mut self.state
     }
-    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr> {
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostError> {
         Ok(card_sdk::native::read(ptr, len.max(0) as usize))
     }
-    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr> {
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostError> {
         card_sdk::native::write(ptr, bytes);
         Ok(())
     }
-    fn fuel(&mut self) -> Result<u64, HostErr> {
+    fn fuel(&mut self) -> Result<u64, HostError> {
         Ok(self.fuel)
     }
-    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostError> {
         self.fuel = v;
         Ok(())
     }
@@ -970,13 +970,15 @@ impl HostCtx for ConfHost {
         _arg: &[u8],
         _want_msg: bool,
     ) -> (
-        Result<CallOut, HostErr>,
+        Result<CallOut, HostError>,
         HostState<ConfWorld, ConfRules>,
         u64,
     ) {
         // Nested `play_card` is out of scope for the thin adapter.
         (
-            Err(HostErr::trap("conf_model: nested call_entry not supported")),
+            Err(HostError::trap(
+                "conf_model: nested call_entry not supported",
+            )),
             HostState::new(ConfRules, ConfWorld::new(), vec![], 0),
             self.fuel,
         )
@@ -1003,7 +1005,7 @@ impl InlineHost for ConfInline {
                 from,
                 to,
                 amount,
-                total_stage: _,
+                runs_total_stage: _,
                 ..
             } => {
                 if amount <= 0 {
@@ -1065,7 +1067,7 @@ pub struct Snap {
     pub tiles_owner: Vec<i32>,
     pub tiles_houses: Vec<i32>,
     pub tiles_mortgaged: Vec<bool>,
-    pub dest: i32,
+    pub fate: i32,
     pub trig_value: i32,
     pub trig_target: i32,
     /// Normalized effect lines: `gain p n`, `pay p n`, `teleport p t`, ...
@@ -1083,7 +1085,7 @@ fn snap_real(w: &ConfWorld) -> Snap {
         tiles_owner: w.tiles_owner.to_vec(),
         tiles_houses: w.tiles_houses.to_vec(),
         tiles_mortgaged: w.tiles_mortgaged.to_vec(),
-        dest: w.dest,
+        fate: w.fate,
         trig_value: w.trig_value,
         trig_target: w.trig_target,
         effects: w.events.clone(),
@@ -1106,7 +1108,7 @@ fn snap_model() -> Snap {
             tiles_owner: w.tiles.iter().map(|t| t.owner).collect(),
             tiles_houses: w.tiles.iter().map(|t| t.houses).collect(),
             tiles_mortgaged: w.tiles.iter().map(|t| t.mortgaged).collect(),
-            dest: w.dest,
+            fate: w.fate,
             trig_value: w.pay_amount,
             trig_target: w.trig_target,
             effects,
@@ -1156,8 +1158,8 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
     if real.tiles_mortgaged != model.tiles_mortgaged {
         diffs.push("tiles_mortgaged diverged".into());
     }
-    if real.dest != model.dest {
-        diffs.push(format!("dest real={} model={}", real.dest, model.dest));
+    if real.fate != model.fate {
+        diffs.push(format!("fate real={} model={}", real.fate, model.fate));
     }
     if real.trig_value != model.trig_value {
         diffs.push(format!(
@@ -1515,17 +1517,17 @@ fn op_add_to_dest_take_card_cards_in_hand_size_match() {
     // (bitset + pile hybrid) is exercised on an empty-start hand.
     let (cp, cl) = intern_str("R:[衍生] 压");
     diff_op_seq(
-        "add_to_dest+take_card+cards_in",
+        "add_to_fate+take_card+cards_in",
         &[],
         |c| {
-            game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1).unwrap();
+            game_rules::hostfns::add_to_fate(c, 0, cp, cl, 1).unwrap();
             let ok = game_rules::hostfns::take_card(c, 0, cp, cl, 0).unwrap();
             let (buf, cap) = card_sdk::native::reserve(64);
             let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
             ok as i64
         },
         || {
-            rules_kani::host::dispatch(Op::add_to_dest, [0, cp, cl, 1, 0, 0]);
+            rules_kani::host::dispatch(Op::add_to_fate, [0, cp, cl, 1, 0, 0]);
             let ok = rules_kani::host::dispatch(Op::take_card, [0, cp, cl, 0, 0, 0]);
             let (buf, cap) = card_sdk::native::reserve(64);
             rules_kani::host::dispatch(Op::cards_in, [0, 0, buf, cap, 0, 0]);
@@ -1599,14 +1601,14 @@ fn op_set_dest_place_card_at_match() {
     let (cp, cl) = intern_str("PP:[衍生]共鸣");
     let (mp, ml) = intern_msg("conf.place");
     diff_op_seq(
-        "set_dest+place_card_at",
+        "set_fate+place_card_at",
         &[],
         |c| {
-            game_rules::hostfns::set_dest(c, 12).unwrap();
+            game_rules::hostfns::set_fate(c, 12).unwrap();
             game_rules::hostfns::place_card_at(c, 0, cp, cl, mp, ml).unwrap() as i64
         },
         || {
-            rules_kani::host::dispatch(Op::set_dest, [12, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::set_fate, [12, 0, 0, 0, 0, 0]);
             rules_kani::host::dispatch(Op::place_card_at, [0, cp, cl, mp, ml, 0])
         },
     );
@@ -1782,7 +1784,7 @@ fn card_band_pp_conforms() {
 #[test]
 fn card_band_ppp_conforms() {
     let _g = model_lock();
-    // `PPP:[衍生]Pipopa` -- set_dest + gain + place_card.
+    // `PPP:[衍生]Pipopa` -- set_fate + gain + place_card.
     diff_card("ppp", "PPP:[衍生]Pipopa", &[], run_play);
 }
 
@@ -1948,7 +1950,7 @@ fn trig_conf() -> ConfWorld {
     w.trig_pay_is_rent = true;
     w.move_present = true;
     w.move_kind = 0;
-    w.move_resolve = true;
+    w.move_settles = true;
     w.move_dir = 1;
     w.move_from = 2;
     w.move_remaining = 3;
@@ -1973,7 +1975,7 @@ fn trig_model() -> KWorld {
     w.trig_pay_is_rent = true;
     let mut ms = MoveSnap::NONE;
     ms.kind = 0;
-    ms.resolve = true;
+    ms.settles = true;
     ms.dir = 1;
     ms.from = 2;
     ms.remaining = 3;
@@ -2009,9 +2011,9 @@ fn op_trig_move_payload_matches_engine() {
         [0; 6],
     );
     trig_get(
-        "trig_move_resolve",
-        |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-        Op::trig_move_resolve,
+        "trig_move_settles",
+        |c| game_rules::hostfns::trig_move_settles(c).unwrap() as i64,
+        Op::trig_move_settles,
         [0; 6],
     );
     trig_get(
@@ -2115,7 +2117,7 @@ fn op_trig_move_sentinels_match_engine() {
     let mut model = base_model();
     model.trig_main = true;
     diff_get_with(
-        "no-move main",
+        "no-move is_main_move",
         conf,
         model,
         |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
@@ -2148,8 +2150,8 @@ fn op_trig_move_sentinels_match_engine() {
         "no-move resolve",
         conf,
         model,
-        |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_resolve, [0; 6]),
+        |c| game_rules::hostfns::trig_move_settles(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_settles, [0; 6]),
     );
 }
 
