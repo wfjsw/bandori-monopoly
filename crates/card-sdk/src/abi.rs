@@ -1210,7 +1210,7 @@ pub enum Stack {
     /// create a row when there is none. The old `place_cp` behaviour.
     Merge = 0,
     /// Always push a fresh row. The old `add_mark` behaviour (tests count
-    /// rows; kaoru's 3 「怪盗标记」, embers' copies, tae_police rabbits).
+    /// rows; kaoru's 3 「怪盗标记」, embers' copies, tae rabbits).
     Fresh = 1,
 }
 
@@ -1393,7 +1393,7 @@ pub mod prop {
 
     /// 「可购买格子」 (`data/rules.txt` line 19) -- `1` = this tile can be bought
     /// at all. Stamped from `TileData::is_buyable` at bind time; a rule
-    /// instance may clear it (rana_parking's 「不可被抵押双倍支付购买」).
+    /// instance may clear it (rana's 「不可被抵押双倍支付购买」).
     pub const BUYABLE: &str = "buyable";
     /// Houses already standing on the tile, counted into the buy price
     /// (「购买格子地契和建造已有房子的资金总价」). `0` disables; a positive

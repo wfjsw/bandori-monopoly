@@ -174,7 +174,7 @@ move payload and CEL (`move.rolled`), set from how the walk got its steps
 `ctx::plan::set_extra_steps` writes only `TurnCtx::plan.extra_steps`; the
 running walk is a separate `Move` and never re-reads that field, so the +2 is
 a no-op on the move that earned it. The card keeps a running prop and
-overwrites `uika_imprisoned`'s value because `set_extra_steps` assigns.
+overwrites `uika`'s value because `set_extra_steps` assigns.
 Expected: +2 extends the walk it is earned on and composes. **Root fix:** the
 walk syncs `extra_steps` from the plan each step; `plan::add_extra_steps`
 composes (R5).
@@ -209,7 +209,7 @@ The abnormal-gate opt-out (STA-02, `rules.txt` 51) is a separate backlog item.
 > 「视为使用一次初始Afterglow角色的（2）效果」
 
 `detour.rs:214-226` writes `plan::set_parity(1/0)`, and
-`rules/skills/skill-personas/src/himari_step.rs:74-75` writes 1/2; the walk
+`rules/skills/skill-personas/src/himari.rs:74-75` writes 1/2; the walk
 loop derives `next` from `m.dir()` alone (`play.rs:1753`) and never reads
 `m.parity`. The book's 「仅在单/双数格上进行」 lands only on the chosen
 parity. Expected: each step goes to the nearest tile of the requested parity.

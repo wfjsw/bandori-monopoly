@@ -74,12 +74,7 @@ fn win() -> WindowCtx {
         turn_key: 7,
         trigger_card: 0,
         name: String::new(),
-        players: vec![
-            p0,
-            p1,
-            PlayerSnap::default(),
-            PlayerSnap::default(),
-        ],
+        players: vec![p0, p1, PlayerSnap::default(), PlayerSnap::default()],
         tile_ids: [("festival".to_string(), 9)].into_iter().collect(),
         tile_kinds: vec!["circle".to_string()],
         tile_attrs: Default::default(),
@@ -838,7 +833,7 @@ fn geo_win(size: i64, pos: &[i64], owners: &[i64]) -> WindowCtx {
 #[test]
 fn plan_fixed_roll_null_when_unset() {
     // `plan.fixed_roll` binds `null` when no card fixed this turn's roll --
-    // the sports_talent / kaoru_thief / soyo_clear / kanon_lost
+    // the sports_talent / kaoru_thief / soyo / kanon
     // `roll_plan_unfixed` residual is `plan.fixed_roll == null`.
     assert!(compile("plan.fixed_roll == null")
         .unwrap()

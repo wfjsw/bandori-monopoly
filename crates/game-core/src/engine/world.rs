@@ -180,7 +180,7 @@ pub struct TurnCtx {
     /// press) drove at least one move. An activation that did is *spent* when
     /// it ends -- its per-move plan writes were for the move it drove, and its
     /// replay re-applies them afterwards; one that drove none wrote for a move
-    /// still to come (ran_red 「本次移动向后」, sakiko_lead's half price) and
+    /// still to come (ran 「本次移动向后」, sakiko_lead's half price) and
     /// keeps them (`Cx::drop_spent_plan_shape`). Reset at the activation's
     /// entry alongside `extreme`.
     #[serde(default)]

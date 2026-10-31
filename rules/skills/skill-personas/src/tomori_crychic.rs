@@ -23,14 +23,8 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
-        On::Action(Action::Pass(
-            bandori_std::guards::OWN_START,
-            None,
-            on_pass)),
-        On::Action(Action::DiceRollAfter(
-            card_sdk::pre::MINE,
-            None,
-            on_roll)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
+        On::Action(Action::DiceRollAfter(card_sdk::pre::MINE, None, on_roll)),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
         On::Schedule("settle_now", "owner.pos >= 0", None, settle_now),

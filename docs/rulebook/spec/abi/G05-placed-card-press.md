@@ -59,7 +59,7 @@ the skill card's `On::Play`, which is that skill's clause **(3)**:
 ```
 
 `skill:广町七深:这是很普通的事吧？` declares (2) as an `On::Action(Action::CardUsed(…))`
-entry (`rules/skills/skill-personas/src/nanami_ordinary.rs:62`) and (3) as its
+entry (`rules/skills/skill-personas/src/nanami.rs:62`) and (3) as its
 press `On::Play` (line 50). `ctx::play_card` and `invoke_skill` both resolve
 "the card's first `On::Play`", so (2) is unreachable by id. The clause's
 「本次技能不受数量或轮数限制」 half (`nanami_effort.rs:276`) is also unwaived
@@ -632,7 +632,7 @@ Notes:
   数量或轮数限制」 waives (2)'s CD/cap without a flag. The press gate still
   checks the caller-side costs (crystal, pot — §6.1) and the body's
   `fire::spend` remains the last line.
-* No new `TriggerKind`. The outer press raises `cardUsed` once; `nanami_ordinary`'s
+* No new `TriggerKind`. The outer press raises `cardUsed` once; `nanami`'s
   (2) condition `actor != owner` keeps it out of its own raise.
 * `ctx::invoke_paid` / `COST_PAID` (G13) let a borrowing body skip its own
   cost prompt when the caller paid.
@@ -704,7 +704,7 @@ fn use_skill(p) -> Asked {
 }
 ```
 
-`nanami_ordinary`'s (2) gains `.id("2")` (G13 §4.4's convention; the label
+`nanami`'s (2) gains `.id("2")` (G13 §4.4's convention; the label
 「（2）」 stays). New locale key
 `nanami_effort_no_pot` (zh/en). The two `TODO(规则书)` at
 `nanami_effort.rs:276-285` close; the card's own gate no longer needs the
@@ -1024,7 +1024,7 @@ the existing `drive` already gives all three for a resolved entry. Rejected.
 2. **Which category does the nanami press raise?** `use_press` raises
    `cardUsed` once for the pressed effort card; the invocation seeds, and does
    not raise, the skill side (G13 §5.3). Is one raise expected, or should the
-   skill's use be a second answerable window? A tae_police 「抵消」 answers the
+   skill's use be a second answerable window? A tae 「抵消」 answers the
    press today; under this design it cannot answer the skill separately.
 3. **Should the press of a skill go through `use_skill`'s `skillUsed`
    semantics at all now that `entry::PRESS` is generic?** The design keeps the

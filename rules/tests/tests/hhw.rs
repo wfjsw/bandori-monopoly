@@ -978,7 +978,7 @@ fn hagumi_gives_croquettes_when_passing_another_player() {
             break;
         }
         let d = t.dump_prompt();
-        if d.contains("hagumi_homerun_give") || d.contains("可乐饼转移给") {
+        if d.contains("hagumi_give") || d.contains("可乐饼转移给") {
             let _ = t.answer_one(0); // yes
                                      // then the how-many pick (1..=max)
             if t.prompt().is_some() {

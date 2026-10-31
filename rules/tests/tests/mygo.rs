@@ -1079,7 +1079,11 @@ fn journey_drains_when_move_exceeds_six() {
     drain(&mut t);
     t.end(0).unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 3, "one drained");
-    assert_eq!(t.turns_left(0, "MyGO:哪怕这旅程没有终点"), 3, "marker ticks");
+    assert_eq!(
+        t.turns_left(0, "MyGO:哪怕这旅程没有终点"),
+        3,
+        "marker ticks"
+    );
 }
 
 #[test]
@@ -1207,7 +1211,7 @@ fn tomori_teleport_settles_at_the_destination() {
             break;
         }
         let p = t.expect_prompt();
-        if t.prompt_refers("tomori") || p.title.key().contains("tomori_poem") {
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori") {
             let _ = t.answer_one(0); // accept the 诗超绊 press
             pressed = true;
         } else if p.title.key().contains("ask.buy") {
@@ -1251,7 +1255,7 @@ fn tomori_self_teleport_settles_at_the_destination() {
             break;
         }
         let p = t.expect_prompt();
-        if t.prompt_refers("tomori") || p.title.key().contains("tomori_poem") {
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori") {
             let _ = t.answer_one(0); // accept the 诗超绊 press (cost 1)
             pressed = true;
         } else if p.title.key().contains("ask.buy") {
@@ -1340,7 +1344,7 @@ fn soyo_recolour_expires_at_next_turn_start() {
             break;
         }
         let p = t.expect_prompt();
-        if format!("{:?}", p.title).contains("soyo_clear") {
+        if format!("{:?}", p.title).contains("soyo") {
             let _ = t.answer_one(0);
         } else {
             t.decline();

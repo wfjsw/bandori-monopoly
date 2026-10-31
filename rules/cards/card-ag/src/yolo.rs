@@ -47,7 +47,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（使结果增加1d4结果的数字）: the cell does not say whether a face
     // another effect already fixed still takes the +1d4 -- we add anyway (the
     // 「固定」 vs additive ruling is open, BACKLOG MOVE-02); `starry_night` /
-    // `eve_unify` refuse over a fixed face.
+    // `eve` refuse over a fixed face.
     let before = trigger::move_roll().unwrap_or_else(|| trigger::value().max(0));
     let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect)?;
     trigger::set_move_roll(before + n);

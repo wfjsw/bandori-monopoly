@@ -74,7 +74,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // walk still lands (BACKLOG STA-02).
     let held = ctx::state::get(player_id, "unstoppable");
     // `add` stacks a layer rather than clobbering the count (`tsukushi_garden`,
-    // `rinko_1cm` grant the same status this way).
+    // `rinko` grant the same status this way).
     ctx::state::add(player_id, "unstoppable", 1);
     bandori_std::status::declare_companion(player_id, "unstoppable");
     // TODO(规则书)（期间[不可阻挡]）: the book scopes [不可阻挡] to this move -- we

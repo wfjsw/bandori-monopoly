@@ -31,10 +31,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, at_start)),
         On::Action(Action::DeckAtGameStart("", None, at_start)),
-        On::Action(Action::Pass(
-            bandori_std::guards::OWN_START,
-            None,
-            on_pass)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
         On::Action(Action::DiceRollAfter("", Some(other), latch)).silent(),
     ],
 )

@@ -889,7 +889,7 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     // The skill asks yes/no; take yes.
     let mut offered = false;
     while let Some(p) = t.prompt() {
-        if p.kind == "choice" && p.title.key().contains("mana_donut") {
+        if p.kind == "choice" && p.title.key().contains("mana") {
             offered = true;
             let who = t.asked()[0];
             t.answer(who, 0).expect("yes");
@@ -899,10 +899,7 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     }
     drain(&mut t);
     if !offered {
-        panic!(
-            "no mana_donut offer on passing 购物中心: {}",
-            t.dump_prompt()
-        );
+        panic!("no mana offer on passing 购物中心: {}", t.dump_prompt());
     }
     if t.charge(0) != 0 {
         panic!("fire {}, expected 0 after 「消耗一个火罐」", t.charge(0));

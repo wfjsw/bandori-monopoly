@@ -39,7 +39,7 @@ is superseded by the 2026-10-16 note above.
 * The three cards that used the `TurnCtx` flags are ported — see §Card
   migrations. `buy_discount` / `free_buy` / `raze_on_buy` and their `set_*`
   APIs, `st.tile_colors` and `key::EXTRA_COLOR` are **deleted** (ABI 41).
-* The colour skills (朝日六花 / Roselia (1) / 游击演出 / soyo_clear / （soyo）
+* The colour skills (朝日六花 / Roselia (1) / 游击演出 / soyo / （soyo）
   混合的颜色) write the `colorFor:<p>` / `ANY_COLOR` tile props.
 * Dealer buy/build options are not filtered by current cash. After selecting
   one, a short player can mortgage deeds to cover the final payment amount,
@@ -74,7 +74,7 @@ how ownership is assigned — are handled by the `rules/` crates.
 * **Auction:** moves money directly, clears the mortgage, and raises only
   `bought`.
 * **Dead gates:**
-  * `plan.no_buy` (rana_parking) is never read.
+  * `plan.no_buy` (rana) is never read.
   * Poppin's `lock_hill` cancels `buyBefore`, but `buy()` ignores the
     cancellation, and the lock never covers force-buy.
 * **Unwritten view field:** `st.buy_price` is always -1, so `autopilot.ts`
@@ -167,10 +167,10 @@ StubRules and the sim run.
 | Roselia band (1)/(2) | `BuyMul` ½ (live-house / first non-LH); `Bought` one-shot unchanged | **done** |
 | 迷宫般的仓库 | linger + `BuySet` 0 + `BuyAssign` houses 0 | **done** |
 | Poppin (3) hill lock | `BuyGate`, every kind, Force included | **done** |
-| rana_parking | native gate reads `plan.no_buy` for Land | **done** |
+| rana | native gate reads `plan.no_buy` for Land | **done** |
 | 学生会的检查 noBuild | a linger instance carrying `prop::NO_BUILD` | **done** |
 | （soyo）混合的颜色 | tile prop `ANY_COLOR` | **done** |
-| 朝日六花 / Roselia (1) / 游击演出 / soyo_clear | tile prop `colorFor:<p>`; remove `st.tile_colors` and `key::EXTRA_COLOR` | **done** |
+| 朝日六花 / Roselia (1) / 游击演出 / soyo | tile prop `colorFor:<p>`; remove `st.tile_colors` and `key::EXTRA_COLOR` | **done** |
 | 巴 收购 | `ctx::acquire` | **done** |
 | Afterglow / chuchu / asahi | `Bought`, unchanged | unchanged |
 

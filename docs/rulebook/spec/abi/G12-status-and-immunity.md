@@ -470,7 +470,7 @@ blocked; forced/stop/reverse are blocked exactly when the move clamp applies.
 `set_self_immune_except_owner` writes `current_uid`'s field; placement reads
 the prop (`ops.rs:1229`). Migrate the effect-touch consumers to the causer
 read: `title_idol.rs:59`, `crystal_swap.rs:112` (its `slots()` takes the
-acting player). `mumei_streamer.rs:162` keeps `is_immune_at` — there it is a
+acting player). `nyamu.rs:162` keeps `is_immune_at` — there it is a
 bookkeeping marker for cards the skill flipped, not an effect touch.
 
 No change to the seat-wide `immune()` gate (`wasm_rules.rs:5635`): a

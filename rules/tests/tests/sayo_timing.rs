@@ -113,7 +113,7 @@ fn forced_side_move_does_not_offer_the_main_move_skill() {
     t.m.world_mut().turn.plan.forced = true;
     t.give_play(0, "TEST:mover").unwrap();
     while let Some(p) = t.prompt() {
-        assert!(!p.title.key().ends_with("sayo_thorns_title"));
+        assert!(!p.title.key().ends_with("sayo_title"));
         t.decline();
     }
     assert_eq!(t.charge(0), 10);

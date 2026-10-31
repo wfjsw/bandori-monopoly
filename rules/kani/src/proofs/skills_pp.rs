@@ -46,7 +46,7 @@ fn crystals_at(uid: i32) -> i32 {
     world::with_world(|w| w.field_crystals(uid))
 }
 
-// Ops the aya_with / pastel skill bodies reach.
+// Ops the aya / pastel skill bodies reach.
 crate::host_subset!(skills_pp_dispatch {
     log | effect => arm_log,
     gain | gain_typed | gain_fixed => arm_gain,
@@ -133,7 +133,7 @@ fn effects_slice() -> ([Effect; 24], usize) {
 }
 
 /// Shared iff body at a concrete seat (ppcost).
-fn aya_with_01_five_fans_iff_at(user: i32) {
+fn aya_01_five_fans_iff_at(user: i32) {
     let me = user;
 
     skills_pp_world(me);
@@ -182,7 +182,7 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
         return;
     }
 
-    invoke::unwrap_done(skill_personas::aya_with::at_start_kani(me));
+    invoke::unwrap_done(skill_personas::aya::at_start_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.fans_pos[me as usize] == spec::skills_pp::char_start_five_fans(pre_pos),
@@ -211,30 +211,30 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
-pub fn aya_with_01_five_fans_iff() {
-    aya_with_01_five_fans_iff_at(0);
+pub fn aya_01_five_fans_iff() {
+    aya_01_five_fans_iff_at(0);
 }
 
 /// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
-pub fn aya_with_01_five_fans_user1_iff() {
-    aya_with_01_five_fans_iff_at(1);
+pub fn aya_01_five_fans_user1_iff() {
+    aya_01_five_fans_iff_at(1);
 }
 
 /// MUTANT: +4 fans.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
-pub fn aya_with_01_mutant_is_detected() {
+pub fn aya_01_mutant_is_detected() {
     let me = 0i32;
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
     w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::aya_with::at_start_kani(me));
+    invoke::unwrap_done(skill_personas::aya::at_start_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.fans_pos[me as usize] != spec::skills_pp::char_start_five_fans_mutant(pre_pos),
@@ -250,7 +250,7 @@ pub fn aya_with_01_mutant_is_detected() {
 // ===========================================================================
 
 /// Shared iff body at a concrete seat (ppcost).
-fn aya_with_02_pay_discount_iff_at(user: i32) {
+fn aya_02_pay_discount_iff_at(user: i32) {
     let me = user;
 
     skills_pp_world(me);
@@ -264,16 +264,16 @@ fn aya_with_02_pay_discount_iff_at(user: i32) {
     w.pay_amount = pre_amount;
     world::reset_world(w);
 
-    invoke::unwrap_done(skill_personas::aya_with::on_pay_kani(me));
+    invoke::unwrap_done(skill_personas::aya::on_pay_kani(me));
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize]; // fans flipped reverse
     kani::cover!(y > 0, "chose some Y");
     kani::cover!(y == 0, "declined (Y = 0)");
     crate::kassert!(
-        spec::skills_pp::aya_with_02_y_ok(y, up),
+        spec::skills_pp::aya_02_y_ok(y, up),
         "C-PP-aya-with-02: Y in 0..=up"
     );
-    let expected = spec::skills_pp::aya_with_02_amount(pre_amount, y);
+    let expected = spec::skills_pp::aya_02_amount(pre_amount, y);
     crate::kassert!(
         post.pay_amount == expected,
         "C-PP-aya-with-02: pay amount = max(pre - Y*100, 0)"
@@ -286,23 +286,23 @@ fn aya_with_02_pay_discount_iff_at(user: i32) {
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
-pub fn aya_with_02_pay_discount_iff() {
-    aya_with_02_pay_discount_iff_at(0);
+pub fn aya_02_pay_discount_iff() {
+    aya_02_pay_discount_iff_at(0);
 }
 
 /// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
-pub fn aya_with_02_pay_discount_user1_iff() {
-    aya_with_02_pay_discount_iff_at(1);
+pub fn aya_02_pay_discount_user1_iff() {
+    aya_02_pay_discount_iff_at(1);
 }
 
 /// MUTANT: discount Y*99.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
-pub fn aya_with_02_mutant_is_detected() {
+pub fn aya_02_mutant_is_detected() {
     let me = 0i32;
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
@@ -315,12 +315,12 @@ pub fn aya_with_02_mutant_is_detected() {
     w.trig_value = pre_amount;
     w.pay_amount = pre_amount;
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::aya_with::on_pay_kani(me));
+    invoke::unwrap_done(skill_personas::aya::on_pay_kani(me));
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize];
     if y >= 1 {
         crate::kassert!(
-            post.pay_amount != spec::skills_pp::aya_with_02_amount_mutant(pre_amount, y),
+            post.pay_amount != spec::skills_pp::aya_02_amount_mutant(pre_amount, y),
             "mutant: card must not use Y*99"
         );
     }
@@ -506,10 +506,10 @@ pub fn band_idol_04_tick_user1_iff() {
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
-pub fn hina_lottery_02_borrow_map() {
+pub fn hina_02_borrow_map() {
     let roll: i32 = kani::any();
-    kani::assume(spec::skills_pp::hina_lottery_02_roll_ok(roll));
-    let b = spec::skills_pp::hina_lottery_02_borrow(roll);
+    kani::assume(spec::skills_pp::hina_02_roll_ok(roll));
+    let b = spec::skills_pp::hina_02_borrow(roll);
     match roll {
         1 => crate::kassert!(b == 0, "1 -> 丸山彩"),
         2 => crate::kassert!(b == 1, "2 -> 白鹭千圣"),
@@ -526,18 +526,18 @@ pub fn hina_lottery_02_borrow_map() {
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
-pub fn maya_dawn_02_watch_formula() {
+pub fn maya_02_watch_formula() {
     let y: i32 = kani::any();
     let deck: i32 = kani::any();
     kani::assume(y >= 0 && y <= 10);
     kani::assume(deck >= 0 && deck <= 8);
-    let watch = spec::skills_pp::maya_dawn_02_watch(y, deck);
+    let watch = spec::skills_pp::maya_02_watch(y, deck);
     crate::kassert!(
         watch == (y + 1).min(deck),
         "C-PP-maya-dawn-02: watch min(Y+1, deck)"
     );
     crate::kassert!(
-        spec::skills_pp::maya_dawn_02_hand_n() == 1,
+        spec::skills_pp::maya_02_hand_n() == 1,
         "exactly one card joins the hand"
     );
 }
@@ -550,14 +550,14 @@ pub fn maya_dawn_02_watch_formula() {
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
-pub fn eve_unify_02_extra_dice_formula() {
+pub fn eve_02_extra_dice_formula() {
     let y: i32 = kani::any();
     kani::assume(y >= 0 && y <= 6);
-    let n = spec::skills_pp::eve_unify_02_extra_dice(y);
+    let n = spec::skills_pp::eve_02_extra_dice(y);
     crate::kassert!(n == y, "C-PP-eve-unify-02: +Yd4");
     let sum: i32 = kani::any();
     kani::assume(sum >= 0 && sum <= 24);
-    if spec::skills_pp::eve_unify_02_extra_sum_ok(sum, y) {
+    if spec::skills_pp::eve_02_extra_sum_ok(sum, y) {
         crate::kassert!(sum >= y && sum <= 4 * y, "Yd4 sum range");
     }
 }
@@ -569,7 +569,7 @@ pub fn eve_unify_02_extra_dice_formula() {
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
-pub fn chisato_frank_02_formula() {
+pub fn chisato_02_formula() {
     let pre: i32 = kani::any();
     let y: i32 = kani::any();
     let up: i32 = kani::any();
@@ -577,11 +577,11 @@ pub fn chisato_frank_02_formula() {
     kani::assume(y >= 0 && y <= 20);
     kani::assume(up >= 0 && up <= 20);
     crate::kassert!(
-        spec::skills_pp::chisato_frank_02_amount(pre, y) == pre + y * 100,
+        spec::skills_pp::chisato_02_amount(pre, y) == pre + y * 100,
         "receive += Y*100"
     );
     crate::kassert!(
-        spec::skills_pp::chisato_frank_02_flip_pos(up, y) == up.min(y),
+        spec::skills_pp::chisato_02_flip_pos(up, y) == up.min(y),
         "flip min(Y, up) positives reverse"
     );
 }

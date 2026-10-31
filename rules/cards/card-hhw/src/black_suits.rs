@@ -28,7 +28,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // 规则书: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- the tile
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
-        // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
+        // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki.rs`).
         On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", Some(pass_tile_guard), pass_tile)),
         // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
         // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.

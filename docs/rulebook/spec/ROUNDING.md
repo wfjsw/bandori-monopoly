@@ -44,9 +44,9 @@ the base formula produced it (rent table, printed X, mortgage/redeem rate, …).
 | `AG:（摩卡）0.5倍速` (half-speed / moca_half) | `rules/cards/card-ag/src/moca_half.rs` | ×0.5 | **was yes** | **DONE** — same |
 | `R:Fire bird` | `rules/cards/card-roselia/src/fire_bird.rs` | ×1.5 | **was yes** | **DONE** — same |
 | `HHW:爱心义演` (charity_show) | `rules/cards/card-hhw/src/charity_show.rs` | ×0.5 | yes (printed 「向上取整10」) | **KEEP** — printed end-of-calc; idempotent with engine round when sole modifier. Stack caveat: another modifier after it still sees the early round. |
-| tukushi_try / tomori_poem / mana_donut / soyo_colors | `rules/skills/…`, `card-mygo/soyo_colors.rs` | ×0.5 (`(x+1)/2`) | no | fold already; engine now also rounds at settle (behaviour change on non-multiples of 10) |
+| shifune / tomori / mana / soyo_colors | `rules/skills/…`, `card-mygo/soyo_colors.rs` | ×0.5 (`(x+1)/2`) | no | fold already; engine now also rounds at settle (behaviour change on non-multiples of 10) |
 | ave_mujica bend | `rules/skills/skill-groups/src/ave_mujica.rs` | ×1.5 (`(x*3+1)/2`) | no | fold already; engine now rounds at settle |
-| chisato_frank / aya_with / fever / nfo / … | various | +x / −x / ×2 | no | exact integer; engine rounds at settle if the figure is not already a multiple of 10 |
+| chisato / aya / fever / nfo / … | various | +x / −x / ×2 | no | exact integer; engine rounds at settle if the figure is not already a multiple of 10 |
 | plan/tile factors (`set_pay_factor(500)`, `RENT_FACTOR`) | saki_move, sakiko_lead, repaint, rana_funny, taki_serious, council_check, kasumi_love_all, studio_storm, ringing_bloom | ×0.5 / ×0.25 / … | truncate in `scale_settle_payment` | engine rounds at settle when the scale rewrote the figure |
 
 ### Base formulas (NOT running-amount modifiers — unchanged)

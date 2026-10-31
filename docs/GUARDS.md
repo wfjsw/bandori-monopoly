@@ -52,7 +52,7 @@ per-card probes.
 
 | family | decls | distinct fns | entry | where |
 |---|---|---|---|---|
-| counteract guards | 51 | 50 (`can_counteract`×48, `can_counteract2`, `can_counter_fire`, `can_negate`) | `On::Counteract` | cards + `tae_police.rs:87` |
+| counteract guards | 51 | 50 (`can_counteract`×48, `can_counteract2`, `can_counter_fire`, `can_negate`) | `On::Counteract` | cards + `tae.rs:87` |
 | hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Action` | cards, skills, events, tiles |
 | play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play().counter_reason(..)` | cards |
 | skill usability | (in play gates) | `can_use` family ×35 | `On::Play` | skills/ |
@@ -88,10 +88,10 @@ per-card probes.
 | pattern | decls | example |
 |---|---|---|
 | `mine` = `trigger.player_id == owner` | 118 | `skills/skill-bands/src/mygo.rs:34` |
-| `mine` + `skill_blocked(band)` | 3 | `aya_with.rs:36` |
+| `mine` + `skill_blocked(band)` | 3 | `aya.rs:36` |
 | `is_placed` only / + actor | ~30 | `charity_show.rs:92` |
 | `crystals_changed_guard` (card_is(ID) ∧ crystals==0 ∧ value≤0) | 11 | `crimson_soul.rs:184` |
-| threshold on fire / crystals / tokens / hand / state | ~40 | `tae_police.rs:87` `fire(owner) >= 4` |
+| threshold on fire / crystals / tokens / hand / state | ~40 | `tae.rs:87` `fire(owner) >= 4` |
 | money threshold (play) | 7 | `gacha10.rs:17` `money < 1500` |
 | `cant_move` / counts / tile-distance (play) | ~45 | `your_light.rs:16` (dist residual) |
 | `always` (no-op prefilter) | 19 | events `embers.rs:26` |
@@ -540,8 +540,8 @@ lifting it to the host would duplicate it), `now_sumimi` price_tag (a rent-table
 lookup + `ring_multiplier`, engine logic), `dream_return` targets (a tile loop
 over `rent_of`, the rent table), `hey_kids` buildable_targets (the engine's
 `WhyNotBuildOn` -- colour-group completeness, house caps, build-block props),
-`tsugushi_monitor` all-player token scan, and the mark-count residuals
-(`hagumi_marks`, `hagumi_homerun`, `uika_idol`, `black_suits`, `tae_police`) --
+`tsukushi` all-player token scan, and the mark-count residuals
+(`hagumi_marks`, `hagumi`, `uika_sumimi`, `black_suits`, `tae`) --
 **deferred** to the `mark-counter-api` branch, which is replacing the whole
 mark/token API with card-instance counters. Each residual keeps its
 kind/actor prefix (and, for the partials, the expressible head is now in
@@ -552,7 +552,7 @@ kind/actor prefix (and, for the partials, the expressible head is now in
 `haruhikage` within5/others_within, `lisa_bond` players_on,
 `rana_funny` card.tile, `hagumi_marks` gains_this_turn, `centrifugal`
 targeted_count, and `plan.fixed_roll` (sports_talent / kaoru_thief /
-soyo_clear / kanon_lost). `dist` and `repeated_digits` are in the vocabulary
+soyo / kanon). `dist` and `repeated_digits` are in the vocabulary
 too, but `your_light` / `no_breakup` keep those clauses in their residual
 guard -- they are play gates whose refusal `Msg` is specific (§4.4).
 

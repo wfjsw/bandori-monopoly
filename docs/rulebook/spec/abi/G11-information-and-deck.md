@@ -32,8 +32,8 @@ Related open work this design closes or feeds:
 * `docs/rulebook/BACKLOG.md` **ABI-07** (deck-inspection hook) is closed by
   items 1–2 and §4.
 * The same look idiom is also live in `C-PP-maya-dawn-02`
-  (`rules/skills/skill-personas/src/maya_dawn.rs:60-97`) and
-  `rules/skills/skill-personas/src/ako_cool.rs:52-144`; both get the same
+  (`rules/skills/skill-personas/src/maya.rs:60-97`) and
+  `rules/skills/skill-personas/src/ako.rs:52-144`; both get the same
   migration (§6) and both have the same peek-refill defect today.
 * Open questions that stay open after this doc: OPEN-HHW-BELIEVE-CHOOSER,
   OPEN-HHW-SHORT-PILE, OPEN-mark, OPEN-div (§11).
@@ -90,8 +90,8 @@ Three separate holes, one shared root:
   gate `can_swap` accepts is `is_placed()`, and nothing can place the card out
   of a deck, both [持续] clauses are unreachable in real play.
 * **A look is spelled as "snapshot + take later".** Every looker
-  (`backstage_tour.rs:65-76`, `believe_you.rs:107-127`, `maya_dawn.rs:60-97`,
-  `ako_cool.rs:52-144`) reads `cards_in(Deck)` into a local, then removes by
+  (`backstage_tour.rs:65-76`, `believe_you.rs:107-127`, `maya.rs:60-97`,
+  `ako.rs:52-144`) reads `cards_in(Deck)` into a local, then removes by
   card id from the live deck after a prompt. Any pile write in between
   (including a refill, item 1) invalidates the snapshot, and the ids are
   re-resolved by name against a pile that may have changed.
@@ -587,7 +587,7 @@ card.placed && value > 0` stays; the body is unchanged (it now runs once per
 action). The header comment about C#'s batch shape is resolved.
 
 **4. Same-family lookers (not group items, same migration).**
-`maya_dawn.rs:60-97` and `ako_cool.rs:52-144` change their `cards_in(Deck)`
+`maya.rs:60-97` and `ako.rs:52-144` change their `cards_in(Deck)`
 snapshot plus post-prompt `take_card(Deck)` into `inspect_begin` /
 `take_card(Inspect)`; maya's tail becomes `inspect_end(player, true)`
 (「剩余观看的牌洗回卡组」), ako's per-card release either places

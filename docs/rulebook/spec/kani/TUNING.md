@@ -428,7 +428,7 @@ Every `#[kani::proof]` gets `#[kani::use_stub_set(crate::kani_stubs::LIB_COST[_N
 | `--no-unwinding-checks` | unsound (vacuous proofs); never used. |
 | `-Z stubbing` on production bodies | not allowed (card bodies stay unmodified). |
 
-### Profile delta — `skills_pp::aya_with_02_pay_discount_iff` (TIMEOUT 1800 s central)
+### Profile delta — `skills_pp::aya_02_pay_discount_iff` (TIMEOUT 1800 s central)
 
 | metric | central (no stubs) | + kani-bump + LIB_COST | + NOFMT (panic_fmt + format) |
 |---|---|---|---|
@@ -451,7 +451,7 @@ per-row verdict table.
 
 | stub | what the real function does | why the replacement is equivalent | what it is NOT allowed to change |
 |---|---|---|---|
-| `memchr` / `memchr_naive` / `memchr_aligned` | first index of byte `n` in `text`, or `None` | pure search. Stub is a 128-step `.get` scan; same `Option<usize>` for every haystack of length ≤ 128. **Model bound:** every `format!` key / panic snippet / `split('\n')` piece in this corpus is ≤ 128 bytes (`skill.tsugushi.rec:3` = 20; panic texts ~50). Longer haystacks are a **loud** `kani::assert(false)` — never a silent wrong index. | result value |
+| `memchr` / `memchr_naive` / `memchr_aligned` | first index of byte `n` in `text`, or `None` | pure search. Stub is a 128-step `.get` scan; same `Option<usize>` for every haystack of length ≤ 128. **Model bound:** every `format!` key / panic snippet / `split('\n')` piece in this corpus is ≤ 128 bytes (`skill.tsukushi.rec:3` = 20; panic texts ~50). Longer haystacks are a **loud** `kani::assert(false)` — never a silent wrong index. | result value |
 | `slice_index_fail(start,end,len)` | formats "index out of bounds: …" then panics (`-> !`) | reachable OOB is a loud fail either way. Stub: `kani::assert(false)` + diverge. Only the fmt/memchr of the *message* is dropped. | reachability of the OOB |
 | `handle_alloc_error(layout)` | formats the layout then aborts (`-> !`) | reachable OOM is a loud fail either way. Stub: `kani::assert(false)` + diverge. | reachability of OOM |
 | `capacity_overflow` / `handle_error` | panics / dispatches to the two above (`-> !`) | same: loud fail either way. `handle_error`'s `match` is the cost; the arms are already stubbed. | reachability of grow failure |

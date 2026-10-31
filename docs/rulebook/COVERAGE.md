@@ -209,7 +209,7 @@ assert the clause (or the reason it is not).
 | `skill:高松灯（CRYCHIC）:跌跌撞撞...#2` | any time in your turn: spend 1 fire to clear 1 [停留] | **unc** | — |
 | `skill:高松灯（CRYCHIC）:跌跌撞撞...#3` | move roll <= 6: gain 1 [停留] and settle at turn end | **ok** | tomori_skill_low_roll_gives_stay |
 | `skill:椎名立希（CRYCHIC）:克服劣等感#1` | if your move roll < another's last move roll (<=20) and you have not used a skill this turn, next turn you may re-roll once pre-move and keep either | **unc** | riki_skill_bound is binding-only |
-| `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#1` | pass CiRCLE: +1 fire (init 1, cap 2) | **ok** | saki_crychic_skill_fire_cap |
+| `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#1` | pass CiRCLE: +1 fire (init 1, cap 2) | **ok** | sakiko_crychic_skill_fire_cap |
 | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#2` | other's main-move end, before settle, if within ±5: they may pay 300 to step 1 toward you | **unc** | — |
 | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#3` | your main-move end: spend 1 fire to step 1 toward a player within ±5 | **unc** | — |
 | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#4` | if band is Ave Mujica: within 5 of a player = state 2, but only shuffling adds band crystals | **unc** | — |

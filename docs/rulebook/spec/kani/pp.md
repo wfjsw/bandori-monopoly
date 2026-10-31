@@ -121,16 +121,16 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-PP-aya-with-01 | start +5 positive fans | PROVEN* | `aya_with_01_five_fans_iff`, `aya_with_01_mutant_is_detected` | triage3: VACUOUS was **C** `guard_needs` band_is seat-arg (no seat rows filled); fixed, re-time pending | grant-(2) half needs a non-PP seat (not fully asserted) | — |
+| C-PP-aya-with-01 | start +5 positive fans | PROVEN* | `aya_01_five_fans_iff`, `aya_01_mutant_is_detected` | triage3: VACUOUS was **C** `guard_needs` band_is seat-arg (no seat rows filled); fixed, re-time pending | grant-(2) half needs a non-PP seat (not fully asserted) | — |
 | C-PP-hina-lottery-01 | same shared (1) | PROVEN* (same shape as aya-with-01) | — | — | — | — |
 | C-PP-chisato-frank-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
 | C-PP-maya-dawn-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
 | C-PP-eve-unify-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
-| C-PP-aya-with-02 | pay discount Y×100 + fan-side flip | PROVEN* | `aya_with_02_pay_discount_iff`, `aya_with_02_mutant_is_detected` | triage3: TIMEOUT **E** (`ask_number` → Msg → memchr cliff) | — | — |
-| C-PP-hina-lottery-02 | turn-start 1d4 borrow (2) | PROVEN* (map) / FAILS (body) | `hina_lottery_02_borrow_map` | pending | regression: `skill.hinaLottery.borrowed` stays -1 (borrow never lands) | — |
-| C-PP-chisato-frank-02 | receive +Y×100 | PROVEN* (formula) | `chisato_frank_02_formula` | pending | — | — |
-| C-PP-maya-dawn-02 | draw → watch Y+1, pick 1 | PROVEN* (formula) | `maya_dawn_02_watch_formula` | pending | prompt/pick body is expensive | — |
-| C-PP-eve-unify-02 | +Yd4 on any roll | BLOCKED-HOST | `eve_unify_02_extra_dice_formula` (pure) | pending | `trig_move_roll` unmodeled (KANI-COVERAGE) | — |
+| C-PP-aya-with-02 | pay discount Y×100 + fan-side flip | PROVEN* | `aya_02_pay_discount_iff`, `aya_02_mutant_is_detected` | triage3: TIMEOUT **E** (`ask_number` → Msg → memchr cliff) | — | — |
+| C-PP-hina-lottery-02 | turn-start 1d4 borrow (2) | PROVEN* (map) / FAILS (body) | `hina_02_borrow_map` | pending | regression: `skill.hinaLottery.borrowed` stays -1 (borrow never lands) | — |
+| C-PP-chisato-frank-02 | receive +Y×100 | PROVEN* (formula) | `chisato_02_formula` | pending | — | — |
+| C-PP-maya-dawn-02 | draw → watch Y+1, pick 1 | PROVEN* (formula) | `maya_02_watch_formula` | pending | prompt/pick body is expensive | — |
+| C-PP-eve-unify-02 | +Yd4 on any roll | BLOCKED-HOST | `eve_02_extra_dice_formula` (pure) | pending | `trig_move_roll` unmodeled (KANI-COVERAGE) | — |
 
 ---
 

@@ -1352,7 +1352,7 @@ Plain failing tests, kept red.
   charged 3000 (looks like 1000 per cleared **layer** globally). Test:
   `hitoshizuku_clear_charge_and_stun_play`.
 * **WRONG** `C-MYGO-rana-skill-03` -- 「免除付款并抽1张卡」. Engine draws
-  (`rana_parking_free`) but still charges rent (400 with 1 house) instead of
+  (`rana_free`) but still charges rent (400 with 1 house) instead of
   exempting. Test: `rana_skill_space_and_overlap`.
 * **WRONG** `C-MYGO-murosshi-04` -- 「本应获得的格子收入由此前指定的那名玩家获得」.
   Engine: the foreign settler pays 0 (rent vanishes) instead of redirecting

@@ -10,7 +10,7 @@ Motivation (user request 2026-10-18): 火罐 was designed to be bound to the
 player's skill card -- a single source of write, other cards communicating with
 the skill to modify it -- but the usage census found it a free resource with
 10+ unowned writers (Ave Mujica's band skill raw-sets the pool, `Sumimi:一人
-两个甜甜圈` grants across seats, `lisa_goddess` invents a parallel `tempFire`
+两个甜甜圈` grants across seats, `lisa` invents a parallel `tempFire`
 key, `Sumimi:Sumimi是二人一体的` hardcodes 初始/上限 pairs). P✽P粉丝 is a
 second free-keyed quantity. Neither may pollute the engine.
 
@@ -209,7 +209,7 @@ the second, clause （2） is per band instance.
 * CP点 -- kind-owned (`mark:cp`, already the model).
 * 抹茶巴菲 (wire `"抹茶芭菲"`) -- **not** a `mark:*` kind-owned host. It is a
   counter of `skill:要乐奈:投币式停车场的猫` -- units held by players and
-  placed on a space (`rules/skills/skill-personas/src/rana_parking.rs`) --
+  placed on a space (`rules/skills/skill-personas/src/rana.rs`) --
   and is collected when the holder is down. Cross-writes
   (`card-mygo/src/rana_funny.rs`) route through the kernel. The skill being
   unique does **not** promote it to a standing host; the `mark:*` family is
@@ -260,11 +260,11 @@ the second, clause （2） is per band instance.
    The face's 「（初始N，上限M）」 lives on its own `CardDef` (`.fire_pots(N, M)`
    → props `fireInitial`/`fireCap`); `fire_pot(player)` →
    `declare_own` reads them through `ctx::card_prop` (no body literals, no
-   central table). Guests routed: two_in_one (`CardDef` re-declare), mutsumi_actor
+   central table). Guests routed: two_in_one (`CardDef` re-declare), mutsumi
    (fire overlay via the last-play latch; character
    cover still `TODO(规则书)[judgement]`), ave_mujica (regime verbs),
-   kaoru_prince / uika_imprisoned (declare), yuri_crit (stops touching
-   CHARGE), lisa_goddess (`fire::temp::grant`).
+   kaoru / uika (declare), rui (stops touching
+   CHARGE), lisa (`fire::temp::grant`).
 3. **Fans**: kind-owned host protocol in `rules/skills/skill-groups/src/fans.rs`
    (`mark:pp_fans` -- the host family lives in `rules/markers`; this holder-
    bound counter's protocol is the facade module, storage stays the wire

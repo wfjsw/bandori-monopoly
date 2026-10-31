@@ -126,9 +126,9 @@ be left behind by a **later** link.
   only negation that removes it is the whole-effect negation **before** the body
   (`skillUsed`/`card`/`event`). A later step's negation, or a pay-stage cancel
   of an accompanying money payment, leaves the marker spent.
-* **Examples:** 「你可以消耗一个火罐指定…」 (`himari_step.rs:63-80` — pick
+* **Examples:** 「你可以消耗一个火罐指定…」 (`himari.rs:63-80` — pick
   first, then `spend_fire`, then `plan::set_parity`; if the move is later
-  cancelled the fire stands); 「消耗7个[火罐]」 (`kaoru_prince.rs:128`);
+  cancelled the fire stands); 「消耗7个[火罐]」 (`kaoru.rs:128`);
   「消耗所有火罐」 (`misaki_card.rs:71`, inside a counteract body).
 * **Ruling names payments.** Whether 「消耗N个火罐」/「移除[奇迹水晶]」 is a cost
   or effect content is **the question for you** (§5).
@@ -240,7 +240,7 @@ The ruling names payments (资金). 「消耗N个火罐」 / 「移除[奇迹水
 spends are handled as **raw state writes** (`ctx::spend_fire` all-or-nothing,
 `ctx::add_crystals(-n)`, `ctx::add_tok`) with no counteraction window. Skill
 texts use 「你可以消耗一个火罐…」 / 「消耗N个[火罐]」 wording (e.g.
-`himari_step.rs:5`, `kaoru_prince.rs`, `arisa_bonsai.rs:7`
+`himari.rs:5`, `kaoru.rs`, `arisa.rs:7`
 「使用2个[火罐]为自己的团卡添加1个[奇迹水晶]」).
 
 **Ruled 2026-10-07:**
@@ -255,11 +255,11 @@ texts use 「你可以消耗一个火罐…」 / 「消耗N个[火罐]」 wordin
 Exception: HHW:（美咲） may counteract with 0 火罐 -- 「消耗所有火罐」 is
 vacuous when the pot is empty.
 
-Related pre-gates: `can_use` fire checks (`himari_step.rs:56`, `kaoru_prince.rs:88`
-`FIRE < 7`, `kiritani_zenith.rs:70`, `extraordinary_star.rs:77`, `uika_idol.rs`,
-`anon_restart.rs`, `lisa_goddess.rs`, `mana_donut.rs`, `moca_self.rs`,
-`tomoe_ramen.rs`, `tsugumi_plain.rs`, `rinko_1cm.rs`, `sato_red.rs`,
-`misaki_other.rs`, `tukushi_try.rs`) refuse the press when the pot is short —
+Related pre-gates: `can_use` fire checks (`himari.rs:56`, `kaoru.rs:88`
+`FIRE < 7`, `toko.rs:70`, `kasumi.rs:77`, `uika_sumimi.rs`,
+`anon.rs`, `lisa.rs`, `mana.rs`, `moca.rs`,
+`tomoe.rs`, `tsugumi.rs`, `rinko.rs`, `masking.rs`,
+`misaki.rs`, `shifune.rs`) refuse the press when the pot is short —
 the same activation-cost shape as §4, if markers are effect content.
 
 ---

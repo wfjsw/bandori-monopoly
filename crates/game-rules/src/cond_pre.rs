@@ -1610,8 +1610,8 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.kanonLost.silent",
     "skill.soyoClear.armed",
     "skill.soyoClear.penalty",
-    "skill.tamade.builtLast",
-    "skill.mumeiStream.state",
+    "skill.chuchu.builtLast",
+    "skill.nyamuStream.state",
     "skill.mutsumiActor.state",
     "skill.kaedeSupport.state",
     "skill.sakikoLife.state",
@@ -1622,7 +1622,7 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.takiCrychic.armed",
     // `soyo_crychic` teleport one-shot flag (`state::set(player_id, ARMED, 1)`).
     "skill.soyoCrychic.armed",
-    "skill.tamade.builtThis",
+    "skill.chuchu.builtThis",
     // `kaoru_thief` mark-turn latch (`ctx::set_slot(player_id, TURN, turn_key)`).
     "kaoru_thief_turn",
     // `umiri_card` user seat+1 (`ctx::set_slot(holder, USER_KEY, user + 1)`).
@@ -1635,18 +1635,18 @@ pub const SLOT_NAMES: &[&str] = &[
     // `detour` next-roll 1d6 arm (`state::set(player_id, NEXT_ROLL, 1)`); the
     // `On::RollPlan` condition is `slot('detour_next_roll') != 0`.
     "detour_next_roll",
-    // `sayo_thorns` / `sayo_play` once-per-turn lock (`state::set(player_id, USED, turn_key)`).
+    // `sayo` / `sayo_play` once-per-turn lock (`state::set(player_id, USED, turn_key)`).
     "skill.sayoThorns.used",
-    // `mumei_streamer` flip count (`state::set(player_id, FLIPPED, n)`).
-    "skill.mumei.flipped",
-    // `mumei_streamer` post-gain pot X latched at the payment declaration for
+    // `nyamu` flip count (`state::set(player_id, FLIPPED, n)`).
+    "skill.nyamu.flipped",
+    // `nyamu` post-gain pot X latched at the payment declaration for
     // the pure `PaySplitAdd` filter (`state::set(player_id, BUMP_X, x)`).
-    "skill.mumei.bumpX",
-    // `hina_lottery` borrowed-skill index (`state::set(player_id, BORROWED, k)`).
+    "skill.nyamu.bumpX",
+    // `hina` borrowed-skill index (`state::set(player_id, BORROWED, k)`).
     "skill.hinaLottery.borrowed",
-    // `arisa_bonsai` passed-station latch (`ctx::set_slot(player_id, …, 1)`).
+    // `arisa` passed-station latch (`ctx::set_slot(player_id, …, 1)`).
     "skill.arisa.passedStation",
-    // `uika_imprisoned` 1d6 bonus count (`state::set(player_id, BONUS, n)`).
+    // `uika` 1d6 bonus count (`state::set(player_id, BONUS, n)`).
     "skill.uikaImprisoned.bonus",
     // `star_beat` banked build layers (`ctx::inc_slot(player_id, "star_beat.layers", ±1)`).
     "star_beat.layers",

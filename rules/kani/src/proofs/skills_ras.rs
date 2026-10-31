@@ -83,7 +83,7 @@ macro_rules! fire_pass_leaf_iff_at {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn masking_01_fire_gain_leaf() {
-    fire_pass_leaf_iff_at!(0, skill_personas::sato_red::on_pass_kani(0));
+    fire_pass_leaf_iff_at!(0, skill_personas::masking::on_pass_kani(0));
 }
 
 /// Same leaf at seat 1.
@@ -91,7 +91,7 @@ pub fn masking_01_fire_gain_leaf() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn masking_01_user1_fire_gain_leaf() {
-    fire_pass_leaf_iff_at!(1, skill_personas::sato_red::on_pass_kani(1));
+    fire_pass_leaf_iff_at!(1, skill_personas::masking::on_pass_kani(1));
 }
 
 /// C-RAS-rio-01 leaf: `skill:和奏瑞依` `on_pass` requests +1 [火罐].
@@ -99,7 +99,7 @@ pub fn masking_01_user1_fire_gain_leaf() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn rio_01_fire_gain_leaf() {
-    fire_pass_leaf_iff_at!(0, skill_personas::raise_effort::on_pass_kani(0));
+    fire_pass_leaf_iff_at!(0, skill_personas::layer::on_pass_kani(0));
 }
 
 /// Mutant companion for the fire-pass leaf (+2 ≠ +1).
@@ -109,7 +109,7 @@ pub fn rio_01_fire_gain_leaf() {
 pub fn fire_pass_gain_mutant_is_detected() {
     fire_world(0);
     let user = 0i32;
-    invoke::unwrap_done(skill_personas::sato_red::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::masking::on_pass_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];

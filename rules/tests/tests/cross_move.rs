@@ -168,7 +168,7 @@ fn m03_eve_then_yolo() {
         let Some(p) = t.prompt() else { break };
         if t.counteract_offered("AG:Y.O.L.O") {
             t.counteract(0, "AG:Y.O.L.O").unwrap();
-        } else if p.kind == "choice" && t.prompt_refers("eve_unify") {
+        } else if p.kind == "choice" && t.prompt_refers("eve") {
             // Eve's ask_number 0..=up: option index == Y.
             t.answer(0, 2).unwrap();
         } else {
@@ -613,8 +613,7 @@ fn m12a_yukina_forced_stop() {
     t.dice(&[5]);
     t.roll(1).unwrap();
     while let Some(p) = t.prompt() {
-        if format!("{p:?}").contains("kokoro_practice_force") || format!("{p:?}").contains("force")
-        {
+        if format!("{p:?}").contains("yukina_force") || format!("{p:?}").contains("force") {
             let _ = t.answer_one(0);
         } else {
             t.decline();
@@ -641,9 +640,7 @@ fn m12b_yukina_stop_countered() {
     while let Some(p) = t.prompt() {
         if t.counteract_offered("通用:安可") {
             t.counteract(1, "通用:安可").unwrap();
-        } else if format!("{p:?}").contains("kokoro_practice_force")
-            || format!("{p:?}").contains("force")
-        {
+        } else if format!("{p:?}").contains("yukina_force") || format!("{p:?}").contains("force") {
             let _ = t.answer_one(0);
         } else {
             t.decline();
@@ -1067,7 +1064,7 @@ fn m23_human_boost_hit_by_stop() {
     // asker, so match the message key instead (same drive as m12a).
     loop {
         let Some(_) = t.prompt() else { break };
-        if t.prompt_refers("kokoro_practice_force") {
+        if t.prompt_refers("yukina_force") {
             t.answer_one(0).unwrap(); // yes: stop the passer on P1's tile
         } else {
             t.decline();

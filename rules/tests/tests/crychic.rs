@@ -767,7 +767,7 @@ fn tomori_crychic_card_resets_x() {
 // -- CRYCHIC:（祥子）带领着大家 -----------------------------------------
 
 #[test]
-fn saki_crychic_card_records_players() {
+fn sakiko_crychic_card_records_players() {
     let mut t = Table::vanilla(3);
     t.set_character_raw(0, "丰川祥子（CRYCHIC）");
     t.set_pos(1, 0); // same tile as p0
@@ -903,7 +903,7 @@ fn riki_skill_bound() {
 }
 
 #[test]
-fn saki_crychic_skill_fire_cap() {
+fn sakiko_crychic_skill_fire_cap() {
     let mut t = Table::new(&["丰川祥子（CRYCHIC）", "高松灯（CRYCHIC）"]);
     t.clean();
     t.begin_turn(0);
@@ -921,7 +921,7 @@ fn saki_crychic_skill_fire_cap() {
 /// really moves before the settle, and the settle (its 停在 / rent line) runs at
 /// the new tile -- not the one the dice cast.
 #[test]
-fn saki_crychic_nudge_moves_the_destination() {
+fn sakiko_crychic_nudge_moves_the_destination() {
     let mut t = Table::new(&["丰川祥子（CRYCHIC）", "高松灯（CRYCHIC）"]);
     t.clean();
     t.set_pos(1, 16);
@@ -934,7 +934,7 @@ fn saki_crychic_nudge_moves_the_destination() {
     let mut asked = false;
     loop {
         let Some(_) = t.prompt() else { break };
-        if t.prompt_refers("saki_crychic_ask_self") {
+        if t.prompt_refers("sakiko_crychic_ask_self") {
             asked = true;
             t.answer_one(0).unwrap();
         } else {

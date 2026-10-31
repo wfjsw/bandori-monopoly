@@ -70,112 +70,112 @@ pub fn fire_pot(player_id: i32) {
     bandori_std::fire::declare_own(player_id);
 }
 
-pub mod anon_restart;
-use anon_restart::ANON_RESTART;
-pub mod arisa_bonsai;
-use arisa_bonsai::ARISA_BONSAI;
-pub mod kaoru_prince;
-use kaoru_prince::KAORU_PRINCE;
-pub mod kiritani_zenith;
-pub mod lisa_goddess;
-use kiritani_zenith::KIRITANI_ZENITH;
-use lisa_goddess::LISA_GODDESS;
-pub mod misaki_other;
-use misaki_other::MISAKI_OTHER;
-pub mod moca_self;
-pub mod mutsumi_actor;
-use mutsumi_actor::MUTSUMI_ACTOR;
+pub mod anon;
+use anon::ANON;
+pub mod arisa;
+use arisa::ARISA;
+pub mod kaoru;
+use kaoru::KAORU;
+pub mod lisa;
+pub mod toko;
+use lisa::LISA;
+use toko::TOKO;
+pub mod misaki;
+use misaki::MISAKI;
+pub mod moca;
+pub mod mutsumi;
+use mutsumi::MUTSUMI;
 pub mod mutsumi_crychic;
-pub mod nanami_ordinary;
+pub mod nanami;
 use mutsumi_crychic::MUTSUMI_CRYCHIC;
-use nanami_ordinary::NANAMI_ORDINARY;
-pub mod tukushi_try;
-use moca_self::MOCA_SELF;
-use tukushi_try::TUKUSHI_TRY;
-pub mod numazu_maid;
-pub mod tomoe_ramen;
-use numazu_maid::NUMAZU_MAID;
-use tomoe_ramen::TOMOE_RAMEN;
-pub mod rana_parking;
-use rana_parking::RANA_PARKING;
-pub mod rimi_resolve;
-use rimi_resolve::RIMI_RESOLVE;
-pub mod rinko_1cm;
-pub mod tae_police;
-use rinko_1cm::RINKO_1CM;
-use tae_police::TAE_POLICE;
-pub mod asahi_aim;
-use asahi_aim::ASAHI_AIM;
-pub mod uika_idol;
-use uika_idol::UIKA_IDOL;
-pub mod hagumi_homerun;
-use hagumi_homerun::HAGUMI_HOMERUN;
-pub mod hina_lottery;
-pub mod mana_donut;
-use hina_lottery::HINA_LOTTERY;
-use mana_donut::MANA_DONUT;
-pub mod himari_step;
-use himari_step::HIMARI_STEP;
-pub mod ran_red;
-use ran_red::RAN_RED;
-pub mod raise_effort;
-pub mod tsugumi_plain;
-pub mod tsugushi_monitor;
-use tsugushi_monitor::TSUGUSHI_MONITOR;
-pub mod yuri_crit;
-use raise_effort::RAISE_EFFORT;
-use tsugumi_plain::TSUGUMI_PLAIN;
-use yuri_crit::YURI_CRIT;
-pub mod sayo_thorns;
-use sayo_thorns::SAYO_THORNS;
-pub mod soyo_clear;
+use nanami::NANAMI;
+pub mod shifune;
+use moca::MOCA;
+use shifune::SHIFUNE;
+pub mod pareo;
+pub mod tomoe;
+use pareo::PAREO;
+use tomoe::TOMOE;
+pub mod rana;
+use rana::RANA;
+pub mod rimi;
+use rimi::RIMI;
+pub mod rinko;
+pub mod tae;
+use rinko::RINKO;
+use tae::TAE;
+pub mod lock;
+use lock::LOCK;
+pub mod uika_sumimi;
+use uika_sumimi::UIKA_SUMIMI;
+pub mod hagumi;
+use hagumi::HAGUMI;
+pub mod hina;
+pub mod mana;
+use hina::HINA;
+use mana::MANA;
+pub mod himari;
+use himari::HIMARI;
+pub mod ran;
+use ran::RAN;
+pub mod layer;
+pub mod tsugumi;
+pub mod tsukushi;
+use tsukushi::TSUKUSHI;
+pub mod rui;
+use layer::LAYER;
+use rui::RUI;
+use tsugumi::TSUGUMI;
+pub mod sayo;
+use sayo::SAYO;
+pub mod soyo;
 pub mod soyo_crychic;
 use soyo_crychic::SOYO_CRYCHIC;
 pub mod tomori_crychic;
-use soyo_clear::SOYO_CLEAR;
+use soyo::SOYO;
 use tomori_crychic::TOMORI_CRYCHIC;
-pub mod sato_red;
-use sato_red::SATO_RED;
-pub mod taki_meeting;
-use taki_meeting::TAKI_MEETING;
-pub mod chisato_frank;
-pub mod uika_imprisoned;
-use chisato_frank::CHISATO_FRANK;
-use uika_imprisoned::UIKA_IMPRISONED;
-pub mod eve_unify;
-use eve_unify::EVE_UNIFY;
-pub mod extraordinary_star;
-pub mod maya_dawn;
-use extraordinary_star::EXTRAORDINARY_STAR;
-use maya_dawn::MAYA_DAWN;
-pub mod kurata_speed;
-use kurata_speed::KURATA_SPEED;
-pub mod tamade_producer;
-use tamade_producer::TAMADE_PRODUCER;
-pub mod tomori_poem;
-use tomori_poem::TOMORI_POEM;
-pub mod ako_cool;
-use ako_cool::AKO_COOL;
-pub mod aya_with;
-use aya_with::AYA_WITH;
-pub mod kokoro_practice;
-use kokoro_practice::KOKORO_PRACTICE;
-pub mod kanon_lost;
-pub mod kasumi_group;
-use kanon_lost::KANON_LOST;
-pub mod saaya_sky;
-pub mod saki_crychic;
-use kasumi_group::KASUMI_GROUP;
-use saaya_sky::SAAYA_SKY;
-use saki_crychic::SAKI_CRYCHIC;
-pub mod marina_gifts;
-use marina_gifts::MARINA_GIFTS;
-pub mod kaede_support;
-use kaede_support::KAEDE_SUPPORT;
-pub mod mumei_streamer;
-use mumei_streamer::MUMEI_STREAMER;
-pub mod sakiko_life;
-use sakiko_life::SAKIKO_LIFE;
+pub mod masking;
+use masking::MASKING;
+pub mod taki;
+use taki::TAKI;
+pub mod chisato;
+pub mod uika;
+use chisato::CHISATO;
+use uika::UIKA;
+pub mod eve;
+use eve::EVE;
+pub mod kasumi;
+pub mod maya;
+use kasumi::KASUMI;
+use maya::MAYA;
+pub mod mashiro;
+use mashiro::MASHIRO;
+pub mod chuchu;
+use chuchu::CHUCHU;
+pub mod tomori;
+use tomori::TOMORI;
+pub mod ako;
+use ako::AKO;
+pub mod aya;
+use aya::AYA;
+pub mod yukina;
+use yukina::YUKINA;
+pub mod kanon;
+pub mod kokoro;
+use kanon::KANON;
+pub mod saaya;
+pub mod sakiko_crychic;
+use kokoro::KOKORO;
+use saaya::SAAYA;
+use sakiko_crychic::SAKIKO_CRYCHIC;
+pub mod marina;
+use marina::MARINA;
+pub mod umiri;
+use umiri::UMIRI;
+pub mod nyamu;
+use nyamu::NYAMU;
+pub mod sakiko;
+use sakiko::SAKIKO;
 pub mod taki_crychic;
 use taki_crychic::TAKI_CRYCHIC;
 
@@ -191,58 +191,58 @@ use taki_crychic::TAKI_CRYCHIC;
 // one (2026-10-06); the module docs describe the hook/binding shape.
 //
 pub const CARDS: &[CardDef] = &[
-    ANON_RESTART,
-    ARISA_BONSAI,
-    AKO_COOL,
-    ASAHI_AIM,
-    AYA_WITH,
-    CHISATO_FRANK,
-    UIKA_IDOL,
-    UIKA_IMPRISONED,
-    EVE_UNIFY,
-    EXTRAORDINARY_STAR,
-    KASUMI_GROUP,
-    KAORU_PRINCE,
-    KANON_LOST,
-    KIRITANI_ZENITH,
-    KOKORO_PRACTICE,
-    HAGUMI_HOMERUN,
-    HINA_LOTTERY,
-    HIMARI_STEP,
-    KURATA_SPEED,
-    LISA_GODDESS,
-    MANA_DONUT,
-    MARINA_GIFTS,
-    MAYA_DAWN,
-    MISAKI_OTHER,
-    MOCA_SELF,
-    MUTSUMI_ACTOR,
+    ANON,
+    ARISA,
+    AKO,
+    LOCK,
+    AYA,
+    CHISATO,
+    UIKA_SUMIMI,
+    UIKA,
+    EVE,
+    KASUMI,
+    KOKORO,
+    KAORU,
+    KANON,
+    TOKO,
+    YUKINA,
+    HAGUMI,
+    HINA,
+    HIMARI,
+    MASHIRO,
+    LISA,
+    MANA,
+    MARINA,
+    MAYA,
+    MISAKI,
+    MOCA,
+    MUTSUMI,
     MUTSUMI_CRYCHIC,
-    NANAMI_ORDINARY,
-    NUMAZU_MAID,
-    RANA_PARKING,
-    RAN_RED,
-    RAISE_EFFORT,
-    RIMI_RESOLVE,
-    RINKO_1CM,
-    SAAYA_SKY,
-    SAKI_CRYCHIC,
-    SATO_RED,
-    SAYO_THORNS,
-    SOYO_CLEAR,
+    NANAMI,
+    PAREO,
+    RANA,
+    RAN,
+    LAYER,
+    RIMI,
+    RINKO,
+    SAAYA,
+    SAKIKO_CRYCHIC,
+    MASKING,
+    SAYO,
+    SOYO,
     SOYO_CRYCHIC,
-    TAKI_MEETING,
-    TAE_POLICE,
-    TAMADE_PRODUCER,
-    TOMOE_RAMEN,
-    TSUGUMI_PLAIN,
-    TSUGUSHI_MONITOR,
-    YURI_CRIT,
-    TUKUSHI_TRY,
+    TAKI,
+    TAE,
+    CHUCHU,
+    TOMOE,
+    TSUGUMI,
+    TSUKUSHI,
+    RUI,
+    SHIFUNE,
     TOMORI_CRYCHIC,
-    TOMORI_POEM,
+    TOMORI,
     TAKI_CRYCHIC,
-    SAKIKO_LIFE,
-    MUMEI_STREAMER,
-    KAEDE_SUPPORT,
+    SAKIKO,
+    NYAMU,
+    UMIRI,
 ];

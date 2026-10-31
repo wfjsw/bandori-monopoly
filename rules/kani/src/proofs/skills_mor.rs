@@ -572,7 +572,7 @@ mod pass_fire {
             0,
             spec::TOUKO_01_FIRE_MAX,
             "C-MOR-touko-01",
-            skill_personas::kiritani_zenith::on_pass_kani,
+            skill_personas::toko::on_pass_kani,
         );
     }
 
@@ -585,7 +585,7 @@ mod pass_fire {
             1,
             spec::TOUKO_01_FIRE_MAX,
             "C-MOR-touko-01",
-            skill_personas::kiritani_zenith::on_pass_kani,
+            skill_personas::toko::on_pass_kani,
         );
     }
 
@@ -598,7 +598,7 @@ mod pass_fire {
             0,
             spec::NANAMI_01_FIRE_MAX,
             "C-MOR-nanami-01",
-            skill_personas::nanami_ordinary::on_pass_kani,
+            skill_personas::nanami::on_pass_kani,
         );
     }
 
@@ -611,7 +611,7 @@ mod pass_fire {
             1,
             spec::NANAMI_01_FIRE_MAX,
             "C-MOR-nanami-01",
-            skill_personas::nanami_ordinary::on_pass_kani,
+            skill_personas::nanami::on_pass_kani,
         );
     }
 
@@ -649,7 +649,7 @@ mod pass_fire {
             w.charge_max[user as usize] = spec::TOUKO_01_FIRE_MAX;
             w.charge[user as usize] = 0;
         });
-        invoke::unwrap_done(skill_personas::kiritani_zenith::on_pass_kani(user));
+        invoke::unwrap_done(skill_personas::toko::on_pass_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -674,7 +674,7 @@ pub use pass_fire::*;
 // ===========================================================================
 
 #[cfg(feature = "skills-personas")]
-mod yuri_crit {
+mod rui {
     use super::effects_of;
     use crate::host;
     use crate::intern;
@@ -745,7 +745,7 @@ mod yuri_crit {
         let amount = world::with_world(|w| w.pay_amount);
         let x = world::with_world(|w| w.key_get(user, intern::intern(KEY_YURI_X)));
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::rui::on_pay_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -827,7 +827,7 @@ mod yuri_crit {
         let key = intern::intern(KEY_YURI_X);
         let pre_x = world::with_world(|w| w.key_get(user, key));
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::rui::on_pay_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -858,7 +858,7 @@ mod yuri_crit {
             w.pay_amount = 100;
             w.trig_target = user;
         });
-        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::rui::on_pay_kani(user));
         kani::cover!(true, "body returned");
         let x_after = world::with_world(|ww| ww.key_get(user, key));
         // Post X is 0 (book hit, inclusive at n == 1) or 2 (miss).
@@ -891,7 +891,7 @@ mod yuri_crit {
 }
 
 #[cfg(feature = "skills-personas")]
-pub use yuri_crit::*;
+pub use rui::*;
 
 // ===========================================================================
 // C-MOR-tsukushi-01  `skill:二叶筑紫:交给班长吧` (1)
@@ -963,7 +963,7 @@ mod tsukushi_on_gain {
         }
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::on_gain_kani(owner));
+        invoke::unwrap_done(skill_personas::tsukushi::on_gain_kani(owner));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1024,7 +1024,7 @@ mod tsukushi_on_gain {
             w.out[1] = false;
         });
         let amount = world::with_world(|w| w.pay_amount);
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::on_gain_kani(owner));
+        invoke::unwrap_done(skill_personas::tsukushi::on_gain_kani(owner));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -1062,7 +1062,7 @@ mod tsukushi_cash {
     use crate::spec::skills_mor as spec;
     use crate::world::{self, Effect, MAX_PLAYERS};
 
-    const KEY_TSUKU_RATE: &str = "skill.tsugushi.rate";
+    const KEY_TSUKU_RATE: &str = "skill.tsukushi.rate";
     const TOK_X_UP: &str = "X";
     const TOK_X_DOWN: &str = "X标记(反)";
 
@@ -1162,7 +1162,7 @@ mod tsukushi_cash {
         let want_rate_after = spec::tsukushi_03_rate_after(pre_rate);
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::cash_kani(user));
+        invoke::unwrap_done(skill_personas::tsukushi::cash_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1239,7 +1239,7 @@ mod tsukushi_cash {
             w.key_set(user, rk, 200); // at floor: book stays 200, mutant → 0
         });
         let pre_rate = 200;
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::cash_kani(user));
+        invoke::unwrap_done(skill_personas::tsukushi::cash_kani(user));
         kani::cover!(true, "body returned");
         let post_rate = world::with_world(|ww| ww.key_get(user, rk));
         let book = spec::tsukushi_03_rate_after(pre_rate);

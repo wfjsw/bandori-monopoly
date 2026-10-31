@@ -167,7 +167,7 @@ Wrong site: same call, `rules/cards/card-hhw/src/kokoro_circle.rs:109`
 **Demand:** the collection names CiRCLE so tile-keyed riders can see it.
 
 `HostRequest::Pay` never writes `p.tile`; `trigger::tile()` is -1. 明天之门's
-`tile.id >= 0 && tile.owner == owner` and `kaede_support`'s `tile.id >= 0`
+`tile.id >= 0 && tile.owner == owner` and `umiri`'s `tile.id >= 0`
 dead-end.
 
 Root cause **R1** (no tile in the card-facing payload).
@@ -1021,7 +1021,7 @@ in the reason, per `docs/rulebook/TEST-FINDINGS.md` convention.
 | 3 | `g02_sakiko_two_halves_compose_and_leave_with_move` | two live halves pay 0.25; the next move pays full |
 | 4 | `g02_kokoro_10000_is_buy_and_must` | kind is Buy; a 5000-money payer mortgages/bankrupts rather than underpaying |
 | 5 | `g02_kokoro_6000_is_rent_kind` | `pay_is_rent` hook sees it; a 0.5 rent factor halves it |
-| 6 | `g02_kokoro_6000_carries_circle_tile` | `trigger::tile() == CiRCLE`; 明天之门 and `kaede_support` fire |
+| 6 | `g02_kokoro_6000_carries_circle_tile` | `trigger::tile() == CiRCLE`; 明天之门 and `umiri` fire |
 | 7 | `g02_tomori_full_temp_cost_substitutable` (`fire.rs` test) | a fully-temp cost opens `ChargePaying` once with the full `n`; a cancel spends no pot |
 | 8 | `g02_popi_crystal_choice_on_redeem_and_auction` | redeem and auction each raise `spendBefore` with the full cost; 2 crystals reduce by 300 |
 | 9 | `g02_aya_1500_once_per_command_at_stage_two` | a split command prompts once, −1500 before the add fold; a sibling +500 composes |
