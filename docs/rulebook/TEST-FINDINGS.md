@@ -324,7 +324,25 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     now declares 安可. `ix_encore_blocks_overlap_teleport`, green).
   * ~~PP band (2) overflow crystals: no flip-effect trigger to observe.~~
     **Fixed 2026-10-13** (`FlipEffect` = 94; ABI-05).
-* **roselia** (1)
+* **roselia** (5)
+  * 宇田川亚子 对帅气的憧憬 (1): the peek does **not** replace the reward
+    draw -- the kept card is added *and* the normal reward draw fires
+    (`peek_keep_replaces_the_draw`).
+  * 宇田川亚子 对帅气的憧憬 (1): the paid face-down placement never takes the
+    card out of the looked-at pile, so `place_card` leaves a duplicate copy in
+    the deck (`paying_places_the_card_face_down_and_off_the_deck`).
+  * 宇田川亚子 对帅气的憧憬 (1): the trigger is bare `pre::MINE`, so the peek
+    also fires on the money option (`money_reward_does_not_peek`).
+  * 宇田川亚子 对帅气的憧憬 (2): the face-down take does not `set_cancelled`,
+    so the chosen reward is paid **on top** instead of being replaced
+    (`face_down_card_replaces_the_reward`).
+  * 宇田川亚子 对帅气的憧憬 (3): face-down field cards are excluded from every
+    counteraction offer (`has_field_counter` / `declare_one` in
+    `crates/game-rules/src/wasm_rules.rs`), so a face-down [反击] can never be
+    played directly (`face_down_counter_card_is_offered`).
+  * 宇田川亚子 对帅气的憧憬 (1), low: 「至多两张」 gives the player the choice
+    of how many to look at; the body always takes `min(2, len)` and offers no
+    count prompt.
   * ~~凑友希那 (3) stop-pot offers no prompt.~~ **Fixed 2026-10-09** (test
     matched Chinese text instead of the `kokoro_practice_force_*` key).
   * ~~凑友希那 (1) grants no fire pot on a RiNG landing.~~ **Fixed
