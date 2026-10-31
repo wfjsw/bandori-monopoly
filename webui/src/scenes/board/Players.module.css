@@ -68,10 +68,16 @@
 .lines { flex: 1; align-self: stretch; overflow: auto; margin-top: 8px; font-size: 14px; line-height: 1.55; }
 .lines::-webkit-scrollbar { width: 5px; }
 /* A turn block: bold round/turn heading over that turn's entries, barred in
-   the player's colour. Setup lines before the first turn have neither. */
-.turnGroup { border-left: 4px solid var(--bar, var(--pink)); padding-left: 8px; margin: 10px 0 2px; }
+   the player's colour. Setup lines before the first turn have neither.
+   Windowed rows own their own spacing (padding, never margin) so a row's
+   measured height is its whole visual height: the heading opens the block,
+   every entry under it continues the bar, and the last one closes it. */
+.turnGroup { border-left: 4px solid var(--bar, var(--pink)); padding: 10px 0 0 8px; }
+.turnGroupCont { border-left: 4px solid var(--bar, var(--pink)); padding-left: 8px; }
+.turnEnd { padding-bottom: 2px; }
 .groupHead { font-weight: 700; color: var(--text); margin-bottom: 2px; }
-.stageLine { color: var(--sub); font-size: 12px; margin: 5px 0 2px; }
+.stageLine { color: var(--sub); font-size: 12px; padding: 5px 0 2px; }
+.spacer { width: 100%; }
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
 
 .clock { position: absolute; right: -4px; bottom: -3px; z-index: 2; border-radius: 50%; text-align: center; box-shadow: 0 0 0 2px #fff; width: 30px; height: 30px; line-height: 30px; font-size: 13px; font-weight: 700; color: var(--pink); background: radial-gradient(var(--white) 56%, transparent 59%), conic-gradient(var(--pink) calc(var(--frac) * 360deg), var(--light-pill) 0); }
@@ -125,5 +131,7 @@
 :global(:root[data-compact]) .me { outline-width: 2px; outline-offset: 1px; box-shadow: var(--shadow), inset 5px 0 0 var(--me-blue); }
 :global(:root[data-compact]) .log { padding: 8px 10px 6px; }
 :global(:root[data-compact]) .lines { font-size: 12px; line-height: 1.45; margin-top: 4px; }
-:global(:root[data-compact]) .stageLine { font-size: 11px; margin: 3px 0 1px; }
-:global(:root[data-compact]) .turnGroup { margin: 6px 0 1px; padding-left: 6px; }
+:global(:root[data-compact]) .stageLine { font-size: 11px; padding: 3px 0 1px; }
+:global(:root[data-compact]) .turnGroup { padding: 6px 0 0 6px; }
+:global(:root[data-compact]) .turnGroupCont { padding-left: 6px; }
+:global(:root[data-compact]) .turnEnd { padding-bottom: 1px; }

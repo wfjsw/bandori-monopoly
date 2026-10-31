@@ -419,3 +419,62 @@ test("Animator: a skill rule's hook (not drawn in the field row) keeps the centr
   assert.ok(flashed, "centre flash shows");
   assert.equal(anim.pulse, null);
 });
+
+// -- full history -----------------------------------------------------------
+
+test("Animator: the log keeps the whole match (no tail cap)", () => {
+  const { anim } = makeAnim();
+  for (let id = 1; id <= 450; id++) {
+    anim.addLog(frame({ id, type: "pass", msg: { k: "log.x" } }), { history: true });
+  }
+  assert.equal(anim.log.length, 450);
+  assert.equal(anim.log[0].id, 1);
+  assert.equal(anim.log[449].id, 450);
+});
+
+test("Animator: the log keeps more than the old 200-row cap across stage lines", () => {
+  const { anim } = makeAnim();
+  for (let id = 1; id <= 260; id++) {
+    anim.addLog(frame({ id, type: "pass", msg: { k: "log.x" } }), { history: true });
+    if (id % 13 === 0) anim.stageTo(1, { step: 2, newTurn: false });
+  }
+  assert.equal(anim.log.filter((l) => !l.stage).length, 260);
+  assert.equal(anim.log[0].id, 1);
+});
+
+test("Animator: mergeHistory slots older rows in id order, ahead of the tail", () => {
+  const { anim } = makeAnim();
+  for (const id of [100, 101]) anim.addLog(frame({ id, type: "pass", msg: { k: "log.x" } }), { history: true });
+  // A second, newer event arrives before the fetch resolves.
+  anim.addLog(frame({ id: 102, type: "pass", msg: { k: "log.x" } }), { history: true });
+
+  anim.mergeHistory([10, 11, 100, 12].map((id) => frame({ id, type: "pass", msg: { k: "log.x" } })));
+
+  assert.deepEqual(anim.log.map((l) => l.id), [10, 11, 12, 100, 101, 102]);
+  // A re-delivered fetch (or stream replay) adds nothing.
+  anim.mergeHistory([10, 11, 12].map((id) => frame({ id, type: "pass", msg: { k: "log.x" } })));
+  assert.equal(anim.log.length, 6);
+});
+
+test("Animator: mergeHistory folds a walk's 继续前进 republish like the live ingest", () => {
+  const { anim } = makeAnim();
+  const mov = (id: number) => frame({ id, type: "pass", msg: { k: "log.move_on" } });
+  anim.mergeHistory([mov(1), mov(2), mov(3)]);
+  assert.equal(anim.log.length, 1);
+  assert.equal(anim.log[0].repeat, 3);
+  // Closing slot placement when the same event had already logged? No -- a
+  // second event of another kind ends the run, and a later one starts afresh.
+  anim.mergeHistory([frame({ id: 4, type: "pass", msg: { k: "log.x" } }), mov(5)]);
+  assert.equal(anim.log.length, 3);
+});
+
+test("Animator: mergeHistory seals the flash ids it seeds", async () => {
+  const { anim } = makeAnim();
+  const card = frame({ id: 55, type: "card", card: "TEST:old", kind: "play", uid: -1, msg: { k: "log.played" }, flash: true });
+  anim.mergeHistory([card]);
+  assert.equal(anim.log.length, 1);
+  anim.push(card);
+  for (let i = 0; i < 30 && anim.animating; i++) await sleep(10);
+  assert.equal(anim.flash, null);
+  assert.equal(anim.log.length, 1);
+});

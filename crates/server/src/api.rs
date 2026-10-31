@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
@@ -675,6 +675,34 @@ pub async fn room_state(
         you: me,
         game,
     }))
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct EventsQuery {
+    pub since: i32,
+}
+
+/// `GET /api/rooms/{id}/events?since=N` -- the match's retained events after
+/// `since`, oldest first. This is the log's mount-time history seed; the
+/// engine keeps only a tail, so `since=0` is "as far back as it still has".
+/// Seats and spectators alike may read (the event log is public).
+pub async fn events(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Query(q): Query<EventsQuery>,
+) -> ApiResult<Json<Vec<serde_json::Value>>> {
+    let m = as_viewer(&s, &sess, &id, |r, _me| Ok(r.match_handle()))?;
+    let Some(m) = m else {
+        return Ok(Json(Vec::new()));
+    };
+    let since = q.since;
+    let evs = tokio::task::spawn_blocking(move || m.events(since))
+        .await
+        .map_err(|e| ApiError::bad(format!("events task: {e}").as_str()))?
+        .map_err(|e| ApiError::bad(e.as_str()))?;
+    Ok(Json(evs))
 }
 
 /// `POST /api/rooms/{id}/anim-done` -- the acting seat's animation queue has

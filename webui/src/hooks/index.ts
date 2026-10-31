@@ -8,6 +8,7 @@
 //   dom.ts      -- event listeners, pagehide, hotkeys, focus
 //   timers.ts   -- interval / timeout / animation frame / countdowns
 //   measure.ts  -- ResizeObserver, scroll follow / reset
+//   window.ts   -- windowed rendering of a long, append-only list
 //   mount.ts    -- one-shot mount actions, overlay auto-close
 //   dock.ts     -- the docked card rows' raise / retract
 //   async.ts    -- cancellable async work
@@ -31,6 +32,7 @@ export {
   countdownLeft,
 } from "./timers.ts";
 export { useResizeObserver, useScrollFollow, useResetScroll } from "./measure.ts";
+export { useWindowedList, rowOffsets, rowRange, type RowWindow, type WindowOptions } from "./window.ts";
 export { useMountEffect, useCloseWhen } from "./mount.ts";
 export { useDockRaise, type DockRaise } from "./dock.ts";
 export { useAsync, type AsyncState } from "./async.ts";

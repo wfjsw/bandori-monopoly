@@ -11,7 +11,7 @@
 // command, and the page keeps the newest one in memory to write as the page
 // goes away.
 
-import type { Command, MatchView } from "../core/types.ts";
+import type { Command, MatchEvent, MatchView } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
 import { reportCrash } from "../core/crash.ts";
 import { describeWorkerError } from "./workerError.ts";
@@ -106,6 +106,12 @@ export class SoloEngine {
    *  explicit read for tests and for a seat that has not been pushed yet). */
   view(member: number): Promise<MatchView> {
     return this.rpc<MatchView>("view", { member });
+  }
+
+  /** Events after `lastId`, oldest first -- the log's history seed. The
+   *  engine keeps a tail, so `0` is "as far back as it still has". */
+  events(lastId: number): Promise<MatchEvent[]> {
+    return this.rpc<MatchEvent[]>("events", { since: lastId });
   }
 
   /** The snapshot for pagehide / tab-hide: a fresh one when the match waits

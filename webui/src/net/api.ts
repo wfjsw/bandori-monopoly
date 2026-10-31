@@ -137,6 +137,12 @@ export const api = {
   nonce: (id: string, nonce: string) => call<RoomInfo>("POST", `/api/rooms/${id}/nonce`, { nonce }),
   leave: (id: string) => call<unknown>("POST", `/api/rooms/${id}/leave`, {}),
   roomState: (id: string) => call<{ room: RoomInfo; you: number; game: MatchView | null }>("GET", `/api/rooms/${id}/state`),
+  /**
+   * The match's retained events after `since`, oldest first -- the log's
+   * history seed. The engine keeps a tail, so `0` is "as far back as it still
+   * has". Public to anyone in the room, spectators included.
+   */
+  events: (id: string, since = 0) => call<MatchEvent[]>("GET", `/api/rooms/${id}/events?since=${since}`),
   act: (id: string, cmd: Command) => call<unknown>("POST", `/api/rooms/${id}/act`, cmd),
   /**
    * The acting seat's animation queue drained for state version `seq`.

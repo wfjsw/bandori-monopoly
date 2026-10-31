@@ -4,13 +4,13 @@ import { useCompactValue } from "../../app/Stage";
 import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { fireMaxOf, fireOf, stateOf } from "../../core/names";
 import { NO_HAND_LIMIT } from "../../core/hand";
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { sceneImg } from "../../core/assets";
 import { cardTitle, cardArtUrl } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
 import { useTick } from "../../core/hooks";
-import { useScrollFollow } from "../../hooks/measure";
+import { useWindowedList } from "../../hooks/window";
 import { useSecondBoundary } from "../../hooks/timers";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
@@ -278,52 +278,73 @@ const CardRef = memo(function CardRef({ card, text, onHover, onLeave }: { card: 
   );
 });
 
+/** One row of the windowed log. A turn heading opens its block and the rows
+ *  under it carry the group's colour bar; setup rows before the first turn
+ *  have neither. */
+interface LogRow {
+  key: string;
+  head: boolean;
+  /** Part of a turn block (its colour bar and indent). */
+  group: boolean;
+  /** Last row of its turn block (closes the block's bottom spacing). */
+  end: boolean;
+  bar?: string;
+  line: LogLine;
+}
+
+function logRows(lines: LogLine[], colorOf?: (playerId: number) => string): LogRow[] {
+  const rows: LogRow[] = [];
+  for (const g of turnGroups(lines)) {
+    const bar = g.head && g.head.who != null && g.head.who >= 0 ? colorOf?.(g.head.who) : undefined;
+    if (g.head) rows.push({ key: `h${g.head.id}`, head: true, group: true, end: !g.body.length, bar, line: g.head });
+    g.body.forEach((l, n) =>
+      rows.push({ key: `${l.id}:${n}`, head: false, group: !!g.head, end: n === g.body.length - 1, bar, line: l }),
+    );
+  }
+  return rows;
+}
+
 export const Log = memo(function Log({ lines, colorOf, children, titled = true }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  // The log follows its own tail: re-pin only when new lines arrive, so a
-  // reader who scrolled up is not thrown back down by a hover re-render.
-  useScrollFollow(ref, [lines]);
+  const compact = useCompactValue();
   // Hovered card reference: the standing card panel (right sidebar) shows it.
   // Stable identities, so the memoized card refs are not re-rendered by a
   // fresh closure on every log line the board appends.
   const onHover = useCallback((id: string) => { stickCard(id); }, []);
   const onLeave = useCallback(() => undefined, []);
-  const groups = turnGroups(lines);
+  const rows = useMemo(() => logRows(lines, colorOf), [lines, colorOf]);
+  const keys = useMemo(() => rows.map((r) => r.key), [rows]);
+  // Only the rows around the viewport are in the DOM; the spacers keep the
+  // scrollbar honest for the whole match. The hook also owns the tail follow.
+  const win = useWindowedList(ref, keys, { estimate: compact ? 18 : 22 });
   return (
     <div className={s.log}>
       {titled && <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>}
       {children}
       <div className={s.lines} ref={ref}>
-        {groups.map((g) => {
-          const bar = g.head && g.head.who != null && g.head.who >= 0 ? colorOf?.(g.head.who) : undefined;
-          return (
-            <div
-              key={g.head ? `h${g.head.id}` : "pre"}
-              className={cx(g.head && s.turnGroup)}
-              style={bar ? { ["--bar" as string]: bar } : undefined}
-            >
-              {g.head && <div className={s.groupHead}>{g.head.text}</div>}
-              {g.body.map((l, n) => (
-                <div key={`${l.id}:${n}`} className={cx(l.stage && s.stageLine)}>
-                  {l.parts?.length
-                    ? l.parts.map((p, k) =>
-                        typeof p === "string" ? (
-                          <span key={k}>{p}</span>
-                        ) : (
-                          <CardRef
-                            key={k}
-                            card={p.card}
-                            text={p.text}
-                            onHover={onHover}
-                            onLeave={onLeave}
-                          />
-                        ))
-                    : l.text}
-                </div>
-              ))}
-            </div>
-          );
-        })}
+        <div className={s.spacer} style={{ height: win.top }} aria-hidden />
+        {rows.slice(win.start, win.end).map((r, k) => (
+          <div
+            key={r.key}
+            ref={win.row(r.key, win.start + k)}
+            className={cx(r.head && s.turnGroup, r.group && !r.head && s.turnGroupCont, r.group && r.end && s.turnEnd, r.line.stage && s.stageLine)}
+            style={r.group && r.bar ? { ["--bar" as string]: r.bar } : undefined}
+          >
+            {r.head ? (
+              <div className={s.groupHead}>{r.line.text}</div>
+            ) : r.line.parts?.length ? (
+              r.line.parts.map((p, i) =>
+                typeof p === "string" ? (
+                  <span key={i}>{p}</span>
+                ) : (
+                  <CardRef key={i} card={p.card} text={p.text} onHover={onHover} onLeave={onLeave} />
+                ))
+            ) : (
+              r.line.text
+            )}
+          </div>
+        ))}
+        <div className={s.spacer} style={{ height: win.bottom }} aria-hidden />
       </div>
     </div>
   );

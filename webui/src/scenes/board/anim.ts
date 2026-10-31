@@ -163,6 +163,9 @@ export class Animator {
   /** Once-per-flash: event ids this view has already played (or sealed from
    *  history). A re-delivered frame never replays a flash. */
   private flashOnce = new FlashOnce();
+  /** Event ids that already have log rows: the state window, the history
+   *  fetch and a re-delivered stream overlap, and each id logs once. */
+  private logged = new Set<number>();
   /** Animation speed scales every sleep and timer. A 4x replay additionally
    *  takes the instant path; live matches still show each movement step. */
   speed = 1;
@@ -226,17 +229,8 @@ export class Animator {
     clearTimeout(this.pulseTimer);
   }
 
-  /**
-   * Append `e`'s log rows. `history` marks the mount-time ingest of events
-   * already in the state: those seal their once-per-flash id so a later
-   * re-delivery of the same frame never animates (and never duplicates rows).
-   */
-  addLog(e: MatchEvent, opts?: { history?: boolean }): void {
-    // Once-per-flash: a re-delivered frame of an id this view already played
-    // (or sealed from history) contributes no second flash, no re-arm, and
-    // no duplicate log rows.
-    if (this.flashOnce.has(e.id)) return;
-    const names = e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names();
+  /** The log rows one event contributes (none when it says nothing). */
+  private rowsFor(e: MatchEvent, names: Names): { rows: LogLine[]; line: string; indent: string; parent: number } {
     const parts = fmtMsgParts(e.msg, names);
     const line = partsText(parts) || fmtMsg(e.msg, names);
     // Group under the 「效果适用」 header: children indent one level past
@@ -249,14 +243,6 @@ export class Animator {
     if (e.type === "card") this.actDepth.set(e.id, depth);
     const indent = "  ".repeat(depth);
     const rows: LogLine[] = [];
-    // A walk interrupted at every step republishes 「X 继续前进」 each time;
-    // fold a run of them into one row with a count.
-    const last = this.log[this.log.length - 1];
-    if (e.msg?.k === "log.move_on" && !e.results?.length && last?.base === indent + line) {
-      const n = (last.repeat ?? 1) + 1;
-      this.log = [...this.log.slice(0, -1), { ...last, repeat: n, text: `${last.base} ×${n}` }];
-      return;
-    }
     if (line) {
       rows.push({
         id: e.id, text: indent + line, turn: e.type === "turn",
@@ -268,6 +254,52 @@ export class Animator {
     for (const r of e.results ?? []) {
       const rt = fmtMsg(r, names);
       if (rt) rows.push({ id: e.id, text: `${indent}  ${rt}`, turn: false });
+    }
+    return { rows, line, indent, parent };
+  }
+
+  /**
+   * Append `newRows`, folding a walk republish into the row it continues: a
+   * walk interrupted at every step republishes 「X 继续前进」 each time, which
+   * becomes one row with a count. Returns whether it folded.
+   */
+  private appendRows(rows: LogLine[], e: MatchEvent, line: string, indent: string, newRows: LogLine[]): boolean {
+    const last = rows[rows.length - 1];
+    if (e.msg?.k === "log.move_on" && !e.results?.length && last?.base === indent + line) {
+      const n = (last.repeat ?? 1) + 1;
+      rows[rows.length - 1] = { ...last, repeat: n, text: `${last.base} ×${n}` };
+      return true;
+    }
+    rows.push(...newRows);
+    return false;
+  }
+
+  /**
+   * Append `e`'s log rows. `history` marks the mount-time ingest of events
+   * already in the state: those seal their once-per-flash id so a later
+   * re-delivery of the same frame never animates (and never duplicates rows).
+   *
+   * The log keeps **every** row (it is windowed at render, not capped here),
+   * and an event id that already has rows is never logged twice -- the state
+   * window, the full-history fetch and a re-delivered stream overlap.
+   */
+  addLog(e: MatchEvent, opts?: { history?: boolean }): void {
+    // Once-per-flash: a re-delivered frame of an id this view already played
+    // (or sealed from history) contributes no second flash, no re-arm, and
+    // no duplicate log rows.
+    if (this.flashOnce.has(e.id)) return;
+    if (e.id >= 0) {
+      if (this.logged.has(e.id)) return;
+      this.logged.add(e.id);
+    }
+    const names = e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names();
+    const { rows, line, indent, parent } = this.rowsFor(e, names);
+    if (rows.length) {
+      // Copied first: a walk republish folds into (rewrites) the last row.
+      this.log = [...this.log];
+      const folded = this.appendRows(this.log, e, line, indent, rows);
+      // A folded line adds no new row, so nothing below it applies.
+      if (folded) return;
     }
     // A body line that belongs to the activation currently on the flash rides
     // its face as the outcome summary (first two only).
@@ -281,8 +313,49 @@ export class Animator {
     // History rows have already been shown (or were never animated): seal
     // their flash identity so a reconnect / seek cannot play them now.
     if (opts?.history && (e.type === "flash" || e.type === "card")) this.flashOnce.seal(e.id);
+  }
+
+  /**
+   * Seed `events` older than anything the log holds -- the state window and
+   * the live stream only carry a tail. Rows land in id order ahead of the
+   * existing ones (the stream may already have delivered newer events while
+   * the fetch ran); ids already logged are skipped and the flashes stay
+   * sealed, exactly like [`addLog`]'s history ingest.
+   */
+  mergeHistory(events: MatchEvent[]): void {
+    const rows: LogLine[] = [];
+    for (const e of events) {
+      if (this.flashOnce.has(e.id)) continue;
+      if (e.id >= 0) {
+        if (this.logged.has(e.id)) continue;
+        this.logged.add(e.id);
+      }
+      if (e.type === "flash" || e.type === "card") this.flashOnce.seal(e.id);
+      const names = e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names();
+      const r = this.rowsFor(e, names);
+      this.appendRows(rows, e, r.line, r.indent, r.rows);
+    }
     if (!rows.length) return;
-    this.log = [...this.log.slice(-199), ...rows];
+    // Everything new is older than the log's first positively-identified row
+    // (negative ids are local stage lines, always newer than history).
+    const at = this.firstNewer(rows[0].id);
+    this.log = [...this.log.slice(0, at), ...rows, ...this.log.slice(at)];
+    this.bump();
+  }
+
+  /** The index of the first row whose event id is past `id` (`log.length`
+   *  when every id is older). */
+  private firstNewer(id: number): number {
+    let lo = 0;
+    let hi = this.log.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const lid = this.log[mid].id;
+      if (lid >= 0 && lid <= id) lo = mid + 1;
+      else if (lid < 0) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 
   /** Names for message arguments (players/tiles/cards of the running match). */
@@ -337,7 +410,7 @@ export class Animator {
     const cur = this.stage ?? this.view()?.state.step;
     this.stage = step;
     if (force || cur !== step) {
-      this.log = [...this.log.slice(-199), {
+      this.log = [...this.log, {
         id: --this.localLogId, text: tr("board.logStage", { stage: tr(stageKey(step)) }), turn: false, stage: true,
       }];
       this.bump();
@@ -901,6 +974,10 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
       if (viewRef.current !== shownRef.current) set({ view: viewRef.current, at: performance.now() });
     };
     for (const e of sess.view?.state.events ?? []) a.addLog(e, { history: true });
+    // The state frame carries only a tail. Ask the session for everything it
+    // still has and slot the older rows in behind the ones just seeded; the
+    // fetch lands after the board is already drawing, so it never delays it.
+    void sess.historyEvents().then((evs) => a.mergeHistory(evs));
     animRef.current = a;
   }
   useEffect(() => {

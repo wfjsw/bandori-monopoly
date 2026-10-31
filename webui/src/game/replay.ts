@@ -530,6 +530,17 @@ export class ReplaySession extends GameSession {
     return Promise.resolve({ k: "err.replay" });
   }
 
+  /**
+   * Every event the engine has collected up to the current tick -- the
+   * replayer keeps the whole match, so a board remounted on a seek still
+   * shows the log from the start. `lastEventId` is left alone: the pump owns
+   * it.
+   */
+  historyEvents(): Promise<MatchEvent[]> {
+    if (this.closed) return super.historyEvents();
+    return this.run((h) => h.eventsSince(0)).catch(() => super.historyEvents());
+  }
+
   /** The 托管 toggle does not exist here; keep the method harmless. */
   setAutoMode(): void {
     /* read-only */

@@ -12,7 +12,7 @@
 // (`docs/REPLAY.md` §9).
 //
 // Messages in  ({id, op, ...}):  init | start | restore | act | quick_start |
-//                                view | save | export | visibility | close
+//                                view | events | save | export | visibility | close
 // Messages out ({id, ok, value} | {id, ok:false, error}) and unsolicited
 //              {push: "sync" | "save", ...}.
 
@@ -428,6 +428,10 @@ function call(op: string, rest: Record<string, unknown>): unknown {
     }
     case "view":
       return JSON.parse(requireMatch().view(rest.member as number)) as MatchView;
+    case "events":
+      // History seed for the log: the engine only keeps a tail, so a `since`
+      // older than it simply starts at its oldest row.
+      return JSON.parse(requireMatch().events_since(rest.since as number)) as MatchEvent[];
     case "save": {
       // The page is going away (pagehide / tab-hide), so a fresh snapshot
       // outlives it -- but only one taken at a save point. Mid-effect the
@@ -452,7 +456,7 @@ function call(op: string, rest: Record<string, unknown>): unknown {
   }
 }
 
-const OPS = new Set(["start", "restore", "act", "quick_start", "view", "save", "export", "visibility", "close"]);
+const OPS = new Set(["start", "restore", "act", "quick_start", "view", "events", "save", "export", "visibility", "close"]);
 
 ctx.onmessage = async (e: MessageEvent) => {
   const { id, op, ...rest } = (e.data ?? {}) as { id: number; op: string } & Record<string, unknown>;
