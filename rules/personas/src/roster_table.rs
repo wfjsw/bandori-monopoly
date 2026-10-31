@@ -5,117 +5,117 @@ use alloc::vec::Vec;
 use bandori_std::roster::PersonaDef;
 use card_sdk::meta::MetaRow;
 
-pub use super::akao_cool::CHARACTER as AKAO_COOL;
-pub use super::anon_restart::CHARACTER as ANON_RESTART;
-pub use super::arisa_bonsai::CHARACTER as ARISA_BONSAI;
-pub use super::asahi_aim::CHARACTER as ASAHI_AIM;
-pub use super::aya_with::CHARACTER as AYA_WITH;
-pub use super::chisato_frank::CHARACTER as CHISATO_FRANK;
-pub use super::eve_unify::CHARACTER as EVE_UNIFY;
-pub use super::extraordinary_star::CHARACTER as EXTRAORDINARY_STAR;
-pub use super::hagumi_homerun::CHARACTER as HAGUMI_HOMERUN;
-pub use super::himari_step::CHARACTER as HIMARI_STEP;
-pub use super::hina_lottery::CHARACTER as HINA_LOTTERY;
-pub use super::kaede_support::CHARACTER as KAEDE_SUPPORT;
-pub use super::kanon_lost::CHARACTER as KANON_LOST;
-pub use super::kaoru_prince::CHARACTER as KAORU_PRINCE;
-pub use super::kasumi_group::CHARACTER as KASUMI_GROUP;
-pub use super::kiritani_zenith::CHARACTER as KIRITANI_ZENITH;
-pub use super::kokoro_practice::CHARACTER as KOKORO_PRACTICE;
-pub use super::kurata_speed::CHARACTER as KURATA_SPEED;
-pub use super::lisa_goddess::CHARACTER as LISA_GODDESS;
-pub use super::mana_donut::CHARACTER as MANA_DONUT;
-pub use super::marina_gifts::CHARACTER as MARINA_GIFTS;
-pub use super::maya_dawn::CHARACTER as MAYA_DAWN;
-pub use super::misaki_other::CHARACTER as MISAKI_OTHER;
-pub use super::moca_self::CHARACTER as MOCA_SELF;
-pub use super::mumei_streamer::CHARACTER as MUMEI_STREAMER;
-pub use super::mutsumi_actor::CHARACTER as MUTSUMI_ACTOR;
+pub use super::ako::CHARACTER as AKO;
+pub use super::anon::CHARACTER as ANON;
+pub use super::arisa::CHARACTER as ARISA;
+pub use super::aya::CHARACTER as AYA;
+pub use super::chisato::CHARACTER as CHISATO;
+pub use super::chuchu::CHARACTER as CHUCHU;
+pub use super::eve::CHARACTER as EVE;
+pub use super::hagumi::CHARACTER as HAGUMI;
+pub use super::himari::CHARACTER as HIMARI;
+pub use super::hina::CHARACTER as HINA;
+pub use super::kanon::CHARACTER as KANON;
+pub use super::kaoru::CHARACTER as KAORU;
+pub use super::kasumi::CHARACTER as KASUMI;
+pub use super::kokoro::CHARACTER as KOKORO;
+pub use super::layer::CHARACTER as LAYER;
+pub use super::lisa::CHARACTER as LISA;
+pub use super::lock::CHARACTER as LOCK;
+pub use super::mana::CHARACTER as MANA;
+pub use super::marina::CHARACTER as MARINA;
+pub use super::mashiro::CHARACTER as MASHIRO;
+pub use super::masking::CHARACTER as MASKING;
+pub use super::maya::CHARACTER as MAYA;
+pub use super::misaki::CHARACTER as MISAKI;
+pub use super::moca::CHARACTER as MOCA;
+pub use super::mutsumi::CHARACTER as MUTSUMI;
 pub use super::mutsumi_crychic::CHARACTER as MUTSUMI_CRYCHIC;
-pub use super::nanami_ordinary::CHARACTER as NANAMI_ORDINARY;
-pub use super::numazu_maid::CHARACTER as NUMAZU_MAID;
-pub use super::raise_effort::CHARACTER as RAISE_EFFORT;
-pub use super::ran_red::CHARACTER as RAN_RED;
-pub use super::rana_parking::CHARACTER as RANA_PARKING;
-pub use super::rimi_resolve::CHARACTER as RIMI_RESOLVE;
-pub use super::rinko_1cm::CHARACTER as RINKO_1CM;
-pub use super::saaya_sky::CHARACTER as SAAYA_SKY;
-pub use super::saki_crychic::CHARACTER as SAKI_CRYCHIC;
-pub use super::sakiko_life::CHARACTER as SAKIKO_LIFE;
-pub use super::sato_red::CHARACTER as SATO_RED;
-pub use super::sayo_thorns::CHARACTER as SAYO_THORNS;
-pub use super::soyo_clear::CHARACTER as SOYO_CLEAR;
+pub use super::nanami::CHARACTER as NANAMI;
+pub use super::nyamu::CHARACTER as NYAMU;
+pub use super::pareo::CHARACTER as PAREO;
+pub use super::ran::CHARACTER as RAN;
+pub use super::rana::CHARACTER as RANA;
+pub use super::rimi::CHARACTER as RIMI;
+pub use super::rinko::CHARACTER as RINKO;
+pub use super::rui::CHARACTER as RUI;
+pub use super::saaya::CHARACTER as SAAYA;
+pub use super::sakiko::CHARACTER as SAKIKO;
+pub use super::sakiko_crychic::CHARACTER as SAKIKO_CRYCHIC;
+pub use super::sayo::CHARACTER as SAYO;
+pub use super::soyo::CHARACTER as SOYO;
 pub use super::soyo_crychic::CHARACTER as SOYO_CRYCHIC;
-pub use super::tae_police::CHARACTER as TAE_POLICE;
+pub use super::tae::CHARACTER as TAE;
+pub use super::taki::CHARACTER as TAKI;
 pub use super::taki_crychic::CHARACTER as TAKI_CRYCHIC;
-pub use super::taki_meeting::CHARACTER as TAKI_MEETING;
-pub use super::tamade_producer::CHARACTER as TAMADE_PRODUCER;
-pub use super::tomoe_ramen::CHARACTER as TOMOE_RAMEN;
+pub use super::toko::CHARACTER as TOKO;
+pub use super::tomoe::CHARACTER as TOMOE;
+pub use super::tomori::CHARACTER as TOMORI;
 pub use super::tomori_crychic::CHARACTER as TOMORI_CRYCHIC;
-pub use super::tomori_poem::CHARACTER as TOMORI_POEM;
-pub use super::tsugumi_plain::CHARACTER as TSUGUMI_PLAIN;
-pub use super::tsugushi_monitor::CHARACTER as TSUGUSHI_MONITOR;
-pub use super::tukushi_try::CHARACTER as TUKUSHI_TRY;
-pub use super::uika_idol::CHARACTER as UIKA_IDOL;
-pub use super::uika_imprisoned::CHARACTER as UIKA_IMPRISONED;
-pub use super::yuri_crit::CHARACTER as YURI_CRIT;
+pub use super::tsugumi::CHARACTER as TSUGUMI;
+pub use super::tsukushi::CHARACTER as TSUKUSHI;
+pub use super::tukushi::CHARACTER as TUKUSHI;
+pub use super::uika::CHARACTER as UIKA;
+pub use super::uika_sumimi::CHARACTER as UIKA_SUMIMI;
+pub use super::umiri::CHARACTER as UMIRI;
+pub use super::yukina::CHARACTER as YUKINA;
 
 /// Every lifted character, in skill-file order (the export sorts by ordinal).
 pub const PERSONAS: &[PersonaDef] = &[
-    AKAO_COOL,
-    ANON_RESTART,
-    ARISA_BONSAI,
-    ASAHI_AIM,
-    AYA_WITH,
-    CHISATO_FRANK,
-    EVE_UNIFY,
-    EXTRAORDINARY_STAR,
-    HAGUMI_HOMERUN,
-    HIMARI_STEP,
-    HINA_LOTTERY,
-    KAEDE_SUPPORT,
-    KANON_LOST,
-    KAORU_PRINCE,
-    KASUMI_GROUP,
-    KIRITANI_ZENITH,
-    KOKORO_PRACTICE,
-    KURATA_SPEED,
-    LISA_GODDESS,
-    MANA_DONUT,
-    MARINA_GIFTS,
-    MAYA_DAWN,
-    MISAKI_OTHER,
-    MOCA_SELF,
-    MUMEI_STREAMER,
-    MUTSUMI_ACTOR,
+    AKO,
+    ANON,
+    ARISA,
+    LOCK,
+    AYA,
+    CHISATO,
+    EVE,
+    KASUMI,
+    HAGUMI,
+    HIMARI,
+    HINA,
+    UMIRI,
+    KANON,
+    KAORU,
+    KOKORO,
+    TOKO,
+    YUKINA,
+    MASHIRO,
+    LISA,
+    MANA,
+    MARINA,
+    MAYA,
+    MISAKI,
+    MOCA,
+    NYAMU,
+    MUTSUMI,
     MUTSUMI_CRYCHIC,
-    NANAMI_ORDINARY,
-    NUMAZU_MAID,
-    RAISE_EFFORT,
-    RAN_RED,
-    RANA_PARKING,
-    RIMI_RESOLVE,
-    RINKO_1CM,
-    SAAYA_SKY,
-    SAKI_CRYCHIC,
-    SAKIKO_LIFE,
-    SATO_RED,
-    SAYO_THORNS,
-    SOYO_CLEAR,
+    NANAMI,
+    PAREO,
+    LAYER,
+    RAN,
+    RANA,
+    RIMI,
+    RINKO,
+    SAAYA,
+    SAKIKO_CRYCHIC,
+    SAKIKO,
+    MASKING,
+    SAYO,
+    SOYO,
     SOYO_CRYCHIC,
-    TAE_POLICE,
+    TAE,
     TAKI_CRYCHIC,
-    TAKI_MEETING,
-    TAMADE_PRODUCER,
-    TOMOE_RAMEN,
+    TAKI,
+    CHUCHU,
+    TOMOE,
     TOMORI_CRYCHIC,
-    TOMORI_POEM,
-    TSUGUMI_PLAIN,
-    TSUGUSHI_MONITOR,
-    TUKUSHI_TRY,
-    UIKA_IDOL,
-    UIKA_IMPRISONED,
-    YURI_CRIT,
+    TOMORI,
+    TSUGUMI,
+    TSUKUSHI,
+    TUKUSHI,
+    UIKA_SUMIMI,
+    UIKA,
+    RUI,
 ];
 
 /// Wire rows for `ruleset_metadata`.
