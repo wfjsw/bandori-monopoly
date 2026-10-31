@@ -396,11 +396,12 @@ self-describing):
 ### 4.3 Trigger payload / link state
 
 ```rust
-pub struct TriggerPay { pub is_rent: bool, pub split_leg: bool, .. }  // EXTENDED
-// G02 lands first and changes this struct to
-// `{ is_rent, rent_kind, shape, settle_tile }` (its §4.4). This group only
-// appends `split_leg`, so the merge is append-only against G02's shape; take
-// G02's struct as the base, not the four-field one on v104.
+pub struct TriggerPay { pub is_rent: bool, pub total_stage: bool, .. }
+// G02 lands first and already extends the struct to `{ is_rent, total_stage }`
+// (its `settle_tile` sits on `Trigger`, not here) with the `pay_total_stage` /
+// `pay_is_rent` / `settle_tile*` pre scalars. `split_leg` below is **derived**
+// (`!total_stage`), not a field; where a guard needs it, `pay_split_leg()` is
+// sugar over `!pay_total_stage()`. Take G02's struct as the base.
 pub struct Trigger {
     // …
     /// The card whose effect this link *is*: its own id on a root link, the
@@ -504,7 +505,7 @@ pub struct CounterRecord { pub declarer: i32, pub countered: i32, pub card: Stri
 | 2 | `join::shield` replaces `set_join_used` | `join_used` alias | | yes |
 | 3 | `NumericShape`, `prop::RANGE_CARD`, `extreme_armed`, `pending_negation`, `AnswerEffect::ARMS_EXTREME` | `CounteractEntry` | `ManifestOn.numeric` | |
 | 4 | — | card link list | | yes |
-| 5 | `AnswerPayShape`, `pay_split_leg` | `TriggerPay` | `ManifestOn.pay_shape` | |
+| 5 | `AnswerPayShape` (`pay_split_leg` is derived: `!pay_total_stage`, G02) | `TriggerPay` (read only) | `ManifestOn.pay_shape` | |
   (`PayShape` is G02's; this group's enum is `AnswerPayShape` so both can land.)
 | 6 | `ManifestOn.all_kinds` | matcher | `ManifestOn.all_kinds` | |
 | 7 | `subject_card`, `chain_depth`, `answered_kind` | counter-link build, `bridge_trigger` | | |
@@ -547,7 +548,7 @@ fn contract_admits(&self, card: i32, t: &Trigger) -> bool {
         AnswerPayShape::Any => {}
         AnswerPayShape::Whole => {
             let Some(p) = t.pay else { return false };
-            if p.split_leg { return false; }
+            if !p.total_stage { return false; }   // a 分摊 leg (G02's field)
         }
     }
     true
@@ -823,8 +824,9 @@ by every card that can `set_cancelled` (net_error, and the sweep in 9.3).
 ///    `trigger::{pending_negation,extreme_armed,subject_card,chain_depth,
 ///    answered_kind}` and `ctx::countered_by_this_turn`; new window vars
 ///    `subject_range_card` / `extreme_armed` / `pending_negation` /
-///    `pay_split_leg` / `chain_depth`. Counter links carry the answered
-///    link's payload forward (`mv`, `pay.split_leg`, `effects`,
+///    `pay_split_leg` (sugar over G02's `pay_total_stage`) / `chain_depth`.
+///    Counter links carry the answered
+///    link's payload forward (`mv`, `pay`, `effects`,
 ///    `subject_card`, `join`) and set `subject_card` to the answered card.
 ///    `set_join_used` stays as an alias of `ctx::join::shield`. SAVE_VERSION
 ///    14 → 15 (`TurnCtx.countered_this_turn`); RECORD_VERSION unchanged.

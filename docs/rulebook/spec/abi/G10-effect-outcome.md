@@ -275,6 +275,7 @@ pub struct SettleFacts {
     pub owner: i32,
     /// The settle ended before any body: the `settle` link was negated, or
     /// the mover was already out. No `settleBody`, no `settleAfter`.
+    /// Derived from G02's `SettleScope.outcome` (`Cancelled`).
     pub cancelled: bool,
     /// The `settleBody` link was negated — the body was replaced.
     pub body_replaced: bool,
@@ -484,29 +485,27 @@ must derive `Debug` and `PartialEq` too or the containers stop compiling.
 
 ### 5.1 Stage reporting (`play.rs`)
 
-* `SettleFrame` gains `facts_idx: usize` (`usize::MAX` on `new`) and the
-  `Cx` gains `settle_facts: Vec<SettleFacts>` (transient, beside
-  `settle_open`).
-* `step_settle` at entry: if `frame.facts_idx == usize::MAX` push
-  `SettleFacts { at: frame.at, owner: frame.owner, ..Default::default() }` and
-  store the index. This also fixes
-  `settle_open`, which currently increments on **every** resume of the same
-  frame (`play.rs:2142`) and only leaks upward: gate the increment on the
-  same first-entry condition, decrement on completion.
-* `RaiseSettle`: in the `self.out(i) || t.is_cancelled()` terminal branch,
-  set `facts.cancelled` (both reasons mean no body).
-* `RaiseSettleBody`: `if si.is_cancelled()` — set `facts.body_replaced`.
-* Pop the facts entry when the frame reaches `Done`, and drop
-  `frame.facts_idx`.
-* In `money_inner` (`play.rs:3346`), after the balances are written
-  (play.rs:3833-3841) and before the `paid` raise: with `facts` the innermost
-  entry (none open → skip), if `p.kind == PayKind::Rent && loss > 0 &&
-  facts.owner >= 0 && p.tile == Some(facts.at) &&
-  p.to == Some(facts.owner as usize)`, set `paid` and add `loss` to
-  `paid_value`. A payment cancelled or reduced to 0 never reaches it.
-* `RaiseSettleAfter` / `RaiseTileResolved`: copy
-  `self.settle_facts[frame.facts_idx]` into `t.settle` for the raise.
-  `settleBody` carries `t.settle` with `paid = false`, `body_replaced =
+* G02 (which lands before this group) already replaced the `settle_open`
+  counter with `Cx.settle_scopes: Vec<SettleScope>`, pushed once per frame and
+  popped on completion, and gave the scope its terminal `outcome`. This group
+  does **not** re-fix the counter; it extends that scope.
+* `SettleScope` gains `paid: bool` and `paid_value: i32`; `SettleFacts` is a
+  snapshot of the scope, `at`/`owner` read from `scope.tile`/`scope.player`
+  (which is why both fields are redundant on the scope and are not stored
+  twice). `cancelled` is `scope.outcome == Cancelled` — no second bool.
+* `RaiseSettleBody`: `if si.is_cancelled()` — set a new
+  `scope.body_replaced: bool`.
+* In `money_inner`, after the balances are written (play.rs:4045-4054) and
+  before the `paid` raise: with the innermost scope (none open → skip), if
+  `p.rent && loss > 0 && scope.player >= 0 && p.settle_tile == scope.tile as i32 &&
+  p.to == Some(scope.player)`, set `paid` and add `loss` to `paid_value`. The
+  test uses G02's `p.settle_tile` payload field, not the payment's own
+  `p.tile`. A payment cancelled or reduced to 0 never reaches it.
+* `RaiseSettleAfter` / `RaiseTileResolved`: build `t.settle` from the frame's
+  scope (`SettleFacts { at: scope.tile, owner: scope.player as i32,
+  cancelled: scope.outcome == Cancelled, body_replaced: scope.body_replaced,
+  paid: scope.paid, paid_value: scope.paid_value }`).
+  `settleBody` carries the same snapshot with `paid = false`, `body_replaced =
   false` (facts so far).
 * The bits are readable through the bitset import; `paid_value` in the same
   call.
