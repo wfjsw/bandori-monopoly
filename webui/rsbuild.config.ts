@@ -58,7 +58,15 @@ const engineSink: RequestHandler = (req, res, next) => {
   const path = (req.url ?? "").split("?")[0];
   const prefix = "/assets/engine/";
   if (req.method !== "GET" || !path.startsWith(prefix)) return next();
-  const rest = decodeURIComponent(path.slice(prefix.length));
+  // `/assets/engine/` itself, and a malformed escape, belong to the handlers
+  // behind this one -- a miss here must fall through, never throw a 500.
+  let rest: string;
+  try {
+    rest = decodeURIComponent(path.slice(prefix.length));
+  } catch {
+    return next();
+  }
+  if (!rest) return next();
 
   let file: string | null = null;
   if (rest === "index.json") {

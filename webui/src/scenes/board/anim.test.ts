@@ -26,6 +26,8 @@ if (!g.localStorage) {
   g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 }
 if (!g.document) g.document = { documentElement: { lang: "zh-CN" } };
+// `core/audio.ts` touches `window` at module scope; node has none.
+if (!g.window) g.window = g;
 
 const STUB = new Map<string, string>();
 const stub = (spec: string, source: string): string => {

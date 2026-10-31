@@ -207,7 +207,7 @@
 
 /* Face-down, as seen by everyone but the owner: a card back in its owner's
    frame (no name or markers leak). The owner gets the face instead, with the
-   back blended over it now and then (`.downBlend`). */
+   back blended over it now and then (`FaceDown.module.css`). */
 .back {
   width: var(--card-w, 120px);
   aspect-ratio: 3 / 4;
@@ -223,51 +223,17 @@
   display: block;
 }
 
-/* The owner's own face-down card: the face stays readable and the back blends
-   back over it now and then, so the card's state is never lost (the Master
-   Duel flicker). Sits above the face, under the holder avatar. */
-.downBlend {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  box-shadow: 0 0 0 2.5px var(--own, var(--line));
-  pointer-events: none;
-  /* Face first: if the keyframes ever fail to bind, the owner still sees the
-     card it is. */
-  opacity: 0;
-  animation: field-down-blend 6s ease-in-out infinite;
-}
-
-@keyframes field-down-blend {
-  0%, 52% { opacity: 0; }
-  64%, 84% { opacity: 1; }
-  96%, 100% { opacity: 0; }
-}
-
-.downBlend img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-
-/* 「盖着」: the owner's own face-down card says so outright, over the face. */
-.downTag {
-  position: absolute;
-  top: -4px;
+/* The owner's face-down treatment (back blend, 盖着 tag) is shared with the
+   hand's parked stack: `FaceDown.module.css`. Only this row's tag corner
+   differs. */
+.downTagLeft {
   left: -4px;
-  z-index: 2;
-  padding: 1px 6px;
-  border-radius: var(--r-sm);
-  background: var(--own, var(--line));
-  color: var(--white);
-  font-size: 11px;
-  line-height: 1.4;
-  letter-spacing: 0.04em;
-  pointer-events: none;
+}
+
+/* The blend covers the face, so it carries the same owner ring here (the hand
+   stack's slots ring every child themselves). */
+.blendRing {
+  box-shadow: 0 0 0 2.5px var(--own, var(--line));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -275,12 +241,6 @@
   .row,
   .slot {
     transition: none;
-  }
-
-  /* No flicker: the owner's card keeps its face, the tag says it is face down. */
-  .downBlend {
-    animation: none;
-    opacity: 0;
   }
 
   .pulse,

@@ -15,6 +15,7 @@ import engineId from "../wasm/engine_id.json";
 import {
   bundleBase,
   archiveIndex,
+  entryFor,
   resetArchiveIndex,
   serveIdFor,
   type ArchiveIndex,
@@ -180,24 +181,17 @@ function hostedMatches(entry: BundleEntry | null | undefined, manifest: Portable
   return true;
 }
 
-/** The archive entry `want` names (id, alias, or rebuilt byte id). */
-function entryFor(index: ArchiveIndex | null, want: string): BundleEntry | undefined {
-  return (
-    index?.bundles.find((b) => b.id === want) ??
-    index?.bundles.find((b) => b.aliases && want in b.aliases) ??
-    index?.bundles.find((b) => b.rebuilt?.byte_id === want)
-  );
-}
-
 /**
  * The archive index, refetched once when `want` is absent. A tab can outlive a
  * deploy: the cached index predates the bundle the deploy just archived, and
  * without the retry an open page keeps answering "no copy of engine bundle".
  */
-async function indexFor(want: string): Promise<{ index: ArchiveIndex | null; entry: BundleEntry | undefined }> {
+async function indexFor(want: string, known = false): Promise<{ index: ArchiveIndex | null; entry: BundleEntry | undefined }> {
   let index = await archiveIndex();
   let entry = entryFor(index, want);
-  if (!entry) {
+  // A blank id (a pre-bundle record) is never in the index, and `known` means
+  // the page engine's own stamp already answers: neither needs the retry.
+  if (!entry && want && !known) {
     resetArchiveIndex();
     index = await archiveIndex();
     entry = entryFor(index, want);
@@ -219,14 +213,13 @@ export async function openRecordOnEngine(bytes: Uint8Array, force = false): Prom
   const header = JSON.parse(rules.record_header_bytes(prep.record)) as RecordHeader;
   const now = currentStamp();
   const want = header.engine?.bundle ?? prep.manifest?.bundle ?? "";
-  const { index } = await indexFor(want);
+  const { index, entry } = await indexFor(want, !!want && want === now?.bundle);
 
   // Prefer the hosted bundle when it is known and byte-identical to what the
   // record embedded. Otherwise run the embedded engine -- that is the whole
   // point of carrying it.
   if (prep.embedded) {
     const policy = await trustedLoaderPolicy(index);
-    const entry = entryFor(index, want);
     const canPreferHosted =
       !!entry &&
       (want === now?.bundle || hostedMatches(entry, prep.manifest!)) &&
@@ -415,11 +408,7 @@ export async function collectBundleForExport(
       origin: "embedded",
     };
   }
-  const index = await archiveIndex();
-  const entry =
-    index?.bundles.find((b) => b.id === want) ??
-    index?.bundles.find((b) => b.aliases && want in b.aliases) ??
-    index?.bundles.find((b) => b.rebuilt?.byte_id === want);
+  const entry = entryFor(await archiveIndex(), want);
   const serveId = entry ? serveIdFor(entry, want) : want;
   // `URL` needs an absolute base: `/assets/engine/<id>/` alone throws.
   const base = new URL(bundleBase(serveId), location.origin);

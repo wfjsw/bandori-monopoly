@@ -239,7 +239,7 @@ function assemble(worktree, out) {
     format: probe.stamp.format,
     save_version: probe.stamp.save_version,
     abi: probe.stamp.abi,
-    ruleset_sha256: String(rulesIndex.ruleset_sha256 || probe.stamp.ruleset_sha256 || "stub"),
+    ruleset_sha256: String(probe.stamp.ruleset_sha256 || rulesIndex.ruleset_sha256 || "stub"),
     data_sha256: dsha,
     engine: probe.stamp.engine || "game-core",
     build: probe.stamp.build || "",

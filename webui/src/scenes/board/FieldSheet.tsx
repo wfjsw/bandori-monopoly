@@ -39,6 +39,7 @@ import { eventMarkers, fieldMarkers, markerNote, type Marker } from "./markers";
 import { MarkerChip } from "./MarkerChip";
 import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
+import fd from "./FaceDown.module.css";
 import s from "./FieldSheet.module.css";
 
 /** Card face width (px), the widest step, and the row's horizontal breathing
@@ -213,7 +214,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
                 ) : (
                   <>
-                    {own && <span className={s.downTag}>{tr("board.faceDownTag")}</span>}
+                    {own && <span className={cx(fd.tag, s.downTagLeft)}>{tr("board.faceDownTag")}</span>}
                     <FieldFace
                       slotKey={key}
                       card={e.id}
@@ -227,7 +228,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                       present={present}
                       dismiss={dismiss}
                     />
-                    {own && <div className={s.downBlend} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>}
+                    {own && <div className={cx(fd.blend, s.blendRing)} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>}
                   </>
                 )}
               </div>

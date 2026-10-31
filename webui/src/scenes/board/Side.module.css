@@ -235,10 +235,13 @@
   pointer-events: none;
   white-space: nowrap;
 }
-/* The face-down stack owns the bar's right end: the pill clears its peek strip
-   (and its name / markers when the hand is raised). */
+/* The face-down stack owns the bar's right end: the pill clears its peek strip,
+   and the raised card entirely. */
 .dock[data-down] .thinkingSlot {
   bottom: calc(100% + var(--hand-peek) + var(--sp-2));
+}
+.dock[data-down][data-state="raised"] .thinkingSlot {
+  bottom: calc(100% + 200px + var(--sp-2));
 }
 .bar > span:first-child {
   height: 28px;
@@ -462,8 +465,7 @@
    card is the last child and so paints on top; hovering one lifts it clear.
    It carries the other surfaces' face-down conventions: the back for everyone
    but the owner, and the owner's face with the back blended over it now and
-   then under a 盖着 tag (FieldSheet's `.downBlend` / `.downTag`, in this
-   stack's colours and direction). */
+   then under a 盖着 tag (both shared via `FaceDown.module.css`). */
 .downStack {
   position: absolute;
   /* Clear of the column edge: the 盖着 tag hangs 4px past the card and would
@@ -548,47 +550,17 @@
   border-radius: var(--r-sm);
   overflow: hidden;
 }
-.downBack img,
-.downBlend img {
+.downBack img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
-.downBlend {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  pointer-events: none;
-  /* Face first: if the keyframes ever fail to bind, the owner still sees the
-     card it is. */
-  opacity: 0;
-  animation: hand-down-blend 6s ease-in-out infinite;
-}
-/* A short hold face down, a slow blend back to the face: most of the cycle
-   shows what the card is. Local to this module: a module scopes a keyframe
-   name it does not itself declare (`:global()` does not survive it). */
-@keyframes hand-down-blend {
-  0%, 52% { opacity: 0; }
-  64%, 84% { opacity: 1; }
-  96%, 100% { opacity: 0; }
-}
-.downTag {
-  position: absolute;
-  top: -4px;
+
+/* The 盖着 tag and the back blend are shared (`FaceDown.module.css`); only
+   this stack's corner differs. */
+.downTagRight {
   right: -4px;
-  z-index: 2;
-  padding: 1px 6px;
-  border-radius: var(--r-sm);
-  background: var(--own, var(--line));
-  color: var(--white);
-  font-size: 11px;
-  line-height: 1.4;
-  letter-spacing: 0.04em;
-  pointer-events: none;
-  white-space: nowrap;
 }
 
 /* Draw-pile peek grows upward above the hand dock (and rides up with a
@@ -656,12 +628,6 @@
   .downStack,
   .downSlot {
     transition: none;
-  }
-
-  /* No flicker: the owner's card keeps its face, the tag says it is face down. */
-  .downBlend {
-    animation: none;
-    opacity: 0;
   }
 
   .downSlot.pulse {

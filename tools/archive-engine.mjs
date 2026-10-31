@@ -506,16 +506,18 @@ async function main() {
     );
   }
 
-  // The stamp the engine would seal a record with here. `data_sha256` is the
-  // engine's own value -- `""` on every record this build writes
-  // (`docs/REPLAY.md` §9.1). Hashing the boot tables into that slot (the old
-  // recipe) minted a bundle id no record could name; the id must be exactly
-  // what `engine_stamp()` puts in a record's header.
+  // The stamp the engine would seal a record with here. Everything is the
+  // engine's own answer -- including `ruleset_sha256`, which is read back from
+  // `engine_stamp()` after the build so a stale or hand-edited
+  // `rules/index.json` cannot mint an id no record can name. `data_sha256` is
+  // the engine's value too: `""` on every record this build writes
+  // (`docs/REPLAY.md` §9.1); hashing the boot tables into that slot (the old
+  // recipe) was the same bug.
   const stamp = {
     format: probe.format,
     save_version: probe.save_version,
     abi: probe.abi,
-    ruleset_sha256: String(rulesIndex.ruleset_sha256 || probe.ruleset_sha256 || "stub"),
+    ruleset_sha256: String(probe.ruleset_sha256 || rulesIndex.ruleset_sha256 || "stub"),
     data_sha256: probe.data_sha256 ?? "",
     engine: probe.engine || "game-core",
     build: probe.build || "",

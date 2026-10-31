@@ -886,11 +886,13 @@ Older records may still carry a real `data_sha256` over the two `DATA_FILES`
 (and historically the display tables that are no longer hashed). Those tables
 may begin with a UTF-8 BOM, and a byte-preserving decode keeps it
 (`as_bytes()` puts `EF BB BF` back) while `TextDecoder`'s default and
-`Response.text()` strip it. The stamp recipe was unified on **hash without
-the BOM**: `load_data`, `Ctx::load` and `tools/archive-engine.mjs` all drop a
-leading `U+FEFF` before hashing, so a record sealed by `tools/`, the server or
-a page carried the same `data_sha256` for the same tables. The embedded
-loader still decodes the tables both ways and feeds the one whose pre-recipe
+`Response.text()` strip it. The old stamp recipe hashed without the BOM:
+`load_data` and the archiving tools dropped a leading `U+FEFF` first, so a
+record sealed by `tools/`, the server or a page carried the same
+`data_sha256` for the same tables. Current builds write `data_sha256: ""`
+instead -- `Ctx::load` (`String::new()`) and the tools no longer hash the
+tables at all -- so only the reading side still matters. The embedded loader
+still decodes the tables both ways and feeds the one whose pre-recipe
 hash is the record's own `data_sha256`, so the bytes the engine parses match
 what the file was sealed against -- including records sealed before the
 recipe was unified (those carry the BOM-inclusive stamp; `compat` names
