@@ -15,22 +15,23 @@ recorded.
 ## Review order and collisions
 
 Every document was written against the same base (ABI v104, `SAVE_VERSION` 12,
-engine kinds ending at 110, Kani `Op` ending at 340). Each draft originally
-reached for the same next numbers, so the band below is allocated **once, in
-landing order**, and the documents carry their row of it. Take these numbers;
-renumber only if the order actually changes, and then shift the whole table.
+`RECORD_VERSION` 4, engine kinds ending at 110, Kani `Op` ending at 340). Each
+draft originally reached for the same next numbers, so the band below is
+allocated **once, in landing order**, and the documents carry their row of it.
+Take these numbers; renumber only if the order actually changes, and then shift
+the whole table.
 
 | group | `ABI_VERSION` | `SAVE_VERSION` | engine kinds | Kani `Op` |
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
-| G01 | 104→105 | 12 | 111–113 | — |
-| G08 | 105→106 | 12→13 | 114–121 | — |
-| G02 | 106→107 | 13 | 122 | 341–350 |
-| G04 | 107→108 | 13 | — | 351–370 |
+| G01 | 104→105 | 12 | 111–113 | 341–348 |
+| G08 | 105→106 | 12→13 | 114–121 | 349–368 |
+| G02 | 106→107 | 13 | 122 | 369–377 |
+| G04 | 107→108 | 13 | — | 378–397 |
 | G03 | 108→109 | 13→14 | 123–125 | — |
-| G06 | 109→110 | 14→15 | — | 371–390 |
-| G05 + G13 | 110→111 | 15→16 | — | 391–400 |
-| G07 | 111→112 | 16 | — | 401–410 |
+| G06 | 109→110 | 14→15 | — | 398–417 |
+| G05 + G13 | 110→111 | 15→16 | — | 418–427 |
+| G07 | 111→112 | 16 | — | 428–437 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
 | G11 | 114→115 | 17→18 | 132–133 | — |
@@ -39,6 +40,14 @@ renumber only if the order actually changes, and then shift the whole table.
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
+
+**2026-10-31 amendment.** The first table filled Op numbers only from G02
+onward and gave G01/G08 no Op row at all, although G01's revised draft imports
+eight functions and G08's imports twenty. Recounted from base 340 in landing
+order: G01 takes 341–348, G08 349–368, and every group from G02 on shifts ten.
+`SAVE_VERSION` stays at the value G08 landed (13) — the base column above
+records the *pre-landing* value each document was written against, which is
+why G15/G01 say 12.
 
 Recommended landing order (foundation → dependent):
 
@@ -62,7 +71,9 @@ Couplings a reviewer must keep in one head:
 - **G05 ↔ G13** share `invoke_entry` and the press-entry resolution; G05 adopts
   G13's import verbatim.
 - **G01 ↔ G08** share instance uid and the per-instance store.
-- **G02 ↔ G10** share the settle frame and its outcome facts.
+- **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
+  scope stack, the terminal outcome and the `settle_open` fix, G10 adds the
+  `paid`/`body_replaced` facts on top (G02 §12).
 - **G03 ↔ G11** share the drawAfter point; their kind bands are adjacent.
 - **G06 ↔ G12** share pending-window reads.
 - **G04 ↔ G12** share the blocked predicate (`cant_move_code_for_activation`).
