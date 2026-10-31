@@ -441,9 +441,13 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   * **Auction answers (2026-10-28).** The prompt's `worth` is a ceiling, not a
     bid: `policy::act_for` passes when the seat is already the top bidder
     (`err.already_top_bid`) or cannot reach the minimum raise (`err.bid_min`),
-    and otherwise bids from that minimum by its own `bid_step`. A refused
-    auction answer holds the whole table on the prompt, because nobody marks
-    an answer the engine turned down.
+    and otherwise bids from that minimum by its own `bid_step`. The minimum
+    still moves between the frame a seat decides from and its `act` (another
+    seat bids first), so a refusal there is a race, not a verdict: the driver
+    re-arms the answer and retries once from the frame the engine has now
+    (`botDrive.ts` `recordAnswer` / `retryFresh`, 2026-10-31). Without that a
+    refused bid is recorded as answered and -- Solo having no prompt clock --
+    parks the whole table on the prompt.
   * **Trivial decisions (2026-10-08).**
     [`action::trivial_decision`] skips the search when the root has exactly
     one legal action (it is forced) or when no candidate moves money,

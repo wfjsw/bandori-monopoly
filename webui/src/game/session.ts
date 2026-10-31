@@ -239,7 +239,7 @@ class Autopilot {
       search: mode === "advanced",
       mentality: mode === "chaos" ? "chaos" : mode === "advanced" ? "advanced" : "standard",
       onThinking: (_m, on) => this.setSearching(on),
-      onApplied: (m, decision, ok) => recordAnswer(this.answered, m, decision, ok),
+      onApplied: (m, decision, err) => recordAnswer(this.answered, m, decision, err),
     };
     void driveSeat(
       (_member, cmd) => {
@@ -255,7 +255,14 @@ class Autopilot {
         this.inFlight = false;
         this.setSearching(false);
         const now = s.view;
-        if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== at) this.schedule();
+        if (!isAuto(s.autoMode) || !now) return;
+        // The seat still owes this surface (a refusal re-armed it, or the state
+        // moved on): let the next pass ask again. A refused answer leaves
+        // `seq` alone, so the old `at !== seq` test alone would park the seat.
+        if (needsAnswer(this.answered, s.you, now)) {
+          this.tried.delete("search");
+          this.schedule();
+        }
       });
   }
 }
@@ -762,7 +769,7 @@ export class SoloSession extends GameSession {
           search: mentality === "advanced",
           mentality,
           onThinking: (m, on) => this.setBotThinking(m, on),
-          onApplied: (m, decision, ok) => recordAnswer(this.botAnswered, m, decision, ok),
+          onApplied: (m, decision, err) => recordAnswer(this.botAnswered, m, decision, err),
         },
       ).finally(() => {
         this.botInFlight.delete(member);
