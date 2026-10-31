@@ -233,3 +233,117 @@ fn stage_accident_writes_two_skillblock_names() {
         stems.len()
     );
 }
+
+// =====================================================================
+// a spent plan stop / step count shapes the next move
+// =====================================================================
+
+/// `plan::set_stop_at` and `plan::set_steps` write `turn.plan`, which is
+/// never reset between moves in a turn. `this_hand` sets both for each
+/// player's forced walk, and its replay re-applies those writes *after* the
+/// last walk, so they outlive the event: the turn player's main move then
+/// takes the event's step count in place of its own roll and halts on the
+/// event's stop tile -- already spent by the earlier walk, so no line of the
+/// later move says why it stopped.
+///
+/// Repro: a Hurray mark on 51 and an event that walks the turn player over it
+/// (the mark stops that walk and is spent); the main move from 49 rolls 4 and
+/// must reach 53.
+#[test]
+fn spent_plan_stop_and_steps_shape_the_next_move() {
+    let mut t = Table::new(&["北泽育美", "高松灯"]);
+    t.clean();
+    t.set_pos(0, 48);
+    t.set_pos(1, 20);
+    t.give(0, &["HHW:（育美）", "event:这只手我不会放开"]);
+    // 4d20 = 52 wraps onto tile 51.
+    t.dice(&[20, 20, 10, 2, 20, 20, 10, 3]);
+    t.play(0, "HHW:（育美）").unwrap();
+    let p = t.expect_prompt();
+    let want = p
+        .options
+        .iter()
+        .position(|o| format!("{o:?}").contains("51"))
+        .expect("a roll landing on 51");
+    t.answer(0, want as i32).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    // The event's walks: P0 (5-3+1 = +3) lands on 51 and the mark stops it.
+    t.dice(&[5, 3, 1, 1, 1, 1]);
+    t.play(0, "event:这只手我不会放开").unwrap();
+    let mut took = false;
+    while t.prompt().is_some() {
+        if !took && t.option("ask.yes").is_some() {
+            took = true;
+            let k = t.option("ask.yes").unwrap();
+            t.answer(0, k).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(took, "the mark offered its stop");
+    assert_eq!(t.pos(0), 51, "the event's walk stopped on the mark");
+    // Main move: the plan still holds the event's 1 step and the spent stop.
+    t.set_pos(0, 49);
+    let mark = t.mark();
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert_eq!(
+        t.pos(0),
+        53,
+        "the main roll is 4, not the event's step count: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k == "log.outcome.plan_stop"),
+        "the spent stop is not re-announced: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+/// The same event sets two more per-move plan fields for its walks: `reverse`
+/// (「如果X是负数」) and `resolve` (「不触发场地效果」). Both stayed on the plan,
+/// so the turn player's main move walked *backwards* and settled nothing.
+///
+/// Repro: the event rolls the turn player a negative X (backwards), then the
+/// main move rolls forward and must settle.
+#[test]
+fn spent_plan_reverse_and_resolve_shape_the_next_move() {
+    let mut t = Table::new(&["北泽育美", "高松灯"]);
+    t.clean();
+    t.set_pos(0, 48);
+    t.set_pos(1, 20);
+    t.give(0, &["event:这只手我不会放开"]);
+    // P0 1-20+16 = -3 walks backwards; P1 1-1+1 = +1.
+    t.dice(&[1, 20, 16, 1, 1, 1]);
+    t.play(0, "event:这只手我不会放开").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert_eq!(t.pos(0), 45, "the event walked backwards");
+    let mark = t.mark();
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    let mut prompts = 0;
+    while t.prompt().is_some() {
+        prompts += 1;
+        t.decline();
+    }
+    assert_eq!(
+        t.pos(0),
+        49,
+        "the main roll walks forward: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(
+        prompts > 0,
+        "the main move still settles: {:?}",
+        t.keys_since(mark)
+    );
+}

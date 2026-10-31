@@ -2370,6 +2370,8 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         let was = self.world.move_total();
         self.world.set_steps(v);
+        // Written for the move this body shapes, not for a later one.
+        self.world.turn.plan.steps_fresh = true;
         // Keep the shared MoveBefore link coherent for later counters and
         // hooks. Its base distance is already final; a plan rewrite extends
         // this move rather than rewriting a roll that has already resolved.
@@ -2397,6 +2399,8 @@ impl CardWorld for Run {
     fn set_reverse(&mut self, v: bool) {
         self.stamp_skill_source();
         self.world.set_reverse(v);
+        // Written for the move this body shapes, not for a later one.
+        self.world.turn.plan.reverse_fresh = true;
     }
     fn set_signed(&mut self, v: bool) {
         self.stamp_skill_source();
@@ -2406,6 +2410,8 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         let was = self.world.move_stop_at();
         self.world.set_stop_at(v);
+        // Written for the move this body shapes, not for a later one.
+        self.world.turn.plan.stop_at_fresh = true;
         if v != was {
             self.outcome_plan("log.outcome.plan_stop", v.map(|t| t.0).unwrap_or(-1), 0, "");
         }
@@ -2417,6 +2423,8 @@ impl CardWorld for Run {
     fn set_resolve(&mut self, v: bool) {
         self.stamp_skill_source();
         self.world.set_resolve(v);
+        // Written for the move this body shapes, not for a later one.
+        self.world.turn.plan.resolve_fresh = true;
     }
     fn set_no_buy(&mut self, v: bool) {
         self.stamp_skill_source();
@@ -2457,10 +2465,14 @@ impl CardWorld for Run {
     fn set_pay_factor(&mut self, v: i32) {
         self.stamp_skill_source();
         self.world.set_pay_factor(v);
+        // Written for the move this body shapes, not for a later one.
+        self.world.turn.plan.pay_fresh = true;
     }
     fn set_rent_factor(&mut self, v: i32) {
         self.stamp_skill_source();
         self.world.set_rent_factor(v);
+        // Written for the move this body shapes, not for a later one.
+        self.world.turn.plan.pay_fresh = true;
     }
     fn set_can_build(&mut self, v: bool) {
         self.stamp_skill_source();

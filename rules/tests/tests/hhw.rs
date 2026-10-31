@@ -88,6 +88,60 @@ fn hagumi_offers_a_high_and_a_low_roll_on_the_same_tile() {
     );
 }
 
+// 规则书（2）: 「[经过]放置有育美标记的格子时，可使其[强制停下]并[触发结算]，获得
+// 2000资金并移除那个育美标记」 -- the walk halts on the marked tile itself
+// (not a tile later), settles there, and the log says so before it happens.
+#[test]
+fn hagumi_mark_stops_the_walk_and_settles_there() {
+    let mut t = Table::new(&["北泽育美", "户山香澄"]);
+    t.clean();
+    t.set_pos(0, 48);
+    t.own(1, &[51]);
+    t.give(0, &["HHW:（育美）"]);
+    // 4d20 = 52 wraps onto tile 51.
+    t.dice(&[20, 20, 10, 2, 20, 20, 10, 3]);
+    t.play(0, "HHW:（育美）").unwrap();
+    let p = t.expect_prompt();
+    let want = p
+        .options
+        .iter()
+        .position(|o| format!("{o:?}").contains("51"))
+        .expect("a roll landing on 51");
+    t.answer(0, want as i32).unwrap();
+    drain(&mut t);
+    assert!(!t.marks_on(51).is_empty(), "51 carries the mark");
+    let mark = t.mark();
+    // 48 -> 52 with a 4, but the mark stops the walk on 51.
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("hagumi_marks_stop") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.pos(0), 51, "keys: {:?}", t.recent_keys(16));
+    assert!(t.marks_on(51).is_empty(), "the stop spends the mark");
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k == "log.outcome.plan_stop"),
+        "the stop is announced: {keys:?}"
+    );
+    // 规则书: 「并[触发结算]」 -- the settle runs on the stop tile, not on 52.
+    let rent = t
+        .events_since(mark)
+        .into_iter()
+        .find(|e| log_key(e) == "log.rent")
+        .expect("a rent at the landing");
+    assert_eq!(
+        format!("{:?}", rent.msg.a.get("tile")),
+        format!("Some({:?})", game_core::msg::Arg::Tile(51)),
+        "the settle is on the stop tile"
+    );
+}
+
 // ----- HHW:因为我一直相信着你
 
 #[test]

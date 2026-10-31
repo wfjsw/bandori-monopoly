@@ -1105,6 +1105,7 @@ fn harvest_previews_each_distance_with_wraparound_and_reverse() {
         let mut t = Table::vanilla(2);
         t.set_pos(0, if reverse { 2 } else { 58 });
         t.m.world_mut().turn.plan.reverse = reverse;
+        t.m.world_mut().turn.plan.reverse_fresh = true;
         t.give_play(0, "通用:尽力后的收获").unwrap();
         let p = t.expect_prompt();
         assert_eq!(p.options.len(), 6);

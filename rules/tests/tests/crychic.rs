@@ -6,6 +6,7 @@
 mod common;
 use common::*;
 
+use game_core::msg::Arg;
 use game_core::net::NetMessage;
 use game_core::state::stage;
 
@@ -913,6 +914,50 @@ fn saki_crychic_skill_fire_cap() {
     t.set_fire(0, 1, 2);
     assert_eq!(t.charge(0), 1);
     assert_eq!(t.charge_max(0), 2);
+}
+
+/// 规则书（2）: 「其他人的主要移动结束时，[触发结算]前若在你的前后5格内，可选择
+/// 向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」. The destination
+/// really moves before the settle, and the settle (its 停在 / rent line) runs at
+/// the new tile -- not the one the dice cast.
+#[test]
+fn saki_crychic_nudge_moves_the_destination() {
+    let mut t = Table::new(&["丰川祥子（CRYCHIC）", "高松灯（CRYCHIC）"]);
+    t.clean();
+    t.set_pos(1, 16);
+    t.set_pos(0, 10);
+    t.set_fire(0, 1, 10);
+    t.own(1, &[13, 14]);
+    let mark = t.mark();
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    let mut asked = false;
+    loop {
+        let Some(_) = t.prompt() else { break };
+        if t.prompt_refers("saki_crychic_ask_self") {
+            asked = true;
+            t.answer_one(0).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(asked, "the settleBefore offer: {:?}", t.recent_keys(12));
+    // 10 + 3 lands on 13; one step toward P1 (16) is 14.
+    assert_eq!(t.pos(0), 14, "keys={:?}", t.recent_keys(12));
+    let rent_tile = t
+        .events_since(mark)
+        .into_iter()
+        .find(|e| log_key(e) == "log.rent")
+        .and_then(|e| match e.msg.a.get("tile") {
+            Some(Arg::Tile(v)) => Some(*v),
+            _ => None,
+        });
+    assert_eq!(
+        rent_tile,
+        Some(14),
+        "the settle runs at the nudged destination: {:?}",
+        t.recent_keys(12)
+    );
 }
 
 #[test]

@@ -809,6 +809,8 @@ impl Cx<'_> {
         if as_main {
             self.w.turn.main_moved = true;
         }
+        // The activation running this move drove it (see `drop_spent_plan_shape`).
+        self.w.turn.play_drove_move = true;
         plan.player_id = i;
         // A substitution (hallucination 「上一名玩家代替进行此次投掷」) writes
         // `roller` through `plan::set_roller`; otherwise the mover rolls.
@@ -832,6 +834,13 @@ impl Cx<'_> {
         let r = self.card_move_seeded(i, plan, as_main);
         if let Some(outer) = outer_plan {
             self.w.turn.plan = outer;
+            // The moved plan -- and the tail clear `card_move_seeded` made on
+            // it -- is discarded here. The restored plan still carries the
+            // flags of the write that shaped the move just run, so clear them
+            // on it too, or the next entry would honour that spent value
+            // (`drop_stale_plan_shape`). The values stay: an outer walk that is
+            // still going reads its own per step.
+            self.drop_plan_fresh();
         }
         r
     }
@@ -860,6 +869,17 @@ impl Cx<'_> {
 
     /// [`Self::card_move`] once the shared plan is seeded.
     fn card_move_seeded(&mut self, i: usize, mut plan: Move, as_main: bool) -> Flow<()> {
+        // `plan` was built from the ctx plan for this call. Drop what an earlier
+        // move in this turn left behind (`drop_stale_plan_shape`; without it a
+        // stale `steps` also skips the roll below outright) and carry the
+        // survivors from the shared plan onto the move.
+        self.drop_stale_plan_shape();
+        plan.steps = self.w.turn.plan.steps;
+        plan.stop_at = self.w.turn.plan.stop_at;
+        plan.pay_factor = self.w.turn.plan.pay_factor;
+        plan.rent_factor = self.w.turn.plan.rent_factor;
+        plan.reverse = self.w.turn.plan.reverse;
+        plan.resolve = self.w.turn.plan.resolve;
         if plan.teleport_to.is_some() {
             let to = plan.teleport_to.unwrap().0 as usize;
             let resolve = plan.resolve;
@@ -928,7 +948,16 @@ impl Cx<'_> {
                     }
                 }
             }
-            if plan.teleport_to.is_none() && !plan.cancelled && !self.out(i) {
+            // A `diceRollAfter` / `diceRollResult` hook may have changed the
+            // destination on the plan after the pre-roll check above (the same
+            // shape `main_move` takes). Teleport there; do not also walk.
+            let after_teleport = self.take_plan_teleport();
+            if let Some(to) = after_teleport {
+                let resolve = plan.resolve;
+                let why = plan.why.clone();
+                self.teleport_as(i, to, resolve, why, as_main)?;
+            }
+            if after_teleport.is_none() && !plan.cancelled && !self.out(i) {
                 self.walk(&mut plan)?;
             }
         }
@@ -939,6 +968,7 @@ impl Cx<'_> {
         self.w.turn.plan.by_skill = false;
         self.w.turn.plan.start = None;
         self.w.turn.plan.start_why.clear();
+        self.drop_plan_fresh();
         // Record the walked length: `lastWalk` is the last **non-teleport main**
         // walk (「你最近一次非传送的主要移动」), so a forced / side card walk
         // must not overwrite it -- and it is the distance actually walked
@@ -1012,8 +1042,14 @@ impl Cx<'_> {
         if self.w.st.turn == player_id as i32 {
             self.w.turn.played.push(card.to_string());
         }
+        // A move this press drives makes it spent (`drop_spent_plan_shape`).
+        let prev_drove_move = self.w.turn.play_drove_move;
+        self.w.turn.play_drove_move = false;
         let rules = self.rules;
         rules.play(self, player_id, card)?;
+        // The press is spent (see `drop_spent_plan_shape`).
+        self.drop_spent_plan_shape();
+        self.w.turn.play_drove_move = prev_drove_move;
         Ok(())
     }
 
@@ -1370,6 +1406,11 @@ impl Cx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
+        // The activation running this move drove it (see `drop_spent_plan_shape`).
+        self.w.turn.play_drove_move = true;
+        // Drop what an earlier move in this turn left behind (`drop_stale_plan_shape`);
+        // a Play body that shaped *this* move marked its writes fresh.
+        self.drop_stale_plan_shape();
         // Start from the turn's plan, not a fresh move: a **Play** body may have
         // shaped this move earlier in the turn (change_world's 「你的本次移动掷骰
         // 变为3d20」 writes the dice table at play time). Only the identity and
@@ -1498,7 +1539,18 @@ impl Cx<'_> {
                     m.steps = Some(0);
                     m.resolve = false;
                 }
-                self.walk(&mut m)?;
+                // A `diceRollAfter` / `diceRollResult` hook may have changed the
+                // destination on the plan (saaya_sky's floor 「移动到下一个可购买
+                // 格子」) -- the pre-roll check above ran too early for it. Same
+                // branch as a `rollPlan` rewrite: the plan's destination is the
+                // move and no steps are walked.
+                if let Some(to) = self.take_plan_teleport() {
+                    let resolve = m.resolve;
+                    let why = m.why.clone();
+                    m.cancelled = !self.teleport_as(i, to, resolve, why, m.main)?;
+                } else {
+                    self.walk(&mut m)?;
+                }
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
             // `DiceRollAfter` floor, saki_crychic's `SettleBefore` nudge): this
@@ -1508,6 +1560,7 @@ impl Cx<'_> {
             self.w.turn.plan.by_skill = false;
             self.w.turn.plan.start = None;
             self.w.turn.plan.start_why.clear();
+            self.drop_plan_fresh();
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
             // each follower recorded on the plan replays this move's result,
@@ -1778,6 +1831,7 @@ impl Cx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
+            self.land_plan_teleport(i);
             if self.w.st.players[i].pos != cur {
                 break; // moved by a passBefore counteraction
             }
@@ -1803,6 +1857,7 @@ impl Cx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
+            self.land_plan_teleport(i);
             // A pass-reward (if any) is the tile rule's Pass entry on the
             // `passTile` hook above. The engine keeps no built-in fallback.
             // `pass` -- every traversed tile, like `passBefore` / `passTile`
@@ -1812,6 +1867,7 @@ impl Cx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
+            self.land_plan_teleport(i);
             if self.w.st.players[i].pos != next {
                 break; // moved by an effect
             }
@@ -1896,6 +1952,126 @@ impl Cx<'_> {
             _ => return,
         }
         self.w.st.players[i].state_set("resolveOverride", 0);
+    }
+
+    /// Consume a `teleport_to` a hook wrote on the *plan*
+    /// (`plan::set_teleport_to`) instead of calling `ctx::teleport_to`.
+    ///
+    /// The two write shapes are the same relocation -- `ctx::teleport_to` is a
+    /// bare position write at `move_depth > 0` -- so a plan write inside a move
+    /// must move the piece too, or the destination the hook logged (and the
+    /// `log.outcome.plan_teleport` line) is a promise the board never keeps and
+    /// the settle runs at the original tile (saki_crychic's settleBefore nudge,
+    /// saaya_sky's dice floor).
+    ///
+    /// One-shot: the write is cleared whether or not the tile is usable.
+    /// Returns the tile when it is on the board.
+    fn take_plan_teleport(&mut self) -> Option<usize> {
+        let t = self.w.turn.plan.teleport_to.take()?.0;
+        (t >= 0 && (t as usize) < self.data.tiles.len()).then_some(t as usize)
+    }
+
+    /// Drop the plan shape that was written for an *earlier* move in this turn.
+    ///
+    /// `turn.plan` is never reset between moves (only `next_turn` rebuilds it),
+    /// so anything an earlier move consumed is still sitting there and reshapes
+    /// this one:
+    ///
+    /// * `stop_at` -- the later walk halts on a tile nobody named for it and
+    ///   with no line of its own (`set_stop_at` logs only the write, which
+    ///   happened in the earlier move), so the piece just stops unexplained;
+    /// * `steps` -- the leftover count *replaces* the roll outright (the roll
+    ///   goes out as that many steps and the walk takes them);
+    /// * `pay_factor` / `rent_factor` -- a 「此次支付」 scaler keeps scaling a
+    ///   later, unrelated payment;
+    /// * `reverse` / `resolve` -- the next walk goes the wrong way, or
+    ///   settles nothing because a 「不[结算]」 move said so.
+    ///
+    /// A write meant for the current move (a Play body shaping the main move)
+    /// raises its fresh mark, which this consumes. Values written *inside* a
+    /// move land on the running `Move`; [`Self::drop_plan_fresh`] clears the
+    /// marks at the move's tail so they cannot leak either.
+    fn drop_stale_plan_shape(&mut self) {
+        let p = &mut self.w.turn.plan;
+        if !p.steps_fresh {
+            p.steps = None;
+        }
+        if !p.stop_at_fresh {
+            p.stop_at = None;
+        }
+        if !p.pay_fresh {
+            p.pay_factor = 1.0;
+            p.rent_factor = 1.0;
+        }
+        if !p.reverse_fresh {
+            p.reverse = false;
+        }
+        if !p.resolve_fresh {
+            p.resolve = true;
+        }
+        p.steps_fresh = false;
+        p.stop_at_fresh = false;
+        p.pay_fresh = false;
+        p.reverse_fresh = false;
+        p.resolve_fresh = false;
+    }
+
+    /// End the per-move scope: a write made during the move must not mark the
+    /// next one fresh (the value itself stays for a post-move read, e.g.
+    /// maze_warehouse's `ctx::plan::stop_at()` charge -- the next move's entry
+    /// drops it).
+    fn drop_plan_fresh(&mut self) {
+        let p = &mut self.w.turn.plan;
+        p.steps_fresh = false;
+        p.stop_at_fresh = false;
+        p.pay_fresh = false;
+        p.reverse_fresh = false;
+        p.resolve_fresh = false;
+    }
+
+    /// An **activation** body (a hand Play, an event, a skill press) that
+    /// drove a move is spent when it ends: the `plan::set_steps` /
+    /// `set_stop_at` / `set_reverse` / `set_resolve` / `set_pay_factor` writes
+    /// it made were for that walk. The body's replay re-applies them *after*
+    /// the last move, so they sit on the plan as if they were meant for
+    /// whatever comes next: the turn player's main move then takes the event's
+    /// step count in place of its roll, halts on a stop tile that is already
+    /// spent and unannounced, walks backwards, or settles nothing.
+    ///
+    /// An activation that drove **no** move is shaping a move still to come
+    /// (ran_red (2)'s 「本次移动向后」, sakiko_lead's half price, taki_serious'
+    /// quarter) and keeps everything.
+    ///
+    /// Only at `move_depth == 0` too: an activation nested inside a move (a
+    /// card played from a settle) is shaping that walk, and its write has to
+    /// stay for the settle stages still to run. Hook bodies are left alone
+    /// entirely: a `rollPlan` hook (`kaoru_thief`'s forced stop) runs before
+    /// the walk of the move it shapes and must keep its write.
+    fn drop_spent_plan_shape(&mut self) {
+        if self.move_depth > 0 || !self.w.turn.play_drove_move {
+            return;
+        }
+        let p = &mut self.w.turn.plan;
+        p.steps = None;
+        p.stop_at = None;
+        p.reverse = false;
+        p.resolve = true;
+        p.pay_factor = 1.0;
+        p.rent_factor = 1.0;
+        p.steps_fresh = false;
+        p.stop_at_fresh = false;
+        p.reverse_fresh = false;
+        p.resolve_fresh = false;
+        p.pay_fresh = false;
+    }
+
+    /// Move the player to a plan-written destination, if a hook just wrote one.
+    /// A bare write: the stage's own flow (`break` on a step, the `settleBefore`
+    /// re-target loop) carries on from the new tile.
+    fn land_plan_teleport(&mut self, i: usize) {
+        if let Some(to) = self.take_plan_teleport() {
+            self.w.st.players[i].pos = to as i32;
+        }
     }
 
     fn teleport_as_depth(
@@ -2089,6 +2265,10 @@ impl Cx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
+            // A hook that changes the destination writes the plan rather than
+            // the position; land it so the `now != at` re-target below runs the
+            // settle (and its lines) at the new tile.
+            self.land_plan_teleport(i);
             let now = self.w.st.players[i].pos as usize;
             if now == at {
                 break;
@@ -4818,6 +4998,9 @@ impl Cx<'_> {
         // it from the snapshot.
         let prev_extreme = self.w.turn.extreme;
         self.w.turn.extreme = Extreme::Plain;
+        // A move this play drives makes it spent (`drop_spent_plan_shape`).
+        let prev_drove_move = self.w.turn.play_drove_move;
+        self.w.turn.play_drove_move = false;
         // Per-pair designations cancelled on the previous play must not leak
         // into this one.
         self.w.turn.cancelled_designations.clear();
@@ -4923,6 +5106,10 @@ impl Cx<'_> {
         // extreme (`extreme`, same scope).
         self.w.turn.play_from_hand = prev_from_hand;
         self.w.turn.extreme = prev_extreme;
+        // The play is spent (see `drop_spent_plan_shape`); the flag is read
+        // there, so it is restored after.
+        self.drop_spent_plan_shape();
+        self.w.turn.play_drove_move = prev_drove_move;
         Ok(())
     }
 
@@ -4964,6 +5151,9 @@ impl Cx<'_> {
             self.w.log("text", i as i32, Msg::new("log.no_events"));
             return Ok(());
         };
+        // A move this event drives makes it spent (`drop_spent_plan_shape`).
+        let prev_drove_move = self.w.turn.play_drove_move;
+        self.w.turn.play_drove_move = false;
         self.w
             .log(
                 "event",
@@ -5022,6 +5212,9 @@ impl Cx<'_> {
         // emptied deck take the shuffled discard (this card included).
         self.w.refill_event_deck();
         self.wait(0.4);
+        // The event is spent (see `drop_spent_plan_shape`).
+        self.drop_spent_plan_shape();
+        self.w.turn.play_drove_move = prev_drove_move;
         Ok(())
     }
 

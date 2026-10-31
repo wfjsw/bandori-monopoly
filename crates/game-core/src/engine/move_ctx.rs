@@ -173,6 +173,27 @@ pub struct MoveCtx {
     /// `card_sdk::ctx::trigger::is_settle_redirect()`.
     #[serde(default)]
     pub settle_redirect: bool,
+    /// Per-move scope marks, never read by the walk itself. The plan is never
+    /// reset between moves in a turn, so a value written for an *earlier*
+    /// move stays on it and reshapes the next one; the corresponding
+    /// `plan::set_*` write raises these, and the next move's entry consumes
+    /// them ([`crate::engine::play`]'s `drop_stale_plan_shape`). `steps` and
+    /// the two payment factors are per-move by definition; a leftover
+    /// `stop_at` would halt an unrelated later walk, unexplained (the
+    /// `log.outcome.plan_stop` line belongs to the move that wrote it).
+    #[serde(default)]
+    pub steps_fresh: bool,
+    #[serde(default)]
+    pub stop_at_fresh: bool,
+    #[serde(default)]
+    pub pay_fresh: bool,
+    /// Same one-shot scope for the walk's *direction* (`reverse`) and whether
+    /// it settles (`resolve`): a 「向反方向移动」 / 「不[结算]」 move must not
+    /// send the next one backwards or silence its settle.
+    #[serde(default)]
+    pub reverse_fresh: bool,
+    #[serde(default)]
+    pub resolve_fresh: bool,
     /// Whether this move can build on the tile it lands on. `false` is the
     /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
     /// one flag, not two.
@@ -249,6 +270,11 @@ impl Default for MoveCtx {
             rent_factor: 1.0,
             settle_as_agent: false,
             settle_redirect: false,
+            steps_fresh: false,
+            stop_at_fresh: false,
+            pay_fresh: false,
+            reverse_fresh: false,
+            resolve_fresh: false,
             can_build: true,
             build_anywhere: false,
             more_steps: 0,

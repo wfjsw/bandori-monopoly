@@ -72,8 +72,8 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「本次结算导致的所有[支付]变为原价的四分之一」 -- the stayer
         // settles there at a quarter price.
         // TODO(规则书)（本次结算导致的所有[支付]变为原价的四分之一）: 只限本次结算
-        //   -- `set_pay_factor` 写整回合的 `turn.plan` 且不还原，之后本回合的移动
-        //   落地也按四分之一付。
+        //   -- `set_pay_factor` 写整回合的 `turn.plan`，之后本回合的移动落地也按
+        //   四分之一付。
         ctx::plan::set_pay_factor(250);
         // TODO(规则书)（进行一次[触发结算]）: 这个强制结算记为 `main = true`（当作
         //   该回合的落点）-- 书只写[触发结算]；`main` 会改写 `landed` 并让

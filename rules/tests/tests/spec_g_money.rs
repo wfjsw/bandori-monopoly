@@ -365,6 +365,7 @@ fn force_buy_ignores_a_pay_multiplier() -> Result<(), String> {
     t.set_mortgaged(land, true);
     // 其他规则 6: the multiplier cannot reach this sum.
     t.m.world_mut().turn.plan.pay_factor = 0.5;
+    t.m.world_mut().turn.plan.pay_fresh = true;
     t.set_money(0, 10_000);
     t.set_money(1, 1_000);
     t.observe(rules_spec::global::money::CLAUSES);
@@ -388,6 +389,7 @@ fn mortgage_ignores_a_pay_multiplier() -> Result<(), String> {
     let land = tile("购物中心");
     t.own(0, &[land]);
     t.m.world_mut().turn.plan.pay_factor = 0.5;
+    t.m.world_mut().turn.plan.pay_fresh = true;
     t.set_money(0, 1_000);
     t.observe(rules_spec::global::money::CLAUSES);
     until_turn(&mut t, 0);
