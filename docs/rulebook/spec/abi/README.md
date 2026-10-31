@@ -28,10 +28,10 @@ the whole table.
 | G08 | 105→106 | 12→13 | 114–121 | 349–368 |
 | G02 | 106→107 | 13 | 122 | 369–377 |
 | G04 | 107→108 | 13 | — | 378–397 |
-| G03 | 108→109 | 13→14 | 123–125 | 398–406 |
-| G06 | 109→110 | 14→15 | — | 407–426 |
-| G05 + G13 | 110→111 | 15→16 | — | 427–436 |
-| G07 | 111→112 | 16 | — | 437–446 |
+| G03 | 108→109 | 13→14 | 123–125 | 398–410 |
+| G06 | 109→110 | 14→15 | — | 411–430 |
+| G05 + G13 | 110→111 | 15→16 | — | 431–440 |
+| G07 | 111→112 | 16 | — | 441–450 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
 | G11 | 114→115 | 17→18 | 132–133 | — |
@@ -51,8 +51,10 @@ why G15/G01 say 12.
 
 **2026-10-31 second amendment (G03).** The G03 review found the draft asked
 for eight roll imports plus `trig_roll` while its Op row was still `—`. G03
-takes 398–406 (nine), and every group after it shifts nine: G06 407–426,
-G05+G13 427–436, G07 437–446. G04's landed 378–397 is untouched.
+takes 398–406 (nine). At landing the two 「是否触发结算」 answer pairs
+(§4.7's four ops) joined the same band: G03 takes **398–410** (thirteen),
+and every group after it shifts thirteen: G06 411–430, G05+G13 431–440,
+G07 441–450. G04's landed 378–397 is untouched.
 
 Recommended landing order (foundation → dependent):
 

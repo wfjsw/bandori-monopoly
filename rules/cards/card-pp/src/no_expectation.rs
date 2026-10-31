@@ -16,7 +16,7 @@
 //! the reshuffle stack growth runs on `Reshuffled`.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{prop, ActionKind, FilterKind};
+use card_sdk::abi::{prop, ActionKind, FilterKind, RollPurpose};
 use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue, RollValue};
 
@@ -27,15 +27,19 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // ABI v74 Filter/Action split of the old shared `hook` body; v79
         // folded the shave + the 「为0则不[结算]」 clamp into one pure
         // FilterValue at DiceRollValue (option C -- the text is a result
-        // modifier, not a 「掷骰后」 listener). No DiceRollAfter entry.
-        // PaySplitAdd is the pure payment bend (filters may not write, so the
-        // 「生效2次」 charges are spent by the `PayAfter` action below).
+        // modifier, not a 「掷骰后」 listener). PaySplitAdd is the pure payment
+        // bend (filters may not write, so the 「生效2次」 charges are spent by
+        // the `PayAfter` action below).
         //
-        // TODO(ABI): DiceRollValue is raised only inside a move dispatch --
-        // effect rolls (`ctx::roll`) and card-driven move rerolls never reach
-        // this filter; both need a roll-value stage.
+        // G03 R9: the shave is an additive result modifier ("additive first,
+        // then the halves"), so it sits at DiceRollAdd, which every cast runs.
+        // `step != 1` is 「非回合开始时」 (step 1 = turn start).
         // 规则书: 「非回合开始时进行投掷的投掷结果减少2」
-        On::Filter(Filter::DiceRollValue("card.placed", None, roll_shave)),
+        On::Filter(Filter::DiceRollAdd(
+            "card.placed && actor == owner && step != 1",
+            None,
+            roll_shave,
+        )),
         // 规则书: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
         On::Filter(Filter::PaySplitAdd("card.placed", None, pay_add)),
         // The bend applied to this money move -- spend the charges.
@@ -114,17 +118,13 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
 /// `CardNoExpectation` (1): 「投掷结果减少2（…如果为0则此次移动不[结算]）」.
-/// Pure RollValue at DiceRollValue (v79): shaves the face by 2 and, when the
-/// result is 0, clears `resolve` so the walk does not settle. `card.placed`
-/// is the pre; only the owner's rolls are shaved.
+/// Pure RollValue at DiceRollAdd: shaves the face by 2. A move result floors at
+/// 0 and, when it lands on 0, clears `resolve` so the walk does not settle; an
+/// effect roll is unbounded below. `card.placed` / `step != 1` / `actor ==
+/// owner` are the pre; only the owner's off-turn-start rolls are shaved.
 fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
-    // TODO(规则书)（非回合开始时进行投掷的投掷结果减少2）: 与减半卡（moca_half）的
-    // 先后未定 -- 现在按摆放顺序折叠，未按「最终结果」复核（OPEN-ROLLRESHAPE-01）
-    if trigger::player_id() != player_id {
-        return v;
-    }
     let roll = v.value;
-    let cut = (roll - 2).max(0);
+    let cut = roll - 2;
     if roll > 0 {
         ctx::log(
             player_id,
@@ -132,14 +132,18 @@ fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
         );
     }
     let mut out = RollValue { value: cut, ..v };
-    if cut == 0 {
-        // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
-        // (the clause keys on 「为0」, not on the shave having done work).
-        out.resolve = Some(false);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
-        );
+    if v.purpose == RollPurpose::Move as i32 {
+        // 「如果是移动投掷则最终结果最小为0」 -- the floor is move-only.
+        out.value = cut.max(0);
+        if out.value == 0 {
+            // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
+            // (the clause keys on 「为0」, not on the shave having done work).
+            out.resolve = Some(false);
+            ctx::log(
+                player_id,
+                &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
+            );
+        }
     }
     out
 }

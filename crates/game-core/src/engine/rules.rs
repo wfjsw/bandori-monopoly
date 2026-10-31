@@ -77,6 +77,31 @@ pub struct TriggerMove {
     pub settle_redirect: bool,
 }
 
+/// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
+/// every other trigger.
+///
+/// The guest sees this as `abi::RollPayload`; the two crates cannot share a
+/// type, so keep the fields aligned.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TriggerRoll {
+    /// The transaction id.
+    pub id: i32,
+    /// `0` = effect roll, `1` = move roll.
+    pub purpose: i32,
+    /// The highest-ranked [`RollSource`] seen on the transaction.
+    pub source: RollSource,
+    /// More than one cast exists.
+    pub rerolled: bool,
+    /// Index into `casts` of the face that will settle.
+    pub chosen_index: i32,
+    /// The face the latest pick did not take; `-1` when none.
+    pub unused_face: i32,
+    /// Every cast so far, `(value, source)`.
+    pub casts: Vec<(i32, i32)>,
+    /// The settled face at `diceRollSettled`; `None` before it.
+    pub final_face: Option<i32>,
+}
+
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
 /// the amount rides the trigger's `value` and the payee its `target`, but
 /// whether the payment is rent is a pay-only fact.
@@ -146,7 +171,9 @@ impl TriggerPay {
 /// `card_sdk::abi::roll_source`'s wire codes; the guest ABI still sees the `i32`.
 /// The engine never branches on a game name -- code `1` is the marker-funded
 /// roll that rules-layer clauses match by wire code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]
@@ -167,6 +194,18 @@ impl RollSource {
             RollSource::Charge => 1,
             RollSource::Card => 2,
             RollSource::Skill => 3,
+        }
+    }
+
+    /// Precedence rank (higher wins). The wire codes are not in rank order:
+    /// a charge-funded recast outranks a skill, which outranks a card, which
+    /// outranks an unattributed roll.
+    pub const fn rank(self) -> i32 {
+        match self {
+            RollSource::Unattributed => 0,
+            RollSource::Card => 1,
+            RollSource::Skill => 2,
+            RollSource::Charge => 3,
         }
     }
 
@@ -260,9 +299,11 @@ pub struct Trigger {
     /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on
     /// every other kind.
     pub buy: Option<TriggerBuy>,
-    /// Where a `diceRollBefore` / `diceRollResult` face came from. [`RollSource::Unattributed`]
+    /// Where the roll's face came from. [`RollSource::Unattributed`]
     /// on every non-roll trigger.
     pub roll_source: RollSource,
+    /// The roll a `DiceRoll*` trigger belongs to. `None` on every other kind.
+    pub roll: Option<TriggerRoll>,
     /// How a counter invalidated this link. The effect body is skipped when this
     /// is not [`Negation::None`]; the Before/After hooks still run.
     pub negation: Negation,
@@ -304,6 +345,7 @@ impl Trigger {
             pay: None,
             buy: None,
             roll_source: RollSource::Unattributed,
+            roll: None,
             negation: Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -348,6 +390,22 @@ impl Trigger {
     /// or when a counter spared this one recipient.
     pub fn settles_for(&self, seat: i32) -> bool {
         self.negation == Negation::None && !self.spared.contains(&seat)
+    }
+
+    /// Attach the roll transaction payload.
+    pub(crate) fn with_roll(&mut self, r: &super::roll::RollTransaction) -> &mut Self {
+        self.roll = Some(TriggerRoll {
+            id: r.id,
+            purpose: r.purpose,
+            source: r.source,
+            rerolled: r.casts.len() > 1,
+            chosen_index: r.chosen_index as i32,
+            unused_face: r.unused_face,
+            casts: r.casts.iter().map(|c| (c.raw, c.source.as_i32())).collect(),
+            final_face: r.final_face,
+        });
+        self.roll_source = r.source;
+        self
     }
 
     /// Copy the move context onto this trigger.

@@ -37,7 +37,80 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_roll_direct"
         )]
-        pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32) -> i32;
+        pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_recast"
+        )]
+        pub fn roll_recast(roll_id: i32, source: i32) -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_move"
+        )]
+        pub fn roll_move(player_id: i32, source: i32) -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_pick"
+        )]
+        pub fn roll_pick(roll_id: i32, index: i32);
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_current"
+        )]
+        pub fn roll_current() -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_face"
+        )]
+        pub fn roll_face(roll_id: i32, index: i32) -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_unused_face"
+        )]
+        pub fn roll_unused_face(roll_id: i32) -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_roll_rerolled"
+        )]
+        pub fn roll_rerolled(roll_id: i32) -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_rolls_by_player"
+        )]
+        pub fn rolls_by_player(player_id: i32, buf: i32, cap: i32) -> i32;
+
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_roll"
+        )]
+        pub fn trigger_roll(buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_move_settle_answer"
+        )]
+        pub fn set_move_settle_answer(answer: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_move_settle_answer"
+        )]
+        pub fn move_settle_answer() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_turn_end_settle_answer"
+        )]
+        pub fn set_turn_end_settle_answer(answer: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_turn_end_settle_answer"
+        )]
+        pub fn turn_end_settle_answer() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_log"
@@ -1458,7 +1531,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_fixed_roll"
         )]
-        pub fn set_fixed_roll(n: i32);
+        pub fn set_fixed_roll(n: i32, source: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_fixed_roll"

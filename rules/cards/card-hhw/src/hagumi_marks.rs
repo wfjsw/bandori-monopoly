@@ -77,27 +77,25 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     // `.Distinct()`), but two different results on one tile stay two options --
     // 「若选择的投掷结果大于60」 is about the chosen roll, not the tile.
     let mut options: alloc::vec::Vec<(i32, i32)> = alloc::vec::Vec::new();
+    let mut opts: alloc::vec::Vec<ctx::TileOption> = alloc::vec::Vec::new();
     for _ in 0..times.max(1) {
         let r = ctx::roll(player_id, 4, 20, RollPurpose::Effect, roll_source::CARD)?;
         let t = (r - 1).rem_euclid(n);
-        if !options.contains(&(t, r)) {
-            options.push((t, r));
+        let label = Msg::new(key!("hagumi_marks_opt"))
+            .tile("tile", t)
+            .i("roll", r as i64);
+        if opts.iter().any(|o| o.tile == t && o.label == label) {
+            continue;
         }
+        options.push((t, r));
+        opts.push(ctx::TileOption { tile: t, label });
     }
     let title = Msg::new(key!("hagumi_marks_ask_title"));
     let text = Msg::new(key!("hagumi_marks_ask_text"));
-    // 「将一个育美标记放置到投掷结果之一的格子上」 -- one labelled option per
-    // roll; the answer is the option index, so the chosen roll survives even when
-    // another option sits on the same tile.
-    let opts: alloc::vec::Vec<Msg> = options
-        .iter()
-        .map(|&(t, r)| {
-            Msg::new(key!("hagumi_marks_opt"))
-                .tile("tile", t)
-                .i("roll", r as i64)
-        })
-        .collect();
-    let i = ctx::ask_pick(player_id, &title, &text, &opts)?;
+    // 「将一个育美标记放置到投掷结果之一的格子上」 -- one tile-bound option per
+    // roll (the board can light it); the answer is the option index, so the
+    // chosen roll survives even when another option sits on the same tile.
+    let i = ctx::ask_tile_index(player_id, &title, &text, &opts)?;
     let (tile, chosen) = options[i.min(options.len() - 1)];
     // 规则书（1）[手]: 「若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记」
     // -- the book's literal 60 (not the tile count: a custom board may differ).

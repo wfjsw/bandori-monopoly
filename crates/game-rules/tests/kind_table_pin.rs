@@ -165,6 +165,9 @@ fn typed_engine_consts_have_table_rows() {
         (108, "OnBoardGate"),
         (109, "TargetableGate"),
         (110, "PaySplitMulBefore"),
+        (123, "DiceRollCast"),
+        (124, "DiceRollSettled"),
+        (125, "DiceRollAdd"),
     ];
     for (id, name) in named {
         let row =
@@ -219,6 +222,7 @@ fn filter_payload_shape_mapping() {
         ("TurnBaseTime", FilterShape::Value),
         ("PlayGate", FilterShape::Gate),
         ("DiceRollValue", FilterShape::Payload),
+        ("DiceRollAdd", FilterShape::Payload),
         ("OnBoardGate", FilterShape::Gate),
         ("TargetableGate", FilterShape::Gate),
     ];

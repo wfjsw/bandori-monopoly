@@ -58,6 +58,12 @@ pub trait CondView {
     /// Eager table for `move.tag(name)` (window-scope, not per-candidate).
     fn move_tag_table(&self) -> Vec<(String, i64)>;
     fn roll_source(&self) -> i64;
+    /// The roll's purpose (`0` = effect, `1` = move); `-1` outside a roll.
+    fn roll_purpose(&self) -> i64;
+    /// Has the roll transaction more than one cast?
+    fn roll_rerolled(&self) -> bool;
+    /// The face a pick did not take (`-1` = none).
+    fn roll_unused_face(&self) -> i64;
     fn abnormal(&self) -> bool;
     fn turn_player(&self) -> i64;
     fn turn_key(&self) -> i64;

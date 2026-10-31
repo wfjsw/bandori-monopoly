@@ -47,13 +47,19 @@ pub struct PlanValue {
     pub recorded_roll: Option<i32>,
 }
 
-/// DiceRollValue -- the face plus host context.
+/// DiceRollAdd / DiceRollValue -- the face plus host context.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RollValue {
-    /// The face; read + written.
+    /// The running face; read + written. `DiceRollAdd` adds to it,
+    /// `DiceRollValue` multiplies / reshapes it.
     pub value: i32,
+    /// A [`crate::abi::RollPurpose`] code (`0` = effect, `1` = move).
+    pub purpose: i32,
+    /// More than one cast exists on the transaction.
+    pub rerolled: bool,
     /// Host-supplied recorded roll (`None` = none for this raise).
     pub recorded_roll: Option<i32>,
+    /// Move rolls only: pin the settle off (`false`) or back on (`true`).
     pub resolve: Option<bool>,
 }
 
@@ -318,6 +324,12 @@ impl FilterPayload for RollValue {
                 // (`move_roll().unwrap_or(value())`).
                 value: crate::ctx::trigger::move_roll()
                     .unwrap_or_else(|| crate::ctx::trigger::value()),
+                purpose: crate::ctx::trigger::roll_payload()
+                    .map(|r| r.purpose)
+                    .unwrap_or(0),
+                rerolled: crate::ctx::trigger::roll_payload()
+                    .map(|r| r.rerolled)
+                    .unwrap_or(false),
                 recorded_roll: crate::ctx::plan::recorded_roll(),
                 resolve: None,
             }

@@ -135,6 +135,58 @@ pub struct TurnSnap {
     pub mortgaged: Vec<bool>,
 }
 
+/// A fixed face the turn's main move must use instead of casting (去唱卡拉ok吧,
+/// a kept die), with the source it was obtained from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixedFace {
+    pub value: i32,
+    pub source: crate::engine::rules::RollSource,
+}
+
+/// One cast in [`TurnCtx::roll_history`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollHistoryEntry {
+    pub roller: usize,
+    pub value: i32,
+    /// `0` = effect roll, `1` = move roll.
+    pub purpose: i32,
+    pub source: crate::engine::rules::RollSource,
+    /// The face came from `fixed_roll`, not a throw.
+    pub fixed: bool,
+}
+
+/// A 「是否触发结算」 answer (选择自己的舞台). Mirrors
+/// `card_sdk::abi::SettleAnswer`; `Unanswered` = the card said nothing.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SettleAnswer {
+    #[default]
+    Unanswered = 0,
+    Settle = 1,
+    Skip = 2,
+}
+
+impl SettleAnswer {
+    /// The `resolveOverride` slot value (`take_resolve_override` reads 1 =
+    /// settle, 2 = skip), `None` for `Unanswered`.
+    pub const fn slot(self) -> Option<i32> {
+        match self {
+            SettleAnswer::Unanswered => None,
+            SettleAnswer::Settle => Some(1),
+            SettleAnswer::Skip => Some(2),
+        }
+    }
+
+    /// Decode the guest code.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => SettleAnswer::Settle,
+            2 => SettleAnswer::Skip,
+            _ => SettleAnswer::Unanswered,
+        }
+    }
+}
+
 /// Per-turn bookkeeping the shell uses.
 ///
 /// The derived `Default` would zero `build_cost_pct` (only the serde default is
@@ -160,9 +212,10 @@ pub struct TurnCtx {
     /// not payments, so they are exempt.
     #[serde(default)]
     pub no_money_loss: Vec<usize>,
-    /// This turn's main move roll is fixed to this face.
+    /// This turn's main move roll is fixed to this face (and the source it
+    /// was obtained with).
     #[serde(default)]
-    pub fixed_roll: Option<i32>,
+    pub fixed_roll: Option<FixedFace>,
     /// Steps this turn's main move walked; 0 = none yet.
     #[serde(default)]
     pub main_steps: i32,
@@ -219,9 +272,19 @@ pub struct TurnCtx {
     #[serde(default)]
     pub turn_snap: Vec<TurnSnap>,
     /// Every face rolled this turn, in order. 「与本回合内你骰出过的所有骰点
-    /// 都不同」 compares against this.
+    /// 都不同」 compares against this. Mirrors [`Self::roll_history`] (which
+    /// also carries the roller); kept for readers that only want the faces.
     #[serde(default)]
     pub turn_rolls: Vec<i32>,
+    /// Every cast this turn, with its roller. Written at cast time, before any
+    /// roll window opens. Cleared with the turn.
+    #[serde(default)]
+    pub roll_history: Vec<RollHistoryEntry>,
+    /// 选择自己的舞台's turn-end half: whether a **blocked** turn settles at
+    /// its end. Engine-stamped to `Settle` when the move gate holds the mover;
+    /// `Unanswered` when the mover was not blocked.
+    #[serde(default)]
+    pub blocked_settle_answer: SettleAnswer,
     /// 「下次盖房时减免N（可溢出），盖房后减少1层」. A layered cut on the build
     /// cost; each build pops one layer.
     #[serde(default)]
@@ -278,6 +341,8 @@ impl Default for TurnCtx {
             turn_start_pos: Vec::new(),
             turn_snap: Vec::new(),
             turn_rolls: Vec::new(),
+            roll_history: Vec::new(),
+            blocked_settle_answer: SettleAnswer::Unanswered,
             build_discount: 0,
             build_discount_layers: 0,
             build_cost_pct: full_build_cost(),
@@ -664,6 +729,14 @@ pub struct World {
     #[serde(default)]
     pub recorded_roll: Option<i32>,
     pub ask_seq: i32,
+    /// The open roll transaction stack (a roll can nest: an effect roll inside
+    /// a move window, a recast inside a counteraction).
+    #[serde(default)]
+    pub open_rolls: Vec<crate::engine::roll::RollTransaction>,
+    /// The next roll-transaction id (`rolls_by_player` / `roll_face` key on
+    /// it; never written to a card slot).
+    #[serde(default)]
+    pub next_roll_id: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
     #[serde(default)]
@@ -800,6 +873,8 @@ impl World {
             board: None,
             recorded_roll: None,
             ask_seq: 0,
+            open_rolls: Vec::new(),
+            next_roll_id: 1,
             signals: vec![],
             scheduled: vec![],
             targeted: vec![],

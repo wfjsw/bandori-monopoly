@@ -5,7 +5,7 @@
 use card_sdk::abi::{roll_source, ChainKind, ActionKind, FilterKind, RollPurpose};
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::serde;
-use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On, PayAddValue, PlanValue};
+use card_sdk::{Action, CardDef, Filter, GateValue, key, Msg, On, PayAddValue, PlanValue, RollValue};
 
 /// Plays another card (in another module) in the middle of its own effect.
 const RELAY: CardDef = CardDef::new("TEST:relay", &[On::Play("", None, relay)]);
@@ -1921,6 +1921,119 @@ fn query_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// ------------------------------------------------------------- G03 roll ladder
+
+/// G03: logs every roll stage (kind id, face, purpose, source, rerolled,
+/// unused face, cast count) and bends the face at Add (+1) and Value (×2), so
+/// the stage order and the fold-once contract are visible from the log.
+const ROLL_TRACE: CardDef = CardDef::new(
+    "TEST:rollTrace",
+    &[
+        On::Play("", None, roll_trace_play),
+        On::Action(Action::DiceRollCast("card.placed", None, roll_trace_log)),
+        On::Action(Action::DiceRollBefore("card.placed", None, roll_trace_log)),
+        On::Filter(Filter::DiceRollAdd("card.placed", None, roll_trace_add)),
+        On::Filter(Filter::DiceRollValue("card.placed", None, roll_trace_value)),
+        On::Action(Action::DiceRollAfter("card.placed", None, roll_trace_log)),
+        On::Action(Action::DiceRollResult("card.placed", None, roll_trace_log)),
+        On::Action(Action::DiceRollSettled("card.placed", None, roll_trace_log)),
+    ],
+);
+
+fn roll_trace_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:rollTrace", &Msg::new(key!("roll_trace_note")));
+    Ok(())
+}
+
+fn roll_trace_log(player_id: i32) -> card_sdk::Asked {
+    let p = trigger::roll_payload().unwrap_or_default();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("roll_trace"))
+            .i("kind", trigger::kind().id as i64)
+            .i("face", trigger::value() as i64)
+            .i("purpose", p.purpose as i64)
+            .i("source", p.source as i64)
+            .i("rerolled", p.rerolled as i64)
+            .i("unused", p.unused_face as i64)
+            .i("casts", p.casts.len() as i64),
+    );
+    Ok(())
+}
+
+fn roll_trace_add(_player_id: i32, v: RollValue) -> RollValue {
+    RollValue {
+        value: v.value + 1,
+        ..v
+    }
+}
+
+fn roll_trace_value(_player_id: i32, v: RollValue) -> RollValue {
+    RollValue {
+        value: v.value * 2,
+        ..v
+    }
+}
+
+/// G03: at the move's After, recast with a fire source and pick the new face
+/// (the Result window must then carry `roll_source == 1`).
+const FIRE_RECAST: CardDef = CardDef::new(
+    "TEST:fireRecast",
+    &[
+        On::Play("", None, fire_recast_play),
+        On::Action(Action::DiceRollAfter("card.placed", None, fire_recast)),
+    ],
+);
+
+fn fire_recast_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:fireRecast",
+        &Msg::new(key!("fire_recast_note")),
+    );
+    Ok(())
+}
+
+fn fire_recast(player_id: i32) -> card_sdk::Asked {
+    let id = trigger::roll_id();
+    let _ = ctx::roll_recast(id, roll_source::CHARGE)?;
+    ctx::roll_pick(id, 1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("fire_recast_note"))
+            .i("id", id as i64)
+            .i("unused", ctx::roll_unused_face(id).unwrap_or(-1) as i64)
+            .i("casts", ctx::roll_faces(id).len() as i64),
+    );
+    Ok(())
+}
+
+/// G03: at the move's After, reroll with a fire source and let the player
+/// pick (keep old / keep new) -- the keep-point body must see `unused_face`.
+const FIRE_REROLL: CardDef = CardDef::new(
+    "TEST:fireReroll",
+    &[
+        On::Play("", None, fire_recast_play),
+        On::Action(Action::DiceRollAfter("card.placed", None, fire_reroll)),
+    ],
+);
+
+fn fire_reroll(player_id: i32) -> card_sdk::Asked {
+    let title = Msg::new(key!("fire_recast_note"));
+    let old = Msg::new(key!("fire_keep_old"));
+    let new = Msg::new(key!("fire_keep_new"));
+    let r = ctx::roll_reroll(player_id, &title, &title, &old, &new, roll_source::CHARGE)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("fire_recast_note"))
+            .i("chosen", r.chosen_index as i64)
+            .i("unused", r.unused_face.map(|v| v as i64).unwrap_or(-1)),
+    );
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, DICE_MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1935,5 +2048,5 @@ card_sdk::ruleset!(&[
     FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER,
     CUSTOM_FILTER, DECLINE, PICK, DECLINE_SIB, GATE_CLOSED, ASKING_GUARD, PICK_COUNTER, TRIGGER_SEEN, TRAP_DECLARE,
-    STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY
+    STRUCT_ARG, NAMED_OPEN, NAMED_SHUT, QUERY, ROLL_TRACE, FIRE_RECAST, FIRE_REROLL
 ]);

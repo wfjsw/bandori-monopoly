@@ -74,6 +74,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     // with `roll_source::CHARGE` raises the `Roll` chain link and 寄于指尖的执念
     // 「[反击] 当你使用火罐进行掷骰时」 rings on it.
     let again = ctx::roll(player_id, 0, 0, RollPurpose::Move, roll_source::CHARGE)?.max(0);
+    let roll = ctx::trigger::roll_id();
     // 「择其一执行」 -- keep whichever the player names.
     let keep = ctx::ask_pick(
         player_id,
@@ -84,6 +85,11 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("layer_keep_new")).i("n", again as i64),
         ],
     )?;
+    // Record the choice on the transaction: the unpicked face is the keep point
+    // 寄于指尖的执念 banks at settlement.
+    if roll >= 0 {
+        ctx::roll_pick(roll, keep as i32);
+    }
     let face = if keep == 1 { again } else { before };
     ctx::trigger::set_move_roll(face);
     ctx::log(player_id, &Msg::new(key!("layer_kept")).i("n", face as i64));

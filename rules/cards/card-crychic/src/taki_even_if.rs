@@ -7,7 +7,7 @@
 //! until the face is new this turn.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{roll_source, ChainKind};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -35,16 +35,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(before) = trigger::move_roll() else {
         return Ok(());
     };
-    // 规则书[反击]: 「进行一次重骰」 -- `H.DoMoveRoll`, which sums the move's
-    // whole dice table.
-    // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- `H._turnCtx.Rolls`:
-    // the turn's recorded roll totals (one summed total per roll, every seat's
-    // effect rolls included; the move's own face is pushed below by hand).
-    // TODO(规则书)（本回合内你骰出过的所有骰点）: 只该是「你」骰出的骰点 --
-    //   `turn_rolls` 是本回合所有玩家的效果骰，别人骰出的点也会挡你的重骰。
-    let mut seen: alloc::vec::Vec<i32> = ctx::turn_rolls().into_iter().map(|r| r.abs()).collect();
-    seen.push(before.abs());
-    let mut x = ctx::do_move_roll(player_id)?;
+    // 规则书[反击]: 「进行一次重骰」 -- a recast on the move's transaction, so the
+    // new face inherits the shared producer (and a forced extreme).
+    // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- the per-roller cast
+    // history; the current face is already in it (cast time), so no manual push.
+    let mut seen: alloc::vec::Vec<i32> =
+        ctx::rolls_by_player(player_id).into_iter().map(|r| r.abs()).collect();
+    let mut x = ctx::roll_recast(trigger::roll_id(), roll_source::CARD)?;
     ctx::log(
         player_id,
         &Msg::new(key!("taki_reroll"))
@@ -64,8 +61,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             break;
         }
         seen.push(x.abs());
-        // Same shape as the first reroll: the move plan's whole dice table.
-        x = ctx::do_move_roll(player_id)?;
+        // Same shape as the first reroll: another cast.
+        x = ctx::roll_recast(trigger::roll_id(), roll_source::CARD)?;
         ctx::log(
             player_id,
             &Msg::new(key!("taki_reroll"))

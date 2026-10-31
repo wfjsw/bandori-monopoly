@@ -114,7 +114,9 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::Acquire { .. }
         | HostRequest::AgentOffer { .. } => Some("buy/build"),
         HostRequest::SettleAt { .. } => Some("settle"),
-        HostRequest::Roll { .. } => Some("roll"),
+        HostRequest::Roll { .. }
+        | HostRequest::RollRecast { .. }
+        | HostRequest::RollMove { .. } => Some("roll"),
         _ => None,
     }
 }
@@ -688,6 +690,57 @@ impl Run {
 }
 
 impl CardWorld for Run {
+    // ---- G03 roll surface -------------------------------------------------
+    // The run's world is the write-through copy the guest reads (and the one
+    // the commit pass hands back to the live world), so the roll queries read
+    // their own transaction view and a pick writes into the copy the settle
+    // sees.
+    fn open_roll_id(&self) -> i32 {
+        self.world.open_roll_id()
+    }
+    fn roll_transaction(&self, id: i32) -> Option<&game_core::engine::roll::RollTransaction> {
+        self.world.roll_by_id(id)
+    }
+    fn roll_pick(&mut self, id: i32, index: i32) {
+        self.world.roll_pick(id, index);
+    }
+    fn roll_unused_face(&self, id: i32) -> i32 {
+        self.world.roll_unused_face(id)
+    }
+    fn roll_rerolled(&self, id: i32) -> bool {
+        self.world.roll_rerolled(id)
+    }
+    fn rolls_by_player(&self, player_id: i32) -> Vec<i32> {
+        self.world.rolls_by_player(player_id.max(0) as usize)
+    }
+    // The settle answers are plain world writes postcard-carried by the
+    // commit pass with every other player-state write (the move half rides
+    // `state_set("resolveOverride")`; the turn-end half is a `TurnCtx` field).
+    fn set_move_settle_answer(&mut self, player_id: i32, answer: i32) {
+        // An `Unanswered` write leaves the armed slot alone (`Match`'s
+        // setter semantics).
+        if let Some(slot) =
+            game_core::engine::SettleAnswer::from_i32(answer).slot()
+        {
+            self.world.st.players[player_id.max(0) as usize]
+                .state_set("resolveOverride", slot);
+        }
+    }
+    fn move_settle_answer(&self, player_id: i32) -> i32 {
+        game_core::engine::SettleAnswer::from_i32(
+            self.world.st.players[player_id.max(0) as usize]
+                .state_get("resolveOverride"),
+        )
+        .slot()
+        .unwrap_or(0)
+    }
+    fn set_turn_end_settle_answer(&mut self, answer: i32) {
+        self.world.turn.blocked_settle_answer =
+            game_core::engine::SettleAnswer::from_i32(answer);
+    }
+    fn turn_end_settle_answer(&self) -> i32 {
+        self.world.turn.blocked_settle_answer.slot().unwrap_or(0)
+    }
     fn after_host(&mut self, answer: usize) {
         if let Some(checkpoint) = self.pile_checkpoints.get(&answer) {
             checkpoint.apply(&mut self.world);
@@ -2333,11 +2386,14 @@ impl CardWorld for Run {
             }
         }
     }
-    fn set_fixed_roll(&mut self, n: i32) {
-        self.world.turn.fixed_roll = Some(n.max(0));
+    fn set_fixed_roll(&mut self, n: i32, source: i32) {
+        self.world.turn.fixed_roll = Some(game_core::engine::FixedFace {
+            value: n.max(0),
+            source: game_core::engine::rules::RollSource::from_i32(source),
+        });
     }
     fn fixed_roll(&self) -> i32 {
-        self.world.turn.fixed_roll.unwrap_or(-1)
+        self.world.turn.fixed_roll.map(|f| f.value).unwrap_or(-1)
     }
     fn set_next_steps(&mut self, player_id: i32, n: i32) {
         if let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) {
@@ -3019,11 +3075,11 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(0);
         }
         // v78: pre-roll a recorded die into the world so a DiceRollPlan /
-        // DiceRollValue Filter body can read `RollValue.recorded_roll` instead
+        // DiceRollAdd / DiceRollValue Filter body can read `RollValue.recorded_roll` instead
         // of calling `roll` (pure + replay-deterministic: the same RNG stream).
         if matches!(
             trigger.kind,
-            TriggerKind::DiceRollPlan | TriggerKind::DiceRollValue
+            TriggerKind::DiceRollPlan | TriggerKind::DiceRollAdd | TriggerKind::DiceRollValue
         ) {
             // Peek the next face from a *clone* of the stream so the main
             // dice stream is unchanged (existing tests / records keep their
@@ -4068,13 +4124,19 @@ impl<M: CardModules> RulesBridge<M> {
                 cx.card_offer_build_one(player_id.max(0) as usize, tile.max(0) as usize)?;
                 return Ok(1);
             }
-            // A card- or skill-driven dice roll. The engine rolls (Effect =
-            // `count`d`sides`, Move = the move plan's dice tables), logs one
-            // `"dice"` event either way, and -- when `window` -- raises the
-            // `Roll` chain link: the 「掷骰结算前」 counteraction window (Y.O.L.O
-            // 「你的任意掷骰结算前」, 寄于指尖的执念 「when you roll using charge pots」)
-            // -- with the roller, the face and the `roll_source` code, then
-            // answers with whatever a counteraction left on `value`.
+            // A card- or skill-driven dice roll (v109: a roll is a
+            // transaction, design G03 §4.4).
+            //
+            // * `window = false` (`roll_direct`): a windowless cast -- the die
+            //   is thrown and logged, nothing else.
+            // * Move + an open move transaction: a **join** recast on it. The
+            //   enclosing commit settles the chosen cast, so the rerolled face
+            //   passes the whole ladder again (0.5倍速 &c).
+            // * Move without one: a **preview** -- cast and `diceRollBefore`,
+            //   committed raw. Karaoke's candidates; the real move settles the
+            //   face it pins.
+            // * Effect: always a child transaction and the whole Effect
+            //   ladder, even inside a move window.
             HostRequest::Roll {
                 player_id,
                 count,
@@ -4083,21 +4145,35 @@ impl<M: CardModules> RulesBridge<M> {
                 source,
                 window,
             } => {
-                // `purpose == 1` (Move) sums the move plan's dice tables
-                // instead of `count`d`sides` (the old `sides == 0` hack).
-                let face = if purpose == 1 {
-                    cx.card_do_move_roll(player_id.max(0) as usize)
-                } else {
-                    cx.card_roll(player_id.max(0) as usize, count, sides)
-                };
+                use game_core::engine::roll::PURPOSE_MOVE;
+                let p = player_id.max(0) as usize;
+                let src = game_core::engine::rules::RollSource::from_i32(source);
                 if !window {
-                    return Ok(face);
+                    return Ok(cx.run_direct_roll(p, purpose, count, sides, src)?);
                 }
-                let t = self.raise_core(cx, "diceRollBefore", player_id, |t| {
-                    t.value = face;
-                    t.roll_source = game_core::engine::rules::RollSource::from_i32(source);
-                })?;
-                return Ok(t.value.max(0));
+                let face = if purpose == PURPOSE_MOVE {
+                    let id = cx.open_move_roll_id();
+                    if cx.can_join() {
+                        let view = cx.roll_move_view(id, p);
+                        cx.roll_recast(id, src, Some(&view))?
+                    } else {
+                        let view = cx.roll_move_view(-1, p);
+                        cx.run_preview_roll(p, &view, src)?
+                    }
+                } else {
+                    cx.run_effect_roll(p, count, sides, src)?
+                };
+                return Ok(face);
+            }
+            HostRequest::RollRecast { roll_id, source } => {
+                use game_core::engine::rules::RollSource;
+                let view = cx.roll_move_view(roll_id, 0);
+                return Ok(cx.roll_recast(roll_id, RollSource::from_i32(source), Some(&view))?);
+            }
+            HostRequest::RollMove { player_id, source } => {
+                use game_core::engine::rules::RollSource;
+                let p = player_id.max(0) as usize;
+                return Ok(cx.run_standalone_roll(p, RollSource::from_i32(source))?);
             }
             // The card announces an acquisition it performed outside the buy
             // routine (tomoe_savior). The `bought` hook chain runs over the
@@ -7351,6 +7427,9 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
             | TriggerKind::DiceRollBefore
             | TriggerKind::DiceRollAfter
             | TriggerKind::DiceRollValue
+            | TriggerKind::DiceRollCast
+            | TriggerKind::DiceRollAdd
+            | TriggerKind::DiceRollSettled
     );
     // Only a move trigger carries a roll; `paid`/`settle` carry value as an
     // amount, which must not read as a phantom move. `DiceRollAfter` is the
@@ -7401,6 +7480,16 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         card: t.card.clone(),
         name: t.name.clone(),
         roll_source: t.roll_source,
+        roll: t.roll.as_ref().map(|r| crate::world::TriggerRoll {
+            id: r.id,
+            purpose: r.purpose,
+            source: r.source.as_i32(),
+            rerolled: r.rerolled,
+            chosen_index: r.chosen_index,
+            unused_face: r.unused_face,
+            casts: r.casts.clone(),
+            final_face: r.final_face,
+        }),
         reason: t.reason.clone(),
         join_redirect: None,
         join_used: false,
@@ -7970,7 +8059,7 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     }
     #[inline]
     fn fixed_roll(&self) -> i32 {
-        self.world.turn.fixed_roll.unwrap_or(-1)
+        self.world.turn.fixed_roll.map(|f| f.value).unwrap_or(-1)
     }
     #[inline]
     fn gains_this_turn(&self, player_id: i32) -> i32 {
@@ -8116,6 +8205,19 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn roll_source(&self) -> i64 {
         self.trigger.roll_source.as_i32() as i64
+    }
+    fn roll_purpose(&self) -> i64 {
+        self.trigger.roll.as_ref().map(|r| r.purpose as i64).unwrap_or(-1)
+    }
+    fn roll_rerolled(&self) -> bool {
+        self.trigger.roll.as_ref().map(|r| r.rerolled).unwrap_or(false)
+    }
+    fn roll_unused_face(&self) -> i64 {
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.unused_face as i64)
+            .unwrap_or(-1)
     }
     fn abnormal(&self) -> bool {
         matches!(self.trigger.kind, crate::TriggerKind::Abnormal)
@@ -8398,7 +8500,11 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
 
     // -- turn plan / counters ----------------------------------------------
     fn plan_fixed_roll(&self) -> i64 {
-        self.world.turn.fixed_roll.map(|n| n as i64).unwrap_or(-1)
+        self.world
+            .turn
+            .fixed_roll
+            .map(|f| f.value as i64)
+            .unwrap_or(-1)
     }
     fn gains_this_turn(&self, seat: i64) -> i64 {
         if seat < 0 {

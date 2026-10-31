@@ -586,6 +586,15 @@ pub enum HostRequest {
         source: i32,
         window: bool,
     },
+    /// `ctx::roll_recast` -- cast one more die on an open roll transaction
+    /// (a reroll) and raise its `diceRollBefore` (and `diceRollResult` on a
+    /// move transaction). Answers the new raw face; the enclosing commit
+    /// settles it.
+    RollRecast { roll_id: i32, source: i32 },
+    /// `ctx::roll_move` -- a standalone move roll for `player_id` (Doll
+    /// Garden's victim): its own transaction and the whole Move ladder.
+    /// Answers the settled face.
+    RollMove { player_id: i32, source: i32 },
     /// A card handed a deed over (tomoe_savior's 「从该玩家处收购该地契」) and
     /// is announcing the acquisition: the engine raises the `bought` hook chain
     /// over the field (`TriggerKind::Bought`), with `by_card` = the run's own
@@ -3462,8 +3471,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "roll_direct",
-        |mut c: C<W>, player_id: i32, count: i32, sides: i32, purpose: i32| -> Result<i32, Error> {
-            hostfns::roll_direct(&mut c, player_id, count, sides, purpose)
+        |mut c: C<W>,
+         player_id: i32,
+         count: i32,
+         sides: i32,
+         purpose: i32,
+         source: i32|
+         -> Result<i32, Error> {
+            hostfns::roll_direct(&mut c, player_id, count, sides, purpose, source)
                 .map_err(HostErr::into_err)
         },
     )?;
@@ -3981,6 +3996,89 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "turn_rolls",
         |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::turn_rolls(&mut c, buf, cap).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_recast",
+        |mut c: C<W>, roll_id: i32, source: i32| -> Result<i32, Error> {
+            hostfns::roll_recast(&mut c, roll_id, source).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_move",
+        |mut c: C<W>, player_id: i32, source: i32| -> Result<i32, Error> {
+            hostfns::roll_move(&mut c, player_id, source).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_pick",
+        |mut c: C<W>, roll_id: i32, index: i32| -> Result<(), Error> {
+            hostfns::roll_pick(&mut c, roll_id, index).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "roll_current", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::roll_current(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "roll_face",
+        |mut c: C<W>, roll_id: i32, index: i32| -> Result<i32, Error> {
+            hostfns::roll_face(&mut c, roll_id, index).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_unused_face",
+        |mut c: C<W>, roll_id: i32| -> Result<i32, Error> {
+            hostfns::roll_unused_face(&mut c, roll_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_rerolled",
+        |mut c: C<W>, roll_id: i32| -> Result<i32, Error> {
+            hostfns::roll_rerolled(&mut c, roll_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "rolls_by_player",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::rolls_by_player(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_roll",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::trigger_roll(&mut c, buf, cap).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_move_settle_answer",
+        |mut c: C<W>, answer: i32| -> Result<(), Error> {
+            hostfns::set_move_settle_answer(&mut c, answer).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "move_settle_answer", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_settle_answer(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "set_turn_end_settle_answer",
+        |mut c: C<W>, answer: i32| -> Result<(), Error> {
+            hostfns::set_turn_end_settle_answer(&mut c, answer).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "turn_end_settle_answer",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::turn_end_settle_answer(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5332,8 +5430,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_fixed_roll",
-        |mut c: C<W>, n: i32| -> Result<(), Error> {
-            hostfns::set_fixed_roll(&mut c, n).map_err(HostErr::into_err)
+        |mut c: C<W>, n: i32, source: i32| -> Result<(), Error> {
+            hostfns::set_fixed_roll(&mut c, n, source).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(m, "fixed_roll", |mut c: C<W>| -> Result<i32, Error> {

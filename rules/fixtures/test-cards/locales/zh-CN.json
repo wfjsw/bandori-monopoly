@@ -82,5 +82,10 @@
   "named_note": "named hook card placed",
   "named_open_tick": "named-open tick ran",
   "named_shut_tick": "named-shut tick ran",
-  "query_body": "query open={{open}} shut={{shut}} wrong={{wrong}} unnamed={{unnamed}} press_open={{press_open}} press_shut={{press_shut}}"
+  "query_body": "query open={{open}} shut={{shut}} wrong={{wrong}} unnamed={{unnamed}} press_open={{press_open}} press_shut={{press_shut}}",
+  "roll_trace_note": "掷骰阶梯试探",
+  "roll_trace": "掷骰阶段 {{kind}}：出目 {{face}}，目的 {{purpose}}，来源 {{source}}，重投 {{rerolled}}，未选 {{unused}}，次数 {{casts}}",
+  "fire_recast_note": "火罐重投试探",
+  "fire_keep_old": "保留旧出目",
+  "fire_keep_new": "保留新出目"
 }

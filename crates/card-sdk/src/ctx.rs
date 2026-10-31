@@ -217,9 +217,10 @@ pub fn roll_direct(
     count: i32,
     sides: i32,
     purpose: crate::abi::RollPurpose,
+    source: i32,
 ) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::roll_direct");
-    asked(unsafe { sys::roll_direct(player_id, count, sides, purpose as i32) })
+    asked(unsafe { sys::roll_direct(player_id, count, sides, purpose as i32, source) })
 }
 
 /// Log a message line for `player_id`.
@@ -1133,6 +1134,141 @@ pub fn event_deck_push(id: &str, face_down: bool) {
 pub fn event_banish(id: &str) {
     let (p, l) = s(id);
     unsafe { sys::event_banish(p, l) }
+}
+
+/// 「本次移动…是否触发结算」 -- arm the answer for the **current move**. The
+/// engine consumes it once; `Unanswered` leaves it alone.
+pub fn set_move_settle_answer(answer: crate::abi::SettleAnswer) {
+    unsafe { sys::set_move_settle_answer(answer as i32) }
+}
+
+/// The armed answer for the current move.
+pub fn move_settle_answer() -> crate::abi::SettleAnswer {
+    match unsafe { sys::move_settle_answer() } {
+        1 => crate::abi::SettleAnswer::Settle,
+        2 => crate::abi::SettleAnswer::Skip,
+        _ => crate::abi::SettleAnswer::Unanswered,
+    }
+}
+
+/// 「（或无法移动的回合结束时）」 -- the turn-end half of the same answer.
+pub fn set_turn_end_settle_answer(answer: crate::abi::SettleAnswer) {
+    unsafe { sys::set_turn_end_settle_answer(answer as i32) }
+}
+
+/// The armed turn-end answer.
+pub fn turn_end_settle_answer() -> crate::abi::SettleAnswer {
+    match unsafe { sys::turn_end_settle_answer() } {
+        1 => crate::abi::SettleAnswer::Settle,
+        2 => crate::abi::SettleAnswer::Skip,
+        _ => crate::abi::SettleAnswer::Unanswered,
+    }
+}
+
+/// The innermost open roll transaction, if any. `None` outside a roll window
+/// and when a body resumed after a dropped stack -- callers treat it as "open
+/// a fresh preview".
+pub fn roll_current() -> Option<i32> {
+    let id = unsafe { sys::roll_current() };
+    (id >= 0).then_some(id)
+}
+
+/// Every face `roll` has cast, in cast order.
+pub fn roll_faces(roll: i32) -> Vec<i32> {
+    let mut out = Vec::new();
+    loop {
+        let v = unsafe { sys::roll_face(roll, out.len() as i32) };
+        if v < 0 {
+            break;
+        }
+        out.push(v);
+    }
+    out
+}
+
+/// Every face `player_id` has cast this turn, in cast order (one entry per
+/// real throw and per fixed face).
+pub fn rolls_by_player(player_id: i32) -> Vec<i32> {
+    const CAP: usize = 64;
+    let (p, scratch) = out_buf(CAP);
+    let n = unsafe { sys::rolls_by_player(player_id, p, CAP as i32) };
+    if n <= 0 || n as usize > CAP {
+        return Vec::new();
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// The face the latest pick did not take, if any (the reroll's spare face).
+pub fn roll_unused_face(roll: i32) -> Option<i32> {
+    let v = unsafe { sys::roll_unused_face(roll) };
+    (v >= 0).then_some(v)
+}
+
+/// Recast `roll` with `source`; the enclosing transaction settles the chosen
+/// face. Returns the new raw face.
+pub fn roll_recast(roll: i32, source: i32) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::roll_recast");
+    let v = asked(unsafe { sys::roll_recast(roll, source) })?;
+    // The recast chooses its own cast; keep the trigger's move view in step so
+    // the window's write-back cannot undo the choice.
+    crate::ctx::trigger::set_move_roll(v);
+    Ok(v)
+}
+
+/// Choose a cast of `roll`. Clamped; records the other face of the pair as
+/// `unused_face`.
+pub fn roll_pick(roll: i32, index: i32) {
+    unsafe { sys::roll_pick(roll, index) };
+    // See `roll_recast`: the pick may take an earlier cast, and the window's
+    // write-back must carry the picked face.
+    let faces = roll_faces(roll);
+    if !faces.is_empty() {
+        let i = (index.max(0) as usize).min(faces.len() - 1);
+        crate::ctx::trigger::set_move_roll(faces[i]);
+    }
+}
+
+/// The result of [`roll_reroll`].
+pub struct RerollOutcome {
+    /// The index that will settle (the pick).
+    pub chosen_index: i32,
+    /// The face the pick left behind.
+    pub unused_face: Option<i32>,
+}
+
+/// 「放弃第一次的结果重骰一次」: cast a new face on the current roll, let the
+/// player pick old/new and choose it. The enclosing transaction settles the
+/// chosen face. With no open transaction, the first cast is a fresh preview.
+pub fn roll_reroll(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    keep_old: &Msg,
+    keep_new: &Msg,
+    source: i32,
+) -> Result<RerollOutcome, Prompt> {
+    let roll = match roll_current() {
+        Some(r) => r,
+        None => {
+            let _ = roll(player_id, 0, 0, crate::abi::RollPurpose::Move, source)?;
+            roll_current().unwrap_or(-1)
+        }
+    };
+    roll_recast(roll, source)?;
+    let pick = ask_pick(player_id, title, text, &[keep_old.clone(), keep_new.clone()])?;
+    roll_pick(roll, pick as i32);
+    Ok(RerollOutcome {
+        chosen_index: pick as i32,
+        unused_face: roll_unused_face(roll),
+    })
+}
+
+/// A standalone move roll for `player_id` (Doll Garden's victim): its own
+/// transaction, the whole Move ladder, the settled face.
+pub fn roll_move(player_id: i32, source: i32) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::roll_move");
+    asked(unsafe { sys::roll_move(player_id, source) })
 }
 
 /// Is this card in play at the player?
@@ -2111,6 +2247,55 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
     }
 }
 
+/// One option of [`ask_tile_index`]: a tile and its label.
+#[derive(Clone)]
+pub struct TileOption {
+    pub tile: i32,
+    pub label: Msg,
+}
+
+/// Like [`ask_tile`], but one option per `(tile, label)` pair and the answer is
+/// the **option index** -- repeated tiles stay distinct options, and each maps
+/// to its own cast (Hagumi's per-roll options).
+pub fn ask_tile_index(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    options: &[TileOption],
+) -> Result<usize, Prompt> {
+    #[cfg(kani)]
+    {
+        // Bounded list (16 slots), same cap as `ask_pick`.
+        const CAP: usize = 16;
+        let mut i = 0usize;
+        while i < CAP {
+            if let Some(o) = options.get(i) {
+                let (lp, ll) = mj(&o.label);
+                unsafe { sys::opt_tile(o.tile, lp, ll) }
+            }
+            i += 1;
+        }
+        if options.len() > CAP {
+            kani::assert(false, "ask_tile_index: more than 16 options under Kani");
+        }
+        if options.is_empty() {
+            let _ = ask_raw(PromptKind::Tile, player_id, title, text)?;
+            return Ok(0);
+        }
+        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+        return Ok((i.max(0) as usize).min(options.len() - 1));
+    }
+    #[cfg(not(kani))]
+    {
+        for o in options {
+            let (lp, ll) = mj(&o.label);
+            unsafe { sys::opt_tile(o.tile, lp, ll) }
+        }
+        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+        Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
+    }
+}
+
 /// [`ask_tile`] for a pick the player then walks to: the board lights the
 /// path to the hovered tile as well as the tile itself.
 pub fn ask_tile_walk(
@@ -2986,8 +3171,8 @@ pub fn set_no_money_loss(player_id: i32) {
 }
 
 /// This turn's [主要移动] roll is `n`.
-pub fn set_fixed_roll(n: i32) {
-    unsafe { sys::set_fixed_roll(n) }
+pub fn set_fixed_roll(n: i32, source: i32) {
+    unsafe { sys::set_fixed_roll(n, source) }
 }
 
 /// This turn's fixed main-move roll, if a card set one.
@@ -3162,6 +3347,50 @@ pub mod trigger {
     /// [`crate::abi::roll_source::NONE`] on every non-roll trigger.
     pub fn roll_source() -> i32 {
         unsafe { sys::trig_roll_source() }
+    }
+
+    /// The roll transaction this trigger belongs to (`Trigger.roll`), `None`
+    /// on every non-roll trigger. v109.
+    pub fn roll_payload() -> Option<crate::abi::RollPayload> {
+        const CAP: usize = 512;
+        let (p, scratch) = out_buf(CAP);
+        let n = unsafe { sys::trigger_roll(p, CAP as i32) };
+        if n <= 0 || n as usize > CAP {
+            return None;
+        }
+        let buf = out_read(p, n, scratch);
+        postcard::from_bytes::<Option<crate::abi::RollPayload>>(&buf[..n as usize])
+            .ok()
+            .flatten()
+    }
+
+    /// The transaction id, `-1` outside a roll trigger.
+    pub fn roll_id() -> i32 {
+        roll_payload().map(|r| r.id).unwrap_or(-1)
+    }
+
+    /// The [`crate::abi::RollPurpose`] code, `None` outside a roll trigger.
+    pub fn roll_purpose() -> Option<i32> {
+        roll_payload().map(|r| r.purpose)
+    }
+
+    /// Has the transaction more than one cast (a reroll)?
+    pub fn roll_rerolled() -> bool {
+        roll_payload().map(|r| r.rerolled).unwrap_or(false)
+    }
+
+    /// The face a pick did not take, `None` when none.
+    pub fn roll_unused_face() -> Option<i32> {
+        roll_payload()
+            .map(|r| r.unused_face)
+            .filter(|&v| v >= 0)
+    }
+
+    /// The trigger's every cast face, in cast order.
+    pub fn roll_faces() -> Vec<i32> {
+        roll_payload()
+            .map(|r| r.casts.into_iter().map(|c| c.value).collect())
+            .unwrap_or_default()
     }
 
     // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
@@ -3424,7 +3653,13 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
 /// recurse. Shorthand for [`roll_direct`] with [`crate::abi::RollPurpose::Move`];
 /// still logs a `"dice"` event.
 pub fn do_move_roll(player_id: i32) -> Result<i32, Prompt> {
-    roll_direct(player_id, 0, 0, crate::abi::RollPurpose::Move)
+    roll_direct(
+        player_id,
+        0,
+        0,
+        crate::abi::RollPurpose::Move,
+        crate::abi::roll_source::CARD,
+    )
 }
 
 /// Is this card in play at the player?

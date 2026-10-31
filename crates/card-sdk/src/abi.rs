@@ -842,7 +842,27 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 104;
+pub const ABI_VERSION: i32 = 109;
+/// v109: **roll transactions and settlement**. A roll is a transaction
+///    carrying roller / purpose / source / every cast; every cast runs
+///    `diceRollCast` (new hook-only Action 123) -> `diceRollBefore` ->
+///    `diceRollAdd` (new hook-only filter 125, the additive pass) ->
+///    `diceRollValue` (now the final-settlement pass, id/wire unchanged) ->
+///    `diceRollAfter` -> `diceRollResult` -> `diceRollSettled` (new hook-only
+///    Action 124). `diceRollAfter`/`diceRollResult` stay Move-only. A
+///    `diceRollBefore` face is now post-cast (no `-1` sentinel); a reroll
+///    re-raises `diceRollBefore` + `diceRollResult` in the same transaction.
+///    `ruleset_roll` joins an open Move transaction or runs a raw preview;
+///    `ruleset_roll_direct` gains `source`; new `ruleset_roll_move`. New
+///    imports `roll_recast`, `roll_move`, `roll_pick`, `roll_current`,
+///    `roll_face`, `roll_unused_face`, `roll_rerolled`, `rolls_by_player`,
+///    `trigger_roll`; guest wrappers `roll_reroll` / `ask_tile_index` /
+///    `set_move_settle_answer` / `set_turn_end_settle_answer`. `Trigger.roll`
+///    payload added; `roll_source` reaches Result and Settled; `fixed_roll`
+///    carries its source. `RollValue` gains `purpose` / `rerolled`. New
+///    [`SettleAnswer`]. SAVE_VERSION 13 -> 14. RECORD_VERSION unchanged.
+///    (Groups G01/G02/G04 land ahead of this one in the README order; their
+///    numbers are not implemented in this batch.)
 /// v104: **turn snapshot carries money and the board arrays**. The
 ///    `ruleset_turn_snap` payload is the postcard struct
 ///    `(pos, state, money, owners, houses, mortgaged)` (was `(pos, state)`):
@@ -1435,6 +1455,47 @@ pub mod roll_source {
     pub const CARD: i32 = 2;
     /// A skill press's roll (`ctx::roll` from a skill body).
     pub const SKILL: i32 = 3;
+
+    /// Precedence rank of a source code (higher wins). The wire codes are
+    /// NONE 0 / CHARGE 1 / CARD 2 / SKILL 3, so numeric order is *not* the
+    /// precedence order: a marker-funded recast outranks a skill, which
+    /// outranks a card, which outranks an unattributed roll.
+    pub const fn rank(source: i32) -> i32 {
+        match source {
+            CHARGE => 3,
+            SKILL => 2,
+            CARD => 1,
+            _ => 0,
+        }
+    }
+}
+
+/// A 「是否触发结算」 answer (选择自己的舞台), shared by the move half
+/// (`set_move_settle_answer`, the current move) and the turn-end half
+/// (`set_turn_end_settle_answer`, a blocked turn). `Unanswered` = the card
+/// said nothing, which is also the engine's default.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SettleAnswer {
+    /// No answer (the engine's own default).
+    #[default]
+    Unanswered = 0,
+    /// Settle (written into the `resolveOverride` slot as `1`).
+    Settle = 1,
+    /// Skip the settle (written as `2`).
+    Skip = 2,
+}
+
+impl SettleAnswer {
+    /// The `resolveOverride` slot value (1 = settle, 2 = skip), or `None` for
+    /// `Unanswered` (leave whatever is there alone).
+    pub const fn slot(self) -> Option<i32> {
+        match self {
+            SettleAnswer::Unanswered => None,
+            SettleAnswer::Settle => Some(1),
+            SettleAnswer::Skip => Some(2),
+        }
+    }
 }
 
 /// Why a die is being cast. Wire codes are frozen i32s; the engine branches on
@@ -1449,6 +1510,43 @@ pub enum RollPurpose {
     /// ignored). Replaces the old `sides == 0` shape of `roll_ask` /
     /// `do_move_roll_ask`.
     Move = 1,
+}
+
+/// One cast of a roll, as the guest sees it.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
+pub struct TriggerCast {
+    /// The face this cast produced.
+    pub value: i32,
+    /// The [`roll_source`] code of this cast.
+    pub source: i32,
+}
+
+/// The roll a `DiceRoll*` trigger belongs to, returned by `trigger::roll()`.
+/// Present on `diceRollCast` / `diceRollBefore` / `diceRollAdd` /
+/// `diceRollValue` / `diceRollAfter` / `diceRollResult` / `diceRollSettled`,
+/// and `None` on every other trigger.
+#[derive(
+    Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
+pub struct RollPayload {
+    /// The transaction id (`ctx::roll_current` shape; `-1` when none).
+    pub id: i32,
+    /// A [`RollPurpose`] code.
+    pub purpose: i32,
+    /// The highest-ranked [`roll_source`] seen on the transaction.
+    pub source: i32,
+    /// More than one cast exists on this transaction.
+    pub rerolled: bool,
+    /// Index into `casts`; `-1` outside a roll.
+    pub chosen_index: i32,
+    /// The face the latest pick did **not** take; `-1` when none.
+    pub unused_face: i32,
+    /// Every cast so far, in cast order.
+    pub casts: Vec<TriggerCast>,
+    /// The settled face at `diceRollSettled`; `None` before it.
+    pub final_face: Option<i32>,
 }
 
 /// `i32_exit` status the host uses to abort a run that reached an unanswered prompt.
@@ -1959,6 +2057,18 @@ impl ActionKind {
     /// DiceRollValue when a pure reshape is enough.
     pub const DiceRollAfter: Self = Self(TriggerKind::DiceRollAfter);
 
+    /// Action. One real die cast landed, raw — before any window or
+    /// settlement. Payload: `trigger::roll()` (`value` = the raw face), the
+    /// move view on a move cast. Hook-only. Every cast raises it, rerolls
+    /// included; a fixed face does not.
+    pub const DiceRollCast: Self = Self(TriggerKind::DiceRollCast);
+
+    /// Action. The transaction's terminal cast finished settling, once per
+    /// roll. Payload: `trigger::roll()` (`value` = the settled face,
+    /// `unused_face`, `chosen_index`). Hook-only; consume one-shot slots here,
+    /// not at DiceRollAfter.
+    pub const DiceRollSettled: Self = Self(TriggerKind::DiceRollSettled);
+
     /// Action. A card's hand effect resolved and its destination is final.
     /// Payload: card, cards, by_card.
     pub const CardPlayed: Self = Self(TriggerKind::CardPlayed);
@@ -2317,11 +2427,17 @@ impl FilterKind {
     /// allowed, false = denied; the host folds the answers into one decision.
     pub const PlayGate: Self = Self(TriggerKind::PlayGate);
 
-    /// Filter. Roll-value modifier, raised immediately before DiceRollAfter
-    /// with the same payload (the move, value = the face). Body returns the new
-    /// face; the host folds it into the roll. Pure: prefer this over the
-    /// DiceRollAfter exception unless a prompt is required.
+    /// Filter. The **final settlement** roll stage, raised after DiceRollAdd
+    /// and immediately before DiceRollAfter: fractions, halvings and floors
+    /// belong here. Payload: `RollValue` (the running face, purpose,
+    /// `rerolled`, `recorded_roll`). Body returns the new face; the host folds
+    /// it into the roll, once per cast.
     pub const DiceRollValue: Self = Self(TriggerKind::DiceRollValue);
+
+    /// Filter. The **additive** roll stage, raised after DiceRollBefore and
+    /// before DiceRollValue. Payload: `RollValue`. Body adds / subtracts a flat
+    /// amount; the host folds it into the roll, once per cast.
+    pub const DiceRollAdd: Self = Self(TriggerKind::DiceRollAdd);
 
     /// Filter. May the named seat be treated as on the board right now?
     /// Evaluated natively like ActGate. Payload: the seat. Body true = allowed,
@@ -2712,6 +2828,15 @@ impl TriggerKind {
 
     /// `targetableGate`
     pub const TargetableGate: Self = Self::engine(109);
+
+    /// `diceRollCast`
+    pub const DiceRollCast: Self = Self::engine(123);
+
+    /// `diceRollSettled`
+    pub const DiceRollSettled: Self = Self::engine(124);
+
+    /// `diceRollAdd`
+    pub const DiceRollAdd: Self = Self::engine(125);
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {

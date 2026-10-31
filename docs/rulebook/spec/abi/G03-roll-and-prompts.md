@@ -55,6 +55,8 @@ from the groups landing before this one. What the draft got wrong:
 | R23 | §5.7 designed `MoveCtx::sync_plan`, duplicating G04 §4.3's window fold that lands first. | §5.7 shrinks to "call G04's fold after every raise"; item 7 is re-dispositioned to G04. |
 | R24 | The test table pointed at `rules/tests/tests/gap_money.rs` for a roll test and named files that do not exist. | One new `rules/tests/tests/g03_rolls.rs`; engine-level tests stay where the suites are. |
 | R25 | Names were abbreviated and mixed units: `RollTx`, `trig_roll`, `roll_log` beside the message log, `chosen` (an index) next to `unused` (a face), `Settle`/`Done` as two terminal stages, two settle-answer shapes, and a parallel `RollSource` enum duplicating the existing `roll_source` module. | §4.1's naming rules; `RollTransaction`, `trigger_roll`, `roll_history`, `chosen_index`/`unused_face`, `Settling`/`Settled`, one `SettleAnswer`, `roll_source::rank(code)`, one `set_fixed_roll(value, source)`, `roll_pick` beside `ask_pick`, `TileOption`. The BACKLOG slugs keep their spelling. |
+| R26 | R16's turn-end stamp sat in the roll-dispatch `immobile` branch, but the roll gate (`why_not_act "roll"`) refuses a blocked main move, so that branch never runs for the very turn it is about. Also (finding) `roll_pick` kept the recast's own cast as the chosen one and returned early without `dirty`, so a kept rerolled face skipped its Add/Value fold. | The stamp moves to `turn_start` (fallback: the `immobile` branch), both guarded by `Unanswered` so a card's `Skip` survives (§4.7). `roll_recast` folds Add/Value on its new cast before the Result raise (§5.2). |
+| R27 | The review's Op count (R17) missed §4.7's four `set`/`get` settle-answer imports, which the code must carry. | The band is thirteen, not nine: G03 takes 398-410 and G06 onwards shifts thirteen (§8, README). |
 
 ## 1. Items
 
@@ -583,14 +585,17 @@ The move half writes the existing `resolveOverride` slot (`Settle` → `1`,
 half writes `TurnCtx.blocked_settle_answer: SettleAnswer`
 (`#[serde(default)]`, `Unanswered` by default).
 
-`blocked_settle_answer` is engine-stamped in the blocked branch itself
-(`play.rs:1548-1553`, `immobile`): that branch already zeroes the roll/steps
-and clears the landing settle (`m.resolve = false`), and now also sets
-`blocked_settle_answer = Settle` when the seat is live. It runs *after* the roll ladder, so
-the round still casts and settles normally and `diceRollSettled` still fires —
-only the tile settle is withheld. Leaving the card unplayed therefore settles
-at turn end. `Skip` withholds it. It is cleared after the turn-end runner and rebuilt
-with the turn.
+`blocked_settle_answer` is engine-stamped **at turn start** (`turn_start`,
+inside the `!mv` branch): the roll gate (`why_not_act "roll"`) already refuses
+a blocked main move, so that move never casts and the old post-ladder
+`immobile` stamp never ran for it. The roll-dispatch `immobile` branch keeps
+the same stamp as a fallback (a join / card-driven roll that is refused
+mid-walk). Both stamps only fire while the slot is `Unanswered`: a card that
+answered `Skip` when the blocking effect landed keeps it, which is what makes
+「无法移动的回合结束时」 a settling turn end only when the card said
+nothing. Leaving the card unplayed therefore settles at turn end. `Skip`
+withholds it. It is cleared after the turn-end runner and rebuilt with the
+turn.
 
 ## 5. Engine wiring
 
@@ -688,6 +693,13 @@ For a join the cast is appended to the outer transaction and the outer commit
 settles whichever cast is chosen. For a preview the cast is committed raw under
 its own (child) transaction, so a later card move can pin it; it is still
 logged, and it still runs `diceRollBefore` on its own face.
+
+A **recast** (`roll_recast`, the reroll of a live transaction) raises its own
+`diceRollBefore`, folds `diceRollAdd` / `diceRollValue` on the new cast right
+there, and — on a windowed move — raises `diceRollResult`. The pick then
+chooses between already-settled faces: a rerolled face carries the same
+「结算」 modifiers as its first throw (I2/I3), so the choice is between final
+results, not between a modified and a raw face.
 
 ### 5.3 The cast history
 
@@ -1013,10 +1025,10 @@ constant and above the newest note:
 with the three kinds.
 
 **Kani `Op` band.** Base 340. G01 341-348, G08 349-368, G02 369-377 and G04
-378-397 are ahead of this group. G03 takes **398-406** (nine ops: the seven
-roll reads/writes plus `roll_move` and `trigger_roll`); G06 shifts to **407-426**,
-G05+G13 to **427-436**, G07 to **437-446**. The README table carries these
-rows (§12).
+378-397 are ahead of this group. G03 takes **398-410** (thirteen ops: the seven
+roll reads/writes, `roll_move`, `trigger_roll`, and §4.7's four
+`set`/`get` settle answers); G06 shifts to **411-430**, G05+G13 to **431-440**,
+G07 to **441-450**. The README table carries these rows (§12).
 
 Source-only, no bump: `RollValue` gains `purpose`/`rerolled`, the source rank
 function, the cast-history projection, and every card edit.
@@ -1034,14 +1046,14 @@ that remain open are `#[ignore]` with the row id in the reason.
 | 4 | `g03_taki_reroll_settles_at_the_armed_extreme` | extreme max + reroll ⇒ the maximum face |
 | 5 | `g03_want_human_boost_survives_a_reroll` | 7 + (20−X), reroll 3 ⇒ 3 + boost |
 | 6 | `g03_want_human_banks_every_low_cast` | a low first face and a high reroll bank one crystal each |
-| 7 | (G04) `g04_detour_counter_plan_writes_reach_the_walk` | reverse/start rewrite changes the path |
+| 7 | (G04, `#[ignore]`) `g04_detour_counter_plan_writes_reach_the_walk` | reverse/start rewrite changes the path |
 | 8 | `g03_hagumi_offers_one_option_per_cast` | two faces on one tile stay two options; each maps to its owner |
-| 9 | `g03_misaki_only_after_a_fire_cast` | a plain roll refuses; the fire recast's Result carries `roll_source == 1` |
+| 9 | `g03_misaki_only_after_a_fire_cast` / `…_offered_when_the_result_is_a_fire_recast` | a plain roll refuses; the fire recast's Result carries `roll_source == 1` |
 | 10 | `g03_half_speed_settles_after_the_shave` | 7 with −2 and the half ⇒ 3; the reverse placement order gives the same |
-| 11 | `g03_no_expectation_shaves_effect_rolls` | effect rolls lose 2 with no floor; a Move 0 sets `resolve = false`; a turn-start roll is untouched |
+| 11 | `g03_no_expectation_shaves_effect_rolls` / `g03_no_expectation_leaves_a_turn_start_roll_alone` | effect rolls lose 2 with no floor; a Move 0 sets `resolve = false`; an effect roll at the turn start keeps its face |
 | 12 | `g03_layer_keep_banks_the_unchosen_face` | fire reroll, pick old ⇒ `unused_face` is the new face, one die banked, `use_die` offers it |
 | 13 | `g03_please_choose_opt1_offers_only_with_a_targeting_card` | option (1) absent with an empty hand; the pick plays via ABI-04 |
-| 14 | `g03_doll_garden_victim_roll_takes_the_victim_view` | no expectation shaves the victim's roll; a victim After hook runs; `move.main` false |
+| 14 | `g03_doll_garden_victim_roll_takes_the_victim_view` / `g03_doll_garden_victim_is_not_the_main_move` | no expectation shaves the victim's roll; the cast entry pays while the main-only After reroll does not run |
 | 15 | `g03_own_stage_no_suppresses_the_landing_settle` / `…_yes_on_a_blocked_stay_settles_at_turn_end` / `…_no_skips` / `…_default_settles` | exactly one settle overall, and only where the answer says (yes ⇒ at `end_turn`, no ⇒ nowhere, default ⇒ at the landing) |
 
 Engine-level: `crates/game-rules/tests/kind_table_pin.rs` (123-125),
@@ -1140,7 +1152,7 @@ quotes only; protocol-level where the ladder is engine-side):
 - **G01/G08 (before).** Their trigger payload and zone writer carry
   `Trigger.roll`; the `is_roll_kind` list in `bridge_trigger` is the only
   shared line.
-- **README.** The band table gains G03's Op row (398-406) and shifts G06,
+- **README.** The band table gains G03's Op row (398-410) and shifts G06,
   G05+G13 and G07; the G03 rows and the `G03 ↔ G04` coupling are added, and
   the `G03 ↔ G11` note stays.
 - **`docs/CARDS.md`.** The stage list becomes Plan → Cast → Before → Add →

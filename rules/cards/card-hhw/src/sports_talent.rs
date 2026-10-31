@@ -19,12 +19,18 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         // 规则书: 「每回合结束时失去一个」 -- every turn end, not only the
         // owner's (the cell does not say 你的; same for every peer decay card).
         On::Action(Action::TurnEnd("card.placed", None, at_turn_end)),
-        // 规则书: 「每次掷骰获得一次资金」 -- the owner's own main-move dice
-        // (`m.Seat == Seat && m.Main`). The fixed-roll check is residual.
-        // TODO(规则书)（每次掷骰获得一次资金）: 每次掷骰都该给钱 -- 我们只认
-        // 掷骰者的主要移动掷骰；效果掷骰根本不发 diceRollAfter，非主要移动也
-        // 不给.
-        On::Action(Action::DiceRollAfter("actor == owner && card.placed && move.main", Some(roll_after_applies), on_roll_after)),
+        // 规则书: 「每次掷骰获得一次资金」 -- every cast, on the field, whatever the
+        // purpose (「掷骰」 is not 「移动掷骰」; the move reroll below says so
+        // explicitly). `diceRollCast` fires once per throw (a fixed face raises
+        // none), so a reroll pays again without the body having to know.
+        On::Action(Action::DiceRollCast(
+            "actor == owner && card.placed",
+            None,
+            on_cast,
+        )),
+        // 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果至少为10为止」 -- the move
+        // roll's action event.
+        On::Action(Action::DiceRollAfter("actor == owner && card.placed && move.main", None, on_roll_after)),
         // The body-top applicability checks are the condition now (C#
         // `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's own main
         // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
@@ -85,19 +91,14 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`on_roll_after`]: C# `m.FixedRoll >= 0` skips a plan's
-/// fixed roll -- `trigger::move_roll` is the live face and is `Some` even then,
-/// so the fixed-face test is the plan's, the same one [`roll_plan`] bails on.
-fn roll_after_applies(_player_id: i32) -> bool {
-    trigger::move_roll().is_some() && ctx::fixed_roll().is_none()
+/// 规则书: 「此卡位于场上时，每次掷骰获得一次资金」 -- one cast, one payout.
+fn on_cast(player_id: i32) -> card_sdk::Asked {
+    reward(player_id)?;
+    Ok(())
 }
 
-/// 规则书: 「此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100」
-/// -- C# `CardSportsTalent.DiceRollAfter` -> `Reward`. `actor == owner &&
-/// card.placed && move.main` is the pre; [`roll_after_applies`] is the residual.
+/// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果至少为10为止」.
 fn on_roll_after(player_id: i32) -> card_sdk::Asked {
-    reward(player_id)?;
-    // 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果至少为10为止」
     reroll_to_ten(player_id)?;
     Ok(())
 }
@@ -140,11 +141,10 @@ fn reroll_to_ten(player_id: i32) -> card_sdk::Asked {
         if x >= 10 || ctx::player_out(player_id) {
             break;
         }
+        // The recast raises `diceRollCast`, so the Cast entry pays it -- no
+        // `reward()` call here.
         x = ctx::do_move_roll(player_id)?.max(0);
         trigger::set_move_roll(x);
-        // 规则书: 「每次掷骰获得一次资金」 -- a re-roll is another 掷骰 and pays
-        // again (the ladder steps down each time).
-        reward(player_id)?;
     }
     ctx::log(
         player_id,
@@ -197,6 +197,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_cast_kani(player_id: i32) -> card_sdk::Asked {
+    on_cast(player_id)
 }
 
 #[cfg(kani)]

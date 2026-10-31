@@ -17,7 +17,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The named other player, or -1.
@@ -112,7 +112,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
         return Ok(());
     }
-    ctx::set_fixed_roll(face);
+    ctx::set_fixed_roll(face, roll_source::SKILL);
     ctx::log(
         player_id,
         &Msg::new(key!("mutsumi_crychic_fixed")).i("n", face as i64),

@@ -1213,9 +1213,10 @@ fn aya_skill_2_discount_and_flip() {
 }
 
 /// 规则书: 若宫伊芙（2）「投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」
-/// Two-part timing (DiceRollBefore Action + DiceRollPlan Filter): the ask
-/// fires before any die lands, the fan flips happen at ask time, and Yd4 is
-/// part of the same roll's face (not a post-hoc patch).
+/// One DiceRollBefore Action body: the window is named for the settlement,
+/// not the throw, so the d20 has already landed when the ask opens -- the
+/// fan flips happen at answer time and the Yd4 is thrown into the same
+/// roll's face by the skill body (a face write from the window).
 #[test]
 fn eve_skill_2_adds_yd4() {
     let mut t = Table::vanilla(2);
@@ -1226,7 +1227,8 @@ fn eve_skill_2_adds_yd4() {
     t.dice(&[2, 1, 1, 1]);
     let mark = t.mark();
     t.roll(0).unwrap();
-    // The ask is at DiceRollBefore: prompt open, no die consumed, fans intact.
+    // The ask is at DiceRollBefore: prompt open, the d20 (2) already landed,
+    // the Yd4 not yet, fans intact.
     {
         let p = t.expect_prompt();
         assert!(
@@ -1239,8 +1241,8 @@ fn eve_skill_2_adds_yd4() {
         );
         assert_eq!(
             t.dice_left(),
-            4,
-            "DiceRollBefore: no die has landed yet: {}",
+            3,
+            "DiceRollBefore runs after the cast: only the d20 landed: {}",
             t.dump_prompt()
         );
         assert_eq!(fans(&t, 0), (3, 0), "fans flip only after the Y answer");
@@ -1260,16 +1262,22 @@ fn eve_skill_2_adds_yd4() {
     }
     assert_eq!(fans(&t, 0), (1, 2), "Y=2 flipped");
     assert_eq!(t.pos(0), 4, "roll 2 + 2d4(1+1) -- Yd4 is part of the face");
-    assert_eq!(t.state(0, "evePendingY"), 0, "stash cleared after the roll");
-    // Ask/log precede the roll line in the trace.
+    // The cast lands first; the eve actions land inside the window, before
+    // the settlement line.
     let keys = t.keys_since(mark);
-    let eve = keys.iter().position(|k| k.contains("eve"));
-    let rolled = keys
+    let eve = keys
         .iter()
-        .position(|k| k.contains("log.roll") || k.contains("log.dice") || k.contains("roll"));
-    if let (Some(e), Some(r)) = (eve, rolled) {
-        assert!(e < r, "eve ask/log before the roll line: {keys:?}");
+        .position(|k| k.contains("eve"))
+        .unwrap_or_else(|| panic!("eve log missing: {keys:?}"));
+    let cast = keys.iter().position(|k| k.contains("log.dice"));
+    let settled = keys
+        .iter()
+        .position(|k| k.contains("log.roll"))
+        .unwrap_or_else(|| panic!("settlement line missing: {keys:?}"));
+    if let Some(c) = cast {
+        assert!(c < eve, "the cast precedes the eve window body: {keys:?}");
     }
+    assert!(eve < settled, "eve log before the settlement: {keys:?}");
 }
 
 /// 规则书: 「为此次投掷结果增加Yd4」 is this roll only -- the next roll must

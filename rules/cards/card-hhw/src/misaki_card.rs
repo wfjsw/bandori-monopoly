@@ -18,16 +18,12 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         &[ChainKind::DiceRollResult],
         // 规则书[反击]: 「触发结算前可打出此卡」 -- the window is the
         // `diceRollResult` timing, after the roll and before the settle.
-        // 「使用火罐进行移动掷骰后」 -- the [火罐] roll is meant to be card-owned
-        // state: the fire reroll is meant to tag it (`plan::set_tag("fireRoll", 1)`)
-        // and readers ask `move.tag`.
+        // 「使用火罐进行移动掷骰后」 -- the fire recast stamps the transaction
+        // with `roll_source::CHARGE` (the layer-keep die bank), which reaches
+        // this Result window as `roll_source == 1`.
         // 规则书: 「位于你的移动起点与预定移动终点之间」 -- `between(owner) > 0`
         // (there must be a rival to teleport to).
-        // TODO(规则书)（使用火罐进行移动掷骰后）: the book conditions on the fire-pot
-        //   roll -- no shipped producer tags the move `fireRoll` (only the
-        //   `TEST:fireRoll` fixture does) and `roll_source` never reaches this
-        //   trigger, so this pre reads 0 in every real game.
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
+        "actor == owner && roll_source == 1 && between(owner) > 0",
         None,
         counteract).counter_reason(key!("misaki_card_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -70,8 +66,7 @@ fn between(player_id: i32) -> Vec<i32> {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0` is
-    // the pre.
+    // `actor == owner && roll_source == 1 && between(owner) > 0` is the pre.
     let list = between(player_id);
     // 规则书[反击]: 「使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子」
     // -- C# `H.AskSeat(i, "另一个我", ..., list)`.

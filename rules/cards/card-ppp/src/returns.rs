@@ -30,7 +30,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::abi::{ActionKind, CardPile, RollPurpose};
+use card_sdk::abi::{roll_source, ActionKind, CardPile, RollPurpose};
 use card_sdk::ctx::{intern, NameId};
 use card_sdk::{it, items, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -187,7 +187,13 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
             // C# `H._rng.Next(pool.Count)` -- a silent host rng. Pure random
             // index pick, not a 「掷骰」 the player should see countered, so
             // `roll_direct` (it still animates).
-            (ctx::roll_direct(player_id, 1, pool.len() as i32, RollPurpose::Effect)? - 1).max(0)
+            (ctx::roll_direct(
+                player_id,
+                1,
+                pool.len() as i32,
+                RollPurpose::Effect,
+                roll_source::CARD,
+            )? - 1).max(0)
                 as usize
                 % pool.len()
         };
