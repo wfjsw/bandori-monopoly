@@ -49,7 +49,7 @@ an immune payee or a trailing write therefore still leaves X at 5 (item
 fire, and none without a fire.
 
 The skill that fires here is `skill:八潮瑠唯:正论暴击`
-(`rules/skills/skill-personas/src/yuri_crit.rs`), a **Pay-hook** body: it is
+(`rules/skills/skill-personas/src/rui.rs`), a **Pay-hook** body: it is
 dispatched by `collect_hook_jobs` (`crates/game-rules/src/wasm_rules.rs:5292`)
 from the money pipeline, not by `use_skill`. `use_skill` raises `cardUsed`
 (`crates/game-core/src/engine/play.rs:979-990`) only on a press, so hook-driven

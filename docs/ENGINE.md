@@ -387,7 +387,7 @@ the generic mechanics (`purchase.rs`):
   a quote can be asked without cloning.
 * **Gate.** `BuyGate` runs for every `BuyKind` (Land / Agent / Card / Force /
   Acquire / Auction); a `set_cancelled` refuses the buy. `buyBefore` cancel is
-  also honoured. rana_parking's 「该次传送不可进行地契购买」 is a **native** gate
+  also honoured. rana's 「该次传送不可进行地契购买」 is a **native** gate
   on the Land offer: `plan.no_buy`.
 * **Assign.** `assign_deed` writes owner / houses / mortgage in one place;
   `BuyAssign` hooks rewrite the deal before commit, on every kind (land,

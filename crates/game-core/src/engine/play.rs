@@ -1474,7 +1474,7 @@ impl Cx<'_> {
             // the turn player still has a main move to take).
             if m.teleport_to.is_some() {
                 // A `rollPlan` body -- or a Play body before the roll
-                // (kanon_march 「视为本次主要移动」, lisa_goddess 「将此次移动变为
+                // (kanon_march 「视为本次主要移动」, lisa 「将此次移动变为
                 // 传送」, ras 「下一次主要移动可变为传送至…」) -- rewrote this
                 // move as a teleport: the destination is the plan's, and no dice
                 // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
@@ -1565,7 +1565,7 @@ impl Cx<'_> {
                 }
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
-            // `DiceRollAfter` floor, saki_crychic's `SettleBefore` nudge): this
+            // `DiceRollAfter` floor, sakiko_crychic's `SettleBefore` nudge): this
             // move is over and the write must not shape the next one. Same for
             // the skill-source tag, and for `start` (「使**本次**移动以…为起点」).
             self.w.turn.plan.teleport_to = None;
@@ -1973,7 +1973,7 @@ impl Cx<'_> {
     /// bare position write at `move_depth > 0` -- so a plan write inside a move
     /// must move the piece too, or the destination the hook logged (and the
     /// `log.outcome.plan_teleport` line) is a promise the board never keeps and
-    /// the settle runs at the original tile (saki_crychic's settleBefore nudge,
+    /// the settle runs at the original tile (sakiko_crychic's settleBefore nudge,
     /// saaya_sky's dice floor).
     ///
     /// One-shot: the write is cleared whether or not the tile is usable.
@@ -2051,7 +2051,7 @@ impl Cx<'_> {
     /// spent and unannounced, walks backwards, or settles nothing.
     ///
     /// An activation that drove **no** move is shaping a move still to come
-    /// (ran_red (2)'s 「本次移动向后」, sakiko_lead's half price, taki_serious'
+    /// (ran (2)'s 「本次移动向后」, sakiko_lead's half price, taki_serious'
     /// quarter) and keeps everything.
     ///
     /// Only at `move_depth == 0` too: an activation nested inside a move (a
@@ -3147,7 +3147,7 @@ impl Cx<'_> {
         if gate.is_cancelled() {
             return Ok(false);
         }
-        // rana_parking's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
+        // rana's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
         // plan's no-buy flag is a **native** gate on the ordinary Land offer.
         // TODO(规则书) ruling 6: whether it
         // also bars a card-driven (`BuyKind::Card`) buy is undecided; today it

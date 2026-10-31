@@ -24,9 +24,9 @@ through **engine flags** -- side channels the rulebook never names:
 | flag | where | set by | after Phase 3 |
 |---|---|---|---|
 | ~~`no_circle_reward`~~ | ~~`MoveCtx.plan` + `state::key::NO_CIRCLE_REWARD`~~ | detour, PPP band (2), PP band (3), 凑友希那 (1), 赤音, tsugumi | **done** -- `prop::NO_REWARD` on the rule instance |
-| `rent_factor` / `pay_factor` | `MoveCtx.plan` | studio_storm, kasumi_love_all, council_check / sakiko_lead, saki_move, rana_funny, taki_serious, repaint, kaede_support | **moved** -- the read is the money pipeline's `paySplitMul` stage (`scale_settle_payment`), so it covers the payment as card effects shape it; the arming is still `plan::set_*_factor` for a hand card (see [Left short](#left-short)) |
+| `rent_factor` / `pay_factor` | `MoveCtx.plan` | studio_storm, kasumi_love_all, council_check / sakiko_lead, saki_move, rana_funny, taki_serious, repaint, umiri | **moved** -- the read is the money pipeline's `paySplitMul` stage (`scale_settle_payment`), so it covers the payment as card effects shape it; the arming is still `plan::set_*_factor` for a hand card (see [Left short](#left-short)) |
 | ~~`buy_discount` / `free_buy` / `raze_on_buy`~~ | ~~`TurnCtx`~~ | tsugu_ycm, roselia band (1) / maze_warehouse | **done** -- `ctx::linger` + `BuyAdd` −1500 / `BuyMul` ½ / `BuySet` 0 + `BuyAssign` houses 0 (`docs/PURCHASE.md`) |
-| ~~`extraColor:<tile>` / `st.tile_colors`~~ | ~~per-player state / `MatchState`~~ | soyo_colors, asahi_aim, roselia band (1), guerrilla, soyo_clear | **done** -- tile props `colorFor:<p>` (per player) and `prop::ANY_COLOR` (「该格获得所有颜色」); `is_color` / `is_live_house_for` read them |
+| ~~`extraColor:<tile>` / `st.tile_colors`~~ | ~~per-player state / `MatchState`~~ | soyo_colors, lock, roselia band (1), guerrilla, soyo | **done** -- tile props `colorFor:<p>` (per player) and `prop::ANY_COLOR` (「该格获得所有颜色」); `is_color` / `is_live_house_for` read them |
 | ~~`noBuild` (play-from-hand)~~ | ~~per-player state~~ | council_check | **done** -- a `ctx::linger` instance carrying `prop::NO_BUILD`, which `why_not_build_on` reads |
 | ~~`settleAtEnd`~~ | ~~per-player state~~ | rinne_rain, tomori_crychic | **done** -- `ctx::before_turn_end` + `On::Schedule` whose body calls `ctx::settle` |
 | ~~`settleInstead`~~ | ~~`ActionKind`~~ | ~~parking_space, smile_parade~~ | **done** -- `ActionKind::SettleBody`; hey_kids moved to `ChainKind::SettleBody` |
@@ -651,7 +651,7 @@ Concretely still short:
   (`BuyAssign` houses 0).
 * ~~**`extraColor:` is still per-player state.**~~ **Done.** The clause split
   is now the two props: （soyo） 「该格获得所有颜色」 is `prop::ANY_COLOR` on the
-  tile (tile-wide), while 朝日六花 / Roselia band (1) / 游击演出 / soyo_clear are
+  tile (tile-wide), while 朝日六花 / Roselia band (1) / 游击演出 / soyo are
   per-player `colorFor:<p>`. `is_color` / `is_live_house_for` read both, the
   same way `agent_colour_set` does. TODO(规则书) ruling 5: whether 「所有颜色」
   and the per-player 「视为live house」 widen the agent's 同色 set is unchanged
@@ -677,7 +677,7 @@ Concretely still short:
 effects shape it**. The cards whose sheet wording matches that reading and now
 ride the `paySplitMul` stage: **祥，移动**, **（祥子）带领着大家** (sakiko_lead),
 **（乐奈）有趣的女人** (rana_funny), **（立希）想认真去做** (taki_serious, ¼
-rather than ½), **Repaint**, **八幡海铃:熟练的支援贝斯手** (kaede_support).
+rather than ½), **Repaint**, **八幡海铃:熟练的支援贝斯手** (umiri).
 
 Wording that differs, left as it is with `TODO(规则书)`:
 

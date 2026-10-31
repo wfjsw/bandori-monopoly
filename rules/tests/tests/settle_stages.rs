@@ -206,8 +206,7 @@ fn m4_kokoro_force_stop_stops_a_passer() {
     // Accept the force-stop offer.
     let mut offered = false;
     while let Some(p) = t.prompt() {
-        if format!("{p:?}").contains("kokoro_practice_force") || format!("{p:?}").contains("force")
-        {
+        if format!("{p:?}").contains("yukina_force") || format!("{p:?}").contains("force") {
             offered = true;
             let _ = t.answer_one(0);
         } else {
@@ -398,7 +397,7 @@ fn rana_parfait_transfer_voids_the_space_payment() {
     // The transfer ask goes to the settling non-owner (P2).
     let p = t.expect_prompt();
     assert!(
-        p.title.key().contains("rana_parking_title"),
+        p.title.key().contains("rana_title"),
         "the transfer ask: {:?}",
         p.title
     );
@@ -436,11 +435,7 @@ fn rana_parfait_transfer_declined_pays_the_rent() {
     t.dice(&[1]);
     t.roll(2).unwrap();
     let p = t.expect_prompt();
-    assert!(
-        p.title.key().contains("rana_parking_title"),
-        "{:?}",
-        p.title
-    );
+    assert!(p.title.key().contains("rana_title"), "{:?}", p.title);
     t.answer(2, 1).unwrap(); // no
     drain(&mut t);
     assert_eq!(t.token(2, "抹茶芭菲"), 1, "the held unit stayed");
@@ -473,7 +468,7 @@ fn rana_parfait_transfer_not_offered_without_a_held_unit() {
     // No transfer ask: any prompt that comes up is not the rana ask.
     while let Some(p) = t.prompt() {
         assert!(
-            !p.title.key().contains("rana_parking_title"),
+            !p.title.key().contains("rana_title"),
             "no transfer ask when the mover holds none: {:?}",
             p.title
         );

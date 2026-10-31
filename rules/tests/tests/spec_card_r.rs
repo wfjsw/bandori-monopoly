@@ -1740,7 +1740,7 @@ fn yukina_force_stop_passer() {
     let mut offered = false;
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("kokoro_practice_force") {
+        if d.contains("yukina_force") {
             offered = true;
             let _ = t.answer_one(0);
         } else {
@@ -1827,7 +1827,7 @@ fn rinko_fix_roll_to_x_times_six() {
     t.skill(0, &skill).unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("rinko_1cm") {
+        if d.contains("rinko") {
             let _ = t.answer_one(1); // X = 2
         } else {
             t.decline();

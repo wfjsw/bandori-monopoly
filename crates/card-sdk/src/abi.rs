@@ -1210,7 +1210,7 @@ pub enum Stack {
     /// create a row when there is none. The old `place_cp` behaviour.
     Merge = 0,
     /// Always push a fresh row. The old `add_mark` behaviour (tests count
-    /// rows; kaoru's 3 「怪盗标记」, embers' copies, tae_police rabbits).
+    /// rows; kaoru's 3 「怪盗标记」, embers' copies, tae rabbits).
     Fresh = 1,
 }
 
@@ -1260,6 +1260,10 @@ pub enum Target {
 pub mod prop {
     /// Offer this placed source in the hand-counteraction window. Default 0.
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
+    /// `1` on a source on the owner's field: the owner's **face-down** field
+    /// cards (normally inert) may be played directly in a counteraction window
+    /// (宇田川亚子 「对帅气的憧憬」(3)). Default 0.
+    pub const COUNTERACT_FACE_DOWN: &str = "counteractFaceDown";
     /// Nonzero alternatives with the same group are exclusive per seat/timing.
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     /// Fire-pot cost shown on a field counteraction's source-choice label.
@@ -1389,7 +1393,7 @@ pub mod prop {
 
     /// 「可购买格子」 (`data/rules.txt` line 19) -- `1` = this tile can be bought
     /// at all. Stamped from `TileData::is_buyable` at bind time; a rule
-    /// instance may clear it (rana_parking's 「不可被抵押双倍支付购买」).
+    /// instance may clear it (rana's 「不可被抵押双倍支付购买」).
     pub const BUYABLE: &str = "buyable";
     /// Houses already standing on the tile, counted into the buy price
     /// (「购买格子地契和建造已有房子的资金总价」). `0` disables; a positive

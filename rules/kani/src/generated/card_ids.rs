@@ -16,7 +16,7 @@
 #![allow(dead_code)]
 
 /// Number of registered `CardDef`s in `invoke::RULESET`.
-pub const CARD_COUNT: usize = 285;
+pub const CARD_COUNT: usize = 286;
 
 /// Id string at each index (for native asserts / debug).
 /// Under Kani never scan this — use [`card_id!`].
@@ -278,6 +278,7 @@ pub static IDS: &[&str] = &[
     "tile:ring",
     "tile:property",
     "mark:cp",
+    "mark:pp_fans",
     "event:对邦",
     "event:弦卷集团地产开发",
     "event:很噜的感觉",
@@ -900,167 +901,167 @@ pub const SKILL_BAND_POPPIN: usize = 194;
 /// `skill:CRYCHIC:美好的往日幻影`  (`RULESET[12][11]`, `CRYCHIC`)
 pub const SKILL_BAND_CRYCHIC: usize = 195;
 
-/// `skill:千早爱音:重新开始`  (`RULESET[13][0]`, `ANON_RESTART`)
-pub const SKILL_ANON_RESTART: usize = 196;
+/// `skill:千早爱音:重新开始`  (`RULESET[13][0]`, `ANON`)
+pub const SKILL_ANON: usize = 196;
 
-/// `skill:市谷有咲:盆栽爱好者`  (`RULESET[13][1]`, `ARISA_BONSAI`)
-pub const SKILL_ARISA_BONSAI: usize = 197;
+/// `skill:市谷有咲:盆栽爱好者`  (`RULESET[13][1]`, `ARISA`)
+pub const SKILL_ARISA: usize = 197;
 
-/// `skill:宇田川亚子:对帅气的憧憬`  (`RULESET[13][2]`, `AKAO_COOL`)
-pub const SKILL_AKAO_COOL: usize = 198;
+/// `skill:宇田川亚子:对帅气的憧憬`  (`RULESET[13][2]`, `AKO`)
+pub const SKILL_AKO: usize = 198;
 
-/// `skill:朝日六花:瞄准目标`  (`RULESET[13][3]`, `ASAHI_AIM`)
-pub const SKILL_ASAHI_AIM: usize = 199;
+/// `skill:朝日六花:瞄准目标`  (`RULESET[13][3]`, `LOCK`)
+pub const SKILL_LOCK: usize = 199;
 
-/// `skill:丸山彩:With~`  (`RULESET[13][4]`, `AYA_WITH`)
-pub const SKILL_AYA_WITH: usize = 200;
+/// `skill:丸山彩:With~`  (`RULESET[13][4]`, `AYA`)
+pub const SKILL_AYA: usize = 200;
 
-/// `skill:白鹭千圣:保持坦率的你`  (`RULESET[13][5]`, `CHISATO_FRANK`)
-pub const SKILL_CHISATO_FRANK: usize = 201;
+/// `skill:白鹭千圣:保持坦率的你`  (`RULESET[13][5]`, `CHISATO`)
+pub const SKILL_CHISATO: usize = 201;
 
-/// `skill:三角初华（Sumimi）:成为偶像`  (`RULESET[13][6]`, `UIKA_IDOL`)
-pub const SKILL_UIKA_IDOL: usize = 202;
+/// `skill:三角初华（Sumimi）:成为偶像`  (`RULESET[13][6]`, `UIKA_SUMIMI`)
+pub const SKILL_UIKA_SUMIMI: usize = 202;
 
-/// `skill:三角初华:Imprisoned XII`  (`RULESET[13][7]`, `UIKA_IMPRISONED`)
-pub const SKILL_UIKA_IMPRISONED: usize = 203;
+/// `skill:三角初华:Imprisoned XII`  (`RULESET[13][7]`, `UIKA`)
+pub const SKILL_UIKA: usize = 203;
 
-/// `skill:若宫伊芙:天下统一`  (`RULESET[13][8]`, `EVE_UNIFY`)
-pub const SKILL_EVE_UNIFY: usize = 204;
+/// `skill:若宫伊芙:天下统一`  (`RULESET[13][8]`, `EVE`)
+pub const SKILL_EVE: usize = 204;
 
-/// `skill:户山香澄:非凡之星`  (`RULESET[13][9]`, `EXTRAORDINARY_STAR`)
-pub const SKILL_EXTRAORDINARY_STAR: usize = 205;
+/// `skill:户山香澄:非凡之星`  (`RULESET[13][9]`, `KASUMI`)
+pub const SKILL_KASUMI: usize = 205;
 
-/// `skill:弦卷心:弦卷集团`  (`RULESET[13][10]`, `KASUMI_GROUP`)
-pub const SKILL_KASUMI_GROUP: usize = 206;
+/// `skill:弦卷心:弦卷集团`  (`RULESET[13][10]`, `KOKORO`)
+pub const SKILL_KOKORO: usize = 206;
 
-/// `skill:濑田薰:梦幻的王子殿下`  (`RULESET[13][11]`, `KAORU_PRINCE`)
-pub const SKILL_KAORU_PRINCE: usize = 207;
+/// `skill:濑田薰:梦幻的王子殿下`  (`RULESET[13][11]`, `KAORU`)
+pub const SKILL_KAORU: usize = 207;
 
-/// `skill:松原花音:真正的迷子`  (`RULESET[13][12]`, `KANON_LOST`)
-pub const SKILL_KANON_LOST: usize = 208;
+/// `skill:松原花音:真正的迷子`  (`RULESET[13][12]`, `KANON`)
+pub const SKILL_KANON: usize = 208;
 
-/// `skill:桐谷透子:天上天下，唯我独尊`  (`RULESET[13][13]`, `KIRITANI_ZENITH`)
-pub const SKILL_KIRITANI_ZENITH: usize = 209;
+/// `skill:桐谷透子:天上天下，唯我独尊`  (`RULESET[13][13]`, `TOKO`)
+pub const SKILL_TOKO: usize = 209;
 
-/// `skill:凑友希那:来练习吧`  (`RULESET[13][14]`, `KOKORO_PRACTICE`)
-pub const SKILL_KOKORO_PRACTICE: usize = 210;
+/// `skill:凑友希那:来练习吧`  (`RULESET[13][14]`, `YUKINA`)
+pub const SKILL_YUKINA: usize = 210;
 
-/// `skill:北泽育美:全垒打！`  (`RULESET[13][15]`, `HAGUMI_HOMERUN`)
-pub const SKILL_HAGUMI_HOMERUN: usize = 211;
+/// `skill:北泽育美:全垒打！`  (`RULESET[13][15]`, `HAGUMI`)
+pub const SKILL_HAGUMI: usize = 211;
 
-/// `skill:冰川日菜:日菜抽中的大奖`  (`RULESET[13][16]`, `HINA_LOTTERY`)
-pub const SKILL_HINA_LOTTERY: usize = 212;
+/// `skill:冰川日菜:日菜抽中的大奖`  (`RULESET[13][16]`, `HINA`)
+pub const SKILL_HINA: usize = 212;
 
-/// `skill:上原绯玛丽:大家一起迈出新的一步`  (`RULESET[13][17]`, `HIMARI_STEP`)
-pub const SKILL_HIMARI_STEP: usize = 213;
+/// `skill:上原绯玛丽:大家一起迈出新的一步`  (`RULESET[13][17]`, `HIMARI`)
+pub const SKILL_HIMARI: usize = 213;
 
-/// `skill:仓田真白:向后全速前进`  (`RULESET[13][18]`, `KURATA_SPEED`)
-pub const SKILL_KURATA_SPEED: usize = 214;
+/// `skill:仓田真白:向后全速前进`  (`RULESET[13][18]`, `MASHIRO`)
+pub const SKILL_MASHIRO: usize = 214;
 
-/// `skill:今井莉莎:慈爱女神`  (`RULESET[13][19]`, `LISA_GODDESS`)
-pub const SKILL_LISA_GODDESS: usize = 215;
+/// `skill:今井莉莎:慈爱女神`  (`RULESET[13][19]`, `LISA`)
+pub const SKILL_LISA: usize = 215;
 
-/// `skill:纯田真奈:甜甜圈爱好者`  (`RULESET[13][20]`, `MANA_DONUT`)
-pub const SKILL_MANA_DONUT: usize = 216;
+/// `skill:纯田真奈:甜甜圈爱好者`  (`RULESET[13][20]`, `MANA`)
+pub const SKILL_MANA: usize = 216;
 
-/// `skill:月岛麻里奈:礼物还有好多好多哟`  (`RULESET[13][21]`, `MARINA_GIFTS`)
-pub const SKILL_MARINA_GIFTS: usize = 217;
+/// `skill:月岛麻里奈:礼物还有好多好多哟`  (`RULESET[13][21]`, `MARINA`)
+pub const SKILL_MARINA: usize = 217;
 
-/// `skill:大和麻弥:朝阳照耀的片刻`  (`RULESET[13][22]`, `MAYA_DAWN`)
-pub const SKILL_MAYA_DAWN: usize = 218;
+/// `skill:大和麻弥:朝阳照耀的片刻`  (`RULESET[13][22]`, `MAYA`)
+pub const SKILL_MAYA: usize = 218;
 
-/// `skill:奥泽美咲:另一个我`  (`RULESET[13][23]`, `MISAKI_OTHER`)
-pub const SKILL_MISAKI_OTHER: usize = 219;
+/// `skill:奥泽美咲:另一个我`  (`RULESET[13][23]`, `MISAKI`)
+pub const SKILL_MISAKI: usize = 219;
 
-/// `skill:青叶摩卡:我行我素`  (`RULESET[13][24]`, `MOCA_SELF`)
-pub const SKILL_MOCA_SELF: usize = 220;
+/// `skill:青叶摩卡:我行我素`  (`RULESET[13][24]`, `MOCA`)
+pub const SKILL_MOCA: usize = 220;
 
-/// `skill:若叶睦:天生的演员`  (`RULESET[13][25]`, `MUTSUMI_ACTOR`)
-pub const SKILL_MUTSUMI_ACTOR: usize = 221;
+/// `skill:若叶睦:天生的演员`  (`RULESET[13][25]`, `MUTSUMI`)
+pub const SKILL_MUTSUMI: usize = 221;
 
 /// `skill:若叶睦（CRYCHIC）:精致的人偶`  (`RULESET[13][26]`, `MUTSUMI_CRYCHIC`)
 pub const SKILL_MUTSUMI_CRYCHIC: usize = 222;
 
-/// `skill:广町七深:这是很普通的事吧？`  (`RULESET[13][27]`, `NANAMI_ORDINARY`)
-pub const SKILL_NANAMI_ORDINARY: usize = 223;
+/// `skill:广町七深:这是很普通的事吧？`  (`RULESET[13][27]`, `NANAMI`)
+pub const SKILL_NANAMI: usize = 223;
 
-/// `skill:鳰原令王那:梦幻可爱♪女仆`  (`RULESET[13][28]`, `NUMAZU_MAID`)
-pub const SKILL_NUMAZU_MAID: usize = 224;
+/// `skill:鳰原令王那:梦幻可爱♪女仆`  (`RULESET[13][28]`, `PAREO`)
+pub const SKILL_PAREO: usize = 224;
 
-/// `skill:要乐奈:投币式停车场的猫`  (`RULESET[13][29]`, `RANA_PARKING`)
-pub const SKILL_RANA_PARKING: usize = 225;
+/// `skill:要乐奈:投币式停车场的猫`  (`RULESET[13][29]`, `RANA`)
+pub const SKILL_RANA: usize = 225;
 
-/// `skill:美竹兰:叛逆的红挑染`  (`RULESET[13][30]`, `RAN_RED`)
-pub const SKILL_RAN_RED: usize = 226;
+/// `skill:美竹兰:叛逆的红挑染`  (`RULESET[13][30]`, `RAN`)
+pub const SKILL_RAN: usize = 226;
 
-/// `skill:和奏瑞依:一次又一次竭尽全力`  (`RULESET[13][31]`, `RAISE_EFFORT`)
-pub const SKILL_RAISE_EFFORT: usize = 227;
+/// `skill:和奏瑞依:一次又一次竭尽全力`  (`RULESET[13][31]`, `LAYER`)
+pub const SKILL_LAYER: usize = 227;
 
-/// `skill:牛込里美:里美的决心`  (`RULESET[13][32]`, `RIMI_RESOLVE`)
-pub const SKILL_RIMI_RESOLVE: usize = 228;
+/// `skill:牛込里美:里美的决心`  (`RULESET[13][32]`, `RIMI`)
+pub const SKILL_RIMI: usize = 228;
 
-/// `skill:白金燐子:即使1cm也要前进`  (`RULESET[13][33]`, `RINKO_1CM`)
-pub const SKILL_RINKO_1CM: usize = 229;
+/// `skill:白金燐子:即使1cm也要前进`  (`RULESET[13][33]`, `RINKO`)
+pub const SKILL_RINKO: usize = 229;
 
-/// `skill:山吹沙绫:焕然一新的天空中`  (`RULESET[13][34]`, `SAAYA_SKY`)
-pub const SKILL_SAAYA_SKY: usize = 230;
+/// `skill:山吹沙绫:焕然一新的天空中`  (`RULESET[13][34]`, `SAAYA`)
+pub const SKILL_SAAYA: usize = 230;
 
-/// `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？`  (`RULESET[13][35]`, `SAKI_CRYCHIC`)
-pub const SKILL_SAKI_CRYCHIC: usize = 231;
+/// `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？`  (`RULESET[13][35]`, `SAKIKO_CRYCHIC`)
+pub const SKILL_SAKIKO_CRYCHIC: usize = 231;
 
-/// `skill:佐藤益木:与燃烧的红色一起驰骋`  (`RULESET[13][36]`, `SATO_RED`)
-pub const SKILL_SATO_RED: usize = 232;
+/// `skill:佐藤益木:与燃烧的红色一起驰骋`  (`RULESET[13][36]`, `MASKING`)
+pub const SKILL_MASKING: usize = 232;
 
-/// `skill:冰川纱夜:踏上荆棘之路的觉悟`  (`RULESET[13][37]`, `SAYO_THORNS`)
-pub const SKILL_SAYO_THORNS: usize = 233;
+/// `skill:冰川纱夜:踏上荆棘之路的觉悟`  (`RULESET[13][37]`, `SAYO`)
+pub const SKILL_SAYO: usize = 233;
 
-/// `skill:长崎素世:通透的颜色`  (`RULESET[13][38]`, `SOYO_CLEAR`)
-pub const SKILL_SOYO_CLEAR: usize = 234;
+/// `skill:长崎素世:通透的颜色`  (`RULESET[13][38]`, `SOYO`)
+pub const SKILL_SOYO: usize = 234;
 
 /// `skill:长崎素世（CRYCHIC）:雨中祈晴`  (`RULESET[13][39]`, `SOYO_CRYCHIC`)
 pub const SKILL_SOYO_CRYCHIC: usize = 235;
 
-/// `skill:椎名立希:决定练习日的会议`  (`RULESET[13][40]`, `TAKI_MEETING`)
-pub const SKILL_TAKI_MEETING: usize = 236;
+/// `skill:椎名立希:决定练习日的会议`  (`RULESET[13][40]`, `TAKI`)
+pub const SKILL_TAKI: usize = 236;
 
-/// `skill:花园多惠:花园警察，出警！`  (`RULESET[13][41]`, `TAE_POLICE`)
-pub const SKILL_TAE_POLICE: usize = 237;
+/// `skill:花园多惠:花园警察，出警！`  (`RULESET[13][41]`, `TAE`)
+pub const SKILL_TAE: usize = 237;
 
-/// `skill:珠手知由:天才制作人`  (`RULESET[13][42]`, `TAMADE_PRODUCER`)
-pub const SKILL_TAMADE_PRODUCER: usize = 238;
+/// `skill:珠手知由:天才制作人`  (`RULESET[13][42]`, `CHUCHU`)
+pub const SKILL_CHUCHU: usize = 238;
 
-/// `skill:宇田川巴:豚骨酱油拉面大姐`  (`RULESET[13][43]`, `TOMOE_RAMEN`)
-pub const SKILL_TOMOE_RAMEN: usize = 239;
+/// `skill:宇田川巴:豚骨酱油拉面大姐`  (`RULESET[13][43]`, `TOMOE`)
+pub const SKILL_TOMOE: usize = 239;
 
-/// `skill:羽泽鸫:伟大的平凡`  (`RULESET[13][44]`, `TSUGUMI_PLAIN`)
-pub const SKILL_TSUGUMI_PLAIN: usize = 240;
+/// `skill:羽泽鸫:伟大的平凡`  (`RULESET[13][44]`, `TSUGUMI`)
+pub const SKILL_TSUGUMI: usize = 240;
 
-/// `skill:二叶筑紫:交给班长吧`  (`RULESET[13][45]`, `TSUGUSHI_MONITOR`)
-pub const SKILL_TSUGUSHI_MONITOR: usize = 241;
+/// `skill:二叶筑紫:交给班长吧`  (`RULESET[13][45]`, `TSUKUSHI`)
+pub const SKILL_TSUKUSHI: usize = 241;
 
-/// `skill:八潮瑠唯:正论暴击`  (`RULESET[13][46]`, `YURI_CRIT`)
-pub const SKILL_YURI_CRIT: usize = 242;
+/// `skill:八潮瑠唯:正论暴击`  (`RULESET[13][46]`, `RUI`)
+pub const SKILL_RUI: usize = 242;
 
-/// `skill:都筑诗船:尽力了吗`  (`RULESET[13][47]`, `TUKUSHI_TRY`)
-pub const SKILL_TUKUSHI_TRY: usize = 243;
+/// `skill:都筑诗船:尽力了吗`  (`RULESET[13][47]`, `SHIFUNE`)
+pub const SKILL_SHIFUNE: usize = 243;
 
 /// `skill:高松灯（CRYCHIC）:跌跌撞撞...`  (`RULESET[13][48]`, `TOMORI_CRYCHIC`)
 pub const SKILL_TOMORI_CRYCHIC: usize = 244;
 
-/// `skill:高松灯:诗超绊`  (`RULESET[13][49]`, `TOMORI_POEM`)
-pub const SKILL_TOMORI_POEM: usize = 245;
+/// `skill:高松灯:诗超绊`  (`RULESET[13][49]`, `TOMORI`)
+pub const SKILL_TOMORI: usize = 245;
 
 /// `skill:椎名立希（CRYCHIC）:克服劣等感`  (`RULESET[13][50]`, `TAKI_CRYCHIC`)
 pub const SKILL_TAKI_CRYCHIC: usize = 246;
 
-/// `skill:丰川祥子:请把你们的人生交给我`  (`RULESET[13][51]`, `SAKIKO_LIFE`)
-pub const SKILL_SAKIKO_LIFE: usize = 247;
+/// `skill:丰川祥子:请把你们的人生交给我`  (`RULESET[13][51]`, `SAKIKO`)
+pub const SKILL_SAKIKO: usize = 247;
 
-/// `skill:祐天寺若麦:大主播喵梦亲`  (`RULESET[13][52]`, `MUMEI_STREAMER`)
-pub const SKILL_MUMEI_STREAMER: usize = 248;
+/// `skill:祐天寺若麦:大主播喵梦亲`  (`RULESET[13][52]`, `NYAMU`)
+pub const SKILL_NYAMU: usize = 248;
 
-/// `skill:八幡海铃:熟练的支援贝斯手`  (`RULESET[13][53]`, `KAEDE_SUPPORT`)
-pub const SKILL_KAEDE_SUPPORT: usize = 249;
+/// `skill:八幡海铃:熟练的支援贝斯手`  (`RULESET[13][53]`, `UMIRI`)
+pub const SKILL_UMIRI: usize = 249;
 
 /// `tile:edogawa`  (`RULESET[14][0]`, `EDOGAWA`)
 pub const TILE_EDOGAWA: usize = 250;
@@ -1083,89 +1084,92 @@ pub const TILE_PROPERTY: usize = 255;
 /// `mark:cp`  (`RULESET[15][0]`, `MARK_CP`)
 pub const MARK_MARK_CP: usize = 256;
 
+/// `mark:pp_fans`  (`RULESET[15][1]`, `MARK_PP_FANS`)
+pub const MARK_MARK_PP_FANS: usize = 257;
+
 /// `event:对邦`  (`RULESET[16][0]`, `DUI_BANG`)
-pub const EVENT_DUI_BANG: usize = 257;
+pub const EVENT_DUI_BANG: usize = 258;
 
 /// `event:弦卷集团地产开发`  (`RULESET[16][1]`, `TSURUMAKI_ESTATE`)
-pub const EVENT_TSURUMAKI_ESTATE: usize = 258;
+pub const EVENT_TSURUMAKI_ESTATE: usize = 259;
 
 /// `event:很噜的感觉`  (`RULESET[16][2]`, `LULU`)
-pub const EVENT_LULU: usize = 259;
+pub const EVENT_LULU: usize = 260;
 
 /// `event:前往哈比内尔王国旅游`  (`RULESET[16][3]`, `HABINEL`)
-pub const EVENT_HABINEL: usize = 260;
+pub const EVENT_HABINEL: usize = 261;
 
 /// `event:这只手我不会放开`  (`RULESET[16][4]`, `THIS_HAND`)
-pub const EVENT_THIS_HAND: usize = 261;
+pub const EVENT_THIS_HAND: usize = 262;
 
 /// `event:PICO灵魂交换`  (`RULESET[16][5]`, `PICO_SWAP`)
-pub const EVENT_PICO_SWAP: usize = 262;
+pub const EVENT_PICO_SWAP: usize = 263;
 
 /// `event:协助CiRCLE重建`  (`RULESET[16][6]`, `CIRCLE_REBUILD`)
-pub const EVENT_CIRCLE_REBUILD: usize = 263;
+pub const EVENT_CIRCLE_REBUILD: usize = 264;
 
 /// `event:前场队还是后场队？`  (`RULESET[16][7]`, `FRONT_OR_BACK`)
-pub const EVENT_FRONT_OR_BACK: usize = 264;
+pub const EVENT_FRONT_OR_BACK: usize = 265;
 
 /// `event:EX任务挑战`  (`RULESET[16][8]`, `EX_QUEST`)
-pub const EVENT_EX_QUEST: usize = 265;
+pub const EVENT_EX_QUEST: usize = 266;
 
 /// `event:发送熊饼表情`  (`RULESET[16][9]`, `BEAR_COOKIE`)
-pub const EVENT_BEAR_COOKIE: usize = 266;
+pub const EVENT_BEAR_COOKIE: usize = 267;
 
 /// `event:飞鸟山之战`  (`RULESET[16][10]`, `ASUKAYAMA`)
-pub const EVENT_ASUKAYAMA: usize = 267;
+pub const EVENT_ASUKAYAMA: usize = 268;
 
 /// `event:幻觉来了`  (`RULESET[16][11]`, `HALLUCINATION`)
-pub const EVENT_HALLUCINATION: usize = 268;
+pub const EVENT_HALLUCINATION: usize = 269;
 
 /// `event:卡池BUG`  (`RULESET[16][12]`, `POOL_BUG`)
-pub const EVENT_POOL_BUG: usize = 269;
+pub const EVENT_POOL_BUG: usize = 270;
 
 /// `event:A！A！O！`  (`RULESET[16][13]`, `A_A_O`)
-pub const EVENT_A_A_O: usize = 270;
+pub const EVENT_A_A_O: usize = 271;
 
 /// `event:麻里奈小姐的礼物箱`  (`RULESET[16][14]`, `MARINA_BOX`)
-pub const EVENT_MARINA_BOX: usize = 271;
+pub const EVENT_MARINA_BOX: usize = 272;
 
 /// `event:元祖！邦多利酱`  (`RULESET[16][15]`, `BANGDREAM_CHAN`)
-pub const EVENT_BANGDREAM_CHAN: usize = 272;
+pub const EVENT_BANGDREAM_CHAN: usize = 273;
 
 /// `event:超燃甩头`  (`RULESET[16][16]`, `HEAT_HEAD`)
-pub const EVENT_HEAT_HEAD: usize = 273;
+pub const EVENT_HEAT_HEAD: usize = 274;
 
 /// `event:意外的对邦`  (`RULESET[16][17]`, `SURPRISE_DUEL`)
-pub const EVENT_SURPRISE_DUEL: usize = 274;
+pub const EVENT_SURPRISE_DUEL: usize = 275;
 
 /// `event:Forbidden Moca`  (`RULESET[16][18]`, `FORBIDDEN_MOCA`)
-pub const EVENT_FORBIDDEN_MOCA: usize = 275;
+pub const EVENT_FORBIDDEN_MOCA: usize = 276;
 
 /// `event:上学时间`  (`RULESET[16][19]`, `SCHOOL_TIME`)
-pub const EVENT_SCHOOL_TIME: usize = 276;
+pub const EVENT_SCHOOL_TIME: usize = 277;
 
 /// `event:泪水的含义`  (`RULESET[16][20]`, `TEARS`)
-pub const EVENT_TEARS: usize = 277;
+pub const EVENT_TEARS: usize = 278;
 
 /// `event:Kizuna Music`  (`RULESET[16][21]`, `KIZUNA_MUSIC`)
-pub const EVENT_KIZUNA_MUSIC: usize = 278;
+pub const EVENT_KIZUNA_MUSIC: usize = 279;
 
 /// `event:冲榜`  (`RULESET[16][22]`, `CHART_RUSH`)
-pub const EVENT_CHART_RUSH: usize = 279;
+pub const EVENT_CHART_RUSH: usize = 280;
 
 /// `event:修复公告`  (`RULESET[16][23]`, `FIX_NOTE`)
-pub const EVENT_FIX_NOTE: usize = 280;
+pub const EVENT_FIX_NOTE: usize = 281;
 
 /// `event:迷子的追逐`  (`RULESET[16][24]`, `LOST_CHASE`)
-pub const EVENT_LOST_CHASE: usize = 281;
+pub const EVENT_LOST_CHASE: usize = 282;
 
 /// `event:让我来结束一切`  (`RULESET[16][25]`, `END_IT_ALL`)
-pub const EVENT_END_IT_ALL: usize = 282;
+pub const EVENT_END_IT_ALL: usize = 283;
 
 /// `event:一切不会结束`  (`RULESET[16][26]`, `NEVER_ENDS`)
-pub const EVENT_NEVER_ENDS: usize = 283;
+pub const EVENT_NEVER_ENDS: usize = 284;
 
 /// `event:火种燃尽之后会怎么样呢？`  (`RULESET[16][27]`, `EMBERS`)
-pub const EVENT_EMBERS: usize = 284;
+pub const EVENT_EMBERS: usize = 285;
 
 // ---------------------------------------------------------------------------
 // card_id! — compile-time literal → usize (unknown = compile error)
@@ -1435,34 +1439,35 @@ macro_rules! card_id {
     ("tile:ring") => { 254usize };
     ("tile:property") => { 255usize };
     ("mark:cp") => { 256usize };
-    ("event:对邦") => { 257usize };
-    ("event:弦卷集团地产开发") => { 258usize };
-    ("event:很噜的感觉") => { 259usize };
-    ("event:前往哈比内尔王国旅游") => { 260usize };
-    ("event:这只手我不会放开") => { 261usize };
-    ("event:PICO灵魂交换") => { 262usize };
-    ("event:协助CiRCLE重建") => { 263usize };
-    ("event:前场队还是后场队？") => { 264usize };
-    ("event:EX任务挑战") => { 265usize };
-    ("event:发送熊饼表情") => { 266usize };
-    ("event:飞鸟山之战") => { 267usize };
-    ("event:幻觉来了") => { 268usize };
-    ("event:卡池BUG") => { 269usize };
-    ("event:A！A！O！") => { 270usize };
-    ("event:麻里奈小姐的礼物箱") => { 271usize };
-    ("event:元祖！邦多利酱") => { 272usize };
-    ("event:超燃甩头") => { 273usize };
-    ("event:意外的对邦") => { 274usize };
-    ("event:Forbidden Moca") => { 275usize };
-    ("event:上学时间") => { 276usize };
-    ("event:泪水的含义") => { 277usize };
-    ("event:Kizuna Music") => { 278usize };
-    ("event:冲榜") => { 279usize };
-    ("event:修复公告") => { 280usize };
-    ("event:迷子的追逐") => { 281usize };
-    ("event:让我来结束一切") => { 282usize };
-    ("event:一切不会结束") => { 283usize };
-    ("event:火种燃尽之后会怎么样呢？") => { 284usize };
+    ("mark:pp_fans") => { 257usize };
+    ("event:对邦") => { 258usize };
+    ("event:弦卷集团地产开发") => { 259usize };
+    ("event:很噜的感觉") => { 260usize };
+    ("event:前往哈比内尔王国旅游") => { 261usize };
+    ("event:这只手我不会放开") => { 262usize };
+    ("event:PICO灵魂交换") => { 263usize };
+    ("event:协助CiRCLE重建") => { 264usize };
+    ("event:前场队还是后场队？") => { 265usize };
+    ("event:EX任务挑战") => { 266usize };
+    ("event:发送熊饼表情") => { 267usize };
+    ("event:飞鸟山之战") => { 268usize };
+    ("event:幻觉来了") => { 269usize };
+    ("event:卡池BUG") => { 270usize };
+    ("event:A！A！O！") => { 271usize };
+    ("event:麻里奈小姐的礼物箱") => { 272usize };
+    ("event:元祖！邦多利酱") => { 273usize };
+    ("event:超燃甩头") => { 274usize };
+    ("event:意外的对邦") => { 275usize };
+    ("event:Forbidden Moca") => { 276usize };
+    ("event:上学时间") => { 277usize };
+    ("event:泪水的含义") => { 278usize };
+    ("event:Kizuna Music") => { 279usize };
+    ("event:冲榜") => { 280usize };
+    ("event:修复公告") => { 281usize };
+    ("event:迷子的追逐") => { 282usize };
+    ("event:让我来结束一切") => { 283usize };
+    ("event:一切不会结束") => { 284usize };
+    ("event:火种燃尽之后会怎么样呢？") => { 285usize };
     ($other:literal) => {
         compile_error!("card_id!: unknown card/skill/event/tile/mark id; re-run tools/kani/gen_card_ids.py")
     };

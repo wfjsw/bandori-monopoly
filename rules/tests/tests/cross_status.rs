@@ -289,9 +289,9 @@ fn s08_sakiko_absorbs_statuses() {
     loop {
         let Some(_) = t.prompt() else { break };
         let dump = t.dump_prompt();
-        // The absorb ask_yes (`sakiko_life_take`); YesNo option labels are
+        // The absorb ask_yes (`sakiko_take`); YesNo option labels are
         // `ask.yes` / `ask.no` (prompt_to_ask), so match the message key.
-        if dump.contains("sakiko_life_take") {
+        if dump.contains("sakiko_take") {
             let k = t.option("ask.yes").unwrap_or(0);
             t.answer(0, k).unwrap();
         } else {

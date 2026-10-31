@@ -32,8 +32,8 @@ Related open work this design closes or feeds:
 * `docs/rulebook/BACKLOG.md` **ABI-07** (deck-inspection hook) is closed by
   items 1–2 and §4.
 * The same look idiom is also live in `C-PP-maya-dawn-02`
-  (`rules/skills/skill-personas/src/maya_dawn.rs:60-97`) and
-  `rules/skills/skill-personas/src/akao_cool.rs:60-100`; both get the same
+  (`rules/skills/skill-personas/src/maya.rs:60-97`) and
+  `rules/skills/skill-personas/src/ako.rs:52-144`; both get the same
   migration (§6) and both have the same peek-refill defect today.
 * Open questions that stay open after this doc: OPEN-HHW-BELIEVE-CHOOSER,
   OPEN-HHW-SHORT-PILE, OPEN-mark, OPEN-div (§11).
@@ -90,8 +90,8 @@ Three separate holes, one shared root:
   gate `can_swap` accepts is `is_placed()`, and nothing can place the card out
   of a deck, both [持续] clauses are unreachable in real play.
 * **A look is spelled as "snapshot + take later".** Every looker
-  (`backstage_tour.rs:65-76`, `believe_you.rs:107-127`, `maya_dawn.rs:60-97`,
-  `akao_cool.rs:60-100`) reads `cards_in(Deck)` into a local, then removes by
+  (`backstage_tour.rs:65-76`, `believe_you.rs:107-127`, `maya.rs:60-97`,
+  `ako.rs:52-144`) reads `cards_in(Deck)` into a local, then removes by
   card id from the live deck after a prompt. Any pile write in between
   (including a refill, item 1) invalidates the snapshot, and the ids are
   re-resolved by name against a pile that may have changed.
@@ -587,10 +587,10 @@ card.placed && value > 0` stays; the body is unchanged (it now runs once per
 action). The header comment about C#'s batch shape is resolved.
 
 **4. Same-family lookers (not group items, same migration).**
-`maya_dawn.rs:60-97` and `akao_cool.rs:60-100` change their `cards_in(Deck)`
+`maya.rs:60-97` and `ako.rs:52-144` change their `cards_in(Deck)`
 snapshot plus post-prompt `take_card(Deck)` into `inspect_begin` /
 `take_card(Inspect)`; maya's tail becomes `inspect_end(player, true)`
-(「剩余观看的牌洗回卡组」), akao's per-card release either places
+(「剩余观看的牌洗回卡组」), ako's per-card release either places
 (`take_card(Inspect)` + `place_card`) or discards (`take_card(Inspect)` +
 `add_to_dest(Graveyard)`), then `inspect_end(false)` for anything left. Both are private looks and reveal
 nothing.
@@ -680,7 +680,7 @@ to `ruleset-tests`).
 | 2 | `pp.rs::possibility_does_not_re_place_from_the_hand` — the copy in hand never fires `inspected` |
 | 3 | `pp.rs::possibility_grows_once_per_draw_action` — 0 crystals, draw 2: exactly 1 crystal; then a second 2-card action from 3 crystals clears once (0 crystals, +1 band crystal) |
 | 3 | `pp.rs::draw_after_names_the_batch_and_drew_stays_per_card` — an event-log probe: one `drawAfter` with `value == 2` and both ids, two `drew` |
-| 1 | `rules/tests/tests/skill_personas.rs::maya_rest_shuffle_returns_the_unpicked_cards` and `pp.rs::akao_flip_release_does_not_refill` — the same-family migration |
+| 1 | `rules/tests/tests/skill_personas.rs::maya_rest_shuffle_returns_the_unpicked_cards` and `pp.rs::ako_flip_release_does_not_refill` — the same-family migration |
 
 ABI-level: `crates/game-rules/tests/kind_table_pin.rs` (132/133),
 `crates/game-rules/tests/live_match.rs` (`inspected` is raised top-first *before*

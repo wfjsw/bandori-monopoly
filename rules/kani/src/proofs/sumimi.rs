@@ -302,7 +302,7 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     kani::cover!(pre_fire >= cap, "at/over cap (global hold-cap forbids)");
 
     // DIRECT body call (ppcost).
-    invoke::unwrap_done(skill_personas::uika_idol::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::uika_sumimi::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -352,7 +352,7 @@ pub fn hina_01_mutant_is_detected() {
     let user = 0i32;
     world::with_world_mut(|w| w.charge[0] = 0);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_personas::uika_idol::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::uika_sumimi::on_pass_kani(user));
     let post = world::snapshot();
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(
         pre.charge[user as usize],

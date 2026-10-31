@@ -11,7 +11,7 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-// Ops the ran_red / moca_self skill bodies reach.
+// Ops the ran / moca skill bodies reach.
 crate::host_subset!(skills_ag_dispatch {
     log | effect => arm_log,
     gain | gain_typed | gain_fixed => arm_gain,
@@ -115,7 +115,7 @@ fn firepot_01_tick_iff_at(user: i32) {
     // Entry 2 is the TurnEnd hook with residual `afterglow`
     // (`trigger::player_id() == player_id && in_group(player_id, "Afterglow")`).
     // Both hold by construction.
-    invoke::unwrap_done(skill_personas::ran_red::tick_kani(player));
+    invoke::unwrap_done(skill_personas::ran::tick_kani(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -234,7 +234,7 @@ pub fn moca_02_teleport_iff() {
     let src = 1i32;
     world::reset_world(w);
     // Entry 2 is CardPlayed (residual `other`: actor != owner). Held by setup.
-    invoke::unwrap_done(skill_personas::moca_self::on_card_kani(owner));
+    invoke::unwrap_done(skill_personas::moca::on_card_kani(owner));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -296,7 +296,7 @@ pub fn moca_02_mutant_is_detected() {
     w.symbolic_answers = false;
     w.answers[0] = 0; // yes
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::moca_self::on_card_kani(owner));
+    invoke::unwrap_done(skill_personas::moca::on_card_kani(owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -331,7 +331,7 @@ pub fn ran_02_spend_charge_iff() {
     w.group_id[player as usize] = band_key();
     world::reset_world(w);
     // Entry 0 is the (2) Play (`can_use` residual: not skill_blocked, fire ≥ 1).
-    invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
+    invoke::unwrap_done(skill_personas::ran::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.charge[player as usize]);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -360,7 +360,7 @@ pub fn ran_02_mutant_is_detected() {
     w.charge_max = [1, 1, 1, 1];
     w.group_id[player as usize] = band_key();
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
+    invoke::unwrap_done(skill_personas::ran::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.charge[player as usize]);
     crate::kassert!(post_fire == 0, "card spends exactly 1");
     crate::kassert!(

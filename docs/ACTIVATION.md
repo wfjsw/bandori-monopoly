@@ -35,7 +35,7 @@ So a decision that is part of the activation -- which mode, which target, which
 sub-effect -- has to be collected **before** that line, and the body has to see
 the result. Today the only ask site is `ctx::ask_*` inside the body, which is
 too late: `detour.rs`'s four-way 「"afterglow"式的移动」 pick, `haruhikage.rs`'s
-「使用一次Crychic角色的技能」 pick, and `nanami_ordinary.rs`'s 角色标记 pick all
+「使用一次Crychic角色的技能」 pick, and `nanami.rs`'s 角色标记 pick all
 sit there.
 
 ### Prior art: `COUNTERACT_MOVE_EXTENSION`
@@ -49,7 +49,7 @@ The one offer-time choice that already works this way
 3. `resolve_jobs` stamps it onto the trigger as `mv.tags`
    (`wasm_rules.rs:6159-6165`) before `drive(Call::Counteract)`;
 4. the body reads `trigger::move_tag(COUNTERACT_MOVE_EXTENSION)`
-   (`skill-personas/src/sayo_thorns.rs:119`).
+   (`skill-personas/src/sayo.rs:119`).
 
 `declare` is that shape, lifted from one hard-coded i32 to a per-entry
 collector + a real body argument. (`CounteractHint` at
@@ -507,7 +507,7 @@ So the card is: *pick one of those (2)s, and only when that (2) is activatable.*
 
 ```rust
 // In the skill's file — the id *is* the rulebook clause.
-// rules/skills/skill-personas/src/ran_red.rs
+// rules/skills/skill-personas/src/ran.rs
 On::Play("", None, Some(can_use), use_skill).label("（2）")   // "press" is reserved; no .id needed
 
 // In detour's file.

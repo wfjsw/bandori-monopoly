@@ -453,9 +453,9 @@ own per-leg rounding is unchanged.
 * Tests: `money::pre_split_modifier_shapes_the_total_not_each_leg`.
 * Files: `crates/card-sdk/src/abi.rs`, `crates/card-sdk/src/ctx.rs`,
   `crates/game-core/src/engine/play.rs`, `crates/game-rules/src/host.rs`,
-  `rules/skills/skill-characters/src/aya_with.rs`,
-  `rules/skills/skill-characters/src/chisato_frank.rs`,
-  `rules/skills/skill-characters/src/numazu_maid.rs`,
+  `rules/skills/skill-characters/src/aya.rs`,
+  `rules/skills/skill-characters/src/chisato.rs`,
+  `rules/skills/skill-characters/src/pareo.rs`,
   `rules/cards/card-pp/src/chisato_mask.rs`, `rules/cards/card-roselia/src/nfo.rs`,
   `rules/events/src/front_or_back.rs`, `rules/skills/skill-bands/src/poppin.rs`.
 

@@ -324,9 +324,17 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     now declares 安可. `ix_encore_blocks_overlap_teleport`, green).
   * ~~PP band (2) overflow crystals: no flip-effect trigger to observe.~~
     **Fixed 2026-10-13** (`FlipEffect` = 94; ABI-05).
-* **roselia** (1)
+* **roselia** (0)
+  * ~~宇田川亚子 对帅气的憧憬 (1) does not replace the reward draw; (1) leaves
+    a duplicate deck copy when placing the paid card; (1) fires on the money
+    option; (2) pays the reward on top of the take; (3) is unimplemented;
+    「至多两张」 offered no look-count choice.~~ **Fixed 2026-10-31**
+    (`set_cancelled` on both replacements, a `value == REWARD_CARD` guard,
+    `take_card` before `place_card`, a count choice, and the new
+    `COUNTERACT_FACE_DOWN` prop + reveal in `has_field_counter` /
+    `declare_one`; `ako.rs` tests un-ignored, green).
   * ~~凑友希那 (3) stop-pot offers no prompt.~~ **Fixed 2026-10-09** (test
-    matched Chinese text instead of the `kokoro_practice_force_*` key).
+    matched Chinese text instead of the `yukina_force_*` key).
   * ~~凑友希那 (1) grants no fire pot on a RiNG landing.~~ **Fixed
     2026-10-09** (fire cap 「上限1」 now declared).
   * ~~白金燐子 (2) has no pre-roll pot window.~~ **Fixed 2026-10-09** (it is
@@ -433,7 +441,7 @@ only.
     read dropped 「育美经过其他角色时，可以把自己身上的可乐饼转移给该角色」,
     「育美可在主要阶段消耗4个可乐饼兑换1000资金」 and 「其他角色拥有4个可乐饼
     时自动移除所有可乐饼停留一回合」; the 2026-10-17 sheet restores all three
-    and they are implemented (`hagumi_homerun.rs`). The old "these are off the
+    and they are implemented (`hagumi.rs`). The old "these are off the
     sheet" note in that file is superseded.
   * **Afterglow (1) rest counter is 「每四回合」**, not 「每三回合」 (all five
     Afterglow personas share `rest_tick`).
@@ -630,13 +638,13 @@ rulings above.
     entry). The test's prompt-matching loop looked for the **resolved UI text**
     (`「PAREO」`/`「pareo」`/`「失去」`) inside `format!("{p:?}")`, but
     `MatchPrompt` carries i18n **keys** -- the offer's are
-    `cards:skill-characters.numazu_maid_title` / `numazu_maid_ask` (zh-CN
+    `cards:skill-characters.pareo_title` / `pareo_ask` (zh-CN
     「失去 1 个 PAREO 标记，向其他玩家分摊收取 {{n}}？」), none of which
     contain those substrings. The loop therefore declined the offer as
     if it were the house-removal prompt (its exclusion list `pareo_far_ask` /
     `pareo_far_pick` is key-based, so the author *was* matching keys and just
     assumed a pareo-flavoured key the implementation does not use). Fixed by
-    matching the key (`numazu_maid_ask` / `numazu_maid_title`) and taking
+    matching the key (`pareo_ask` / `pareo_title`) and taking
     `t.option("ask.yes")`; the house-removal prompt
     (`cards:card-ras.pareo_far_ask_*`) is still declined. Un-ignored, green:
     the one other player pays 1000×2/4 = 500 as the book says.
@@ -896,11 +904,11 @@ implemented (raze clears houses before the `bought` hook).
   (the `cant_play` shape) only when a hooking instance exists; the commit
   re-quotes, so quote == charge. Gates / view / AI / autopilot read it.
 * `st.tile_colors` / `key::EXTRA_COLOR` are **deleted**; the four skills
-  (`asahi_aim`, `roselia`, `guerrilla`, `soyo_clear`) write the `colorFor:<p>`
+  (`lock`, `roselia`, `guerrilla`, `soyo`) write the `colorFor:<p>`
   tile prop, and （soyo）混合的颜色 writes `prop::ANY_COLOR`.
 * Poppin (3)'s hill lock moved from `BuyBefore` to `BuyGate`, so it covers
   Force too (「不可被抵押双倍支付购买」).
-* rana_parking's 「该次传送不可进行地契购买」 is a native gate reading
+* rana's 「该次传送不可进行地契购买」 is a native gate reading
   `plan.no_buy` on the Land offer — the flag was written but never read.
 * 学生会的检查's 「本回合无法加盖房屋」 is a linger instance carrying
   `prop::NO_BUILD`; the per-player `noBuild` scratch key is gone.
@@ -1106,17 +1114,17 @@ ruling list in §6 and the open sections below.
 
 * **凑友希那 (3) fire cap** (`yukina_skill_3_gains_a_fire_pot_on_a_ring`).
   The book's 「获得一个火罐（上限1）」 is a fire-pot cap, and `gain_fire` is a
-  no-op at cap 0. `kokoro_practice` now declares `fire_pot(_, 0, 1)` at
+  no-op at cap 0. `yukina` now declares `fire_pot(_, 0, 1)` at
   `TurnStartBefore` / `DeckAtGameStart` (the same shape as 燐子 / 要乐奈).
   Engine fix; un-ignored and green.
 * **要乐奈 (2) Space teleport** (`rana_cat_space_teleport_spends_three_fire`).
   「传送至space代替本回合的移动」 -- the press *is* the main move.
-  `rana_parking::use_skill` set the plan but never ran `ctx::card_move`, so
+  `rana::use_skill` set the plan but never ran `ctx::card_move`, so
   the piece stayed put (fire was spent). Now executes the plan (and marks
   `MainMoved`). Un-ignored and green.
 * **凑友希那 (3) stop-pot prompt match**
   (`interaction_yukina_stop_pot_vs_a_passing_player`, **test bug D**). The
-  offer is i18n keys `kokoro_practice_force_*`; the test matched the resolved
+  offer is i18n keys `yukina_force_*`; the test matched the resolved
   Chinese text (`yukina` / `练习` / `火罐`) and declined the offer as noise --
   the same class as §6 item 14 (pareo_far). Match the key; un-ignored and
   green. (`settle_stages::m4_kokoro_force_stop_stops_a_passer` already
@@ -1210,7 +1218,7 @@ CRYSTAL-04's prompt sequence and Morfonica-cycle expectation; SKILL-01's
 The remaining `#[ignore]`s are C (ruling -- §6 and the Timing / order block)
 or A/B items that need a wider surface than this batch:
 
-* **B / A:** 冰川日菜 (2) -- `hina_lottery` is written (roll 1d4, borrow the
+* **B / A:** 冰川日菜 (2) -- `hina` is written (roll 1d4, borrow the
   matching (2)) but `place_raw` + `begin_turn` never reaches `borrowed`.
   Test: `hina_skill_2_borrows_skill` (also asserts the *face* where the
   skill stores the 0-based pool index -- fix the test to pin the face in the
@@ -1264,7 +1272,7 @@ or A/B items that need a wider surface than this batch:
   read `trigger::player_id()` as "the other" under a `MINE` pre (always the
   owner) and bailed; it now reads `trigger::target()`. New test
   `rana_cat_overlap_takes_800_and_gives_a_parfait`. Amount 800 (sheet).
-* **SKILL-09 (stale):** kaoru_prince Pass half is already `pre::MINE` +
+* **SKILL-09 (stale):** kaoru Pass half is already `pre::MINE` +
   filtered `PassTile`; live `kaoru_skill_1_*` tests pin it.
 * **MOVE-01 (2026-10-10, test drive / arrangement):** `m12a_yukina_forced_stop`
   / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` un-ignored.

@@ -37,7 +37,7 @@ fn shipped_declare_cap_entries_are_silent() {
 /// `.flash(&[(2, Flash::Always)])` pointed at the silent `DeckAtGameStart`
 /// `declare_cap` (entry 2) and was dead there, so the clause never flashed.
 #[test]
-fn extraordinary_star_flashes_its_fire_pot_clause() {
+fn kasumi_flashes_its_fire_pot_clause() {
     let r = rules();
     let id = "skill:户山香澄:非凡之星";
     let idx = r
@@ -65,11 +65,11 @@ fn extraordinary_star_flashes_its_fire_pot_clause() {
     }
 }
 
-/// A turn start must not flash the raise_effort declare-cap entry.
+/// A turn start must not flash the layer declare-cap entry.
 #[test]
 fn turn_start_does_not_flash_declare_cap() {
     let mut t = Table::vanilla(2);
-    // Give player 0 the raise_effort skill via character.
+    // Give player 0 the layer skill via character.
     t.strip_skills();
     t.set_character_raw(0, "和奏瑞依");
     t.clean();

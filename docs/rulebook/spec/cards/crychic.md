@@ -690,7 +690,7 @@ Clause IDs: `C-CRYCHIC-<slug>-<n>`.
 * **Condition:** fire < 2.
 * **Effect:** +1 [火罐]; initial 1, cap 2.
 * **Frame:** `state:P_user:fire` only.
-* **Executable:** cap pinned by `rb_crychic::saki_crychic_skill_fire_cap`
+* **Executable:** cap pinned by `rb_crychic::sakiko_crychic_skill_fire_cap`
   (`fire_max == 2`). Walk-past not contracted.
 
 ### C-CRYCHIC-sakiskill-02

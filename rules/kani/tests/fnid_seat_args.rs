@@ -1,7 +1,7 @@
 //! Guard: every `FnId` whose first argument is a player seat must be listed
 //! in `ir_fill::fn_takes_seat_arg0` and `ir_fill::seat_field_bits`. A vocab
 //! rename that shifts discriminants would silently break the seat fill
-//! (aya_with_01 VACUOUS regression) unless this test catches it.
+//! (aya_01 VACUOUS regression) unless this test catches it.
 //!
 //! Dead discriminants (7/8/11/12/14/15/16) are reserved holes and must not
 //! reappear. `CandHas = 34` and `CardIs = 35` are append-only.

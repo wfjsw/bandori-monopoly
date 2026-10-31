@@ -48,7 +48,7 @@ frame — is B for both items.
 > （2）效果，然后弃一张卡。」
 
 The borrowed clause for nanami is 广町七深's character sheet (2)
-(`rules/skills/skill-personas/src/nanami_ordinary.rs:5-6`):
+(`rules/skills/skill-personas/src/nanami.rs:5-6`):
 
 > 「（2）当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上
 > 存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）」
@@ -116,7 +116,7 @@ does not fix (a).
 > （2）技能。」
 
 The borrowed clause is 高松灯's character sheet (2)
-(`rules/skills/skill-personas/src/tomori_poem.rs:5-8`):
+(`rules/skills/skill-personas/src/tomori.rs:5-8`):
 
 > 「（2）当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐，在该玩家
 > [触发结算]前强制将该玩家[传送]至自己所在的格子并[触发结算]，然后使其投掷1d20，
@@ -133,7 +133,7 @@ a settle, and never runs the skill's own code — so every future fix to 诗超�
 The existing implementation also shows *why* a bare "call the skill" is not
 enough: the skill's body asks and spends **4** fire, while 内心的呐喊 (3) says
 **1**; and the skill's own delay uses `state::set(player_id, DUE, 1)` +
-`On::Action(Action::TurnEnd("actor == owner" …))` (`tomori_poem.rs:191`,
+`On::Action(Action::TurnEnd("actor == owner" …))` (`tomori.rs:191`,
 `:59-62`), i.e. a **placed** instance's hook — the borrowed skill is not placed,
 so the hook never dispatches. The delay must be expressible by the caller of
 the borrowed body (existing `ctx::at_next_turn_end`, `ctx.rs:2929-2934`).
@@ -328,13 +328,13 @@ caller's; only `card` / `cards` are seeded (I4).
 (`hostfns.rs:2804-2824`, `:2868-2902`). It gains the same frame seeding: look up
 the target's instance and `enter_invoke(id, uid)` instead of `enter_card(id)`.
 This is required, not cosmetic: a gate shaped as a reaction residual
-(`on_skill_applies` reads `trigger::cards()`, `nanami_ordinary.rs:79-84`) is
+(`on_skill_applies` reads `trigger::cards()`, `nanami.rs:79-84`) is
 otherwise always false under a press and the probe is useless.
 
 The CEL scope needs the same fact. `fill_window_ambient` fills
 `actor = player_id` and `trigger_card = 0` (`cond_pre.rs:1393-1422`), and a
 reaction-shaped pre such as `"actor != owner && trigger_card != 0 && …"`
-(`nanami_ordinary.rs:62-65`) therefore refuses. After the scope is built,
+(`nanami.rs:62-65`) therefore refuses. After the scope is built,
 `query_guard_entry` overwrites `scope.trigger_card = card` (and keeps
 `actor = player_id`) so the probe asks the question the invoke would answer. No
 wire change; PRESS probes become *more* accurate because `is_placed()`-shaped
@@ -498,7 +498,7 @@ for the character skill (`OPEN-借用技能` remains open for a non-七深 owner
 The 「不受数量或轮数限制」 TODO resolves: the body runs with no gate, and the
 CD lives in `on_skill_applies` which the invoke does not run.
 
-Borrowed (2) body (`rules/skills/skill-personas/src/nanami_ordinary.rs`):
+Borrowed (2) body (`rules/skills/skill-personas/src/nanami.rs`):
 
 ```rust
 On::Action(Action::CardUsed(…), Some(on_skill_applies), on_skill).id("2").label("（2）")
@@ -523,7 +523,7 @@ it, and `spend_crystals` consumes the instance. The `"no money clause in (2)"`
 assertion in `card_paths.rs:361` flips to the paid figure. `skill-groups` needs
 **no** change once bound; `group_crystals` at `:131` is only the A stopgap.
 
-### 6.3 `rules/skills/skill-personas/src/tomori_poem.rs` and
+### 6.3 `rules/skills/skill-personas/src/tomori.rs` and
 `rules/cards/card-crychic/src/tomori_inner_shout.rs` (item 2)
 
 Poem: split the (2) into two named entries and route both callers through one
@@ -598,11 +598,11 @@ effect body, gated by the `OFFERED` latch (cleared on entry) or by
 `invoke_paid` on a call that skipped the offer.
 
 `nearest_other_tile` is the existing scan lifted out of `before_settle`
-(`tomori_poem.rs:141-160`).
+(`tomori.rs:141-160`).
 
 `DUE` moves from the owner to the **mover** (`state::set(mover, DUE, 1)`), which
 makes the existing `half` filter correct as written: its body receives the payer
-and reads `state::get(player_id, DUE) > 0` (`tomori_poem.rs:74-78`). The
+and reads `state::get(player_id, DUE) > 0` (`tomori.rs:74-78`). The
 `TurnEnd` entry and its `actor == owner` pre go away; a schedule fires on the
 mover's next turn end (already skip-safe, `ctx.rs:2929-2934`), which is what
 「自己的下回合结束时」 means, and it survives the card not being placed — the
@@ -626,7 +626,7 @@ set `half_key`, `ctx::card_settle_at(mover, pos, true)`, clear `half_key`. One
 fire (not four) because the shout paid before invoking (`COST_PAID`); the roll
 and delay come from the skill body.
 
-`tomori_poem.rs::at_turn_end` becomes `due_settle` (`On::Schedule` instead of
+`tomori.rs::at_turn_end` becomes `due_settle` (`On::Schedule` instead of
 `On::Action(Action::TurnEnd)`) and is unchanged apart from the clear order.
 
 ---
@@ -689,7 +689,7 @@ Black-box tests use the existing `Table` harness and `t.option` / `answer_q`.
 
 | item | test |
 |---|---|
-| 1 | `crychic.rs::nanami_effort_press_runs_the_owners_second_skill` — 1 fire, persona skill of 七深 bound; after the press: 1 pot spent, one `角色标记:skill:广町七深:…` gained, the `nanami_ordinary_mark` log present, no `nanami_ordinary_which` (the (3) pick) prompt |
+| 1 | `crychic.rs::nanami_effort_press_runs_the_owners_second_skill` — 1 fire, persona skill of 七深 bound; after the press: 1 pot spent, one `角色标记:skill:广町七深:…` gained, the `nanami_mark` log present, no `nanami_which` (the (3) pick) prompt |
 | 1 | `crychic.rs::nanami_effort_press_keeps_the_crystal_cost_and_one_crystal_only` — starting 2 crystals, 1 removed |
 | 1 | `crychic.rs::nanami_effort_press_refuses_without_a_pot` — 0 fire, no crystal substitute → `nanami_effort_no_skill`/gate refusal before the crystal is spent |
 | 1 | `crychic.rs::mutsumi_never_cash_out_reads_the_band_instance` — 5 crystals: after (2) the band card is gone, money `+2*500` (not the pre-spend 5), band crystals 0 (no `Sumimi:#L11` placed, so the substitution order is not involved) |
@@ -697,11 +697,11 @@ Black-box tests use the existing `Table` harness and `t.option` / `answer_q`.
 | ABI | `crates/game-rules/tests/card_activation.rs::invoke_binds_the_target_and_restores_the_outer_frame` — test card A invokes test card B; B reads `self_uid` = B's uid, A's `self_uid` is restored after |
 | ABI | `card_activation.rs::invoke_seeds_and_restores_the_trigger_card` / `::invoke_unknown_entry_is_a_noop` / `::invoke_unknown_card_traps` / `::invoke_filter_entry_traps` |
 | ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Dest` and log as the PRESS slug |
-| 2 | `crychic.rs::tomori_shout_pull_runs_the_borrowed_second_body` — the poem's own `tomori_poem_moved` log appears (proves the body, not the copy), mover teleported to the controller's tile |
+| 2 | `crychic.rs::tomori_shout_pull_runs_the_borrowed_second_body` — the poem's own `tomori_moved` log appears (proves the body, not the copy), mover teleported to the controller's tile |
 | 2 | `crychic.rs::tomori_shout_pull_rolls_once_and_leans_on_six_or_less` — forced face 6 ⇒ `stay` 1 plus a scheduled settle; face 7 ⇒ none |
 | 2 | `crychic.rs::tomori_shout_delayed_settle_pays_half_at_the_movers_next_turn_end` — the settle runs on the mover's next turn end (not the controller's), at half, and then clears |
 | 2 | `crychic.rs::tomori_shout_spends_one_fire_not_four` — fire pool 2, one spent, `COST_PAID` suppresses the poem's 4 |
-| 2 | `mygo.rs::tomori_poem_second_settles_at_the_movers_turn_end` — the standalone skill, same delay assertion |
+| 2 | `mygo.rs::tomori_second_settles_at_the_movers_turn_end` — the standalone skill, same delay assertion |
 
 Static: `rules/kani/tests/on_parse.rs` (`.id` on an `On::Action` survives the
 manifest), `split_hook_entries.rs` (the poem's two (2) entries keep distinct
@@ -784,7 +784,7 @@ facts rather than running the nested guest):
    engine must materialize a transient instance. Today's bodies do not.
 8. **Pot gates vs the crystal substitution.** 七深's (2) pre says
    `charge(owner) >= 1`; `fire::spend` can take a 不再迷茫 crystal instead
-   (`tomori_poem.rs:101-104` is the same question on the poem side and omits the
+   (`tomori.rs:101-104` is the same question on the poem side and omits the
    gate). Should the (2) gate be `charge(owner) >= 1 || a substitute is armed`,
    or is a 0-pot press meant to be refused? The design keeps the sheet's literal
    pot condition on the gate and lets `fire::spend` substitute only inside the

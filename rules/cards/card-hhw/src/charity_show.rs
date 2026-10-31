@@ -173,7 +173,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     //   write `TurnCtx::plan.extra_steps`, which the in-flight walk never
     //   re-reads, so the +2 is a no-op on the walk it is earned on (BACKLOG
     //   CRYSTAL-07). The running prop also overwrites any value another
-    //   `set_extra_steps` writer (`uika_imprisoned`) put on the plan.
+    //   `set_extra_steps` writer (`uika`) put on the plan.
     Ok(())
 }
 

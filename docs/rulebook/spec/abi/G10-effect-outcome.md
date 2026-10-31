@@ -64,12 +64,12 @@ makes clause (1) wrong:
   `draw_event` leaves `tile` at `-1`, so the station is not on the trigger.
 
 The station matters for a second card: the persona skill
-`rules/skills/skill-personas/src/arisa_bonsai.rs:27` hooks
+`rules/skills/skill-personas/src/arisa.rs:27` hooks
 `On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", …))`
 for 「每次有其他玩家在"流星堂"抽取事件时获得一个[火罐]」. With `tile = -1`
 on every `event` raise that hook can never match, and bonsai's own clause (2)
 does not even draw an event (it calls `ctx::draw`, a **hand** draw,
-`arisa_bonsai.rs:62`). `draw_event_as(player, tile)` repairs both: it is
+`arisa.rs:62`). `draw_event_as(player, tile)` repairs both: it is
 the primitive for “an event drawn as X at tile Y”.
 
 ### 1.2 `settle-outcome-flags` (rows 792, 1428, 1449)
