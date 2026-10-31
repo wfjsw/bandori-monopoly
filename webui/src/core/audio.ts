@@ -13,7 +13,7 @@ const SCENE_TRACKS: Record<string, string> = {
   gallery: "04_Nobiri",
   deck: "21_Enjoy",
 };
-const FADE = 0.8;
+const FADE_MS = 800;
 
 // One AudioContext serves BGM, sfx and voice, and every clip is decoded once and
 // replayed as a buffer source. Nothing is an <audio>/<video> element, so nothing
@@ -67,7 +67,10 @@ function holdAudible(): void {
     clearTimeout(releaseTimer);
     releaseTimer = 0;
   }
-  if (audible++ === 0) setSession("playback");
+  if (audible++ === 0) {
+    setSession("playback");
+    duck(true);
+  }
 }
 
 function releaseAudible(): void {
@@ -75,7 +78,10 @@ function releaseAudible(): void {
   if (--audible > 0) return;
   releaseTimer = window.setTimeout(() => {
     releaseTimer = 0;
-    if (audible === 0) setSession(BASE_SESSION);
+    if (audible === 0) {
+      setSession(BASE_SESSION);
+      duck(false);
+    }
   }, RELEASE_MS);
 }
 
@@ -85,6 +91,28 @@ let current: Bgm | null = null;
 let pending: string | null = null;
 let seq = 0;
 let unlocked = false;
+
+// Raising sfx/voice onto the "playback" session also un-mutes the BGM already
+// playing, which under the ringer switch is exactly the wrong half of the mix.
+// Duck it out of the way for as long as the bump lasts, so a silenced phone
+// hears only the effect (and an unmuted one gets a normal sidechain dip).
+const DUCK = 0.1;
+const DUCK_MS = 90;
+const UNDUCK_MS = 250;
+let ducked = false;
+
+function bgmTarget(b: Bgm): number {
+  return b.level * (ducked ? DUCK : 1);
+}
+
+function duck(on: boolean): void {
+  if (ducked === on) return;
+  ducked = on;
+  if (current) fadeTo(current, bgmTarget(current), on ? DUCK_MS : UNDUCK_MS);
+}
+
+/** Session/duck state, for DevTools on a handset where the switch cannot be read. */
+(window as unknown as Record<string, unknown>).__bgmDbg = () => ({ audible, ducked, level: current?.level ?? null, target: current ? bgmTarget(current) : null });
 
 /**
  * Browsers block audio until the first user gesture; every later gesture also
@@ -102,17 +130,17 @@ function startBgm(b: Bgm): void {
   if (b.started) return;
   b.started = true;
   b.source.start();
-  fadeTo(b, b.level);
+  fadeTo(b, bgmTarget(b), FADE_MS);
 }
 
 /** Fades a Bgm's gain; a newer fade (or `applyVolumes`) supersedes this one. */
-function fadeTo(b: Bgm, to: number, then?: () => void): void {
+function fadeTo(b: Bgm, to: number, ms: number, then?: () => void): void {
   const mine = ++b.fade;
   const from = b.gain.gain.value;
   const start = performance.now();
   const step = (t: number) => {
     if (mine !== b.fade) return;
-    const k = Math.min(1, (t - start) / (FADE * 1000));
+    const k = Math.min(1, (t - start) / ms);
     b.gain.gain.value = from + (to - from) * k;
     if (k < 1) requestAnimationFrame(step);
     else then?.();
@@ -126,7 +154,7 @@ function stopBgm(b: Bgm): void {
     b.gain.disconnect();
     return;
   }
-  fadeTo(b, 0, () => {
+  fadeTo(b, 0, FADE_MS, () => {
     b.source.stop();
     b.gain.disconnect();
   });
@@ -188,8 +216,8 @@ export function playSceneBgm(scene: string): void {
 export function applyVolumes(): void {
   if (!current) return;
   current.level = settings().bgm / 10;
-  current.fade++; // drop a fade-in still running, so it cannot overwrite this
-  current.gain.gain.value = current.level;
+  current.fade++; // drop a fade still running, so it cannot overwrite this
+  current.gain.gain.value = bgmTarget(current);
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
