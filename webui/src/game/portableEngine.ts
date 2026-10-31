@@ -15,6 +15,7 @@ import engineId from "../wasm/engine_id.json";
 import {
   bundleBase,
   archiveIndex,
+  resetArchiveIndex,
   serveIdFor,
   type ArchiveIndex,
   type BundleEntry,
@@ -179,6 +180,31 @@ function hostedMatches(entry: BundleEntry | null | undefined, manifest: Portable
   return true;
 }
 
+/** The archive entry `want` names (id, alias, or rebuilt byte id). */
+function entryFor(index: ArchiveIndex | null, want: string): BundleEntry | undefined {
+  return (
+    index?.bundles.find((b) => b.id === want) ??
+    index?.bundles.find((b) => b.aliases && want in b.aliases) ??
+    index?.bundles.find((b) => b.rebuilt?.byte_id === want)
+  );
+}
+
+/**
+ * The archive index, refetched once when `want` is absent. A tab can outlive a
+ * deploy: the cached index predates the bundle the deploy just archived, and
+ * without the retry an open page keeps answering "no copy of engine bundle".
+ */
+async function indexFor(want: string): Promise<{ index: ArchiveIndex | null; entry: BundleEntry | undefined }> {
+  let index = await archiveIndex();
+  let entry = entryFor(index, want);
+  if (!entry) {
+    resetArchiveIndex();
+    index = await archiveIndex();
+    entry = entryFor(index, want);
+  }
+  return { index, entry };
+}
+
 /**
  * Open a record on the engine that wrote it.
  *
@@ -191,19 +217,16 @@ function hostedMatches(entry: BundleEntry | null | undefined, manifest: Portable
 export async function openRecordOnEngine(bytes: Uint8Array, force = false): Promise<OpenedEngine> {
   const prep = await prepareRecord(bytes);
   const header = JSON.parse(rules.record_header_bytes(prep.record)) as RecordHeader;
-  const index = await archiveIndex();
   const now = currentStamp();
   const want = header.engine?.bundle ?? prep.manifest?.bundle ?? "";
+  const { index } = await indexFor(want);
 
   // Prefer the hosted bundle when it is known and byte-identical to what the
   // record embedded. Otherwise run the embedded engine -- that is the whole
   // point of carrying it.
   if (prep.embedded) {
     const policy = await trustedLoaderPolicy(index);
-    const entry =
-      index?.bundles.find((b) => b.id === want) ??
-      index?.bundles.find((b) => b.aliases && want in b.aliases) ??
-      index?.bundles.find((b) => b.rebuilt?.byte_id === want);
+    const entry = entryFor(index, want);
     const canPreferHosted =
       !!entry &&
       (want === now?.bundle || hostedMatches(entry, prep.manifest!)) &&
@@ -413,7 +436,9 @@ export async function collectBundleForExport(
     };
   };
   try {
-    const r = await fetch(new URL("bundle.json", base));
+    // no-store: a bundle archived by a deploy after this page loaded must not
+    // lose to a cached 404 for its directory.
+    const r = await fetch(new URL("bundle.json", base), { cache: "no-store" });
     if (!r.ok) return null;
     manifest = await r.json();
   } catch {
