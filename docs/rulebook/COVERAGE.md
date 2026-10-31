@@ -823,9 +823,9 @@ assert the clause (or the reason it is not).
 | `skill:凑友希那:来练习吧#4` | when another passes you: may spend 1 fire to force-stop them and settle | **ign** | interaction_yukina_stop_pot_vs_a_passing_player / m12a/m12b (DISCREPANCY: no prompt) |
 | `skill:白金燐子:即使1cm也要前进#1` | pass CiRCLE: +3 fire (init 3, cap 3) | **ok** | rinko_skill_1_gains_three_fire_pots_passing_circle |
 | `skill:白金燐子:即使1cm也要前进#2` | usable even while stunned; pre-roll spend X fire to fix the move roll to X*6; that move is immune to abnormal move effects | **ign** | rinko_skill_2_fixes_the_move_roll_to_x_times_six / rinko_skill_2_prompt_is_offered_before_the_move_roll / m10 / m11 (DISCREPANCY: no pre-roll window) |
-| `skill:宇田川亚子:对帅气的憧憬#1` | each CiRCLE pass, if you take the draw: look at 2, keep 1, the rest to discard or face-down on your field for 500 | **unc** | no test |
-| `skill:宇田川亚子:对帅气的憧憬#2` | taking a CiRCLE reward while a face-down card is on your field: the reward becomes taking that card | **unc** | — |
-| `skill:宇田川亚子:对帅气的憧憬#3` | a face-down [反击] on your field may be played at the right time | **unc** | — |
+| `skill:宇田川亚子:对帅气的憧憬#1` | each CiRCLE pass, if you take the draw: look at up to 2, keep 1, the rest to discard or face-down on your field for 500 | **ok** | peek_keep_replaces_the_draw / looking_at_one_leaves_the_second_on_the_deck / paying_places_the_card_face_down_and_off_the_deck / money_reward_does_not_peek |
+| `skill:宇田川亚子:对帅气的憧憬#2` | taking a CiRCLE reward while a face-down card is on your field: the reward becomes taking that card | **ok** | face_down_card_replaces_the_reward |
+| `skill:宇田川亚子:对帅气的憧憬#3` | a face-down [反击] on your field may be played at the right time | **ok** | face_down_counter_card_is_offered (offered, body runs, card revealed) |
 | `skill:冰川纱夜:踏上荆棘之路的觉悟#1` | pass CiRCLE: +2 fire; being passed: +1 fire (init 10, cap 10) | **ok** | sayo_skill_1_gains_fire_pots_passing_circle |
 | `skill:冰川纱夜:踏上荆棘之路的觉悟#2` | spend 6 fire to add 1 or 2 to a non-teleport main move | **unc** | — |
 | `skill:冰川纱夜:踏上荆棘之路的觉悟#3` | after the first player is eliminated, CiRCLE fire +1 | **unc** | — |

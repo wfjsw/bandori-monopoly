@@ -154,8 +154,8 @@ pub mod tamade_producer;
 use tamade_producer::TAMADE_PRODUCER;
 pub mod tomori_poem;
 use tomori_poem::TOMORI_POEM;
-pub mod akao_cool;
-use akao_cool::AKAO_COOL;
+pub mod ako_cool;
+use ako_cool::AKO_COOL;
 pub mod aya_with;
 use aya_with::AYA_WITH;
 pub mod kokoro_practice;
@@ -193,7 +193,7 @@ use taki_crychic::TAKI_CRYCHIC;
 pub const CARDS: &[CardDef] = &[
     ANON_RESTART,
     ARISA_BONSAI,
-    AKAO_COOL,
+    AKO_COOL,
     ASAHI_AIM,
     AYA_WITH,
     CHISATO_FRANK,

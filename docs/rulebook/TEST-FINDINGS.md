@@ -324,7 +324,15 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     now declares 安可. `ix_encore_blocks_overlap_teleport`, green).
   * ~~PP band (2) overflow crystals: no flip-effect trigger to observe.~~
     **Fixed 2026-10-13** (`FlipEffect` = 94; ABI-05).
-* **roselia** (1)
+* **roselia** (0)
+  * ~~宇田川亚子 对帅气的憧憬 (1) does not replace the reward draw; (1) leaves
+    a duplicate deck copy when placing the paid card; (1) fires on the money
+    option; (2) pays the reward on top of the take; (3) is unimplemented;
+    「至多两张」 offered no look-count choice.~~ **Fixed 2026-10-31**
+    (`set_cancelled` on both replacements, a `value == REWARD_CARD` guard,
+    `take_card` before `place_card`, a count choice, and the new
+    `COUNTERACT_FACE_DOWN` prop + reveal in `has_field_counter` /
+    `declare_one`; `ako_cool.rs` tests un-ignored, green).
   * ~~凑友希那 (3) stop-pot offers no prompt.~~ **Fixed 2026-10-09** (test
     matched Chinese text instead of the `kokoro_practice_force_*` key).
   * ~~凑友希那 (1) grants no fire pot on a RiNG landing.~~ **Fixed

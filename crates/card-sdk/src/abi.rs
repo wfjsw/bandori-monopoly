@@ -1260,6 +1260,10 @@ pub enum Target {
 pub mod prop {
     /// Offer this placed source in the hand-counteraction window. Default 0.
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
+    /// `1` on a source on the owner's field: the owner's **face-down** field
+    /// cards (normally inert) may be played directly in a counteraction window
+    /// (宇田川亚子 「对帅气的憧憬」(3)). Default 0.
+    pub const COUNTERACT_FACE_DOWN: &str = "counteractFaceDown";
     /// Nonzero alternatives with the same group are exclusive per seat/timing.
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     /// Fire-pot cost shown on a field counteraction's source-choice label.
