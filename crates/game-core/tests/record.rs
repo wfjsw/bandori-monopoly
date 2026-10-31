@@ -854,6 +854,51 @@ fn seek_equals_a_linear_replay() {
     let _ = events;
 }
 
+#[test]
+fn repeated_forward_seeks_match_a_linear_replay() {
+    // A scrub drag is a run of small forward seeks. Each one must land on the
+    // same state a plain play does, and the run must still collect the event
+    // stream without gaps.
+    let (file, events) = run_bot_game(21, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let total = file.header.total_ticks;
+    assert!(total > 200, "need a game long enough to drag in");
+
+    let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
+    let mut t = 0;
+    while t < total {
+        t = (t + 7).min(total);
+        rp.seek(t).unwrap();
+        assert_eq!(rp.status().tick, t);
+    }
+    let want = {
+        let mut lin = Replayer::new(data(), rules(), &file, false).unwrap();
+        while lin.status().tick < total && !lin.status().ended {
+            lin.step_ticks(1);
+        }
+        lin.match_ref().save()
+    };
+    assert_eq!(rp.match_ref().save(), want);
+    let _ = events;
+}
+
+#[test]
+fn seek_works_before_the_index_pass_laid_any_keyframe() {
+    let (file, _) = run_bot_game(22, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let total = file.header.total_ticks;
+    let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
+    // No `index()` call: the seek itself must lay the tick-0 keyframe.
+    rp.seek(total / 2).unwrap();
+    assert_eq!(rp.status().tick, total / 2);
+    let want = {
+        let mut lin = Replayer::new(data(), rules(), &file, false).unwrap();
+        while lin.status().tick < total / 2 && !lin.status().ended {
+            lin.step_ticks(1);
+        }
+        lin.match_ref().save()
+    };
+    assert_eq!(rp.match_ref().save(), want);
+}
+
 // ---------------------------------------------------------------- values
 
 #[test]
@@ -1398,4 +1443,71 @@ fn index_reports_how_far_it_has_reached() {
     let last = rp.index(10_000_000);
     assert!(last.done);
     assert_eq!(last.tick, file.header.total_ticks);
+}
+
+/// Every 7th tick: `seek` there and compare the save blob with a linear
+/// replay to the same tick. Reports the first differing byte window, if any.
+/// Slow (a full linear replay per probe), so `#[ignore]`d.
+#[test]
+#[ignore = "slow; run explicitly"]
+fn find_first_seek_divergence() {
+    let (file, _) = run_bot_game(21, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let total = file.header.total_ticks;
+    let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
+    let mut t = 0;
+    while t < total {
+        t = (t + 7).min(total);
+        rp.seek(t).unwrap();
+        let want = {
+            let mut lin = Replayer::new(data(), rules(), &file, false).unwrap();
+            while lin.status().tick < t && !lin.status().ended {
+                lin.step_ticks(1);
+            }
+            lin.match_ref().save()
+        };
+        let got = rp.match_ref().save();
+        if got != want {
+            eprintln!("first divergence at seek {t}");
+            let g: Vec<char> = got.chars().collect();
+            let w: Vec<char> = want.chars().collect();
+            let at = g.iter().zip(&w).position(|(a, b)| a != b).unwrap_or(0);
+            let lo = at.saturating_sub(80);
+            eprintln!("at {at}: got {}", g[lo..(at + 120).min(g.len())].iter().collect::<String>());
+            eprintln!("want {}", w[lo..(at + 120).min(w.len())].iter().collect::<String>());
+            return;
+        }
+    }
+    eprintln!("no divergence");
+}
+
+/// Index pass + random-seek cost on a long game. Timings, so `#[ignore]`d:
+///
+///     cargo test --release -p game-core --test record -- --ignored bench_seek_cost --nocapture
+#[test]
+#[ignore = "timing; run explicitly"]
+fn bench_seek_cost() {
+    use std::time::Instant;
+    let (file, _) = run_bot_game(33, 4, BotMentality::Chaos, &mut |r| 1 + r.below(3) as u8, 300);
+    let total = file.header.total_ticks;
+    let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
+    let t = Instant::now();
+    let st = rp.index(1_000_000);
+    eprintln!(
+        "index: {:?} for {} ticks, {} keyframes, {} bytes",
+        t.elapsed(),
+        total,
+        st.keyframes,
+        st.bytes
+    );
+    let mut times = Vec::new();
+    let mut rng = Rng::new(5);
+    for _ in 0..200 {
+        let target = rng.below(total as usize) as u64;
+        let t = Instant::now();
+        rp.seek(target).unwrap();
+        times.push(t.elapsed());
+    }
+    times.sort();
+    eprintln!("seek p50 {:?} p95 {:?} max {:?}", times[100], times[190], times[199]);
+    eprintln!("save len {}", rp.match_ref().save().len());
 }

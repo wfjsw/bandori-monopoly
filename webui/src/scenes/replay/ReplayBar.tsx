@@ -8,7 +8,7 @@
 // (Space / arrows / H) keep working while the bar is hidden -- the handler
 // lives here, not in the chrome.
 
-import { useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { useSessionOther, useTick } from "../../core/hooks";
 import { designBox } from "../../app/stageScale";
 import { useHotkeys } from "../../hooks/dom";
@@ -53,6 +53,38 @@ function saveBarPrefs(p: BarPrefs): void {
   prefs.set(BAR_KEY, JSON.stringify(p));
 }
 
+/**
+ * The turn marks. Memoized (the mark list is fixed for a session) so a drag --
+ * which re-renders the bar on every pointer event -- does not walk a large
+ * list of buttons each time.
+ */
+const Marks = memo(function Marks({
+  marks,
+  total,
+  ready,
+  onSeek,
+}: {
+  marks: { round: number; turn: number; tick: number }[];
+  total: number;
+  ready: number;
+  onSeek: (tick: number) => void;
+}) {
+  return (
+    <div className={s.marks} aria-hidden>
+      {marks.map((m) => (
+        <button
+          key={`${m.round}:${m.turn}:${m.tick}`}
+          type="button"
+          className={cx(s.mark, m.tick > ready && s.markOff)}
+          style={{ left: `${(m.tick / total) * 100}%` }}
+          title={tr("replay.turnMark", { round: m.round, turn: m.turn })}
+          onClick={() => onSeek(m.tick)}
+        />
+      ))}
+    </div>
+  );
+});
+
 export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => void }) {
   useSessionOther(rs);
   useTick(200); // the scrub head follows `status()` while playing
@@ -62,8 +94,17 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   const total = Math.max(1, rs.totalTicks);
   const marks = rs.turns;
   const seats = rs.header.seats;
-  // Only what the index has reached is offered; the rest comes online as it builds.
+  // What the index has reached: the ready strip on the track, and the slower
+  // (still offered) marks beyond it.
   const ready = Math.min(total, rs.seekLimit());
+
+  // The pointer owns the thumb while it is down: engine seeks are slower than
+  // a drag, so the head follows the pointer and the frames catch up under it.
+  // Scrubbing pauses playback, and resumes it on release if it was playing.
+  const [drag, setDrag] = useState<number | null>(null);
+  const down = useRef(false);
+  const resume = useRef(false);
+  const shown = Math.min(drag ?? now, total);
 
   const patch = (p: Partial<BarPrefs>) =>
     setPrefs((old) => {
@@ -74,6 +115,22 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
 
   const seekTo = (tick: number) => {
     rs.seek(tick);
+  };
+  const jump = useCallback((tick: number) => rs.seek(tick), [rs]);
+
+  const scrubDown = () => {
+    down.current = true;
+    resume.current = rs.playing;
+    rs.setPlaying(false);
+  };
+  const scrubUp = () => {
+    if (!down.current) return;
+    down.current = false;
+    setDrag(null);
+    if (resume.current) {
+      resume.current = false;
+      rs.setPlaying(true);
+    }
   };
 
   // The transport's measured height becomes edge insets on the player root
@@ -206,26 +263,22 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
           min={0}
           max={total}
           step={1}
-          value={Math.min(now, total)}
-          onChange={(e) => seekTo(Number(e.target.value))}
+          value={shown}
+          onPointerDown={scrubDown}
+          onPointerUp={scrubUp}
+          onPointerCancel={scrubUp}
+          onLostPointerCapture={scrubUp}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (down.current) setDrag(v);
+            seekTo(v);
+          }}
           aria-label={tr("replay.scrub")}
         />
         <div className={s.ready} style={{ width: `${(ready / total) * 100}%` }} aria-hidden />
-        <div className={s.marks} aria-hidden>
-          {marks.map((m) => (
-            <button
-              key={`${m.round}:${m.turn}:${m.tick}`}
-              type="button"
-              className={cx(s.mark, m.tick > ready && s.markOff)}
-              disabled={m.tick > ready}
-              style={{ left: `${(m.tick / total) * 100}%` }}
-              title={tr("replay.turnMark", { round: m.round, turn: m.turn })}
-              onClick={() => seekTo(m.tick)}
-            />
-          ))}
-        </div>
+        <Marks marks={marks} total={total} ready={ready} onSeek={jump} />
         <div className={s.at}>
-          {tr("replay.at", { round: rs.view?.state.round ?? 0, turn: rs.view?.state.turn ?? 0, tick: now })}
+          {tr("replay.at", { round: rs.view?.state.round ?? 0, turn: rs.view?.state.turn ?? 0, tick: shown })}
         </div>
       </div>
 

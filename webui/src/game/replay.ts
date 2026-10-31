@@ -146,6 +146,12 @@ export class ReplaySession extends GameSession {
   private closed = false;
   private busy = false;
   private indexing = false;
+  /** Latest scrub target when a drag outruns the engine: seeks are
+   *  latest-wins, so the pointer never queues a backlog of stale positions. */
+  private seekWant: number | null = null;
+  private seeking = false;
+  /** Last frame render, so a fast index head cannot outpace the screen. */
+  private lastRender = 0;
 
   private constructor(h: ReplayHandle, header: RecordHeader, turns: Turn[], totalTicks: number, id: string, bytes: Uint8Array) {
     super();
@@ -187,13 +193,17 @@ export class ReplaySession extends GameSession {
     return this.lastStatus;
   }
 
-  /** Current tick, as a number (the wire value is a u64 string). */
+  /** Current tick, as a number (the wire value is a u64 string). While a seek
+   *  is queued the pointer's target stands in, so a key repeat builds on the
+   *  position it was heading for rather than the one the engine last reported. */
   now(): number {
-    return Number(this.status().tick) || 0;
+    return this.seekWant ?? (Number(this.status().tick) || 0);
   }
 
   private async tick(): Promise<void> {
-    if (this.closed || document.hidden || this.busy) {
+    // A scrub owns the transport while it drains: a step queued mid-drag
+    // would pull the head away from the pointer.
+    if (this.closed || document.hidden || this.busy || this.seeking || this.seekWant !== null) {
       this.lastAt = performance.now();
       return;
     }
@@ -315,32 +325,103 @@ export class ReplaySession extends GameSession {
     this.emitOther();
   }
 
-  /** How far a seek may go: as far as the keyframe index has covered, or the
-   *  current position if that is later. Past it a seek would re-simulate a long
-   *  stretch, so it is not offered until the index gets there. An older bundle
-   *  reports no index tick; it has no limit. */
+  /** How far the background keyframe pass has got -- the extent the bar shows
+   *  as already indexed. Past it a seek is slower (the pass has to simulate up
+   *  to the target first). An older bundle reports no index tick; it is
+   *  treated as fully indexed. */
   seekLimit(): number {
     const st = this.indexStatus;
     if (st?.done || (st && st.tick === undefined)) return this.totalTicks;
     return Math.max(this.now(), st?.tick ? Number(st.tick) : 0);
   }
 
-  /** Jump to `tick` (clamped to what is ready). Bumps `epoch` so the Board remounts. */
+  /** Where the keyframe index itself stands, independent of where the head
+   *  happens to be. */
+  private indexHead(): number {
+    const st = this.indexStatus;
+    if (!st || st.done || st.tick === undefined) return this.totalTicks;
+    return Number(st.tick) || 0;
+  }
+
+  /**
+   * Jump to `tick`. A drag fires far faster than an engine seek completes, so
+   * calls coalesce: while one seek runs the pointer just replaces the target,
+   * and stale positions are skipped instead of queueing up behind each other.
+   * A target past the keyframe index can only be reached by simulating the
+   * stretch, so the pass is driven forward a chunk at a time and the board
+   * follows the index head as it goes. The final target always wins.
+   */
   seek(tick: number): void {
     if (this.closed) return;
-    tick = Math.min(tick, this.seekLimit());
-    void this.run(async (h) => {
-      this.lastStatus = await h.seek(Math.max(0, Math.round(tick)));
-      // The Board's event log is re-seeded from the state's tail on remount,
-      // so the collected-stream cursor moves to that tail's last id.
-      const v = await h.view(this.perspective);
-      const tail = v.state.events ?? [];
-      this.lastEventId = tail.length ? tail[tail.length - 1].id : 0;
+    this.seekWant = Math.max(0, Math.min(this.totalTicks, Math.round(tick)));
+    if (!this.seeking) void this.drainSeek();
+  }
+
+  /** One seek to `tick`, then its frame. `force` renders even while a newer
+   *  target is already queued (the index head walking under a long drag). */
+  private async doSeek(tick: number, force = false): Promise<void> {
+    try {
+      const { st, v, lastEventId } = await this.run(async (h) => {
+        const st = await h.seek(tick);
+        // The Board's event log is re-seeded from the state's tail on remount,
+        // so the collected-stream cursor moves to that tail's last id.
+        const v = await h.view(this.perspective);
+        const tail = v.state.events ?? [];
+        return { st, v, lastEventId: tail.length ? tail[tail.length - 1].id : 0 };
+      });
+      // A newer target landed meanwhile: this frame is stale, keep it for
+      // `status()` but leave the render to the one that is still coming.
+      this.lastStatus = st;
+      this.lastEventId = lastEventId;
       this.idleRun = 0;
+      if (this.seekWant !== null && !force) return;
+      // Intermediate frames on the way to a target that is still coming are
+      // throttled: each one remounts the board, and the index can outrun a
+      // frame. The target's own frame always renders.
+      const at = performance.now();
+      if (this.seekWant !== null && at - this.lastRender < 80) return;
+      this.lastRender = at;
       this.epoch++;
       this.emitView(v);
       this.emitOther();
-    }).catch((e) => console.warn("replay seek failed:", e));
+    } catch (e) {
+      console.warn("replay seek failed:", e);
+    }
+  }
+
+  private async drainSeek(): Promise<void> {
+    if (this.seeking) return;
+    this.seeking = true;
+    try {
+      while (this.seekWant !== null && !this.closed) {
+        const want = this.seekWant;
+        const head = this.indexHead();
+        // Ahead of both the head and where we are: simulate one index chunk,
+        // show what it covered, and re-read the pointer. Driving the pass (not
+        // the seek) means the keyframes it lays serve later jumps too.
+        if (want > head && want > (Number(this.lastStatus.tick) || 0)) {
+          const st = await this.run((h) => h.index(INDEX_CHUNK));
+          this.indexStatus = st;
+          const next = this.indexHead();
+          // Bar and board update only once per visible frame: a seek carries
+          // a whole frame (engine, JSON, board remount), and paying that per
+          // chunk would halve the simulation rate. Skipping costs nothing --
+          // the pass keeps the keyframes, so whoever lands next restores one.
+          const due = st.done || performance.now() - this.lastRender >= 120;
+          if (due) this.emitOther();
+          if (!st.done && next > head) {
+            const at = Math.min(want, next);
+            if (due && at !== (Number(this.lastStatus.tick) || 0)) await this.doSeek(at, true);
+            continue;
+          }
+        }
+        this.seekWant = null;
+        await this.doSeek(want);
+      }
+    } finally {
+      this.seeking = false;
+      this.lastAt = performance.now();
+    }
   }
 
   /** The mark at or after `tick` (next) / before it (previous). */
@@ -348,8 +429,7 @@ export class ReplaySession extends GameSession {
     const marks = this.turns;
     if (!marks.length) return null;
     if (dir > 0) {
-      const next = marks.find((m) => m.tick > tick + 0.5);
-      return next && next.tick <= this.seekLimit() ? next.tick : null;
+      return marks.find((m) => m.tick > tick + 0.5)?.tick ?? null;
     }
     const prev = [...marks].reverse().find((m) => m.tick < tick - 0.5);
     // One step back from the very start of a turn lands on the turn before it;

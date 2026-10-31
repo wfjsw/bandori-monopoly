@@ -1379,7 +1379,8 @@ struct Keyframe {
     input: usize,
     /// Last event id produced up to here, so a seek can drop later events.
     last_event_id: i32,
-    save: String,
+    /// Shared so a seek copies a pointer, not the whole save blob.
+    save: Arc<str>,
 }
 
 /// Plays a [`RecordFile`] back through the public [`Match`] API.
@@ -1783,7 +1784,7 @@ impl Replayer {
             time: self.time,
             input: self.cursor,
             last_event_id: self.last_event_id,
-            save,
+            save: save.into(),
         }));
     }
 
@@ -1895,71 +1896,122 @@ impl Replayer {
             .collect()
     }
 
-    /// Jump to `tick` (clamped to [`Replayer::total_ticks`]): restore the
-    /// nearest keyframe and re-simulate forward. Event history before the
-    /// restored keyframe is dropped when it is not already collected.
+    /// Jump to `tick` (clamped to [`Replayer::total_ticks`]): step forward
+    /// from where we are when that is no further than restoring the nearest
+    /// keyframe, and otherwise restore that keyframe and re-simulate forward.
+    /// A scrub drag mostly moves forward, so the common case touches no
+    /// snapshot at all. Event history before a restored keyframe is dropped
+    /// when it is not already collected.
     pub fn seek(&mut self, tick: u64) -> Result<Status, ReplayError> {
         let target = tick.min(self.total_ticks());
+        // Restoring is only short when a keyframe sits behind the target. The
+        // index pass normally laid one at tick 0 already; lay it here if the
+        // user got to the scrub bar first.
+        if self.keyframes.is_empty() {
+            self.index(0);
+        }
         let best = self
             .keyframes
             .iter()
             .filter(|k| k.tick <= target)
             .max_by_key(|k| k.tick)
-            .map(|k| (k.tick, k.time, k.input, k.last_event_id, k.save.clone()));
-        // Rebuild from the init (cheap for a seed, one restore for a snapshot).
-        let mut rp = Self::from_body(
-            self.data.clone(),
-            self.rules.clone(),
-            self.header.clone(),
-            self.body.clone(),
-        )?;
-        if let Some((k_tick, k_time, k_input, k_last_event, k_save)) = best {
-            let m = Match::restore(self.data.clone(), self.rules.clone(), &k_save)
-                .map_err(|e| ReplayError::Corrupt(e.to_string()))?;
-            rp.m = m;
-            rp.cursor = k_input;
-            rp.sub = 0;
-            rp.tick = k_tick;
-            rp.time = k_time;
-            rp.last_event_id = k_last_event;
-            // Carry the event prefix over only when this session has already
-            // collected it (a plain forward play). Otherwise start the log at
-            // the keyframe and leave the gap to the caller.
-            let have_prefix = k_last_event == 0 || self.events.iter().any(|e| e.id == k_last_event);
-            if have_prefix {
-                rp.events = self
-                    .events
-                    .iter()
-                    .take_while(|e| e.id <= k_last_event)
-                    .cloned()
-                    .collect();
-                rp.last_event_id = rp.events.last().map_or(k_last_event, |e| e.id);
-            } else {
-                rp.events.clear();
-            }
-            rp.drain_events();
+            .cloned();
+        // Cost is ticks simulated: from here vs. from the keyframe behind the
+        // target. Forward from here is never worse while it is no further.
+        // Equal ticks still rebuild: the inputs logged at this tick are not
+        // part of the frame, so a restore is how that frame is reproduced.
+        let step_forward = target > self.tick
+            && best
+                .as_ref()
+                .is_none_or(|k| target - self.tick <= target - k.tick);
+        if !step_forward {
+            let mut rp = match best {
+                Some(k) => {
+                    let m = Match::restore(self.data.clone(), self.rules.clone(), &k.save)
+                        .map_err(|e| ReplayError::Corrupt(e.to_string()))?;
+                    let mut rp = self.shell(m);
+                    rp.cursor = k.input;
+                    rp.tick = k.tick;
+                    rp.time = k.time;
+                    rp.last_event_id = k.last_event_id;
+                    // Carry the event prefix over only when this session has
+                    // already collected it (a plain forward play). Otherwise
+                    // start the log at the keyframe and leave the gap to the
+                    // caller.
+                    let have_prefix =
+                        k.last_event_id == 0 || self.events.iter().any(|e| e.id == k.last_event_id);
+                    if have_prefix {
+                        rp.events = self
+                            .events
+                            .iter()
+                            .take_while(|e| e.id <= k.last_event_id)
+                            .cloned()
+                            .collect();
+                        rp.last_event_id = rp.events.last().map_or(k.last_event_id, |e| e.id);
+                    }
+                    rp.drain_events();
+                    rp
+                }
+                // No keyframe behind the target: rebuild from the init (cheap
+                // for a seed, one restore for a snapshot).
+                None => Self::from_body(
+                    self.data.clone(),
+                    self.rules.clone(),
+                    self.header.clone(),
+                    self.body.clone(),
+                )?,
+            };
+            // Divergence is sticky across seeks; the keyframe index is kept.
+            rp.diverged = self.diverged;
+            rp.first_mismatch = self.first_mismatch.clone();
+            rp.last_act = self.last_act.clone();
+            rp.idx = self.idx.take();
+            rp.keyframes = std::mem::take(&mut self.keyframes);
+            rp.keyframe_bytes = self.keyframe_bytes;
+            rp.capture = self.capture;
+            rp.turns_since_kf = self.turns_since_kf;
+            rp.last_kf_time = self.last_kf_time;
+            *self = rp;
         }
-        while rp.tick < target && !rp.ended() {
-            rp.apply_pending_inputs();
-            if rp.ended() {
+        while self.tick < target && !self.ended() {
+            self.apply_pending_inputs();
+            if self.ended() {
                 break;
             }
-            if !rp.apply_one_tick() {
+            if !self.apply_one_tick() {
                 break;
             }
         }
-        // Divergence is sticky across seeks; the keyframe index is kept.
-        rp.diverged = self.diverged;
-        rp.first_mismatch = self.first_mismatch.clone();
-        rp.last_act = self.last_act.clone();
-        rp.idx = self.idx.take();
-        rp.keyframes = std::mem::take(&mut self.keyframes);
-        rp.keyframe_bytes = self.keyframe_bytes;
-        rp.capture = self.capture;
-        rp.turns_since_kf = self.turns_since_kf;
-        rp.last_kf_time = self.last_kf_time;
-        *self = rp;
         Ok(self.status())
+    }
+
+    /// A replayer around an already-restored match: the record and metadata of
+    /// `self`, without re-running the init. The seek above fills in the state
+    /// that describes where the restored snapshot sits.
+    fn shell(&self, m: Match) -> Self {
+        Self {
+            data: self.data.clone(),
+            rules: self.rules.clone(),
+            header: self.header.clone(),
+            body: self.body.clone(),
+            step: self.step,
+            m,
+            cursor: 0,
+            sub: 0,
+            tick: 0,
+            time: 0.0,
+            last_event_id: 0,
+            events: vec![],
+            diverged: false,
+            first_mismatch: None,
+            last_act: None,
+            idx: None,
+            keyframes: vec![],
+            keyframe_bytes: 0,
+            capture: false,
+            turns_since_kf: 0,
+            last_kf_time: 0.0,
+        }
     }
 
     pub fn match_ref(&self) -> &Match {

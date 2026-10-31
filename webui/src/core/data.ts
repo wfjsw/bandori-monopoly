@@ -130,6 +130,7 @@ export const dataVersionOf = (): number => dataVersion;
 if (import.meta.env?.DEV) {
   (globalThis as { __bmDebug?: unknown }).__bmDebug = {
     data: () => D,
+    rules: () => rules,
     sources: currentSources,
     version: dataVersionOf,
     busy: () => loadState().busy,

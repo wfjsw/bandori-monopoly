@@ -1875,6 +1875,7 @@ name = "rules-native"
 version = "0.1.0"
 dependencies = [
  "bandori-std",
+ "bot-core",
  "card-ag",
  "card-crychic",
  "card-general",

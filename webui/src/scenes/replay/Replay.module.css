@@ -242,6 +242,8 @@
 .error p { font-size: 18px; font-weight: 700; }
 .detail { color: var(--sub); font-weight: 400; font-size: 14px; max-width: 640px; }
 .mismatch { text-align: left; color: var(--sub); font-size: 14px; }
-/* How far the keyframe index has reached: seeks past it are not offered yet. */
+/* How far the keyframe index has reached: seeks past it must simulate first. */
 .ready { position: absolute; left: 0; top: 11px; height: 2px; background: var(--pink-light); opacity: 0.6; pointer-events: none; }
-.markOff { opacity: 0.25; cursor: default; }
+/* Past the index head: dimmed (the seek has to simulate up to it) but still a
+   live target. */
+.markOff { opacity: 0.25; }

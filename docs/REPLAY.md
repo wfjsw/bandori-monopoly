@@ -115,8 +115,17 @@ endpoint policy, and the deviations below.
     marks, a perspective dropdown (any seat or spectator), skip-idle, and a
     divergence banner.
   * Seek: a background index pass keeps `save()` keyframes about every 4 turns,
-    or every 20 s of game time. A seek restores the nearest keyframe and
-    re-simulates forward. Board remounts with `key={epoch}`.
+    or every 20 s of game time. A seek steps forward from the current position
+    when that is no further than restoring the nearest keyframe behind the
+    target, and otherwise restores that keyframe and re-simulates forward.
+    Board remounts with `key={epoch}`.
+  * Scrubbing coalesces: one seek is in flight at a time and a newer pointer
+    position simply replaces the pending target, so a drag never queues a
+    backlog of stale frames. The thumb follows the pointer locally; the board
+    follows the engine. A target past the index head is reached by driving the
+    index pass toward it (the chunk it advances is rendered as feedback, at
+    most one frame per 120 ms), so the stretch is simulated once and its
+    keyframes serve later jumps. The target's own frame always renders.
   * Entry points: home menu 「回放 / Replays」 (list, open file, drag and drop);
     the post-match Results 「下载回放」 / 「观看回放」; and the Room scene's
     "download last replay".
