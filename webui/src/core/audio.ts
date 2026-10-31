@@ -15,10 +15,9 @@ const SCENE_TRACKS: Record<string, string> = {
 };
 const FADE = 0.8;
 
-// One AudioContext serves BGM, sfx and voice. Creating an <audio> element per
-// clip makes iOS re-negotiate its audio session each time (the page flickers),
-// and iOS ignores HTMLMediaElement.volume anyway, so everything goes through
-// gain nodes on this shared context.
+// One AudioContext serves BGM, sfx and voice, and every clip is decoded once and
+// replayed as a buffer source. Nothing is an <audio>/<video> element, so nothing
+// can drag the page onto the "playback" audio session behind our back.
 let ac: AudioContext | null = null;
 
 function ctx(): AudioContext | null {
@@ -28,13 +27,58 @@ function ctx(): AudioContext | null {
     } catch {
       return null;
     }
+    setSession(BASE_SESSION);
   }
   return ac;
 }
 
-type Bgm = { track: string; el: HTMLAudioElement; gain: GainNode | null };
+// --- Audio session ---------------------------------------------------------
+// The iOS ringer switch mutes the "ambient" session but not "playback". BGM
+// stays ambient, so it follows the switch; sfx and voice are bumped to
+// "playback" while they sound, so they are heard anyway. Safari-only -- Chrome
+// and Android have no Audio Session API, and their Web Audio already plays on
+// the media stream, which the ringer switch does not touch.
+type SessionType = "auto" | "playback" | "transient" | "transient-solo" | "ambient" | "play-and-record";
+
+const BASE_SESSION: SessionType = "ambient";
+/** Keep the page on "playback" this long after the last sfx/voice ends. */
+const RELEASE_MS = 400;
+
+function setSession(type: SessionType): void {
+  const session = (navigator as Navigator & { audioSession?: { type: SessionType } }).audioSession;
+  if (!session || session.type === type) return;
+  try {
+    session.type = type;
+  } catch {
+    // No page context (`type` throws InvalidStateError).
+  }
+}
+
+let audible = 0;
+let releaseTimer = 0;
+
+function holdAudible(): void {
+  if (releaseTimer) {
+    clearTimeout(releaseTimer);
+    releaseTimer = 0;
+  }
+  if (audible++ === 0) setSession("playback");
+}
+
+function releaseAudible(): void {
+  if (audible === 0) return;
+  if (--audible > 0) return;
+  releaseTimer = window.setTimeout(() => {
+    releaseTimer = 0;
+    if (audible === 0) setSession(BASE_SESSION);
+  }, RELEASE_MS);
+}
+
+type Bgm = { track: string; gain: GainNode; source: AudioBufferSourceNode; level: number; started: boolean };
 
 let current: Bgm | null = null;
+let pending: string | null = null;
+let seq = 0;
 let unlocked = false;
 
 /** Browsers block audio until the first user gesture. */
@@ -43,66 +87,122 @@ export function unlockAudio(): void {
   unlocked = true;
   const c = ctx();
   if (c && c.state !== "running") void c.resume();
-  if (current) void current.el.play().catch(() => undefined);
+  if (current) startBgm(current);
 }
 
-function bgmVolume(b: Bgm): number {
-  return b.gain ? b.gain.gain.value : b.el.volume;
+function startBgm(b: Bgm): void {
+  if (b.started) return;
+  b.started = true;
+  b.source.start();
+  fadeTo(b.gain, b.level);
 }
 
-function setBgmVolume(b: Bgm, v: number): void {
-  v = Math.min(1, Math.max(0, v));
-  if (b.gain) b.gain.gain.value = v;
-  else b.el.volume = v;
-}
-
-function fade(b: Bgm, to: number, then?: () => void): void {
-  const from = bgmVolume(b);
+function fadeTo(g: GainNode, to: number, then?: () => void): void {
+  const from = g.gain.value;
   const start = performance.now();
   const step = (t: number) => {
     const k = Math.min(1, (t - start) / (FADE * 1000));
-    setBgmVolume(b, from + (to - from) * k);
+    g.gain.value = from + (to - from) * k;
     if (k < 1) requestAnimationFrame(step);
     else then?.();
   };
   requestAnimationFrame(step);
 }
 
+function stopBgm(b: Bgm): void {
+  fadeTo(b.gain, 0, () => {
+    b.source.stop();
+    b.gain.disconnect();
+  });
+}
+
+function startNewBgm(track: string, buf: AudioBuffer): void {
+  const c = ctx();
+  if (!c) return;
+  const old = current;
+  const gain = c.createGain();
+  gain.gain.value = 0;
+  gain.connect(c.destination);
+  const source = c.createBufferSource();
+  source.buffer = buf;
+  source.loop = true;
+  source.connect(gain);
+  const b: Bgm = { track, gain, source, level: settings().bgm / 10, started: false };
+  current = b;
+  if (old) stopBgm(old);
+  if (unlocked) startBgm(b);
+}
+
+function stopBgmNow(): void {
+  const b = current;
+  if (!b) return;
+  current = null;
+  stopBgm(b);
+}
+
 export function playSceneBgm(scene: string): void {
   const track = SCENE_TRACKS[scene];
-  if (!track || current?.track === track) return;
+  if (!track) {
+    seq++;
+    pending = null;
+    return stopBgmNow();
+  }
+  if (track === current?.track || track === pending) return;
   const src = res(`BandoriBGM/${track}`);
-  const old = current;
-  if (old) fade(old, 0, () => old.el.pause());
-  if (!src) {
-    current = null;
-    return;
+  if (!src || !ctx()) {
+    seq++;
+    pending = null;
+    return stopBgmNow();
   }
-  const el = new Audio(src);
-  el.loop = true;
-  let gain: GainNode | null = null;
-  const c = ctx();
-  if (c) {
-    try {
-      gain = c.createGain();
-      c.createMediaElementSource(el).connect(gain).connect(c.destination);
-    } catch {
-      gain = null;
-    }
-  }
-  const b: Bgm = (current = { track, el, gain });
-  setBgmVolume(b, 0);
-  if (unlocked) void el.play().catch(() => undefined);
-  fade(b, settings().bgm / 10);
+  const mine = ++seq;
+  pending = track;
+  void bgmBuffer(src).then((buf) => {
+    if (mine !== seq) return; // superseded by a newer scene
+    pending = null;
+    if (buf) startNewBgm(track, buf);
+  });
 }
 
 export function applyVolumes(): void {
-  if (current) setBgmVolume(current, settings().bgm / 10);
+  if (!current) return;
+  current.level = settings().bgm / 10;
+  current.gain.gain.value = current.level;
+}
+
+// Decoded BGM is far bigger than an sfx clip (a whole track of PCM), so only
+// the few most recent tracks are kept; a playing source holds its own buffer.
+const BGM_CACHE = 3;
+const bgmBuffers = new Map<string, AudioBuffer>();
+const bgmLoads = new Map<string, Promise<AudioBuffer | null>>();
+
+function bgmBuffer(src: string): Promise<AudioBuffer | null> {
+  const hit = bgmBuffers.get(src);
+  if (hit) {
+    bgmBuffers.delete(src); // re-insert: recent tracks are evicted first
+    bgmBuffers.set(src, hit);
+    return Promise.resolve(hit);
+  }
+  const loading = bgmLoads.get(src);
+  if (loading) return loading;
+  const c = ctx();
+  if (!c) return Promise.resolve(null);
+  const p = fetch(src)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((data) => c.decodeAudioData(data))
+    .then((buf) => {
+      bgmBuffers.set(src, buf);
+      while (bgmBuffers.size > BGM_CACHE) bgmBuffers.delete(bgmBuffers.keys().next().value!);
+      return buf;
+    })
+    .catch(() => null)
+    .finally(() => bgmLoads.delete(src));
+  bgmLoads.set(src, p);
+  return p;
 }
 
 const lastPlayed = new Map<string, number>();
 
-// Clips are fetched and decoded once, then replayed as buffer sources.
+// Sfx and voice clips are small, so they stay decoded for the whole session.
 const clips = new Map<string, Promise<AudioBuffer | null>>();
 
 function clipBuffer(src: string): Promise<AudioBuffer | null> {
@@ -130,7 +230,11 @@ function playBuffer(buf: AudioBuffer, volume: number, dest?: AudioNode): AudioBu
   const g = c.createGain();
   g.gain.value = volume;
   node.connect(g).connect(dest ?? c.destination);
-  node.onended = () => g.disconnect();
+  holdAudible();
+  node.onended = () => {
+    g.disconnect();
+    releaseAudible();
+  };
   node.start();
   return node;
 }
