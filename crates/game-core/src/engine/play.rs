@@ -4399,7 +4399,7 @@ impl Cx<'_> {
         raise!(self, "bankrupt", i)?;
         // `beforeOut` (Fx) -- before the player is cleared.
         raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i);
+        let deeds = self.remove_from_game(i)?;
         // `bankruptResolved` (Q6 / K11) -- the terminal: cash-in done, the seat
         // cleared, the leftover auctions finished. Nothing else observes
         // "cleanup + auctions finished", so this is the point a 「结算完成时」
@@ -4433,7 +4433,7 @@ impl Cx<'_> {
         );
         // `beforeOut` (Fx) -- before the player is cleared.
         raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i);
+        let deeds = self.remove_from_game(i)?;
         // `leaveAfter` -- after the player is cleared out, but before the
         // game-over check so it still runs when leaving ends the match.
         raise!(self, "leaveAfter", i)?;
@@ -4448,7 +4448,7 @@ impl Cx<'_> {
     }
 
     /// Clear the player; its land returns to the bank.
-    fn remove_from_game(&mut self, i: usize) -> Vec<usize> {
+    fn remove_from_game(&mut self, i: usize) -> Flow<Vec<usize>> {
         // Collect the rule ids this seat's field carries **before** the clear
         // below: markers those rules own leave the game with them (user ruling
         // 2026-10-07), wherever the copies sit.
@@ -4517,7 +4517,27 @@ impl Cx<'_> {
                 Msg::new(key).player_id("who", i).i("n", deeds.len() as i64),
             );
         }
-        deeds
+        // Raise the purge's mark removals even though no further run commits
+        // for this player: the `markChanged` drain needs a committing frame.
+        self.commit_marks_delta()?;
+        Ok(deeds)
+    }
+
+    /// Drain the pending mark log into `markChanged` raises. Called by
+    /// `commit_after` and by paths that clear marks with no later run
+    /// (`remove_from_game`).
+    fn commit_marks_delta(&mut self) -> Flow<()> {
+        let rows = std::mem::take(&mut self.w.mark_log);
+        for row in rows {
+            let mut t = Trigger::new("markChanged", row.owner as usize);
+            t.tile = row.tile;
+            t.name = Some(row.kind);
+            t.value = row.delta;
+            t.card = row.card;
+            t.instance = row.instance;
+            self.raise(t)?;
+        }
+        Ok(())
     }
 
     /// User ruling 2026-10-07 (marker ownership): drop every marker whose
@@ -4538,6 +4558,17 @@ impl Cx<'_> {
         for name in doomed {
             for p in self.w.st.players.iter_mut() {
                 p.tokens.retain(|t| t.name != name);
+            }
+            let gone: Vec<crate::state::TileMark> = self
+                .w
+                .st
+                .marks
+                .iter()
+                .filter(|m| m.owner != crate::state::BOARD_OWNER && m.kind == name)
+                .cloned()
+                .collect();
+            for m in &gone {
+                self.w.log_mark_row(m, -m.count);
             }
             self.w
                 .st

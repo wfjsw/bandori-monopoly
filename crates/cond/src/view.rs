@@ -57,6 +57,11 @@ pub trait CondView {
     fn move_tag_named(&self, name: &str) -> i64;
     /// Eager table for `move.tag(name)` (window-scope, not per-candidate).
     fn move_tag_table(&self) -> Vec<(String, i64)>;
+    /// The cards whose bodies are currently resolving (`resolving('id')`);
+    /// absent = nothing resolving.
+    fn resolving_table(&self) -> Vec<(String, i64)> {
+        Vec::new()
+    }
     fn roll_source(&self) -> i64;
     fn abnormal(&self) -> bool;
     fn turn_player(&self) -> i64;

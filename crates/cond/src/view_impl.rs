@@ -80,6 +80,9 @@ impl CondView for SnapshotView<'_> {
     fn move_tag_table(&self) -> Vec<(String, i64)> {
         self.win.mv.tags.clone()
     }
+    fn resolving_table(&self) -> Vec<(String, i64)> {
+        self.win.resolving.clone()
+    }
     fn roll_source(&self) -> i64 {
         self.win.roll_source
     }

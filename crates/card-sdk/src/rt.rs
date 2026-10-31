@@ -311,18 +311,59 @@ pub fn on(
             _,
         ) => {
             let _ = shape;
-            match drive(player_id, body) {
+            // One body dispatcher: every host- or guest-started body enters a
+            // resolution frame (the `skillFired` raise and the `resolving`
+            // table) and leaves it on both the success and the ask path.
+            let cid = card(bands, idx).id;
+            let entered = crate::ctx::body_enter(cid);
+            if entered == 0 {
+                return 0;
+            }
+            // The frame's `skillFired` raise asked: halt here, and pop the
+            // frame before the host re-runs us with the answer.
+            // Asked: the frame stays up (the host settles the effects on it
+            // and re-enters us), so no `body_leave` here.
+            if entered == crate::abi::EXIT_NEED_INPUT {
+                return crate::abi::EXIT_NEED_INPUT as i64;
+            }
+            let out = match drive(player_id, body) {
                 Ok(()) => 0,
                 // Asked: the host reads the published question and re-runs us
                 // with the answer. The old `EXIT_NEED_INPUT` trap, as a return
                 // value.
                 Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+            };
+            // A body that parked a host request keeps its frame up: the host
+            // settles what it caused on that stack and re-enters us.
+            if out != crate::abi::EXIT_NEED_INPUT as i64 {
+                crate::ctx::body_leave();
             }
+            out
         }
-        (On::Action(e), _) => match (e.drive)(player_id, e.body) {
-            Ok(()) => 0,
-            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
-        },
+        (On::Action(e), _) => {
+            let cid = card(bands, idx).id;
+            let entered = crate::ctx::body_enter(cid);
+            if entered == 0 {
+                return 0;
+            }
+            // The frame's `skillFired` raise asked: halt here, and pop the
+            // frame before the host re-runs us with the answer.
+            // Asked: the frame stays up (the host settles the effects on it
+            // and re-enters us), so no `body_leave` here.
+            if entered == crate::abi::EXIT_NEED_INPUT {
+                return crate::abi::EXIT_NEED_INPUT as i64;
+            }
+            let out = match (e.drive)(player_id, e.body) {
+                Ok(()) => 0,
+                Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+            };
+            // A body that parked a host request keeps its frame up: the host
+            // settles what it caused on that stack and re-enters us.
+            if out != crate::abi::EXIT_NEED_INPUT as i64 {
+                crate::ctx::body_leave();
+            }
+            out
+        }
     }
 }
 

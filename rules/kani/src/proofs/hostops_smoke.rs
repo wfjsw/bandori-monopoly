@@ -233,3 +233,24 @@ pub fn trig_roll_source_reads() {
     kani::cover!(src == ROLL_CARD, "card");
     kani::cover!(src == ROLL_SKILL, "skill");
 }
+
+// ---------------------------------------------------------------------------
+// v105 identity / frame / counter cap (stubbed until modeled)
+// ---------------------------------------------------------------------------
+
+/// The six v105 imports answer their documented defaults: no raise identity
+/// (`0` / `-1`), the body runs (`1`), and no stored cap (`0`). Replacing a
+/// stub with a model must keep these totals.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn identity_and_cap_stubs() {
+    install_empty();
+    let uid: i32 = kani::any();
+    crate::kassert!(call(Op::trig_uid, [0; 6]) == 0);
+    crate::kassert!(call(Op::trig_instance, [0; 6]) == -1);
+    crate::kassert!(call(Op::body_enter, [0; 6]) == 1);
+    crate::kassert!(call(Op::body_leave, [0; 6]) == 0);
+    crate::kassert!(call(Op::counter_max_at, [uid, 0, 0, 0, 0, 0]) == 0);
+    crate::kassert!(call(Op::set_counter_max_at, [uid, 0, 0, 0, 0, 0]) == 0);
+}

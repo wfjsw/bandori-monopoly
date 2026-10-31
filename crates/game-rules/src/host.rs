@@ -612,6 +612,11 @@ pub enum HostRequest {
         /// The tile the raise is about (`t.tile`) -- filter pres like
         /// `tile.id == tile_named('…')` read it.
         tile: i32,
+        /// The raise's card provenance (`t.card`). Only the body wrapper's
+        /// `skillFired` sets it, so a hook can answer `card_is('skill:…')`.
+        /// `player_id` is that raise's cause (`t.by_card`) -- for `skillFired`
+        /// the skill's owner, which is what 「你的技能」 guards read.
+        card: Option<String>,
         /// BuyAssign filter deal (in): owner after (`i32::MIN` = unset).
         deal_owner: i32,
         /// BuyAssign filter deal (in): houses after.
@@ -1586,8 +1591,13 @@ impl Ruleset {
             } else {
                 None
             };
-            let cand =
-                crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
+            let cand = crate::cond_pre::fill_candidate_uid(
+                world,
+                player_id,
+                &info.id,
+                world.self_uid(),
+                world.is_placed() != 0,
+            );
             match self.entry_admitted(
                 world,
                 card,
@@ -1653,6 +1663,14 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
+        let dbg = std::env::var("DBG_HOOK").is_ok() && (self.inner.cards[card as usize].id.contains("蝴蝶") || self.inner.cards[card as usize].id.contains("正论恶魔"));
+        if dbg {
+            eprintln!("PRE uid={} counters={:?} pre={:?}", cand.uid, cand.card_counters, pre.is_some());
+        }
+        if dbg && pre.is_some() {
+            let v = crate::cond_pre::admits_pre(pre, scope, cand);
+            eprintln!("PREV {v}");
+        }
         if self.guard_is_none(card, entry) {
             return Ok(if crate::cond_pre::admits_pre(pre, scope, cand) {
                 self.declare_after(world, card, entry, player_id, answers, start_answer)?
@@ -1684,6 +1702,12 @@ impl Ruleset {
                 )
             }) {
                 Ok(v) => {
+                    if std::env::var("DBG_HOOK").is_ok() {
+                        let su = store.data_mut().w().self_uid();
+                        let inst = store.data().wr().trigger().instance;
+                        let val = store.data().wr().trigger().value;
+                        eprintln!("GUARD card={} entry={} v={} selfuid={} inst={} val={}", self.inner.cards[card as usize].id, entry, v, su, inst, val);
+                    }
                     store_for_guard = Some(store);
                     Ok(v != 0)
                 }
@@ -1878,8 +1902,13 @@ impl Ruleset {
         // `card.placed` must answer for the **running instance** (the guest's
         // `ctx::is_placed()`): a game-start hook also runs for the same id
         // while it sits in a pile / hand (`uid = -1`).
-        let cand =
-            crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
+        let cand = crate::cond_pre::fill_candidate_uid(
+            world,
+            player_id,
+            &info.id,
+            world.self_uid(),
+            world.is_placed() != 0,
+        );
         let mut cur: W = world.clone();
         // One `next_answer` cursor threads the whole call: every guard, every
         // `OP_DECLARE` and every body reads the shared answer log in order, so
@@ -2039,10 +2068,11 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        let cand = crate::cond_pre::fill_candidate(
+        let cand = crate::cond_pre::fill_candidate_uid(
             world,
             player_id,
             &self.inner.cards[card as usize].id,
+            world.self_uid(),
             false,
         );
         let ok = if self.guard_is_none(card, entry) {
@@ -2095,10 +2125,11 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        let cand = crate::cond_pre::fill_candidate(
+        let cand = crate::cond_pre::fill_candidate_uid(
             world,
             player_id,
             &self.inner.cards[card as usize].id,
+            world.self_uid(),
             false,
         );
         if crate::cond_pre::condition_allows(pre, Some(scope), &cand) {
@@ -3792,6 +3823,36 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trig_name",
         |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
             hostfns::trig_name(&mut c, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "trig_uid", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_uid(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "trig_instance", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_instance(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "body_enter",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::body_enter(&mut c, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "body_leave", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::body_leave(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "counter_max_at",
+        |mut c: C<W>, uid: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::counter_max_at(&mut c, uid, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_counter_max_at",
+        |mut c: C<W>, uid: i32, p: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::set_counter_max_at(&mut c, uid, p, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

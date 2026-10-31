@@ -53,6 +53,8 @@
   "anim.chainKind.actGate": "行动限制",
   "anim.chainKind.onBoardGate": "在场限制",
   "anim.chainKind.targetableGate": "可指定限制",
+  "anim.chainKind.skillFired": "技能触发后",
+  "anim.chainKind.markChanged": "标记变化",
   "anim.chainKind.bankruptBefore": "破产前",
   "anim.chainKind.bankruptResolved": "破产结算后",
   "anim.chainKind.beforeOut": "出局前",

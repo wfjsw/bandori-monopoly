@@ -27,8 +27,13 @@ pub const SPARKLER: CardDef = CardDef::new(
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
-// 规则书「放置2个奇迹水晶」: the `⌛2` marker the client shows.
-.props(&[(bandori_std::marker::TURNS_LEFT, 2)])
+// 规则书「放置2个奇迹水晶（上限2）」: the `⌛2` marker the client shows, and the
+// printed 上限 as a static per-instance cap (`counter_max.*` is split out of the
+// props at placement and `add_counter_at` clamps at it).
+.props(&[
+    (bandori_std::marker::TURNS_LEFT, 2),
+    ("counter_max.crystals", 2),
+])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"燃尽前的线香花火"#)
         .raw_name(r#"燃尽前的线香花火"#)
@@ -43,10 +48,8 @@ fn sparkler(player_id: i32) -> card_sdk::Asked {
     // (`MaxCrystals = 2`).
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("sparkler_note")));
-    // TODO(ABI): there is no per-instance counter max -- `add_counter_at` clamps
-    //   this call only, so an external add (`crystal_swap`'s `add`, `max = 0`) can
-    //   push the count past 上限2, and the burn then hands out one more extra turn
-    //   than the two crystals allow.
+    // The stored `counter_max.crystals` cap (declared in `.props`) clamps this
+    // call and every later external add, so 上限2 holds however the count moves.
     ctx::add_crystals(2, 2)?;
     ctx::log(
         player_id,

@@ -709,6 +709,8 @@ action_kinds! {
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
+    SkillFired;
+    MarkChanged;
 }
 
 #[cfg(test)]

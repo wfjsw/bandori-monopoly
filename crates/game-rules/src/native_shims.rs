@@ -302,6 +302,19 @@ pub trait HostOps {
     fn op_trig_step(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_by_card`
     fn op_trig_by_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_trig_uid` -- the raise's unique id (0 outside a raise).
+    fn op_trig_uid(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_trig_instance` -- the raise's subject instance/row (-1 none).
+    fn op_trig_instance(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_body_enter` -- push a resolution frame; 1 run the body, 0 the
+    /// fire was cancelled.
+    fn op_body_enter(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_body_leave` -- pop the innermost resolution frame.
+    fn op_body_leave(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_counter_max_at` -- per-instance counter maximum (0 uncapped).
+    fn op_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_set_counter_max_at` -- write the maximum (0 clears).
+    fn op_set_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_pay_is_rent`
     fn op_trig_pay_is_rent(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_move_kind`
@@ -1207,6 +1220,25 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trig_by_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_by_card(self)? as i64)
+    }
+    fn op_trig_uid(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::trig_uid(self)? as i64)
+    }
+    fn op_trig_instance(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::trig_instance(self)? as i64)
+    }
+    fn op_body_enter(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::body_enter(self, a[0], a[1])? as i64)
+    }
+    fn op_body_leave(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::body_leave(self)?;
+        Ok(0)
+    }
+    fn op_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::counter_max_at(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_set_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::set_counter_max_at(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_trig_pay_is_rent(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_pay_is_rent(self)? as i64)
@@ -3221,6 +3253,59 @@ pub unsafe extern "C-unwind" fn ruleset_trig_step() -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_by_card() -> i32 {
     with_host(|h| match h.op_trig_by_card([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_uid() -> i32 {
+    with_host(|h| match h.op_trig_uid([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_instance() -> i32 {
+    with_host(|h| match h.op_trig_instance([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_body_enter(p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_body_enter([p, n, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_body_leave() {
+    with_host(|h| match h.op_body_leave([0, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_counter_max_at(uid: i32, p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_counter_max_at([uid, p, n, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_counter_max_at(
+    uid: i32,
+    p: i32,
+    n: i32,
+    max: i32,
+) -> i32 {
+    with_host(|h| match h.op_set_counter_max_at([uid, p, n, max, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

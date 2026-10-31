@@ -307,7 +307,12 @@ pub fn add_counter_self<C: HostCtx>(
     max: i32,
 ) -> Result<i32, HostErr> {
     let name = guest_str(c, np, nl)?;
-    Ok(c.st_mut().w().add_counter(&name, n, max))
+    let uid = c.st().wr().trigger().uid;
+    let r = c.st_mut().w().add_counter(&name, n, max);
+    if std::env::var("DBG_HOOK").is_ok() && name == "crystals" {
+        eprintln!("ADDCOUNT n={} -> {} uid={}", n, r, uid);
+    }
+    Ok(r)
 }
 
 pub fn set_counter_self<C: HostCtx>(c: &mut C, np: i32, nl: i32, n: i32) -> Result<i32, HostErr> {
@@ -1451,6 +1456,19 @@ pub fn raise<C: HostCtx>(
     kind: &str,
     value: i32,
 ) -> Result<i32, HostErr> {
+    raise_as(c, player_id, kind, value, None)
+}
+
+/// [`raise`] with the raise's `card` provenance set (`t.card`). The body
+/// wrapper uses it for `skillFired` so a hook can name the skill
+/// (`card_is('skill:…')`); a plain guest raise has none.
+pub fn raise_as<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    kind: &str,
+    value: i32,
+    card: Option<&str>,
+) -> Result<i32, HostErr> {
     // v78: a `DealValue` kind (BuyAssign) carries the default
     // deal from the guest's trigger in, and writes the rewritten
     // deal back so `trigger::deal_*` reads the fold.
@@ -1477,6 +1495,7 @@ pub fn raise<C: HostCtx>(
         kind: kind.to_string(),
         value,
         tile,
+        card: card.map(str::to_string),
         deal_owner,
         deal_houses,
         deal_mortgaged,
@@ -2418,6 +2437,9 @@ pub fn ask<C: HostCtx>(
 /// Two-call out-buffer pattern like [`trig_name`].
 pub fn trig_kind<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
     let s = c.st().wr().trigger().kind.spelling();
+    if std::env::var("DBG_HOOK").is_ok() {
+        eprintln!("TRIGKIND {}", s);
+    }
     write_str(c, &s, p, n)
 }
 
@@ -2443,6 +2465,77 @@ pub fn trig_step<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 pub fn trig_by_card<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok({ c.st().wr().trigger().by_card.unwrap_or(-1) })
+}
+
+/// The raise's unique id (0 outside a raise). The one current trigger is the
+/// open top of the raise.
+pub fn trig_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().wr().trigger().uid)
+}
+
+/// The raise's subject instance/row (-1 = none).
+pub fn trig_instance<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().wr().trigger().instance)
+}
+
+/// Push a resolution frame for the body about to run as the card `(p, n)`.
+/// `1` = run the body, `0` = the fire was cancelled. Raising `skillFired`
+/// itself is the engine's; the frame carries the open raise id, or `0`.
+pub fn body_enter<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
+    // The frames are the host's (`drive_hook` pushes, `raise_core` drops); the
+    // guest only raises `skillFired` here.
+    let card = guest_str(c, p, n)?;
+    if card.starts_with("skill:") {
+        // The skill's owner is the seat this body runs for (the frame
+        // `drive_hook` just pushed), not the raise's actor: on a payment the
+        // actor is the payer, and a payee's hook must still read 「你的技能」.
+        let owner = crate::wasm_rules::resolving_seat()
+            .filter(|s| *s >= 0)
+            .unwrap_or(c.st().wr().trigger().player_id);
+        // `raise` answers 1 when the link settled and 0 when a counteraction
+        // cancelled it; the caller skips the body on 0 (and on the pause
+        // sentinel, which it re-enters once the answer is logged).
+        let packed = raise_as(c, owner, "skillFired", 0, Some(&card))?;
+        if packed == 0 {
+            return Ok(0);
+        }
+        return Ok(if packed == card_sdk::abi::EXIT_NEED_INPUT {
+            packed
+        } else {
+            1
+        });
+    }
+    Ok(1)
+}
+
+/// Leave the body. The frame deliberately stays up: the hooks the body's own
+/// money moves raised are walked *after* the guest call returns, so the host
+/// drops the frame when the raise behind it finishes (`raise_core`), not here.
+pub fn body_leave<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
+    if std::env::var("DBG_HOOK").is_ok() {
+        let card = c.st().wr().current_card().to_string();
+        eprintln!("LEAVE card={} kind={:?}", card, c.st().wr().trigger().kind);
+    }
+    Ok(())
+}
+
+/// The instance's stored maximum for counter `name` (`0` = uncapped/absent).
+pub fn counter_max_at<C: HostCtx>(c: &mut C, uid: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, p, n)?;
+    Ok(c.st().wr().counter_max_at(uid, &name))
+}
+
+/// Store the maximum for counter `name` (`0` clears); returns the stored
+/// value.
+pub fn set_counter_max_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    p: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().set_counter_max_at(uid, &name, max))
 }
 
 pub fn trig_pay_is_rent<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {

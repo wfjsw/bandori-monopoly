@@ -21,7 +21,7 @@ Closed backlog items (B class: needs an engine/ABI capability):
 | 7 | `hagumi-multi-standin-abi` | 252 |
 | 8 | `sparkler-per-instance-counter-cap` | 342 |
 | 9 | `umiri-user-key-per-instance` (see 1) | 445 |
-| 10 | `hina-clause-2-swap-missing` (shared with G05; G01 owns the marker and the uid half) | 487, 488, 490, 1555 |
+| 10 | `hina-clause-2-swap-missing` (**moved to G05**; its lifetime edge to G08) | 487, 488, 490, 1555 |
 | 11 | `cs-crystal-cap-read` | 301, 1056 |
 
 Items 5, 6, 7 and 9 are **demoted to A** after this design: existing mechanisms
@@ -37,15 +37,16 @@ and are identified by their triage row id.
 | # | draft said | why it was wrong | revision |
 |---|---|---|---|
 | R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Press(id, …)`, `NetMessage.{uid,entry}`, `act = "press"`, `SkillAction.{uid,entry,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §6.5. | Drop the offer half entirely. G01 ships the `real_id` store and accessors; G05 ships every offer wire. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
-| R2 | uid is stamped only in `Match::counteract` (`play.rs:5226`) and `skillFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal and maintain the resolving stack from a wrapper in the guest's `ruleset_on` body dispatch, which all three paths cross (§5.4). |
+| R2 | uid is stamped only in `Match::counteract` (`play.rs:5226`) and `skillFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
 | R3 | hook jobs are enumerated from fields only | A `markChanged` caused by destruction names an instance that is **already unplaced** by the time the raise commits (`unplace_at` removes before `commit_after`), so the field walk misses the very instance whose hook must resync/discard. | `collect_hook_jobs` also adds a job for the raise's subject instance (alive or dead) and one per resolving frame (§5.3). |
-| R4 | umiri's fix reads `card.counter('umiri_user')` in a pre | `fill_candidate` resolves `card.*` by `(player, card id)` — the **first** copy — so two copies read one counter and item 9 stays broken. | `CandidateCtx` gains the running `uid`; `card.counter` / `card.tile` / `card.placed` resolve through it when set (§5.6). |
-| R5 | the G01 README allocation gives no Kani `Op` ids | G01 adds nine imports; each needs an `Op` and an arm (`sys_kani`, `kani_host`, `host.rs` are exhaustive). Without ids the Kani build cannot compile. | Take 341–349 and shift the later groups' bands (README table updated with this file). |
-| R6 | claims for "one per raise" ride player slots (`ctx::slot(player, "black.pass.<uid>")`) | A player slot is per seat and never cleaned; every pass/mark trigger adds a permanent key. | Claim on the **acting instance's** prop (`prop == trigger::uid()`), which dies with the instance and stays per-copy (§6.3, §6.4, §6.7). |
+| R4 | umiri's fix reads `card.counter('umiri_user')` in a pre | `fill_candidate` resolves `card.*` by `(player, card id)` — the **first** copy — so two copies read one counter and item 9 stays broken. | `CandidateCtx` gains the running `uid`; `card.counter` / `card.tile` / `card.placed` resolve through it when set (§5.5). |
+| R5 | the G01 README allocation gives no Kani `Op` ids | G01 adds six imports; each needs an `Op` and an arm (`sys_kani`, `kani_host`, `host.rs` are exhaustive). Without ids the Kani build cannot compile. | Take 341–346 and shift the later groups' bands (README table updated with this file). |
+| R6 | claims for "one per raise" ride per-raise player slots (`ctx::slot(player, "black.pass.<uid>")`) | A per-raise key is never cleaned; every pass/mark trigger adds a permanent state key. | Claim on **one fixed-key seat latch** holding the raise uid (`state::get(player, CLAIM) != trigger::uid()`): one key per card, overwritten in place, shared by every copy so two copies answer one raise once (§6.3, §6.4, §6.7). |
 | R7 | `remove_from_game` drains the mark log "at its end" | `remove_from_game` returns `Vec<usize>`, not `Flow`, and its two callers do not propagate a raise. | It returns `Flow<Vec<usize>>`; both callers `?` (§5.3). |
-| R8 | `counterMax`, `reatedBy` (created_by), `real_id` stamping | hina's substitute would be destroyed with hina's own instance when hina is banished (`:85`) — `created_by` alone kills the stand-in. | Add `set_created_by_at`; hina clears it after marking the stand-in. A self-placement (same card id) is never stamped (§5.5). |
+| R8 | `counterMax`, `createdBy` (created_by), `real_id` stamping | hina's substitute would be destroyed with hina's own instance when hina is banished (`:85`) — `created_by` alone kills the stand-in. | Lifecycle (`created_by` + `set_created_by_at`) moves to G08 and the substitute marker (`real_id`) to G05; the cap stays here (R11). |
 | R9 | cited line numbers from the 2026-10-28 base | Master moved (landing-log, walk-pace, detour `linger`, sparkler props). Every reference is re-read below; item 6 is already fixed on master. | References updated; §6.6 records the landed fix. |
 | R10 | "RECORD_VERSION stays 3" | It is **4** (`record.rs:48`). | Corrected (§7). |
+| R11 | one group carried three unrelated concerns | `real_id` is offer/skin (G05 already enumerates presses and resolves an effective card) and `created_by` is zone lifecycle (G08 owns the zone writer, attachments and destruction). Keeping them here made G01 report on three subsystems at once and coupled its landing to two others. | G01 keeps only identity and its three stores: raise uid, subject instance, counter cap. `real_id` moves to G05 §4.4, `created_by` to G08 §4.9; their `Op` ids 347–349 stay with those groups in place. |
 
 All line references below are against `a0403648`.
 
@@ -205,10 +206,11 @@ pressed.
 gate spelling used elsewhere is `ctx::hand_count(player, "PP:[衍生]共鸣") > 0`
 (`see_you_tomorrow.rs:51`).
 
-**Group split.** G01 ships the instance marker (`real_id`), its lifetime
-rules, and hina's two marker writes in the play body. G05 ships the press
-entry and the offer, which is what makes the swap reachable — see R1. The
-marker half lands here and is testable on its own.
+**Where it went.** Both halves are offer-and-skin concerns, not identity:
+the substitute marker (`real_id`) and hina's two marker writes are G05 §4.4,
+and the lifetime edge that keeps the stand-in alive (`created_by`,
+`set_created_by_at`) is G08 §4.9. G01 supplies only the plumbing they read
+(`trigger::uid()`, the instance uid).
 
 ### 2.11 `cs-crystal-cap-read` — rows 301, 1056
 
@@ -232,9 +234,8 @@ including one already at its printed 上限, then overfills it. The TODOs at
 3. **No lifetime edge between instances.** `place_card_on` creates a child row
    with no creator; destruction walks only mark/token units.
 4. **The cap is call-local.** There is no per-instance maximum store.
-5. **The feature-offer and per-instance reads are name-keyed.** A placed
-   instance cannot be told apart from its copy in a pre (`card.*`), and no
-   per-instance identity (`real_id`) is stored.
+5. **The condition reads are name-keyed.** A placed instance cannot be told
+   apart from its copy in a pre (`card.*`); both resolve by `(player, id)`.
 6. **Guest paths skip the host drive.** `play_card` / `invoke_skill` /
    `invoke_entry` run bodies through `call_entry` in the guest, so anything
    wired into the host drive alone misses them.
@@ -257,11 +258,8 @@ Concretely:
   vocabulary for "am I currently resolving".
 - Mark mutations are logged and raised with the mark's `instance` (creator),
   owner, tile, kind and effective signed delta.
-- `FieldCard` gains a creator (`created_by`) and a per-counter maximum
-  (`counter_max`); destruction follows `created_by`; adds clamp at the stored
-  maximum.
-- A field instance may carry a `real_id` naming the card whose press/effect
-  surface it should run. (The press surface itself is G05.)
+- `FieldCard` gains a per-counter maximum (`counter_max`), and adds clamp at
+  the stored maximum.
 - `CandidateCtx` carries the running uid so `card.*` answers for the instance,
   not the first copy of its name.
 
@@ -299,12 +297,8 @@ ruleset_trig_instance() -> i32;         // the subject instance/row uid; -1 none
 
 // resolution stack (new)
 ruleset_body_enter(ptr, len) -> i32;    // 1 run the body, 0 the fire was cancelled
-ruleset_body_leave();                   // pop the frame
-
-// real id / lifetime (new; two-call strings, 0 bytes = none)
-ruleset_real_id_at(uid, ptr, len) -> i32;      // byte length of the real id, 0 none
-ruleset_set_real_id_at(uid, ptr, len) -> i32;  // 1 set, 0 no such instance
-ruleset_set_created_by_at(uid, by) -> i32;     // 1 set, -1 clears, 0 no such instance
+ruleset_body_leave();                   // close the body scope (the frame
+                                        // stays up; its raise drops it)
 
 // per-instance counter maximum (new)
 ruleset_counter_max_at(uid, ptr, len) -> i32;      // 0 = uncapped / absent
@@ -313,7 +307,7 @@ ruleset_set_counter_max_at(uid, ptr, len, max) -> i32; // 0 clears; returns stor
 
 `ptrs` are guest pointers, `len` bytes of UTF-8, the established two-call /
 `write_str` pattern (`hostfns.rs:3415-3420`). `uid` of a non-existent instance
-reads `-1`/`0`/`0` per above and all writers return `0`.
+reads `-1`/`0` and all writers return `0`.
 
 ### 4.2 Guest wrappers — `crates/card-sdk/src/ctx.rs`
 
@@ -323,12 +317,9 @@ pub fn uid() -> i32;          // raise id
 pub fn instance() -> i32;     // subject instance, -1
 
 // module scope (called by `rt::on`; not by card code)
-pub fn body_enter(card: &str) -> bool;  // false = cancelled fire, skip the body
+pub fn body_enter(card: &str) -> i32;   // 0 = cancelled fire, skip the body
 pub fn body_leave();
 
-pub fn real_id_at(uid: i32) -> Option<NameId>;
-pub fn set_real_id_at(uid: i32, id: &str) -> i32;
-pub fn set_created_by_at(uid: i32, by: i32) -> i32;
 pub fn counter_max_at(uid: i32, name: &str) -> i32;
 pub fn set_counter_max_at(uid: i32, name: &str, max: i32) -> i32;
 ```
@@ -344,14 +335,8 @@ Parameter semantics:
   (`counterChanged`), the mark's creating instance (`markChanged`), or the
   instance the hook job runs as (`-1` when neither names one). It is **not**
   overwritten per job: copy A must be able to ignore a raise about copy B.
-- `body_enter` / `body_leave` — pushed by the one body dispatcher; see §5.4.
-- `real_id_at` / `set_real_id_at` — the substitute marker on an instance,
-  written by the stand-in's play; `set_real_id_at(uid, "")` clears. It names
-  the card whose **press/effect surface** the instance runs (G05 reads it on
-  every press and offer read); it is not a rename of `FieldCard.card`, so
-  counters, props and `dest` of the instance stay its own.
-- `set_created_by_at` — relinks the lifetime edge; `by < 0` clears it. Used by
-  a stand-in whose creator leaves play (hina, §6.10).
+- `body_enter` / `body_leave` — called by the one guest body dispatcher;
+  the host owns the frames they bracket (§5.4).
 - `counter_max_at` / `set_counter_max_at` — a hard per-instance ceiling for one
   named counter. `0` = uncapped. `add_counter_at` / `add_counter` /
   `add_crystals` clamp to it in addition to their call-local `max`.
@@ -423,7 +408,7 @@ unchanged.
 | export | state | change |
 |---|---|---|
 | `ruleset_add_counter_at` | extended | clamps at the instance's stored maximum (`counter_max`) after the call-local `max` |
-| `ruleset_place_card` / `ruleset_place_card_on` | extended | stamp `created_by = current_uid` for a differently-named child (§5.5), and split out `counter_max.*` props |
+| `ruleset_place_card` / `ruleset_place_card_on` | extended | split `counter_max.*` props into the per-instance cap store (§5.5) |
 | `ruleset_trig_name` | extended | also set on `markChanged` (the mark kind) |
 | `ruleset_trig_value` | extended | mark delta |
 | `ruleset_trig_tile` / `trig_target` | extended | mark tile / mark owner |
@@ -480,8 +465,10 @@ No signature is removed and no existing byte layout changes.
      provenance, §5.3);
   2. one job per resolution frame whose card declares the kind, with the
      frame's uid.
-  Both are deduped against field jobs by `(card_id, uid)`. A frame and a dead
-  subject for the same uid may both exist and are the same job.
+  All passes are deduped by uid against what this walk already drove, and the
+  resolving pass runs last: a frame and a dead subject for the same uid are
+  the same job, and a body that is also on the field or the board is driven
+  once rather than hearing its own raise twice.
 - `remove_from_game` (`play.rs:4451`) becomes `Flow<Vec<usize>>` and drains
   the log after its clears, so a purge's removals are raised even when no
   further run commits. Both call sites (`:4402`, `:4436`) propagate with `?`.
@@ -494,27 +481,42 @@ No signature is removed and no existing byte layout changes.
 
 ### 5.4 Resolution stack, body wrapper and `skillFired`
 
-- `World.resolving: Vec<(String, i32)>` — transient `#[serde(skip)]`, so a
-  replayed action starts empty and nothing leaks into a save.
-- The push/pop lives in **one** place: the body arm of `card_sdk::rt::on`
-  (`rt.rs:283-326`, the `*Body` arms before the drive invocation). For every
-  body it calls `ruleset_body_enter(card_id)`, runs the body, then
-  `ruleset_body_leave()` in both the success and the `Err(Prompt)` path.
+- The stack is a host **thread-local** (`RESOLVING`), not a world field: a
+  raise nested inside a body reads it, and every body commit swaps the
+  world copy, so no `World`/`Cx` copy could carry it. One host thread per
+  match; it dies with the stack. A frame is `(card, uid, owner seat, raise
+  uid)`.
+- The host owns the frames end to end; the guest wrapper in `card_sdk::rt::on`
+  only announces scope (`body_enter` / `body_leave`).
+  - `play_card` / `event` stamp the trigger's uid and push the frame before
+    the drive; `drive_hook` pushes for the card it is about to drive (seat
+    from the call, `-1` for a hand play's not-yet-placed servo).
+  - A body returns from its guest call **before** the hooks its money moves
+    raised are walked (handler answers replay inline afterwards), so the body
+    cannot drop its own frame on return. A frame dies with the raise that
+    carried it: `raise_core` (and `counteract_orig`, which writes the same
+    lifetime) truncates every frame whose raise uid is the trigger it is
+    settling, on success and on a non-suspended error alike.
+  - An already-resolving instance keeps one frame; a repeated walk does not
+    stack a second.
 - Host side of `enter`:
-  1. if the top frame is already `(card, uid)`, mark it non-pushing
-     (a replay re-entry); otherwise push;
-  2. if the card is a `skill:`, raise `skillFired` (fresh
+  1. if the card is a `skill:`, raise `skillFired` (fresh
      `CoreTrigger::new("skillFired", call.player_id())`, `card`,
      `by_card = owner`, `instance = -1`) through the normal counteract
-     choke. A counter may cancel it; a cancelled fire returns `0`, pops the
-     frame and the guest skips the body;
-  3. if the raise halts (`Err(e) if e.is_need_input()`), pop the frame and
-     propagate — the body has not started, and the replayed action pushes
-     again;
-  4. otherwise return `1`.
-- `leave` pops. A body that traps or panics leaves at most one stale frame in
-  the run copy; `[serde(skip)]` discards it on save and the action boundary
-  discards it on replay.
+     choke. The owner is the **frame's seat** -- the seat the drive was
+     dispatched for -- not the enclosing raise's `player_id`, because on a
+     payment that is the payer: a payee's 「你的技能」 hook would otherwise
+     miss every leg paid *to* it. The raise's own cause is stamped there too
+     (`t.by_card`, which the guard reads as `by == owner`). A counter may
+     cancel it; a cancelled fire returns `0` and the guest skips the body;
+  2. if the raise halts (`packed == EXIT_NEED_INPUT`), return the sentinel —
+     the body has not started, and the replayed action re-enters;
+  3. otherwise return `1`.
+- `leave` is a no-op (debug trace only): the frame deliberately stays up.
+- Dispatch reads the stack: the conjoined unit-subject pass and the last
+  pass of every walk drive the resolving bodies, resolving frames **last**
+  and deduped against what the earlier passes drove, so a body that is also
+  on the field or the board hears its own raise once.
 - The guard for a cancelled fire is the existing `is_cancelled()` read on the
   raised trigger, exactly as `use_skill` treats a cancelled `cardUsed`
   (`play.rs:1026-1036`).
@@ -524,26 +526,7 @@ No signature is removed and no existing byte layout changes.
 - `collect_hook_jobs` reads the stack (§5.3); `fill_window` snapshots it
   (§4.4). The stack is mirrored nowhere else.
 
-### 5.5 Creator binding and destruction
-
-- `FieldCard.created_by: Option<i32>` — `#[serde(default, with =
-  "opt_i32_neg1")]`, stamped by `Run::place_card` / `place_card_on`
-  (`wasm_rules.rs:1148-1178`) **before** `current_uid` moves: when the placed
-  card differs from `current_card` and `current_uid >= 0`, set
-  `created_by = current_uid`. A card placing itself (its own id) is not
-  stamped, so no self-cycle.
-- `destroy_instance_units(uid)` (`ops.rs:2124`) first collects live instances
-  whose `created_by == Some(uid)`, `unplace_at`s them recursively (depth cap
-  8) and sends each to its owner's discard via `to_discard`, then clears
-  mark/token units. It runs even when `unplace_at` already removed the parent,
-  because bankruptcy clears the player's field (`play.rs:4488`) **before**
-  destroying owned uids (`:4496-4497`).
-- `unplace_at` calls `destroy_instance_units` *before* removing the instance
-  (`ops.rs:1514`), so a child's removal sees a live parent.
-- A stand-in that must outlive its creator clears the edge
-  (`set_created_by_at(uid, -1)`, hina §6.10).
-
-### 5.6 Counter maximum and per-instance candidate reads
+### 5.5 Counter maximum and per-instance candidate reads
 
 - `FieldCard.counter_max: BTreeMap<String, i32>` — `#[serde(default,
   skip_serializing_if = "…::is_empty")]`.
@@ -558,30 +541,26 @@ No signature is removed and no existing byte layout changes.
   mirrors both.
 - `CandidateCtx.uid` / `fill_candidate_uid`: §4.5.
 
-### 5.7 Real id and lifetime
+### 5.6 Kani model representation
 
-- `FieldCard.real_id: Option<String>` — `#[serde(default,
-  skip_serializing_if = "Option::is_none")]`. Dies with the instance.
-- G01 stores and exposes it; G05 resolves the effective card on press and
-  offer reads (`real_id_at(uid).unwrap_or(own card)`) and enumerates press
-  entries. Until G05 lands, nothing reads it.
-- `set_real_id_at` requires a live uid and a non-empty, declared id; it does
-  not validate the pair (`CIRCLED` in G05 validates on read).
-
-### 5.8 Kani model representation
-
-- `World` gains symbolic `trig_uid: i32`, `trig_instance: i32`, a bounded
-  `resolving: [u16; MAX_RESOLVING]` + length, `real_id: [NameId; MAX_FIELD]` +
-  a `real_tag` bit per slot, `created_by` per field slot, and `counter_max`
-  in the per-field counter area.
-- Each new op has an `arm_*`; unmodeled ops keep failing loudly
-  (`rules/kani/src/host.rs:1-10`).
-- Invariants to assert: `add_counter_at` never exceeds a positive stored cap;
-  a counter set with a cap and then set uncapped is no longer clamped; a
-  `created_by` child disappears from the field after the parent's
-  `unplace_at`; a child with the edge cleared survives; `body_enter` on a
-  cancelled fire leaves no frame; `resolving(id)` is true inside that card's
-  body and false after `body_leave`; `set_dest` applies to `last_uid`.
+- All six ops are **stubs** for now (`rules/kani/src/host.rs`, the
+  `trig_uid` arm onward), following the existing convention for an op the
+  model has not grown: the documented defaults, not a loud failure
+  (`trig_uid` 0, `trig_instance` -1, `body_enter` 1, `body_leave` 0,
+  `counter_max_at` 0, `set_counter_max_at` 0).
+  `hostops_smoke::identity_and_cap_stubs` pins those totals, so replacing a
+  stub with a model must keep them.
+- Consequence to keep in mind when reading a card proof: a body that reads
+  `trigger::uid()` / `trigger::instance()` or the stored cap sees the stub,
+  so anything keyed on a specific non-zero id is not exercised symbolically
+  yet (in particular `add_counter_at`'s stored-cap clamp).
+- What a model must still represent: symbolic `trig_uid` / `trig_instance`,
+  a bounded `resolving` in the frame stack, and `counter_max` in the
+  per-field counter area. Its invariants: `add_counter_at` never exceeds a
+  positive stored cap; a counter set with a cap and then set uncapped is no
+  longer clamped; a frame pushed by the host survives a cancelled fire (it
+  dies with the raise); `resolving(id)` holds from the push until the raise
+  finishes, `body_leave` notwithstanding; `set_dest` applies to `last_uid`.
 
 ---
 
@@ -667,8 +646,8 @@ fn resync(_p: i32) -> Asked { sync_circle_instance(trigger::tile()); Ok(()) }
 // pass body: one removal per raise, every copy files
 fn pass_tile(player_id: i32) -> Asked {
     let t = trigger::tile();
-    if ctx::prop(CLAIM) != trigger::uid() {
-        ctx::set_prop(CLAIM, trigger::uid());
+    if ctx::state::get(player_id, CLAIM) != trigger::uid() {
+        ctx::state::set(player_id, CLAIM, trigger::uid());
         ctx::bump_mark(t, &MarkFilter::any().kind(MARK).owner(player_id), -1);
     }
     sync_circle_instance(t);
@@ -677,12 +656,13 @@ fn pass_tile(player_id: i32) -> Asked {
 }
 ```
 
-`CLAIM` is a card-local prop key (`"black.claimed"`). The prop dies with the
-instance and is per-copy. `trigger::uid()` is nonzero inside a raise. The
+`CLAIM` is a fixed seat-state key (`"black.claimed"`). `trigger::uid()` is
+nonzero inside a raise; the value is a single int overwritten per raise, so
+the key never accumulates and both copies read the same latch. The
 guard `pass_tile_guard` and its residual `count_marks` check are dropped (the
-identity does the work). `sync_circle_instance`'s child now dies with the
-stand-in automatically (`created_by`), so its own `unplace_at` call is
-optional; it stays for the immediate case.
+identity does the work). `sync_circle_instance`'s child dies with the stand-in through G08's
+`created_by`, so its own `unplace_at` call is optional once that lands; it
+stays in the meantime.
 
 ### 6.5 `tomori-x-instance-scope` (demote to A)
 
@@ -732,8 +712,8 @@ ctx::bump_mark(t, &mark_filter(player_id), -1);
 if !any_marks(player_id) { ctx::set_dest(ctx::Dest::Graveyard); }
 
 // after — claim per raise, every copy files itself
-if ctx::prop(CLAIM) != trigger::uid() {
-    ctx::set_prop(CLAIM, trigger::uid());
+if ctx::state::get(player_id, CLAIM) != trigger::uid() {
+    ctx::state::set(player_id, CLAIM, trigger::uid());
     if !ctx::ask_yes(…) { return Ok(()); }
     if !ctx::gate(…) { return Ok(()); }
     if trigger::move_remaining() > 0 { ctx::plan::set_stop_at(t); }
@@ -788,37 +768,11 @@ separate users and the value dies with the instance. `turn_start` / `turn_end`
 swap `ctx::slot` for `ctx::counter` / `ctx::set_counter`, and the hop re-sets
 the counter on the new instance.
 
-### 6.10 `hina-clause-2-swap-missing` (marker half; card edit with G05)
-
-```rust
-// after placement of the substitute (hina_sound.rs:69-82)
-let new_uid = ctx::field_instances(player_id).into_iter()
-    .find(|(u, c)| !before.contains(u) && c.as_str() == sub).map(|(u, _)| *u)
-    .expect("the substitute placed itself");
-// insert at `:82`, before `set_dest(Banished)` at `:85`
-ctx::set_real_id_at(new_uid, ID);
-// The stand-in outlives hina, which is banished immediately below.
-ctx::set_created_by_at(new_uid, -1);
-```
-
-G05 supplies the offer (`On::Press("press_swap", …)` on HINA_SOUND, offered
-when the instance's effective card is HINA_SOUND) and the swap body. The
-swap's own marker notation is G05 §6.5 and is adopted verbatim; the crystals
-ride G01's counter store, not a slot.
-
-Test witnesses in this group assert only the marker: after hina's play, the
-substitute has `real_id == HINA_SOUND`, the substitute is not destroyed with
-hina, and the marker disappears when the substitute leaves.
-
----
-
 ## 7. Save / record / replay
 
 | added field | serde | SAVE_VERSION |
 |---|---|---|
 | `FieldCard.counter_max` | `default`, skip-if-empty | unchanged |
-| `FieldCard.created_by` | `default`, `opt_i32_neg1` | unchanged |
-| `FieldCard.real_id` | `default`, skip-if-none | unchanged |
 | `MatchState.trigger_uid` | `default` | unchanged |
 | `World.mark_log` | `skip` (rebuilt from re-raise; rows are transient) | unchanged |
 | `World.resolving` | `skip` (transient stack) | unchanged |
@@ -853,11 +807,10 @@ survives. Checkpoint hashes are A/B'd as usual (`examples/ckpt_equiv.rs`);
 any reordering takes the next free number instead — the README renumber rule).
 The reason is additive but incompatible: a v105 ruleset imports
 `ruleset_trig_uid`, `ruleset_trig_instance`, `ruleset_body_enter`,
-`ruleset_body_leave`, `ruleset_real_id_at`, `ruleset_set_real_id_at`,
-`ruleset_set_created_by_at`, `ruleset_counter_max_at` and
+`ruleset_body_leave`, `ruleset_counter_max_at` and
 `ruleset_set_counter_max_at`, uses kind ids 111–112, and expects
-`add_counter_at`'s stored-cap clamp and `place_card_on`'s creator stamp. A
-v104 host has none of them. No existing import signature or byte layout
+`add_counter_at`'s stored-cap clamp and `place_card_on`'s `counter_max.*`
+split. A v104 host has none of them. No existing import signature or byte layout
 changes.
 
 The exact doc line to add immediately below `ABI_VERSION` and above the newest
@@ -866,16 +819,15 @@ note (notes are newest-first under the constant):
 ```rust
 /// v105: **per-instance identity and state**. Raises carry a unique `uid`
 ///    (`ruleset_trig_uid`) and a subject instance (`ruleset_trig_instance`);
-///    every card body enters/leaves a resolution frame
-///    (`ruleset_body_enter` / `ruleset_body_leave`) readable as
-///    `resolving('id')`; `counterChanged` / `markChanged` name their instance;
+///    every card body opens a resolution frame (`ruleset_body_enter` /
+///    `ruleset_body_leave`) that the host pins to the body's raise, readable
+///    as the `resolving('id')` predicate; `counterChanged` / `markChanged`
+///    name their instance;
 ///    a per-instance counter maximum is stored (`ruleset_counter_max_at` /
-///    `ruleset_set_counter_max_at`) and `add_counter_at` clamps at it; an
-///    instance stores a `realId` (`ruleset_real_id_at` /
-///    `ruleset_set_real_id_at`) and a creator (`ruleset_set_created_by_at`)
-///    that destruction follows. New hook kinds `skillFired` (111) and
-///    `markChanged` (112); `place_card_on` stamps the creating instance;
-///    `card.*` condition reads answer for the running uid.
+///    `ruleset_set_counter_max_at`) and `add_counter_at` clamps at it; a
+///    `counter_max.*` placement prop fills that store. New hook kinds
+///    `skillFired` (111) and `markChanged` (112); `card.*` condition reads
+///    answer for the running uid.
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
 ```
 
@@ -899,7 +851,7 @@ usual version message; the archived bundles cover the old replays.
 | 7 | `hhw.rs::hagumi_one_reward_per_mark_with_two_standins` |
 | 8 | `mujica.rs::sparkler_cap_blocks_a_third_external_crystal` |
 | 9 | `mujica.rs::umiri_two_copies_keep_their_own_user` |
-| 10 | `pp.rs::hina_swap_marks_the_substitute_and_it_outlives_hina` |
+| 10 | (moved to G05) `pp.rs::hina_swap_marks_the_substitute_and_it_outlives_hina` |
 | 11 | `mujica.rs::crystal_swap_skips_a_full_destination` |
 
 Test 1 covers both directions: a fire during the resolution writes X, and a
@@ -908,14 +860,15 @@ untouched; it also pins the **guest-invoked** path (`ctx::invoke_skill` of
 `正论暴击` inside a probe card names the same resolution). Test 3 exercises an
 external `bump_mark` and a bankruptcy purge, and asserts the borrowed
 `tile:circle` is gone. Test 4 runs the pass under a replay with a prompt open
-to pin claim stability. Test 10 asserts the substitute survives hina's banish.
+to pin claim stability.
 
 ### 9.2 Kani obligations
 
-`kani_host::Op` gains nine append-only ids in the README band 341–349:
+`kani_host::Op` gains six append-only ids in the README band 341–346:
 `trig_uid = 341`, `trig_instance = 342`, `body_enter = 343`,
-`body_leave = 344`, `real_id_at = 345`, `set_real_id_at = 346`,
-`set_created_by_at = 347`, `counter_max_at = 348`, `set_counter_max_at = 349`.
+`body_leave = 344`, `counter_max_at = 345`, `set_counter_max_at = 346`.
+347–349 stay free; G05 (`real_id_at` / `set_real_id_at`) and G08
+(`set_created_by_at`) take them from their own docs without a renumber.
 Every new `Op` also lands in `hostops_smoke.rs`, `sys_kani.rs`,
 `native_shims.rs` and the `host.rs` dispatch.
 
@@ -924,8 +877,7 @@ Every new `Op` also lands in `hostops_smoke.rs`, `sys_kani.rs`,
 - `proofs/mor.rs::C-MOR-starry-night-02` — the guard admits iff
   `trig_instance == last_uid`.
 - `proofs/hhw.rs::C-HHW-black-suits-02` — a `markChanged` add/remove drives
-  attach/drop; a child with `created_by` leaves the field on
-  `unplace_at(parent)`; a child whose edge was cleared stays.
+  attach/drop, including a removal raised from the purge.
 - `proofs/hhw.rs::C-HHW-black-suits-03` — two drives with one raise id produce
   one `BumpMark(-1)` and two `set_dest` rows; a replay of the same raise keeps
   one bump.
@@ -939,12 +891,10 @@ Every new `Op` also lands in `hostops_smoke.rs`, `sys_kani.rs`,
   `add_counter_at` stops at the cap; clearing the cap unclamps.
 - `proofs/mujica.rs::C-MUJICA-umiri-02` — two instances keep separate
   `counter(USER_KEY)` values, read through the uid-bound candidate.
-- `proofs/pp.rs::C-PP-hina-03` — the substitute keeps its crystals, carries
-  `real_id`, and survives the placer.
 - `proofs/mujica.rs::C-MUJICA-crystal-swap-03` — the destination list excludes
   a full instance.
 
-Bounded-stub invariants per new op are in §5.8. `kind_table_pin` pins the two
+Bounded-stub invariants per new op are in §5.6. `kind_table_pin` pins the two
 names and ids.
 
 ---
@@ -971,8 +921,9 @@ names and ids.
    mutation is not necessarily a counter write (pairs, removals by filter,
    destruction) and the payload (tile/owner/instance) is exactly what a
    listener needs.
-6. **A `Message`/`send`-based handshake for hina.** Rejected: the swap must be
-   *offered* to the player with an enabled/reason state on the view.
+6. **A `Message`/`send`-based handshake for hina** (now G05's item). Rejected:
+   the swap must be *offered* to the player with an enabled/reason state on the
+   view.
 7. **Storing the counter cap in `props` only** (`props["max.crystals"]`) and
    clamping there. Rejected: `add_counter_at` is engine-side and would have to
    know the prop prefix anyway; a typed `counter_max` map keeps the clamp
@@ -1009,19 +960,16 @@ names and ids.
    the chain depth bounds it, and the claim spell makes a per-copy listener
    idempotent. The contract "listener writes must be idempotent per raise" is
    a ruling the doc assumes.
-5. **`real_id` scope.** Design: the marker does not change the card id, so
-   counters, props and `dest` stay the instance's. G05 decides the offer and
-   press gating. Confirm that a marked substitute should also keep its own
-   `On::Play` for a non-press re-fire.
-6. **Hina clause (2) frequency.** Is the swap once per turn, once per
-   resolution, or unlimited while resonance is held? The sheet gives none.
-   G05 assumes one offer per activation, unlimited across the turn.
-7. **Hina's inner play refusal.** If the newly played substitute refuses and
-   stays in hand, the host instance is already unplaced and the crystals are
-   lost. Re-place the old substitute and refund, or treat it as legal? Open.
-8. **`real_id` on a card that is itself a stand-in for two ids.** G05's
-   `real_id_at(uid).unwrap_or(own)` gives one level. Is a chain (A replaces B
-   replaces C) ever needed? Not ruled; one level assumed.
+5. **(G05)** `real_id` scope: the marker does not change the card id, so
+   counters, props and `dest` stay the instance's. Confirm that a marked
+   substitute should also keep its own `On::Play` for a non-press re-fire.
+6. **(G05)** Hina clause (2) frequency — once per turn, once per resolution, or
+   unlimited while resonance is held? The sheet gives none.
+7. **(G05)** Hina's inner play refusal: if the newly played substitute refuses
+   and stays in hand, the host instance is already unplaced and the crystals
+   are lost. Re-place and refund, or treat it as legal?
+8. **(G05)** `real_id` on a card that is itself a stand-in for two ids — is a
+   chain ever needed? Not ruled; one level assumed.
 9. **`trigger::uid()` on synthetic triggers.** A test-built trigger has `0`.
    A claim keyed on `0` matches every synthetic raise in the test. Confirm
    that is acceptable, or reserve `0` as "no identity" and skip claiming.

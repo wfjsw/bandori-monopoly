@@ -167,6 +167,9 @@ pub struct WindowCtx {
     /// This turn's fixed main-move roll (`plan.fixed_roll`, the guest's
     /// `ctx::fixed_roll()`); `None` = unset (binds CEL `null`).
     pub plan_fixed_roll: Option<i64>,
+    /// Card bodies currently resolving (`resolving('id') -> 1`); a name table
+    /// like `_move_tags`, innermost last.
+    pub resolving: Vec<(String, i64)>,
 }
 
 impl WindowCtx {
@@ -205,6 +208,10 @@ pub struct CandidateCtx {
     pub owner_tiles: i64,
     /// `card.*`
     pub card_id: i64,
+    /// The instance these `card.*` fields were read from, or `-1`. When set,
+    /// `card.counter` / `card.tile` / `card.placed` answer for that instance
+    /// instead of the first copy of `card_id`.
+    pub uid: i64,
     pub card_placed: bool,
     /// `card.counter('name')` lookup -- the candidate instance's named
     /// counters (host maps well-known wire names onto dedicated card fields;

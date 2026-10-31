@@ -74,6 +74,12 @@ pub struct Trigger {
     /// The counter name on a `CounterChanged` raise, or the message name on
     /// an `On::Message` dispatch.
     pub name: Option<String>,
+    /// Unique per raise; shared by every job it dispatches. `0` outside a
+    /// raise and on a hand-built trigger.
+    pub uid: i32,
+    /// The instance/row this raise is about (`-1` = none). Never restamped
+    /// per hook job -- the job's own instance is `self_uid()`.
+    pub instance: i32,
     /// A `BuyGate` refusal's reason key.
     pub reason: Option<String>,
     /// 真奈 join: the seat self-targeted effects of counters answering **this
@@ -164,6 +170,8 @@ impl Default for Trigger {
             cards: Vec::new(),
             card: None,
             name: None,
+            uid: 0,
+            instance: -1,
             reason: None,
             join_redirect: None,
             join_used: false,
@@ -196,6 +204,8 @@ impl Trigger {
             cards: Vec::new(),
             card: None,
             name: None,
+            uid: 0,
+            instance: -1,
             reason: None,
             join_redirect: None,
             join_used: false,
@@ -698,6 +708,17 @@ pub trait CardWorld: Clone + 'static {
         let _ = (uid, name, n, max);
         0
     }
+    /// The instance's stored maximum for counter `name`; `0` = uncapped.
+    fn counter_max_at(&self, uid: i32, name: &str) -> i32 {
+        let _ = (uid, name);
+        0
+    }
+    /// Store the maximum for counter `name` (`0` clears); returns the stored
+    /// value.
+    fn set_counter_max_at(&mut self, uid: i32, name: &str, max: i32) -> i32 {
+        let _ = (uid, name);
+        max
+    }
     /// On-card named counter of a placed card (first copy).
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
         let _ = (player_id, card, name);
@@ -1061,6 +1082,16 @@ pub trait CardWorld: Clone + 'static {
 
     // ---------------------------------------------------------- trigger
     fn trigger(&self) -> Trigger;
+    /// Card bodies currently running, innermost last: `(card id, raise uid)`.
+    /// Empty on a world that has no stack.
+    fn resolving(&self) -> Vec<(String, i32)> {
+        Vec::new()
+    }
+    /// The card whose entry is running (`""` when none) -- the frame's key
+    /// next to [`Self::self_uid`].
+    fn current_card(&self) -> &str {
+        ""
+    }
     fn set_trigger_move_roll(&mut self, roll: i32);
     /// Rewrite the pending amount on a `pay`/`paid` trigger (`PayCtx.amount`);
     /// 0 cancels the payment (`t.Pay.cancel`).

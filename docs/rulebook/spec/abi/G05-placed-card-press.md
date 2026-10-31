@@ -15,10 +15,10 @@ are the same mechanism). The request names the **instance** (`uid`) and the
 prefix, or from the card being placed.
 
 **Closed slugs and rows:** the consolidated row's rows plus the shared item
-below. `hina-clause-2-swap-missing` is G01's by header, but its clause
-(2) swap is a press of clause (2) of a *placed* card — the press entry here is
-what makes it addressable, so its rows are repeated and the card migration is
-listed in §6.
+below. `hina-clause-2-swap-missing` moved here whole from G01 (R11 there):
+its clause (2) swap is a press of clause (2) of a *placed* card, and the
+real-id marker the press resolves through is part of the press surface. Its
+only G01 remainder is the lifetime edge, which G08 carries.
 
 | # | slug | severity | rows |
 |---|---|---|---|
@@ -26,7 +26,7 @@ listed in §6.
 | 2 | `kanon-press-surface-abi` | high | 380, 955, 967 |
 | 3 | `even-lost-not-pressable` | low | 1521 |
 | 4 | `placed-card-press-surface` | high | 974 |
-| 5 | `hina-clause-2-swap-missing` (press half; G01 owns the uid half) | medium | 487, 488, 490, 1555 |
+| 5 | `hina-clause-2-swap-missing` (moved from G01; lifetime edge in G08) | medium | 487, 488, 490, 1555 |
 
 Two items are **demoted to A**: #2 and #3. Their stated expectation ("appears
 pressable and reaches `why_not_act`") is reachable today by dropping the
@@ -135,10 +135,10 @@ for every hand play, so hand-only bodies (`[手]` plays) would appear and rerun
 their hand body on a placed copy with no reservation. The row's own
 `fix_plan`: "Needs a capability, not a filter tweak".
 
-### 1.5 `hina-clause-2-swap-missing` (rows 487, 488, 490, 1555) — press half
+### 1.5 `hina-clause-2-swap-missing` (rows 487, 488, 490, 1555)
 
-The problem statement is G01 §2.10; on this group's half it is the same
-missing surface as 1.4, one level harder: the clause lives on a card that is
+The problem statement is G01 §2.10 (retained there for the shared rows); it is
+the same missing surface as 1.4, one level harder: the clause lives on a card that is
 no longer on the field (the stand-in), so the press must be found through the
 substitute's instance, not through its own card id. `hina_sound.rs:87-96` has
 both TODOs — no real-id marker on the placed substitute and no offer — and the
@@ -353,6 +353,26 @@ The frame's `entry` is always the **resolved** entry's declared id (`""` when
 that entry is unnamed, e.g. a `play_card` into a bare `On::Play`), never the
 alias spelling.
 
+Moved here from G01 (its original group carried the marker only as an offer
+concern). The marker text the press resolves through:
+
+```rust
+// crates/card-sdk/src/ctx/sys.rs -- two-call string, 0 bytes = none
+ruleset_real_id_at(uid, ptr, len) -> i32;      // byte length of the real id, 0 none
+ruleset_set_real_id_at(uid, ptr, len) -> i32;  // 1 set, 0 no such instance
+```
+
+`real_id_at(uid)` names the card whose **press/effect surface** the instance
+runs; it is not a rename of `FieldCard.card`, so counters, props and `dest`
+stay the instance's. `set_real_id_at(uid, "")` clears; the writer requires a
+live uid and a declared id and does not validate the pair. Field:
+`FieldCard.real_id: Option<String>`, `#[serde(default, skip_serializing_if =
+"Option::is_none")]`, `SAVE_VERSION` unchanged; it dies with the instance.
+
+Every read of an effective card on a placed instance
+(`real_id_at(uid).unwrap_or(own)`) is this group's: presses, offer
+enumeration and the press gate. Until G05 lands nothing reads it.
+
 All three targets: wasm32 resolves `ruleset_invoke_entry` /
 `ruleset_invoke_frame` as imports; native / `native-rules` needs
 `HostOps::op_invoke_entry` / `op_invoke_frame` + their forwarding impls in
@@ -482,7 +502,7 @@ defaults. The answer is memoised separately from `rules_cant_play`:
 existing `(player, card)` memo would cross-talk.
 
 A press belongs to the instance's **effective card**:
-`real_id_at(uid).unwrap_or(<the instance's own card>)`, the G01 marker a
+`real_id_at(uid).unwrap_or(<the instance's own card>)`, the marker a
 stand-in writes on the card it placed (§6.5). Every `card` / `id` below is that
 id. When a real-id is set the instance's own entries are replaced by the
 effective card's (a substitute does not also offer its own press); entry slugs
@@ -662,6 +682,9 @@ actions, each gated separately.
   `intern::resolve_str(NameId(..))` and returns real card names
   (`host.rs:2310-2325`), not `"p0".."p3"`; the model needs no field for this,
   and `owner_skill`'s `skill:` prefix test is already meaningful under CBMC.
+* `Op::real_id_at = 347` and `Op::set_real_id_at = 348` (carved from G01's
+  band, which now ends at 346). Model: `real_id: [NameId; MAX_FIELD]` plus a
+  `real_tag` bit per slot; both arms mirror live/declared checks.
 * A harness helper `place_instance(player, card) -> uid` writes `field[]`
   (`FieldCard { uid, card, player, .. }`) and `last_uid`; a press harness sets
   `last_uid = uid`.
@@ -758,7 +781,7 @@ press entry and never appear, so their `[手]` bodies cannot be replayed from
 the field. A card that is *both* hand-playable and field-activated (kanon,
 nanami) has two entries and two independent gates.
 
-### 6.5 `hina-clause-2-swap-missing` (rows 487, 488, 490, 1555) — press half; G01 owns the marker
+### 6.5 `hina-clause-2-swap-missing` (rows 487, 488, 490, 1555)
 
 Book (`PP:[冰川日菜]会发出怎样的声音呢？`, clause (2)):
 
@@ -766,8 +789,8 @@ Book (`PP:[冰川日菜]会发出怎样的声音呢？`, clause (2)):
 
 「本卡」 is the stand-in, which is banished once its substitute lands
 (`hina_sound.rs:86`); the [共鸣] clause therefore lives on the *substitute*
-from then on. That is exactly what the G01 real-id marker is for
-(`set_real_id_at`, G01 §4), and what §4.6's effective-card rule addresses: the
+from then on. That is exactly what the real-id marker is for
+(`set_real_id_at`, §4.4), and what §4.6's effective-card rule addresses: the
 press entry is declared on `HINA_SOUND`, found through the substitute's uid.
 
 Before (`hina_sound.rs:21`, two dead TODOs at `:87-96`):
@@ -791,6 +814,9 @@ let before: Vec<i32> = ctx::field_instances(player_id).iter().map(|(u, _)| *u).c
 // in hina_sound, after the sub is placed (`:77-82`):
 let Some(uid) = new_uid_since(player_id, &before, sub) else { return Ok(()) };
 ctx::set_real_id_at(uid, ID);
+// The stand-in outlives hina, which is banished on the next line. G08 owns the
+// edge and its clear; until it lands the substitute dies with hina.
+ctx::set_created_by_at(uid, -1);
 
 fn cant_swap(p: i32) -> Option<Msg> {
     if ctx::hand_count(p, crate::resonance::RESONANCE.id) < 1 {
@@ -856,10 +882,9 @@ fn new_uid_since(p: i32, before: &[i32], card: &str) -> Option<i32> {
   intact.
 * New locale keys `hina_sound_swap_ask` / `hina_swap_no_resonance` (zh/en);
   `hina_sound_title` is reused.
-* G01 §6.10's sketch spells this as `On::Action(Action::Actions(…))`; on the
-  press half that is superseded by `On::Press` (the `card.placed` condition and
-  the `actor == owner` pre drop out — a press is always a placed, owner-acted
-  entry). Its marker and counter spellings are adopted verbatim.
+* G01's earlier sketch spelled this as `On::Action(Action::Actions(…))`, now
+  superseded by `On::Press` (the `card.placed` condition and the `actor ==
+  owner` pre drop out — a press is always a placed, owner-acted entry).
 * Test `g05_hina_swap_keeps_crystals_and_re_mark` (two copied instances,
   different uids, same crystal count) pins the per-instance marker and counter
   carry.
@@ -914,7 +939,7 @@ so pre-v111 wasm still links). Changelog block, placed after the
 ///    `skip_serializing_if`; old `act: "skill"` records replay via the alias).
 ```
 
-The effective-card resolution (§4.6) reads G01's `FieldCard.real_id`; it adds
+The effective-card resolution (§4.6) reads `FieldCard.real_id`; it adds
 no field of its own, and with no marker it falls back to the instance's own
 card, so it is correct before §6.5's migration too.
 
@@ -963,6 +988,8 @@ delegates to it with the alias):
 Kani obligations (all in `rules/kani`):
 
 * `Op::invoke_entry` / `arm_invoke_entry` + the G13 record fields;
+  `Op::real_id_at` / `arm_real_id_at`, `Op::set_real_id_at` /
+  `arm_set_real_id_at` (347/348) with the `real_id` slot array and tag bits;
   `arm_is_placed` uid-bound; `arm_placed_cards` real names;
   `place_instance` harness helper.
 * `proofs/mor.rs`: `nanami_effort_press_iff_at(user)` — post = crystal -1,

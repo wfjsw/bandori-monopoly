@@ -286,6 +286,16 @@ pub struct Trigger {
     /// The counter name on a `CounterChanged` hook, or the message name on a
     /// `Message` entry. `None` otherwise.
     pub name: Option<String>,
+    /// Unique per raise, stamped once in `Ruleset::counteract` and shared by
+    /// every job the raise dispatches. `0` outside a raise and on a trigger a
+    /// test built by hand (the allocator only fills a `0`). A listener keys
+    /// one-shot claims on it.
+    pub uid: i32,
+    /// The field instance or row this raise is *about*, or `-1`. Set on
+    /// `counterChanged` (the changed instance) and `markChanged` (the mark's
+    /// creating instance); never restamped per hook job -- the job's own
+    /// instance is `self_uid()`.
+    pub instance: i32,
 }
 
 impl Trigger {
@@ -312,6 +322,8 @@ impl Trigger {
             cards: Vec::new(),
             reason: None,
             name: None,
+            uid: 0,
+            instance: -1,
         }
     }
 

@@ -1023,7 +1023,8 @@ fn m22_mygo_band_move1() {
     let band = t.skill_id(0, "迷途之星");
     t.set_crystals(0, &band, 1);
     // 想要成为人类 on the field -- `place_raw` runs no play body, so no X is
-    // declared (the slot stays 0 and the (1) guard `x > 0` cannot fire).
+    // declared (the instance has no `want_human_x` prop, so the (1) guard
+    // `x > 0` cannot fire).
     t.place_raw(0, "CRYCHIC:想要成为人类");
     // Replace the roll with a 1-tile move (the press runs the move itself).
     t.dice(&[15]);
@@ -1052,9 +1053,9 @@ fn m23_human_boost_hit_by_stop() {
     let mut t = Table::new(&["高松灯", "凑友希那"]);
     t.clean();
     // Everything the turn start reads must already be in place: `place_raw`
-    // runs no play body, so X is written through the player slot by hand.
-    t.place_raw(0, "CRYCHIC:想要成为人类");
-    t.m.world_mut().set_slot(0, "want_human_x", 15);
+    // runs no play body, so X is written onto the instance's prop by hand.
+    let human = t.place_raw(0, "CRYCHIC:想要成为人类");
+    t.m.world_mut().set_prop_at(human, "want_human_x", 15);
     t.set_crystals(0, "CRYCHIC:想要成为人类", 2);
     t.begin_turn(0);
     t.set_pos(0, 30);

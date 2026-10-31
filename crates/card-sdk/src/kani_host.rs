@@ -368,6 +368,13 @@ pub enum Op {
     // v100: mark refs -- resolve / drop one row by its stable uid.
     mark_tile = 339,
     remove_mark = 340,
+    // v105: raise identity, resolution frame and per-instance counter cap.
+    trig_uid = 341,
+    trig_instance = 342,
+    body_enter = 343,
+    body_leave = 344,
+    counter_max_at = 345,
+    set_counter_max_at = 346,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

@@ -10,7 +10,7 @@ Terminology: **attachment** = a card instance placed on another card instance
 `Attached`; **zone transaction** (`ZoneTxn`) = the one kernel move this design
 introduces. "Hook" = a passive listener, as in G03/G06.
 
-**Closed slugs and rows:** all 10 items are covered.
+**Closed slugs and rows:** all 11 items are covered.
 
 | # | slug | severity | rows |
 |---|---|---|---|
@@ -24,6 +24,7 @@ introduces. "Hook" = a passive listener, as in G03/G06.
 | 8 | `card-on-card` | high | 1075 |
 | 9 | `here-the-world-leave-hook` | high | 639, 645, 867, 875, 1074, 1252, 1474, 1488, 1514, 1515, 1689, 1695 |
 | 10 | `tomori-earliest-owned` | medium | 188, 994 |
+| 11 | `created-by-lifetime` (adopted from G01; shared rows `black-marker-hook`, `hina-clause-2-swap-missing`) | — | 283, 1029, 487, 488, 490, 1555 |
 
 **Demotions:** item 10 is **demoted to A** (engine-maintained `firstTile`, no ABI
 surface). Items 4 and 7, and the cancelled-flag half of item 5, also have
@@ -526,9 +527,44 @@ nothing is translated at runtime.
 | 8 | attachment imports, `CardLeft` cascade | `FieldCard.on`, `place_card*` | `on` is save-only | |
 | 9 | `CardLeaveBefore/Left/Removed` | `unplace_at`, `take_card`, purge | kinds 113-115 | |
 | 10 | — (A) | acquisition stamp + `firstTile` | | yes |
+| 11 | `set_created_by_at`, `created_by` edge | `place_card*` | import | field is save-only |
 
 The wire break is the new kind ids and import names; `FieldCard.on` and the
 stamps are save-shape only.
+
+### 4.9 Creator edge (`created_by`) — moved here from G01
+
+A placed child has no link to the instance that placed it, so destruction
+cannot follow it. `place_card_on` builds a row with `instance = None` and
+`src = None` even for a completely different card.
+
+```rust
+// crates/card-sdk/src/ctx/sys.rs -- two-call-free, scalar
+ruleset_set_created_by_at(uid, by) -> i32;   // 1 set, -1 clears, 0 no such instance
+```
+
+`FieldCard.created_by: Option<i32>`, `#[serde(default, with = "opt_i32_neg1")]`,
+`SAVE_VERSION` 13 already covers the group's own fields, so this adds no bump.
+It is an ownership edge, not provenance: `src`/`instance` on marks describe
+where a row came from, `created_by` decides what dies with what.
+
+Wiring:
+
+* `Run::place_card` / `place_card_on` (`wasm_rules.rs:1148-1178`) stamp
+  `created_by = current_uid` when `current_uid >= 0` and the placed card
+  differs from `current_card` (self-placement never stamps, so no cycle).
+* `destroy_instance_units(uid)` (`ops.rs:2124`) first collects live instances
+  with `created_by == Some(uid)`, `unplace_at`s them recursively (depth cap 8)
+  and sends each to its owner's discard, then clears mark/token units. It runs
+  even when `unplace_at` already removed the parent, because bankruptcy clears
+  the field (`play.rs:4488`) **before** destroying owned uids (`:4496-4497`).
+* `unplace_at` calls `destroy_instance_units` *before* removing the instance
+  (`ops.rs:1514`), so a child's removal sees a live parent.
+* An instance that must outlive its creator clears the edge
+  (`set_created_by_at(uid, -1)`), e.g. hina's substitute.
+
+Classification: item 11 is **EXTENDED** (`place_card*`), **WIRE-BREAK** (one
+import), save-shape only.
 
 ---
 
@@ -775,7 +811,9 @@ this item is A.
 `rules/kani/src/world.rs` implements the same `ZoneTxn` on its compact instance
 vector (`uid, card, owner, zone, face_down, on`), so the proofs in section 9
 exercise the real dispatch/kernel contract; `rules/kani/build.rs`'s `ARRAY_OPS`
-gains the eleven new import names and `rules/kani/src/host.rs` gets the dispatch
+gains the eleven new import names plus `set_created_by_at`
+(`Op::set_created_by_at = 349`, carved from G01's band, which now ends at 346;
+`created_by: [i32; MAX_FIELD]` in the model world) and `rules/kani/src/host.rs` gets the dispatch
 arms (symbolic index, bounded vectors). New `#[cfg(kani)]` direct-call exports
 follow the existing `ppcost` pattern for every edited card
 (`nyamu_card`, `one_of_us`, `same_sky`, `returns`, `fate_together`, `forever`,
@@ -945,6 +983,23 @@ No card edit. `firstTile` is now maintained; the existing
 `slot("firstTile") - 1` branch succeeds, and `.min()` remains the empty-slot
 fallback.
 
+### 6.10 black_suits / hina_sound (item 11)
+
+`black_suits` places the borrowed `tile:circle` rule on the board owner
+(`black_suits.rs:120-125`) and nothing binds it, so it outlives the crystal.
+The stamp is automatic — no card line — but the child's own `unplace_at` call
+becomes optional and stays as the immediate path.
+
+`hina_sound` must *not* follow its placer (hina is banished on the next line):
+
+```rust
+// after the substitute is placed, before `set_dest(Banished)` (`:85`)
+ctx::set_created_by_at(new_uid, -1);
+```
+
+Tests: `g08_borrowed_tile_dies_with_its_crystal` (external clear and a
+bankruptcy purge both remove it), `g08_hina_substitute_outlives_hina`.
+
 ---
 
 ## 7. Save / record / replay
@@ -953,7 +1008,7 @@ fallback.
   acquired_seq` are durable and saved; both are `#[serde(default)]`
   (`on = None`, stamps `0`), so a v12 save loads with no attachments and an
   empty order (tomori falls back to `.min()`).
-* **RECORD_VERSION stays 3.** No input-stream shape changes; the record's
+* **RECORD_VERSION stays 4** (`record.rs:48`). No input-stream shape changes; the record's
   `EngineStamp.save_version` moves with `SAVE_VERSION`.
 * **In-flight state:** `play_wasted` lives on `TurnCtx` like `extreme` and is
   restored by the re-run from its snapshot, not serialized separately. Chains
@@ -1057,6 +1112,9 @@ no input-shape change".
    `HandChanged`; `counted` matches the transaction; opening deal raises one per
    card with `counted = false`.
 7. `wasted_iff` — `Discarded.wasted` iff `set_ineffective` or `Cancelled`.
+8. `creator_cascade_iff` — a child with `created_by` leaves the field exactly
+   when its creator does; a cleared edge keeps it; a self-placement keeps the
+   field non-cyclic.
 8. `out_cause_iff` — one `beforeOut` per departure; cause matches the entry.
 9. `no_double_card_played` — exactly one `cardPlayed` per hand play of either
    path, at commit.

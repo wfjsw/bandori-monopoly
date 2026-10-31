@@ -980,6 +980,45 @@ mod abi {
             link_name = "ruleset_trig_name"
         )]
         pub fn trig_name(p: i32, n: i32) -> i32;
+        // v105: raise identity (hook reads only). `uid` is the raise's unique
+        // id (0 outside a raise); `instance` is the subject instance/row
+        // (-1 = none). Neither is restamped per hook job.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_uid"
+        )]
+        pub fn trig_uid() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_instance"
+        )]
+        pub fn trig_instance() -> i32;
+        // v105: resolution frame. `body_enter` reports 1 (run the body), 0
+        // (the fire was cancelled) or the pause sentinel (the fire asked).
+        // The frame is the host's: it stays up past `body_leave` and dies
+        // with the raise that carried the body.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_body_enter"
+        )]
+        pub fn body_enter(p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_body_leave"
+        )]
+        pub fn body_leave();
+        // v105: per-instance counter maximum. `0` = uncapped; the setter
+        // clears on `0` and returns the stored value.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_counter_max_at"
+        )]
+        pub fn counter_max_at(uid: i32, p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_counter_max_at"
+        )]
+        pub fn set_counter_max_at(uid: i32, p: i32, n: i32, max: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_step"

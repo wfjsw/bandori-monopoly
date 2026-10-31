@@ -1761,5 +1761,13 @@ mod tests {
             "paySplitMulBefore"
         );
         assert_eq!(TriggerKind::PaySplitMulBefore.id, 110);
+        // v105 hook kinds (104 / 107 stay retired).
+        assert_eq!(TriggerKind::from_str("skillFired").spelling(), "skillFired");
+        assert_eq!(
+            TriggerKind::from_str("markChanged").spelling(),
+            "markChanged"
+        );
+        assert_eq!(TriggerKind::SkillFired.id, 111);
+        assert_eq!(TriggerKind::MarkChanged.id, 112);
     }
 }
