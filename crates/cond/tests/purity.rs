@@ -19,6 +19,25 @@ const FORBIDDEN: &[&str] = &[
     "\"edogawa\"",
 ];
 
+/// Whole identifiers the kernel keeps despite naming a forbidden word: the
+/// G02 `charge_is_skill` window var (a `ChargePaying` raise's skill-cost flag)
+/// is engine ABI, so the content word `charge` rides inside a kernel name.
+const ALLOWED_IDENTS: &[&str] = &["charge_is_skill"];
+
+/// The identifier containing byte `pos`.
+fn ident_at(src: &str, pos: usize) -> &str {
+    let hay = src.as_bytes();
+    let mut start = pos;
+    while start > 0 && is_word_byte(hay[start - 1]) {
+        start -= 1;
+    }
+    let mut end = pos;
+    while end < hay.len() && is_word_byte(hay[end]) {
+        end += 1;
+    }
+    &src[start..end]
+}
+
 fn is_word_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
@@ -41,7 +60,11 @@ fn segment_hits(src: &str, word: &str) -> Vec<usize> {
             // (`_` before) and `persona_is` (`_` after).
             let before_alnum = i > 0 && hay[i - 1].is_ascii_alphanumeric();
             let after_alnum = after < hay.len() && hay[after].is_ascii_alphanumeric();
-            if before_ok && after_ok && !(before_alnum && after_alnum) {
+            if before_ok
+                && after_ok
+                && !(before_alnum && after_alnum)
+                && !ALLOWED_IDENTS.contains(&ident_at(src, i))
+            {
                 hits.push(i);
             }
         }

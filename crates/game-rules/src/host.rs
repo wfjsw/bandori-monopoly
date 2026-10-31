@@ -397,6 +397,18 @@ pub enum HostRequest {
         /// [`Self::PayTotal`] before dividing (`PIPELINE-AUDIT` Q2).
         total_stage: bool,
     },
+    /// A payment **command** (v107): the same pipeline as [`Self::Pay`] plus
+    /// its context -- the `spec` carries shape / kind / flags / tile (4 bits
+    /// each, `tile + 1` from bit 12). Answers a packed `pay_receipt`: SETTLED
+    /// or CANCELLED or SHORTFALL plus the moved amount (a `Pause::Sentinel`
+    /// request).
+    PayCommand {
+        from: i32,
+        to: i32,
+        amount: i32,
+        spec: i32,
+        src: Option<crate::Msg>,
+    },
     /// The command-wide **pre-split** stage alone (`PIPELINE-AUDIT` Q2): the
     /// engine runs `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel` on `total`
     /// and answers with the shaped figure, or `-1` when a `payCombinedCancel`
@@ -618,6 +630,9 @@ pub enum HostRequest {
         deal_houses: i32,
         /// BuyAssign filter deal (in): mortgaged after (0/1).
         deal_mortgaged: i32,
+        /// The `ChargePaying` window came from a skill cost
+        /// (`raise_from(Skill)`); stamped as `trigger.charge_skill`.
+        charge_skill: bool,
     },
     /// Which option `player_id`'s AI would take among `tiles` on an agent offer
     /// (`ctx::ai_agent_choice`). Answers the index; `tiles.len()` = skip.
@@ -3858,6 +3873,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::pay_leg(&mut c, from, to, amount, p, n).map_err(HostErr::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "pay_command",
+        |mut c: C<W>,
+         from: i32,
+         to: i32,
+         amount: i32,
+         spec: i32,
+         p: i32,
+         n: i32|
+         -> Result<i32, Error> {
+            hostfns::pay_command(&mut c, from, to, amount, spec, p, n).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(m, "player_count", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::player_count(&mut c).map_err(HostErr::into_err)
     })?;
@@ -3976,6 +4005,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "paid_in_settle", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::paid_in_settle(&mut c).map_err(HostErr::into_err)
     })?;
+    l.func_wrap(m, "paid_in_settle_by", |mut c: C<W>, seat: i32| -> Result<i32, Error> {
+        hostfns::paid_in_settle_by(&mut c, seat).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "rent_quote",
+        |mut c: C<W>, payer: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::rent_quote(&mut c, payer, tile).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "turn_rolls",
@@ -4498,9 +4537,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "raise",
-        |mut c: C<W>, player_id: i32, kp: i32, kl: i32, value: i32| -> Result<i32, Error> {
+        |mut c: C<W>, player_id: i32, kp: i32, kl: i32, value: i32, source: i32| -> Result<i32, Error> {
             let kind = hostfns::guest_str(&mut c, kp, kl).map_err(HostErr::into_err)?;
-            hostfns::raise(&mut c, player_id, &kind, value).map_err(HostErr::into_err)
+            hostfns::raise(&mut c, player_id, &kind, value, source).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5200,6 +5239,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "trig_set_pay_kind",
+        |mut c: C<W>, kind: i32| -> Result<(), Error> {
+            hostfns::trig_set_pay_kind(&mut c, kind).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_pay_shape",
+        |mut c: C<W>, shape: i32| -> Result<i32, Error> {
+            hostfns::trig_set_pay_shape(&mut c, shape).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "trig_set_cancelled",
         |mut c: C<W>| -> Result<(), Error> {
             hostfns::trig_set_cancelled(&mut c).map_err(HostErr::into_err)
@@ -5498,6 +5551,22 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::set_pay_factor(&mut c, v).map_err(HostErr::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "mul_pay_factor",
+        |mut c: C<W>, milli: i32, scope: i32| -> Result<(), Error> {
+            hostfns::mul_pay_factor(&mut c, milli, scope).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "pay_factor", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::pay_factor(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "settle_tile", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::settle_tile(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "settle_outcome", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::settle_outcome(&mut c).map_err(HostErr::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_rent_factor",

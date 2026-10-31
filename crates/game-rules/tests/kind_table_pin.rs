@@ -165,6 +165,7 @@ fn typed_engine_consts_have_table_rows() {
         (108, "OnBoardGate"),
         (109, "TargetableGate"),
         (110, "PaySplitMulBefore"),
+        (122, "SpendBefore"),
     ];
     for (id, name) in named {
         let row =

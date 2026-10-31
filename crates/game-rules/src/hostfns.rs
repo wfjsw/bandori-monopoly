@@ -574,6 +574,28 @@ pub fn pay_to<C: HostCtx>(
     }
 }
 
+/// `pay_command`: the context-carrying payment. `spec` bits 0-3 shape, 4-7
+/// kind, 8-11 flags, 12-31 `tile + 1`. Answers a packed receipt.
+pub fn pay_command<C: HostCtx>(
+    c: &mut C,
+    from: i32,
+    to: i32,
+    amount: i32,
+    spec: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    let req = HostRequest::PayCommand {
+        from,
+        to,
+        amount,
+        spec,
+        src: Some(src),
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
 pub fn pay_total<C: HostCtx>(
     c: &mut C,
     from: i32,
@@ -1450,6 +1472,7 @@ pub fn raise<C: HostCtx>(
     player_id: i32,
     kind: &str,
     value: i32,
+    source: i32,
 ) -> Result<i32, HostErr> {
     // v78: a `DealValue` kind (BuyAssign) carries the default
     // deal from the guest's trigger in, and writes the rewritten
@@ -1480,6 +1503,8 @@ pub fn raise<C: HostCtx>(
         deal_owner,
         deal_houses,
         deal_mortgaged,
+        // Only `ChargePaying` reads this; any other kind ignores it.
+        charge_skill: source == card_sdk::abi::charge_source::SKILL,
     };
     let packed = crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)?;
     if is_deal {
@@ -2594,6 +2619,40 @@ pub fn trig_set_pay_amount<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr>
 
 pub fn trig_set_pay_target<C: HostCtx>(c: &mut C, to: i32) -> Result<(), HostErr> {
     c.st_mut().w().set_trigger_target(to);
+    Ok(())
+}
+
+pub fn trig_set_pay_kind<C: HostCtx>(c: &mut C, kind: i32) -> Result<(), HostErr> {
+    c.st_mut().w().set_trigger_pay_kind(kind);
+    Ok(())
+}
+
+pub fn trig_set_pay_shape<C: HostCtx>(c: &mut C, shape: i32) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().set_trigger_pay_shape(shape) as i32)
+}
+
+pub fn settle_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().settle_tile())
+}
+
+pub fn settle_outcome<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().settle_outcome())
+}
+
+pub fn paid_in_settle_by<C: HostCtx>(c: &mut C, seat: i32) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().paid_in_settle_by(seat))
+}
+
+pub fn rent_quote<C: HostCtx>(c: &mut C, payer: i32, tile: i32) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().rent_quote(payer, tile))
+}
+
+pub fn pay_factor<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().pay_factor())
+}
+
+pub fn mul_pay_factor<C: HostCtx>(c: &mut C, milli: i32, scope: i32) -> Result<(), HostErr> {
+    c.st_mut().w().mul_pay_factor(milli, scope);
     Ok(())
 }
 

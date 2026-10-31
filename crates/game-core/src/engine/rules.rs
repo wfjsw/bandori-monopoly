@@ -82,9 +82,17 @@ pub struct TriggerMove {
 /// whether the payment is rent is a pay-only fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TriggerPay {
+    /// The in-flight kind; `set_pay_kind` rewrites it (last writer wins).
+    pub kind: super::play::PayKind,
+    /// The in-flight shape; `set_pay_shape` rewrites it before the first share.
+    pub shape: super::play::PayShape,
     /// Is this payment rent, as against a buy, a build, or a forced loss?
-    /// Always `false` on a card-driven payment.
+    /// The declared [`Pay::rent`](super::play::Pay::rent) flag, not
+    /// `kind == Rent`: a rent redirected to `Loss` still reads as rent.
     pub is_rent: bool,
+    /// Is this payment a command **total**, as against a 「[分摊]」 leg? A
+    /// command that has already staged is also `false` (a reverse child).
+    pub total_stage: bool,
 }
 
 /// Where a purchase's money goes. Lives in `game-kinds` -- one definition
@@ -137,8 +145,18 @@ impl TriggerBuy {
 }
 
 impl TriggerPay {
-    pub fn new(is_rent: bool) -> Self {
-        Self { is_rent }
+    pub fn new(
+        kind: super::play::PayKind,
+        is_rent: bool,
+        total_stage: bool,
+        shape: super::play::PayShape,
+    ) -> Self {
+        Self {
+            kind,
+            shape,
+            is_rent,
+            total_stage,
+        }
     }
 }
 
@@ -286,6 +304,14 @@ pub struct Trigger {
     /// The counter name on a `CounterChanged` hook, or the message name on a
     /// `Message` entry. `None` otherwise.
     pub name: Option<String>,
+    /// The tile of the innermost open settle, or `-1` when none is open. Not a
+    /// pay-only fact -- `settleBody` / `settleAfter` / `tileResolved` carry it
+    /// with no `pay` payload, and `settleAfter` raises after the entry popped.
+    pub settle_tile: i32,
+    /// The settle's terminal outcome, only on `tileResolved`.
+    pub outcome: Option<super::cx::SettleOutcome>,
+    /// The `ChargePaying` window came from a skill cost (`raise_from(Skill)`).
+    pub charge_skill: bool,
 }
 
 impl Trigger {
@@ -312,6 +338,9 @@ impl Trigger {
             cards: Vec::new(),
             reason: None,
             name: None,
+            settle_tile: -1,
+            outcome: None,
+            charge_skill: false,
         }
     }
 

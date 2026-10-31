@@ -125,7 +125,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&to) = far.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 3, &Msg::new(key!("rimi_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 3, &Msg::new(key!("rimi_spend")))? {
         return Ok(());
     }
     // 「[传送]…并[结算]」 -- a teleport that settles.

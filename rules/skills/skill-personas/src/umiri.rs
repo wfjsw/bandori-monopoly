@@ -267,7 +267,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     if x <= 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, x, &Msg::new(key!("umiri_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("umiri_spend")))? {
         return Ok(());
     }
     for _ in 0..x {

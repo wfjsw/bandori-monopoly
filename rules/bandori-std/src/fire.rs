@@ -312,6 +312,23 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
 /// verb. A pre-check on the pool would skip the window and break
 /// 「以代替此次技能的火罐消耗」.
 pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    spend_from(player_id, n, why, card_sdk::abi::ChargeSource::Other)
+}
+
+/// [`spend`] for a **skill cost**: the same pots and window, with
+/// `ChargeSource::Skill` on the raise so the `ChargePaying` hook reads
+/// `charge_is_skill` (I12). The skill bodies use this verb; a card's own
+/// counter cost keeps [`spend`].
+pub fn spend_skill(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    spend_from(player_id, n, why, card_sdk::abi::ChargeSource::Skill)
+}
+
+fn spend_from(
+    player_id: i32,
+    n: i32,
+    why: &Msg,
+    source: card_sdk::abi::ChargeSource,
+) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }
@@ -320,7 +337,7 @@ pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     }
     // 规则书: 「以代替此次技能的火罐消耗」 -- the swap covers the whole cost,
     // temp pots included, so the window opens before *any* pot moves.
-    if !ctx::raise(player_id, crate::kind::ChargePaying, n)? {
+    if !ctx::raise_from(player_id, crate::kind::ChargePaying, n, source)? {
         return Ok(true);
     }
     let from_temp = temp::get(player_id).min(n);

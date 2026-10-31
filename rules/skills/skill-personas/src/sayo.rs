@@ -114,7 +114,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     if !matches!(n, 1 | 2) {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 6, &Msg::new(key!("sayo_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 6, &Msg::new(key!("sayo_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, ctx::turn_key());

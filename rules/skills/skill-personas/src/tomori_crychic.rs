@@ -81,7 +81,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「消耗1火罐清除自身一层[停留]」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
         return Ok(());
     }
     ctx::state::add(player_id, state_key::STAY, -1);

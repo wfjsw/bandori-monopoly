@@ -201,6 +201,10 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::pay_leg, [from, to, amount, ptr, len, 0])
 }
 
+pub fn pay_command(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::pay_command, [from, to, amount, spec, ptr, len])
+}
+
 pub fn draw(player_id: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::draw, [player_id, n, 0, 0, 0, 0])
 }
@@ -605,8 +609,8 @@ pub fn raise_bought(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::raise_bought, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32) -> i32 {
-    kani_host::call_i32(Op::raise, [player_id, kind_p, kind_l, value, 0, 0])
+pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32, source: i32) -> i32 {
+    kani_host::call_i32(Op::raise, [player_id, kind_p, kind_l, value, source, 0])
 }
 
 pub fn gain_marker(
@@ -875,6 +879,14 @@ pub fn trig_set_pay_amount(v: i32) {
     kani_host::call_unit(Op::trig_set_pay_amount, [v, 0, 0, 0, 0, 0]);
 }
 
+pub fn trig_set_pay_kind(kind: i32) {
+    kani_host::call_unit(Op::trig_set_pay_kind, [kind, 0, 0, 0, 0, 0]);
+}
+
+pub fn trig_set_pay_shape(shape: i32) -> i32 {
+    kani_host::call_i32(Op::trig_set_pay_shape, [shape, 0, 0, 0, 0, 0])
+}
+
 pub fn trig_set_pay_target(to: i32) {
     kani_host::call_unit(Op::trig_set_pay_target, [to, 0, 0, 0, 0, 0]);
 }
@@ -996,6 +1008,30 @@ pub fn set_settle_tile(n: i32) {
 
 pub fn set_pay_factor(n: i32) {
     kani_host::call_unit(Op::set_pay_factor, [n, 0, 0, 0, 0, 0]);
+}
+
+pub fn mul_pay_factor(milli: i32, scope: i32) {
+    kani_host::call_unit(Op::mul_pay_factor, [milli, scope, 0, 0, 0, 0]);
+}
+
+pub fn pay_factor() -> i32 {
+    kani_host::call_i32(Op::pay_factor, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn settle_tile() -> i32 {
+    kani_host::call_i32(Op::settle_tile, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn settle_outcome() -> i32 {
+    kani_host::call_i32(Op::settle_outcome, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn paid_in_settle_by(seat: i32) -> i32 {
+    kani_host::call_i32(Op::paid_in_settle_by, [seat, 0, 0, 0, 0, 0])
+}
+
+pub fn rent_quote(payer: i32, tile: i32) -> i32 {
+    kani_host::call_i32(Op::rent_quote, [payer, tile, 0, 0, 0, 0])
 }
 
 pub fn set_rent_factor(n: i32) {

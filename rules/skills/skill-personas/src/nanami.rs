@@ -130,7 +130,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("nanami_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("nanami_spend")))? {
         return Ok(());
     }
     ctx::add_tok(player_id, &mark_name(id.as_str()), 1, i32::MAX)?;

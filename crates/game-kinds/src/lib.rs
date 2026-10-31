@@ -630,6 +630,12 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: false,
         hook_only: true,
     },
+    EngineKind {
+        id: 122,
+        wire: "spendBefore",
+        is_filter: false,
+        hook_only: false,
+    },
 ];
 
 /// The table row for `id`, or `None` when the id is retired / unknown.
@@ -759,6 +765,7 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "onBoardGate" => Some(108),
         "targetableGate" => Some(109),
         "paySplitMulBefore" => Some(110),
+        "spendBefore" => Some(122),
         _ => None,
     };
     #[cfg(not(kani))]

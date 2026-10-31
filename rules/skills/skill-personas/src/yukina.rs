@@ -120,7 +120,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !is_deed(t) {
         let have = bandori_std::fire::get(player_id);
         if have > 0 {
-            bandori_std::fire::spend(player_id, have, &Msg::new(key!("yukina_lost")))?;
+            bandori_std::fire::spend_skill(player_id, have, &Msg::new(key!("yukina_lost")))?;
         }
     }
     Ok(())
@@ -144,7 +144,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("yukina_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("yukina_spend")))? {
         return Ok(());
     }
     if !ctx::gate(ctx::trigger::player_id(), bandori_std::kind::abnormal::Stop) {

@@ -203,6 +203,7 @@ fn count_on_spellings(src: &str) -> usize {
                 | "Buy"
                 | "Build"
                 | "Message"
+                | "Schedule"
         ) {
             n += 1;
         }

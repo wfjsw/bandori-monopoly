@@ -40,6 +40,24 @@ pub trait CondView {
     /// `by_card` owner seat (`by`), `-1` = none.
     fn by(&self) -> i64;
     fn pay_is_rent(&self) -> bool;
+    /// The pending payment's wire kind (`pay_kind`), `-1` = no payment.
+    fn pay_kind(&self) -> i64;
+    /// 1 = the pending payment's shape is `Fixed` (`pay_is_fixed`).
+    fn pay_is_fixed(&self) -> i64;
+    /// 1 = a command total (`pay_total_stage`); neutral `1` without a payment.
+    fn pay_total_stage(&self) -> i64;
+    /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
+    fn charge_is_skill(&self) -> bool;
+    /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
+    fn settle_tile(&self) -> i64;
+    /// `settle.owner` -- `-1` = no settle / unowned.
+    fn settle_owner(&self) -> i64;
+    /// `settle.houses`.
+    fn settle_houses(&self) -> i64;
+    /// `settle.mortgaged`.
+    fn settle_mortgaged(&self) -> bool;
+    /// `settle.outcome` -- `-1` = not finished / no settle.
+    fn settle_outcome(&self) -> i64;
     /// Move face (`move.roll`), `-1` = none (binds CEL `null`).
     fn move_roll(&self) -> i64;
     /// Move kind (`move.kind`), `-1` = none (binds CEL `null`).

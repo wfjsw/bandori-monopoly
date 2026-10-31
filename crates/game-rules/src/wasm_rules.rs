@@ -97,6 +97,7 @@ const fn fold_header(
 fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
     match req {
         HostRequest::Pay { .. }
+        | HostRequest::PayCommand { .. }
         | HostRequest::PayTotal { .. }
         | HostRequest::PayRent { .. }
         | HostRequest::ChargeRent { .. } => Some("pay/gain/transfer"),
@@ -2238,6 +2239,72 @@ impl CardWorld for Run {
     fn set_trigger_target(&mut self, to: i32) {
         self.trigger.target = to;
     }
+    fn set_trigger_pay_kind(&mut self, kind: i32) {
+        let kind = game_core::engine::PayKind::from_i32(kind);
+        if let Some(p) = &mut self.trigger.pay {
+            p.kind = kind;
+            // `Loss` keeps the declared rent flag (a redirected rent still
+            // scales as rent); the other kinds set / clear it.
+            p.is_rent = match kind {
+                game_core::engine::PayKind::Rent => true,
+                game_core::engine::PayKind::Loss => p.is_rent,
+                _ => false,
+            };
+        }
+    }
+    fn set_trigger_pay_shape(&mut self, shape: i32) -> bool {
+        use crate::TriggerKind as K;
+        // A command's shape decides whether the split stages run, so a later
+        // switch cannot un-skip them.
+        let before_split = matches!(
+            self.trigger.kind,
+            K::Effect
+                | K::PayCombinedAddBefore
+                | K::PayCombinedAdd
+                | K::PayCombinedMul
+                | K::PayCombinedCancel
+        );
+        if !before_split {
+            self.world.log(
+                "text",
+                self.trigger.player_id,
+                crate::Msg::new("log.pay_shape_too_late"),
+            );
+            return false;
+        }
+        if let Some(p) = &mut self.trigger.pay {
+            p.shape = game_core::engine::PayShape::from_i32(shape);
+        }
+        true
+    }
+    fn settle_tile(&self) -> i32 {
+        self.trigger.settle_tile
+    }
+    fn settle_outcome(&self) -> i32 {
+        self.trigger.outcome.map_or(-1, |o| o.as_i32())
+    }
+    fn paid_in_settle_by(&self, seat: i32) -> i32 {
+        self.world.paid_in_settle_by(seat)
+    }
+    fn rent_quote(&mut self, payer: i32, tile: i32) -> i32 {
+        if tile < 0 {
+            return -1;
+        }
+        self.world
+            .rent_quote(&self.data, payer.max(0) as usize, tile as usize)
+    }
+    fn pay_factor(&self) -> i32 {
+        self.world.pay_factor()
+    }
+    fn mul_pay_factor(&mut self, milli: i32, scope: i32) {
+        self.stamp_skill_source();
+        let scope = game_core::engine::PayFactorScope::from_i32(scope);
+        self.world.mul_pay_factor(milli, scope);
+        if scope == game_core::engine::PayFactorScope::ThisMove {
+            // Written for the move this body shapes, not for a later one.
+            self.world.turn.plan.pay_fresh = true;
+        }
+    }
     fn set_trigger_cancelled(&mut self) {
         self.trigger.negate_activation();
     }
@@ -3788,6 +3855,71 @@ impl<M: CardModules> RulesBridge<M> {
     /// `adopt_turn_policy` / `overlay_guest_state` first in the replay path
     /// only: in a single forward pass the guest's writes are already real on
     /// the world the routine mutates.
+    /// The shared body of `pay` / `transfer` / `pay_command`: the immune
+    /// check, the one `Cx::money` pipeline, and the answer. `receipt` answers
+    /// the packed `PayReceipt` (a command) instead of the bare moved amount.
+    #[allow(clippy::too_many_arguments)]
+    fn pay_through(
+        &self,
+        cx: &mut Cx,
+        call: &Call,
+        from: i32,
+        to: i32,
+        amount: i32,
+        kind: game_core::engine::PayKind,
+        shape: game_core::engine::PayShape,
+        must: bool,
+        allow_mortgage: bool,
+        total_stage: bool,
+        tile: Option<usize>,
+        src: Option<crate::Msg>,
+        receipt: bool,
+    ) -> Flow<i32> {
+        let cancelled = card_sdk::abi::pay_receipt::CANCELLED;
+        // A player immune to others' effects (`ImmuneAll`) is neither charged
+        // nor paid by another player's card -- the payment does not happen.
+        let mut immune = false;
+        for x in [from, to] {
+            if x >= 0 && x != call.player_id() && self.immune(cx, x, call.player_id())? {
+                immune = true;
+                break;
+            }
+        }
+        if immune {
+            return Ok(if receipt { cancelled } else { 0 });
+        }
+        let mut p = game_core::engine::Pay::new(amount, kind);
+        if from >= 0 {
+            p.from = Some(from as usize);
+        }
+        if to >= 0 {
+            p.to = Some(to as usize);
+        }
+        p.shape = shape;
+        p.by_card = Some(call.player_id());
+        p.total_stage = total_stage;
+        p.tile = tile;
+        p.must = must;
+        p.allow_mortgage = allow_mortgage;
+        p.reason = src;
+        let paid = cx.money(p)?;
+        if !receipt {
+            return Ok(paid.moved());
+        }
+        let mut answer = paid.moved() & card_sdk::abi::pay_receipt::AMOUNT_MASK;
+        if shape == game_core::engine::PayShape::Fixed {
+            answer |= card_sdk::abi::pay_receipt::FIXED;
+        }
+        if paid.paid {
+            answer |= card_sdk::abi::pay_receipt::SETTLED;
+        } else if paid.shortfall {
+            answer |= card_sdk::abi::pay_receipt::SHORTFALL;
+        } else {
+            answer |= cancelled;
+        }
+        Ok(answer)
+    }
+
     fn apply_host_request(
         &self,
         cx: &mut Cx,
@@ -4023,7 +4155,8 @@ impl<M: CardModules> RulesBridge<M> {
                 tile,
                 amount,
             } => {
-                let got = cx.apply_redeem(player_id.max(0) as usize, tile.max(0) as usize, amount);
+                let got =
+                    cx.apply_redeem(player_id.max(0) as usize, tile.max(0) as usize, amount, None)?;
                 return Ok(got);
             }
             HostRequest::DrawEvent { player_id } => {
@@ -4128,12 +4261,14 @@ impl<M: CardModules> RulesBridge<M> {
                 deal_owner,
                 deal_houses,
                 deal_mortgaged,
+                charge_skill,
             } => {
                 let tk = card_sdk::abi::TriggerKind::from_str(&kind);
                 let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
                 let t = self.raise_core(cx, kind, player_id, |t| {
                     t.value = value;
                     t.tile = tile;
+                    t.charge_skill = charge_skill;
                     if is_deal {
                         let mut b = game_core::engine::rules::TriggerBuy::new(
                             game_core::engine::purchase::BuyKind::Land,
@@ -4328,7 +4463,15 @@ impl<M: CardModules> RulesBridge<M> {
                 let moved = if delta >= 0 {
                     w.gain_money(player_id, delta, msg.clone())
                 } else {
-                    let amount = -delta;
+                    // `spendBefore` -- a raw loss raises the window before its
+                    // debit, at the full figure; a reduction keeps the payer
+                    // solvent, a cancel leaves the cost alone.
+                    let amount = cx.spend_before(
+                        player_id.max(0) as usize,
+                        -1,
+                        -delta,
+                        Some(call.player_id()),
+                    )?;
                     let Some(s) = w.st.players.get_mut(player_id.max(0) as usize) else {
                         return Ok(0);
                     };
@@ -4417,20 +4560,6 @@ impl<M: CardModules> RulesBridge<M> {
                 src,
                 total_stage,
             } => {
-                let by = Some(call.player_id());
-                // A player immune to others' effects (`ImmuneAll`) is neither
-                // charged nor paid by another player's card -- the payment
-                // simply does not happen.
-                let mut immune = false;
-                for x in [from, to] {
-                    if x >= 0 && x != call.player_id() && self.immune(cx, x, call.player_id())? {
-                        immune = true;
-                        break;
-                    }
-                }
-                if immune {
-                    return Ok(0);
-                }
                 // One pipeline: `Cx::money` runs the staged adjustment
                 // points (pre-split `effect` counteraction window -> payCombinedAdd /
                 // payCombinedMul / payCombinedCancel -> paySplitAdd / paySplitMul /
@@ -4441,34 +4570,52 @@ impl<M: CardModules> RulesBridge<M> {
                 // any card-caused payment is answerable. The money move
                 // happens inside, so the guest's `pay`/`gain` resume is
                 // answered with the amount and does not move it again.
-                let mut p = game_core::engine::Pay::new(asked, game_core::engine::PayKind::Card);
-                if from >= 0 {
-                    p.from = Some(from as usize);
-                }
-                if to >= 0 {
-                    p.to = Some(to as usize);
-                }
-                p.by_card = by;
-                p.total_stage = total_stage;
+                //
                 // Q1 / B1 (`PIPELINE-AUDIT` P11a): a card's forced
                 // 「pay/spend」 runs the same raise-funds-then-bankrupt
                 // path rent does (规则书 L16 「当玩家无法支付某笔支出时（包括
-                // 抵押）」 → 折现 + 破产, L76 the mortgage offer). It used to
-                // settle as `must = false`, which silently underpaid and
-                // could never eliminate anyone. Voluntary purchases
-                // (buy/build) keep their pre-gates and remain `must = false`.
-                p.must = true;
-                // The card's `why` is a **reason** (「登上武道馆」), not a log
-                // line: it names the cause and says nothing about who paid
-                // what. It rides the standard `log.pay` / `log.lose` /
-                // `log.gain` line as the parenthetical `{{src}}`, the same
-                // way `Pay::source` carries `src.*`. (It used to be assigned
-                // to `Pay::text`, which *replaces* the line -- so every
-                // card-driven move logged as the bare card name and a card
-                // that moves money several times spammed that name.)
-                p.reason = src;
-                let paid = cx.money(p)?;
-                return Ok(paid.moved());
+                // 抵押）」 → 折现 + 破产, L76 the mortgage offer). The card's
+                // `why` is a **reason** (「登上武道馆」), not a log line: it
+                // rides the standard `log.pay` / `log.lose` / `log.gain` line
+                // as the parenthetical `{{src}}`.
+                return self.pay_through(
+                    cx,
+                    &call,
+                    from,
+                    to,
+                    asked,
+                    game_core::engine::PayKind::Card,
+                    game_core::engine::PayShape::Normal,
+                    true,
+                    true,
+                    total_stage,
+                    None,
+                    src,
+                    false,
+                );
+            }
+            // v107: the context-carrying command. `spec` bits 0-3 shape, 4-7
+            // kind, 8-11 flags, 12-31 `tile + 1`; the host validates on decode
+            // by falling back (`Normal` / `Card`, unknown flag bits ignored).
+            HostRequest::PayCommand {
+                from,
+                to,
+                amount,
+                spec,
+                src,
+            } => {
+                let shape = game_core::engine::PayShape::from_i32(spec & 0xF);
+                let kind = game_core::engine::PayKind::from_i32((spec >> 4) & 0xF);
+                let flags = (spec >> 8) & 0xF;
+                let raw_tile = (spec >> 12) & 0xF_FFFF;
+                let tile = (raw_tile > 0).then(|| (raw_tile - 1) as usize);
+                let must = flags & card_sdk::abi::pay_flag::MUST != 0;
+                let allow_mortgage = flags & card_sdk::abi::pay_flag::ALLOW_MORTGAGE != 0;
+                let total_stage = flags & card_sdk::abi::pay_flag::TOTAL_STAGE != 0;
+                return self.pay_through(
+                    cx, &call, from, to, amount, kind, shape, must, allow_mortgage,
+                    total_stage, tile, src, true,
+                );
             }
             HostRequest::PayTotal {
                 from,
@@ -7390,7 +7537,12 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         by_card: t.by_card,
         main: t.main,
         mv,
-        pay: t.pay.map(|p| TriggerPay { is_rent: p.is_rent }),
+        pay: t.pay.map(|p| TriggerPay {
+            kind: p.kind,
+            shape: p.shape,
+            is_rent: p.is_rent,
+            total_stage: p.total_stage,
+        }),
         buy,
         negation: t.negation,
         spared: t.spared.clone(),
@@ -7404,6 +7556,9 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         reason: t.reason.clone(),
         join_redirect: None,
         join_used: false,
+        settle_tile: t.settle_tile,
+        outcome: t.outcome,
+        charge_skill: t.charge_skill,
     }
 }
 
@@ -8062,6 +8217,59 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn pay_is_rent(&self) -> bool {
         self.trigger.pay.map(|p| p.is_rent).unwrap_or(false)
+    }
+    fn pay_kind(&self) -> i64 {
+        self.trigger.pay.map(|p| p.kind.as_i32() as i64).unwrap_or(-1)
+    }
+    fn pay_is_fixed(&self) -> i64 {
+        self.trigger
+            .pay
+            .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
+            .unwrap_or(0)
+    }
+    fn pay_total_stage(&self) -> i64 {
+        self.trigger.pay.map(|p| p.total_stage as i64).unwrap_or(1)
+    }
+    fn charge_is_skill(&self) -> bool {
+        self.trigger.charge_skill
+    }
+    fn settle_tile(&self) -> i64 {
+        self.trigger.settle_tile as i64
+    }
+    fn settle_owner(&self) -> i64 {
+        if self.trigger.settle_tile >= 0 {
+            self.world.tile_owner(self.trigger.settle_tile) as i64
+        } else {
+            -1
+        }
+    }
+    fn settle_houses(&self) -> i64 {
+        if self.trigger.settle_tile >= 0 {
+            self.world
+                .st
+                .houses
+                .get(self.trigger.settle_tile.max(0) as usize)
+                .copied()
+                .unwrap_or(0) as i64
+        } else {
+            0
+        }
+    }
+    fn settle_mortgaged(&self) -> bool {
+        self.trigger.settle_tile >= 0
+            && self
+                .world
+                .st
+                .mortgaged
+                .get(self.trigger.settle_tile.max(0) as usize)
+                .copied()
+                .unwrap_or(false)
+    }
+    fn settle_outcome(&self) -> i64 {
+        self.trigger
+            .outcome
+            .map(|o| o.as_i32() as i64)
+            .unwrap_or(-1)
     }
     fn move_roll(&self) -> i64 {
         self.trigger
@@ -10069,6 +10277,8 @@ mod tests {
             "paySplitChooseBefore",
             "payCombinedAddBefore",
             "paySplitMulBefore",
+            // v107: the raw-spend window (a redeem / auction / `lose_raw` hook)
+            "spendBefore",
         ] {
             assert!(
                 !matches!(trigger_kind(k), TriggerKind::None),

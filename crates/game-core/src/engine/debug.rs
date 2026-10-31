@@ -91,7 +91,7 @@ impl Match {
                 "redeem" => {
                     let t = m.value as usize;
                     let v = cx.redeem_cost(t);
-                    let _ = cx.apply_redeem(target, t, v);
+                    let _ = cx.apply_redeem(target, t, v, None);
                 }
                 _ => unreachable!(),
             }

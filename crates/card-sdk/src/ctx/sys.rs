@@ -283,6 +283,13 @@ mod abi {
             link_name = "ruleset_pay_leg"
         )]
         pub fn pay_leg(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32;
+        // v107: the context-carrying payment command (shape / kind / flags /
+        // tile in a packed spec). Answers a packed `pay_receipt`.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_pay_command"
+        )]
+        pub fn pay_command(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i32) -> i32;
         // hand & deck
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
@@ -793,7 +800,8 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_raise"
         )]
-        pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32) -> i32;
+        // v107: `source` is the [`crate::abi::charge_source`] slot.
+        pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32, source: i32) -> i32;
         // v88: generic marker family (the name is data). Readers are `state_get`
         // / `state_max` with the marker's wire key.
         #[cfg_attr(
@@ -1122,6 +1130,18 @@ mod abi {
             link_name = "ruleset_trig_set_pay_amount"
         )]
         pub fn trig_set_pay_amount(v: i32);
+        // v107: rewrite the pending payment's kind / shape (last writer wins;
+        // a shape write after the first share is refused).
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_set_pay_kind"
+        )]
+        pub fn trig_set_pay_kind(kind: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_set_pay_shape"
+        )]
+        pub fn trig_set_pay_shape(shape: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_set_pay_target"
@@ -1276,6 +1296,37 @@ mod abi {
             link_name = "ruleset_set_pay_factor"
         )]
         pub fn set_pay_factor(n: i32);
+        // v107: scoped pay factors and the settle / quote readers.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_mul_pay_factor"
+        )]
+        pub fn mul_pay_factor(milli: i32, scope: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_pay_factor"
+        )]
+        pub fn pay_factor() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_settle_tile"
+        )]
+        pub fn settle_tile() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_settle_outcome"
+        )]
+        pub fn settle_outcome() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_paid_in_settle_by"
+        )]
+        pub fn paid_in_settle_by(seat: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_rent_quote"
+        )]
+        pub fn rent_quote(payer: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_rent_factor"

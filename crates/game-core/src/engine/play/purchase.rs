@@ -174,7 +174,7 @@ pub fn standalone_redeem(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> 
     if cx.why_not_redeem(player, tile as i32, false).is_some() {
         return Ok(false);
     }
-    cx.redeem(player, tile);
+    cx.redeem(player, tile)?;
     Ok(true)
 }
 

@@ -103,7 +103,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = others.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("shifune_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("shifune_spend")))? {
         return Ok(());
     }
     state::set(player_id, PARTNER, who);

@@ -30,6 +30,15 @@ pub enum VarId {
     Step,
     By,
     PayIsRent,
+    PayKind,
+    PayIsFixed,
+    PayTotalStage,
+    ChargeIsSkill,
+    SettleTile,
+    SettleOwner,
+    SettleHouses,
+    SettleMortgaged,
+    SettleOutcome,
     RollSource,
     Abnormal,
     TurnPlayer,
@@ -64,7 +73,7 @@ pub enum VarId {
     CardTile,
 }
 
-pub const SCALAR_COUNT: usize = 39;
+pub const SCALAR_COUNT: usize = 48;
 
 /// Flat identifier + type, in `VarId` order. Mirrors `vocab::VOCAB` scalars
 /// (Window + Candidate, non-Func).
@@ -76,6 +85,15 @@ pub const VARS: &[(VarId, &str, VarTy)] = &[
     (VarId::Step, "step", VarTy::Int),
     (VarId::By, "by", VarTy::Int),
     (VarId::PayIsRent, "pay_is_rent", VarTy::Bool),
+    (VarId::PayKind, "pay_kind", VarTy::Int),
+    (VarId::PayIsFixed, "pay_is_fixed", VarTy::Int),
+    (VarId::PayTotalStage, "pay_total_stage", VarTy::Int),
+    (VarId::ChargeIsSkill, "charge_is_skill", VarTy::Bool),
+    (VarId::SettleTile, "settle_tile", VarTy::Int),
+    (VarId::SettleOwner, "settle_owner", VarTy::Int),
+    (VarId::SettleHouses, "settle_houses", VarTy::Int),
+    (VarId::SettleMortgaged, "settle_mortgaged", VarTy::Bool),
+    (VarId::SettleOutcome, "settle_outcome", VarTy::Int),
     (VarId::RollSource, "roll_source", VarTy::Int),
     (VarId::Abnormal, "abnormal", VarTy::Bool),
     (VarId::TurnPlayer, "turn_player", VarTy::Int),

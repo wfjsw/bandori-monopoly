@@ -119,7 +119,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if space < 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 3, &Msg::new(key!("rana_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 3, &Msg::new(key!("rana_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);

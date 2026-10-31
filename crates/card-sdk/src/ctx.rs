@@ -601,16 +601,140 @@ pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
 
 /// Money out (what the player could pay), logged.
 pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
-    let (p, l) = mj(src);
-    asked(unsafe { sys::pay(player_id, amount, p, l) })
+    PayCommand::new(player_id, -1, amount, src).send().map(|r| r.amount())
+}
+
+/// A payment command: the `pay` / `transfer` verb with its context (shape,
+/// kind, flags, tile) packed into the host call. `send` pauses for the
+/// windows and answers a [`PayReceipt`] with the amount actually moved.
+///
+/// `from < 0` = print (the bank pays), `to < 0` = delete (the bank is paid);
+/// both `>= 0` = a transfer.
+pub struct PayCommand {
+    from: i32,
+    to: i32,
+    amount: i32,
+    kind: crate::abi::PayKind,
+    shape: crate::abi::PayShape,
+    flags: i32,
+    tile: i32,
+    src: Msg,
+}
+
+impl PayCommand {
+    /// A command with today's defaults: `MUST` and the command-wide pre-split
+    /// stage, kind `Card`, shape `Normal`.
+    pub fn new(from: i32, to: i32, amount: i32, src: &Msg) -> Self {
+        Self {
+            from,
+            to,
+            amount,
+            kind: crate::abi::PayKind::Card,
+            shape: crate::abi::PayShape::Normal,
+            flags: crate::abi::pay_flag::MUST | crate::abi::pay_flag::TOTAL_STAGE,
+            tile: -1,
+            src: src.clone(),
+        }
+    }
+
+    pub fn kind(mut self, kind: crate::abi::PayKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    pub fn shape(mut self, shape: crate::abi::PayShape) -> Self {
+        self.shape = shape;
+        self
+    }
+
+    /// An immutable leg: no responder can change its figure or payee and no
+    /// factor applies.
+    pub fn fixed(mut self) -> Self {
+        self.shape = crate::abi::PayShape::Fixed;
+        self
+    }
+
+    /// The declared payee pays half of what the payer lost, as a fresh fixed
+    /// child leg after this one settles.
+    pub fn payee_half(mut self) -> Self {
+        self.shape = crate::abi::PayShape::PayeeHalf;
+        self
+    }
+
+    pub fn tile(mut self, tile: i32) -> Self {
+        self.tile = tile;
+        self
+    }
+
+    /// Optional: no raise-funds / bankruptcy, but a cancellable mortgage offer.
+    pub fn optional(mut self) -> Self {
+        self.flags &= !crate::abi::pay_flag::MUST;
+        self.flags |= crate::abi::pay_flag::ALLOW_MORTGAGE;
+        self
+    }
+
+    pub fn total_stage(mut self, on: bool) -> Self {
+        if on {
+            self.flags |= crate::abi::pay_flag::TOTAL_STAGE;
+        } else {
+            self.flags &= !crate::abi::pay_flag::TOTAL_STAGE;
+        }
+        self
+    }
+
+    /// Run the command. Load-bearing: it pauses for the pay windows.
+    pub fn send(self) -> Result<PayReceipt, Prompt> {
+        let mut spec = (self.shape.as_i32() & 0xF)
+            | ((self.kind.as_i32() & 0xF) << 4)
+            | ((self.flags & 0xF) << 8);
+        if self.tile >= 0 {
+            spec |= (self.tile + 1) << 12;
+        }
+        let (p, l) = mj(&self.src);
+        asked(unsafe { sys::pay_command(self.from, self.to, self.amount, spec, p, l) })
+            .map(PayReceipt)
+    }
+}
+
+/// What a [`PayCommand`] actually did, packed.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PayReceipt(pub i32);
+
+impl PayReceipt {
+    /// The amount actually moved (0 for a cancel, a shortfall or a locked
+    /// zero commit).
+    pub fn amount(self) -> i32 {
+        self.0 & crate::abi::pay_receipt::AMOUNT_MASK
+    }
+
+    /// The payment committed (a locked zero included).
+    pub fn settled(self) -> bool {
+        self.0 & crate::abi::pay_receipt::SETTLED != 0
+    }
+
+    /// Nothing moved for a no-settle reason (immunity, gate, zero, cancel,
+    /// payer off-board).
+    pub fn cancelled(self) -> bool {
+        self.0 & crate::abi::pay_receipt::CANCELLED != 0
+    }
+
+    /// A mandatory payment could not be completed (the payer went out).
+    pub fn shortfall(self) -> bool {
+        self.0 & crate::abi::pay_receipt::SHORTFALL != 0
+    }
+
+    /// The command was a fixed leg.
+    pub fn fixed(self) -> bool {
+        self.0 & crate::abi::pay_receipt::FIXED != 0
+    }
 }
 
 /// Player-to-player money -- one pipeline entry (`pay_to`), so the `effect`
 /// declaration names both the payer and the payee and 「向其他玩家支付」 sees it.
 /// The receiver gets exactly what the payer could pay.
 pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
-    let (p, l) = mj(src);
-    asked(unsafe { sys::pay_to(from, to, amount, p, l) })
+    PayCommand::new(from, to, amount, src).send().map(|r| r.amount())
 }
 
 /// A rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0) of `tile`'s
@@ -653,8 +777,10 @@ pub fn pay_total(from: i32, to: i32, total: i32, src: &Msg) -> Result<Option<i32
 /// command-wide pre-split stage (the body already ran [`pay_total`]).
 /// `from < 0` / `to < 0` name the bank side.
 pub fn pay_leg(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
-    let (p, l) = mj(src);
-    asked(unsafe { sys::pay_leg(from, to, amount, p, l) })
+    PayCommand::new(from, to, amount, src)
+        .total_stage(false)
+        .send()
+        .map(|r| r.amount())
 }
 
 /// 「[分摊][支付]」: shape `total` with the command-wide
@@ -1876,9 +2002,20 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result<bool, Prompt> {
+    raise_from(player_id, kind, value, crate::abi::ChargeSource::Other)
+}
+
+/// [`raise`] with a source marker. `Skill` sets `charge_is_skill` on the
+/// window (`fire::spend_skill` is the one caller that means it).
+pub fn raise_from(
+    player_id: i32,
+    kind: impl Into<TriggerKind>,
+    value: i32,
+    source: crate::abi::ChargeSource,
+) -> Result<bool, Prompt> {
     let kind = kind.into();
     let (p, l) = s(&kind.spelling());
-    asked(unsafe { sys::raise(player_id, p, l, value) }).map(|v| v != 0)
+    asked(unsafe { sys::raise(player_id, p, l, value, source.as_i32()) }).map(|v| v != 0)
 }
 
 // ---------------------------------------------------------- generic status verbs
@@ -2654,6 +2791,19 @@ pub mod plan {
         unsafe { sys::set_pay_factor(n) }
     }
 
+    /// Compose a pay factor into `scope` (milli). An unopened `this` scope
+    /// falls forward to its next instance.
+    pub fn mul_pay_factor(milli: i32, scope: crate::abi::PayFactorScope) {
+        unsafe { sys::mul_pay_factor(milli, scope.as_i32()) }
+    }
+
+    /// The scoped pay-factor product in milli: the move plan × every open
+    /// settle. The per-payment rent factor, tile props and `milli_scale` are
+    /// not in it.
+    pub fn pay_factor() -> i32 {
+        unsafe { sys::pay_factor() }
+    }
+
     /// Rent paid on this walk, in milli-units (500 = x0.5).
     pub fn set_rent_factor(n: i32) {
         unsafe { sys::set_rent_factor(n) }
@@ -3241,6 +3391,30 @@ pub mod trigger {
         unsafe { sys::trig_set_pay_target(to) }
     }
 
+    /// Rewrite the pending payment's kind. Valid in every pay window (a write
+    /// at `paid` is observational only); last writer wins. `Loss` keeps the
+    /// declared rent flag, the other kinds set / clear it.
+    pub fn set_pay_kind(kind: crate::abi::PayKind) {
+        unsafe { sys::trig_set_pay_kind(kind.as_i32()) }
+    }
+
+    /// Rewrite the pending payment's shape. Honoured only before the first
+    /// share leg; a late write is dropped, logged, and answers `false`.
+    pub fn set_pay_shape(shape: crate::abi::PayShape) -> bool {
+        unsafe { sys::trig_set_pay_shape(shape.as_i32()) != 0 }
+    }
+
+    /// The tile of the innermost open settle, `-1` outside one.
+    pub fn settle_tile() -> i32 {
+        unsafe { sys::settle_tile() }
+    }
+
+    /// The settle's terminal outcome ([`crate::abi::SettleOutcome`]), `-1`
+    /// outside `tileResolved`.
+    pub fn settle_outcome() -> i32 {
+        unsafe { sys::settle_outcome() }
+    }
+
     /// Rewrite `t.target` -- on a `redirect` hook, the player that takes the hit
     /// instead.
     pub fn set_target(player_id: i32) {
@@ -3598,8 +3772,8 @@ pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
 /// Mechanism half of a redeem the tile rule already approved: clear the
 /// mortgage flag and charge `amount` directly. Returns the amount charged.
 #[cfg_attr(kani, inline(always))]
-pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
-    unsafe { sys::apply_redeem(player_id, tile, amount) }
+pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::apply_redeem(player_id, tile, amount) })
 }
 
 /// Pay the buy price through the money pipeline (`PayKind::Buy`). `kind` is
@@ -3657,6 +3831,19 @@ pub fn gain_fixed(player_id: i32, amount: i32, why: &Msg) -> Result<i32, Prompt>
 #[cfg_attr(kani, inline(always))]
 pub fn paid_in_settle() -> i32 {
     unsafe { sys::paid_in_settle() }
+}
+
+/// What `seat` paid other players during this turn's settles.
+pub fn paid_in_settle_by(seat: i32) -> i32 {
+    unsafe { sys::paid_in_settle_by(seat) }
+}
+
+/// The figure a fresh rent charge from `payer` on `tile` would move, scaled by
+/// the tile's own factors and the standing plan / settle factors (not by any
+/// in-flight payment's factor). `-1` = no rent charge. Rolls a fresh d20 on a
+/// dice-rent tile.
+pub fn rent_quote(payer: i32, tile: i32) -> i32 {
+    unsafe { sys::rent_quote(payer, tile) }
 }
 
 /// Place a field card **on a tile** (the mark sits on the board at `tile`

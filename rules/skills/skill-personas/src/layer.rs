@@ -67,7 +67,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("layer_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("layer_spend")))? {
         return Ok(());
     }
     // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so a windowed Move roll

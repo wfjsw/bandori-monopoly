@@ -84,6 +84,12 @@ pub struct Trigger {
     /// 真奈 join: a joiner used the redirect (shielded the redirect target).
     /// Set by the joiner's body; read by the join opener to decide its draw.
     pub join_used: bool,
+    /// The innermost open settle's tile (`settle.tile`), `-1` when none.
+    pub settle_tile: i32,
+    /// The settle's terminal outcome (`settle.outcome`), only on `tileResolved`.
+    pub outcome: Option<game_core::engine::SettleOutcome>,
+    /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
+    pub charge_skill: bool,
 }
 
 /// The move that caused a trigger.
@@ -121,8 +127,14 @@ pub struct TriggerMove {
 /// The payment a `pay` / `paid` trigger is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct TriggerPay {
+    /// The in-flight kind (`set_pay_kind`).
+    pub kind: game_core::engine::PayKind,
+    /// The in-flight shape (`set_pay_shape`).
+    pub shape: game_core::engine::PayShape,
     /// Is this payment rent, as against a buy / build / forced loss?
     pub is_rent: bool,
+    /// Is this a command total (not a share, not a staged command)?
+    pub total_stage: bool,
 }
 
 /// The purchase a buy trigger is about (`docs/PURCHASE.md`).
@@ -167,6 +179,9 @@ impl Default for Trigger {
             reason: None,
             join_redirect: None,
             join_used: false,
+            settle_tile: -1,
+            outcome: None,
+            charge_skill: false,
         }
     }
 }
@@ -199,6 +214,9 @@ impl Trigger {
             reason: None,
             join_redirect: None,
             join_used: false,
+            settle_tile: -1,
+            outcome: None,
+            charge_skill: false,
         }
     }
 
@@ -380,6 +398,18 @@ pub trait CardWorld: Clone + 'static {
     /// What this turn's [触发结算]s have cost the player so far.
     fn paid_in_settle(&self) -> i32 {
         0
+    }
+    /// What `seat` paid other players during this turn's settles.
+    fn paid_in_settle_by(&self, _seat: i32) -> i32 {
+        0
+    }
+    /// A fresh rent quote from `payer` on `tile`, -1 = none.
+    fn rent_quote(&mut self, _payer: i32, _tile: i32) -> i32 {
+        -1
+    }
+    /// The scoped pay-factor product in milli (plan × open settles).
+    fn pay_factor(&self) -> i32 {
+        1000
     }
     /// Where the player stood when the turn started.
     fn turn_start_pos(&self, _player_id: i32) -> i32 {
@@ -1067,6 +1097,21 @@ pub trait CardWorld: Clone + 'static {
     fn set_trigger_value(&mut self, value: i32);
     /// Redirect the payee of a pending pay (`PayCtx.to`); -1 = the bank.
     fn set_trigger_target(&mut self, to: i32);
+    /// Rewrite the pending payment's kind (guest `pay_kind` code).
+    fn set_trigger_pay_kind(&mut self, _kind: i32) {}
+    /// Rewrite the pending payment's shape (guest `pay_shape` code). Answers
+    /// whether it was honoured -- a write after the first share leg is not.
+    fn set_trigger_pay_shape(&mut self, _shape: i32) -> bool {
+        false
+    }
+    /// The innermost open settle's tile (`settle.tile`), -1 outside one.
+    fn settle_tile(&self) -> i32 {
+        -1
+    }
+    /// The settle's terminal outcome (`settle.outcome`), -1 outside `tileResolved`.
+    fn settle_outcome(&self) -> i32 {
+        -1
+    }
     /// Negate the trigger's effect (`trigger.Cancelled = true`).
     fn set_trigger_cancelled(&mut self);
     /// Yu-Gi-Oh's *negate the effect*: the link happened, but settles to nothing.
@@ -1255,6 +1300,8 @@ pub trait CardWorld: Clone + 'static {
     fn set_settle_tile(&mut self, _v: i32) {}
     /// Scale money paid for this walk. Milli-units (500 = x0.5).
     fn set_pay_factor(&mut self, _v: i32) {}
+    /// Compose a pay factor into a scope (`pay_factor_scope` code).
+    fn mul_pay_factor(&mut self, _milli: i32, _scope: i32) {}
     /// Scale rent paid for this walk, same units.
     fn set_rent_factor(&mut self, _v: i32) {}
     /// May this move build where it lands. `set_no_build` is the inverse

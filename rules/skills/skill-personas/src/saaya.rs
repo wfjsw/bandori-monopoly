@@ -151,7 +151,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if bandori_std::fire::spend(player_id, 5, &Msg::new(key!("saaya_spend")))? {
+    if bandori_std::fire::spend_skill(player_id, 5, &Msg::new(key!("saaya_spend")))? {
         ctx::trigger::set_pay_amount((amount - 5000).max(0));
     }
     Ok(())

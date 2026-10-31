@@ -88,7 +88,7 @@ fn before_settle_self(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("sakiko_crychic_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("sakiko_crychic_spend")))? {
         return Ok(());
     }
     nudge(player_id, at);

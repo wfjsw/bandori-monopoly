@@ -490,8 +490,10 @@ const MAX_EXTRA: usize = 16;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct NameMap {
     vals: [i32; crate::intern::SLOTS],
-    /// Bit `i` set = key `NameId(i)` is present (even if `vals[i] == 0`).
-    present: u64,
+    /// Bit `i` of word `i / 64` set = key `NameId(i)` is present (even if
+    /// `vals[i] == 0`). One word per 64 slots -- a single `u64` overflows at
+    /// slot 64 in the debug build.
+    present: [u64; (crate::intern::SLOTS + 63) / 64],
     /// Linear fallback for `NameId.0 >= SLOTS` (derived MIN/MAX/EXPIRES).
     extra: [(NameId, i32); MAX_EXTRA],
     extra_n: u8,
@@ -501,7 +503,7 @@ impl NameMap {
     pub const fn new() -> Self {
         Self {
             vals: [0; crate::intern::SLOTS],
-            present: 0,
+            present: [0; (crate::intern::SLOTS + 63) / 64],
             extra: [(NameId::INVALID, 0); MAX_EXTRA],
             extra_n: 0,
         }
@@ -516,7 +518,7 @@ impl NameMap {
     pub fn get_opt(&self, key: NameId) -> Option<i32> {
         let i = key.0 as usize;
         if i < crate::intern::SLOTS {
-            if ((self.present >> i) & 1) == 1 {
+            if ((self.present[i / 64] >> (i % 64)) & 1) == 1 {
                 return Some(self.vals[i]);
             }
             return None;
@@ -538,7 +540,7 @@ impl NameMap {
         let i = key.0 as usize;
         if i < crate::intern::SLOTS {
             self.vals[i] = value;
-            self.present |= 1u64 << i;
+            self.present[i / 64] |= 1u64 << (i % 64);
             return value;
         }
         if !key.is_valid() {
@@ -574,18 +576,14 @@ impl NameMap {
     /// not the hot `get`/`set`. `f` sees at most `MAX_KEYS` live keys in
     /// practice (the engine budget); extra slots are model headroom.
     pub fn for_each(&self, mut f: impl FnMut(NameId, i32)) {
-        // 8×8 chunk walk over the 64 intern slots (unwind bound 8, not 64).
-        let mut outer = 0usize;
-        while outer < 8 {
-            let mut k = 0usize;
-            while k < 8 {
-                let i = outer * 8 + k;
-                if i < crate::intern::SLOTS && ((self.present >> i) & 1) == 1 {
-                    f(NameId(i as u16), self.vals[i]);
-                }
-                k += 1;
+        // Walk every bucket. The bound is `SLOTS` (64 under Kani, 4096 in a
+        // native test build), so a native id lands wherever the hash puts it.
+        let mut i = 0usize;
+        while i < crate::intern::SLOTS {
+            if ((self.present[i / 64] >> (i % 64)) & 1) == 1 {
+                f(NameId(i as u16), self.vals[i]);
             }
-            outer += 1;
+            i += 1;
         }
         let mut e = 0usize;
         while e < MAX_EXTRA {
@@ -778,6 +776,34 @@ pub struct World {
     pub trig_roll_source: i32,
     /// `Trigger::pay.is_rent` — pay-only fact (`hostfns::trig_pay_is_rent`).
     pub trig_pay_is_rent: bool,
+    /// `TriggerPay.kind` wire code, `-1` = no payment (`pay_kind` pre).
+    pub trig_pay_kind: i32,
+    /// `TriggerPay.shape == Fixed` (`pay_is_fixed` pre).
+    pub trig_pay_is_fixed: bool,
+    /// `TriggerPay.total_stage` (`pay_total_stage` pre); `true` is neutral.
+    pub trig_pay_total_stage: bool,
+    /// `Trigger.charge_skill` (`charge_is_skill` pre).
+    pub trig_charge_skill: bool,
+    /// `Trigger.settle_tile` — the innermost open settle, `-1` = none.
+    pub trig_settle_tile: i32,
+    /// `Trigger.outcome` as `SettleOutcome::as_i32`, `-1` = none.
+    pub trig_settle_outcome: i32,
+    /// `pay_amount` was written since the last fold (`spendBefore` reads it).
+    pub pay_amount_set: bool,
+    /// Pay factors per scope, milli (1000 = x1); `pay_factor` composes the
+    /// live ones.
+    pub next_move_pay_factor: i32,
+    pub plan_pay_factor: i32,
+    pub next_settle_pay_factor: i32,
+    pub settle_pay_factor: i32,
+    /// A `thisMove` scope is open.
+    pub move_open: bool,
+    /// Number of open settles (`thisSettle` is open while non-zero).
+    pub settle_open: u32,
+    /// `paid_in_settle_by` — per-seat array, index = seat.
+    pub paid_in_settle_by: [i32; MAX_PLAYERS],
+    /// A symbolic `rent_quote` figure; `-1` = no rent charge.
+    pub rent_quote: i32,
     /// Move payload (`Trigger::mv`); `MoveSnap::NONE` = no move.
     pub move_snap: MoveSnap,
     /// Buy payload (`Trigger::buy`); `BuySnap::NONE` = no buy.
@@ -903,6 +929,21 @@ impl World {
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,
             trig_pay_is_rent: false,
+            trig_pay_kind: -1,
+            trig_pay_is_fixed: false,
+            trig_pay_total_stage: true,
+            trig_charge_skill: false,
+            trig_settle_tile: -1,
+            trig_settle_outcome: -1,
+            pay_amount_set: false,
+            next_move_pay_factor: 1000,
+            plan_pay_factor: 1000,
+            next_settle_pay_factor: 1000,
+            settle_pay_factor: 1000,
+            move_open: false,
+            settle_open: 0,
+            paid_in_settle_by: [0; MAX_PLAYERS],
+            rent_quote: -1,
             move_snap: MoveSnap::NONE,
             buy_snap: BuySnap::NONE,
             trig_card: 0,

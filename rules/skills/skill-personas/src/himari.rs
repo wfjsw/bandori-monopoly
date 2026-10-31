@@ -64,7 +64,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("himari_ask")),
         &[Msg::new(key!("himari_odd")), Msg::new(key!("himari_even"))],
     )?;
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("himari_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("himari_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

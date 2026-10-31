@@ -85,7 +85,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("lisa_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("lisa_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -111,7 +111,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("lisa_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("lisa_spend")))? {
         return Ok(());
     }
     // 「若你这样做，此次传送不触发任何结算」

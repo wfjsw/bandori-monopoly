@@ -50,6 +50,33 @@ impl CondView for SnapshotView<'_> {
     fn pay_is_rent(&self) -> bool {
         self.win.pay_is_rent
     }
+    fn pay_kind(&self) -> i64 {
+        self.win.pay_kind
+    }
+    fn pay_is_fixed(&self) -> i64 {
+        self.win.pay_is_fixed
+    }
+    fn pay_total_stage(&self) -> i64 {
+        self.win.pay_total_stage
+    }
+    fn charge_is_skill(&self) -> bool {
+        self.win.charge_is_skill
+    }
+    fn settle_tile(&self) -> i64 {
+        self.win.settle_tile
+    }
+    fn settle_owner(&self) -> i64 {
+        self.win.settle_owner
+    }
+    fn settle_houses(&self) -> i64 {
+        self.win.settle_houses
+    }
+    fn settle_mortgaged(&self) -> bool {
+        self.win.settle_mortgaged
+    }
+    fn settle_outcome(&self) -> i64 {
+        self.win.settle_outcome
+    }
     fn move_roll(&self) -> i64 {
         self.win.mv.roll.unwrap_or(-1)
     }

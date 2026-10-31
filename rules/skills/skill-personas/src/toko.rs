@@ -105,7 +105,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("toko_nobody")).tile("tile", tile));
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("toko_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("toko_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

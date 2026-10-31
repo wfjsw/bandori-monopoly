@@ -115,7 +115,7 @@ impl Default for MoveSnap {
 /// Built **once per trigger / chain window** (the `declare_one` / `run_hook`
 /// call) and reused by every candidate probe in that window. This is where
 /// the savings of G1 live: 48 900 counteract probes share ~250 windows.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowCtx {
     /// Trigger / chain kind wire **spelling** of this window (see
@@ -132,6 +132,24 @@ pub struct WindowCtx {
     /// `by_card` owner seat (`-1` = none).
     pub by: i64,
     pub pay_is_rent: bool,
+    /// The pending payment's wire kind (`pay_kind`), `-1` = no payment.
+    pub pay_kind: i64,
+    /// 1 = the pending payment's shape is `Fixed` (`pay_is_fixed`).
+    pub pay_is_fixed: i64,
+    /// 1 = a command total (`pay_total_stage`); neutral `1` without a payment.
+    pub pay_total_stage: i64,
+    /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
+    pub charge_is_skill: bool,
+    /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
+    pub settle_tile: i64,
+    /// `settle.owner` -- `-1` = no settle / unowned.
+    pub settle_owner: i64,
+    /// `settle.houses`.
+    pub settle_houses: i64,
+    /// `settle.mortgaged`.
+    pub settle_mortgaged: bool,
+    /// `settle.outcome` -- `-1` = not finished / no settle.
+    pub settle_outcome: i64,
     pub mv: MoveSnap,
     /// Where a roll came from (`-1` = none). Binds `roll_source`.
     pub roll_source: i64,
@@ -167,6 +185,49 @@ pub struct WindowCtx {
     /// This turn's fixed main-move roll (`plan.fixed_roll`, the guest's
     /// `ctx::fixed_roll()`); `None` = unset (binds CEL `null`).
     pub plan_fixed_roll: Option<i64>,
+}
+
+impl Default for WindowCtx {
+    fn default() -> Self {
+        Self {
+            kind: String::new(),
+            actor: -1,
+            target: -1,
+            tile: TileSnap::default(),
+            value: 0,
+            step: 0,
+            by: -1,
+            pay_is_rent: false,
+            // The sentinels are the GUARDS §4.2 window defaults: a guard on a
+            // pay-only name rejects outside a pay, and one on a settle name
+            // outside a settle, instead of failing the build.
+            pay_kind: -1,
+            pay_is_fixed: 0,
+            pay_total_stage: 1,
+            charge_is_skill: false,
+            settle_tile: -1,
+            settle_owner: -1,
+            settle_houses: 0,
+            settle_mortgaged: false,
+            settle_outcome: -1,
+            mv: MoveSnap::default(),
+            roll_source: 0,
+            abnormal: false,
+            chain: Vec::new(),
+            turn_player: 0,
+            turn_key: 0,
+            trigger_card: 0,
+            name: String::new(),
+            players: Vec::new(),
+            tile_ids: BTreeMap::new(),
+            tile_kinds: Vec::new(),
+            tile_attrs: BTreeMap::new(),
+            tile_classes: Vec::new(),
+            tile_count: 0,
+            tile_owners: Vec::new(),
+            plan_fixed_roll: None,
+        }
+    }
 }
 
 impl WindowCtx {

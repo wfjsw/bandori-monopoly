@@ -108,7 +108,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     let Some(&tile) = pool.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("uika_sumimi_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("uika_sumimi_spend")))? {
         return Ok(());
     }
     // One pot per placement, its own row (`place_mark_new`).

@@ -136,7 +136,7 @@ fn can_negate(player_id: i32) -> bool {
 /// The [反击] window's play-vs-skip *is* the 「你可以使用」 choice; declaring
 /// the counteraction spends the 4 [火罐] and voids the effect. No extra confirm.
 fn negate(player_id: i32) -> card_sdk::Asked {
-    if !bandori_std::fire::spend(player_id, 4, &Msg::new(key!("tae_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 4, &Msg::new(key!("tae_spend")))? {
         return Ok(());
     }
     trigger::set_cancelled();

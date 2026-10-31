@@ -976,6 +976,20 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_deal_mortgaged => world::with_world(|w| w.buy_snap.deal_mortgaged as i64),
         Op::trig_set_pay_amount => arm_trig_set_pay_amount(a),
         Op::trig_set_pay_target => arm_trig_set_pay_target(a),
+        Op::pay_command => arm_pay_command(a),
+        Op::set_pay_factor => arm_set_pay_factor(a),
+        Op::trig_set_pay_kind => arm_trig_set_pay_kind(a),
+        Op::trig_set_pay_shape => arm_trig_set_pay_shape(a),
+        Op::mul_pay_factor => arm_mul_pay_factor(a),
+        Op::pay_factor => world::with_world(|w| {
+            w.plan_pay_factor.saturating_mul(w.settle_pay_factor)
+        }) as i64,
+        Op::settle_tile => world::with_world(|w| w.trig_settle_tile) as i64,
+        Op::settle_outcome => world::with_world(|w| w.trig_settle_outcome) as i64,
+        Op::paid_in_settle_by => {
+            world::with_world(|w| w.paid_in_settle_by[player_idx(a0)]) as i64
+        }
+        Op::rent_quote => world::with_world(|w| w.rent_quote) as i64,
         Op::trig_set_price => {
             world::with_world_mut(|w| w.buy_snap.price = a0);
             0
@@ -1027,7 +1041,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::set_parity
         | Op::set_resolve
         | Op::set_settle_tile
-        | Op::set_pay_factor
         | Op::set_rent_factor
         | Op::set_no_buy
         | Op::set_no_build
@@ -2662,7 +2675,16 @@ pub fn arm_set_mortgaged(a: Args) -> i64 {
 /// clear the mortgage flag. Modelled as the unmortgage write (the `redeemed`
 /// state key and the fee have no model field).
 pub fn arm_apply_redeem(a: Args) -> i64 {
-    let [_, a1, ..] = a;
+    let [a0, a1, a2, ..] = a;
+    // G02 `spendBefore`: the write is the cost, else the asked amount.
+    let cost = fold_spend_before(a2.max(0));
+    if cost > 0 {
+        world::with_world_mut(|w| {
+            let p = player_idx(a0);
+            let n = cost.min(w.money[p].max(0));
+            w.money[p] -= n;
+        });
+    }
     world::with_world_mut(|w| {
         w.tiles[tile_idx(a1)].mortgaged = false;
         w.push(Effect::SetMortgaged {
@@ -2670,7 +2692,7 @@ pub fn arm_apply_redeem(a: Args) -> i64 {
             on: false,
         });
     });
-    0
+    cost as i64
 }
 
 pub fn arm_set_owner(a: Args) -> i64 {
@@ -3093,6 +3115,11 @@ pub fn arm_take_card(a: Args) -> i64 {
 pub fn arm_target(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
+        // Tile targeting (`target(-1, tile, 0)`, ctx::target_tile): the tile
+        // itself is the answer. Mirrors `InlineHost::apply`'s `Target` arm.
+        if a1 >= 0 {
+            return a1 as i64;
+        }
         let p = a0;
         world::with_world_mut(|w| {
             if p >= 0
@@ -3373,10 +3400,109 @@ pub fn arm_trig_set_pay_amount(a: Args) -> i64 {
     {
         world::with_world_mut(|w| {
             w.pay_amount = a0;
+            w.pay_amount_set = true;
             w.push(Effect::SetPayAmount { to: a0 });
         });
         0
     }
+}
+
+/// G02 `spendBefore` fold: the last `set_pay_amount` write is the cost (a
+/// written `0` is a free spend); with no write the caller's `cost` stands. A
+/// cancel is not signalled and does not zero the cost.
+pub fn fold_spend_before(cost: i32) -> i32 {
+    let (set, v) = world::with_world(|w| (w.pay_amount_set, w.pay_amount));
+    world::with_world_mut(|w| w.pay_amount_set = false);
+    if set {
+        v
+    } else {
+        cost
+    }
+}
+
+pub fn arm_pay_command(a: Args) -> i64 {
+    let [from, to, amount, spec, _, _] = a;
+    let shape = spec & 0xF;
+    let kind = (spec >> 4) & 0xF;
+    let flags = (spec >> 8) & 0xF;
+    let raw_tile = (spec >> 12) & 0xF_FFFF;
+    let tile = if raw_tile > 0 { raw_tile - 1 } else { -1 };
+    world::with_world_mut(|w| {
+        w.trig_pay_kind = kind;
+        w.trig_pay_is_fixed = shape == 1;
+        w.trig_pay_total_stage = flags & 4 != 0;
+        w.trig_settle_tile = tile;
+    });
+    // A `Fixed` leg moves the amount verbatim; the symbolic model does not
+    // apply factors, so `Normal` moves it verbatim too.
+    if amount > 0 {
+        world::with_world_mut(|w| {
+            let f = player_idx(from);
+            w.money[f] = (w.money[f] - amount).max(0);
+            if to >= 0 {
+                let t = player_idx(to);
+                w.money[t] = w.money[t].saturating_add(amount);
+            }
+            w.push(Effect::PayTo {
+                from,
+                to,
+                n: amount,
+            });
+        });
+    }
+    amount as i64
+}
+
+pub fn arm_trig_set_pay_kind(a: Args) -> i64 {
+    world::with_world_mut(|w| w.trig_pay_kind = a[0]);
+    0
+}
+
+pub fn arm_trig_set_pay_shape(a: Args) -> i64 {
+    // The model records no stage cursor, so a shape write always takes.
+    world::with_world_mut(|w| w.trig_pay_is_fixed = a[0] == 1);
+    1
+}
+
+/// Resolve a wire factor scope: `Auto` (0) is the innermost live one, and an
+/// unopened `this` scope falls forward to its `next` instance.
+fn resolve_scope(w: &crate::world::World, scope: i32) -> i32 {
+    let auto = if w.settle_open > 0 {
+        3
+    } else if w.move_open {
+        1
+    } else {
+        0
+    };
+    match if scope == 0 { auto } else { scope } {
+        1 if !w.move_open => 0,
+        3 if w.settle_open == 0 => 2,
+        s => s,
+    }
+}
+
+pub fn arm_mul_pay_factor(a: Args) -> i64 {
+    let milli = a[0].max(0);
+    world::with_world_mut(|w| {
+        match resolve_scope(w, a[1]) {
+            1 => w.plan_pay_factor = w.plan_pay_factor.saturating_mul(milli),
+            2 => w.next_settle_pay_factor = w.next_settle_pay_factor.saturating_mul(milli),
+            3 => w.settle_pay_factor = w.settle_pay_factor.saturating_mul(milli),
+            _ => w.next_move_pay_factor = w.next_move_pay_factor.saturating_mul(milli),
+        }
+    });
+    0
+}
+
+pub fn arm_set_pay_factor(a: Args) -> i64 {
+    let milli = a[0].max(0);
+    world::with_world_mut(|w| match resolve_scope(w, 0) {
+        1 => w.plan_pay_factor = milli,
+        2 => w.next_settle_pay_factor = milli,
+        3 => w.settle_pay_factor = milli,
+        _ => w.next_move_pay_factor = milli,
+    });
+    0
 }
 
 pub fn arm_trig_set_pay_target(a: Args) -> i64 {

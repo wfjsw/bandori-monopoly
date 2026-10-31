@@ -124,6 +124,8 @@ pub trait HostOps {
     fn op_pay_total(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_pay_leg`
     fn op_pay_leg(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_pay_command`
+    fn op_pay_command(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_draw`
     fn op_draw(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_draw_event`
@@ -356,6 +358,10 @@ pub trait HostOps {
     fn op_trig_set_pay_amount(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_set_pay_target`
     fn op_trig_set_pay_target(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_trig_set_pay_kind`
+    fn op_trig_set_pay_kind(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_trig_set_pay_shape`
+    fn op_trig_set_pay_shape(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_set_cancelled`
     fn op_trig_set_cancelled(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_trig_set_negate_effect`
@@ -412,6 +418,14 @@ pub trait HostOps {
     fn op_set_settle_tile(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_pay_factor`
     fn op_set_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_mul_pay_factor`
+    fn op_mul_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_pay_factor`
+    fn op_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_settle_tile`
+    fn op_settle_tile(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_settle_outcome`
+    fn op_settle_outcome(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_rent_factor`
     fn op_set_rent_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_no_buy`
@@ -534,6 +548,10 @@ pub trait HostOps {
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_paid_in_settle`
     fn op_paid_in_settle(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_paid_in_settle_by`
+    fn op_paid_in_settle_by(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_rent_quote`
+    fn op_rent_quote(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_place_card_on`
     fn op_place_card_on(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_play_from_hand`
@@ -912,6 +930,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_pay_leg(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::pay_leg(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
+    fn op_pay_command(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::pay_command(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
+    }
     fn op_draw(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::draw(self, a[0], a[1])? as i64)
     }
@@ -1087,7 +1108,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_raise(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         let kind = crate::hostfns::guest_str(self, a[1], a[2])?;
-        Ok(crate::hostfns::raise(self, a[0], &kind, a[3])? as i64)
+        Ok(crate::hostfns::raise(self, a[0], &kind, a[3], a[4])? as i64)
     }
     fn op_gain_marker(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         let name = crate::hostfns::guest_str(self, a[1], a[2])?;
@@ -1297,6 +1318,13 @@ impl<C: crate::host::HostCtx> HostOps for C {
         crate::hostfns::trig_set_pay_target(self, a[0])?;
         Ok(0)
     }
+    fn op_trig_set_pay_kind(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::trig_set_pay_kind(self, a[0])?;
+        Ok(0)
+    }
+    fn op_trig_set_pay_shape(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::trig_set_pay_shape(self, a[0])? as i64)
+    }
     fn op_trig_set_cancelled(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::trig_set_cancelled(self)?;
         Ok(0)
@@ -1391,6 +1419,19 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_set_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_pay_factor(self, a[0])?;
         Ok(0)
+    }
+    fn op_mul_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::mul_pay_factor(self, a[0], a[1])?;
+        Ok(0)
+    }
+    fn op_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::pay_factor(self)? as i64)
+    }
+    fn op_settle_tile(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::settle_tile(self)? as i64)
+    }
+    fn op_settle_outcome(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::settle_outcome(self)? as i64)
     }
     fn op_set_rent_factor(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_rent_factor(self, a[0])?;
@@ -1599,6 +1640,12 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_paid_in_settle(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::paid_in_settle(self)? as i64)
+    }
+    fn op_paid_in_settle_by(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::paid_in_settle_by(self, a[0])? as i64)
+    }
+    fn op_rent_quote(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::rent_quote(self, a[0], a[1])? as i64)
     }
     fn op_place_card_on(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::place_card_on(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
@@ -2368,6 +2415,21 @@ pub unsafe extern "C-unwind" fn ruleset_pay_leg(
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_pay_command(
+    from: i32,
+    to: i32,
+    amount: i32,
+    spec: i32,
+    ptr: i32,
+    len: i32,
+) -> i32 {
+    with_host(|h| match h.op_pay_command([from, to, amount, spec, ptr, len]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_draw(player_id: i32, n: i32) -> i32 {
     with_host(|h| match h.op_draw([player_id, n, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -2900,8 +2962,14 @@ pub unsafe extern "C-unwind" fn ruleset_raise_bought(player_id: i32, tile: i32) 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_raise(player_id: i32, kp: i32, kl: i32, value: i32) -> i32 {
-    with_host(|h| match h.op_raise([player_id, kp, kl, value, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_raise(
+    player_id: i32,
+    kp: i32,
+    kl: i32,
+    value: i32,
+    source: i32,
+) -> i32 {
+    with_host(|h| match h.op_raise([player_id, kp, kl, value, source, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3443,6 +3511,22 @@ pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_target(to: i32) {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_kind(n: i32) {
+    with_host(|h| match h.op_trig_set_pay_kind([n, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_set_pay_shape(n: i32) -> i32 {
+    with_host(|h| match h.op_trig_set_pay_shape([n, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_set_cancelled() {
     with_host(|h| match h.op_trig_set_cancelled([0, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
@@ -3673,6 +3757,38 @@ pub unsafe extern "C-unwind" fn ruleset_set_settle_tile(n: i32) {
 pub unsafe extern "C-unwind" fn ruleset_set_pay_factor(n: i32) {
     with_host(|h| match h.op_set_pay_factor([n, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_mul_pay_factor(milli: i32, scope: i32) {
+    with_host(|h| match h.op_mul_pay_factor([milli, scope, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_pay_factor() -> i32 {
+    with_host(|h| match h.op_pay_factor([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_settle_tile() -> i32 {
+    with_host(|h| match h.op_settle_tile([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_settle_outcome() -> i32 {
+    with_host(|h| match h.op_settle_outcome([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
@@ -4247,6 +4363,22 @@ pub unsafe extern "C-unwind" fn ruleset_gain_fixed(
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_paid_in_settle() -> i32 {
     with_host(|h| match h.op_paid_in_settle([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_paid_in_settle_by(seat: i32) -> i32 {
+    with_host(|h| match h.op_paid_in_settle_by([seat, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_rent_quote(payer: i32, tile: i32) -> i32 {
+    with_host(|h| match h.op_rent_quote([payer, tile, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

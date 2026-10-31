@@ -167,7 +167,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, cost, &Msg::new(key!("tomori_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, cost, &Msg::new(key!("tomori_spend")))? {
         return Ok(());
     }
     // `teleport_to` runs the [传送] abnormal gate itself (`HostRequest::Teleport`).

@@ -121,6 +121,47 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn pay_is_rent(&self) -> bool {
         self.trigger.pay.map(|p| p.is_rent).unwrap_or(false)
     }
+    fn pay_kind(&self) -> i64 {
+        self.trigger.pay.map(|p| p.kind.as_i32() as i64).unwrap_or(-1)
+    }
+    fn pay_is_fixed(&self) -> i64 {
+        self.trigger
+            .pay
+            .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
+            .unwrap_or(0)
+    }
+    fn pay_total_stage(&self) -> i64 {
+        self.trigger.pay.map(|p| p.total_stage as i64).unwrap_or(1)
+    }
+    fn charge_is_skill(&self) -> bool {
+        self.trigger.charge_skill
+    }
+    fn settle_tile(&self) -> i64 {
+        self.trigger.settle_tile as i64
+    }
+    fn settle_owner(&self) -> i64 {
+        if self.trigger.settle_tile >= 0 {
+            self.src.tile_owner(self.trigger.settle_tile) as i64
+        } else {
+            -1
+        }
+    }
+    fn settle_houses(&self) -> i64 {
+        if self.trigger.settle_tile >= 0 {
+            self.src.houses_of(self.trigger.settle_tile) as i64
+        } else {
+            0
+        }
+    }
+    fn settle_mortgaged(&self) -> bool {
+        self.trigger.settle_tile >= 0 && self.src.mortgaged_of(self.trigger.settle_tile) != 0
+    }
+    fn settle_outcome(&self) -> i64 {
+        self.trigger
+            .outcome
+            .map(|o| o.as_i32() as i64)
+            .unwrap_or(-1)
+    }
     fn move_roll(&self) -> i64 {
         // Negative face is the pre-cast sentinel; reads as `null`.
         self.trigger
@@ -1330,6 +1371,26 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         step: t.step as i64,
         by: t.by_card.map(|b| b as i64).unwrap_or(-1),
         pay_is_rent: t.pay.map(|p| p.is_rent).unwrap_or(false),
+        pay_kind: t.pay.map(|p| p.kind.as_i32() as i64).unwrap_or(-1),
+        pay_is_fixed: t
+            .pay
+            .map(|p| (p.shape == game_core::engine::PayShape::Fixed) as i64)
+            .unwrap_or(0),
+        pay_total_stage: t.pay.map(|p| p.total_stage as i64).unwrap_or(1),
+        charge_is_skill: t.charge_skill,
+        settle_tile: t.settle_tile as i64,
+        settle_owner: if t.settle_tile >= 0 {
+            world.tile_owner(t.settle_tile) as i64
+        } else {
+            -1
+        },
+        settle_houses: if t.settle_tile >= 0 {
+            world.houses_of(t.settle_tile) as i64
+        } else {
+            0
+        },
+        settle_mortgaged: t.settle_tile >= 0 && world.mortgaged_of(t.settle_tile) != 0,
+        settle_outcome: t.outcome.map(|o| o.as_i32() as i64).unwrap_or(-1),
         mv,
         roll_source: t.roll_source.as_i32() as i64,
         // `abnormal` is the AbnormalGate window, not "this link was negated".
@@ -1415,6 +1476,15 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         step: 0,
         by: -1,
         pay_is_rent: false,
+        pay_kind: -1,
+        pay_is_fixed: 0,
+        pay_total_stage: 1,
+        charge_is_skill: false,
+        settle_tile: -1,
+        settle_owner: -1,
+        settle_houses: 0,
+        settle_mortgaged: false,
+        settle_outcome: -1,
         mv: MoveSnap::default(),
         roll_source: 0,
         abnormal: false,

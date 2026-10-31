@@ -75,7 +75,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("misaki_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("misaki_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(1, 10, "另一个我");
@@ -98,7 +98,7 @@ fn can_use_exile(player_id: i32) -> Option<Msg> {
 /// （3）「获得一层在你的下回合开始前移除的[除外]」 -- the exile wears off at the
 /// next turn start, which is what `expires: TurnStart` says.
 fn use_exile(player_id: i32) -> card_sdk::Asked {
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("misaki_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("misaki_spend")))? {
         return Ok(());
     }
     rules_status::exile::send(player_id, 1, -1);

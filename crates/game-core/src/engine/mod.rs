@@ -39,11 +39,14 @@ pub use ai::{
     CHAOS_COUNTER_CHANCE, CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN,
     PASS_REWARD_CARD_MIN_MONEY, PASS_REWARD_CARD_MONEY, PLAY_CARD_CHANCE, REDEEM_RESERVE,
 };
-pub use cx::{AnswerProvider, Answered, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
+pub use cx::{
+    AnswerProvider, Answered, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, SettleEntry,
+    SettleOutcome, AI_UNSET,
+};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;
-pub use play::{Paid, Pay, PayEvent, PayKind};
+pub use play::{Paid, Pay, PayEvent, PayFactorScope, PayKind, PayShape};
 pub use rules::{
     CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
     TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,

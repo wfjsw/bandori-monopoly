@@ -434,6 +434,58 @@ fn heuristic_auction(
     }
 }
 
+/// The terminal outcome of a [触发结算], written as the frame passes its last
+/// terminal stage. Distinguishes "the settle played out" from a cancel and from
+/// the payer leaving, so a reader after the fact (council's refund, the
+/// `settle.outcome` pre field) can tell them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettleOutcome {
+    /// The settle ran to `tileResolved` with no earlier terminal outcome.
+    #[default]
+    Settled,
+    /// Cancelled at `settle` or `settleBody`.
+    Cancelled,
+    /// The payer left the board (`out`) at `settle` or `settleAfter`.
+    PayerOut,
+    /// The match stopped playing before `tileResolved`.
+    Aborted,
+}
+
+impl SettleOutcome {
+    /// Decode the guest / CEL encoding; an unknown code is `Settled`.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => SettleOutcome::Cancelled,
+            2 => SettleOutcome::PayerOut,
+            3 => SettleOutcome::Aborted,
+            _ => SettleOutcome::Settled,
+        }
+    }
+
+    /// The guest / CEL encoding.
+    pub const fn as_i32(self) -> i32 {
+        match self {
+            SettleOutcome::Settled => 0,
+            SettleOutcome::Cancelled => 1,
+            SettleOutcome::PayerOut => 2,
+            SettleOutcome::Aborted => 3,
+        }
+    }
+}
+
+/// One open [触发结算] on [`Cx::settle_stack`]. The tile and payer are the
+/// frame's; `base` is the product of the *outer* settle factors (the world's
+/// `settle_pay_factor` at push time) so the entry's own `thisSettle` write
+/// composes on top without re-reading the stack. `outcome` starts
+/// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
+#[derive(Debug, Clone, Copy)]
+pub struct SettleEntry {
+    pub player: usize,
+    pub tile: usize,
+    pub base: f64,
+    pub outcome: SettleOutcome,
+}
+
 /// Routine context: the world being mutated, read-only game data, card rules, and
 /// the replay cursor.
 pub struct Cx<'a> {
@@ -455,11 +507,13 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
-    /// How many [触发结算]s are open right now (nested settles included; a
-    /// settle that suspends keeps its count until it resumes and finishes).
-    /// Non-zero is 「结算中」 for the payments it carries -- RAS:游击演出's
-    /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally. Transient.
-    pub(crate) settle_open: u32,
+    /// The open [触发结算]s, innermost last. An entry is pushed **once** per
+    /// frame (at its first step, not on every resume) and popped on completion,
+    /// so a suspended settle never inflates the depth. Non-empty is 「结算中」
+    /// for the payments the settle carries -- RAS:游击演出's
+    /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally -- and the
+    /// innermost entry stamps every raise with its tile and outcome. Transient.
+    pub(crate) settle_stack: Vec<SettleEntry>,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -1018,6 +1072,16 @@ impl<'a> Cx<'a> {
         self.rules
     }
 
+    /// How many settles are open right now (the [`Cx::settle_stack`] depth).
+    pub fn settle_open(&self) -> u32 {
+        self.settle_stack.len() as u32
+    }
+
+    /// The innermost open settle's tile, `-1` when none is open.
+    pub fn settle_tile(&self) -> i32 {
+        self.settle_stack.last().map_or(-1, |s| s.tile as i32)
+    }
+
     pub fn new(
         w: World,
         data: &'a GameData,
@@ -1034,7 +1098,7 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
-            settle_open: 0,
+            settle_stack: Vec::new(),
             state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,

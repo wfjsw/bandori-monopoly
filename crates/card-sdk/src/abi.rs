@@ -842,7 +842,211 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 104;
+/// v107: **pay command context, pay shapes, spend windows, factor scopes and
+///    settle identity** (G02, `spec/abi/G02-pay-pipeline.md`).
+///
+///    * `ruleset_pay_command(from, to, amount, spec, ptr, len)` -- the `pay` /
+///      `pay_to` verb plus a packed `spec` word (shape, kind, flags, tile) and
+///      a packed [`pay_receipt`] answer (moved amount + settled / cancelled /
+///      shortfall / fixed flags). `ctx::PayCommand` is the guest builder over
+///      it; `pay` / `transfer` / `pay_leg` become builder calls.
+///    * New imports `trig_set_pay_kind`, `trig_set_pay_shape`,
+///      `mul_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`,
+///      `paid_in_settle_by`, `rent_quote`.
+///    * `ruleset_raise` gains a fifth slot, the raise **source**
+///      ([`charge_source`]); `ctx::raise_from` is the sibling of `raise`.
+///    * New action / counteraction window `spendBefore = 122`
+///      ([`TriggerKind::SpendBefore`]), raised before a raw 消耗 debit
+///      (redeem, auction, `lose_raw`).
+///    * New wire tables [`pay_kind`], [`pay_shape`], [`pay_flag`],
+///      [`pay_receipt`], [`charge_source`] and the enums [`PayKind`],
+///      [`PayShape`], [`PayFactorScope`], [`SettleOutcome`], [`ChargeSource`].
+///    * `TriggerPay` gains `total_stage`; `Trigger` gains `settle_tile`,
+///      `outcome` and `charge_skill`, and the pre vocabulary gains
+///      `pay_kind` / `pay_is_fixed` / `pay_total_stage` / `charge_is_skill` /
+///      `settle.*`.
+///
+///    SAVE_VERSION / RECORD_VERSION unchanged (the new save fields are
+///    `#[serde(default)]`).
+pub const ABI_VERSION: i32 = 107;
+
+// v107 wire code tables. Unknown values fall back (`Normal` / `Card`); an
+// unknown flag bit is ignored by the host decoder.
+
+/// `pay_command` spec bits 4-7: what caused the payment.
+pub mod pay_kind {
+    pub const CARD: i32 = 0;
+    pub const RENT: i32 = 1;
+    pub const BUY: i32 = 2;
+    pub const BUILD: i32 = 3;
+    pub const LOSS: i32 = 4;
+    pub const FORCE_BUY: i32 = 5;
+    pub const GAIN: i32 = 6;
+}
+
+/// `pay_command` spec bits 0-3: how the figure is produced.
+pub mod pay_shape {
+    pub const NORMAL: i32 = 0;
+    pub const FIXED: i32 = 1;
+    pub const PAYEE_HALF: i32 = 2;
+}
+
+/// `pay_command` spec bits 8-11.
+pub mod pay_flag {
+    /// Raise funds / bankrupt when short (the host default for a card pay).
+    pub const MUST: i32 = 1 << 0;
+    pub const ALLOW_MORTGAGE: i32 = 1 << 1;
+    /// Run the command-wide pre-split stages (cleared by `pay_leg`).
+    pub const TOTAL_STAGE: i32 = 1 << 2;
+}
+
+/// The packed `pay_command` answer.
+pub mod pay_receipt {
+    /// Low bits: the amount actually moved.
+    pub const AMOUNT_MASK: i32 = 0x0FFF_FFFF;
+    pub const SETTLED: i32 = 1 << 31;
+    pub const CANCELLED: i32 = 1 << 30;
+    pub const SHORTFALL: i32 = 1 << 29;
+    /// Echo of [`pay_shape::FIXED`].
+    pub const FIXED: i32 = 1 << 28;
+}
+
+/// `ruleset_raise` source slot.
+pub mod charge_source {
+    pub const OTHER: i32 = 0;
+    pub const SKILL: i32 = 1;
+    pub const DRAIN: i32 = 2;
+}
+
+/// The wire [`pay_kind`] code.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i32)]
+pub enum PayKind {
+    Card = 0,
+    Rent = 1,
+    Buy = 2,
+    Build = 3,
+    Loss = 4,
+    ForceBuy = 5,
+    Gain = 6,
+}
+
+impl PayKind {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    /// Unknown codes fall back to [`PayKind::Card`].
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => PayKind::Rent,
+            2 => PayKind::Buy,
+            3 => PayKind::Build,
+            4 => PayKind::Loss,
+            5 => PayKind::ForceBuy,
+            6 => PayKind::Gain,
+            _ => PayKind::Card,
+        }
+    }
+}
+
+/// The wire [`pay_shape`] code.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i32)]
+pub enum PayShape {
+    Normal = 0,
+    Fixed = 1,
+    PayeeHalf = 2,
+}
+
+impl PayShape {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    /// Unknown codes fall back to [`PayShape::Normal`].
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => PayShape::Fixed,
+            2 => PayShape::PayeeHalf,
+            _ => PayShape::Normal,
+        }
+    }
+}
+
+/// Which factor store a [`crate::ctx::plan::mul_pay_factor`] write lands in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i32)]
+pub enum PayFactorScope {
+    NextMove = 0,
+    ThisMove = 1,
+    NextSettle = 2,
+    ThisSettle = 3,
+}
+
+impl PayFactorScope {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => PayFactorScope::ThisMove,
+            2 => PayFactorScope::NextSettle,
+            3 => PayFactorScope::ThisSettle,
+            _ => PayFactorScope::NextMove,
+        }
+    }
+}
+
+/// How one [触发结算] ended (`tileResolved`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i32)]
+pub enum SettleOutcome {
+    Settled = 0,
+    Cancelled = 1,
+    PayerOut = 2,
+    Aborted = 3,
+}
+
+impl SettleOutcome {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => SettleOutcome::Cancelled,
+            2 => SettleOutcome::PayerOut,
+            3 => SettleOutcome::Aborted,
+            _ => SettleOutcome::Settled,
+        }
+    }
+}
+
+/// The [`charge_source`] code of a raise: what opened a `ChargePaying` window.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(i32)]
+pub enum ChargeSource {
+    Other = 0,
+    Skill = 1,
+    Drain = 2,
+}
+
+impl ChargeSource {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => ChargeSource::Skill,
+            2 => ChargeSource::Drain,
+            _ => ChargeSource::Other,
+        }
+    }
+}
+
 /// v104: **turn snapshot carries money and the board arrays**. The
 ///    `ruleset_turn_snap` payload is the postcard struct
 ///    `(pos, state, money, owners, houses, mortgaged)` (was `(pos, state)`):
@@ -2123,6 +2327,12 @@ impl ActionKind {
     /// the running figure.
     pub const PaySplitMulBefore: Self = Self(TriggerKind::PaySplitMulBefore);
 
+    /// Action / Counteraction window. Before a raw 消耗 debit (redeem, auction,
+    /// `lose_raw`) at the full cost. Payload: player_id = the spender,
+    /// tile = the tile involved (-1), value = the cost, by_card. Reduce it
+    /// with `set_pay_amount`; a cancel does not zero it (I5).
+    pub const SpendBefore: Self = Self(TriggerKind::SpendBefore);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self {
         Self(TriggerKind::engine(id))
@@ -2706,6 +2916,12 @@ impl TriggerKind {
 
     /// `paySplitMulBefore`
     pub const PaySplitMulBefore: Self = Self::engine(110);
+
+    /// `spendBefore` -- before a raw 消耗 debit (redeem, auction, `lose_raw`).
+    /// A counteraction link and an action hook alike; `value` is the full
+    /// cost, `trigger::set_pay_amount` reduces it, and a cancel leaves the
+    /// cost unchanged.
+    pub const SpendBefore: Self = Self::engine(122);
 
     /// `onBoardGate`
     pub const OnBoardGate: Self = Self::engine(108);

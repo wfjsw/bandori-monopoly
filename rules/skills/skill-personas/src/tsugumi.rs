@@ -107,7 +107,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「使本次移动反向」 + arm the deferred half.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tsugumi_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("tsugumi_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

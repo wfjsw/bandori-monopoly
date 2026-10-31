@@ -368,6 +368,17 @@ pub enum Op {
     // v100: mark refs -- resolve / drop one row by its stable uid.
     mark_tile = 339,
     remove_mark = 340,
+    // v107 (G02): payment commands, pay-window kind/shape writes, scoped
+    // factors and the settle / quote readers (`G02-pay-pipeline` §5.9).
+    pay_command = 369,
+    trig_set_pay_kind = 370,
+    trig_set_pay_shape = 371,
+    mul_pay_factor = 372,
+    pay_factor = 373,
+    settle_tile = 374,
+    settle_outcome = 375,
+    paid_in_settle_by = 376,
+    rent_quote = 377,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

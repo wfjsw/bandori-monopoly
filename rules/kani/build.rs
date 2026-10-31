@@ -298,6 +298,15 @@ const ARRAY_OPS: &[&str] = &[
     "adjust_money",
     "card_prop",
     "raise_after",
+    "pay_command",
+    "trig_set_pay_kind",
+    "trig_set_pay_shape",
+    "mul_pay_factor",
+    "pay_factor",
+    "settle_tile",
+    "settle_outcome",
+    "paid_in_settle_by",
+    "rent_quote",
 ];
 
 fn main() {

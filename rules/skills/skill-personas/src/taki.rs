@@ -95,7 +95,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&(uid, card)) = field.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("taki_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("taki_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

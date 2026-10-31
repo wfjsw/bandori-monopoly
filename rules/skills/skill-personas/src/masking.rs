@@ -68,7 +68,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         1,
         have,
     )?;
-    if x < 1 || !bandori_std::fire::spend(player_id, x, &Msg::new(key!("masking_spend")))? {
+    if x < 1 || !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("masking_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(x, 10, "与燃烧的红色一起驰骋");

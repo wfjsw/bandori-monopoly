@@ -48,6 +48,16 @@ fn full_build_cost() -> i32 {
     100
 }
 
+/// Serde default for a milli factor (`1000` = ×1).
+fn milli_one() -> i32 {
+    1000
+}
+
+/// Serde default for an `f64` pay factor (`1.0` = ×1).
+fn one() -> f64 {
+    1.0
+}
+
 /// How a play settles its number-range dice (「以理论最大值或最小值结算」).
 /// The wire encoding is the old `1` / `0` / `-1` triple; only the Rust side is
 /// an enum.
@@ -209,6 +219,38 @@ pub struct TurnCtx {
     /// 「本回合的settle向其他玩家支付了至少1000资金」.
     #[serde(default)]
     pub paid_in_settle: i32,
+    /// The same figure per **payer** seat: guerrilla's 「本回合的[结算]向其他
+    /// 玩家支付了至少1000资金」 counts the owner's own payments only
+    /// (`ctx::paid_in_settle_by`). Resized at turn start.
+    #[serde(default)]
+    pub paid_in_settle_by: Vec<i32>,
+    /// Pay factor for the **next** move, in milli (1000 = ×1). Folded into
+    /// the plan at move start, then reset.
+    #[serde(default = "milli_one")]
+    pub next_move_pay_factor: i32,
+    /// Pay factor for the **next** settle, in milli. Moved into the settle
+    /// entry when it is pushed, then reset.
+    #[serde(default = "milli_one")]
+    pub next_settle_pay_factor: i32,
+    /// A move is in flight (walk / teleport through its tail). The `thisMove`
+    /// factor scope is open while this holds.
+    #[serde(default)]
+    pub move_open: bool,
+    /// Depth of the open settles (`Cx::settle_stack`). The guest factor API
+    /// needs the depth without the stack; the stack stays the truth and this
+    /// is kept level with it.
+    #[serde(default)]
+    pub settle_open: u32,
+    /// The product of every open settle's factor (`thisSettle` composes on
+    /// top of [`Self::settle_base`]). This is what the payment scale and the
+    /// factor getter read.
+    #[serde(default = "one")]
+    pub settle_pay_factor: f64,
+    /// The product of the **outer** settle factors -- the innermost entry's
+    /// `base`. A `thisSettle` write replaces the innermost factor, so it
+    /// recomposes from here instead of dividing.
+    #[serde(default = "one")]
+    pub settle_base: f64,
     /// Where each player stood when the turn started. 「在场地地块开始
     /// 回合时」 is a question about that square, not the one a mid-turn walk has
     /// since reached.
@@ -275,6 +317,13 @@ impl Default for TurnCtx {
             cancelled_designations: Vec::new(),
             play_doubled: None,
             paid_in_settle: 0,
+            paid_in_settle_by: Vec::new(),
+            next_move_pay_factor: milli_one(),
+            next_settle_pay_factor: milli_one(),
+            move_open: false,
+            settle_open: 0,
+            settle_pay_factor: one(),
+            settle_base: one(),
             turn_start_pos: Vec::new(),
             turn_snap: Vec::new(),
             turn_rolls: Vec::new(),
@@ -855,9 +904,113 @@ impl World {
         self.marker_owner.get(name).map(|s| s.as_str())
     }
 
+    /// What `player_id` paid other players during this turn's settles
+    /// (`ctx::paid_in_settle_by`). 0 outside a seat's range.
+    /// The ordinary-settle rent figure of `t` as `pay_rent` charges it, plus
+    /// its detail note (`log.part.rent_houses` / `log.part.rent_dice`).
+    /// **Single source** for the engine's `pay_rent` / `card_charge_rent` and
+    /// the guest `rent_quote` reader. Needs no `Cx`, so a card `Run` can call
+    /// it.
+    pub fn rent_figure(
+        &mut self,
+        data: &crate::data::GameData,
+        owner: usize,
+        t: usize,
+    ) -> (i32, Option<crate::msg::Msg>) {
+        use crate::msg::Msg;
+        // The tile prop marks dice rent; the unit comes from the live
+        // `rentUnitMult` rule param (a card's +N lands there).
+        if self.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT) > 0 {
+            let dice_mult = self.rent_unit_mult();
+            let d = self.rng.d(20);
+            let kind = data.tiles[t].kind.as_str().to_string();
+            let unit = super::play::purchase::dice_rent_unit(data, self, owner, &kind, dice_mult);
+            let n = super::play::purchase::count_owned_kind(data, self, owner, &kind).max(1);
+            (
+                unit * d,
+                Some(
+                    Msg::new("log.part.rent_dice")
+                        .i("n", n)
+                        .i("mult", dice_mult)
+                        .i("d", d),
+                ),
+            )
+        } else {
+            // The counted house count ([`Self::rent_houses`]): a
+            // 「房屋数视为…」 override rides here, and real `st.houses` is
+            // untouched.
+            let h = self.rent_houses(t as i32);
+            let rent = super::play::purchase::table_rent(data, self, t);
+            (
+                rent,
+                (h > 0).then(|| Msg::new("log.part.rent_houses").i("h", h)),
+            )
+        }
+    }
+
+    /// The figure a fresh `payer -> owner` rent charge on `t` would move here:
+    /// base x the tile's own rent scale x the standing plan and open-settle
+    /// pay factors, one end-of-calculation round, and **not** the in-flight
+    /// payment's own rent factor or `milli_scale`. `-1` = no rent charge
+    /// (unowned, own tile, mortgaged, an endpoint out, or a zero table).
+    /// Moves no money but rolls a fresh d20 on a dice-rent tile.
+    pub fn rent_quote(&mut self, data: &crate::data::GameData, payer: usize, t: usize) -> i32 {
+        let owner = self.st.owners.get(t).copied().unwrap_or(-1);
+        if owner < 0
+            || owner as usize == payer
+            || self.out(payer)
+            || self.out(owner as usize)
+            || self.st.mortgaged.get(t).copied().unwrap_or(false)
+        {
+            return -1;
+        }
+        let (amount, _) = self.rent_figure(data, owner as usize, t);
+        if amount <= 0 {
+            return -1;
+        }
+        // The same arithmetic [`super::play::Play::scale_settle_payment`] runs
+        // for a rent, minus the in-flight rent factor and with
+        // `milli_scale = 1000`: the tile's rent half and every standing plan /
+        // open-settle pay factor, then the single end-of-calculation round the
+        // pay chain applies.
+        let mut f = self.turn.plan.pay_factor;
+        f *= self.turn.settle_pay_factor;
+        f *= super::play::purchase::tile_money_scale(self, t, true);
+        let scaled = if (f - 1.0).abs() <= f64::EPSILON {
+            amount
+        } else {
+            (amount as f64 * f) as i32
+        };
+        if scaled != amount && scaled > 0 {
+            super::play::ceil10_money(scaled)
+        } else {
+            scaled
+        }
+    }
+
+    pub fn paid_in_settle_by(&self, player_id: i32) -> i32 {
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.turn.paid_in_settle_by.get(s).copied())
+            .unwrap_or(0)
+    }
+
     /// Zero every player's turn-gain counter (「当前回合内」 starts fresh).
     pub fn reset_gains(&mut self) {
         self.gains.iter_mut().for_each(|n| *n = 0);
+    }
+
+    /// The one credit write path: add `amount` to the player's money and count
+    /// the gain (「当前回合内你每获得过一次资金」). Every money-in funnels through
+    /// here; a debit never bumps.
+    pub fn credit(&mut self, player_id: i32, amount: i32) {
+        let Ok(s) = usize::try_from(player_id) else {
+            return;
+        };
+        if let Some(p) = self.st.players.get_mut(s) {
+            p.money += amount;
+            self.bump_gain(player_id, 1);
+        }
     }
 
     /// Append an event to the log. Returns it for further fields.

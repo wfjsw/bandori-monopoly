@@ -155,7 +155,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = near.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 7, &Msg::new(key!("kaoru_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 7, &Msg::new(key!("kaoru_spend")))? {
         return Ok(());
     }
     // 「在…玩家场上放置3个[怪盗标记]」 -- three units on that player's field

@@ -41,6 +41,10 @@ pub struct SettleFrame {
     pub stage: SettleStage,
     /// Owner of `at` when the settle opened (read once, as today).
     pub owner: i32,
+    /// Index of this frame's [`Cx::settle_stack`](super::Cx::settle_stack)
+    /// entry, or `usize::MAX` before the first step pushed it. A parked frame
+    /// keeps its index, so a resume does not push again.
+    pub stack_idx: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +73,7 @@ impl SettleFrame {
             m,
             stage: SettleStage::RaiseSettle,
             owner: -1,
+            stack_idx: usize::MAX,
         }
     }
 }

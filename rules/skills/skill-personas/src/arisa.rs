@@ -81,7 +81,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if bandori_std::fire::spend(player_id, 2, &Msg::new(key!("arisa_spend")))? {
+    if bandori_std::fire::spend_skill(player_id, 2, &Msg::new(key!("arisa_spend")))? {
         ctx::add_group_crystals(player_id, 1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("arisa_crystal")));
     }

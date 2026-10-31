@@ -11,6 +11,7 @@ use crate::data::GameData;
 use crate::msg::Msg;
 use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
+use super::play::PayFactorScope;
 use super::world::World;
 use crate::engine::world::Extreme;
 
@@ -134,9 +135,59 @@ impl World {
     pub fn set_settle_tile(&mut self, tile: i32) {
         self.turn.plan.settle_tile = tile;
     }
-    /// Scale money paid for this walk. Milli-units (500 = x0.5).
+    /// Set a pay factor absolutely (milli; `500` = ×0.5). The `Auto` scope of
+    /// [`ctx::plan::set_pay_factor`](crate::engine::Cx): the innermost live
+    /// scope -- `thisSettle` in a settle, else `thisMove` in a move, else
+    /// `nextMove`.
     pub fn set_pay_factor(&mut self, milli: i32) {
-        self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
+        let milli = milli.max(0);
+        if self.turn.settle_open > 0 {
+            self.turn.settle_pay_factor = self.turn.settle_base * f64::from(milli) / 1000.0;
+        } else if self.turn.move_open {
+            self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
+        } else {
+            self.turn.next_move_pay_factor = milli;
+        }
+    }
+
+    /// Compose a pay factor into `scope` (milli). An unopened `this` scope
+    /// falls forward to its next instance; the milli buffers saturate.
+    pub fn mul_pay_factor(&mut self, milli: i32, scope: PayFactorScope) {
+        let milli = milli.max(0);
+        match self.resolve_scope(scope) {
+            PayFactorScope::ThisMove => {
+                self.turn.plan.pay_factor *= f64::from(milli) / 1000.0;
+            }
+            PayFactorScope::ThisSettle => {
+                self.turn.settle_pay_factor *= f64::from(milli) / 1000.0;
+            }
+            PayFactorScope::NextMove => {
+                self.turn.next_move_pay_factor = self.turn.next_move_pay_factor.saturating_mul(milli);
+            }
+            PayFactorScope::NextSettle => {
+                self.turn.next_settle_pay_factor =
+                    self.turn.next_settle_pay_factor.saturating_mul(milli);
+            }
+        }
+    }
+
+    /// The scoped pay-factor product in milli: the move plan × the open
+    /// settles. The per-payment rent factor, tile props and `milli_scale` are
+    /// not in it (they need the pending payment).
+    pub fn pay_factor(&self) -> i32 {
+        ((self.turn.plan.pay_factor * 1000.0) as i32)
+            .saturating_mul((self.turn.settle_pay_factor * 1000.0) as i32)
+    }
+
+    /// An unopened `this` scope falls forward to its next instance.
+    fn resolve_scope(&self, scope: PayFactorScope) -> PayFactorScope {
+        match scope {
+            PayFactorScope::ThisMove if !self.turn.move_open => PayFactorScope::NextMove,
+            PayFactorScope::ThisSettle if self.turn.settle_open == 0 => {
+                PayFactorScope::NextSettle
+            }
+            s => s,
+        }
     }
     /// Scale rent paid for this walk, same units.
     pub fn set_rent_factor(&mut self, milli: i32) {
@@ -586,13 +637,13 @@ impl World {
         if amount == 0 {
             return 0;
         }
-        if let Some(s) = self.player_mut(player_id) {
-            s.money += amount;
-        }
         // 「当前回合内你每获得过一次资金」 -- only money **in** counts; a
-        // negative `gain_fixed` is a loss.
+        // negative `gain_fixed` is a loss. A credit goes through the one
+        // credit path (which bumps); a loss is a bare debit.
         if amount > 0 {
-            self.bump_gain(player_id, 1);
+            self.credit(player_id, amount);
+        } else if let Some(s) = self.player_mut(player_id) {
+            s.money += amount;
         }
         let e = self.log("gain", player_id, why);
         e.value = amount;
@@ -912,14 +963,15 @@ impl World {
 
     /// Money in (「gain」), logged with its reason.
     pub fn gain_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
-        let Some(s) = self.player_mut(player_id) else {
-            return 0;
-        };
-        if amount <= 0 || s.out() {
-            return 0;
+        {
+            let Some(s) = self.player_mut(player_id) else {
+                return 0;
+            };
+            if amount <= 0 || s.out() {
+                return 0;
+            }
         }
-        s.money += amount;
-        self.bump_gain(player_id, 1);
+        self.credit(player_id, amount);
         self.log(
             "gain",
             player_id,
