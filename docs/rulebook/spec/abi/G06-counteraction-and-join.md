@@ -399,9 +399,8 @@ self-describing):
 pub struct TriggerPay { pub is_rent: bool, pub total_stage: bool, .. }
 // G02 lands first and already extends the struct to `{ is_rent, total_stage }`
 // (its `settle_tile` sits on `Trigger`, not here) with the `pay_total_stage` /
-// `pay_is_rent` / `settle_tile*` pre scalars. `split_leg` below is **derived**
-// (`!total_stage`), not a field; where a guard needs it, `pay_split_leg()` is
-// sugar over `!pay_total_stage()`. Take G02's struct as the base.
+// `pay_is_rent` / `settle.*` pre scalars. A 分摊 leg is `!total_stage`; there
+// is no separate `split_leg` field or sugar. Take G02's struct as the base.
 pub struct Trigger {
     // …
     /// The card whose effect this link *is*: its own id on a root link, the
@@ -483,7 +482,8 @@ pub fn countered_by_this_turn(seat: i32) -> Vec<i32>;
 ### 4.5 Condition vocabulary (`crates/cond`, window vars)
 
 `subject_range_card` (bool), `extreme_armed` (bool), `pending_negation` (int),
-`pay_split_leg` (bool), `chain_depth` (int). Documented in `GUARDS.md` §4.2c
+`chain_depth` (int). A 分摊 leg is G02's window var `pay_total_stage` (`0`), so
+this group adds none for it. All of these are documented in `GUARDS.md` §4.2
 next to the other effect-window vars. Purely additive; no wire id.
 
 ### 4.6 State
@@ -505,7 +505,7 @@ pub struct CounterRecord { pub declarer: i32, pub countered: i32, pub card: Stri
 | 2 | `join::shield` replaces `set_join_used` | `join_used` alias | | yes |
 | 3 | `NumericShape`, `prop::RANGE_CARD`, `extreme_armed`, `pending_negation`, `AnswerEffect::ARMS_EXTREME` | `CounteractEntry` | `ManifestOn.numeric` | |
 | 4 | — | card link list | | yes |
-| 5 | `AnswerPayShape` (`pay_split_leg` is derived: `!pay_total_stage`, G02) | `TriggerPay` (read only) | `ManifestOn.pay_shape` | |
+| 5 | `AnswerPayShape` (reads G02's `total_stage`) | `TriggerPay` (read only) | `ManifestOn.pay_shape` | |
   (`PayShape` is G02's; this group's enum is `AnswerPayShape` so both can land.)
 | 6 | `ManifestOn.all_kinds` | matcher | `ManifestOn.all_kinds` | |
 | 7 | `subject_card`, `chain_depth`, `answered_kind` | counter-link build, `bridge_trigger` | | |
@@ -824,7 +824,7 @@ by every card that can `set_cancelled` (net_error, and the sweep in 9.3).
 ///    `trigger::{pending_negation,extreme_armed,subject_card,chain_depth,
 ///    answered_kind}` and `ctx::countered_by_this_turn`; new window vars
 ///    `subject_range_card` / `extreme_armed` / `pending_negation` /
-///    `pay_split_leg` (sugar over G02's `pay_total_stage`) / `chain_depth`.
+///    `pay_total_stage` (G02) / `chain_depth`.
 ///    Counter links carry the answered
 ///    link's payload forward (`mv`, `pay`, `effects`,
 ///    `subject_card`, `join`) and set `subject_card` to the answered card.
@@ -924,7 +924,7 @@ offer costs more than a bitmask shift. Rejected in favour of empty = all, which
 is one line in the matcher and already expressible in the manifest.
 
 **A4 — express range/pay contracts only as CEL pre conditions**
-(`subject_range_card`, `pay_split_leg`) with no entry fields. Simplest surface,
+(`subject_range_card`, the pay-shape test) with no entry fields. Simplest surface,
 but every offer then pays a world copy + scope + CEL eval to discover the card
 is ineligible. Chosen design keeps the entry fields as the cheap index and the
 vars as the body/guard escape hatch.

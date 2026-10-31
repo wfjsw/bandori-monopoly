@@ -142,7 +142,7 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
 | window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/hand/pos/out/stay/stun/exile/tiles` (count) | `World`/`Player` |
 | candidate | `card.id`, `card.placed`, `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
@@ -339,11 +339,23 @@ the instance's card id hash, `name` / `counter_name` = the counter name
 `card.counter(name)` on that instance. Filter with `counter_is('cp')` /
 `card.counter('cp') == 0`.
 
-`pay.*` fields are meaningful only where the dispatch trigger carries them (a
-`pay`/`paid` raise); a `Settle` / `AtEnd` / `DiceRollPlan` window reads `value = 0`
-/ `pay_is_rent = false`. Derived state that the schema does not cover
-(`ctx::fixed_roll()`, `ctx::abnormal_count`, a "every X is out" scan) stays a
-residual wasm guard -- exactly the G3 split.
+`pay_is_rent`, `pay_kind`, `pay_is_fixed` and `pay_total_stage` are meaningful
+only where the dispatch trigger carries a payment (a `pay`/`paid` raise); a
+`Settle` / `AtEnd` / `DiceRollPlan` window reads `value = 0`,
+`pay_is_rent = false`, `pay_is_fixed = 0`, `pay_kind = -1` and the neutral
+`pay_total_stage = true`. Only `pay_kind` / `pay_is_fixed` reject there, so a
+guard that must stay pay-only tests those rather than `pay_total_stage`,
+which stays neutral so it never spuriously rejects inside its own window.
+`charge_is_skill` is `false` unless the `ChargePaying` window was raised as a
+skill cost. `settle.*` reads the trigger's stamp of the innermost **open**
+settle and is `-1` (`settle.tile`/`.owner`/`.outcome`), `0` (`settle.houses`)
+or `false` (`settle.mortgaged`) when no settle is open; `settle.outcome` is
+also `-1` until `tileResolved`. These are the G02 additions
+(`spec/abi/G02-pay-pipeline.md` §4.7).
+
+Derived state that the schema does not cover (`ctx::fixed_roll()`,
+`ctx::abnormal_count`, a "every X is out" scan) stays a residual wasm guard --
+exactly the G3 split.
 
 ### 4.3 ABI / authoring surface
 

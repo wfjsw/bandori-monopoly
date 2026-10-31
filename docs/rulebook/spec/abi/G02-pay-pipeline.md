@@ -31,7 +31,7 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 | R3 | `build_cost_effective` duplicated G09's `build_price(tile)`, which is the identical formula (`max(0, build_cost*pct/100 - discount)`). | Item 12 is handed to G09; G02 drops that import (2.12). |
 | R4 | Op ids 341–350 collide with G01's eight imports (341–348), and G08's twenty (349–368) are not counted anywhere. | G02 takes **369–377**; the README table is corrected and every later group is shifted (§8). |
 | R5 | §7 said `RECORD_VERSION` stays 3. Master is already **4** (`record.rs:48`); G08 landed `SAVE_VERSION` 13. | `SAVE_VERSION` stays **13**; `RECORD_VERSION` stays **4** (§7). |
-| R6 | `SettleOutcome` was designed beside G10's `SettleFacts`, which carries `cancelled`/`body_replaced`/`paid` for the same frame — two representations of one fact, and G10 also claimed the `settle_open` fix. | One stack (`Cx.settle_scopes`) owned here; `SettleFacts` becomes a view of it, and G02 ships the `settle_open` fix G10's bullet described (§12, R10 below). |
+| R6 | `SettleOutcome` was designed beside G10's `SettleFacts`, which carries `cancelled`/`body_replaced`/`paid` for the same frame — two representations of one fact, and G10 also claimed the `settle_open` fix. | One stack (`Cx.settle_stack`) owned here; `SettleFacts` becomes a view of it, and G02 ships the `settle_open` fix G10's bullet described (§12, R10 below). |
 | R7 | `rent_quote` was defined as "the figure `charge_rent` would move", which includes the in-flight payment's own factor — so 连接 (`anon_tokyo`) would scale a partner charge by the *triggering* payment's factor. | The quote is a fresh hypothetical charge: own tile factors + standing plan/settle factors, **not** the in-flight payment's rent factor or `milli_scale` (I8, 4.6). |
 | R8 | `Fixed` said the pay windows are "read-only" but did not say what happens to `spare(link, seat)`, `set_pay_target`, or the `ceil10`. | `Fixed` ignores amount, target, cancel and spare writes and skips the round; `must` still applies (I2, 5.2). |
 | R9 | §4.4 let `set_pay_shape` write in any window, including stages that had already run. | Shape is foldable only until the first split leg opens; after that a `set_pay_shape` to a non-`Normal` shape is logged and dropped (4.3). |
@@ -39,7 +39,7 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 | R11 | Item 23's "per-seat gains counter" ignored that `gains_this_turn` already exists and is already a pre field; the defect is six bare `money +=` credits that never bump it. | One `World::credit` write path; the six sites route through it (2.23, 5.8). |
 | R12 | Item 20's reader was assigned to `PayCombinedAddBefore` only, so a `Fixed` command (which skips the combined stages) had no flag and the guard was unreadable at the `effect` window where 主唱太拼命了 actually listens. | `total_stage` moves onto `TriggerPay` and the pre vocabulary; readable on every pay window (§4.7, 5.2). |
 | R13 | `pay_kind` was listed as a pre scalar returning "-1 when not a pay window", but the pre language has no nullable int convention there. | `pay_kind` returns -1 and the docs say the guard is only meaningful with `effect.has(Pay)`; `pay_total_stage` defaults `true` so a non-pay guard fails closed (§4.7). |
-| R14 | "Design only" claimed nothing is serialized, yet `settle_scopes` and the payee half are engine state that a mid-settle save must reproduce. | `settle_scopes` is rebuilt from the answer log like the work stack; `partner` is runtime-only and derived from the declared payee (§7). |
+| R14 | "Design only" claimed nothing is serialized, yet `settle_stack` and the payee half are engine state that a mid-settle save must reproduce. | `settle_stack` is rebuilt from the answer log like the work stack; `partner` is runtime-only and derived from the declared payee (§7). |
 | R15 | §11 Q3/Q8/Q13/Q16/Q17 stated outcomes for behaviour the draft did not define. | Each now points at the section that defines it, and Q13/Q17 are tightened to what the design actually does. |
 | R16 | The draft's test 12 tested a surface the group no longer owns and test 18 tested `SettleAfter` cleanup that G10 also changes. | Test table rewritten; the council test asserts the G02 outcome reader and leaves the G10 bits to G10 (§9). |
 
@@ -52,18 +52,18 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 | 3 | `sakiko-pay-factor-composition` | medium | 131, 132 | B: scoped `mul_pay_factor` |
 | 4 | `kokoro-pay-buy` | medium | 305 | B: kind `Buy` + mandatory pay |
 | 5 | `kokoro-rent-kind` | high | 306, 953 | B: kind `Rent` on a caller-supplied figure |
-| 6 | `kokoro-pay-tile` | high | 309, 1005 | B: `pay_spec` tile |
+| 6 | `kokoro-pay-tile` | high | 309, 1005 | B: `pay_command` tile |
 | 7 | `tomori-charge-paying-temp-share` | low | 459 | **A** (`fire.rs:323` whole-cost window already landed) |
 | 8 | `popipapapipopa-spend-window` | medium | 572 | B: `SpendBefore` for redeem/auction |
 | 9 | `aya-stage-2-interactive-hook-missing` | medium | 1397, 1539 | **A** (`PayCombinedAddBefore`, id 106) |
 | 10 | `door-pay-tile-vs-settle-tile` | medium | 1427 | B: `settle_tile` on the pay payload |
 | 11 | `anon-tokyo-link-rent-figure` | medium | 513, 1388 | B: `rent_quote`; **row 513 A** |
 | 12 | `miracle-free-build-choice` (G09's row) | medium | 521 | **Hand to G09** (`build_price`) |
-| 13 | `guerrilla-paid-per-seat` | medium | 1472 | B: `paid_in_settle_for` |
+| 13 | `guerrilla-paid-per-seat` | medium | 1472 | B: `paid_in_settle_by` |
 | 14 | `repaint-pay-factor` | medium | 835 | B: `mul_pay_factor` (move scope) |
 | 15 | `taki-pay-factor-leak` | high | 560, 1361 | B: `mul_pay_factor` (settle scope) |
 | 16 | `rana-pay-factor-multiply` | medium | 1483 | B: `mul_pay_factor` (settle scope) |
-| 17 | `fire-bird-paid-signal` | medium | 1441 | B: `PayReport::settled` |
+| 17 | `fire-bird-paid-signal` | medium | 1441 | B: `PayReceipt::settled` |
 | 18 | `council-check-cancelled-settle` (G10's row) | medium | 1449 | B: `SettleOutcome` on `tileResolved`; the `paid`/`body_replaced` bits stay G10's |
 | 19 | `kokoro-circlenormal-skip` | medium | 1353 | **A** (`trigger::is_settle_redirect()`) |
 | 20 | `vocal-split-leg` | medium | 21 | B: `total_stage` on the trigger + `pay_total_stage` pre |
@@ -554,15 +554,15 @@ Testable invariants:
   in-flight payment's own rent factor or `milli_scale`. It is -1 when a rent
   charge would not happen (unowned, mortgaged, owner is `p`, an endpoint out)
   and moves no money.
-- **I9 (per payer).** `paid_in_settle_for(seat)` counts only payments whose
+- **I9 (per payer).** `paid_in_settle_by(seat)` counts only payments whose
   payer is `seat`, while a settle is open and the declared counterparty is
   another player.
-- **I10 (report).** `PayReport::settled` is true iff the payment committed;
+- **I10 (receipt).** `PayReceipt::settled` is true iff the payment committed;
   `amount` is the money actually moved and is independent of the flag.
-- **I11 (command shape).** `pay_total_stage()` is `true` exactly when the
-  payment runs the command-wide stages (`Pay.total_stage`), i.e. it is `false`
+- **I11 (command shape).** `pay_total_stage` is `1` exactly when the
+  payment runs the command-wide stages (`Pay.total_stage`), i.e. it is `0`
   on every 分摊 leg and on a command that has already staged.
-- **I12 (charge source).** `charge_is_skill()` is `true` exactly when the
+- **I12 (charge source).** `charge_is_skill` is `1` exactly when the
   `ChargePaying` window was raised from a character-skill cost.
 - **I13 (credit).** Every credit to a player's money raises that player's
   `gains_this_turn` by exactly one, whatever the cause; a debit never does.
@@ -571,13 +571,39 @@ Testable invariants:
 
 Everything below is guest-facing ABI unless marked internal. "New" = added;
 "extended" = existing shape grows; "wire-breaking" = existing wire meaning
-changes. No import decides anything: `pay_spec` pauses and the engine opens the
+changes. No import decides anything: `pay_command` pauses and the engine opens the
 windows, a spend hook may ask and suspends the spend call, and the quoted
 readers move no money (`rent_quote` rolls a fresh d20 for a dice-rent tile and
 therefore advances the RNG, 11.8). All nine imports exist identically on
 wasm32, native and Kani (4.9, 5.9). Nothing carries display text: the only
 string argument is the existing postcard `Msg` (`ptr`/`len`) and every log line
 keeps its current `Msg` shape and keys.
+
+**Word choices**, so a reviewer can challenge them in one place:
+
+- **command / leg** — the whole 支付 versus one 分摊 share. The design already
+  needed the distinction in prose (`total_stage`); `PayCommand` is the call
+  that carries a command, `pay_leg` already names a share.
+- **`spec`** — the packed word inside a command. It stays `spec` rather than
+  `command` so the payload field and the request name do not collide; the
+  doc says "spec bits" for it throughout.
+- **receipt** — the returned `PayReceipt`, not "report": it is proof of what
+  moved, it cannot be confused with the `join-window-report` family, and the
+  amount lives there instead of in the return type's sign.
+- **`SettleEntry` / `settle_stack`** — the frame stack's elements, not a
+  "scope": factor *scopes* are a different concept this doc already owns, and
+  one word for both made 5.3/5.5 ambiguous. The frame field is `stack_idx`.
+- **`settle.tile` etc.** — pre fields, dotted like `tile.id` / `tile.owner`.
+  The body readers stay `trigger::settle_tile()` / `settle_outcome()`,
+  parallel to `trigger::tile()`; the engine field keeps its `settle_tile`
+  spelling. Because `settle.*` takes the dotted word, G10's trigger snapshot
+  is `settle_facts` (matching `trig_settle_facts`), never a bare `settle`.
+- **`paid_in_settle_by(seat)`** — matches the `paid_in_settle_by` counter and
+  reads as attribution, parallel to the existing world `paid_in_settle()`.
+- **`raise_from`** — the source of a raise, on the `ruleset_raise` slot.
+  `raise_src` collided mentally with `Pay.source` and the `Msg` `src`.
+- **`credit`** — the engine write that always bumps the gains counter. It is
+  deliberately not `gain`, which is the guest verb and opens windows.
 
 ### 4.1 New ABI constants and kinds (`crates/card-sdk/src/abi.rs`)
 
@@ -603,7 +629,7 @@ pub mod pay_flag {
     pub const ALLOW_MORTGAGE: i32 = 1 << 1;
     pub const TOTAL_STAGE: i32 = 1 << 2;
 }
-pub mod pay_report {
+pub mod pay_receipt {
     pub const AMOUNT_MASK: i32 = 0x0FFF_FFFF;
     pub const SETTLED: i32 = 1 << 31;
     pub const CANCELLED: i32 = 1 << 30;
@@ -621,21 +647,22 @@ pub mod charge_source { pub const OTHER: i32 = 0; pub const SKILL: i32 = 1; pub 
 
 `spec` bit layout for 4.2: bits 0-3 shape, 4-7 kind, 8-11 flags, 12-31
 `tile + 1` (`0` = no tile). Unknown shape/kind falls back to `Normal`/`Card`;
-an unknown flag bit is ignored. `TOTAL_STAGE` is set by `TransferCtx::new`, so
+an unknown flag bit is ignored. `TOTAL_STAGE` is set by `PayCommand::new`, so
 `ctx::pay`/`ctx::transfer` keep today's behaviour without spelling a flag and
 `pay_leg` is the one caller that clears it. The host validates on decode.
 
 ### 4.2 New host import
 
 ```rust
-/// Host slot: ruleset_pay_spec
-pub fn pay_spec(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i32) -> i32;
+/// Host slot: ruleset_pay_command
+pub fn pay_command(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i32) -> i32;
 ```
 
-Semantics: exactly `pay_to` plus context. `from < 0` = print, `to < 0` = delete,
-both `>= 0` = transfer. `ptr`/`len` are the postcard `Msg`. The answer is a
-packed `PayReport`: low 28 bits moved amount, high flag bits. `EXIT_NEED_INPUT`
-(`0x0B_A0_D0`) is still the pause sentinel; a real report always sets
+Semantics: exactly the `pay` / `transfer` verb plus context. `from < 0` = print,
+`to < 0` = delete, both `>= 0` = transfer. `ptr`/`len` are the postcard `Msg`.
+The answer is a packed `PayReceipt`: low 28 bits moved amount, high flag bits.
+`EXIT_NEED_INPUT`
+(`0x0B_A0_D0`) is still the pause sentinel; a real receipt always sets
 `SETTLED`, `CANCELLED` or `SHORTFALL`, all of which are outside the sentinel's
 bit range.
 
@@ -653,8 +680,8 @@ caller can tell an immutable zero from a shaped one.
 ### 4.3 New guest builder (`crates/card-sdk/src/ctx.rs`) — sugar over 4.2
 
 ```rust
-pub struct TransferCtx { /* from, to, amount, spec, src: Msg */ }
-impl TransferCtx {
+pub struct PayCommand { /* from, to, amount, spec, src: Msg */ }
+impl PayCommand {
     pub fn new(from: i32, to: i32, amount: i32, src: &Msg) -> Self;
     pub fn kind(self, kind: PayKind) -> Self;
     pub fn shape(self, shape: PayShape) -> Self;
@@ -663,18 +690,18 @@ impl TransferCtx {
     pub fn tile(self, tile: i32) -> Self;   // tile < 0 = none
     pub fn optional(self) -> Self;          // must = false, allow_mortgage = true
     pub fn total_stage(self, on: bool) -> Self;
-    pub fn send(self) -> Result<PayReport, Prompt>;   // load-bearing
+    pub fn send(self) -> Result<PayReceipt, Prompt>;   // load-bearing
 }
 ```
 
 `ctx::pay`, `ctx::transfer` and `ctx::pay_leg` keep their signatures and become
-`TransferCtx::new(...).send()?.amount()` (with `pay` `to = -1`, `pay_leg`
+`PayCommand::new(...).send()?.amount()` (with `pay` `to = -1`, `pay_leg`
 `total_stage(false)`). The builder is not an ABI type; it fills the packed
-`spec` before calling `pay_spec`.
+`spec` before calling `pay_command`.
 
 ```rust
-#[repr(transparent)] pub struct PayReport(pub i32);
-impl PayReport {
+#[repr(transparent)] pub struct PayReceipt(pub i32);
+impl PayReceipt {
     pub fn amount(self) -> i32; pub fn settled(self) -> bool;
     pub fn cancelled(self) -> bool; pub fn shortfall(self) -> bool;
     pub fn fixed(self) -> bool;
@@ -737,33 +764,43 @@ does the single end-of-calculation round after all of them.
 ```rust
 pub fn settle_tile() -> i32;                 // -1 outside a settle
 pub fn settle_outcome() -> i32;              // SettleOutcome; -1 outside tileResolved
-pub fn paid_in_settle_for(seat: i32) -> i32;
+pub fn paid_in_settle_by(seat: i32) -> i32;
 pub fn rent_quote(payer: i32, tile: i32) -> i32; // -1 = no rent charge
 ```
 
-`settle_tile` and `settle_outcome` are also pre-language scalars (4.7).
+The bodies `settle_tile()` / `settle_outcome()` have pre counterparts
+`settle.tile` / `settle.outcome` (4.7); body readers are for hook bodies, the
+pre fields for guards.
 
 ### 4.7 Extended pre language (`crates/game-rules/src/cond_pre.rs`)
 
-New pure scalars, usable in any guard because they read the trigger:
+New pure scalars, usable in any guard because they read the trigger. All of
+them join the `GUARDS.md` §4.2 window schema with the default stated here, and
+`pay_*` follows the existing bare style of `pay_is_rent`:
 
-- `pay_is_fixed()` — the pending payment's shape is `Fixed`.
-- `pay_kind()` — the wire kind, or -1 when the trigger has no payment.
-- `pay_total_stage()` — `true` on a command total, `false` on a 分摊 leg and
-  on a command that already staged (I11). Reads `TriggerPay.total_stage`,
-  default `true`.
-- `charge_is_skill()` — the `ChargePaying` window came from a skill cost (I12).
-  Reads `Trigger.charge_skill`, default `false`.
-- `settle_tile_id()`, `settle_tile_owner()`, `settle_tile_houses()`,
-  `settle_tile_mortgaged()` — the innermost settle, or -1/0 when outside.
-- `settle_outcome()` — the terminal outcome, or -1.
+- `pay_kind` — the wire kind, `-1` when the trigger has no payment.
+- `pay_is_fixed` — `1` when the pending payment's shape is `Fixed`, else `0`.
+- `pay_total_stage` — `1` on a command total, `0` on a 分摊 leg and on a
+  command that already staged (I11). Reads `TriggerPay.total_stage`, default `1`.
+- `charge_is_skill` — `1` when the `ChargePaying` window came from a skill cost
+  (I12). Reads `Trigger.charge_skill`, default `0`.
+- `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged` — the
+  innermost open settle, `-1`/`0` when none is open. Only the tile is stamped;
+  `owner` / `houses` / `mortgaged` read that tile's current state, so no fourth
+  trigger field is needed. Dotted, mirroring `tile.id` / `tile.owner`, so the
+  payment tile and the settle tile read apart at a glance.
+- `settle.outcome` — the terminal outcome, `-1` outside `tileResolved`.
 
 `tile.id`/`tile.owner` keep meaning the **payment's** tile. `pay_is_rent`
 remains the declared `p.rent` flag (not `kind == Rent`), so a rent rewritten to
-`Loss` still reads as rent (5.2). Both new fields are also filled on
-`TriggerSnap` for every trigger (`0`/`false` on non-pay triggers), so a guard
-composed of only the new scalars still compiles; `pay_kind` is the one that
-uses the not-a-pay sentinel -1.
+`Loss` still reads as rent (5.2). The window declaration fills every field on
+every trigger with the defaults above, so a guard built only from the new
+scalars compiles, and its sentinels (`pay_kind` = -1, `settle.tile` = -1)
+reject outside their window instead of failing the build. The `settle.*`
+fields read the trigger's stamped `settle_tile` / `outcome` (written from the
+innermost entry at raise time, 5.3) — the same source as the body readers —
+not G10's `trigger.settle_facts`, a separate snapshot that exists only on the
+three settle hooks.
 
 ### 4.8 Extended `ruleset_raise`
 
@@ -774,24 +811,24 @@ uses the not-a-pay sentinel -1.
 pub fn raise(player_id: i32, kind_ptr: i32, kind_len: i32, value: i32, source: i32) -> i32;
 ```
 
-`ctx::raise` and `ctx::raise_src` (`player, kind, value, ChargeSource`) both
+`ctx::raise` and `ctx::raise_from` (`player, kind, value, ChargeSource`) both
 call it; `raise` passes `OTHER`. The host writes `trigger.charge_skill =
-source == SKILL`. Any future raise that wants a marker can use `raise_src`
+source == SKILL`. Any future raise that wants a marker can use `raise_from`
 without another import.
 
 ### 4.9 Host plumbing (internal; all three targets)
 
 | Layer | Addition |
 |---|---|
-| `game-rules/src/host.rs` `HostRequest` | `PaySpec { from, to, amount, spec, src }` (`TOTAL_STAGE` decodes from the spec) |
-| `game-rules/src/hostfns.rs` | `pay_spec`, `trig_set_pay_kind`, `trig_set_pay_shape`, `mul_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`, `paid_in_settle_for`, `rent_quote`, `raise`(5 slots) |
+| `game-rules/src/host.rs` `HostRequest` | `PayCommand { from, to, amount, spec, src }` (`TOTAL_STAGE` decodes from the spec) |
+| `game-rules/src/hostfns.rs` | `pay_command`, `trig_set_pay_kind`, `trig_set_pay_shape`, `mul_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`, `paid_in_settle_by`, `rent_quote`, `raise`(5 slots) |
 | `game-rules/src/host.rs` `func_wrap` | one registration per name; `raise`'s closure takes the fifth slot |
-| `game-rules/src/native_shims.rs` | `op_pay_spec`, `op_trig_set_pay_kind`, … one per import, plus the extra `op_raise` slot; `ruleset_pay_spec` panics on a bad decode (host bug) |
-| `game-rules/src/wasm_rules.rs` | `visible_host_request` gains `PaySpec` next to `Pay`; the `PaySpec` arm and the inline `InlineHost::apply` arm; the `Pay`/`PaySpec` handler passes the settled `Pay` to `money_inner` |
+| `game-rules/src/native_shims.rs` | `op_pay_command`, `op_trig_set_pay_kind`, … one per import, plus the extra `op_raise` slot; `ruleset_pay_command` panics on a bad decode (host bug) |
+| `game-rules/src/wasm_rules.rs` | `visible_host_request` gains `PayCommand` next to `Pay`; the `PayCommand` arm and the inline `InlineHost::apply` arm; the `Pay`/`PayCommand` handler passes the settled `Pay` to `money_inner` |
 | `game-rules/src/world.rs` (guest `Trigger` mirror) | `TriggerPay { is_rent, total_stage }`, `Trigger { settle_tile, outcome, charge_skill }`; `bridge_trigger` copies them |
 | `card-sdk/src/ctx/sys.rs` | externs with `#[link_name = "ruleset_*"]` |
 | `card-sdk/src/ctx/sys_kani.rs` | same wrappers over `kani_host::call_i32` |
-| `card-sdk/src/kani_host.rs` | `Op::pay_spec = 369`, `Op::trig_set_pay_kind = 370`, `Op::trig_set_pay_shape = 371`, `Op::mul_pay_factor = 372`, `Op::pay_factor = 373`, `Op::settle_tile = 374`, `Op::settle_outcome = 375`, `Op::paid_in_settle_for = 376`, `Op::rent_quote = 377`; `Op::raise` keeps 134 and gains the slot |
+| `card-sdk/src/kani_host.rs` | `Op::pay_command = 369`, `Op::trig_set_pay_kind = 370`, `Op::trig_set_pay_shape = 371`, `Op::mul_pay_factor = 372`, `Op::pay_factor = 373`, `Op::settle_tile = 374`, `Op::settle_outcome = 375`, `Op::paid_in_settle_by = 376`, `Op::rent_quote = 377`; `Op::raise` keeps 134 and gains the slot |
 | `rules/kani/build.rs` | the same nine names appended in discriminant order; `op_*` HostOps arms in `conf_sym_ops.rs` |
 | `rules/kani/tests/conf_model.rs` | inline-host arms for all nine |
 | `rules/kani/src/proofs/hostops_smoke.rs` | all nine exercised |
@@ -865,7 +902,7 @@ leg whose committed `to` is `None`, by its `loss` (11.3). Concretely, the
 Every `TriggerPay` constructor passes `p.total_stage` beside `is_rent`; the
 `effect`, `payCombined*`, `paySplit*`, `pay`, `payAfter` and `paid` raises all
 build the payload from the declared `Pay`, and stamp `settle_tile` from the
-current settle scope (5.3).
+innermost open `SettleEntry` (5.3).
 `set_pay_amount`'s `Pay` is the same one, so a reverse child
 (`play.rs:3954`) keeps `total_stage = true`.
 
@@ -877,39 +914,40 @@ a cancel. The handler packs `SETTLED` from `paid.paid`, `SHORTFALL` from
 ### 5.3 Settle tile and outcome
 
 `Cx` replaces the bare `settle_open: u32` with
-`settle_scopes: Vec<SettleScope>` where
-`SettleScope { player: usize, tile: usize, pay_factor: f64, outcome: SettleOutcome }`.
+`settle_stack: Vec<SettleEntry>` where
+`SettleEntry { player: usize, tile: usize, pay_factor: f64, outcome: SettleOutcome }`.
 A push initializes `pay_factor` from `turn.next_settle_pay_factor` (milli, then
 reset to 1000), so a `NextSettle` write lands on exactly one settle.
-`SettleFrame` gains `scope_idx: usize` (`usize::MAX` on `new`); `step_settle`
-pushes when `scope_idx == usize::MAX` and stores the index, **before**
+`SettleFrame` gains `stack_idx: usize` (`usize::MAX` on `new`); `step_settle`
+pushes when `stack_idx == usize::MAX` and stores the index, **before**
 `step_settle_run`, and pops on completion (not on suspension). This is the
 `settle_open` fix G10 described: the counter currently increments on every
 resume of one frame (`play.rs:2359`) but decrements once per *completion*, so a
 settle that suspended at least once leaves it permanently above its true
 depth. The single-entry gate replaces both defects and `settle_open()` becomes
-`settle_scopes.len() as u32`, so the existing `> 0` call sites are unchanged.
+`settle_stack.len() as u32`, so the existing `> 0` call sites are unchanged.
 
 - `TriggerPay` loses its bare `new(is_rent)` and becomes
   `TriggerPay::new(rent, total_stage)` (5.2).
 - `Trigger` gains `settle_tile: i32` and `outcome: Option<SettleOutcome>`.
   `settle_tile` is **not** a pay-only fact: `settleBody` / `settleAfter` /
   `tileResolved` carry it with no `pay` payload at all, and `settleAfter`
-  raises after the scope popped. It is therefore stamped on the trigger by the
+  raises after the entry popped. It is therefore stamped on the trigger by the
   engine at raise time. Distinct from `Move.settle_tile`, the move's own
   settle target (`move_ctx.rs:159`).
 - Every raise a settle wraps passes
   `settle_tile: innermost().map_or(-1, |s| s.tile)`; the fifteen pay raises in
-  `money_inner` read it off the scope stack once at the raise, and the settle
+  `money_inner` read it off the settle stack once at the raise, and the settle
   stage raises take it from their own frame.
-- `SettleScope.outcome` is written at `RaiseSettle` (out → `PayerOut`, cancel →
+- `SettleEntry.outcome` is written at `RaiseSettle` (out → `PayerOut`, cancel →
   `Cancelled`), `RaiseSettleBody` (body cancel → `Cancelled`),
   `RaiseSettleAfter` (out → `PayerOut`, `!playing()` → `Aborted`), and
   `RaiseTileResolved` (`Settled` only when no earlier terminal outcome was
-  recorded). `RaiseTileResolved` sets `Trigger.outcome` from the scope and
-  every other raise leaves it `None`. `settle_outcome()` and the pre scalar
-  read `trigger.outcome`; `settle_tile()` and `settle_tile_*` read
-  `trigger.settle_tile`.
+  recorded). `RaiseTileResolved` sets `Trigger.outcome` from the entry and
+  every other raise leaves it `None`. The body readers and the pre fields are
+  one source: `settle_outcome()` / `settle.outcome` read `trigger.outcome`,
+  `settle_tile()` / `settle.tile` read `trigger.settle_tile`, and
+  `settle.owner` / `.houses` / `.mortgaged` read that tile's state.
 - Nothing reads `player_pos`.
 
 ### 5.4 SpendBefore and `lose_raw`
@@ -952,8 +990,8 @@ free spend.
 |---|---|---|
 | `NextMove` | `TurnCtx.next_move_pay_factor: i32` (milli, default 1000) | folded into `turn.plan.pay_factor` at move start, then reset to 1000 |
 | `ThisMove` | `turn.plan.pay_factor: f64` (the live plan; `MoveCtx`'s own copy is the carried value, not the write target) | cleared to 1.0 at move end (`moveAfter` tail) |
-| `NextSettle` | `TurnCtx.next_settle_pay_factor: i32` (milli, default 1000) | moved into the next `SettleScope`, then reset to 1000; also reset at turn end |
-| `ThisSettle` | `SettleScope.pay_factor: f64` | dropped with the scope |
+| `NextSettle` | `TurnCtx.next_settle_pay_factor: i32` (milli, default 1000) | moved into the next `SettleEntry`, then reset to 1000; also reset at turn end |
+| `ThisSettle` | `SettleEntry.pay_factor: f64` | dropped with the entry |
 
 The move tail clears `turn.plan.pay_factor` here, not in G04: G02 lands first
 and I4 depends on it. `drop_stale_plan_shape` already copies a stale flag's
@@ -983,11 +1021,11 @@ the persona-skill bodies use (the twenty-odd
 `rules/skills/skill-personas/src/*.rs` call sites migrate mechanically). The
 turn-end drain keeps `spend` (`Other`; `DRAIN` is reserved if the drain ever
 needs to be named). `fire::spend` internally calls
-`ctx::raise_src(player_id, ChargePaying, n, source)` where it today calls
-`ctx::raise`. `charge_is_skill()` is `source == SKILL`. The slot is stored on
+`ctx::raise_from(player_id, ChargePaying, n, source)` where it today calls
+`ctx::raise`. `charge_is_skill` is `source == SKILL`. The slot is stored on
 the trigger only for the duration of the window; `Trigger.charge_skill` is
 `false` on every non-`ChargePaying` raise. Tomori's guard becomes
-`charge_is_skill() && card.counter('crystals') >= 1`.
+`charge_is_skill && card.counter('crystals') >= 1`.
 
 An explicit verb beats deriving the source from the resolution stack: a skill
 body that spends for an unrelated reason would otherwise be substitutable, and
@@ -997,11 +1035,11 @@ body that spends for an unrelated reason would otherwise be substitutable, and
 
 | Field | Writer | When |
 |---|---|---|
-| `shape`, `kind` at declaration | the card body | before `pay_spec` |
+| `shape`, `kind` at declaration | the card body | before `pay_command` |
 | `kind` in a window | any responder via `set_pay_kind` | any pay window, last wins |
 | `shape` in a window | any responder via `set_pay_shape` | before the first split leg only |
 | `amount` | existing `set_pay_amount`; `spendBefore` for spends | as today; ignored by `Fixed` |
-| `tile` | declaration only (`pay_spec`) | immutable afterwards |
+| `tile` | declaration only (`pay_command`) | immutable afterwards |
 | `must`, `allow_mortgage`, `total_stage` | declaration only | immutable |
 | `settle_tile`, `settle_outcome`, `charge_skill` | engine only | raise time |
 | factor of a scope | any card body/hook | its scope only |
@@ -1022,13 +1060,13 @@ home. A debit never bumps.
 
 Add nine `Op` arms with `[i32; 6]` args, all deterministic:
 
-- `pay_spec` decodes the spec, pushes `Effect::PayTo` and a `PayReport`,
+- `pay_command` decodes the spec, pushes `Effect::PayTo` and a `PayReceipt`,
   mutating `w.money` as `arm_pay_to` does; `Fixed` moves `amount` verbatim.
 - `trig_set_pay_kind` / `trig_set_pay_shape` rewrite the installed trigger.
 - `mul_pay_factor` multiplies the scope model and asserts no overflow;
   `pay_factor` returns the product.
 - `settle_tile` / `settle_outcome` read the symbolic settle model;
-  `paid_in_settle_for` a per-seat array; `rent_quote` a symbolic figure per
+  `paid_in_settle_by` a per-seat array; `rent_quote` a symbolic figure per
   (payer, tile).
 `SpendBefore` has no import of its own, so it adds no tenth `Op`:
 `arm_apply_redeem`/`arm_lose_raw` call an internal `fold_spend_before` helper
@@ -1050,7 +1088,7 @@ ctx::transfer(player_id, o, 100, &why)?;
 ```
 After:
 ```rust
-ctx::TransferCtx::new(player_id, o, 100, &why).fixed().send()?;
+ctx::PayCommand::new(player_id, o, 100, &why).fixed().send()?;
 ```
 The 300-back leg at 42 keeps `ctx::transfer`. `Fixed` raises `paid`, so the
 existing "skill fired" bookkeeping is unchanged; `set_slot` writes stay.
@@ -1080,9 +1118,9 @@ After: `ctx::plan::mul_pay_factor(500, PayFactorScope::NextMove);`
 Before: `ctx::pay(..., 10000)` and `if paid < 10000 { return }`.
 After:
 ```rust
-let report = ctx::TransferCtx::new(player_id, -1, 10000, &why)
+let receipt = ctx::PayCommand::new(player_id, -1, 10000, &why)
     .kind(PayKind::Buy).send()?;
-if !report.settled() { return Ok(()); }
+if !receipt.settled() { return Ok(()); }
 ```
 Mandatory is the builder default; `.optional()` would drop it. The early
 return stays only for the open "card not effective" ruling (11.4).
@@ -1092,10 +1130,10 @@ return stays only for the open "card not effective" ruling (11.4).
 Before: `ctx::transfer(mover, player_id, 6000, ...)`.
 After:
 ```rust
-let report = ctx::TransferCtx::new(mover, player_id, 6000, &why)
+let receipt = ctx::PayCommand::new(mover, player_id, 6000, &why)
     .kind(PayKind::Rent).tile(target).send()?;
 ```
-The `paid` value for the log comes from `report.amount()`. `.tile(target)`
+The `paid` value for the log comes from `receipt.amount()`. `.tile(target)`
 supplies both the rent riders and `trigger::tile()`; there is no separate code
 change (2.6).
 
@@ -1112,7 +1150,7 @@ with 6.5.
 
 The guard becomes:
 ```rust
-"charge_is_skill() && actor == owner && card.counter('crystals') >= 1"
+"charge_is_skill && actor == owner && card.counter('crystals') >= 1"
 ```
 `cover` is unchanged; `ChargePaying`'s `value` is already the whole cost
 (item 7's fix, 6.9). The `SLOT_COVERING` bookkeeping is unchanged.
@@ -1132,7 +1170,7 @@ the body is shared unchanged; its max clamp still never asks beyond zero.
 ### 6.9 `fire.rs:323-325` (demoted)
 
 No card change; the window already sits above the temp drain. `spend` gains the
-`raise_src` call of 5.6 and the new `spend_skill` sibling. A regression test
+`raise_from` call of 5.6 and the new `spend_skill` sibling. A regression test
 locks the position.
 
 ### 6.10 `aya_longing.rs:60` (demoted)
@@ -1147,7 +1185,7 @@ stays (it is a different clause).
 
 Before: `pay_is_rent && tile.id >= 0 && tile.owner == owner`.
 After:
-`actor != owner && (settle_tile_owner == owner || settle_tile_id == tile_named('梦开始的地方'))`
+`actor != owner && (settle.owner == owner || settle.tile == tile_named('梦开始的地方'))`
 (no `pay_is_rent`; the clause is about a settle, and 梦开始的地方 is the
 unowned half of it). `settle_body` keeps its existing fallback.
 
@@ -1165,7 +1203,7 @@ the G09 reviewer has the row.
 ### 6.14 `guerrilla.rs:201`
 
 Before: `if ctx::paid_in_settle() < 1000`.
-After: `if ctx::paid_in_settle_for(player_id) < 1000`.
+After: `if ctx::paid_in_settle_by(player_id) < 1000`.
 
 ### 6.15 `repaint.rs:98`
 
@@ -1188,8 +1226,8 @@ After: `ctx::plan::mul_pay_factor(500, PayFactorScope::NextSettle);`
 Before: `let paid = ctx::pay(...)?; if paid < 1600 { return }`.
 After:
 ```rust
-let report = ctx::TransferCtx::new(player_id, -1, 1600, &why).send()?;
-if !report.settled() { return Ok(()); }
+let receipt = ctx::PayCommand::new(player_id, -1, 1600, &why).send()?;
+if !receipt.settled() { return Ok(()); }
 ```
 A discounted 800 has `settled() == true`. The `must` default already gives the
 shortfall path.
@@ -1203,8 +1241,8 @@ After:
 - `settle_ended` (the old `settle_after` body) reads `ctx::settle_outcome()`;
   if it is not `Settled`, refund the placement cost and unplace without the
   `got < expect` gate; if `Settled`, keep the existing comparison;
-- the placement pay uses `TransferCtx` and `if !report.settled()`; the refund
-  slot stores `report.amount()` (the money actually spent), not the pre-scale
+- the placement pay uses `PayCommand` and `if !receipt.settled()`; the refund
+  slot stores `receipt.amount()` (the money actually spent), not the pre-scale
   `amount`.
 `TileResolved` carries the same `tile` as `settleAfter`, so the
 `trigger::tile() == tile` copy check stays. G10 later converts the `Settled`
@@ -1214,7 +1252,7 @@ already correct for `Cancelled`/`PayerOut`.
 ### 6.20 `vocal_too_hard.rs:22`
 
 Before: `"... && value >= 5000"`.
-After: `"... && pay_total_stage() && value >= 5000"`. The TODO at `:19-21`
+After: `"... && pay_total_stage && value >= 5000"`. The TODO at `:19-21`
 comes out. `pay_total_stage` is `true` on any ordinary single-pair payment, so
 nothing but a 分摊 leg stops qualifying.
 
@@ -1230,7 +1268,7 @@ After **two** registrations to the same body, because the clause is
 「失去**或**支付」: the existing `Effect` one (payments) and
 `On::Counteract(&[ChainKind::SpendBefore], "actor == owner && value > 0", …)`
 (raw losses). One shared guard cannot express the disjunction — `effect.has(Pay)`
-is meaningless on a `spendBefore` link, and `pay_kind()` is -1 there — so the
+is meaningless on a `spendBefore` link, and `pay_kind` is -1 there — so the
 two links stay separate. The body's `match trigger::kind()` gains a
 `TriggerKind::SpendBefore` arm beside `Effect`; both read `trigger::value()` and
 gain it through the pipeline (`gain_fixed`), so `「立刻获得此次失去的资金金额」`
@@ -1252,14 +1290,14 @@ registration is unchanged.
   1000/empty; no other field changes meaning. A save→restore identity test
   covers pending next-move and next-settle factors.
 - `RECORD_VERSION` stays **4**. The record envelope does not change; new
-  `HostRequest::PaySpec` answers ride the existing answer log exactly like
+  `HostRequest::PayCommand` answers ride the existing answer log exactly like
   `Pay`, and archived engine bundles replay older records with their own host.
-- `pay_spec` is a `Pause::Sentinel` request: the packed answer is stored in the
+- `pay_command` is a `Pause::Sentinel` request: the packed answer is stored in the
   answer log, replay returns it without re-running the engine, and the card
   resumes once. `SpendBefore` prompts are ordinary hook prompts in the same
-  log. Nothing in `Pay`, `TriggerPay`, `SettleScope`, `PayReport`, `PayShape`
+  log. Nothing in `Pay`, `TriggerPay`, `SettleEntry`, `PayReceipt`, `PayShape`
   or `SettleOutcome` is serialized outside `World`/`TurnCtx`.
-- `settle_scopes` and `SettleFrame.scope_idx` are `Cx`/work-stack runtime
+- `settle_stack` and `SettleFrame.stack_idx` are `Cx`/work-stack runtime
   state; a mid-settle save re-derives them by replaying the answer log to the
   prompt, the same way the work stack is re-derived today. `Pay.partner` is
   derived from the declared payee on the same replay, so it needs no field.
@@ -1277,10 +1315,10 @@ and becomes
 pub const ABI_VERSION: i32 = 107;
 ```
 
-with a `v107` doc block immediately below it recording: new import `pay_spec`;
+with a `v107` doc block immediately below it recording: new import `pay_command`;
 new imports for kind/shape/factors/settle/quotes; `ruleset_raise` gains its
 source slot; new `ActionKind::SpendBefore = 122`; new `pay_kind` / `pay_shape`
-/ `pay_flag` / `pay_report` / `charge_source` wire code tables; new
+/ `pay_flag` / `pay_receipt` / `charge_source` wire code tables; new
 `PayKind::Loss`, `PayShape`, `PayFactorScope`, `SettleOutcome`,
 `ChargeSource`; `SAVE_VERSION` and `RECORD_VERSION` unchanged.
 
@@ -1298,7 +1336,7 @@ fifth `raise` slot. Every card wasm must be rebuilt in the same batch as the
 host. There is no compatibility shim and no dual-version host: records replay
 through the archived bundle.
 
-Source-only changes that do **not** bump: the `TransferCtx` builder, the
+Source-only changes that do **not** bump: the `PayCommand` builder, the
 `ctx::plan::set_pay_factor` implementation gaining its Auto scope (the one-arg
 signature stays; call sites migrate to `mul` in the same commit),
 `apply_redeem` gaining `Flow`, `World::credit`, and the pre scalars. Old card
@@ -1340,9 +1378,9 @@ in the reason, per `docs/rulebook/TEST-FINDINGS.md` convention.
 Kani obligations (each proof carries `host_subset!` with only its own ops, and
 a named invariant in `rules/kani/src/spec/`):
 
-- `mor::rui_devil_fixed_leg` — `pay_spec(Fixed)` report amount == 100 and
+- `mor::rui_devil_fixed_leg` — `pay_command(Fixed)` receipt amount == 100 and
   `fixed()`; a symbolic factor never changes it.
-- `mor::mashiro_halves_after_scale` — `PayeeHalf` report is `settled`, main
+- `mor::mashiro_halves_after_scale` — `PayeeHalf` receipt is `settled`, main
   loss equals settled, half leg from the captured partner.
 - `crychic::sakiko_factor_product` — two `mul_pay_factor(500, NextMove)`
   compose to 250; the scope reset restores 1000.
@@ -1359,12 +1397,12 @@ a named invariant in `rules/kani/src/spec/`):
 - `mygo::taki_factor_scope` and `mygo::rana_compose`.
 - `r::fire_bird_discount_settles` and `r::council_outcome_refund`.
 - `crychic::vocal_total_stage` — a `total_stage: false` payment reports
-  `pay_total_stage()` false at the effect window.
-- `mygo::tomori_skill_source` — `raise_src(Skill)` sets `charge_is_skill()`;
+  `pay_total_stage` false at the effect window.
+- `mygo::tomori_skill_source` — `raise_from(Skill)` sets `charge_is_skill`;
   `raise` does not.
 - `general::credit_bumps_gain` — every `World::credit` increments
   `gains_this_turn` exactly once.
-- `general::pay_report_flags` — settled/cancelled/shortfall are mutually
+- `general::pay_receipt_flags` — settled/cancelled/shortfall are mutually
   exclusive; `amount` masks correctly.
 - `general::settle_outcome_total` — tileResolved always raises exactly once and
   reports the frame's outcome.
@@ -1380,7 +1418,7 @@ drive all nine imports.
    already uses all six shim slots; adding kind/shape/tile/must needs either a
    second pointer or a wire struct, and changes every existing caller's answer
    from amount to report. Rejected: a six-slot stack payload plus a new answer
-   encoding is exactly what `pay_spec` is, and the old verb stays stable.
+   encoding is exactly what `pay_command` is, and the old verb stays stable.
 2. **One bespoke import per capability** (`pay_fixed`, `pay_rent_fixed`,
    `pay_buy_must`, `pay_half`). Rejected: each new shape multiplies imports and
    the combination order is re-encoded per verb; a packed spec keeps one
@@ -1416,7 +1454,7 @@ drive all nine imports.
 10. **A separate `build_cost_effective` import.** It is G09's `build_price`
     formula and G09 owns the build pipeline. Rejected: one owner per fact
     (2.12).
-11. **A second `raise_src` verb instead of widening `raise`.** Two verbs that
+11. **A second `raise_from` verb instead of widening `raise`.** Two verbs that
     differ by one slot double the shim, the Kani arm and the model question.
     Rejected: the arity break is already paid by this version bump.
 12. **Turn the `Paid` struct into the ABI return directly.** `Paid` is
@@ -1485,7 +1523,7 @@ silently guess.
 15. **Factor overflow/precision.** milli products beyond `i32` and f64
     precision for many factors are unbounded in the book. Proposal: saturate
     the milli getter and keep f64 arithmetic like today.
-16. **`paid_in_settle_for` and the rewrite in 11.3.** If the half leg also
+16. **`paid_in_settle_by` and the rewrite in 11.3.** If the half leg also
     counts, the payee can inflate its own counter by accepting a Mashiro
     rewrite. Current proposal: both legs count (the half leg's payer is the
     captured payee).
@@ -1509,11 +1547,12 @@ silently guess.
   is a `Dest::Graveyard` write, unchanged.
 - **G09 (after).** Item 12 hands over to `build_price`; item 19's *general*
   suppression stays G09's. G09's `PayKind::Build` uses the plain pipeline.
-- **G10 (after).** `SettleFacts { at, owner }` alias `SettleScope.tile/player`;
-  `cancelled`/`body_replaced` are the scope outcome `Cancelled` and a
-  `body_replaced` bit G10 adds to the scope; `paid`'s test becomes
-  `p.rent && p.settle_tile == scope.tile` (not `p.tile == facts.at`);
-  `settle_open`'s fix is **removed from G10 §5.1** because 5.3 here carries it.
+- **G10 (after).** `SettleFacts { at, owner }` alias `SettleEntry.tile/player`;
+  `cancelled` is `entry.outcome == Cancelled` and `body_replaced` is a bit G10
+  adds to the entry; `paid`'s test becomes
+  `p.rent && loss > 0 && entry.player >= 0 && p.settle_tile == entry.tile as i32 && p.to == Some(entry.player)`
+  (not `p.tile == facts.at`); `settle_open`'s fix is **removed from G10 §5.1**
+  because 5.3 here carries it.
   G10's `trig_settle_facts` bit 1 composes with, and does not rename,
   `settle_outcome()`.
 - **G04 (after).** G04 owns the plan module; this group owns the settle half of

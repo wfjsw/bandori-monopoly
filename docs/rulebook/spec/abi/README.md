@@ -72,7 +72,7 @@ Couplings a reviewer must keep in one head:
   G13's import verbatim.
 - **G01 ↔ G08** share instance uid and the per-instance store.
 - **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
-  scope stack, the terminal outcome and the `settle_open` fix, G10 adds the
+  settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
   `paid`/`body_replaced` facts on top (G02 §12).
 - **G03 ↔ G11** share the drawAfter point; their kind bands are adjacent.
 - **G06 ↔ G12** share pending-window reads.
