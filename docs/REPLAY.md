@@ -121,11 +121,18 @@ endpoint policy, and the deviations below.
     Board remounts with `key={epoch}`.
   * Scrubbing coalesces: one seek is in flight at a time and a newer pointer
     position simply replaces the pending target, so a drag never queues a
-    backlog of stale frames. The thumb follows the pointer locally; the board
-    follows the engine. A target past the index head is reached by driving the
-    index pass toward it (the chunk it advances is rendered as feedback, at
-    most one frame per 120 ms), so the stretch is simulated once and its
-    keyframes serve later jumps. The target's own frame always renders.
+    backlog of stale frames. The thumb is driven straight into the DOM from
+    the pointer (React state only at press and release) and, after release,
+    keeps showing the pending target while the engine catches up under it.
+    A target past the index head is reached by driving the index pass toward
+    it -- the pass is what simulates the stretch, and its keyframes serve
+    later jumps. Feedback frames come from the index head the pass has
+    already simulated (no seek, so no restore), and are paced three ways: at
+    most one per 400 ms, only once the head has advanced a twelfth of the
+    record, and only while the pass is keeping up (under 1.5 ms a tick). The
+    chunk itself is time-budgeted (~120 ms of simulation) so the call rate
+    does not starve the pointer, whether the engine is a debug build or a
+    release one. The target's own frame always renders.
   * Entry points: home menu 「回放 / Replays」 (list, open file, drag and drop);
     the post-match Results 「下载回放」 / 「观看回放」; and the Room scene's
     "download last replay".

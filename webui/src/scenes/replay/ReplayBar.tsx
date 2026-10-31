@@ -101,10 +101,21 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   // The pointer owns the thumb while it is down: engine seeks are slower than
   // a drag, so the head follows the pointer and the frames catch up under it.
   // Scrubbing pauses playback, and resumes it on release if it was playing.
-  const [drag, setDrag] = useState<number | null>(null);
+  //
+  // The dragged value is a ref, written straight into the DOM: a drag fires
+  // faster than React renders, and a state update per pointer event would
+  // spend the drag re-rendering the whole transport. Renders that do happen
+  // (the 200 ms clock tick, a frame) read the ref, so the thumb never jumps
+  // back under the pointer.
+  const drag = useRef<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const rangeRef = useRef<HTMLInputElement | null>(null);
+  const atRef = useRef<HTMLDivElement | null>(null);
   const down = useRef(false);
   const resume = useRef(false);
-  const shown = Math.min(drag ?? now, total);
+  // `rs.now()` follows the pending scrub target, so after release the thumb
+  // stays on the target while the engine still catches up under it.
+  const shown = Math.min(dragging && drag.current !== null ? drag.current : rs.now(), total);
 
   const patch = (p: Partial<BarPrefs>) =>
     setPrefs((old) => {
@@ -118,15 +129,27 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   };
   const jump = useCallback((tick: number) => rs.seek(tick), [rs]);
 
+  const atText = (tick: number) =>
+    tr("replay.at", { round: rs.view?.state.round ?? 0, turn: rs.view?.state.turn ?? 0, tick });
+  /** Move the thumb and its label without React (see `drag`). */
+  const showDrag = (tick: number) => {
+    drag.current = tick;
+    if (rangeRef.current) rangeRef.current.value = String(tick);
+    if (atRef.current) atRef.current.textContent = atText(tick);
+  };
+
   const scrubDown = () => {
     down.current = true;
+    drag.current = now;
     resume.current = rs.playing;
+    setDragging(true);
     rs.setPlaying(false);
   };
   const scrubUp = () => {
     if (!down.current) return;
     down.current = false;
-    setDrag(null);
+    drag.current = null;
+    setDragging(false);
     if (resume.current) {
       resume.current = false;
       rs.setPlaying(true);
@@ -258,6 +281,7 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
 
       <div className={s.scrub}>
         <input
+          ref={rangeRef}
           className={s.range}
           type="range"
           min={0}
@@ -270,16 +294,14 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
           onLostPointerCapture={scrubUp}
           onChange={(e) => {
             const v = Number(e.target.value);
-            if (down.current) setDrag(v);
+            if (down.current) showDrag(v);
             seekTo(v);
           }}
           aria-label={tr("replay.scrub")}
         />
         <div className={s.ready} style={{ width: `${(ready / total) * 100}%` }} aria-hidden />
         <Marks marks={marks} total={total} ready={ready} onSeek={jump} />
-        <div className={s.at}>
-          {tr("replay.at", { round: rs.view?.state.round ?? 0, turn: rs.view?.state.turn ?? 0, tick: shown })}
-        </div>
+        <div ref={atRef} className={s.at}>{atText(shown)}</div>
       </div>
 
       <div className={s.side}>
