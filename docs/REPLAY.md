@@ -126,13 +126,17 @@ endpoint policy, and the deviations below.
     keeps showing the pending target while the engine catches up under it.
     A target past the index head is reached by driving the index pass toward
     it -- the pass is what simulates the stretch, and its keyframes serve
-    later jumps. Feedback frames come from the index head the pass has
-    already simulated (no seek, so no restore), and are paced three ways: at
-    most one per 400 ms, only once the head has advanced a twelfth of the
-    record, and only while the pass is keeping up (under 1.5 ms a tick). The
-    chunk itself is time-budgeted (~120 ms of simulation) so the call rate
-    does not starve the pointer, whether the engine is a debug build or a
-    release one. The target's own frame always renders.
+    later jumps. The pass advances a private copy of the replay, so a
+    feedback frame is a seek up to the head it has reached: the board steps
+    forward under the pointer instead of standing still until the target. A
+    frame is paced by its own measured cost (at most about half the wall
+    clock, never sooner than 400 ms) and, on a long jump, only once the head
+    has covered a twelfth of the record, so the jump gets coarse frames
+    rather than a strobe. The chunk itself is time-budgeted (30 ms of
+    simulation, steered by the last chunk's duration) so the call rate does
+    not starve the pointer, whether the engine is a debug build or a release
+    one. The chunk never runs past the pointer, so reaching it is the last
+    frame, with no second simulation behind it.
   * Entry points: home menu 「回放 / Replays」 (list, open file, drag and drop);
     the post-match Results 「下载回放」 / 「观看回放」; and the Room scene's
     "download last replay".

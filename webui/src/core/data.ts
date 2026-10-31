@@ -126,8 +126,9 @@ export const subscribeData = (cb: () => void): (() => void) => {
 export const dataVersionOf = (): number => dataVersion;
 
 // Dev-only seam for browser checks: lets a script read the live source and
-// roster without reaching into React.
-if (import.meta.env?.DEV) {
+// roster without reaching into React. A `?__debug` build also carries it, so a
+// script can drive a production bundle.
+if (import.meta.env?.DEV || globalThis.location?.search.includes("__debug")) {
   (globalThis as { __bmDebug?: unknown }).__bmDebug = {
     data: () => D,
     rules: () => rules,

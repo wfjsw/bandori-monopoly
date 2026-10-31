@@ -32,8 +32,9 @@ const FB = new URLSearchParams(globalThis.location?.search ?? "");
 /** Smallest / largest tick quanta per keyframe-index call. */
 const INDEX_CHUNK = 40;
 const MAX_CHUNK = 4000;
-/** Target duration of one index chunk. */
-const CHUNK_MS = Number(FB.get("chunkms") ?? 120);
+/** Target duration of one index chunk. Small chunks beat long ones on a
+ *  release engine (the state stays hot); the floor lifts them on a slow one. */
+const CHUNK_MS = Number(FB.get("chunkms") ?? 30);
 /** Minimum spacing between feedback frames while a scrub drives the index. */
 const FEEDBACK_MS = Number(FB.get("fbms") ?? 400);
 /** Ticks the index must advance between two feedback frames: a jump over a
@@ -163,12 +164,15 @@ export class ReplaySession extends GameSession {
   private seeking = false;
   /** Last frame render, so a fast index head cannot outpace the screen. */
   private lastRender = 0;
-  /** Tick of the last rendered frame: a long jump gets coarse feedback, a
-   *  short one a frame almost as soon as it is due. */
-  private lastFrameTick = 0;
-  /** Smoothed cost of one simulated tick. Frames are only worth it while the
-   *  simulation is winning the race against them. */
-  private chunkMs = 0;
+  /** Ticks per index call, steered towards `CHUNK_MS` of simulation: a call
+   *  has a fixed cost on top of its ticks, so a fixed size is either far too
+   *  coarse on a debug build's slow engine or needlessly chatty on a release
+   *  one. The size is steered by the last chunk's actual duration, at most
+   *  doubling or halving per step. */
+  private chunkSize = INDEX_CHUNK;
+  /** Smoothed cost of one feedback frame, so frames are paced by their own
+   *  price instead of a fixed guess. */
+  private frameMs = 0;
 
   private constructor(h: ReplayHandle, header: RecordHeader, turns: Turn[], totalTicks: number, id: string, bytes: Uint8Array) {
     super();
@@ -281,12 +285,14 @@ export class ReplaySession extends GameSession {
   /** Keyframes for `seek`, built in the background. The engine runs in a
    *  worker, so this never blocks the UI; it is chunked (by tick quanta) only
    *  so a step or a seek queued behind it waits for one short chunk, not the
-   *  whole pass. */
+   *  whole pass. While a scrub drives the pass itself this stands aside, so
+   *  the two do not interleave into one noisy stream of calls. */
   private runIndex(): void {
     if (this.indexing) return;
     this.indexing = true;
     const step = () => {
       if (this.closed) return;
+      if (this.seeking || this.seekWant !== null) return void window.setTimeout(step, 50);
       void this.run((h) => h.index(INDEX_CHUNK))
         .then((st) => {
           this.indexStatus = st;
@@ -374,8 +380,12 @@ export class ReplaySession extends GameSession {
     if (!this.seeking) void this.drainSeek();
   }
 
-  /** One seek to `tick`, then its frame. */
-  private async doSeek(tick: number): Promise<void> {
+  /**
+   * One seek to `tick`, then its frame. `want` is the scrub target this frame
+   * belongs to: a frame taken on the way to it is not stale just because the
+   * target is still pending, only one overtaken by a newer target is.
+   */
+  private async doSeek(tick: number, want: number | null = null): Promise<void> {
     try {
       const { st, v, lastEventId } = await this.run(async (h) => {
         const st = await h.seek(tick);
@@ -390,9 +400,8 @@ export class ReplaySession extends GameSession {
       this.lastStatus = st;
       this.lastEventId = lastEventId;
       this.idleRun = 0;
-      if (this.seekWant !== null) return;
+      if (this.seekWant !== null && this.seekWant !== want) return;
       this.lastRender = performance.now();
-      this.lastFrameTick = Number(st.tick) || 0;
       this.epoch++;
       this.emitView(v);
       this.emitOther();
@@ -402,10 +411,22 @@ export class ReplaySession extends GameSession {
   }
 
   /**
-   * Refresh the frame from where the engine already stands (the index pass
-   * drives it) without a seek. A seek to the tick we are already on still
-   * restores a keyframe and re-simulates up to it, so paying that for a
-   * feedback frame the pass produced anyway is pure cost.
+   * A feedback frame at the index head. The pass advances a private copy of
+   * the replay, so the drawn position only moves by seeking up to where the
+   * pass got: that is the frame. Its price is timed, and the next one is
+   * spaced by it.
+   */
+  private async seekHead(tick: number, want: number): Promise<void> {
+    const started = performance.now();
+    await this.doSeek(tick, want);
+    const ms = performance.now() - started;
+    this.frameMs = this.frameMs ? this.frameMs * 0.7 + ms * 0.3 : ms;
+  }
+
+  /**
+   * Refresh the frame from where the engine already stands, without a seek. A
+   * seek to the tick we are already on still restores a keyframe and
+   * re-simulates up to it, so paying that for a frame is pure cost.
    */
   private async showHere(): Promise<void> {
     const { st, v, lastEventId } = await this.run(async (h) => {
@@ -418,22 +439,9 @@ export class ReplaySession extends GameSession {
     this.lastEventId = lastEventId;
     this.idleRun = 0;
     this.lastRender = performance.now();
-    this.lastFrameTick = Number(st.tick) || 0;
     this.epoch++;
     this.emitView(v);
     this.emitOther();
-  }
-
-  /**
-   * How much to ask the index pass for next: about one target pause's worth of
-   * simulation at the rate just measured. A fixed tick count would be far too
-   * coarse on a debug build's slow engine and needlessly chatty on a release
-   * one -- every call also costs a main-thread turn, which is what starves the
-   * pointer, so a chunk big enough to be worth the turn is the goal.
-   */
-  private chunkTicks(): number {
-    if (!this.chunkMs) return INDEX_CHUNK;
-    return Math.min(MAX_CHUNK, Math.max(INDEX_CHUNK, Math.round(CHUNK_MS / this.chunkMs)));
   }
 
   private async drainSeek(): Promise<void> {
@@ -448,39 +456,47 @@ export class ReplaySession extends GameSession {
         // show what it covered, and re-read the pointer. Driving the pass (not
         // the seek) means the keyframes it lays serve later jumps too.
         if (want > head && want > cur) {
-          const chunk = this.chunkTicks();
+          // Never past the pointer: the pass then lands exactly on it.
+          const chunk = Math.min(this.chunkSize, want - head);
           const started = performance.now();
           const st = await this.run((h) => h.index(chunk));
           this.indexStatus = st;
           // The pointer moved while the chunk ran: its newer target decides.
           if (this.seekWant !== want) continue;
           const ms = performance.now() - started;
-          // Smoothed cost of a tick, so the next chunk can aim at a duration.
-          const cost = ms / chunk;
-          this.chunkMs = this.chunkMs ? this.chunkMs * 0.7 + cost * 0.3 : cost;
+          // Steer the next chunk towards the duration target, one doubling or
+          // halving at a time.
+          const ratio = Math.min(2, Math.max(0.5, CHUNK_MS / Math.max(1, ms)));
+          this.chunkSize = Math.min(
+            MAX_CHUNK,
+            Math.max(INDEX_CHUNK, Math.round(this.chunkSize * ratio)),
+          );
           const next = this.indexHead();
-          // Feedback is rate-limited three times over: a frame carries a whole
-          // view, a board remount and an engine turn, and paying that per chunk
-          // would halve the simulation rate. Skipping costs nothing -- the pass
-          // keeps the keyframes, so whoever lands next restores one. So: never
-          // more than one per FEEDBACK_MS, only after the head moved a
-          // meaningful distance (a long jump gets coarse feedback), and only
-          // while the pass is keeping up (a slow pass would just fall further
-          // behind).
-          const due =
-            st.done ||
-            (this.chunkMs < 1.5 &&
-              next - this.lastFrameTick >= feedbackTicks(this.totalTicks) &&
-              performance.now() - this.lastRender >= FEEDBACK_MS);
-          if (next > head && want > next) {
-            // Still short of the pointer: the frame is what the pass already
-            // simulated, so it costs no seek at all.
-            if (due) await this.showHere();
+          // The pass advances a copy of the replay, not the position the
+          // view reads, so a frame has to seek up to the head. The pointer is
+          // the extent of that: reaching it is the landing itself.
+          if (next >= want || st.done) {
+            this.seekWant = null;
+            await this.doSeek(Math.min(want, next));
             continue;
           }
+          // Feedback is paced by its own measured cost: a frame may take at
+          // most about half the wall clock, so a slow pass still moves the
+          // board several times a second instead of sitting still for its
+          // whole run. A long jump additionally waits until it has covered a
+          // twelfth of itself, so a jump gets coarse frames rather than a
+          // strobe.
+          const moved = next - cur;
+          const since = performance.now() - this.lastRender;
+          const gap = Math.max(FEEDBACK_MS, this.frameMs * 2);
+          const due =
+            moved > 0 &&
+            (since >= gap || (since >= FEEDBACK_MS && moved >= feedbackTicks(this.totalTicks)));
+          if (due) await this.seekHead(next, want);
+          continue;
         }
         this.seekWant = null;
-        // The head is already exactly here: a seek would only rebuild it.
+        // The engine is already exactly here: a seek would only rebuild it.
         if (want === (Number(this.lastStatus.tick) || 0)) await this.showHere();
         else await this.doSeek(want);
       }
