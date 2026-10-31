@@ -6159,6 +6159,12 @@ impl<M: CardModules> RulesBridge<M> {
                         // ends and priority advances.
                         break;
                     };
+                    // A face-down card played directly is revealed: it is in
+                    // play now, its hooks resume, and the client shows the
+                    // face (「对帅气的憧憬」(3) -- 「将其直接打出」).
+                    if uid >= 0 && cx.world().is_face_down_at(uid) {
+                        cx.world_mut().set_face_down_at(uid, false);
+                    }
                     // The declaration leaves the hand now.
                     if uid < 0 {
                         let mut w = cx.world_copy();
@@ -6675,26 +6681,59 @@ impl<M: CardModules> RulesBridge<M> {
         }
     }
 
-    /// Only sources explicitly opting into the shared declaration menu.
+    /// Only sources explicitly opting into the shared declaration menu: a
+    /// face-up instance needs `COUNTERACT_FROM_FIELD`, and a face-down one
+    /// (normally inert) is offered when the seat controls a facing
+    /// `COUNTERACT_FACE_DOWN` source (「对帅气的憧憬」(3) -- 「可在符合条件时
+    /// 将其直接打出」).
     fn has_field_counter(&self, cx: &Cx, seat: usize, top: &Trigger) -> bool {
-        !cx.world().out(seat)
-            && cx
-                .world()
-                .field_instances(seat as i32)
-                .iter()
-                .any(|(_, id)| {
-                    let Some(idx) = self.ruleset.card(id) else {
-                        return false;
-                    };
-                    self.counteracts_to_play(idx, top)
-                        && self.ruleset.cards()[idx as usize]
-                            .props
-                            .get(card_sdk::abi::prop::COUNTERACT_FROM_FIELD)
-                            .copied()
-                            .unwrap_or(0)
-                            != 0
-                        && !cx.world().card_face_down(seat as i32, id)
-                })
+        if cx.world().out(seat) {
+            return false;
+        }
+        let field = cx.world().field_instances(seat as i32);
+        let face_down_ok = self.face_down_counter_ok(cx, seat);
+        field.iter().any(|(uid, id)| {
+            let Some(idx) = self.ruleset.card(id) else {
+                return false;
+            };
+            let offered = if cx.world().is_face_down_at(*uid) {
+                face_down_ok
+            } else {
+                self.field_counter_prop(idx)
+            };
+            offered && self.counteracts_to_play(idx, top)
+        })
+    }
+
+    /// Does `seat` control a face-up source granting direct play of face-down
+    /// field cards ([`card_sdk::abi::prop::COUNTERACT_FACE_DOWN`])?
+    fn face_down_counter_ok(&self, cx: &Cx, seat: usize) -> bool {
+        cx.world()
+            .field_instances(seat as i32)
+            .iter()
+            .any(|(uid, id)| !cx.world().is_face_down_at(*uid) && self.face_down_counter_prop(id))
+    }
+
+    /// The [`card_sdk::abi::prop::COUNTERACT_FROM_FIELD`] opt-in of `idx`.
+    fn field_counter_prop(&self, idx: i32) -> bool {
+        self.ruleset.cards()[idx as usize]
+            .props
+            .get(card_sdk::abi::prop::COUNTERACT_FROM_FIELD)
+            .copied()
+            .unwrap_or(0)
+            != 0
+    }
+
+    /// The [`card_sdk::abi::prop::COUNTERACT_FACE_DOWN`] grant of `id`.
+    fn face_down_counter_prop(&self, id: &str) -> bool {
+        self.ruleset.card(id).is_some_and(|idx| {
+            self.ruleset.cards()[idx as usize]
+                .props
+                .get(card_sdk::abi::prop::COUNTERACT_FACE_DOWN)
+                .copied()
+                .unwrap_or(0)
+                != 0
+        })
     }
 
     /// Does the play `top` names declare recipients (`DESIGNATES`)? Those are
@@ -6820,21 +6859,22 @@ impl<M: CardModules> RulesBridge<M> {
             ));
         }
         if !cx.world().out(s) {
+            let face_down_ok = self.face_down_counter_ok(cx, s);
             for (field_pos, (uid, id)) in
                 cx.world().field_instances(s as i32).into_iter().enumerate()
             {
                 let Some(idx) = self.ruleset.card(&id) else {
                     continue;
                 };
-                if self.ruleset.cards()[idx as usize]
-                    .props
-                    .get(card_sdk::abi::prop::COUNTERACT_FROM_FIELD)
-                    .copied()
-                    .unwrap_or(0)
-                    == 0
-                    || !self.counteracts_to_play(idx, top)
-                    || cx.world().card_face_down(s as i32, &id)
-                {
+                // A face-down instance is normally inert; it is offered only
+                // for a face-down-granting seat (`COUNTERACT_FACE_DOWN`). The
+                // face-up half keeps the `COUNTERACT_FROM_FIELD` opt-in.
+                let offered = if cx.world().is_face_down_at(uid) {
+                    face_down_ok
+                } else {
+                    self.field_counter_prop(idx)
+                };
+                if !offered || !self.counteracts_to_play(idx, top) {
                     continue;
                 }
                 candidates.push((

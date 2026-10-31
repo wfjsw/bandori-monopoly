@@ -1,9 +1,7 @@
 //! 宇田川亚子 / 对帅气的憧憬 -- black-box review of the face-down half.
 //!
 //! Spec: `docs/rulebook/spec/cards/r.md` C-R-对帅气的憧憬-01..03.
-//! Each test quotes the sheet clause it checks. Disagreements are
-//! `#[ignore = "DISCREPANCY: …"]` (the suite convention: `cargo test` stays
-//! green; `--ignored` runs them).
+//! Each test quotes the sheet clause it checks.
 
 mod common;
 use common::*;
@@ -50,7 +48,6 @@ fn lie_face_down(t: &mut Table, who: usize, card: &str) {
 /// The peek-and-keep **replaces** the draw: one card reaches the hand, not the
 /// peeked card *plus* the normal reward draw.
 #[test]
-#[ignore = "DISCREPANCY: (1) the peek does not cancel the reward draw -- the player gets the peeked card plus the normal draw"]
 fn peek_keep_replaces_the_draw() {
     let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
     t.clean();
@@ -64,16 +61,22 @@ fn peek_keep_replaces_the_draw() {
     let p = t.expect_prompt();
     assert!(p.title.key().contains("pass_reward"), "{}", t.dump_prompt());
     t.answer_one(1).unwrap();
-    // The skill peeks the top two and asks which to keep.
+    // 「至多两张」: choose to look at both, then keep the first.
     assert!(
-        t.prompt_refers("akao_cool"),
+        t.prompt_refers("ako_cool_count"),
+        "count prompt: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(1).unwrap();
+    assert!(
+        t.prompt_refers("ako_cool"),
         "peek prompt: {}",
         t.dump_prompt()
     );
     t.answer_one(0).unwrap();
     // The remaining card: decline the 500 face-down placement -> discard.
     assert!(
-        t.prompt_refers("akao_cool_place"),
+        t.prompt_refers("ako_cool_place"),
         "place prompt: {}",
         t.dump_prompt()
     );
@@ -101,7 +104,6 @@ fn peek_keep_replaces_the_draw() {
 /// **moves** from the looked-at pile onto the field (it is not a duplicate copy
 /// that stays in the deck), and it lands face-down.
 #[test]
-#[ignore = "DISCREPANCY: (1) the paid card is not taken out of the deck -- place_card leaves a duplicate copy behind"]
 fn paying_places_the_card_face_down_and_off_the_deck() {
     let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
     t.clean();
@@ -112,9 +114,11 @@ fn paying_places_the_card_face_down_and_off_the_deck() {
     pass_circle(&mut t, 0);
 
     t.answer_one(1).unwrap(); // draw -- replaced by the peek
-    assert!(t.prompt_refers("akao_cool"), "{}", t.dump_prompt());
+    assert!(t.prompt_refers("ako_cool_count"), "{}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // look at both
+    assert!(t.prompt_refers("ako_cool"), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // keep GREAT
-    assert!(t.prompt_refers("akao_cool_place"), "{}", t.dump_prompt());
+    assert!(t.prompt_refers("ako_cool_place"), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // pay the 500 and place it face-down
     drain(&mut t);
 
@@ -136,7 +140,6 @@ fn paying_places_the_card_face_down_and_off_the_deck() {
 
 /// 规则书（1）: 「若选择抽卡」 -- the money option does not peek.
 #[test]
-#[ignore = "DISCREPANCY: (1) the skill also fires on the money option -- the trigger lacks a value == card guard"]
 fn money_reward_does_not_peek() {
     let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
     t.clean();
@@ -150,7 +153,7 @@ fn money_reward_does_not_peek() {
     t.answer_one(0).unwrap(); // money
     drain(&mut t);
 
-    assert!(!t.prompt_refers("akao_cool"), "no peek on the money option");
+    assert!(!t.prompt_refers("ako_cool"), "no peek on the money option");
     assert_eq!(t.money(0), before + 2000, "the money reward is paid");
     assert!(
         t.hand(0).is_empty(),
@@ -158,6 +161,38 @@ fn money_reward_does_not_peek() {
         t.hand(0)
     );
     assert_eq!(t.draw_pile(0), vec!["通用:GREAT", "通用:安可"]);
+}
+
+/// 规则书（1）: 「至多两张」 -- the player may look at only one; the second
+/// card is then left on the deck, not even looked at (so not discarded).
+#[test]
+fn looking_at_one_leaves_the_second_on_the_deck() {
+    let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_money(0, 10_000);
+    t.set_draw(0, &["通用:GREAT", "通用:安可", "通用:登上武道馆"]);
+
+    pass_circle(&mut t, 0);
+
+    t.answer_one(1).unwrap(); // draw
+    assert!(
+        t.prompt_refers("ako_cool_count"),
+        "count prompt: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap(); // look at 1
+    assert!(t.prompt_refers("ako_cool"), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // keep GREAT
+    drain(&mut t);
+
+    assert_eq!(t.hand(0), vec!["通用:GREAT".to_string()]);
+    assert!(t.discard(0).is_empty(), "nothing was looked at twice");
+    assert_eq!(
+        t.draw_pile(0),
+        vec!["通用:安可".to_string(), "通用:登上武道馆".to_string()],
+        "the second card stays on top of the deck"
+    );
 }
 
 // --------------------------------------------------------- clause (2)
@@ -168,7 +203,6 @@ fn money_reward_does_not_peek() {
 /// The face-down card is **instead of** the reward -- the chosen reward is not
 /// paid on top.
 #[test]
-#[ignore = "DISCREPANCY: (2) the reward is paid on top of the take -- no set_cancelled, so the reward is added, not replaced"]
 fn face_down_card_replaces_the_reward() {
     let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
     t.clean();
@@ -210,7 +244,6 @@ fn face_down_card_replaces_the_reward() {
 /// A face-down [反击] card on the field must be offered in its counteraction
 /// window, exactly like a face-up field copy.
 #[test]
-#[ignore = "DISCREPANCY: (3) a face-down card is excluded from every counteraction offer (wasm_rules.rs has_field_counter / declare_one)"]
 fn face_down_counter_card_is_offered() {
     // Face-up control: the same card, face-up on the payer's field.
     let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
@@ -244,4 +277,19 @@ fn face_down_counter_card_is_offered() {
         "a face-down [反击] on the field must be offered: {}",
         t.dump_prompt()
     );
+
+    // Playing it runs the card's own body: the [眩晕] is gained, the instance
+    // is revealed, and (like any field copy) it stays in place.
+    t.counteract(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
+    drain(&mut t);
+    assert!(
+        t.state(0, "stun") + t.state(0, "stunStart") >= 1,
+        "the played card's body ran: gained [眩晕]"
+    );
+    let still = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == "R:（亚子）黑暗大魔姬亚子")
+        .expect("a played field copy stays in place");
+    assert!(!still.face_down, "the played card is revealed");
 }

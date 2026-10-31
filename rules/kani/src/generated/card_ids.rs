@@ -16,7 +16,7 @@
 #![allow(dead_code)]
 
 /// Number of registered `CardDef`s in `invoke::RULESET`.
-pub const CARD_COUNT: usize = 285;
+pub const CARD_COUNT: usize = 286;
 
 /// Id string at each index (for native asserts / debug).
 /// Under Kani never scan this — use [`card_id!`].
@@ -278,6 +278,7 @@ pub static IDS: &[&str] = &[
     "tile:ring",
     "tile:property",
     "mark:cp",
+    "mark:pp_fans",
     "event:对邦",
     "event:弦卷集团地产开发",
     "event:很噜的感觉",
@@ -906,8 +907,8 @@ pub const SKILL_ANON_RESTART: usize = 196;
 /// `skill:市谷有咲:盆栽爱好者`  (`RULESET[13][1]`, `ARISA_BONSAI`)
 pub const SKILL_ARISA_BONSAI: usize = 197;
 
-/// `skill:宇田川亚子:对帅气的憧憬`  (`RULESET[13][2]`, `AKAO_COOL`)
-pub const SKILL_AKAO_COOL: usize = 198;
+/// `skill:宇田川亚子:对帅气的憧憬`  (`RULESET[13][2]`, `AKO_COOL`)
+pub const SKILL_AKO_COOL: usize = 198;
 
 /// `skill:朝日六花:瞄准目标`  (`RULESET[13][3]`, `ASAHI_AIM`)
 pub const SKILL_ASAHI_AIM: usize = 199;
@@ -1083,89 +1084,92 @@ pub const TILE_PROPERTY: usize = 255;
 /// `mark:cp`  (`RULESET[15][0]`, `MARK_CP`)
 pub const MARK_MARK_CP: usize = 256;
 
+/// `mark:pp_fans`  (`RULESET[15][1]`, `MARK_PP_FANS`)
+pub const MARK_MARK_PP_FANS: usize = 257;
+
 /// `event:对邦`  (`RULESET[16][0]`, `DUI_BANG`)
-pub const EVENT_DUI_BANG: usize = 257;
+pub const EVENT_DUI_BANG: usize = 258;
 
 /// `event:弦卷集团地产开发`  (`RULESET[16][1]`, `TSURUMAKI_ESTATE`)
-pub const EVENT_TSURUMAKI_ESTATE: usize = 258;
+pub const EVENT_TSURUMAKI_ESTATE: usize = 259;
 
 /// `event:很噜的感觉`  (`RULESET[16][2]`, `LULU`)
-pub const EVENT_LULU: usize = 259;
+pub const EVENT_LULU: usize = 260;
 
 /// `event:前往哈比内尔王国旅游`  (`RULESET[16][3]`, `HABINEL`)
-pub const EVENT_HABINEL: usize = 260;
+pub const EVENT_HABINEL: usize = 261;
 
 /// `event:这只手我不会放开`  (`RULESET[16][4]`, `THIS_HAND`)
-pub const EVENT_THIS_HAND: usize = 261;
+pub const EVENT_THIS_HAND: usize = 262;
 
 /// `event:PICO灵魂交换`  (`RULESET[16][5]`, `PICO_SWAP`)
-pub const EVENT_PICO_SWAP: usize = 262;
+pub const EVENT_PICO_SWAP: usize = 263;
 
 /// `event:协助CiRCLE重建`  (`RULESET[16][6]`, `CIRCLE_REBUILD`)
-pub const EVENT_CIRCLE_REBUILD: usize = 263;
+pub const EVENT_CIRCLE_REBUILD: usize = 264;
 
 /// `event:前场队还是后场队？`  (`RULESET[16][7]`, `FRONT_OR_BACK`)
-pub const EVENT_FRONT_OR_BACK: usize = 264;
+pub const EVENT_FRONT_OR_BACK: usize = 265;
 
 /// `event:EX任务挑战`  (`RULESET[16][8]`, `EX_QUEST`)
-pub const EVENT_EX_QUEST: usize = 265;
+pub const EVENT_EX_QUEST: usize = 266;
 
 /// `event:发送熊饼表情`  (`RULESET[16][9]`, `BEAR_COOKIE`)
-pub const EVENT_BEAR_COOKIE: usize = 266;
+pub const EVENT_BEAR_COOKIE: usize = 267;
 
 /// `event:飞鸟山之战`  (`RULESET[16][10]`, `ASUKAYAMA`)
-pub const EVENT_ASUKAYAMA: usize = 267;
+pub const EVENT_ASUKAYAMA: usize = 268;
 
 /// `event:幻觉来了`  (`RULESET[16][11]`, `HALLUCINATION`)
-pub const EVENT_HALLUCINATION: usize = 268;
+pub const EVENT_HALLUCINATION: usize = 269;
 
 /// `event:卡池BUG`  (`RULESET[16][12]`, `POOL_BUG`)
-pub const EVENT_POOL_BUG: usize = 269;
+pub const EVENT_POOL_BUG: usize = 270;
 
 /// `event:A！A！O！`  (`RULESET[16][13]`, `A_A_O`)
-pub const EVENT_A_A_O: usize = 270;
+pub const EVENT_A_A_O: usize = 271;
 
 /// `event:麻里奈小姐的礼物箱`  (`RULESET[16][14]`, `MARINA_BOX`)
-pub const EVENT_MARINA_BOX: usize = 271;
+pub const EVENT_MARINA_BOX: usize = 272;
 
 /// `event:元祖！邦多利酱`  (`RULESET[16][15]`, `BANGDREAM_CHAN`)
-pub const EVENT_BANGDREAM_CHAN: usize = 272;
+pub const EVENT_BANGDREAM_CHAN: usize = 273;
 
 /// `event:超燃甩头`  (`RULESET[16][16]`, `HEAT_HEAD`)
-pub const EVENT_HEAT_HEAD: usize = 273;
+pub const EVENT_HEAT_HEAD: usize = 274;
 
 /// `event:意外的对邦`  (`RULESET[16][17]`, `SURPRISE_DUEL`)
-pub const EVENT_SURPRISE_DUEL: usize = 274;
+pub const EVENT_SURPRISE_DUEL: usize = 275;
 
 /// `event:Forbidden Moca`  (`RULESET[16][18]`, `FORBIDDEN_MOCA`)
-pub const EVENT_FORBIDDEN_MOCA: usize = 275;
+pub const EVENT_FORBIDDEN_MOCA: usize = 276;
 
 /// `event:上学时间`  (`RULESET[16][19]`, `SCHOOL_TIME`)
-pub const EVENT_SCHOOL_TIME: usize = 276;
+pub const EVENT_SCHOOL_TIME: usize = 277;
 
 /// `event:泪水的含义`  (`RULESET[16][20]`, `TEARS`)
-pub const EVENT_TEARS: usize = 277;
+pub const EVENT_TEARS: usize = 278;
 
 /// `event:Kizuna Music`  (`RULESET[16][21]`, `KIZUNA_MUSIC`)
-pub const EVENT_KIZUNA_MUSIC: usize = 278;
+pub const EVENT_KIZUNA_MUSIC: usize = 279;
 
 /// `event:冲榜`  (`RULESET[16][22]`, `CHART_RUSH`)
-pub const EVENT_CHART_RUSH: usize = 279;
+pub const EVENT_CHART_RUSH: usize = 280;
 
 /// `event:修复公告`  (`RULESET[16][23]`, `FIX_NOTE`)
-pub const EVENT_FIX_NOTE: usize = 280;
+pub const EVENT_FIX_NOTE: usize = 281;
 
 /// `event:迷子的追逐`  (`RULESET[16][24]`, `LOST_CHASE`)
-pub const EVENT_LOST_CHASE: usize = 281;
+pub const EVENT_LOST_CHASE: usize = 282;
 
 /// `event:让我来结束一切`  (`RULESET[16][25]`, `END_IT_ALL`)
-pub const EVENT_END_IT_ALL: usize = 282;
+pub const EVENT_END_IT_ALL: usize = 283;
 
 /// `event:一切不会结束`  (`RULESET[16][26]`, `NEVER_ENDS`)
-pub const EVENT_NEVER_ENDS: usize = 283;
+pub const EVENT_NEVER_ENDS: usize = 284;
 
 /// `event:火种燃尽之后会怎么样呢？`  (`RULESET[16][27]`, `EMBERS`)
-pub const EVENT_EMBERS: usize = 284;
+pub const EVENT_EMBERS: usize = 285;
 
 // ---------------------------------------------------------------------------
 // card_id! — compile-time literal → usize (unknown = compile error)
@@ -1435,34 +1439,35 @@ macro_rules! card_id {
     ("tile:ring") => { 254usize };
     ("tile:property") => { 255usize };
     ("mark:cp") => { 256usize };
-    ("event:对邦") => { 257usize };
-    ("event:弦卷集团地产开发") => { 258usize };
-    ("event:很噜的感觉") => { 259usize };
-    ("event:前往哈比内尔王国旅游") => { 260usize };
-    ("event:这只手我不会放开") => { 261usize };
-    ("event:PICO灵魂交换") => { 262usize };
-    ("event:协助CiRCLE重建") => { 263usize };
-    ("event:前场队还是后场队？") => { 264usize };
-    ("event:EX任务挑战") => { 265usize };
-    ("event:发送熊饼表情") => { 266usize };
-    ("event:飞鸟山之战") => { 267usize };
-    ("event:幻觉来了") => { 268usize };
-    ("event:卡池BUG") => { 269usize };
-    ("event:A！A！O！") => { 270usize };
-    ("event:麻里奈小姐的礼物箱") => { 271usize };
-    ("event:元祖！邦多利酱") => { 272usize };
-    ("event:超燃甩头") => { 273usize };
-    ("event:意外的对邦") => { 274usize };
-    ("event:Forbidden Moca") => { 275usize };
-    ("event:上学时间") => { 276usize };
-    ("event:泪水的含义") => { 277usize };
-    ("event:Kizuna Music") => { 278usize };
-    ("event:冲榜") => { 279usize };
-    ("event:修复公告") => { 280usize };
-    ("event:迷子的追逐") => { 281usize };
-    ("event:让我来结束一切") => { 282usize };
-    ("event:一切不会结束") => { 283usize };
-    ("event:火种燃尽之后会怎么样呢？") => { 284usize };
+    ("mark:pp_fans") => { 257usize };
+    ("event:对邦") => { 258usize };
+    ("event:弦卷集团地产开发") => { 259usize };
+    ("event:很噜的感觉") => { 260usize };
+    ("event:前往哈比内尔王国旅游") => { 261usize };
+    ("event:这只手我不会放开") => { 262usize };
+    ("event:PICO灵魂交换") => { 263usize };
+    ("event:协助CiRCLE重建") => { 264usize };
+    ("event:前场队还是后场队？") => { 265usize };
+    ("event:EX任务挑战") => { 266usize };
+    ("event:发送熊饼表情") => { 267usize };
+    ("event:飞鸟山之战") => { 268usize };
+    ("event:幻觉来了") => { 269usize };
+    ("event:卡池BUG") => { 270usize };
+    ("event:A！A！O！") => { 271usize };
+    ("event:麻里奈小姐的礼物箱") => { 272usize };
+    ("event:元祖！邦多利酱") => { 273usize };
+    ("event:超燃甩头") => { 274usize };
+    ("event:意外的对邦") => { 275usize };
+    ("event:Forbidden Moca") => { 276usize };
+    ("event:上学时间") => { 277usize };
+    ("event:泪水的含义") => { 278usize };
+    ("event:Kizuna Music") => { 279usize };
+    ("event:冲榜") => { 280usize };
+    ("event:修复公告") => { 281usize };
+    ("event:迷子的追逐") => { 282usize };
+    ("event:让我来结束一切") => { 283usize };
+    ("event:一切不会结束") => { 284usize };
+    ("event:火种燃尽之后会怎么样呢？") => { 285usize };
     ($other:literal) => {
         compile_error!("card_id!: unknown card/skill/event/tile/mark id; re-run tools/kani/gen_card_ids.py")
     };

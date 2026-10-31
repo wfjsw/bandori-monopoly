@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use bandori_std::roster::PersonaDef;
 use card_sdk::meta::MetaRow;
 
-pub use super::akao_cool::CHARACTER as AKAO_COOL;
+pub use super::ako_cool::CHARACTER as AKO_COOL;
 pub use super::anon_restart::CHARACTER as ANON_RESTART;
 pub use super::arisa_bonsai::CHARACTER as ARISA_BONSAI;
 pub use super::asahi_aim::CHARACTER as ASAHI_AIM;
@@ -62,7 +62,7 @@ pub use super::yuri_crit::CHARACTER as YURI_CRIT;
 
 /// Every lifted character, in skill-file order (the export sorts by ordinal).
 pub const PERSONAS: &[PersonaDef] = &[
-    AKAO_COOL,
+    AKO_COOL,
     ANON_RESTART,
     ARISA_BONSAI,
     ASAHI_AIM,
