@@ -448,6 +448,12 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     (`botDrive.ts` `recordAnswer` / `retryFresh`, 2026-10-31). Without that a
     refused bid is recorded as answered and -- Solo having no prompt clock --
     parks the whole table on the prompt.
+  * **A bid is not an answer either (2026-10-31).** A bid leaves the seat
+    pending; only a pass marks its slot. The driver therefore records the bid
+    an answer left live and re-arms the seat when the live bid moves past it,
+    so an outbid seat decides again instead of going quiet with the engine
+    still counting it open (`botDrive.ts` `needsAnswer`; pinned end-to-end by
+    `bot-core/tests/auction_drive.rs`).
   * **Trivial decisions (2026-10-08).**
     [`action::trivial_decision`] skips the search when the root has exactly
     one legal action (it is forced) or when no candidate moves money,

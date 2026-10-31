@@ -83,6 +83,12 @@ Only `err.answered` / `err.auction_passed` (the answer already stands) keep the
 record. A refused answer is also retried once from the frame the engine has
 **now**, never replayed from the stale one that produced it.
 
+An auction slot is the same shape in the engine: a bid leaves the seat
+pending (`answers[k] < 0`) and being outbid is a fresh decision (raise or
+pass); only a pass marks the slot. So the recorded decision carries the bid
+its answer left live, and the seat re-arms exactly when the live bid moves
+past it -- not on its own bid, and not on a cosmetic `seq` bump.
+
 ## 3. Staging (each step green on its own)
 
 1. **Policy out of `game-core`.** Create `bot-core/src/policy.rs` with the

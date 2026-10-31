@@ -70,6 +70,9 @@ export interface Decision {
   /** The 运营 window owes several decisions on one surface (a card, a skill,
    *  the roll, then `end`): a new state there is a new decision. */
   revisitable: boolean;
+  /** Auction only: the bid this answer left live (`-1` = passed), so the seat
+   *  re-arms exactly when someone outbids it -- not on its own bid. */
+  bid?: number;
 }
 
 /** One key per (turn, stage, prompt): a prompt id stays below 100 000. */
@@ -91,7 +94,13 @@ function revisitable(v: MatchView): boolean {
 
 /** The decision a seat's frame shows right now. */
 export function decisionOf(v: MatchView): Decision {
-  return { key: decisionKey(v), seq: v.state.seq, revisitable: revisitable(v) };
+  const d: Decision = {
+    key: decisionKey(v),
+    seq: v.state.seq,
+    revisitable: revisitable(v),
+  };
+  if (v.state.prompt?.kind === "auction") d.bid = v.state.prompt.bid;
+  return d;
 }
 
 /** Where an applied `end` leaves the match: the turn's 结束 surface. An `end`
@@ -103,9 +112,16 @@ function settled(v: MatchView): Decision {
 }
 
 /** What an applied command is recorded against: an `end` settles the turn's
- *  结束 surface, anything else the decision it answered. */
+ *  结束 surface, anything else the decision it answered. An auction answer
+ *  records the bid it **left live** (the engine floors bids to 100s), so the
+ *  seat is not re-armed by its own bid -- only by someone outbidding it. */
 export function answerFor(v: MatchView, cmd: Command, decision: Decision): Decision {
-  return cmd.act === "end" ? settled(v) : decision;
+  if (cmd.act === "end") return settled(v);
+  if (v.state.prompt?.kind === "auction") {
+    const value = cmd.value ?? 0;
+    return { ...decision, bid: value < 0 ? -1 : value - (value % 100) };
+  }
+  return decision;
 }
 
 /**
@@ -119,6 +135,13 @@ export function answerFor(v: MatchView, cmd: Command, decision: Decision): Decis
  * once or twice per turn for every bot. A prompt is the same: the answer is
  * already in the prompt's answer list, so a re-ask is `err.answered`. Only the
  * 运营 window (no prompt) re-arms on a new state.
+ *
+ * An auction is the one prompt that outlives its answer too: the seat stays
+ * pending while it holds the top bid, and owes a fresh decision (raise or
+ * pass) every time somebody outbids it. So it re-arms when the **live bid**
+ * moves past the one its answer left -- not on its own bid, and not on a
+ * cosmetic `seq` bump (a Solo auction has no clock, so a seat that is never
+ * re-armed keeps the prompt open forever).
  */
 export function needsAnswer(
   answered: ReadonlyMap<number, Decision>,
@@ -127,6 +150,13 @@ export function needsAnswer(
 ): boolean {
   const prev = answered.get(member);
   if (!prev || prev.key !== decisionKey(v)) return true;
+  if (v.state.prompt?.kind === "auction") {
+    // A pass is final (`err.auction_passed` on a re-ask); a bid leaves the
+    // seat pending and re-arms it only once it is outbid.
+    const k = v.state.prompt.players.indexOf(v.playerId);
+    if (k >= 0 && (v.state.prompt.answers[k] ?? -1) >= 0) return false;
+    return prev.bid !== v.state.prompt.bid;
+  }
   return prev.revisitable && prev.seq !== v.state.seq;
 }
 

@@ -10,6 +10,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import {
+  answerFor,
   botSeats,
   decisionKey,
   decisionOf,
@@ -312,6 +313,60 @@ test("recordAnswer: a refusal re-arms unless the answer already stands", () => {
   assert.equal(needsAnswer(answered, 2, asked), true);
 });
 
+test("needsAnswer: an auction re-arms on an outbid, not on the seat's own bid", () => {
+  const answered = new Map<number, Decision>();
+  const asked = auctionView(300, 0, 12);
+  // The seat bid 400.
+  answered.set(2, answerFor(asked, { act: "answer", prompt: 7, value: 400 }, decisionOf(asked)));
+  assert.equal(needsAnswer(answered, 2, auctionView(400, 1, 13)), false, "its own bid is no re-ask");
+  // A cosmetic `seq` bump on the same bid is not one either.
+  assert.equal(needsAnswer(answered, 2, auctionView(400, 1, 14)), false);
+  // Being outbid is: the seat owes a raise or a pass.
+  assert.equal(needsAnswer(answered, 2, auctionView(500, 0, 15)), true);
+  // Once it passes, the slot is answered for good (`err.auction_passed`).
+  const passed = auctionView(500, 0, 15);
+  passed.state.prompt.answers = [-1, 1];
+  answered.set(2, answerFor(passed, { act: "answer", prompt: 7, value: -1 }, decisionOf(passed)));
+  const later = auctionView(900, 0, 16);
+  later.state.prompt.answers = [-1, 1];
+  assert.equal(needsAnswer(answered, 2, later), false);
+});
+
+test("an auction seat that cannot raise passes instead of going quiet", async () => {
+  // The human sits at 2 000; the seat's ceiling (money - 1 000) is under the
+  // next raise, so the re-arm after the outbid must end in a pass -- a seat
+  // that only ever answered once kept the engine's prompt open forever.
+  let bid = 300;
+  let bidder = 0;
+  let held = auctionView(bid, bidder, 12, 2_000);
+  const answered = new Map<number, Decision>();
+  const act = async (_m: number, cmd: Command): Promise<Msg | null> => {
+    if (cmd.value < 0) return null;
+    const min = bid + 100;
+    if (cmd.value < min) return { k: "err.bid_min", a: { min: { n: min } } } as Msg;
+    bid = cmd.value;
+    bidder = 1;
+    return null;
+  };
+  const pool = fakePool(
+    async () => okAnswer("answer"),
+    async () => ({ act: "answer", prompt: 7, value: 100 }),
+  );
+  const onApplied = (m: number, d: Decision, err: Msg | null) =>
+    recordAnswer(answered, m, d, err);
+  // Round 1: it raises to its ceiling.
+  await driveSeat(act, () => held, 2, { ...hooks(), search: false, pool, onApplied });
+  assert.equal(bidder, 1);
+  // The human outbids it; that must land on a pass, not on silence.
+  bid = 5_000;
+  bidder = 0;
+  held = auctionView(bid, bidder, 13, 2_000);
+  assert.equal(needsAnswer(answered, 2, held), true, "the outbid re-arms the seat");
+  await driveSeat(act, () => held, 2, { ...hooks(), search: false, pool, onApplied });
+  held.state.prompt.answers = [-1, 1];
+  assert.equal(needsAnswer(answered, 2, held), false, "and the pass settles it");
+});
+
 test("driveSeat retries a stale auction bid from the frame the engine has now", async () => {
   // The seat decided against `stale` (no bid yet) while the human's 300 landed.
   // The engine refuses its 100 (`err.bid_min`, min 400); the retry must read
@@ -345,8 +400,9 @@ test("driveSeat retries a stale auction bid from the frame the engine has now", 
   assert.equal(outcome, "fallback");
   assert.equal(values.length, 2, "the refused bid is retried once");
   assert.ok(values[1] >= 400, `the retry honours the live minimum (got ${values[1]})`);
-  // Landed: recorded against the fresh surface, so the caller stops asking.
-  assert.equal(needsAnswer(answered, 2, fresh), false);
+  // Landed: recorded at the bid it left live (400 + one step), so the caller
+  // stops asking until someone outbids it again.
+  assert.equal(needsAnswer(answered, 2, auctionView(values[1], 1, 13)), false);
 });
 
 test("driveSeat passes when the live minimum is over the ceiling", async () => {
