@@ -28,6 +28,11 @@ function ctx(): AudioContext | null {
       return null;
     }
     setSession(BASE_SESSION);
+    // iOS suspends the context on backgrounding and on interruptions; a
+    // returning tab resumes it without waiting for a gesture.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && ac && ac.state !== "running" && ac.state !== "closed") void ac.resume();
+    });
   }
   return ac;
 }
@@ -74,19 +79,22 @@ function releaseAudible(): void {
   }, RELEASE_MS);
 }
 
-type Bgm = { track: string; gain: GainNode; source: AudioBufferSourceNode; level: number; started: boolean };
+type Bgm = { track: string; gain: GainNode; source: AudioBufferSourceNode; level: number; started: boolean; fade: number };
 
 let current: Bgm | null = null;
 let pending: string | null = null;
 let seq = 0;
 let unlocked = false;
 
-/** Browsers block audio until the first user gesture. */
+/**
+ * Browsers block audio until the first user gesture; every later gesture also
+ * resumes a context suspended by an interruption or by backgrounding.
+ */
 export function unlockAudio(): void {
+  const c = ctx();
+  if (c && c.state !== "running" && c.state !== "closed") void c.resume();
   if (unlocked) return;
   unlocked = true;
-  const c = ctx();
-  if (c && c.state !== "running") void c.resume();
   if (current) startBgm(current);
 }
 
@@ -94,15 +102,18 @@ function startBgm(b: Bgm): void {
   if (b.started) return;
   b.started = true;
   b.source.start();
-  fadeTo(b.gain, b.level);
+  fadeTo(b, b.level);
 }
 
-function fadeTo(g: GainNode, to: number, then?: () => void): void {
-  const from = g.gain.value;
+/** Fades a Bgm's gain; a newer fade (or `applyVolumes`) supersedes this one. */
+function fadeTo(b: Bgm, to: number, then?: () => void): void {
+  const mine = ++b.fade;
+  const from = b.gain.gain.value;
   const start = performance.now();
   const step = (t: number) => {
+    if (mine !== b.fade) return;
     const k = Math.min(1, (t - start) / (FADE * 1000));
-    g.gain.value = from + (to - from) * k;
+    b.gain.gain.value = from + (to - from) * k;
     if (k < 1) requestAnimationFrame(step);
     else then?.();
   };
@@ -110,7 +121,12 @@ function fadeTo(g: GainNode, to: number, then?: () => void): void {
 }
 
 function stopBgm(b: Bgm): void {
-  fadeTo(b.gain, 0, () => {
+  // `stop()` throws InvalidStateError on a source that never started.
+  if (!b.started) {
+    b.gain.disconnect();
+    return;
+  }
+  fadeTo(b, 0, () => {
     b.source.stop();
     b.gain.disconnect();
   });
@@ -127,7 +143,7 @@ function startNewBgm(track: string, buf: AudioBuffer): void {
   source.buffer = buf;
   source.loop = true;
   source.connect(gain);
-  const b: Bgm = { track, gain, source, level: settings().bgm / 10, started: false };
+  const b: Bgm = { track, gain, source, level: settings().bgm / 10, started: false, fade: 0 };
   current = b;
   if (old) stopBgm(old);
   if (unlocked) startBgm(b);
@@ -147,7 +163,13 @@ export function playSceneBgm(scene: string): void {
     pending = null;
     return stopBgmNow();
   }
-  if (track === current?.track || track === pending) return;
+  if (track === pending) return;
+  if (track === current?.track) {
+    // Back to what is already playing: cancel a load for the track we left.
+    seq++;
+    pending = null;
+    return;
+  }
   const src = res(`BandoriBGM/${track}`);
   if (!src || !ctx()) {
     seq++;
@@ -166,7 +188,21 @@ export function playSceneBgm(scene: string): void {
 export function applyVolumes(): void {
   if (!current) return;
   current.level = settings().bgm / 10;
+  current.fade++; // drop a fade-in still running, so it cannot overwrite this
   current.gain.gain.value = current.level;
+}
+
+const FETCH_TIMEOUT_MS = 15_000;
+
+/** Fetch and decode a clip; `null` on any failure, including a stalled fetch. */
+function fetchDecode(src: string): Promise<AudioBuffer | null> {
+  const c = ctx();
+  if (!c) return Promise.resolve(null);
+  const timeout = (AbortSignal as { timeout?: (ms: number) => AbortSignal }).timeout;
+  return fetch(src, { signal: timeout?.(FETCH_TIMEOUT_MS) })
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((data) => c.decodeAudioData(data))
+    .catch(() => null);
 }
 
 // Decoded BGM is far bigger than an sfx clip (a whole track of PCM), so only
@@ -184,17 +220,20 @@ function bgmBuffer(src: string): Promise<AudioBuffer | null> {
   }
   const loading = bgmLoads.get(src);
   if (loading) return loading;
-  const c = ctx();
-  if (!c) return Promise.resolve(null);
-  const p = fetch(src)
-    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
-    .then((data) => c.decodeAudioData(data))
+  const p = fetchDecode(src)
     .then((buf) => {
+      if (!buf) return null;
       bgmBuffers.set(src, buf);
-      while (bgmBuffers.size > BGM_CACHE) bgmBuffers.delete(bgmBuffers.keys().next().value!);
+      // Evict the oldest entries, but never the one just loaded or the track
+      // that is playing (its source would hold it anyway; re-decoding is the
+      // cost of getting this wrong).
+      const playing = current ? `BandoriBGM/${current.track}` : null;
+      for (const key of bgmBuffers.keys()) {
+        if (bgmBuffers.size <= BGM_CACHE) break;
+        if (key !== src && key !== playing) bgmBuffers.delete(key);
+      }
       return buf;
     })
-    .catch(() => null)
     .finally(() => bgmLoads.delete(src));
   bgmLoads.set(src, p);
   return p;
@@ -208,15 +247,10 @@ const clips = new Map<string, Promise<AudioBuffer | null>>();
 function clipBuffer(src: string): Promise<AudioBuffer | null> {
   let p = clips.get(src);
   if (!p) {
-    const c = ctx();
-    if (!c) return Promise.resolve(null);
-    p = fetch(src)
-      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
-      .then((data) => c.decodeAudioData(data))
-      .catch(() => {
-        clips.delete(src); // allow a retry on the next play
-        return null;
-      });
+    p = fetchDecode(src).then((buf) => {
+      if (!buf) clips.delete(src); // allow a retry on the next play
+      return buf;
+    });
     clips.set(src, p);
   }
   return p;
