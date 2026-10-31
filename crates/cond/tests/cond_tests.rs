@@ -73,6 +73,7 @@ fn win() -> WindowCtx {
         turn_player: 1,
         turn_key: 7,
         trigger_card: 0,
+        trigger_card_is_skill: false,
         name: String::new(),
         players: vec![
             p0,
@@ -1057,4 +1058,16 @@ fn resolving_is_a_predicate_over_the_running_bodies() {
     assert!(compile("resolving('X') && trigger_card == 42")
         .unwrap()
         .eval(&w2, &c));
+}
+
+#[test]
+fn card_is_skill_reads_the_trigger_card() {
+    // The 「技能」 precondition of a `cardFired` listener: a bare Bool conjunct
+    // over the trigger's card, false for a play or a hook body.
+    let mut w = WindowCtx::default();
+    let c = CandidateCtx::default();
+    assert!(!compile("card.is_skill").unwrap().eval(&w, &c), "no trigger card");
+    w.trigger_card_is_skill = true;
+    assert!(compile("card.is_skill").unwrap().eval(&w, &c), "a skill body");
+    assert!(compile("card.is_skill && true").unwrap().eval(&w, &c));
 }

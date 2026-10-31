@@ -78,6 +78,10 @@ pub trait CondView {
     /// [`CondView::card_id`] -- comparable to `card.id` and to a card-id
     /// literal (`id_of("…")`). `0` when the trigger carries no card.
     fn trigger_card(&self) -> i64;
+    /// The trigger's card is a `skill:` card (`card.is_skill`).
+    fn trigger_card_is_skill(&self) -> bool {
+        false
+    }
     /// The trigger's counter / message name hash (`counter_name`), same
     /// encoding as [`crate::id_of`] -- `Trigger.name` on a `CounterChanged`
     /// hook (the counter name) or an `On::Message` entry (the message name).

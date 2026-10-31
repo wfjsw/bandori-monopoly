@@ -348,7 +348,9 @@ fn cross_player_activation_flashes() {
 }
 
 /// Ruling 2a: a declined optional prompt leaves no header, no flash, no log.
-/// The lazy header only posts when a visible outcome follows.
+/// The lazy header only posts when a visible outcome follows. The one trace is
+/// the body-entry `cardFired` raise (v105): the body *did* fire, and any card
+/// listening hears it, so the fire's own chain event stays.
 #[test]
 fn declined_optional_prompt_leaves_no_trace() {
     let mut t = Table::vanilla(2);
@@ -367,11 +369,15 @@ fn declined_optional_prompt_leaves_no_trace() {
         t.decline();
     }
     let ran = activations_since(&t, mark, "TEST:silentAsk");
-    assert!(
-        ran.is_empty(),
-        "a declined optional prompt must leave no header: {}",
+    assert_eq!(
+        ran.len(),
+        1,
+        "only the fire, nothing of the declined offer: {}",
         t.recent_keys(25).join(", ")
     );
+    // The event is the settle body's entry (an in-play hook drive).
+    assert_eq!(ran[0].kind, "hook", "the sole event is the fire");
+    assert!(!ran[0].flash, "the fire does not flash the card");
     assert!(
         !t.events_since(mark)
             .iter()

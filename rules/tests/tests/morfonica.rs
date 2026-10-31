@@ -1318,6 +1318,29 @@ fn rui_x_only_when_the_users_skill_fires() {
     );
 }
 
+#[test]
+fn rui_ignores_the_cards_own_play_body() {
+    // `cardFired` is every body, this card's own play included -- and it is
+    // inside `resolving`. `card.is_skill` is the 「技能」 precondition that
+    // keeps the play body out. With the skills stripped no fire happens at all,
+    // so X must sit untouched (a non-skill write would force it to 5).
+    let mut t = Table::new(&["八潮瑠唯", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.strip_skills();
+    t.set_state(0, "skill.yuriCrit.x", 7);
+    t.give(0, &["Mor:（Rui）正论恶魔"]);
+    t.dice(&[1, 1]);
+    let mark = t.mark();
+    t.play(0, "Mor:（Rui）正论恶魔").unwrap();
+    decline_all(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        !keys.iter().any(|k| k.ends_with("rui_devil_crit")),
+        "no skill fired, no write: {keys:?}"
+    );
+    assert_eq!(t.state(0, "skill.yuriCrit.x"), 7, "X untouched: {keys:?}");
+}
 // --------------------------------------------------- （筑紫）迷茫的庭园
 
 #[test]

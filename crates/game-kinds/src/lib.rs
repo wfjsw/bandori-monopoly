@@ -632,7 +632,7 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
     },
     EngineKind {
         id: 111,
-        wire: "skillFired",
+        wire: "cardFired",
         is_filter: false,
         hook_only: true,
     },
@@ -771,7 +771,7 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "onBoardGate" => Some(108),
         "targetableGate" => Some(109),
         "paySplitMulBefore" => Some(110),
-        "skillFired" => Some(111),
+        "cardFired" => Some(111),
         "markChanged" => Some(112),
         _ => None,
     };

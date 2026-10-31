@@ -144,6 +144,9 @@ pub struct WindowCtx {
     /// The trigger's card id hash (`trigger_card`), same encoding as
     /// [`CandidateCtx::card_id`]. `0` when the trigger carries no card.
     pub trigger_card: i64,
+    /// The trigger's card is a `skill:` card (`card.is_skill`) -- the
+    /// precondition a `cardFired` listener uses to hear skills only.
+    pub trigger_card_is_skill: bool,
     /// `Trigger.name` -- the counter name on a `CounterChanged` hook, or the
     /// message name on an `On::Message` entry. Empty otherwise. Binds
     /// `counter_name` (a hash) / `counter_is('…')`.

@@ -107,6 +107,9 @@ impl CondView for SnapshotView<'_> {
     fn trigger_card(&self) -> i64 {
         self.win.trigger_card
     }
+    fn trigger_card_is_skill(&self) -> bool {
+        self.win.trigger_card_is_skill
+    }
     fn counter_name(&self) -> i64 {
         if self.win.name.is_empty() {
             0

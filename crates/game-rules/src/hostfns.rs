@@ -1460,8 +1460,8 @@ pub fn raise<C: HostCtx>(
 }
 
 /// [`raise`] with the raise's `card` provenance set (`t.card`). The body
-/// wrapper uses it for `skillFired` so a hook can name the skill
-/// (`card_is('skill:…')`); a plain guest raise has none.
+/// wrapper uses it for `cardFired` so a hook can name the card
+/// (`card_is('skill:…')`, `card.is_skill`); a plain guest raise has none.
 pub fn raise_as<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -2478,34 +2478,36 @@ pub fn trig_instance<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().trigger().instance)
 }
 
-/// Push a resolution frame for the body about to run as the card `(p, n)`.
-/// `1` = run the body, `0` = the fire was cancelled. Raising `skillFired`
-/// itself is the engine's; the frame carries the open raise id, or `0`.
+/// Announce the body about to run as the card `(p, n)`: raise `cardFired`.
+/// `1` = run the body, `0` = the fire was cancelled. The frames are the
+/// host's (`drive_hook` pushes, the raise that carried the body drops them);
+/// this only raises the announcement.
 pub fn body_enter<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
-    // The frames are the host's (`drive_hook` pushes, `raise_core` drops); the
-    // guest only raises `skillFired` here.
     let card = guest_str(c, p, n)?;
-    if card.starts_with("skill:") {
-        // The skill's owner is the seat this body runs for (the frame
-        // `drive_hook` just pushed), not the raise's actor: on a payment the
-        // actor is the payer, and a payee's hook must still read 「你的技能」.
-        let owner = crate::wasm_rules::resolving_seat()
-            .filter(|s| *s >= 0)
-            .unwrap_or(c.st().wr().trigger().player_id);
-        // `raise` answers 1 when the link settled and 0 when a counteraction
-        // cancelled it; the caller skips the body on 0 (and on the pause
-        // sentinel, which it re-enters once the answer is logged).
-        let packed = raise_as(c, owner, "skillFired", 0, Some(&card))?;
-        if packed == 0 {
-            return Ok(0);
-        }
-        return Ok(if packed == card_sdk::abi::EXIT_NEED_INPUT {
-            packed
-        } else {
-            1
-        });
+    // A body entered *by* a `cardFired` hook does not announce itself: its
+    // entry **is** that announcement. Without this, two cards watching each
+    // other's fires would raise forever.
+    if c.st().wr().trigger().kind == card_sdk::abi::TriggerKind::CardFired {
+        return Ok(1);
     }
-    Ok(1)
+    // The body's owner is the seat it runs for (the frame `drive_hook` just
+    // pushed), not the raise's actor: on a payment the actor is the payer, and
+    // a payee's hook must still read 「你的技能」.
+    let owner = crate::wasm_rules::resolving_seat()
+        .filter(|s| *s >= 0)
+        .unwrap_or(c.st().wr().trigger().player_id);
+    // `raise` answers 1 when the link settled and 0 when a counteraction
+    // cancelled it; the caller skips the body on 0 (and on the pause
+    // sentinel, which it re-enters once the answer is logged).
+    let packed = raise_as(c, owner, "cardFired", 0, Some(&card))?;
+    if packed == 0 {
+        return Ok(0);
+    }
+    Ok(if packed == card_sdk::abi::EXIT_NEED_INPUT {
+        packed
+    } else {
+        1
+    })
 }
 
 /// Leave the body. The frame deliberately stays up: the hooks the body's own

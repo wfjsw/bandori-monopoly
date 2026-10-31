@@ -1565,7 +1565,7 @@ pub fn move_units(
 
 /// Announce the body about to run as `card` (the one dispatcher `rt::on` calls;
 /// card code does not). `1` runs the body, `0` skips it (the body's
-/// `skillFired` raise was cancelled), and the pause sentinel
+/// `cardFired` raise was cancelled), and the pause sentinel
 /// [`crate::abi::EXIT_NEED_INPUT`] halts the body too -- the raise asked a
 /// question, and the replayed action re-enters.
 ///

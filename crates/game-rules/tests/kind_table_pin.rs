@@ -165,7 +165,7 @@ fn typed_engine_consts_have_table_rows() {
         (108, "OnBoardGate"),
         (109, "TargetableGate"),
         (110, "PaySplitMulBefore"),
-        (111, "SkillFired"),
+        (111, "CardFired"),
         (112, "MarkChanged"),
     ];
     for (id, name) in named {

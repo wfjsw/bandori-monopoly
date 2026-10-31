@@ -312,14 +312,14 @@ pub fn on(
         ) => {
             let _ = shape;
             // One body dispatcher: every host- or guest-started body enters a
-            // resolution frame (the `skillFired` raise and the `resolving`
+            // resolution frame (the `cardFired` raise and the `resolving`
             // table) and leaves it on both the success and the ask path.
             let cid = card(bands, idx).id;
             let entered = crate::ctx::body_enter(cid);
             if entered == 0 {
                 return 0;
             }
-            // The frame's `skillFired` raise asked: halt here, and pop the
+            // The frame's `cardFired` raise asked: halt here, and pop the
             // frame before the host re-runs us with the answer.
             // Asked: the frame stays up (the host settles the effects on it
             // and re-enters us), so no `body_leave` here.
@@ -346,7 +346,7 @@ pub fn on(
             if entered == 0 {
                 return 0;
             }
-            // The frame's `skillFired` raise asked: halt here, and pop the
+            // The frame's `cardFired` raise asked: halt here, and pop the
             // frame before the host re-runs us with the answer.
             // Asked: the frame stays up (the host settles the effects on it
             // and re-enters us), so no `body_leave` here.

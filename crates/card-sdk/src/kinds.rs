@@ -709,7 +709,7 @@ action_kinds! {
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
-    SkillFired;
+    CardFired;
     MarkChanged;
 }
 

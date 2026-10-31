@@ -37,7 +37,7 @@ and are identified by their triage row id.
 | # | draft said | why it was wrong | revision |
 |---|---|---|---|
 | R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Press(id, …)`, `NetMessage.{uid,entry}`, `act = "press"`, `SkillAction.{uid,entry,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §6.5. | Drop the offer half entirely. G01 ships the `real_id` store and accessors; G05 ships every offer wire. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
-| R2 | uid is stamped only in `Match::counteract` (`play.rs:5226`) and `skillFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
+| R2 | uid is stamped only in `Match::counteract` (`play.rs:5226`) and `cardFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
 | R3 | hook jobs are enumerated from fields only | A `markChanged` caused by destruction names an instance that is **already unplaced** by the time the raise commits (`unplace_at` removes before `commit_after`), so the field walk misses the very instance whose hook must resync/discard. | `collect_hook_jobs` also adds a job for the raise's subject instance (alive or dead) and one per resolving frame (§5.3). |
 | R4 | umiri's fix reads `card.counter('umiri_user')` in a pre | `fill_candidate` resolves `card.*` by `(player, card id)` — the **first** copy — so two copies read one counter and item 9 stays broken. | `CandidateCtx` gains the running `uid`; `card.counter` / `card.tile` / `card.placed` resolve through it when set (§5.5). |
 | R5 | the G01 README allocation gives no Kani `Op` ids | G01 adds six imports; each needs an `Op` and an arm (`sys_kani`, `kani_host`, `host.rs` are exhaustive). Without ids the Kani build cannot compile. | Take 341–346 and shift the later groups' bands (README table updated with this file). |
@@ -346,11 +346,11 @@ Parameter semantics:
 ```rust
 // engine trigger ids (104/107 retired; 105–110 taken; the README allocates
 // the next free pair to this group, which lands first)
-pub const SkillFired: Self = Self::engine(111);   // wire "skillFired", hook-only
+pub const CardFired: Self = Self::engine(111);    // wire "cardFired", hook-only
 pub const MarkChanged: Self = Self::engine(112);  // wire "markChanged", hook-only
 ```
 
-- `Action::SkillFired(pre, guard, body)`,
+- `Action::CardFired(pre, guard, body)`,
   `Action::MarkChanged(pre, guard, body)` — added to the `action_kinds!` engine
   table (`kinds.rs:638`), one `EngineKind` row each in
   `crates/game-kinds/src/lib.rs` with `hook_only: true`,
@@ -440,7 +440,7 @@ No signature is removed and no existing byte layout changes.
   `(owner, card, uid, name, change)`; `commit_after` (`:4892`) stamps
   `t.instance = Some(uid)`.
 - `markChanged`: the drain stamps the row's `instance` (§5.3).
-- `skillFired`: unused (`-1`).
+- `cardFired`: unused (`-1`).
 - The field is only ever the **raise's** subject. It is not restamped per hook
   job; `self_uid()` remains the job's instance.
 
@@ -479,7 +479,7 @@ No signature is removed and no existing byte layout changes.
   depth bounds it, and the contract requires the listener's own write to be
   idempotent per raise; the claim spell in §6.3/§6.4/§6.7 makes that true.
 
-### 5.4 Resolution stack, body wrapper and `skillFired`
+### 5.4 Resolution stack, body wrapper and `cardFired`
 
 - The stack is a host **thread-local** (`RESOLVING`), not a world field: a
   raise nested inside a body reads it, and every body commit swaps the
@@ -500,18 +500,32 @@ No signature is removed and no existing byte layout changes.
   - An already-resolving instance keeps one frame; a repeated walk does not
     stack a second.
 - Host side of `enter`:
-  1. if the card is a `skill:`, raise `skillFired` (fresh
-     `CoreTrigger::new("skillFired", call.player_id())`, `card`,
+  1. unless the drive **is** a `cardFired` hook job, raise `cardFired`
+     (fresh `CoreTrigger::new("cardFired", call.player_id())`, `card`,
      `by_card = owner`, `instance = -1`) through the normal counteract
-     choke. The owner is the **frame's seat** -- the seat the drive was
-     dispatched for -- not the enclosing raise's `player_id`, because on a
-     payment that is the payer: a payee's 「你的技能」 hook would otherwise
-     miss every leg paid *to* it. The raise's own cause is stamped there too
-     (`t.by_card`, which the guard reads as `by == owner`). A counter may
-     cancel it; a cancelled fire returns `0` and the guest skips the body;
+     choke. Every body announces -- a play, a hook, a counteraction, a skill
+     alike; a listener after skills narrows with the `card.is_skill`
+     precondition rather than the raise being skill-only. The owner is the
+     **frame's seat** -- the seat the drive was dispatched for -- not the
+     enclosing raise's `player_id`, because on a payment that is the payer:
+     a payee's 「你的技能」 hook would otherwise miss every leg paid *to* it.
+     The raise's own cause is stamped there too (`t.by_card`, which the guard
+     reads as `by == owner`). A counter may cancel it; a cancelled fire
+     returns `0` and the guest skips the body;
   2. if the raise halts (`packed == EXIT_NEED_INPUT`), return the sentinel —
      the body has not started, and the replayed action re-enters;
   3. otherwise return `1`.
+- A hook's own body does not announce (step 1's skip): its entry *is* the
+  announcement, and two cards watching each other's fires would otherwise
+  raise forever. Termination is one level deep, matching C#'s
+  `H.SkillFired`.
+- `card.is_skill` (window-scope Bool, `card_is_skill` flat) is the
+  precondition 「技能」: the trigger's `card` is a `skill:` id.
+- The fire is itself a visible outcome: its raise posts the firing card's
+  chain event (`kind = "hook"` for an in-play body). A body that produced
+  nothing else therefore still has that event — the lazy 「效果适用」 header
+  (Ruling 2a) stays for a normal entry, and a `QuietWhenEmpty` entry still
+  retracts its header around it.
 - `leave` is a no-op (debug trace only): the frame deliberately stays up.
 - Dispatch reads the stack: the conjoined unit-subject pass and the last
   pass of every walk drive the resolving bodies, resolving frames **last**
@@ -578,8 +592,8 @@ for &o in &others {
 ctx::set_slot(player_id, X, 5);              // trailing, unconditional
 
 // after: the transfer legs stay; the writes and the log move into a hook
-On::Action(Action::SkillFired(
-    "resolving('Mor:（Rui）正论恶魔') && actor == owner && card_is('skill:八潮瑠唯:正论暴击')",
+On::Action(Action::CardFired(
+    "resolving('Mor:（Rui）正论恶魔') && card.is_skill && by == owner",
     None, on_skill))
 …
 fn on_skill(player_id: i32) -> Asked {
@@ -826,7 +840,7 @@ note (notes are newest-first under the constant):
 ///    a per-instance counter maximum is stored (`ruleset_counter_max_at` /
 ///    `ruleset_set_counter_max_at`) and `add_counter_at` clamps at it; a
 ///    `counter_max.*` placement prop fills that store. New hook kinds
-///    `skillFired` (111) and `markChanged` (112); `card.*` condition reads
+///    `cardFired` (111) and `markChanged` (112); `card.*` condition reads
 ///    answer for the running uid.
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
 ```
@@ -872,7 +886,7 @@ to pin claim stability.
 Every new `Op` also lands in `hostops_smoke.rs`, `sys_kani.rs`,
 `native_shims.rs` and the `host.rs` dispatch.
 
-- `proofs/mor.rs::C-MOR-rui-demon-03` — `resolving` + `skillFired` ⇒ exactly
+- `proofs/mor.rs::C-MOR-rui-demon-03` — `resolving` + `cardFired` ⇒ exactly
   one X write per fire; no fire ⇒ X unchanged; a cancelled fire ⇒ no write.
 - `proofs/mor.rs::C-MOR-starry-night-02` — the guard admits iff
   `trig_instance == last_uid`.
@@ -935,9 +949,13 @@ names and ids.
 9. **A resolving stack on `Cx` only** (host reads via the bridge). Rejected:
    conditions are evaluated from a `WindowCtx` built over the world, so a
    `Cx`-only stack is invisible to every `pre`.
-10. **Raising `skillFired` in `drive_inner_body` only.** Rejected: guest
+10. **Raising `cardFired` in `drive_inner_body` only.** Rejected: guest
     `play_card` / `invoke_skill` / `invoke_entry` never reach it (R2).
-11. **Restamping `trigger.instance` to the job uid at dispatch.** Rejected:
+11. **A skill-only kind (`skillFired`).** Rejected: every card body is a
+    firing, and the skill carve-out is a precondition a listener states
+    (`card.is_skill`), not a second kind. It also lets a listener hear a
+    played card's own body without a second signal.
+12. **Restamping `trigger.instance` to the job uid at dispatch.** Rejected:
     it destroys starry's ability to ignore a raise about the other copy.
     `self_uid()` already names the job.
 
@@ -953,8 +971,8 @@ names and ids.
    (`play.rs:4527-4547`) deletes by `marker_owner` name across all owners, so
    a bankrupt black player also removes the *other* players' crystals of the
    same kind. Is that intended? Not ruled.
-3. **Cancelled `skillFired`.** Design: a counter may cancel it, and a
-   cancelled fire skips the skill body. Confirm that a listener may negate a
+3. **Cancelled `cardFired`.** Design: a counter may cancel it, and a
+   cancelled fire skips the body. Confirm that a listener may negate a
    skill's fire, not only rewrite X.
 4. **`markChanged` re-entrancy.** A listener that writes marks raises again;
    the chain depth bounds it, and the claim spell makes a per-copy listener

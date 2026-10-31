@@ -742,6 +742,18 @@ pub const VOCAB: &[Name] = &[
         doc: "counter_is('name') -> this window's `Trigger.name` is that counter / message",
     },
     Name {
+        cel: "card.is_skill",
+        aliases: &[],
+        flat: "card_is_skill",
+        scope: Scope::Window,
+        ty: Ty::Bool,
+        get: |v| v.trigger_card_is_skill() as i64,
+        get_str: NO_GET_STR,
+        fx: NO_FX,
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "the trigger's card is a skill -- narrows `cardFired` to skills",
+    },
+    Name {
         cel: "card_is",
         aliases: &[],
         flat: "card_is",

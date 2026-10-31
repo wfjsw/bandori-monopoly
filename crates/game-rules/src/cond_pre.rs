@@ -1376,6 +1376,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             Some(card) if !card.is_empty() => id_of(card),
             _ => 0,
         },
+        trigger_card_is_skill: t
+            .card
+            .as_deref()
+            .is_some_and(|c| c.starts_with("skill:")),
         name: t.name.clone().unwrap_or_default(),
         players,
         tile_ids,
@@ -1457,6 +1461,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         turn_key: world.turn_key() as i64,
         // No trigger: no card. `trigger_card == card.id` is false here.
         trigger_card: 0,
+        trigger_card_is_skill: false,
         // No trigger: no counter / message name either.
         name: String::new(),
         players,

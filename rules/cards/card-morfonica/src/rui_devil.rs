@@ -14,13 +14,15 @@ pub const RUI_DEVIL: CardDef = CardDef::new(
     &[
         On::Play("", None, rui_devil),
         // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」.
-        // `resolving(…)` keeps the fire inside this card's resolution;
-        // `by == owner` says 「你的技能」 -- the fire's cause is a skill of this
-        // card's user (`actor` cannot: on a payment it is the payer, and the
-        // 300 leg pays *to* the user). `owner` / `self_uid()` cannot scope the
-        // frame either -- this card never places itself.
-        On::Action(Action::SkillFired(
-            "resolving('Mor:（Rui）正论恶魔') && by == owner",
+        // `cardFired` covers every body, so `card.is_skill` is the
+        // 「技能」 precondition; `resolving(…)` keeps the fire inside this
+        // card's resolution; `by == owner` says 「你的技能」 -- the fire's cause
+        // is a skill of this card's user (`actor` cannot: on a payment it is
+        // the payer, and the 300 leg pays *to* the user). `owner` /
+        // `self_uid()` cannot scope the frame either -- this card never places
+        // itself.
+        On::Action(Action::CardFired(
+            "resolving('Mor:（Rui）正论恶魔') && card.is_skill && by == owner",
             None,
             on_skill,
         )),

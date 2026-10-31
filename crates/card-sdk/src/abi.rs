@@ -852,7 +852,7 @@ pub const ABI_VERSION: i32 = 105;
 ///    a per-instance counter maximum is stored (`ruleset_counter_max_at` /
 ///    `ruleset_set_counter_max_at`) and `add_counter_at` clamps at it; a
 ///    `counter_max.*` placement prop fills that store. New hook kinds
-///    `skillFired` (111) and `markChanged` (112); `card.*` condition reads
+///    `cardFired` (111) and `markChanged` (112); `card.*` condition reads
 ///    answer for the running uid.
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
 /// v104: **turn snapshot carries money and the board arrays**. The
@@ -2138,9 +2138,10 @@ impl ActionKind {
     /// the running figure.
     pub const PaySplitMulBefore: Self = Self(TriggerKind::PaySplitMulBefore);
 
-    /// Action. A `skill:` body entered its resolution frame (hook-only, no
-    /// counteraction window). Same payload as [`TriggerKind::SkillFired`].
-    pub const SkillFired: Self = Self(TriggerKind::SkillFired);
+    /// Action. A card body entered its resolution frame (hook-only, no
+    /// counteraction window). Same payload as [`TriggerKind::CardFired`].
+    /// `card.is_skill` narrows it to skill bodies.
+    pub const CardFired: Self = Self(TriggerKind::CardFired);
 
     /// Action. A mark row changed (hook-only, no counteraction window). Same
     /// payload as [`TriggerKind::MarkChanged`].
@@ -2739,11 +2740,14 @@ impl TriggerKind {
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
     // ruleset-declared "fansFlip"); the next free **engine** pair is 111/112.
 
-    /// `skillFired` -- a `skill:` card's body entered its resolution frame.
-    /// Hook-only: no counteraction window opens. Payload: the skill's card id
-    /// on `card`, the owner on `by_card`, `instance = -1`; `uid` is the fire's
-    /// raise id, so one fire is one claim.
-    pub const SkillFired: Self = Self::engine(111);
+    /// `cardFired` -- a card's body entered its resolution frame: every
+    /// body, a play, a hook or a counteraction alike. Hook-only: no
+    /// counteraction window opens. Payload: the card id on `card`, the body's
+    /// seat on `by_card`, `instance = -1`; `uid` is the fire's raise id, so
+    /// one fire is one claim. A listener after skills only pre-filters on
+    /// `card.is_skill`. A hook's *own* body does not re-announce (a fire is
+    /// announced once, not once per level).
+    pub const CardFired: Self = Self::engine(111);
 
     /// `markChanged` -- a mark row was added, bumped or removed. Hook-only.
     /// Payload: `player_id` = row owner, `tile`, `name` = mark kind,

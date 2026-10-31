@@ -613,9 +613,9 @@ pub enum HostRequest {
         /// `tile.id == tile_named('…')` read it.
         tile: i32,
         /// The raise's card provenance (`t.card`). Only the body wrapper's
-        /// `skillFired` sets it, so a hook can answer `card_is('skill:…')`.
-        /// `player_id` is that raise's cause (`t.by_card`) -- for `skillFired`
-        /// the skill's owner, which is what 「你的技能」 guards read.
+        /// `cardFired` sets it, so a hook can answer `card_is('skill:…')` or
+        /// `card.is_skill`. `player_id` is that raise's cause (`t.by_card`) --
+        /// the body's own seat, which is what 「你的技能」 guards read.
         card: Option<String>,
         /// BuyAssign filter deal (in): owner after (`i32::MIN` = unset).
         deal_owner: i32,
