@@ -154,7 +154,9 @@ pub struct MatchState {
     /// [`Self::skip_move`] is the same live latch, so the two always agree
     /// (it was once re-derived from the named layer counters, which did not: the
     /// mid-turn layer grants -- a bot trusting it sent `end` into
-    /// `err.roll_first`).
+    /// `err.roll_first`). True as well once the end is already queued: a
+    /// duplicate `end` is accepted there and folds into the phase
+    /// (`Cx::end_already_queued`), prompts and hand overflow included.
     pub can_end_here: bool,
     /// How many hand cards / skills the turn has already played
     /// (`world.turn.played.len()`) -- what the standard policy's

@@ -706,6 +706,18 @@ impl Cx<'_> {
 
     /// The player's "end turn" command.
     pub(crate) fn end_turn_cmd(&mut self, i: usize) -> Flow<()> {
+        // The turn end is a phase, not an edge: once it is up (结束 after
+        // the walk, or queued by an auto-skip) a second `end` must be a
+        // no-op -- otherwise it re-runs the whole end phase, wears another
+        // status layer off, re-raises `turnEnd` / `turnEndAfter` and logs
+        // 「结束了回合」 again. Clients do send it twice: an accepting seat's
+        // own duplicate (a view that lags the state) and each other seat's
+        // client racing the same frame. The record keeps the extra commands,
+        // so a replay must fold them here too. `do_act` already folds at the
+        // gate; this catches a routine that was in flight.
+        if self.w.end_already_queued() {
+            return Ok(());
+        }
         // `endTurnBefore` -- the player chose to end the turn. (Auto-skips --
         // a closed act gate -- go straight to [`Self::end_turn`] and so raise only
         // `endTurnAfter`, which is the "the turn ended" signal.)

@@ -763,6 +763,19 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    /// Has the turn end this `end` asks for already happened? 结束 with the
+    /// next turn queued, or the same seat's **extra turn** already open -- a
+    /// late duplicate lands on that 开始 (the queued turn kept the seat, and
+    /// an end from any other seat is refused as not their turn), so it must
+    /// not run the end phase again. A duplicate `end` folds into both.
+    pub fn end_already_queued(&self) -> bool {
+        match self.st.step {
+            crate::state::stage::END => self.next_turn_pending,
+            crate::state::stage::START => true,
+            _ => false,
+        }
+    }
+
     /// Assemble a world around an already-built [`Rng`]: which stream the
     /// match runs on is the caller's choice (`Match::new` legacy xoshiro vs
     /// `Match::new_seeded` ChaCha12, `docs/FAIRNESS.md`).
