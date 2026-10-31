@@ -421,7 +421,8 @@ export async function collectBundleForExport(
     index?.bundles.find((b) => b.aliases && want in b.aliases) ??
     index?.bundles.find((b) => b.rebuilt?.byte_id === want);
   const serveId = entry ? serveIdFor(entry, want) : want;
-  const base = bundleBase(serveId);
+  // `URL` needs an absolute base: `/assets/engine/<id>/` alone throws.
+  const base = new URL(bundleBase(serveId), location.origin);
   let manifest: {
     id?: string;
     api?: number;
@@ -476,7 +477,7 @@ export async function collectBundleForExport(
       await push(rel, new URL(idx.conds.file, new URL(L.rulesIndex, base)));
     }
     for (const m of idx.modules ?? []) {
-      await push(`modules/${m.file}`, new URL(`modules/${m.file}`, "/assets/engine/"));
+      await push(`modules/${m.file}`, new URL(`modules/${m.file}`, new URL("/assets/engine/", location.origin)));
     }
   }
   // Identity: the index's glueSha256, else hash the pair ourselves.
