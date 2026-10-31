@@ -37,10 +37,10 @@ from the groups landing before this one. What the draft got wrong:
 | R5 | `payload::RollAddValue` was "the plain i32 shape", but `超燃甩头`'s additive −1d6 needs a `recorded_roll` peek. | The Add payload is the same `RollValue` shape as Value (with `purpose`, `rerolled`, `recorded_roll`, `resolve`). |
 | R6 | Only `no_expectation` and `moca_half` were migrated. **`event:超燃甩头`** (`rules/events/src/heat_head.rs:28-30,66-90`) subtracts a die at `DiceRollValue` and **`event:Forbidden Moca`** (`forbidden_moca.rs:22,47-60`) halves every face there; both would fold in the wrong order and both apply outside Move rolls. | Both are in the group: heat head moves to `DiceRollAdd`, Forbidden Moca stays `DiceRollValue`; both gain `roll_purpose == 1`. |
 | R7 | `moca_half` was described as a `DiceRollValue` filter, but the entry is an `On::Action(Action::DiceRollAfter)` (`moca_half.rs:53`). | It becomes a real `Filter::DiceRollValue`; the Action body and `set_move_roll` go. |
-| R8 | `taiki_even_if` was told to drop its manual push because "the cast is already recorded", but §5.3 committed `casts` only at commit — the row is not there yet during the Result window. Also the live `turn_rolls` is **not** merely turn-wide: nothing on the live path pushes it (`Cx::roll` and `card_do_move_roll` never do; only the uncalled `World::do_move_roll`/`roll_silent` do), so the card currently compares against an empty vector. | The cast row is written to `roll_log` **at cast time**, before any window; item 3 says both facts. |
+| R8 | `taiki_even_if` was told to drop its manual push because "the cast is already recorded", but §5.3 committed `casts` only at commit — the row is not there yet during the Result window. Also the live `turn_rolls` is **not** merely turn-wide: nothing on the live path pushes it (`Cx::roll` and `card_do_move_roll` never do; only the uncalled `World::do_move_roll`/`roll_silent` do), so the card currently compares against an empty vector. | The cast row is written to `roll_history` **at cast time**, before any window; item 3 says both facts. |
 | R9 | `cast()` (5.1) held `&mut RollCtx` borrowed from `self.rolls` across `self.raise`, which cannot compile as written, and a raise can open a child transaction. | §5.1 fixes the borrow discipline: pop the innermost transaction, work on the owned value, push it back after the raise. |
-| R10 | A recast raised only `diceRollBefore`. Misaki counters `DiceRollResult`, so the fire reroll she gates on would still never open a Result window with `CHARGE`, and the outer result link's source was already stamped. | A recast of a windowed Move raises its **own** `diceRollBefore` **and** `diceRollResult`, both stamped with the transaction source. |
-| R11 | `roll_source` precedence "Charge > Skill > Card > NONE" was stated, but the wire codes are NONE 0 / CHARGE 1 / CARD 2 / SKILL 3, so numeric order is not the stated order. | `RollSource::rank()` gives the stated order explicitly; only a higher-ranked source replaces the transaction's. |
+| R10 | A recast raised only `diceRollBefore`. Misaki counters `DiceRollResult`, so the fire reroll she gates on would still never open a Result window with `CHARGE`, and the outer result link's source was already stamped. | A recast of a Move whose ladder has a Result window raises its **own** `diceRollBefore` **and** `diceRollResult`, both stamped with the transaction source. |
+| R11 | `roll_source` precedence "Charge > Skill > Card > NONE" was stated, but the wire codes are NONE 0 / CHARGE 1 / CARD 2 / SKILL 3, so numeric order is not the stated order. | `roll_source::rank(code)` gives the stated order explicitly; only a higher-ranked source replaces the transaction's. |
 | R12 | `fixed_roll` (karaoke, kept dice) was not in the design at all. A fixed face would be cast again at the main move, re-running Add/Value and raising a second Cast/Settled for one die. | A fixed face is a transaction with **no cast**: Before/Add/Value/[After/Result]/Settle only. `fixed_roll` carries its `source`. A preview roll (`ctx::roll` on a Move with no open move) is Cast+Before only, committed raw. |
 | R13 | A standalone Move roll had one meaning. Doll Garden needs a fully settled victim move roll, karaoke needs raw candidates, and a roll inside an open move window must join the outer transaction. | Three explicit shapes: **join** (open Move transaction), **preview** (`ctx::roll(Move)` top level — raw), **standalone** (new `ctx::roll_move` — full ladder, own transaction even inside a window). |
 | R14 | The marker of "settle again" was a boolean `tainted`, and the resettle re-folded the whole face. `layer_keeping` the old face would halve twice. | Each cast stores `settled: Option<i32>`; the settle folds Add+Value **once per cast** and caches the result. A window write to the running face clears the cache (treated as a new raw value); choosing an already-settled cast reuses its cached face. |
@@ -48,12 +48,13 @@ from the groups landing before this one. What the draft got wrong:
 | R16 | Item 15 said "nothing reads either slot" and "the move always settles". `resolveOverride` **is** consumed (`play.rs:1902,1960-1966,2161`); only `stageEnd` is dead, and a blocked move settles nowhere today (`m.resolve = false`). | The move half is a rename/clarification of a live mechanism; only the turn-end half is new. §2.15 sets the real baseline. |
 | R17 | The README table's G03 Op row was `—`, but the design adds nine Kani imports (eight roll ops plus the trigger payload read). | G03 takes **398–406**; G06 onwards shifts nine (§8). |
 | R18 | §7 said `RECORD_VERSION` stays 3; master is **4** (`record.rs:48`). §12.4 said SAVE stays at 13 in the same document whose §7 bumps it to 14. | `RECORD_VERSION` stays 4; SAVE is 14 everywhere (§7, §2.15). |
-| R19 | `RollCtx`/`RollPayload` mixed `chosen: usize` with a per-cast `chosen: bool`, and `RollId` was a newtype never used as one. | `RollTx`/`RollCast`/`RollPayload` are named once; `chosen` is an index, `unused` a face; no newtype. |
+| R19 | `RollCtx`/`RollPayload` mixed `chosen: usize` with a per-cast `chosen: bool`, and `RollId` was a newtype never used as one. | `RollTransaction`/`RollCast`/`RollPayload` are named once; `chosen_index` is an index, `unused_face` a face; no newtype. |
 | R20 | The draft said a recast "never re-runs `DiceRollAfter`" but the Stage enum and I6 both implied a per-cast settle, so the terminal-Settled rule and the boost consumption were under-specified. | §3 I3/I6 state it exactly: Settled fires once per transaction at the chosen cast; a re-chosen cast reuses its cached face and never raises a second Settled. |
 | R21 | `ask_tile_pick` clamped to 8 under Kani while `ask_pick` already uses 16 and Hagumi's option count is unbounded (2 + one per gain this turn). | Bound 16, matching `ask_pick`; the fallback and the `Ask::tile` "none" fallback are documented (§4.6). |
 | R22 | The `roll_reroll` wrapper hid the pick's answer shape, and the prompt was called once; the design never said what the answer log stores. | The pick is a `PromptKind::Tile` answer (an **index**, stable because the options are rebuilt in cast order); the choose index is derived from it and logged by the stamp. |
 | R23 | §5.7 designed `MoveCtx::sync_plan`, duplicating G04 §4.3's window fold that lands first. | §5.7 shrinks to "call G04's fold after every raise"; item 7 is re-dispositioned to G04. |
 | R24 | The test table pointed at `rules/tests/tests/gap_money.rs` for a roll test and named files that do not exist. | One new `rules/tests/tests/g03_rolls.rs`; engine-level tests stay where the suites are. |
+| R25 | Names were abbreviated and mixed units: `RollTx`, `trig_roll`, `roll_log` beside the message log, `chosen` (an index) next to `unused` (a face), `Settle`/`Done` as two terminal stages, two settle-answer shapes, and a parallel `RollSource` enum duplicating the existing `roll_source` module. | §4.1's naming rules; `RollTransaction`, `trigger_roll`, `roll_history`, `chosen_index`/`unused_face`, `Settling`/`Settled`, one `SettleAnswer`, `roll_source::rank(code)`, one `set_fixed_roll(value, source)`, `roll_pick` beside `ask_pick`, `TileOption`. The BACKLOG slugs keep their spelling. |
 
 ## 1. Items
 
@@ -61,7 +62,7 @@ from the groups landing before this one. What the draft got wrong:
 |---|------|-----|------|-------------|
 | 1 | `starry-value-stage` | low | 1262 | B: `roll_reroll`; the rerolled face settles |
 | 2 | `talent-effect-rolls-unpaid` | medium | 179, 1224 | B: reward on `DiceRollCast` |
-| 3 | `taki-per-player-rolls` | low | 97, 1159 | B: cast log + `rolls_of` |
+| 3 | `taki-per-player-rolls` | low | 97, 1159 | B: cast history + `rolls_by_player` |
 | 4 | `taki-extreme-reroll` | low | 1160 | **A** — the producer already honours `extreme` (`play.rs:1645-1667`) |
 | 5 | `want-human-boost-vs-reroll` | high | 150, 1002 | B: `DiceRollAdd` + settle-time consume |
 | 6 | `want-human-crystal-on-reroll` | low | 1169 | B: the check moves to `DiceRollCast` |
@@ -70,7 +71,7 @@ from the groups landing before this one. What the draft got wrong:
 | 9 | `misaki-fire-roll-signal` | high | 292, 954, 294, 298, 1006 | B: source on the recast's Result window; the pre becomes `roll_source == 1` |
 | 10 | `moca-roll-post-additive-stage` | medium | 62 | B: additive pass before the final settlement |
 | 11 | `noexpect-roll-scope` | high | 596, 598, 1367, 1479 | B: ladder on every cast; purpose + step scoping |
-| 12 | `layer-keep-keep-point` | high | 892, 893, 1379 | B: `unused` on `DiceRollSettled` |
+| 12 | `layer-keep-keep-point` | high | 892, 893, 1379 | B: `unused_face` on `DiceRollSettled` |
 | 13 | `please-choose-opt1-inert` | medium | 750 | **A** (ABI-04); the prompt half only (§5.6) |
 | 14 | `dg-move-dice` | medium | 1053 | B: `roll_move` (a real Move cast for the victim) |
 | 15 | `own-stage-answer` | high | 671, 672, 673, 674, 1455 | B: the turn-end half; the move half already reads `resolveOverride` |
@@ -132,7 +133,7 @@ have no caller; `Cx::roll` (`cx.rs:1422-1448`) and `card_do_move_roll`
 `seen.push(before.abs())` (`taki_even_if.rs:45-46`) is the only entry.
 
 Expected: every cast, with its roller, and only the owner's faces count.
-**Root fix:** a cast log written at cast time and a per-roller reader (R2).
+**Root fix:** a cast history written at cast time and a per-roller reader (R2).
 
 ### 2.4 `taki-extreme-reroll` — same card, row 1160 — DEMOTE TO A
 
@@ -224,7 +225,7 @@ that window is not in the enclosing `DiceRollAfter` walk already in flight; and
 no payload ever carries the unchosen face (`layer_keep.rs:107-117, 131-139`).
 The `layerUnused` slot has no writer. Expected: the unchosen face reaches the
 card after the pick. **Root fix:** the transaction keeps every cast, the recast
-records `unused`, and a post-settlement observer delivers both faces (§3 I5).
+records `unused_face`, and a post-settlement observer delivers both faces (§3 I5).
 
 ### 2.13 `please-choose-opt1-inert` — RAS:PLEASE CHOOSE, row 750 — DEMOTE TO A
 
@@ -266,7 +267,7 @@ fix:** one generic answer verb for each half and a turn-end settle runner
 1. **No roll object (R1).** A cast is a bare `i32` through a raise; there is
    nowhere to record the roller, purpose, source, casts or the unchosen face,
    so every observer re-derives facts from the enclosing move.
-2. **No cast log (R2).** `turn_rolls` has no roller and is not even written on
+2. **No cast history (R2).** `turn_rolls` has no roller and is not even written on
    the live path.
 3. **Cast and settlement are one event (R3).** `do_move_roll`/`roll_direct`
    are raw, `diceRollValue` is one reshape stage, and a reroll discards the
@@ -304,10 +305,10 @@ obligation, §9):
   after the fold.
 * **I4 Attribution.** The roller is on the transaction and on every cast. A
   filter keyed to "your roll" sees only the roller's casts; per-roller history
-  is a projection of the cast log.
+  is a projection of the cast history.
 * **I5 Choice.** A prompt over rolls carries `(tile?, face, label)` per cast
   and answers an **index**. Each distinct cast is one option. A recast exposes
-  `chosen` and `unused`; `unused` is the cast among the latest pair that the
+  `chosen_index` and `unused_face`; `unused_face` is the cast among the latest pair that the
   choose did not pick.
 * **I6 Accounting.** Every real die cast is logged once with its roller at
   cast time. A fixed face is not a cast and raises no `diceRollCast`, but it
@@ -329,26 +330,42 @@ final-settlement (multiplicative) pass.
 | id | wire | class | filter | hook-only | meaning |
 |---:|---|---|---|---|---|
 | 123 | `diceRollCast` | Action | no | yes | one real cast is on the table, raw. Payload: transaction, `value` = raw face, source, purpose. |
-| 124 | `diceRollSettled` | Action | no | yes | the transaction's terminal cast finished settling. Payload: transaction, `value` = `final_face`, `rerolled`, `chosen`, `unused`, purpose. |
+| 124 | `diceRollSettled` | Action | no | yes | the transaction's terminal cast finished settling. Payload: transaction, `value` = `final_face`, `rerolled`, `chosen_index`, `unused_face`, purpose. |
 | 125 | `diceRollAdd` | Filter (value) | yes | yes | the additive pass, before the final settlement. `RollValue` payload. |
 
 `diceRollCast` and `diceRollSettled` are hook-only: they are observations, not
 counter windows. `diceRollBefore`/`diceRollResult` stay the only chain windows.
 
-Naming (each word carries one meaning, and none collides with G02/G04):
+Naming rules (each word carries one meaning, none collides with G02/G04, and
+nothing is abbreviated):
 
-* **`RollTx`** — the transaction (not `RollCtx`; `ctx` is already a guest
-  module and a `Cx` is the engine).
+* One word per thing: **transaction** is the whole roll, **cast** is one throw,
+  **face** is a number. The domain words come from the book (骰点 = face,
+  重骰 = reroll); `count`/`sides` are the effect producer's arguments only.
+* Any `i32` that is an index says so (`chosen_index`); any `i32` that is a
+  face says so where the name would otherwise be ambiguous (`unused_face`,
+  `final_face`). Two adjacent `i32`s never mix units silently.
+* `log` means the message log, so the per-cast record is a **history**
+  (`roll_history`, `RollHistoryEntry`).
+* No new source enum: `roll_source` already exists as a module with the
+  constants, so ranking is `roll_source::rank(code)`.
+* The `roll_` prefix on guest verbs is kept for greppability across ~49 call
+  sites even where it stutters (`roll_reroll`); `trigger_roll` is the one
+  expanded abbreviation (`sys::trig_roll_source` renames with it).
+
+* **`RollTransaction`** — the transaction (not `RollCtx`; `ctx` is already a
+  guest module and a `Cx` is the engine).
 * **`RollCast`** — one cast. `raw`, `settled`, `source`, `fixed`.
 * **`RollStage`** — `Plan | Cast | Before | Add | Value | After | Result |
-  Settle | Done`.
-* `Match.rolls: Vec<RollTx>` — the stack; `Match.roll_seq: i32` — the next id.
-  `parent`, `windowed`, `dirty`, `fixed` are the flags.
-* Guest verbs: `roll_move`, `roll_recast`, `roll_choose`, `roll_reroll`,
-  `roll_unused`, `roll_faces`, `roll_current`, `ask_tile_index`. A preview is
+  Settling | Settled`. `Settling` covers the window; `Settled` is terminal.
+* `Match.open_rolls: Vec<RollTransaction>` — the stack; `Match.next_roll_id:
+  i32` — the next id. `parent`, `has_result_window`, `dirty`, `fixed` are the
+  flags.
+* Guest verbs: `roll_move`, `roll_recast`, `roll_pick`, `roll_reroll`,
+  `roll_unused_face`, `roll_faces`, `roll_current`, `ask_tile_index`. A preview is
   the existing `ctx::roll(…, Move, …)` with no open move (§4.5).
 
-### 4.2 `RollTx` (`crates/game-core/src/engine/roll.rs`)
+### 4.2 `RollTransaction` (`crates/game-core/src/engine/roll.rs`)
 
 ```rust
 #[derive(Clone, Serialize, Deserialize)]
@@ -361,10 +378,10 @@ pub struct RollCast {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RollStage { Plan, Cast, Before, Add, Value, After, Result, Settle, Done }
+pub enum RollStage { Plan, Cast, Before, Add, Value, After, Result, Settling, Settled }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct RollTx {
+pub struct RollTransaction {
     pub id: i32,
     pub roller: i32,
     pub purpose: i32,              // abi::RollPurpose wire code
@@ -373,30 +390,32 @@ pub struct RollTx {
     pub source: i32,               // highest-ranked source seen
     pub stage: RollStage,
     pub casts: Vec<RollCast>,
-    pub chosen: usize,
-    /// The face the latest choose did not pick; -1 before a choose.
-    pub unused: i32,
+    /// Index into `casts` of the face the transaction will settle.
+    pub chosen_index: usize,
+    /// The face the latest pick did not take; -1 before a pick.
+    pub unused_face: i32,
     /// `diceRollAfter`/`diceRollResult` are part of this transaction's ladder:
     /// true for the main move and for `roll_move`, false for a preview (it
     /// returns before) and for an Effect roll.
-    pub windowed: bool,
+    pub has_result_window: bool,
     pub parent: i32,
     /// The **current** cast is a fixed face (karaoke / a kept die): no die is
-    /// thrown. Mirrors `casts[chosen].fixed` for the ladder.
+    /// thrown. Mirrors `casts[chosen_index].fixed` for the ladder.
     pub fixed: bool,
     /// The running face was written after its settle; the settle re-folds.
     pub dirty: bool,
 }
 ```
 
-`Match` gains `roll_seq: i32` (`#[serde(default)]`) and `rolls: Vec<RollTx>`
+`Match` gains `next_roll_id: i32` (`#[serde(default)]`) and `open_rolls: Vec<RollTransaction>`
 (`#[serde(default)]`). Helpers: `open`, `join`, `cast`, `fold_add`,
-`fold_value`, `after`, `result`, `choose`, `set_unused`, `settle`, `commit`,
-`find`, and the pure predicates `can_join`, `depth`.
+`fold_value`, `after`, `result`, `pick`, `set_unused_face`, `settle`, `commit`,
+`roll_by_id`, and the pure predicates `can_join`, `depth`.
 
 `fixed_roll` changes shape: `Option<FixedFace { value: i32, source: i32 }>`
-(`TurnCtx`, `#[serde(default)]`); `ctx::set_fixed_roll(v)` keeps `NONE`, and a
-new `ctx::set_fixed_roll_from(v, source)` is used by the kept-die path.
+(`TurnCtx`, `#[serde(default)]`). The one verb is
+`ctx::set_fixed_roll(value, source)`, so a caller can never leave the source to
+chance.
 
 ### 4.3 `abi.rs` additions
 
@@ -404,6 +423,10 @@ new `ctx::set_fixed_roll_from(v, source)` is used by the kept-die path.
 /// Why a die is being cast. Wire codes are frozen i32s.
 #[repr(i32)]
 pub enum RollPurpose { Effect = 0, Move = 1 }        // unchanged; comment updated
+
+/// A 「是否触发结算」 answer, shared by the move and turn-end halves.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SettleAnswer { #[default] Unanswered, Settle, Skip }
 
 /// The roll a `DiceRoll*` trigger belongs to, returned by
 /// `trigger::roll()`. Read-only; one decode per access.
@@ -414,16 +437,16 @@ pub struct RollPayload {
     pub source: i32,
     pub rerolled: bool,
     /// Index into `casts`; -1 outside a roll.
-    pub chosen: i32,
-    /// The face the latest choose did not pick; -1 when none.
-    pub unused: i32,
-    pub casts: Vec<RollCastPayload>,
+    pub chosen_index: i32,
+    /// The face the latest pick did not take; -1 when none.
+    pub unused_face: i32,
+    pub casts: Vec<TriggerCast>,
     /// The settled face at `DiceRollSettled`, `None` before it.
     pub final_face: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RollCastPayload { pub value: i32, pub source: i32 }
+pub struct TriggerCast { pub value: i32, pub source: i32 }
 ```
 
 `payload::RollValue` (the `DiceRollAdd` and `DiceRollValue` payload) gains:
@@ -447,15 +470,15 @@ repeated tiles are legal.
 
 | import | args | returns | pause | why it is not a decision |
 |---|---|---|---|---|
-| `ruleset_roll_recast` | `(roll_id, source)` | raw face | Sentinel (raises the recast's Before/Result when windowed) | throws dice only |
+| `ruleset_roll_recast` | `(roll_id, source)` | raw face | Sentinel (raises the recast's Before/Result when `has_result_window`) | throws dice only |
 | `ruleset_roll_move` | `(player_id, source)` | settled face | Sentinel (full Move ladder) | a move roll, no decision |
-| `ruleset_roll_choose` | `(roll_id, index)` | — | none | writes the chosen index and `unused`, clamped |
+| `ruleset_roll_pick` | `(roll_id, index)` | — | none | writes `chosen_index` and `unused_face`, clamped |
 | `ruleset_roll_current` | `()` | tx id or `-1` | none | read |
 | `ruleset_roll_face` | `(roll_id, index)` | face or `-1` | none | read |
-| `ruleset_roll_unused` | `(roll_id)` | face or `-1` | none | read |
+| `ruleset_roll_unused_face` | `(roll_id)` | face or `-1` | none | read |
 | `ruleset_roll_rerolled` | `(roll_id)` | `0/1` | none | read |
-| `ruleset_rolls_of` | `(player_id, buf, cap)` | `n` | none | read; postcard `Vec<i32>` |
-| `ruleset_trig_roll` | `(buf, cap)` | `n` | none | read; postcard `Option<RollPayload>` |
+| `ruleset_rolls_by_player` | `(player_id, buf, cap)` | `n` | none | read; postcard `Vec<i32>` |
+| `ruleset_trigger_roll` | `(buf, cap)` | `n` | none | read; postcard `Option<RollPayload>` |
 
 `ruleset_roll` keeps its v103 signature. `ruleset_roll_direct` gains `source`
 as a 5th arg and never raises (a windowless cast still needs its source for
@@ -487,28 +510,28 @@ pub fn roll_current() -> Option<i32>;
 pub fn roll_faces(roll: i32) -> Vec<i32>;
 
 /// The face the player did not choose (the latest recast), if any.
-pub fn roll_unused(roll: i32) -> Option<i32>;
+pub fn roll_unused_face(roll: i32) -> Option<i32>;
 
 /// Recast `roll`; the enclosing transaction settles the chosen face.
 pub fn roll_recast(roll: i32, source: i32) -> Result<i32, Prompt>;
 
-/// Pick a face `roll` has drawn. Clamped; sets `unused`.
-pub fn roll_choose(roll: i32, index: i32);
+/// Pick a face `roll` has drawn. Clamped; records `unused_face`.
+pub fn roll_pick(roll: i32, index: i32);
 
 /// Cast a new face on the current roll, let the player pick old/new, and
 /// choose it; the enclosing transaction settles the chosen face.
 pub fn roll_reroll(
     player_id: i32, title: &Msg, text: &Msg,
     keep_old: &Msg, keep_new: &Msg, source: i32,
-) -> Result<RollReroll, Prompt>;
-pub struct RollReroll { pub chosen: i32, pub unused: Option<i32> };
+) -> Result<RerollOutcome, Prompt>;
+pub struct RerollOutcome { pub chosen_index: i32, pub unused_face: Option<i32> };
 
 /// A standalone move roll for `player_id` (Doll Garden's victim).
 pub fn roll_move(player_id: i32, source: i32) -> Result<i32, Prompt>;
 ```
 
 `roll_reroll` is `roll_current` → `roll_recast(roll, source)` → `ask_pick(keep_old,
-keep_new)` → `roll_choose`. `roll_current() == None` opens a fresh preview.
+keep_new)` → `roll_pick`. `roll_current() == None` opens a fresh preview.
 
 `ctx::roll_direct` gains the `source` parameter; `ctx::do_move_roll` keeps its
 one-arg signature and passes `roll_source::CARD`, so the existing call sites do
@@ -517,11 +540,11 @@ not change.
 ### 4.6 The option ask
 
 ```rust
-pub struct TileLabel { pub tile: i32, pub label: Msg }
+pub struct TileOption { pub tile: i32, pub label: Msg }
 
 /// One option per tile-labelled item, answered by option index.
 pub fn ask_tile_index(
-    player_id: i32, title: &Msg, text: &Msg, options: &[TileLabel],
+    player_id: i32, title: &Msg, text: &Msg, options: &[TileOption],
 ) -> Result<usize, Prompt>;
 ```
 
@@ -540,26 +563,33 @@ same cap as `ask_pick` (`ctx.rs:2198`), because Hagumi's option count is
 ### 4.7 The turn-end settle answer
 
 ```rust
+/// One answer shape for both halves. `Unanswered` means "the card said
+/// nothing", which is what the engine stamp and the default both read as.
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum SettleAnswer { #[default] Unanswered, Settle, Skip }
+
 /// 「本次移动…是否触发结算」 -- the answering seat's current move.
-pub fn set_move_settle_answer(yes: bool);
-pub fn move_settle_answer() -> bool;
+pub fn set_move_settle_answer(answer: SettleAnswer);
+pub fn move_settle_answer() -> SettleAnswer;
 
 /// 「（或无法移动的回合结束时）」 -- the answering seat's blocked turn.
-pub fn set_turn_end_settle_answer(yes: bool);
-pub fn turn_end_settle_answer() -> i8;   // 0 none, 1 settle, 2 skip
+pub fn set_turn_end_settle_answer(answer: SettleAnswer);
+pub fn turn_end_settle_answer() -> SettleAnswer;
 ```
 
-The move half writes the existing `resolveOverride` slot (`1`/`0`), which
+The move half writes the existing `resolveOverride` slot (`Settle` → `1`,
+`Skip` → `0`; `Unanswered` leaves the slot alone), which
 `take_resolve_override` already consumes; nothing new is checked. The turn-end
-half writes `TurnCtx.blocked_settle` (`i8`, `#[serde(default)]`, 0 = none).
+half writes `TurnCtx.blocked_settle_answer: SettleAnswer`
+(`#[serde(default)]`, `Unanswered` by default).
 
-`blocked_settle` is engine-stamped in the blocked branch itself
+`blocked_settle_answer` is engine-stamped in the blocked branch itself
 (`play.rs:1548-1553`, `immobile`): that branch already zeroes the roll/steps
 and clears the landing settle (`m.resolve = false`), and now also sets
-`blocked_settle = 1` when the seat is live. It runs *after* the roll ladder, so
+`blocked_settle_answer = Settle` when the seat is live. It runs *after* the roll ladder, so
 the round still casts and settles normally and `diceRollSettled` still fires —
 only the tile settle is withheld. Leaving the card unplayed therefore settles
-at turn end. `2` skips. It is cleared after the turn-end runner and rebuilt
+at turn end. `Skip` withholds it. It is cleared after the turn-end runner and rebuilt
 with the turn.
 
 ## 5. Engine wiring
@@ -569,28 +599,28 @@ with the turn.
 `crates/game-core/src/engine/roll.rs` owns the producer:
 
 ```rust
-/// `r` is the caller's transaction, already popped out of `self.rolls`.
-fn cast(&mut self, r: &mut RollTx) -> Flow<i32> {
+/// `r` is the caller's transaction, already popped out of `self.open_rolls`.
+fn cast(&mut self, r: &mut RollTransaction) -> Flow<i32> {
     let value = match RollPurpose::from_i32(r.purpose) {
         RollPurpose::Move => self.roll_tables(r.roller),
         RollPurpose::Effect => self.roll_n(r.roller, r.count, r.sides),
     };
     r.casts.push(RollCast { raw: value, settled: None, source: r.source, fixed: false });
-    r.chosen = r.casts.len() - 1;
-    r.unused = -1;
+    r.chosen_index = r.casts.len() - 1;
+    r.unused_face = -1;
     r.stage = RollStage::Cast;
     let t = raise!(self, "diceRollCast", r.roller, @move_for(r), value = value)?;
     // `diceRollCast` may write the raw face; read the write-back
-    r.casts[r.chosen].raw = t.value.max(0);
-    Ok(r.casts[r.chosen].raw)
+    r.casts[r.chosen_index].raw = t.value.max(0);
+    Ok(r.casts[r.chosen_index].raw)
 }
 ```
 
-`rolls` is a `Match` field, so a method holding `&mut RollTx` *into the
+`open_rolls` is a `Match` field, so a method holding `&mut RollTransaction` *into the
 vector* cannot also call `self.raise`. Every stage therefore takes the
-innermost transaction **out** (`let mut r = self.rolls.pop().expect(...)`),
+innermost transaction **out** (`let mut r = self.open_rolls.pop().expect(...)`),
 passes `&mut r` around, pushes it back after the raise, and re-checks
-`self.rolls.len()` (a raise may have opened and popped a child). `@move_for(r)`
+`self.open_rolls.len()` (a raise may have opened and popped a child). `@move_for(r)`
 is a synthesized `Move` for a Move transaction and no `@m` for an Effect (see
 5.4).
 
@@ -604,7 +634,7 @@ branch move here, so a move roll and an effect roll can never diverge.
 ```
 run_cast(shape):
   shape = join | preview | standalone | effect
-  open or join a RollTx        (join only: Move purpose + an open Move tx)
+  open or join a RollTransaction        (join only: Move purpose + an open Move tx)
   if fixed:
       push RollCast{raw: fixed.value, fixed: true}; log the row; no Cast raise
   else:
@@ -615,15 +645,15 @@ run_cast(shape):
   fold "diceRollValue"                            (filter; RollValue; floor 0)
   if purpose == Move:
       raise "diceRollAfter"                       (Move only)
-      if windowed: raise "diceRollResult"
+      if has_result_window: raise "diceRollResult"
   if the chosen cast is dirty:
       clear dirty; fold it again (cache overwritten)
-  push r; r.stage = Settle
-  raise "diceRollSettled" (final_face, rerolled, chosen, unused, purpose)
+  push r; r.stage = Settling
+  raise "diceRollSettled" (final_face, rerolled, chosen_index, unused_face, purpose)
   pop r
   if the chosen cast is dirty:                 (a Settled listener wrote it)
       clear dirty; fold it again; no second Settled
-  r.stage = Done; the record keeps final_face
+  r.stage = Settled; the record keeps final_face
   pop (child / top level) or return to the parent (join)
 ```
 
@@ -643,9 +673,9 @@ post-cast: the window is named for the settlement, not the throw (today it
 fires with the `-1` sentinel at `play.rs:1448`, before `diceRollPlan`).
 
 `r` is pushed back for the `diceRollSettled` raise so `roll_face(id, …)`,
-`roll_unused(id)` and `find` resolve it; `roll_current()` inside the window
+`roll_unused_face(id)` and `roll_by_id` resolve it; `roll_current()` inside the window
 returns the settling transaction (nothing joins a transaction already in
-`Settle`). The write-back of a Settled listener sets `dirty` like any other
+`Settling`). The write-back of a Settled listener sets `dirty` like any other
 face write, and the commit folds once more; the settle therefore never loops
 past the two-fold cap.
 
@@ -659,15 +689,15 @@ settles whichever cast is chosen. For a preview the cast is committed raw under
 its own (child) transaction, so a later card move can pin it; it is still
 logged, and it still runs `diceRollBefore` on its own face.
 
-### 5.3 The cast log
+### 5.3 The cast history
 
 Every real cast (and every fixed face) appends
-`RollRecord { roller, value, purpose, source, fixed }` to
-`TurnCtx.roll_log: Vec<RollRecord>` (`#[serde(default)]`) **at cast time**,
+`RollHistoryEntry { roller, value, purpose, source, fixed }` to
+`TurnCtx.roll_history: Vec<RollHistoryEntry>` (`#[serde(default)]`) **at cast time**,
 before any window, so the current face is visible during `diceRollResult`.
-`rolls_of(p)` filters by `roller`. `turn_rolls: Vec<i32>` stays and receives
+`rolls_by_player(p)` filters by `roller`. `turn_rolls: Vec<i32>` stays and receives
 the same face, so old cards and readers keep working; `turn_rolls` is now
-actually populated (R2). `roll_log` is turn-scoped and cleared with the turn.
+actually populated (R2). `roll_history` is turn-scoped and cleared with the turn.
 
 SAVE decision in §7.
 
@@ -681,16 +711,16 @@ transaction and extends `is_roll_kind` so `mv.roll` is carried for
 ```rust
 pub struct TriggerRoll {
     pub id: i32, pub purpose: i32, pub source: i32,
-    pub rerolled: bool, pub chosen: i32, pub unused: i32,
+    pub rerolled: bool, pub chosen_index: i32, pub unused_face: i32,
     pub casts: Vec<(i32, i32)>,          // (value, source)
     pub final_face: Option<i32>,
 }
 ```
 
 `trigger::roll() -> Option<RollPayload>` is the typed read (one
-`trig_roll` buffer import); the conveniences `roll_id`, `roll_purpose`,
-`roll_rerolled`, `roll_unused` are guest-side wrappers over it. The CEL
-vocabulary gains `roll_purpose`, `roll_rerolled` and `roll_unused`
+`trigger_roll` buffer import); the conveniences `roll_id`, `roll_purpose`,
+`roll_rerolled`, `roll_unused_face` are guest-side wrappers over it. The CEL
+vocabulary gains `roll_purpose`, `roll_rerolled` and `roll_unused_face`
 (`cond_pre.rs` + `cond/src/schema.rs` + `vocab.rs`).
 
 `move_*` readers keep working. A Move transaction synthesizes the move view
@@ -699,7 +729,7 @@ or a preview, `main = true` only on the turn's own main move, and
 `resolve = false` throughout because the transaction's caller owns the settle.
 An Effect transaction carries no move view.
 
-`source` precedence is an explicit `RollSource::rank()`:
+`source` precedence is explicit via `roll_source::rank(code)`:
 `Charge (3) > Skill (2) > Card (1) > NONE (0)`. A recast replaces the
 transaction's source only when it is higher, and both the recast's Before and
 Result raises stamp the transaction source, so item 9 sees `CHARGE`.
@@ -732,11 +762,11 @@ cannot shape the plan.
 
 `end_turn` (`play.rs:737`) already raises `endTurnBefore`; the runner goes
 immediately before `turnEndBefore` (`:742`) and only for a live seat whose
-`blocked_settle == 1`, then clears it:
+`blocked_settle_answer == Settle`, then clears it:
 
 ```
-if blocked_settle == 1 && !out { settle_here(); }   // the seat's own tile
-blocked_settle = 0;
+if blocked_settle_answer == Settle && !out { settle_here(); }  // its own tile
+blocked_settle_answer = Unanswered;
 ```
 
 `settle_here` is the ordinary landing settle with `resolve = true`, so its
@@ -752,15 +782,15 @@ answers.
 
 ```
 roll_recast   => raise the source if higher; push a symbolic cast; raise
-                 Before/Result when windowed; return its face
+                 Before/Result when `has_result_window`; return its face
 roll_move     => open a top-level Move tx, symbolic face, return settled
-roll_choose   => chosen = index.clamp(0, casts.len()-1); unused = other of the pair
+roll_pick   => chosen_index = index.clamp(0, casts.len()-1); unused_face = other of the pair
 roll_face     => casts.get(i).copied().unwrap_or(-1)
-roll_unused   => unused
+roll_unused_face   => unused_face
 roll_rerolled => casts.len() > 1
 roll_current  => innermost open id or -1
-rolls_of      => the model log filtered by roller, postcard-encoded
-trig_roll     => postcard Option<RollPayload> from the model trigger
+rolls_by_player      => the model log filtered by roller, postcard-encoded
+trigger_roll     => postcard Option<RollPayload> from the model trigger
 ```
 
 Every op is appended to `rules/kani/build.rs` (the import allowlist) and to the
@@ -779,7 +809,7 @@ trigger::set_move_roll(new_roll);
 // after
 let r = ctx::roll_reroll(player_id, &title, &ask, &keep_old, &keep_new,
                          roll_source::CARD)?;
-// r.chosen is the settled face; no set_move_roll
+// r.chosen_index is the settled face; no set_move_roll
 ```
 
 The guard at `:162` stays. The card no longer knows the reroll is raw.
@@ -795,8 +825,8 @@ unchanged too.
 
 ### 6.3 `taki_even_if.rs:43-47,68,82`
 
-`ctx::turn_rolls()` → `ctx::rolls_of(player_id)`; drop the manual
-`seen.push(before.abs())` (the cast log already has it, at cast time).
+`ctx::turn_rolls()` → `ctx::rolls_by_player(player_id)`; drop the manual
+`seen.push(before.abs())` (the cast history already has it, at cast time).
 
 ### 6.4 `taki_even_if.rs`
 
@@ -838,10 +868,10 @@ delivers them. The `NEXT_ROLL` latch keeps its one-shot consume at After.
 ### 6.8 `hagumi_marks.rs:76-101`
 
 ```rust
-let mut options: Vec<TileLabel> = Vec::new();
+let mut options: Vec<TileOption> = Vec::new();
 for … { let t = (r - 1).rem_euclid(n);
         if options.iter().any(|o| o.tile == t && o.label == label(r)) { continue; }
-        options.push(TileLabel { tile: t, label: Msg::new(key!("…")).i("n", r) }); }
+        options.push(TileOption { tile: t, label: Msg::new(key!("…")).i("n", r) }); }
 let pick = ctx::ask_tile_index(player_id, &title, &text, &options)?;
 let chosen = /* option order is the (tile, roll) order */;
 ```
@@ -884,9 +914,9 @@ stays otherwise (all seats' move rolls).
 
 The `roll_after` entry changes from `Action::DiceRollAfter` to
 `Action::DiceRollSettled` with `actor == owner && card.placed && roll_purpose
-== 1 && roll_unused >= 0`; `counter_fire` records nothing itself, the body
-reads `roll_unused` and banks it. `use_die` calls
-`set_fixed_roll_from(die, roll_source::CHARGE)`.
+== 1 && roll_unused_face >= 0`; `counter_fire` records nothing itself, the body
+reads `roll_unused_face` and banks it. `use_die` calls
+`set_fixed_roll(die, roll_source::CHARGE)`.
 
 ### 6.15 `please_choose.rs:74-95`
 
@@ -910,10 +940,11 @@ fold and only the faces are used.
 ### 6.17 `own_stage.rs:68-90`
 
 ```rust
+use card_sdk::abi::SettleAnswer::{Settle, Skip};
 if matches!(abnormal_kind(), Some(Stay) | Some(Stun)) {
-    ctx::set_turn_end_settle_answer(yes);
+    ctx::set_turn_end_settle_answer(if yes { Settle } else { Skip });
 } else {
-    ctx::set_move_settle_answer(yes);
+    ctx::set_move_settle_answer(if yes { Settle } else { Skip });
 }
 ```
 
@@ -925,9 +956,9 @@ question (§11 Q7).
 No structural change: the card already passes `RollPurpose::Move` and
 `roll_source::CARD`, which now makes each candidate a **preview** (raw, no
 `diceRollAdd`/`diceRollValue`/Result/Settled). A preview still runs
-`diceRollBefore` and still logs its cast, so a per-cast shave applies to the
+`diceRollBefore` and still writes its cast to the history, so a per-cast shave applies to the
 candidates and 立希 counts them — which is right, each is a real die throw.
-The pin becomes `set_fixed_roll_from(chosen, roll_source::CARD)`, and the
+The pin becomes `set_fixed_roll(chosen, roll_source::CARD)`, and the
 `TODO(规则书)` at `:101-104` narrows: dice effects landing after the card now
 do apply — the fixed face gets Add and Value at the real move (§5.2) — and
 only `set_base_dice`'s own clearing remains card-side.
@@ -935,8 +966,8 @@ only `set_base_dice`'s own clearing remains card-side.
 ## 7. Save / record / replay
 
 * **SAVE_VERSION 13 → 14.** The roll stack is save-visible: a body can pause on
-  a prompt with a transaction open, and the save must restore `rolls` (casts,
-  chosen, unused, source, stage), `roll_seq`, `roll_log` and `fixed_roll`'s
+  a prompt with a transaction open, and the save must restore `open_rolls` (casts,
+  chosen_index, unused_face, source, stage), `next_roll_id`, `roll_history` and `fixed_roll`'s
   new source. Loading stays exact-version. Every field is `#[serde(default)]`
   for shape tolerance; `turn_rolls` still round-trips. A wrapper treats
   `roll_current() == None` as "open fresh", which is also what a resumed body
@@ -945,7 +976,7 @@ only `set_base_dice`'s own clearing remains card-side.
   stream and prompt answers are already recorded; no new record field. Roll
   ids are per-run and never written to a card slot.
 * **Replay.** A recast replays as the same RNG draw; the transaction is rebuilt
-  by the re-run and only the answers (`roll_choose` index, `ask_tile_index`
+  by the re-run and only the answers (`roll_pick` index, `ask_tile_index`
   index) come from the log. Archived bundles are unaffected by the additive
   kinds, but `diceRollValue` (102) changes **stage** — a listener on it sees a
   different face and timing, and After no longer sees a settled face. That is
@@ -958,7 +989,7 @@ number if the order moves). Wire break, named in the doc comment below the
 constant and above the newest note:
 
 ```
-/// v109: **roll transactions and settlement**. A roll is a `RollTx` carrying
+/// v109: **roll transactions and settlement**. A roll is a `RollTransaction` carrying
 ///    roller / purpose / source / every cast; every cast runs
 ///    `diceRollCast` (new hook-only Action 123) -> `diceRollBefore` ->
 ///    `diceRollAdd` (new hook-only filter 125, the additive pass) ->
@@ -967,8 +998,8 @@ constant and above the newest note:
 ///    Action 124). `diceRollAfter`/`diceRollResult` stay Move-only.
 ///    `ruleset_roll` joins an open Move transaction or runs a preview;
 ///    `ruleset_roll_direct` gains `source`; new `ruleset_roll_move`.
-///    New imports `roll_recast`, `roll_move`, `roll_choose`, `roll_current`,
-///    `roll_face`, `roll_unused`, `roll_rerolled`, `rolls_of`, `trig_roll`;
+///    New imports `roll_recast`, `roll_move`, `roll_pick`, `roll_current`,
+///    `roll_face`, `roll_unused_face`, `roll_rerolled`, `rolls_by_player`, `trigger_roll`;
 ///    guest wrappers `roll_reroll` / `ask_tile_index` /
 ///    `set_move_settle_answer` / `set_turn_end_settle_answer`. `Trigger.roll`
 ///    payload added; `roll_source` reaches Result and Settled; `fixed_roll`
@@ -983,12 +1014,12 @@ with the three kinds.
 
 **Kani `Op` band.** Base 340. G01 341-348, G08 349-368, G02 369-377 and G04
 378-397 are ahead of this group. G03 takes **398-406** (nine ops: the seven
-roll reads/writes plus `roll_move` and `trig_roll`); G06 shifts to **407-426**,
+roll reads/writes plus `roll_move` and `trigger_roll`); G06 shifts to **407-426**,
 G05+G13 to **427-436**, G07 to **437-446**. The README table carries these
 rows (§12).
 
-Source-only, no bump: `RollValue` gains `purpose`/`rerolled`, the `RollSource`
-rank, the cast-log projection, and every card edit.
+Source-only, no bump: `RollValue` gains `purpose`/`rerolled`, the source rank
+function, the cast-history projection, and every card edit.
 
 ## 9. Tests and Kani obligations
 
@@ -1008,14 +1039,14 @@ that remain open are `#[ignore]` with the row id in the reason.
 | 9 | `g03_misaki_only_after_a_fire_cast` | a plain roll refuses; the fire recast's Result carries `roll_source == 1` |
 | 10 | `g03_half_speed_settles_after_the_shave` | 7 with −2 and the half ⇒ 3; the reverse placement order gives the same |
 | 11 | `g03_no_expectation_shaves_effect_rolls` | effect rolls lose 2 with no floor; a Move 0 sets `resolve = false`; a turn-start roll is untouched |
-| 12 | `g03_layer_keep_banks_the_unchosen_face` | fire reroll, pick old ⇒ `unused` is the new face, one die banked, `use_die` offers it |
+| 12 | `g03_layer_keep_banks_the_unchosen_face` | fire reroll, pick old ⇒ `unused_face` is the new face, one die banked, `use_die` offers it |
 | 13 | `g03_please_choose_opt1_offers_only_with_a_targeting_card` | option (1) absent with an empty hand; the pick plays via ABI-04 |
 | 14 | `g03_doll_garden_victim_roll_takes_the_victim_view` | no expectation shaves the victim's roll; a victim After hook runs; `move.main` false |
 | 15 | `g03_own_stage_no_suppresses_the_landing_settle` / `…_yes_on_a_blocked_stay_settles_at_turn_end` / `…_no_skips` / `…_default_settles` | exactly one settle overall, and only where the answer says (yes ⇒ at `end_turn`, no ⇒ nowhere, default ⇒ at the landing) |
 
 Engine-level: `crates/game-rules/tests/kind_table_pin.rs` (123-125),
 `crates/game-rules/tests/live_match.rs` (order Cast → Before → Add → Value →
-After → Result → Settled; `roll_source` on Result; `unused` on Settled),
+After → Result → Settled; `roll_source` on Result; `unused_face` on Settled),
 `rules/tests/tests/split_hook_entries.rs` (no expectation on Add),
 `rules/kani/tests/on_parse.rs`, and a prompt test that `ask_tile_index` keeps
 duplicate tiles and answers an index.
@@ -1026,7 +1057,7 @@ quotes only; protocol-level where the ladder is engine-side):
 * `talent_pays_exactly_once_per_cast_iff`
 * `want_human_boost_is_added_iff_armed_and_move`
 * `want_human_banks_one_crystal_iff_cast_le_x`
-* `taki_counts_only_its_own_casts` (model log + `rolls_of`)
+* `taki_counts_only_its_own_casts` (model log + `rolls_by_player`)
 * `hagumi_each_option_maps_to_one_distinct_cast`
 * `layer_keep_banks_exactly_the_unchosen_face`
 * `no_expectation_shaves_iff_not_turn_start` (Move floor; effect unbounded)
@@ -1051,7 +1082,7 @@ quotes only; protocol-level where the ladder is engine-side):
    client kind, wire string and log kind. `Tile` already answers an index and
    its UI highlights the tile. Rejected.
 5. **Keep `turn_rolls` and add a parallel roller vector.** Two vectors desync;
-   the cast log with one row per cast is a single source. Chosen.
+   the cast history with one row per cast is a single source. Chosen.
 6. **Make the main move's `diceRollBefore` post-cast for every call path.**
    Chosen: the current main-move `-1` sentinel is the only path without a
    face, and the window's name says "before the settlement", not "before the
@@ -1059,7 +1090,7 @@ quotes only; protocol-level where the ladder is engine-side):
 
 ## 11. Open questions
 
-1. **Signed walks.** A signed (reverse) walk's `unused` is signed while
+1. **Signed walks.** A signed (reverse) walk's `unused_face` is signed while
    `taki_even_if` compares unsigned. The design publishes raw; the card takes
    `abs()`. Confirm.
 2. **Is a reroll 「掷骰」 for every "each roll" clause?** 运动的天赋 says
@@ -1076,7 +1107,7 @@ quotes only; protocol-level where the ladder is engine-side):
 5. **A recast inside `diceRollAdd`/`diceRollValue`** (a pure filter cannot
    recast today; `roll_recast` is a mutating ctx call). Is a filter-side
    recast ever wanted?
-6. **`rolls_of` scope.** Turn-scoped to match 「本回合内」; confirm no card
+6. **`rolls_by_player` scope.** Turn-scoped to match 「本回合内」; confirm no card
    needs match-scoped history.
 7. **The own-stage branch is the abnormal kind, not "the move was actually
    blocked".** A [停留] walked through under 「不可阻挡」 takes the turn-end
@@ -1117,5 +1148,5 @@ quotes only; protocol-level where the ladder is engine-side):
   and the `DiceRollAfter` exception wording are updated (After is Move-only
   and no longer sees a settled face).
 - **`docs/GUARDS.md`.** §4.2 gains `roll_purpose` / `roll_rerolled` /
-  `roll_unused` / `roll.chosen` / `roll.final_face`, the neutral defaults
+  `roll_unused_face` / `roll_chosen_index` / `roll.final_face`, the neutral defaults
   outside a roll, and the per-kind meaningful-vars rows for the three kinds.
