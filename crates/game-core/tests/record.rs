@@ -1400,19 +1400,39 @@ fn index_reports_how_far_it_has_reached() {
     assert_eq!(last.tick, file.header.total_ticks);
 }
 
-/// The end phase runs once per accepted `end`: a duplicate `end` (any seat's
-/// client re-sending while 结束 is up) must not log 「结束了回合」 again --
-/// that spam is exactly what a replay of the record shows (`play.rs`
-/// `end_turn_cmd`).
+/// The end phase runs once per turn, not once per `end`: a record that holds
+/// a duplicate `end` (racing clients -- refused seats included -- record the
+/// same 结束 frame) must replay to the same events, save and 「结束了回合」
+/// count as the clean one (`play.rs` `end_turn_cmd`).
 #[test]
-fn accepted_ends_and_end_turn_lines_match() {
-    let (file, events) = run_bot_game(
+fn duplicate_ends_replay_as_no_ops() {
+    let (mut file, events) = run_bot_game(
         9,
         4,
         BotMentality::Standard,
         &mut |r| 1 + r.below(6) as u8,
         8,
     );
+    // Repeat every accepted end in place, the shape a replay applies back to
+    // back. Checkpoint boundaries after an insertion move with it.
+    let mut inputs = Vec::with_capacity(file.body.inputs.len() * 2);
+    let mut inserted = Vec::new();
+    for (i, input) in file.body.inputs.iter().enumerate() {
+        inputs.push(input.clone());
+        if matches!(input, Input::Act { msg, ok: true, .. } if msg.act == "end") {
+            inputs.push(input.clone());
+            inserted.push(i + 1);
+        }
+    }
+    assert!(!inserted.is_empty());
+    file.body.inputs = inputs;
+    for ckpt in &mut file.body.checkpoints {
+        let at = ckpt.at;
+        ckpt.at += inserted.iter().filter(|&&p| p <= at as usize).count() as u32;
+    }
+    seal(&mut file);
+    // The duplicates are pure no-ops: same events, same final save.
+    assert_round_trip(&file, &events, "duplicate ends");
     let logged = events
         .iter()
         .filter(|e| e.msg.key() == "log.end_turn")
@@ -1423,6 +1443,6 @@ fn accepted_ends_and_end_turn_lines_match() {
         .iter()
         .filter(|i| matches!(i, Input::Act { msg, ok: true, .. } if msg.act == "end"))
         .count();
-    assert!(accepted > 0);
-    assert_eq!(logged, accepted);
+    assert_eq!(accepted, inserted.len() * 2, "every end was doubled");
+    assert_eq!(logged, accepted / 2, "one 结束了回合 per turn, not per end");
 }

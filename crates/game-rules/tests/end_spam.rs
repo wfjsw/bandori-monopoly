@@ -50,5 +50,9 @@ fn repeated_end_during_settlement_logs_once() {
     let keys = t.keys_since(mark);
     let n = keys.iter().filter(|k| *k == "log.end_turn").count();
     assert_eq!(n, 1, "one 结束 phase logs one 结束了回合: {keys:?}");
-    assert_eq!(t.state(0, "stun"), 1, "one turn end wears one layer, not one per end");
+    assert_eq!(
+        t.state(0, "stun"),
+        1,
+        "one turn end wears one layer, not one per end"
+    );
 }
