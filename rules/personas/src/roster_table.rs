@@ -43,6 +43,7 @@ pub use super::saaya::CHARACTER as SAAYA;
 pub use super::sakiko::CHARACTER as SAKIKO;
 pub use super::sakiko_crychic::CHARACTER as SAKIKO_CRYCHIC;
 pub use super::sayo::CHARACTER as SAYO;
+pub use super::shifune::CHARACTER as SHIFUNE;
 pub use super::soyo::CHARACTER as SOYO;
 pub use super::soyo_crychic::CHARACTER as SOYO_CRYCHIC;
 pub use super::tae::CHARACTER as TAE;
@@ -54,7 +55,6 @@ pub use super::tomori::CHARACTER as TOMORI;
 pub use super::tomori_crychic::CHARACTER as TOMORI_CRYCHIC;
 pub use super::tsugumi::CHARACTER as TSUGUMI;
 pub use super::tsukushi::CHARACTER as TSUKUSHI;
-pub use super::tukushi::CHARACTER as TUKUSHI;
 pub use super::uika::CHARACTER as UIKA;
 pub use super::uika_sumimi::CHARACTER as UIKA_SUMIMI;
 pub use super::umiri::CHARACTER as UMIRI;
@@ -112,7 +112,7 @@ pub const PERSONAS: &[PersonaDef] = &[
     TOMORI,
     TSUGUMI,
     TSUKUSHI,
-    TUKUSHI,
+    SHIFUNE,
     UIKA_SUMIMI,
     UIKA,
     RUI,
