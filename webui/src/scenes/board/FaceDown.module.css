@@ -1,0 +1,59 @@
+/* The face-down treatment every surface shares: an owner's own face-down card
+   keeps its face and the back blends over it now and then (Master Duel's
+   flicker), under a 盖着 tag. Everyone else simply sees the back. Used by the
+   field row (face-down events) and the hand's parked-card stack.
+   The keyframes live HERE, with the animation: a CSS module scopes any
+   animation name it does not itself declare, so a global rule never binds. */
+
+.blend {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  pointer-events: none;
+  /* Face first: if the keyframes ever fail to bind, the owner still sees the
+     card it is. */
+  opacity: 0;
+  animation: blend 6s ease-in-out infinite;
+}
+
+.blend img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* A short hold face down, a slow blend back to the face: most of the cycle
+   shows what the card is. */
+@keyframes blend {
+  0%, 52% { opacity: 0; }
+  64%, 84% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+
+/* 「盖着」: the owner's own face-down card says so outright, over the face. */
+.tag {
+  position: absolute;
+  top: -4px;
+  z-index: 2;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--own, var(--line));
+  color: var(--white);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  /* No flicker: the owner's card keeps its face, the tag says it is face down. */
+  .blend {
+    animation: none;
+    opacity: 0;
+  }
+}

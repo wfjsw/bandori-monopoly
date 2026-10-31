@@ -1253,7 +1253,7 @@ fn rui_card_sets_x_to_5_when_the_skill_fires() {
     t.play(0, "Mor:（Rui）正论恶魔").unwrap();
     decline_all(&mut t);
     assert!(
-        t.keys_since(mark).iter().any(|k| k.ends_with("yuri_crit_hit")),
+        t.keys_since(mark).iter().any(|k| k.ends_with("rui_hit")),
         "X was 5 when the d20 of 1 landed: {:?}",
         t.keys_since(mark)
     );
@@ -1277,7 +1277,7 @@ fn rui_x_only_when_the_users_skill_fires() {
     decline_all(&mut t);
     let keys = t.keys_since(mark);
     assert!(
-        keys.iter().any(|k| k.ends_with("yuri_crit_hit")),
+        keys.iter().any(|k| k.ends_with("rui_hit")),
         "the fire set X=5, so the d20 of 4 was a hit: {keys:?}"
     );
     assert!(
@@ -1299,10 +1299,10 @@ fn rui_x_only_when_the_users_skill_fires() {
     t.give_play(0, "Mor:（Rui）正论恶魔").unwrap();
     decline_all(&mut t);
     let keys = t.keys_since(mark);
-    // `yuri_crit_*` logs climb twice per roll (one per side of the money move).
+    // `rui_*` logs climb twice per roll (one per side of the money move).
     // Two rolls: the outbound 100 (p0 pays) and the inbound 300 (p1 pays), both
     // of which fire p0's skill.
-    let fires = keys.iter().filter(|k| k.ends_with("yuri_crit_miss")).count() / 2;
+    let fires = keys.iter().filter(|k| k.ends_with("rui_miss")).count() / 2;
     assert_eq!(fires, 2, "two money moves: {keys:?}");
     assert_eq!(
         keys.iter().filter(|k| k.ends_with("rui_devil_crit")).count(),

@@ -10,7 +10,7 @@
 //! the next `DiceRollPlan` consumes -- the same shape as detour's 「下一次的移动掷骰
 //! 变更为1d6」.
 //!
-//! The latch is a presence flag plus a tile memory (the detour / soyo_clear
+//! The latch is a presence flag plus a tile memory (the detour / soyo
 //! idiom), not a signed tile: an unset key reads 0, and tile 0 is a real tile,
 //! so a bare tile index cannot say "nothing owed" without a sentinel. The flag
 //! gates the read and the CEL `slot('skill.soyoCrychic.armed')` condition, so
@@ -42,7 +42,8 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::PaySplitChooseBefore(
             "actor != owner && tile.owner == owner && value > 0",
             None,
-            on_pay)),
+            on_pay,
+        )),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
         // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
@@ -58,7 +59,8 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         On::Action(Action::MoveAfter(
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
-            on_plan_after)),
+            on_plan_after,
+        )),
     ],
 );
 

@@ -68,13 +68,13 @@ skill, an immune payee or the trailing write therefore still leaves X at 5
 write per fire, and none without a fire.
 
 The skill that fires here is `skill:八潮瑠唯:正论暴击`
-(`rules/skills/skill-personas/src/yuri_crit.rs:42`), and **`On::Action(Pay)`**
-— a post-settlement hook body dispatched by `collect_hook_jobs`
-(`crates/game-rules/src/wasm_rules.rs:5326`) from the money pipeline, not by
-`use_skill`. `use_skill` raises `cardUsed` (`crates/game-core/src/engine/play.rs:1009-1020`)
+(`rules/skills/skill-personas/src/rui.rs`), and **`On::Action(Pay)`** — a
+post-settlement hook body dispatched by `collect_hook_jobs`
+(`crates/game-rules/src/wasm_rules.rs:5292`) from the money pipeline, not by
+`use_skill`. `use_skill` raises `cardUsed` (`crates/game-core/src/engine/play.rs:979-990`)
 only on a press, so hook-driven skill bodies have no fire signal at all. The
 card also cannot ask "did this fire happen during *my* resolution": `Run` has
-one `current_card` (`wasm_rules.rs:226`) which a nested `play_card`
+one `current_card` (`wasm_rules.rs:222-228`) which a nested `play_card`
 replaces, and no stack. rui is also never placed, so neither its own field
 presence nor `self_uid()` can scope the hook.
 
@@ -365,7 +365,7 @@ pub const MarkChanged: Self = Self::engine(112);  // wire "markChanged", hook-on
   extended with the two names.
 - **No `Actions` kind and no `entry::ACTION`.** G05's `On::Press` +
   `entry::PRESS` are the offer vocabulary (R1). `kind_table_pin`'s kind-id
-  ceiling becomes 112; 113 stays free.
+  ceiling becomes 112; G08 continues at 113.
 
 ### 4.4 Condition vocabulary — `crates/cond`
 

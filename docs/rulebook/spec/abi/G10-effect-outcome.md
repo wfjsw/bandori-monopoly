@@ -64,12 +64,12 @@ makes clause (1) wrong:
   `draw_event` leaves `tile` at `-1`, so the station is not on the trigger.
 
 The station matters for a second card: the persona skill
-`rules/skills/skill-personas/src/arisa_bonsai.rs:27` hooks
+`rules/skills/skill-personas/src/arisa.rs:27` hooks
 `On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", …))`
 for 「每次有其他玩家在"流星堂"抽取事件时获得一个[火罐]」. With `tile = -1`
 on every `event` raise that hook can never match, and bonsai's own clause (2)
 does not even draw an event (it calls `ctx::draw`, a **hand** draw,
-`arisa_bonsai.rs:62`). `draw_event_as(player, tile)` repairs both: it is
+`arisa.rs:62`). `draw_event_as(player, tile)` repairs both: it is
 the primitive for “an event drawn as X at tile Y”.
 
 ### 1.2 `settle-outcome-flags` (rows 792, 1428, 1449)
@@ -261,8 +261,9 @@ pub by_card_id: Option<i32>,
 /// `effect` / `target` only, and only when the rename landed (I-4).
 pub redirected_from: Option<i32>,
 /// The settle this trigger belongs to, on `settleBody` / `settleAfter` /
-/// `tileResolved` only.
-pub settle: Option<SettleFacts>,
+/// `tileResolved` only. Not `settle`: that word names G02's pre-variable
+/// namespace (`settle.tile`, G02 §4.7), which reads the trigger's stamp.
+pub settle_facts: Option<SettleFacts>,
 ```
 
 ```rust
@@ -275,6 +276,7 @@ pub struct SettleFacts {
     pub owner: i32,
     /// The settle ended before any body: the `settle` link was negated, or
     /// the mover was already out. No `settleBody`, no `settleAfter`.
+    /// Derived from G02's `SettleEntry.outcome` (`Cancelled`).
     pub cancelled: bool,
     /// The `settleBody` link was negated — the body was replaced.
     pub body_replaced: bool,
@@ -484,29 +486,27 @@ must derive `Debug` and `PartialEq` too or the containers stop compiling.
 
 ### 5.1 Stage reporting (`play.rs`)
 
-* `SettleFrame` gains `facts_idx: usize` (`usize::MAX` on `new`) and the
-  `Cx` gains `settle_facts: Vec<SettleFacts>` (transient, beside
-  `settle_open`).
-* `step_settle` at entry: if `frame.facts_idx == usize::MAX` push
-  `SettleFacts { at: frame.at, owner: frame.owner, ..Default::default() }` and
-  store the index. This also fixes
-  `settle_open`, which currently increments on **every** resume of the same
-  frame (`play.rs:2142`) and only leaks upward: gate the increment on the
-  same first-entry condition, decrement on completion.
-* `RaiseSettle`: in the `self.out(i) || t.is_cancelled()` terminal branch,
-  set `facts.cancelled` (both reasons mean no body).
-* `RaiseSettleBody`: `if si.is_cancelled()` — set `facts.body_replaced`.
-* Pop the facts entry when the frame reaches `Done`, and drop
-  `frame.facts_idx`.
-* In `money_inner` (`play.rs:3346`), after the balances are written
-  (play.rs:3833-3841) and before the `paid` raise: with `facts` the innermost
-  entry (none open → skip), if `p.kind == PayKind::Rent && loss > 0 &&
-  facts.owner >= 0 && p.tile == Some(facts.at) &&
-  p.to == Some(facts.owner as usize)`, set `paid` and add `loss` to
-  `paid_value`. A payment cancelled or reduced to 0 never reaches it.
-* `RaiseSettleAfter` / `RaiseTileResolved`: copy
-  `self.settle_facts[frame.facts_idx]` into `t.settle` for the raise.
-  `settleBody` carries `t.settle` with `paid = false`, `body_replaced =
+* G02 (which lands before this group) already replaced the `settle_open`
+  counter with `Cx.settle_stack: Vec<SettleEntry>`, pushed once per frame and
+  popped on completion, and gave the entry its terminal `outcome`. This group
+  does **not** re-fix the counter; it extends that entry.
+* `SettleEntry` gains `paid: bool` and `paid_value: i32`; `SettleFacts` is a
+  snapshot of the entry, `at`/`owner` read from `entry.tile`/`entry.player`
+  (which is why both fields are redundant on the entry and are not stored
+  twice). `cancelled` is `entry.outcome == Cancelled` — no second bool.
+* `RaiseSettleBody`: `if si.is_cancelled()` — set a new
+  `entry.body_replaced: bool`.
+* In `money_inner`, after the balances are written (play.rs:4045-4054) and
+  before the `paid` raise: with the innermost entry (none open → skip), if
+  `p.rent && loss > 0 && entry.player >= 0 && p.settle_tile == entry.tile as i32 &&
+  p.to == Some(entry.player)`, set `paid` and add `loss` to `paid_value`. The
+  test uses G02's `p.settle_tile` payload field, not the payment's own
+  `p.tile`. A payment cancelled or reduced to 0 never reaches it.
+* `RaiseSettleAfter` / `RaiseTileResolved`: build `t.settle_facts` from the frame's
+  entry (`SettleFacts { at: entry.tile, owner: entry.player as i32,
+  cancelled: entry.outcome == Cancelled, body_replaced: entry.body_replaced,
+  paid: entry.paid, paid_value: entry.paid_value }`).
+  `settleBody` carries the same snapshot with `paid = false`, `body_replaced =
   false` (facts so far).
 * The bits are readable through the bitset import; `paid_value` in the same
   call.
@@ -825,8 +825,8 @@ The restore is the 「回到原处并取消所有受到的效果」 half.
 * **RECORD_VERSION stays 3.** `Answered` is unchanged; the new fields ride
   world/pending state. A record replays through its archived engine bundle,
   so an older engine never sees v114 keys.
-* `Cx.settle_facts`, `Trigger.*` are transient (the routine re-derives them
-  on a re-run, exactly like `settle_open`).
+* The `SettleFacts` snapshot and `Trigger.*` are transient (both are
+  re-derived from the settle entry on a re-run, exactly like `settle_open`).
 * A save inside a settle re-runs the routine; the settle work stack
   (`ContinueSettleWork`) is not saved today either, so nothing new is lost.
 * Replay determinism: the deferral queue is world state, so a replayed turn
@@ -849,7 +849,7 @@ pub const ABI_VERSION: i32 = 114;   // was 113 (eleventh group)
 ///    `draw_event_as(player, tile)` attributes an event draw to another
 ///    seat and tile (`HostRequest::DrawEventAt`). `Trigger.by_card_id` /
 ///    `trig_by_card_id` add the causing **instance** beside `by_card`'s
-///    seat. `Trigger.settle` / `trig_settle_facts` (bitset) /
+///    seat. `Trigger.settle_facts` / `trig_settle_facts` (bitset) /
 ///    `trig_settle_paid_value` publish a settle's `cancelled` /
 ///    `body_replaced` / `paid` outcome to `settleAfter` / `tileResolved`.
 ///    `Trigger.redirected_from` / `trig_redirected_from` name the seat a

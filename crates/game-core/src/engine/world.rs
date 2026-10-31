@@ -180,7 +180,7 @@ pub struct TurnCtx {
     /// press) drove at least one move. An activation that did is *spent* when
     /// it ends -- its per-move plan writes were for the move it drove, and its
     /// replay re-applies them afterwards; one that drove none wrote for a move
-    /// still to come (ran_red 「本次移动向后」, sakiko_lead's half price) and
+    /// still to come (ran 「本次移动向后」, sakiko_lead's half price) and
     /// keeps them (`Cx::drop_spent_plan_shape`). Reset at the activation's
     /// entry alongside `extreme`.
     #[serde(default)]
@@ -784,6 +784,19 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    /// Has the turn end this `end` asks for already happened? 结束 with the
+    /// next turn queued, or the same seat's **extra turn** already open -- a
+    /// late duplicate lands on that 开始 (the queued turn kept the seat, and
+    /// an end from any other seat is refused as not their turn), so it must
+    /// not run the end phase again. A duplicate `end` folds into both.
+    pub fn end_already_queued(&self) -> bool {
+        match self.st.step {
+            crate::state::stage::END => self.next_turn_pending,
+            crate::state::stage::START => true,
+            _ => false,
+        }
+    }
+
     /// Assemble a world around an already-built [`Rng`]: which stream the
     /// match runs on is the caller's choice (`Match::new` legacy xoshiro vs
     /// `Match::new_seeded` ChaCha12, `docs/FAIRNESS.md`).

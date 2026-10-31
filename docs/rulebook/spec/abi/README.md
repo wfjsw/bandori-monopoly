@@ -15,22 +15,23 @@ recorded.
 ## Review order and collisions
 
 Every document was written against the same base (ABI v104, `SAVE_VERSION` 12,
-engine kinds ending at 110, Kani `Op` ending at 340). Each draft originally
-reached for the same next numbers, so the band below is allocated **once, in
-landing order**, and the documents carry their row of it. Take these numbers;
-renumber only if the order actually changes, and then shift the whole table.
+`RECORD_VERSION` 4, engine kinds ending at 110, Kani `Op` ending at 340). Each
+draft originally reached for the same next numbers, so the band below is
+allocated **once, in landing order**, and the documents carry their row of it.
+Take these numbers; renumber only if the order actually changes, and then shift
+the whole table.
 
 | group | `ABI_VERSION` | `SAVE_VERSION` | engine kinds | Kani `Op` |
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
 | G01 | 104→105 | 12 | 111–112 | 341–346 |
-| G08 | 105→106 | 12→13 | 113–120 | 349 |
-| G02 | 106→107 | 13 | 121 | 350–359 |
-| G04 | 107→108 | 13 | — | 360–379 |
-| G03 | 108→109 | 13→14 | 122–124 | — |
-| G06 | 109→110 | 14→15 | — | 380–399 |
-| G05 + G13 | 110→111 | 15→16 | — | 347–348, 400–409 |
-| G07 | 111→112 | 16 | — | 410–419 |
+| G08 | 105→106 | 12→13 | 113–120 | 349–368 |
+| G02 | 106→107 | 13 | 122 | 369–377 |
+| G04 | 107→108 | 13 | — | 378–397 |
+| G03 | 108→109 | 13→14 | 123–125 | — |
+| G06 | 109→110 | 14→15 | — | 398–417 |
+| G05 + G13 | 110→111 | 15→16 | — | 347–348, 418–427 |
+| G07 | 111→112 | 16 | — | 428–437 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
 | G11 | 114→115 | 17→18 | 132–133 | — |
@@ -40,14 +41,19 @@ renumber only if the order actually changes, and then shift the whole table.
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
 
-**2026-10-31 amendment.** G01's review found that its new imports need Kani
-`Op` ids, which the original table left blank; it also dropped its `Actions`
-offer kind in favour of G05's press surface. A second review then split two
+**2026-10-31 amendment.** The original table filled Op numbers only from G02
+onward and gave G01/G08 no Op row at all, although G01's revised draft imports
+functions and G08's imports twenty. G01's review then dropped its `Actions`
+offer kind in favour of G05's press surface, and a second review split two
 concerns out of G01 — `real_id` to G05 and `created_by` to G08 — because they
 are offer/skin and zone lifecycle, not identity. G01 keeps six ops (341–346)
-and its two kinds (111–112); the three vacated ids sit with their new groups
-(G05 347–348, G08 349) so no later band moves for them. The kind rows below
-G01 moved down by one when `Actions` went.
+and its two kinds (111–112); the vacated ids sit with their new groups
+(G05 347–348, G08 349) so no later band moves for them. Recounted from base
+340 in landing order, G08's twenty imports take 349–368 and every group from
+G02 on shifts ten; kind 121 stays free, which costs nothing. `SAVE_VERSION`
+stays at the value G08 landed (13) — the base column above
+records the *pre-landing* value each document was written against, which is
+why G15/G01 say 12.
 
 Recommended landing order (foundation → dependent):
 
@@ -73,7 +79,9 @@ Couplings a reviewer must keep in one head:
 - **G01 ↔ G08** share instance uid and the per-instance store; G08 also
   carries the creator edge (`created_by`) that G01's borrowed-row hooks rely
   on.
-- **G02 ↔ G10** share the settle frame and its outcome facts.
+- **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
+  settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
+  `paid`/`body_replaced` facts on top (G02 §12).
 - **G03 ↔ G11** share the drawAfter point; their kind bands are adjacent.
 - **G06 ↔ G12** share pending-window reads.
 - **G04 ↔ G12** share the blocked predicate (`cant_move_code_for_activation`).

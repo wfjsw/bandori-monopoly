@@ -652,7 +652,7 @@ const Center = memo(function Center({ m, roll }: { m: Model; roll?: RollControl 
           own draw pile is at the head of your hand (Side.tsx). Cards in play
           sit on the board's top sheet (FieldSheet), not in the interior. */}
       <div className={s.piles}>
-        <button type="button" className={s.pile} onClick={() => showEventPile(S)}>
+        <button type="button" className={s.pile} onClick={() => showEventPile(S, m.playerId)}>
           <div className={s.stack}>
             <img src={sceneImg("card_back")} alt="" />
             <div className={s.pileLabel}>{tr("board.eventDeck")}<b>×{S.eventDeck}</b></div>

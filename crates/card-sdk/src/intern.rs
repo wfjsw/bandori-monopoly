@@ -189,10 +189,7 @@ struct Slot {
 }
 
 impl Slot {
-    const EMPTY: Slot = Slot {
-        hash: 0,
-        name: &[],
-    };
+    const EMPTY: Slot = Slot { hash: 0, name: &[] };
 }
 
 /// Write-once interned name bytes.
@@ -629,50 +626,50 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
         let start = bucket(h);
         let mut probe = 0usize;
         let mut first_empty = usize::MAX;
-    // 8 probes, **zero loops** (same reason as `fnv1a`: an 8-trip `while`
-    // still shows up as `Unwinding loop … iteration 8` and, with
-    // `inline(always)`, once per call site). Each probe is an integer
-    // compare on a hit.
-    macro_rules! probe_once {
-        () => {{
-            let idx = (start + probe) & (SLOTS - 1);
-            let slot = &t.slots[idx];
-            if slot.hash == 0 {
-                if first_empty == usize::MAX {
-                    first_empty = idx;
+        // 8 probes, **zero loops** (same reason as `fnv1a`: an 8-trip `while`
+        // still shows up as `Unwinding loop … iteration 8` and, with
+        // `inline(always)`, once per call site). Each probe is an integer
+        // compare on a hit.
+        macro_rules! probe_once {
+            () => {{
+                let idx = (start + probe) & (SLOTS - 1);
+                let slot = &t.slots[idx];
+                if slot.hash == 0 {
+                    if first_empty == usize::MAX {
+                        first_empty = idx;
+                    }
+                } else if slot.hash == h && slot.name.len() == n {
+                    // Hash+len identity. `bytes_eq` (64 steps × 8 probes) was the
+                    // money_shave setup cliff (`known_init` interns 10 names).
+                    // Collisions (same FNV+len, different bytes) are a loud
+                    // INVALID below — never a silent alias. The pilot set is
+                    // pinned unique in `model_bounds`.
+                    return NameId(idx as u16);
+                } else if slot.hash == h && slot.name.len() != n {
+                    // Same FNV, different length: collision. Loud, not an alias.
+                    return NameId::INVALID;
                 }
-            } else if slot.hash == h && slot.name.len() == n {
-                // Hash+len identity. `bytes_eq` (64 steps × 8 probes) was the
-                // money_shave setup cliff (`known_init` interns 10 names).
-                // Collisions (same FNV+len, different bytes) are a loud
-                // INVALID below — never a silent alias. The pilot set is
-                // pinned unique in `model_bounds`.
-                return NameId(idx as u16);
-            } else if slot.hash == h && slot.name.len() != n {
-                // Same FNV, different length: collision. Loud, not an alias.
-                return NameId::INVALID;
-            }
-            probe += 1;
-        }};
-    }
-    probe_once!();
-    probe_once!();
-    probe_once!();
-    probe_once!();
-    probe_once!();
-    probe_once!();
-    probe_once!();
-    probe_once!();
-    if first_empty == usize::MAX || t.n as usize >= MAX_INTERN {
-        return NameId::INVALID;
-    }
-    let slot = &mut t.slots[first_empty];
-    slot.hash = h;
-    // Write-once leak, not table memory — `resolve` can hand out a real
-    // `&'static` (see [`leak_name`]). The zero-loop copy lives there.
-    slot.name = leak_name(s);
-    t.n += 1;
-    NameId(first_empty as u16)
+                probe += 1;
+            }};
+        }
+        probe_once!();
+        probe_once!();
+        probe_once!();
+        probe_once!();
+        probe_once!();
+        probe_once!();
+        probe_once!();
+        probe_once!();
+        if first_empty == usize::MAX || t.n as usize >= MAX_INTERN {
+            return NameId::INVALID;
+        }
+        let slot = &mut t.slots[first_empty];
+        slot.hash = h;
+        // Write-once leak, not table memory — `resolve` can hand out a real
+        // `&'static` (see [`leak_name`]). The zero-loop copy lives there.
+        slot.name = leak_name(s);
+        t.n += 1;
+        NameId(first_empty as u16)
     })
 }
 
@@ -834,7 +831,7 @@ mod tests {
 
     /// `角色标记:` (13 bytes) + a 52-byte skill id = **65** bytes — one past
     /// the old inline `MAX_NAME`. This is the nanami mark namespace
-    /// (`nanami_ordinary`): when the composite became `NameId::INVALID`,
+    /// (`nanami`): when the composite became `NameId::INVALID`,
     /// `mark_skill` returned `""` and the CD key collapsed to
     /// `skill.nanamiOrdinary.cd:`. Production must round-trip it intact.
     #[test]

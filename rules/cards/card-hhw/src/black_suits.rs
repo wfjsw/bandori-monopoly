@@ -34,7 +34,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // 规则书: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- the tile
         // and the owner's own pass are the condition; the per-raise claim in the
         // body does the dedupe. `ActionKind::Pass` (not `PassTile`) matches the
-        // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki_other.rs`).
+        // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki.rs`).
         On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", None, pass_tile)),
         // 规则书: 「该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果」 -- an
         // external clear (another card, a bounce, a bankrupt owner's purge) must

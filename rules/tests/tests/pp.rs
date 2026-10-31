@@ -1263,7 +1263,7 @@ fn eve_skill_2_adds_yd4() {
     assert_eq!(t.state(0, "evePendingY"), 0, "stash cleared after the roll");
     // Ask/log precede the roll line in the trace.
     let keys = t.keys_since(mark);
-    let eve = keys.iter().position(|k| k.contains("eve_unify"));
+    let eve = keys.iter().position(|k| k.contains("eve"));
     let rolled = keys
         .iter()
         .position(|k| k.contains("log.roll") || k.contains("log.dice") || k.contains("roll"));
@@ -1617,7 +1617,7 @@ fn jennifer_owner_flip_clause2_crystal() {
 /// character, so the grantee running 丸山彩's (2) is the rulebook text, not a
 /// mis-dispatch (AYA-GRANT-01 settled).
 #[test]
-fn aya_with_grants_ayaa_2_to_non_pp_players() {
+fn aya_grants_ayaa_2_to_non_pp_players() {
     let mut t = Table::new(&["丸山彩", "户山香澄", "白鹭千圣"]);
     t.clean();
     t.begin_turn(0);
@@ -1969,7 +1969,7 @@ fn accident_blocks_pp_skill_2() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        assert!(!p.title.key().contains("aya_with"), "{}", t.dump_prompt());
+        assert!(!p.title.key().contains("aya"), "{}", t.dump_prompt());
         t.decline();
     }
     assert_eq!(fans(&t, 0), (3, 0), "skill (2) never used");

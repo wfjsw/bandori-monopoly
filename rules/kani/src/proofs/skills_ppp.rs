@@ -193,7 +193,7 @@ pub fn kasumi_skill_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::extraordinary_star::on_settle_kani(owner));
+    invoke::unwrap_done(skill_personas::kasumi::on_settle_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
@@ -242,7 +242,7 @@ pub fn kasumi_skill_01_noop_own_settle() {
 pub fn kasumi_skill_01_mutant_extra_fire() {
     let (w, owner, _settler) = kasumi_01_world();
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::extraordinary_star::on_settle_kani(owner));
+    invoke::unwrap_done(skill_personas::kasumi::on_settle_kani(owner));
     let (logbuf, log_n) = take_log();
     crate::kassert!(
         spec::kasumi_01_effects_ok_mutant(effects_of(&logbuf, log_n), owner),
@@ -287,7 +287,7 @@ pub fn kasumi_skill_02_spend_charge_iff() {
     };
     // symbolic pick among owned tiles
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(skill_personas::extraordinary_star::use_skill_kani(owner));
+    invoke::unwrap_done(skill_personas::kasumi::use_skill_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         spec::kasumi_02_fire_ok(pre_fire, post.charge[owner as usize]),
@@ -315,7 +315,7 @@ pub fn kasumi_skill_02_noop_no_fire() {
     // Gate: `state::get(CHARGE) < 1` refuses. Invoking the body still spends
     // only if the pot has 1 — both stay 0, so post.charge is unchanged.
     let pre_fire = 0;
-    invoke::unwrap_done(skill_personas::extraordinary_star::use_skill_kani(owner));
+    invoke::unwrap_done(skill_personas::kasumi::use_skill_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[owner as usize] == pre_fire,
@@ -333,7 +333,7 @@ pub fn kasumi_skill_02_mutant_no_spend() {
     let pre_fire = w.charge[owner as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(skill_personas::extraordinary_star::use_skill_kani(owner));
+    invoke::unwrap_done(skill_personas::kasumi::use_skill_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[owner as usize] == pre_fire,
@@ -364,7 +364,7 @@ pub fn megumi_skill_01a_rabbit_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::tae_police::on_circle_kani(me));
+    invoke::unwrap_done(skill_personas::tae::on_circle_kani(me));
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
     let post = world::snapshot();
@@ -465,7 +465,7 @@ pub fn megumi_skill_01b_fire_iff() {
         world::snapshot()
     };
     // Residual: tile holds ≥1 rabbit (we seeded it).
-    invoke::unwrap_done(skill_personas::tae_police::on_pass_kani(me));
+    invoke::unwrap_done(skill_personas::tae::on_pass_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
@@ -562,7 +562,7 @@ pub fn megumi_skill_02_leaf_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::tae_police::negate_kani(me));
+    invoke::unwrap_done(skill_personas::tae::negate_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[me as usize] == spec::megumi_02_fire_after(pre_fire),
@@ -601,7 +601,7 @@ pub fn megumi_skill_02_mutant_money_swap() {
         w.field_n = 1;
     });
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::tae_police::negate_kani(me));
+    invoke::unwrap_done(skill_personas::tae::negate_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.money[me as usize] == 2000 && post.money[other as usize] == 500,
@@ -662,7 +662,7 @@ pub fn rimi_skill_01_turn_end_iff() {
     if !admitted {
         return;
     }
-    invoke::unwrap_done(skill_personas::rimi_resolve::at_turn_end_kani(me));
+    invoke::unwrap_done(skill_personas::rimi::at_turn_end_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     crate::kassert!(
@@ -716,7 +716,7 @@ pub fn rimi_skill_01_mutant_plus_two() {
     });
     let pre_fire = 1;
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::rimi_resolve::at_turn_end_kani(me));
+    invoke::unwrap_done(skill_personas::rimi::at_turn_end_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[me as usize] == pre_fire + 2,
@@ -764,7 +764,7 @@ pub fn rimi_skill_02_spend_charge_iff() {
     let pre_fire = w.charge[me as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(skill_personas::rimi_resolve::use_skill_kani(me));
+    invoke::unwrap_done(skill_personas::rimi::use_skill_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[me as usize] == spec::rimi_02_fire_after(pre_fire),
@@ -874,7 +874,7 @@ pub fn saaya_skill_01a_accept_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::saaya_sky::on_pay_after_kani(me));
+    invoke::unwrap_done(skill_personas::saaya::on_pay_after_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let mark_key = tok_key(spec::TOK_SAAYA);
@@ -916,7 +916,7 @@ pub fn saaya_skill_01a_noop_self_pay() {
 pub fn saaya_skill_01a_mutant_payee_swap() {
     let (w, me, payer) = saaya_01a_world(true);
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::saaya_sky::on_pay_after_kani(me));
+    invoke::unwrap_done(skill_personas::saaya::on_pay_after_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.money[me as usize] == post.money[payer as usize] + 200,
@@ -973,7 +973,7 @@ pub fn saaya_skill_02_shave_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::saaya_sky::on_pay_kani(me));
+    invoke::unwrap_done(skill_personas::saaya::on_pay_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
 
@@ -1049,7 +1049,7 @@ pub fn aoki_skill_01_iff() {
         world::snapshot()
     };
     // residual is the CEL guard `actor != owner && tile.id == tile_named('流星堂')`
-    invoke::unwrap_done(skill_personas::arisa_bonsai::on_event_kani(me));
+    invoke::unwrap_done(skill_personas::arisa::on_event_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     crate::kassert!(
@@ -1088,7 +1088,7 @@ pub fn aoki_skill_01_mutant_plus_two() {
         w.trig_tile = spec::TILE_RYUSEIDO;
     });
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::arisa_bonsai::on_event_kani(me));
+    invoke::unwrap_done(skill_personas::arisa::on_event_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[me as usize] == 2,
@@ -1134,7 +1134,7 @@ pub fn aoki_skill_02_turn_end_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::arisa_bonsai::at_turn_end_kani(me));
+    invoke::unwrap_done(skill_personas::arisa::at_turn_end_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     crate::kassert!(
@@ -1162,7 +1162,7 @@ pub fn aoki_skill_02_noop_end_on_station() {
         "end at 流星堂 must not fire"
     );
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::arisa_bonsai::at_turn_end_kani(me));
+    invoke::unwrap_done(skill_personas::arisa::at_turn_end_kani(me));
     let (logbuf, log_n) = take_log();
     // The body's `set_slot` pushes a SetState bookkeeping effect; the clause
     // effects (draw + fire) must be absent.
@@ -1195,7 +1195,7 @@ pub fn aoki_skill_02_mutant_no_draw() {
         w.deck_pile[0] = 7;
     });
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::arisa_bonsai::at_turn_end_kani(me));
+    invoke::unwrap_done(skill_personas::arisa::at_turn_end_kani(me));
     let (logbuf, log_n) = take_log();
     crate::kassert!(log_n == 1, "mutant: card must not match a fire-only spec");
 }

@@ -557,7 +557,7 @@ Genuine engine gaps (plain failing tests; no `#[ignore]`):
   does not see the counter the printed card plants. Test:
   `kaoru_removes_a_phantom_mark_instead_of_a_pot`.
 * **C-HHW-kaoru-02** -- book: 「消耗7火罐…放置3个[怪盗标记]」. The press spends
-  the 7 火罐 (`kaoru_prince_spend` logged) and answers the nearest-player
+  the 7 火罐 (`kaoru_spend` logged) and answers the nearest-player
   pick, but places **0** [怪盗标记] (no `cards:card-hhw.kaoru_thief_tok` on any
   seat, no tile mark). Test: `kaoru_skill_plants_three_marks_for_seven_fire`.
 

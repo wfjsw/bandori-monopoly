@@ -43,6 +43,9 @@ rules-events = { path = "../../rules/events" }
 # the test build of `game-rules` turns `sandbox` (wasmi/wasmtime) back on.
 game-rules = { path = "../game-rules", default-features = false, features = ["native-rules", "sandbox"] }
 serde_json = { workspace = true }
+# gen_record.rs plays a full bot match on the real ruleset to seed a long
+# `.bdrec` for browser timing checks.
+bot-core = { path = "../bot-core" }
 
 [features]
 # Measurement counters, same shape as game-rules' `bot-cost`.

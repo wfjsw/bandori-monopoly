@@ -37,7 +37,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
 )
 // 「可保留多个骰点」 -- the card stays on the field and must answer later fire
 // rolls from there (`COUNTERACT_FROM_FIELD`). One reservation per roll so the
-// placed copy cannot re-offer itself on the same window (the tae_police shape).
+// placed copy cannot re-offer itself on the same window (the tae shape).
 .props(&[
     (card_sdk::abi::prop::COUNTERACT_FROM_FIELD, 1),
     (card_sdk::abi::prop::COUNTERACT_GROUP, 1),

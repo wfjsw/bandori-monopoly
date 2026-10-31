@@ -116,7 +116,7 @@ pub fn kokoro_01_opening_1000_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::kasumi_group::at_start_kani(owner));
+    invoke::unwrap_done(skill_personas::kokoro::at_start_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -150,7 +150,7 @@ pub fn kokoro_01_mutant_500() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::kasumi_group::at_start_kani(owner));
+    invoke::unwrap_done(skill_personas::kokoro::at_start_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
@@ -171,7 +171,7 @@ pub fn kokoro_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::kasumi_group::at_start_kani(owner));
+    invoke::unwrap_done(skill_personas::kokoro::at_start_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
@@ -228,7 +228,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::kasumi_group::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::kokoro::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -275,7 +275,7 @@ pub fn kokoro_02_mutant_2000() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::kasumi_group::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::kokoro::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
@@ -295,7 +295,7 @@ pub fn kokoro_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::kasumi_group::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::kokoro::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
@@ -338,7 +338,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(skill_personas::misaki_other::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::misaki::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -384,7 +384,7 @@ pub fn misaki_skill_01_mutant_is_detected() {
     w.charge[owner as usize] = 0;
     let pre_fire = 0;
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::misaki_other::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::misaki::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.charge[owner as usize] != spec::skills_hhw::misaki_skill_01_gain_mutant(pre_fire),
@@ -417,7 +417,7 @@ pub fn kaoru_01_pot_arm_iff() {
         world::snapshot()
     };
     // `On::Action(Pass)` with `card_sdk::pre::MINE`.
-    invoke::unwrap_done(skill_personas::kaoru_prince::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::kaoru::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -453,7 +453,7 @@ pub fn kaoru_01_mutant_is_detected() {
     let mut w = symbolic_pass_world(owner, -1);
     w.charge[owner as usize] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(skill_personas::kaoru_prince::on_pass_kani(owner));
+    invoke::unwrap_done(skill_personas::kaoru::on_pass_kani(owner));
     let post = world::snapshot();
     // Mutant demands GainFire + a second effect (both arms at once).
     let (logbuf, log_n) = effects_of();

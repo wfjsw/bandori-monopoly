@@ -138,7 +138,7 @@ unchanged in substance. **Root fix (B):** `ask_tile_pick` (4.5).
 The pre requires `move.tag('fireRoll') != 0`; no shipped producer writes that
 tag (`misaki_card.rs:25-30`), and `roll_source` is stamped only on
 `diceRollBefore` (`wasm_rules.rs:4062-4065`), never on `diceRollResult`.
-`raise_effort` recasts with `roll_source::CHARGE`, but the outer move roll's
+`layer` recasts with `roll_source::CHARGE`, but the outer move roll's
 result window still reads `NONE`. Expected: the card is playable only after a
 fire-pot-funded move roll. **Root fix (B):** the roll carries a source
 throughout the transaction and the result window reads it (4.4, 5.4); the pre

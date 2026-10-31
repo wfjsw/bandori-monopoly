@@ -1102,7 +1102,7 @@ Worktree `/home/monopoly/kani-bands-a-wt`. Propagates the ppcost FLOOR fix
 | fire arms | `arm_fire` / `arm_fire_max` / `arm_gain_fire` / `arm_spend_fire` |
 | `arm_inc_slot` | named keyed increment |
 | World `Clone` | proofs read pre-state without a full-struct assign |
-| missing `*_kani` wrappers | popipapapipopa, returns::on_played, aya_with, arisa_bonsai::at_turn_end, poppin::{on_pass,lock_hill}, hhw::on_pay_choose |
+| missing `*_kani` wrappers | popipapapipopa, returns::on_played, aya, arisa::at_turn_end, poppin::{on_pass,lock_hill}, hhw::on_pay_choose |
 | `run.sh` features | ppp/skills_* pull in `skills-characters`+`skills-bands` so `card_id!` resolves |
 
 ### Formula-harness fixes (class A/B)
@@ -1175,11 +1175,11 @@ arm" — not a stand-in for real semantics.
 | r::nfo_play_dispatch | `card_move` | **yes** | **real** `arm_card_move` |
 | r::nfo_play_dispatch | `card_replayable\|play_card` | **yes** (`nfo.rs` replay) | `arm_protocol_stub` (0 = not replayable / did not land) |
 | r::council_dispatch | `linger` | yes | `arm_protocol_stub` (PROTOCOL-0) |
-| skills_*::\* | `state_add` | **yes** (rinko_1cm/lisa_goddess/…) | **real** `arm_inc_slot` (same keyed-add as dispatch) |
+| skills_*::\* | `state_add` | **yes** (rinko/lisa/…) | **real** `arm_inc_slot` (same keyed-add as dispatch) |
 | skills_ag::skills_ag_dispatch | `trig_target` | **yes** (`trigger::target`) | **real** `arm_trig_target` |
-| skills_ag::skills_ag_dispatch | `place_mark` | **yes** (tae_police/hagumi) | **real** `arm_place_mark` |
+| skills_ag::skills_ag_dispatch | `place_mark` | **yes** (tae/hagumi) | **real** `arm_place_mark` |
 | skills_pp/hhw/ppp | `card_move` | yes | **real** `arm_card_move` |
-| skills_pp/hhw/ppp | `card_offer_build\|can_build_on\|offer_*\|buy\|acquire` | rimi_resolve offers | `arm_protocol_stub` (PROTOCOL-0 / 0=did-not-land) |
+| skills_pp/hhw/ppp | `card_offer_build\|can_build_on\|offer_*\|buy\|acquire` | rimi offers | `arm_protocol_stub` (PROTOCOL-0 / 0=did-not-land) |
 | hhw::\* | plan setters (`set_kind`, `set_steps`, dice, …) | yes (balloon/hagumi) | `arm_protocol_stub` (PROTOCOL-0) |
 
 **Removed from subsets** (not listed → `outside_subset` loud FAIL if reached):
@@ -1187,7 +1187,7 @@ none in this pass beyond the above reclassifications. Prefer listing an op
 over stubbing it when unsure.
 
 **Class C found and fixed in this audit:** `state_get`/`state_set` were
-`arm_plan_stub` (silent 0) while `ran_red::tick` writes `REST_TURNS` via
+`arm_plan_stub` (silent 0) while `ran::tick` writes `REST_TURNS` via
 `state::set` — the rest counter never moved and the iff failed for the wrong
 reason. Replaced with real `arm_state_get` / `arm_state_set` (commits `944dcf5`,
 `bc2e730`).
@@ -1342,12 +1342,12 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 
 | id | before | failing assertion | class | action |
 |---|---|---|---|---|
-| `skills_pp::aya_with_01_five_fans_iff` + user1 | VACUOUS 550/723 s | cover `admitted` unreachable (0 of 1) | **C** | `guard_needs` treated `band_is`'s name-hash ConstInt as `seat_const` and missed FnId 18/19 in the symbolic-seat set → **no seat rows filled**, guard never admits. Fixed in `ir_fill.rs` |
-| `skills_pp::aya_with_02_pay_discount_iff` + user1 + mutant | TIMEOUT 1800 s ×3 | (died in BMC/symex) | **E** | `ask_number` prompt path pulls `Msg` → `memchr` (same string cliff as other prompt proofs). No cheap proof-file lever |
+| `skills_pp::aya_01_five_fans_iff` + user1 | VACUOUS 550/723 s | cover `admitted` unreachable (0 of 1) | **C** | `guard_needs` treated `band_is`'s name-hash ConstInt as `seat_const` and missed FnId 18/19 in the symbolic-seat set → **no seat rows filled**, guard never admits. Fixed in `ir_fill.rs` |
+| `skills_pp::aya_02_pay_discount_iff` + user1 + mutant | TIMEOUT 1800 s ×3 | (died in BMC/symex) | **E** | `ask_number` prompt path pulls `Msg` → `memchr` (same string cliff as other prompt proofs). No cheap proof-file lever |
 | `skills_pp::band_idol_02_body_never_overflows` | FAILED 414 s | `host op outside declared per-harness subset` | **C/B** | body `at_start` calls `placed_cards` (Op not in subset); `at_turn_start` calls `set_prop` → `set_self_prop` (also missing). Both arms exist. Added to subset |
 | `skills_pp::band_idol_04_tick_iff` + user1 | FAILED 357/330 s | same `outside_subset` | **C/B** | same (`set_self_prop` from `set_prop(NO_REWARD)`) |
 
-`band_idol_02_overflow_formula`, `hina_lottery_02_borrow_map`, `maya_dawn_02_watch_formula`, `eve_unify_02_extra_dice_formula` are SUCCESSFUL (pure-formula class).
+`band_idol_02_overflow_formula`, `hina_02_borrow_map`, `maya_02_watch_formula`, `eve_02_extra_dice_formula` are SUCCESSFUL (pure-formula class).
 
 ### batch-2 re-time results (in progress)
 
@@ -1359,7 +1359,7 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 | `skills_pp::band_idol_02_body_never_overflows` | **SUCCESSFUL** (1/1 cover; `placed_cards` in subset) |
 | `skills_pp::band_idol_04_tick_iff` | **SUCCESSFUL** (2/2 covers; `set_self_prop` in subset) |
 | `skills_pp::band_idol_04_tick_user1_iff` | **SUCCESSFUL** |
-| `skills_pp::aya_with_01_five_fans_iff` + user1 | queued (guard_needs fix) |
+| `skills_pp::aya_01_five_fans_iff` + user1 | queued (guard_needs fix) |
 | `pp::dream_ahead_01_crystal_per_draw_iff` | queued |
 | `mor::toko_swap_*` | queued (unwind 64) |
 
@@ -1373,14 +1373,14 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 
 | id | after |
 |---|---|
-| `skills_pp::aya_with_01_five_fans_iff` | **SUCCESSFUL** (1/1 cover; guard_needs fix) |
-| `skills_pp::aya_with_01_five_fans_user1_iff` | **SUCCESSFUL** (1/1 cover) |
+| `skills_pp::aya_01_five_fans_iff` | **SUCCESSFUL** (1/1 cover; guard_needs fix) |
+| `skills_pp::aya_01_five_fans_user1_iff` | **SUCCESSFUL** (1/1 cover) |
 | `pp::dream_ahead_01_crystal_per_draw_iff` | **TIMEOUT 1800 s** (class E — `add_crystals` `?` prompt path + `Msg`/memchr symex; body ABI) |
 | `ppp::pipopa_01_*` | queued (PlaceCard.dest fix) |
 | `ppp::bang_dream_02_teleport_owned_iff` | queued (8×8 walk) |
 | `mor::toko_swap_*` | queued (unwind 64) |
 
-`aya_with_02_*` TIMEOUT remains class E (`ask_number` prompt → Msg → memchr).
+`aya_02_*` TIMEOUT remains class E (`ask_number` prompt → Msg → memchr).
 
 ## triage3 batch 3 — pp central non-success rows (combined master)
 
@@ -1506,7 +1506,7 @@ Per-proof detail lives in `docs/rulebook/spec/kani/mor.md` § skills_mor triage.
 | `nanami_01_fire_iff` + `nanami_01_user1_fire_iff` | UNWINDING 156/118 s | same `pass_world` 60-trip | **A** | same |
 | `touko_01_mutant_is_detected` | UNWINDING 116 s | same `pass_world` | **A** | same |
 | `touko_01_noop_not_circle` | UNWINDING 39 s (`#[kani::unwind(8)]`) | `fill_pass_circle` `while i < 60` (fill `SetId::Circle`), `skills_mor.rs:69` iteration 8 | **A** | 8×8 chunk walk (true N 60 → 8) |
-| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsugushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_pick)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_pick` returns a literal 0 when `options.len()<=1` (forced pick; `crates/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`crates/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
+| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsukushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_pick)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_pick` returns a literal 0 when `options.len()<=1` (forced pick; `crates/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`crates/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
 
 ### CONFIRMED genuine discrepancies
 
@@ -1721,15 +1721,15 @@ weakening. Production bodies untouched. Allowed Kani-only surface:
 ## class-E deep dive — library stubs + global kani-bump (branch `kani-triage3`)
 
 Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
-(`aya_with_02_*`, `tsukushi_01_*`, `riot_02_03_*`, `chisato_mask_01_*`,
+(`aya_02_*`, `tsukushi_01_*`, `riot_02_03_*`, `chisato_mask_01_*`,
 `moca_02_*`, `rimi_skill_02_*`, …). Full lever table: TUNING.md §12.
 
 ### Method
 
-1. Phase-split 4 representative central logs (`aya_with_02_pay_discount_iff`,
+1. Phase-split 4 representative central logs (`aya_02_pay_discount_iff`,
    `chisato_mask_01_total_iff`, `riot_02_03_cycle_iff`, `tsukushi_01_redirect_iff`).
 2. Two shared cliffs:
-   * **fmt/memchr** (`aya_with`, `tsukushi`): `memchr_naive` 1868–2705,
+   * **fmt/memchr** (`aya`, `tsukushi`): `memchr_naive` 1868–2705,
      `memchr_aligned` 574–867, `memcmp` 558–837, `PadAdapter` recursion,
      `slice_index_fail` 38, `RawVec handle_error` 27. Root: panic-message
      assembly + `format!("key:{p}")` (`rec_key`) + `ask_number` → Msg.
@@ -1738,7 +1738,7 @@ Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
 3. Levers landed (TUNING §12): global `kani-bump`; `LIB_COST` /
    `LIB_COST_NOFMT` stub sets on every harness (`-Z stubbing`).
 
-### Profile delta — `skills_pp::aya_with_02_pay_discount_iff`
+### Profile delta — `skills_pp::aya_02_pay_discount_iff`
 
 | metric | central | + stubs (NOFMT) |
 |---|---|---|
@@ -1758,7 +1758,7 @@ Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
 
 | row | dominant cost | lever applies? | status after levers |
 |---|---|---|---|
-| `skills_pp::aya_with_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
+| `skills_pp::aya_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
 | `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | memchr 2705→**0**; residual `ask_pick` 16 + `fmt::num::__fmt_inner` 2 + RawVec `with_capacity` aborts; BMC reached |
 | `ras::riot_02_03_*` | RawVec grow abort paths | yes (kani-bump + handle_error stub) | re-time queued |
 | `pp::chisato_mask_01_total_iff` | `split_pay` find + `others` Vec | partial (memchr); body `Vec` ABI remains | irreducible without body edit (TUNING §11 residual) |
@@ -1825,7 +1825,7 @@ expected-FAILING. The 2026-10-15 OPEN-取整 ruling (card writes the fold, engin
 ### Item B — timeout rows reaching a verdict
 
 **Plainly: none of the class-E TIMEOUT rows finished in 1800 s** with the
-stubs+bump+Display levers. `aya_with_02_pay_discount_iff` and
+stubs+bump+Display levers. `aya_02_pay_discount_iff` and
 `tsukushi_01_redirect_iff` both now **start BMC** (they previously died in
 symex) but remain solver-bound / residual-`fmt::write` / RawVec
 `with_capacity` abort paths. Display stubs for `{u32,i32,i64}` are landed

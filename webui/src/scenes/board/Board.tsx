@@ -268,7 +268,7 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
               roll={roll}
             />
           </div>
-          <Hand m={m} sess={sess} busy={anim.animating} />
+          <Hand m={m} sess={sess} busy={anim.animating} pulse={anim.pulse} />
           {/* Match-screen FX layer: the stage banner (new-turn announcement),
               the action banner and the card activation flash are detached from
               the map -- sized and placed by this column, never clipped or

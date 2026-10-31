@@ -50,7 +50,7 @@ fn rest(t: &mut Table) {
 /// `ask_yes` lands as a `choice` prompt whose options are `ask.yes` /
 /// `ask.no` (the title/text name the ask), so [`Table::option`] cannot find
 /// it by the skill/card name -- answer `0` = yes. Match on the **Msg key**
-/// (`rana_parking_parfait`, `soyo_clear_title`, ...); the localized Chinese
+/// (`rana_parfait`, `soyo_title`, ...); the localized Chinese
 /// text is not in `Debug`.
 fn accept_yes(t: &mut Table, who: usize, needle: &str) -> bool {
     let Some(p) = t.prompt() else {
@@ -2215,11 +2215,11 @@ fn anon_skill_draw_after_abnormal_resolves() {
         t.give_play(1, "MyGO:那天的雨")
             .map_err(|e| format!("rainday: {e}"))?;
         // 「在受到[停留]…效果影响并结算该效果后」 opens a YesNo ask
-        // (`anon_restart_title`). YesNo has no `options`; accept it so the
+        // (`anon_title`). YesNo has no `options`; accept it so the
         // 2-pot spend + draw run.
         let fire = t.charge(0);
         let hand = t.hand(0).len();
-        let accepted = accept_yes(&mut t, 0, "anon_restart");
+        let accepted = accept_yes(&mut t, 0, "anon");
         rest(&mut t);
         drain(&mut t);
         if t.state(0, "stay") == 0 {
@@ -2482,8 +2482,8 @@ fn soyo_skill_endpoint_as_coloured_agent() {
         t.dice(&[2]); // 11 -> 13
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         // 「移动掷骰后可消耗一个火罐」 -- the `DiceRollAfter` hook opens a YesNo
-        // ask (`soyo_clear_title`) during the roll. Accept it.
-        if !accept_yes(&mut t, 0, "soyo_clear") {
+        // ask (`soyo_title`) during the roll. Accept it.
+        if !accept_yes(&mut t, 0, "soyo") {
             return Err(format!(
                 "C-MYGO-soyo-skill-02: no offer after the move roll: {}",
                 t.dump_prompt()
@@ -2746,9 +2746,9 @@ fn rana_skill_parfait_on_space() {
         let skill = t.skill_id(0, "投币式停车场的猫");
         t.skill(0, &skill).map_err(|e| format!("skill: {e}"))?;
         // Own-space settle: may add a 抹茶芭菲 instead of the normal settle.
-        // The offer is a YesNo (`rana_parking_parfait`) raised during the
+        // The offer is a YesNo (`rana_parfait`) raised during the
         // teleport's settle; accept it before draining.
-        if !accept_yes(&mut t, 0, "rana_parking") {
+        if !accept_yes(&mut t, 0, "rana") {
             return Err(format!(
                 "C-MYGO-rana-skill-04: no parfait offer: {}",
                 t.dump_prompt()
@@ -2795,8 +2795,8 @@ fn rana_skill_parfait_on_space() {
         u.dice(&[1]); // 41 -> 42, Space
         u.roll(1).map_err(|e| format!("roll: {e}"))?;
         // 「可将自己拥有的一个"抹茶芭菲"转移到该格上以免除当次付款」 -- a
-        // YesNo (`rana_parking_transfer`).
-        accept_yes(&mut u, 1, "rana_parking");
+        // YesNo (`rana_transfer`).
+        accept_yes(&mut u, 1, "rana");
         rest(&mut u);
         drain(&mut u);
         // Determined part of -05: if the token was spent, the payment is 0.

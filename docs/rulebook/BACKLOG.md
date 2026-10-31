@@ -625,9 +625,9 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **severity**: medium
 - **suggested batch**: skills: Mujica
 - **locations**
-  - `rules/skills/skill-personas/src/kaede_support.rs:284` (「直到状态2结束为止」 with no clause that ends it)
-  - `rules/skills/skill-personas/src/mumei_streamer.rs:131` (no exit; 「退出状态2后，被你翻面的卡自动翻回」 has no moment)
-  - `rules/skills/skill-personas/src/mutsumi_actor.rs:89` (状态2 character swap: 「上一位打出过手牌的玩家」 latch + 「角色卡堆」)
+  - `rules/skills/skill-personas/src/umiri.rs:284` (「直到状态2结束为止」 with no clause that ends it)
+  - `rules/skills/skill-personas/src/nyamu.rs:131` (no exit; 「退出状态2后，被你翻面的卡自动翻回」 has no moment)
+  - `rules/skills/skill-personas/src/mutsumi.rs:89` (状态2 character swap: 「上一位打出过手牌的玩家」 latch + 「角色卡堆」)
   - contrast: 三角初华 fire-pot cap, 若叶睦 hand-size exit (those are stated)
 - **question**: C-Q11.
 
@@ -652,11 +652,11 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/skills/skill-groups/src/circle_staff.rs:77,81` (「只能在卡组中加入"通用"卡」; 「（除将牌加入卡组的效果以外）」 carve-out)
   - `rules/skills/skill-groups/src/sumimi.rs:81` (「你可携带两个角色的专属卡牌」)
   - `rules/skills/skill-groups/src/poppin.rs:315` (「所有Poppin' Party角色视为同时拥有"星之鼓动山丘"」 co-ownership + buy lock)
-  - `rules/skills/skill-personas/src/lisa_goddess.rs:124` (temporary fire-pot provenance / 「被冲榜类效果被动消耗无需支付」)
-  - `rules/skills/skill-personas/src/mutsumi_crychic.rs:125`, `saki_crychic.rs:131` (「只有洗牌时可以…添加奇迹水晶」 untagged carve-out)
-  - `rules/skills/skill-personas/src/yuri_crit.rs:95` (「复制者」 / 「（抵押或赎回以外）」)
-  - `rules/skills/skill-personas/src/tae_police.rs:100` (「[主]效果」「[手]效果」 tag query)
-  - `rules/skills/skill-personas/src/soyo_clear.rs:114` (「以此法免除」 attribution)
+  - `rules/skills/skill-personas/src/lisa.rs:124` (temporary fire-pot provenance / 「被冲榜类效果被动消耗无需支付」)
+  - `rules/skills/skill-personas/src/mutsumi_crychic.rs:125`, `sakiko_crychic.rs:131` (「只有洗牌时可以…添加奇迹水晶」 untagged carve-out)
+  - `rules/skills/skill-personas/src/rui.rs:95` (「复制者」 / 「（抵押或赎回以外）」)
+  - `rules/skills/skill-personas/src/tae.rs:100` (「[主]效果」「[手]效果」 tag query)
+  - `rules/skills/skill-personas/src/soyo.rs:114` (「以此法免除」 attribution)
 - **capability**: deck-list / character-exclusive tag / co-owned tile / provenance-tagged spends / tag query on triggers.
 
 ## TILE-06 — 江户川乐器店 / CiRCLE shared body
@@ -705,7 +705,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   `rules/tests/tests/cross_move.rs:551` `m11_rinko_plus_yolo` (pins the add-anyway reading)
 - **rulebook**: 白金燐子 (2) 「使这回合移动掷骰的结果固定为X*6」 + Y.O.L.O 「使结果增加1d4
   结果的数字」 — the text does not say whether a fixed face refuses the addition.
-  Contrast `starry_night` / `eve_unify`, which refuse over a fixed face.
+  Contrast `starry_night` / `eve`, which refuse over a fixed face.
 
 ## MOVE-06 — E14 0-step case: [经过] vs [重叠]
 - **kind**: rulebook divergence
@@ -897,13 +897,13 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **expected**: track rises (done) and falls (needs a `HouseRemoved` kind or an
   equivalent) for the life of the card.
 
-## SKILL-10 — misaki_other 「额外视为CiRCLE」
+## SKILL-10 — misaki 「额外视为CiRCLE」
 - **kind**: rulebook divergence + ABI defect
 - **class**: C then B
 - **severity**: medium
 - **suggested batch**: tiles / skills: HHW
 - **locations**
-  - `rules/skills/skill-personas/src/misaki_other.rs:107` (per-player tile-kind override; what 「额外视为CiRCLE」 pays is not stated)
+  - `rules/skills/skill-personas/src/misaki.rs:107` (per-player tile-kind override; what 「额外视为CiRCLE」 pays is not stated)
 - **question**: C-Q37.
 
 ## EVENT-01 — 前往哈比内尔王国旅游 teleport timing
@@ -1050,7 +1050,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **class**: C
 - **severity**: low
 - **suggested batch**: skills: PP
-- **locations**: `rules/skills/skill-personas/src/aya_with.rs:122-124`
+- **locations**: `rules/skills/skill-personas/src/aya.rs:122-124`
 - **current**: the slice. Per-seat remaining-Y would let overflow crystals fire.
 
 ## EVE-01 — `card_move` never raises `diceRollBefore`
@@ -1058,7 +1058,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **class**: B
 - **severity**: medium
 - **suggested batch**: movement
-- **locations**: `rules/skills/skill-personas/src/eve_unify.rs:38-43`
+- **locations**: `rules/skills/skill-personas/src/eve.rs:38-43`
 - **rulebook**: 「因任意原因投掷前」 also covers card-driven rolls.
 - **current**: the `card_move` site (`play.rs` ~743) never raises `diceRollBefore`.
 
@@ -1067,7 +1067,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **class**: B
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
-- **locations**: `rules/skills/skill-personas/src/hagumi_homerun.rs:220-223`, `:259-263`
+- **locations**: `rules/skills/skill-personas/src/hagumi.rs:220-223`, `:259-263`
 - **current**: held tokens raise only pre-move `markerGain`; the overflow sweep
   is re-run only at this skill's own write sites.
 - **capability**: post-commit `*Changed` for held tokens.
@@ -1087,7 +1087,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **severity**: medium
 - **suggested batch**: skills: Roselia / fire kernel
 - **locations**: `rules/status/src/fire.rs` (`temp` module),
-  `rules/skills/skill-personas/src/lisa_goddess.rs`
+  `rules/skills/skill-personas/src/lisa.rs`
 - **rulebook**: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
   需要支付你600资金」 — the spend path has to know a pot's *provenance* to charge
   the provider, and 「被冲榜类效果被动消耗无需支付」 carves out a class of
@@ -1100,7 +1100,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **class**: C
 - **severity**: medium
 - **suggested batch**: skills: Ave Mujica
-- **locations**: `rules/skills/skill-personas/src/mutsumi_actor.rs`
+- **locations**: `rules/skills/skill-personas/src/mutsumi.rs`
 - **rulebook**: 状态2's 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其
   覆盖于自己角色卡上」 — 「角色卡堆」 is a pile the vocabulary has no read for.
   The fire half (「并获得其初始火罐」) landed as a registry overlay
@@ -1288,7 +1288,7 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
   spends 1 crystal then `ctx::play_card` on the first `skill:*` field card, which
   runs `skill:广町七深:这是很普通的事吧？`'s **`On::Play`** = that skill's clause
   **（3）** 「使用手中的角色标记，视为使用该角色的技能」
-  (`rules/skills/skill-personas/src/nanami_ordinary.rs:48,162-187`).
+  (`rules/skills/skill-personas/src/nanami.rs:48,162-187`).
 - **gap**: The printed target is clause **（2）** 「当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）」. 「不受数量或轮数限制」 names exactly the two limits that exist only on （2） (mark cap + 3-turn CD), and neither is waived. The comment at `nanami_effort.rs:252-253` states the waiver is deliberately unimplemented. Tests only assert the crystal spend / (4) discard and `decline_all` the prompts.
 - **question**: see C-Q46.
 - **note**: Contrast `CRYCHIC:（灯）内心的呐喊`（3） 「使用一次高松灯（MyGO!!!!!）的（2）技能」, which implements *that* body directly (`tomori_inner_shout.rs:155-197`) rather than `play_card` on the skill.
@@ -1412,7 +1412,7 @@ and §5 was answered the same day (`:238-254`). N3–N6 (`:321-324`) remain open
 
 ## SETTLE-STAGES.md
 `:169` "latent bug" row on 凑友希那 force-stop is stale — it says
-`HookKind::PassPlayer … never fires`, but live `rules/skills/skill-personas/src/kokoro_practice.rs:39-47`
+`HookKind::PassPlayer … never fires`, but live `rules/skills/skill-personas/src/yukina.rs:39-47`
 uses `ActionKind::PassTile` with `move.remaining > 0` and notes the §4 M4
 latent bug is fixed. The `TODO(规则书) PIPELINE-AUDIT Q7` marker at L5 is already gone.
 
@@ -1696,7 +1696,7 @@ generalize.
 # Open engine defects (carried)
 
 ## COND-01 — `slot()` conditions on FilterValue miss mid-roll state writes (possible engine defect)
-- **Symptom (2026-10-17, seen while splitting eve_unify):** a `slot('…') >= n`
+- **Symptom (2026-10-17, seen while splitting eve):** a `slot('…') >= n`
   *condition* on an `On::FilterValue` at `DiceRollPlan` did not observe a
   per-player state write made earlier in the same roll, while `state::get`
   inside the body saw it. The condition and the body therefore disagree about
@@ -1704,10 +1704,10 @@ generalize.
 - **Suspect:** the condition (CEL) evaluation uses a snapshot taken before
   mid-roll writes (or a cached `slot` view), while body calls read the live
   world. Affects any entry whose gate counts up during the roll.
-- **Likely affected:** `kanon_lost`'s `On::FilterValue(DiceRollPlan)` gate
+- **Likely affected:** `kanon`'s `On::FilterValue(DiceRollPlan)` gate
   `slot('skill.kanonLost.silent') >= 3` (TODO(bug) at the entry in
-  `rules/skills/skill-personas/src/kanon_lost.rs`); any future gate written the
-  same way. eve_unify worked around it (`actor == owner` + `state::get` in the
+  `rules/skills/skill-personas/src/kanon.rs`); any future gate written the
+  same way. eve worked around it (`actor == owner` + `state::get` in the
   body).
 - **Check:** a two-roll scenario where the slot increments mid-roll and the
   gate must flip on the same roll; compare `slot()` in the condition vs
@@ -1801,7 +1801,7 @@ PP band (2) is passive on 「将X个反面[P✽P粉丝]变正的效果且X大于
 Sumimi:no_breakup 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」: is 「触发结算后」 `settleAfter` or the `tileResolved` terminal? And does 「取消所有受到的效果」 undo money as well (「不进行任何结算」 scopes to the return)?
 
 **C-Q11 (SKILL-04, 状态2 exits).**
-For skills that say 「直到状态2结束为止」 with no clause that ends it (kaede_support, mumei_streamer, mutsumi_actor): what ends 状态2? Options: (a) never (permanent once named), (b) same exits as the Ave Mujica band skill (fire-pot 0 at turn end), (c) a per-skill exit you specify, (d) other.
+For skills that say 「直到状态2结束为止」 with no clause that ends it (umiri, nyamu, mutsumi): what ends 状态2? Options: (a) never (permanent once named), (b) same exits as the Ave Mujica band skill (fire-pot 0 at turn end), (c) a per-skill exit you specify, (d) other.
 
 **C-Q12 (SKILL-05, CRYCHIC band (3) / (2) scope).**
 (12a) When CRYCHIC band (2) 「移除此卡与你所有区域的所有"CRYCHIC"卡」 removes the band card itself, does (3) 「当此卡移除时」 cash out? (12b) Is (2) limited to `BandCrychic` specifically (C#) or any 「乐队技能的（2）效果」 (this port)?
@@ -1893,7 +1893,7 @@ C# `HagumiMarkFx.PassTile` has a circle-tile case (remove every 育美标记 and
 **C-Q36 (CRYSTAL-08, Ringing Bloom (3) X).**
 「X为你收费格上的房屋数」: the count after (2) 「视为」 raises it (engine now), or the real house count?
 
-**C-Q37 (SKILL-10, misaki_other).**
+**C-Q37 (SKILL-10, misaki).**
 「下次经过"弦卷集团"前可将"弦卷集团"格子额外视为CiRCLE」: what does 「额外视为CiRCLE」 pay on top of the tile's own effect? And is the override per-player tile-kind (not colour)?
 
 **C-Q38 (EVENT-01, habinel).**

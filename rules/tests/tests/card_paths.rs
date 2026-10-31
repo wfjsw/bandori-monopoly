@@ -716,7 +716,7 @@ fn umiri_copies_go_away_when_the_card_returns() {
 // 2 houses -> 1000*2/4 = 500, split over the one other player.
 //
 // `MatchPrompt` carries i18n *keys*, not resolved UI text: the offer's prompt is
-// `cards:skill-personas.numazu_maid_title` / `numazu_maid_ask` (zh-CN
+// `cards:skill-personas.pareo_title` / `pareo_ask` (zh-CN
 // 「失去 1 个 PAREO 标记，向其他玩家分摊收取 {{n}}？」), so the needle below
 // matches that key rather than the rendered 「PAREO」/「失去」 text. The card's
 // own house-removal prompts are `cards:card-ras.pareo_far_ask_*` /
@@ -747,7 +747,7 @@ fn pareo_far_triggers_the_pareo_skill_offer() {
         let Some(p) = t.prompt() else { break };
         let hay = format!("{p:?}");
         if !took_offer
-            && (hay.contains("numazu_maid_ask") || hay.contains("numazu_maid_title"))
+            && (hay.contains("pareo_ask") || hay.contains("pareo_title"))
             && !hay.contains("pareo_far_ask")
             && !hay.contains("pareo_far_pick")
         {

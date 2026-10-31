@@ -224,7 +224,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-afterglow式移动** | 「初始Afterglow角色的（2）」 | detour-02 | Which character's (2) is "afterglow-style"? |
 | **OPEN-@Tsugu / OPEN-@Tsugu-ycm** | garbled sheet mentions | tiny-can-01/02 | Are these typos for a real card id? |
 | **OPEN-每三回合** | fire-pot 「每四回合没有使用」 (sheet-sync 2026-10-17 renamed 每三→每四) | fire-pot | Whose turns count the four? *(wording updated 2026-10-17)* |
-| ~~**OPEN-2次cd**~~ | ~~moca skill 「2次使用cd」~~ | — | **RESOLVED / moot 2026-10-17** — the live sheet **dropped** 「该效果对每个玩家的被动技能和卡存在2次使用cd」 entirely (`rules/skills/skill-personas/src/moca_self.rs:15`). There is no cd to scope. |
+| ~~**OPEN-2次cd**~~ | ~~moca skill 「2次使用cd」~~ | — | **RESOLVED / moot 2026-10-17** — the live sheet **dropped** 「该效果对每个玩家的被动技能和卡存在2次使用cd」 entirely (`rules/skills/skill-personas/src/moca.rs:15`). There is no cd to scope. |
 | **OPEN-每圈** | tomoe (3) 「每圈限一次」 | tomoe skill (3) | How is a lap counted? |
 
 ### CRYCHIC

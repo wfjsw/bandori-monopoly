@@ -66,6 +66,18 @@ answering entirely can only stall its own seat: a prompt is forced onto its
 prefill once the seat's window is spent, and a turn is re-claimed by the
 server through the drive list.
 
+**One answer per decision.** A decision *surface* can outlive its answer: 结束
+holds for the walk and a beat after `end` is applied, so the frame still shows
+「你的结束」 while the turn is already on its way out -- a second ask lands
+after the turn moved on and is refused (`err.not_your_turn`). The pages
+therefore remember the surface each seat answered (`botDrive.ts`
+`needsAnswer` / `recordAnswer`, keyed by turn, step and prompt id) and skip a
+seat until the surface changes. Only 运营 re-arms on a new state, because that
+one surface legitimately owes several decisions (card, skill, roll, `end`); an
+applied `end` is recorded against the turn's 结束 surface so the 运营 → 结束
+flip does not look like a new decision either. A refusal re-arms only 运营,
+where the next candidate is still legal on the same surface.
+
 ## 3. Staging (each step green on its own)
 
 1. **Policy out of `game-core`.** Create `bot-core/src/policy.rs` with the

@@ -1903,7 +1903,7 @@ fn nagisa_fingertip_is_offered_as_a_counter_on_a_fire_pot_roll() {
         }
         let d = t.dump_prompt();
         // Skill (2) reroll window: accept it so the fire-pot roll happens.
-        if !used_fire && d.contains("raise_effort_again") {
+        if !used_fire && d.contains("layer_again") {
             // Skill (2) 「进行任意掷骰后，可选择使用一个[火罐]再投一次骰子」.
             let k = t.option("ask.yes").unwrap_or(0);
             let _ = t.answer(0, k);

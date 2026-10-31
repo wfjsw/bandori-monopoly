@@ -154,7 +154,9 @@ pub struct MatchState {
     /// [`Self::skip_move`] is the same live latch, so the two always agree
     /// (it was once re-derived from the named layer counters, which did not: the
     /// mid-turn layer grants -- a bot trusting it sent `end` into
-    /// `err.roll_first`).
+    /// `err.roll_first`). True as well once the end is already queued: a
+    /// duplicate `end` is accepted there and folds into the phase
+    /// (`Cx::end_already_queued`), prompts and hand overflow included.
     pub can_end_here: bool,
     /// How many hand cards / skills the turn has already played
     /// (`world.turn.played.len()`) -- what the standard policy's
@@ -442,6 +444,10 @@ pub mod prop {
     pub const EST_COST: &str = "estCost";
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
+    /// `1` on a source on the owner's field: the owner may play their
+    /// **face-down** field cards directly in a counteraction window
+    /// (宇田川亚子 「对帅气的憧憬」(3)).
+    pub const COUNTERACT_FACE_DOWN: &str = "counteractFaceDown";
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     pub const COUNTERACT_CHARGE_COST: &str = "counteractChargeCost";
     /// 「有designate目标」: `1` = this play names recipients (the play's other

@@ -898,14 +898,18 @@ impl Match {
                 let over_hand = st.players.get(ti).is_some_and(|p| p.over_hand(held));
                 let my_turn = st.turn == ti as i32;
                 let owes_roll = st.step == stage::OPS && !live_skip && !main_moved;
+                let queued_end = my_turn && self.world.end_already_queued();
                 st.can_roll_here = my_turn
                     && st.step == stage::OPS
                     && !st.busy
                     && !live_skip
                     && !main_moved
                     && st.roller == st.turn;
-                st.can_end_here =
-                    my_turn && !st.busy && st.step != stage::MOVE && !owes_roll && !over_hand;
+                // A queued end accepts a duplicate whatever else is up -- a
+                // prompt opened by a turn-end hook, or hand overflow from one
+                // (`why_not_act` folds it before the busy / over-hand gates).
+                st.can_end_here = queued_end
+                    || (my_turn && !st.busy && st.step != stage::MOVE && !owes_roll && !over_hand);
             }
         }
         st.drive = self.drive_seats();
@@ -2423,6 +2427,14 @@ impl Match {
                 if let Some(why) = self.with_cx(|cx| why_not_act(cx, i, m, busy)) {
                     return Err(why);
                 }
+                // A duplicate `end` folds here without a routine: `execute`
+                // would reset `wait` to the routine's (zero) delay and clip a
+                // presentation hold the end-phase hooks set, and bump `seq`
+                // for no state change. `end_turn_cmd` keeps the same guard
+                // for a routine that was already in flight.
+                if m.act == "end" && self.world.end_already_queued() {
+                    return Ok(());
+                }
                 self.start(Routine::Act(i, Box::new(m.clone())));
             }
             _ => return Err(Msg::new("err.unknown_act")),
@@ -2937,6 +2949,12 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
         "end" => {
             if !my_turn {
                 return Some(Msg::new("err.not_your_turn"));
+            }
+            // The end is already queued (or the seat's extra turn has opened
+            // on its late duplicate): every other gate would only toast a
+            // command the handler folds anyway.
+            if cx.w.end_already_queued() {
+                return None;
             }
             if busy {
                 return Some(Msg::new("err.busy"));

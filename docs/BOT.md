@@ -105,7 +105,7 @@ Evaluated against `fill_window_ambient` + `fill_candidate`
 | anything that would name a hand **card id**, a deck **order**, or the RNG | **no such CEL name exists** | n/a -- forbidden | would grey-out wrong / leak |
 
 The only `On::Play` in the live pool with a non-empty CEL `pre` is
-`skill-characters/numazu_maid` (`tok('PAREO标记') >= 1`) -- a public token.
+`skill-characters/pareo` (`tok('PAREO标记') >= 1`) -- a public token.
 
 #### C. `rules_cant_play` -- wasm `OP_GUARD` (the card's `cant_play` / `can_*` body)
 

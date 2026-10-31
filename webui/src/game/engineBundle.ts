@@ -65,6 +65,15 @@ export interface BundleEntry {
 
 /** Where the bytes for `want` actually live: an alias target, else the
  *  rebuilt byte id, else the entry id itself. */
+/** The archive entry `want` names (id, alias, or rebuilt byte id). */
+export function entryFor(index: ArchiveIndex | null, want: string): BundleEntry | undefined {
+  return (
+    index?.bundles.find((b) => b.id === want) ??
+    index?.bundles.find((b) => b.aliases && want in b.aliases) ??
+    index?.bundles.find((b) => b.rebuilt?.byte_id === want)
+  );
+}
+
 export function serveIdFor(entry: BundleEntry, want: string): string {
   return entry.aliases?.[want] ?? entry.rebuilt?.byte_id ?? entry.id;
 }
@@ -106,7 +115,9 @@ let indexCache: Promise<ArchiveIndex | null> | null = null;
 export function archiveIndex(): Promise<ArchiveIndex | null> {
   indexCache ??= (async () => {
     try {
-      const r = await fetch("/assets/engine/index.json");
+      // no-store: a refetch after a deploy must not be answered from a
+      // heuristically cached copy (the index is the one mutable engine file).
+      const r = await fetch("/assets/engine/index.json", { cache: "no-store" });
       if (!r.ok) return null;
       const text = await r.text();
       // An SPA answers unknown paths with index.html and HTTP 200.
@@ -155,10 +166,7 @@ export function resolveBundle(
   const want = header.engine?.bundle ?? "";
   if (want) {
     if (want === now?.bundle) return { kind: "current", bundle: want };
-    const entry =
-      index?.bundles.find((b) => b.id === want) ??
-      index?.bundles.find((b) => b.aliases && want in b.aliases) ??
-      index?.bundles.find((b) => b.rebuilt?.byte_id === want);
+    const entry = entryFor(index, want);
     if (entry) return { kind: "archived", bundle: serveIdFor(entry, want), entry };
     return { kind: "missing", bundle: want };
   }

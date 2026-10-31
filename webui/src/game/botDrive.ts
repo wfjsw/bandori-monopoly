@@ -52,10 +52,95 @@ export interface DriveHooks {
   onThinking?: (member: number, on: boolean) => void;
   /** Decision counter, for tests / logs. */
   onDone?: (member: number, outcome: DriveOutcome, iterations: number) => void;
+  /** A command was applied for `member` against `decision`; `ok` is false when
+   *  the engine refused it, so the caller can re-arm a revisitable surface. */
+  onApplied?: (member: number, decision: Decision, ok: boolean) => void;
 }
 
 /** `server/src/botsvc.rs::decision_at`, already ported in `botBudget`. */
 export { decisionAt };
+
+/** A decision a seat owed: its surface and the state version it was read at. */
+export interface Decision {
+  /** [`decisionKey`] of the frame it was read from. */
+  key: number;
+  /** `state.seq` of that frame. */
+  seq: number;
+  /** The 运营 window owes several decisions on one surface (a card, a skill,
+   *  the roll, then `end`): a new state there is a new decision. */
+  revisitable: boolean;
+}
+
+/** One key per (turn, stage, prompt): a prompt id stays below 100 000. */
+function keyOf(turn: number, step: number, promptId: number): number {
+  return ((turn + 1) * 8 + step) * 100_000 + Math.max(0, promptId);
+}
+
+/** The decision surface a frame shows. Coarse on purpose: `seq` also moves for
+ *  cosmetic reasons (an end-phase log, a status wearing off) which must not
+ *  re-arm a seat that already answered. */
+export function decisionKey(v: MatchView): number {
+  return keyOf(v.state.turn, v.state.step, v.state.prompt?.id ?? 0);
+}
+
+/** The 运营 surface, the only one a seat answers more than once. */
+function revisitable(v: MatchView): boolean {
+  return !(v.state.prompt?.id > 0) && v.state.step === 2;
+}
+
+/** The decision a seat's frame shows right now. */
+export function decisionOf(v: MatchView): Decision {
+  return { key: decisionKey(v), seq: v.state.seq, revisitable: revisitable(v) };
+}
+
+/** Where an applied `end` leaves the match: the turn's 结束 surface. An `end`
+ *  at 运营 moves the stage to 结束 on the same turn first, so the frame shows
+ *  a *new* surface between the answer and the next turn -- the seat owes
+ *  nothing more on this turn, so the answer is recorded against that one. */
+function settled(v: MatchView): Decision {
+  return { key: keyOf(v.state.turn, 4, 0), seq: v.state.seq, revisitable: false };
+}
+
+/** What an applied command is recorded against: an `end` settles the turn's
+ *  结束 surface, anything else the decision it answered. */
+export function answerFor(v: MatchView, cmd: Command, decision: Decision): Decision {
+  return cmd.act === "end" ? settled(v) : decision;
+}
+
+/**
+ * Should the driver ask this seat again, given the decision each seat has
+ * already answered?
+ *
+ * A turn surface outlives its answer: 结束 holds for a beat after `end` is
+ * applied (and the walk animation before that), so the seat's frame still
+ * shows the same decision while the turn is already on its way out. Asking
+ * again lands after the turn moved on and is refused (`err.not_your_turn`) --
+ * once or twice per turn for every bot. A prompt is the same: the answer is
+ * already in the prompt's answer list, so a re-ask is `err.answered`. Only the
+ * 运营 window (no prompt) re-arms on a new state.
+ */
+export function needsAnswer(
+  answered: ReadonlyMap<number, Decision>,
+  member: number,
+  v: MatchView,
+): boolean {
+  const prev = answered.get(member);
+  if (!prev || prev.key !== decisionKey(v)) return true;
+  return prev.revisitable && prev.seq !== v.state.seq;
+}
+
+/** Record an applied answer. A refusal only re-arms a revisitable (运营)
+ *  surface, where the next candidate is still legal on the same surface; a
+ *  refused turn / prompt answer means the surface is already moving on. */
+export function recordAnswer(
+  answered: Map<number, Decision>,
+  member: number,
+  decision: Decision,
+  ok: boolean,
+): void {
+  if (!ok && decision.revisitable) answered.delete(member);
+  else answered.set(member, decision);
+}
 
 /**
  * Ask the pool for `member`'s answer at the current view and apply it.
@@ -77,6 +162,15 @@ export async function driveSeat(
   const promptId = decisionAt(v.state, v.playerId);
   if (promptId == null) return "fallback";
 
+  // Every applied command is reported against the decision it was read from,
+  // so the caller can keep the seat from being asked the same decision twice.
+  const decision = decisionOf(v);
+  const apply = async (cmd: Command): Promise<Msg | null> => {
+    const err = await act(member, cmd);
+    hooks.onApplied?.(member, answerFor(v, cmd, decision), !err);
+    return err;
+  };
+
   const search = hooks.search ?? true;
   const budgetInput: BudgetInput = {
     timed: hooks.timed,
@@ -95,7 +189,7 @@ export async function driveSeat(
   // would value -- answer it without paying for a search.
   const rich = richPassRewardCard(v, v.state.prompt);
   if (rich) {
-    const err = await act(member, rich);
+    const err = await apply(rich);
     if (!err) {
       hooks.onDone?.(member, "heuristic", 0);
       return "heuristic";
@@ -105,7 +199,7 @@ export async function driveSeat(
 
   const pool = hooks.pool ?? safePool();
   if (!pool) {
-    if (fallback) await act(member, fallback);
+    if (fallback) await apply(fallback);
     hooks.onDone?.(member, "fallback", 0);
     return "fallback";
   }
@@ -117,14 +211,14 @@ export async function driveSeat(
       // Standard / chaos: the policy alone, no search budget, no tree.
       const cmd = await withTimeout(pool.act(sent, seed), 5_250);
       if (!cmd) {
-        if (fallback) await act(member, fallback);
+        if (fallback) await apply(fallback);
         hooks.onDone?.(member, "heuristic", 0);
         return "heuristic";
       }
-      const err = await act(member, cmd);
+      const err = await apply(cmd);
       if (err) {
         console.warn(`bot ${member}: policy answer refused`, cmd, err);
-        if (fallback) await act(member, fallback);
+        if (fallback) await apply(fallback);
         hooks.onDone?.(member, "fallback", 0);
         return "fallback";
       }
@@ -138,11 +232,11 @@ export async function driveSeat(
       outerDeadlineMs(budgetMs) + 250,
     );
     if (result.heuristic && !result.answer) {
-      if (fallback) await act(member, fallback);
+      if (fallback) await apply(fallback);
       hooks.onDone?.(member, "heuristic", 0);
       return "heuristic";
     }
-    const err = await act(member, result.answer);
+    const err = await apply(result.answer);
     if (err) {
       // The engine refused the search's answer (a stale view, an already-taken
       // prompt). Never re-ask: drop the cached answer so it cannot be replayed,
@@ -154,7 +248,7 @@ export async function driveSeat(
       } catch {
         /* best-effort */
       }
-      if (fallback) await act(member, fallback);
+      if (fallback) await apply(fallback);
       hooks.onDone?.(member, "fallback", result.iterations);
       return "fallback";
     }
@@ -162,7 +256,7 @@ export async function driveSeat(
     return result.reused ? "reused" : "searched";
   } catch (e) {
     console.warn(`bot ${member}: search failed -- falling back`, e);
-    if (fallback) await act(member, fallback);
+    if (fallback) await apply(fallback);
     hooks.onDone?.(member, "fallback", 0);
     return "fallback";
   } finally {

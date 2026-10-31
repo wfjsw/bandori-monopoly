@@ -1267,10 +1267,10 @@ suppressed, so the square-valued tag is pinned too.
   `settle_reward` (`tile_prop(player_pos)`),
   `skills/skill-groups/src/ras.rs:57,85` (`ON_HOUSE` is a square tested
   against `player_pos`) and `:105` (`set_teleport_to(owned_livehouses…)`),
-  `skill-personas/src/tomoe_ramen.rs:68,81-85` (`shop()` is a square tested
+  `skill-personas/src/tomoe.rs:68,81-85` (`shop()` is a square tested
   against `player_pos` and fed to `dist`),
-  `skill-personas/src/tomori_poem.rs:117,122,151` and
-  `saki_crychic.rs:58` (`dist(trigger.tile(), position)`), saki's `nudge`
+  `skill-personas/src/tomori.rs:117,122,151` and
+  `sakiko_crychic.rs:58` (`dist(trigger.tile(), position)`), saki's `nudge`
   (`:119-134`, `landing ± 1` positions but `landing` is `trigger.tile`),
   `card-ras/src/studio_storm.rs` `on_own_lh` (`tile_owner(pos)`,
   `is_live_house_for(pos)`) and `settle_body` (`dist(trigger.tile(),

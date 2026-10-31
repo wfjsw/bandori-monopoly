@@ -493,7 +493,7 @@ fn first_accident_blocks_pp_skill_2() {
             let hit = |k: &str| {
                 p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
             };
-            ["aya_with", "maya_dawn", "hina_lottery"]
+            ["aya", "maya", "hina"]
                 .into_iter()
                 .find(|&k| hit(k))
                 .map(|k| k.to_string())
@@ -507,7 +507,7 @@ fn first_accident_blocks_pp_skill_2() {
         // three.
         while t.prompt().is_some() {
             if let Some(k) = pp_skill_prompt(&t) {
-                if k != "maya_dawn" {
+                if k != "maya" {
                     return Err(format!(
                         "C-PP-first-accident-02: PP (2) skill {k} offered under 初次演出事故: {}",
                         t.dump_prompt()
@@ -1774,7 +1774,7 @@ fn band_overflow_to_crystals() {
 /// character's (2) skill until the next turn start.
 /// Book: 「结果为1是丸山彩；结果为2是白鹭千圣；结果为3是若宫伊芙；结果为4是大和麻弥。」
 /// `skill.hinaLottery.borrowed` is the 0-based pool index (Kani
-/// `hina_lottery_02_borrow`: face N -> N-1). The book pin is the borrowed
+/// `hina_02_borrow`: face N -> N-1). The book pin is the borrowed
 /// character card on the field.
 #[test]
 fn hina_skill_2_borrows_skill() {

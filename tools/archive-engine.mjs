@@ -61,7 +61,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { bundleId, glueSha256, stampKey } from "./engine-bundle.mjs";
+import { bundleId, glueSha256, healEmptyDataAliases, stampKey } from "./engine-bundle.mjs";
 import {
   makeReferenceRecord,
   sourceId,
@@ -311,10 +311,11 @@ function computeSourceId(prov, stamp) {
 
 // ---------------------------------------------------------------- glue probe
 
-/** Load the glue in node far enough to ask it for its own stamp and the
- *  `DATA_FILES` list -- the archive must hash exactly the fields the engine
- *  stamps, and those live in the binary. `wantEngine` also loads the data and
- *  ruleset, so the caller can seal a reference record with a real match. */
+/** Load the glue in node far enough to ask it for its own stamp and the boot
+ *  file list -- the archive must seal **exactly** the stamp the engine would
+ *  put in a record (`data_sha256` included, `""` on this build), and those
+ *  fields live in the binary. `wantEngine` also loads the data and ruleset, so
+ *  the caller can seal a reference record with a real match. */
 async function probeGlue(glueDir, dataDir, rulesDir, gsha, wantEngine) {
   const g = await import(pathToFileURL(join(glueDir, "glue.js")).href);
   await g.default({ module_or_path: new Uint8Array(readFileSync(join(glueDir, "glue_bg.wasm"))) });
@@ -352,21 +353,10 @@ async function probeGlue(glueDir, dataDir, rulesDir, gsha, wantEngine) {
     g.ruleset_build();
   }
   if (typeof g.set_glue_sha === "function" && gsha) g.set_glue_sha(gsha);
-  return { stamp, dataFiles, api, g };
-}
-
-/** sha256 over the `DATA_FILES` contents in order -- the engine's own recipe
- *  (`load_data` / `Ctx::load`). Missing files are skipped, as there. */
-function dataSha256Hex(dataDir, dataFiles) {
-  const hasher = createHash("sha256");
-  for (const name of dataFiles) {
-    const p = join(dataDir, name);
-    if (!existsSync(p)) continue;
-    // A leading UTF-8 BOM is not content (the engine hashes without it).
-    const b = readFileSync(p);
-    hasher.update(b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf ? b.subarray(3) : b);
-  }
-  return hasher.digest("hex");
+  // Re-stamp now that data + ruleset are in: the id a record seals must come
+  // from the loaded engine (`ruleset_sha256` is written by `ruleset_build`,
+  // `data_sha256` is `""` on this build). `stamp` above is the pre-load probe.
+  return { stamp: JSON.parse(g.engine_stamp()), dataFiles, api, g };
 }
 
 // ---------------------------------------------------------------- check / backup
@@ -494,7 +484,6 @@ async function main() {
 
   const { stamp: probe, dataFiles, api, g } = await probeGlue(src.glue, src.data, src.rules, null, true);
   const rulesIndex = JSON.parse(readFileSync(join(src.rules, "index.json"), "utf8"));
-  const dsha = dataSha256Hex(src.data, dataFiles);
 
   // A debug engine (cfg(debug_assertions) -- the console cheats) must never
   // become a replay bundle: it is larger/slower, and its records may carry
@@ -517,15 +506,19 @@ async function main() {
     );
   }
 
-  // The stamp the engine would seal a record with here: its own format /
-  // save / abi / engine / build, plus the ruleset and data hashes computed
-  // from the files this bundle freezes.
+  // The stamp the engine would seal a record with here. Everything is the
+  // engine's own answer -- including `ruleset_sha256`, which is read back from
+  // `engine_stamp()` after the build so a stale or hand-edited
+  // `rules/index.json` cannot mint an id no record can name. `data_sha256` is
+  // the engine's value too: `""` on every record this build writes
+  // (`docs/REPLAY.md` §9.1); hashing the boot tables into that slot (the old
+  // recipe) was the same bug.
   const stamp = {
     format: probe.format,
     save_version: probe.save_version,
     abi: probe.abi,
-    ruleset_sha256: String(rulesIndex.ruleset_sha256 || probe.ruleset_sha256 || "stub"),
-    data_sha256: dsha,
+    ruleset_sha256: String(probe.ruleset_sha256 || rulesIndex.ruleset_sha256 || "stub"),
+    data_sha256: probe.data_sha256 ?? "",
     engine: probe.engine || "game-core",
     build: probe.build || "",
   };
@@ -657,6 +650,12 @@ async function main() {
   // ref) -- a redeploy of the same engine is not a new archive event.
   if (at < 0) index.bundles.unshift(entry);
   if (a.current) index.current = id;
+  // Entries sealed before this recipe fix carry the boot-table hash in
+  // `data_sha256`; map the id a record names onto the id the bytes live under.
+  const healed = healEmptyDataAliases(index);
+  if (healed) {
+    console.log(`alias  ${healed} pre-fix entr${healed === 1 ? "y" : "ies"} now resolve by the id their records name`);
+  }
   writeFileSync(indexPath, JSON.stringify(index, null, 1));
 
   // -- dist copy ---------------------------------------------------------
@@ -703,7 +702,7 @@ async function main() {
   console.log(`  source id    ${srcId.slice(0, 16)}…  (${prov.dirty ? "dirty: content hash" : `commit ${prov.commit.slice(0, 12)}…`})`);
   console.log(`  ref          ${refName}`);
   console.log(`  ruleset      ${stamp.ruleset_sha256.slice(0, 16)}… (${(rulesIndex.modules ?? []).length} modules)`);
-  console.log(`  data sha     ${dsha.slice(0, 16)}… (${dataFiles.length} files)`);
+  console.log(`  data sha     ${stamp.data_sha256 ? `${stamp.data_sha256.slice(0, 16)}…` : '"" (board/rule params ride in the record)'} (${dataFiles.length} boot files stored)`);
   console.log(`  stamp        format=${stamp.format} save=${stamp.save_version} abi=${stamp.abi} build=${stamp.build}`);
   console.log(`  api          ${api}`);
   console.log(`  rebuild      ${prov.rebuild ? `yes (${prov.commit.slice(0, 12)}…)` : "no (store the files; see --backup)"}`);

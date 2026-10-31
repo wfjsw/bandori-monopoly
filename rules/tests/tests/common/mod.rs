@@ -993,7 +993,12 @@ impl Table {
         self.field(who)
             .into_iter()
             .find(|f| f.card == card)
-            .map(|f| f.props.get(bandori_std::marker::TURNS_LEFT).copied().unwrap_or(0))
+            .map(|f| {
+                f.props
+                    .get(bandori_std::marker::TURNS_LEFT)
+                    .copied()
+                    .unwrap_or(0)
+            })
             .unwrap_or(-1)
     }
 

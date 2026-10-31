@@ -23,6 +23,7 @@ import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
 import { byTitle, cardKeys, showDeck, showDeedList } from "./Popups";
+import { downStackWidth, FaceDownStack } from "./FaceDownStack";
 import { fieldMarkers, type Marker } from "./markers";
 import { MarkerChip } from "./MarkerChip";
 import { useCompactValue } from "../../app/Stage";
@@ -339,7 +340,7 @@ const HandFace = memo(function HandFace({ id, k, on, playable, title, onPick, on
  * looking at cards is fine, play / discard are not. Once the sheet retracts the
  * hand raises again for looking; once the question is answered it is normal.
  */
-export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
+export const Hand = memo(function Hand({ m, sess, busy, pulse }: { m: Model; sess: GameSession; busy: boolean; pulse?: { uid: number; id: number; ms: number } | null }) {
   // One hover target for both the hand fan and the skill stack: the dock's own
   // floating preview and the standing card panel read this.
   const [hover, setHover] = useState<{ id: string; note: string; text?: string } | null>(null);
@@ -424,7 +425,11 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
     setMidW(designBox(el).width);
     return () => ro.disconnect();
   }, []);
-  const fanSpread = Math.min(660, Math.max(0, midW - 2 * skillW - 120));
+  // The face-down stack holds the same right-hand space as the skill stack does
+  // on the left, so the fan's budget counts it out on both sides too.
+  const downN = S.players.reduce((n, x) => n + (x.field ?? []).filter((fc) => fc.faceDown).length, 0);
+  const downW = downStackWidth(downN);
+  const fanSpread = Math.min(660, Math.max(0, midW - 2 * (skillW + downW) - 120));
   // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered card:
   // the wheel over the dock (fan or skill stack), or PgUp/PgDn/↑/↓ while a
@@ -460,9 +465,12 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
       <div
         // A retracted prompt sheet's title strip sits on the bottom edge: lift the
         // whole hand above it so the cards stay easy to reach.
+        // `data-down` marks parked face-down cards at the bar's right end, where
+        // the thinking pill floats: it moves up clear of them (`.thinkingSlot`).
         className={s.dock}
         data-state={dock.raised ? "raised" : "retracted"}
         data-sheet={sheet.open && !sheet.raised ? "down" : "up"}
+        data-down={downN ? "" : undefined}
         style={{ ["--skill-step" as string]: `${skillStep}px` }}
         ref={dockRef}
         {...dock.hover}
@@ -495,6 +503,9 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
           </div>
           {/* Pressable skills as a dense stack on the left of the fan. */}
           <SkillStack m={m} sess={sess} peek={peekCard} unpeek={unpeek} />
+          {/* Cards a skill has parked face down, as the matching stack on the
+              right: they are still hand cards, so they stay with the hand. */}
+          <FaceDownStack m={m} pulse={pulse} />
         </div>
         <div className={s.bar}>
           <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit ?? "∞" })}</PanelTab>
