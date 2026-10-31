@@ -436,6 +436,10 @@ pub mod prop {
     pub const EST_COST: &str = "estCost";
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
+    /// `1` on a source on the owner's field: the owner may play their
+    /// **face-down** field cards directly in a counteraction window
+    /// (宇田川亚子 「对帅气的憧憬」(3)).
+    pub const COUNTERACT_FACE_DOWN: &str = "counteractFaceDown";
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     pub const COUNTERACT_CHARGE_COST: &str = "counteractChargeCost";
     /// 「有designate目标」: `1` = this play names recipients (the play's other

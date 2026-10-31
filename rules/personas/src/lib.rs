@@ -5,7 +5,7 @@
 
 extern crate alloc;
 
-pub mod akao_cool;
+pub mod ako_cool;
 pub mod anon_restart;
 pub mod arisa_bonsai;
 pub mod asahi_aim;
