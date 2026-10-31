@@ -7,6 +7,9 @@ file. (Originally opened 2026-10-10 as `rulebook-triage`; full recount
 2026-10-17; card-rule TODO review + reconstruction 2026-10-20; 2026-10-27 card
 sheet review + triage; 2026-10-28 triage applied, closed items removed.)
 
+**2026-10-31 revision.** Attribution to the former reference port was dropped
+throughout; each item now cites the rulebook text and the live engine/ABI only.
+
 On 2026-10-27 the 47 completed item sections and the closed-audit tail were
 deleted. On 2026-10-28 every review row was triaged and merged by root cause
 into A/B/C/D, and the 776 A items were fixed on branch
@@ -328,7 +331,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `docs/PURCHASE.md` ruling 8; TEST-FINDINGS §6 item 13
   - tests (green, pin current): `card_paths::tomoe_savior_buy_listener_*`
 - **rulebook**: 「立刻支付常规收购价一半的价格从该玩家处收购该地契」 — 「收购」 not 「购买」; base (land / land+houses / 2× force) unnamed.
-- **current**: C# reading `price / 2` (land alone); hand-over runs `raise_bought` so every 「购买…时」 listener hears it; mortgage is cleared before the hook.
+- **current**: implemented as `price / 2` (land alone); hand-over runs `raise_bought` so every 「购买…时」 listener hears it; mortgage is cleared before the hook.
 - **expected**: decide the price base, whether 收购 is a 「购买」, and whether the mortgage stays.
 - **question**: C-Q4.
 
@@ -374,10 +377,10 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/cards/card-morfonica/src/noble_blue.rs:32`
   - related: `rules/cards/card-hhw/src/believe_you.rs` wasted flag
 - **rulebook**: 「视为此卡未生效」 (haneoka / fire_bird short-pay / starry_night / noble_blue / kokoro_circle / no_road / miracle (3)).
-- **current**: clause names a state with no observer. `PlayCtx.Effective = false` is the C# side channel and is not being ported (routine should *return* whether it took effect).
+- **current**: clause names a state with no observer. The `PlayCtx.Effective = false` side channel is not being carried; the routine should *return* whether it took effect.
 - **expected**: rule (a) does the card get spent / discarded (haneoka says yes; noble_blue/starry_night "spent anyway" implies no), (b) what counts as a "use" this suppresses (later 「抵消一次任意付款」 etc.).
 - **question**: C-Q5.
-- **capability (after the ruling)**: routine return value for took-effect + `CardWasted` (C# `H.CardWasted`).
+- **capability (after the ruling)**: routine return value for took-effect + `CardWasted`.
 
 ## WINDOW-03 — EXIST redirect / 「造成影响」 latch is at declaration, not settlement
 - **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — the
@@ -495,7 +498,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **suggested batch**: settle stages
 - **locations**
   - `rules/cards/card-sumimi/src/no_breakup.rs:124` (R3 `settleAfter` vs `tileResolved`; revert half not wired)
-  - `rules/cards/card-ag/src/ran_as_usual.rs` (undo uses `turn_snap` of 4 fields only — incomplete vs C# full snapshot)
+  - `rules/cards/card-ag/src/ran_as_usual.rs` (undo uses `turn_snap` of 4 fields only — incomplete vs the full snapshot the revert needs)
   - `rules/cards/card-ag/src/one_of_us.rs:138,200` (「不受其他任何效果影响」 raw money add vs `transfer`)
 - **rulebook**: 「取消所有受到的效果（不进行任何结算）」 / 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」.
 - **current**: no world-snapshot/restore; teleport settles and consumes the main move even when the revert should fire.
@@ -638,7 +641,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **suggested batch**: skills: Roselia / CRYCHIC
 - **locations**
   - `rules/skills/skill-groups/src/crychic.rs:79` (「当此卡移除时」 should fire on the (2)-driven 「移除此卡」; nested run has no running instance so `crystals()` reads 0)
-  - `rules/cards/card-crychic/src/mutsumi_never.rs:32` (C# narrows (2) to `BandCrychic` specifically — wider 「乐队技能」 reading taken)
+  - `rules/cards/card-crychic/src/mutsumi_never.rs:32` (narrows (2) to `BandCrychic` specifically — wider 「乐队技能」 reading taken)
   - `rules/skills/skill-groups/src/crychic.rs:155` (「无法从手中打出任何牌」 global play gate)
   - tests: `card_paths::mutsumi_never_2_*`
 - **question**: C-Q12 (does (3) cash out on the (2)-driven removal? is (2) limited to BandCrychic?).
@@ -734,7 +737,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **severity**: medium
 - **suggested batch**: settle stages
 - **locations**
-  - `rules/cards/card-crychic/src/want_to_grab.rs:29` (R5; left as `PassPlayer` C#-carried)
+  - `rules/cards/card-crychic/src/want_to_grab.rs:29` (R5; left as `PassPlayer`)
   - `docs/rulebook/SETTLE-STAGES.md` §9 R5
 - **question**: C-Q22.
 
@@ -828,13 +831,13 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **related** (carried from the closed CH-03): the turn-key `PLACED` latch also backs `cant_play` (`x_in_play`, `:59-64`), so a second copy in hand is refused in the same turn although the cell prints no once-per-turn cap; the `noCounteractTurn` latch is still the other seats' hand-counter block (`:98`). Probe: a second copy fails `Err("cards:card-mujica.x_in_play")`.
 - **question**: C-Q31 (must other [反击]s still answer this card's own play window?).
 
-## CH-10 — ran_as_usual (1) C# once-per-turn gate
+## CH-10 — ran_as_usual (1) once-per-turn gate
 - **kind**: rulebook divergence
 - **class**: C
 - **severity**: low
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/cards/card-ag/src/ran_as_usual.rs:27` (C# adds a once-per-turn gate the passage does not name)
+  - `rules/cards/card-ag/src/ran_as_usual.rs:27` (an unprinted once-per-turn gate the passage does not name)
 - **question**: C-Q32.
 
 ## CRYSTAL-02 — miracle (3) / crystal-on-discard 「视为此卡未生效」
@@ -846,13 +849,13 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
   - `rules/cards/card-mygo/src/miracle.rs:138` (needs `PlayCtx.Effective` / `H.CardWasted`)
 - **capability**: `CardWasted` when a card is discarded with crystals left.
 
-## CRYSTAL-05 — 育美标记 circle-tile case (C# only)
+## CRYSTAL-05 — 育美标记 circle-tile case (not in the rulebook text)
 - **kind**: rulebook divergence
 - **class**: C
 - **severity**: low
 - **suggested batch**: crystal/marker accounting / HHW cards
 - **locations**
-  - `rules/cards/card-hhw/src/hagumi_marks.rs:159` (C# `HagumiMarkFx.PassTile` circle-tile case not in the rulebook text; held)
+  - `rules/cards/card-hhw/src/hagumi_marks.rs:159` (circle-tile behaviour not in the rulebook text; held)
 - **question**: C-Q34.
 
 ## CRYSTAL-06 — 薰 charge/decay 「（充能3，衰减1）」 has no 0-clause
@@ -861,7 +864,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **severity**: low
 - **suggested batch**: HHW cards
 - **locations**
-  - `rules/cards/card-hhw/src/kaoru_thief.rs:142` (keeps C# decay-out behaviour)
+  - `rules/cards/card-hhw/src/kaoru_thief.rs:142` (keeps decay-out behaviour)
 - **question**: C-Q35.
 
 ## CRYSTAL-07 — charity_show +2 steps not synced mid-walk
@@ -1005,7 +1008,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - TEST-FINDINGS §8: 丸山彩 / 上原绯玛丽 / 羽泽鸫 which column is current; Pastel Palettes alternate band design is a draft; typos “PERFECT“ / “FEVER!“ / 星月夜 「的的」 / 游击演出 stray `\[特]`.
 - **class**: C (sheet ownership) — low.
 
-## LOW-06 — 上原绯玛丽 (2) prompts under a once-per-turn C# gate?
+## LOW-06 — 上原绯玛丽 (2) prompts under a once-per-turn gate?
 - See CH-10.
 
 ---
@@ -1079,7 +1082,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **suggested batch**: skills: Mujica
 - **locations**: `rules/cards/card-mujica/src/nyamu_card.rs:57-62`
 - **rulebook**: 「每当此卡将从正面翻至背面时可选择失去2个火罐」 — the clause
-  does not say what losing the 2 fire pots buys (C# also silent).
+  does not say what losing the 2 fire pots buys (the text is silent).
 
 ## MARKERS-LISA-01 — temp-pot 600-cost and two-turn expiry under-specified
 - **kind**: rulebook divergence
@@ -1120,7 +1123,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
   `rules/tests/tests/markers.rs` cover the same ground at the integration
   level.
 
-## DETOUR-01 — 「"afterglow"式的移动」 under-specified; counter C# vs text
+## DETOUR-01 — 「"afterglow"式的移动」 under-specified; counter vs text
 - **kind**: rulebook divergence
 - **class**: C
 - **severity**: medium
@@ -1316,7 +1319,7 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
 - **code**: `rules/cards/card-hhw/src/kaoru_thief.rs:31` — filter pre
   `turn_player != owner && pos(turn_player) == owner.pos && …`.
 - **gap**: 「所有」 reads as every piece sharing 薰's tile, including 薰. The
-  `!= owner` conjunct is an unprinted extra gate justified only by C#
+  `!= owner` conjunct is an unprinted extra gate carried from
   `m.Seat != Seat`.
 - **question**: see C-Q48.
 
@@ -1326,11 +1329,11 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
 - **rule text**: 「当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。」
 - **code**: `rules/cards/card-sumimi/src/here_the_world.rs:161-185` —
   `ctx::set_dest(ctx::Dest::Graveyard)` after returning the held card
-  (comment: C# `H.Unplace(this, "discard", "结束了")`).
+  (comment: `H.Unplace(this, "discard", "结束了")`).
 - **gap**: Nothing prints a discard / unplace of Here the world. The discard is
   load-bearing for a one-shot reading (the `slot('here_held_len') <= 0` guard on
   `Drew` would otherwise re-arm (2) on the next draw) — which is exactly why it
-  needs a ruling rather than a silent C# carry.
+  needs a ruling rather than a silent carry.
 - **question**: see C-Q49.
 - **note**: neighbours already filed, not duplicated: **CH-13** (fixed),
   **C-Q33** (capture vs auto-play).
@@ -1341,7 +1344,7 @@ job tmp `wave3-review.md`. **7 new findings** (1 high A, 1 high C, 1 med A+C,
 - **rule text**: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
 - **code**: `rules/cards/card-ag/src/one_of_us.rs:262-291` — for each designated
   tile still owned by the leaver, `ctx::set_owner(t, survivor)`. The comment at
-  `:258-261` admits the C# does not park the deeds on the card.
+  `:258-261` admits the deeds are not parked on the card.
 - **gap**: Three printed details missing or altered: (1) 「将两张被指定地契放置在该卡上」
   never happens; (2) 「视为拥有」 is usually a continuous view, the code rewrites
   the real owner; (3) 「两张被指定地契」 is unconditional, the loop only moves
@@ -1532,7 +1535,7 @@ Display text / quoted names were clean on all 15 — the problems are behavioral
   `DESIGNATES`-prop-only. Cards that `[指定]` a subset (e.g. `通用:雨啊，快点来吧`)
   report empty and take clause 2 (full cancel) instead of clause 1.
 - **note**: at the Card window effects are not yet declared (`effect::count()==0`),
-  so this needs static play/card targeting metadata (C# `CardDef.Targeting`
+  so this needs static play/card targeting metadata (a `CardDef.Targeting`
   stand-in) or always route clause 1 through the `Target` window. Do not guess.
 
 ### LOY-GUERRILLA-01 `RAS:游击演出` 「经过属于其他玩家的livehouse」 not implemented
@@ -1651,8 +1654,8 @@ generalize.
   modifiers", which points at half-last (3); the engine's documented contract
   (`moca_half.rs`, ABI v74) is "placement order among roll reshapes is
   preserved", which points at half-first (2). Neither the card text nor the
-  rulebook body settles it. The C# port calls the half `DiceRollAfter`, but
-  the C# port is not a spec.
+  rulebook body settles it. The implementation calls the half `DiceRollAfter`,
+  but it is not a spec.
 - **what a ruling must say**: whether 「投掷结果减少2」 is an *additive
   modifier* that 「最终结算」 follows (→ 3), or a same-stage reshape that runs
   in placement order (→ 2). Also whether 「最终结果最小为0」 in the same
@@ -1776,9 +1779,9 @@ Three related questions on 基础[结算] 6.2 / 其他 6 「不受任何资金�
 
 **C-Q4 (MONEY-05, 巴 「常规收购价一半」).**
 AG:（巴）商店街的救世主 「立刻支付常规收购价一半的价格从该玩家处收购该地契」:
-(4a) What is 「常规收购价」 — land price only (C#), land + houses, or 2× force-buy total?
+(4a) What is 「常规收购价」 — land price only (the reading implemented), land + houses, or 2× force-buy total?
 (4b) Is 「收购」 a 「购买」 for 「购买…时」 listeners?
-(4c) Does the mortgage stay on the hand-over (C# keeps it; this port clears it so Afterglow's 「自动免费在上面加盖一栋房子」 can fire)?
+(4c) Does the mortgage stay on the hand-over (the reading implemented keeps it; this port clears it so Afterglow's 「自动免费在上面加盖一栋房子」 can fire)?
 
 **C-Q5 (CH-07, 「视为此卡未生效」).**
 The clause 「视为此卡未生效」 appears on 羽丘的不可思议女孩, Fire bird, 星月夜, noble_blue, kokoro_circle, 无路矢, 奇迹 (3). Two decisions:
@@ -1804,7 +1807,7 @@ Sumimi:no_breakup 「若传送并触发结算后未能使资金变为拥有相�
 For skills that say 「直到状态2结束为止」 with no clause that ends it (umiri, nyamu, mutsumi): what ends 状态2? Options: (a) never (permanent once named), (b) same exits as the Ave Mujica band skill (fire-pot 0 at turn end), (c) a per-skill exit you specify, (d) other.
 
 **C-Q12 (SKILL-05, CRYCHIC band (3) / (2) scope).**
-(12a) When CRYCHIC band (2) 「移除此卡与你所有区域的所有"CRYCHIC"卡」 removes the band card itself, does (3) 「当此卡移除时」 cash out? (12b) Is (2) limited to `BandCrychic` specifically (C#) or any 「乐队技能的（2）效果」 (this port)?
+(12a) When CRYCHIC band (2) 「移除此卡与你所有区域的所有"CRYCHIC"卡」 removes the band card itself, does (3) 「当此卡移除时」 cash out? (12b) Is (2) limited to `BandCrychic` specifically (the reading implemented) or any 「乐队技能的（2）效果」 (the wider reading)?
 
 **C-Q13 (TILE-01, Anon link + mortgaged partner).**
 Does the Anon Tokyo link add half of a *mortgaged* partner tile's 收费?
@@ -1842,7 +1845,7 @@ For a 0-step move / teleport: does [经过] (`passTile`) fire as well as [重叠
 Should a teleport that *is* the main move settle like a main-move landing (announce + end-step buy offer) or like any teleport (immediate `offer_buy`)? Engine now: immediate offer.
 
 **C-Q22 (MOVE-08, want_to_grab R5).**
-CRYCHIC:想要抓住... (2) 「当第一位其他玩家经过你」: is that 经过 (mid-route pass of my tile, 行动阶段 12) or 重叠 (`passPlayer`, end-tile overlap)? Text says 「经过」; C# used `PassPlayer` (engine now).
+CRYCHIC:想要抓住... (2) 「当第一位其他玩家经过你」: is that 经过 (mid-route pass of my tile, 行动阶段 12) or 重叠 (`passPlayer`, end-tile overlap)? Text says 「经过」; the engine currently uses `PassPlayer`.
 
 **C-Q23 (MOVE-13, 星月夜 re-roll).**
 Does 星月夜's re-roll cover the whole dice set or only the base die? (Ignored test asserts full set.)
@@ -1876,19 +1879,19 @@ player who cannot reach 状态2 is not toggled. The older "free toggle" note was
 stale.
 
 **C-Q31 (CH-09, dice_cast).**
-「（此卡可以被反击）」: must other [反击]s still answer this card's own play window before the lock is set? (Engine wants the C# reverse-order counter play; see CH-05.)
+「（此卡可以被反击）」: must other [反击]s still answer this card's own play window before the lock is set? (Engine wants the reverse-order counter play; see CH-05.)
 
 **C-Q32 (CH-10, ran_as_usual once-per-turn).**
-C# adds a once-per-turn gate to （兰）像往常一样 「此卡可以当反击使用」 that the passage does not name. Keep the C# limit (narrows), or drop it (text has no per-turn limit)? Engine now: kept.
+An unprinted once-per-turn gate applies to （兰）像往常一样 「此卡可以当反击使用」 that the passage does not name. Keep the limit (narrows), or drop it (text has no per-turn limit)? Engine now: kept.
 
 **C-Q33 (CH-13, Here the world).**
 When a drawn effect card is captured by Here the world, is it captured before that card's auto-play, or after? (`l06_one_draw_several_effects` ignore already removed — record-only.)
 
 **C-Q34 (CRYSTAL-05, 育美标记).**
-C# `HagumiMarkFx.PassTile` has a circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过起点」) that the rulebook text does not carry. Keep the C# behaviour?
+A circle-tile case (remove every 育美标记 and gain 1,000 per mark 「经过起点」) is implemented although the rulebook text does not carry it. Keep it?
 
 **C-Q35 (CRYSTAL-06, 薰 charge/decay).**
-「（充能3，衰减1）」 names the charge and the decay but never says what happens at 0 (every other crystal card says 「为0时置入弃牌堆」). Keep C# decay-out, or leave the spent card on the field?
+「（充能3，衰减1）」 names the charge and the decay but never says what happens at 0 (every other crystal card says 「为0时置入弃牌堆」). Keep decay-out, or leave the spent card on the field?
 
 **C-Q36 (CRYSTAL-08, Ringing Bloom (3) X).**
 「X为你收费格上的房屋数」: the count after (2) 「视为」 raises it (engine now), or the real house count?
@@ -1914,10 +1917,10 @@ Batch of event ambiguities — please answer each:
 (40h) 圆 rebuild: 「该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果」 — real priority, or placement order (engine now)?
 
 **C-Q41 (LOW-03, Mujica #J11).**
-`Mujica:#J11` has no rulebook entry at all (body follows C# alone). Please supply the clause, or confirm the C# behaviour is the intended rule.
+`Mujica:#J11` has no rulebook entry at all (the body follows the implementation alone). Please supply the clause, or confirm the implemented behaviour is the intended rule.
 
 **C-Q42 (LOW-04, umiri 「置入弃牌堆」).**
-「置入弃牌堆」 for a *taken band-skill card*: a band attachment is not a card in a pile (C# only detaches it). Detach (engine now), or put it in the discard (and is a `skill:` id drawable)?
+「置入弃牌堆」 for a *taken band-skill card*: a band attachment is not a card in a pile (the implementation only detaches it). Detach (engine now), or put it in the discard (and is a `skill:` id drawable)?
 
 **C-Q43 (TILE-05 follow-up, Parking Space × 要乐奈 (2) body-replace order).**
 When 「通用:[都筑诗船]Parking Space」 is on Space and 「skill:要乐奈:投币式停车场的猫」（2） also fires on a settle at Space (both are 「将该次结算改为…」 settle-body replaces, `SETTLE-STAGES.md` §9 R4):
@@ -1952,20 +1955,20 @@ to waive and the printed numbers are wrong? (c) Other. The code currently invoke
 
 **C-Q47 (W3-KAORU-02, 1d2 polarity).** *(fileed 2026-10-21)*
 `HHW:（薰）怪盗hello happy`「投掷1d2（前后）」: for the direction die, is 前/后
-**face 1 / face 2**, or **odd / even**? The port reads odd = reverse (the C# the
-module cites used `num == 2` = reverse). Separately the die is currently a d6
-parity, not a 1d2 — that half is class B (W3-KAORU-02).
+**face 1 / face 2**, or **odd / even**? The port reads odd = reverse (the
+module's cited source used `num == 2` = reverse). Separately the die is
+currently a d6 parity, not a 1d2 — that half is class B (W3-KAORU-02).
 
 **C-Q48 (W3-KAORU-03, 「所有在薰所在格子的人」).** *(filed 2026-10-21)*
 Does 「所有在薰所在格子的人」 include 薰 himself? The port drops the owner
-(C# `m.Seat != Seat`). If 薰's own main move is also meant to become 1d2+1d10,
+(`m.Seat != Seat`). If 薰's own main move is also meant to become 1d2+1d10,
 the `turn_player != owner` conjunct is an unprinted extra gate. A plausible
 design reading is that the effect weirdifies *other* pieces standing with 薰.
 
 **C-Q49 (W3-HERE-01, Here the world end-of-hold).** *(filed 2026-10-21)*
 `Sumimi:Here the world`（2）: 「当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并
 使此卡使用者抽一张卡。」 Nothing prints that *this* card leaves play. The port
-discards it (C# `H.Unplace(this, "discard", "结束了")`). If it stayed, the
+discards it (`H.Unplace(this, "discard", "结束了")`). If it stayed, the
 `slot('here_held_len') <= 0` guard on `Drew` would re-arm (2) on the next draw.
 Does the card leave play on (2) completion, or stay and re-arm?
 
@@ -2241,7 +2244,7 @@ Decision needed: When (1)'s [除外] grant is barred — a second copy already e
 **C-Q88 (l12-per-pot-reading).** *(filed 2026-10-28; rows 1319; `rules/cards/card-sumimi/src/l12.rs`)*
 每当你消耗火罐时，为此卡添加一个[奇迹水晶]
 
-Current: The comment grounded one crystal per pot in C# t.value without saying the clause itself does not state it.
+Current: The comment grounded one crystal per pot in `t.value` without saying the clause itself does not state it.
 
 Decision needed: Is a crystal added per 火罐 spent or per 消耗 event (a mixed temp+pool spend now raising two events)?
 
