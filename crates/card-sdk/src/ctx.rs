@@ -935,7 +935,7 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
 
 /// Distinct card ids in `pile`, first-seen order. A pile can hold several
 /// copies of one card; when the player is picking a *title*, list each id
-/// once (C# `Distinct()`).
+/// once.
 pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     // Concrete cap (see `owned_tiles`): the mixed push/realloc growth is
     // capped at `cards_in`'s own 8 anyway.

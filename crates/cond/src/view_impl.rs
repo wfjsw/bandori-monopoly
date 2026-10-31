@@ -341,7 +341,8 @@ impl CondView for SnapshotView<'_> {
             if q < 0 {
                 continue;
             }
-            // C# `Next`: `tile_forward(pos, q)` forward, `tile_forward(q, pos)` back.
+            // Steps from `pos` to `q` along `dir`: forward wraps, backward
+            // mirrors the same measurement.
             let fwd = {
                 let f = ((q - pos) % n + n) % n;
                 if dir >= 0 {

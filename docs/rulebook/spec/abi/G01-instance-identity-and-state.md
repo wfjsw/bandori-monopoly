@@ -139,7 +139,7 @@ they answer the same pass.
 key `:39`) and every reader/"reset" goes through `ctx::slot`
 (`want_human.rs:95,110,139,145`; `tomori_inner_shout.rs:66,91`). The comment at
 `want_human.rs:57-60` states the defect: the value survives the card and two
-copies share it, where C# `Mem["x"]` belongs to the instance. `boost` and
+copies share it, where the value belongs to the instance. `boost` and
 `abBefore` (`:79`, `:84`) have the same shape.
 
 `tomori_inner_shout` already implements the cross-instance half by hand:
@@ -517,8 +517,8 @@ No signature is removed and no existing byte layout changes.
   3. otherwise return `1`.
 - A hook's own body does not announce (step 1's skip): its entry *is* the
   announcement, and two cards watching each other's fires would otherwise
-  raise forever. Termination is one level deep, matching C#'s
-  `H.SkillFired`.
+  raise forever. Termination is one level deep: a fire heard as a hook is
+  never announced again.
 - `card.is_skill` (window-scope Bool, `card_is_skill` flat) is the
   precondition 「技能」: the trigger's `card` is a `skill:` id.
 - The fire is itself a visible outcome: its raise posts the firing card's

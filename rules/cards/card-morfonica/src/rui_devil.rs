@@ -1,4 +1,4 @@
-//! `Mor:（Rui）正论恶魔` -- C# `CardRuiDevil`: pay 100 to every other player,
+//! `Mor:（Rui）正论恶魔`: pay 100 to every other player,
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（Rui）正论恶魔`）:
 //! > （Rui）正论恶魔：向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5
@@ -41,9 +41,9 @@ const X: &str = "skill.yuriCrit.x";
 fn rui_devil(player_id: i32) -> card_sdk::Asked {
     let others = ctx::others(player_id);
     let why = Msg::new(key!("rui_devil_why"));
-    // Outbound 100s are `fixedAmount` in C#, but the host has no such flag:
-    // `ctx::transfer` runs the ordinary pay pipeline, so the user's own
-    // 「正论暴击」 fires on the leg (`On::Action(Pay)`, ABI v74).
+    // The outbound 100s should be immune to every effect, but the host has no
+    // unmodifiable pay: `ctx::transfer` runs the ordinary pay pipeline, so the
+    // user's own 「正论暴击」 fires on the leg (`On::Action(Pay)`, ABI v74).
     for &o in &others {
         // 规则书: 「向全场玩家支付100资金（该数值不可被任何效果影响）」
         // TODO(规则书)（该数值不可被任何效果影响）: the 100 is immune to every effect --
