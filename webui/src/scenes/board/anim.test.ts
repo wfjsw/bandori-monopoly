@@ -26,6 +26,8 @@ if (!g.localStorage) {
   g.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 }
 if (!g.document) g.document = { documentElement: { lang: "zh-CN" } };
+// `core/audio.ts` touches `window` at module scope; node has none.
+if (!g.window) g.window = g;
 
 const STUB = new Map<string, string>();
 const stub = (spec: string, source: string): string => {
@@ -385,6 +387,27 @@ test("Animator: two same-name field cards pulse one after the other", async () =
   clearInterval(poll);
   console.log(JSON.stringify(stamps));
   assert.deepEqual(seen.filter((u) => u >= 0), [70, 71]);
+});
+
+test("Animator: a face-down card's slot pulses for its owner only", async () => {
+  const view = { playerId: 0, state: { players: [{ field: [
+    { uid: 90, card: "TEST:down", owner: 0, faceDown: true },
+    { uid: 91, card: "TEST:down", owner: 1, faceDown: true },
+  ] }], prompt: { id: 0 } } } as never;
+  const anim = new Animator(() => {}, () => view, false);
+  const seen: number[] = [];
+  const poll = setInterval(() => { if (anim.pulse) seen.push(anim.pulse.uid); }, 5);
+  anim.push(frame({ id: 71, type: "card", card: "TEST:down", kind: "hook", uid: 90, msg: { k: "log.effect_applied" }, flash: true }));
+  for (let i = 0; i < 600 && (anim.animating || anim.pulse); i++) await sleep(10);
+  clearInterval(poll);
+  assert.deepEqual([...new Set(seen)], [90], "the owner's face-down card lights its slot");
+
+  // Someone else's face-down card has no face to light: the centre flash plays.
+  anim.push(frame({ id: 73, type: "card", card: "TEST:down", kind: "hook", uid: 91, msg: { k: "log.effect_applied" }, flash: true }));
+  let flashed = false;
+  for (let i = 0; i < 60 && !flashed; i++) { flashed = !!anim.flash; await sleep(10); }
+  assert.ok(flashed, "centre flash shows");
+  assert.equal(anim.pulse, null);
 });
 
 test("Animator: a skill rule's hook (not drawn in the field row) keeps the centre flash", async () => {

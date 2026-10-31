@@ -183,6 +183,8 @@
   "board.eventDeck": "Event deck",
   "board.exiled": "Exiled",
   "board.faceDown": "(face-down card)",
+  "board.faceDownStack": "Face-down cards (temporarily unavailable)",
+  "board.faceDownTag": "Face down",
   "board.field": "Field",
   "board.fieldEmpty": "No cards in play yet",
   "board.pillDesignee": "Designee: {{who}}",

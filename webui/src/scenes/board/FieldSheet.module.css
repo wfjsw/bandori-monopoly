@@ -205,7 +205,9 @@
   background: var(--teal);
 }
 
-/* Face-down: a card back in the owner's frame (no name or markers leak). */
+/* Face-down, as seen by everyone but the owner: a card back in its owner's
+   frame (no name or markers leak). The owner gets the face instead, with the
+   back blended over it now and then (`FaceDown.module.css`). */
 .back {
   width: var(--card-w, 120px);
   aspect-ratio: 3 / 4;
@@ -219,6 +221,19 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* The owner's face-down treatment (back blend, 盖着 tag) is shared with the
+   hand's parked stack: `FaceDown.module.css`. Only this row's tag corner
+   differs. */
+.downTagLeft {
+  left: -4px;
+}
+
+/* The blend covers the face, so it carries the same owner ring here (the hand
+   stack's slots ring every child themselves). */
+.blendRing {
+  box-shadow: 0 0 0 2.5px var(--own, var(--line));
 }
 
 @media (prefers-reduced-motion: reduce) {

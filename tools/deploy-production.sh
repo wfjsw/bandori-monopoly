@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Release to the live site: pull master into this worktree, build for production,
-# cut over, and verify. Run it from a deploy worktree, never from the checkout a
-# dev server is serving (the build writes webui/dist).
+# seal the built engine into the archive, cut over, and verify. Run it from a
+# deploy worktree, never from the checkout a dev server is serving (the build
+# writes webui/dist). The deploy is refused unless the live site serves the exact
+# engine bundle this run sealed -- a record sealed by it must stay replayable.
 #
 #   node tools/build-production.mjs      the build steps on their own
 #   tools/deploy-production.sh           this script: merge + build + deploy + check
@@ -72,6 +74,38 @@ for b in target/release/server target/release/bot-service target/release/rules-w
 done
 step "bundles in dist: $(ls webui/dist/assets/engine | wc -l)"
 
+# ---------------------------------------------------------------- 2b. archive
+# The archive is part of the cutover, not a build side effect: seal the exact
+# engine this run built and hold the deploy if its bundle is not in the store.
+# (`build-production.mjs` already archives; running it here again is cheap and
+# makes `--skip-server` / a hand-run build just as safe.)
+log "archive the deployed engine"
+[ -f webui/src/wasm/engine_id.json ] || die "no engine identity; build-glue did not run"
+built_glue="$(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(j.glueSha256||"")' webui/src/wasm/engine_id.json)"
+[ -n "$built_glue" ] || die "engine_id.json carries no glue sha"
+
+node tools/archive-engine.mjs
+node tools/archive-engine.mjs --check
+
+# `archive-engine.mjs` makes the entry it just sealed `current`; key the rest
+# off that, and prove it really is the engine this run built.
+bundle="$(node -e '
+  const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(j.current || "");
+' archive/engine/index.json)"
+[ -n "$bundle" ] || die "the archive has no current bundle after sealing"
+entry_glue="$(node -e '
+  const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  const e = (j.bundles || []).find((b) => b.id === process.argv[2]);
+  process.stdout.write(e ? (e.glueSha256 || "") : "");
+' archive/engine/index.json "$bundle")"
+[ "$entry_glue" = "$built_glue" ] || die "archive current $bundle is not the built engine ${built_glue:0:12}…"
+[ -d "data/engine-archive/$bundle" ] || die "archive entry $bundle has no stored bytes"
+# archive-engine.mjs never overwrites an existing dist file; the index may have
+# just gained aliases, so take the fresh copy explicitly.
+cp archive/engine/index.json webui/dist/assets/engine/index.json
+step "engine bundle ${bundle:0:12}… sealed"
+
 # ---------------------------------------------------------------- 3. cut over
 log "deploy to $LIVE_DIR and $WEBUI_DIR"
 
@@ -122,6 +156,23 @@ for path in / /menu /api/health /data/index.json /assets/engine/index.json; do
   [ "$code" = 200 ] || fail=1
 done
 [ "$fail" = 0 ] || die "an endpoint did not answer 200 through $SITE"
+
+# The deployment must be able to replay the records its own engine sealed.
+step "engine bundle ${bundle:0:12}… is live"
+[ -d "$LIVE_DIR/data/engine-archive/$bundle" ] || die "live store lacks $bundle"
+live_current="$(node -e '
+  try {
+    const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    process.stdout.write(j.current || "");
+  } catch { process.stdout.write(""); }
+' "$WEBUI_DIR/dist/assets/engine/index.json")"
+[ "$live_current" = "$bundle" ] || die "live engine index current is ${live_current:0:12}…, not $bundle"
+for f in bundle.json glue.js glue_bg.wasm; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H "Host: $SITE" "http://127.0.0.1/assets/engine/$bundle/$f")
+  printf '   %-32s %s\n' "/assets/engine/${bundle:0:8}…/$f" "$code"
+  [ "$code" = 200 ] || fail=1
+done
+[ "$fail" = 0 ] || die "the live deployment cannot serve engine bundle $bundle"
 
 step "direct backend (should answer the API only)"
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://$BACKEND/api/health")

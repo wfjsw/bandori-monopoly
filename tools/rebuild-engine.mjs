@@ -231,17 +231,15 @@ function assemble(worktree, out) {
   const glueWasm = readFileSync(join(glueDir, "glue_bg.wasm"));
   const gsha = glueSha256(glueJs, glueWasm);
 
-  const hasher = createHash("sha256");
-  for (const name of probe.dataFiles) {
-    const p = join(dataDir, name);
-    if (existsSync(p)) hasher.update(readFileSync(p));
-  }
-  const dsha = hasher.digest("hex");
+  // `data_sha256` is the engine's own value -- `""` on every record this build
+  // writes (`docs/REPLAY.md` §9.1). Hashing the boot tables here minted an id
+  // no record could name; `tools/archive-engine.mjs` has the same recipe.
+  const dsha = probe.stamp.data_sha256 ?? "";
   const stamp = {
     format: probe.stamp.format,
     save_version: probe.stamp.save_version,
     abi: probe.stamp.abi,
-    ruleset_sha256: String(rulesIndex.ruleset_sha256 || probe.stamp.ruleset_sha256 || "stub"),
+    ruleset_sha256: String(probe.stamp.ruleset_sha256 || rulesIndex.ruleset_sha256 || "stub"),
     data_sha256: dsha,
     engine: probe.stamp.engine || "game-core",
     build: probe.stamp.build || "",
@@ -520,7 +518,7 @@ async function rebuildOne(a, commit, expectId, entry) {
     log(`  glue sha     ${built.gsha.slice(0, 16)}…`);
     log(`  source id    ${(v.source_id ?? "").slice(0, 16)}…`);
     log(`  ruleset      ${built.stamp.ruleset_sha256.slice(0, 16)}…`);
-    log(`  data sha     ${built.dsha.slice(0, 16)}…`);
+    log(`  data sha     ${built.dsha ? `${built.dsha.slice(0, 16)}…` : '"" (board/rule params ride in the record)'}`);
     log(`  out          ${built.bundleDir}`);
     if (a.dist) {
       copyToDist(built.bundleDir, built.modulesDir, a.dist, serveAs);

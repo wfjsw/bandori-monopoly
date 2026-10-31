@@ -14,6 +14,10 @@
 // standing preview -- it never lights tiles; a press-and-hold on a card that
 // actually binds tiles (「指定」) lights those and fades the rest, and lifting
 // the finger is not a tap. A card with no tile binding has no hold effect.
+//
+// A face-down card instance is not "in play" yet -- it is a hand card parked
+// out of reach -- so it sits in its own stack by the hand (FaceDownStack), not
+// in this row. Face-down *events* stay: they are already in effect.
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useDockRaise } from "../../hooks/dock";
@@ -35,6 +39,7 @@ import { eventMarkers, fieldMarkers, markerNote, type Marker } from "./markers";
 import { MarkerChip } from "./MarkerChip";
 import { t as tr } from "../../i18n/t";
 import { designBox } from "../../app/stageScale";
+import fd from "./FaceDown.module.css";
 import s from "./FieldSheet.module.css";
 
 /** Card face width (px), the widest step, and the row's horizontal breathing
@@ -72,7 +77,7 @@ export function rowSpread(n: number, width = 480 + CARD_W): Record<string, strin
  * (and their `<img>`s) alone. Pills are derived here; the note and marker
  * chips come pre-built (`markers.ts`) because several surfaces print them.
  */
-const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers, owner, designee, m, on, present, dismiss }: {
+export const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers, owner, designee, m, on, present, dismiss }: {
   /** The row's pick identity (`e…` / `c…`), shared with the wrapper div. */
   slotKey: string;
   /** The card / event id whose art this face shows. */
@@ -157,12 +162,18 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
     pickCard(id, note, pills);
   }, []);
   const dismiss = useCallback(() => setPicked(null), []);
+  // A face-down event's art is hidden from everyone but its owner. The owner
+  // gets the face with the back periodically blended over it, so the card reads
+  // as face down without losing what it is. (Face-down *cards* live in the
+  // hand's own stack and follow the same rule there.)
+  const mine = (ownerSeat: number) => ownerSeat >= 0 && ownerSeat === m.playerId;
   // One stack, cards in play and events in effect alike. Skill rules (`skill:`)
-  // are engine plumbing on the field, not cards in play.
+  // are engine plumbing on the field, not cards in play; a face-down card is
+  // parked out of play by the hand instead.
   const stack = [
     ...S.players.flatMap((x, i) =>
       (x.field ?? [])
-        .filter((c) => !c.card.startsWith("skill:"))
+        .filter((c) => !c.card.startsWith("skill:") && !c.faceDown)
         .map((fc) => ({ kind: "card" as const, seat: i, fc })),
     ),
     ...(S.eventActive ?? []).map((e) => ({ kind: "event" as const, e })),
@@ -195,24 +206,30 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             // An event's frame is its player's colour; a face with no player
             // (a neutral one) falls back to the event purple.
             const owner = e.playerId >= 0 ? e.playerId : -1;
+            const own = e.faceDown && mine(owner);
+            const name = D.event(e.id)?.name ?? e.id;
             return (
               <div key={key} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, hoverSeat >= 0 && s[e.playerId === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: owner >= 0 ? m.colorOf(owner) : "var(--purple)" }}>
-                {e.faceDown ? (
+                {e.faceDown && !own ? (
                   <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
                 ) : (
-                  <FieldFace
-                    slotKey={key}
-                    card={e.id}
-                    title={D.event(e.id)?.name ?? e.id}
-                    note={note}
-                    markers={markers}
-                    owner={owner}
-                    designee={-1}
-                    m={m}
-                    on={picked === key}
-                    present={present}
-                    dismiss={dismiss}
-                  />
+                  <>
+                    {own && <span className={cx(fd.tag, s.downTagLeft)}>{tr("board.faceDownTag")}</span>}
+                    <FieldFace
+                      slotKey={key}
+                      card={e.id}
+                      title={own ? `${name} · ${tr("board.faceDown")}` : name}
+                      note={note}
+                      markers={markers}
+                      owner={owner}
+                      designee={-1}
+                      m={m}
+                      on={picked === key}
+                      present={present}
+                      dismiss={dismiss}
+                    />
+                    {own && <div className={cx(fd.blend, s.blendRing)} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>}
+                  </>
                 )}
               </div>
             );
@@ -229,25 +246,22 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           // Hold-to-highlight only when this instance actually designates tiles.
           const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
           const key = `c${fc.uid}`;
+          const name = D.card(fc.card)?.name;
           return (
             <div key={key} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
-              {fc.faceDown ? (
-                <div className={s.back} title={`${m.nameOf(seat)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
-              ) : (
-                <FieldFace
-                  slotKey={key}
-                  card={fc.card}
-                  title={D.card(fc.card)?.name}
-                  note={live}
-                  markers={markers}
-                  owner={owner}
-                  designee={designee}
-                  m={m}
-                  on={picked === key}
-                  present={present}
-                  dismiss={dismiss}
-                />
-              )}
+              <FieldFace
+                slotKey={key}
+                card={fc.card}
+                title={name}
+                note={live}
+                markers={markers}
+                owner={owner}
+                designee={designee}
+                m={m}
+                on={picked === key}
+                present={present}
+                dismiss={dismiss}
+              />
               {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}
             </div>
           );

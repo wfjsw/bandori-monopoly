@@ -235,6 +235,14 @@
   pointer-events: none;
   white-space: nowrap;
 }
+/* The face-down stack owns the bar's right end: the pill clears its peek strip,
+   and the raised card entirely. */
+.dock[data-down] .thinkingSlot {
+  bottom: calc(100% + var(--hand-peek) + var(--sp-2));
+}
+.dock[data-down][data-state="raised"] .thinkingSlot {
+  bottom: calc(100% + 200px + var(--sp-2));
+}
 .bar > span:first-child {
   height: 28px;
   font-size: var(--fs-md);
@@ -450,6 +458,111 @@
   box-shadow: 0 0 0 1.5px #fff;
 }
 
+/* The face-down stack: hand cards a skill has put down, parked at the right end
+   of the hand (the mirror of the skill stack on the left). Dense overlap like
+   the skill stack, retracted and raised with the hand's own top strip
+   (`--hand-peek`), click-through except for the cards themselves. The newest
+   card is the last child and so paints on top; hovering one lifts it clear.
+   It carries the other surfaces' face-down conventions: the back for everyone
+   but the owner, and the owner's face with the back blended over it now and
+   then under a 盖着 tag (both shared via `FaceDown.module.css`). */
+.downStack {
+  position: absolute;
+  /* Clear of the column edge: the 盖着 tag hangs 4px past the card and would
+     otherwise slip under the right-hand panel. */
+  right: var(--sp-2);
+  bottom: 0;
+  width: max-content;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  pointer-events: none;
+  transform: translateY(calc(100% - var(--hand-peek)));
+  transition: transform var(--dur-slow) var(--ease-sheet);
+}
+/* A retracted prompt sheet holds the bottom edge: the peek rides above its
+   strip like the fan's and the skill stack's. */
+.dock[data-sheet="down"] .downStack {
+  transform: translateY(calc(100% - var(--hand-peek) - var(--sheet-strip)));
+}
+.dock[data-state="raised"] .downStack {
+  transform: translateY(0);
+}
+.downSlot {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: none;
+  /* Pinned: the shrink-to-fit stack otherwise sizes a slot to the art's
+     intrinsic width, not the face's. The step below assumes this width. */
+  width: var(--card-w, 120px);
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease, opacity var(--dur-mid) ease;
+}
+/* Only the leading edge of each covered card shows, up to the newest. */
+.downSlot + .downSlot {
+  margin-left: calc(var(--down-step, 0px) - var(--card-w, 120px));
+}
+.downSlot:hover,
+.downSlot:focus-within {
+  transform: translateY(-24px);
+  z-index: 2;
+  filter: var(--peek-lift);
+}
+/* Players-panel hover: this owner's parked cards light, the rest fade. */
+.downSlot.hot {
+  filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own));
+  transform: translateY(-10px);
+  z-index: var(--z-lift);
+}
+.downSlot.dim {
+  opacity: 0.35;
+  filter: grayscale(0.7);
+}
+/* 「效果适用」 on a parked card: it lifts out of the stack and blinks (the
+   field row's pulse, in this stack's upward direction). */
+.downSlot.pulse {
+  z-index: 3;
+  animation: down-pulse var(--pulse-ms, 1500ms) ease-in-out both;
+}
+@keyframes down-pulse {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  18%,
+  82% {
+    transform: translateY(-18px) scale(1.08);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+/* The owner's colour on the frame, like every field instance's. */
+.downSlot > div {
+  box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
+}
+.downBack {
+  width: var(--card-w, 120px);
+  aspect-ratio: 3 / 4;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.downBack img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* The 盖着 tag and the back blend are shared (`FaceDown.module.css`); only
+   this stack's corner differs. */
+.downTagRight {
+  right: -4px;
+}
+
 /* Draw-pile peek grows upward above the hand dock (and rides up with a
    bottom-docked replay transport, same as the dock itself). */
 .peek {
@@ -511,8 +624,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fan,
-  .skillStack {
+  .skillStack,
+  .downStack,
+  .downSlot {
     transition: none;
+  }
+
+  .downSlot.pulse {
+    animation: none;
   }
 }
 /* Phone canvas: the hand strip's controls are the thing pressed all game -- bigger. */
