@@ -15,6 +15,7 @@ import { isAuto, plan, type AutoMode, type AutopilotCtx, type PolicyName } from 
 import { SOLO_CAP_MS } from "./botBudget";
 import {
   answerFor,
+  autopilotAnswers,
   botSeats,
   decisionAt,
   decisionOf,
@@ -28,6 +29,7 @@ import {
 import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
+import { autoBids } from "./autoBid";
 import type { SaveSnap, SoloBootOpts, SoloPush } from "./soloProtocol";
 import { clearSoloSave, hasSoloSave, loadSoloSave, saveSoloSave } from "./soloSave.ts";
 import { kv } from "../core/kv.ts";
@@ -197,6 +199,9 @@ class Autopilot {
     // Already answered: the frame still shows the decision this seat just
     // answered (结束 holds after `end`), re-asking would be refused.
     if (!needsAnswer(this.answered, s.you, v)) return;
+    // An auction left to the player (`autoBid` off): the prompt sheet holds
+    // the controls, so 托管 keeps its hands off until the auction closes.
+    if (!autopilotAnswers(v, autoBids())) return;
     // Setup / discard / vote: the search does not cover them (and the server
     // keeps a bot's setup engine-side). Same policy as the mode's table.
     if (decisionAt(v.state, v.playerId) == null) {

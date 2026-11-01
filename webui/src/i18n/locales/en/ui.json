@@ -680,6 +680,8 @@
   "select.stepBan": "Ban",
   "select.stepDeck": "Deck",
   "select.stepPick": "Pick",
+  "settings.autoBid": "Auto-play takes part in auctions",
+  "settings.autoBidHint": "When off, an auction waits for you and auto-play answers everything else.",
   "settings.bgm": "Music",
   "settings.delete": "Delete",
   "settings.deleteAsk": "Level, history and decks will be deleted. Are you sure?",

@@ -89,6 +89,14 @@ pass); only a pass marks the slot. So the recorded decision carries the bid
 its answer left live, and the seat re-arms exactly when the live bid moves
 past it -- not on its own bid, and not on a cosmetic `seq` bump.
 
+Bidding is also the one surface a player may keep while 托管: with the global
+`autoBid` setting off (Settings → 托管参与竞拍) the autopilot skips auction
+prompts (`botDrive.ts` `autopilotAnswers`), the board opens the sheet anyway
+and keeps its controls live over the input lock, and the autopilot resumes on
+the next surface once the auction closes. A Solo auction has no clock, so the
+table then waits for the player; online, the seat's clock and the server's
+drive-list claim stay the backstop.
+
 ## 3. Staging (each step green on its own)
 
 1. **Policy out of `game-core`.** Create `bot-core/src/policy.rs` with the

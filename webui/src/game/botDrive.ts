@@ -181,6 +181,19 @@ export function recordAnswer(
 }
 
 /**
+ * Does the autopilot answer the surface this frame shows?
+ *
+ * An auction is the one surface a player usually wants to keep: bidding is a
+ * judgement call about the seat's money, not a chore, so the global `autoBid`
+ * setting can leave it to the player. The prompt sheet then stays live (the
+ * `Board` opens it under 托管 too) and the autopilot keeps to the other
+ * surfaces until the auction closes.
+ */
+export function autopilotAnswers(v: MatchView, autoBid: boolean): boolean {
+  return autoBid || v.state.prompt?.kind !== "auction";
+}
+
+/**
  * Ask the pool for `member`'s answer at the current view and apply it.
  * Resolves to the outcome; never throws -- a failed search falls back to the
  * existing bot policy (`plan(v, ctx, "bot")` / the view's `aiAnswer`).

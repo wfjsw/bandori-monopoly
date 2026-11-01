@@ -10,6 +10,7 @@ import { n0 } from "../../core/format";
 import { useProfile, useSettings } from "../../core/hooks";
 import { deleteProfile, getProfile, markSeen, profileJson, saveSettings, updateProfile } from "../../core/store";
 import type { SoundSettings } from "../../core/types";
+import { autoBids, setAutoBids } from "../../game/autoBid";
 import { resolveHistoryReplay, type HistoryReplayLink } from "../../game/historyReplay";
 import { getReplay, listReplays, type ReplayEntry } from "../../game/record";
 import { queueReplayBytes } from "../../game/replay";
@@ -122,6 +123,9 @@ export function showFire(): void {
 function Settings({ close }: { close: () => void }) {
   const st = useSettings();
   const [name, setName] = useState(getProfile().playerName);
+  // Global 托管 policy, not a profile field: it is a settings-store key like the
+  // solo search cap, so it survives a refresh without inflating the profile.
+  const [bidAuto, setBidAuto] = useState(autoBids);
   const update = (patch: Partial<SoundSettings>) => {
     saveSettings({ ...st, ...patch });
     applyVolumes();
@@ -147,6 +151,13 @@ function Settings({ close }: { close: () => void }) {
       {toggle(tr("settings.skipLine"), "skipLine")}
       {toggle(tr("settings.greet"), "greet")}
       {toggle(tr("settings.keepAwake"), "keepAwake")}
+      <label className={s.setRow} title={tr("settings.autoBidHint")}>
+        <span className={s.setLabel}>{tr("settings.autoBid")}</span>
+        <input className={s.switch} type="checkbox" checked={bidAuto} onChange={(e) => {
+          setBidAuto(e.target.checked);
+          setAutoBids(e.target.checked);
+        }} />
+      </label>
       <div className={s.setRow}>
         <span className={s.setLabel}>{tr("settings.language")}</span>
         <div className={s.langs}>

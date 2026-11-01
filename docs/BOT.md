@@ -453,6 +453,12 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     so an outbid seat decides again instead of going quiet with the engine
     still counting it open (`botDrive.ts` `needsAnswer`; pinned end-to-end by
     `bot-core/tests/auction_drive.rs`).
+  * **Auto mode can leave the bid to the player (2026-10-31).** 托管 answers
+    auctions like every other surface unless the global `autoBid` setting is
+    off (Settings → 托管参与竞拍). Off, the autopilot skips auction prompts
+    (`botDrive.ts` `autopilotAnswers`), the board still opens the sheet
+    (`Board.tsx`) with its controls live over the input lock (`Prompt.tsx`),
+    and the seat waits for the player; every other surface stays automatic.
   * **Trivial decisions (2026-10-08).**
     [`action::trivial_decision`] skips the search when the root has exactly
     one legal action (it is forced) or when no candidate moves money,
