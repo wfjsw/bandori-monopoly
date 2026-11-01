@@ -1247,3 +1247,201 @@ fn kkr_two_copies_each_charge_6000() {
         "one settle line per stacked copy"
     );
 }
+
+// ================================================================ G04 §8.2
+
+// 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
+// -- 「掷骰」 is a die rolled for the walk, not "this is the main move": a
+// roll-less card main walk earns nothing, a forced dice walk earns it.
+#[test]
+fn g04_charity_gate_ignores_roll_less_main_moves_and_takes_forced_dice_moves() {
+    // Negative half: `TEST:mover` is a roll-less main walk (3 steps).
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 28);
+    t.own(0, &[30]);
+    t.give_play(0, "HHW:爱心义演").unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.give_play(0, "TEST:mover").unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 31, "3 steps, no +2");
+    assert!(
+        !t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("charity_show_pass")),
+        "no pass event for a roll-less walk: {:?}",
+        t.keys_since(mark)
+    );
+
+    // Positive half: the same start and own tile, but the walk rolls.
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 28);
+    t.own(0, &[30]);
+    t.give_play(0, "HHW:爱心义演").unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.give(0, &["TEST:diceMover"]);
+    t.m.world_mut().turn.plan.forced = true; // a side dice walk
+    t.dice(&[3]);
+    t.give_play(0, "TEST:diceMover").unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 33, "the forced dice walk earned its +2");
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("charity_show_pass")),
+        "the pass event fired: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+// 规则书: 「使你的总移动数+2」 -- the +2 joins the walk it was earned on.
+#[test]
+fn g04_charity_plus_two_extends_the_earning_walk() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 28);
+    t.own(0, &[30]);
+    t.give_play(0, "HHW:爱心义演").unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    // 28 -> 29, 30 (+2), 31, 32, 33.
+    assert_eq!(t.pos(0), 33, "the earning walk itself grew by 2");
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("charity_show_pass")),
+        "{:?}",
+        t.keys_since(mark)
+    );
+}
+
+/// P0 is at 10, P1 at `rival`; the roll is loaded. A `fireRoll` tag makes the
+/// plain roll a fire-pot roll so the 美咲 [反击] window opens.
+fn misaki_window(rival: usize) -> Table {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 10);
+    t.set_pos(1, rival);
+    t.set_fire(0, 1, 1);
+    // `give` replaces the hand, so both cards go in one call.
+    t.give(0, &["HHW:（美咲）", "TEST:fireRoll"]);
+    t.play(0, "TEST:fireRoll").unwrap();
+    drain(&mut t);
+    t
+}
+
+// 规则书: 「传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并
+// 触发结算（视为你的主要移动）」 -- the rolled walk is replaced, not appended.
+#[test]
+fn g04_misaki_teleport_is_main_move_voids_the_rolled_walk() {
+    // Allowed: P1 stands 2 ahead of the loaded 4-step walk.
+    let mut t = misaki_window(12);
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    assert!(t.counteract_offered("HHW:（美咲）"), "{}", t.dump_prompt());
+    t.counteract(0, "HHW:（美咲）").unwrap();
+    let k = t
+        .option("PlayerId(1)")
+        .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 12, "teleported, walk voided (not 14)");
+    assert_eq!(t.charge(0), 0, "the fire pot was spent");
+    assert_eq!(t.money(1), 9_500, "the destination's neighbours pay 500");
+
+    // Refused: an abnormal guard on P0 denies the replacement move. The outer
+    // walk is armed again and lands on the rolled endpoint.
+    let mut t = misaki_window(12);
+    t.place_raw(0, "TEST:guard");
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    assert!(t.counteract_offered("HHW:（美咲）"), "{}", t.dump_prompt());
+    t.counteract(0, "HHW:（美咲）").unwrap();
+    let k = t
+        .option("PlayerId(1)")
+        .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 14, "the refused replacement resumed the walk");
+    assert!(
+        t.recent_keys(20)
+            .iter()
+            .any(|k| k.contains("guard_blocked")),
+        "the gate denied the teleport: {:?}",
+        t.recent_keys(20)
+    );
+}
+
+// 规则书: 「位于你的移动起点与预定移动终点之间」 -- the start is the *planned*
+// start (`set_start`), not the pre-plan position; the walk is a plain roll so
+// the frame's start override is the only thing that can move the origin.
+#[test]
+fn g04_misaki_span_uses_the_planned_start() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 5);
+    t.set_pos(1, 15);
+    t.set_fire(0, 1, 1);
+    t.give_play(0, "Mor:你的光芒将照亮前路").unwrap();
+    drain(&mut t);
+    t.give(0, &["HHW:（美咲）", "TEST:fireRoll"]);
+    t.play(0, "TEST:fireRoll").unwrap();
+    drain(&mut t);
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    // The planned start is 13 (你的光芒); the span 13..17 contains P1 on 15,
+    // while the pre-plan position 5 would have given 5..9.
+    assert!(
+        t.counteract_offered("HHW:（美咲）"),
+        "the planned start's span contains P1: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "HHW:（美咲）").unwrap();
+    let k = t
+        .option("PlayerId(1)")
+        .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 15, "teleported to P1");
+}
+
+/// Open the 美咲 window over a loaded 4-step roll. Returns the table after
+/// the roll, before the counter decision.
+fn misaki_effective_steps(next_steps: Option<i32>) -> Table {
+    let mut t = misaki_window(15);
+    t.m.world_mut().hidden[0].next_steps = next_steps;
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    t
+}
+
+// 规则书: 「预定移动终点」 -- the endpoint is the effective length, so a
+// `next_steps` bound past the raw face widens the span.
+#[test]
+fn g04_misaki_span_uses_next_steps() {
+    // With `next_steps` 5 the span is 10..15 and P1 on 15 is inside it.
+    let mut t = misaki_effective_steps(Some(5));
+    assert!(
+        t.counteract_offered("HHW:（美咲）"),
+        "next_steps widens the span: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "HHW:（美咲）").unwrap();
+    let k = t
+        .option("PlayerId(1)")
+        .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 15);
+
+    // Without it the raw face is 4 and the span 10..14 stops before P1.
+    let mut t = misaki_effective_steps(None);
+    assert!(
+        !t.counteract_offered("HHW:（美咲）"),
+        "the raw face does not reach 15: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+    assert_eq!(t.pos(0), 14, "the plain walk landed");
+}

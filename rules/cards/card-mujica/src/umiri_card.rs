@@ -82,13 +82,9 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
 }
 
 fn take_bands(holder: i32, user: i32) {
-    for (_uid, id, extra) in ctx::group_skills(holder) {
-        // TODO(规则书)（从卡堆拿取场上有此卡的玩家的所有乐队技能卡）: A holder only carries extras once a second
-        // copy exists.
-        if extra != 0 {
-            continue;
-        }
-        // 规则书（2）: 「从卡堆拿取场上有此卡的玩家的所有乐队技能卡」
+    for (_uid, id, _extra) in ctx::group_skills(holder) {
+        // 规则书（2）: 「从卡堆拿取场上有此卡的玩家的所有乐队技能卡」 -- an
+        // `extra` attachment is a band skill card on the holder's field too.
         let got = ctx::add_group_skill(user, id.as_str(), true);
         if got >= 0 {
             ctx::log(
@@ -164,10 +160,9 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
                 .card("card", id.as_str()),
         );
     }
-    // TODO(规则书)（将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡）: 书 discards
-    //   before the draw -- `set_dest` only records the dest and the instance enters the
-    //   discard after the body, so the draw (which can reshuffle that discard) runs first
-    ctx::set_dest(ctx::Dest::Graveyard);
+    // 规则书（3）: 「将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡」 -- the
+    // discard is filed now, before the draw (a draw can reshuffle the discard).
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::set_counter(USER_KEY, 0);
     ctx::draw(user, 1)?;
     ctx::log(user, &Msg::new(key!("umiri_ended")).player_id("who", user));

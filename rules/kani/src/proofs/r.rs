@@ -127,6 +127,11 @@ crate::host_subset!(nfo_play_dispatch {
     card_counter => arm_card_counter,
     add_card_counter => arm_add_card_counter,
     count_held | count_held_name => arm_count_held,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// `R:NFO` AtEnd — one [停留] layer.

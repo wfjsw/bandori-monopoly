@@ -258,6 +258,12 @@ pub struct MoveSnap {
     pub tags: NameMap,
     /// Was this settle initiated by a card (`settle_tile_at`)?
     pub settle_redirect: bool,
+    /// The walk was rolled (`move.rolled`); a teleport or a card-driven hop is
+    /// not.
+    pub rolled: bool,
+    /// The steps the move actually took (`move.effective`): the fixed count,
+    /// else `next_steps`, else the roll.
+    pub effective: i32,
 }
 
 impl MoveSnap {
@@ -271,6 +277,8 @@ impl MoveSnap {
         roll: -1,
         tags: NameMap::new(),
         settle_redirect: false,
+        rolled: false,
+        effective: 0,
     };
 
     /// A move payload is present when kind is a real `MoveKind` (0/1).
@@ -856,6 +864,22 @@ pub struct World {
     pub paid_in_settle_by: [i32; MAX_PLAYERS],
     /// A symbolic `rent_quote` figure; `-1` = no rent charge.
     pub rent_quote: i32,
+    /// The turn's main move is already taken (`run_planned_move` latch).
+    pub main_moved: bool,
+    /// The next move is forced (`plan::set_forced`).
+    pub forced: bool,
+    /// A forced move counts as the main move anyway (`set_main_override`).
+    pub main_override: bool,
+    /// A replacement skips the rolled walk (`plan::void_walk`).
+    pub void_walk: bool,
+    /// The plan has a teleport destination (`plan::set_teleport_to`).
+    pub teleport: bool,
+    /// The call runs inside a roll window owned by the mover.
+    pub window: bool,
+    /// Fixed plan steps (`plan::set_steps`), `None` = "the roll".
+    pub steps: Option<i32>,
+    /// Walk parity (`plan::set_parity`); `-1` = no parity, `0` even, `1` odd.
+    pub parity: i32,
     /// Move payload (`Trigger::mv`); `MoveSnap::NONE` = no move.
     pub move_snap: MoveSnap,
     /// Buy payload (`Trigger::buy`); `BuySnap::NONE` = no buy.
@@ -1009,6 +1033,14 @@ impl World {
             settle_open: 0,
             paid_in_settle_by: [0; MAX_PLAYERS],
             rent_quote: -1,
+            main_moved: false,
+            forced: false,
+            main_override: false,
+            void_walk: false,
+            teleport: false,
+            window: false,
+            steps: None,
+            parity: -1,
             move_snap: MoveSnap::NONE,
             buy_snap: BuySnap::NONE,
             trig_card: 0,

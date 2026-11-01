@@ -26,7 +26,7 @@
 //! mutate through the stack by id between raises instead of holding a borrow
 //! across `self.raise`.
 
-use super::cx::{PlayCtx, Flow};
+use super::cx::{Flow, PlayCtx};
 use super::play::{plan_dice_msg, Move};
 use super::rules::{RollSource, Trigger};
 use super::world::{FixedFace, RollHistoryEntry, World};
@@ -181,12 +181,18 @@ impl World {
     /// The synthesized move view of a transaction, for a trigger raised
     /// outside a live move frame (a join recast or a preview): a walk that does
     /// not resolve -- the transaction's caller owns the walk and the settle.
-    /// The dice come from the shared turn plan (the move this transaction
-    /// rides); a bare default would throw a plain d20 and drop every plan
-    /// table (1d4 extras, forced 2d20, ...).
+    /// The dice come from the plan this transaction rides -- the innermost
+    /// frame (`plan()`), not the staging `turn.plan`: a `rollPlan` filter's
+    /// `set_base_dice` / `add_base_dice` write the frame, and a join recast
+    /// would otherwise throw the staged table and drop the 1d4 extras. A bare
+    /// default would throw a plain d20 and drop every plan table (forced 2d20
+    /// included).
     pub fn roll_move_view(&self, id: i32, fallback_roller: usize) -> Move {
-        let roller = self.roll_by_id(id).map(|r| r.roller).unwrap_or(fallback_roller);
-        let mut m = self.turn.plan.clone();
+        let roller = self
+            .roll_by_id(id)
+            .map(|r| r.roller)
+            .unwrap_or(fallback_roller);
+        let mut m = self.plan().clone();
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
         m.is_main_move = self.roll_by_id(id).map(|r| r.main).unwrap_or(false);
@@ -237,7 +243,9 @@ impl World {
 
     /// More than one cast on the transaction?
     pub fn roll_rerolled(&self, id: i32) -> bool {
-        self.roll_by_id(id).map(|r| r.casts.len() > 1).unwrap_or(false)
+        self.roll_by_id(id)
+            .map(|r| r.casts.len() > 1)
+            .unwrap_or(false)
     }
 
     /// Every face `player` has cast this turn.
@@ -301,6 +309,17 @@ impl PlayCtx<'_> {
         id
     }
 
+    /// Re-stamp an open transaction's source: a plan window can raise the
+    /// move's own source (「使用火罐进行移动掷骰」 tags the plan at
+    /// `diceRollPlan`, after the transaction was opened). Rank-up only.
+    pub fn set_roll_source(&mut self, id: i32, source: RollSource) {
+        if let Some(r) = self.tx_mut(id) {
+            if source.rank() > r.source.rank() {
+                r.source = source;
+            }
+        }
+    }
+
     /// Drop a transaction without a settlement (a `diceRollPlan` teleport
     /// rewrite casts no dice).
     pub fn abandon_roll(&mut self, id: i32) -> Option<RollTransaction> {
@@ -333,6 +352,17 @@ impl PlayCtx<'_> {
         let mut t = Trigger::new(kind, r.roller);
         if let Some(m) = m {
             t.with_move(m);
+            // The move view carries the face the walk will take: the cast in
+            // flight (a fixed count / `next_steps` still win). The local move
+            // is a snapshot and does not see the cast the ladder made.
+            let face = r.face();
+            if let Some(mv) = t.mv.as_mut() {
+                mv.effective = m.steps.or(m.next_steps).unwrap_or(face);
+                // `move.roll` is the face this trigger is about: `-1` on the
+                // Plan window (`null` after `fill_window`'s negative filter),
+                // the cast from the Cast window on.
+                mv.roll = Some(value);
+            }
         }
         t.with_roll(r);
         t.value = value;
@@ -342,13 +372,7 @@ impl PlayCtx<'_> {
     // ---- stages --------------------------------------------------------
 
     /// Throw one face and log it. Returns the raw face.
-    fn cast(
-        &mut self,
-        id: i32,
-        m: Option<&Move>,
-        source: RollSource,
-        log_dice: bool,
-    ) -> Flow<i32> {
+    fn cast(&mut self, id: i32, m: Option<&Move>, source: RollSource, log_dice: bool) -> Flow<i32> {
         let Some(r) = self.roll_by_id(id) else {
             return Ok(0);
         };
@@ -453,6 +477,7 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         let raw = r.casts[idx].raw;
+        let purpose = r.purpose;
         if let Some(r) = self.tx_mut(id) {
             r.stage = RollStage::Add;
         }
@@ -461,6 +486,14 @@ impl PlayCtx<'_> {
             r.stage = RollStage::Value;
         }
         v = self.fold_roll("diceRollValue", id, m, v)?;
+        // 规则书 「如果为0则此次移动不[结算]」 keys on the **final** figure, and
+        // both folds compose several responders' deltas: a body that floors
+        // its own input to 0 (不要背负期待) cannot know whether a sibling
+        // writes the face back up (想要成为人类's `+N`). Decide it on the
+        // composed result, after both folds, and only for a move roll.
+        if purpose == PURPOSE_MOVE && v == 0 {
+            self.w.plan_mut().settles = false;
+        }
         if let Some(r) = self.tx_mut(id) {
             r.casts[idx].settled = Some(v.max(0));
             r.dirty = false;
@@ -468,13 +501,7 @@ impl PlayCtx<'_> {
         Ok(())
     }
 
-    fn fold_roll(
-        &mut self,
-        kind: &str,
-        id: i32,
-        m: Option<&Move>,
-        value: i32,
-    ) -> Flow<i32> {
+    fn fold_roll(&mut self, kind: &str, id: i32, m: Option<&Move>, value: i32) -> Flow<i32> {
         let t = self.raise_roll(kind, id, m, value)?;
         Ok(t.value.max(0))
     }
@@ -598,12 +625,7 @@ impl PlayCtx<'_> {
 
     /// A preview move roll: cast + `diceRollBefore`, committed raw. No
     /// settlement and no `diceRollSettled` -- the real move settles the face.
-    pub fn run_preview_roll(
-        &mut self,
-        roller: usize,
-        m: &Move,
-        source: RollSource,
-    ) -> Flow<i32> {
+    pub fn run_preview_roll(&mut self, roller: usize, m: &Move, source: RollSource) -> Flow<i32> {
         let id = self.next_roll_id();
         let parent = self.open_roll_id();
         let mut r = RollTransaction::new(id, roller, PURPOSE_MOVE, 0, 0, parent);
@@ -635,12 +657,7 @@ impl PlayCtx<'_> {
     /// A standalone move roll for another seat (Doll Garden's victim): its own
     /// top-level transaction, the whole Move ladder, the plan raise against
     /// the victim's view of the shared plan.
-    pub fn roll_move(
-        &mut self,
-        roller: usize,
-        m: &Move,
-        source: RollSource,
-    ) -> Flow<i32> {
+    pub fn roll_move(&mut self, roller: usize, m: &Move, source: RollSource) -> Flow<i32> {
         let id = self.open_move_roll(roller, source);
         self.raise_roll("diceRollPlan", id, Some(m), -1)?;
         self.run_move_roll(id, m, None, true)
@@ -679,12 +696,7 @@ impl PlayCtx<'_> {
     /// A recast on an open transaction (a reroll). Raises its own
     /// `diceRollBefore` and, on a windowed move, `diceRollResult`, both with
     /// the transaction source. Returns the new raw face.
-    pub fn roll_recast(
-        &mut self,
-        id: i32,
-        source: RollSource,
-        m: Option<&Move>,
-    ) -> Flow<i32> {
+    pub fn roll_recast(&mut self, id: i32, source: RollSource, m: Option<&Move>) -> Flow<i32> {
         let Some(roll) = self.roll_by_id(id) else {
             return Ok(0);
         };

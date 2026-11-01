@@ -30,7 +30,11 @@ fn zz_probe_debut_crystal() {
     while t.prompt().is_some() {
         t.decline();
     }
-    eprintln!("after: field {:?} crystals {:?}", t.field(0), Some(t.crystals(0, &band_id)));
+    eprintln!(
+        "after: field {:?} crystals {:?}",
+        t.field(0),
+        Some(t.crystals(0, &band_id))
+    );
     for e in t.events_since(0) {
         eprintln!("{} {:?}", e.r#type, e.msg);
     }

@@ -68,6 +68,15 @@ pub trait CondView {
     fn move_main(&self) -> bool;
     /// `move.by_skill` -- the move was shaped or started by a skill.
     fn move_by_skill(&self) -> bool;
+    /// `move.rolled` -- a die was cast for this walk.
+    fn move_rolled(&self) -> bool;
+    /// `move.effective` -- the length the move will take.
+    fn move_effective(&self) -> i64;
+    /// The move's actual start tile (`trigger::move_from()`), `-1` = none.
+    /// A planned start is stamped here before the roll windows.
+    fn move_from(&self) -> i64 {
+        -1
+    }
     /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward; `1` when the
     /// window has no move (matches the guest's `trigger::move_dir()`).
     fn move_dir(&self) -> i64;

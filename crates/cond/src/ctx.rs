@@ -94,6 +94,14 @@ pub struct MoveSnap {
     pub tags: Vec<(String, i64)>,
     /// The move was shaped or started by a skill (`move.by_skill`).
     pub by_skill: bool,
+    /// A die was cast for this walk (`move.rolled`).
+    pub rolled: bool,
+    /// The length the move will take (`move.effective`).
+    pub effective: i64,
+    /// The move's actual start tile (`move.from`), `-1` = none. A planned
+    /// start (`set_start`) is stamped here before the roll windows, so a span
+    /// reads the origin the walk will use, not the pre-plan position.
+    pub from: i64,
 }
 
 impl Default for MoveSnap {
@@ -108,6 +116,9 @@ impl Default for MoveSnap {
             dir: 1,
             tags: Vec::new(),
             by_skill: false,
+            rolled: false,
+            effective: 0,
+            from: -1,
         }
     }
 }

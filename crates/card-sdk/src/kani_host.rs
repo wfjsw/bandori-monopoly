@@ -386,6 +386,22 @@ pub enum Op {
     settle_outcome = 375,
     paid_in_settle_by = 376,
     rent_quote = 377,
+    // v111 (G04): command-scoped plans, walk control and board geometry
+    // (`G04-move-plan` §3.3).
+    set_forced = 378,
+    set_main_override = 379,
+    void_walk = 380,
+    clear_steps = 381,
+    add_extra_steps = 382,
+    move_planned_teleport = 383,
+    move_pay_factor = 384,
+    move_rent_factor = 385,
+    move_effective_steps = 386,
+    move_forced = 387,
+    trig_move_rolled = 388,
+    trig_move_effective_steps = 389,
+    nearest_tile_on_axis = 390,
+    farthest_tile_on_axis = 391,
     // v109: roll transactions (design G03).
     roll_recast = 398,
     roll_move = 399,

@@ -210,6 +210,13 @@ pub struct TurnCtx {
     /// save/restore diverge on the next roll (`fuzz_found::save_restore_break`).
     #[serde(default)]
     pub plan: crate::engine::move_ctx::MoveCtx,
+    /// The live plan frames, innermost last. `plan` above is the staging buffer
+    /// when this is empty; see [`World::plan`].
+    #[serde(default)]
+    pub plan_stack: Vec<crate::engine::move_ctx::PlanFrame>,
+    /// The activation body's command scope (see [`World::enter_plan_command`]).
+    #[serde(default)]
+    pub plan_scope: crate::engine::move_ctx::PlanScope,
     pub player_id: usize,
     pub extra: bool,
     pub main_moved: bool,
@@ -393,6 +400,8 @@ impl Default for TurnCtx {
     fn default() -> Self {
         Self {
             plan: Default::default(),
+            plan_stack: Vec::new(),
+            plan_scope: Default::default(),
             player_id: 0,
             extra: false,
             main_moved: false,
@@ -909,6 +918,11 @@ pub struct World {
     /// reset-to-hook-value, prompts never draw on a pool.
     #[serde(default)]
     pub legacy_clock: bool,
+    /// The rollers whose move roll windows are open, innermost last. A
+    /// `run_planned_move` issued from the owner's own window replaces the
+    /// pending walk (`spec/abi/G04-move-plan.md` §4.4).
+    #[serde(default)]
+    pub move_roll_windows: Vec<usize>,
 }
 
 /// Once-per-flash state (ABI v55), shared across `World::clone` via [`Arc`].
@@ -948,13 +962,137 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    // ------------------------------------------------ plan frames
+
+    /// The plan the move currently reads: the innermost frame, else the
+    /// staging buffer.
+    pub fn plan(&self) -> &crate::engine::move_ctx::MoveCtx {
+        self.turn
+            .plan_stack
+            .last()
+            .map_or(&self.turn.plan, |f| &f.plan)
+    }
+
+    /// The plan a card write lands on: the innermost frame, else staging.
+    pub fn plan_mut(&mut self) -> &mut crate::engine::move_ctx::MoveCtx {
+        self.turn
+            .plan_stack
+            .last_mut()
+            .map_or(&mut self.turn.plan, |f| &mut f.plan)
+    }
+
+    /// Open a plan frame for a move `owner` is about to run. `target` is the
+    /// plan the caller passed; at depth 0 a Main frame takes it whole and a
+    /// Side frame takes the command delta, while a nested frame takes the delta
+    /// against the innermost command (`spec/abi/G04-move-plan.md` §3.2).
+    pub fn begin_plan(
+        &mut self,
+        owner: usize,
+        kind: crate::engine::move_ctx::PlanKind,
+        target: crate::engine::move_ctx::MoveCtx,
+    ) {
+        use crate::engine::move_ctx::MoveCtx;
+        let command = self.turn.plan_scope.commands.last().cloned();
+        let depth = self.turn.plan_stack.len();
+        let saved = command
+            .as_ref()
+            .map_or_else(|| self.turn.plan.clone(), |c| c.staging_before.clone());
+        let mut seed = if depth == 0 {
+            match kind {
+                crate::engine::move_ctx::PlanKind::MainMove => target,
+                crate::engine::move_ctx::PlanKind::SideMove => command.as_ref().map_or_else(
+                    || self.turn.plan.clone(),
+                    |c| MoveCtx::staging_seed(&c.plan_before, &self.turn.plan, &target),
+                ),
+            }
+        } else {
+            // A nested frame is a side frame; its `saved` is unused.
+            let current = self.plan().clone();
+            let base = command.as_ref().map_or(&current, |c| &c.plan_before);
+            MoveCtx::staging_seed(base, &current, &target)
+        };
+        if depth == 0 {
+            // G02 §5.5: the `nextMove` factor is for exactly this move.
+            let next = std::mem::take(&mut self.turn.next_move_pay_factor);
+            self.turn.next_move_pay_factor = 1000;
+            seed.pay_factor *= f64::from(next) / 1000.0;
+        }
+        if kind == crate::engine::move_ctx::PlanKind::MainMove && depth == 0 {
+            // `is_main_move` is a Command field, so the frame carries it while
+            // a roll window hook reads the plan.
+            seed.is_main_move = true;
+            if let Some(steps) = self.hidden.get_mut(owner).and_then(|h| h.next_steps.take()) {
+                seed.next_steps = Some(steps);
+            }
+        }
+        let kind = if depth > 0 {
+            crate::engine::move_ctx::PlanKind::SideMove
+        } else {
+            kind
+        };
+        self.turn
+            .plan_stack
+            .push(crate::engine::move_ctx::PlanFrame {
+                plan: seed,
+                saved,
+                kind,
+                owner,
+            });
+        self.turn.move_open = true;
+    }
+
+    /// Pop the innermost frame and apply the restore table.
+    pub fn end_plan(&mut self, ran: bool) {
+        use crate::engine::move_ctx::{MoveCtx, PlanKind};
+        let Some(frame) = self.turn.plan_stack.pop() else {
+            return;
+        };
+        if self.turn.plan_stack.is_empty() {
+            self.turn.plan = match (frame.kind, ran) {
+                (PlanKind::MainMove, true) => MoveCtx::default(),
+                _ => frame.saved,
+            };
+            self.turn.move_open = false;
+        }
+    }
+
+    /// Enter an activation body's command scope (`resumed`: the body is being
+    /// re-run after a host pause and the saved world still holds it, so no
+    /// second snapshot is taken).
+    pub fn enter_plan_command(&mut self, resumed: bool) {
+        if resumed {
+            return;
+        }
+        let command = crate::engine::move_ctx::PlanCommand {
+            staging_before: self.turn.plan.clone(),
+            plan_before: self.plan().clone(),
+            moves_at_entry: self.turn.plan_scope.moves,
+        };
+        self.turn.plan_scope.commands.push(command);
+    }
+
+    /// Leave the innermost command scope. An outermost command that drove a
+    /// move drops the writes the replayed body made after its last move; one
+    /// that drove none keeps them (they stage the next main move).
+    pub fn leave_plan_command(&mut self) {
+        let Some(command) = self.turn.plan_scope.commands.pop() else {
+            return;
+        };
+        // Per-pair designation cancels are **not** cleared here: they are written
+        // by the counteraction body of the play's `card` window, which runs as
+        // its own command (and so leaves before the play's body). They are
+        // scoped to the play instead -- cleared at its start.
+        if self.turn.plan_scope.commands.is_empty()
+            && self.turn.plan_scope.moves > command.moves_at_entry
+        {
+            self.turn.plan = command.staging_before;
+        }
+    }
+
     /// The withheld turn-end settle answer for `player` (`Unanswered` when
     /// never stamped; a save predating the field has a short vector).
     pub fn blocked_settle_answer(&self, player: usize) -> SettleAnswer {
-        self.blocked_settle
-            .get(player)
-            .copied()
-            .unwrap_or_default()
+        self.blocked_settle.get(player).copied().unwrap_or_default()
     }
 
     /// Arm / clear `player`'s withheld turn-end settle answer.
@@ -1018,6 +1156,7 @@ impl World {
             flash: SharedFlash::default(),
             clock: crate::clock::ClockSettings::default(),
             legacy_clock: false,
+            move_roll_windows: Vec::new(),
         }
     }
 
@@ -1122,16 +1261,32 @@ impl World {
         {
             return -1;
         }
-        let (amount, _) = self.rent_figure(data, owner as usize, t);
+        let (mut amount, _) = self.rent_figure(data, owner as usize, t);
         if amount <= 0 {
             return -1;
+        }
+        // The open settle's addends ride the quote exactly as the charge takes
+        // them (add phase before the factors): the pay addend on every leg and
+        // the rent addend on this one -- a quote is always a rent leg.
+        let add = self
+            .turn
+            .settle_pay_add
+            .saturating_add(self.turn.settle_rent_add);
+        let mut modified = false;
+        if add != 0 {
+            amount = amount.saturating_add(add);
+            modified = true;
         }
         // The same arithmetic [`super::play::Play::scale_settle_payment`] runs
         // for a rent, minus the in-flight rent factor and with
         // `milli_scale = 1000`: the tile's rent half and every standing plan /
         // open-settle pay factor, then the single end-of-calculation round the
         // pay chain applies.
-        let mut f = self.turn.plan.pay_factor;
+        // `plan()`, not staging: a quote made inside a live move must see the
+        // factors that move's frame carries (`G04-move-plan.md` R13: the
+        // window-time reads move to `plan()`), else a counter's ×0.5 applied
+        // to the very settle being quoted is missed.
+        let mut f = self.plan().pay_factor;
         f *= self.turn.settle_pay_factor;
         f *= super::play::purchase::tile_money_scale(self, t, true);
         let scaled = if (f - 1.0).abs() <= f64::EPSILON {
@@ -1139,7 +1294,7 @@ impl World {
         } else {
             (amount as f64 * f) as i32
         };
-        if scaled != amount && scaled > 0 {
+        if (scaled != amount || modified) && scaled > 0 {
             super::play::ceil10_money(scaled)
         } else {
             scaled

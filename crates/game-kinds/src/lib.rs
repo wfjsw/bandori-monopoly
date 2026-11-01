@@ -20,8 +20,10 @@
 
 #![no_std]
 
+pub mod move_plan;
 pub mod vocab;
 
+pub use move_plan::PlanKind;
 pub use vocab::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
 
 /// One live engine trigger kind.

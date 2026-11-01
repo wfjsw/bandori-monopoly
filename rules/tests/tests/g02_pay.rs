@@ -267,7 +267,6 @@ fn g02_mashiro_redirect_is_loss_and_half_settles() {
     t.give(0, &[MASHIRO_PAY]);
     // A second 0.5 through the plan: 1000 -> 500 (moca) -> 250 (plan).
     t.m.world_mut().turn.plan.pay_factor = 0.5;
-    t.m.world_mut().turn.plan.pay_fresh = true;
     let before = (t.money(0), t.money(1));
     // P0 pays P1 1000 (x0.5 moca x0.5 plan = 250 settled).
     t.give_play(0, "TEST:xfer1000").unwrap();
@@ -361,7 +360,6 @@ fn g02_kokoro_10000_is_buy_and_must() {
     t.clean();
     t.set_money(0, 10_000);
     t.m.world_mut().turn.plan.pay_factor = 0.5;
-    t.m.world_mut().turn.plan.pay_fresh = true;
     t.give_play(0, KOKORO_CIRCLE).unwrap();
     drain(&mut t);
     assert_eq!(
@@ -431,7 +429,6 @@ fn g02_kokoro_6000_is_rent_kind() {
     t.set_state(2, "skillState", 2);
     t.set_state(2, &format!("{SPLIT_KEY}0"), 1);
     t.m.world_mut().turn.plan.rent_factor = 0.5;
-    t.m.world_mut().turn.plan.pay_fresh = true;
     let before = (t.money(0), t.money(1), t.money(2));
     let m = t.mark();
     land_on_card(&mut t, 0, 0);
@@ -1059,7 +1056,6 @@ fn g02_rana_half_composes_with_walk_factor() {
     t.begin_turn(0);
     t.set_pos(0, land - 2);
     t.m.world_mut().turn.plan.pay_factor = 0.5;
-    t.m.world_mut().turn.plan.pay_fresh = true;
     t.dice(&[2]);
     t.roll(0).unwrap();
     // The trap asks: lose a 抹茶芭菲 or be stopped -- with none in hand the only

@@ -96,6 +96,11 @@ crate::host_subset!(skills_pp_dispatch {
     set_steps | set_settles | set_stop_at | schedule_turn_end | linger
     | card_offer_build | can_build_on => arm_protocol_stub,
     run_planned_move => arm_card_move,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// Sparse 2-seat world + skills_pp subset. `user` ∈ {0, 1} concrete.

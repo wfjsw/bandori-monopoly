@@ -473,6 +473,53 @@ fn want_to_grab_gives_stay() {
     );
 }
 
+/// G04 item 1: 规则书（3）「你在回合开始时立即选择并[传送]至一个与自身所在格
+/// 正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动」.
+/// The offer is one nearest tile per axis; the pick teleports and settles, and
+/// the main move is consumed (a later roll is refused). P0 stands on 水族馆 (3,
+/// `[8,9]`): left (4, `[7,9]`) and right (2, `[9,9]`) are the only rays.
+#[test]
+fn g04_want_to_grab_nearest_axis_teleport() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 3);
+    t.place_raw(0, "CRYCHIC:想要抓住...");
+    // The turn-start branch keys on the unset `PASSER` latch.
+    t.set_state(0, "want_to_grab_passer", -1);
+    t.own(1, &[2]);
+    t.begin_turn(0);
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.kind,
+        "tile",
+        "the axis nearest-tile pick: {}",
+        t.dump_prompt()
+    );
+    let offered: Vec<usize> = p.items.iter().map(|s| s.parse().unwrap()).collect();
+    assert_eq!(
+        offered,
+        vec![54, 4, 2],
+        "one nearest tile per axis (up none): {offered:?}"
+    );
+    // 规则书（3）: 「…并[触发结算]，视为你的主要移动」 -- settle there.
+    let k = p.items.iter().position(|s| s == "2").unwrap();
+    answer_q(&mut t, 0, k as i32).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        2,
+        "teleported to the chosen nearest tile: {:?}",
+        t.recent_keys(16)
+    );
+    // The card retires (「你的下回合开始前」 window over).
+    assert!(!t.on_field(0, "CRYCHIC:想要抓住..."), "the card left play");
+    // 「视为你的主要移动」 -- the main move is spent.
+    assert!(
+        t.roll(0).is_err(),
+        "the teleport consumed the main move: {:?}",
+        t.recent_keys(12)
+    );
+}
+
 // -- CRYCHIC:优雅的呐喊 ------------------------------------------------
 
 fn pass_cry(t: &mut Table, who: usize) {
@@ -789,6 +836,36 @@ fn tomori_crychic_card_resets_x() {
     assert!(r.is_ok(), "card plays: {r:?}");
 }
 
+/// G04 item 14: 「你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发
+/// 结算）」 -- the hop is forced, so it neither consumes nor requires the main
+/// move; the roll still runs afterwards.
+#[test]
+fn g04_fate_hop_does_not_consume_or_require_the_main_move() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "CRYCHIC:一起演奏音乐的命运共同体").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "CRYCHIC:一起演奏音乐的命运共同体"));
+    t.set_pos(0, 10);
+    t.set_pos(1, 6);
+    // P1 is force-moved onto P0's deed: its payment is the 收款 that arms the hop.
+    t.own(0, &[9]);
+    t.own(1, &[12]);
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    answer_opt(&mut t, 0, "PlayerId(1)");
+    answer_opt(&mut t, 0, "forward");
+    drain(&mut t);
+    // 规则书（1）: 「你移动到你前方的下一个属于行动序列后一名玩家的格子」 -- P1
+    // (the next seat) owns 12, the next such tile ahead of P0.
+    assert_eq!(t.pos(0), 12, "hopped to P1's tile: {:?}", t.recent_keys(20));
+    assert_eq!(t.pos(1), 9, "P1 was only force-moved, not followed");
+    // The hop did not touch the main move.
+    t.dice(&[4]);
+    let r = t.roll(0);
+    drain(&mut t);
+    assert!(r.is_ok(), "the main roll still runs: {r:?}");
+    assert_eq!(t.pos(0), 16, "the main walk ran 4 from 12");
+}
+
 // -- CRYCHIC:（祥子）带领着大家 -----------------------------------------
 
 #[test]
@@ -801,6 +878,34 @@ fn sakiko_crychic_card_records_players() {
     // 规则书: 「回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家」
     // We verify the setup is valid.
     assert_eq!(t.pos(0), t.pos(1), "players share CiRCLE");
+}
+
+/// G04 item 7: 「使你的下次主要移动结果对那些玩家一起执行」 -- the shared tail
+/// replays recorded followers on a **card-driven** main move too (not only a
+/// dice main), because the Main frame seed folds the follower list.
+#[test]
+fn g04_sakiko_followers_replay_on_a_card_main_move() {
+    let mut t = Table::new(&["丰川祥子（CRYCHIC）", "户山香澄", "花园多惠"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 5);
+    t.set_pos(1, 5); // shares P0's tile at the turn start
+    t.give_play(0, "CRYCHIC:（祥子）带领着大家").unwrap();
+    drain(&mut t);
+    // 祥，移动 on the caster: a card main move (main_override).
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    answer_opt(&mut t, 0, "PlayerId(0)");
+    answer_opt(&mut t, 0, "forward");
+    drain(&mut t);
+    // 规则书: 「下次主要移动结果对那些玩家一起执行」 -- P1 replays the 3-step move.
+    assert_eq!(t.pos(0), 8, "the caster moved 3: {:?}", t.recent_keys(20));
+    assert_eq!(
+        t.pos(1),
+        8,
+        "the recorded follower replays on the card main move: {:?}",
+        t.recent_keys(20)
+    );
 }
 
 // -- CRYCHIC:（soyo）回到曾经 -------------------------------------------

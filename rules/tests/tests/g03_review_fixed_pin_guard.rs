@@ -3,11 +3,14 @@
 
 mod common;
 use common::*;
-use game_core::engine::FixedFace;
 use game_core::engine::rules::RollSource;
+use game_core::engine::FixedFace;
 
 fn pin(t: &mut Table, v: i32) {
-    t.m.world_mut().turn.fixed_roll = Some(FixedFace { value: v, source: RollSource::Unattributed });
+    t.m.world_mut().turn.fixed_roll = Some(FixedFace {
+        value: v,
+        source: RollSource::Unattributed,
+    });
 }
 
 fn drain(t: &mut Table) {
@@ -31,7 +34,10 @@ fn probe_starry_over_pinned_face() {
     t.dice(&[1, 1, 1, 1, 1]);
     t.roll(0).unwrap();
     let open = t.prompt();
-    println!("starry: prompt after roll = {:?}", open.as_ref().map(|p| p.title.clone()));
+    println!(
+        "starry: prompt after roll = {:?}",
+        open.as_ref().map(|p| p.title.clone())
+    );
     println!("starry: dump = {}", t.dump_prompt());
     drain(&mut t);
     println!("starry: pos = {}", t.pos(0));
@@ -49,7 +55,10 @@ fn probe_eve_over_pinned_face() {
     t.dice(&[1, 1, 1, 1]);
     t.roll(0).unwrap();
     let open = t.prompt();
-    println!("eve: prompt after roll = {:?}", open.as_ref().map(|p| p.title.clone()));
+    println!(
+        "eve: prompt after roll = {:?}",
+        open.as_ref().map(|p| p.title.clone())
+    );
     println!("eve: dump = {}", t.dump_prompt());
     drain(&mut t);
     println!("eve: pos = {}", t.pos(0));
@@ -68,7 +77,10 @@ fn probe_layer_over_pinned_face() {
     t.dice(&[1, 1]);
     t.roll(0).unwrap();
     let open = t.prompt();
-    println!("layer: prompt after roll = {:?}", open.as_ref().map(|p| p.title.clone()));
+    println!(
+        "layer: prompt after roll = {:?}",
+        open.as_ref().map(|p| p.title.clone())
+    );
     println!("layer: dump = {}", t.dump_prompt());
     drain(&mut t);
     println!("layer: pos = {}", t.pos(0));

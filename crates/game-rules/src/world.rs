@@ -150,6 +150,10 @@ pub struct TriggerMove {
     /// Was this settle initiated by a card (`settle_tile_at`), not by the
     /// player's own move landing? `trigger::is_settle_redirect()`.
     pub settle_redirect: bool,
+    /// A die was cast for this walk (`trigger::move_rolled()`).
+    pub rolled: bool,
+    /// The length the move will take (`trigger::move_effective_steps()`).
+    pub effective: i32,
 }
 
 /// The payment a `pay` / `paid` trigger is about.
@@ -1392,6 +1396,49 @@ pub trait CardWorld: Clone + 'static {
     fn set_start(&mut self, _v: Option<game_kinds::Tile>, _reason: &str) {}
     /// Extra steps added mid-walk (the walk grows as it runs).
     fn set_extra_steps(&mut self, _v: i32) {}
+    /// Add to the extra steps (signed).
+    fn add_extra_steps(&mut self, _v: i32) {}
+    /// Drop a fixed step count so the next move rolls.
+    fn clear_steps(&mut self) {}
+    /// A forced move (not the main move unless `main_override`).
+    fn set_forced(&mut self, _v: bool) {}
+    /// 「视为主要移动」.
+    fn set_main_override(&mut self, _v: bool) {}
+    /// This teleport replaces the pending walk.
+    fn void_walk(&mut self) {}
+    /// Clear [`Self::void_walk`] again (a refused replacement re-arms the walk,
+    /// `spec/abi/G04-move-plan.md` §4.4).
+    fn clear_void_walk(&mut self) {}
+    /// The planned teleport destination, -1 when none.
+    fn move_planned_teleport(&self) -> i32 {
+        -1
+    }
+    /// The plan half of the pay factor, milli.
+    fn move_pay_factor(&self) -> i32 {
+        1000
+    }
+    /// The move's rent factor, milli.
+    fn move_rent_factor(&self) -> i32 {
+        1000
+    }
+    fn move_effective_steps(&self) -> i32 {
+        0
+    }
+    fn move_forced(&self) -> bool {
+        false
+    }
+    fn trig_move_rolled(&self) -> bool {
+        false
+    }
+    fn trig_move_effective_steps(&self) -> i32 {
+        0
+    }
+    fn nearest_tile_on_axis(&self, _tile: i32, _axis: i32) -> i32 {
+        -1
+    }
+    fn farthest_tile_on_axis(&self, _tile: i32, _axis: i32) -> i32 {
+        -1
+    }
     /// Floor applied to the final face (unsigned rolls only).
     fn set_min_roll(&mut self, _v: Option<i32>) {}
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
@@ -1461,6 +1508,9 @@ pub trait CardWorld: Clone + 'static {
     fn move_plan(&self) -> game_core::engine::MoveCtx {
         game_core::engine::MoveCtx::default()
     }
+    /// Mutable plan: the `run_planned_move` refusal cleanup re-arms the outer
+    /// walk (`spec/abi/G04-move-plan.md` §4.4).
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx;
     /// How the planned move gets there (0 = walk, 1 = teleport).
     fn move_kind(&self) -> i32 {
         0

@@ -42,13 +42,16 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]),
 );
 
-const SLOT_PASSED: &str = "saaya_sky_passed";
+/// The pass record, a counter **on the instance** (the schedule captures the
+/// uid, so two copies stay independent and the record survives the card leaving
+/// the field).
+const PASSED: &str = "saaya_sky_passed";
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::tile_named("山吹面包房");
     ctx::set_dest(ctx::Dest::Field);
-    // A pass from a previous time on the field must not fire again.
-    ctx::set_slot(player_id, SLOT_PASSED, 0);
+    // A pass from a previous time on the instance must not fire again.
+    ctx::set_counter(PASSED, 0);
     // 规则书（1）: 「将此卡放置在山吹面包房」 -- bound to that tile; the hop in
     // (2) moves it with `set_self_tile`.
     ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("saaya_sky_note")));
@@ -66,25 +69,28 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
-    let uid = ctx::self_uid();
-    if ctx::slot(player_id, SLOT_PASSED) == uid {
+    // 规则书: 「[使用者][经过]此卡后」 -- the record belongs to 「此卡」, an on-card
+    // counter, so two copies passed in the same turn both pay.
+    if ctx::counter(PASSED) != 0 {
         return Ok(());
     }
-    // TODO(规则书)（[使用者][经过]此卡后）: the record is one uid per player -- with
-    // two copies both passed in the same turn only the last one pays.
-    ctx::set_slot(player_id, SLOT_PASSED, uid);
+    // TODO(规则书): 「在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在…」 -- the
+    // card may have left the field before the turn ends; the schedule still pays
+    // and the 3d20 hop then re-places it. Whether a card already gone should
+    // still hop is unprinted.
+    ctx::set_counter(PASSED, 1);
     ctx::at_turn_end(player_id, "at_end");
     Ok(())
 }
 
-/// Residual guard for [`turn_end_after`]: the recorded pass is this instance's,
-/// so a second copy the user did not pass stays put.
-fn passed_here(player_id: i32) -> bool {
-    ctx::slot(player_id, SLOT_PASSED) == ctx::self_uid()
+/// Residual guard for [`turn_end_after`]: this instance recorded a pass, so an
+/// unpassed copy stays put.
+fn passed_here(_player_id: i32) -> bool {
+    ctx::counter(PASSED) != 0
 }
 
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
-    ctx::set_slot(player_id, SLOT_PASSED, 0);
+    ctx::set_counter(PASSED, 0);
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;
     let num = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
     let n = ctx::tile_count();

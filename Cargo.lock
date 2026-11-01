@@ -1850,6 +1850,7 @@ dependencies = [
  "card-sdk",
  "card-sumimi",
  "game-core",
+ "game-kinds",
  "game-rules",
  "postcard",
  "rules-cond",

@@ -182,6 +182,8 @@ pub struct ConfWorld {
     // ---- field instances (uid → tile) for `tile_at` / `set_tile_at` ----
     pub field_uid: Vec<i32>,
     pub field_tile: Vec<i32>,
+    /// The move-plan staging (G04) -- the model keeps its own copy.
+    pub plan: game_core::engine::MoveCtx,
 }
 
 impl ConfWorld {
@@ -248,6 +250,7 @@ impl ConfWorld {
             buy_deal_mortgaged: false,
             field_uid: Vec::new(),
             field_tile: Vec::new(),
+            plan: game_core::engine::MoveCtx::default(),
         }
     }
 
@@ -328,6 +331,9 @@ impl CardWorld for ConfWorld {
     }
     fn log(&mut self, player_id: i32, msg: EngineMsg) {
         self.events.push(format!("log {player_id} {msg}"));
+    }
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx {
+        &mut self.plan
     }
     fn tile_count(&self) -> i32 {
         60
@@ -909,6 +915,8 @@ impl CardWorld for ConfWorld {
                 },
                 by_skill: false,
                 settle_redirect: false,
+                rolled: self.move_roll >= 0,
+                effective: self.move_remaining,
             });
         }
         if self.trig_pay_kind >= 0 || self.trig_pay_is_rent {

@@ -1421,3 +1421,98 @@ fn interaction_web_glitch_vs_hand_effect() {
     // State is consistent either way.
     assert!(t.money(0) >= 10_000);
 }
+
+// ================================================================ G04 §8.2
+
+// 规则书: 「向你选择的方向移动3格」 is a per-card shape; a later main move of
+// the caster walks its own dice and settles at its own (full) price.
+#[test]
+fn g04_saki_move_does_not_shape_the_caster_main_move() {
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 21);
+    t.set_pos(1, 7);
+    t.own(1, &[25]);
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    answer_opt(&mut t, 0, "PlayerId(1)");
+    answer_opt(&mut t, 0, "forward");
+    drain(&mut t);
+    assert_eq!(t.pos(1), 10, "the forced walk is 3 tiles");
+    let rent = data().tiles[25].rent[0];
+    let before = t.money(0);
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    // 规则书: the main move's dice (4), not the card's 3.
+    assert_eq!(t.pos(0), 25, "dice 4, not the forced 3");
+    // 规则书: 「触发结算时进行的支付价格减半」 is ThisMove only.
+    assert_eq!(before - t.money(0), rent, "full rent, not half");
+}
+
+// 规则书: 「（可在掷骰前选择自己以代替主要移动）」 -- only the self-target is
+// 「视为主要移动」; another player's forced walk leaves the caster's slot free.
+#[test]
+fn g04_forced_walk_of_the_turn_player_is_main_only_with_main_override() {
+    // Self: the 3-step walk consumes the main slot.
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 20);
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    answer_opt(&mut t, 0, "PlayerId(0)");
+    answer_opt(&mut t, 0, "forward");
+    drain(&mut t);
+    assert_eq!(t.pos(0), 23, "P0 was forced 3 tiles");
+    assert!(
+        t.roll(0).is_err(),
+        "the self-pick is the main move; keys={:?}",
+        t.recent_keys(12)
+    );
+
+    // Another: the caster's main move is still open.
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 20);
+    t.set_pos(1, 6);
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    answer_opt(&mut t, 0, "PlayerId(1)");
+    answer_opt(&mut t, 0, "forward");
+    drain(&mut t);
+    assert_eq!(t.pos(1), 9, "P1 was forced 3 tiles");
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 24, "P0's own main move still runs");
+}
+
+// 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- the victims' no-settle,
+// forced shape must not leak into the summoner's sum walk (it settles as the
+// main move and walks the sum).
+#[test]
+fn g04_doll_garden_victims_do_not_leak_shape() {
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 20);
+    t.set_pos(1, 10);
+    t.set_pos(2, 30);
+    t.own(1, &[25]);
+    t.dice(&[3, 2]);
+    t.give_play(0, "Mujica:人偶的箱庭").unwrap();
+    let rent = data().tiles[25].rent[0];
+    let before = [t.money(0), t.money(1)];
+    // Take the move half for both victims.
+    for _ in 0..10 {
+        let Some(p) = t.prompt() else { break };
+        if !p.title.key().contains("doll_garden") {
+            decline_q(&mut t);
+            continue;
+        }
+        let who = t.asked()[0];
+        answer_q(&mut t, who, 0).unwrap();
+    }
+    fix_step(&mut t);
+    assert_eq!(t.pos(1), 13, "victim 1 walked its roll");
+    assert_eq!(t.pos(2), 32, "victim 2 walked its roll");
+    // The sum is 5: the frame walks 5 (not a victim's 2/3) and settles.
+    assert_eq!(t.pos(0), 25, "the summoner walked the sum");
+    assert_eq!(
+        [t.money(0), t.money(1)],
+        [before[0] - rent, before[1] + rent],
+        "the sum walk settled at the full price"
+    );
+}

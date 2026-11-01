@@ -14,7 +14,7 @@
 //! whole point of spending the pot.
 
 use bandori_std::ctx;
-use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
+use card_sdk::abi::{roll_source, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const LAYER: CardDef = CardDef::new(
@@ -70,11 +70,13 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("layer_spend")))? {
         return Ok(());
     }
-    // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so a windowed Move roll
-    // with `roll_source::CHARGE` raises the `Roll` chain link and 寄于指尖的执念
-    // 「[反击] 当你使用火罐进行掷骰时」 rings on it.
-    let again = ctx::roll(player_id, 0, 0, RollPurpose::Move, roll_source::CHARGE)?.max(0);
+    // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so it is a **recast**
+    // on the open transaction (not a bare `ctx::roll`, which on a join only
+    // throws): the cast raises the `Roll` chain link 寄于指尖的执念
+    // 「[反击] 当你使用火罐进行掷骰时」 rings on, and the new face runs the
+    // rest of its ladder (so a 「最终结算」 modifier settles it too).
     let roll = ctx::trigger::roll_id();
+    let again = ctx::roll_recast(roll, roll_source::CHARGE)?.max(0);
     // 「择其一执行」 -- keep whichever the player names.
     let keep = ctx::ask_choice(
         player_id,
@@ -87,10 +89,25 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     )?;
     // Record the choice on the transaction: the unpicked face is the keep point
     // 寄于指尖的执念 banks at settlement.
+    //
+    // `roll_pick` wants an absolute cast index, but the prompt's options are
+    // the pair the recast left as the last two casts (old = n-2, new = n-1).
+    // A `Roll` counteraction answering this very recast leaves another cast
+    // behind, so the option index cannot be passed through
+    // (`ctx::roll_reroll` makes the same conversion).
+    let n = ctx::roll_faces(roll).len().max(1);
+    let chosen = if keep == 1 {
+        n - 1
+    } else {
+        n.saturating_sub(2)
+    };
     if roll >= 0 {
-        ctx::roll_pick(roll, keep as i32);
+        ctx::roll_pick(roll, chosen as i32);
     }
-    let face = if keep == 1 { again } else { before };
+    let face = ctx::roll_faces(roll)
+        .get(chosen)
+        .copied()
+        .unwrap_or(if keep == 1 { again } else { before });
     ctx::trigger::set_move_roll(face);
     ctx::log(player_id, &Msg::new(key!("layer_kept")).i("n", face as i64));
     Ok(())

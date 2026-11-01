@@ -6,7 +6,7 @@
 //! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{ActionKind, ChainKind};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,10 +20,10 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // declarer (see `build_round`), so `target == owner && actor != owner`
         // is exactly 「有玩家对你使用[反击]」. `Counteracted` is the named wire
         // kind; the counter-to-a-counter window also presents the link as the
-        // counter's own `card` / `cardUsed` kind, so those two counter-link
+        // counter's own `card` / `CardUsed` kind, so those two counter-link
         // selectors are declared as well.
         On::Counteract(
-            &[ChainKind::Counteracted, ChainKind::Card, card_sdk::abi::ActionKind::CardUsed.as_trigger()],
+            &[ChainKind::Counteracted, ChainKind::Card, ActionKind::CardUsed.as_trigger()],
             "target == owner && actor != owner",
             None,
             counteract).counter_reason(key!("cant_look_away_when")),
@@ -36,52 +36,56 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // sheet cell J7
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
-fn play(player_id: i32) -> card_sdk::Asked {
-    run(player_id)?;
+fn play(_player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「使用者」 is the caster, which a hand-play reaches through the
+    // trigger (`player_id` is the owner).
+    run(trigger::player_id())?;
     Ok(())
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // The counter itself is cast by the answering seat (`player_id`).
     run(player_id)?;
     Ok(())
 }
 
-fn run(player_id: i32) -> card_sdk::Asked {
+/// `caster` is the [使用者] the clause keys on.
+fn run(caster: i32) -> card_sdk::Asked {
     //
     // TODO(规则书): 「使当前回合内对你打出过[反击]的所有玩家…」 needs a
     //   per-turn counteraction history (who countered whom). The engine has
     //   none: `ctx::turn_key()` only names the turn, so the full list cannot
     //   be built (BACKLOG ABI-03). Today the hand-play entry moves **nobody**
-    //   (there `trigger::player_id()` is the acting seat, so the guard below
-    //   returns) and the counteract entry moves only the immediate counterer
-    //   (`trigger::player_id()` of the link this counter answers) -- both less
-    //   than the book. A fix needs: (1) an SDK query for the per-turn
+    //   (there the counterer and the caster are the same seat, so the guard
+    //   below returns) and the counteract entry moves only the immediate
+    //   counterer (`trigger::player_id()` of the link this counter answers) --
+    //   both less than the book. A fix needs: (1) an SDK query for the per-turn
     //   counteraction history (declarer × countered seat), (2) cond vocab to
     //   filter it, (3) a per-entry target set (play vs counteract) that only
     //   skips when empty, (4) an append at the counter-declaration loop
     //   (`wasm_rules.rs` ~5480, where `link.target` = the countered seat and
     //   `actor`/`player_id` = the declarer), (5) an ABI bump.
     //
-    // TODO(规则书)（「若使用者在自身回合内选择了使用者自己进行强制移动」）: the self
-    //   case cannot occur today -- the owner is never in the walked set (the
-    //   counter path requires `actor != owner`; the hand-play path returns at
-    //   the guard). It becomes reachable once the counterer set exists (ABI-03).
+    // TODO(规则书): 「若使用者在自身回合内选择了使用者自己进行强制移动」 -- the self
+    //   case cannot occur today: the counterer is never the caster (the counter
+    //   path requires `actor != owner`, and a hand-play's caster *is* the
+    //   counterer). It becomes reachable once the counterer set exists (ABI-03).
     let counter_user = trigger::player_id();
-    if counter_user < 0 || counter_user == player_id {
+    if counter_user < 0 || counter_user == caster {
         return Ok(());
     }
     if ctx::player_out(counter_user) {
         return Ok(());
     }
     let n = ctx::ask_number(
-        player_id,
+        caster,
         &Msg::new(key!("cant_look_away_title")),
         &Msg::new(key!("cant_look_away_steps")).player_id("who", counter_user),
         1,
         4,
     )?;
     let forward = ctx::ask_choice(
-        player_id,
+        caster,
         &Msg::new(key!("cant_look_away_dir_title")),
         &Msg::new(key!("cant_look_away_dir_ask")),
         &[
@@ -89,16 +93,15 @@ fn run(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("cant_look_away_backward")),
         ],
     )? == 0;
-    // TODO(ABI)（plan::set_forced / MoveCtx）: Steps / Reverse / Resolve map onto
-    // `ctx::plan::*`; `ctx::plan` has no setter for `forced`, so that flag is
-    // dropped and the walk goes through `run_planned_move`'s main-move path. no guest
-    // setter for `MoveCtx.forced` -- a forced walk of the turn player is treated as
-    // the main move and is refused once the main move is spent.
+    // 规则书: 「强制移动1~4以内的任意步数」 -- a forced move; 「若使用者在自身
+    // 回合内选择了使用者自己…则视为其主要移动」 makes only that case the main move.
+    ctx::plan::set_forced(true);
+    ctx::plan::set_main_override(counter_user == caster);
     ctx::plan::set_steps(n);
     ctx::plan::set_reverse(!forward);
     ctx::plan::set_settles(true);
     ctx::log(
-        player_id,
+        caster,
         &Msg::new(key!("cant_look_away_ordered"))
             .player_id("who", counter_user)
             .i("n", n as i64),

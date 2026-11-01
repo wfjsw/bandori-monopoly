@@ -81,7 +81,10 @@ fn zz_control_no_event_mover_card_fires() {
     t.roll(1).unwrap();
     drain(&mut t);
     println!("PROBE control: shave={:?}", fired(&t, mark));
-    assert!(!fired(&t, mark).is_empty(), "control: card must fire at all");
+    assert!(
+        !fired(&t, mark).is_empty(),
+        "control: card must fire at all"
+    );
     assert!(sub_log(&t, mark).is_empty(), "control: no substitution");
 }
 
@@ -96,7 +99,10 @@ fn zz_control_substitute_own_roll_fires() {
     t.roll(0).unwrap();
     drain(&mut t);
     println!("PROBE control2: shave={:?}", fired(&t, mark));
-    assert!(!fired(&t, mark).is_empty(), "control2: card fires on own roll");
+    assert!(
+        !fired(&t, mark).is_empty(),
+        "control2: card fires on own roll"
+    );
 }
 
 #[test]
@@ -108,9 +114,18 @@ fn zz_hallucination_actor_is_the_mover() {
     t.roll(1).unwrap();
     drain(&mut t);
     let subs = sub_log(&t, mark);
-    println!("PROBE mover-owned: shave={:?} sub={subs:?}", fired(&t, mark));
-    assert!(!subs.is_empty(), "P0 must be recorded as the stand-in roller");
-    assert!(!fired(&t, mark).is_empty(), "the mover's own card must apply");
+    println!(
+        "PROBE mover-owned: shave={:?} sub={subs:?}",
+        fired(&t, mark)
+    );
+    assert!(
+        !subs.is_empty(),
+        "P0 must be recorded as the stand-in roller"
+    );
+    assert!(
+        !fired(&t, mark).is_empty(),
+        "the mover's own card must apply"
+    );
 }
 
 #[test]
@@ -122,7 +137,16 @@ fn zz_hallucination_actor_is_not_the_substitute() {
     t.roll(1).unwrap();
     drain(&mut t);
     let subs = sub_log(&t, mark);
-    println!("PROBE substitute-owned: shave={:?} sub={subs:?}", fired(&t, mark));
-    assert!(!subs.is_empty(), "P0 must be recorded as the stand-in roller");
-    assert!(fired(&t, mark).is_empty(), "the substitute's card must NOT apply");
+    println!(
+        "PROBE substitute-owned: shave={:?} sub={subs:?}",
+        fired(&t, mark)
+    );
+    assert!(
+        !subs.is_empty(),
+        "P0 must be recorded as the stand-in roller"
+    );
+    assert!(
+        fired(&t, mark).is_empty(),
+        "the substitute's card must NOT apply"
+    );
 }

@@ -84,5 +84,7 @@
   "want_human_drained": "Wants to Be Human: drained the crystals, next move roll +{{n}}",
   "want_human_note": "\"Wanting to Become Human\" placed on the field",
   "want_human_title": "Wanting to Become Human",
-  "want_to_grab_note": "Want to Grab...'s effect: {{who}} gained one [Stay]"
+  "want_to_grab_ask": "Choose the nearest tile straight up, down, left or right",
+  "want_to_grab_note": "Want to Grab...'s effect: {{who}} gained one [Stay]",
+  "want_to_grab_title": "Want to Grab..."
 }

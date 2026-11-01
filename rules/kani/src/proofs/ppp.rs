@@ -119,6 +119,11 @@ crate::host_subset!(ppp_dispatch {
     trig_value => arm_trig_value,
     trig_set_pay_amount => arm_trig_set_pay_amount,
     opt_int | opt_str | opt_tile => arm_opt,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// Install the sparse 2-seat world + the ppp host subset **in place**.

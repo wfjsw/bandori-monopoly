@@ -621,9 +621,9 @@ fn circle_approach_then_settle_teleport_stream_is_continuous() {
     t.set_pos(0, 57);
     t.set_pos(1, 20);
     t.m.world_mut().turn.fixed_roll = Some(game_core::engine::FixedFace {
-            value: 6,
-            source: game_core::engine::rules::RollSource::Unattributed,
-        }); // 57 -> 0 (CiRCLE) -> 3
+        value: 6,
+        source: game_core::engine::rules::RollSource::Unattributed,
+    }); // 57 -> 0 (CiRCLE) -> 3
     let mark = t.mark();
     let start = t.pos(0);
     t.roll(0).unwrap();

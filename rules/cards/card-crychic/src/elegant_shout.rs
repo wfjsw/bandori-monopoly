@@ -18,10 +18,19 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
         // 规则书[反击]: 「当你在回合外受到抽卡效果时打出」 -- `DrawOut` is the
-        // out-of-turn effect-caused draw; `condition::MINE` is the drawer (「你」).
+        // out-of-turn effect-caused draw (the host raises it only when the draw
+        // lands outside the drawer's own turn); `condition::MINE` is the drawer
+        // (「你」).
+        //
+        // 规则书[反击]: 「当你在回合外受到抽卡效果时」 -- 「受到」 excludes a draw
+        // you caused yourself (a placed card's own hook, e.g. the chuchu crystal
+        // decay, reports its holder as both drawer and `by`). The cause is
+        // `by_card` (`by`), never `actor` -- on this link `actor` *is* the drawer
+        // (the raise's own `player_id`), so `target != actor` would read true
+        // every time.
         On::Counteract(
             &[ChainKind::DrawOut],
-            card_sdk::condition::MINE,
+            "actor == owner && by != actor",
             None,
             counteract,
         )
@@ -49,6 +58,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("elegant_shout_note")).player_id("who", player_id),
     );
+    // 规则书[反击]: 「你的下回合结束时抽一张卡」 -- bind the deferred draw to the
+    // owner's own next turn end.
     ctx::at_next_turn_end(player_id, "at_end");
     Ok(())
 }

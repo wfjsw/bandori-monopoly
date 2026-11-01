@@ -71,7 +71,11 @@ fn g03_starry_reroll_reaches_the_settlement() {
     t.roll(0).unwrap();
     pick(&mut t, 0, "starry_night_keep_new");
     drain(&mut t);
-    assert_eq!(t.pos(0), 4, "the kept 7 settles through the half: ceil(7/2)");
+    assert_eq!(
+        t.pos(0),
+        4,
+        "the kept 7 settles through the half: ceil(7/2)"
+    );
 }
 
 // 规则书 (`sports_talent`): 「此卡位于场上时，每次掷骰获得一次资金」 -- every
@@ -226,7 +230,12 @@ fn g03_hagumi_offers_one_option_per_cast() {
     t.dice(&[20, 20, 20, 10, 3, 3, 2, 2]);
     t.play(0, HAGUMI).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.options.len(), 2, "one option per roll: {}", t.dump_prompt());
+    assert_eq!(
+        p.options.len(),
+        2,
+        "one option per roll: {}",
+        t.dump_prompt()
+    );
     let money = t.money(0);
     t.answer(0, 1).unwrap(); // the ≤60 roll: a mark, no money
     drain(&mut t);
@@ -278,8 +287,16 @@ fn g03_misaki_offered_when_the_result_is_a_fire_recast() {
 fn g03_half_speed_settles_after_the_shave() {
     for order in [0, 1] {
         let mut t = fresh(&["青叶摩卡", "户山香澄"]);
-        let first = if order == 0 { NO_EXPECTATION } else { HALF_SPEED };
-        let second = if order == 0 { HALF_SPEED } else { NO_EXPECTATION };
+        let first = if order == 0 {
+            NO_EXPECTATION
+        } else {
+            HALF_SPEED
+        };
+        let second = if order == 0 {
+            HALF_SPEED
+        } else {
+            NO_EXPECTATION
+        };
         t.place_raw(0, first);
         t.place_raw(0, second);
         drain(&mut t);
@@ -417,7 +434,11 @@ fn g03_please_choose_opt1_offers_only_with_a_targeting_card() {
     );
     t.answer_one(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(1), t.pos(0), "option (2): teleported onto the settler");
+    assert_eq!(
+        t.pos(1),
+        t.pos(0),
+        "option (2): teleported onto the settler"
+    );
     // With a designating card the option appears and plays it.
     // The mask sits in the *settler's* hand: the forced player plays one of
     // their own cards designating the PLEASE CHOOSE holder.
@@ -579,7 +600,6 @@ fn g03_own_stage_no_skips_the_blocked_settle() {
     assert_eq!(t.money(0), 10_000, "no settle at all");
 }
 
-
 /// 「或无法移动的回合结束时」 across seats: the answer is given in the
 /// **applying** turn (the rain's target here), and must survive into the
 /// blocked seat's own turn -- the engine may not read it on the declarer.
@@ -629,7 +649,9 @@ fn g03_own_stage_stun_turn_end_settles() {
     t.set_pos(0, edogawa);
     t.set_state(0, "stun", 1);
     // One deck card: clean emptied both piles and the tile rule draws.
-    t.m.world_mut().hidden[0].deck.push("PP:不要背负期待".into());
+    t.m.world_mut().hidden[0]
+        .deck
+        .push("PP:不要背负期待".into());
     let before = t.hand(0).len();
     let mark = t.mark();
     t.begin_turn(0);

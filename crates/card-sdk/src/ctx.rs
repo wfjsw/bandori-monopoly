@@ -1324,8 +1324,21 @@ pub fn rolls_by_player(player_id: i32) -> Vec<i32> {
     const CAP: usize = 64;
     let (p, scratch) = out_buf(CAP);
     let n = unsafe { sys::rolls_by_player(player_id, p, CAP as i32) };
-    if n <= 0 || n as usize > CAP {
+    if n <= 0 {
         return Vec::new();
+    }
+    // Over the cap the host writes nothing and returns the **full** length
+    // (`hostfns::write_postcard`), so size a second buffer to it and ask
+    // again -- a long turn (taki rerolls, starry, 运动的天赋) must not read as
+    // "no casts".
+    if n as usize > CAP {
+        let (p2, scratch2) = out_buf(n as usize);
+        let m = unsafe { sys::rolls_by_player(player_id, p2, n) };
+        if m <= 0 || m > n {
+            return Vec::new();
+        }
+        let buf = out_read(p2, m, scratch2);
+        return postcard::from_bytes(&buf[..m as usize]).unwrap_or_default();
     }
     let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
@@ -1390,13 +1403,22 @@ pub fn roll_reroll(
         }
     };
     roll_recast(roll, source)?;
-    let pick = ask_choice(player_id, title, text, &[keep_old.clone(), keep_new.clone()])?;
+    let pick = ask_choice(
+        player_id,
+        title,
+        text,
+        &[keep_old.clone(), keep_new.clone()],
+    )?;
     // The prompt's options are the pair the recast left as the last two casts
     // (old = n-2, new = n-1); `roll_pick` wants an absolute cast index, so a
     // transaction that already carries earlier casts (taki's rerolls, layer's
     // fire-pot rerolls) must not pass the option index straight through.
     let n = roll_faces(roll).len().max(1);
-    let chosen = if pick == 1 { n - 1 } else { n.saturating_sub(2) };
+    let chosen = if pick == 1 {
+        n - 1
+    } else {
+        n.saturating_sub(2)
+    };
     roll_pick(roll, chosen as i32);
     Ok(RerollOutcome {
         chosen_index: chosen as i32,
@@ -1974,7 +1996,7 @@ fn abi_msg_bytes(m: &crate::abi::Message) -> (i32, i32) {
         // `send()` `np` slot (interned via `s`); this is only the typed ints.
         let mut buf = [0u8; 20];
         buf[0..4].copy_from_slice(&m.seat.to_le_bytes());
-        buf[4..8].copy_from_slice(&m.args.to_le_bytes());
+        buf[4..8].copy_from_slice(&m.arg0.to_le_bytes());
         buf[8..12].copy_from_slice(&m.arg1.to_le_bytes());
         buf[12..16].copy_from_slice(&m.arg2.to_le_bytes());
         buf[16..20].copy_from_slice(&m.tile.to_le_bytes());
@@ -3089,6 +3111,56 @@ pub mod plan {
         unsafe { sys::set_extra_steps(n) }
     }
 
+    /// Add to the walk's extra steps (signed).
+    pub fn add_extra_steps(n: i32) {
+        unsafe { sys::add_extra_steps(n) }
+    }
+
+    /// Drop a fixed step count so the next move rolls.
+    pub fn clear_steps() {
+        unsafe { sys::clear_steps() }
+    }
+
+    /// A forced move: not the main move unless [`set_main_override`].
+    pub fn set_forced(on: bool) {
+        unsafe { sys::set_forced(on as i32) }
+    }
+
+    /// 「视为主要移动」 -- keep a forced move of the turn player the main move.
+    pub fn set_main_override(on: bool) {
+        unsafe { sys::set_main_override(on as i32) }
+    }
+
+    /// This teleport replaces the pending walk instead of following it.
+    pub fn void_walk() {
+        unsafe { sys::void_walk() }
+    }
+
+    /// The planned teleport destination, `-1` when none.
+    pub fn planned_teleport() -> i32 {
+        unsafe { sys::move_planned_teleport() }
+    }
+
+    /// The plan half of the pay factor, in milli.
+    pub fn move_pay_factor() -> i32 {
+        unsafe { sys::move_pay_factor() }
+    }
+
+    /// The move's rent factor, in milli.
+    pub fn rent_factor() -> i32 {
+        unsafe { sys::move_rent_factor() }
+    }
+
+    /// The length this move will take.
+    pub fn effective_steps() -> i32 {
+        unsafe { sys::move_effective_steps() }
+    }
+
+    /// Is this a forced move?
+    pub fn forced() -> bool {
+        unsafe { sys::move_forced() != 0 }
+    }
+
     /// Further steps appended to the walk length.
     pub fn set_more_steps(n: i32) {
         unsafe { sys::set_more_steps(n) }
@@ -3405,6 +3477,16 @@ pub fn turn_main_steps() -> i32 {
 }
 
 /// The trigger a counteraction is being checked against.
+/// The closest tile strictly along `axis` from `tile`, or `-1`. Board-only.
+pub fn nearest_tile_on_axis(tile: i32, axis: i32) -> i32 {
+    unsafe { sys::nearest_tile_on_axis(tile, axis) }
+}
+
+/// The farthest tile strictly along `axis` from `tile`, or `-1`. Board-only.
+pub fn farthest_tile_on_axis(tile: i32, axis: i32) -> i32 {
+    unsafe { sys::farthest_tile_on_axis(tile, axis) }
+}
+
 pub mod trigger {
     use super::*;
 
@@ -3544,6 +3626,16 @@ pub mod trigger {
         unsafe { sys::trig_move_total() }
     }
 
+    /// Was the triggering move a rolled walk?
+    pub fn move_rolled() -> bool {
+        unsafe { sys::trig_move_rolled() != 0 }
+    }
+
+    /// The triggering move's effective length.
+    pub fn move_effective_steps() -> i32 {
+        unsafe { sys::trig_move_effective_steps() }
+    }
+
     pub fn move_roll() -> Option<i32> {
         let v = unsafe { sys::trig_move_roll() };
         (v >= 0).then_some(v)
@@ -3587,9 +3679,7 @@ pub mod trigger {
 
     /// The face a pick did not take, `None` when none.
     pub fn roll_unused_face() -> Option<i32> {
-        roll_payload()
-            .map(|r| r.unused_face)
-            .filter(|&v| v >= 0)
+        roll_payload().map(|r| r.unused_face).filter(|&v| v >= 0)
     }
 
     /// The trigger's every cast face, in cast order.

@@ -73,7 +73,7 @@ fn can_swap(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn swap(player_id: i32) -> card_sdk::Asked {
+pub(crate) fn swap(player_id: i32) -> card_sdk::Asked {
     if !crate::resonance::try_resonance(player_id)? {
         return Ok(());
     }

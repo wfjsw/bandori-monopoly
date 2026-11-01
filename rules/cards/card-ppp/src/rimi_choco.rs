@@ -26,11 +26,9 @@ pub const RIMI_CHOCO: CardDef = CardDef::new(
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"牛込里美"#)]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // Not-your-turn and already-moved stay refusals.
-    if ctx::cant_move_code(player_id) == 3
-        && rules_status::stay::get(player_id) > 0
-        && ctx::state::get(player_id, bandori_std::state_key::UNSTOPPABLE) <= 0
-    {
+    // 规则书: 「期间[不可阻挡]」 -- a [停留] latch (code 3) is no refusal here, the
+    // card's own [不可阻挡] lifts it. Not-your-turn / already-moved still refuse.
+    if ctx::cant_move_code(player_id) == 3 {
         return None;
     }
     rules_status::move_blocked(player_id)

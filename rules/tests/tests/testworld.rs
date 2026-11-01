@@ -71,6 +71,8 @@ pub struct TestWorld {
     /// Field instances as `(card id, tile)`; `-2` = not placed. Backs
     /// `field_instances` / `tile_at` so `card_tile` resolves.
     pub field: Vec<(String, i32)>,
+    /// The live move plan (`plan_mut`); the stub keeps one bare staging plan.
+    pub plan: game_core::engine::MoveCtx,
     /// Per-seat 「是否触发结算」 answer (`resolveOverride`; 0 = unanswered).
     pub move_settle: Vec<i32>,
     /// The turn-end half, per seat (0 = unanswered).
@@ -93,6 +95,7 @@ impl TestWorld {
             targeted: vec![],
             fixed_roll: None,
             field: vec![],
+            plan: game_core::engine::MoveCtx::default(),
             move_settle: vec![],
             turn_end_settle: vec![],
         }
@@ -512,5 +515,8 @@ impl CardWorld for TestWorld {
             .get(uid.max(0) as usize)
             .map(|(_, t)| *t)
             .unwrap_or(-2)
+    }
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx {
+        &mut self.plan
     }
 }

@@ -45,6 +45,8 @@ pub struct SettleFrame {
     /// entry, or `usize::MAX` before the first step pushed it. A parked frame
     /// keeps its index, so a resume does not push again.
     pub stack_idx: usize,
+    /// The frame was opened by `settle_tile_at` and owns a plan frame.
+    pub scoped: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +79,7 @@ impl SettleFrame {
             stage: SettleStage::RaiseSettle,
             owner: -1,
             stack_idx: usize::MAX,
+            scoped: false,
         }
     }
 }

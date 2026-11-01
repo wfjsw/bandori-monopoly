@@ -8,7 +8,10 @@ pub fn roll(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -
 }
 
 pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32 {
-    kani_host::call_i32(Op::roll_direct, [player_id, count, sides, purpose, source, 0])
+    kani_host::call_i32(
+        Op::roll_direct,
+        [player_id, count, sides, purpose, source, 0],
+    )
 }
 
 pub fn log(player_id: i32, ptr: i32, len: i32) {
@@ -1111,6 +1114,62 @@ pub fn set_min_roll(n: i32) {
 
 pub fn set_extra_steps(n: i32) {
     kani_host::call_unit(Op::set_extra_steps, [n, 0, 0, 0, 0, 0]);
+}
+
+pub fn add_extra_steps(n: i32) {
+    kani_host::call_unit(Op::add_extra_steps, [n, 0, 0, 0, 0, 0]);
+}
+
+pub fn clear_steps() {
+    kani_host::call_unit(Op::clear_steps, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn set_forced(on: i32) {
+    kani_host::call_unit(Op::set_forced, [on, 0, 0, 0, 0, 0]);
+}
+
+pub fn set_main_override(on: i32) {
+    kani_host::call_unit(Op::set_main_override, [on, 0, 0, 0, 0, 0]);
+}
+
+pub fn void_walk() {
+    kani_host::call_unit(Op::void_walk, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn move_planned_teleport() -> i32 {
+    kani_host::call_i32(Op::move_planned_teleport, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn move_pay_factor() -> i32 {
+    kani_host::call_i32(Op::move_pay_factor, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn move_rent_factor() -> i32 {
+    kani_host::call_i32(Op::move_rent_factor, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn move_effective_steps() -> i32 {
+    kani_host::call_i32(Op::move_effective_steps, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn move_forced() -> i32 {
+    kani_host::call_i32(Op::move_forced, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_move_rolled() -> i32 {
+    kani_host::call_i32(Op::trig_move_rolled, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_move_effective_steps() -> i32 {
+    kani_host::call_i32(Op::trig_move_effective_steps, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn nearest_tile_on_axis(tile: i32, axis: i32) -> i32 {
+    kani_host::call_i32(Op::nearest_tile_on_axis, [tile, axis, 0, 0, 0, 0])
+}
+
+pub fn farthest_tile_on_axis(tile: i32, axis: i32) -> i32 {
+    kani_host::call_i32(Op::farthest_tile_on_axis, [tile, axis, 0, 0, 0, 0])
 }
 
 pub fn set_more_steps(n: i32) {

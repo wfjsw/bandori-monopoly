@@ -367,6 +367,8 @@ impl SnapSrc for Fixture {
                 roll: m.roll.map(|r| r as i32),
                 by_skill: false,
                 settle_redirect: false,
+                rolled: m.roll.is_some(),
+                effective: m.remaining as i32,
             });
         }
         tr.effects = t

@@ -598,3 +598,116 @@ fn g12_factor_write_survives_a_suspended_drive() {
     );
     assert_eq!(t.money(0), 10_000 + expected, "the payee receives it");
 }
+
+// =====================================================================
+// G13. the settle's 「地租」 twins stop at the rent leg
+// =====================================================================
+
+// `settleRentAdd` is the rent-scoped twin of `settleAdd` (支付阶段 2). It was
+// stored and restored but never added to a leg; a card leg of the same settle
+// must also stay clear of it.
+#[test]
+fn g13_settle_rent_add_reaches_the_rent_leg_only() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "TEST:settleRentAdd100");
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), tile, "P0 landed on the rent tile");
+    let expected = ceil10(rent + 100);
+    assert_eq!(t.money(0), 10_000 - expected, "(R+100) for R = {rent}");
+    assert_eq!(t.money(1), 10_000 + expected, "the payee receives it");
+}
+
+#[test]
+fn g13_settle_rent_add_spares_a_card_leg() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "TEST:settleRentAdd100");
+    t.place_raw(0, "TEST:settlePay1000");
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let rent_paid = ceil10(rent + 100);
+    assert_eq!(
+        t.money(0),
+        10_000 - rent_paid - 1000,
+        "rent leg {rent_paid}, card leg its own 1000"
+    );
+    assert_eq!(
+        t.money(1),
+        10_000 + rent_paid,
+        "the payee receives the rent"
+    );
+}
+
+// `settleRentMul` is the same twin on the scale stage. `settleMul` by contrast
+// shapes every leg, so the pair splits the same settle differently.
+#[test]
+fn g13_settle_rent_mul_spares_a_card_leg() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "TEST:settleRentMulHalf");
+    t.place_raw(0, "TEST:settlePay1000");
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let rent_paid = ceil10(rent / 2);
+    assert_eq!(
+        t.money(0),
+        10_000 - rent_paid - 1000,
+        "rent leg halved, card leg whole"
+    );
+    assert_eq!(
+        t.money(1),
+        10_000 + rent_paid,
+        "the payee receives the rent"
+    );
+}
+
+#[test]
+fn g13_settle_mul_still_shapes_every_leg() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "TEST:settleMulHalf");
+    t.place_raw(0, "TEST:settlePay1000");
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let rent_paid = ceil10(rent / 2);
+    assert_eq!(
+        t.money(0),
+        10_000 - rent_paid - 500,
+        "the settle twin halves both legs"
+    );
+    assert_eq!(
+        t.money(1),
+        10_000 + rent_paid,
+        "the payee receives the rent"
+    );
+}

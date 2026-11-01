@@ -406,7 +406,7 @@ impl Run {
     /// carries the tag onto the move it shapes. Cleared after each move.
     fn stamp_skill_source(&mut self) {
         if self.current_card.starts_with("skill:") {
-            self.world.turn.plan.by_skill = true;
+            self.world.plan_mut().by_skill = true;
         }
     }
 
@@ -743,17 +743,13 @@ impl CardWorld for Run {
     fn set_move_settle_answer(&mut self, player_id: i32, answer: i32) {
         // An `Unanswered` write leaves the armed slot alone (`Match`'s
         // setter semantics).
-        if let Some(slot) =
-            game_core::engine::SettleAnswer::from_i32(answer).slot()
-        {
-            self.world.st.players[player_id.max(0) as usize]
-                .state_set("resolveOverride", slot);
+        if let Some(slot) = game_core::engine::SettleAnswer::from_i32(answer).slot() {
+            self.world.st.players[player_id.max(0) as usize].state_set("resolveOverride", slot);
         }
     }
     fn move_settle_answer(&self, player_id: i32) -> i32 {
         game_core::engine::SettleAnswer::from_i32(
-            self.world.st.players[player_id.max(0) as usize]
-                .state_get("resolveOverride"),
+            self.world.st.players[player_id.max(0) as usize].state_get("resolveOverride"),
         )
         .slot()
         .unwrap_or(0)
@@ -1426,7 +1422,9 @@ impl CardWorld for Run {
         let was = self.world.counter_at(uid, name);
         let now = self.world.set_counter_at(uid, name, n);
         self.note_counter_changed(uid, was, now, name);
-        if now != was {
+        // A silent entry's counter is bookkeeping (`outcome_plan` already
+        // suppresses its lines the same way).
+        if now != was && !self.silent_body {
             let who = self.trigger.player_id;
             self.outcome(
                 who,
@@ -1443,7 +1441,9 @@ impl CardWorld for Run {
         let was = self.world.counter_at(uid, name);
         let now = self.world.add_counter_at(uid, name, n, max);
         self.note_counter_changed(uid, was, now, name);
-        if now != was {
+        // A silent entry's counter is bookkeeping (`outcome_plan` already
+        // suppresses its lines the same way).
+        if now != was && !self.silent_body {
             let who = self.trigger.player_id;
             self.outcome(
                 who,
@@ -2538,7 +2538,6 @@ impl CardWorld for Run {
         let was = self.world.move_total();
         self.world.set_steps(v);
         // Written for the move this body shapes, not for a later one.
-        self.world.turn.plan.steps_fresh = true;
         // Keep the shared MoveBefore link coherent for later counters and
         // hooks. Its base distance is already final; a plan rewrite extends
         // this move rather than rewriting a roll that has already resolved.
@@ -2560,14 +2559,12 @@ impl CardWorld for Run {
         // 投掷」. `MoveCtx::roller` rides `TurnCtx.plan`, so `main_move`'s
         // post-`rollPlan` re-clone picks it up.
         if v.is_some() {
-            self.world.turn.plan.roller = v;
+            self.world.plan_mut().roller = v;
         }
     }
     fn set_reverse(&mut self, v: bool) {
         self.stamp_skill_source();
         self.world.set_reverse(v);
-        // Written for the move this body shapes, not for a later one.
-        self.world.turn.plan.reverse_fresh = true;
     }
     fn set_signed(&mut self, v: bool) {
         self.stamp_skill_source();
@@ -2577,8 +2574,6 @@ impl CardWorld for Run {
         self.stamp_skill_source();
         let was = self.world.move_stop_at();
         self.world.set_stop_at(v);
-        // Written for the move this body shapes, not for a later one.
-        self.world.turn.plan.stop_at_fresh = true;
         if v != was {
             self.outcome_plan("log.outcome.plan_stop", v.map(|t| t.0).unwrap_or(-1), 0, "");
         }
@@ -2590,8 +2585,6 @@ impl CardWorld for Run {
     fn set_settles(&mut self, v: bool) {
         self.stamp_skill_source();
         self.world.set_settles(v);
-        // Written for the move this body shapes, not for a later one.
-        self.world.turn.plan.resolve_fresh = true;
     }
     fn set_no_buy(&mut self, v: bool) {
         self.stamp_skill_source();
@@ -2624,6 +2617,30 @@ impl CardWorld for Run {
         if v != 0 {
             self.outcome_plan("log.outcome.plan_steps", -1, v, "");
         }
+    }
+    fn add_extra_steps(&mut self, v: i32) {
+        self.stamp_skill_source();
+        self.world.add_extra_steps(v);
+        self.outcome_plan("log.outcome.plan_steps", -1, v, "");
+    }
+    fn clear_steps(&mut self) {
+        self.stamp_skill_source();
+        self.world.clear_steps();
+    }
+    fn set_forced(&mut self, v: bool) {
+        self.stamp_skill_source();
+        self.world.set_forced(v);
+    }
+    fn set_main_override(&mut self, v: bool) {
+        self.stamp_skill_source();
+        self.world.set_main_override(v);
+    }
+    fn void_walk(&mut self) {
+        self.stamp_skill_source();
+        self.world.void_walk();
+    }
+    fn clear_void_walk(&mut self) {
+        self.world.plan_mut().void_walk = false;
     }
     fn set_settle_tile(&mut self, v: i32) {
         self.stamp_skill_source();
@@ -2721,7 +2738,10 @@ impl CardWorld for Run {
         self.world.move_settles()
     }
     fn move_plan(&self) -> game_core::engine::MoveCtx {
-        self.world.turn.plan.clone()
+        self.world.plan().clone()
+    }
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx {
+        self.world.plan_mut()
     }
     fn move_kind(&self) -> i32 {
         self.world.move_kind()
@@ -2737,6 +2757,33 @@ impl CardWorld for Run {
     }
     fn move_dir(&self) -> i32 {
         self.world.move_dir()
+    }
+    fn move_planned_teleport(&self) -> i32 {
+        self.world.planned_teleport()
+    }
+    fn move_pay_factor(&self) -> i32 {
+        self.world.move_pay_factor()
+    }
+    fn move_rent_factor(&self) -> i32 {
+        self.world.rent_factor()
+    }
+    fn move_effective_steps(&self) -> i32 {
+        self.world.effective_steps()
+    }
+    fn move_forced(&self) -> bool {
+        self.world.move_forced()
+    }
+    fn trig_move_rolled(&self) -> bool {
+        self.trigger.mv.as_ref().is_some_and(|m| m.rolled)
+    }
+    fn trig_move_effective_steps(&self) -> i32 {
+        self.trigger.mv.as_ref().map_or(0, |m| m.effective)
+    }
+    fn nearest_tile_on_axis(&self, tile: i32, axis: i32) -> i32 {
+        self.world.nearest_tile_on_axis(&self.data, tile, axis)
+    }
+    fn farthest_tile_on_axis(&self, tile: i32, axis: i32) -> i32 {
+        self.world.farthest_tile_on_axis(&self.data, tile, axis)
     }
 }
 
@@ -2798,7 +2845,7 @@ impl Run {
         let (who, n) = self.factor_write_key();
         let exec = self.ledger_exec;
         let ok = self.world.note_factor(exec, &who, n);
-        if std::env::var_os("STAGE_DBG").is_some() {
+        if game_core::engine::stage_dbg() {
             eprintln!("CLAIM exec={exec} who={who} n={n} ok={ok}");
         }
         ok
@@ -2990,6 +3037,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         let card_id: &str = unsafe { &*self.card_id };
         cx.adopt_turn_policy(&run.world);
         cx.overlay_guest_state(&run.world);
+        cx.overlay_guest_plan_tags(&run.world);
         let linger = run.linger_props.clone();
         let live_before = cx.live_event_count();
         match bridge.apply_host_request(cx, req, &linger, self.call.clone(), card_id) {
@@ -3311,12 +3359,35 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &mut Trigger,
         guarded: bool,
     ) -> Flow<i32> {
-        self.drive_inner_body_from(cx, call, card_id, uid, trigger, guarded, Vec::new())
+        self.drive_inner_body_from(cx, call, card_id, uid, trigger, guarded, Vec::new(), false)
     }
 
     /// [`Self::drive_inner_body`] with a pre-filled answer log (STACK-01
     /// resume: continue a drive that paused at a nested `settle_tile_at`).
+    ///
+    /// Wraps the body in its command scope (`enter_plan_command` /
+    /// `leave_plan_command`): the staging snapshot is taken on the way in and,
+    /// at the outermost leave, restored once the command has driven a move.
+    /// `resumed` is `true` only from the resume arm -- the paused world still
+    /// holds the command, so it must not snapshot twice.
     fn drive_inner_body_from(
+        &self,
+        cx: &mut PlayCtx,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        trigger: &mut Trigger,
+        guarded: bool,
+        answers: Vec<i32>,
+        resumed: bool,
+    ) -> Flow<i32> {
+        cx.world_mut().enter_plan_command(resumed);
+        let r = self.drive_inner_body_scoped(cx, call, card_id, uid, trigger, guarded, answers);
+        cx.world_mut().leave_plan_command();
+        r
+    }
+
+    fn drive_inner_body_scoped(
         &self,
         cx: &mut PlayCtx,
         call: Call,
@@ -3901,6 +3972,10 @@ impl<M: CardModules> RulesBridge<M> {
                     // at the next iteration's top, so the replay re-applies it
                     // rather than double-counting. See `PlayCtx::overlay_guest_state`.
                     cx.overlay_guest_state(&run.world);
+                    // A `plan::set_tag` made right before a `settleAt` (e.g.
+                    // 微笑游行's redirect) must be on the live frame the nested
+                    // settle reads (`spec/abi/G04-move-plan.md` §4.3).
+                    cx.overlay_guest_plan_tags(&run.world);
                     if matches!(req, HostRequest::Draw { .. }) && pile_base.is_none() {
                         pile_base = Some(PileCheckpoint::new(cx.world_copy()));
                     }
@@ -3957,6 +4032,7 @@ impl<M: CardModules> RulesBridge<M> {
                                         &mut trigger_own,
                                         guarded_own,
                                         answers2,
+                                        true,
                                     );
                                     if uid_own >= 0 {
                                         cx.reentrant_hooks.pop();
@@ -4161,15 +4237,21 @@ impl<M: CardModules> RulesBridge<M> {
                 let allowed =
                     self.abnormal_gate(cx, player_id, crate::AbKind(5), call.player_id())?;
                 if allowed {
-                    cx.run_planned_move(player_id.max(0) as usize, plan)?;
-                } else {
-                    // The gate refused the move: drop the one-shot `teleport_to`
-                    // the body wrote for it so it cannot shape a later move.
-                    let mut w = cx.world_copy();
-                    w.turn.plan.teleport_to = None;
-                    cx.swap_world(w);
+                    return Ok(cx.run_planned_move(player_id.max(0) as usize, plan)? as i32);
                 }
-                return Ok(allowed as i32);
+                // Refused: clear every one-shot this attempt wrote. `plan_mut`
+                // is the frame when the call sits inside a move, staging
+                // otherwise.
+                let mut w = cx.world_copy();
+                let p = w.plan_mut();
+                p.teleport_to = None;
+                p.void_walk = false;
+                p.start = None;
+                p.start_reason.clear();
+                p.by_skill = false;
+                p.kind = game_core::engine::MoveKind::Walk;
+                cx.swap_world(w);
+                return Ok(0);
             }
             // A bare jump with no settle (`settles = false`): runs through the
             // engine teleport so the move tail (`moveBefore` / `moveAfter` /
@@ -4182,7 +4264,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // Skill-source tag (cond `move.by_skill`) from the calling rule.
                     if card_id.starts_with("skill:") {
                         let mut w = cx.world_copy();
-                        w.turn.plan.by_skill = true;
+                        w.plan_mut().by_skill = true;
                         cx.swap_world(w);
                     }
                     cx.card_teleport(player_id.max(0) as usize, tile.max(0) as usize)?;
@@ -4210,10 +4292,9 @@ impl<M: CardModules> RulesBridge<M> {
                 // call, then put the plan back unless a pass-window counter
                 // rewrote it (e.g. `plan::set_settles(true)` arming the settle,
                 // which the re-read then honours).
-                let prev_settles = cx.world().turn.plan.settles;
                 {
                     let mut w = cx.world_copy();
-                    w.turn.plan.settles = settles;
+                    w.plan_mut().settles = settles;
                     cx.swap_world(w);
                 }
                 cx.teleport_as(
@@ -4223,11 +4304,6 @@ impl<M: CardModules> RulesBridge<M> {
                     None,
                     is_main_move,
                 )?;
-                if prev_settles != settles && cx.world().turn.plan.settles == settles {
-                    let mut w = cx.world_copy();
-                    w.turn.plan.settles = prev_settles;
-                    cx.swap_world(w);
-                }
                 return Ok(1);
             }
             // The rest of the routine family -- see `HostRequest`.
@@ -7973,6 +8049,8 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         roll: is_roll_kind.then_some(t.value),
         by_skill: m.by_skill,
         settle_redirect: m.settle_redirect,
+        rolled: m.rolled,
+        effective: m.effective,
     });
     let buy = t.buy.map(|b| TriggerBuy {
         kind: card_sdk::abi::BuyKind::from_i32(b.kind.as_i32())
@@ -8790,6 +8868,15 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .map(|m| m.by_skill)
             .unwrap_or(false)
     }
+    fn move_rolled(&self) -> bool {
+        self.trigger.mv.as_ref().map(|m| m.rolled).unwrap_or(false)
+    }
+    fn move_effective(&self) -> i64 {
+        self.trigger.mv.as_ref().map(|m| m.effective).unwrap_or(0) as i64
+    }
+    fn move_from(&self) -> i64 {
+        self.trigger.mv.as_ref().map(|m| m.from).unwrap_or(-1) as i64
+    }
     fn move_dir(&self) -> i64 {
         self.trigger
             .mv
@@ -8816,10 +8903,18 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger.roll_source.as_i32() as i64
     }
     fn roll_purpose(&self) -> i64 {
-        self.trigger.roll.as_ref().map(|r| r.purpose as i64).unwrap_or(-1)
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.purpose as i64)
+            .unwrap_or(-1)
     }
     fn roll_rerolled(&self) -> bool {
-        self.trigger.roll.as_ref().map(|r| r.rerolled).unwrap_or(false)
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.rerolled)
+            .unwrap_or(false)
     }
     fn roll_unused_face(&self) -> i64 {
         self.trigger
@@ -9110,11 +9205,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
 
     // -- turn plan / counters ----------------------------------------------
     fn plan_fixed_roll(&self) -> i64 {
-        self.world
+        let v = self
+            .world
             .turn
             .fixed_roll
             .map(|f| f.value as i64)
-            .unwrap_or(-1)
+            .unwrap_or(-1);
+        v
     }
     fn gains_this_turn(&self, seat: i64) -> i64 {
         if seat < 0 {
@@ -9245,7 +9342,12 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             return 0;
         }
         let roll = roll.abs();
-        let start = self.pos(p);
+        // G04 item 12: the planned start, when one is stamped.
+        let start = if self.move_from() >= 0 {
+            self.move_from()
+        } else {
+            self.pos(p)
+        };
         let n = self.data.tiles.len() as i64;
         if n <= 0 || start < 0 {
             return 0;

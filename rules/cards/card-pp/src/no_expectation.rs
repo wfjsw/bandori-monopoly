@@ -131,7 +131,9 @@ fn roll_shave(player_id: i32, v: RollValue) -> RollValue {
         if out.value == 0 {
             // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
             // (the clause keys on 「为0」, not on the shave having done work).
-            out.settles = Some(false);
+            // The settle flag itself is the engine's: the Add fold composes
+            // every responder, so a sibling (`+N`, 想要成为人类) can lift the
+            // 「最终结果」 back off 0 after this body has run.
             ctx::log(
                 player_id,
                 &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),

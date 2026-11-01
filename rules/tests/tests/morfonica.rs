@@ -872,6 +872,86 @@ fn wing_then_rolls_the_movement_dice() {
     assert_eq!(t.pos(0), 5 + 20 + 3);
 }
 
+/// G04 item 2: 「传送到移动方向20格后…立刻进行移动掷骰」 -- an earlier card's
+/// step count cannot turn the roll into a fixed walk; the walk is a dice roll
+/// from the jump's destination.
+#[test]
+fn g04_pure_wings_rolls_from_teleport_destination() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(0, 5);
+    t.set_pos(1, 50);
+    t.dice(&[3]);
+    let mark = t.mark();
+    t.give_play(0, "Mor:纯真振翅").unwrap();
+    decline_all(&mut t);
+    assert_eq!(t.pos(0), 5 + 20 + 3, "keys={:?}", t.recent_keys(16));
+    let walk = t
+        .events_since(mark)
+        .into_iter()
+        .find(|e| e.player_id == 0 && matches!(e.r#type.as_str(), "move" | "diceRollBefore"))
+        .expect("the roll is announced");
+    assert_eq!(
+        walk.from,
+        5 + 20,
+        "the walk starts at the teleport destination, not the old tile"
+    );
+    assert_eq!(walk.to, 5 + 20 + 3, "the walk is the rolled 3");
+}
+
+/// G04 item 3: a prior side move's `reverse` write (祥，移动 backwards) must not
+/// reach this body's own frame -- the jump still goes the moving direction.
+#[test]
+fn g04_pure_wings_ignores_a_prior_reverse() {
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 5);
+    t.set_pos(1, 40);
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    let k = t.option("PlayerId(1)").expect("target pick");
+    t.answer(0, k).unwrap();
+    let k = t.option("saki_move_backward").expect("direction pick");
+    t.answer(0, k).unwrap();
+    decline_all(&mut t);
+    assert_eq!(t.pos(1), 37, "P1 was moved backwards");
+    t.dice(&[3]);
+    t.give_play(0, "Mor:纯真振翅").unwrap();
+    decline_all(&mut t);
+    // Forward 20 (5 -> 25) then the rolled 3 -- not 45/42.
+    assert_eq!(
+        t.pos(0),
+        5 + 20 + 3,
+        "the jump ignores the prior reverse: keys={:?}",
+        t.recent_keys(16)
+    );
+}
+
+/// G04 item 4: 祥，移动's `ThisMove` half must not halve the next body's settle;
+/// the frame starts at the default factor and the rent is paid in full.
+#[test]
+fn g04_pure_wings_settles_at_full_price_after_saki_move() {
+    let mut t = Table::vanilla(3);
+    t.set_pos(0, 2);
+    t.set_pos(1, 6);
+    t.set_pos(2, 50);
+    t.own(1, &[25]); // the wing's landing: jump 22, roll 3
+    t.give_play(0, "Mujica:祥，移动").unwrap();
+    let k = t.option("PlayerId(1)").expect("target pick");
+    t.answer(0, k).unwrap();
+    let k = t.option("saki_move_forward").expect("direction pick");
+    t.answer(0, k).unwrap();
+    decline_all(&mut t);
+    t.dice(&[3]);
+    t.give_play(0, "Mor:纯真振翅").unwrap();
+    decline_all(&mut t);
+    assert_eq!(t.pos(0), 25, "jump 22, roll 3");
+    // Rent 100, in full (a leaked 0.5 factor would charge 50).
+    assert_eq!(
+        t.money(0),
+        10_000 - 100,
+        "the landing settles at full price: keys={:?}",
+        t.recent_keys(16)
+    );
+}
+
 // --------------------------------------------------- 秘密与青春的虹彩
 //
 // Ruling 2026-10-06: grades come from BanG Dream character facts, shipped as

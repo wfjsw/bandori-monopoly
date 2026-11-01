@@ -29,6 +29,7 @@ pub mod markers;
 pub mod money_shave;
 #[cfg(feature = "band-morfonica")]
 pub mod mor;
+pub mod move_plan;
 #[cfg(feature = "band-mujica")]
 pub mod mujica;
 #[cfg(feature = "band-mygo")]
