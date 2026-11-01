@@ -55,6 +55,9 @@ pub enum SettleStage {
     RaiseSettle,
     /// After `settle` returned: cancel check, then body or terminal.
     AfterSettle,
+    /// Raise `settleAdd` / `settleMul` once for the settle and record the
+    /// composed 支付价格 shaping (`Cx::settle_pay`) for its legs.
+    RaiseSettlePay,
     /// Raise `settleBody` (field replace).
     RaiseSettleBody,
     /// Run `rules.settle_tile` unless the body cancelled.

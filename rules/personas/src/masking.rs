@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"佐藤益木"#)
     .display(r#"佐藤益木"#)
+    .latin(r#"Sato Masuki"#)
     .group(r#"RAISE A SUILEN"#)
     .color(r#"#EEBB44"#)
     .skill(r#"与燃烧的红色一起驰骋"#)

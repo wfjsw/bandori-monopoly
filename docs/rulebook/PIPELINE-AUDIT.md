@@ -42,7 +42,9 @@ Our one pipeline: `PlayCtx::money` / `money_inner` (`crates/game-core/src/engine
 Print (`from = None`), delete (`to = None`) and pay-player (both `Some`) all go
 through it (`Pay`, `play.rs:34-78`). Stage order is pinned by
 `money::gain_runs_the_modifier_stages` (`rules/tests/tests/money.rs:34`)
-and `gap_money::g02_*` (`rules/tests/tests/gap_money.rs:159`).
+and `gap_money::g02_*` / `g08_*` / `g09_*`
+(`rules/tests/tests/gap_money.rs`); G-MONEY-13 states the within-window
+composition rule the stages rely on.
 
 ### 1.1 Behavioural requirements
 
@@ -50,8 +52,8 @@ and `gap_money::g02_*` (`rules/tests/tests/gap_money.rs:159`).
 |---|---|---|---|---|
 | P1 | Root caller or effect requests Print / Delete / PlayerPayPlayer | `Pay::new` + `PlayCtx::money`; card path `HostRequest::Pay` (`game-rules/src/wasm_rules.rs:1971-2022`) | MATCHES | One entry point for all three directions. |
 | P2 | Validate endpoints before opening events; reject invalid silently | `money_inner` early-outs: `amount <= 0`, `from == to`, dead endpoints (`play.rs:2672-2677`) | MATCHES (with gaps P14/P15) | |
-| P3 | Command-wide pre-split: AddDiff → MultDiff → Cancel, composing | `effect` ([反击] window, `play.rs:2736-2771`) → `paySplitAdd` → `paySplitMulBefore` → `paySplitMul` → `paySplitChoose` → `paySplitAt` (`play.rs:2774-2804`) | DIFFERS | See P3a. Rulebook 支付阶段 (rulebook-doc.md:227-235) is 1 计算前 / 2 计算时(±) / 3 计算后 / 4 支付前(×) / 5 支付时(取消/改目标) / 6 支付后 / 7 资金变动. |
-| P3a | Cancel runs *after* Add and Mult | our `effect` (cancel-capable) runs *before* `paySplitAdd`/`paySplitMul`; a second cancel-capable point is `pay` after the modifiers | DIFFERS | Already recorded: `docs/rulebook/TEST-FINDINGS.md:189-192` (「One `effect` raise carries window 5's cancel/retarget power at window 1's position」). Card-facing order pinned by `gap_money::g01`(ignored)/`g02`. |
+| P3 | Command-wide pre-split: AddDiff → MultDiff → Cancel, composing | `effect` ([反击] window, `play.rs:2736-2771`) → `rentAdd` → `settleAdd` → `payCombinedAdd(Before)` → `paySplitAdd` → `rentMul` → `settleMul` → `payCombinedMul` → `payCombinedCancel` → `paySplitMulBefore` → `paySplitMul` → `paySplitChoose` → `paySplitAt` (`play.rs:2774-2804`) | DIFFERS | See P3a. Rulebook 支付阶段 (rulebook-doc.md:227-235) is 1 计算前 / 2 计算时(±) / 3 计算后 / 4 支付前(×) / 5 支付时(取消/改目标) / 6 支付后 / 7 资金变动. The rent and settle rows are the same 2 / 4 windows scoped to the 收费 and to the settle (MONEY-01); within one window every responder's delta / factor composes (sum / product) from a fixed stage input, so order cannot matter. |
+| P3a | Cancel runs *after* Add and Mult | our `effect` (cancel-capable) runs *before* the add stages; the cancel-capable stages proper are `payCombinedCancel` (after the muls) and `pay` after them | DIFFERS | Already recorded: `docs/rulebook/TEST-FINDINGS.md:189-192` (「One `effect` raise carries window 5's cancel/retarget power at window 1's position」). Card-facing order pinned by `gap_money::g01`/`g02`/`g08`/`g09`. |
 | P4 | Build split-entry list (print: one/payee; delete: one/payer; transfer: payee-major Cartesian) | **No split in the pipeline.** Multi-endpoint plays split at the card body; each 分摊 leg is its own `money()` call (`gap_money.rs:298` ruling comment) | DIFFERS | See P4a. Spec's own text calls the split-damage/pay-me content "future". |
 | P4a | Split share = divide final amount, round each share **up to a multiple of ten** | Card body computes `ceil10(total/n)` (微笑的铁假面 legs; `gap_money::g03/g05/g06`) | MATCHES (rule) / DIFFERS (home) | The ceil-10 rule is implemented, but in the card body, not the pipeline. |
 | P4b | Pre-split modifiers are **command-wide** (one double hits the total before division) | Each leg runs its own full pipeline; a modifier on one leg does not hit the others | DIFFERS | Ruling question Q2. |

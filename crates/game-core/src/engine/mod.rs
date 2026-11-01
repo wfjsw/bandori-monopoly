@@ -25,6 +25,7 @@ mod debug;
 mod move_ctx;
 mod ops;
 mod play;
+pub mod roll;
 pub mod rules;
 mod setup;
 mod tile_text;
@@ -55,7 +56,10 @@ pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
     WorkItem,
 };
-pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, TurnSnapshot, World};
+pub use world::{
+    Extreme, FixedFace, Hidden, Lingering, Scheduled, SettleAnswer, SharedWorld, TurnCtx,
+    TurnSnapshot, World,
+};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.
@@ -388,7 +392,10 @@ struct Saved {
 /// older saves are refused (replays ride archived engine bundles).
 /// v13: per-seat order-roll acks (`order_ready`), so the order phase ends on
 /// every client's ack instead of always burning its 4s cap.
-pub const SAVE_VERSION: u32 = 13;
+/// v14: roll transactions (`World.open_rolls`, `next_roll_id`, the turn's
+/// `roll_history` / `fixed_roll`, `World.blocked_settle`). A roll in flight
+/// is live state, not a rebuildable view, so saves carry it.
+pub const SAVE_VERSION: u32 = 14;
 
 /// A running match.
 pub struct Match {
@@ -1194,7 +1201,8 @@ impl Match {
     pub fn world_mut(&mut self) -> &mut World {
         assert!(
             self.pending.is_none(),
-            "world_mut while a routine is pending"
+            "world_mut while a routine is pending: {:?}",
+            self.pending.as_ref().map(|p| &p.routine)
         );
         self.changed = true;
         self.seq += 1;

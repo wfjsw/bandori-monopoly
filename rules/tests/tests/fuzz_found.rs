@@ -158,22 +158,17 @@ fn negation_not_total() {
 
 /// Two multiplicative money modifiers must commute.
 ///
-/// **Still open as a ruling (MONEY-01 / C-Q1).** The rulebook lists
-/// 「支付减半/翻倍」 as one 时点 (rulebook.txt 支付阶段 4) with no product /
-/// stack / order rule for two live multipliers (Fire bird 1.5×, Ave Mujica
-/// 状态2 1.5×, HHW band double-pay, 摩卡 0.5×). Two identical 0.5× modifiers
-/// commute under any composition, so this probe cannot decide the question --
-/// leave it ignored until the user answers C-Q1.
+/// **Ruled by MONEY-01 / C-Q1 (2026-10-31):** the mul stage composes every live
+/// writer (「支付减半/翻倍」, 支付阶段 4) as one product, so placement order
+/// cannot matter. The check switches two *different* factors (payer's 摩卡
+/// 0.5× vs owner's Fire bird 1.5×), which is the case the old identical-pair
+/// probe could not decide.
 #[test]
-#[ignore = "RULING: MONEY-01 / C-Q1 -- composition of two live money multipliers (product? declaration order? one-per-window?)"]
 fn multiply_order_matters() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(23)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    match fuzz::meta::check_commutativity(seed) {
-        Ok(()) => panic!("commutativity held on this seed; the finding is not reproducing"),
-        Err(e) => panic!("commutativity gap: {e}"),
-    }
+    fuzz::meta::check_commutativity(seed).expect("commutativity gap");
 }
 
 /// A +N roll modifier must never shorten a move. The original check measured

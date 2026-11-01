@@ -145,6 +145,58 @@ pub struct TurnSnapshot {
     pub mortgaged: Vec<bool>,
 }
 
+/// A fixed face the turn's main move must use instead of casting (去唱卡拉ok吧,
+/// a kept die), with the source it was obtained from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FixedFace {
+    pub value: i32,
+    pub source: crate::engine::rules::RollSource,
+}
+
+/// One cast in [`TurnCtx::roll_history`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollHistoryEntry {
+    pub roller: usize,
+    pub value: i32,
+    /// `0` = effect roll, `1` = move roll.
+    pub purpose: i32,
+    pub source: crate::engine::rules::RollSource,
+    /// The face came from `fixed_roll`, not a throw.
+    pub fixed: bool,
+}
+
+/// A 「是否触发结算」 answer (选择自己的舞台). Mirrors
+/// `card_sdk::abi::SettleAnswer`; `Unanswered` = the card said nothing.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SettleAnswer {
+    #[default]
+    Unanswered = 0,
+    Settle = 1,
+    Skip = 2,
+}
+
+impl SettleAnswer {
+    /// The `resolveOverride` slot value (`take_resolve_override` reads 1 =
+    /// settle, 2 = skip), `None` for `Unanswered`.
+    pub const fn slot(self) -> Option<i32> {
+        match self {
+            SettleAnswer::Unanswered => None,
+            SettleAnswer::Settle => Some(1),
+            SettleAnswer::Skip => Some(2),
+        }
+    }
+
+    /// Decode the guest code.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => SettleAnswer::Settle,
+            2 => SettleAnswer::Skip,
+            _ => SettleAnswer::Unanswered,
+        }
+    }
+}
+
 /// Per-turn bookkeeping the shell uses.
 ///
 /// The derived `Default` would zero `build_cost_pct` (only the serde default is
@@ -177,9 +229,10 @@ pub struct TurnCtx {
     /// not payments, so they are exempt.
     #[serde(default)]
     pub no_money_loss: Vec<usize>,
-    /// This turn's main move roll is fixed to this face.
+    /// This turn's main move roll is fixed to this face (and the source it
+    /// was obtained with).
     #[serde(default)]
-    pub fixed_roll: Option<i32>,
+    pub fixed_roll: Option<FixedFace>,
     /// Steps this turn's main move walked; 0 = none yet.
     #[serde(default)]
     pub main_steps: i32,
@@ -239,6 +292,10 @@ pub struct TurnCtx {
     /// entry when it is pushed, then reset.
     #[serde(default = "milli_one")]
     pub next_settle_pay_factor: i32,
+    /// Fixed pay addend for the **next** settle, moved in and reset the same
+    /// way.
+    #[serde(default)]
+    pub next_settle_pay_add: i32,
     /// A move is in flight (walk / teleport through its tail). The `thisMove`
     /// factor scope is open while this holds.
     #[serde(default)]
@@ -258,6 +315,36 @@ pub struct TurnCtx {
     /// recomposes from here instead of dividing.
     #[serde(default = "one")]
     pub settle_base: f64,
+    /// The same pair for the settle's 「地租」 scale (`rentMul` composes here;
+    /// [`Self::settle_rent_base`] is the outer product).
+    #[serde(default = "one")]
+    pub settle_rent_factor: f64,
+    #[serde(default = "one")]
+    pub settle_rent_base: f64,
+    /// The `settleAdd` / `rentAdd` sums of every open settle (规则书 支付阶段 2:
+    /// live fixed-value adjustments sum). Each leg of a settle carries the same
+    /// addend; the innermost entry keeps the outer sums in `base_add` /
+    /// `base_rent_add` and restores them on its way out.
+    #[serde(default)]
+    pub settle_pay_add: i32,
+    #[serde(default)]
+    pub settle_rent_add: i32,
+    /// The factor writes that already landed this body execution, as
+    /// `(execution, writer, ordinal)` keys. A suspended body is re-executed from its start
+    /// on the resume (STACK-01), replaying the prefix; the set makes the
+    /// replay's write land on its own earlier contribution instead of
+    /// composing it in twice. Reset by the drive, one execution at a time.
+    #[serde(default)]
+    pub factor_applied: Vec<(u32, String, u32)>,
+    /// The running ordinal `Run::factor_write_key` hands out. Part of the same
+    /// per-execution transport as [`Self::factor_applied`].
+    #[serde(default)]
+    pub factor_ordinal: u32,
+    /// The last execution id the factor ledger handed out. World-scoped, so
+    /// two firings of the same card stay apart even though each drive builds a
+    /// fresh context (a context-local counter restarts at 1 and would collide).
+    #[serde(default)]
+    pub factor_gen: u32,
     /// Where each player stood when the turn started. 「在场地地块开始
     /// 回合时」 is a question about that square, not the one a mid-turn walk has
     /// since reached.
@@ -268,9 +355,14 @@ pub struct TurnCtx {
     #[serde(default)]
     pub turn_snapshot: Vec<TurnSnapshot>,
     /// Every face rolled this turn, in order. 「与本回合内你骰出过的所有骰点
-    /// 都不同」 compares against this.
+    /// 都不同」 compares against this. Mirrors [`Self::roll_history`] (which
+    /// also carries the roller); kept for readers that only want the faces.
     #[serde(default)]
     pub turn_rolls: Vec<i32>,
+    /// Every cast this turn, with its roller. Written at cast time, before any
+    /// roll window opens. Cleared with the turn.
+    #[serde(default)]
+    pub roll_history: Vec<RollHistoryEntry>,
     /// 「下次盖房时减免N（可溢出），盖房后减少1层」. A layered cut on the build
     /// cost; each build pops one layer.
     #[serde(default)]
@@ -329,13 +421,22 @@ impl Default for TurnCtx {
             paid_in_settle_by: Vec::new(),
             next_move_pay_factor: milli_one(),
             next_settle_pay_factor: milli_one(),
+            next_settle_pay_add: 0,
             move_open: false,
             settle_open: 0,
             settle_pay_factor: one(),
             settle_base: one(),
+            settle_rent_factor: one(),
+            settle_rent_base: one(),
+            settle_pay_add: 0,
+            settle_rent_add: 0,
+            factor_applied: Vec::new(),
+            factor_ordinal: 0,
+            factor_gen: 0,
             turn_start_pos: Vec::new(),
             turn_snapshot: Vec::new(),
             turn_rolls: Vec::new(),
+            roll_history: Vec::new(),
             build_discount: 0,
             build_discount_layers: 0,
             build_cost_pct: full_build_cost(),
@@ -707,6 +808,12 @@ pub struct World {
     /// which was the single hottest cost in a bot match.
     pub recent: EventTail,
     pub turn: TurnCtx,
+    /// Per-seat withheld turn-end settle answer (G03 §4.7). It lives here, not
+    /// on [`TurnCtx`], because the answer is given during the turn that applied
+    /// the blocking effect -- possibly another player's -- and must survive
+    /// into the blocked seat's own turn.
+    #[serde(default)]
+    pub blocked_settle: Vec<SettleAnswer>,
     pub extra_turns: Vec<usize>,
     pub out_count: i32,
     pub event_deck: Vec<String>,
@@ -738,6 +845,14 @@ pub struct World {
     #[serde(default)]
     pub recorded_roll: Option<i32>,
     pub ask_seq: i32,
+    /// The open roll transaction stack (a roll can nest: an effect roll inside
+    /// a move window, a recast inside a counteraction).
+    #[serde(default)]
+    pub open_rolls: Vec<crate::engine::roll::RollTransaction>,
+    /// The next roll-transaction id (`rolls_by_player` / `roll_face` key on
+    /// it; never written to a card slot).
+    #[serde(default)]
+    pub next_roll_id: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
     #[serde(default)]
@@ -847,6 +962,7 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+<<<<<<< HEAD
     // ------------------------------------------------ plan frames
 
     /// The plan the move currently reads: the innermost frame, else the
@@ -972,6 +1088,24 @@ impl World {
         {
             self.turn.plan = command.staging_before;
         }
+=======
+    /// The withheld turn-end settle answer for `player` (`Unanswered` when
+    /// never stamped; a save predating the field has a short vector).
+    pub fn blocked_settle_answer(&self, player: usize) -> SettleAnswer {
+        self.blocked_settle
+            .get(player)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// Arm / clear `player`'s withheld turn-end settle answer.
+    pub fn set_blocked_settle_answer(&mut self, player: usize, a: SettleAnswer) {
+        if self.blocked_settle.len() <= player {
+            self.blocked_settle
+                .resize(player + 1, SettleAnswer::Unanswered);
+        }
+        self.blocked_settle[player] = a;
+>>>>>>> master
     }
 
     /// Has the turn end this `end` asks for already happened? 结束 with the
@@ -998,6 +1132,7 @@ impl World {
             next_event: 1,
             recent: EventTail::default(),
             turn: TurnCtx::default(),
+            blocked_settle: vec![SettleAnswer::Unanswered; players],
             extra_turns: vec![],
             out_count: 0,
             event_deck: vec![],
@@ -1011,6 +1146,8 @@ impl World {
             board: None,
             recorded_roll: None,
             ask_seq: 0,
+            open_rolls: Vec::new(),
+            next_roll_id: 1,
             signals: vec![],
             scheduled: vec![],
             targeted: vec![],

@@ -19,7 +19,7 @@
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const RINKO: CardDef = CardDef::new(
@@ -82,7 +82,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「固定为X*6」 -- the face is pinned, not rolled.
-    ctx::set_fixed_roll(x * 6);
+    ctx::set_fixed_roll(x * 6, roll_source::SKILL);
     // 「本次移动不受异常移动效果影响」 -- the companion layer closes the
     // stay half of the move gate, and the generic walk-exempt flag cancels
     // the immobile clamp for this walk.

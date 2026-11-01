@@ -10,30 +10,21 @@
 //! （1）'s grant is the skill rule placed on the grantee's field (see
 //! [`super::aya`]).
 //!
-//! （2） is **two-part** and must run 「投掷前」 -- before the dice land:
+//! （2） is one **[`ActionKind::DiceRollBefore`] (Action)** body: the
+//! `ask_number` for Y, the self `fans::flip_down(Y)`, the other-seat
+//! `fans::flip_up` loop, the `Y`d4 throw and the log.
 //!
-//! 1. **[`ActionKind::DiceRollBefore`] (Action)** -- the `ask_number` for Y, the
-//!    self `fans::flip_down(Y)`, the other-seat `fans::flip_up` loop, and the
-//!    log. Prompts are allowed here; this is the only window that is actually
-//!    before the roll.
-//! 2. **[`FilterKind::DiceRollPlan`] (FilterValue)** -- pure: reads the Y the
-//!    Before action stashed in per-player state and appends `Y`d4 to the move's
-//!    dice table (`add_base_count` / `add_base_sides`, same shape as
-//!    [`super::kanon`]'s 「1d20+1d4」). The host folds that into the plan
-//!    before `roll_tables`, so 「为此次投掷结果增加Yd4」 is *part of* the roll
-//!    result (not a post-hoc `set_move_roll` patch).
-//!
-//! Raise order at the main-move site (`play.rs` `main_move`):
-//! `diceRollBefore` → `diceRollPlan` → `roll_tables` → `diceRollValue` →
-//! `diceRollAfter`. The plan is re-seeded from the move *after* Before, so a
-//! `plan::add_base_dice` call inside Before would be wiped; Y is therefore
-//! stashed in state at Before and read by the pure Plan filter.
-//! A silent `diceRollAfter` Action clears the stash so a later roll cannot
-//! inherit it; Before always overwrites (including `Y = 0` on decline).
-//! The Plan filter's *condition* is `actor == owner` (not `slot(…) >= 1`):
-//! a `slot()` condition on FilterValue at DiceRollPlan did not observe a
-//! stash written earlier in the same roll, while `state::get` in the body
-//! does.
+//! Raise order per cast (G03 §5.2): `diceRollCast` → `diceRollBefore` →
+//! `diceRollAdd` → `diceRollValue` → … The window is named for the
+//! settlement, not the throw, so the d20 has already landed when this body
+//! runs -- but `diceRollAdd` / `diceRollValue` have not, and a
+//! `trigger::set_move_roll` write from the window reaches the face before
+//! them (the same shape Y.O.L.O uses). The `Y`d4 is therefore thrown here
+//! (`ctx::roll_direct`, skill-sourced) and added onto the running face, so
+//! 「为此次投掷结果增加Yd4」 is part of *this* roll's face rather than a
+//! separate transaction. A `diceRollPlan` filter cannot carry it any more:
+//! Plan runs before the cast, and this window is the only place that can
+//! prompt.
 //!
 //! TODO(规则书): 「因任意原因投掷前」 also covers card-driven rolls, but the
 //! run_planned_move site (`play.rs` ~743) never raises `diceRollBefore` (only
@@ -42,15 +33,10 @@
 //! (no prompts). Fixing that needs a `diceRollBefore` raise on the run_planned_move
 //! path.
 
-use bandori_std::ctx::{self, state};
-use card_sdk::abi::{ActionKind, Dice, FilterKind};
-use card_sdk::{key, Action, CardDef, Filter, Msg, On, PlanValue};
+use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::{roll_source, ActionKind, RollPurpose};
+use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
-
-/// Y chosen at [`ActionKind::DiceRollBefore`], consumed by the Plan filter.
-/// One-shot per roll: Before always writes it (0 on decline); a silent
-/// After action clears it.
-const PENDING_Y: &str = "evePendingY";
 
 pub const EVE: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
@@ -66,14 +52,8 @@ pub const EVE: CardDef = CardDef::new(
             Some(roll_ok),
             on_before,
         )),
-        // （2） 「为此次投掷结果增加Yd4」 -- pure dice-table append.
-        On::Filter(Filter::DiceRollPlan("actor == owner", None, on_plan)).silent(),
-        // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
-        On::Action(Action::DiceRollAfter("actor == owner", None, clear_pending)).silent(),
     ],
 );
-// 2 (plan shape) and 3 (stash clear) are bookkeeping; 1 is the visible clause.
-
 /// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).
 /// `actor == owner && slot('ppFansUp') >= 1` is the condition.
@@ -99,13 +79,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） at 「投掷前」: ask Y, flip fans now, stash Y for the Plan filter.
-/// The Yd4 itself is *not* rolled here -- it joins the move's dice table via
-/// [`on_plan`] so the sum is part of the roll result.
+/// （2） at the move's `diceRollBefore`: ask Y, flip fans, and add `Y`d4 onto
+/// this cast's face. A declined ask (Y = 0) adds nothing, so a later roll
+/// cannot inherit a stale boost.
 fn on_before(player_id: i32) -> card_sdk::Asked {
-    // Always write the stash (including 0) so a decline cannot inherit a
-    // previous roll's Y.
-    state::set(player_id, PENDING_Y, 0);
     let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,
@@ -120,8 +97,6 @@ fn on_before(player_id: i32) -> card_sdk::Asked {
     let chosen = y;
     let mut left = y;
     let _ = fans::flip_down(player_id, chosen)?;
-    // Stash for [`on_plan`]; the Plan filter is pure and cannot `state::set`.
-    state::set(player_id, PENDING_Y, chosen);
     if ctx::in_group(player_id, "Pastel✽Palettes") {
         for p in 0..ctx::player_count() {
             if left <= 0 {
@@ -146,36 +121,20 @@ fn on_before(player_id: i32) -> card_sdk::Asked {
             let _ = fans::flip_up(p, 1)?;
         }
     }
-    // `n` is the chosen Y (the dice count), not the Yd4 sum -- the dice have
-    // not landed yet.
-    ctx::log(player_id, &Msg::new(key!("eve_done")).i("n", chosen as i64));
+    // 「为此次投掷结果增加Yd4」 -- the dice are a real throw (skill source): its
+    // `diceRollCast` pays per-cast listeners, and the sum is added onto the
+    // face the window carries. `n` is the chosen Y; `add` the rolled sum.
+    let add = ctx::roll_direct(player_id, chosen, 4, RollPurpose::Effect, roll_source::SKILL)?.max(0);
+    let face = trigger::move_roll().unwrap_or_else(|| trigger::value());
+    trigger::set_move_roll(face + add);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("eve_done"))
+            .i("n", chosen as i64)
+            .i("add", add as i64),
+    );
     Ok(())
 }
-
-/// （2） 「为此次投掷结果增加Yd4」 -- pure PlanValue at [`FilterKind::DiceRollPlan`].
-/// Appends `Y`d4 to the move's dice table (`add_base`), so `roll_tables`
-/// includes it in the face. Reads the stash [`on_before`] wrote; never writes.
-fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
-    // NOTE: `slot('evePendingY')` as a *condition* on this FilterValue did not
-    // see the stash `on_before` writes earlier in the same roll (the Action
-    // `slot` conditions do). Gate on `actor == owner` and read the stash here
-    // -- `state::get` is legal in filters and does see it.
-    let y = state::get(player_id, PENDING_Y);
-    if y >= 1 {
-        v.add_base = Some(Dice { count: y, sides: 4 });
-    }
-    v
-}
-
-/// Drop the one-shot Y after the roll (including its `diceRollValue` reshape).
-fn clear_pending(player_id: i32) -> card_sdk::Asked {
-    state::set(player_id, PENDING_Y, 0);
-    Ok(())
-}
-
-//
-
-//
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
@@ -188,16 +147,4 @@ pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_before_kani(player_id: i32) -> card_sdk::Asked {
     on_before(player_id)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn on_plan_kani(player_id: i32, v: card_sdk::PlanValue) -> card_sdk::PlanValue {
-    on_plan(player_id, v)
-}
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn clear_pending_kani(player_id: i32) -> card_sdk::Asked {
-    clear_pending(player_id)
 }

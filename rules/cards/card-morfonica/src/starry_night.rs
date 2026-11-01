@@ -11,7 +11,7 @@
 //! ×1000 to stock X crystals; each removal pays the owner 1,000.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::{roll_source, ActionKind, TriggerKind};
 use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -163,25 +163,26 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 规则书（1）: 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」 -- the
+/// cast is a recast on the move transaction (`roll_reroll`): the rerolled face
+/// runs the whole ladder again, so 「最终结算」 modifiers (0.5倍速) apply to it,
+/// and the player picks which of the two faces settles. The timeout fallback
+/// keeps the old face, which is "did not reroll".
 fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
-    if !ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("starry_night_reroll_title")),
-        &Msg::new(key!("starry_night_reroll_ask")).i("roll", roll as i64),
-    )? {
-        return Ok(());
-    }
-    // TODO(ABI) dice value stage: `do_move_roll` sums the raw tables and the new
-    // face never passes `diceRollValue`, so 「最终结算」 modifiers (AG:（摩卡）0.5倍速) are not
-    // re-applied -- needs an export that re-runs the value stage.
-    let new_roll = ctx::do_move_roll(player_id)?;
-    trigger::set_move_roll(new_roll);
+    let id = trigger::roll_id();
+    let kind = Msg::new(key!("starry_night_reroll_title"));
+    let ask = Msg::new(key!("starry_night_reroll_ask")).i("roll", roll as i64);
+    let old = Msg::new(key!("starry_night_keep_old")).i("roll", roll as i64);
+    let new = Msg::new(key!("starry_night_keep_new")).i("roll", roll as i64);
+    let r = ctx::roll_reroll(player_id, &kind, &ask, &old, &new, roll_source::CARD)?;
+    let faces = ctx::roll_faces(id);
+    let to = faces.get(r.chosen_index as usize).copied().unwrap_or(roll);
     ctx::log(
         player_id,
         &Msg::new(key!("starry_night_rerolled"))
             .player_id("who", player_id)
             .i("from", roll as i64)
-            .i("to", new_roll as i64),
+            .i("to", to as i64),
     );
     Ok(())
 }

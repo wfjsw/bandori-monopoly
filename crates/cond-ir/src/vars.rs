@@ -73,9 +73,14 @@ pub enum VarId {
     CardId,
     CardPlaced,
     CardTile,
+    RollPurpose,
+    RollRerolled,
+    RollUnusedFace,
 }
 
-pub const SCALAR_COUNT: usize = 48;
+/// Always `VARS.len()` -- derived so adding a variable cannot leave the
+/// context's scalar storage short.
+pub const SCALAR_COUNT: usize = VARS.len();
 
 /// Flat identifier + type, in `VarId` order. Mirrors `vocab::VOCAB` scalars
 /// (Window + Candidate, non-Func).
@@ -130,6 +135,9 @@ pub const VARS: &[(VarId, &str, VarType)] = &[
     (VarId::CardId, "card_id", VarType::Int),
     (VarId::CardPlaced, "card_placed", VarType::Bool),
     (VarId::CardTile, "card_tile", VarType::Int),
+    (VarId::RollPurpose, "roll_purpose", VarType::Int),
+    (VarId::RollRerolled, "roll_rerolled", VarType::Bool),
+    (VarId::RollUnusedFace, "roll_unused_face", VarType::Int),
 ];
 
 /// Look up a flat name (after `root.field` rewrite).

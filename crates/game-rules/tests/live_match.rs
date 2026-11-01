@@ -363,6 +363,79 @@ fn a_card_layer_passes_the_abnormal_gate() {
     );
 }
 
+/// G03: the roll ladder runs `Cast -> Before -> Add -> Value -> After ->
+/// Result -> Settled`, the Add/Value folds land in that order, and the settle
+/// is last and once.
+#[test]
+fn a_move_roll_runs_the_whole_ladder_in_order() {
+    let mut m = match_with_rules("TEST:rollTrace", rules_with_fixtures());
+    m.act(1, &play("TEST:rollTrace")).expect("place the trace");
+    let start = m.state().players[1].pos;
+    m.world_mut().rng.load_dice(&[5]);
+    m.act(1, &NetMessage::act("roll")).expect("roll");
+    decline_prompts(&mut m);
+    let st = m.state();
+    let rows: Vec<&game_core::msg::Msg> = fixture_events(&st, "roll_trace");
+    let kinds: Vec<i64> = rows.iter().map(|r| int_arg(r, "kind")).collect();
+    // Filter bodies run on a discarded world copy, so only the Action stages
+    // log: 123 cast, 1 before, 49 after, 2 result, 124 settled. The faces
+    // prove the Filter stages ran between Before and After, and only there:
+    // Add 5 -> 6 then Value 6 -> 12, with no re-fold at Result (`write_face`
+    // no-ops on an unchanged face).
+    assert_eq!(
+        kinds,
+        vec![123, 1, 49, 2, 124],
+        "ladder order: {:?}",
+        rows.iter()
+            .map(|r| (int_arg(r, "kind"), int_arg(r, "face")))
+            .collect::<Vec<_>>()
+    );
+    let faces: Vec<i64> = rows.iter().map(|r| int_arg(r, "face")).collect();
+    assert_eq!(faces, vec![5, 5, 12, 12, 12], "fold once, add before value");
+    for r in &rows {
+        assert_eq!(int_arg(r, "purpose"), 1, "a move roll");
+        assert_eq!(int_arg(r, "rerolled"), 0, "a single cast");
+        assert_eq!(int_arg(r, "unused"), -1, "nothing unchosen");
+    }
+    assert_eq!(
+        st.players[1].pos,
+        ((start as i32 + 12).rem_euclid(60)) as i32,
+        "the walk uses the settled face"
+    );
+}
+
+/// G03: a recast raises its own Result with the transaction's source, and the
+/// unchosen face reaches the one Settled (`unused_face`), where a keep-point
+/// body can read it.
+#[test]
+fn a_fire_recast_carries_the_source_and_the_unused_face() {
+    let mut m = match_with_rules("TEST:rollTrace", rules_with_fixtures());
+    m.give_cards(1, &["TEST:fireRecast"]);
+    m.act(1, &play("TEST:rollTrace")).expect("place the trace");
+    m.act(1, &play("TEST:fireRecast")).expect("place the recast");
+    m.world_mut().rng.load_dice(&[5, 3]);
+    m.act(1, &NetMessage::act("roll")).expect("roll");
+    decline_prompts(&mut m);
+    let st = m.state();
+    let rows: Vec<&game_core::msg::Msg> = fixture_events(&st, "roll_trace");
+    let kinds: Vec<i64> = rows.iter().map(|r| int_arg(r, "kind")).collect();
+    // Two casts, so two Before / Result windows and one Settled.
+    assert_eq!(kinds.iter().filter(|&&k| k == 123).count(), 2, "{kinds:?}");
+    assert_eq!(kinds.iter().filter(|&&k| k == 124).count(), 1, "{kinds:?}");
+    assert_eq!(*kinds.last().unwrap(), 124, "the settle is last");
+    // Every Result of the transaction carries the fire source.
+    for r in rows.iter().filter(|r| int_arg(r, "kind") == 2) {
+        assert_eq!(int_arg(r, "source"), 1, "the Result source is CHARGE");
+    }
+    let settled = rows.last().unwrap();
+    // The unpicked face is the **raw** one (the old cast's 5): a banked die is
+    // recast later and re-folds the Add/Value modifiers itself, so the settled
+    // 12 would apply them twice (G03 I5).
+    assert_eq!(int_arg(settled, "unused"), 5, "the unpicked raw face");
+    assert_eq!(int_arg(settled, "rerolled"), 1, "more than one cast");
+    assert_eq!(int_arg(settled, "casts"), 2);
+}
+
 #[test]
 fn a_card_can_shape_a_move_and_run_it_now() {
     let mut m = match_with_rules("TEST:mover", rules_with_fixtures());

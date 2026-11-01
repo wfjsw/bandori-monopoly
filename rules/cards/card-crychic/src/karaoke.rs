@@ -84,11 +84,15 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
         )?;
         results[pick.min(results.len() - 1)]
     };
-    // TODO(规则书)（视为正常掷骰移动）: the faces are the turn's movement dice (the plan's `base`
-    // + `dice`) -- a dice effect that lands *after* this card is still bypassed,
-    // because the pinned face wins in `run_planned_move`. `set_base_dice` clears it for its
-    // own roll; other dice writers do not.
-    ctx::set_fixed_roll(chosen);
+    // 规则书: 「视为正常掷骰移动」 -- the main move then rolls this face and
+    // walks normally.
+    // TODO(规则书)（视为正常掷骰移动）: the faces are the turn's movement dice (the
+    //   plan's `base` + `dice`). Dice effects landing *after* this card still
+    //   apply: the pinned face is a cast of the real move and runs the whole
+    //   ladder (`diceRollAdd` / `diceRollValue` included). Only
+    //   `set_base_dice`'s own clearing stays card-side: it replaces the `base`
+    //   table, not the pinned face.
+    ctx::set_fixed_roll(chosen, roll_source::CARD);
     ctx::log(
         player_id,
         &Msg::new(key!("karaoke_chosen"))

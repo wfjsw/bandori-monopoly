@@ -86,7 +86,6 @@ function dynamicImages(name: Name): Promise<unknown> {
     roster = [
       ...D.personas.map((c) => charArt(D.artId(c), "thumb")),
       charArt(D.artId(home), "sdThumb"),
-      charArt(D.artId(home), "namePlate"),
     ];
   } catch {
     /* no roster yet: nothing to warm */

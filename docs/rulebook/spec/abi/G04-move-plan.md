@@ -467,8 +467,12 @@ Each new import is added at every layer, or the build fails:
 2. `crates/card-sdk/src/ctx/sys.rs` — `extern` under the
    `wasm32`/`native-rules` attribute pair, link name `ruleset_*`.
 3. `crates/card-sdk/src/ctx/sys_kani.rs` — `kani_host::call_*` stub.
+<<<<<<< HEAD
 4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 378-397;
    this group uses **378-391**).
+=======
+4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 378-397; this group uses 378-391).
+>>>>>>> master
 5. `rules/kani/src/host.rs` — arm (stub or model) and every affected card
    proof's `host_subset!`.
 6. `crates/game-rules/src/hostfns.rs` — `HostCtx` implementation.
@@ -966,6 +970,13 @@ both after the last raise. A nested move with its own roll inside a counter
 window gets its own snapshot instead of clobbering the outer one. The fold is
 `fold_plan_delta(&mut m, window_before.last().unwrap(), &frame)` before the
 pop. This is what makes a detour counter and a misaki teleport land.
+
+G03 (after this group) keeps both raises inside this snapshot and adds none
+outside it: the main move raises `diceRollBefore` *after* casting, a reroll
+re-raises `diceRollBefore`+`diceRollResult` inside the same snapshot, and a
+preview roll (no open move, e.g. 去唱卡拉ok吧's candidates) has no frame to
+fold into. G03 item 7 (`detour-plan-writes-lost`) is therefore this group's,
+not G03's.
 
 `fold_plan_delta` (`play.rs:108-180`) changes from "copy when changed and
 non-empty" to "copy when changed": the `is_some()` guards on `teleport_to`,

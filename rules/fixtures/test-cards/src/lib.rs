@@ -5,7 +5,7 @@
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{roll_source, ActionKind, ChainKind, FilterKind, RollPurpose};
 use card_sdk::serde;
-use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On, PayAddValue, PlanValue};
+use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On, PayAddValue, PlanValue, RollValue};
 
 /// Plays another card (in another module) in the middle of its own effect.
 const RELAY: CardDef = CardDef::new("TEST:relay", &[On::Play("", None, relay)]);
@@ -566,6 +566,97 @@ fn pay_add_any(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     PayAddValue { value: out, ..v }
 }
 
+/// `MONEY-01` -- the rent figure's own 「收费」 stages. `rentAdd` is the fixed
+/// step (支付阶段 2) and `rentMul` the scale step (支付阶段 4): both sit before
+/// the payment's stages, so a rent-shaped charge composes with them instead of
+/// being rewritten by a payment-side body.
+const RENT_ADD_100: CardDef = CardDef::new(
+    "TEST:rentAdd100",
+    &[On::Filter(Filter::RentAdd("card.placed", None, add_100))],
+);
+
+const RENT_MUL_HALF: CardDef = CardDef::new(
+    "TEST:rentMulHalf",
+    &[On::Filter(Filter::RentMul("card.placed", None, half))],
+);
+
+/// The settle's one `settleAdd` / `settleMul` window (`MONEY-01`): what the
+/// settle costs at 支付阶段 2 / 4, composed once for every leg of the settle.
+const SETTLE_ADD_100: CardDef = CardDef::new(
+    "TEST:settleAdd100",
+    &[On::Filter(Filter::SettleAdd("card.placed", None, add_100))],
+);
+
+/// A second `settleAdd` responder: two of them on one stage must **sum**.
+const SETTLE_ADD_50: CardDef = CardDef::new(
+    "TEST:settleAdd50",
+    &[On::Filter(Filter::SettleAdd("card.placed", None, add_50))],
+);
+
+const SETTLE_MUL_HALF: CardDef = CardDef::new(
+    "TEST:settleMulHalf",
+    &[On::Filter(Filter::SettleMul("card.placed", None, half))],
+);
+
+/// MONEY-01 idempotence probe: arm a 支付减半 and then settle a tile whose
+/// settle has to prompt, so the drive suspends and its prefix re-runs on the
+/// resume. The 减半 must land **once**.
+const FACTOR_SUSPEND: CardDef = CardDef::new(
+    "TEST:factorSusp",
+    &[On::Play("", None, factor_susp)],
+);
+
+fn factor_susp(player_id: i32) -> card_sdk::Asked {
+    // The nested settles below happen after this body returns, so the halves
+    // ride the turn plan's 「地租」 factor, which the settles' own move clones
+    // carry.
+    ctx::plan::set_rent_factor(500);
+    // A prompt of its own: the body is re-executed from the start when the
+    // drive resumes, replaying the `set_rent_factor` above. The 减半 must land
+    // once.
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("settle_ask_title")),
+        &Msg::new(key!("settle_ask_text")),
+    )?;
+    // 购物中心 -- the test owns it for the other seat. Two settles: the second
+    // one pays after the resume, where a doubled factor would show.
+    ctx::settle_tile_at(1 - player_id, 1, true);
+    ctx::settle_tile_at(1 - player_id, 1, true);
+    Ok(())
+}
+
+/// A `SettleBody` hook that always asks -- a prompt purely to suspend the
+/// arming body's drive mid-settle (MONEY-01 re-run probe).
+const SETTLE_ASK: CardDef = CardDef::new(
+    "TEST:settleAsk",
+    &[On::Action(Action::SettleBody("actor == 1", None, settle_ask))],
+);
+
+fn settle_ask(player_id: i32) -> card_sdk::Asked {
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("settle_ask_title")),
+        &Msg::new(key!("settle_ask_text")),
+    )?;
+    Ok(())
+}
+
+/// +50 on the stage input.
+fn add_50(_player_id: i32, value: i32) -> i32 {
+    value + 50
+}
+
+/// +100 on the stage input.
+fn add_100(_player_id: i32, value: i32) -> i32 {
+    value + 100
+}
+
+/// ÷2, rounded up (the rounding every halving body uses).
+fn half(_player_id: i32, value: i32) -> i32 {
+    value / 2 + value % 2
+}
+
 /// A 「不[触发结算]」 **teleport move** (`SETTLE-STAGES.md` §6 M6a / ruling R2):
 /// `plan::set_kind(Teleport)` + `set_settles(false)` + `run_planned_move`, so the move
 /// goes through `teleport_as` and must still raise `passTile` + `passPlayer` at
@@ -686,9 +777,9 @@ fn marker_spend(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Tags every move plan `fireRoll` at `rollPlan`, so a plain `roll` looks like
-/// a 「使用火罐进行移动掷骰」. HHW:（美咲）'s `can_counteract` keys on
-/// `move_tag("fireRoll")` and never reads the pot -- the 0-fire regression.
+/// Tags every move plan `fireRoll` at `rollPlan`. G03 moved the 「使用火罐进行
+/// 移动掷骰」 key onto `roll_source` (`TEST:fireRecast` supplies that), so the
+/// tag is now only a marker a test can assert on.
 const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
@@ -1300,7 +1391,10 @@ fn settle_tail(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("tail_before")));
     // Settle a *different* tile so this is a 1-level nest (the tail must run
     // exactly once). Tile 0 has no settleTail instance.
-    ctx::settle_tile_at(player_id, 0, true);
+    // The nested settle is by the *other* seat: a counteract condition sees
+    // the move's tile, not the nested settle's, so `actor` is what tells the
+    // inner settle apart from the outer one.
+    ctx::settle_tile_at(1 - player_id, 0, true);
     ctx::log(player_id, &Msg::new(key!("tail_after")));
     Ok(())
 }
@@ -1320,6 +1414,30 @@ fn settle_sib(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::log(player_id, &Msg::new(key!("sib_once")));
+    Ok(())
+}
+
+/// A `Settle` [反击] that cancels the settle outright. Only offered for the
+/// *other* seat's settle (`actor == 1`; the tail nests for the other player),
+/// so the outer settle of the same turn is left alone. Answers `Settle`, not
+/// `SettleBefore` -- the latter is only raised by a real walk, never by a
+/// card-driven `settle_tile_at`. A settle cancelled at its declaration never
+/// raises `settleAdd` / `settleMul`; the outer settle's stored 支付价格 shaping
+/// must survive it.
+const SETTLE_CANCEL: CardDef = CardDef::new(
+    "TEST:settleCancel",
+    &[On::Counteract(
+        &[ChainKind::Settle],
+        "actor == 1",
+        None,
+        settle_cancel,
+    )],
+)
+.props(&[(card_sdk::abi::prop::COUNTERACT_FROM_FIELD, 1)]);
+
+fn settle_cancel(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("cancel_at")).i("tile", ctx::trigger::tile() as i64));
+    ctx::trigger::set_cancelled();
     Ok(())
 }
 
@@ -2183,74 +2301,131 @@ fn query_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// ------------------------------------------------------------- G03 roll ladder
+
+/// G03: logs every roll stage (kind id, face, purpose, source, rerolled,
+/// unused face, cast count) and bends the face at Add (+1) and Value (×2), so
+/// the stage order and the fold-once contract are visible from the log.
+const ROLL_TRACE: CardDef = CardDef::new(
+    "TEST:rollTrace",
+    &[
+        On::Play("", None, roll_trace_play),
+        On::Action(Action::DiceRollCast("card.placed", None, roll_trace_log)),
+        On::Action(Action::DiceRollBefore("card.placed", None, roll_trace_log)),
+        On::Filter(Filter::DiceRollAdd("card.placed", None, roll_trace_add)),
+        On::Filter(Filter::DiceRollValue("card.placed", None, roll_trace_value)),
+        On::Action(Action::DiceRollAfter("card.placed", None, roll_trace_log)),
+        On::Action(Action::DiceRollResult("card.placed", None, roll_trace_log)),
+        On::Action(Action::DiceRollSettled("card.placed", None, roll_trace_log)),
+    ],
+);
+
+fn roll_trace_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:rollTrace", &Msg::new(key!("roll_trace_note")));
+    Ok(())
+}
+
+fn roll_trace_log(player_id: i32) -> card_sdk::Asked {
+    let p = trigger::roll_payload().unwrap_or_default();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("roll_trace"))
+            .i("kind", trigger::kind().id as i64)
+            .i("face", trigger::value() as i64)
+            .i("purpose", p.purpose as i64)
+            .i("source", p.source as i64)
+            .i("rerolled", p.rerolled as i64)
+            .i("unused", p.unused_face as i64)
+            .i("casts", p.casts.len() as i64),
+    );
+    Ok(())
+}
+
+fn roll_trace_add(_player_id: i32, v: RollValue) -> RollValue {
+    RollValue {
+        value: v.value + 1,
+        ..v
+    }
+}
+
+fn roll_trace_value(_player_id: i32, v: RollValue) -> RollValue {
+    RollValue {
+        value: v.value * 2,
+        ..v
+    }
+}
+
+/// G03: at the move's After, recast with a fire source and pick the new face
+/// (the Result window must then carry `roll_source == 1`).
+const FIRE_RECAST: CardDef = CardDef::new(
+    "TEST:fireRecast",
+    &[
+        On::Play("", None, fire_recast_play),
+        On::Action(Action::DiceRollAfter("card.placed", None, fire_recast)),
+    ],
+);
+
+fn fire_recast_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:fireRecast",
+        &Msg::new(key!("fire_recast_note")),
+    );
+    Ok(())
+}
+
+fn fire_recast(player_id: i32) -> card_sdk::Asked {
+    let id = trigger::roll_id();
+    let _ = ctx::roll_recast(id, roll_source::CHARGE)?;
+    ctx::roll_pick(id, 1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("fire_recast_note"))
+            .i("id", id as i64)
+            .i("unused", ctx::roll_unused_face(id).unwrap_or(-1) as i64)
+            .i("casts", ctx::roll_faces(id).len() as i64),
+    );
+    Ok(())
+}
+
+/// G03: at the move's After, reroll with a fire source and let the player
+/// pick (keep old / keep new) -- the keep-point body must see `unused_face`.
+const FIRE_REROLL: CardDef = CardDef::new(
+    "TEST:fireReroll",
+    &[
+        On::Play("", None, fire_recast_play),
+        On::Action(Action::DiceRollAfter("card.placed", None, fire_reroll)),
+    ],
+);
+
+fn fire_reroll(player_id: i32) -> card_sdk::Asked {
+    let title = Msg::new(key!("fire_recast_note"));
+    let old = Msg::new(key!("fire_keep_old"));
+    let new = Msg::new(key!("fire_keep_new"));
+    let r = ctx::roll_reroll(player_id, &title, &title, &old, &new, roll_source::CHARGE)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("fire_recast_note"))
+            .i("chosen", r.chosen_index as i64)
+            .i("unused", r.unused_face.map(|v| v as i64).unwrap_or(-1)),
+    );
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
-    RELAY,
-    RECURSE,
-    ECHO,
-    LISTER,
-    STUNNER,
-    STUN_SELF_MOVER,
-    GUARD,
-    AIMER,
-    SHIELD,
-    MOVER,
-    DICE_MOVER,
-    COUNTER,
-    PROBE,
-    DENY,
-    CRYSTAL,
-    DEST_NOW,
-    DEST_TO,
-    TOTAL_CUT,
-    DEAD_PAY,
-    SELF_CHARGE,
-    PAY_ADD_ANY,
-    TELE_NOSOLVE,
-    PAY_OVERCUT,
-    XFER_1000,
-    GAIN_1000,
-    LOSE_1000,
-    MARKER_DENY,
-    MARKER_SPEND,
-    CHARGE_ROLL,
-    PRE_REJECT,
-    PRE_ACCEPT,
-    PRE_PLAY,
-    PRE_HOOK,
-    PRE_GATE,
-    PRE_ROLLPLAN,
-    PRE_ATEMD,
-    PRE_SETTLE,
-    SPLIT_12K,
-    SHAPE_LATE,
-    LOSE_RAW,
-    SPEND_FIRE,
-    PASS_TELE,
-    TILE_HOOK,
-    DENY_PLAY,
-    PASS_FLASH,
-    PASS_BEFORE_FLASH,
-    PING,
-    PING_REJECT,
-    ROLL_THEN_PAY,
-    DECK_ONCE,
-    CLOCK_HOOK,
-    READ_HOST_READ,
-    SETTLE_NEST,
-    SETTLE_TAIL,
-    SETTLE_SIB,
-    SILENT_PAIR,
-    SILENT_NEST,
-    SILENT_PAY,
-    SILENT_QUIET,
-    SILENT_ASK,
-    QUIET_COUNTER,
-    QUIET_RAISE,
-    FLASH_ALWAYS,
-    FLASH_NEVER,
-    FLASH_ALWAYS_QUIET,
-    FLASH_FOLD_ALWAYS,
-    FLASH_FOLD_NEVER,
+    RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, DICE_MOVER, COUNTER, PROBE, DENY,
+    CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
+    RENT_ADD_100, RENT_MUL_HALF, SETTLE_ADD_100, SETTLE_ADD_50, SETTLE_MUL_HALF, FACTOR_SUSPEND, SETTLE_ASK,
+    PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
+    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
+    SPLIT_12K, SHAPE_LATE, LOSE_RAW, SPEND_FIRE,
+    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
+    ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB, SETTLE_CANCEL,
+    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
+    QUIET_COUNTER, QUIET_RAISE,
+    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
     FLASH_HEADER_IDS,
     FLASH_THEN_ASK,
     FLASH_TWO_ASKS,
@@ -2272,5 +2447,8 @@ card_sdk::ruleset!(&[
     STRUCT_ARG,
     NAMED_OPEN,
     NAMED_SHUT,
-    QUERY
+    QUERY,
+    ROLL_TRACE,
+    FIRE_RECAST,
+    FIRE_REROLL
 ]);

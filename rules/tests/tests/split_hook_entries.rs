@@ -35,15 +35,16 @@ fn split_cards_declare_filter_and_action_halves() {
         }
     };
 
-    // no_expectation (ABI v94): Play / Filter(DiceRollValue) /
+    // no_expectation (ABI v94): Play / Filter(DiceRollAdd) /
     //   Filter(PaySplitAdd) / Action(PayAfter) / Action(Reshuffled). The roll
-    //   shave + 0-step no-settle clamp are one Filter (option C); the PayAfter
-    //   entry spends the 「生效2次」 charges.
+    //   shave + 0-step no-settle clamp are one Filter (option C) at Add (G03
+    //   R9: additive first, then the halves); the PayAfter entry spends the
+    //   「生效2次」 charges.
     let s = shape("PP:不要背负期待");
     assert_eq!(s.len(), 5, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
-    assert_eq!(s[1].1, vec!["diceRollValue".to_string()], "DiceRollValue");
+    assert_eq!(s[1].1, vec!["diceRollAdd".to_string()], "DiceRollAdd");
     assert_eq!(s[2].0, kind("Filter"));
     assert_eq!(s[2].1, vec!["paySplitAdd".to_string()], "PaySplitAdd");
     assert_eq!(s[3].0, kind("Action"));
@@ -145,7 +146,7 @@ fn no_expectation_silent_index_follows_the_split() {
     assert_eq!(
         info.on[1].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 1 (Filter DiceRollValue) announces"
+        "entry 1 (Filter DiceRollAdd) announces"
     );
     assert_eq!(
         info.on[2].presentation,
@@ -196,7 +197,7 @@ fn fever_filter_half_pay_add_still_boosts() {
     );
 }
 
-/// no_expectation both halves: the roll shave (Filter DiceRollValue) and PaySplitAdd
+/// no_expectation both halves: the roll shave (Filter DiceRollAdd) and PaySplitAdd
 /// bend (Filter) still land. Outcome matches master
 /// `no_expect_roll_minus_2` + the pay-arm of the old shared `hook`.
 #[test]
@@ -213,12 +214,8 @@ fn no_expectation_both_halves_fire() {
     while t.prompt().is_some() {
         let _ = t.answer(0, 0);
     }
-    // Filter half (DiceRollValue): face - 2.
-    assert_eq!(
-        t.pos(0),
-        (face - 2) as usize,
-        "DiceRollValue half shaves by 2"
-    );
+    // Filter half (DiceRollAdd): face - 2.
+    assert_eq!(t.pos(0), (face - 2) as usize, "DiceRollAdd half shaves by 2");
 }
 
 /// j11 both halves: TurnEnd decay (Action) burns a crystal. Sequence matches

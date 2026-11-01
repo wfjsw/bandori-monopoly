@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"上原绯玛丽"#)
     .display(r#"上原绯玛丽"#)
+    .latin(r#"Uehara Himari"#)
     .group(r#"Afterglow"#)
     .color(r#"#FF9999"#)
     .skill(r#"大家一起迈出新的一步"#)

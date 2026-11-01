@@ -493,10 +493,9 @@ fn first_accident_blocks_pp_skill_2() {
             let hit = |k: &str| {
                 p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
             };
-            // `maya` before `aya`: the substring `aya` is inside `maya`, so a
-            // maya prompt would otherwise be reported as aya and never match
-            // the allowed exception below.
-            ["maya", "aya", "hina"]
+            // 「maya」 first: `maya_title` also contains 「aya」, so an aya-first
+            // list reports every 大和麻弥 prompt as 丸山彩's.
+            ["maya", "hina", "aya"]
                 .into_iter()
                 .find(|&k| hit(k))
                 .map(|k| k.to_string())

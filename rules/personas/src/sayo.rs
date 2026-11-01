@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"冰川纱夜"#)
     .display(r#"冰川纱夜"#)
+    .latin(r#"Hikawa Sayo"#)
     .group(r#"Roselia"#)
     .color(r#"#00AABB"#)
     .skill(r#"踏上荆棘之路的觉悟"#)

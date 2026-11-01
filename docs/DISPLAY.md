@@ -44,9 +44,9 @@ cargo run -q -p rules-native --example dump_display -- /tmp/display.json
 {
   "cards":    { "<cardId>":      { "text": "...", "body": [ … ],
                                    "rawName": "...", "counterReason": "..." } },
-  "personas": { "<personaName>": { "display": "...", "text": "...", "color": "...",
-                                   "variantTag": "...", "art": "...", "costume": "...",
-                                   "cnId": "..." } },
+  "personas": { "<personaName>": { "display": "...", "latin": "...", "text": "...",
+                                   "color": "...", "variantTag": "...", "art": "...",
+                                   "costume": "...", "cnId": "..." } },
   "groups":   { "<groupName>":   { "text": "...", "shortName": "...", "color": "...",
                                    "logo": "..." } },
   "events":   { "<eventId>":     { "name": "...", "text": "...", "body": [ … ] } },
@@ -105,6 +105,7 @@ skill text is still a flat `text` only -- the client parses it at render time.
 | card | `rawName` | `CardMeta::raw_name` | untrimmed sheet name |
 | card | `counterReason` | `On` reason field (`Counteract` / `Action` / `Play`) | 「…时」 clause the counteraction prompt shows, as a **locale key** the client resolves (`cards:<crate>.…` / `counter.*`, ABI v95); several entries join their keys with `\n` |
 | persona | `display` | `PersonaDef::display` | compact display label |
+| persona | `latin` | `PersonaDef::latin` | romanised name, subtitle of the name plate |
 | persona | `text` | `PersonaDef::text` | skill text |
 | persona | `color` | `PersonaDef::color` | accent colour |
 | persona | `variantTag` | `PersonaDef::variant_tag` | short variant label |
@@ -192,3 +193,14 @@ above is display-only and lives only in `display.json`.
 Builder calls (`.text(...)` / `.display(...)` / `.color(...)` / `.art(...)` /
 …) stay in the rule sources. `dump_display` reads the defs directly; only the
 emission into `MetaRow` stops (ABI v86).
+
+## Name plates
+
+The roster's name plate is drawn from these display columns: `title` is the
+persona `display`, the subtitle is its romanised `latin` name (set in caps by
+the plate) and `color` is its accent (`ui/NameBanner.tsx`, geometry in
+`core/nameBanner.ts`). A row without `latin` falls back to its band name. The
+plate used to be extracted art (`namePlate` in the
+asset manifest); the vector plate covers every roster row, variants included,
+so the art set no longer gates it. `tools/name-banner.py` builds the same
+shape for offline assets.

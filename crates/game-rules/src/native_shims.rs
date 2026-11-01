@@ -607,6 +607,32 @@ pub trait HostOps {
     fn op_set_extreme(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_turn_rolls`
     fn op_turn_rolls(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_recast`
+    fn op_roll_recast(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_move`
+    fn op_roll_move(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_pick`
+    fn op_roll_pick(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_current`
+    fn op_roll_current(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_face`
+    fn op_roll_face(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_unused_face`
+    fn op_roll_unused_face(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_roll_rerolled`
+    fn op_roll_rerolled(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_rolls_by_player`
+    fn op_rolls_by_player(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_roll`
+    fn op_trigger_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_move_settle_answer`
+    fn op_set_move_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_move_settle_answer`
+    fn op_move_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_turn_end_settle_answer`
+    fn op_set_turn_end_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_turn_end_settle_answer`
+    fn op_turn_end_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_turn_snap`
     fn op_turn_snapshot(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_turn_start_pos`
@@ -820,7 +846,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::roll(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
     fn op_roll_direct(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
-        Ok(crate::hostfns::roll_direct(self, a[0], a[1], a[2], a[3])? as i64)
+        Ok(crate::hostfns::roll_direct(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
     fn op_log(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::log(self, a[0], a[1], a[2])?;
@@ -1669,7 +1695,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(0)
     }
     fn op_set_fixed_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
-        crate::hostfns::set_fixed_roll(self, a[0])?;
+        crate::hostfns::set_fixed_roll(self, a[0], a[1])?;
         Ok(0)
     }
     fn op_fixed_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
@@ -1778,6 +1804,48 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_turn_rolls(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::turn_rolls(self, a[0], a[1])? as i64)
+    }
+    fn op_roll_recast(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::roll_recast(self, a[0], a[1])? as i64)
+    }
+    fn op_roll_move(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::roll_move(self, a[0], a[1])? as i64)
+    }
+    fn op_roll_pick(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::roll_pick(self, a[0], a[1])?;
+        Ok(0)
+    }
+    fn op_roll_current(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::roll_current(self)? as i64)
+    }
+    fn op_roll_face(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::roll_face(self, a[0], a[1])? as i64)
+    }
+    fn op_roll_unused_face(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::roll_unused_face(self, a[0])? as i64)
+    }
+    fn op_roll_rerolled(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::roll_rerolled(self, a[0])? as i64)
+    }
+    fn op_rolls_by_player(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::rolls_by_player(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_trigger_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_roll(self, a[0], a[1])? as i64)
+    }
+    fn op_set_move_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::set_move_settle_answer(self, a[0], a[1])?;
+        Ok(0)
+    }
+    fn op_move_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::move_settle_answer(self, a[0])? as i64)
+    }
+    fn op_set_turn_end_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::set_turn_end_settle_answer(self, a[0], a[1])?;
+        Ok(0)
+    }
+    fn op_turn_end_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::turn_end_settle_answer(self, a[0])? as i64)
     }
     fn op_turn_snapshot(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::turn_snapshot(self, a[0], a[1])? as i64)
@@ -2131,9 +2199,10 @@ pub unsafe extern "C-unwind" fn ruleset_roll_direct(
     count: i32,
     sides: i32,
     purpose: i32,
+    source: i32,
 ) -> i32 {
     with_host(
-        |h| match h.op_roll_direct([player_id, count, sides, purpose, 0, 0]) {
+        |h| match h.op_roll_direct([player_id, count, sides, purpose, source, 0]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
         },
@@ -4393,8 +4462,8 @@ pub unsafe extern "C-unwind" fn ruleset_set_no_money_loss(player_id: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_fixed_roll(n: i32) {
-    with_host(|h| match h.op_set_fixed_roll([n, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_set_fixed_roll(n: i32, source: i32) {
+    with_host(|h| match h.op_set_fixed_roll([n, source, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
@@ -4790,6 +4859,110 @@ pub unsafe extern "C-unwind" fn ruleset_set_extreme(v: i32) {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_turn_rolls(buf: i32, cap: i32) -> i32 {
     with_host(|h| match h.op_turn_rolls([buf, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_recast(roll_id: i32, source: i32) -> i32 {
+    with_host(|h| match h.op_roll_recast([roll_id, source, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_move(player_id: i32, source: i32) -> i32 {
+    with_host(|h| match h.op_roll_move([player_id, source, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_pick(roll_id: i32, index: i32) {
+    with_host(|h| match h.op_roll_pick([roll_id, index, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_current() -> i32 {
+    with_host(|h| match h.op_roll_current([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_face(roll_id: i32, index: i32) -> i32 {
+    with_host(|h| match h.op_roll_face([roll_id, index, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_unused_face(roll_id: i32) -> i32 {
+    with_host(|h| match h.op_roll_unused_face([roll_id, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_roll_rerolled(roll_id: i32) -> i32 {
+    with_host(|h| match h.op_roll_rerolled([roll_id, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_rolls_by_player(player_id: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_rolls_by_player([player_id, buf, cap, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_roll(buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_trigger_roll([buf, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_move_settle_answer(player_id: i32, answer: i32) {
+    with_host(|h| match h.op_set_move_settle_answer([player_id, answer, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_move_settle_answer(player_id: i32) -> i32 {
+    with_host(|h| match h.op_move_settle_answer([player_id, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_turn_end_settle_answer(player_id: i32, answer: i32) {
+    with_host(|h| match h.op_set_turn_end_settle_answer([player_id, answer, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_turn_end_settle_answer(player_id: i32) -> i32 {
+    with_host(|h| match h.op_turn_end_settle_answer([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

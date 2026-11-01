@@ -244,8 +244,8 @@ deterministic). A named plan tag rides `PlanValue.tag: Option<(MsgKey, i32)>`
 
 **The one exception (user decision 2026-10-17, keep it):** an `On::Action`
 at `DiceRollAfter` may prompt, roll dice, and write the face (trigger value
-read back). Every other reshape is the pure `DiceRollValue` filter. See the
-filter-kind section below.
+read back). Every other reshape is a pure filter (`DiceRollAdd` for flat
+values, `DiceRollValue` for fractions). See the filter-kind section below.
 
 ### Interactive pre-stages (v78)
 
@@ -265,27 +265,36 @@ immediately before the pure filter stage:
 The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
 declaration source of truth** for ids, spellings, and `is_filter`. The typed
 mirror is `Filter::KINDS` / `Action::KINDS` in `crates/card-sdk/src/kinds.rs`.
-Today (27 filter kinds):
+Today (34 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
   `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
+* the rent / settle figures' own stages (v105, hook-only) -- `RentAdd`,
+  `RentMul`, `SettleAdd`, `SettleMul` (`docs/ENGINE.md` "the stage folds")
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
-* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v75)
+* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v75), `DiceRollAdd` (v109)
 * decision gates (v77) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
   `PlayGate`, `BuyGate`, `AbnormalGuard`, `ImmuneAll`, `Untargetable`,
   `Redirect`
 
-`DiceRollValue` (id 102) is raised **immediately before** `DiceRollAfter` with the
-same payload: the pure roll-reshape stage. `DiceRollAfter` stays an Action event
-(dice already landed) and no longer rewrites the face.
+A cast runs one ladder (v109, design G03): `diceRollCast` (Action, hook-only)
+→ `diceRollBefore` → **`DiceRollAdd`** → **`DiceRollValue`** → optional
+`DiceRollAfter`/`diceRollResult` rerolls → settlement. `DiceRollAdd` (id 125)
+is the **additive** pass and `DiceRollValue` (id 102) the **multiplicative /
+final-settlement** pass; both carry `RollValue` and both are pure. Write to the
+zone the rulebook names: a flat ±N is an Add, a fraction/half is a Value.
+`DiceRollAfter`/`diceRollResult` are **Move rolls only**; effect rolls stop at
+the settlement. Neither After nor Result sees the settled face any more — the
+Add/Value fold runs after them, once, on the chosen cast.
 
 **Documented exception (user decision 2026-10-17, keep it):** an
-`On::Action` at `DiceRollAfter` **may** prompt, roll dice, and write the face
-(trigger value read back). That is the one exception to the filter-purity
-rule — the only Action that may reshape a roll. Prefer the pure
-`DiceRollValue` filter when no prompt is needed; use the Action half only
-when the rulebook puts a 「可」 offer on the reshape.
+`On::Action` at `DiceRollAfter`/`diceRollResult` **may** prompt, roll dice, and
+write the face (trigger value read back). That is the one exception to the
+filter-purity rule — the only Actions that may reshape a roll. A window write
+is treated as a new raw value: the Add/Value fold is re-run once and cached on
+the cast. Prefer the pure filter when no prompt is needed; use the Action half
+only when the rulebook puts a 「可」 offer on the reshape.
 
 `ChargePaying` (bandori-std kind 78) is **not** a filter kind: its 「可」
 opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
@@ -315,16 +324,30 @@ happened.
 
 ### Host application order
 
-The host raises the pipeline stages in rulebook order and folds each stage's
-return before the next raise, within a stage in placement order:
+The host raises the pipeline stages in rulebook order. Within one stage the
+answers are **folded** -- adds sum, muls multiply, both from the stage input
+(MONEY-01), so placement order inside a stage cannot change the figure. The
+remaining stages are **last-writer**: the `*Before` interactive prompts, the
+single-value stages `payCombinedCancel` (cancel flag; a non-cancelling answer
+still rewrites the figure), `paySplitChoose` (cancel flag), `paySplitAt`, and
+the `pay` settlement hook after them. A body on one of those writes the whole
+figure it wants, not a delta.
 
-* pay: `effect` declaration → `payCombinedAddBefore` (Action) → `payCombinedAdd` →
-  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMulBefore` (Action) →
-  `paySplitMul` → `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+* pay: `effect` declaration → `rentAdd` (rent leg) → `settleAdd` (settle leg) →
+  `payCombinedAddBefore` (Action) → `payCombinedAdd` → `paySplitAdd` →
+  `rentMul` (rent leg) → `settleRentMul` (rent leg of a settle) →
+  `settleMul` (settle leg) → `payCombinedMul` →
+  `payCombinedCancel` → `paySplitMulBefore` (Action) → `paySplitMul` →
+  `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+* settle: `settleAdd` → `settleMul` (and their 「地租」 twins `settleRentAdd` /
+  `settleRentMul`), raised **once** per settle and applied to every leg of it
+  (the settle's `TurnCtx::settle_pay_add` / `settle_pay_factor`, restored from
+  the stack entry when the settle ends)
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
-* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window).
-  `DiceRollAfter` is the one Action that may still roll and write the face
-  (documented exception above); everything else reshapes purely at `DiceRollValue`.
+* roll: `DiceRollPlan` (once per move) → dice + `diceRollCast` → `diceRollBefore` → `DiceRollAdd` → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` (move rolls only, [反击] reroll window) → `diceRollSettled`.
+  `DiceRollAfter`/`diceRollResult` are the only Actions that may still roll and
+  write the face (documented exception above); everything else reshapes purely
+  at `DiceRollAdd`/`DiceRollValue`.
 
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no
@@ -1113,7 +1136,7 @@ original names where the pairing is already implied (`settleBefore` →
 | pair | when |
 |---|---|
 | `turnStartBefore` / `turnStart` | a turn begins -- before / after the exile & stun status ticks |
-| `diceRollBefore` / `diceRollResult` | the main roll -- before the d20 is cast / after it (after `diceRollAfter`, 行动阶段 10 「移动掷骰后」), before walking. `diceRollResult` is a [反击] counteraction window; a counteraction may reroll via `set_move_roll` |
+| `diceRollBefore` / `diceRollResult` | the main roll -- the raw die is already on `value` (v109; the window is named for the settlement, not the throw) / after the Add+Value settlement attempt and `diceRollAfter` (行动阶段 10 「移动掷骰后」), before walking. `diceRollResult` is a [反击] counteraction window; a counteraction may reroll via `ctx::roll_reroll`/`set_move_roll`, and the reroll re-raises both windows in the same transaction. A fixed face (去唱卡拉ok吧, a kept die) has no cast but still runs both |
 | `passBefore` / `pass` / `passTile` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives. `passTile` is the [经过] step (行动阶段 12); a 「被[经过]」 clause reads the tile being entered. `passPlayer` is the end-tile [重叠] only |
 | `moveBefore` / `moveAfter` | the move head / tail (ABI v43, `SETTLE-STAGES.md` §7). `moveBefore` fires once the plan is fixed and before the first step / the teleport -- counteractions that cancel or alter the move go here. `moveAfter` is 「移动后」/「主要移动结束时」/「[移动终点]」: after `passPlayer`, before `settleBefore`, for every completed move including a 「不触发结算」 one |
 | `settleBefore` / `settle` / `settleBody` / `settleAfter` | landing -- before resolving the tile / before its effect / the settle's effect list (a field card may replace it with 「将本次结算改为…」) / after it fully resolves |

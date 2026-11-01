@@ -850,6 +850,11 @@ impl CardModules for NativeModules {
         let mut cur = world.clone();
         let mut announced = false;
         let mut ran_any = false;
+        // One cursor threads the whole `run_hook` call, mirrors
+        // `Ruleset::run_hook` (`Admitted`): every guard, declare and body
+        // reads the shared answer log in order, so an answer one entry's
+        // raise consumed is never re-read by the next entry's body.
+        let mut next_answer = 0usize;
         for entry in entries {
             let mut state = Some(HostState::new(
                 self.index.clone(),
@@ -857,6 +862,7 @@ impl CardModules for NativeModules {
                 answers.to_vec(),
                 0,
             ));
+            state.as_mut().expect("host state present").next_answer = next_answer;
             // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
             // flashes).
@@ -894,6 +900,9 @@ impl CardModules for NativeModules {
                     matches!(asked, Ok(true))
                 };
                 if !admitted {
+                    if let Some(st) = state.as_ref() {
+                        next_answer = st.next_answer;
+                    }
                     continue;
                 }
                 announced = true;
@@ -913,10 +922,13 @@ impl CardModules for NativeModules {
                 DEFAULT_FUEL,
             );
             ran_any = true;
+            let after_body = state.next_answer;
             let outcome = finish(state, res)?;
             match outcome {
                 Outcome::Done(w) => {
+                    // Later entries see earlier writes and earlier answers.
                     cur = w;
+                    next_answer = after_body;
                 }
                 paused => {
                     return Ok(Some(HookRun {

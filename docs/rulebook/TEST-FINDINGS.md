@@ -362,13 +362,14 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   g21 (祥子 (1) absorbs nothing), g23 ([不可阻挡] still gains [除外] from
   无路矢), g28 (Maya (2)'s kept card does not raise `drew`), g30 (t13's
   stack overflow).
-* **fuzz** (`fuzz_found` 14 tests, 1 open): latent shapes the fuzzer
+* **fuzz** (`fuzz_found` 14 tests, 0 open): latent shapes the fuzzer
   found, filed with minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz
   coverage". Un-ignored 2026-10-13 (green, `closeout-5-engine`):
   `unknown_card_id`, `determinism_break`, `save_restore_break`,
-  `negation_not_total`, `monotonicity_break`. Still open:
-  `multiply_order_matters` (MONEY-01 / C-Q1 ruling). Un-ignored 2026-10-10
-  (green): `card_trap_reachable`, `immunity_gap`.
+  `negation_not_total`, `monotonicity_break`; and 2026-10-31 (green,
+  MONEY-01): `multiply_order_matters`, now the stage-commutativity check
+  (摩卡 0.5x against Fire bird 1.5x). Un-ignored 2026-10-10 (green):
+  `card_trap_reachable`, `immunity_gap`.
   * `save_restore_break` root cause: `TurnCtx::plan` (`MoveCtx`) was
     `#[serde(skip)]`, so a restore dropped card-shaped roll tables and the
     next roll diverged. Serialized now (`SAVE_VERSION` 7).
@@ -631,12 +632,17 @@ adders.
   becomes crystals. Ruling: is a fan-flip its own timing, or is this folded
   into the fan-spend / fan-gain points?
   (`pp::band_skill_overflow_to_crystals`, DISCREPANCY.) Sheet NOT FOUND.
-* **R-1 money multiply × multiply:** Fire bird 1.5× vs Ave Mujica 1.5× vs
-  摩卡 half vs HHW band double-pay. (`gap_money::g01_*` still RULING;
-  `cross_tiles::t11_*` **un-ignored 2026-10-10**, green for the
-  Fire bird × HHW pair.) Engine now: the multipliers compose in
-  declaration order. Sheet HINT: all live in the one window
-  `回合階段&註釋` `B30`/`C30`; no product/stack rule.
+* **R-1 money multiply × multiply — RULED 2026-10-31 (MONEY-01 / C-Q1).**
+  Fire bird 1.5× vs Ave Mujica 1.5× vs 摩卡 half vs HHW band double-pay. The
+  sheet's windows (`回合階段&註釋` `B30`/`C30`, 支付阶段 2 / 4) are one window
+  each holding any number of responders, so within a stage the writers
+  **sum** (row 2) / **multiply** (row 4) from a fixed stage input; the rent
+  and the settle each get their own row-2 / row-4 stages ahead of the
+  payment's, and the single 「向上取整10」 runs once at the end. Order cannot
+  matter. `gap_money::g01_*` and `fuzz_found::multiply_order_matters` are
+  **un-ignored** on the ruling; the fuzz check now swaps two *different*
+  factors (payer's 0.5× against the owner's Fire bird 1.5×) instead of two
+  identical ones. G-MONEY-13 carries the rule.
 * **R-3 money cancel-one × split-share:** does X recompute after a
   designation is dropped? (`gap_money::g03_*`, TODO(ABI); `g04_*`,
   RULING: halving vs cancel-one order on a 分摊 leg.) Sheet NOT FOUND.

@@ -110,7 +110,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         }
     }
     fn value(&self) -> i64 {
-        self.trigger.value as i64
+        self.trigger.shown_value() as i64
     }
     fn step(&self) -> i64 {
         self.trigger.step as i64
@@ -228,6 +228,19 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     }
     fn roll_source(&self) -> i64 {
         self.trigger.roll_source.as_i32() as i64
+    }
+    fn roll_purpose(&self) -> i64 {
+        self.trigger.roll.as_ref().map(|r| r.purpose as i64).unwrap_or(-1)
+    }
+    fn roll_rerolled(&self) -> bool {
+        self.trigger.roll.as_ref().map(|r| r.rerolled).unwrap_or(false)
+    }
+    fn roll_unused_face(&self) -> i64 {
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.unused_face as i64)
+            .unwrap_or(-1)
     }
     fn abnormal(&self) -> bool {
         matches!(self.trigger.kind, crate::TriggerKind::Abnormal)
@@ -1455,6 +1468,9 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         settle_outcome: t.outcome.map(|o| o.as_i32() as i64).unwrap_or(-1),
         mv,
         roll_source: t.roll_source.as_i32() as i64,
+        roll_purpose: t.roll.as_ref().map(|r| r.purpose as i64).unwrap_or(-1),
+        roll_rerolled: t.roll.as_ref().map(|r| r.rerolled).unwrap_or(false),
+        roll_unused_face: t.roll.as_ref().map(|r| r.unused_face as i64).unwrap_or(-1),
         // `abnormal` is the AbnormalGate window, not "this link was negated".
         // There is no `t.Abnormal` bool on `Trigger`; the closest signal is the
         // trigger kind itself.
@@ -1551,6 +1567,9 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         settle_outcome: -1,
         mv: MoveSnap::default(),
         roll_source: 0,
+        roll_purpose: -1,
+        roll_rerolled: false,
+        roll_unused_face: -1,
         abnormal: false,
         chain: Vec::new(),
         turn_player: world.turn_player() as i64,
@@ -1759,6 +1778,9 @@ pub const SLOT_NAMES: &[&str] = &[
     "change_world_turn",
     // `here_the_world` held-cards count (`ctx::set_slot(player_id, SLOT_HELD_LEN, n)`).
     "here_held_len",
+    // `想要成为人类` armed-boost latch (`ctx::set_slot(player_id, SLOT_BOOST, …)`,
+    // total + 1); the `DiceRollAdd` filter pre reads it (G03).
+    "want_human_boost",
     // `（灯）诗超绊` due-payment latch (`state::set(player_id, DUE, ...)`).
     "skill.tomoriPoem.due",
     // `（莉莉）坚定决心` passed-this-turn latch (`state::set(player_id, PASSED, ...)`).

@@ -68,11 +68,11 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_reason")))?;
             continue;
         }
-        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
-        // TODO(ABI)（移动掷骰）: no per-roller movement-dice reader -- this generic
-        //   Effect roll misses the victim's move-dice modifiers and the
-        //   `DiceRollAfter` hooks.
-        let r = ctx::roll(p, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
+        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- a move
+        // roll of the victim's own (non-main, so the walk stays card-driven
+        // below); its Plan writes cannot fold outside a move frame and only the
+        // face is used.
+        let r = ctx::roll_move(p, roll_source::CARD)?.max(0);
         sum += r;
         // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- an effect
         // walk on the victim's own side frame, never the main move.

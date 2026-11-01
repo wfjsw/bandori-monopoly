@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"八潮瑠唯"#)
     .display(r#"八潮瑠唯"#)
+    .latin(r#"Yashio Rui"#)
     .group(r#"Morfonica"#)
     .color(r#"#669988"#)
     .skill(r#"正论暴击"#)

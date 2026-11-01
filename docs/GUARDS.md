@@ -142,7 +142,11 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
+<<<<<<< HEAD
 | window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.is_main_move`, `move.dir`, `move.rolled`, `move.effective`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+=======
+| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.is_main_move`, `move.dir`, `move.tag('name')`, `roll_source`, `roll_purpose`, `roll_rerolled`, `roll_unused_face`, `roll_chosen_index`, `roll_final_face`, `roll.count`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `roll.*` from `Trigger.roll`; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+>>>>>>> master
 | window | `turn_player`, `turn_key` | `PlayCtx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/hand/pos/out/stay/stun/exile/tiles` (count) | `World`/`Player` |
 | candidate | `card.id`, `card.placed`, `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
@@ -324,6 +328,8 @@ reading its default / sentinel):
 |---|---|---|---|
 | `Gate` | the gate's own raise (`ImmuneAll` / `Untargetable` / `Redirect` / `BuyGate` / `AbnormalGuard`, …) | `kind`, `actor` (the protected seat / buyer / named target), `target` (`Redirect`'s current name), `tile` (`BuyGate`'s tile), `value`, `by` (the causing card's seat, `null` when not card-caused), `trigger_card`, `turn_player`, `turn_key` | a gate is asked per raise; `card.placed` is true by construction (only placed instances are asked) |
 | `DiceRollPlan` | `diceRollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
+| `DiceRollCast` / `DiceRollAdd` / `DiceRollValue` | the roll ladder: cast (raw face on `value`), the additive pass, the final settlement | `actor` = roller, `value`, `roll.*` (id / purpose / rerolled / chosen_index / unused_face / count), `roll_source`, `move.*` on a Move cast (null on an effect roll), `card.*` | Add/Value are pure filters; the whole roll family is hook-only in this batch except Before/Result. `roll_final_face` is `-1` here |
+| `DiceRollSettled` | `diceRollSettled` (the terminal cast settled) | `actor` = roller, `value` = `roll_final_face`, `roll.*`, `roll_source`, `move.*` | once per transaction; consume-one-shot slots here, not at After |
 | `AtEnd` (`On::Schedule`) | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
 | `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.is_main_move` | `actor`, `target`, `tile.*`, `move.is_main_move`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
@@ -346,7 +352,10 @@ only where the dispatch trigger carries a payment (a `pay`/`paid` raise); a
 `pay_total_stage = true`. Only `pay_kind` / `pay_is_fixed` reject there, so a
 guard that must stay pay-only tests those rather than `pay_total_stage`,
 which stays neutral so it never spuriously rejects inside its own window.
-`charge_is_skill` is `false` unless the `ChargePaying` window was raised as a
+`roll_purpose`, `roll_chosen_index` and `roll_unused_face` are `-1`, `roll_rerolled`
+`false`, `roll_final_face` `-1` and `roll.count` `0` outside a roll
+(and `roll_final_face` before the settle). `charge_is_skill` is `false` unless
+the `ChargePaying` window was raised as a
 skill cost. `settle.*` reads the trigger's stamp of the innermost **open**
 settle and is `-1` (`settle.tile`/`.owner`/`.outcome`), `0` (`settle.houses`)
 or `false` (`settle.mortgaged`) when no settle is open; `settle.outcome` is
@@ -875,7 +884,10 @@ unaffected either way.
   still reject on the trigger kind (the category owns that).
 * `fill_window` now filters negative `move_roll` to `null` (matching the
   guest's `trigger::move_roll()`, which treats the pre-cast `value = -1`
-  sentinel as "no face yet") — this was a G3 audit catch.
+  sentinel as "no face yet") — this was a G3 audit catch. From v109 the main
+  roll's `diceRollBefore` carries the face, so the sentinel survives only on
+  `diceRollPlan` and on the roll kinds raised by an effect roll (no move
+  view).
 
 ### 10.2 G4 — authoring pass (first batch)
 
