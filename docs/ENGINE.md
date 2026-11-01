@@ -541,11 +541,12 @@ literals.
 **`chaos`** is legal but maximally disruptive and effect-heavy: it plays a card
 at every legal opportunity (no odds roll, no per-turn cap beyond the engine's
 own; the rule's `ai_play` heuristic is ignored, only `cant_play` counts), presses
-every enabled skill and placed-card clause whenever it is usable (at most once
-per instance per turn via `turn.pressed`, so a no-op press cannot park
-it), and picks uniformly among the non-default
-prompt options -- a tile prompt gets a random target, never 「无」 while one
-exists. An offered [反击] is the one gate left: it declares on only
+every enabled skill whenever it is usable (at most once per instance per turn
+via `turn.pressed`, so a no-op press cannot park it), and picks uniformly among
+the non-default prompt options -- a tile prompt gets a random target, never
+「无」 while one exists. The offers placed cards raise (G05) are prompts and go
+through that same random pick, so chaos takes them where a standard bot
+declines. An offered [反击] is the one gate left: it declares on only
 **`CHAOS_COUNTER_CHANCE = 0.3`** of the offers it gets (a random offered card)
 and passes the rest, rolled per offer from the match RNG. Ban / pick / deck are
 random (the deck is a random legal one, `deck::random`), hand overflow discards

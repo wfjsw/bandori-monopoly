@@ -340,12 +340,12 @@ prompt-free `Decline` is log-silent.*
 
 ## 3. Mechanism B -- `ctx::query_guard` (cross-card applicability)
 
-> **Reading note (G05).** A press is the card's `On::Play` run on a placed
-> instance; the entry is marked `.field()` so the instance is offered. Every
-> "play entry" below therefore reads as "the card's activation entry", and
-> `entry::PRESS` aliases that entry (the first `.field()` Play, else the first
-> Play). A prompt raised by a condition (a marker count, a crystal) asks the
-> owner directly and needs no query.
+> **Reading note (G05).** "Press" below is the button on a placed **skill**. A
+> clause printed on a plain placed card is not a button: it is an offer -- an
+> `On::Action` hook that raises `ask_yes` at the event its condition names
+> (G05 §3) -- so it asks the owner directly and needs no query. "Play entry"
+> still reads as "the card's activation entry", and `entry::PRESS` aliases the
+> card's first Play ("press" stays reserved).
 
 ### Named entries
 
@@ -377,8 +377,8 @@ An id that is printable rulebook text is a bug even though it "works":
 * it invites someone to "fix the wording" in the one place that is not wording.
 
 So: a press carries the clause as its **label**, and `entry::PRESS` is the
-alias for a card's **activation entry** (its first `.field()` Play, else its
-first Play); `"press"` is reserved so no entry may declare it. A *hook* that
+alias for a card's **activation entry** (its first Play); `"press"` is reserved
+so no entry may declare it. A *hook* that
 wants to be queried declares its own slug (`.id("decay")`), and so does any
 entry a body has to address by name.
 `build-ruleset` **rejects a non-slug id** (the same fail-closed net as
@@ -397,8 +397,8 @@ ctx::query_guard(player_id, "skill:美竹兰:叛逆的红挑染", entry::PRESS)
 ```
 
 A skill's own Play is `On::Play(...).label("（2）")` and answers `entry::PRESS`
-through the fallback. Once a card's Play carries `.field()`, `PRESS` resolves
-that Play, so a hand-activation query must then name the Play's own id.
+through the fallback. A card with more than one Play should give each an `id`
+and have callers name it; `PRESS` keeps answering the first Play.
 
 `id` is `&'static str` on the entry, `""` = not externally addressable (the
 common case; nothing pays for it). It rides the manifest as
@@ -420,9 +420,8 @@ function and one reserved id.
 ```rust
 pub mod entry {
     /// The reserved alias of a card's **activation entry** -- the
-    /// **press surface** question, "may I use this card / this skill
-    /// button?". Not a declared id: it resolves the card's first
-    /// `.field()` Play, else its first `On::Play`.
+    /// button question, "may I use this card / this skill button?".
+    /// Not a declared id: it resolves the card's first `On::Play`.
     /// `build-ruleset` rejects a declaration of `.id(PRESS)` so the word
     /// cannot be squatted.
     pub const PRESS: &str = "press";

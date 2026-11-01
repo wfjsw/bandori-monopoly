@@ -36,7 +36,7 @@ and are identified by their triage row id.
 
 | # | draft said | why it was wrong | revision |
 |---|---|---|---|
-| R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Play(...).field()`, `NetMessage.instance`, `act = "press"`, `SkillAction.{instance,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §9.5. | Drop the offer half entirely. G01 ships no offer wire; the effective-card store and accessors are G05 §6.2. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
+| R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05 (landing after G01) already defines the placed-card offer: an `On::Action` hook that asks (§4-§5 there), with the existing prompt surface the carrier for the question. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's passive change in G05 §9.5. | Drop the offer half entirely. G01 ships no offer wire; the effective-card store and accessors are G05 §6.2. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
 | R2 | uid is stamped only in `Match::counteract` (`play.rs:5918`) and `cardFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
 | R3 | hook jobs are enumerated from fields only | A `markChanged` caused by destruction names an instance that is **already unplaced** by the time the raise commits (`unplace_at` removes before `commit_after`), so the field walk misses the very instance whose hook must resync/discard. | `collect_hook_jobs` also adds a job for the raise's subject instance (alive or dead) and one per resolving frame (§5.3). |
 | R4 | umiri's fix reads `card.counter('umiri_user')` in a pre | `fill_candidate` resolves `card.*` by `(player, card id)` — the **first** copy — so two copies read one counter and item 9 stays broken. | `CandidateCtx` gains the running `uid`; `card.counter` / `card.tile` / `card.placed` resolve through it when set (§5.5). |
@@ -46,7 +46,7 @@ and are identified by their triage row id.
 | R8 | `counterMax`, `createdBy` (created_by), `effectiveCard` stamping | hina's substitute would be destroyed with hina's own instance when hina is banished (`:85`) — `created_by` alone kills the stand-in. | Lifecycle (`created_by` + `set_created_by_at`) moves to G08 and the substitute marker (`effective_card`, formerly `real_id`) to G05; the cap stays here (R11). |
 | R9 | cited line numbers from the 2026-10-28 base | Master moved (landing-log, walk-pace, detour `linger`, sparkler props). Every reference is re-read below; item 6 is already fixed on master. | References updated; §6.6 records the landed fix. |
 | R10 | "RECORD_VERSION stays 3" | It is **4** (`record.rs:48`). | Corrected (§7). |
-| R11 | one group carried three unrelated concerns | `effective_card` is offer/skin (G05 already enumerates presses and resolves an effective card) and `created_by` is zone lifecycle (G08 owns the zone writer, attachments and destruction). Keeping them here made G01 report on three subsystems at once and coupled its landing to two others. | G01 keeps only identity and its three stores: raise uid, subject instance, counter cap. `effective_card` (then spelled `real_id`) moves to G05 §6.2, `created_by` to G08 §4.9; their `Op` ids 347–349 stay with those groups in place. |
+| R11 | one group carried three unrelated concerns | `effective_card` is offer/skin (G05 resolves an effective card for every dispatch) and `created_by` is zone lifecycle (G08 owns the zone writer, attachments and destruction). Keeping them here made G01 report on three subsystems at once and coupled its landing to two others. | G01 keeps only identity and its three stores: raise uid, subject instance, counter cap. `effective_card` (then spelled `real_id`) moves to G05 §6.2, `created_by` to G08 §4.9; their `Op` ids stay with those groups in place (G05 347–349, G08 350). |
 
 All line references below are against `a0403648`.
 
@@ -72,7 +72,7 @@ The skill that fires here is `skill:八潮瑠唯:正论暴击`
 post-settlement hook body dispatched by `collect_hook_jobs`
 (`crates/game-rules/src/wasm_rules.rs:5292`) from the money pipeline, not by
 `use_skill`. `use_skill` raises `cardUsed` (`crates/game-core/src/engine/play.rs:1168-1176`)
-only on a press, so hook-driven skill bodies have no fire signal at all. The
+only on a press (a skill button), so hook-driven skill bodies have no fire signal at all. The
 card also cannot ask "did this fire happen during *my* resolution": `Run` has
 one `current_card` (`wasm_rules.rs:222-228`) which a nested `play_card`
 replaces, and no stack. rui is also never placed, so neither its own field
@@ -198,7 +198,7 @@ and no surface to offer the swap. The card marks nothing after
 `ctx::play_card` (`:71`) and leaves play (`:73`, `Banished`), so no later code
 can find the substitute. The offer surface today only enumerates `skill:*` field
 instances with an `On::Play` (`crates/game-core/src/engine/mod.rs:1416`); a
-non-skill card cannot be pressed.
+non-skill card cannot be pressed and its offers have no anchor.
 
 `[共鸣]` is the derived fuel card `PP:[衍生]共鸣`, spent by
 `resonance::try_resonance` (`rules/cards/card-pp/src/resonance.rs:44-75`); the
@@ -362,9 +362,9 @@ pub const MarkChanged: Self = Self::engine(112);  // wire "markChanged", hook-on
 - `kind_table_pin`, `game-kinds`'s `every_row_round_trips` /
   `retired_ids_are_unnamed` / `filter_and_hook_sets`, and `hostops_smoke` are
   extended with the two names.
-- **No `Actions` kind and no `entry::ACTION`.** G05's `On::Play(...).field()`
-  plus `entry::PRESS` are the offer vocabulary (R1). `kind_table_pin`'s kind-id
-  ceiling stays 112; G08 continues at 113.
+- **No `Actions` kind and no `entry::ACTION`.** G05's offers are ordinary
+  `On::Action` hooks (R1), so no kind is coined for them. `kind_table_pin`'s
+  kind-id ceiling stays 112; G08 continues at 113.
 
 ### 4.4 Condition vocabulary — `crates/cond`
 
@@ -392,9 +392,9 @@ running card (`host.rs:1590`, `:1882`, `:2042`, `:2098`) pass
 
 ### 4.6 Client / view wire
 
-**None.** G01 lands no client field of its own; G05's `SkillAction.instance` is
-the carrier once it lands. `effective_card` never reaches the client directly
-(G05's effective-card resolution reads it host-side).
+**None.** G01 lands no client field of its own, and G05 needs none either (its
+offers are prompts). `effective_card` never reaches the client directly (G05's
+effective-card resolution reads it host-side).
 
 ### 4.7 ManifestOn changes
 
@@ -880,7 +880,7 @@ to pin claim stability.
 `kani_host::Op` gains six append-only ids in the README band 341–346:
 `trig_uid = 341`, `trig_instance = 342`, `body_enter = 343`,
 `body_leave = 344`, `counter_max_at = 345`, `set_counter_max_at = 346`.
-347–349 stay free; G05 (`effective_card_at` / `set_effective_card_at`) and G08
+350 stays free; G05 (`effective_card_at` / `set_effective_card_at`) and G08
 (`set_created_by_at`) take them from their own docs without a renumber.
 Every new `Op` also lands in `hostops_smoke.rs`, `sys_kani.rs`,
 `native_shims.rs` and the `host.rs` dispatch.
@@ -942,9 +942,8 @@ names and ids.
    know the prop prefix anyway; a typed `counter_max` map keeps the clamp
    local and the save field skippable.
 8. **G01 defines its own `Actions` offer wire (the draft).** Rejected in
-   favour of G05's press surface (R1); a second channel would need a parallel
-   client act, a reserved entry id and a second `why_not` arm for the same
-   cards.
+   favour of G05's offers (R1); a second channel would need a parallel client
+   act, a reserved entry id and a second `why_not` arm for the same cards.
 9. **A resolving stack on `Cx` only** (host reads via the bridge). Rejected:
    conditions are evaluated from a `WindowCtx` built over the world, so a
    `Cx`-only stack is invisible to every `pre`.

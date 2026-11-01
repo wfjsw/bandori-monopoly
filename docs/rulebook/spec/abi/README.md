@@ -30,7 +30,7 @@ the whole table.
 | G04 | 107→108 | 13 | — | 378–397 |
 | G03 | 108→109 | 13→14 | 123–125 | 398–410 |
 | G06 | 109→110 | 14→15 | — | 411–430 |
-| G05 + G13 | 110→111 | 15→16 | — | 347–348, 431–440 |
+| G05 + G13 | 110→111 | 15→16 | — | 347–349, 431–440 |
 | G07 | 111→112 | 16 | — | 441–450 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
@@ -44,13 +44,13 @@ suites after each landing.
 **2026-10-31 amendment.** The original table filled Op numbers only from G02
 onward and gave G01/G08 no Op row at all, although G01's revised draft imports
 functions and G08's imports twenty. G01's review then dropped its `Actions`
-offer kind in favour of G05's press surface, and a second review split two
+offer kind in favour of G05's offer surface, and a second review split two
 concerns out of G01 — `effective_card` (then spelt `real_id`) to G05 and
 `created_by` to G08 — because they are offer/skin and zone lifecycle, not
 identity. G01 keeps six ops (341–346)
 and its two kinds (111–112); the vacated ids sit with their new groups
-(G05 347–348, G08 349) so no later band moves for them. Recounted from base
-340 in landing order, G08's twenty imports take 349–368 and every group from
+(G05 347–349, G08 350) so no later band moves for them. Recounted from base
+340 in landing order, G08's twenty imports take 350–369 and every group from
 G02 on shifts ten; kind 121 stays free, which costs nothing. `SAVE_VERSION`
 stays at the value G08 landed (13) — the base column above
 records the *pre-landing* value each document was written against, which is
@@ -63,6 +63,16 @@ takes 398–406 (nine). At landing the two 「是否触发结算」 answer pairs
 and every group after it shifts thirteen: G06 411–430, G05+G13 431–440,
 G07 441–450. G04's landed 378–397 is untouched.
 
+**2026-11-01 amendment (G05).** The G05 review found the group is not a press
+surface at all: every clause the sheet prints on a placed card is an
+engine-raised offer (a prompt at the event the clause names) or a passive
+change, so no card gets a button. The card-side bit, the press `Call` and the
+wire field are gone; the group instead needs one guest `Action` constructor over
+the existing plan kind (kind 67, no new id), a per-move offer claim, and the
+effective-card marker. The claim takes `Op` 349, so **G08 shifts to 350** and
+its twenty imports take 350–369; the kind column stays `—` because no engine id
+is consumed. `SAVE_VERSION` still moves for the marker's field.
+
 Recommended landing order (foundation → dependent):
 
 1. **G15** Kani host — model-only, no version change.
@@ -72,7 +82,7 @@ Recommended landing order (foundation → dependent):
 5. **G04** move plan — plan frames and the blocked predicate.
 6. **G03** roll pipeline — the cast ladder over G04's frame; kinds 123–125.
 7. **G06** counteraction/join — depends on G01 payload and G03 kinds.
-8. **G05 + G13** press/invoke — must land together (one `invoke_entry` shape).
+8. **G05 + G13** offer/invoke — must land together (one `invoke_entry` shape).
 9. **G07** targeting — depends on G01 identity and G06 window.
 10. **G09** tile/build/pass — depends on G02 header and G08 zone writer.
 11. **G10** effect outcome — settle facts and defer depend on G02/G09.
@@ -82,8 +92,8 @@ Recommended landing order (foundation → dependent):
 
 Couplings a reviewer must keep in one head:
 
-- **G05 ↔ G13** share `invoke_entry` and the activation-entry resolution; G05 adopts
-  G13's import verbatim.
+- **G05 ↔ G13** share `invoke_entry`: G05's crystal offer invokes a named clause
+  and adopts G13's import verbatim.
 - **G01 ↔ G08** share instance uid and the per-instance store; G08 also
   carries the creator edge (`created_by`) that G01's borrowed-row hooks rely
   on.
@@ -106,7 +116,7 @@ Couplings a reviewer must keep in one head:
 | G02 | Pay pipeline payload, stages and raw-money windows | 7 | [G02](G02-pay-pipeline.md) |
 | G03 | Roll pipeline stages and prompt option actions | 5 | [G03](G03-roll-and-prompts.md) |
 | G04 | Move plan, walk sync and forced moves | 7 | [G04](G04-move-plan.md) |
-| G05 | Press surface for placed cards | 5 (1 shared with G13) | [G05](G05-placed-card-press.md) |
+| G05 | Offers from placed cards | 5 (1 shared with G13) | [G05](G05-placed-card-press.md) |
 | G06 | Counteraction, join and negation windows | 6 | [G06](G06-counteraction-and-join.md) |
 | G07 | Targeting pipeline and distance | 2 | [G07](G07-targeting-and-distance.md) |
 | G08 | Zone and attachment lifecycle | 11 | [G08](G08-zone-lifecycle.md) |
@@ -177,7 +187,7 @@ map (consolidated → slugs the document names):
 | `effect-move-forced-path` | `sakiko-followers-card-move`, `misaki-teleport`, `dest-forced-hop`, `plan-set-forced` |
 | `trigger-walk-payload` | `detour-parity-unused`, `misaki-planned-start`, `misaki-fire-roll-signal` |
 | `nested-teleport-tail` | `lisa-bond-nested-teleport-window` |
-| `press-surface-placed-card` | `nanami-press-invokes-clause-3` (shared with G13), `kanon-press-surface-abi`, `even-lost-not-pressable`, `placed-card-press-surface`, `hina-clause-2-swap-missing` — the consolidated row's nine rows are mis-filed; G05 §0 gives the true rows |
+| `press-surface-placed-card` | `nanami-press-invokes-clause-3` (shared with G13), `kanon-press-surface-abi`, `even-lost-not-pressable`, `placed-card-press-surface`, `hina-clause-2-swap-missing` — the consolidated row's nine rows are mis-filed; G05 §0 gives the true rows. The clauses are offers (engine-raised prompts), not buttons |
 | `join-window-report` | `net-error-join-draw-ownership`, `net-error-join-used-getter`, `mana-nested-window`, `mana-joiner-count`, `rain-designates-prop` |
 | `extreme-range-event-counter` | `extreme-range-filter-missing`, `event-effects-not-counterable` |
 | `counter-link-move-face` | `repaint-counter-link-roll` |

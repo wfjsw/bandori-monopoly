@@ -1026,14 +1026,14 @@ per-counteract entry is the card's own spec (0 = hold it back); a card with no
 entry takes `counteract_propensity_milli`. Chaos is **not** parameterised: it
 keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE` as literals.
 
-**Placed-card presses (G05).** The viewer list carries one action per
-`field()`-marked Play instance (`SkillAction.instance`). `skills[id]` keys on
-the *card id*. A plain card (an id with no `skill:` prefix) has no book entry by
-default, so its press would read as "never"; a non-`skill:` id therefore
-defaults to the neutral weight and is pressed **once per turn**, de-duplicated
-by `TurnCtx.pressed` (a list of instances, also broadcast as
-`MatchState.pressed`). `skill:` ids keep the "never" default. Two copies of one
-card are two instances and are pressed independently.
+**Offers from placed cards (G05).** A clause printed on a plain placed card is
+an engine-raised question (`ask_yes`), not a button, so it never appears in the
+viewer list and `skills[id]` does not describe it. `answer_for_entry` answers it
+with the ask's own fallback, which is **decline**: the standard bot therefore
+ignores 即使迷茫着's movement offer and 進行曲's jump until a weight is added.
+A tuned weight belongs in its own sparse map keyed by card id (same shape as
+`skills`, default fallback) and is a follow-up to the ABI landing, not part of
+it. `skill:` buttons keep every rule above unchanged.
 
 The `[pass-reward]` card roll is not a book param either (web 托管 only, user
 ruling 2026-10-28): at or below 8 000 money the standard bot takes the 2 000

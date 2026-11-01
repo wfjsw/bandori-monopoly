@@ -264,9 +264,9 @@ shape).
 `ruleset_invoke_skill` and `ruleset_play_card` are **kept** and become thin
 host-side calls into the same core with `flags = 0`; no signature moves (§8).
 They do **not** share an entry resolver: `invoke_skill` passes `entry::PRESS`,
-`play_card` passes its Play-first pick (`entry(OnKind::Play, None)`), because
-`ctx::play_card` on a card that has both a Play and a press means "play this
-card" (G05 §6.1).
+`play_card` passes its Play-first pick (`entry(OnKind::Play, None)`). Both mean
+the card's first Play today; the alias exists so a caller can say "the
+activation entry" without naming it (G05 §6.1).
 
 ### 4.3 Guest wrappers (`card-sdk/src/ctx.rs`, next to `play_card` / `query_guard`)
 
@@ -297,12 +297,11 @@ logged invocation names (`by_instance`), and what future entries will branch on.
 
 ### 4.4 Entry addressing
 
-* `entry::PRESS` (`abi.rs:1153-1162`) keeps its spelling, and resolves
-  **field-Play-first with a first-Play fallback** (G05 §6.1): the card's first
-  Play carrying `.field()`, else its first Play. That is "whatever the engine
-  would press" for both a pressable card and an unmigrated skill.
-  `ctx::invoke_skill` is therefore exactly `invoke_entry(…, entry::PRESS)`.
-  `ctx::play_card` is not: it picks a Play first.
+* `entry::PRESS` (`abi.rs:1153-1162`) keeps its spelling, and resolves the
+  card's **first Play** -- unchanged from the pre-v111 engine, which is what a
+  skill button runs. `ctx::invoke_skill` is therefore exactly
+  `invoke_entry(…, entry::PRESS)`. `ctx::play_card` is not: it picks a Play
+  first, without the alias.
 * Clause slugs are declared by the target: 广町七深's (2) becomes
   `On::Action(Action::CardUsed(…), …).id("2").label("（2）")`; 诗超绊's (2)
   offer becomes `.id("2")` and its effect half `.id("2-effect")`. `"2"` is a
@@ -310,8 +309,10 @@ logged invocation names (`by_instance`), and what future entries will branch on.
 * `entry::PRESS` remains reserved (`host.rs:1098-1109`); the activation entry *may*
   also carry `.id("2")` where the sheet numbers it, because a clause id is
   identity and `PRESS` is a resolver, not a name.
-* Resolution: `PRESS` → first field Play, else `play_entry_preferring_gated()`;
-  any other id → `entry_by_id` (`host.rs:162-170`). Card unknown ⇒ trap
+* Resolution: `PRESS` → the first Play
+  (`play_entry_preferring_gated()`, `host.rs:188-190`, which is
+  `entry(OnKind::Play, None)`); any other id → `entry_by_id`
+  (`host.rs:162-170`). Card unknown ⇒ trap
   (`invoke_entry: unknown card {id:?}`); entry unknown/unnamed ⇒ **no-op**
   returning `DEST_UNSET`, matching today's "no `On::Play` entry" path.
 
@@ -320,7 +321,7 @@ logged invocation names (`by_instance`), and what future entries will branch on.
 | kind | invocable | why |
 |---|---|---|
 | `Play` | yes | a hand play; the existing path |
-| `Press` | yes | a placed clause (G05); the same body shape |
+| `Press` | yes | the alias for the first Play (G05 §6.1); same body shape |
 | `Action` | yes | (2) clauses are reaction-shaped; the body is `fn(i32) -> Asked` |
 | `Settle` / `Schedule` | yes | same body shape |
 | `Filter` | no | a pure value fold (`i32 -> i32`), not an activation; trap |
@@ -338,7 +339,7 @@ the target's instance and `enter_invoke(id, instance)` instead of
 `enter_card(id)`.
 This is required, not cosmetic: a gate shaped as a reaction residual
 (`on_skill_applies` reads `trigger::cards()`, `nanami.rs:79-84`) is
-otherwise always false under a press and the probe is useless.
+otherwise always false inside the caller's run and the probe is useless.
 
 The CEL scope needs the same fact. `fill_window_ambient` fills
 `actor = player_id` and `trigger_card = 0` (`condition.rs:1393-1422`), and a
@@ -486,9 +487,9 @@ must admit. The 不再迷茫 substitution is not modelled (G05 open question 1).
 
 ## 6. Card usage — before / after
 
-**G05 note.** The button/press *surface* — when a skill is offered, its
-`guard` text, the `use_skill` dispatch — is the G05 group's. This document
-only guarantees what a press (and a card) can *address* and *bind*; the gate
+**G05 note.** When a clause is *asked* — nanami's crystal is an `ask_yes` in
+(3), and the offer's own conditions are the caller's — is the G05 group's. This
+document only guarantees what a body can *address* and *bind*; the gate
 rewrites below are the minimum to keep the cards coherent with the clause and
 are G05's to finish.
 
@@ -667,8 +668,8 @@ and delay come from the skill body.
 
 If a pause-with-open-frame is ever observed across a save boundary to lose
 state, the fallback is to persist `invoke_stack` with `#[serde(default)]` and
-bump SAVE_VERSION by one (15 → 16 today, riding the G05 batch; take the head
-at landing); the
+bump SAVE_VERSION by one beyond G05's (17 at the README landing order; take
+the head at landing, shifting the later groups); the
 design above does not need it.
 
 ## 8. Versioning

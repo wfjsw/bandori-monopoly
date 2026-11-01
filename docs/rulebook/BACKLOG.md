@@ -149,11 +149,11 @@ Design: `docs/rulebook/spec/abi/G04-move-plan.md`
 - **trigger-walk-payload** (high, rows 292,294,298,954,1006,1007,1101) — diceRollResult carries no roll_source, planned start, parity or effective walk data; `rules/cards/card-ag/src/detour.rs`
 - **nested-teleport-tail** (medium, rows 693) — A skill teleport nested in a settle raises no MoveAfter; `rules/cards/card-roselia/src/lisa_bond.rs`
 
-## G05 — Press surface for placed cards
+## G05 — Offers from placed cards
 
 Design: `docs/rulebook/spec/abi/G05-placed-card-press.md`
 
-- **press-surface-placed-card** (high, rows 607,608,619,620,621,798,801,930,931,932,936,972,1614; the filed 380,487,488,490,955,967,974,1521,1555 are mis-filed — see G05 §0) — Placed non-skill cards and field actions are on no press surface; `crates/game-core/src/engine/mod.rs:1416`
+- **press-surface-placed-card** (high, rows 607,608,619,620,621,798,801,930,931,932,936,972,1614; the filed 380,487,488,490,955,967,974,1521,1555 are mis-filed — see G05 §0) — Clauses printed on placed non-skill cards have no way to be offered: the plan pass cannot wait for a player and a move cannot be claimed; `crates/game-core/src/engine/mod.rs:1416`, `crates/game-core/src/engine/play.rs:1623`
 
 ## G06 — Counteraction, join and negation windows
 
