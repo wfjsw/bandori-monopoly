@@ -19,11 +19,11 @@ calling generic mechanism primitives: `ctx::raise` (filter fold for `BuyGate`
 / `BuyAssign` gates and payloads -- typed `Filter::` kinds since ABI 94, not
 the old `FilterFlag` / `FilterValue` bags -- action chain for `buyBefore` / `bought` /
 `buyAfter` / `buildBefore` / `houseAdded` / `buildAfter`), `ctx::pay_buy` /
-`ctx::pay_build` through `Cx::money` (so paySplitAdd/paySplitMul/payCombined and
+`ctx::pay_build` through `PlayCtx::money` (so paySplitAdd/paySplitMul/payCombined and
 allow_mortgage funding prompts behave identically), `ctx::assign_deed`
 (`purchase::assign_deed`) and `ctx::log`. All acquisitions route through
 `CardRules::deed_buy` / `deed_build`; `StubRules` keeps the engine's standing
-`Cx::buy` / `Cx::build` as the default. Force-buy money remains a direct
+`PlayCtx::buy` / `PlayCtx::build` as the default. Force-buy money remains a direct
 transfer outside effects (规则书 其他规则 6).
 
 What follows is the **historical** 2026-10-07 design record (P0–P5). Where it
@@ -34,7 +34,7 @@ is superseded by the 2026-10-16 note above.
   `BuyAdd` → `BuyMul` → `BuySet` in **pure guard mode** against a world copy
   (the `cant_play` shape — no mutation, no prompt) only when a hooking instance
   exists; the commit re-quotes, so quote == charge. Gates (`buyable_here`,
-  `why_not_act "buy"`), the view (`st.buy_price`), the AI (`ai_wants_buy` /
+  `cant_act "buy"`), the view (`st.buy_price`), the AI (`ai_wants_buy` /
   `ai_agent_choice`) and the autopilot all read that quote.
 * The three cards that used the `TurnCtx` flags are ported — see §Card
   migrations. `buy_discount` / `free_buy` / `raze_on_buy` and their `set_*`
@@ -62,7 +62,7 @@ how ownership is assigned — are handled by the `rules/` crates.
   6. `raze_on_buy`;
   7. `bought` → `buyAfter`.
 * **Gates and AI read the base price, not the price actually charged.** That
-  covers `buyable_here`, `can_buy_here`, `why_not_act "buy"`, `ai_wants_buy`
+  covers `buyable_here`, `can_buy_here`, `cant_act "buy"`, `ai_wants_buy`
   and `ai_agent_choice`. A player who can afford only the discounted price is
   refused (`err.buy_poor`).
 * **Agent:** the `tile:agent` body's 同色 set (`ctx::is_color`) reads the
@@ -195,7 +195,7 @@ StubRules and the sim run.
 * **P1 — property buy.**
   * quote → commit;
   * honour the `buyBefore` cancel;
-  * the `why_not_act` gate;
+  * the `cant_act` gate;
   * the `st.buy_price` write;
   * `MatchPrompt.price`;
   * tile props in `property.rs` / `ring.rs`;

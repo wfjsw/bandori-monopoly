@@ -3,7 +3,7 @@
 //! [`Match`] is the host. It owns the clocks, the live prompt (bot answers, time-outs,
 //! auction bidding), the end-match vote, and at most one *pending routine*.
 //!
-//! Game flow runs as **routines** -- straight-line code over a [`Cx`] (opening hands,
+//! Game flow runs as **routines** -- straight-line code over a [`PlayCtx`] (opening hands,
 //! a turn start, a player command, a bot decision, leftover auctions). A routine
 //! that needs a player decision halts; the host shows the prompt, collects the
 //! answer, then re-runs the routine from the snapshot taken when it started, with the
@@ -39,11 +39,14 @@ pub use ai::{
     CHAOS_COUNTER_CHANCE, CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN,
     PASS_REWARD_CARD_MIN_MONEY, PASS_REWARD_CARD_MONEY, PLAY_CARD_CHANCE, REDEEM_RESERVE,
 };
-pub use cx::{AnswerProvider, Answered, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
+pub use cx::{
+    AnswerProvider, Answered, Ask, Flow, Halt, HeuristicProvider, PlayCtx, Reply, SettleOutcome,
+    AI_UNSET,
+};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;
-pub use play::{Paid, Pay, PayEvent, PayKind};
+pub use play::{Paid, Pay, PayEvent, PayFactorScope, PayKind, PayShape};
 pub use rules::{
     CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
     TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
@@ -52,14 +55,14 @@ pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
     WorkItem,
 };
-pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, TurnSnap, World};
+pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, TurnSnapshot, World};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.
 #[cfg(feature = "bot-cost")]
 pub mod bot_cost {
     use std::sync::atomic::AtomicU64;
-    /// [`Cx::world_copy`] calls -- the per-drive / per-probe `World` clones.
+    /// [`PlayCtx::world_copy`] calls -- the per-drive / per-probe `World` clones.
     /// Engine-side routine snapshots (`Match::execute` / `start`) clone the
     /// world too, 1-2 per routine (re)run; those are not counted here.
     pub static WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
@@ -68,7 +71,7 @@ pub mod bot_cost {
     /// Play-gate verdicts served from the per-world memo (fix A) instead of
     /// re-running the check.
     pub static CANT_PLAY_MEMO_HITS: AtomicU64 = AtomicU64::new(0);
-    /// [`Cx::share_world`] calls -- pure checks that shared the live world
+    /// [`PlayCtx::share_world`] calls -- pure checks that shared the live world
     /// instead of cloning it (fix B).
     pub static WORLD_SHARES: AtomicU64 = AtomicU64::new(0);
 }
@@ -135,7 +138,7 @@ pub mod rtimer {
         let g = |s: &AtomicU64| s.load(Ordering::Relaxed);
         [
             ("state()", g(&STATE_NS)),
-            ("view_extra", g(&VIEW_EXTRA_NS)),
+            ("view_extras", g(&VIEW_EXTRA_NS)),
             ("log/event", g(&LOG_NS)),
             ("world_copy", g(&WORLD_COPY_NS)),
             ("tick", g(&TICK_NS)),
@@ -149,7 +152,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 /// The engine's own AI answer for one seat's live prompt -- the typed form of
-/// `view_extra`'s `aiAnswer` (`Ask::ai` / `ai_picked` / `worth`).
+/// `view_extras`'s `aiAnswer` (`Ask::ai` / `ai_picked` / `worth`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RawAiAnswer {
     pub answer: i32,
@@ -157,14 +160,14 @@ pub struct RawAiAnswer {
     pub worth: i32,
 }
 
-/// Typed twin of [`Match::view_extra`] (same fields, no JSON).
+/// Typed twin of [`Match::view_extras`] (same fields, no JSON).
 #[derive(Debug, Clone, Default)]
 pub struct ViewExtra {
     pub ai_answer: Option<RawAiAnswer>,
     pub playable: Vec<bool>,
-    pub est_cost: Vec<i32>,
+    pub estimated_cost: Vec<i32>,
     /// The viewer's pressable skills (`skill:*` field instances with an
-    /// `On::Play` entry), each gated through [`why_not_act`].
+    /// `On::Play` entry), each gated through [`cant_act`].
     pub skills: Vec<SkillAction>,
 }
 
@@ -520,7 +523,7 @@ impl Match {
         // a short vector would index-panic on the first ack.
         let mut order_ready = s.order_ready;
         order_ready.resize(world.st.players.len(), false);
-        // v9: clock settings live on the World (so `Cx` sees them mid-routine)
+        // v9: clock settings live on the World (so `PlayCtx` sees them mid-routine)
         // and are mirrored at the Saved top level for the bot mirror / docs.
         world.clock = s.clock;
         world.legacy_clock = s.legacy_clock;
@@ -883,7 +886,7 @@ impl Match {
             st.bonus_time = bonus;
             st.time_left = base + bonus;
             st.clock_paused = self.clock_hold.is_some();
-            // `why_not_act`'s roll / end branches, from the **live** fields the
+            // `cant_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
             // it used to be re-derived from the timed / off-board layers, which
@@ -907,7 +910,7 @@ impl Match {
                     && st.roller == st.turn;
                 // A queued end accepts a duplicate whatever else is up -- a
                 // prompt opened by a turn-end hook, or hand overflow from one
-                // (`why_not_act` folds it before the busy / over-hand gates).
+                // (`cant_act` folds it before the busy / over-hand gates).
                 st.can_end_here = queued_end
                     || (my_turn && !st.busy && st.step != stage::MOVE && !owes_roll && !over_hand);
             }
@@ -1292,7 +1295,7 @@ impl Match {
         let Some(i) = self.player_index(member) else {
             return vec![];
         };
-        let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+        let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         self.world.hidden[i]
             .hand
             .iter()
@@ -1333,16 +1336,16 @@ impl Match {
     ///
     /// Both view builders (`web-glue` and `rules-worker`) merge this into the
     /// match frame.
-    pub fn view_extra(&self, member: i32) -> serde_json::Value {
+    pub fn view_extras(&self, member: i32) -> serde_json::Value {
         let t0 = rtimer::now();
         let v = self.view_extra_inner(member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
         v
     }
 
-    /// Typed twin of [`Match::view_extra`] for in-process callers (the bot's
+    /// Typed twin of [`Match::view_extras`] for in-process callers (the bot's
     /// rollout / action abstraction). Same fields, no JSON round trip.
-    pub fn view_extra_typed(&self, member: i32) -> ViewExtra {
+    pub fn view_extras_typed(&self, member: i32) -> ViewExtra {
         let t0 = rtimer::now();
         let v = self.view_extra_parts(member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
@@ -1361,7 +1364,7 @@ impl Match {
         serde_json::json!({
             "aiAnswer": ai_answer,
             "playable": p.playable,
-            "estCost": p.est_cost,
+            "estCost": p.estimated_cost,
             "skills": p.skills,
         })
     }
@@ -1382,9 +1385,9 @@ impl Match {
                 worth: l.ask.worth.get(k).copied().unwrap_or(0),
             })
         });
-        let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+        let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         let mut playable = Vec::new();
-        let mut est_cost = Vec::new();
+        let mut estimated_cost = Vec::new();
         // One `cant_play` per distinct card id: a hand may hold duplicates and
         // the answer is a pure query of the (unchanged) state within this loop.
         let mut memo: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
@@ -1393,10 +1396,10 @@ impl Match {
                 .entry(c.as_str())
                 .or_insert_with(|| cx.cant_play(i, c, false).is_none());
             playable.push(ok);
-            est_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
+            estimated_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
         // The viewer's pressable skills: every `skill:*` field instance with an
-        // activatable `On::Play`, gated through the same `why_not_act` the
+        // activatable `On::Play`, gated through the same `cant_act` the
         // `act: "skill"` request takes -- so "shown enabled" ⇔ "accepted".
         // Passive / hook-only skills (`has_play` = false) never appear.
         let busy = self.pending.is_some();
@@ -1410,7 +1413,7 @@ impl Match {
                 card: id.clone(),
                 ..Default::default()
             };
-            let reason = why_not_act(&cx, i, &m, busy);
+            let reason = cant_act(&cx, i, &m, busy);
             // `skill:<owner>:<name>` -- the owner is the persona or group the
             // skill came from (granted copies keep the original owner).
             let source = id
@@ -1430,7 +1433,7 @@ impl Match {
         ViewExtra {
             ai_answer,
             playable,
-            est_cost,
+            estimated_cost,
             skills,
         }
     }
@@ -1438,8 +1441,8 @@ impl Match {
     /// A throwaway policy context: the world is a clone and no answers are
     /// installed, so a policy's RNG draws do not persist into the match.
     /// `bot-core::policy` decides on one of these.
-    pub fn bot_cx(&self) -> Cx<'_> {
-        Cx::new(self.world.clone(), &self.data, &*self.rules, &[])
+    pub fn bot_cx(&self) -> PlayCtx<'_> {
+        PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[])
     }
 
     // ------------------------------------------------------- simulation fork
@@ -1476,7 +1479,7 @@ impl Match {
     }
 
     /// Install a simulation answer provider (`docs/BOT.md` §3.2). Every
-    /// [`Cx::ask`] whose replay-log entry is missing calls it instead of
+    /// [`PlayCtx::ask`] whose replay-log entry is missing calls it instead of
     /// halting, so a routine runs once per simulation. Returns the previous
     /// provider, if any. Never installed on a live match.
     pub fn set_provider(
@@ -1500,13 +1503,13 @@ impl Match {
 
     /// Run `f` directly on the world (no prompts possible). Only valid with no
     /// routine pending.
-    fn direct<R>(&mut self, f: impl FnOnce(&mut Cx) -> R) -> R {
+    fn direct<R>(&mut self, f: impl FnOnce(&mut PlayCtx) -> R) -> R {
         debug_assert!(
             self.pending.is_none(),
             "direct world mutation while a routine is pending"
         );
         let (data, rules) = (self.data.clone(), self.rules.clone());
-        let mut cx = Cx::new(self.world.clone(), &data, &*rules, &[]);
+        let mut cx = PlayCtx::new(self.world.clone(), &data, &*rules, &[]);
         let r = f(&mut cx);
         self.world = cx.into_world();
         self.changed = true;
@@ -1527,7 +1530,7 @@ impl Match {
         // path, unchanged.
         let mut prov = self.provider.take();
         let (res, delay, mut w) = {
-            let mut cx = Cx::new(snapshot.clone(), &data, &*rules, &answers);
+            let mut cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
             let mut cx = match prov.as_mut() {
                 Some(p) => cx.with_provider(&mut **p),
                 None => cx,
@@ -1641,7 +1644,7 @@ impl Match {
             Err(Halt(HaltKind::Suspended)) => {
                 self.world = w;
                 self.pending = None;
-                let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+                let mut cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
                 let _ = cx.drain_work();
                 self.world = cx.into_world();
                 self.changed = true;
@@ -2414,8 +2417,8 @@ impl Match {
                 }
             }
             "skill" => {
-                if let Some(why) = self.with_cx(|cx| why_not_act(cx, i, m, busy)) {
-                    return Err(why);
+                if let Some(reason) = self.with_cx(|cx| cant_act(cx, i, m, busy)) {
+                    return Err(reason);
                 }
                 self.start(Routine::Act(i, Box::new(m.clone())));
             }
@@ -2424,8 +2427,8 @@ impl Match {
             #[cfg(debug_assertions)]
             "debug" => return self.debug_act(i, m),
             "roll" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" | "end" => {
-                if let Some(why) = self.with_cx(|cx| why_not_act(cx, i, m, busy)) {
-                    return Err(why);
+                if let Some(reason) = self.with_cx(|cx| cant_act(cx, i, m, busy)) {
+                    return Err(reason);
                 }
                 // A duplicate `end` folds here without a routine: `execute`
                 // would reset `wait` to the routine's (zero) delay and clip a
@@ -2442,8 +2445,8 @@ impl Match {
         Ok(())
     }
 
-    fn with_cx<R>(&self, f: impl FnOnce(&Cx) -> R) -> R {
-        let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+    fn with_cx<R>(&self, f: impl FnOnce(&PlayCtx) -> R) -> R {
+        let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         f(&cx)
     }
 
@@ -2719,7 +2722,7 @@ impl Match {
         }
     }
 
-    fn end_vote(&mut self, pass: bool, why: Msg) {
+    fn end_vote(&mut self, pass: bool, reason: Msg) {
         self.vote = MatchVote::default();
         self.changed = true;
         self.seq += 1;
@@ -2728,7 +2731,11 @@ impl Match {
             self.finish_now("vote");
         } else {
             self.vote_cooldown = VOTE_COOLDOWN;
-            self.host_log("vote", -1, Msg::new("log.vote_failed").msg("why", why));
+            self.host_log(
+                "vote",
+                -1,
+                Msg::new("log.vote_failed").msg("reason", reason),
+            );
         }
     }
 
@@ -2839,7 +2846,7 @@ impl Match {
     }
 }
 
-fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
+fn run(cx: &mut PlayCtx, r: &Routine) -> Flow<()> {
     match r {
         Routine::Opening => cx.opening(),
         Routine::NextTurn => cx.next_turn(),
@@ -2879,7 +2886,7 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
 }
 
 /// `DoAct` checks for the turn commands.
-fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
+fn cant_act(cx: &PlayCtx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
     let st = &cx.w.st;
     let my_turn = cx.playing() && st.turn == i as i32;
     let pos = st.players[i].pos;
@@ -2895,7 +2902,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
                 return Some(cx.rules.gate_refusal_msg(Gate::Move, i));
             }
             // The turn's main move is already spent (an off-board main-move expiry
-            // teleport, or a `card_move` that ran it early): 「一回合只能触发
+            // teleport, or a `run_planned_move` that ran it early): 「一回合只能触发
             // 一次［主要移动］效果,多次触发［主要移动］时无效」. Refuse the roll
             // and let `end` through below.
             if cx.w.turn.main_moved && st.turn == i as i32 {
@@ -2934,8 +2941,8 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
         // still accepts these acts (replay / old clients) and rejects them
         // with a clear reason.
         "buy" | "build" => Some(Msg::new("err.buy_build_at_settle")),
-        "mortgage" => cx.why_not_mortgage(i, m.value, busy),
-        "redeem" => cx.why_not_redeem(i, m.value, busy),
+        "mortgage" => cx.guard_mortgage(i, m.value, busy),
+        "redeem" => cx.guard_redeem(i, m.value, busy),
         "play" => cx.cant_play(i, &m.card, busy),
         "discard" => {
             if !cx.playing() || !cx.over_hand(i) {

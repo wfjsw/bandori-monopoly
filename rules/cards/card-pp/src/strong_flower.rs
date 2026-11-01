@@ -1,4 +1,3 @@
-//! `PP:可爱又强壮的花朵` -- C# `CardStrongFlower` (MatchHost.cs:7629-7698):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:可爱又强壮的花朵`）:
 //! > 可爱又强壮的花朵：
@@ -13,7 +12,7 @@
 //! place on one of your deeds; the user stops there and settles when passing.
 //! `place_card_on` stamps the chosen tile on the instance and `self_tile` reads
 //! the binding back; the [持续] stop is forced there with `plan::set_stop_at` +
-//! `plan::set_resolve`.
+//! `plan::set_settles`.
 
 use alloc::vec::Vec;
 use bandori_std::ctx;
@@ -52,11 +51,9 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- nothing to point at without
-    // a deed. C# `CardStrongFlower.WhyNot` refuses the play when the player owns
-    // nothing ("你还没有地").
+    // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- nothing to point at without a deed.
     if ctx::owned_count(player_id) == 0 {
-        return Some(Msg::new(key!("strong_flower_why_not")));
+        return Some(Msg::new(key!("strong_flower_blocked")));
     }
     None
 }
@@ -106,7 +103,7 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
 /// -- the user's own pass, onto the tile this card is bound to, and the three
 /// steps in order.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner` is the pre. `self_tile` is a derived lookup (the tile
+    // `actor == owner` is the condition. `self_tile` is a derived lookup (the tile
     // this card is bound to).
     let Some(tile) = ctx::self_tile() else {
         return Ok(());
@@ -122,7 +119,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     plan::set_stop_at(tile);
-    plan::set_resolve(true);
+    plan::set_settles(true);
     // 2. 「如果[共鸣]则获得1500资金」
     if crate::resonance::try_resonance(player_id)? {
         ctx::gain(player_id, 1500, &Msg::new(key!("strong_flower_gain")))?;

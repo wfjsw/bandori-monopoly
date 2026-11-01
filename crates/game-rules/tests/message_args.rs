@@ -52,7 +52,7 @@ fn walk_arg(arg: &Arg, where_: &str, bad: &mut Vec<String>) {
 
 fn walk_msg(m: &Msg, where_: &str, bad: &mut Vec<String>) {
     let w = format!("{where_} {}", m.key());
-    for (name, arg) in m.a.iter() {
+    for (name, arg) in m.args.iter() {
         walk_arg(arg, &format!("{w}.{name}"), bad);
     }
 }
@@ -174,7 +174,7 @@ fn chain_kinds_and_counters_have_locale_text() {
                 missing.push(format!("{loc}: {key}"));
             }
         }
-        // Kinds with no dedicated `log.why.*` phrase, named in the fallback
+        // Kinds with no dedicated `log.reason.*` phrase, named in the fallback
         // (`kind_name` always builds `log.kind.{spelling}`).
         for k in [
             "diceRollPlan",

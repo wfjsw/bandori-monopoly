@@ -1,4 +1,3 @@
-//! `HHW:黑衣人的补给` -- C# `CardBlackSuits` (MatchHost.cs:3966-3993): [反击] past
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:黑衣人的补给`）:
 //! > 黑衣人的补给：
@@ -12,26 +11,42 @@
 //! `tile:agent` body. It is not an after-hook: a body replace must not leave a
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
-use bandori_std::ctx;
+use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
-/// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
-/// (C# `H.AddMark(..., "黑衣人的补给", ...)`). It is a locale key so the
-/// placement line reads as a 奇迹水晶, not as the card's own name.
+/// It is a locale key so the placement line reads as a 奇迹水晶, not as the card's
+/// own name.
 const MARK: &str = key!("black_suits_crystal");
+
+/// One-shot claim for the pass body: the raise uid that already spent this
+/// copy's crystal. A fixed-key seat latch holding the last raise uid: one
+/// key, overwritten in place, shared by every copy so two stand-ins answer
+/// one pass once; `trigger::uid()` is nonzero inside a raise.
+const CLAIM: &str = "black.claimed";
 
 pub const BLACK_SUITS: CardDef = CardDef::new(
     "HHW:黑衣人的补给",
     &[
         // 规则书: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- the tile
-        // and the owner's own pass are the condition; the crystal mark count is
-        // the residual guard. `ActionKind::Pass` (not `PassTile`) matches the
+        // and the owner's own pass are the condition; the per-raise claim in the
+        // body does the dedupe. `ActionKind::Pass` (not `PassTile`) matches the
         // misaki 「经过弦卷集团」 shape (`skill-personas/src/misaki.rs`).
-        On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", Some(pass_tile_guard), pass_tile)),
-        // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
-        // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
+        On::Action(Action::Pass("card.placed && actor == owner && tile.id == tile_named('弦卷集团')", None, pass_tile)),
+        // 规则书: 「该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果」 -- an
+        // external clear (another card, a bounce, a bankrupt owner's purge) must
+        // resync too. The guard admits only a raise about *this* stand-in.
+        // TODO(规则书)（你经过“弦卷集团”格子后，移除那格的一个奇迹水晶）: this
+        //   retires the same-site `sync_circle_instance` calls below once the
+        //   hook fire is trusted; they stay as the belt-and-braces path.
+        On::Action(Action::MarkChanged(
+            "tile.id == tile_named('弦卷集团')",
+            Some(changed_is_my_crystal),
+            resync,
+        )),
+        // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 --
+        // `t.Kind == "pass" && t.Seat == seat && Tile(t.Tile)?.kind == "circle"`.
         // `PassBefore` is the category; the owner's own pass of CiRCLE is the
         // condition. The `circle < 0` defensive check is dropped (`tile_named`
         // missing = -1 never equals a live `tile.id`).
@@ -51,11 +66,24 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
-    // 规则书[反击]: 「在“弦卷集团”（#29格）格子上放置一个奇迹水晶」 -- C#
-    // `H.AddMark(tsurumakiAgent, "黑衣人的补给", c.Seat, 1, ...)`: a tile mark
-    // owned by the player of this card. `place_mark_new`: one row per crystal.
+    // `place_mark_new`: one row per crystal.
     if group >= 0 {
-        ctx::place_mark(
+        // 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- field hooks only
+        // dispatch to placed instances, and a [反击] declaration would otherwise
+        // be discarded, leaving the `Pass` hook below dead. Place this card
+        // as the stand-in for the effect (same pattern as `HHW:育美标记`),
+        // *before* the mark, so the row is bound to the stand-in
+        // (`place_mark` stamps `instance = ctx::self_uid()`) and the
+        // `MarkChanged` guard can name it.
+        if !ctx::is_placed() {
+            ctx::set_dest(ctx::Dest::Field);
+            ctx::place_card(
+                player_id,
+                "HHW:黑衣人的补给",
+                &Msg::new(key!("black_suits_attach")),
+            );
+        }
+        let _row = ctx::place_mark(
             group,
             MARK,
             "",
@@ -77,19 +105,20 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // The instance's own `On::Settle` (landing draw) and Pass entry (the
         // [经过] reward) are what 「全部效果」 means; no card hook draws.
         sync_circle_instance(group);
-        // 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- field hooks only
-        // dispatch to placed instances, and a [反击] declaration would otherwise
-        // be discarded, leaving the `Pass` hook below dead. Place this card
-        // as the stand-in for C# `BlackSuitFx` (same pattern as `HHW:育美标记`).
-        if !ctx::is_placed() {
-            ctx::set_dest(ctx::Dest::Field);
-            ctx::place_card(
-                player_id,
-                "HHW:黑衣人的补给",
-                &Msg::new(key!("black_suits_attach")),
-            );
-        }
     }
+    Ok(())
+}
+
+/// Does this raise concern this stand-in's own crystal? The subject instance is
+/// the stand-in itself; for a destroyed instance `card.placed` is already
+/// false, so the guard does not check it.
+fn changed_is_my_crystal(_player_id: i32) -> bool {
+    trigger::name() == MARK && trigger::instance() == ctx::self_uid()
+}
+
+/// Re-evaluate the borrowed `tile:circle` for the mark's tile.
+pub fn resync(_player_id: i32) -> card_sdk::Asked {
+    sync_circle_instance(trigger::tile());
     Ok(())
 }
 
@@ -101,11 +130,12 @@ fn own_crystals(tile: i32, owner: i32) -> i32 {
 /// Attach or drop the borrowed `tile:circle` instance so it exists exactly
 /// while 弦卷集团 carries a crystal.
 fn sync_circle_instance(group: i32) {
-    // TODO(规则书)（该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果）: the book keys
-    //   the borrow on the crystal's presence -- this sync only runs from this
-    //   card's own place/pass, so an external crystal clear is not re-synced;
-    //   a bankrupt owner's field purge destroys the crystal with no sync either,
-    //   leaving the borrowed instance behind (LOY-BLACK-01 related medium).
+    // The book keys the borrow on the crystal's presence. The `MarkChanged`
+    // entry above (and the `counterChanged` path of a purge) is what keeps this
+    // true outside this card's own bodies; the direct calls here stay too.
+    // TODO(G08) created_by: the borrowed instance outlives the stand-in until
+    //   G08's `created_by` edge lands -- its own `unplace_at` is the
+    //   interim cleanup, not a replacement.
     let has = ctx::count_marks(group, &MarkFilter::any().kind(MARK)) > 0;
     // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a tile"
     // gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The board
@@ -130,25 +160,23 @@ fn sync_circle_instance(group: i32) {
     }
 }
 
-/// Residual guard for [`pass_tile`] -- the crystal mark count on the tile
-/// (`count_marks`) stays here (not yet in the condition vocabulary).
-fn pass_tile_guard(player_id: i32) -> bool {
-    own_crystals(ctx::trigger::tile(), player_id) > 0
-}
-
-/// 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
+/// 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- the pass-tile effect's
 /// `mark.count--`, which is `bump_mark`'s single-tick form. Dropping the last
 /// crystal takes the borrowed `tile:circle` instance with it.
+///
+/// One removal per raise: a pass dispatches one job per placed copy, so each
+/// job first claims the raise on its own prop. Every copy still files itself
+/// (the trailing `own_crystals == 0` check runs outside the claim), so the
+/// other copy leaves too.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && tile.id == tile_named('弦卷集团')` is the pre; the
-    // crystal mark count is the residual guard.
-    let t = ctx::trigger::tile();
-    // The owner's own crystal is the one spent (`owner(player_id)`), so two
-    // players' stand-ins never eat each other's crystals.
-    // TODO(规则书)（你经过“弦卷集团”格子后，移除那格的一个奇迹水晶）: one hook job
-    //   runs per placed copy -- two copies remove two crystals on a single pass
-    //   (the filing guard counts the owner's total, so only the second files).
-    ctx::bump_mark(t, &MarkFilter::any().kind(MARK).owner(player_id), -1);
+    // `actor == owner && tile.id == tile_named('弦卷集团')` is the condition.
+    let t = trigger::tile();
+    if ctx::state::get(player_id, CLAIM) != trigger::uid() {
+        ctx::state::set(player_id, CLAIM, trigger::uid());
+        // The owner's own crystal is the one spent (`owner(player_id)`), so two
+        // players' stand-ins never eat each other's crystals.
+        ctx::bump_mark(t, &MarkFilter::any().kind(MARK).owner(player_id), -1);
+    }
     sync_circle_instance(t);
     // Stand-in cleanup: nothing left to remove, so file the card away.
     if own_crystals(t, player_id) == 0 {

@@ -225,8 +225,8 @@ fn every_guard_lowers_to_its_embedded_ir() {
 #[test]
 fn generate_skips_are_only_the_allowlist() {
     install_ext();
-    let generated = rules_cond::gen_ir::generate_with(&rules_dir(), &vocab())
-        .expect("gen_ir generate_with");
+    let generated =
+        rules_cond::gen_ir::generate_with(&rules_dir(), &vocab()).expect("gen_ir generate_with");
     for (src, err) in &generated.skipped {
         assert!(
             UNLOWERABLE_ALLOWLIST.contains(&src.as_str()),

@@ -10,7 +10,7 @@
 //!
 //! A [`Step`] is one player input and everything it caused:
 //!
-//! * `pre` -- the world just before the input (cloned via `Match::world()`,
+//! * `condition` -- the world just before the input (cloned via `Match::world()`,
 //!   which is read-only and available even while a prompt is pending;
 //!   `world_mut` asserts and must not be used here).
 //! * `post` -- the world after the input **and** the caller's settle loop.
@@ -100,7 +100,7 @@ impl fmt::Debug for Clause {
 /// the act that caused it, and the static game data.
 pub struct Step<'a> {
     /// The world just before the input.
-    pub pre: &'a World,
+    pub condition: &'a World,
     /// The world after the input and the settle loop.
     pub post: &'a World,
     /// Events logged by this input (and its settle). Per-act window: the
@@ -127,7 +127,7 @@ impl Step<'_> {
     /// check the wrong seat.
     pub fn player_of_act(&self) -> usize {
         let member = self.act.who();
-        self.pre
+        self.condition
             .st
             .players
             .iter()
@@ -171,7 +171,12 @@ impl Step<'_> {
 
     /// Money of player `i` before the input.
     pub fn pre_money(&self, i: usize) -> i32 {
-        self.pre.st.players.get(i).map(|p| p.money).unwrap_or(0)
+        self.condition
+            .st
+            .players
+            .get(i)
+            .map(|p| p.money)
+            .unwrap_or(0)
     }
 
     /// Money of player `i` after the input.
@@ -182,7 +187,11 @@ impl Step<'_> {
     /// Hand size of player `i` before the input (private zones, not the
     /// public `MatchPlayer::hand` mirror).
     pub fn pre_hand_len(&self, i: usize) -> usize {
-        self.pre.hidden.get(i).map(|h| h.hand.len()).unwrap_or(0)
+        self.condition
+            .hidden
+            .get(i)
+            .map(|h| h.hand.len())
+            .unwrap_or(0)
     }
 
     /// Hand size of player `i` after the input.
@@ -336,7 +345,7 @@ pub fn check(step: &Step<'_>, clauses: &[Clause]) -> Vec<Violation> {
 pub fn event_key(e: &MatchEvent) -> String {
     use game_core::msg::Arg;
     let m = if e.msg.key() == "log.card_effect" {
-        match e.msg.a.get("what") {
+        match e.msg.args.get("what") {
             Some(Arg::Msg(inner)) => inner.as_ref(),
             _ => &e.msg,
         }
@@ -355,8 +364,8 @@ pub fn event_key(e: &MatchEvent) -> String {
 /// Integer argument of a message (`.i` / `.n`), for amount-like fields.
 pub fn int_arg(msg: &game_core::msg::Msg, name: &str) -> Option<i64> {
     use game_core::msg::Arg;
-    match msg.a.get(name) {
-        Some(Arg::I(v)) | Some(Arg::N(v)) => Some(*v),
+    match msg.args.get(name) {
+        Some(Arg::Integer(v)) | Some(Arg::Number(v)) => Some(*v),
         _ => None,
     }
 }
@@ -364,7 +373,7 @@ pub fn int_arg(msg: &game_core::msg::Msg, name: &str) -> Option<i64> {
 /// Player-id argument of a message (`.player_id`-style slots).
 pub fn player_arg(msg: &game_core::msg::Msg, name: &str) -> Option<i32> {
     use game_core::msg::Arg;
-    match msg.a.get(name) {
+    match msg.args.get(name) {
         Some(Arg::PlayerId(v)) => Some(*v),
         _ => None,
     }

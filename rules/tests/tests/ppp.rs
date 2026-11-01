@@ -211,7 +211,7 @@ fn returns_borrow_options_carry_band_cards() {
     // [持续]（2): 「[拥有者]每回合开始时选择一个其他存活玩家的团卡」.
     let p = t.expect_prompt();
     assert_eq!(
-        p.title.k.as_ref(),
+        p.title.key.as_ref(),
         "cards:card-ppp.returns_title",
         "{}",
         t.dump_prompt()
@@ -219,11 +219,11 @@ fn returns_borrow_options_carry_band_cards() {
     assert_eq!(p.options.len(), 2, "two other players: {}", t.dump_prompt());
     let mut seen = 0;
     for (i, opt) in p.options.iter().enumerate() {
-        let who = opt.a.values().find_map(|a| match a {
+        let who = opt.args.values().find_map(|a| match a {
             Arg::PlayerId(x) => Some(*x),
             _ => None,
         });
-        let card = opt.a.values().find_map(|a| match a {
+        let card = opt.args.values().find_map(|a| match a {
             Arg::Card(c) => Some(c.clone()),
             _ => None,
         });
@@ -887,7 +887,7 @@ fn saaya_floor_moves_to_the_next_buyable_tile() {
     t.set_pos(0, 20);
     // The mark rides the persona-skill instance (MARKERS.md §7).
     let uid = t.m.world().persona_skill_uid(0);
-    t.m.world_mut().set_tok(0, "saaya标记", 1, uid, 1);
+    t.m.world_mut().set_held(0, "saaya标记", 1, uid, 1);
     t.dice(&[1, 10]); // face 1, cut 10 -> <= 0
     t.roll(0).unwrap();
     while t.prompt().is_some() {

@@ -30,9 +30,9 @@ pub const RIMI: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1）「你的回合中[经过]任意Live House颜色格子」 -- `is_live_house_for`
         // is player-relative (sees a recolour too) and not in the condition
-        // vocabulary, so it is the residual guard. `actor == owner` is the pre.
+        // vocabulary, so it is the residual guard. `actor == owner` is the condition.
         On::Action(Action::Pass(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(on_pass_live_house),
             on_pass,
         ))
@@ -114,7 +114,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if far.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("rimi_title")),
         &Msg::new(key!("rimi_ask")),
@@ -125,14 +125,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&to) = far.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 3, &Msg::new(key!("rimi_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 3, &Msg::new(key!("rimi_spend")))? {
         return Ok(());
     }
     // 「[传送]…并[结算]」 -- a teleport that settles.
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(to);
-    plan::set_resolve(true);
-    ctx::card_move(player_id);
+    plan::set_settles(true);
+    ctx::run_planned_move(player_id);
     // 「且可选择盖房」.
     ctx::card_offer_build(player_id, &[to]);
     Ok(())

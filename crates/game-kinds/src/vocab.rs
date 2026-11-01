@@ -72,7 +72,7 @@ impl Payee {
 }
 
 /// A dice pool: `count` dice of `sides`. `sides == 0` = a flat `count`.
-/// The dice shape only; engine `Roll` keeps its `why: String` on top.
+/// The dice shape only; engine `Roll` keeps its `reason: String` on top.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Dice {
     pub count: i32,

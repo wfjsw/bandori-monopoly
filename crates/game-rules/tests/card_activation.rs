@@ -34,7 +34,7 @@ fn effects_since(t: &Table, mark: i32, card: &str) -> Vec<MatchEvent> {
         .into_iter()
         .filter(|e| {
             e.msg.key() == "log.card_effect"
-                && e.msg.a.get("card") == Some(&Arg::Card(card.to_string()))
+                && e.msg.args.get("card") == Some(&Arg::Card(card.to_string()))
         })
         .collect()
 }
@@ -226,9 +226,9 @@ fn negated_play_shows_negated() {
     assert_eq!(deny[0].kind, "counter");
 }
 
-/// A hook whose CEL `pre` rejects is not an activation at all: the body never
+/// A hook whose CEL `condition` rejects is not an activation at all: the body never
 /// runs and nothing about the card reaches the UI. `TEST:preHook`'s `PaySplitAdd`
-/// entry carries `pre: "false"`; `TEST:selfCharge` moving money raises the
+/// entry carries `condition: "false"`; `TEST:selfCharge` moving money raises the
 /// `PaySplitAdd` the hook declares.
 #[test]
 fn hook_whose_cel_pre_rejects_remains_silent() {
@@ -295,9 +295,9 @@ fn declined_counteraction_offer_remains_silent() {
     assert!(!aimer[0].negated);
 }
 
-/// A play-gate probe (`cant_play`, the `On::Play` gate + its CEL `pre`) is a
+/// A play-gate probe (`cant_play`, the `On::Play` gate + its CEL `condition`) is a
 /// question, not an activation: asking whether a card may be played never
-/// flashes it. `TEST:prePlay` declares `pre: "owner.money >= 999999"`, so the
+/// flashes it. `TEST:prePlay` declares `condition: "owner.money >= 999999"`, so the
 /// play is refused -- and the refusal is silent.
 #[test]
 fn play_gate_probe_remains_silent() {
@@ -403,13 +403,13 @@ fn a_negated_play_emits_exactly_one_negated() {
 }
 
 // ------------------------------------------------ v49: Gate / AtEnd / DiceRollPlan --
-// docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
+// docs/GUARDS.md §4.2c: these kinds carry the same `condition` + residual-guard
 // pair as `On::Action` (ABI v49). A rejecting entry runs no body and so emits
 // no `card` flash -- exactly like `hook_whose_cel_pre_rejects_remains_silent`
 // above. (`On::Settle` is a tile rule's body and is covered at the host layer
 // in `pre_conditions.rs`.)
 
-/// `TEST:preGate`'s `On::Gate(ImmuneAll)` declares `pre: "false"`. The layer
+/// `TEST:preGate`'s `On::Gate(ImmuneAll)` declares `condition: "false"`. The layer
 /// raise asks every field card's `ImmuneAll`; the rejecting entry must not
 /// answer (so the layer lands) and must not flash.
 #[test]
@@ -449,7 +449,7 @@ fn gate_whose_cel_pre_rejects_remains_silent() {
     );
 }
 
-/// `TEST:preRollPlan`'s `On::RollPlan` declares `pre: "false"`. The mover's
+/// `TEST:preRollPlan`'s `On::RollPlan` declares `condition: "false"`. The mover's
 /// walk raises `rollPlan` for every field card; the rejecting routine must
 /// not shape the move and must not flash.
 #[test]
@@ -483,7 +483,7 @@ fn rollplan_whose_cel_pre_rejects_remains_silent() {
     );
 }
 
-/// `TEST:preAtEnd`'s `On::Schedule` declares `pre: "false"`; its play schedules
+/// `TEST:preAtEnd`'s `On::Schedule` declares `condition: "false"`; its play schedules
 /// the callback at the owner's turn end. The scheduled callback must run no
 /// body and emit no flash.
 #[test]

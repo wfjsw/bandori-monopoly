@@ -38,7 +38,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]」. The two named
-/// tiles are the pre.
+/// tiles are the condition.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("masking_gain")))?;
     Ok(())
@@ -68,7 +68,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         1,
         have,
     )?;
-    if x < 1 || !bandori_std::fire::spend(player_id, x, &Msg::new(key!("masking_spend")))? {
+    if x < 1 || !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("masking_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(x, 10, "与燃烧的红色一起驰骋");

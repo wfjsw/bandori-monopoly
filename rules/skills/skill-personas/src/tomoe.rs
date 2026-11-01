@@ -92,7 +92,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     } else {
         back
     };
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomoe_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("tomoe_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

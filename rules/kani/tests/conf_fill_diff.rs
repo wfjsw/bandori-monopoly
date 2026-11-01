@@ -4,7 +4,7 @@
 //!
 //! | path | fill | eval |
 //! |---|---|---|
-//! | (A) production | `game_rules::cond_pre::{fill_window, fill_candidate}` over [`SnapSrc`] | `CompiledPre::compile` + `WindowScope::eval` (error ⇒ false) |
+//! | (A) production | `game_rules::condition::{fill_window, fill_candidate}` over [`SnapSrc`] | `CompiledCondition::compile` + `WindowScope::eval` (error ⇒ false) |
 //! | (B) Kani IR | `rules_kani::ir_fill::fill_from_world` (+ geometry bins) | `rules_kani::generated::cond_irs::eval_id` |
 //!
 //! Asserts (A) == (B) for every one of the 139 generated guards on every
@@ -30,15 +30,15 @@
 //! * `between` is not used by any inventory guard source.
 
 use game_core::engine::rules::{Dir, Effect, RollSource};
-use game_rules::cond_pre::{
-    fill_candidate, fill_window, window_scope, CompiledPre, SnapSrc, WindowCtx,
+use game_rules::condition::{
+    fill_candidate, fill_window, window_scope, CompiledCondition, SnapSrc, WindowCtx,
 };
 use game_rules::{MoveKind, Trigger, TriggerKind, TriggerMove, TriggerPay};
 
 use rules_cond_ir::ctx::{FnId, IrCtx};
 use rules_cond_ir::eval::eval_node;
 use rules_cond_ir::nodes::Kind;
-use rules_cond_ir::Val;
+use rules_cond_ir::Value;
 use rules_kani::generated::cond_irs::{self, eval_id, BY_ID, GUARD_COUNT};
 use rules_kani::intern;
 use rules_kani::ir_fill::{self, TriggerOverlay, TILE_NAMES};
@@ -66,7 +66,7 @@ struct Seat {
     unstoppable: i32,
     persona: &'static str,
     group: &'static str,
-    /// Non-zero named tokens (`tok('…')`).
+    /// Non-zero named tokens (`held_count('…')`).
     tokens: Vec<(&'static str, i32)>,
     /// Non-zero latches (`slot('…')`) — a subset of `SLOT_NAMES`.
     slots: Vec<(&'static str, i32)>,
@@ -103,13 +103,13 @@ impl Default for Seat {
 }
 
 #[derive(Clone, Debug)]
-struct TileFx {
+struct TileState {
     owner: i32,
     houses: i32,
     mortgaged: bool,
 }
 
-impl Default for TileFx {
+impl Default for TileState {
     fn default() -> Self {
         Self {
             owner: -1,
@@ -120,13 +120,13 @@ impl Default for TileFx {
 }
 
 #[derive(Clone, Debug)]
-struct MoveFx {
+struct MoveState {
     /// `None` = no move payload; `Some(roll)` with `roll < 0` = pre-cast null face.
     roll: Option<i64>,
     kind: Option<i64>,
     remaining: i64,
     /// `Trigger.main` (the turn's [主要移动]) — not `TriggerMove.main`.
-    main: bool,
+    is_main_move: bool,
     dir: i64,
 }
 
@@ -141,12 +141,20 @@ struct Trig {
     /// `-1` = no by-card.
     by: i64,
     pay_is_rent: bool,
+    /// `-1` = no payment.
+    pay_kind: i64,
+    pay_is_fixed: bool,
+    pay_total_stage: bool,
+    charge_skill: bool,
+    /// `-1` = no settle.
+    settle_tile: i64,
+    settle_outcome: i64,
     roll_source: i64,
     trigger_card: &'static str,
     counter_name: &'static str,
     /// Negative = null.
     plan_fixed_roll: i64,
-    mv: Option<MoveFx>,
+    mv: Option<MoveState>,
     /// `(kind, from, hits)` — `kind` is the `TriggerKind` wire value.
     chain: Vec<(i64, i64, i64)>,
     turn_player: i32,
@@ -164,6 +172,12 @@ impl Default for Trig {
             step: 0,
             by: -1,
             pay_is_rent: false,
+            pay_kind: -1,
+            pay_is_fixed: false,
+            pay_total_stage: true,
+            charge_skill: false,
+            settle_tile: -1,
+            settle_outcome: -1,
             roll_source: -1,
             trigger_card: "",
             counter_name: "",
@@ -181,7 +195,7 @@ struct Fixture {
     name: &'static str,
     n_players: i32,
     seats: Vec<Seat>,
-    tiles: Vec<TileFx>,
+    tiles: Vec<TileState>,
     trig: Trig,
     /// Candidate card name (`card.id` / `card.placed`).
     card: &'static str,
@@ -205,7 +219,7 @@ impl Fixture {
             name,
             n_players,
             seats,
-            tiles: vec![TileFx::default(); 60],
+            tiles: vec![TileState::default(); 60],
             trig: Trig::default(),
             card: "PP:[丸山彩]憧憬的前方",
             card_placed: true,
@@ -285,14 +299,33 @@ impl SnapSrc for Fixture {
             value: t.value as i32,
             step: t.step as i32,
             by_card: if t.by >= 0 { Some(t.by as i32) } else { None },
-            main: t.mv.as_ref().map(|m| m.main).unwrap_or(false),
-            pay: if t.pay_is_rent {
-                Some(TriggerPay { is_rent: true })
+            is_main_move: t.mv.as_ref().map(|m| m.is_main_move).unwrap_or(false),
+            pay: if t.pay_kind >= 0 {
+                Some(TriggerPay {
+                    kind: game_core::engine::PayKind::from_i32(t.pay_kind as i32),
+                    shape: game_core::engine::PayShape::from_i32(t.pay_is_fixed as i32),
+                    is_rent: t.pay_is_rent,
+                    total_stage: t.pay_total_stage,
+                })
+            } else if t.pay_is_rent {
+                Some(TriggerPay {
+                    kind: game_core::engine::PayKind::Rent,
+                    is_rent: true,
+                    total_stage: true,
+                    ..Default::default()
+                })
             } else if matches!(t.kind, TriggerKind::Pay | TriggerKind::Paid) {
-                Some(TriggerPay { is_rent: false })
+                Some(TriggerPay {
+                    total_stage: true,
+                    ..Default::default()
+                })
             } else {
                 None
             },
+            charge_skill: t.charge_skill,
+            settle_tile: t.settle_tile as i32,
+            outcome: (t.settle_outcome >= 0)
+                .then(|| game_core::engine::SettleOutcome::from_i32(t.settle_outcome as i32)),
             roll_source: match t.roll_source {
                 1 => RollSource::Charge,
                 2 => RollSource::Card,
@@ -312,7 +345,7 @@ impl SnapSrc for Fixture {
             ..Trigger::default()
         };
         // `Trigger.main` is the turn's [主要移动], independent of the move payload.
-        tr.main = t.mv.as_ref().map(|m| m.main).unwrap_or(false);
+        tr.is_main_move = t.mv.as_ref().map(|m| m.is_main_move).unwrap_or(false);
         if let Some(m) = &t.mv {
             tr.mv = Some(TriggerMove {
                 kind: if m.kind == Some(MoveKind::Teleport as i64) {
@@ -320,9 +353,9 @@ impl SnapSrc for Fixture {
                 } else {
                     MoveKind::Walk
                 },
-                resolve: true,
+                settles: true,
                 tags: Vec::new(),
-                main: m.main,
+                is_main_move: m.is_main_move,
                 dir: if m.dir < 0 {
                     Dir::Backward
                 } else {
@@ -417,7 +450,7 @@ impl SnapSrc for Fixture {
             return 0;
         };
         match key {
-            // Production `cond_pre` reads fire via `tok(p, "charge")`
+            // Production `condition` reads fire via `held_count(p, "charge")`
             // (the ABI-88 named-marker spelling), not a dedicated `charge()`.
             "charge" => s.charge,
             "stay" => s.stay,
@@ -469,7 +502,7 @@ impl SnapSrc for Fixture {
             .map(|s| s.group.to_string())
             .filter(|s| !s.is_empty())
     }
-    fn tok(&self, p: i32, name: &str) -> i32 {
+    fn held_count(&self, p: i32, name: &str) -> i32 {
         // `charge` is the ABI-88 named-marker spelling of the seat's fire pot
         // (same source `state_get` answers for the `charge` key).
         if name == "charge" {
@@ -480,7 +513,7 @@ impl SnapSrc for Fixture {
             .and_then(|s| s.tokens.iter().find(|(n, _)| *n == name).map(|(_, v)| *v))
             .unwrap_or(0)
     }
-    fn tok_names(&self, p: i32, prefix: &str) -> Vec<String> {
+    fn held_names(&self, p: i32, prefix: &str) -> Vec<String> {
         self.seats
             .get(p as usize)
             .map(|s| {
@@ -649,7 +682,7 @@ fn to_overlay(fx: &Fixture) -> TriggerOverlay {
         ov.move_roll = m.roll.unwrap_or(-1);
         ov.move_kind = m.kind.unwrap_or(-1);
         ov.move_remaining = m.remaining;
-        ov.move_main = m.main;
+        ov.move_main = m.is_main_move;
         ov.move_dir = m.dir;
     }
     for &(kind, from, hits) in &t.chain {
@@ -661,10 +694,10 @@ fn to_overlay(fx: &Fixture) -> TriggerOverlay {
     ov
 }
 
-fn as_i64(v: Val) -> i64 {
+fn as_i64(v: Value) -> i64 {
     match v {
-        Val::Int(i) => i,
-        Val::Bool(b) => b as i64,
+        Value::Int(i) => i,
+        Value::Bool(b) => b as i64,
         _ => 0,
     }
 }
@@ -696,7 +729,7 @@ fn fill_geometry_bins(c: &mut IrCtx, prog: &rules_cond_ir::Program, fx: &Fixture
 }
 
 /// Mirror of production `CondView`'s geometry accessors (see
-/// `crates/game-rules/src/cond_pre.rs` `SnapView`). Only the four functions
+/// `crates/game-rules/src/condition.rs` `SnapView`). Only the four functions
 /// the inventory uses need bins.
 fn geometry_value(fx: &Fixture, fid: i64, a: i64, b: i64) -> i64 {
     let n = 60i64;
@@ -838,10 +871,10 @@ fn fill_ir(fx: &Fixture, owner: i32, prog: &rules_cond_ir::Program) -> IrCtx {
 fn prod_eval(src: &str, fx: &Fixture, owner: i32) -> bool {
     let win: WindowCtx = fill_window(fx);
     let cand = fill_candidate(fx, owner, fx.card, fx.card_placed);
-    let pre = CompiledPre::compile(src).expect("inventory guard must compile");
+    let condition = CompiledCondition::compile(src).expect("inventory guard must compile");
     let scope = window_scope(&win);
     // `WindowScope::eval` maps any CEL error to false — same root rule as IR.
-    scope.eval(&pre.cond, &cand)
+    scope.eval(&condition.cond, &cand)
 }
 
 fn ir_eval(id: usize, fx: &Fixture, owner: i32) -> bool {
@@ -876,7 +909,7 @@ fn check_all(fx: &Fixture) {
 
 /// (1) 2 players, poorest-style money split, PaySplitAdd value > 0, card with owner,
 /// circle tile, fans present. Covers aya_haruka_02 `value > 0` (true).
-fn fx_aya_poorest_value() -> Fixture {
+fn fixture_aya_poorest_value() -> Fixture {
     let mut fx = Fixture::new("aya_poorest_value", 2);
     fx.seats[0].money = 200; // poorest
     fx.seats[1].money = 5000;
@@ -898,7 +931,7 @@ fn fx_aya_poorest_value() -> Fixture {
 }
 
 /// (2) Same shape but `value == 0` and owner is not poorest — aya guard false.
-fn fx_aya_value_zero_richest() -> Fixture {
+fn fixture_aya_value_zero_richest() -> Fixture {
     let mut fx = Fixture::new("aya_value_zero_richest", 2);
     fx.seats[0].money = 9000;
     fx.seats[1].money = 100;
@@ -921,7 +954,7 @@ fn fx_aya_value_zero_richest() -> Fixture {
 
 /// (3) Placed card on a ring tile (RiNG 1 = slot 8), not-placed counterpart
 /// exercised via `card_tile = -2` / `card_placed = false` on seat 1's probe.
-fn fx_tile_kinds() -> Fixture {
+fn fixture_tile_kinds() -> Fixture {
     let mut fx = Fixture::new("tile_kinds", 2);
     fx.seats[0].pos = 1;
     fx.seats[1].pos = 20;
@@ -949,7 +982,7 @@ fn fx_tile_kinds() -> Fixture {
 /// (4) slot('ppFansUp') present vs the absent twin (seats differ).
 /// Fans live in the per-player state dict (`slots` / `state_get`), matching
 /// `skill_groups::fans` (`ppFansUp` / `ppFansDown`).
-fn fx_fans_tok() -> Fixture {
+fn fixture_fans_tok() -> Fixture {
     let mut fx = Fixture::new("fans_tok", 4);
     for (i, s) in fx.seats.iter_mut().enumerate() {
         s.pos = i as i32 * 7;
@@ -975,7 +1008,7 @@ fn fx_fans_tok() -> Fixture {
 
 /// (5) Chain with a Pay link present, plus slot latches. Also a move payload
 /// with a real face (others out → geometry stays 0 on both sides).
-fn fx_chain_pay_move() -> Fixture {
+fn fixture_chain_pay_move() -> Fixture {
     let mut fx = Fixture::new("chain_pay_move", 2);
     fx.seats[0].pos = 30;
     fx.seats[1].pos = 40;
@@ -998,11 +1031,11 @@ fn fx_chain_pay_move() -> Fixture {
             (rules_cond_ir::ctx::id_of("pay"), 0, 1),
             (rules_cond_ir::ctx::id_of("target"), 1, 0),
         ],
-        mv: Some(MoveFx {
+        mv: Some(MoveState {
             roll: Some(5),
             kind: Some(MoveKind::Walk as i64),
             remaining: 2,
-            main: true,
+            is_main_move: true,
             dir: 1,
         }),
         turn_player: 0,
@@ -1016,7 +1049,7 @@ fn fx_chain_pay_move() -> Fixture {
 }
 
 /// (6) No chain, Abnormal window, group_is, persona_is, counter_is, not placed.
-fn fx_no_chain_abnormal() -> Fixture {
+fn fixture_no_chain_abnormal() -> Fixture {
     let mut fx = Fixture::new("no_chain_abnormal", 4);
     for (i, s) in fx.seats.iter_mut().enumerate() {
         s.pos = 5 + i as i32 * 11;
@@ -1047,7 +1080,7 @@ fn fx_no_chain_abnormal() -> Fixture {
 
 /// (7) 2 players, property tile with owner ≠ actor, rent pay — `pay_is_rent`
 /// and `tile.owner` paths.
-fn fx_rent_property() -> Fixture {
+fn fixture_rent_property() -> Fixture {
     let mut fx = Fixture::new("rent_property", 2);
     fx.seats[0].pos = 4;
     fx.seats[1].pos = 33;
@@ -1071,7 +1104,7 @@ fn fx_rent_property() -> Fixture {
 
 /// (8) 4 players, richest/owner.money style, Teleport move (null face),
 /// live-house tile (slot 22 = 便利店? — use slot 9 ring 2).
-fn fx_four_players_teleport() -> Fixture {
+fn fixture_four_players_teleport() -> Fixture {
     let mut fx = Fixture::new("four_players_teleport", 4);
     for (i, s) in fx.seats.iter_mut().enumerate() {
         s.pos = [3, 17, 39, 52][i];
@@ -1084,11 +1117,11 @@ fn fx_four_players_teleport() -> Fixture {
         target: 2,
         tile: 9, // RiNG 2
         value: 0,
-        mv: Some(MoveFx {
+        mv: Some(MoveState {
             roll: None, // null face → on_path / next_dist short-circuit
             kind: Some(MoveKind::Teleport as i64),
             remaining: 0,
-            main: false,
+            is_main_move: false,
             dir: -1,
         }),
         turn_player: 2,
@@ -1104,7 +1137,7 @@ fn fx_four_players_teleport() -> Fixture {
 /// Status-gate layer counts on one seat: stay / stun / stunStart / exile /
 /// unstoppable all non-zero so a `stay(p)`-shaped guard cannot pass by
 /// reading unfilled zeros.
-fn fx_status_layers() -> Fixture {
+fn fixture_status_layers() -> Fixture {
     let mut fx = Fixture::new("status_layers", 2);
     fx.seats[0].stay = 2;
     fx.seats[0].stun = 1;
@@ -1132,15 +1165,15 @@ fn fx_status_layers() -> Fixture {
 
 fn all_fixtures() -> Vec<Fixture> {
     vec![
-        fx_aya_poorest_value(),
-        fx_aya_value_zero_richest(),
-        fx_tile_kinds(),
-        fx_fans_tok(),
-        fx_chain_pay_move(),
-        fx_no_chain_abnormal(),
-        fx_rent_property(),
-        fx_four_players_teleport(),
-        fx_status_layers(),
+        fixture_aya_poorest_value(),
+        fixture_aya_value_zero_richest(),
+        fixture_tile_kinds(),
+        fixture_fans_tok(),
+        fixture_chain_pay_move(),
+        fixture_no_chain_abnormal(),
+        fixture_rent_property(),
+        fixture_four_players_teleport(),
+        fixture_status_layers(),
     ]
 }
 
@@ -1159,178 +1192,191 @@ fn guard_index(src: &str) -> usize {
 
 /// Id stability: `guard_id!(src)` / `guard_id_const(src)` == the `BY_ID` index
 /// whose `src` field is that string, for every entry.
-#[test]
-fn guard_ids_are_stable() {
-    assert_eq!(
-        GUARD_COUNT,
-        BY_ID.len(),
-        "generated table size matches the table"
-    );
-    for (i, g) in BY_ID.iter().enumerate() {
-        assert_eq!(
-            g.id,
-            i,
-            "GuardIr.id must equal BY_ID index for {src:?}",
-            src = g.src
-        );
-        assert_eq!(
-            cond_irs::guard_id_const(g.src),
-            i,
-            "guard_id_const({src:?}) must be {i}",
-            src = g.src
-        );
-        assert_eq!(
-            cond_irs::guard_id_opt(g.src),
-            Some(i),
-            "guard_id_opt({src:?}) must be Some({i})",
-            src = g.src
-        );
-    }
-    // Compile-time macro agrees on a sample of every shape class.
-    assert_eq!(
-        rules_kani::guard_id!("actor == owner && value > 0"),
-        guard_index("actor == owner && value > 0")
-    );
-    assert_eq!(rules_kani::guard_id!("false"), guard_index("false"));
-    assert_eq!(
-        rules_kani::guard_id!(
-            "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
-        ),
-        guard_index(
-            "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
-        )
-    );
-    assert_eq!(
-        rules_kani::guard_id!("card.placed"),
-        guard_index("card.placed")
-    );
+/// Run a test body on a wide stack: a `World` is over a megabyte and the
+/// harness holds several by value, past a default test thread's stack.
+fn big(f: impl FnOnce() + Send + 'static) {
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(f)
+        .expect("spawn")
+        .join()
+        .expect("test thread");
 }
 
+#[test]
+fn guard_ids_are_stable() {
+    big(|| {
+        assert_eq!(
+            GUARD_COUNT,
+            BY_ID.len(),
+            "generated table size matches the table"
+        );
+        for (i, g) in BY_ID.iter().enumerate() {
+            assert_eq!(
+                g.id,
+                i,
+                "GuardIr.id must equal BY_ID index for {src:?}",
+                src = g.src
+            );
+            assert_eq!(
+                cond_irs::guard_id_const(g.src),
+                i,
+                "guard_id_const({src:?}) must be {i}",
+                src = g.src
+            );
+            assert_eq!(
+                cond_irs::guard_id_opt(g.src),
+                Some(i),
+                "guard_id_opt({src:?}) must be Some({i})",
+                src = g.src
+            );
+        }
+        // Compile-time macro agrees on a sample of every shape class.
+        assert_eq!(
+            rules_kani::guard_id!("actor == owner && value > 0"),
+            guard_index("actor == owner && value > 0")
+        );
+        assert_eq!(rules_kani::guard_id!("false"), guard_index("false"));
+        assert_eq!(
+            rules_kani::guard_id!(
+                "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
+            ),
+            guard_index(
+                "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
+            )
+        );
+        assert_eq!(
+            rules_kani::guard_id!("card.placed"),
+            guard_index("card.placed")
+        );
+    });
+}
 /// The differential: every fixture × every seat × all 139 guards.
 #[test]
 fn fill_window_vs_ir_fill_agree_on_every_guard() {
-    let fixtures = all_fixtures();
-    assert!(fixtures.len() >= 4, "need at least 4 fixtures");
-    let mut comparisons = 0usize;
-    for fx in &fixtures {
-        check_all(fx);
-        comparisons += fx.n_players as usize * GUARD_COUNT;
-    }
-    assert_eq!(
-        comparisons,
-        fixtures
-            .iter()
-            .map(|f| f.n_players as usize * GUARD_COUNT)
-            .sum::<usize>()
-    );
-    // 2+2+2+4+2+4+2+4 = seats × guards = comparisons.
-    eprintln!(
-        "conf_fill_diff: {} fixtures × {} guards on {} seats = {} comparisons",
-        fixtures.len(),
-        GUARD_COUNT,
-        fixtures.iter().map(|f| f.n_players).sum::<i32>(),
-        comparisons
-    );
+    big(|| {
+        let fixtures = all_fixtures();
+        assert!(fixtures.len() >= 4, "need at least 4 fixtures");
+        let mut comparisons = 0usize;
+        for fx in &fixtures {
+            check_all(fx);
+            comparisons += fx.n_players as usize * GUARD_COUNT;
+        }
+        assert_eq!(
+            comparisons,
+            fixtures
+                .iter()
+                .map(|f| f.n_players as usize * GUARD_COUNT)
+                .sum::<usize>()
+        );
+        // 2+2+2+4+2+4+2+4 = seats × guards = comparisons.
+        eprintln!(
+            "conf_fill_diff: {} fixtures × {} guards on {} seats = {} comparisons",
+            fixtures.len(),
+            GUARD_COUNT,
+            fixtures.iter().map(|f| f.n_players).sum::<i32>(),
+            comparisons
+        );
+    });
 }
-
 /// Non-vacuity: the fixtures actually flip the guards they are named for.
 /// (If both sides were stuck false the differential would still "pass".)
 #[test]
 fn fixtures_flip_the_guards_they_target() {
-    let aya = "actor == owner && value > 0";
-    let chain_pay =
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
-    let is_start = bandori_std::guards::OWN_START;
-    // No `actor == owner` clause — the fans fixture's actor is seat 1.
-    let fans = "value > 0 && slot('ppFansUp') >= 1";
-    let placed = "card.placed";
-    let band = "group_is(owner, 'Pastel✽Palettes')";
+    big(|| {
+        let aya = "actor == owner && value > 0";
+        let chain_pay =
+            "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
+        let is_start = bandori_std::guards::OWN_START;
+        // No `actor == owner` clause — the fans fixture's actor is seat 1.
+        let fans = "value > 0 && slot('ppFansUp') >= 1";
+        let placed = "card.placed";
+        let band = "group_is(owner, 'Pastel✽Palettes')";
 
-    let f1 = fx_aya_poorest_value();
-    assert!(prod_eval(aya, &f1, 0), "fixture 1: aya guard should hold");
-    assert!(
-        ir_eval(guard_index(aya), &f1, 0),
-        "fixture 1: IR aya guard should hold"
-    );
+        let f1 = fixture_aya_poorest_value();
+        assert!(prod_eval(aya, &f1, 0), "fixture 1: aya guard should hold");
+        assert!(
+            ir_eval(guard_index(aya), &f1, 0),
+            "fixture 1: IR aya guard should hold"
+        );
 
-    let f2 = fx_aya_value_zero_richest();
-    assert!(!prod_eval(aya, &f2, 0), "fixture 2: value==0 → aya false");
+        let f2 = fixture_aya_value_zero_richest();
+        assert!(!prod_eval(aya, &f2, 0), "fixture 2: value==0 → aya false");
 
-    let f3 = fx_tile_kinds();
-    assert!(
-        prod_eval(is_start, &f3, 0) == false,
-        "tile 8 is ring, not circle"
-    );
-    // Circle tile 0:
-    let mut f3b = f3.clone();
-    f3b.trig.tile = 0;
-    assert!(prod_eval(is_start, &f3b, 0));
-    assert!(ir_eval(guard_index(is_start), &f3b, 0));
+        let f3 = fixture_tile_kinds();
+        assert!(
+            prod_eval(is_start, &f3, 0) == false,
+            "tile 8 is ring, not circle"
+        );
+        // Circle tile 0:
+        let mut f3b = f3.clone();
+        f3b.trig.tile = 0;
+        assert!(prod_eval(is_start, &f3b, 0));
+        assert!(ir_eval(guard_index(is_start), &f3b, 0));
 
-    let f5 = fx_chain_pay_move();
-    assert!(prod_eval(chain_pay, &f5, 0), "chain Pay present");
-    assert!(ir_eval(guard_index(chain_pay), &f5, 0));
-    let mut f5b = f5.clone();
-    f5b.trig.chain.clear();
-    assert!(!prod_eval(chain_pay, &f5b, 0), "chain Pay absent");
+        let f5 = fixture_chain_pay_move();
+        assert!(prod_eval(chain_pay, &f5, 0), "chain Pay present");
+        assert!(ir_eval(guard_index(chain_pay), &f5, 0));
+        let mut f5b = f5.clone();
+        f5b.trig.chain.clear();
+        assert!(!prod_eval(chain_pay, &f5b, 0), "chain Pay absent");
 
-    let f4 = fx_fans_tok();
-    assert!(prod_eval(fans, &f4, 0), "seat 0 has fans");
-    assert!(ir_eval(guard_index(fans), &f4, 0));
-    assert!(!prod_eval(fans, &f4, 2), "seat 2 has no fans");
-    assert!(!ir_eval(guard_index(fans), &f4, 2));
+        let f4 = fixture_fans_tok();
+        assert!(prod_eval(fans, &f4, 0), "seat 0 has fans");
+        assert!(ir_eval(guard_index(fans), &f4, 0));
+        assert!(!prod_eval(fans, &f4, 2), "seat 2 has no fans");
+        assert!(!ir_eval(guard_index(fans), &f4, 2));
 
-    let f6 = fx_no_chain_abnormal();
-    assert!(!prod_eval(placed, &f6, 0), "not placed");
-    assert!(prod_eval(band, &f6, 0), "Pastel✽Palettes band");
-    assert!(ir_eval(guard_index(band), &f6, 0));
+        let f6 = fixture_no_chain_abnormal();
+        assert!(!prod_eval(placed, &f6, 0), "not placed");
+        assert!(prod_eval(band, &f6, 0), "Pastel✽Palettes band");
+        assert!(ir_eval(guard_index(band), &f6, 0));
+    });
 }
-
 /// Per-fixture names, so a failure names the world immediately.
 #[test]
 fn fill_diff_aya_poorest_value() {
-    check_all(&fx_aya_poorest_value());
+    check_all(&fixture_aya_poorest_value());
 }
 #[test]
 fn fill_diff_aya_value_zero_richest() {
-    check_all(&fx_aya_value_zero_richest());
+    check_all(&fixture_aya_value_zero_richest());
 }
 #[test]
 fn fill_diff_tile_kinds() {
-    check_all(&fx_tile_kinds());
+    check_all(&fixture_tile_kinds());
 }
 #[test]
 fn fill_diff_fans_tok() {
-    check_all(&fx_fans_tok());
+    check_all(&fixture_fans_tok());
 }
 #[test]
 fn fill_diff_chain_pay_move() {
-    check_all(&fx_chain_pay_move());
+    check_all(&fixture_chain_pay_move());
 }
 #[test]
 fn fill_diff_no_chain_abnormal() {
-    check_all(&fx_no_chain_abnormal());
+    check_all(&fixture_no_chain_abnormal());
 }
 #[test]
 fn fill_diff_rent_property() {
-    check_all(&fx_rent_property());
+    check_all(&fixture_rent_property());
 }
 #[test]
 fn fill_diff_four_players_teleport() {
-    check_all(&fx_four_players_teleport());
+    check_all(&fixture_four_players_teleport());
 }
 #[test]
 fn fill_diff_status_layers() {
-    check_all(&fx_status_layers());
+    check_all(&fixture_status_layers());
 }
-
 /// `state(p, 'key')` through both fillers, on a fixture whose seat carries
 /// stay / stun / stunStart / exile / unstoppable. The inventory has no
 /// `state(p,'key')` guard yet, so this lowers the sources directly (same
 /// `fill_window` / `fill_from_world` seam `check_guard` uses).
 #[test]
 fn fill_diff_state_fns() {
-    let fx = fx_status_layers();
+    let fx = fixture_status_layers();
     // (src, owner, expected) — agreement first, then a truth value so a
     // double-zero pass cannot hide a fill gap.
     let cases: &[(&str, i32, bool)] = &[

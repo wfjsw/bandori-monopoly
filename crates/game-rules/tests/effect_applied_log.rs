@@ -28,7 +28,7 @@ fn drain(t: &mut Table) {
     }
 }
 
-/// A hook that pays money: the header (with its why) lands before the pay.
+/// A hook that pays money: the header (with its reason) lands before the pay.
 #[test]
 fn activation_header_precedes_the_host_effects_it_causes() {
     let mut t = Table::vanilla(2);
@@ -63,10 +63,14 @@ fn activation_header_precedes_the_host_effects_it_causes() {
         );
     }
     // The why clause is filled in (not the generic fallback).
-    let why = head.msg.a.get("why").expect("the header carries a why");
+    let reason = head
+        .msg
+        .args
+        .get("reason")
+        .expect("the header carries a why");
     assert!(
-        format!("{why:?}").contains("log.why."),
-        "the why is a real phrase, not blank: {why:?}"
+        format!("{reason:?}").contains("log.reason."),
+        "the why is a real phrase, not blank: {reason:?}"
     );
 }
 
@@ -151,7 +155,7 @@ fn every_listened_trigger_kind_has_a_real_why() {
     use game_rules::{trigger_reason, Trigger, TriggerKind};
     // Kinds the shipped rules declare (Hook / Gate / Counteract / DiceRollPlan /
     // AtEnd). A kind missing from `trigger_reason`'s dedicated arms falls
-    // through to `log.why.generic`; this test pins the ones that matter.
+    // through to `log.reason.generic`; this test pins the ones that matter.
     let kinds = [
         TriggerKind::Pass,
         TriggerKind::PassBefore,
@@ -198,23 +202,23 @@ fn every_listened_trigger_kind_has_a_real_why() {
     ];
     for k in kinds {
         let t = Trigger::new(k, 0);
-        let why = trigger_reason(&t);
+        let reason = trigger_reason(&t);
         assert_ne!(
-            why.key(),
-            "log.why.generic",
+            reason.key(),
+            "log.reason.generic",
             "{k:?} must have a dedicated why phrase"
         );
-        assert!(!why.key().is_empty(), "{k:?} why must not be blank");
+        assert!(!reason.key().is_empty(), "{k:?} why must not be blank");
     }
     // Ruleset-declared custom ids (21 / 26 / 73 / 74 / 75 / 78) carry no
     // engine-named why phrase -- they fall through to the generic fallback by
     // design. The ruleset supplies its own Msg when it raises them.
     for k in [21, 26, 73, 74, 75, 78] {
         let t = Trigger::new(TriggerKind::ruleset("bandori", k), 0);
-        let why = trigger_reason(&t);
+        let reason = trigger_reason(&t);
         assert_eq!(
-            why.key(),
-            "log.why.generic",
+            reason.key(),
+            "log.reason.generic",
             "custom id {k} uses generic why"
         );
     }
@@ -260,8 +264,8 @@ fn reread_after_host_effect_sees_the_updated_value() {
     let house_arg = |name: &str| -> Option<i64> {
         evs.iter()
             .find(|e| e.msg.key().contains(name))
-            .and_then(|e| match e.msg.a.get("houses") {
-                Some(game_core::msg::Arg::N(v) | game_core::msg::Arg::I(v)) => Some(*v),
+            .and_then(|e| match e.msg.args.get("houses") {
+                Some(game_core::msg::Arg::Number(v) | game_core::msg::Arg::Integer(v)) => Some(*v),
                 _ => None,
             })
     };

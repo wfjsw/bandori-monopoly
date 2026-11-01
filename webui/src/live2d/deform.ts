@@ -633,7 +633,6 @@ export interface ModelPose {
   meshes: MeshFrame[];
 }
 
-
 /**
  * Pose gates: sibling groups of deformers that each bind one 0/1 toggle
  * (`PARAM_HAND_R_01_001` .. `PARAM_HAND_R_09_001` and friends). Exactly one
@@ -710,7 +709,6 @@ export function evalPose(model: ModelJson, params?: Record<string, number>): Mod
   });
   return { values, defs, meshes };
 }
-
 
 /**
  * Canvas-space y of the eyes at the default pose -- the anchor the stands line

@@ -130,7 +130,7 @@ fn stay_unlatch_restores_main_move() {
     t.m.world_mut().clear_move_skip(0);
     assert!(
         !t.m.world().st.skip_move,
-        "last [停留] layer un-latches the main move"
+        "last [停留] layer un-latches the is_main_move move"
     );
 }
 

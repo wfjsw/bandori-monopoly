@@ -17,7 +17,7 @@
 //!   **BLOCKED-HOST** on `bump_mark_f` + `mark_src_at`.
 //!
 //! * **`on_place` (Message `"place"`)** — **BLOCKED-HOST** on `msg_tile` /
-//!   `msg_a` / `msg_sender_uid` (protocol stubs return 0), so the handler
+//!   `msg_arg0` / `msg_sender_uid` (protocol stubs return 0), so the handler
 //!   cannot see the target tile, the count, or the provenance card.
 
 use crate::invoke;
@@ -110,7 +110,7 @@ pub fn mark_cp_land_gain_iff() {
     kani::assume(tile >= 0 && tile < 60);
     let w = symbolic_cp_world(settler, tile);
     let pre_money = w.money[settler as usize];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -134,14 +134,14 @@ pub fn mark_cp_land_gain_iff() {
     for p in 0..MAX_PLAYERS {
         if p != settler as usize {
             crate::kassert!(
-                post.money[p] == pre.money[p],
+                post.money[p] == condition.money[p],
                 "mark:cp on_land: frame — other seats' money unchanged"
             );
         }
     }
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
 }
 
 /// MUTANT: the reference wants 900. Must be distinguishable.
@@ -259,7 +259,7 @@ pub fn mark_cp_land_tile_cp_visible_to_count_marks() {
 }
 
 // ===========================================================================
-// mark:cp on_place — BLOCKED-HOST (`msg_tile` / `msg_a` / `msg_sender_uid`)
+// mark:cp on_place — BLOCKED-HOST (`msg_tile` / `msg_arg0` / `msg_sender_uid`)
 //
 // Specs are in `spec/markers.rs`. No harness: the message payload ops are
 // protocol stubs that return 0, so `place_ok` always sees `(tile=0, count=0)`

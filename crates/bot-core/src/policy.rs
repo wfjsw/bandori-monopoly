@@ -1,7 +1,7 @@
 //! The one bot policy -- turn commands and prompt answers.
 //!
 //! This is the decision code `docs/BOT-DRIVE.md` moves out of the engine: a
-//! bot seat is a client, so a host only needs a [`Cx`] over a throwaway world
+//! bot seat is a client, so a host only needs a [`PlayCtx`] over a throwaway world
 //! (a determinized fork, or a clone for a live match) and one of the entries
 //! below. [`turn_action`] is the turn surface, [`compute_answer`] a prompt
 //! answer, and [`act_for`] / [`act_for_view`] the seat-view entries every host
@@ -35,7 +35,7 @@
 use std::sync::Arc;
 
 use game_core::data::GameData;
-use game_core::engine::{purchase, Ask, CardRules, Cx, Match, RawAiAnswer, AI_UNSET};
+use game_core::engine::{purchase, Ask, CardRules, Match, PlayCtx, RawAiAnswer, AI_UNSET};
 use game_core::msg::Msg;
 use game_core::net::NetMessage;
 use game_core::state::prop::EST_COST;
@@ -119,13 +119,13 @@ pub fn bot_wants_buy(m: BotMentality, money: i32, price: i32) -> bool {
 /// play the card and take the Q1 shortfall path. Standard keeps
 /// [`BUY_RESERVE`]; chaos keeps its own [`CHAOS_RESERVE`]. A cost of `0`
 /// (unknown / assume free) always passes.
-pub fn bot_wants_play_card(m: BotMentality, money: i32, est_cost: i32) -> bool {
-    if est_cost <= 0 {
+pub fn bot_wants_play_card(m: BotMentality, money: i32, estimated_cost: i32) -> bool {
+    if estimated_cost <= 0 {
         return true;
     }
     match m {
-        BotMentality::Standard | BotMentality::Advanced => money - est_cost >= BUY_RESERVE,
-        BotMentality::Chaos => money - est_cost >= CHAOS_RESERVE,
+        BotMentality::Standard | BotMentality::Advanced => money - estimated_cost >= BUY_RESERVE,
+        BotMentality::Chaos => money - estimated_cost >= CHAOS_RESERVE,
     }
 }
 
@@ -162,12 +162,12 @@ pub fn bot_wants_force_buy(m: BotMentality, money: i32, price: i32) -> bool {
 /// Inlined and branch-light: this sits on every bot decision, and the
 /// standard path must not pay for the chaos one.
 #[inline]
-pub fn bot_mentality(cx: &Cx<'_>, i: usize) -> BotMentality {
+pub fn bot_mentality(cx: &PlayCtx<'_>, i: usize) -> BotMentality {
     cx.state().players[i].mentality
 }
 
 #[inline]
-pub fn is_chaos(cx: &Cx<'_>, i: usize) -> bool {
+pub fn is_chaos(cx: &PlayCtx<'_>, i: usize) -> bool {
     cx.state().players[i].mentality == BotMentality::Chaos
 }
 
@@ -175,7 +175,7 @@ pub fn is_chaos(cx: &Cx<'_>, i: usize) -> bool {
 /// Resolved from public state only (own persona + the other seats'
 /// personas); chaos never reads them.
 #[inline]
-pub fn strategy_of(cx: &Cx<'_>, i: usize) -> StrategyParams {
+pub fn strategy_of(cx: &PlayCtx<'_>, i: usize) -> StrategyParams {
     game_core::strategy::for_seat_sha(
         cx.data(),
         cx.state(),
@@ -186,7 +186,7 @@ pub fn strategy_of(cx: &Cx<'_>, i: usize) -> StrategyParams {
 
 /// Would buying `t` complete seat `i`'s colour group? Only computed when
 /// [`StrategyParams::set_complete_bonus_milli`] is on (today it is 0).
-fn buy_completes_set(cx: &Cx<'_>, i: usize, t: usize) -> bool {
+fn buy_completes_set(cx: &PlayCtx<'_>, i: usize, t: usize) -> bool {
     let group = cx.tile(t).group;
     (0..cx.data().tiles.len()).all(|u| {
         u == t
@@ -200,7 +200,7 @@ fn buy_completes_set(cx: &Cx<'_>, i: usize, t: usize) -> bool {
 /// decides on the figure a hook-aware ruleset would actually charge; for
 /// `StubRules` the quote is the plain rulebook formula.
 #[inline]
-pub fn ai_wants_buy(cx: &Cx<'_>, i: usize, t: usize) -> bool {
+pub fn ai_wants_buy(cx: &PlayCtx<'_>, i: usize, t: usize) -> bool {
     let quote = cx.buy_quote_for(i, t, purchase::BuyKind::Land);
     if !quote.eligible {
         return false;
@@ -223,7 +223,7 @@ pub fn ai_wants_buy(cx: &Cx<'_>, i: usize, t: usize) -> bool {
 
 /// Would building leave the reserve?
 #[inline]
-pub fn ai_wants_build(cx: &Cx<'_>, i: usize, t: usize) -> bool {
+pub fn ai_wants_build(cx: &PlayCtx<'_>, i: usize, t: usize) -> bool {
     if is_chaos(cx, i) {
         cx.state().players[i].money - cx.build_cost(t) >= CHAOS_RESERVE
     } else {
@@ -243,7 +243,7 @@ pub fn ai_wants_build(cx: &Cx<'_>, i: usize, t: usize) -> bool {
 /// `price` is the quoted force-buy figure (the prompt's `view.price`),
 /// which is not the plain land quote.
 #[inline]
-pub fn ai_wants_force_buy(cx: &Cx<'_>, i: usize, price: i32) -> bool {
+pub fn ai_wants_force_buy(cx: &PlayCtx<'_>, i: usize, price: i32) -> bool {
     let money = cx.state().players[i].money;
     if is_chaos(cx, i) {
         bot_wants_force_buy(bot_mentality(cx, i), money, price)
@@ -255,7 +255,7 @@ pub fn ai_wants_force_buy(cx: &Cx<'_>, i: usize, price: i32) -> bool {
 /// Standard: first affordable purchase, else first build,
 /// else none. Chaos: a random option it can pay for, never "none" while one
 /// exists.
-pub fn ai_agent_choice(cx: &mut Cx<'_>, p: usize, options: &[usize]) -> i32 {
+pub fn ai_agent_choice(cx: &mut PlayCtx<'_>, p: usize, options: &[usize]) -> i32 {
     if is_chaos(cx, p) {
         let ok: Vec<usize> = options
             .iter()
@@ -307,7 +307,7 @@ pub fn ai_agent_choice(cx: &mut Cx<'_>, p: usize, options: &[usize]) -> i32 {
 /// Standard: most valuable mortgaged deed that leaves
 /// the reserve (the original sort-then-`find`, which short-circuits).
 /// Chaos: any affordable one, at random.
-fn ai_redeem_choice(cx: &mut Cx<'_>, i: usize) -> Option<usize> {
+fn ai_redeem_choice(cx: &mut PlayCtx<'_>, i: usize) -> Option<usize> {
     if is_chaos(cx, i) {
         let deeds: Vec<usize> = (0..cx.data().tiles.len())
             .filter(|&t| cx.state().owners[t] == i as i32 && cx.state().mortgaged[t])
@@ -337,7 +337,7 @@ fn ai_redeem_choice(cx: &mut Cx<'_>, i: usize) -> Option<usize> {
 /// (round window, `hold_for_counteract`, weight `> 0`, per-card cash floor
 /// over `estCost`). All defaults are neutral, so the candidate set and the
 /// uniform pick are exactly the old ones.
-fn ai_card_choice(cx: &mut Cx<'_>, i: usize) -> Option<String> {
+fn ai_card_choice(cx: &mut PlayCtx<'_>, i: usize) -> Option<String> {
     let chaos = is_chaos(cx, i);
     let mentality = bot_mentality(cx, i);
     let money = cx.state().players[i].money;
@@ -422,9 +422,9 @@ fn ai_card_choice(cx: &mut Cx<'_>, i: usize) -> Option<String> {
 /// Standard only presses when the seat's [`game_core::strategy::SkillParams`]
 /// say so; the default entry is "never", which is the old standard policy
 /// (skills were left to the player). The gate is the rule's own
-/// `cant_play` (`why_not_act` asks the same one before honouring a `skill`
+/// `cant_play` (`cant_act` asks the same one before honouring a `skill`
 /// command).
-fn ai_skill_choice(cx: &mut Cx<'_>, i: usize) -> Option<String> {
+fn ai_skill_choice(cx: &mut PlayCtx<'_>, i: usize) -> Option<String> {
     let placed = cx.world().placed_cards(i as i32);
     let chaos = is_chaos(cx, i);
     let params = if chaos {
@@ -475,7 +475,7 @@ fn ai_skill_choice(cx: &mut Cx<'_>, i: usize) -> Option<String> {
 
 /// The auction ceiling for seat `s` on a tile of price `base`. Standard
 /// randomises around the price; chaos will spend down to [`CHAOS_RESERVE`].
-pub fn ai_auction_worth(cx: &mut Cx<'_>, s: usize, base: i32) -> i32 {
+pub fn ai_auction_worth(cx: &mut PlayCtx<'_>, s: usize, base: i32) -> i32 {
     let money = cx.state().players[s].money;
     if is_chaos(cx, s) {
         return (money - CHAOS_RESERVE).max(0);
@@ -492,7 +492,7 @@ pub fn ai_auction_worth(cx: &mut Cx<'_>, s: usize, base: i32) -> i32 {
 ///
 /// The standard path is the standard bot policy -- the chaos branch is
 /// taken *before* it and returns, so a standard seat never pays for it.
-pub fn turn_action(cx: &mut Cx<'_>, i: usize) -> Option<NetMessage> {
+pub fn turn_action(cx: &mut PlayCtx<'_>, i: usize) -> Option<NetMessage> {
     if cx.state().phase != "play" || cx.state().busy || cx.state().turn != i as i32 {
         return None;
     }
@@ -532,8 +532,8 @@ pub fn turn_action(cx: &mut Cx<'_>, i: usize) -> Option<NetMessage> {
                 });
             }
             // The live world's play list, not `MatchState::played_count`: the
-            // `Cx` state is a snapshot only `Match::state()` refreshes, and
-            // every fork / live entry reads a `Cx`.
+            // `PlayCtx` state is a snapshot only `Match::state()` refreshes, and
+            // every fork / live entry reads a `PlayCtx`.
             if cx.world().turn.played.len() < p.max_plays_per_turn.max(0) as usize
                 && cx.world_mut().rng.chance(p.play_card_chance())
             {
@@ -569,13 +569,13 @@ pub fn turn_action(cx: &mut Cx<'_>, i: usize) -> Option<NetMessage> {
                 });
             }
         }
-        // The engine's own gates, mirrored from `why_not_act` (and the
+        // The engine's own gates, mirrored from `cant_act` (and the
         // `MatchState::can_roll_here` / `can_end_here` fill in
         // `engine/mod.rs`), **not** the re-derived `skip_move` latch: a card
         // move that spent the main move this turn, a mid-turn layer or the
         // roller all disagree with it, and a refused `roll` leaves a bot seat
         // stalled forever -- nobody but its client can end its turn
-        // (`docs/BOT-DRIVE.md`). A `Cx` sees the live world, so `MatchState`
+        // (`docs/BOT-DRIVE.md`). A `PlayCtx` sees the live world, so `MatchState`
         // convenience fields (only filled by `Match::state`) are stale here.
         let (skip, main_moved) = (cx.world().st.skip_move, cx.world().turn.main_moved);
         let turn = cx.state().turn;
@@ -626,7 +626,7 @@ pub fn turn_action(cx: &mut Cx<'_>, i: usize) -> Option<NetMessage> {
 /// Used by the counteraction offer, whose options are `ask.counteract.play` messages
 /// naming the card each would declare.
 fn option_card(m: &Msg) -> Option<String> {
-    m.a.get("card").and_then(|a| match a {
+    m.args.get("card").and_then(|a| match a {
         game_core::msg::Arg::Card(id) => Some(id.clone()),
         _ => None,
     })
@@ -637,7 +637,7 @@ fn option_card(m: &Msg) -> Option<String> {
 /// re-runs it replays), which is also why a fork's answer can differ from the
 /// live one: the fork owns a fresh stream (`docs/BOT.md` §1, the hidden-state
 /// audit).
-pub fn answer_for_entry(cx: &mut Cx<'_>, ask: &Ask, seat: usize) -> i32 {
+pub fn answer_for_entry(cx: &mut PlayCtx<'_>, ask: &Ask, seat: usize) -> i32 {
     let fallback = ask.view.fallback;
     // A tile prompt carries its targets in `items` (answer == len is
     // "none"); every other prompt's answers index `options`.
@@ -684,7 +684,7 @@ pub fn answer_for_entry(cx: &mut Cx<'_>, ask: &Ask, seat: usize) -> i32 {
 /// "card_landed" on a stop on the start square). Only the intermediate
 /// band draws the world RNG, so the stream moves exactly where the
 /// outcome is undecided.
-fn pass_reward_pick(cx: &mut Cx<'_>, seat: usize, ask: &Ask, fallback: i32) -> i32 {
+fn pass_reward_pick(cx: &mut PlayCtx<'_>, seat: usize, ask: &Ask, fallback: i32) -> i32 {
     let money = cx.state().players.get(seat).map_or(0, |p| p.money);
     let chance = pass_reward_card_chance(money);
     if chance <= 0.0 {
@@ -713,7 +713,7 @@ fn pass_reward_pick(cx: &mut Cx<'_>, seat: usize, ask: &Ask, fallback: i32) -> i
 /// propensity `p` (600‰ default: 60 % for one card, 84 % for two). A
 /// zero propensity draws nothing and never hits, which is how a book
 /// holds a card back.
-fn counteract_pick(cx: &mut Cx<'_>, seat: usize, ask: &Ask, fallback: i32, n: i32) -> i32 {
+fn counteract_pick(cx: &mut PlayCtx<'_>, seat: usize, ask: &Ask, fallback: i32, n: i32) -> i32 {
     let p = strategy_of(cx, seat);
     for i in 0..n {
         if i == fallback {
@@ -737,7 +737,7 @@ fn counteract_pick(cx: &mut Cx<'_>, seat: usize, ask: &Ask, fallback: i32, n: i3
 /// Uniform among `0..n` except `fallback`, falling back to `fallback` when
 /// it is the only option (or `n` is empty). Allocation-free: one draw from
 /// the `n-1` non-default slots, shifted past `fallback`.
-fn chaos_pick(cx: &mut Cx<'_>, fallback: i32, n: i32) -> i32 {
+fn chaos_pick(cx: &mut PlayCtx<'_>, fallback: i32, n: i32) -> i32 {
     if n <= 1 {
         return fallback;
     }
@@ -757,7 +757,7 @@ fn chaos_pick(cx: &mut Cx<'_>, fallback: i32, n: i32) -> i32 {
 /// of `0..options.len()`. Falls back to the prompt's fallback when the
 /// shape is degenerate (0 options, or `count` past what a 31-bit mask can
 /// name).
-fn chaos_multi_pick(cx: &mut Cx<'_>, ask: &Ask) -> i32 {
+fn chaos_multi_pick(cx: &mut PlayCtx<'_>, ask: &Ask) -> i32 {
     let n = ask.view.options.len().min(31) as i32;
     let want = ask.view.count.clamp(1, n.max(1));
     if n <= 0 || want > n {
@@ -775,7 +775,7 @@ fn chaos_multi_pick(cx: &mut Cx<'_>, ask: &Ask) -> i32 {
 }
 
 /// The engine's own answer for `member`'s live prompt, **computed** from the
-/// throwaway [`Cx`] -- the seat-view twin of the prompt-open fill that reads
+/// throwaway [`PlayCtx`] -- the seat-view twin of the prompt-open fill that reads
 /// the precomputed [`Ask`].
 ///
 /// A determinized fork has no precomputed fill (`stub_pending` can only mirror
@@ -784,7 +784,7 @@ fn chaos_multi_pick(cx: &mut Cx<'_>, ask: &Ask) -> i32 {
 /// ran:
 ///
 /// * [`ai_auction_worth`] for an auction ceiling,
-/// * [`Cx::auto_mortgage`] for a mortgage selection,
+/// * [`PlayCtx::auto_mortgage`] for a mortgage selection,
 /// * the `Ask::with_ai` policy tests the settle offers stamp -- "no"
 ///   only when the fill said no ([`ai_wants_buy`] / [`ai_wants_build`] /
 ///   [`ai_wants_force_buy`], 0 = accept),
@@ -808,7 +808,7 @@ fn chaos_multi_pick(cx: &mut Cx<'_>, ask: &Ask) -> i32 {
 /// listed in the hidden-state audit (`docs/BOT.md` §1). The rows above are
 /// deterministic and must match exactly.
 pub fn compute_answer(
-    cx: &mut Cx<'_>,
+    cx: &mut PlayCtx<'_>,
     prompt: &MatchPrompt,
     seat: usize,
     fallback: i32,

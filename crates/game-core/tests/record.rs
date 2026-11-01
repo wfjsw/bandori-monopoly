@@ -859,7 +859,13 @@ fn repeated_forward_seeks_match_a_linear_replay() {
     // A scrub drag is a run of small forward seeks. Each one must land on the
     // same state a plain play does, and the run must still collect the event
     // stream without gaps.
-    let (file, events) = run_bot_game(21, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let (file, events) = run_bot_game(
+        21,
+        4,
+        BotMentality::Chaos,
+        &mut |r| 1 + r.below(6) as u8,
+        10,
+    );
     let total = file.header.total_ticks;
     assert!(total > 200, "need a game long enough to drag in");
 
@@ -883,7 +889,13 @@ fn repeated_forward_seeks_match_a_linear_replay() {
 
 #[test]
 fn seek_works_before_the_index_pass_laid_any_keyframe() {
-    let (file, _) = run_bot_game(22, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let (file, _) = run_bot_game(
+        22,
+        4,
+        BotMentality::Chaos,
+        &mut |r| 1 + r.below(6) as u8,
+        10,
+    );
     let total = file.header.total_ticks;
     let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
     // No `index()` call: the seek itself must lay the tick-0 keyframe.
@@ -1451,7 +1463,13 @@ fn index_reports_how_far_it_has_reached() {
 #[test]
 #[ignore = "slow; run explicitly"]
 fn find_first_seek_divergence() {
-    let (file, _) = run_bot_game(21, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let (file, _) = run_bot_game(
+        21,
+        4,
+        BotMentality::Chaos,
+        &mut |r| 1 + r.below(6) as u8,
+        10,
+    );
     let total = file.header.total_ticks;
     let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
     let mut t = 0;
@@ -1472,8 +1490,14 @@ fn find_first_seek_divergence() {
             let w: Vec<char> = want.chars().collect();
             let at = g.iter().zip(&w).position(|(a, b)| a != b).unwrap_or(0);
             let lo = at.saturating_sub(80);
-            eprintln!("at {at}: got {}", g[lo..(at + 120).min(g.len())].iter().collect::<String>());
-            eprintln!("want {}", w[lo..(at + 120).min(w.len())].iter().collect::<String>());
+            eprintln!(
+                "at {at}: got {}",
+                g[lo..(at + 120).min(g.len())].iter().collect::<String>()
+            );
+            eprintln!(
+                "want {}",
+                w[lo..(at + 120).min(w.len())].iter().collect::<String>()
+            );
             return;
         }
     }
@@ -1487,7 +1511,13 @@ fn find_first_seek_divergence() {
 #[ignore = "timing; run explicitly"]
 fn bench_seek_cost() {
     use std::time::Instant;
-    let (file, _) = run_bot_game(33, 4, BotMentality::Chaos, &mut |r| 1 + r.below(3) as u8, 300);
+    let (file, _) = run_bot_game(
+        33,
+        4,
+        BotMentality::Chaos,
+        &mut |r| 1 + r.below(3) as u8,
+        300,
+    );
     let total = file.header.total_ticks;
     let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
     let t = Instant::now();
@@ -1508,7 +1538,10 @@ fn bench_seek_cost() {
         times.push(t.elapsed());
     }
     times.sort();
-    eprintln!("seek p50 {:?} p95 {:?} max {:?}", times[100], times[190], times[199]);
+    eprintln!(
+        "seek p50 {:?} p95 {:?} max {:?}",
+        times[100], times[190], times[199]
+    );
     eprintln!("save len {}", rp.match_ref().save().len());
 }
 

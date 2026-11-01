@@ -1,4 +1,3 @@
-//! `HHW:热气球演出` -- C# `CardBalloonShow` (MatchHost.cs:4134-4162).
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:热气球演出`）:
 //! > 热气球演出：
@@ -19,10 +18,7 @@ pub const BALLOON_SHOW: CardDef =
         // sheet cell F11
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
-/// C# `CardBalloonShow.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
-    // C# `H.MoveWhyNot` gate applies (off-turn / already-moved / skip-move refuse).
     rules_status::move_blocked(player_id)
 }
 
@@ -31,11 +27,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    // 规则书: 「投掷4次3d20mod60并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four
-    // times. Windowed (`ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
-    // 「你的任意掷骰结算前」) rings on each; source is CARD (a hand card's own roll).
-    // 规则书: 「记录其结果」 -- every face is logged, and all four stay options
-    // below even when two add up to the same tile.
+    // 规则书: 「记录其结果」 -- every face is logged, and all four stay options below even
+    // when two add up to the same tile.
     let mut tiles: Vec<i32> = Vec::new();
     for _ in 0..4 {
         let r = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
@@ -53,18 +46,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if tiles.is_empty() {
         return Ok(());
     }
-    // 规则书: 「选择其中之一」 -- C# `H.AskTileOf` over the four rolled tiles.
     let title = Msg::new(key!("balloon_show_ask_title"));
     let text = Msg::new(key!("balloon_show_ask_text"));
     let to = ctx::ask_tile(player_id, &title, &text, &tiles)?;
-    // 规则书: 「传送至结果对应序号的格子」 -- C# `H.CardMove(c, new MoveCtx
-    // { TeleportTo = to })` (`Resolve` defaults to true, so it settles).
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(to);
-    ctx::plan::set_resolve(true);
-    // 规则书: 「视为你的主要移动」 -- C# `H.CardMove` (`MainMoveAs`) consumes the
-    // turn's main move and runs the teleport immediately.
-    ctx::card_move(player_id);
+    ctx::plan::set_settles(true);
+    ctx::run_planned_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("balloon_show_moved"))

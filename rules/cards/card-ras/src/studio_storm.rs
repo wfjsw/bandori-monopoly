@@ -1,4 +1,3 @@
-//! `RAS:练习室里的风暴` -- C# `CardStudioStorm` (MatchHost.cs:9637-9709):
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:练习室里的风暴`）:
 //! > 练习室里的风暴：
@@ -39,16 +38,12 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
 
 const ID: &str = "RAS:练习室里的风暴";
 
-/// Is `player_id` standing on a livehouse they own? (C# `WhyNot`'s gate.)
-/// 规则书: 「你拥有的livehouse格子」 -- the `livehouse` class, not a hand-kept
-/// name list: growth of the board (RiNG 1-4) and per-player colour overrides
-/// both count.
+/// Is `player_id` standing on a livehouse they own?
 fn on_own_lh(player_id: i32) -> bool {
     let pos = ctx::player_pos(player_id);
     pos >= 0 && ctx::tile_owner(pos) == player_id && ctx::is_live_house_for(player_id, pos)
 }
 
-/// C# `CardStudioStorm.WhyNot`: 「只有站在自己的 Live House 格子上才能打出」
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书（1）: 「当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上」
     if !on_own_lh(player_id) {
@@ -58,14 +53,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上」
-    // -- C# `WhyNot` requires `owners[pos] == player_id && H.IsLiveHouse(player_id, pos)`;
-    // the gate is now `cant_play` above.
     let pos = ctx::player_pos(player_id);
     if !on_own_lh(player_id) {
         return Ok(());
     }
-    // 规则书（1）: 「将此卡放置在当前格子上」 -- C# `H.PlaceFromPlay(c, seat, pos)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(player_id, pos, ID, &Msg::new(key!("studio_storm_note")));
     ctx::log(
@@ -79,11 +70,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardStudioStorm.PassTile` -- the user passing a CiRCLE tile adds a
-/// crystal. The activation gate (`actor == owner && …circle`) is the hook's
-/// condition string; this body only runs once it passed.
+/// The activation gate (`actor == owner && …circle`) is the hook's condition
+/// string; this body only runs once it passed.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Seat != User || H.Tile(t)?.kind != "circle"`.
     let t = trigger::tile();
     // 规则书（1）: 「为此卡放置一个[奇迹水晶]」 -- cap 3 is the printed 「上限3」.
     ctx::add_crystals(1, 3)?;
@@ -96,10 +85,8 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardStudioStorm.SettleAfter` -- a non-user settle within `Crystals` ring
-/// distance of the card's tile triggers the storm.
-/// 规则书（2）: 「…[结算]时将此卡放入弃牌堆且对那个玩家进行一次…收费」 --
-/// 行动阶段 15 (`SETTLE-STAGES.md` §4 M2), so a body replace skips it.
+/// 规则书（2）: 「…[结算]时将此卡放入弃牌堆且对那个玩家进行一次…收费」 -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M2),
+/// so a body replace skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     if trigger::cancelled() {
         return Ok(());
@@ -125,8 +112,8 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if x < 1 || x > crystals {
         return Ok(());
     }
-    // 规则书（2）: 「将此卡放入弃牌堆」 -- C# `Storm`: unplace to discard. The text
-    // order puts the discard before the 收费, so the card is gone first either way.
+    // The text order puts the discard before the 收费, so the card is gone first
+    // either way.
     ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
@@ -137,7 +124,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书（2）: 「对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍
     // 价格的收费」 -- a one-shot 「收费」 to the tile owner, **not** a
-    // `card_settle_at` (a full settle also fires settle hooks / counteractions
+    // `settle_tile_at` (a full settle also fires settle hooks / counteractions
     // and offers build/buy, which the printed wording does not ask for).
     // `ctx::charge_rent` computes 「普通[结算]的价格」 the way a settle would
     // (`table_rent` / houses / the dice-rent roll) and scales it at

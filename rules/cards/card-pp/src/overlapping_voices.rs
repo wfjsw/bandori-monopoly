@@ -1,4 +1,3 @@
-//! `PP:[衍生]重叠的声音` -- C# `CardOverlappingVoices` (MatchHost.cs:7290-7331):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]重叠的声音`）:
 //! > [衍生]重叠的声音：
@@ -12,7 +11,7 @@
 //!
 //! remove itself and 「初次演出事故」, teleport to Bandori车站 without settling.
 //! The teleport is the turn's main move (`ctx::plan::set_teleport_to` +
-//! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
+//! `ctx::run_planned_move`); the turn-end body is scheduled with `at_turn_end`.
 //! The [特] discard hook banishes the accident when this card enters a discard.
 
 use bandori_std::ctx;
@@ -76,18 +75,10 @@ fn banish_accident(player_id: i32) {
 }
 
 fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]1: 「[移除]此卡」 -- C# `c.Dest = "removed"`; `[移除]` is banish
-    // (`Dest::Banished`), not a discard.
     ctx::set_dest(ctx::Dest::Banished);
     // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」
     banish_accident(player_id);
-    // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
-    // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))` (before the move).
     ctx::at_turn_end(player_id, "at_end");
-    // 规则书[手]2: 「进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”
-    // 且不[结算]」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo =
-    // H.TileNamed("Bandori车站"), Resolve = false })`: a teleport to the tile
-    // that consumes the turn's main move and does not settle.
     let to = ctx::tile_named("Bandori车站");
     if to >= 0 {
         // 规则书[手]2: only the teleport is the turn's main move; steps 1 and 3
@@ -97,18 +88,16 @@ fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
         // still run (same shape as BACKLOG LOY-TSUGU-01).
         if rules_status::move_blocked(player_id).is_none() {
             ctx::plan::set_teleport_to(to);
-            ctx::plan::set_resolve(false);
-            ctx::card_move(player_id);
+            ctx::plan::set_settles(false);
+            ctx::run_planned_move(player_id);
         }
     }
     Ok(())
 }
 
-/// C# `CardOverlappingVoices.After` -- the scheduled turn-end body.
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]3: 「获得1层[停留]」
     rules_status::stay::add(player_id, 1);
-    // 规则书[手]3: 「和1个正面的[P✽P粉丝]」 -- C# `H.GainFans(i, 1, up: true)`.
     let _ = fans::grant(player_id, 1, 0)?;
     // 规则书[手]3: 「将1张“明天见”加入手卡」
     ctx::add_to_dest(player_id, "PP:[衍生]明天见", ctx::Dest::Hand);
@@ -120,7 +109,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
-/// 的“初次演出事故”（如果有）」 -- `trigger_card == card.id` in the pre owns the
+/// 的“初次演出事故”（如果有）」 -- `trigger_card == card.id` in the condition owns the
 /// "this card, not any card" re-check.
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
     banish_accident(player_id);

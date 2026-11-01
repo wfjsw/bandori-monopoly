@@ -181,12 +181,10 @@ band skills meet**. Every expectation comes from the live sheet text
 
 ### C13. R.I.O.T. and 宣战布告 on the same timing
 * **Cards:** RAS:R. I. O. T. (P1) + 宣战布告 (P2) vs 登上武道馆. 3 players.
-* **Setup:** Hands: P0 = 武道馆 plus 2 fillers; P1 = R.I.O.T. plus 1 filler;
-  P2 = 宣战布告 plus 3 fillers. Draw piles are big enough for the draws.
+plus 1 filler; P2 = 宣战布告 plus 3 fillers. Draw piles are big enough for the draws.
 * **Expect:**
-  * Resolution is newest first: 宣战布告 (P2) first, then R.I.O.T. (P1).
-  * After R.I.O.T., every player has discarded their hand and redrawn the same
-    count. P1 draws 1 extra.
+(P1).
+P1 draws 1 extra.
   * Hand sizes after everything are: P0 = 2 (武道馆 has already left the
     hand); P1 = 1 + 1; P2 = 3 + 1 from 宣战布告, redrawn to the same count.
   * Then 武道馆 pays out.
@@ -322,38 +320,29 @@ band skills meet**. Every expectation comes from the live sheet text
 ## 2. Moves and counter-moves (`cross_move.rs`)
 
 ### M1. Y.O.L.O works only on your own roll
-* **Cards:** AG:Y.O.L.O. 2 players.
-* **Setup:** P0 and P1 both hold Y.O.L.O.
+2 players.
 * **Act:** P0 rolls a loaded 5.
 * **Expect:**
-  * Only P0 is offered Y.O.L.O.
   * P0 plays it with 1d4 = 3 and moves 8.
   * P1's copy is never offered on P0's roll.
 
 ### M2. Two counters on one roll from the same player
-* **Cards:** AG:（绯玛丽）如果并非没问题 + Y.O.L.O. P0 is 上原绯玛丽.
+P0 is 上原绯玛丽.
 * **Act:** P0's main roll is a loaded 3. The ring is P1, then P0. P0 declares
   one card. The ring returns and P0 declares the other.
 * **Expect:**
   * The second declaration is possible only on a new visit.
-* **RULING:** whether 绯玛丽's 「小于6」 is checked at declaration (the move
-  is always 3 + 1 + 1d4) or at resolution (with newest first, a Y.O.L.O that
-  resolves first may push the roll ≥ 6 and void the +1).
 
 ### M3. 若宫伊芙 (2) before the roll, Y.O.L.O after
-* **Skills/cards:** 若宫伊芙 (2) + Y.O.L.O. P0 is 若宫伊芙 with 5 face-up fans.
-* **Act:** Before the roll, P0 flips Y = 2 fans for +2d4 (loaded 1, 1). The
-  d20 shows 4. Then Y.O.L.O adds 1d4 = 2.
+P0 is 若宫伊芙 with 5 face-up fans.
+* **Act:** Before the roll, P0 flips Y = 2 fans for +2d4 (loaded 1, 1). The d20 shows 4.
 * **Expect:**
   * Move = 4 + 2 + 2 = 8.
   * Fans: 3 face-up and 2 face-down.
 
 ### M4. 不要背负期待 −2 plus Y.O.L.O
-* **Cards:** PP:不要背负期待 (P0's field) + Y.O.L.O.
-* **Act:** The main roll is 5. Y.O.L.O adds 1d4 = 1.
+* **Act:** The main roll is 5.
 * **Expect:** The move is 5 + 1 − 2 = 4.
-* **Edge case:** with a roll of 1 and no Y.O.L.O, the result is clamped to 0
-  and P0 does **not** settle.
 
 ### M5. Repaint plus （摩卡）0.5倍速
 * **Cards:** RAS:Repaint (P1) vs a main move + （摩卡）0.5倍速 (P0 is 青叶摩卡,
@@ -412,7 +401,6 @@ band skills meet**. Every expectation comes from the live sheet text
   * fire = 0.
 
 ### M11. 白金燐子 (2) plus Y.O.L.O
-* **Act:** P0 fixes the result to 12, then plays Y.O.L.O (+1d4 = 2).
 * **RULING:** whether 「固定为X*6」 overrides later additions. Assert 12 or 14
   and record.
 
@@ -474,7 +462,6 @@ band skills meet**. Every expectation comes from the live sheet text
 
 ### M19. 你的光芒将照亮前路 plus Y.O.L.O
 * **Setup:** P0 is at 20, within 20 of 13.
-* **Act:** P0 plays the card, rolls 4, and plays Y.O.L.O (+1d4 = 2).
 * **Expect:** The walk starts from 13 and ends at 19. 月之森 itself does not
   settle as the start.
 
@@ -1183,16 +1170,16 @@ responders on one stage sum / multiply instead of the last one winning:
   leg is `(R+100)/2`.
 * **G10** — a nested settle cancelled at its declaration (`TEST:settleCancel`
   on the other seat's settle) still reaches `tileResolved`; it must not pop the
-  outer settle's stored 支付价格 shaping on the way out (the frame records
-  whether it pushed).
+  outer settle's stored 支付价格 shaping on the way out (the terminal restores
+  from the frame's own `settle_stack` entry).
 * **G11** — two responders on **one** `settleAdd` stage (`TEST:settleAdd100` +
   `TEST:settleAdd50`) sum to `R+150`. The stage payload also mirrors the figure
   onto `t.Move.Roll`, and the counteraction write-back must take the composed
   `value` there, not the mirror (which holds only the last responder).
 * **G12** — a plan factor written before the body's own ask survives the
-  resume (STACK-01). The body is re-executed from its start, so
-  `plan::set_pay_factor` is idempotent per `(writer, ordinal)` write: two
-  settles after the resume each pay `R/2`, not `R/2` then `R/4`.
+  resume (STACK-01). The body is re-executed from its start, so a factor write
+  is idempotent per `(execution, writer, ordinal)` (`TurnCtx::factor_applied`):
+  two settles after the resume each pay `R/2`, not `R/2` then `R/4`.
 
 ### G2. Roll
 
@@ -1465,10 +1452,8 @@ design record and the suggested order:
   +X land on the base rent or on the multiplied rent?
 * **R-3 (money cancel-one x split-share):** G03. Does X recompute after a
   designation is dropped?
-* **R-4 (roll additive order):** Y.O.L.O +1d4 vs 不要背负期待 −2 vs Eve +Yd4
-  vs 沙绫 −1d10. The existing `inter_yolo_pushes_haneoka_over_20` is already
-  `CROSS-AGENT` on this. Suggest: dice-set, then additive modifiers in
-  declaration order, then clamp-floor.
+The existing `inter_yolo_pushes_haneoka_over_20` is already `CROSS-AGENT` on this. Suggest:
+dice-set, then additive modifiers in declaration order, then clamp-floor.
 * **R-5 (path hook order):** G11. A per-tile walk fires pass hooks in tile
   order; a `SettleBefore` end-rewrite is a *later* timing than the pass hooks
   on the original path. Assert the original path's hooks win.

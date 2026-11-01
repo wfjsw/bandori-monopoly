@@ -12,10 +12,8 @@
 //!
 //! # Types
 //!
-//! Each value reports its CEL [`Type`](types::Type): a
-//! [`Kind`](types::Kind), such as `Int` or `Struct`, and a name, such as
-//! `int` or `acme.User`. `type(x)` evaluates to it, as a type value, and
-//! function overloads are declared for, and picked by, types. See [`types`].
+//! `type(x)` evaluates to it, as a type value, and function overloads are
+//! declared for, and picked by, types. See [`types`].
 //!
 //! # Operators
 //!

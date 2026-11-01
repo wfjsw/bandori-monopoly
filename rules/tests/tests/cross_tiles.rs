@@ -61,9 +61,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -195,10 +195,13 @@ fn t03_anon_link_plus_repaint() {
             t.decline();
         }
     }
-    let full = rent(t1, 0) + rent(t2, 0) / 2;
-    // Repaint's ×0.5 is a modifier: exact half, then the engine's one
-    // end-of-calc `ceil10` (user ruling 2026-10-15).
-    let half = ceil10(full / 2);
+    // The link rider quotes the partner's *real* charge (G02 spec 4.6), which
+    // already carries Repaint's ×0.5, so it adds half of the halved figure;
+    // the sum is then halved once more by the pipeline. Both halves round once
+    // each at its own end of calculation (user ruling 2026-10-15).
+    let quoted = ceil10((rent(t2, 0) as f64 * 0.5) as i32);
+    let full = rent(t1, 0) + quoted / 2;
+    let half = ceil10((full as f64 * 0.5) as i32);
     assert_eq!(
         t.money(1),
         10_000 - half,
@@ -1051,9 +1054,12 @@ fn t21_riki_plus_anon_link() {
             t.decline();
         }
     }
-    let full = rent(t1, 0) + rent(t2, 0) / 2;
-    // ×0.25 is a modifier: exact quarter, then the engine's one end-of-calc
-    // `ceil10` (user ruling 2026-10-15). 430/4 = 107.5 → 110.
+    // The link rider quotes the partner's *real* charge (G02 spec 4.6), which
+    // already carries the quarter, so it adds half of it; the sum is then
+    // quartered once more by the pipeline. Each stage rounds once at its own
+    // end of calculation (user ruling 2026-10-15).
+    let quoted = ceil10((rent(t2, 0) as f64 * 0.25) as i32);
+    let full = rent(t1, 0) + quoted / 2;
     let quarter = ceil10((full as f64 * 0.25) as i32);
     eprintln!(
         "t21 record: P2 paid = {} (want round10((R1+R2/2)/4) = {quarter}, full = {full})",

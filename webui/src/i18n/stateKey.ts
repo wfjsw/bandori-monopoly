@@ -6,7 +6,7 @@
 //
 //   1. `board.state.<key>` in `ui` -- a client-side override
 //   2. the shared log phrase (`log.state.*`, the same words
-//      `game_rules::trigger_why::state_key_name` puts in the log)
+//      `game_rules::trigger_reason::state_key_name` puts in the log)
 //   3. the key itself as a `game` key -- `skill.*` scratch names and kin
 //      already carry their phrase there (tools/i18n/check.py pins those)
 //

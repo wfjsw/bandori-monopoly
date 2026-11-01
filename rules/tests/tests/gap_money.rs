@@ -52,9 +52,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -64,9 +64,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
 /// True when the open prompt offers a player-choice naming `target`.
 fn offers_player(t: &Table, target: i32) -> bool {
     let Some(p) = t.prompt() else { return false };
-    p.options.iter().any(|o| match o.a.get("who") {
+    p.options.iter().any(|o| match o.args.get("who") {
         Some(Arg::PlayerId(v)) => *v == target,
-        Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+        Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
         _ => false,
     })
 }
@@ -521,7 +521,11 @@ fn g10_cancelled_nested_settle_keeps_the_outer_scale() {
         }
     }
     if !cancelled {
-        panic!("no cancel window: pos={} keys={:?}", t.pos(0), t.recent_keys(25));
+        panic!(
+            "no cancel window: pos={} keys={:?}",
+            t.pos(0),
+            t.recent_keys(25)
+        );
     }
     let expected = ceil10(rent / 2);
     assert_eq!(t.money(0), 10_000 - expected, "the outer half survives");
@@ -582,8 +586,15 @@ fn g12_factor_write_survives_a_suspended_drive() {
         t.answer_one(1).unwrap();
         prompts += 1;
     }
-    assert!(prompts >= 1, "expected the suspended ask, got {prompts} prompts");
+    assert!(
+        prompts >= 1,
+        "expected the suspended ask, got {prompts} prompts"
+    );
     let expected = 2 * ceil10(rent / 2);
-    assert_eq!(t.money(1), 10_000 - expected, "both settles halved once, rent {rent}");
+    assert_eq!(
+        t.money(1),
+        10_000 - expected,
+        "both settles halved once, rent {rent}"
+    );
     assert_eq!(t.money(0), 10_000 + expected, "the payee receives it");
 }

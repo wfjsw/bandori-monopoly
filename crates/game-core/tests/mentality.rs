@@ -8,8 +8,8 @@ mod common;
 use common::data_arc as data;
 use common::Pump;
 use game_core::engine::{
-    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Cx, Dest, Flow,
-    Match, StubRules, Trigger, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
+    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Dest, Flow, Match,
+    PlayCtx, StubRules, Trigger, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
     FORCE_BUY_RESERVE, REDEEM_RESERVE,
 };
 use game_core::msg::Msg;
@@ -197,7 +197,7 @@ struct PromptRules {
 }
 
 impl game_core::engine::CardRules for PromptRules {
-    fn play(&self, cx: &mut Cx, player_id: usize, _card: &str) -> Flow<Dest> {
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, _card: &str) -> Flow<Dest> {
         let ask = Ask::choice(
             vec![player_id],
             Msg::new("ask.mulligan.title"),
@@ -215,14 +215,14 @@ impl game_core::engine::CardRules for PromptRules {
         Ok(Dest::Graveyard)
     }
 
-    fn event(&self, _cx: &mut Cx, _player_id: usize, _id: &str) -> Flow<bool> {
+    fn event(&self, _cx: &mut PlayCtx, _player_id: usize, _id: &str) -> Flow<bool> {
         Ok(false)
     }
 
     /// A counteract window on every main-move roll: one offered card plus the
     /// skip (the shape `ask.counteract.*` uses -- the offered card id rides the
     /// option label, as in a live ask).
-    fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
+    fn counteract(&self, cx: &mut PlayCtx, t: &mut Trigger) -> Flow<()> {
         if t.kind != "diceRollBefore" {
             return Ok(());
         }
@@ -403,7 +403,7 @@ fn chaos_plays_every_playable_card_instead_of_rolling() {
         let member = st.players[seat].member;
         // What of its hand this seat can still play now.
         let owed = m
-            .view_extra_typed(member)
+            .view_extras_typed(member)
             .playable
             .iter()
             .filter(|&&ok| ok)

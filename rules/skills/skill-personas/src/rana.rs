@@ -38,7 +38,7 @@ pub const RANA: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         // （1） 「每次[经过]CiRCLE时获得一个[火罐]」
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass)).label("（1）"),
+        On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass)).label("（1）"),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
         //
@@ -58,11 +58,16 @@ pub const RANA: CardDef = CardDef::new(
         // other branch.
         On::Action(Action::SettleBody("", Some(any), replace_body)).label("（2）"),
         // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
-        // pre puts the owner in the actor seat (the mover); `target` is the
+        // condition puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
         // such other). The body must read `target`, not `player_id`.
         // （3） 「你与其他玩家重合时」
-        On::Action(Action::PassPlayer(card_sdk::pre::MINE, None, on_overlap)).label("（3）"),
+        On::Action(Action::PassPlayer(
+            card_sdk::condition::MINE,
+            None,
+            on_overlap,
+        ))
+        .label("（3）"),
     ],
 )
 // 「（初始3，上限3）」
@@ -89,13 +94,13 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         bandori_std::fire::gain(player_id, 1, &Msg::new(key!("rana_gain")))?;
         return Ok(());
     }
-    if ctx::is_deed(t) && ctx::tok(player_id, PARFAIT) >= 1 {
+    if ctx::is_deed(t) && ctx::held_count(player_id, PARFAIT) >= 1 {
         if ctx::ask_yes(
             player_id,
             &Msg::new(key!("rana_title")),
             &Msg::new(key!("rana_ring")),
         )? {
-            ctx::add_tok(player_id, PARFAIT, -1, i32::MAX)?;
+            ctx::add_held_by_name(player_id, PARFAIT, -1, i32::MAX)?;
             ctx::gain(player_id, 400, &Msg::new(key!("rana_ring_gain")))?;
         }
     }
@@ -119,18 +124,18 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if space < 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 3, &Msg::new(key!("rana_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 3, &Msg::new(key!("rana_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(space);
-    plan::set_resolve(true);
+    plan::set_settles(true);
     // 「该次传送不可进行地契购买」 -- the plan's no-buy flag.
     plan::set_no_buy(true);
     // 「传送至space代替本回合的移动」 -- the press *is* the main move. Setting
-    // the plan alone leaves the piece put; `card_move` executes it (and marks
+    // the plan alone leaves the piece put; `run_planned_move` executes it (and marks
     // `MainMoved`, so no further main move this turn).
-    ctx::card_move(player_id);
+    ctx::run_planned_move(player_id);
     ctx::log(player_id, &Msg::new(key!("rana_moved")).tile("tile", space));
     Ok(())
 }
@@ -184,7 +189,7 @@ fn exempt_offer(player_id: i32) -> card_sdk::Asked {
         // The owner-branch auto-cancel is [`exempt_flag`].
         return Ok(());
     }
-    if ctx::tok(mover, PARFAIT) < 1 {
+    if ctx::held_count(mover, PARFAIT) < 1 {
         return Ok(());
     }
     let yes = ctx::ask_yes(
@@ -270,14 +275,14 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
 
 /// （3）「你与其他玩家重合时，获得其800资金并使那个玩家获得一个"抹茶芭菲"」.
 /// `passPlayer`'s `player_id`/`actor` is the mover (the owner, on this `MINE`
-/// pre); `target` is the other player already on the landing tile.
+/// condition); `target` is the other player already on the landing tile.
 fn on_overlap(player_id: i32) -> card_sdk::Asked {
     let other = ctx::trigger::target();
     if other < 0 || other == player_id {
         return Ok(());
     }
     ctx::transfer(other, player_id, 800, &Msg::new(key!("rana_overlap")))?;
-    ctx::add_tok(other, PARFAIT, 1, i32::MAX)?;
+    ctx::add_held_by_name(other, PARFAIT, 1, i32::MAX)?;
     ctx::log(
         player_id,
         &Msg::new(key!("rana_gave")).player_id("who", other),

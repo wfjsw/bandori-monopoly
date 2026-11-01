@@ -2,7 +2,7 @@
 //!
 //! A card answers a named message from another card and returns a reply. The
 //! receiver is addressed by uid, by (seat, card id), or by a standing board
-//! pseudo card. No receiver / a rejecting `pre` means the send returns 0 and
+//! pseudo card. No receiver / a rejecting `condition` means the send returns 0 and
 //! the handler never runs.
 
 mod common;
@@ -26,7 +26,7 @@ fn message_handler_replies_with_a_value() {
     assert!(keys.contains(&ev("ping_reply")), "reply logged: {:?}", keys);
 }
 
-/// A `pre` that rejects every sender is not a receiver: the handler body
+/// A `condition` that rejects every sender is not a receiver: the handler body
 /// never runs and the send replies 0.
 #[test]
 fn a_rejecting_pre_is_not_a_receiver() {

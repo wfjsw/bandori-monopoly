@@ -201,6 +201,10 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::pay_leg, [from, to, amount, ptr, len, 0])
 }
 
+pub fn pay_command(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::pay_command, [from, to, amount, spec, ptr, len])
+}
+
 pub fn draw(player_id: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::draw, [player_id, n, 0, 0, 0, 0])
 }
@@ -494,8 +498,8 @@ pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32, max: i32, instanc
     kani_host::call_unit(Op::set_held_name, [np, nl, player_id, v, max, instance]);
 }
 
-pub fn tok_max(np: i32, nl: i32, player_id: i32) -> i32 {
-    kani_host::call_i32(Op::tok_max, [np, nl, player_id, 0, 0, 0])
+pub fn held_max(np: i32, nl: i32, player_id: i32) -> i32 {
+    kani_host::call_i32(Op::held_max, [np, nl, player_id, 0, 0, 0])
 }
 
 pub fn move_units(
@@ -533,16 +537,16 @@ pub fn msg_name(p: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::msg_name, [p, n, 0, 0, 0, 0])
 }
 
-pub fn msg_a() -> i32 {
-    kani_host::call_i32(Op::msg_a, [0, 0, 0, 0, 0, 0])
+pub fn msg_arg0() -> i32 {
+    kani_host::call_i32(Op::msg_arg0, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn msg_b() -> i32 {
-    kani_host::call_i32(Op::msg_b, [0, 0, 0, 0, 0, 0])
+pub fn msg_arg1() -> i32 {
+    kani_host::call_i32(Op::msg_arg1, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn msg_c() -> i32 {
-    kani_host::call_i32(Op::msg_c, [0, 0, 0, 0, 0, 0])
+pub fn msg_arg2() -> i32 {
+    kani_host::call_i32(Op::msg_arg2, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn msg_tile() -> i32 {
@@ -605,8 +609,8 @@ pub fn raise_bought(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::raise_bought, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32) -> i32 {
-    kani_host::call_i32(Op::raise, [player_id, kind_p, kind_l, value, 0, 0])
+pub fn raise(player_id: i32, kind_p: i32, kind_l: i32, value: i32, source: i32) -> i32 {
+    kani_host::call_i32(Op::raise, [player_id, kind_p, kind_l, value, source, 0])
 }
 
 pub fn gain_marker(
@@ -661,8 +665,11 @@ pub fn end_turn_now(player_id: i32) {
     kani_host::call_unit(Op::end_turn_now, [player_id, 0, 0, 0, 0, 0]);
 }
 
-pub fn teleport_as(player_id: i32, tile: i32, resolve: i32, as_main: i32) {
-    kani_host::call_unit(Op::teleport_as, [player_id, tile, resolve, as_main, 0, 0]);
+pub fn teleport_as(player_id: i32, tile: i32, settles: i32, is_main_move: i32) {
+    kani_host::call_unit(
+        Op::teleport_as,
+        [player_id, tile, settles, is_main_move, 0, 0],
+    );
 }
 
 pub fn log_as(player_id: i32, kp: i32, kn: i32, p: i32, n: i32) {
@@ -763,6 +770,30 @@ pub fn trig_name(p: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::trig_name, [p, n, 0, 0, 0, 0])
 }
 
+pub fn trig_uid() -> i32 {
+    kani_host::call_i32(Op::trig_uid, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_instance() -> i32 {
+    kani_host::call_i32(Op::trig_instance, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn body_enter(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::body_enter, [p, n, 0, 0, 0, 0])
+}
+
+pub fn body_leave() {
+    kani_host::call_unit(Op::body_leave, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn counter_max_at(uid: i32, np: i32, nl: i32) -> i32 {
+    kani_host::call_i32(Op::counter_max_at, [uid, np, nl, 0, 0, 0])
+}
+
+pub fn set_counter_max_at(uid: i32, np: i32, nl: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::set_counter_max_at, [uid, np, nl, max, 0, 0])
+}
+
 pub fn trig_step() -> i32 {
     kani_host::call_i32(Op::trig_step, [0, 0, 0, 0, 0, 0])
 }
@@ -779,8 +810,8 @@ pub fn trig_move_kind() -> i32 {
     kani_host::call_i32(Op::trig_move_kind, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn trig_move_resolve() -> i32 {
-    kani_host::call_i32(Op::trig_move_resolve, [0, 0, 0, 0, 0, 0])
+pub fn trig_move_settles() -> i32 {
+    kani_host::call_i32(Op::trig_move_settles, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn trig_move_tag(kp: i32, kl: i32) -> i32 {
@@ -875,6 +906,14 @@ pub fn trig_set_pay_amount(v: i32) {
     kani_host::call_unit(Op::trig_set_pay_amount, [v, 0, 0, 0, 0, 0]);
 }
 
+pub fn trig_set_pay_kind(kind: i32) {
+    kani_host::call_unit(Op::trig_set_pay_kind, [kind, 0, 0, 0, 0, 0]);
+}
+
+pub fn trig_set_pay_shape(shape: i32) -> i32 {
+    kani_host::call_i32(Op::trig_set_pay_shape, [shape, 0, 0, 0, 0, 0])
+}
+
 pub fn trig_set_pay_target(to: i32) {
     kani_host::call_unit(Op::trig_set_pay_target, [to, 0, 0, 0, 0, 0]);
 }
@@ -950,8 +989,8 @@ pub fn play_card(id_ptr: i32, id_len: i32, player_id: i32) -> i32 {
     kani_host::call_i32(Op::play_card, [id_ptr, id_len, player_id, 0, 0, 0])
 }
 
-pub fn card_move(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::card_move, [player_id, 0, 0, 0, 0, 0])
+pub fn run_planned_move(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::run_planned_move, [player_id, 0, 0, 0, 0, 0])
 }
 
 pub fn query_guard(player_id: i32, ptr: i32, len: i32, e_ptr: i32, e_len: i32) -> i32 {
@@ -986,8 +1025,8 @@ pub fn set_parity(n: i32) {
     kani_host::call_unit(Op::set_parity, [n, 0, 0, 0, 0, 0]);
 }
 
-pub fn set_resolve(on: i32) {
-    kani_host::call_unit(Op::set_resolve, [on, 0, 0, 0, 0, 0]);
+pub fn set_settles(on: i32) {
+    kani_host::call_unit(Op::set_settles, [on, 0, 0, 0, 0, 0]);
 }
 
 pub fn set_settle_tile(n: i32) {
@@ -996,6 +1035,30 @@ pub fn set_settle_tile(n: i32) {
 
 pub fn set_pay_factor(n: i32) {
     kani_host::call_unit(Op::set_pay_factor, [n, 0, 0, 0, 0, 0]);
+}
+
+pub fn multiply_pay_factor(milli: i32, scope: i32) {
+    kani_host::call_unit(Op::multiply_pay_factor, [milli, scope, 0, 0, 0, 0]);
+}
+
+pub fn pay_factor() -> i32 {
+    kani_host::call_i32(Op::pay_factor, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn settle_tile() -> i32 {
+    kani_host::call_i32(Op::settle_tile, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn settle_outcome() -> i32 {
+    kani_host::call_i32(Op::settle_outcome, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn paid_in_settle_by(seat: i32) -> i32 {
+    kani_host::call_i32(Op::paid_in_settle_by, [seat, 0, 0, 0, 0, 0])
+}
+
+pub fn rent_quote(payer: i32, tile: i32) -> i32 {
+    kani_host::call_i32(Op::rent_quote, [payer, tile, 0, 0, 0, 0])
 }
 
 pub fn set_rent_factor(n: i32) {
@@ -1082,8 +1145,8 @@ pub fn move_parity() -> i32 {
     kani_host::call_i32(Op::move_parity, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn move_resolve() -> i32 {
-    kani_host::call_i32(Op::move_resolve, [0, 0, 0, 0, 0, 0])
+pub fn move_settles() -> i32 {
+    kani_host::call_i32(Op::move_settles, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn move_steps() -> i32 {
@@ -1106,8 +1169,8 @@ pub fn abnormal_count(player_id: i32) -> i32 {
     kani_host::call_i32(Op::abnormal_count, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn target(player_id: i32, tile: i32, single: i32) -> i32 {
-    kani_host::call_i32(Op::target, [player_id, tile, single, 0, 0, 0])
+pub fn target(player_id: i32, tile: i32, single_target: i32) -> i32 {
+    kani_host::call_i32(Op::target, [player_id, tile, single_target, 0, 0, 0])
 }
 
 pub fn targeted_count(player_id: i32) -> i32 {
@@ -1209,12 +1272,12 @@ pub fn card_mortgage(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::card_mortgage, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
-    kani_host::call_i32(Op::apply_mortgage, [player_id, tile, amount, 0, 0, 0])
+pub fn commit_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
+    kani_host::call_i32(Op::commit_mortgage, [player_id, tile, amount, 0, 0, 0])
 }
 
-pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
-    kani_host::call_i32(Op::apply_redeem, [player_id, tile, amount, 0, 0, 0])
+pub fn commit_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
+    kani_host::call_i32(Op::commit_redeem, [player_id, tile, amount, 0, 0, 0])
 }
 
 pub fn pay_buy(player_id: i32, tile: i32, amount: i32, kind: i32) -> i32 {
@@ -1276,8 +1339,8 @@ pub fn turn_rolls(buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::turn_rolls, [buf, cap, 0, 0, 0, 0])
 }
 
-pub fn turn_snap(player_id: i32, buf: i32) -> i32 {
-    kani_host::call_i32(Op::turn_snap, [player_id, buf, 0, 0, 0, 0])
+pub fn turn_snapshot(player_id: i32, buf: i32) -> i32 {
+    kani_host::call_i32(Op::turn_snapshot, [player_id, buf, 0, 0, 0, 0])
 }
 
 pub fn turn_start_pos(player_id: i32) -> i32 {
@@ -1288,8 +1351,8 @@ pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32 {
     kani_host::call_i32(Op::unplace_card_named, [player_id, cp, cl, 0, 0, 0])
 }
 
-pub fn tok_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32 {
-    kani_host::call_i32(Op::tok_names, [player_id, p, n, buf, cap, 0])
+pub fn held_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::held_names, [player_id, p, n, buf, cap, 0])
 }
 
 pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32 {
@@ -1308,8 +1371,8 @@ pub fn gate(player_id: i32, kind: i32) -> i32 {
     kani_host::call_i32(Op::gate, [player_id, kind, 0, 0, 0, 0])
 }
 
-pub fn card_settle_at(player_id: i32, tile: i32, main: i32) -> i32 {
-    kani_host::call_i32(Op::card_settle_at, [player_id, tile, main, 0, 0, 0])
+pub fn settle_tile_at(player_id: i32, tile: i32, is_main_move: i32) -> i32 {
+    kani_host::call_i32(Op::settle_tile_at, [player_id, tile, is_main_move, 0, 0, 0])
 }
 
 pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32 {

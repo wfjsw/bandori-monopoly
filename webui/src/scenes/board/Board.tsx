@@ -13,6 +13,8 @@ import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
+import { autoBids } from "../../game/autoBid";
+import { isAuto } from "../../game/autopilot";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
@@ -39,7 +41,9 @@ import s from "./Board.module.css";
  * after every render on purpose -- `view`, `anim.animating` and the modal stack
  * arrive from three different channels and either may land first. While 托管
  * is on the prompt modal is not opened at all (it would block the board) and
- * the landing deed is left alone -- the autopilot answers both.
+ * the landing deed is left alone -- the autopilot answers both. The exception
+ * is an auction left to the player (`autoBid` off): the autopilot keeps its
+ * hands off it, so its sheet still opens and the seat waits for the player.
  */
 function useMatchDriver(opts: {
   sess: GameSession;
@@ -74,7 +78,11 @@ function useMatchDriver(opts: {
       autoEnd.current = -1;
     }
     if (anim.animating) return;
-    if (!auto && waitingOn(S.prompt, m.playerId) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
+    // 托管 answers by itself, except an auction left to the player (`autoBid`
+    // off): that sheet still opens and the autopilot keeps to the other
+    // surfaces. A read-only replay never opens it.
+    const mine = !auto || (isAuto(sess.autoMode) && !autoBids());
+    if (mine && waitingOn(S.prompt, m.playerId) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
       promptFor.current = S.prompt.id;
       sfx("prompt");
       openPrompt(sess, S.prompt);

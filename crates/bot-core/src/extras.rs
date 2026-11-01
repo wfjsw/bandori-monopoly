@@ -1,13 +1,13 @@
 //! Per-viewer extras computed from **one seat's view** -- the client-side twin
-//! of [`game_core::engine::Match::view_extra`] (`docs/BOT.md` §1, the seat-view
+//! of [`game_core::engine::Match::view_extras`] (`docs/BOT.md` §1, the seat-view
 //! engine).
 //!
-//! The live match's `view_extra` reads its own [`Match`] (public state + the
+//! The live match's `view_extras` reads its own [`Match`] (public state + the
 //! viewer's hidden zones + the precomputed [`Ask`] fill). This entry takes the
 //! frame the client already holds ([`SeatView`] / `MatchView`), samples every
 //! hidden zone once ([`determinize`]), and runs the **same** engine gates on
-//! the resulting fork: [`Match::view_extra_typed`] for `playable` / `estCost` /
-//! `skills` (`cant_play` / `why_not_act` / `card_prop`), and the `aiAnswer`
+//! the resulting fork: [`Match::view_extras_typed`] for `playable` / `estCost` /
+//! `skills` (`cant_play` / `cant_act` / `card_prop`), and the `aiAnswer`
 //! the fork's prompt fill carries (the `ai_*` choice functions).
 //!
 //! Information boundary: the only input is the viewer's own frame. `seed` is
@@ -25,15 +25,15 @@ use crate::view::{AiAnswer, SeatView};
 
 /// The per-viewer extras the client's hand UI / skill stack / 托管 autopilot
 /// read on top of the shared `MatchState`. Same field names as
-/// [`game_core::engine::Match::view_extra`] / the client's `MatchView`.
+/// [`game_core::engine::Match::view_extras`] / the client's `MatchView`.
 #[derive(Debug, Clone, Default)]
 pub struct ViewExtras {
     /// Parallel to [`SeatView::hand`]: would `cant_play` allow each card now?
     pub playable: Vec<bool>,
     /// Parallel to `playable`: the card's bot-only estimated execution cost
     /// (`prop::EST_COST`). Reserve check only, never legality.
-    pub est_cost: Vec<i32>,
-    /// The viewer's pressable skills, gated through `why_not_act`.
+    pub estimated_cost: Vec<i32>,
+    /// The viewer's pressable skills, gated through `cant_act`.
     pub skills: Vec<SkillAction>,
     /// The standard policy's precomputed answer for the viewer's own live
     /// prompt, if any (the engine's prompt-open fill, mirrored onto the fork).
@@ -41,7 +41,7 @@ pub struct ViewExtras {
 }
 
 impl ViewExtras {
-    /// The `MatchView` / `view_extra` JSON shape (camelCase field names).
+    /// The `MatchView` / `view_extras` JSON shape (camelCase field names).
     pub fn to_json(&self) -> serde_json::Value {
         let ai = self.ai_answer.as_ref().map(|a| {
             serde_json::json!({
@@ -52,7 +52,7 @@ impl ViewExtras {
         });
         serde_json::json!({
             "playable": self.playable,
-            "estCost": self.est_cost,
+            "estCost": self.estimated_cost,
             "skills": self.skills,
             "aiAnswer": ai,
         })
@@ -62,7 +62,7 @@ impl ViewExtras {
 /// Compute the viewer's extras from their own seat view.
 ///
 /// Builds the determinized fork once and runs the same engine gates the
-/// server's [`Match::view_extra`] runs. `seed` seeds the determinizer's
+/// server's [`Match::view_extras`] runs. `seed` seeds the determinizer's
 /// sampling stream (hidden zones the frame does not pin); it is **not** the
 /// match RNG.
 pub fn view_extras(
@@ -79,11 +79,11 @@ pub fn view_extras(
     let mut rng = DeterminizerRng::new(seed);
     let (mut m, _report) = determinize(view, data, rules, &mut rng)?;
     // Same gates as the server path (`Match::view_extra_parts`): `cant_play`
-    // per hand card, `card_prop(EST_COST)`, `why_not_act` per skill.
-    let extra = m.view_extra_typed(member);
+    // per hand card, `card_prop(EST_COST)`, `cant_act` per skill.
+    let extra = m.view_extras_typed(member);
     Ok(ViewExtras {
         playable: extra.playable,
-        est_cost: extra.est_cost,
+        estimated_cost: extra.estimated_cost,
         skills: extra.skills,
         ai_answer: extra.ai_answer.map(|a| AiAnswer {
             answer: a.answer,

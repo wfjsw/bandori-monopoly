@@ -78,7 +78,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         1,
         have,
     )?;
-    if x < 1 || !bandori_std::fire::spend(player_id, x, &Msg::new(key!("rinko_spend")))? {
+    if x < 1 || !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("rinko_spend")))? {
         return Ok(());
     }
     // 「固定为X*6」 -- the face is pinned, not rolled.

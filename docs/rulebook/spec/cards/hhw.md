@@ -497,7 +497,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 
 ---
 
-## Untested clauses (and why)
+## Untested clauses (and reason)
 
 | clause | why no dedicated contract |
 |---|---|

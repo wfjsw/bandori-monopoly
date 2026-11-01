@@ -1,4 +1,3 @@
-//! `通用:@Tsugu ycm` -- C# `CardTsuguYcm` (MatchHost.cs:1902-1974): roll 3d10
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:@Tsugu ycm`）:
 //! > @Tsugu ycm：
@@ -26,7 +25,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         // stage on the buy price, riding a `ctx::linger` instance for the turn
         // (`docs/PURCHASE.md`). The engine floors the stage at 0. The tile is
         // the hook's applicability (the residual guard).
-        On::Filter(Filter::BuyAdd(card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500)),
+        On::Filter(Filter::BuyAdd(card_sdk::condition::MINE, Some(buy_add_on_a_tile), buy_add_1500)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"@Tsugu ycm"#)
@@ -47,7 +46,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 /// 「购买格子时」 -- the `BuyAdd` hook's applicability: there is a tile being
-/// bought. (`pre::MINE` already states the actor.)
+/// bought. (`condition::MINE` already states the actor.)
 fn buy_add_on_a_tile(_player_id: i32) -> bool {
     trigger::tile() >= 0
 }
@@ -59,7 +58,6 @@ fn buy_add_1500(_player_id: i32, value: i32) -> i32 {
     value - 1500
 }
 
-/// C# `H.TileNamed("Bandori车站")` -- the rulebook spells it “bandori车站”.
 const STATION: &str = "Bandori车站";
 
 /// `ctx::slot` marker: the `ctx::turn_key` of a play that already took its
@@ -68,7 +66,6 @@ const STATION: &str = "Bandori车站";
 const MOVED: &str = "tsugu_ycm_moved";
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]: 「投掷3d10并根据结果依次进行以下操作」 -- C# `H.CardRoll(c, 3, 10, ...)`.
     let r = ctx::roll(player_id, 3, 10, RollPurpose::Effect, roll_source::CARD)?;
     let station = ctx::tile_named(STATION);
 
@@ -95,9 +92,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         );
     }
 
-    // 规则书（2）[手]: 「结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到
-    // “bandori车站”并不[结算]」 -- C# `H.CardMove(c, MoveCtx{TeleportTo=station,
-    // Resolve=false})`.
     if r >= 26 {
         // 规则书（2）: 「进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”
         // 并不[结算]」 -- one move: it is the turn's main move, it consumes it, and
@@ -119,16 +113,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
                 ctx::set_slot(player_id, MOVED, ctx::turn_key());
                 plan::set_kind(MoveKind::Teleport);
                 plan::set_teleport_to(station);
-                plan::set_resolve(false);
-                ctx::card_move(player_id);
+                plan::set_settles(false);
+                ctx::run_planned_move(player_id);
             }
         }
-        // 规则书（2）[手]: 「且可选择购买任意无主的[可购买格子]」 -- C#
-        // `H._tiles[t].IsBuyable && owners[t] < 0 && money >= BuyPriceFor(i, t)`
-        // (`ctx::is_buyable` is `TileData.IsBuyable`, a deed tile). Affordability
-        // is the hook-aware quote (`ctx::buy_quotes`, the figure `card_buy`
-        // charges), so the −1500 above is already in it and a `BuyGate`-refused
-        // tile is dropped by `eligible` (HOST-07).
+        // Affordability is the hook-aware quote (`ctx::buy_quotes`, the figure
+        // `card_buy` charges), so the −1500 above is already in it and a
+        // `BuyGate`-refused tile is dropped by `eligible` (HOST-07).
         let mut unowned: Vec<i32> = Vec::new();
         for t in 0..ctx::tile_count() {
             if ctx::is_buyable(t) && ctx::tile_owner(t) < 0 {
@@ -145,19 +136,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
             })
             .collect();
         if !free.is_empty() {
-            // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for
-            // allowNone. C# also defaults the prompt to the most expensive free
-            // tile (`free.OrderByDescending(price).First()`): the list carries
-            // that order, which is what `ask_tile` falls back to.
             free.sort_by(|a, b| b.1.cmp(&a.1));
             let tiles: Vec<i32> = free.iter().map(|&(t, _)| t).collect();
             let title = Msg::new(key!("tsugu_buy_title"));
             let text = Msg::new(key!("tsugu_buy_ask"));
             if ctx::ask_yes(player_id, &title, &text)? {
                 let tile = ctx::ask_tile(player_id, &title, &text, &tiles)?;
-                // 规则书（2）: 「购买」 -- C# `H.BuyRoutine(i, rt.index)`.
-                // HOST-06: `card_buy` answers whether the deed actually changed
-                // hands. A refused buy (`BuyGate` / unpaid) must not log one.
+                // HOST-06: `card_buy` answers whether the deed actually changed hands. A refused
+                // buy (`BuyGate` / unpaid) must not log one.
                 if ctx::card_buy(player_id, tile) {
                     let price = free
                         .iter()
@@ -179,7 +165,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（4）[手]: 「结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]
     // 改为[传送]到“bandori车站”并[结算]」
     if r < 26 {
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             player_id,
             &Msg::new(key!("tsugu_pick_title")),
             &Msg::new(key!("tsugu_pick")).i("roll", r as i64),
@@ -189,30 +175,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
             ],
         )?;
         if pick == 1 {
-            // C# `rr.index == 1 && !H._turnCtx.MainMoved` -- the teleport is a
-            // main-move option, so it is only taken while `H.MoveWhyNot` still
-            // passes (`rules_status::move_blocked(player_id).is_none()`).
-            // TODO(规则书)（选择[获得]1000资金或进入移动阶段）: the book's 「或」 has
-            //   no fallback -- choosing the move silently pays 1000 instead
-            //   when the main move is gone (latent until the whole-card gate goes).
+            // TODO(规则书)（选择[获得]1000资金或进入移动阶段）: the book's 「或」 has no fallback -- choosing the
+            // move silently pays 1000 instead when the main move is gone (latent until the
+            // whole-card gate goes).
             if station >= 0 && rules_status::move_blocked(player_id).is_none() {
                 // 规则书（4）[手]: 「进入移动阶段并将本回合的[主要移动]改为[传送]到
                 // “bandori车站”并[结算]」 -- one move: the turn's main move, and it
                 // settles on arrival (the default).
                 plan::set_kind(MoveKind::Teleport);
                 plan::set_teleport_to(station);
-                ctx::card_move(player_id);
+                ctx::run_planned_move(player_id);
             } else {
-                // 规则书（4）[手]: 「[获得]1000资金」 -- no station tile, or the main
-                // move is no longer available (C# falls back to the gain).
-                // `ctx::n(1, …)` so 「后勤人员的努力」 (「将打出的那张卡[手]效果中的
-                // 一个数字变为两倍」) can double it; slot 1 is this card's only
-                // tagged number and exactly one of the two gains fires.
-                ctx::gain(player_id, ctx::n(1, 1000), &Msg::new(key!("tsugu_why")))?;
+                // `ctx::n(1, …)` so 「后勤人员的努力」 (「将打出的那张卡[手]效果中的 一个数字变为两倍」) can double it; slot 1
+                // is this card's only tagged number and exactly one of the two gains fires.
+                ctx::gain(player_id, ctx::n(1, 1000), &Msg::new(key!("tsugu_reason")))?;
             }
         } else {
             // 规则书（4）[手]: 「[获得]1000资金」 -- the same tagged number.
-            ctx::gain(player_id, ctx::n(1, 1000), &Msg::new(key!("tsugu_why")))?;
+            ctx::gain(player_id, ctx::n(1, 1000), &Msg::new(key!("tsugu_reason")))?;
         }
     }
     Ok(())

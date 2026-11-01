@@ -1,4 +1,3 @@
-//! `R:选择自己的舞台` -- C# `CardOwnStage` (MatchHost.cs:10710-10745): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:选择自己的舞台`）:
 //! > 选择自己的舞台：
@@ -33,10 +32,6 @@ pub const OWN_STAGE: CardDef = CardDef::new(
 
 /// The [异常移动效果] this chain link declared, as its `AbKind`.
 ///
-/// `trigger::abnormal_kind()` reads `t.Ab.Kind` on the settlement-hook kinds
-/// (`abnormal` / `abnormalGuard`); inside the `effect` [反击] window the kind
-/// is `Effect` and the abnormal rides the link's effect list instead -- each
-/// entry's `value` is its `AbKind`.
 fn abnormal_kind() -> Option<AbKind> {
     (0..ctx::effect::count()).find_map(|i| {
         (ctx::effect::kind(i) == TriggerKind::Abnormal)
@@ -59,19 +54,15 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("own_stage_ask_title")),
         &Msg::new(key!("own_stage_ask_text")),
     )?;
-    let why = if yes {
+    let reason = if yes {
         Msg::new(key!("own_stage_settle")).player_id("who", player_id)
     } else {
         Msg::new(key!("own_stage_no_settle")).player_id("who", player_id)
     };
-    ctx::log(player_id, &why);
-    // 规则书[反击]: 「（或无法移动的回合结束时）」 -- C# `H.SetV(i, "stageEnd", yes ? 1 : 2)`
-    // when the abnormal is stay/stun (C# `CardOwnStage.Counteract` branches on
-    // `c.Trigger.Ab.Kind`).
-    // TODO(规则书)（或无法移动的回合结束时）: the turn-end half is only written to
-    //   a slot (`stageEnd`) and no reader consumes it -- nothing settles at the
-    //   end of a movement-locked turn. (The move half is read by
-    //   `Cx::take_resolve_override`.)
+    ctx::log(player_id, &reason);
+    // TODO(规则书)（或无法移动的回合结束时）: the turn-end half is only written to a slot
+    // (`stageEnd`) and no reader consumes it -- nothing settles at the end of a
+    // movement-locked turn. (The move half is read by `PlayCtx::take_resolve_override`.)
     match abnormal_kind() {
         Some(bandori_std::kind::abnormal::Stay) | Some(bandori_std::kind::abnormal::Stun) => {
             // TODO(规则书)（或无法移动的回合结束时）: the turn-end half applies only
@@ -79,10 +70,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             //   a [停留] walked through under 「不可阻挡」 still lands here.
             ctx::set_slot(player_id, "stageEnd", if yes { 1 } else { 2 });
         }
-        // 规则书[反击]: 「选择自己的本次移动…是否触发结算」 -- C# `H._resolveOverride[i] =
-        // (yes ? 1 : 0)` for every other abnormal. The slot is one-shot: the
-        // engine consumes it into the move and clears it (`take_resolve_override`),
-        // so 1 = settle and 2 = pin off (0 would be indistinguishable from unset).
+        // 1 : 0)` for every other abnormal. The slot is one-shot: the engine consumes it
+        // into the move and clears it (`take_resolve_override`), so 1 = settle and 2 =
+        // pin off (0 would be indistinguishable from unset).
         _ => {
             ctx::set_slot(player_id, "resolveOverride", if yes { 1 } else { 2 });
         }

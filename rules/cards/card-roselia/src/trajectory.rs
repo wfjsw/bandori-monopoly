@@ -1,4 +1,3 @@
-//! `R:轨迹` -- C# `CardTrajectory` (MatchHost.cs:10922-10959): [反击][特] on a
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:轨迹`）:
 //! > 轨迹：
@@ -11,7 +10,7 @@ use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ChainKind;
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAJECTORY: CardDef = CardDef::new(
@@ -35,13 +34,10 @@ pub const TRAJECTORY: CardDef = CardDef::new(
 
 /// 规则书（1）[反击]: 「在场上有玩家破产时，展示此卡」
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书（1）[反击]: 「在场上有玩家破产时」 -- C# `t.Kind == "bankrupt" && t.Target != seat`.
     let who = trigger::target();
     if who < 0 || who == player_id {
         return false;
     }
-    // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契」 -- only worth counteracting when
-    // they still have one (C# `H.OwnedBy(t.Target).Count > 0`).
     ctx::owned_count(who) > 0
 }
 
@@ -54,17 +50,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if deeds.is_empty() {
         return Ok(());
     }
-    // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契」 -- C# `H.AskTileOf` over `deeds`
-    // (the C# AI default is the most expensive deed).
     let tile = ctx::ask_tile(
         player_id,
         &Msg::new(key!("trajectory_ask_title")),
         &Msg::new(key!("trajectory_ask_text")).player_id("who", who),
         &deeds,
     )?;
-    // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契（自动免费赎回），并拆除那个对应格子的所有房屋」
-    //   -- C# `H.State.owners[num] = i; H.State.mortgaged[num] = false;
-    //   H.State.houses[num] = 0`.
     ctx::set_owner(tile, player_id);
     // 规则书（1）[反击]: 「（自动免费赎回）」
     ctx::set_mortgaged(tile, false);

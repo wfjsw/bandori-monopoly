@@ -4,8 +4,8 @@ use std::borrow::Cow;
 use std::iter::{once, successors};
 
 /// The namespace an [`Env`](crate::Env) resolves names against, letting an
-/// expression written for container `x` say `y` where it would otherwise
-/// need `x.y`. Mirrors cel-go's `containers.Container`, without aliases.
+/// expression written for container `x` say `y` where it would otherwise need
+/// `x.y`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Container {
     name: String,
@@ -32,11 +32,8 @@ impl Container {
         &self.name
     }
 
-    /// The names `name` may refer to, most specific first, ending with `name`
-    /// itself: in container `a.b.c`, `R.s` is `a.b.c.R.s`, `a.b.R.s`,
-    /// `a.R.s`, then `R.s`. A leading dot makes `name` absolute, so it is the
-    /// only candidate, without the dot. Mirrors cel-go's
-    /// `Container.ResolveCandidateNames`.
+    /// A leading dot makes `name` absolute, so it is the only candidate, without the
+    /// dot.
     pub(crate) fn candidates<'a, 'n: 'a>(
         &'a self,
         name: &'n str,

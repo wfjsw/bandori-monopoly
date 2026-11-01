@@ -47,9 +47,7 @@ use card_sdk::{CardDef, Prompt};
 /// verb. Present so `mark_rule_ids` stamps the owner (MARKERS.md §3).
 pub const MARK_PP_FANS: CardDef = CardDef::new("mark:pp_fans", &[]).board_role("mark");
 
-/// Face-up fan counter (C# `H.FansUp`).
 pub const UP: &str = "ppFansUp";
-/// Face-down fan counter (C# `H.FansDown`).
 pub const DOWN: &str = "ppFansDown";
 
 /// Once-per-match initial-grant flag (「此效果不重复发动」). Held on seat 0 as

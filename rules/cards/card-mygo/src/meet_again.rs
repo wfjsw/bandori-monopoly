@@ -1,4 +1,3 @@
-//! `MyGO:若能再次交汇` -- C# `CardMeetAgain` (MatchHost.cs:6915): after your
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:若能再次交汇`）:
 //! > 若能再次交汇：
@@ -33,9 +32,6 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
         // sheet cell I13
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
-/// 规则书: 「可被经过的玩家」 -- distance in the direction of travel to the
-/// nearest other player who can be passed (C# `CardMeetAgain.Next` over
-/// `H.Forward`, picked by `MoveCtx.Dir`).
 fn next_dist(player_id: i32, dir: i32) -> i32 {
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);
@@ -48,8 +44,6 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
         if p < 0 {
             continue;
         }
-        // C# `Next`: `H.Forward(pos, p)` when moving forward (`Dir == 1`),
-        // `H.Forward(p, pos)` when moving backward.
         let d = if dir >= 0 {
             ctx::tile_forward(pos, p)
         } else {
@@ -68,7 +62,7 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && move.kind != Teleport && move.roll != null &&
-    // next_dist(owner, move.dir) > 0` is the pre.
+    // next_dist(owner, move.dir) > 0` is the condition.
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
     let Some(mut roll) = trigger::move_roll() else {
         return Ok(());
@@ -87,8 +81,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         if roll >= dist || roll >= cap {
             break;
         }
-        // 规则书: 「持续进行移动掷骰」 -- C# `H.DoMoveRoll(move)` re-rolls the
-        // move's whole dice table (0-sided terms are flat adds).
         let n = ctx::do_move_roll(player_id)?.max(0);
         roll += n;
         trigger::set_move_roll(roll);

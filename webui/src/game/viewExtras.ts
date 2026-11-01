@@ -3,11 +3,11 @@
 // `estCost` / `skills` on a human seat's frame; the page recomputes them from
 // the viewer's own `MatchView` through the bot worker's `extras` op
 // (`bot-glue`'s `view_extras`: one determinize + the same engine gates the
-// server's `Match::view_extra` runs).
+// server's `Match::view_extras` runs).
 //
 // Solo keeps the extras the local engine already ships in the frame
-// (`web-glue`'s `view_extra`) and does **not** go through here: in solo the
-// local engine *is* the authoritative engine, so `view_extra` is exact and
+// (`web-glue`'s `view_extras`) and does **not** go through here: in solo the
+// local engine *is* the authoritative engine, so `view_extras` is exact and
 // free (no determinization, no sampling). Online uses the seat-view engine
 // because the client must not ask for hidden state -- the extras are sampled
 // from one seat's frame and are therefore not identical to solo's, so the two

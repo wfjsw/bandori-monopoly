@@ -15,6 +15,7 @@ import { isAuto, plan, type AutoMode, type AutopilotCtx, type PolicyName } from 
 import { SOLO_CAP_MS } from "./botBudget";
 import {
   answerFor,
+  autopilotAnswers,
   botSeats,
   decisionAt,
   decisionOf,
@@ -28,6 +29,7 @@ import {
 import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
+import { autoBids } from "./autoBid";
 import type { SaveSnap, SoloBootOpts, SoloPush } from "./soloProtocol";
 import { clearSoloSave, hasSoloSave, loadSoloSave, saveSoloSave } from "./soloSave.ts";
 import { kv } from "../core/kv.ts";
@@ -197,6 +199,9 @@ class Autopilot {
     // Already answered: the frame still shows the decision this seat just
     // answered (结束 holds after `end`), re-asking would be refused.
     if (!needsAnswer(this.answered, s.you, v)) return;
+    // An auction left to the player (`autoBid` off): the prompt sheet holds
+    // the controls, so 托管 keeps its hands off until the auction closes.
+    if (!autopilotAnswers(v, autoBids())) return;
     // Setup / discard / vote: the search does not cover them (and the server
     // keeps a bot's setup engine-side). Same policy as the mode's table.
     if (decisionAt(v.state, v.playerId) == null) {
@@ -239,7 +244,7 @@ class Autopilot {
       search: mode === "advanced",
       mentality: mode === "chaos" ? "chaos" : mode === "advanced" ? "advanced" : "standard",
       onThinking: (_m, on) => this.setSearching(on),
-      onApplied: (m, decision, ok) => recordAnswer(this.answered, m, decision, ok),
+      onApplied: (m, decision, err) => recordAnswer(this.answered, m, decision, err),
     };
     void driveSeat(
       (_member, cmd) => {
@@ -255,7 +260,14 @@ class Autopilot {
         this.inFlight = false;
         this.setSearching(false);
         const now = s.view;
-        if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== at) this.schedule();
+        if (!isAuto(s.autoMode) || !now) return;
+        // The seat still owes this surface (a refusal re-armed it, or the state
+        // moved on): let the next pass ask again. A refused answer leaves
+        // `seq` alone, so the old `at !== seq` test alone would park the seat.
+        if (needsAnswer(this.answered, s.you, now)) {
+          this.tried.delete("search");
+          this.schedule();
+        }
       });
   }
 }
@@ -762,7 +774,7 @@ export class SoloSession extends GameSession {
           search: mentality === "advanced",
           mentality,
           onThinking: (m, on) => this.setBotThinking(m, on),
-          onApplied: (m, decision, ok) => recordAnswer(this.botAnswered, m, decision, ok),
+          onApplied: (m, decision, err) => recordAnswer(this.botAnswered, m, decision, err),
         },
       ).finally(() => {
         this.botInFlight.delete(member);
@@ -946,7 +958,7 @@ export class OnlineSession extends GameSession {
   /**
    * Online extras cache (`playable` / `estCost` / `skills` / `aiAnswer`).
    * Solo does **not** use this: the local engine already ships those fields
-   * in its frame (`web-glue`'s `Match::view_extra`) and is the authoritative
+   * in its frame (`web-glue`'s `Match::view_extras`) and is the authoritative
    * engine there -- exact and free (no determinization, no sampling). Online
    * computes them from the seat view through the bot worker because the
    * server no longer ships them and the client must not ask for hidden state.

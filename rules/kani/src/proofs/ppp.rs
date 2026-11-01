@@ -1,7 +1,7 @@
 //! Unit `ppp`: clause proofs.
 //!
 //! Per clause emit (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
+//! 1. iff proof (post == spec(condition) and effect log exactly and frame);
 //! 2. no-op proof when the trigger/condition is false;
 //! 3. kani::cover! each branch;
 //! 4. MUTANT whose disagreement is reachable.
@@ -50,7 +50,7 @@ crate::host_subset!(ppp_dispatch {
     shuffle_into_deck => arm_shuffle_into_deck,
     place_card_at => arm_place_card,
     place_card_on => arm_place_card_on,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     teleport_to => arm_teleport_to,
     is_placed => arm_is_placed,
     self_tile => arm_self_tile,
@@ -96,7 +96,7 @@ crate::host_subset!(ppp_dispatch {
     gate => arm_gate,
     raise => arm_raise,
     // Move-plan / settle / offer protocol stubs (benign 0).
-    set_steps | set_reverse | set_stop_at | set_parity | set_resolve
+    set_steps | set_reverse | set_stop_at | set_parity | set_settles
     | set_kind | set_teleport_to | set_start | set_base_dice | set_rent_factor
     | schedule_turn_end | linger | card_offer_build | can_build_on
     | set_roller | set_signed | set_settle_tile | set_pay_factor
@@ -105,15 +105,15 @@ crate::host_subset!(ppp_dispatch {
     | set_tag | set_settle_as_agent | plan_add_follower | set_play_doubled
     | set_no_money_loss | set_fixed_roll | set_next_steps | set_build_discount
     | set_build_cost_pct | set_extreme | clear_dice | set_can_build
-    | move_stopped | move_stop_at | move_parity | move_resolve | move_steps
+    | move_stopped | move_stop_at | move_parity | move_settles | move_steps
     | move_remaining | move_total | move_dir | fixed_roll
-    | turn_main_steps | turn_rolls | turn_snap | turn_start_pos
+    | turn_main_steps | turn_rolls | turn_snapshot | turn_start_pos
     | targeted_count => arm_protocol_stub,
-    card_move => arm_card_move,
+    run_planned_move => arm_card_move,
     trig_card_is => arm_trig_card_is,
     trig_cards => arm_trig_cards,
     // popipapapipopa c1 reads `trigger::tile()`; c2 reads `trigger::value()`,
-    // rewrites the pay amount and asks `ask_number` (whose `ask_pick` walks
+    // rewrites the pay amount and asks `ask_number` (whose `ask_choice` walks
     // the `opt_*` option list).
     trig_tile => arm_trig_tile,
     trig_value => arm_trig_value,
@@ -178,7 +178,7 @@ fn popipa_01_iff_at(user: i32) {
     kani::cover!(pre_deck_pipopa == 0, "no pre-existing Pipopa in deck");
     kani::cover!(pre_deck_pipopa >= 1, "deck already holds Pipopa");
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -209,7 +209,7 @@ fn popipa_01_iff_at(user: i32) {
         "popipa: money+1000, deck+1 Pipopa, hand+1, dest Banished"
     );
     crate::kassert!(
-        spec::ppp::frame_others_money(&pre, &post, player),
+        spec::ppp::frame_others_money(&condition, &post, player),
         "popipa: other players' money is frame"
     );
 }
@@ -363,7 +363,7 @@ fn signpost_02_lose_1000_at_end_iff_at(user: i32) {
         return;
     }
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -455,7 +455,7 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
     kani::cover!(pre_crystals == 0, "band crystals start at 0");
     kani::cover!(pre_crystals > 0, "band crystals already banked");
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -471,11 +471,11 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
     // The (02) teleport leg may move `pos`; that is not this clause's effect.
     let post = world::snapshot();
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "bang-dream-01: money is frame"
     );
     crate::kassert!(
-        world::arr4_eq(post.charge, pre.charge),
+        world::arr4_eq(post.charge, condition.charge),
         "bang-dream-01: fire is frame"
     );
 }
@@ -562,7 +562,7 @@ fn bang_dream_02_teleport_owned_iff_at(user: i32) {
     kani::cover!(n_owned == 1, "exactly one owned tile");
     kani::cover!(n_owned >= 2, "several owned tiles (free pick)");
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -591,15 +591,18 @@ fn bang_dream_02_teleport_owned_iff_at(user: i32) {
     // Frame: other players unmoved; money / fire untouched.
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            crate::kassert!(post.pos[p] == pre.pos[p], "bang-dream-02: others unmoved");
+            crate::kassert!(
+                post.pos[p] == condition.pos[p],
+                "bang-dream-02: others unmoved"
+            );
         }
     }
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "bang-dream-02: money is frame"
     );
     crate::kassert!(
-        world::arr4_eq(post.charge, pre.charge),
+        world::arr4_eq(post.charge, condition.charge),
         "bang-dream-02: fire is frame"
     );
 }
@@ -658,10 +661,10 @@ const CRYSTALS_KEY: &str = "crystals";
 fn popipa_c1_world(user: i32, named_tile: i32) -> World {
     ppp_world_placed(user, named_tile, 2);
     // Under-cap isolation (single +1 branch; see module note).
-    let pre: i32 = kani::any();
-    kani::assume((0..10).contains(&pre));
+    let condition: i32 = kani::any();
+    kani::assume((0..10).contains(&condition));
     world::with_world_mut(|w| {
-        w.field[0].crystals = pre;
+        w.field[0].crystals = condition;
     });
     world::with_world(|w| w.clone())
 }
@@ -958,7 +961,7 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     let pre_field_n = w.field_n;
     let pre_charge_max = w.charge_max[player as usize];
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -992,7 +995,7 @@ fn auction_off_01_at(user: i32, match_id: bool) {
             "auction-off-01 (blocked): field / charge_max untouched"
         );
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "auction-off-01 (blocked): money frame"
         );
     }
@@ -1036,7 +1039,7 @@ fn star_beat_01_layer_iff_at(user: i32) {
     // Room for the pick prompt's two options.
     kani::cover!(pre_layers == 0, "layers start at 0");
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1052,7 +1055,7 @@ fn star_beat_01_layer_iff_at(user: i32) {
     // stickers; option 2 may walk — both are other clauses).
     let post = world::snapshot();
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "star-beat-01: money is frame"
     );
 }
@@ -1281,7 +1284,7 @@ pub fn random_star_01_mutant_two_auctions() {
 // ===========================================================================
 // C-PPP-star-beat-03 (sticker leg)
 // 「1. 获得2个星星贴纸，…」 / option 2 grants no stickers.
-// The walk itself is PROTOCOL-LEVEL (`card_move` / plan stubs return 0).
+// The walk itself is PROTOCOL-LEVEL (`run_planned_move` / plan stubs return 0).
 // Isolation: `w.symbolic_answers` explores both options.
 // ===========================================================================
 
@@ -1295,7 +1298,7 @@ fn star_beat_03_stickers_iff_at(user: i32) {
     let tok = crate::intern::intern(spec::ppp::TOK_STAR_STICKER);
     let pre_tok = w.key_get(player, tok);
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1324,7 +1327,7 @@ fn star_beat_03_stickers_iff_at(user: i32) {
     );
     let post = world::snapshot();
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "star-beat-03: money is frame"
     );
 }
@@ -1375,7 +1378,7 @@ pub fn star_beat_03_mutant_one_sticker() {
 // 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。」
 // BLOCKED-HOST: the residual `on_played_is_general` reads `trigger::cards()`,
 // and `Op::trig_cards` is a hard 0 under the Kani host. The body itself
-// (`add_tok(+1)`) is correct; the engine integration finding LESS (ppp.md)
+// (`add_held_by_name(+1)`) is correct; the engine integration finding LESS (ppp.md)
 // is a separate seam. This harness shows the residual rejects ⇒ no sticker.
 // ===========================================================================
 

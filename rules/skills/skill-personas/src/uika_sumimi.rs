@@ -96,7 +96,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("uika_sumimi_title")),
         &Msg::new(key!("uika_sumimi_which")),
@@ -108,7 +108,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     let Some(&tile) = pool.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("uika_sumimi_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("uika_sumimi_spend")))? {
         return Ok(());
     }
     // One pot per placement, its own row (`place_mark_new`).
@@ -132,7 +132,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「其他玩家经过该格且到达移动终点后向你支付X*30资金并移除那个火罐，X为
 /// 对方经过该格后移动的剩余格数」 -- the pay is at the *end* of the move, so the
 /// remaining count is what the walk has left at the pass. `actor != owner &&
-/// move.remaining > 0` is the pre; the pot-on-tile check is the residual guard.
+/// move.remaining > 0` is the condition; the pot-on-tile check is the residual guard.
 fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     let mover = ctx::trigger::player_id();
@@ -143,7 +143,7 @@ fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
         mover,
         player_id,
         due,
-        &Msg::new(key!("uika_sumimi_why")).i("n", due as i64),
+        &Msg::new(key!("uika_sumimi_reason")).i("n", due as i64),
     )?;
     ctx::log(
         player_id,

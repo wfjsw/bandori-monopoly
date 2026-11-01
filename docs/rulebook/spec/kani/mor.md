@@ -6,7 +6,7 @@ Clause doc: `docs/rulebook/spec/cards/mor.md`. Specs: `rules/kani/src/spec/mor.r
 
 Method: Kani proofs on the **real, unmodified** card/skill bodies with symbolic
 inputs, against a reference spec derived **only** from the 规则书 quotes.
-IFF (post == spec(pre) ∧ effect log exactly ∧ frame) + NO-OP + covers + MUTANT
+IFF (post == spec(condition) ∧ effect log exactly ∧ frame) + NO-OP + covers + MUTANT
 (reachable-disagreement companions). No `#[ignore]`. PROTOCOL-LEVEL rows are
 tagged, not faked.
 
@@ -28,12 +28,12 @@ verdict is CBMC's `VERIFICATION:- …` line.
 2. `buy_price` returns land price only — **houses ignored** (`house_total =
    buy_price - land` is always 0).
 3. `rent_of` is an unmodeled `Op` (loud fail).
-4. `tok_names` returns 0 (empty list). `placed_cards` returns a count, not a
+4. `held_names` returns 0 (empty list). `placed_cards` returns a count, not a
    name list.
 5. `gain_fire` ignores `fire_max` (always adds).
 6. `trig_set_cancelled` writes `a0 != 0` for the no-arg call (`a0=0`) → always
    false.
-7. `move_dir` / `card_settle_at` / `fixed_roll` / `trig_card_is` are protocol
+7. `move_dir` / `settle_tile_at` / `fixed_roll` / `trig_card_is` are protocol
    stubs returning 0.
 8. `World::new().dest` starts at 0 = `Dest::Graveyard` (need a non-zero
    sentinel for dest assertions).
@@ -55,10 +55,10 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-summer-02 | 「当此卡效果结束…则抽一张牌」 | PROTOCOL-LEVEL | — | — | window end + negation counter | — |
 | C-MOR-centrifuge-01 | 「[反击]…第二次成为…目标时」 | PROTOCOL-LEVEL | — | — | [反击] + targeting count | OPEN-目标计数 |
 | C-MOR-centrifuge-02 | 「直到下个你的回合开始时，无效化你受到的所有效果」 | PROTOCOL-LEVEL | — | — | multi-turn negate shield | OPEN-无效化 |
-| C-MOR-rainbow-01 | 「当你向学妹或同级生支付时…此次支付金额减半」 | **FAILS (D GENUINE)** | `rainbow_01_half_iff`, `rainbow_01_mutant_is_detected` | keep FAILING | book 减半 (integer half); body C# `CeilTo(half, 10)`. Mutant collides on amounts like 18/38 | grade table ruling 2026-10-06 |
+| C-MOR-rainbow-01 | 「当你向学妹或同级生支付时…此次支付金额减半」 | **FAILS (D GENUINE)** | `rainbow_01_half_iff`, `rainbow_01_mutant_is_detected` | keep FAILING | Mutant collides on amounts like 18/38 | grade table ruling 2026-10-06 |
 | C-MOR-rainbow-02 | 「当学姐或同级生向你支付…变成1.5倍」 | **FAILS (D GENUINE)** | `rainbow_02_boost_iff`, `rainbow_02_mutant_is_detected` | keep FAILING | book 1.5倍; body CeilTo-10 | grade table ruling 2026-10-06 |
 | C-MOR-wing-01 | 「传送到移动方向20格后（不触发结算）」 | BLOCKED-HOST | `wing_01_teleport_iff_blocked_host`, `wing_01_dir_stub_gap` | (pending) | `Op::move_dir` stub = 0 | OPEN-移动方向 |
-| C-MOR-wing-02 | 「立刻进行移动掷骰」 | PROTOCOL-LEVEL | — | — | `card_move` scheduling stub | — |
+| C-MOR-wing-02 | 「立刻进行移动掷骰」 | PROTOCOL-LEVEL | — | — | `run_planned_move` scheduling stub | — |
 | C-MOR-starry-01 | 「支付X次1000…放置X个[奇迹水晶]」 | PROVEN | `starry_01_place_iff`, `starry_01_mutant_is_detected` | (pending) | X symbolic 1..=5 | OPEN-X, OPEN-场地中央 |
 | C-MOR-starry-02 | 「此卡没有[奇迹水晶]时加入弃牌堆」 | PROVEN (dest write) | folded into `starry_06_payout_iff` | (pending) | discard commit = `set_dest(Graveyard)`; not an effect | — |
 | C-MOR-starry-03 | 「可以放弃第一次的结果重骰一次」 | BLOCKED-HOST | — | — | DiceRollAfter arm needs unmodeled `trig_move_main` | OPEN-重骰次数 |
@@ -69,8 +69,8 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-tritone-02 | 「三回合后…弃置此卡并支付由此卡获得的资金」 | PROVEN (tick) + PROTOCOL (schedule) | `tritone_02_tick_iff`, `tritone_02_mutant_is_detected` | **SUCCESSFUL 335/351 s** (batch-12 B: owed=0) | 3-turn schedule is engine; `owed==0` pays nothing | OPEN-三全音收款人 |
 | C-MOR-noble-01 | 「位于一块地契价值大于等于2200的地块时」 | BLOCKED-HOST | — | — | `tile_price` 0/1-based split | — |
 | C-MOR-noble-02 | 「立刻进行一次触发结算。2.放置一个标记」 | PROVEN (mark) | `noble_02_mark_iff`, `noble_02_not_yours_noop`, `noble_02_mutant_is_detected` | (pending) | settle (1) undefined | OPEN-触发结算, OPEN-指定 |
-| C-MOR-nnm-01 | 「弃置手中x枚角色标记，发动以下效果中的一个」 | BLOCKED-HOST + OPEN | — | — | `tok_names` empty; engine multi-activation gap | OPEN-角色标记, OPEN-多分支选择 |
-| C-MOR-nnm-02 | 「抽x张卡…回合结束后将手牌弃置到五张」 | BLOCKED-HOST | — (spec ready) | — | hand-play unreachable without `tok_names` | — |
+| C-MOR-nnm-01 | 「弃置手中x枚角色标记，发动以下效果中的一个」 | BLOCKED-HOST + OPEN | — | — | `held_names` empty; engine multi-activation gap | OPEN-角色标记, OPEN-多分支选择 |
+| C-MOR-nnm-02 | 「抽x张卡…回合结束后将手牌弃置到五张」 | BLOCKED-HOST | — (spec ready) | — | hand-play unreachable without `held_names` | — |
 | C-MOR-nnm-03 | 「获得x次经过CiRCLE时的资金奖励」 | PROVEN (formula) | `nnm_03_amount_iff`, `nnm_03_mutant_is_detected` | **SUCCESSFUL 0.3/0.6 s** (batch-12 B) | body raises `PassRewardAffected`; Morfonica listener scales 1000/1500/2000 (CRYSTAL-04). Stale `x*2000` model retired | — |
 | C-MOR-nnm-04 | 「放置x个奇迹水晶…视为发动你的（2）技能」 | BLOCKED-HOST | — (spec ready) | — | `placed_cards` is a count, not a name list | OPEN-借用技能 |
 | C-MOR-nnm-05 | 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 | PROVEN (dest write) | `nnm_05_empty_discard_iff`, `nnm_05_press_empty_is_noop`, `nnm_05_atend_leaves_field_card` | **SUCCESSFUL 160/142 s** (batch-12 B) | (4) is CounterChanged (`on_crystals_changed` → `set_dest(Graveyard)`); empty-press is a correct no-op | — |
@@ -123,7 +123,7 @@ B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
 | `nanami_01_user1_fire_iff` | UNWINDING 118 s | **A** | same | same | yes |
 | `touko_01_mutant_is_detected` | UNWINDING 116 s | **A** | same (`pass_world`) | same | yes |
 | `touko_01_noop_not_circle` | UNWINDING 39 s (unwind 8) | **A** | `fill_pass_circle` `while i < 60` (fill `SetId::Circle`) vs unwind 8. Log: `skills_mor.rs:69` iteration 8 | 8×8 chunk walk (true N 60 → 8) | yes |
-| `tsukushi_01_redirect_iff` | TIMEOUT 1800 s | **E** | BMC/symex never reached SAT. Profile: `memchr_naive` 2788 + `memchr_aligned` 894 + `memcmp` 864 + `PadAdapter::write_str` **recursion 33** + `std::fmt::format`. Source: body `rec_key` = `alloc::format!("skill.tsukushi.rec:{p}")` (`tsukushi.rs`) → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. `who = others.get(ask_pick)` left symbolic so Display unrolls all digit paths on a symbolic-length string. Msg facade is already O(1); the cliff is body `format!` | (1) `ask_pick` now returns a **literal** 0 when `options.len()<=1` (forced pick; `card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump landed (`card-sdk/kani_alloc.rs`, cfg(kani)) so alloc-error/`RawVec` paths die. Body `format!` itself cannot be edited (production) | yes |
+| `tsukushi_01_redirect_iff` | TIMEOUT 1800 s | **E** | BMC/symex never reached SAT. Profile: `memchr_naive` 2788 + `memchr_aligned` 894 + `memcmp` 864 + `PadAdapter::write_str` **recursion 33** + `std::fmt::format`. Source: body `rec_key` = `alloc::format!("skill.tsukushi.rec:{p}")` (`tsukushi.rs`) → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. `who = others.get(ask_choice)` left symbolic so Display unrolls all digit paths on a symbolic-length string. Msg facade is already O(1); the cliff is body `format!` | (1) `ask_choice` now returns a **literal** 0 when `options.len()<=1` (forced pick; `card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump landed (`card-sdk/kani_alloc.rs`, cfg(kani)) so alloc-error/`RawVec` paths die. Body `format!` itself cannot be edited (production) | yes |
 | `tsukushi_01_user1_redirect_iff` | TIMEOUT 1800 s | **E** | same `rec_key` format! / PadAdapter / memchr | same | yes |
 | `tsukushi_01_mutant_is_detected` | TIMEOUT 1800 s | **E** | same (accept limb always reaches `rec_key`) | same | yes |
 
@@ -157,7 +157,7 @@ that is counted. All nine rows are **needs re-time**.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening; production bodies untouched. Allowed Kani-only surface used:
-`rules/kani/**` + `cfg(kani)` in `crates/card-sdk` (ask_pick forced-pick fold,
+`rules/kani/**` + `cfg(kani)` in `crates/card-sdk` (ask_choice forced-pick fold,
 `kani_alloc` bump).
 
 ---
@@ -213,7 +213,7 @@ None in this unit's batch-12 rows. Previously listed LESS (nnm-05) and WRONG
    on CounterChanged (`on_crystals_changed` → `set_dest(Graveyard)`), same
    shape as starry-02. The old iff drove the Play press with *already* empty
    crystals (a correct no-op) and claimed the body had no hook. The hook has
-   been registered since before the central pass. `arm_set_dest` commits the
+   been registered since before the central pass. `arm_set_fate` commits the
    dest write as world state.
 2. **nnm-03** — sheet 2026-10-06 G7 wants x × the live CiRCLE money reward.
    CRYSTAL-04 fixed the body to raise `PassRewardAffected` per reward;
@@ -233,12 +233,12 @@ Genuine D in this unit remains the rainbow-01/02 CeilTo-10 rows (keep FAILING).
    `houses × house_cost` like `quote_native`.
 3. ~~**`rent_of`**~~ — fixed 2026-10-28: modelled via `arm_rent_of`.
    Unblocks `skill:桐谷透子` (2).
-4. **`tok_names`** — must list hand character marks. Blocks NNM-01/02/03/04.
+4. **`held_names`** — must list hand character marks. Blocks NNM-01/02/03/04.
 5. **`placed_cards`** — must return a name list, not a raw count. Blocks NNM-04.
 6. **`trig_move_main` / `trig_move_roll`** — unmodeled. Blocks starry-03/04.
 7. **`gain_fire` must honour `fire_max`** — at-cap fire legs (touko-01, nanami-01).
 8. **`trig_set_cancelled` must set true** — currently always false. Blocks band-02 cancel.
-9. **`move_dir` / `card_settle_at` / `fixed_roll` / `trig_card_is`** — protocol
+9. **`move_dir` / `settle_tile_at` / `fixed_roll` / `trig_card_is`** — protocol
    stubs returning 0; needed for wing-01, noble-02 settle, starry DiceRollAfter.
 
 ## OPEN refs

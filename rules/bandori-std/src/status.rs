@@ -68,8 +68,6 @@ fn log_grant(who: i32, target: i32, key: &str) {
     ctx::log_as(who, "text", &msg);
 }
 
-/// The current trigger's actor (`t.Seat`), or `target` when this grant runs
-/// outside a trigger (tick / engine path).
 fn source_of(target: i32) -> i32 {
     let who = ctx::trigger::player_id();
     if who >= 0 {

@@ -15,7 +15,10 @@ use game_core::state::BotMentality;
 use game_core::MatchMode;
 
 fn main() {
-    let args: Vec<u64> = std::env::args().skip(1).filter_map(|a| a.parse().ok()).collect();
+    let args: Vec<u64> = std::env::args()
+        .skip(1)
+        .filter_map(|a| a.parse().ok())
+        .collect();
     let players = args.first().copied().unwrap_or(4) as i32;
     let games = args.get(1).copied().unwrap_or(1);
 

@@ -16,10 +16,10 @@ use game_rules::{Ruleset, Trigger, TriggerKind};
 // ------------------------------------------------ docs/GUARDS.md G0/G2 --
 // Guard **condition** per guarded entry. The condition is layer 1 (the
 // category filter is layer 0, the wasm guard is layer 2); nothing is rejected
-// twice. With no `pre` on any shipped card the behaviour above is untouched;
-// the `TEST:pre*` fixtures below exercise the new layer.
+// twice. With no `condition` on any shipped card the behaviour above is untouched;
+// the `TEST:condition*` fixtures below exercise the new layer.
 
-use game_rules::cond_pre::{self, guard_cost, CompiledPre};
+use game_rules::condition::{self, guard_cost, CompiledCondition};
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Mutex;
 
@@ -68,7 +68,7 @@ fn pre_reject_skips_guard() {
     assert_eq!(guard_cost::SKIPPED_BY_CONDITION.load(Relaxed), 2);
 }
 
-/// An accepting condition runs the residual guard (`pre::MINE` =
+/// An accepting condition runs the residual guard (`condition::MINE` =
 /// `actor == owner`).
 #[test]
 fn pre_accept_runs_guard() {
@@ -95,9 +95,9 @@ fn pre_play_blocks_without_gate() {
     let r = fixtures();
     let card = r.card("TEST:prePlay").expect("fixture present");
     let w = TestWorld::new(7); // money 10_000 < 999_999
-    let why = r.cant_play(&w, card, 0).unwrap();
-    let why = why.expect("condition rejects -> blocked");
-    assert_eq!(&*why.k, "err.play_pre");
+    let blocked = r.cant_play(&w, card, 0).unwrap();
+    let reason = blocked.expect("condition rejects -> blocked");
+    assert_eq!(&*reason.key, "err.play_pre");
     assert_eq!(guard_cost::SKIPPED_BY_CONDITION.load(Relaxed), 1);
 }
 
@@ -124,7 +124,7 @@ fn pre_hook_does_not_fire() {
 }
 
 // ------------------------------------------------ v49: Gate / AtEnd / DiceRollPlan / Settle --
-// docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
+// docs/GUARDS.md §4.2c: these kinds carry the same `condition` + residual-guard
 // pair as `On::Action`, and the host evaluates category → condition → guard →
 // body. A rejecting entry runs no body and so emits no `card` flash --
 // `on_body` is exactly that flash (host.rs `run` / `run_hook`).
@@ -252,23 +252,23 @@ fn pre_compile_errors_fail_closed() {
         "double(owner.money) >= 1", // float op
     ] {
         assert!(
-            CompiledPre::compile(bad).is_err(),
+            CompiledCondition::compile(bad).is_err(),
             "should fail closed: {bad}"
         );
     }
-    assert!(CompiledPre::compile("actor == owner").is_ok());
+    assert!(CompiledCondition::compile("actor == owner").is_ok());
 }
 
 /// The browser runtime-only path (`Cond::from_bytes` + eval) answers exactly
 /// what the host compile path does -- same lean blob, same verdict.
 #[test]
 fn pre_runtime_only_matches_host() {
-    let host = CompiledPre::compile("actor != owner && owner.money >= 500").unwrap();
-    let browser = CompiledPre::from_bytes(&host.blob).unwrap();
+    let host = CompiledCondition::compile("actor != owner && owner.money >= 500").unwrap();
+    let browser = CompiledCondition::from_bytes(&host.blob).unwrap();
     let world = effect_window(1, 0);
-    let win = cond_pre::fill_window(&world);
+    let win = condition::fill_window(&world);
     for owner in 0..4i32 {
-        let cand = cond_pre::fill_candidate(&world, owner, "TEST:preAccept", false);
+        let cand = condition::fill_candidate(&world, owner, "TEST:preAccept", false);
         assert_eq!(
             host.eval(&win, &cand),
             browser.eval(&win, &cand),
@@ -280,7 +280,7 @@ fn pre_runtime_only_matches_host() {
 // ------------------------------------------- shipped precompiled blob (G4) --
 
 /// The `conds-*.bin` `tools/build-ruleset.mjs` publishes is exactly this host
-/// compile of every shipped `pre`, and a ruleset built the browser way (from
+/// compile of every shipped `condition`, and a ruleset built the browser way (from
 /// those blobs via `RulesetBuilder::precompiled`) answers every window the
 /// host-compiled one does. This is the invariant that makes a solo match in
 /// the browser agree with the server: the glue has no CEL parser
@@ -353,8 +353,8 @@ fn shipped_precompiled_blobs_match_host_compile() {
                 for value in [0, 5000] {
                     let mut w = effect_window(actor, value);
                     w.money = vec![1000, 2000, 3000, 4000];
-                    let win = cond_pre::fill_window(&w);
-                    let cand = cond_pre::fill_candidate(&w, owner, &c.id, false);
+                    let win = condition::fill_window(&w);
+                    let cand = condition::fill_candidate(&w, owner, &c.id, false);
                     assert_eq!(
                         h.eval(&win, &cand),
                         r.eval(&win, &cand),
@@ -400,7 +400,7 @@ fn shipped_precompiled_blobs_match_host_compile() {
     );
 }
 
-/// Fail-closed, browser side: a card with a `pre` and no precompiled entry is
+/// Fail-closed, browser side: a card with a `condition` and no precompiled entry is
 /// a build error -- never "treat as true". And a blob that disagrees with the
 /// source is refused rather than silently preferred.
 #[test]

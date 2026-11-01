@@ -10,7 +10,7 @@ use game_core::net::NetMessage;
 use game_core::state::stage;
 
 // ---------------------------------------------------------- local helpers
-// `Table::settle` treats `stage::MOVE` as "not at rest", but `card_move` for a
+// `Table::settle` treats `stage::MOVE` as "not at rest", but `run_planned_move` for a
 // non-turn player (祥，移动 etc.) leaves `step` at MOVE. These helpers tolerate
 // that and restore the step afterwards.
 
@@ -288,6 +288,39 @@ fn sparkler_last_crystal_goes_to_owner_discard() {
 }
 
 #[test]
+fn sparkler_cap_blocks_a_third_external_crystal() {
+    // 规则书: 「放置2个奇迹水晶（上限2）」 -- the 上限 is a stored per-instance cap,
+    // so an external add stops at it; clearing the cap unclamps again.
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "Mujica:燃尽前的线香花火").unwrap();
+    drain(&mut t);
+    let uid = t
+        .field(0)
+        .iter()
+        .find(|f| f.card == "Mujica:燃尽前的线香花火")
+        .expect("sparkler on field")
+        .uid;
+    assert_eq!(
+        t.m.world().counter_max_at(uid, "crystals"),
+        2,
+        "the printed 上限 2 is the stored cap"
+    );
+    t.m.world_mut().add_counter_at(uid, "crystals", 1, 0);
+    assert_eq!(
+        t.m.world().counter_at(uid, "crystals"),
+        2,
+        "a third external crystal is clamped"
+    );
+    t.m.world_mut().set_counter_max_at(uid, "crystals", 0);
+    t.m.world_mut().add_counter_at(uid, "crystals", 1, 0);
+    assert_eq!(
+        t.m.world().counter_at(uid, "crystals"),
+        3,
+        "no cap, no clamp"
+    );
+}
+
+#[test]
 fn sparkler_last_crystal_grants_stun() {
     let mut t = Table::vanilla(2);
     t.dice(&[3]);
@@ -488,6 +521,50 @@ fn crystal_move_opens_source_and_target_prompts() {
     answer_opt(&mut t, 0, "crystal_swap_band");
     assert!(t.prompt().is_some(), "target prompt expected");
     drain(&mut t);
+}
+
+#[test]
+fn crystal_swap_skips_a_full_destination() {
+    // 规则书: 「移动到另一张可以放置奇迹水晶的卡上」 -- a card already at its 上限
+    // cannot take one, so it is not a destination.
+    let mut t = Table::vanilla(2);
+    // A full sparkler (2/2) -- the only other card.
+    t.give_play(0, "Mujica:燃尽前的线香花火").unwrap();
+    drain(&mut t);
+    let full = t
+        .field(0)
+        .iter()
+        .find(|f| f.card == "Mujica:燃尽前的线香花火")
+        .expect("sparkler on field")
+        .uid;
+    assert_eq!(t.m.world().counter_at(full, "crystals"), 2);
+    // A source with one crystal on it.
+    let src = t.place_raw(0, "Mujica:#J11");
+    t.m.world_mut().add_counter_at(src, "crystals", 1, 0);
+    let mark = t.mark();
+    t.give_play(0, "Mujica:会被骗着买水晶的人").unwrap();
+    // The source prompt lists both cards; pick the source, not the full one.
+    answer_opt(&mut t, 0, "Mujica:#J11");
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.ends_with("crystal_swap_none")),
+        "no legal destination: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.ends_with("crystal_swap_moved")),
+        "{keys:?}"
+    );
+    assert_eq!(
+        t.m.world().counter_at(src, "crystals"),
+        1,
+        "the source keeps its crystal"
+    );
+    assert_eq!(
+        t.m.world().counter_at(full, "crystals"),
+        2,
+        "the full card is unchanged"
+    );
 }
 
 #[test]
@@ -1228,6 +1305,61 @@ fn umirin_card_places_on_next_player() {
         "card on next player's field: p0={:?} p1={:?}",
         t.field_ids(0),
         t.field_ids(1)
+    );
+}
+
+#[test]
+fn umiri_two_copies_keep_their_own_user() {
+    // 规则书（1）: 「轮到使用者的回合开始时，将其移动到…后一名的玩家场上」 -- 使用者
+    // is per card, so two copies keep their own user, and each only hops on *its*
+    // user's turn start.
+    let mut t = Table::new(&["八幡海铃", "三角初华", "若叶睦"]);
+    t.clean();
+    // Both copies belong to 八幡海铃's card, so both seats need that persona
+    // (an exclusive play is refused off it).
+    t.set_character_raw(1, "八幡海铃");
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give_play(0, "Mujica:（海铃）").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(1, "Mujica:（海铃）"));
+    t.begin_turn(1);
+    drain(&mut t);
+    t.give_play(1, "Mujica:（海铃）").unwrap();
+    drain(&mut t);
+    // (user counter, holder seat), sorted -- user is stored 1-based.
+    let by_user = |t: &Table| -> Vec<(i32, usize)> {
+        let mut v = Vec::new();
+        for p in 0..t.n {
+            for f in t.field(p) {
+                if f.card == "Mujica:（海铃）" {
+                    v.push((f.counters.get("umiri_user").copied().unwrap_or(0), p));
+                }
+            }
+        }
+        v.sort();
+        v
+    };
+    assert_eq!(
+        by_user(&t),
+        vec![(1, 1), (2, 2)],
+        "each copy has its own user"
+    );
+    // P0's turn start: only P0's copy moves (from p1 to p2).
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(
+        by_user(&t),
+        vec![(1, 2), (2, 2)],
+        "only the matching user's copy moved"
+    );
+    // P1's turn start: only P1's copy moves (from p2 to p0).
+    t.begin_turn(1);
+    drain(&mut t);
+    assert_eq!(
+        by_user(&t),
+        vec![(1, 2), (2, 0)],
+        "each copy follows its own user"
     );
 }
 

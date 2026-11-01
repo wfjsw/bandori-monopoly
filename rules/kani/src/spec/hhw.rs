@@ -2,7 +2,7 @@
 //!
 //! Sources: `docs/rulebook/spec/cards/hhw.md` + `docs/rulebook/cards.json`.
 //! Never derived from engine behaviour. Each function is a pure predicate
-//! over (pre + effect-log + post) for one clause's Trigger/Condition/Effect/Frame.
+//! over (condition + effect-log + post) for one clause's Trigger/Condition/Effect/Frame.
 //!
 //! Narration (`ctx::log`) is NOT part of the frame. Only `Effect` entries are.
 
@@ -42,13 +42,18 @@ pub fn backstage_02_log_ok(effects: &[Effect], player: i32, flipped: i32) -> boo
     gains == flipped
 }
 
-/// Post money = pre money + 1000×flipped. Frame: nothing else moves.
-pub fn backstage_02_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, flipped: i32) -> bool {
+/// Post money = condition money + 1000×flipped. Frame: nothing else moves.
+pub fn backstage_02_post_ok(
+    condition: &Snapshot,
+    post: &Snapshot,
+    player: i32,
+    flipped: i32,
+) -> bool {
     let p = player as usize;
-    post.money[p] == pre.money[p] + backstage_02_gain(flipped)
-        && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.charge, pre.charge)
-        && crate::world::arr4_eq(post.stay, pre.stay)
+    post.money[p] == condition.money[p] + backstage_02_gain(flipped)
+        && crate::world::arr4_eq(post.pos, condition.pos)
+        && crate::world::arr4_eq(post.charge, condition.charge)
+        && crate::world::arr4_eq(post.stay, condition.stay)
 }
 
 /// MUTANT: pay 500 per flip (off-by-amount).
@@ -61,7 +66,7 @@ pub fn backstage_02_gain_mutant(flipped: i32) -> i32 {
 // 「消耗800资金」
 // [消耗] = delete money. The play's money effect is exactly −800 when the
 // payment goes through (paid >= 800); a short payment is the body's early
-// return and leaves the money at whatever `pay` moved (min(pre, 800)).
+// return and leaves the money at whatever `pay` moved (min(condition, 800)).
 // ===========================================================================
 
 /// Book: money falls by exactly 800. `pay` returns the amount actually paid.
@@ -162,10 +167,10 @@ pub fn kkr_01_log_ok(effects: &[Effect], player: i32) -> bool {
         .any(|e| matches!(e, Effect::PayMoney { player: p, n } if *p == player && *n == 10000))
 }
 
-/// Post money = pre − 10000 (when the full payment goes through).
-pub fn kkr_01_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
+/// Post money = condition − 10000 (when the full payment goes through).
+pub fn kkr_01_post_ok(condition: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
-    post.money[p] == pre.money[p] - 10000
+    post.money[p] == condition.money[p] - 10000
 }
 
 /// MUTANT: pay 1000.
@@ -333,7 +338,7 @@ pub fn athletic_04_keeps_mutant(face: i32) -> bool {
 
 /// Destination tile (0-based board index) of a recorded `3d20 mod 60` result.
 /// 序号 run `1..=60`; result `r` names 序号 `r` when `r != 0`, and `0 ≡ 60`.
-pub fn balloon_02_dest(result: i32) -> i32 {
+pub fn balloon_02_fate(result: i32) -> i32 {
     let r = if result == 0 { 60 } else { result };
     r - 1
 }
@@ -370,7 +375,7 @@ pub fn hagumi_02_over_60_log_ok(effects: &[Effect], player: i32) -> bool {
 
 /// ≤60: the chosen result names a 序号 tile that receives the 育美标记.
 /// The mark is a tile mark (PlaceMark); no money, no draw.
-pub fn hagumi_02_mark_dest(chosen: i32) -> i32 {
+pub fn hagumi_02_mark_fate(chosen: i32) -> i32 {
     chosen - 1
 }
 
@@ -521,7 +526,7 @@ pub fn misaki_skill_01_gain_mutant(pre_fire: i32) -> i32 {
 // ===========================================================================
 // C-HHW-band-01
 // 「（1）向他人的格子付款时可选择支付双倍价格，若如此做，记录该玩家并使此卡获得一个奇迹水晶。」
-// Optional. When accepted: pay amount becomes 2× the pre amount; the band
+// Optional. When accepted: pay amount becomes 2× the condition amount; the band
 // card gains exactly 1 crystal; the payee is recorded (OPEN-HHW-BAND-RECORD
 // storage — the crystal count is the observable).
 // ===========================================================================
@@ -604,14 +609,14 @@ pub fn log_empty(effects: &[Effect]) -> bool {
 }
 
 /// Frame: the fields a money clause must not touch.
-pub fn money_frame_unchanged(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
+pub fn money_frame_unchanged(condition: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
-    crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.charge, pre.charge)
-        && crate::world::arr4_eq(post.stay, pre.stay)
-        && crate::world::arr8b_eq(post.hand, pre.hand)
-        && crate::world::arr8b_eq(post.discard, pre.discard)
-        && crate::world::arr4b_eq(post.out, pre.out)
+    crate::world::arr4_eq(post.pos, condition.pos)
+        && crate::world::arr4_eq(post.charge, condition.charge)
+        && crate::world::arr4_eq(post.stay, condition.stay)
+        && crate::world::arr8b_eq(post.hand, condition.hand)
+        && crate::world::arr8b_eq(post.discard, condition.discard)
+        && crate::world::arr4b_eq(post.out, condition.out)
         && (p >= 4 || {
             // only the acting player's money may move; callers check the delta
             true
@@ -619,8 +624,9 @@ pub fn money_frame_unchanged(pre: &Snapshot, post: &Snapshot, player: i32) -> bo
 }
 
 /// Hand/discard bitsets unchanged.
-pub fn piles_unchanged(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr8b_eq(pre.hand, post.hand) && crate::world::arr8b_eq(pre.discard, post.discard)
+pub fn piles_unchanged(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr8b_eq(condition.hand, post.hand)
+        && crate::world::arr8b_eq(condition.discard, post.discard)
 }
 
 /// Count of `MAX_CARDS`-sized bitset true bits.

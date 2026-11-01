@@ -42,7 +42,7 @@ crate::host_subset!(skills_ag_dispatch {
     trig_target => arm_trig_target,
     count_marks_f => arm_count_marks_f,
     place_mark => arm_place_mark,
-    set_reverse | set_steps | set_resolve => arm_protocol_stub,
+    set_reverse | set_steps | set_settles => arm_protocol_stub,
 });
 
 /// Install sparse 2-seat world + subset. Callers keep concrete seats.
@@ -146,7 +146,7 @@ fn firepot_01_tick_iff_at(user: i32) {
     }
     crate::kassert!(
         post_rest == spec::skills_ag::firepot_01_next_rest(pre_rest),
-        "C-AG-firepot-01: rest counter is next_rest(pre)"
+        "C-AG-firepot-01: rest counter is next_rest(condition)"
     );
 }
 
@@ -388,7 +388,7 @@ pub fn firepot_01_tick_formula() {
         crate::kassert!(!grants, "first/second/third idle turn grants nothing");
         crate::kassert!(next == pre_rest + 1, "counter advances");
     }
-    // Mutant is `pre+1 >= 2` (grants far too early); card is `pre+1 >= 4`
+    // Mutant is `condition+1 >= 2` (grants far too early); card is `condition+1 >= 4`
     // (grants only at rest 3). They disagree at rests 1, 2 and 3.
     kani::cover!(pre_rest == 1, "reachable disagreement (rest 1)");
     crate::kassert!(

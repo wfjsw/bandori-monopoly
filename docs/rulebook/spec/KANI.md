@@ -4,7 +4,7 @@ Status: **feasibility pilot**. Three representative clauses, unmodified card
 bodies, reference specs written from the 规则书 clause docs only.
 
 Deliverable shape: for each clause, a `#[kani::proof]` that asserts
-**exactly** the book (iff): post-state == spec(pre), the effect log is exactly
+**exactly** the book (iff): post-state == spec(condition), the effect log is exactly
 the specified effects (no less / no more), and a false trigger is a no-op.
 Each proof is paired with a deliberate MUTANT that Kani must report as failing
 (`#[kani::should_panic]`), so the proofs are not vacuous.
@@ -103,7 +103,7 @@ and calls it. The card sources are **not** copied or rewritten.
    * build a symbolic pre-world (`kani::any` + `assume`ed ranges);
    * `host::install(); world::reset_world(w);`
    * invoke the unmodified entry;
-   * assert `post == spec(pre)` **and** `effect_log == exactly(spec_effects)`
+   * assert `post == spec(condition)` **and** `effect_log == exactly(spec_effects)`
      **and** (when the trigger/condition is false) the log is empty;
    * add `kani::cover!` on both branches;
    * add a `#[kani::should_panic]` MUTANT (spec off-by-one / extra effect).

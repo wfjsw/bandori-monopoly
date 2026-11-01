@@ -42,7 +42,7 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 | ID | book quote (short) | classification | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | `C-MYGO-rinpuu-01` | 「使自己获得一层[停留]」 | **PROVEN** | `rinpuu_01_give_stay_iff`, `rinpuu_01_mutant_is_detected`, `rinpuu_01_mutant_two_layers` | iff SUCCESSFUL 403s (2/2 covers); `rinpuu_01_mutant_two_layers` SUCCESSFUL (panic as expected) | — | — |
-| `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::Action(&[AtEnd])` + `card_settle_at` protocol stub) | OPEN-触发结算 |
+| `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::Action(&[AtEnd])` + `settle_tile_at` protocol stub) | OPEN-触发结算 |
 | `C-MYGO-journey-01` | 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」 | **PROVEN** | `journey_01_place_four_crystals_iff`, `journey_01_mutant_is_detected` | mutant companion SUCCESSFUL; iff verdict pending | — | — |
 | `C-MYGO-journey-02` | 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶」 | **BLOCKED-HOST** | — | — | `turn_main_steps` is a protocol stub returning 0; the `>6` drain never runs under Kani. Missing: real `turn_main_steps` / main-move step count | — |
 | `C-MYGO-journey-03` | 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | CounterChanged → set_dest(Graveyard) is a zone move; the emptying write itself is engine-side | — |
@@ -129,7 +129,7 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 
 | harness | verdict | time (s) | notes |
 |---|---|---:|---|
-| `rinpuu_01_give_stay_iff` | **SUCCESSFUL** | 403.0 / 563.1 | 0/20884 failed, **2/2 covers** (pre stay 0 / nonzero). Runner labeled UNMODELED* (false positive on the `unmodeled host op` property string); log `VERIFICATION:- SUCCESSFUL`. |
+| `rinpuu_01_give_stay_iff` | **SUCCESSFUL** | 403.0 / 563.1 | 0/20884 failed, **2/2 covers** (condition stay 0 / nonzero). Runner labeled UNMODELED* (false positive on the `unmodeled host op` property string); log `VERIFICATION:- SUCCESSFUL`. |
 | `rinpuu_01_mutant_two_layers` | **SUCCESSFUL (panic as expected)** | ~600 | 1/20810 failed = the mutant assert — non-vacuous |
 | `rinpuu_01_mutant_is_detected` | written, verdict pending | — | companion of the should_panic twin |
 | `journey_01_place_four_crystals_iff` | written, verdict pending | — | queued |
@@ -201,10 +201,10 @@ Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf.
 
 | harness | before | class | root cause | fix | re-time |
 |---|---|---|---|---|---|
-| `band_02_crystal_on_16_iff` | FAILED 196 s | **B** then **D** | (1) harness read `key_get(user,"crystals")` but `arm_add_counter_self` stores on `field_crystals(last_uid)` / `self_crystals` (class B — same as `events.rs`). Covers unreachable behind the failing assert. (2) After the storage fix the book formula `if pre<1 {1} else {pre}` FAILS at `pre∈{2,3}`: body `add_crystals(1,1)` + production `add_counter_at` `(*slot+n).max(0).min(max)` **clamps down** and eats (3)'s over-cap crystals | storage → `self_crystals()`; log pins host clamped delta. Book formula kept — **D kept FAILING** | yes |
+| `band_02_crystal_on_16_iff` | FAILED 196 s | **B** then **D** | (1) harness read `key_get(user,"crystals")` but `arm_add_counter_self` stores on `field_crystals(last_uid)` / `self_crystals` (class B — same as `events.rs`). Covers unreachable behind the failing assert. (2) After the storage fix the book formula `if condition<1 {1} else {condition}` FAILS at `condition∈{2,3}`: body `add_crystals(1,1)` + production `add_counter_at` `(*slot+n).max(0).min(max)` **clamps down** and eats (3)'s over-cap crystals | storage → `self_crystals()`; log pins host clamped delta. Book formula kept — **D kept FAILING** | yes |
 | `band_02_user1_crystal_on_16_iff` | FAILED 209 s | **B**+**D** | same | same | FAILED (D) |
 | `band_02_mutant_is_detected` | SUCCESSFUL 154 s | — | — | — | — |
-| `band_04_ineffective_overcap_iff` | FAILED 220 s → **SUCCESSFUL** 3/3 | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(pre,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `pre>=3 ? pre : pre+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
+| `band_04_ineffective_overcap_iff` | FAILED 220 s → **SUCCESSFUL** 3/3 | **B** | crystals via `key_get`; `over` was a symbolic input to the formula but the body *sets* `skill.mygo.over` as audit. Expected `band_04_crystals_after(condition,over)` did not match `add_crystals(1,MAX)` + `if have>=3 return` | `self_crystals()`; formula is `condition>=3 ? condition : condition+1` (book ceiling 3). Log tolerates `SetState` audit | **SUCCESSFUL** 3/3 covers |
 | `band_04_user1_ineffective_overcap_iff` | FAILED 202 s → **SUCCESSFUL** 3/3 | **B** | same | same | **SUCCESSFUL** 3/3 covers |
 | `band_04_mutant_is_detected` | SUCCESSFUL 157 s | — | — | — | — |
 
@@ -226,7 +226,7 @@ Clause doc: the (2) cap applies to the **roll gain**; (3)'s over-cap crystals
 are a different clause. Body `ctx::add_crystals(1, 1)` and production
 `game-core/src/engine/ops.rs` `add_counter_at` (`min(was+n, max)`) force the
 held total down to 1, destroying over-cap crystals. Setup is legal
-(`pre ∈ 0..=3`, which (3) can produce). Proof kept FAILING.
+(`condition ∈ 0..=3`, which (3) can produce). Proof kept FAILING.
 
 Hitoshizuku is **not** D: body and book agree on per-player kinds.
 

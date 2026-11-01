@@ -1,4 +1,3 @@
-//! `PP:练习生解密指南` -- C# `CardTraineeGuide` (MatchHost.cs:7870-7994): stay
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:练习生解密指南`）:
 //! > 练习生解密指南：
@@ -32,8 +31,8 @@ const ID: &str = "PP:练习生解密指南";
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Action(Action::BuildBefore(card_sdk::pre::MINE, None, before_build)),
-        On::Action(Action::BuildAfter(card_sdk::pre::MINE, None, after_build)).silent(),
+        On::Action(Action::BuildBefore(card_sdk::condition::MINE, None, before_build)),
+        On::Action(Action::BuildAfter(card_sdk::condition::MINE, None, after_build)).silent(),
         On::Play("", None, trainee_guide),
         // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- the tick only.
         On::Action(Action::TurnEnd("", Some(turn_end_guard), turn_end)),
@@ -44,8 +43,6 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') >= 5", Some(cash_in_guard), cash_in)),
     ],
 )
-// 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
-// (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
 .props(&[(prop::HAND_LIMIT_DELTA, -1)])
 .meta(&card_sdk::meta::CardMeta::new()
         .name(r#"练习生解密指南"#)
@@ -82,20 +79,16 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
         "PP:练习生解密指南",
         &Msg::new(key!("trainee_guide_note")),
     );
-    // 规则书[手]: 「在此卡上放置“粉丝数量”÷3个[奇迹水晶]」 -- C#
-    // `H.PlaceFromPlay(c, -1, -1, H.Fans(i) / 3)`.
-    // TODO(规则书)（在此卡上放置“粉丝数量”÷3个[奇迹水晶]） OPEN-div: the ÷3 rounding is
-    //   unprinted -- we floor-divide.
+    // TODO(规则书)（在此卡上放置“粉丝数量”÷3个[奇迹水晶]） OPEN-div: the ÷3 rounding is unprinted -- we
+    // floor-divide.
     let fans = fans::up(player_id) + fans::down(player_id);
     ctx::set_crystals(fans / 3);
-    // 规则书[手]: 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
-    // -- `cards_in(Deck)` only reads the deck; the log below carries the distinct
-    // colour count, never the revealed cards. A card's colour is the band prefix
-    // of its id (`PP:`, `R:`, ...), which is what `H.Db.Card(id)?.group` reads.
-    // One distinct colour -> 1 mono mark; two or more -> 1 dual mark.
-    // TODO(规则书)（根据公开卡中的颜色数量添加一个单色/双色标记） OPEN-mark: the
-    //   colour-count table and the 单色/双色标记 vocabulary are unprinted -- we guess
-    //   1 colour = mono, >=2 = dual.
+    // TODO(规则书)（根据公开卡中的颜色数量添加一个单色/双色标记） 规则书[手]:
+    // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」 -- `cards_in(Deck)` only reads the
+    // deck; the log below carries the distinct colour count, never the revealed
+    // cards. One distinct colour -> 1 mono mark; two or more -> 1 dual mark.
+    // OPEN-mark: the colour-count table and the 单色/双色标记 vocabulary are unprinted --
+    // we guess 1 colour = mono, >=2 = dual.
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
     let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
     for c in deck.iter() {
@@ -126,7 +119,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
         )?;
         // 「添加任意2个标记」 -- one pick per mark, each mono or dual.
         for _ in 0..2 {
-            let pick = ctx::ask_pick(
+            let pick = ctx::ask_choice(
                 player_id,
                 &Msg::new(key!("trainee_guide_mark_title")),
                 &Msg::new(key!("trainee_guide_mark_ask")),
@@ -149,9 +142,8 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardTraineeGuide.TurnEnd` -> `Tick`: +1 crystal only.
-/// Pure guard for [`turn_end`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// Pure guard for [`turn_end`] -- the activation gate. `false` means the card is
+/// not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
     // TurnEnd is dispatched over every seat's field; 「回合结束时」 is the owner's
     // own turn end only.
@@ -159,7 +151,6 @@ fn turn_end_guard(player_id: i32) -> bool {
 }
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- C# `AddCrystals(1, "回合结束")`.
     // (3)'s cash-in is the `CounterChanged` handler below; this +1 trips it.
     ctx::add_crystals(1, 0)?;
     Ok(())

@@ -25,7 +25,7 @@ mulligans only rearrange it.
 * **Condition:** a player's hand-limit counter is the engine's `handLimit`
   state (default 5, raised / lowered by effects). A limit of
   `NO_HAND_LIMIT` (`i32::MAX`) means uncapped. The player was **at or under**
-  the limit in `pre` -- an arranged over-limit hand is a non-canonical setup
+  the limit in `condition` -- an arranged over-limit hand is a non-canonical setup
   and is not this act's fault. No prompt is open in `post`.
 * **Effect:** the player's private hand length is at most the limit in `post`.
 * **Frame:** n/a (pure read).
@@ -113,7 +113,7 @@ mulligans only rearrange it.
 * **Quote:** 「非[反击]的[手]效果只能在运营阶段使用，[反击]和[特]效果会描写发动时点。」
 * **Trigger:** an accepted hand play (`Act(play)` whose window contains a
   `kind == play` activation) of a card tagged [手].
-* **Condition:** the actor is the current player and `pre.st.step` is 运营
+* **Condition:** the actor is the current player and `condition.st.step` is 运营
   (`stage::OPS`). [反击] windows are prompt answers (`kind == counter`) and
   are out of scope. Cards whose only timing is [特] (no [手] tag) are out of
   scope.
@@ -265,7 +265,7 @@ mulligans only rearrange it.
 * **Source:** `rulebook-doc.md:154`
 * **Quote:** 「如果没有事件可抽取则将事件弃卡区洗切并当作新的事件卡堆来抽取。」
 * **Trigger:** a window that logs `log.events_reshuffled`.
-* **Condition:** `pre.event_deck` was empty and `pre.event_discard` was
+* **Condition:** `condition.event_deck` was empty and `condition.event_discard` was
   non-empty.
 * **Effect:** the post event pile holds a permutation of the pre-discard
   (plus the just-filed event, if this window also drew one).

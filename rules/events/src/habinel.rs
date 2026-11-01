@@ -4,8 +4,8 @@
 //! > 每个玩家获得X层[除外]，每名玩家回合开始时移除1层[除外]，结束后传送到微笑号（不触发场地效果）X=1d2（每个玩家独立投掷1d2）
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 

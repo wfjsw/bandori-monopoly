@@ -1,4 +1,3 @@
-//! `通用:[衍生]FEVER!` -- C# `CardFever`: stays in play, money to the owner +X.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[衍生]FEVER!`）:
 //! > [衍生]FEVER!：
@@ -18,25 +17,19 @@ use card_sdk::{key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
 const ID: &str = "通用:[衍生]FEVER!";
 
-/// Stand-in for C# `Card.User` (per-card Mem): the player who played the card.
-/// [使用者] is not always the instance's owner -- 「（2）…放入[使用者]弃卡区」
-/// names the user's discard, not the owner's.
+/// [使用者] is not always the instance's owner -- 「（2）…放入[使用者]弃卡区」 names the user's
+/// discard, not the owner's.
 ///
-/// Stored on the card instance (`FieldCard::props`), not in the player's
-/// keyed-state map -- same home as `exist.rs`'s `exist.used` (C# per-card Mem
-/// lives on the instance so the write stays inside this rule's scope and dies
-/// with the card). Values are 1-based (`player_id + 1`) so player 0 survives
-/// the default-0 read of an unset prop; 0 reads as "unset".
+/// Values are 1-based (`player_id + 1`) so player 0 survives the default-0 read
+/// of an unset prop; 0 reads as "unset".
 const PROP_USER: &str = "fever.user";
 
 pub const FEVER: CardDef = CardDef::new(
     "通用:[衍生]FEVER!",
     &[
         On::Play("", None, fever),
-        // C# `CardFever.PaySplitAdd` (value modifier) / `CardFever.TurnStart` (event
-        // reaction) -- field hooks, not [反击]. Mixed kinds split (ABI v73);
-        // bodies split to match the variant (Filter = pure integer, Action =
-        // event reaction).
+        // Mixed kinds split (ABI v73); bodies split to match the variant (Filter = pure
+        // integer, Action = event reaction).
         On::Filter(Filter::PaySplitAdd("card.placed", None, pay_add)),
         On::Action(Action::TurnStart("card.placed", None, turn_start)),
     ],
@@ -63,17 +56,12 @@ fn fever(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("fever_note")));
-    // C# `Card.User` -- who played it, for （2）'s 「[使用者]弃卡区」. 1-based
-    // so player 0 is representable (unset prop reads back as 0). Written on
+    // 1-based so player 0 is representable (unset prop reads back as 0). Written on
     // the instance `place_card` just bound the run to -- the same shape as
-    // `exist.rs`'s `exist.used`. `fever_user_mem_lands_on_the_placed_instance`
-    // pins that it is the field copy and not a play-run / linger slot.
+    // `exist.rs`'s `exist.used`. `fever_user_mem_lands_on_the_placed_instance` pins
+    // that it is the field copy and not a play-run / linger slot.
     ctx::set_prop(PROP_USER, player_id + 1);
-    // C# `H.PlaceFromPlay(c).Mem["x"] = c.N(0, 600)` stored the played value on
-    // the instance. The port instead reads the printed 600 through `ctx::n` in
-    // `x_of`, i.e. at *payment* time: doubling is ported (`play_doubled` on
-    // `TurnCtx`) but is reset at the next play's start, so a doubling armed for
-    // this play is lost if any play intervenes -- unlike the baked-in C# Mem.
+    // The port instead reads the printed 600 through `ctx::n` in `x_of`, i.e.
     // 规则书（1）[持续] runs in `counteract` at `paySplitAdd`; 规则书（2）[持续] at `turnStart`.
     Ok(())
 }
@@ -84,14 +72,9 @@ fn fever(player_id: i32) -> card_sdk::Asked {
 /// printed), free to go below 0.
 fn x_of(player_id: i32) -> i32 {
     let n = ctx::field_instances(player_id).len() as i32;
-    // `ctx::n(1, …)`: doubling slots are 1-based (the skill names 1..9), so the C#
-    // index 0 would never be armed (see `fever`).
     ctx::n(1, 600) - 200 * n
 }
 
-/// 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
-/// [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PaySplitAdd`
-/// (`p.to == Player && p.amount > 0` -> `p.amount = Math.Max(0, p.amount + x)`).
 /// `t.target` is the payee (a gain is the bank paying the owner) and `value` the
 /// pending amount. Early-returns that skipped the log still return `value`
 /// unchanged without logging.
@@ -107,7 +90,7 @@ fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     //   amount (sibling cards that floor say 「最低0」) -- we clamp at 0; whether
     //   「提高」 floors is OPEN-GEN-fever-floor.
     let out = (v.value + x).max(0);
-    // C# `p.Note("FEVER! " + ((x >= 0) ? "+" : "") + x)`.
+    // " + ((x >= 0) ? "+" : "") + x)`.
     ctx::log(player_id, &Msg::new(key!("fever_pay")).i("x", x as i64));
     PayAddValue { value: out, ..v }
 }

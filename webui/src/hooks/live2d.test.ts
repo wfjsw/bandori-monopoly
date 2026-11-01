@@ -1,6 +1,3 @@
-// Run with: node --test webui/src/hooks/live2d.test.ts
-// The pure portrait-fit math behind `useLive2DStand` (Live2DPortrait.Draw).
-
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { canvasBox, sameParams, type Framing } from "./pure.ts";

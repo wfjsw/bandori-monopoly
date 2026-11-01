@@ -20,16 +20,12 @@
 // whatever directory they run in, so an engine bundle can be rebuilt from its
 // source commit and still hash to the same bundle id.
 //
-//   * `CARGO_INCREMENTAL=0` -- release builds already avoid incremental, but
-//     the env is belt and braces.
-//   * `--remap-path-prefix` strips the absolute workspace / cargo-home /
-//     sysroot paths rustc records in panic `Location`s. Without it the bytes
-//     name the build machine's home directory. Workspace crates already get
-//     relative paths; this covers the registry and the std sources too.
-//   * the wasm-bindgen CLI version is checked against the crate pin in
-//     `crates/web-glue/Cargo.toml` (`=X.Y.Z`): the CLI rewrites the wasm and
-//     its own version ends up in the `producers` section, so a mismatch is a
-//     different bundle.
+// * `CARGO_INCREMENTAL=0` -- release builds already avoid incremental, but the
+//   env is belt and braces. * `--remap-path-prefix` strips the absolute
+//   workspace / cargo-home / sysroot paths rustc records in panic `Location`s.
+//   Without it the bytes name the build machine's home directory. Workspace
+//   crates already get relative paths; this covers the registry and the std
+//   sources too.
 //
 // `webui/src/wasm/engine_id.json` then records the glue identity AND the
 // provenance (`commit`, `dirty`, toolchain) of the bytes just built --
@@ -54,7 +50,7 @@ const runOut = (...args) =>
 
 // ---------------------------------------------------------------- toolchain
 
-/** The wasm-bindgen version `crates/web-glue` pins (=X.Y.Z). */
+/** The `wasm-bindgen` version pinned in the crate's manifest (exact `=` match). */
 function pinnedBindgen() {
   const toml = readFileSync(join(ROOT, "crates", "web-glue", "Cargo.toml"), "utf8");
   const m = toml.match(/wasm-bindgen\s*=\s*"=([0-9.]+)"/);

@@ -11,7 +11,7 @@ use bandori_std::kind as rk;
 use common::*;
 
 /// Manifest shape of the three split cards: one Filter + one Action half,
-/// same body, same pre, and no later entry-index drift beyond the known shift.
+/// same body, same condition, and no later entry-index drift beyond the known shift.
 #[test]
 fn split_cards_declare_filter_and_action_halves() {
     let r = rules();

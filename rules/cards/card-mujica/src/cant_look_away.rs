@@ -1,4 +1,3 @@
-//! `Mujica:无法将视线移开` -- C# `CardCantLookAway` (MatchHost.cs:5654-5710):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:无法将视线移开`）:
 //! > 无法将视线移开：
@@ -48,8 +47,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 fn run(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「使当前回合内对你打出过[反击]的所有玩家」 -- C#
-    // `H._counteractedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
     //
     // TODO(规则书): 「使当前回合内对你打出过[反击]的所有玩家…」 needs a
     //   per-turn counteraction history (who countered whom). The engine has
@@ -76,8 +73,6 @@ fn run(player_id: i32) -> card_sdk::Asked {
     if ctx::player_out(counter_user) {
         return Ok(());
     }
-    // 规则书: 「向你选择的方向强制移动1~4以内的任意步数」
-    // C# `H.AskNumber(i, ..., 1, 4, ...)` (an AskPick over the range).
     let n = ctx::ask_number(
         player_id,
         &Msg::new(key!("cant_look_away_title")),
@@ -85,7 +80,7 @@ fn run(player_id: i32) -> card_sdk::Asked {
         1,
         4,
     )?;
-    let forward = ctx::ask_pick(
+    let forward = ctx::ask_choice(
         player_id,
         &Msg::new(key!("cant_look_away_dir_title")),
         &Msg::new(key!("cant_look_away_dir_ask")),
@@ -94,32 +89,21 @@ fn run(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("cant_look_away_backward")),
         ],
     )? == 0;
-    // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
-    // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds
-    // `MoveCtx { Steps = n, Reverse = !forward, Resolve = true,
-    // Forced = true }`. Steps / Reverse / Resolve map onto `ctx::plan::*`;
-    // `ctx::plan` has no setter for `forced`, so that flag is dropped and the
-    // walk goes through `card_move`'s main-move path.
-    // TODO(ABI)（plan::set_forced / MoveCtx）: no guest setter for `MoveCtx.forced` --
-    //   a forced walk of the turn player is treated as the main move and is
-    //   refused once the main move is spent.
+    // TODO(ABI)（plan::set_forced / MoveCtx）: Steps / Reverse / Resolve map onto
+    // `ctx::plan::*`; `ctx::plan` has no setter for `forced`, so that flag is
+    // dropped and the walk goes through `run_planned_move`'s main-move path. no guest
+    // setter for `MoveCtx.forced` -- a forced walk of the turn player is treated as
+    // the main move and is refused once the main move is spent.
     ctx::plan::set_steps(n);
     ctx::plan::set_reverse(!forward);
-    ctx::plan::set_resolve(true);
+    ctx::plan::set_settles(true);
     ctx::log(
         player_id,
         &Msg::new(key!("cant_look_away_ordered"))
             .player_id("who", counter_user)
             .i("n", n as i64),
     );
-    // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- run the shaped walk
-    // now (C# `H.ForceWalk`, MatchHost.cs:23453-23480, through the move
-    // plan).
-    ctx::card_move(counter_user);
-    // 规则书: 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
-    // -- `card_move` runs `MainMoveAs` (MatchHost.cs:23102-23120), which sets
-    // `_turnCtx.MainMoved` when the walked player is the turn player, so a
-    // self walk on one's own turn consumes the main move.
+    ctx::run_planned_move(counter_user);
     Ok(())
 }
 

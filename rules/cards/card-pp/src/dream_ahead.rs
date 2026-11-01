@@ -1,4 +1,3 @@
-//! `PP:梦在前方，结彩当下` -- C# `CardDreamAhead` (MatchHost.cs:7479-7609):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:梦在前方，结彩当下`）:
 //! > 梦在前方，结彩当下：
@@ -16,10 +15,6 @@
 //!
 //! placed before the game starts; crystals grow on draws and settle tax grows
 //! with X.
-//! Not a hand play (C# `Normal => false`, no `Play` override): the card is
-//! placed by `DeckBeforeGame`. The settle tax is live in the `SettleBody` hook
-//! (stage 15, C# routine `SettleAfter`); the crystal growth runs on the `Drew`
-//! hook and on any other crystal the card gains (its counter listener).
 
 use alloc::vec::Vec;
 
@@ -66,9 +61,6 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         On::Action(Action::SettleBody("card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", None, settle_body)),
     ],
 )
-// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous
-// properties (`docs/TILES.md`), stamped at placement and gone with the card:
-// `noBuild` gates `why_not_build_on`, `handLimitDelta` is C# `Card.HandLimitDelta`.
 .props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::NO_BUILD, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"梦在前方，结彩当下"#)
         .raw_name(r#"梦在前方，结彩当下"#)
@@ -89,21 +81,16 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         // sheet cell D10
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
-/// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).
 const SLOT_X: &str = "dream_ahead_x";
 
-/// C# `CardDreamAhead.X`.
 fn x(player_id: i32) -> i32 {
     ctx::slot(player_id, SLOT_X)
 }
 
-/// C# `H.Fans(seat)` -- both [P✽P粉丝] faces together.
 fn fans(player_id: i32) -> i32 {
     fans::up(player_id) + fans::down(player_id)
 }
 
-/// C# `CardDreamAhead.DeckBeforeGame` -- pull the card out of the draw pile and
-/// place it on the owner's field before the opening deal.
 /// 规则书[特]: 「游戏开始前将此卡放置在[使用者]的[场地]且初始手牌减1」
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     // The hook fires on this card while it sits in a draw pile (once per
@@ -125,13 +112,9 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardDreamAhead.Drew` -- per card drawn, add a crystal; the 5 cap and the
-/// X bump for an over-cap crystal live on the [`overflow`] counter listener, so
-/// the add here is uncapped.
-/// 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」
-/// `actor == owner && card.placed` is the pre.
-/// `drew` fires **per single card** (an N-card draw raises it N times), so
-/// 「每次抽牌时」 is one crystal per raise.
+/// 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」 `actor == owner && card.placed` is
+/// the condition. `drew` fires **per single card** (an N-card draw raises it N times),
+/// so 「每次抽牌时」 is one crystal per raise.
 fn drew(player_id: i32) -> card_sdk::Asked {
     ctx::add_crystals(1, 0)?;
     Ok(())
@@ -171,14 +154,11 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 /// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are
 /// continuous properties on the `CardDef` above, stamped at placement.
 
-/// C# `CardDreamAhead.SettleAfter`: someone else settles on an owned deed --
-/// they pay the owner `fans × X + min(X×30, 300)`.
-/// 规则书[持续]（3）: 「…[结算]时额外[支付]」 -- 行动阶段 15
-/// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
-/// replace (`trigger::cancelled()`) skips it.
+/// 规则书[持续]（3）: 「…[结算]时额外[支付]」 -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M2): an entry in
+/// the settle's effect list, so a body replace (`trigger::cancelled()`) skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     // `card.placed && actor != owner && slot('dream_ahead_x') > 0 &&
-    // tile.id >= 0 && tile.owner == owner` is the pre; `cancelled()` is
+    // tile.id >= 0 && tile.owner == owner` is the condition; `cancelled()` is
     // resolution-time and stays. `player_out` of the mover is a derived-list
     // residual.
     if trigger::cancelled() {
@@ -245,7 +225,7 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
         .iter()
         .map(|&t| Msg::new(key!("dream_ahead_tile")).tile("tile", t))
         .collect();
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("dream_ahead_title")),
         &Msg::new(key!("dream_ahead_which")),

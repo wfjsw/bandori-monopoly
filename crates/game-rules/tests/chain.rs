@@ -44,7 +44,7 @@ fn ev(name: &str) -> String {
 /// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
 fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
     if msg.key() == "log.card_effect" {
-        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+        if let Some(Arg::Msg(m)) = msg.args.get("what") {
             return m;
         }
     }
@@ -74,9 +74,9 @@ fn ev_args(t: &Table, name: &str, arg: &str) -> Vec<i64> {
 fn who_of(t: &Table, name: &str) -> Vec<i64> {
     events(t, name)
         .iter()
-        .map(|e| match unadorned(&e.msg).a.get("who") {
+        .map(|e| match unadorned(&e.msg).args.get("who") {
             Some(Arg::PlayerId(v)) => *v as i64,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v,
             other => panic!("who is not a player arg: {other:?}"),
         })
         .collect()
@@ -85,8 +85,8 @@ fn who_of(t: &Table, name: &str) -> Vec<i64> {
 /// The card the open counteraction window's detail line names -- the timing it answers.
 fn answered_card(t: &Table) -> Option<String> {
     let p = t.prompt()?;
-    match p.text.a.get("detail") {
-        Some(Arg::Msg(m)) => match m.a.get("card") {
+    match p.text.args.get("detail") {
+        Some(Arg::Msg(m)) => match m.args.get("card") {
             Some(Arg::Card(id)) => Some(id.clone()),
             _ => None,
         },
@@ -697,7 +697,7 @@ fn a_no_player_trigger_starts_at_the_turn_player() {
     assert!(events(&t, "probe_fired").is_empty(), "no probe ran");
 }
 
-/// The `{{trigger}}` a non-card chain line carries: a nested `log.why.*` phrase
+/// The `{{trigger}}` a non-card chain line carries: a nested `log.reason.*` phrase
 /// (never a raw wire kind, never blank).
 fn chain_trigger(t: &Table, r#type: &str) -> String {
     let st = t.st();
@@ -708,15 +708,15 @@ fn chain_trigger(t: &Table, r#type: &str) -> String {
         .collect();
     assert_eq!(hits.len(), 1, "exactly one {type} line for link 1: {hits:?}", type = r#type);
     let msg = &hits[0].msg;
-    match msg.a.get("trigger") {
+    match msg.args.get("trigger") {
         Some(Arg::Msg(m)) => {
             assert!(
-                m.key().starts_with("log.why."),
+                m.key().starts_with("log.reason."),
                 "the trigger is a why phrase, not {m:?}"
             );
             assert_ne!(
                 m.key(),
-                "log.why.generic",
+                "log.reason.generic",
                 "a pay timing has a real phrase: {m:?}"
             );
             m.key().to_string()
@@ -747,7 +747,7 @@ fn a_non_card_timing_names_itself_in_the_chain_log() {
         t.decline();
     }
     let announced = chain_trigger(&t, "chain");
-    let settled = chain_trigger(&t, "resolve");
+    let settled = chain_trigger(&t, "settles");
     assert_eq!(
         announced, settled,
         "the announce and the settle name the same trigger"

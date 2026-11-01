@@ -20,9 +20,9 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use card_sdk::kani_host::{Args, Op};
-use game_rules::native_shims::{install_host, take_host, HostOps};
+use game_rules::native_shims::{install_host, take_host};
 use game_rules::{
-    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostErr, HostRequest,
+    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostError, HostRequest,
     HostState, InlineHost, Msg as EngineMsg, Prompt as EnginePrompt, RulesHandle,
 };
 
@@ -87,6 +87,21 @@ fn model_lock() -> ModelGuard {
     ModelGuard { _g: g }
 }
 
+/// Run a test body on a wide stack. A `World` is ~1.2 MB, and the harness
+/// builds/installs several by value, which exceeds a default test thread's
+/// stack.
+fn big(f: impl FnOnce() + Send + 'static) {
+    if std::env::var("CONF_NO_BIG").is_ok() {
+        return f();
+    }
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(f)
+        .expect("spawn")
+        .join()
+        .expect("test thread");
+}
+
 // ---------------------------------------------------------------------------
 // Real-side world: a thin `CardWorld` that stores exactly the state we diff
 // ---------------------------------------------------------------------------
@@ -125,9 +140,30 @@ pub struct ConfWorld {
     pub trig_main: bool,
     pub trig_roll_source: i32,
     pub trig_pay_is_rent: bool,
+    /// `TriggerPay.kind` wire code, `-1` = no payment.
+    pub trig_pay_kind: i32,
+    pub trig_pay_is_fixed: bool,
+    pub trig_pay_total_stage: bool,
+    pub trig_charge_skill: bool,
+    /// `settle_tile` / `outcome` stamps (`-1` = none).
+    pub trig_settle_tile: i32,
+    pub trig_settle_outcome: i32,
+    /// Scoped pay factors, milli (1000 = x1).
+    pub next_move_pay_factor: i32,
+    pub plan_pay_factor: i32,
+    pub next_settle_pay_factor: i32,
+    pub settle_pay_factor: i32,
+    pub move_open: bool,
+    pub settle_open: u32,
+    /// `paid_in_settle_by` per seat and a stored quote figure.
+    pub paid_in_settle_by: [i32; 4],
+    pub rent_quote: i32,
+    /// Last `set_pay_amount` write (`spendBefore` fold).
+    pub pay_amount: i32,
+    pub pay_amount_set: bool,
     pub move_present: bool,
     pub move_kind: i32,
-    pub move_resolve: bool,
+    pub move_settles: bool,
     pub move_dir: i32,
     pub move_from: i32,
     pub move_remaining: i32,
@@ -178,9 +214,25 @@ impl ConfWorld {
             trig_main: false,
             trig_roll_source: 0,
             trig_pay_is_rent: false,
+            trig_pay_kind: -1,
+            trig_pay_is_fixed: false,
+            trig_pay_total_stage: true,
+            trig_charge_skill: false,
+            trig_settle_tile: -1,
+            trig_settle_outcome: -1,
+            next_move_pay_factor: 1000,
+            plan_pay_factor: 1000,
+            next_settle_pay_factor: 1000,
+            settle_pay_factor: 1000,
+            move_open: false,
+            settle_open: 0,
+            paid_in_settle_by: [0; 4],
+            rent_quote: -1,
+            pay_amount: 0,
+            pay_amount_set: false,
             move_present: false,
             move_kind: -1,
-            move_resolve: false,
+            move_settles: false,
             move_dir: 1,
             move_from: -1,
             move_remaining: 0,
@@ -656,6 +708,16 @@ impl CardWorld for ConfWorld {
         self.state.insert((player_id, key.to_string()), value);
         self.events
             .push(format!("set_slot {player_id} {key} {value}"));
+        let p = player_id.max(0) as usize % 4;
+        match key {
+            "stay" => {
+                self.stay[p] = value.max(0);
+                self.events.push(format!("give_stay {player_id} {value}"));
+            }
+            "stun" => self.events.push(format!("give_stun {player_id} {value}")),
+            "exile" => self.events.push(format!("give_exile {player_id} {value}")),
+            _ => {}
+        }
         value
     }
     fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
@@ -671,7 +733,20 @@ impl CardWorld for ConfWorld {
         if floor {
             *e = (*e).max(0);
         }
-        *e
+        let out = *e;
+        // Mirror the status columns the snapshot compares (the model's
+        // `arm_state_add` writes its columns and logs the same effect).
+        let p = player_id.max(0) as usize % 4;
+        match key {
+            "stay" => {
+                self.stay[p] = (self.stay[p].saturating_add(delta)).max(0);
+                self.events.push(format!("give_stay {player_id} {delta}"));
+            }
+            "stun" => self.events.push(format!("give_stun {player_id} {delta}")),
+            "exile" => self.events.push(format!("give_exile {player_id} {delta}")),
+            _ => {}
+        }
+        out
     }
     fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
     fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
@@ -707,7 +782,7 @@ impl CardWorld for ConfWorld {
         0
     }
     // fire / stay
-    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _reason: EngineMsg) -> i32 {
         // Matches `game_core::engine::ops::gain_marker`: return the amount
         // actually gained (clamped under cap), not the new total.
         let p = player_id.max(0) as usize % 4;
@@ -722,7 +797,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("gain_marker {player_id} {got}"));
         got
     }
-    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _reason: EngineMsg) -> i32 {
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
             return 1;
@@ -787,19 +862,19 @@ impl CardWorld for ConfWorld {
         let mut t = game_rules::Trigger::default();
         t.value = self.trig_value;
         t.target = self.trig_target;
-        t.main = self.trig_main;
+        t.is_main_move = self.trig_main;
         t.roll_source = game_core::engine::rules::RollSource::from_i32(self.trig_roll_source);
         if self.move_present {
             t.mv = Some(game_rules::TriggerMove {
                 kind: game_rules::MoveKind::from_i32(self.move_kind)
                     .unwrap_or(game_rules::MoveKind::Walk),
-                resolve: self.move_resolve,
+                settles: self.move_settles,
                 tags: self
                     .move_tags
                     .iter()
                     .map(|(k, v)| (k.clone(), *v))
                     .collect(),
-                main: self.trig_main,
+                is_main_move: self.trig_main,
                 dir: game_core::engine::rules::Dir::from_i32(self.move_dir),
                 from: self.move_from,
                 remaining: self.move_remaining,
@@ -813,9 +888,18 @@ impl CardWorld for ConfWorld {
                 settle_redirect: false,
             });
         }
-        if self.trig_pay_is_rent {
-            t.pay = Some(game_rules::TriggerPay { is_rent: true });
+        if self.trig_pay_kind >= 0 || self.trig_pay_is_rent {
+            t.pay = Some(game_rules::TriggerPay {
+                kind: game_core::engine::PayKind::from_i32(self.trig_pay_kind.max(0)),
+                shape: game_core::engine::PayShape::from_i32(self.trig_pay_is_fixed as i32),
+                is_rent: self.trig_pay_is_rent,
+                total_stage: self.trig_pay_total_stage,
+            });
         }
+        t.charge_skill = self.trig_charge_skill;
+        t.settle_tile = self.trig_settle_tile;
+        t.outcome = (self.trig_settle_outcome >= 0)
+            .then(|| game_core::engine::SettleOutcome::from_i32(self.trig_settle_outcome));
         if self.buy_present {
             t.buy = Some(game_rules::TriggerBuy {
                 kind: BuyKind::from_i32(self.buy_kind).unwrap_or(BuyKind::Land),
@@ -877,6 +961,69 @@ impl CardWorld for ConfWorld {
     }
     fn paid_in_settle(&self) -> i32 {
         0
+    }
+    fn paid_in_settle_by(&self, seat: i32) -> i32 {
+        *self
+            .paid_in_settle_by
+            .get(seat.max(0) as usize % 4)
+            .unwrap_or(&0)
+    }
+    fn rent_quote(&mut self, _payer: i32, _tile: i32) -> i32 {
+        self.rent_quote
+    }
+    fn set_trigger_pay_kind(&mut self, kind: i32) {
+        self.trig_pay_kind = kind;
+    }
+    fn set_trigger_pay_shape(&mut self, shape: i32) -> bool {
+        self.trig_pay_is_fixed = shape == 1;
+        true
+    }
+    fn settle_tile(&self) -> i32 {
+        self.trig_settle_tile
+    }
+    fn settle_outcome(&self) -> i32 {
+        self.trig_settle_outcome
+    }
+    fn pay_factor(&self) -> i32 {
+        self.plan_pay_factor.saturating_mul(self.settle_pay_factor)
+    }
+    fn set_pay_factor(&mut self, milli: i32) {
+        // The `Auto` scope composes where a factor is live (MONEY-01).
+        self.multiply_pay_factor(milli, 4);
+    }
+    fn multiply_pay_factor(&mut self, milli: i32, scope: i32) {
+        let milli = milli.max(0);
+        let scope = match game_core::engine::PayFactorScope::from_i32(scope) {
+            game_core::engine::PayFactorScope::ThisMove if !self.move_open => {
+                game_core::engine::PayFactorScope::NextMove
+            }
+            game_core::engine::PayFactorScope::ThisSettle if self.settle_open == 0 => {
+                game_core::engine::PayFactorScope::NextSettle
+            }
+            game_core::engine::PayFactorScope::Auto if self.settle_open > 0 => {
+                game_core::engine::PayFactorScope::ThisSettle
+            }
+            game_core::engine::PayFactorScope::Auto if self.move_open => {
+                game_core::engine::PayFactorScope::ThisMove
+            }
+            game_core::engine::PayFactorScope::Auto => game_core::engine::PayFactorScope::NextMove,
+            s => s,
+        };
+        match scope {
+            game_core::engine::PayFactorScope::ThisMove => {
+                self.plan_pay_factor = self.plan_pay_factor.saturating_mul(milli)
+            }
+            game_core::engine::PayFactorScope::ThisSettle => {
+                self.settle_pay_factor = self.settle_pay_factor.saturating_mul(milli)
+            }
+            game_core::engine::PayFactorScope::NextMove => {
+                self.next_move_pay_factor = self.next_move_pay_factor.saturating_mul(milli)
+            }
+            game_core::engine::PayFactorScope::NextSettle => {
+                self.next_settle_pay_factor = self.next_settle_pay_factor.saturating_mul(milli)
+            }
+            game_core::engine::PayFactorScope::Auto => unreachable!(),
+        }
     }
     fn gains_this_turn(&self, _player: i32) -> i32 {
         0
@@ -946,17 +1093,17 @@ impl HostCtx for ConfHost {
     fn st_mut(&mut self) -> &mut HostState<ConfWorld, ConfRules> {
         &mut self.state
     }
-    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr> {
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostError> {
         Ok(card_sdk::native::read(ptr, len.max(0) as usize))
     }
-    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr> {
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostError> {
         card_sdk::native::write(ptr, bytes);
         Ok(())
     }
-    fn fuel(&mut self) -> Result<u64, HostErr> {
+    fn fuel(&mut self) -> Result<u64, HostError> {
         Ok(self.fuel)
     }
-    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostError> {
         self.fuel = v;
         Ok(())
     }
@@ -970,13 +1117,15 @@ impl HostCtx for ConfHost {
         _arg: &[u8],
         _want_msg: bool,
     ) -> (
-        Result<CallOut, HostErr>,
+        Result<CallOut, HostError>,
         HostState<ConfWorld, ConfRules>,
         u64,
     ) {
         // Nested `play_card` is out of scope for the thin adapter.
         (
-            Err(HostErr::trap("conf_model: nested call_entry not supported")),
+            Err(HostError::trap(
+                "conf_model: nested call_entry not supported",
+            )),
             HostState::new(ConfRules, ConfWorld::new(), vec![], 0),
             self.fuel,
         )
@@ -1003,7 +1152,7 @@ impl InlineHost for ConfInline {
                 from,
                 to,
                 amount,
-                total_stage: _,
+                runs_total_stage: _,
                 ..
             } => {
                 if amount <= 0 {
@@ -1022,6 +1171,78 @@ impl InlineHost for ConfInline {
                 Some(amount)
             }
             HostRequest::PayTotal { amount, .. } => Some(amount),
+            HostRequest::AdjustMoney {
+                player_id, delta, ..
+            } => {
+                // Raw money write (`ctx::adjust_money`): no pipeline, no
+                // window. Matches the model's `arm_adjust_money`.
+                let p = player_id.max(0) as usize % 4;
+                if delta > 0 {
+                    w.money[p] = w.money[p].saturating_add(delta);
+                    w.events
+                        .push(format!("GainMoney {{ player: {player_id}, n: {delta} }}"));
+                } else if delta < 0 {
+                    let n = (-delta).min(w.money[p].max(0));
+                    w.money[p] -= n;
+                }
+                Some(w.money[p])
+            }
+            HostRequest::PayCommand {
+                from,
+                to,
+                amount,
+                spec,
+                ..
+            } => {
+                let shape = spec & 0xF;
+                let kind = (spec >> 4) & 0xF;
+                let flags = (spec >> 8) & 0xF;
+                let raw_tile = (spec >> 12) & 0xF_FFFF;
+                w.trig_pay_kind = kind;
+                w.trig_pay_is_fixed = shape == 1;
+                w.trig_pay_total_stage = flags & 4 != 0;
+                w.trig_settle_tile = if raw_tile > 0 { raw_tile - 1 } else { -1 };
+                if amount > 0 {
+                    if from >= 0 {
+                        let f = from as usize % 4;
+                        w.money[f] = (w.money[f] - amount).max(0);
+                    }
+                    if to >= 0 {
+                        let t = to as usize % 4;
+                        w.money[t] = w.money[t].saturating_add(amount);
+                    }
+                    w.events.push(format!("pay_pipeline {from}->{to} {amount}"));
+                }
+                Some(amount)
+            }
+            HostRequest::ApplyRedeem {
+                player_id,
+                tile,
+                amount,
+            } => {
+                // G02 `spendBefore`: the write is the cost, else the asked one.
+                let cost = if w.pay_amount_set {
+                    w.pay_amount
+                } else {
+                    amount.max(0)
+                };
+                w.pay_amount_set = false;
+                if cost > 0 {
+                    let p = player_id.max(0) as usize % 4;
+                    let n = cost.min(w.money[p].max(0));
+                    w.money[p] -= n;
+                }
+                w.tiles_mortgaged[tile.max(0) as usize % 60] = false;
+                w.events.push(format!("redeem {player_id} {tile} {cost}"));
+                Some(cost)
+            }
+            // Dice answer the model's mid-value face (`roll_dice`, native
+            // branch). Same clamps, so both sides roll the same number.
+            HostRequest::Roll { count, sides, .. } => {
+                let c = count.max(0).min(100);
+                let s = sides.max(1).min(1000);
+                Some(c * (s + 1) / 2)
+            }
             HostRequest::Teleport { player_id, tile } => {
                 if player_id >= 0 {
                     w.pos[player_id as usize % 4] = tile;
@@ -1334,326 +1555,342 @@ fn diff_op_seq(
 
 #[test]
 fn op_gain_matches_engine() {
-    let _g = model_lock();
-    // gain(player, amount, msg) -- immediate credit on the model; Pay pipeline
-    // (no hooks) on the real side via ConfInline.
-    let (mp, ml) = intern_msg("conf.gain");
-    diff_op(
-        "gain",
-        &[],
-        |c| game_rules::hostfns::gain(c, 0, 500, mp, ml).unwrap() as i64,
-        [0, 500, mp, ml, 0, 0],
-        Op::gain,
-    );
+    big(|| {
+        let _g = model_lock();
+        // gain(player, amount, msg) -- immediate credit on the model; Pay pipeline
+        // (no hooks) on the real side via ConfInline.
+        let (mp, ml) = intern_msg("conf.gain");
+        diff_op(
+            "gain",
+            &[],
+            |c| game_rules::hostfns::gain(c, 0, 500, mp, ml).unwrap() as i64,
+            [0, 500, mp, ml, 0, 0],
+            Op::gain,
+        );
+    });
 }
-
 #[test]
 fn op_pay_matches_engine() {
-    let _g = model_lock();
-    let (mp, ml) = intern_msg("conf.pay");
-    diff_op(
-        "pay",
-        &[],
-        |c| game_rules::hostfns::pay(c, 1, 400, mp, ml).unwrap() as i64,
-        [1, 400, mp, ml, 0, 0],
-        Op::pay,
-    );
+    big(|| {
+        let _g = model_lock();
+        let (mp, ml) = intern_msg("conf.pay");
+        diff_op(
+            "pay",
+            &[],
+            |c| game_rules::hostfns::pay(c, 1, 400, mp, ml).unwrap() as i64,
+            [1, 400, mp, ml, 0, 0],
+            Op::pay,
+        );
+    });
 }
-
 #[test]
 fn op_teleport_to_matches_engine() {
-    let _g = model_lock();
-    diff_op(
-        "teleport_to",
-        &[],
-        |c| {
-            game_rules::hostfns::teleport_to(c, 2, 40).unwrap();
-            0
-        },
-        [2, 40, 0, 0, 0, 0],
-        Op::teleport_to,
-    );
+    big(|| {
+        let _g = model_lock();
+        diff_op(
+            "teleport_to",
+            &[],
+            |c| {
+                game_rules::hostfns::teleport_to(c, 2, 40).unwrap();
+                0
+            },
+            [2, 40, 0, 0, 0, 0],
+            Op::teleport_to,
+        );
+    });
 }
-
 /// `gain_charge` was ABI-88 genericized to `gain_marker` (name-as-data).
 /// Same contract: clamped at `charge_max`, returns the amount gained.
 #[test]
 fn op_gain_marker_matches_engine() {
-    let _g = model_lock();
-    let (np, nl) = intern_str("charge");
-    let (mp, ml) = intern_msg("conf.charge");
-    diff_op(
-        "gain_marker",
-        &[],
-        |c| game_rules::hostfns::gain_marker(c, 0, "charge", 2, mp, ml).unwrap() as i64,
-        [0, np, nl, 2, mp, ml],
-        Op::gain_marker,
-    );
+    big(|| {
+        let _g = model_lock();
+        let (np, nl) = intern_str("charge");
+        let (mp, ml) = intern_msg("conf.charge");
+        diff_op(
+            "gain_marker",
+            &[],
+            |c| game_rules::hostfns::gain_marker(c, 0, "charge", 2, mp, ml).unwrap() as i64,
+            [0, np, nl, 2, mp, ml],
+            Op::gain_marker,
+        );
+    });
 }
-
 /// `give_stay` was ABI-88 genericized to `apply_abnormal(player, kind=STAY, n, to)`.
 /// Same contract: a stay layer appears and the grant is logged.
 #[test]
 fn op_apply_abnormal_stay_matches_engine() {
-    let _g = model_lock();
-    // kind 1 = stay (bandori_std::kind::abnormal::Stay wire).
-    diff_op(
-        "apply_abnormal_stay",
-        &[],
-        |c| {
-            game_rules::hostfns::apply_abnormal(c, 1, 1, 2, -1).unwrap();
-            0
-        },
-        [1, 1, 2, -1, 0, 0],
-        Op::apply_abnormal,
-    );
+    big(|| {
+        let _g = model_lock();
+        // kind 1 = stay (bandori_std::kind::abnormal::Stay wire).
+        diff_op(
+            "apply_abnormal_stay",
+            &[],
+            |c| {
+                game_rules::hostfns::apply_abnormal(c, 1, 1, 2, -1).unwrap();
+                0
+            },
+            [1, 1, 2, -1, 0, 0],
+            Op::apply_abnormal,
+        );
+    });
 }
-
 #[test]
 fn op_player_pos_money_player_count_player_out_tile_count_match() {
-    let _g = model_lock();
-    for (label, op, args, real) in [
-        (
-            "player_pos",
-            Op::player_pos,
-            [1, 0, 0, 0, 0, 0],
-            (|c: &mut ConfHost| game_rules::hostfns::player_pos(c, 1).unwrap() as i64)
-                as fn(&mut ConfHost) -> i64,
-        ),
-        (
-            "money",
-            Op::money,
-            [2, 0, 0, 0, 0, 0],
-            (|c: &mut ConfHost| game_rules::hostfns::money(c, 2).unwrap() as i64)
-                as fn(&mut ConfHost) -> i64,
-        ),
-        (
-            "player_count",
-            Op::player_count,
-            [0, 0, 0, 0, 0, 0],
-            (|c: &mut ConfHost| game_rules::hostfns::player_count(c).unwrap() as i64)
-                as fn(&mut ConfHost) -> i64,
-        ),
-        (
-            "player_out",
-            Op::player_out,
-            [3, 0, 0, 0, 0, 0],
-            (|c: &mut ConfHost| game_rules::hostfns::player_out(c, 3).unwrap() as i64)
-                as fn(&mut ConfHost) -> i64,
-        ),
-        (
-            "tile_count",
-            Op::tile_count,
-            [0, 0, 0, 0, 0, 0],
-            (|c: &mut ConfHost| game_rules::hostfns::tile_count(c).unwrap() as i64)
-                as fn(&mut ConfHost) -> i64,
-        ),
-    ] {
-        diff_op(label, &[], real, args, op);
-    }
+    big(|| {
+        let _g = model_lock();
+        for (label, op, args, real) in [
+            (
+                "player_pos",
+                Op::player_pos,
+                [1, 0, 0, 0, 0, 0],
+                (|c: &mut ConfHost| game_rules::hostfns::player_pos(c, 1).unwrap() as i64)
+                    as fn(&mut ConfHost) -> i64,
+            ),
+            (
+                "money",
+                Op::money,
+                [2, 0, 0, 0, 0, 0],
+                (|c: &mut ConfHost| game_rules::hostfns::money(c, 2).unwrap() as i64)
+                    as fn(&mut ConfHost) -> i64,
+            ),
+            (
+                "player_count",
+                Op::player_count,
+                [0, 0, 0, 0, 0, 0],
+                (|c: &mut ConfHost| game_rules::hostfns::player_count(c).unwrap() as i64)
+                    as fn(&mut ConfHost) -> i64,
+            ),
+            (
+                "player_out",
+                Op::player_out,
+                [3, 0, 0, 0, 0, 0],
+                (|c: &mut ConfHost| game_rules::hostfns::player_out(c, 3).unwrap() as i64)
+                    as fn(&mut ConfHost) -> i64,
+            ),
+            (
+                "tile_count",
+                Op::tile_count,
+                [0, 0, 0, 0, 0, 0],
+                (|c: &mut ConfHost| game_rules::hostfns::tile_count(c).unwrap() as i64)
+                    as fn(&mut ConfHost) -> i64,
+            ),
+        ] {
+            diff_op(label, &[], real, args, op);
+        }
+    });
 }
-
 #[test]
 fn op_tile_named_matches_engine() {
-    let _g = model_lock();
-    // Only 「江户川乐器店」 is modeled; both sides return 31.
-    let (np, nl) = intern_str(TILE_SHOP_NAME);
-    diff_op(
-        "tile_named",
-        &[],
-        |c| game_rules::hostfns::tile_named(c, np, nl).unwrap() as i64,
-        [np, nl, 0, 0, 0, 0],
-        Op::tile_named,
-    );
+    big(|| {
+        let _g = model_lock();
+        // Only 「江户川乐器店」 is modeled; both sides return 31.
+        let (np, nl) = intern_str(TILE_SHOP_NAME);
+        diff_op(
+            "tile_named",
+            &[],
+            |c| game_rules::hostfns::tile_named(c, np, nl).unwrap() as i64,
+            [np, nl, 0, 0, 0, 0],
+            Op::tile_named,
+        );
+    });
 }
-
 #[test]
 fn op_set_houses_houses_of_match() {
-    let _g = model_lock();
-    diff_op_seq(
-        "set_houses+houses_of",
-        &[],
-        |c| {
-            game_rules::hostfns::set_houses(c, 3, 4).unwrap();
-            game_rules::hostfns::houses_of(c, 3).unwrap() as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::set_houses, [3, 4, 0, 0, 0, 0]);
-            rules_kani::host::dispatch(Op::houses_of, [3, 0, 0, 0, 0, 0])
-        },
-    );
-    diff_op(
-        "houses_of",
-        &[],
-        |c| game_rules::hostfns::houses_of(c, 2).unwrap() as i64,
-        [2, 0, 0, 0, 0, 0],
-        Op::houses_of,
-    );
+    big(|| {
+        let _g = model_lock();
+        diff_op_seq(
+            "set_houses+houses_of",
+            &[],
+            |c| {
+                game_rules::hostfns::set_houses(c, 3, 4).unwrap();
+                game_rules::hostfns::houses_of(c, 3).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::set_houses, [3, 4, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::houses_of, [3, 0, 0, 0, 0, 0])
+            },
+        );
+        diff_op(
+            "houses_of",
+            &[],
+            |c| game_rules::hostfns::houses_of(c, 2).unwrap() as i64,
+            [2, 0, 0, 0, 0, 0],
+            Op::houses_of,
+        );
+    });
 }
-
 #[test]
 fn op_set_owner_tile_owner_match() {
-    let _g = model_lock();
-    diff_op_seq(
-        "set_owner+tile_owner",
-        &[],
-        |c| {
-            game_rules::hostfns::set_owner(c, 7, 2).unwrap();
-            game_rules::hostfns::tile_owner(c, 7).unwrap() as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::set_owner, [7, 2, 0, 0, 0, 0]);
-            rules_kani::host::dispatch(Op::tile_owner, [7, 0, 0, 0, 0, 0])
-        },
-    );
+    big(|| {
+        let _g = model_lock();
+        diff_op_seq(
+            "set_owner+tile_owner",
+            &[],
+            |c| {
+                game_rules::hostfns::set_owner(c, 7, 2).unwrap();
+                game_rules::hostfns::tile_owner(c, 7).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::set_owner, [7, 2, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::tile_owner, [7, 0, 0, 0, 0, 0])
+            },
+        );
+    });
 }
-
 #[test]
 fn op_add_to_dest_take_card_cards_in_hand_size_match() {
-    let _g = model_lock();
-    // Use a non-resonance card name so the model's pilot-compat `hand_size`
-    // (bitset + pile hybrid) is exercised on an empty-start hand.
-    let (cp, cl) = intern_str("R:[衍生] 压");
-    diff_op_seq(
-        "add_to_dest+take_card+cards_in",
-        &[],
-        |c| {
-            game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1).unwrap();
-            let ok = game_rules::hostfns::take_card(c, 0, cp, cl, 0).unwrap();
-            let (buf, cap) = card_sdk::native::reserve(64);
-            let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
-            ok as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::add_to_dest, [0, cp, cl, 1, 0, 0]);
-            let ok = rules_kani::host::dispatch(Op::take_card, [0, cp, cl, 0, 0, 0]);
-            let (buf, cap) = card_sdk::native::reserve(64);
-            rules_kani::host::dispatch(Op::cards_in, [0, 0, buf, cap, 0, 0]);
-            ok
-        },
-    );
+    big(|| {
+        let _g = model_lock();
+        // Use a non-resonance card name so the model's pilot-compat `hand_size`
+        // (bitset + pile hybrid) is exercised on an empty-start hand.
+        let (cp, cl) = intern_str("R:[衍生] 压");
+        diff_op_seq(
+            "add_to_dest+take_card+cards_in",
+            &[],
+            |c| {
+                game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1).unwrap();
+                let ok = game_rules::hostfns::take_card(c, 0, cp, cl, 0).unwrap();
+                let (buf, cap) = card_sdk::native::reserve(64);
+                let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
+                ok as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::add_to_dest, [0, cp, cl, 1, 0, 0]);
+                let ok = rules_kani::host::dispatch(Op::take_card, [0, cp, cl, 0, 0, 0]);
+                let (buf, cap) = card_sdk::native::reserve(64);
+                rules_kani::host::dispatch(Op::cards_in, [0, 0, buf, cap, 0, 0]);
+                ok
+            },
+        );
+    });
 }
-
 #[test]
 fn op_to_discard_and_hand_size() {
-    let _g = model_lock();
-    let (cp, cl) = intern_str("R:[衍生] 压");
-    diff_op(
-        "to_discard",
-        &[],
-        |c| {
-            game_rules::hostfns::to_discard(c, 1, cp, cl).unwrap();
-            0
-        },
-        [1, cp, cl, 0, 0, 0],
-        Op::to_discard,
-    );
-    diff_op(
-        "hand_size",
-        &[],
-        |c| game_rules::hostfns::hand_size(c, 0).unwrap() as i64,
-        [0, 0, 0, 0, 0, 0],
-        Op::hand_size,
-    );
+    big(|| {
+        let _g = model_lock();
+        let (cp, cl) = intern_str("R:[衍生] 压");
+        diff_op(
+            "to_discard",
+            &[],
+            |c| {
+                game_rules::hostfns::to_discard(c, 1, cp, cl).unwrap();
+                0
+            },
+            [1, cp, cl, 0, 0, 0],
+            Op::to_discard,
+        );
+        diff_op(
+            "hand_size",
+            &[],
+            |c| game_rules::hostfns::hand_size(c, 0).unwrap() as i64,
+            [0, 0, 0, 0, 0, 0],
+            Op::hand_size,
+        );
+    });
 }
-
 #[test]
 fn state_set_get_value_match() {
-    let _g = model_lock();
-    let (kp, kl) = intern_str("conf.key");
-    diff_op_seq(
-        "state_set+state_get",
-        &[],
-        |c| {
-            game_rules::hostfns::state_set(c, 1, kp, kl, 0, 9).unwrap();
-            game_rules::hostfns::state_get(c, 1, kp, kl, 0).unwrap() as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::state_set, [1, kp, kl, 0, 9, 0]);
-            rules_kani::host::dispatch(Op::state_get, [1, kp, kl, 0, 0, 0])
-        },
-    );
+    big(|| {
+        let _g = model_lock();
+        let (kp, kl) = intern_str("conf.key");
+        diff_op_seq(
+            "state_set+state_get",
+            &[],
+            |c| {
+                game_rules::hostfns::state_set(c, 1, kp, kl, 0, 9).unwrap();
+                game_rules::hostfns::state_get(c, 1, kp, kl, 0).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::state_set, [1, kp, kl, 0, 9, 0]);
+                rules_kani::host::dispatch(Op::state_get, [1, kp, kl, 0, 0, 0])
+            },
+        );
+    });
 }
-
 #[test]
 fn op_count_held_set_held_name_match() {
-    let _g = model_lock();
-    let (np, nl) = intern_str("P✽P粉丝(正)");
-    diff_op_seq(
-        "set_held_name+count_held_name",
-        &[],
-        |c| {
-            game_rules::hostfns::set_held_name(c, np, nl, 2, 5, 0, -1).unwrap();
-            game_rules::hostfns::count_held_name(c, np, nl, 2).unwrap() as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::set_held_name, [np, nl, 2, 5, 0, 0]);
-            rules_kani::host::dispatch(Op::count_held_name, [np, nl, 2, 0, 0, 0])
-        },
-    );
+    big(|| {
+        let _g = model_lock();
+        let (np, nl) = intern_str("P✽P粉丝(正)");
+        diff_op_seq(
+            "set_held_name+count_held_name",
+            &[],
+            |c| {
+                game_rules::hostfns::set_held_name(c, np, nl, 2, 5, 0, -1).unwrap();
+                game_rules::hostfns::count_held_name(c, np, nl, 2).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::set_held_name, [np, nl, 2, 5, 0, 0]);
+                rules_kani::host::dispatch(Op::count_held_name, [np, nl, 2, 0, 0, 0])
+            },
+        );
+    });
 }
-
 #[test]
 fn op_set_dest_place_card_at_match() {
-    let _g = model_lock();
-    let (cp, cl) = intern_str("PP:[衍生]共鸣");
-    let (mp, ml) = intern_msg("conf.place");
-    diff_op_seq(
-        "set_dest+place_card_at",
-        &[],
-        |c| {
-            game_rules::hostfns::set_dest(c, 12).unwrap();
-            game_rules::hostfns::place_card_at(c, 0, cp, cl, mp, ml).unwrap() as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::set_dest, [12, 0, 0, 0, 0, 0]);
-            rules_kani::host::dispatch(Op::place_card_at, [0, cp, cl, mp, ml, 0])
-        },
-    );
+    big(|| {
+        let _g = model_lock();
+        let (cp, cl) = intern_str("PP:[衍生]共鸣");
+        let (mp, ml) = intern_msg("conf.place");
+        diff_op_seq(
+            "set_dest+place_card_at",
+            &[],
+            |c| {
+                game_rules::hostfns::set_dest(c, 12).unwrap();
+                game_rules::hostfns::place_card_at(c, 0, cp, cl, mp, ml).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::set_dest, [12, 0, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::place_card_at, [0, cp, cl, mp, ml, 0])
+            },
+        );
+    });
 }
-
 #[test]
 fn op_trig_set_pay_amount_trig_value_match() {
-    let _g = model_lock();
-    diff_op_seq(
-        "trig_set_pay_amount+trig_value",
-        &[],
-        |c| {
-            game_rules::hostfns::trig_set_pay_amount(c, 42).unwrap();
-            game_rules::hostfns::trig_value(c).unwrap() as i64
-        },
-        || {
-            rules_kani::host::dispatch(Op::trig_set_pay_amount, [42, 0, 0, 0, 0, 0]);
-            rules_kani::host::dispatch(Op::trig_value, [0, 0, 0, 0, 0, 0])
-        },
-    );
-    diff_op(
-        "trig_value",
-        &[],
-        |c| game_rules::hostfns::trig_value(c).unwrap() as i64,
-        [0, 0, 0, 0, 0, 0],
-        Op::trig_value,
-    );
+    big(|| {
+        let _g = model_lock();
+        diff_op_seq(
+            "trig_set_pay_amount+trig_value",
+            &[],
+            |c| {
+                game_rules::hostfns::trig_set_pay_amount(c, 42).unwrap();
+                game_rules::hostfns::trig_value(c).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::trig_set_pay_amount, [42, 0, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::trig_value, [0, 0, 0, 0, 0, 0])
+            },
+        );
+        diff_op(
+            "trig_value",
+            &[],
+            |c| game_rules::hostfns::trig_value(c).unwrap() as i64,
+            [0, 0, 0, 0, 0, 0],
+            Op::trig_value,
+        );
+    });
 }
-
 #[test]
 fn op_ask_yes_fixed_answers() {
-    let _g = model_lock();
-    // ask(kind=YesNo=1, player, title, text) -- fixed answers [1].
-    let (tp, tl) = intern_msg("conf.t");
-    let (xp, xl) = intern_msg("conf.x");
-    diff_op(
-        "ask",
-        &[1],
-        |c| {
-            game_rules::hostfns::opt_int(c, 1).unwrap();
-            game_rules::hostfns::ask(c, 1, 0, tp, tl, xp, xl).unwrap() as i64
-        },
-        [1, 0, tp, tl, xp, xl],
-        Op::ask,
-    );
+    big(|| {
+        let _g = model_lock();
+        // ask(kind=YesNo=1, player, title, text) -- fixed answers [1].
+        let (tp, tl) = intern_msg("conf.t");
+        let (xp, xl) = intern_msg("conf.x");
+        diff_op(
+            "ask",
+            &[1],
+            |c| {
+                game_rules::hostfns::opt_int(c, 1).unwrap();
+                game_rules::hostfns::ask(c, 1, 0, tp, tl, xp, xl).unwrap() as i64
+            },
+            [1, 0, tp, tl, xp, xl],
+            Op::ask,
+        );
+    });
 }
-
 // ---------------------------------------------------------------------------
 // Card-level differential: one representative per band + skill + event
 // ---------------------------------------------------------------------------
@@ -1721,107 +1958,121 @@ fn run_hook(id: &str, player: i32) {
 
 #[test]
 fn card_band_ag_conforms() {
-    let _g = model_lock();
-    // `AG:即使夕阳落山` -- play entry; ops modeled (gain/log style).
-    // Falls back to whatever invoke finds; fail-closed if unknown.
-    diff_card("ag", "AG:即使夕阳落山", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `AG:即使夕阳落山` -- play entry; ops modeled (gain/log style).
+        // Falls back to whatever invoke finds; fail-closed if unknown.
+        diff_card("ag", "AG:即使夕阳落山", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_crychic_conforms() {
-    let _g = model_lock();
-    diff_card("crychic", "CRYCHIC:（祥子）带领着大家", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        diff_card("crychic", "CRYCHIC:（祥子）带领着大家", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_general_conforms() {
-    let _g = model_lock();
-    // `通用:10次招募（1回限定）` -- pay + draw.
-    diff_card("general", "通用:10次招募（1回限定）", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `通用:10次招募（1回限定）` -- pay + draw.
+        diff_card("general", "通用:10次招募（1回限定）", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_hhw_conforms() {
-    let _g = model_lock();
-    diff_card("hhw", "HHW:Happy, Lucky, Smile, Yeah！", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        diff_card("hhw", "HHW:Happy, Lucky, Smile, Yeah！", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_morfonica_conforms() {
-    let _g = model_lock();
-    // `Mor:（Rui）正论恶魔` -- four `transfer` legs. Pre-seeded answers are
-    // consumed by `pay` *instead of* moving money (see `request_or_pause`), so
-    // leave answers empty and let ConfInline apply every Pay.
-    diff_card("morfonica", "Mor:（Rui）正论恶魔", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `Mor:（Rui）正论恶魔` -- four `transfer` legs. Pre-seeded answers are
+        // consumed by `pay` *instead of* moving money (see `request_or_pause`), so
+        // leave answers empty and let ConfInline apply every Pay.
+        diff_card("morfonica", "Mor:（Rui）正论恶魔", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_mujica_conforms() {
-    let _g = model_lock();
-    // `Mujica:心の雨` -- player_pos / others / tile_forward / roll /
-    // apply_abnormal(stay/stun) / gain. Dice use the shared mid-value formula.
-    diff_card("mujica", "Mujica:心の雨", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `Mujica:心の雨` -- player_pos / others / tile_forward / roll /
+        // apply_abnormal(stay/stun) / gain. Dice use the shared mid-value formula.
+        diff_card("mujica", "Mujica:心の雨", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_mygo_conforms() {
-    let _g = model_lock();
-    // `MyGO:轮符雨` -- stay grant + before_turn_end. The real engine runs
-    // the stay write through the abnormal [反击] gate; with empty answers
-    // ConfInline answers 1 (allow) so both sides grant the stay. Pre-seeding
-    // 0 would block the stay on the real side only (the model has no gate).
-    diff_card("mygo", "MyGO:轮符雨", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `MyGO:轮符雨` -- stay grant + before_turn_end. The real engine runs
+        // the stay write through the abnormal [反击] gate; with empty answers
+        // ConfInline answers 1 (allow) so both sides grant the stay. Pre-seeding
+        // 0 would block the stay on the real side only (the model has no gate).
+        diff_card("mygo", "MyGO:轮符雨", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_pp_conforms() {
-    let _g = model_lock();
-    diff_card("pp", "PP:有你与我在这里共度", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        diff_card("pp", "PP:有你与我在这里共度", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_ppp_conforms() {
-    let _g = model_lock();
-    // `PPP:[衍生]Pipopa` -- set_dest + gain + place_card.
-    diff_card("ppp", "PPP:[衍生]Pipopa", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `PPP:[衍生]Pipopa` -- set_dest + gain + place_card.
+        diff_card("ppp", "PPP:[衍生]Pipopa", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_ras_conforms() {
-    let _g = model_lock();
-    diff_card("ras", "RAS:（MASKING）CRUSH ON THE DRUM!!!", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        diff_card("ras", "RAS:（MASKING）CRUSH ON THE DRUM!!!", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_roselia_conforms() {
-    let _g = model_lock();
-    // `R:[衍生] 压` -- a pure `gain`.
-    diff_card("roselia", "R:[衍生] 压", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `R:[衍生] 压` -- a pure `gain`.
+        diff_card("roselia", "R:[衍生] 压", &[], run_play);
+    });
 }
-
 #[test]
 fn card_band_sumimi_conforms() {
-    let _g = model_lock();
-    // `Sumimi:兼顾偶像与乐队` -- state + money_of + gain.
-    diff_card("sumimi", "Sumimi:兼顾偶像与乐队", &[], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `Sumimi:兼顾偶像与乐队` -- state + money_of + gain.
+        diff_card("sumimi", "Sumimi:兼顾偶像与乐队", &[], run_play);
+    });
 }
-
 #[test]
 fn card_skill_conforms() {
-    let _g = model_lock();
-    // `skill:千早爱音:重新开始` -- first Hook entry (declare_cap / fire pot).
-    diff_card("skill", "skill:千早爱音:重新开始", &[], run_hook);
+    big(|| {
+        let _g = model_lock();
+        // `skill:千早爱音:重新开始` -- first Hook entry (declare_cap / fire pot).
+        diff_card("skill", "skill:千早爱音:重新开始", &[], run_hook);
+    });
 }
-
 #[test]
 fn card_event_conforms() {
-    let _g = model_lock();
-    // `event:很噜的感觉` -- ask_yes + teleport + pay. `ask_yes` is `ask==0`,
-    // so answer **1** means "no teleport". With all-no the body is quiet
-    // (tile_named("快餐店") is -1 on the model; unused when nobody teleports).
-    diff_card("event", "event:很噜的感觉", &[1, 1, 1, 1], run_play);
+    big(|| {
+        let _g = model_lock();
+        // `event:很噜的感觉` -- ask_yes + teleport + pay. `ask_yes` is `ask==0`,
+        // so answer **1** means "no teleport". With all-no the body is quiet
+        // (tile_named("快餐店") is -1 on the model; unused when nobody teleports).
+        diff_card("event", "event:很噜的感觉", &[1, 1, 1, 1], run_play);
+    });
 }
-
 // ---------------------------------------------------------------------------
 // Host-ops batch: rent_of / tile_at / set_tile_at / trigger payload
 // (modeled 2026-10-11 by HOST-OPS; semantics from `hostfns` + `game-core`
@@ -1871,76 +2122,81 @@ fn rent_model() -> KWorld {
 
 #[test]
 fn op_rent_of_matches_engine() {
-    let _g = model_lock();
-    // Property at 2 houses -> table[2]; 0 houses -> table[0]; RiNG -> price;
-    // empty table -> 0. (tile 30 = 购物中心-like 3600 land, rent[0]=360.)
-    for (tile, expect) in [(1, 3220), (5, 160), (8, 1000), (0, 0), (30, 360)] {
-        diff_get_with(
-            &format!("rent_of[{tile}]={expect}"),
-            rent_conf(),
-            rent_model(),
-            |c| game_rules::hostfns::rent_of(c, tile).unwrap() as i64,
-            move || rules_kani::host::dispatch(Op::rent_of, [tile, 0, 0, 0, 0, 0]),
-        );
-    }
+    big(|| {
+        let _g = model_lock();
+        // Property at 2 houses -> table[2]; 0 houses -> table[0]; RiNG -> price;
+        // empty table -> 0. (tile 30 = 购物中心-like 3600 land, rent[0]=360.)
+        for (tile, expect) in [(1, 3220), (5, 160), (8, 1000), (0, 0), (30, 360)] {
+            diff_get_with(
+                &format!("rent_of[{tile}]={expect}"),
+                rent_conf(),
+                rent_model(),
+                |c| game_rules::hostfns::rent_of(c, tile).unwrap() as i64,
+                move || rules_kani::host::dispatch(Op::rent_of, [tile, 0, 0, 0, 0, 0]),
+            );
+        }
+    });
 }
-
 #[test]
 fn op_buy_price_matches_engine() {
-    let _g = model_lock();
-    // quote_native = land + houses * house_cost.
-    for (tile, expect) in [(1, 7000), (5, 1600), (8, 1000), (0, 0)] {
-        diff_get_with(
-            &format!("buy_price[{tile}]={expect}"),
-            rent_conf(),
-            rent_model(),
-            |c| game_rules::hostfns::buy_price(c, tile).unwrap() as i64,
-            move || rules_kani::host::dispatch(Op::buy_price, [tile, 0, 0, 0, 0, 0]),
-        );
-    }
+    big(|| {
+        let _g = model_lock();
+        // quote_native = land + houses * house_cost.
+        for (tile, expect) in [(1, 7000), (5, 1600), (8, 1000), (0, 0)] {
+            diff_get_with(
+                &format!("buy_price[{tile}]={expect}"),
+                rent_conf(),
+                rent_model(),
+                |c| game_rules::hostfns::buy_price(c, tile).unwrap() as i64,
+                move || rules_kani::host::dispatch(Op::buy_price, [tile, 0, 0, 0, 0, 0]),
+            );
+        }
+    });
 }
-
 #[test]
 fn op_tile_at_set_tile_at_match_engine() {
-    let _g = model_lock();
-    let mut conf = base_conf();
-    conf.field_uid.push(7);
-    conf.field_tile.push(3);
-    let mut model = base_model();
-    model.field[0] = kworld::FieldCard {
-        uid: 7,
-        card: 0,
-        player: 0,
-        tile: 3,
-        face_down: false,
-        immune: false,
-        crystals: 0,
-        props: kworld::NameMap::new(),
-    };
-    model.field_n = 1;
+    big(|| {
+        let _g = model_lock();
+        let mut conf = base_conf();
+        conf.field_uid.push(7);
+        conf.field_tile.push(3);
+        let mut model = base_model();
+        model.field[0] = kworld::FieldCard {
+            uid: 7,
+            card: 0,
+            player: 0,
+            tile: 3,
+            face_down: false,
+            immune: false,
+            crystals: 0,
+            props: kworld::NameMap::new(),
+        };
+        model.field_n = 1;
 
-    let mut conf_h = ConfHost::new(conf, Vec::new());
-    let mut inline = ConfInline;
-    let real = with_inline_host(&mut inline, || {
-        let a = game_rules::hostfns::tile_at(&mut conf_h, 7).unwrap() as i64;
-        let s = game_rules::hostfns::set_tile_at(&mut conf_h, 7, 20).unwrap() as i64;
-        let b = game_rules::hostfns::tile_at(&mut conf_h, 7).unwrap() as i64;
-        let missing = game_rules::hostfns::set_tile_at(&mut conf_h, 99, 1).unwrap() as i64;
-        (a, s, b, missing)
+        let mut conf_h = ConfHost::new(conf, Vec::new());
+        let mut inline = ConfInline;
+        let real = with_inline_host(&mut inline, || {
+            let a = game_rules::hostfns::tile_at(&mut conf_h, 7).unwrap() as i64;
+            let s = game_rules::hostfns::set_tile_at(&mut conf_h, 7, 20).unwrap() as i64;
+            let b = game_rules::hostfns::tile_at(&mut conf_h, 7).unwrap() as i64;
+            let missing = game_rules::hostfns::set_tile_at(&mut conf_h, 99, 1).unwrap() as i64;
+            (a, s, b, missing)
+        });
+        install_model_world_with(model, &[]);
+        let model = {
+            let a = rules_kani::host::dispatch(Op::tile_at, [7, 0, 0, 0, 0, 0]);
+            let s = rules_kani::host::dispatch(Op::set_tile_at, [7, 20, 0, 0, 0, 0]);
+            let b = rules_kani::host::dispatch(Op::tile_at, [7, 0, 0, 0, 0, 0]);
+            let missing = rules_kani::host::dispatch(Op::set_tile_at, [99, 1, 0, 0, 0, 0]);
+            (a, s, b, missing)
+        };
+        if real != model {
+            panic!(
+                "MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}"
+            );
+        }
     });
-    install_model_world_with(model, &[]);
-    let model = {
-        let a = rules_kani::host::dispatch(Op::tile_at, [7, 0, 0, 0, 0, 0]);
-        let s = rules_kani::host::dispatch(Op::set_tile_at, [7, 20, 0, 0, 0, 0]);
-        let b = rules_kani::host::dispatch(Op::tile_at, [7, 0, 0, 0, 0, 0]);
-        let missing = rules_kani::host::dispatch(Op::set_tile_at, [99, 1, 0, 0, 0, 0]);
-        (a, s, b, missing)
-    };
-    if real != model {
-        panic!("MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}");
-    }
 }
-
 fn trig_conf() -> ConfWorld {
     let mut w = base_conf();
     w.trig_main = true;
@@ -1948,7 +2204,7 @@ fn trig_conf() -> ConfWorld {
     w.trig_pay_is_rent = true;
     w.move_present = true;
     w.move_kind = 0;
-    w.move_resolve = true;
+    w.move_settles = true;
     w.move_dir = 1;
     w.move_from = 2;
     w.move_remaining = 3;
@@ -1973,7 +2229,7 @@ fn trig_model() -> KWorld {
     w.trig_pay_is_rent = true;
     let mut ms = MoveSnap::NONE;
     ms.kind = 0;
-    ms.resolve = true;
+    ms.settles = true;
     ms.dir = 1;
     ms.from = 2;
     ms.remaining = 3;
@@ -2009,9 +2265,9 @@ fn op_trig_move_payload_matches_engine() {
         [0; 6],
     );
     trig_get(
-        "trig_move_resolve",
-        |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-        Op::trig_move_resolve,
+        "trig_move_settles",
+        |c| game_rules::hostfns::trig_move_settles(c).unwrap() as i64,
+        Op::trig_move_settles,
         [0; 6],
     );
     trig_get(
@@ -2064,7 +2320,6 @@ fn op_trig_move_payload_matches_engine() {
         [tp, tl, 0, 0, 0, 0],
     );
 }
-
 #[test]
 fn op_trig_move_sentinels_match_engine() {
     let _g = model_lock();
@@ -2115,7 +2370,7 @@ fn op_trig_move_sentinels_match_engine() {
     let mut model = base_model();
     model.trig_main = true;
     diff_get_with(
-        "no-move main",
+        "no-move is_main_move",
         conf,
         model,
         |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
@@ -2148,112 +2403,337 @@ fn op_trig_move_sentinels_match_engine() {
         "no-move resolve",
         conf,
         model,
-        |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-        || rules_kani::host::dispatch(Op::trig_move_resolve, [0; 6]),
+        |c| game_rules::hostfns::trig_move_settles(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_settles, [0; 6]),
     );
 }
-
 #[test]
 fn op_trig_buy_deal_payload_matches_engine() {
-    let _g = model_lock();
-    trig_get(
-        "trig_buy_kind",
-        |c| game_rules::hostfns::trig_buy_kind(c).unwrap() as i64,
-        Op::trig_buy_kind,
-        [0; 6],
-    );
-    trig_get(
-        "trig_seller",
-        |c| game_rules::hostfns::trig_seller(c).unwrap() as i64,
-        Op::trig_seller,
-        [0; 6],
-    );
-    trig_get(
-        "trig_price",
-        |c| game_rules::hostfns::trig_price(c).unwrap() as i64,
-        Op::trig_price,
-        [0; 6],
-    );
-    trig_get(
-        "trig_deal_owner",
-        |c| game_rules::hostfns::trig_deal_owner(c).unwrap() as i64,
-        Op::trig_deal_owner,
-        [0; 6],
-    );
-    trig_get(
-        "trig_deal_houses",
-        |c| game_rules::hostfns::trig_deal_houses(c).unwrap() as i64,
-        Op::trig_deal_houses,
-        [0; 6],
-    );
-    trig_get(
-        "trig_deal_mortgaged",
-        |c| game_rules::hostfns::trig_deal_mortgaged(c).unwrap() as i64,
-        Op::trig_deal_mortgaged,
-        [0; 6],
-    );
-    trig_get(
-        "trig_roll_source",
-        |c| game_rules::hostfns::trig_roll_source(c).unwrap() as i64,
-        Op::trig_roll_source,
-        [0; 6],
-    );
-    trig_get(
-        "trig_pay_is_rent",
-        |c| game_rules::hostfns::trig_pay_is_rent(c).unwrap() as i64,
-        Op::trig_pay_is_rent,
-        [0; 6],
-    );
+    big(|| {
+        let _g = model_lock();
+        trig_get(
+            "trig_buy_kind",
+            |c| game_rules::hostfns::trig_buy_kind(c).unwrap() as i64,
+            Op::trig_buy_kind,
+            [0; 6],
+        );
+        trig_get(
+            "trig_seller",
+            |c| game_rules::hostfns::trig_seller(c).unwrap() as i64,
+            Op::trig_seller,
+            [0; 6],
+        );
+        trig_get(
+            "trig_price",
+            |c| game_rules::hostfns::trig_price(c).unwrap() as i64,
+            Op::trig_price,
+            [0; 6],
+        );
+        trig_get(
+            "trig_deal_owner",
+            |c| game_rules::hostfns::trig_deal_owner(c).unwrap() as i64,
+            Op::trig_deal_owner,
+            [0; 6],
+        );
+        trig_get(
+            "trig_deal_houses",
+            |c| game_rules::hostfns::trig_deal_houses(c).unwrap() as i64,
+            Op::trig_deal_houses,
+            [0; 6],
+        );
+        trig_get(
+            "trig_deal_mortgaged",
+            |c| game_rules::hostfns::trig_deal_mortgaged(c).unwrap() as i64,
+            Op::trig_deal_mortgaged,
+            [0; 6],
+        );
+        trig_get(
+            "trig_roll_source",
+            |c| game_rules::hostfns::trig_roll_source(c).unwrap() as i64,
+            Op::trig_roll_source,
+            [0; 6],
+        );
+        trig_get(
+            "trig_pay_is_rent",
+            |c| game_rules::hostfns::trig_pay_is_rent(c).unwrap() as i64,
+            Op::trig_pay_is_rent,
+            [0; 6],
+        );
+    });
 }
-
 #[test]
 fn op_trig_buy_setters_match_engine() {
-    let _g = model_lock();
-    let mut conf = trig_conf();
-    conf.buy_price = 100;
-    conf.buy_deal_owner = None;
-    conf.buy_deal_houses = None;
-    conf.buy_deal_mortgaged = false;
-    conf.move_roll = -1;
-    let mut model = trig_model();
-    model.buy_snap.price = 100;
-    model.buy_snap.deal_owner = -1;
-    model.buy_snap.deal_houses = 0;
-    model.buy_snap.deal_mortgaged = false;
-    model.move_snap.roll = -1;
+    big(|| {
+        let _g = model_lock();
+        let mut conf = trig_conf();
+        conf.buy_price = 100;
+        conf.buy_deal_owner = None;
+        conf.buy_deal_houses = None;
+        conf.buy_deal_mortgaged = false;
+        conf.move_roll = -1;
+        let mut model = trig_model();
+        model.buy_snap.price = 100;
+        model.buy_snap.deal_owner = -1;
+        model.buy_snap.deal_houses = 0;
+        model.buy_snap.deal_mortgaged = false;
+        model.move_snap.roll = -1;
 
-    let mut conf_h = ConfHost::new(conf, Vec::new());
-    let mut inline = ConfInline;
-    let real = with_inline_host(&mut inline, || {
-        game_rules::hostfns::trig_set_price(&mut conf_h, 400).unwrap();
-        game_rules::hostfns::trig_set_deal_owner(&mut conf_h, 1).unwrap();
-        game_rules::hostfns::trig_set_deal_houses(&mut conf_h, 2).unwrap();
-        game_rules::hostfns::trig_set_deal_mortgaged(&mut conf_h, 1).unwrap();
-        game_rules::hostfns::trig_set_move_roll(&mut conf_h, 11).unwrap();
-        (
-            game_rules::hostfns::trig_price(&mut conf_h).unwrap() as i64,
-            game_rules::hostfns::trig_deal_owner(&mut conf_h).unwrap() as i64,
-            game_rules::hostfns::trig_deal_houses(&mut conf_h).unwrap() as i64,
-            game_rules::hostfns::trig_deal_mortgaged(&mut conf_h).unwrap() as i64,
-            game_rules::hostfns::trig_move_roll(&mut conf_h).unwrap() as i64,
-        )
+        let mut conf_h = ConfHost::new(conf, Vec::new());
+        let mut inline = ConfInline;
+        let real = with_inline_host(&mut inline, || {
+            game_rules::hostfns::trig_set_price(&mut conf_h, 400).unwrap();
+            game_rules::hostfns::trig_set_deal_owner(&mut conf_h, 1).unwrap();
+            game_rules::hostfns::trig_set_deal_houses(&mut conf_h, 2).unwrap();
+            game_rules::hostfns::trig_set_deal_mortgaged(&mut conf_h, 1).unwrap();
+            game_rules::hostfns::trig_set_move_roll(&mut conf_h, 11).unwrap();
+            (
+                game_rules::hostfns::trig_price(&mut conf_h).unwrap() as i64,
+                game_rules::hostfns::trig_deal_owner(&mut conf_h).unwrap() as i64,
+                game_rules::hostfns::trig_deal_houses(&mut conf_h).unwrap() as i64,
+                game_rules::hostfns::trig_deal_mortgaged(&mut conf_h).unwrap() as i64,
+                game_rules::hostfns::trig_move_roll(&mut conf_h).unwrap() as i64,
+            )
+        });
+        install_model_world_with(model, &[]);
+        let model = {
+            rules_kani::host::dispatch(Op::trig_set_price, [400, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::trig_set_deal_owner, [1, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::trig_set_deal_houses, [2, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::trig_set_deal_mortgaged, [1, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::trig_set_move_roll, [11, 0, 0, 0, 0, 0]);
+            (
+                rules_kani::host::dispatch(Op::trig_price, [0; 6]),
+                rules_kani::host::dispatch(Op::trig_deal_owner, [0; 6]),
+                rules_kani::host::dispatch(Op::trig_deal_houses, [0; 6]),
+                rules_kani::host::dispatch(Op::trig_deal_mortgaged, [0; 6]),
+                rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]),
+            )
+        };
+        if real != model {
+            panic!("MODEL-vs-ENGINE DIVERGENCE [trig setters]: real={real:?} model={model:?}");
+        }
     });
-    install_model_world_with(model, &[]);
-    let model = {
-        rules_kani::host::dispatch(Op::trig_set_price, [400, 0, 0, 0, 0, 0]);
-        rules_kani::host::dispatch(Op::trig_set_deal_owner, [1, 0, 0, 0, 0, 0]);
-        rules_kani::host::dispatch(Op::trig_set_deal_houses, [2, 0, 0, 0, 0, 0]);
-        rules_kani::host::dispatch(Op::trig_set_deal_mortgaged, [1, 0, 0, 0, 0, 0]);
-        rules_kani::host::dispatch(Op::trig_set_move_roll, [11, 0, 0, 0, 0, 0]);
-        (
-            rules_kani::host::dispatch(Op::trig_price, [0; 6]),
-            rules_kani::host::dispatch(Op::trig_deal_owner, [0; 6]),
-            rules_kani::host::dispatch(Op::trig_deal_houses, [0; 6]),
-            rules_kani::host::dispatch(Op::trig_deal_mortgaged, [0; 6]),
-            rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]),
-        )
-    };
-    if real != model {
-        panic!("MODEL-vs-ENGINE DIVERGENCE [trig setters]: real={real:?} model={model:?}");
-    }
+}
+// ---------------------------------------------------------------------------
+// G02 pay pipeline ops
+// ---------------------------------------------------------------------------
+
+#[test]
+fn op_trig_set_pay_kind_and_shape() {
+    big(|| {
+        diff_op_seq(
+            "trig_set_pay_kind+trig_set_pay_shape",
+            &[],
+            |c| {
+                game_rules::hostfns::trig_set_pay_kind(c, 3).unwrap();
+                game_rules::hostfns::trig_set_pay_shape(c, 1).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::trig_set_pay_kind, [3, 0, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::trig_set_pay_shape, [1, 0, 0, 0, 0, 0])
+            },
+        );
+        diff_op_seq(
+            "trig_set_pay_shape normal",
+            &[],
+            |c| game_rules::hostfns::trig_set_pay_shape(c, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::trig_set_pay_shape, [0, 0, 0, 0, 0, 0]),
+        );
+    });
+}
+#[test]
+fn op_multiply_pay_factor_scopes() {
+    big(|| {
+        let conf = base_conf();
+        let mut model = base_model();
+        // `thisMove` open: a `ThisMove` multiply must land on the plan, and the
+        // getter composes plan x settle.
+        let mut conf = conf;
+        conf.move_open = true;
+        model.move_open = true;
+        diff_get_with(
+            "multiply_pay_factor thisMove",
+            conf,
+            model,
+            |c| {
+                game_rules::hostfns::multiply_pay_factor(c, 500, 1).unwrap();
+                game_rules::hostfns::pay_factor(c).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::multiply_pay_factor, [500, 1, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::pay_factor, [0; 6])
+            },
+        );
+        // `thisMove` without a move falls forward to `nextMove` (getter ignores it).
+        diff_get_with(
+            "multiply_pay_factor nextMove fallback",
+            base_conf(),
+            base_model(),
+            |c| {
+                game_rules::hostfns::multiply_pay_factor(c, 500, 1).unwrap();
+                game_rules::hostfns::pay_factor(c).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::multiply_pay_factor, [500, 1, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::pay_factor, [0; 6])
+            },
+        );
+        // `thisSettle` without a settle falls forward to `nextSettle`.
+        diff_get_with(
+            "multiply_pay_factor nextSettle fallback",
+            base_conf(),
+            base_model(),
+            |c| {
+                game_rules::hostfns::multiply_pay_factor(c, 500, 3).unwrap();
+                game_rules::hostfns::pay_factor(c).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::multiply_pay_factor, [500, 3, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::pay_factor, [0; 6])
+            },
+        );
+    });
+}
+#[test]
+fn op_set_pay_factor_auto() {
+    big(|| {
+        let mut conf = base_conf();
+        let mut model = base_model();
+        conf.settle_open = 1;
+        conf.settle_pay_factor = 800;
+        model.settle_open = 1;
+        model.settle_pay_factor = 800;
+        diff_get_with(
+            "set_pay_factor in settle",
+            conf,
+            model,
+            |c| {
+                game_rules::hostfns::set_pay_factor(c, 400).unwrap();
+                game_rules::hostfns::pay_factor(c).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::set_pay_factor, [400, 0, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::pay_factor, [0; 6])
+            },
+        );
+    });
+}
+#[test]
+fn op_settle_readers() {
+    big(|| {
+        let mut conf = base_conf();
+        let mut model = base_model();
+        conf.trig_settle_tile = 2;
+        conf.trig_settle_outcome = 1;
+        model.trig_settle_tile = 2;
+        model.trig_settle_outcome = 1;
+        diff_get_with(
+            "settle_tile",
+            conf,
+            model,
+            |c| game_rules::hostfns::settle_tile(c).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::settle_tile, [0; 6]),
+        );
+        let mut conf = base_conf();
+        let mut model = base_model();
+        conf.trig_settle_outcome = 1;
+        model.trig_settle_outcome = 1;
+        diff_get_with(
+            "settle_outcome",
+            conf,
+            model,
+            |c| game_rules::hostfns::settle_outcome(c).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::settle_outcome, [0; 6]),
+        );
+    });
+}
+#[test]
+fn op_paid_in_settle_by_and_rent_quote() {
+    big(|| {
+        let mut conf = base_conf();
+        let mut model = base_model();
+        conf.paid_in_settle_by = [10, 20, 30, 40];
+        model.paid_in_settle_by = [10, 20, 30, 40];
+        diff_get_with(
+            "paid_in_settle_by",
+            conf,
+            model,
+            |c| game_rules::hostfns::paid_in_settle_by(c, 2).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::paid_in_settle_by, [2, 0, 0, 0, 0, 0]),
+        );
+        let mut conf = base_conf();
+        let mut model = base_model();
+        conf.rent_quote = 640;
+        model.rent_quote = 640;
+        diff_get_with(
+            "rent_quote",
+            conf,
+            model,
+            |c| game_rules::hostfns::rent_quote(c, 0, 3).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::rent_quote, [0, 3, 0, 0, 0, 0]),
+        );
+    });
+}
+#[test]
+fn op_pay_command_moves_money() {
+    big(|| {
+        let (mp, ml) = intern_msg("conf.pay_command");
+        // spec: shape 0 (normal), kind 1 (rent), no flags, no tile.
+        let spec = 0 | (1 << 4);
+        diff_op(
+            "pay_command",
+            &[],
+            |c| game_rules::hostfns::pay_command(c, 0, 1, 300, spec, mp, ml).unwrap() as i64,
+            [0, 1, 300, spec, mp, ml],
+            Op::pay_command,
+        );
+        // A fixed leg with a card kind to seat 2, tile index 5 (stored +1).
+        let spec = 1 | (0 << 4) | (4 << 2) | ((5 + 1) << 12);
+        diff_op(
+            "pay_command fixed",
+            &[],
+            |c| game_rules::hostfns::pay_command(c, 0, 2, 120, spec, mp, ml).unwrap() as i64,
+            [0, 2, 120, spec, mp, ml],
+            Op::pay_command,
+        );
+    });
+}
+#[test]
+fn op_commit_redeem_folds_spend_before() {
+    big(|| {
+        // No write: the asked amount is the cost.
+        diff_op(
+            "commit_redeem plain",
+            &[],
+            |c| game_rules::hostfns::commit_redeem(c, 0, 1, 400).unwrap() as i64,
+            [0, 1, 400, 0, 0, 0],
+            Op::commit_redeem,
+        );
+        // A written cost (a `spendBefore` reduction) wins.
+        let mut conf = base_conf();
+        conf.pay_amount = 90;
+        conf.pay_amount_set = true;
+        let mut model = base_model();
+        model.pay_amount = 90;
+        model.pay_amount_set = true;
+        diff_get_with(
+            "commit_redeem folded",
+            conf,
+            model,
+            |c| game_rules::hostfns::commit_redeem(c, 0, 1, 400).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::commit_redeem, [0, 1, 400, 0, 0, 0]),
+        );
+    });
+}
+/// Not an assertion, a signpost: both worlds are large (the model's 60-tile
+/// `NameMap`s dominate), so every test body runs on [`big`]'s wide stack.
+#[test]
+fn world_size_needs_the_big_stack() {
+    big(|| {
+        println!(
+            "KWorld={} ConfWorld={}",
+            std::mem::size_of::<KWorld>(),
+            std::mem::size_of::<ConfWorld>()
+        );
+    });
 }

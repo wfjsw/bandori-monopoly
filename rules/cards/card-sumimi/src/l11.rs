@@ -1,4 +1,3 @@
-//! `Sumimi:#L11` -- C# `CardL11` (MatchHost.cs:11592-11620): place with 2 miracle
 //!
 //! 规则书（the roster, id `Sumimi:#L11`）:
 //! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。
@@ -32,23 +31,15 @@ pub const L11: CardDef = CardDef::new(
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 fn l11(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 2)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "Sumimi:#L11", &Msg::new(key!("l11_note")));
-    // 规则书: 「为其添加2个[奇迹水晶]」 -- C# `PlaceFromPlay(..., crystals: 2)` sets
-    // `Card.Crystals = 2` on the placed copy.
     ctx::set_crystals(2);
     ctx::log(
         player_id,
         &Msg::new(key!("l11_placed")).player_id("who", player_id),
     );
-    // 规则书: 「每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替」 --
-    // every band skill's crystal cost drains this card first through
-    // `skill_groups::spend_crystals` (see `poppin::cash`, `ave_mujica::halve`
-    // and the other band skills' spends), which is C# `CardL11.Cover(n)`.
-    // 规则书: 「此卡[奇迹水晶]数为0时放入弃牌堆」 -- the `counterChanged` entry
-    // above, not a turn-end re-check, so a spend by another card is caught too.
-    // C# `NoteText` shows the crystal count; CardDef has no NoteText hook.
+    // 规则书: 「此卡[奇迹水晶]数为0时放入弃牌堆」 -- the `counterChanged` entry above, not a turn-end
+    // re-check, so a spend by another card is caught too.
     Ok(())
 }
 

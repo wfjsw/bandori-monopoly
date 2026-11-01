@@ -40,12 +40,31 @@ pub trait CondView {
     /// `by_card` owner seat (`by`), `-1` = none.
     fn by(&self) -> i64;
     fn pay_is_rent(&self) -> bool;
+    /// The pending payment's wire kind (`pay_kind`), `-1` = no payment.
+    fn pay_kind(&self) -> i64;
+    /// 1 = the pending payment's shape is `Fixed` (`pay_is_fixed`).
+    fn pay_is_fixed(&self) -> i64;
+    /// Is the pending payment a command total (`pay_total_stage`); neutral
+    /// `true` without a payment.
+    fn pay_total_stage(&self) -> bool;
+    /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
+    fn charge_is_skill(&self) -> bool;
+    /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
+    fn settle_tile(&self) -> i64;
+    /// `settle.owner` -- `-1` = no settle / unowned.
+    fn settle_owner(&self) -> i64;
+    /// `settle.houses`.
+    fn settle_houses(&self) -> i64;
+    /// `settle.mortgaged`.
+    fn settle_mortgaged(&self) -> bool;
+    /// `settle.outcome` -- `-1` = not finished / no settle.
+    fn settle_outcome(&self) -> i64;
     /// Move face (`move.roll`), `-1` = none (binds CEL `null`).
     fn move_roll(&self) -> i64;
     /// Move kind (`move.kind`), `-1` = none (binds CEL `null`).
     fn move_kind(&self) -> i64;
     fn move_remaining(&self) -> i64;
-    /// `t.Move.Main` (`move.main`).
+    /// `t.Move.Main` (`move.is_main_move`).
     fn move_main(&self) -> bool;
     /// `move.by_skill` -- the move was shaped or started by a skill.
     fn move_by_skill(&self) -> bool;
@@ -57,6 +76,11 @@ pub trait CondView {
     fn move_tag_named(&self, name: &str) -> i64;
     /// Eager table for `move.tag(name)` (window-scope, not per-candidate).
     fn move_tag_table(&self) -> Vec<(String, i64)>;
+    /// The cards whose bodies are currently resolving (`resolving('id')`);
+    /// absent = nothing resolving.
+    fn resolving_table(&self) -> Vec<(String, i64)> {
+        Vec::new()
+    }
     fn roll_source(&self) -> i64;
     fn abnormal(&self) -> bool;
     fn turn_player(&self) -> i64;
@@ -73,6 +97,10 @@ pub trait CondView {
     /// [`CondView::card_id`] -- comparable to `card.id` and to a card-id
     /// literal (`id_of("…")`). `0` when the trigger carries no card.
     fn trigger_card(&self) -> i64;
+    /// The trigger's card is a `skill:` card (`card.is_skill`).
+    fn trigger_card_is_skill(&self) -> bool {
+        false
+    }
     /// The trigger's counter / message name hash (`counter_name`), same
     /// encoding as [`crate::id_of`] -- `Trigger.name` on a `CounterChanged`
     /// hook (the counter name) or an `On::Message` entry (the message name).
@@ -109,7 +137,7 @@ pub trait CondView {
     fn slot(&self, name: &str) -> i64;
     /// Per-card token counter (`tok('name')`, the guest's `ctx::tok(owner,
     /// name)`); missing = 0.
-    fn tok_named(&self, name: &str) -> i64;
+    fn held_named(&self, name: &str) -> i64;
     /// Membership list behind `cand_has(key, x)`. Missing key = empty list.
     /// The key is the host's set name (the bake string content installs).
     fn cand_set(&self, key: &str) -> Vec<i64>;
@@ -191,7 +219,7 @@ pub trait CondView {
     /// eager function closures; a live view may answer from the world.
     fn slot_table(&self) -> Vec<(String, i64)>;
     /// Every `tok('name')` counter (non-zero ones; missing = 0).
-    fn tok_named_table(&self) -> Vec<(String, i64)>;
+    fn held_named_table(&self) -> Vec<(String, i64)>;
     /// Every `card.counter('name')` counter on the candidate instance
     /// (non-zero ones; missing = 0).
     fn card_counter_table(&self) -> Vec<(String, i64)>;

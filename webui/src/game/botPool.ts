@@ -23,7 +23,7 @@ import { describeWorkerError } from "./workerError.ts";
 
 /**
  * The per-viewer extras `bot-glue`'s `extras` returns: the same fields the
- * server's `Match::view_extra` used to ship on the frame (`MatchView.aiAnswer`
+ * server's `Match::view_extras` used to ship on the frame (`MatchView.aiAnswer`
  * / `playable` / `estCost` / `skills`), derived from ONE seat's view.
  */
 export interface ViewExtras {
@@ -31,7 +31,7 @@ export interface ViewExtras {
   playable: boolean[];
   /** Parallel to `hand`: bot-only estimated execution cost (reserve check). */
   estCost: number[];
-  /** The viewer's pressable skills, gated through `why_not_act`. */
+  /** The viewer's pressable skills, gated through `cant_act`. */
   skills: SkillAction[];
   /** The standard policy's precomputed answer for the viewer's own live
    *  prompt, if any (the engine's prompt-open fill). */
@@ -360,7 +360,7 @@ export class BotPool {
   /**
    * Per-viewer extras from ONE seat's frame (`playable` / `estCost` / `skills`
    * / `aiAnswer`) -- the online path's client-side twin of the server's
-   * `Match::view_extra`. One worker is enough: extras is a single determinize
+   * `Match::view_extras`. One worker is enough: extras is a single determinize
    * + gate pass (no root-parallel search), and the `seed` is the determinizer's
    * sampling seed (`decisionSeed`), never the match RNG.
    */

@@ -57,9 +57,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -69,8 +69,8 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
 /// The card the open [反击] window's detail line names -- the link it answers.
 fn answered_card(t: &Table) -> Option<String> {
     let p = t.prompt()?;
-    match p.text.a.get("detail") {
-        Some(Arg::Msg(m)) => match m.a.get("card") {
+    match p.text.args.get("detail") {
+        Some(Arg::Msg(m)) => match m.args.get("card") {
             Some(Arg::Card(id)) => Some(id.clone()),
             _ => None,
         },

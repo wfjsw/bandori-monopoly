@@ -48,7 +48,6 @@ export interface ParsedMotion {
 }
 
 /**
- * `live2d._3000_3000_0020_0020_0020._0020`: the fade weight curve.
  *
  * Not clamp01: inside `[0,1]` it is the cosine ease `0.5 - 0.5*cos(t*PI)`,
  * clamped to 0 below 0 and 1 above 1. Every fade in the runtime goes through
@@ -62,9 +61,7 @@ export function fadeWeight(t: number): number {
 }
 
 /**
- * The runtime's float scanner (`_3000_0020_0020_3000._3000_3000`): optional
- * leading `-`, digits, optional `.` + fraction. No `+`, no exponent.
- */
+ * No `+`, no exponent. */
 const NUMBER_RE = /-?(?:\d+(?:\.\d*)?|\.\d+)/g;
 
 function scanNumbers(src: string): number[] {
@@ -374,7 +371,6 @@ export class MotionQueueManager {
 
   startMotion(motion: Live2DMotion, now: number): number {
     for (const ent of this.ents) {
-      // `MotionQueueEnt._3000_0020`: pull the end time in to `now + fadeOut`.
       const end = now + ent.motion.fadeOutMsec;
       if (ent.endTimeMSec < 0 || end < ent.endTimeMSec) ent.endTimeMSec = end;
     }

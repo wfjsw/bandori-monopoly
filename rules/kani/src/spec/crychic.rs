@@ -93,7 +93,7 @@ pub fn grab_01_log_ok_mutant(effects: &[Effect], player: i32, passer_key: u16) -
 // ---------------------------------------------------------------------------
 
 /// Only the stun is in the effect log (`add_group_pool` is unlogged in the
-/// Kani host). The crystal is checked as `post.group_pool == pre+1`.
+/// Kani host). The crystal is checked as `post.group_pool == condition+1`.
 pub fn debut_02_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::GiveStun { player: p, n: 1 } if p == player)
 }

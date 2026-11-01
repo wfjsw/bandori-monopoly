@@ -52,9 +52,10 @@ export interface DriveHooks {
   onThinking?: (member: number, on: boolean) => void;
   /** Decision counter, for tests / logs. */
   onDone?: (member: number, outcome: DriveOutcome, iterations: number) => void;
-  /** A command was applied for `member` against `decision`; `ok` is false when
-   *  the engine refused it, so the caller can re-arm a revisitable surface. */
-  onApplied?: (member: number, decision: Decision, ok: boolean) => void;
+  /** A command was applied for `member` against `decision`; `err` is the
+   *  engine's refusal (null when it landed), so the caller can re-arm a
+   *  surface the engine did not take. */
+  onApplied?: (member: number, decision: Decision, err: Msg | null) => void;
 }
 
 /** `server/src/botsvc.rs::decision_at`, already ported in `botBudget`. */
@@ -69,6 +70,9 @@ export interface Decision {
   /** The 运营 window owes several decisions on one surface (a card, a skill,
    *  the roll, then `end`): a new state there is a new decision. */
   revisitable: boolean;
+  /** Auction only: the bid this answer left live (`-1` = passed), so the seat
+   *  re-arms exactly when someone outbids it -- not on its own bid. */
+  bid?: number;
 }
 
 /** One key per (turn, stage, prompt): a prompt id stays below 100 000. */
@@ -90,7 +94,13 @@ function revisitable(v: MatchView): boolean {
 
 /** The decision a seat's frame shows right now. */
 export function decisionOf(v: MatchView): Decision {
-  return { key: decisionKey(v), seq: v.state.seq, revisitable: revisitable(v) };
+  const d: Decision = {
+    key: decisionKey(v),
+    seq: v.state.seq,
+    revisitable: revisitable(v),
+  };
+  if (v.state.prompt?.kind === "auction") d.bid = v.state.prompt.bid;
+  return d;
 }
 
 /** Where an applied `end` leaves the match: the turn's 结束 surface. An `end`
@@ -102,9 +112,16 @@ function settled(v: MatchView): Decision {
 }
 
 /** What an applied command is recorded against: an `end` settles the turn's
- *  结束 surface, anything else the decision it answered. */
+ *  结束 surface, anything else the decision it answered. An auction answer
+ *  records the bid it **left live** (the engine floors bids to 100s), so the
+ *  seat is not re-armed by its own bid -- only by someone outbidding it. */
 export function answerFor(v: MatchView, cmd: Command, decision: Decision): Decision {
-  return cmd.act === "end" ? settled(v) : decision;
+  if (cmd.act === "end") return settled(v);
+  if (v.state.prompt?.kind === "auction") {
+    const value = cmd.value ?? 0;
+    return { ...decision, bid: value < 0 ? -1 : value - (value % 100) };
+  }
+  return decision;
 }
 
 /**
@@ -118,6 +135,13 @@ export function answerFor(v: MatchView, cmd: Command, decision: Decision): Decis
  * once or twice per turn for every bot. A prompt is the same: the answer is
  * already in the prompt's answer list, so a re-ask is `err.answered`. Only the
  * 运营 window (no prompt) re-arms on a new state.
+ *
+ * An auction is the one prompt that outlives its answer too: the seat stays
+ * pending while it holds the top bid, and owes a fresh decision (raise or
+ * pass) every time somebody outbids it. So it re-arms when the **live bid**
+ * moves past the one its answer left -- not on its own bid, and not on a
+ * cosmetic `seq` bump (a Solo auction has no clock, so a seat that is never
+ * re-armed keeps the prompt open forever).
  */
 export function needsAnswer(
   answered: ReadonlyMap<number, Decision>,
@@ -126,20 +150,47 @@ export function needsAnswer(
 ): boolean {
   const prev = answered.get(member);
   if (!prev || prev.key !== decisionKey(v)) return true;
+  if (v.state.prompt?.kind === "auction") {
+    // A pass is final (`err.auction_passed` on a re-ask); a bid leaves the
+    // seat pending and re-arms it only once it is outbid.
+    const k = v.state.prompt.players.indexOf(v.playerId);
+    if (k >= 0 && (v.state.prompt.answers[k] ?? -1) >= 0) return false;
+    return prev.bid !== v.state.prompt.bid;
+  }
   return prev.revisitable && prev.seq !== v.state.seq;
 }
 
-/** Record an applied answer. A refusal only re-arms a revisitable (运营)
- *  surface, where the next candidate is still legal on the same surface; a
- *  refused turn / prompt answer means the surface is already moving on. */
+/** Record an applied answer. A refusal means the engine did **not** take it:
+ *  the seat still owes the same answer and must be asked again -- `err.bid_min`
+ *  on an auction bid decided from a frame older than the live minimum is the
+ *  common case (solo has no clock, so a swallowed bid holds the table on the
+ *  prompt forever), and so is `err.over_hand`. Only a refusal that says the
+ *  answer already stands (`err.answered` / `err.auction_passed`) keeps it
+ *  recorded. A surface that moved on re-arms by itself (new decision key). */
 export function recordAnswer(
   answered: Map<number, Decision>,
   member: number,
   decision: Decision,
-  ok: boolean,
+  err: Msg | null,
 ): void {
-  if (!ok && decision.revisitable) answered.delete(member);
-  else answered.set(member, decision);
+  if (!err || err.k === "err.answered" || err.k === "err.auction_passed") {
+    answered.set(member, decision);
+    return;
+  }
+  answered.delete(member);
+}
+
+/**
+ * Does the autopilot answer the surface this frame shows?
+ *
+ * An auction is the one surface a player usually wants to keep: bidding is a
+ * judgement call about the seat's money, not a chore, so the global `autoBid`
+ * setting can leave it to the player. The prompt sheet then stays live (the
+ * `Board` opens it under 托管 too) and the autopilot keeps to the other
+ * surfaces until the auction closes.
+ */
+export function autopilotAnswers(v: MatchView, autoBid: boolean): boolean {
+  return autoBid || v.state.prompt?.kind !== "auction";
 }
 
 /**
@@ -164,11 +215,28 @@ export async function driveSeat(
 
   // Every applied command is reported against the decision it was read from,
   // so the caller can keep the seat from being asked the same decision twice.
-  const decision = decisionOf(v);
-  const apply = async (cmd: Command): Promise<Msg | null> => {
+  const applyAt = async (cmd: Command, from: MatchView): Promise<Msg | null> => {
     const err = await act(member, cmd);
-    hooks.onApplied?.(member, answerFor(v, cmd, decision), !err);
+    hooks.onApplied?.(member, answerFor(from, cmd, decisionOf(from)), err);
     return err;
+  };
+  const apply = (cmd: Command): Promise<Msg | null> => applyAt(cmd, v);
+
+  /** Retry once from the frame the engine has **now**. A refusal is usually a
+   *  stale view -- an auction minimum that moved while the seat was deciding
+   *  (`err.bid_min`), a change the seat has not seen yet -- so replaying the
+   *  answer computed from the old frame would just be refused again. Returns
+   *  whether the retry landed; `false` also when there is nothing to retry
+   *  with (no fresh frame / no plan). */
+  const retryFresh = async (what: string, cmd: Command, err: Msg): Promise<boolean> => {
+    console.warn(`bot ${member}: ${what} refused`, cmd, err);
+    const fresh = getMemberView(member);
+    if (!fresh) return false;
+    const again = firstPlan(fresh, hooks.ctx);
+    if (!again) return false;
+    const err2 = await applyAt(again, fresh);
+    if (err2) console.warn(`bot ${member}: retry refused`, again, err2);
+    return err2 == null;
   };
 
   const search = hooks.search ?? true;
@@ -217,8 +285,8 @@ export async function driveSeat(
       }
       const err = await apply(cmd);
       if (err) {
-        console.warn(`bot ${member}: policy answer refused`, cmd, err);
-        if (fallback) await apply(fallback);
+        const landed = await retryFresh("policy answer", cmd, err);
+        if (!landed && fallback) await apply(fallback);
         hooks.onDone?.(member, "fallback", 0);
         return "fallback";
       }
@@ -239,16 +307,16 @@ export async function driveSeat(
     const err = await apply(result.answer);
     if (err) {
       // The engine refused the search's answer (a stale view, an already-taken
-      // prompt). Never re-ask: drop the cached answer so it cannot be replayed,
-      // and fall back to the policy's candidate for this decision right now
-      // (`docs/BOT.md` §5 B6).
-      console.warn(`bot ${member}: search answer refused`, result.answer, err);
+      // prompt). Drop the cached answer so it cannot be replayed, then answer
+      // from the frame the engine has now -- the policy's candidate for this
+      // decision `docs/BOT.md` §5 B6).
       try {
         await pool.invalidate(result.decisionKey ?? "");
       } catch {
         /* best-effort */
       }
-      if (fallback) await apply(fallback);
+      const landed = await retryFresh("search answer", result.answer, err);
+      if (!landed && fallback) await apply(fallback);
       hooks.onDone?.(member, "fallback", result.iterations);
       return "fallback";
     }

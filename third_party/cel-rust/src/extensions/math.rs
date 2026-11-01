@@ -1,6 +1,3 @@
-//! The math extension library: functions and macros in the `math` namespace,
-//! following cel-go's `ext.Math()`.
-
 #[cfg(feature = "parser")]
 use crate::common::ast::{CallExpr, Expr, IdedExpr, ListExpr, LiteralValue};
 use crate::common::functions::Function;

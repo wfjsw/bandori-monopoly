@@ -13,7 +13,7 @@
 //! 状态1's offer is another player's, at *their* turn start -- so the hook runs
 //! on every turn start and asks the turn's player. 「前后一格内的一名玩家」 is a
 //! player standing on the named tile or one of its two neighbours; the
-//! 「半价[结算]」 is `card_settle_at` with the plan's pay factor at 50.
+//! 「半价[结算]」 is `settle_tile_at` with the plan's pay factor at 50.
 //!
 //! 「每两个回合没有玩家发动该技能」 is a shared rest counter: any press resets
 //! it, and two quiet turns pay out one pot.
@@ -55,7 +55,12 @@ pub const UMIRI: CardDef = CardDef::new(
             None,
             at_turn_start,
         )),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, at_turn_end)).silent(),
+        On::Action(Action::TurnEnd(
+            card_sdk::condition::MINE,
+            None,
+            at_turn_end,
+        ))
+        .silent(),
         On::Play("", Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
         // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
@@ -94,7 +99,7 @@ fn split_rent_applies(player_id: i32) -> bool {
 
 /// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
 /// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0` is
-/// the pre and [`split_rent_applies`] the residual.
+/// the condition and [`split_rent_applies`] the residual.
 ///
 /// Filter half: reshape the owner's take to `amount - amount/2` (exact old
 /// `set_pay_amount(amount - half)`). `value < 2` early-returns unchanged
@@ -141,7 +146,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态1's offer, on the *other* player's turn start.
-/// `actor != owner && slot('skillState') != 2` is the pre and
+/// `actor != owner && slot('skillState') != 2` is the condition and
 /// [`offer_support_open`] the residual (the cooldown latch).
 fn offer_support(player_id: i32) -> card_sdk::Asked {
     let other = ctx::trigger::player_id();
@@ -191,7 +196,7 @@ fn offer_support(player_id: i32) -> card_sdk::Asked {
     )?;
     let before = ctx::money_of(player_id);
     plan::set_pay_factor(50);
-    ctx::card_settle_at(who, tile, true);
+    ctx::settle_tile_at(who, tile, true);
     // 「并获得相当于你获取数额的资金」
     let got = (ctx::money_of(player_id) - before).max(0);
     if got > 0 {
@@ -214,7 +219,7 @@ fn offer_support(player_id: i32) -> card_sdk::Asked {
 
 /// 「每两个回合没有玩家发动该技能，你在回合开始时获得1火罐…若达到上限，可在你的
 /// 回合开始时选择进入状态2」.
-/// `actor == owner && slot('skillState') != 2` is the pre.
+/// `actor == owner && slot('skillState') != 2` is the condition.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST) + 1;
     state::set(player_id, REST, n);
@@ -267,7 +272,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     if x <= 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, x, &Msg::new(key!("umiri_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, x, &Msg::new(key!("umiri_spend")))? {
         return Ok(());
     }
     for _ in 0..x {
@@ -331,14 +336,11 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
     out
 }
 
-// 「你与对方均分那些地契收取的资金」 -- the split is a bend on the rent a named
-// deed collects, which is the `paySplitMul` window with `t.Pay.IsRent`. 状态2's exit
-// is the band skill's fire-pot drain (`skill_groups::ave_mujica`), so the split
-// runs only while `skillState == 2`.
-// TODO(规则书)[judgement]: 「均分」 -- the clause does not say whether it divides
-//   the rent figure before or after any other bend, nor what happens on an odd
-//   amount. Read here as a clean split of the settled rent with the remainder to
-//   the deed's owner.
+// TODO(规则书)[judgement]: 状态2's exit is the band skill's fire-pot drain
+// (`skill_groups::ave_mujica`), so the split runs only while `skillState == 2`.
+// 「均分」 -- the clause does not say whether it divides the rent figure before or
+// after any other bend, nor what happens on an odd amount. Read here as a clean
+// split of the settled rent with the remainder to the deed's owner.
 //
 // TODO(规则书)[judgement]: 状态2's exit -- the sheet gives none (「直到状态2结束
 //   为止」 with no clause that ends it). Contrast 三角初华's fire-pot cap and

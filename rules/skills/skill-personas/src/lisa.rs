@@ -85,12 +85,12 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("lisa_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("lisa_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(to);
-    plan::set_resolve(true);
+    plan::set_settles(true);
     ctx::log(player_id, &Msg::new(key!("lisa_moved")).tile("tile", to));
     // 「本次传送触发结算前，你可以额外消耗一个火罐或使与你在同一个格子上的另一个
     // 角色获得一个可超过上限的临时火罐，若你这样做，此次传送不触发任何结算」 --
@@ -111,11 +111,11 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("lisa_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("lisa_spend")))? {
         return Ok(());
     }
     // 「若你这样做，此次传送不触发任何结算」
-    plan::set_resolve(false);
+    plan::set_settles(false);
     // 「使与你在同一个格子上的另一个角色获得一个可超过上限的临时火罐」
     // The temp pot is the kernel's second declared counter (`fire::temp`),
     // not a free key (MARKERS.md §7).

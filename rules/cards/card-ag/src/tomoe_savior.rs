@@ -1,4 +1,3 @@
-//! `AG:（巴）商店街的救世主` -- C# `CardTomoeSavior` (MatchHost.cs:1722-1791):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（巴）商店街的救世主`）:
 //! > （巴）商店街的救世主：【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回
@@ -31,7 +30,6 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
         // sheet cell C14
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"宇田川巴"#)]));
 
-/// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
 fn is_shop(t: i32) -> bool {
     t >= 0 && ctx::is_shop(t)
 }
@@ -48,58 +46,36 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
     let from = trigger::player_id();
     if from == player_id {
-        // 规则书[反击]: 「当你抵押商店街地契时，你可以打出此卡」 -- the self arm.
-        // 规则书[反击]: 「额外获得一份抵押收益并将地契翻回」 -- C# only fires when
-        // the deed is still the player's and still mortgaged
-        // (`H.State.owners[t] == i && H.State.mortgaged[t]`).
-        // TODO(规则书)（额外获得一份抵押收益并将地契翻回）: the cell attaches no
-        // still-mortgaged precondition -- we keep the C# check, so a second copy
-        // declared on the same mortgage finds the deed already flipped and fizzles.
+        // TODO(规则书)（额外获得一份抵押收益并将地契翻回）: 规则书[反击]: 「当你抵押商店街地契时，你可以打出此卡」 -- the self arm.
         if ctx::tile_owner(t) != player_id || !ctx::mortgaged_of(t) {
             return Ok(());
         }
-        // 规则书[反击]: 「额外获得一份抵押收益」 -- C# adds `H.MortgageValue(t)`
-        // (= `_tiles[t].price / 2`) with a raw money add (not `H.GainR`).
         let v = ctx::mortgage_value(t);
         if v > 0 {
-            ctx::gain(player_id, v, &Msg::new(key!("tomoe_savior_why")))?;
+            ctx::gain(player_id, v, &Msg::new(key!("tomoe_savior_reason")))?;
         }
-        // 规则书[反击]: 「将地契翻回」 -- C# `H.State.mortgaged[t] = false`.
         ctx::set_mortgaged(t, false);
-        // TODO(规则书)[judgement]: 「额外获得一份抵押收益」 does not say whether the
-        // extra payout goes through the gain pipeline or lands raw. The C# added
-        // it raw (`H.State.seats[i].money += num`, no `H.GainR`), so a [拥有者] /
-        // [支付] counteraction cannot see it; this port routes it through `gain`, which
-        // means such a counteraction can. Not a missing capability -- the clause just
-        // does not decide. Flagging rather than guessing.
+        // TODO(规则书)[judgement]: 「额外获得一份抵押收益」 does not say whether the extra payout goes
+        // through the gain pipeline or lands raw. Not a missing capability -- the clause
+        // just does not decide. Flagging rather than guessing.
         return Ok(());
     }
-    // 规则书[反击]: 「立刻支付常规收购价一半的价格从该玩家处收购该地契」 -- C#
-    // `PayCtx { from = i, to = from, amount = H._tiles[t].price / 2, must = false }`,
-    // then `H.State.owners[t] = i`.
     if ctx::tile_owner(t) != from {
         return Ok(());
     }
-    // TODO(规则书) ruling 8: 「常规收购价一半」 -- the base (land / land + houses
-    // / 2× force) is undecided. C# used `H._tiles[t].price / 2` (land alone), and
-    // that is what this passes.
+    // TODO(规则书) ruling 8: 「常规收购价一半」 -- the base (land / land + houses / 2× force) is
+    // undecided.
     let price = ctx::tile_price(t) / 2;
     if price <= 0 {
         return Ok(());
     }
-    // 规则书[反击]: 「从该玩家处收购该地契」 -- `ctx::acquire` (`docs/PURCHASE.md`)
-    // is the 收购 pipeline: pay to `from`, then assign → `bought` → `buyAfter`.
-    // C# `if (p.paid) H.State.owners[t] = i` -- the pipeline marks a
-    // positive-amount run paid even when `must: false` clamps the loss to what
-    // the player has -- and `f.Bought(i, t)` then runs over the Fx chain, so
-    // 「购买」 hooks (Afterglow's free house on a cheap/shop-street deed, ...)
-    // hear a buy caused by this card.
-    // HOST-06: `acquire` answers whether the deed actually changed hands.
-    // A refused acquire (`BuyGate` / unpaid) must not log one.
-    // TODO(规则书)（从该玩家处收购该地契）: the cell calls it 「收购」, not 「购买」,
-    // but `acquire` runs the purchase gate `buyGate` (a 「不能购买」 refuses the
-    // 收购), raises the 「购买…时」 listeners (C-Q4 4b), and clears the mortgage
-    // on the hand-over (C-Q4 4c).
+    // TODO(规则书)（从该玩家处收购该地契）: 规则书[反击]: 「从该玩家处收购该地契」 -- `ctx::acquire`
+    // (`docs/PURCHASE.md`) is the 收购 pipeline: pay to `from`, then assign → `bought`
+    // → `buyAfter`. HOST-06: `acquire` answers whether the deed actually changed
+    // hands. A refused acquire (`BuyGate` / unpaid) must not log one. the cell calls
+    // it 「收购」, not 「购买」, but `acquire` runs the purchase gate `buyGate` (a 「不能购买」
+    // refuses the 收购), raises the 「购买…时」 listeners (C-Q4 4b), and clears the
+    // mortgage on the hand-over (C-Q4 4c).
     if ctx::acquire(player_id, from, t, price) {
         ctx::log(
             player_id,

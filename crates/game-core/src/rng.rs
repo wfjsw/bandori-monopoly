@@ -1,9 +1,8 @@
 //! Seeded, deterministic RNG for match logic.
 //!
-//! Not compatible with .NET `System.Random`, by design: the port reproduces the
-//! game's rules, not its exact numbers. What matters is that the same seed and the
-//! same inputs give the same game on server and browser, and that the state is a
-//! plain value, so it travels inside every replay snapshot.
+//! What matters is that the same seed and the same inputs give the same game on
+//! server and browser, and that the state is a plain value, so it travels inside
+//! every replay snapshot.
 //!
 //! Two algorithms live here, selected by the serialized form:
 //!

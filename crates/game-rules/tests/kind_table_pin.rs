@@ -165,10 +165,15 @@ fn typed_engine_consts_have_table_rows() {
         (108, "OnBoardGate"),
         (109, "TargetableGate"),
         (110, "PaySplitMulBefore"),
-        (111, "RentAdd"),
-        (112, "RentMul"),
-        (113, "SettleAdd"),
-        (114, "SettleMul"),
+        (111, "CardFired"),
+        (112, "MarkChanged"),
+        (122, "SpendBefore"),
+        (123, "RentAdd"),
+        (124, "RentMul"),
+        (125, "SettleAdd"),
+        (126, "SettleMul"),
+        (127, "SettleRentAdd"),
+        (128, "SettleRentMul"),
     ];
     for (id, name) in named {
         let row =
@@ -183,6 +188,14 @@ fn typed_engine_consts_have_table_rows() {
     }
     // The typed mirror must cover every live table row (count pin).
     assert_eq!(named.len(), ENGINE_KINDS.len(), "mirror/table size");
+}
+
+/// Kind ids are allocated by the ABI README groups and never reused. The
+/// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
+#[test]
+fn kind_id_ceiling_is_128() {
+    let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
+    assert_eq!(max, 128, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the
@@ -229,6 +242,8 @@ fn filter_payload_shape_mapping() {
         ("DiceRollValue", FilterShape::Payload),
         ("OnBoardGate", FilterShape::Gate),
         ("TargetableGate", FilterShape::Gate),
+        ("SettleRentAdd", FilterShape::Value),
+        ("SettleRentMul", FilterShape::Value),
     ];
     assert_eq!(expect.len(), Filter::KINDS.len(), "shape table size");
     for k in Filter::KINDS {

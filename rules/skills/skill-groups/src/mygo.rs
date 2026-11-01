@@ -30,12 +30,14 @@ pub const MYGO: CardDef = CardDef::new(
             None,
             after_roll,
         )),
-        // TODO(规则书)（每次你的卡在未生效的情况下进入弃牌堆时）: only cards that
-        //   entered the discard without taking effect -- `pre::MINE` is just
-        //   `actor == owner`, so every owner discard counts and an effective
-        //   card (羽丘 at face 10) also grants a crystal. Needs a
-        //   `PlayCtx.Effective` / `CardWasted` flag on the discard (BACKLOG CH-07).
-        On::Action(Action::Discarded(card_sdk::pre::MINE, None, on_discarded)),
+        // TODO(规则书)（每次你的卡在未生效的情况下进入弃牌堆时）: only cards that entered the discard without
+        // taking effect -- `condition::MINE` is just `actor == owner`, so every owner discard
+        // counts and an effective card (羽丘 at face 10) also grants a crystal.
+        On::Action(Action::Discarded(
+            card_sdk::condition::MINE,
+            None,
+            on_discarded,
+        )),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（2）/（3） give two independent 「可」 abilities
         // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
@@ -106,8 +108,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     }
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
     // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
-    if let Some(why) = crate::copy_sticker_gate(player_id) {
-        return Some(why);
+    if let Some(reason) = crate::copy_sticker_gate(player_id) {
+        return Some(reason);
     }
     if !is_my_turn(player_id) {
         return Some(Msg::new(key!("mygo_not_your_turn")));
@@ -135,7 +137,7 @@ fn press(player_id: i32) -> card_sdk::Asked {
     if draw && !step {
         return draw_two(player_id);
     }
-    let k = ctx::ask_pick(
+    let k = ctx::ask_choice(
         player_id,
         &Msg::new(key!("mygo_press_title")),
         &Msg::new(key!("mygo_press_which")),
@@ -159,10 +161,10 @@ fn step_one(player_id: i32) -> card_sdk::Asked {
     }
     crate::spend_crystals(player_id, 1)?;
     // 规则书（2）: 「移动1格以替代移动掷骰」 -- the shaped 1-step move replaces
-    // the roll and runs now (`ctx::card_move`).
+    // the roll and runs now (`ctx::run_planned_move`).
     plan::clear_dice();
     plan::set_steps(1);
-    ctx::card_move(player_id);
+    ctx::run_planned_move(player_id);
     ctx::log(player_id, &Msg::new(key!("mygo_step")));
     Ok(())
 }

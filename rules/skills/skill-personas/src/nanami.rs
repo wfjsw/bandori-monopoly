@@ -61,7 +61,7 @@ pub const NANAMI: CardDef = CardDef::new(
             Some(on_skill_applies),
             on_skill,
         )),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, tick)).quiet_when_empty(),
+        On::Action(Action::TurnEnd(card_sdk::condition::MINE, None, tick)).quiet_when_empty(),
     ],
 )
 // 「（初始2，上限2）」
@@ -89,7 +89,7 @@ fn on_skill_applies(player_id: i32) -> bool {
     let alive = (0..ctx::player_count())
         .filter(|&p| !ctx::player_out(p))
         .count() as i32;
-    if alive >= 3 && ctx::tok(player_id, &mark_name(id.as_str())) >= 1 {
+    if alive >= 3 && ctx::held_count(player_id, &mark_name(id.as_str())) >= 1 {
         return false;
     }
     true
@@ -130,10 +130,10 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("nanami_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("nanami_spend")))? {
         return Ok(());
     }
-    ctx::add_tok(player_id, &mark_name(id.as_str()), 1, i32::MAX)?;
+    ctx::add_held_by_name(player_id, &mark_name(id.as_str()), 1, i32::MAX)?;
     state::set(player_id, &cd, 3);
     ctx::log(
         player_id,
@@ -144,7 +144,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 
 /// 「3回合CD」 counts down.
 fn tick(player_id: i32) -> card_sdk::Asked {
-    for name in ctx::tok_names(player_id, MARK_PREFIX) {
+    for name in ctx::held_names(player_id, MARK_PREFIX) {
         let cd = cd_key(mark_skill(name));
         let left = state::get(player_id, &cd);
         if left > 0 {
@@ -163,7 +163,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if ctx::tok_names(player_id, MARK_PREFIX).is_empty() {
+    if ctx::held_names(player_id, MARK_PREFIX).is_empty() {
         return Some(Msg::new(key!("nanami_no_mark")));
     }
     None
@@ -171,11 +171,11 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （3）「视为使用该角色的技能」 -- `ctx::play_card` runs that skill's `On::Play`.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let marks = ctx::tok_names(player_id, MARK_PREFIX);
+    let marks = ctx::held_names(player_id, MARK_PREFIX);
     if marks.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("nanami_title")),
         &Msg::new(key!("nanami_which")),
@@ -188,7 +188,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     let id = mark_skill(mark);
-    ctx::add_tok(player_id, mark.as_str(), -1, i32::MAX)?;
+    ctx::add_held_by_name(player_id, mark.as_str(), -1, i32::MAX)?;
     ctx::play_card(id, player_id)?;
     ctx::log(player_id, &Msg::new(key!("nanami_used")).card("card", id));
     Ok(())

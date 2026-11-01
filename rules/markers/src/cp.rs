@@ -27,20 +27,16 @@
 //! This board-owned rule instance owns the **tile-mark** lifecycle, so no card
 //! has to:
 //!
-//! * **Placement** -- 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」: a
-//!   [CP点] goes on a tile with no character on it and no [CP点] yet. The
-//!   *where* is the placer's gate (it knows its own targets); the *what* is
-//!   the `"place"` message this rule answers ([`on_place`]), which stamps the
-//!   category and the attachment.
-//! * **Stacking** -- 「添加1个[CP点]」 per placement, and only onto a 「没有
-//!   [CP点]的格子」, so a tile carries one [CP点] mark whose `count` is how many
-//!   [CP点] sit there (in practice 1).
-//! * **Landing** -- 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己
-//!   [场上]1个[CP点]，[获得]800资金」, the `On::Action` below. It spends **both**
-//!   kinds: the tile's mark and one on-card [CP点] of the card the mark is
-//!   attached to (`TileMark.src`).
-//! * **Removal** -- 「移除格子上的个[CP点]」, `ctx::bump_mark(..., -1)` (one per
-//!   [结算]; C# `tileMark.count--`).
+//! * **Placement** -- 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」: a [CP点] goes on a tile with
+//!   no character on it and no [CP点] yet. The *where* is the placer's gate (it
+//!   knows its own targets); the *what* is the `"place"` message this rule
+//!   answers ([`on_place`]), which stamps the category and the attachment. *
+//!   **Stacking** -- 「添加1个[CP点]」 per placement, and only onto a 「没有 [CP点]的格子」, so
+//!   a tile carries one [CP点] mark whose `count` is how many [CP点] sit there (in
+//!   practice 1). * **Landing** -- 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己
+//!   [场上]1个[CP点]，[获得]800资金」, the `On::Action` below. It spends **both** kinds:
+//!   the tile's mark and one on-card [CP点] of the card the mark is attached to
+//!   (`TileMark.src`).
 //!
 //! A [CP点] mark is **not owned by any player**: `TileMark.owner` is always
 //! [`BOARD_OWNER`] (`-1`). Provenance is `TileMark.src` (the placing card
@@ -53,26 +49,15 @@
 //! 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，
 //! [获得]800资金」
 //!
-//! * **Trigger.** Any player's [结算] on a tile that actually carries a
-//!   [CP点]. The bare 「[结算]时」 is board-generic -- it does not say 「自己
-//!   [结算]时」 -- so this instance's `SettleBody` entry hears every settle and
-//!   checks the tile. 行动阶段 15 (`SETTLE-STAGES.md` §4 M2): 「[结算]时」 is
-//!   an entry in the settle's effect list, not the 「[触发结算]后」 window.
-//! * **「格子上的个[CP点]」** is the tile mark (the sheet dropped the numeral;
-//!   read as 「1个」, one per [结算], matching C# `tileMark.count--`).
-//! * **「自己[场上]1个[CP点]」** is the **on-card** [CP点] of the 该清CP了 card
-//!   the tile mark is attached to -- the mark's `src` -- per user ruling
-//!   2026-10-07. That card must have ≥1; if it is gone or empty the clause
-//!   does not fire. (C# instead kept a per-player `Tok(Seat, "CP点")` and
-//!   gated the whole clause on `m.Seat == Seat`; the ruling replaces the
-//!   counter with the card's own count and this reading drops the gate.)
-//! * **「[获得]800资金」** goes to **the settling player** -- the subject of
-//!   「在…[结算]时」 carries over to 「移除…，[获得]…」, and the rulebook tip
-//!   （rulebook.txt 2067: 「短时间内吃多个CP点达到2000以上收益」） has the eater
-//!   (whoever lands on the CP tile) profit 800 a bite. The house style names
-//!   「你」/「[使用者]」 when the card's user is the subject; the bare 「[获得]」
-//!   here takes the settler. (C# paid `Seat`, but its `m.Seat == Seat` gate
-//!   made settler and card controller the same player.)
+//! * **Trigger.** Any player's [结算] on a tile that actually carries a [CP点]. The
+//!   bare 「[结算]时」 is board-generic -- it does not say 「自己 [结算]时」 -- so this
+//!   instance's `SettleBody` entry hears every settle and checks the tile. 行动阶段
+//!   15 (`SETTLE-STAGES.md` §4 M2): 「[结算]时」 is an entry in the settle's effect
+//!   list, not the 「[触发结算]后」 window. * **「自己[场上]1个[CP点]」** is the **on-card**
+//!   [CP点] of the 该清CP了 card the tile mark is attached to -- the mark's `src` --
+//!   per user ruling 2026-10-07. That card must have ≥1; if it is gone or empty
+//!   the clause does not fire. The house style names 「你」/「[使用者]」 when the card's
+//!   user is the subject; the bare 「[获得]」 here takes the settler.
 
 use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
@@ -185,11 +170,10 @@ fn lands_on_cp(_owner: i32) -> bool {
     src >= 0 && ctx::counter_at(src, counter::CP) > 0
 }
 
-/// 规则书: 「移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 --
-/// C# `CPControl.SettleAfter` -> `Clean`. The tile-mark write goes through the
-/// owner API; the on-card write goes to the mark's `src` card and raises
-/// `counterChanged` against it (the 该清CP了 graveyard rule hears about it like
-/// any other write). The 800 goes to the settler -- see the reading above.
+/// The tile-mark write goes through the owner API; the on-card write goes to the
+/// mark's `src` card and raises `counterChanged` against it (the 该清CP了 graveyard
+/// rule hears about it like any other write). The 800 goes to the settler -- see
+/// the reading above.
 fn on_land(_owner: i32) -> card_sdk::Asked {
     let seat = trigger::player_id();
     let tile = trigger::tile();
@@ -199,8 +183,7 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
     // Read the attachment **before** the write: dropping the last mark takes
     // its provenance with it.
     let src = ctx::mark_src_at(tile, &MarkFilter::any().category(mark::CP_CATEGORY));
-    // 「移除格子上的个[CP点]」 -- C# `tileMark.count--`, one per [结算]. A
-    // tile-mark write: it does not touch the on-card count.
+    // A tile-mark write: it does not touch the on-card count.
     ctx::bump_mark(tile, &MarkFilter::any().category(mark::CP_CATEGORY), -1);
     // 「自己[场上]1个[CP点]」 -- one on-card [CP点] of the attached 该清CP了
     // card (user ruling 2026-10-07).
@@ -211,8 +194,7 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
         //   ruling.
         ctx::add_counter_at(src, counter::CP, -1, 0);
     }
-    // 「[获得]800资金」 -- the settling player (see the reading above). C# was
-    // `H.GainR(Seat, Reward, …)`, `Reward = c.N(0, 800)`.
+    // 「[获得]800资金」 -- the settling player (see the reading above).
     ctx::gain(seat, 800, &Msg::new("log.cp_clean").player_id("who", seat))?;
     Ok(())
 }

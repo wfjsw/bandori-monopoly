@@ -6,8 +6,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::all_players;
 

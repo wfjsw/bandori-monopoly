@@ -1061,7 +1061,7 @@ fn ordered(a: &Action) -> u8 {
     match a {
         Action::Play { .. } => 0,
         Action::Decline => 1,
-        Action::Offer { .. } => 2,
+        Action::Answer { .. } => 2,
         Action::Bid { .. } => 3,
         Action::Counteract { .. } => 4,
         Action::Pick { .. } => 5,

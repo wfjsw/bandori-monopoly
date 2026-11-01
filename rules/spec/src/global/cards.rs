@@ -194,7 +194,7 @@ fn pure_pile_window(step: &Step<'_>) -> bool {
 /// * **Condition:** a player's hand-limit counter is the engine's
 ///   `handLimit` state (default 5, raised / lowered by effects). A limit of
 ///   `NO_HAND_LIMIT` (`i32::MAX`) means uncapped. The player was **at or
-///   under** the limit in `pre` -- an arranged over-limit hand is a
+///   under** the limit in `condition` -- an arranged over-limit hand is a
 ///   non-canonical setup and is not this act's fault. No prompt is open in
 ///   `post` (the step is at rest; a discard decision may be the prompt).
 /// * **Effect:** the player's private hand length is at most the limit in
@@ -228,14 +228,14 @@ pub fn g_cards_01(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let limit = limit as usize;
-        let pre = step.pre_hand_len(i);
+        let condition = step.pre_hand_len(i);
         let post = step.post_hand_len(i);
         // Arrange writes (and a previous failing act) may already be over.
         // Only an act that *starts* legal and *ends* over is this clause's
         // finding.
-        if pre <= limit && post > limit {
+        if condition <= limit && post > limit {
             return Err(format!(
-                "player {i} went from {pre} to {post} cards, over handLimit {limit}"
+                "player {i} went from {condition} to {post} cards, over handLimit {limit}"
             ));
         }
     }
@@ -278,14 +278,19 @@ pub fn g_cards_02(step: &Step<'_>) -> Result<(), String> {
     if !pure_pile_window(step) {
         return Ok(());
     }
-    let n = step.pre.st.players.len().max(step.post.st.players.len());
+    let n = step
+        .condition
+        .st
+        .players
+        .len()
+        .max(step.post.st.players.len());
     for i in 0..n {
-        let pre = pile_multiset(step.pre, i);
+        let condition = pile_multiset(step.condition, i);
         let post = pile_multiset(step.post, i);
-        if pre != post {
+        if condition != post {
             return Err(format!(
-                "player {i} pile multiset moved on a pure pile step: pre [{}] vs post [{}]",
-                multiset_str(&pre),
+                "player {i} pile multiset moved on a pure pile step: condition [{}] vs post [{}]",
+                multiset_str(&condition),
                 multiset_str(&post)
             ));
         }
@@ -304,7 +309,7 @@ pub fn g_cards_02(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「使用后的非[持续]手卡进入弃卡区。」 / 「[持续]：卡在任何玩家的[场地]或格子上时持续生效的效果。」
 /// * **Trigger:** a hand play (`kind == play`) of a card that is **not**
 ///   tagged [持续], settled to rest.
-/// * **Condition:** the card was in the player's hand in `pre` and the play
+/// * **Condition:** the card was in the player's hand in `condition` and the play
 ///   was accepted. Skip event cards (`event:*` -- 事件卡, not 手卡; their
 ///   discard is `event_discard`). Skip when the card's own text [移除]s it,
 ///   returns it to hand, or places itself (「将此卡…」 -- card effects override
@@ -362,7 +367,7 @@ pub fn g_cards_03(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let (pre_hand, pre_discard, pre_field) = counts(step.pre, who, id);
+    let (pre_hand, pre_discard, pre_field) = counts(step.condition, who, id);
     let (post_hand, post_discard, post_field) = counts(step.post, who, id);
     // The play took one copy out of the hand. After a non-[持续] use that
     // copy must be in the discard -- as a **count** (two copies of one name
@@ -399,8 +404,8 @@ pub fn g_cards_03(step: &Step<'_>) -> Result<(), String> {
 ///   player `i`.
 /// * **Condition:** the player's draw pile just before that reshuffle was
 ///   empty, and their discard was non-empty (there was something to shuffle).
-///   From a whole-act `pre` this reads as: `pre.draw` was empty, **or** the
-///   act drew at least `pre.draw.len()` cards (the draw emptied the pile
+///   From a whole-act `condition` this reads as: `condition.draw` was empty, **or** the
+///   act drew at least `condition.draw.len()` cards (the draw emptied the pile
 ///   mid-act, then refilled).
 /// * **Effect:** the post reshuffle leaves the player's discard empty and the
 ///   draw pile holding a permutation of the pre-discard (plus any cards the
@@ -434,9 +439,14 @@ pub fn g_cards_04(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     for who in reshuffled {
-        let pre_draw = step.pre.hidden.get(who).map(|h| h.deck.len()).unwrap_or(0);
+        let pre_draw = step
+            .condition
+            .hidden
+            .get(who)
+            .map(|h| h.deck.len())
+            .unwrap_or(0);
         let pre_discard = step
-            .pre
+            .condition
             .hidden
             .get(who)
             .map(|h| h.graveyard.len())
@@ -481,12 +491,12 @@ pub fn g_cards_04(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「非[反击]的[手]效果只能在运营阶段使用，[反击]和[特]效果会描写发动时点。」
 /// * **Trigger:** an accepted hand play (`Act(play)` whose window contains a
 ///   `kind == play` activation) of a card tagged [手].
-/// * **Condition:** the actor is the current player and `pre.st.step` is
+/// * **Condition:** the actor is the current player and `condition.st.step` is
 ///   运营 (`stage::OPS`). Skip [反击] windows (those are prompt answers with
 ///   `kind == counter`, not `Act(play)`). Skip cards whose only timing is
 ///   [特] (no [手] tag) -- they fire on their own written timing.
 /// * **Effect:** the play did not happen outside 运营. (Equivalently: any
-///   accepted [手] play has `pre.st.step == OPS` and `pre.st.turn == actor`.)
+///   accepted [手] play has `condition.st.step == OPS` and `condition.st.turn == actor`.)
 /// * **Frame:** n/a.
 /// * **Rulings & OPEN:** a card tagged both [手] and [反击] is still a [手]
 ///   play when pressed via `Act(play)` -- the counteraction path is a
@@ -509,13 +519,13 @@ pub fn g_cards_05(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let step_ok = step.pre.st.step == game_core::state::stage::OPS;
-    let turn_ok = step.pre.st.turn == who as i32;
+    let step_ok = step.condition.st.step == game_core::state::stage::OPS;
+    let turn_ok = step.condition.st.turn == who as i32;
     if !step_ok || !turn_ok {
         return Err(format!(
             "played [手] card {id} outside 运营: step={} turn={} actor={who} \
              (book: 「非[反击]的[手]效果只能在运营阶段使用」)",
-            step.pre.st.step, step.pre.st.turn
+            step.condition.st.step, step.condition.st.turn
         ));
     }
     Ok(())
@@ -571,7 +581,7 @@ pub fn g_cards_06(step: &Step<'_>) -> Result<(), String> {
             // the hand" (the play activation means the engine believed X
             // held). A body that Dest::Hand's it back is a card override.
             let who = step.player_of_act();
-            let (pre_hand, _, _) = counts(step.pre, who, &ev.card);
+            let (pre_hand, _, _) = counts(step.condition, who, &ev.card);
             let (post_hand, post_discard, post_field) = counts(step.post, who, &ev.card);
             let returned = post_hand >= pre_hand && (post_discard > 0 || post_field > 0);
             if pre_hand > 0 && post_hand >= pre_hand && !returned {
@@ -717,7 +727,7 @@ pub fn g_cards_12(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:154`
 /// * **Quote:** 「如果没有事件可抽取则将事件弃卡区洗切并当作新的事件卡堆来抽取。」
 /// * **Trigger:** a window that logs `log.events_reshuffled`.
-/// * **Condition:** `pre.event_deck` was empty and `pre.event_discard` was
+/// * **Condition:** `condition.event_deck` was empty and `condition.event_discard` was
 ///   non-empty (there was a discard to become the new pile).
 /// * **Effect:** the post event pile holds a permutation of the pre-discard
 ///   (plus the just-filed event, if this window also drew one); the event
@@ -744,8 +754,8 @@ pub fn g_cards_13(step: &Step<'_>) -> Result<(), String> {
     if !reshuffled {
         return Ok(());
     }
-    let pre_deck = step.pre.event_deck.len();
-    let pre_discard = step.pre.event_discard.len();
+    let pre_deck = step.condition.event_deck.len();
+    let pre_discard = step.condition.event_discard.len();
     // How many events did this window take off the pile? A draw that empties
     // the pile may reshuffle in the same window (the just-filed event included).
     let drew = step

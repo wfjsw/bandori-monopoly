@@ -20,7 +20,13 @@ use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), rules_native::roster()).expect("game data"))
+    Arc::new(
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            rules_native::roster(),
+        )
+        .expect("game data"),
+    )
 }
 
 fn stamp() -> EngineStamp {
@@ -82,7 +88,11 @@ fn pump(rm: &mut RecordedMatch) {
     let members: Vec<i32> = if !st.drive.is_empty() {
         st.drive.clone()
     } else {
-        st.players.iter().filter(|p| p.bot && !p.bankrupt && !p.left).map(|p| p.member).collect()
+        st.players
+            .iter()
+            .filter(|p| p.bot && !p.bankrupt && !p.left)
+            .map(|p| p.member)
+            .collect()
     };
     for member in members {
         if let Some(msg) = act_for(rm.inner(), member) {

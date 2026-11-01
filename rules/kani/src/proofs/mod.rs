@@ -7,7 +7,7 @@
 //! 1. builds a symbolic pre-state (`kani::any` + `assume`ed ranges);
 //! 2. evaluates the **single-source** guard IR (no `assume` of the host
 //!    condition) and only runs the body when the guard admits;
-//! 3. asserts post == spec(pre) and the effect log is exactly the clause's
+//! 3. asserts post == spec(condition) and the effect log is exactly the clause's
 //!    effects (no less, no more);
 //! 4. includes a MUTANT whose disagreement is shown reachable.
 

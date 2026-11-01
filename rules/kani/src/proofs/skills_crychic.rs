@@ -109,7 +109,7 @@ mod tomori_spend {
             w.key_set(user, stay_key, stay);
         });
 
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         invoke::unwrap_done(skill_personas::tomori_crychic::use_skill_kani(user));
         kani::cover!(true, "body returned");
         let post = world::snapshot();
@@ -144,8 +144,8 @@ mod tomori_spend {
                 "C-CRYCHIC-tomoriskill-02: STAY unchanged when spend is refused"
             );
         }
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
     }
 
     /// Spend iff at seat 0.
@@ -251,7 +251,7 @@ mod soyo_cancel {
         let tile_key = intern::intern("skill.soyoCrychic.tile").0;
         let armed_key = intern::intern("skill.soyoCrychic.armed").0;
 
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         invoke::unwrap_done(skill_personas::soyo_crychic::on_pay_kani(owner));
         kani::cover!(true, "body returned");
         let post = world::snapshot();
@@ -270,10 +270,10 @@ mod soyo_cancel {
             "C-CRYCHIC-soyoskill-01: pending pay amount is 0"
         );
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "frame: money (waive at rewrite time)"
         );
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
     }
 
     /// Yes-branch iff at (owner=0, actor=1) — the two combos cover every

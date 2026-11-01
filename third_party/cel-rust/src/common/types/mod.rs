@@ -25,23 +25,6 @@
 //!
 //! # Built-in types
 //!
-//! | CEL type | [`Type`] | [`Kind`] | Rust type | Operators |
-//! |---|---|---|---|---|
-//! | `bool` | [`BOOL_TYPE`] | `Boolean` | [`CelBool`] | `<` |
-//! | `int` | [`INT_TYPE`] | `Int` | [`CelInt`] | `+ - * / %`, unary `-`, `<` |
-//! | `uint` | [`UINT_TYPE`] | `UInt` | [`CelUInt`] | `+ - * / %`, `<` |
-//! | `double` | [`DOUBLE_TYPE`] | `Double` | [`CelDouble`] | `+ - * /`, unary `-`, `<` |
-//! | `string` | [`STRING_TYPE`] | `String` | [`CelString`] | `+`, `<` |
-//! | `bytes` | [`BYTES_TYPE`] | `Bytes` | [`CelBytes`] | `+`, `<` |
-//! | `list` | [`LIST_TYPE`] | `List` | [`CelList`] | `+`, `in`, `[]`, comprehensions |
-//! | `map` | [`MAP_TYPE`] | `Map` | [`CelMap`] | `in`, `[]`, `.f`, comprehensions |
-//! | `null_type` | [`NULL_TYPE`] | `NullType` | [`CelNull`] | |
-//! | `type` | [`TYPE_TYPE`] | `Type` | [`CelType`] | |
-//! | `optional_type` | [`OPTIONAL_TYPE`] | `Opaque` | [`CelOptional`] | |
-//! | `google.protobuf.Duration` | [`DURATION_TYPE`] | `Duration` | `CelDuration` | `+ -`, `<` |
-//! | `google.protobuf.Timestamp` | [`TIMESTAMP_TYPE`] | `Timestamp` | `CelTimestamp` | `+ -`, `<` |
-//! | a struct, e.g. `acme.User` | its own | `Struct` | [`CelStruct`] | `.f`, `has(.f)`, `[]` |
-//!
 //! `<` stands for all four comparisons. All of them support `==` and `!=`.
 //! `!`, `&&`, `||` and `? :` take `bool`s. `CelDuration` and `CelTimestamp`
 //! need the `chrono` feature.
@@ -115,7 +98,6 @@ pub use timestamp::Timestamp as CelTimestamp;
 pub use type_val::CelType;
 pub use uint::UInt as CelUInt;
 
-/// The category of a [`Type`], following cel-go's `types.Kind`.
 ///
 /// Converting a value to a [`Value`](crate::Value) goes by its kind, as do
 /// the interpreter's few kind checks, e.g. a field missing from a `map` is
@@ -132,7 +114,7 @@ pub enum Kind {
     /// `dyn`, [`DYN_TYPE`]: any type. An overload parameter of this kind
     /// accepts any argument.
     Dyn,
-    /// `google.protobuf.Any`, [`ANY_TYPE`]. No value has it.
+    /// No value has it.
     Any,
     /// `bool`.
     Boolean,
@@ -140,7 +122,6 @@ pub enum Kind {
     Bytes,
     /// `double`.
     Double,
-    /// `google.protobuf.Duration`.
     Duration,
     /// `int`.
     Int,
@@ -155,10 +136,8 @@ pub enum Kind {
     Opaque,
     /// `string`.
     String,
-    /// A struct type, e.g. `acme.User`: values made of named fields, see
-    /// [`CelStruct`].
+    /// A struct type, e.g.
     Struct,
-    /// `google.protobuf.Timestamp`.
     Timestamp,
     /// `type`, the type of type values such as `int` or `type(x)`, see
     /// [`CelType`].
@@ -238,7 +217,7 @@ impl Type {
     }
 }
 
-/// `google.protobuf.Any`. No value has this type.
+/// No value has this type.
 pub const ANY_TYPE: Type = Type {
     kind: Kind::Any,
     parameters: Cow::Borrowed(&[]),
@@ -275,7 +254,6 @@ pub const DOUBLE_TYPE: Type = Type {
         | traits::SUBTRACTOR_TYPE,
 };
 
-/// `google.protobuf.Duration`, the type of `CelDuration`.
 pub const DURATION_TYPE: Type = Type {
     kind: Kind::Duration,
     parameters: Cow::Borrowed(&[]),
@@ -376,7 +354,6 @@ pub const STRING_TYPE: Type = Type {
         | traits::SIZER_TYPE,
 };
 
-/// `google.protobuf.Timestamp`, the type of `CelTimestamp`.
 pub const TIMESTAMP_TYPE: Type = Type {
     kind: Kind::Timestamp,
     parameters: Cow::Borrowed(&[]),
@@ -502,8 +479,7 @@ impl Type {
         }
     }
 
-    /// Returns the name of the type, as `type(x)` reports it: `int`, `list`,
-    /// `acme.User`. Parameters are not part of it.
+    /// Parameters are not part of it.
     pub fn name(&self) -> &str {
         &self.runtime_type_name
     }

@@ -181,6 +181,31 @@ fn want_to_be_human_crystal_on_low_roll() {
     assert!(c >= 1, "crystal added for low roll (3 ≤ X): {c}");
 }
 
+#[test]
+fn want_human_x_is_per_instance_and_dies_with_it() {
+    // 规则书（1）: 「将其写下」 -- X belongs to the card instance (`Mem`), so two
+    // copies keep separate values and a value dies with its instance.
+    let mut t = Table::vanilla(2);
+    let a = t.place_raw(0, "CRYCHIC:想要成为人类");
+    let b = t.place_raw(0, "CRYCHIC:想要成为人类");
+    t.m.world_mut().set_prop_at(a, "want_human_x", 20);
+    t.m.world_mut().set_prop_at(b, "want_human_x", 1);
+    // A roll of 3 is ≤ a's X (20) but > b's (1).
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.m.world().counter_at(a, "crystals"),
+        1,
+        "a banked a crystal"
+    );
+    assert_eq!(t.m.world().counter_at(b, "crystals"), 0, "b did not");
+    // The value dies with the instance: `a`'s X is gone, `b` keeps its own.
+    t.m.world_mut().unplace_at(a);
+    assert_eq!(t.m.world().prop_at(a, "want_human_x"), 0, "a's X is gone");
+    assert_eq!(t.m.world().prop_at(b, "want_human_x"), 1, "b's X stays");
+}
+
 // -- CRYCHIC:春日影 ----------------------------------------------------
 
 #[test]
@@ -788,7 +813,7 @@ fn soyo_crychic_card_special_on_draw() {
     // 规则书: 「[特] 抽到此卡时立刻从抽牌堆打出」 -- triggers on draw.
     // Draw the card (e.g. landing on CiRCLE or a draw effect).
     t.set_pos(0, 30);
-    t.dice(&[30]); // actually main move is 1d20; let's just end and let the next draw happen.
+    t.dice(&[30]); // actually is_main_move move is 1d20; let's just end and let the next draw happen.
                    // Simpler: just put it in hand and verify.
     t.give(0, &["CRYCHIC:（soyo）回到曾经"]);
     assert!(t.hand(0).contains(&"CRYCHIC:（soyo）回到曾经".to_string()));
@@ -948,7 +973,7 @@ fn sakiko_crychic_nudge_moves_the_destination() {
         .events_since(mark)
         .into_iter()
         .find(|e| log_key(e) == "log.rent")
-        .and_then(|e| match e.msg.a.get("tile") {
+        .and_then(|e| match e.msg.args.get("tile") {
             Some(Arg::Tile(v)) => Some(*v),
             _ => None,
         });

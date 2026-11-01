@@ -241,15 +241,15 @@ pub mod stun { pub fn add(p: i32, n: i32); pub fn add_start(p: i32, n: i32); /* 
 pub mod exile { pub fn send(p: i32, n: i32, to: i32);  // grant n layers, return tile
                 pub fn get(p: i32) -> i32; pub fn clear(p: i32); }
 pub mod fire { pub fn get(p: i32) -> i32; pub fn max(p: i32) -> i32;
-               pub fn gain(p: i32, n: i32, why: &Msg) -> Result<i32, Prompt>;
-               pub fn spend(p: i32, n: i32, why: &Msg) -> Result<bool, Prompt>;
+               pub fn gain(p: i32, n: i32, reason: &Msg) -> Result<i32, Prompt>;
+               pub fn spend(p: i32, n: i32, reason: &Msg) -> Result<bool, Prompt>;
                pub fn add_max(p: i32, n: i32) -> i32; }
 pub mod unstoppable { pub fn add(p: i32, n: i32); pub fn get(p: i32) -> i32; }
 pub mod no_hand { pub fn add(p: i32, n: i32); pub fn get(p: i32) -> i32; }
 
 // generic gate readers (namespaced, replace can_pay / cant_move)
 pub fn can_act(p: i32) -> bool;          // !stunned && !exiled && !out
-pub fn move_blocked(p: i32) -> Option<Msg>;  // Some(why) when the main move is closed
+pub fn move_blocked(p: i32) -> Option<Msg>;  // Some(reason) when the main move is closed
 pub fn can_pay(p: i32) -> bool;          // payment gate (stun/exile)
 ```
 
@@ -306,7 +306,7 @@ in time for the turn-start gate checks. So:
 * `end_turn_now(p)` -- the stunned / exiled auto-skip path (a transient
   latch on `World::end_turn_request`; `turn_start` honors it after the
   `turnStartBefore` / `turnStart` raises with the auto-skip pacing);
-* `teleport_as(p, tile, resolve, as_main)` -- the engine's `Cx::teleport_as`
+* `teleport_as(p, tile, resolve, as_main)` -- the engine's `PlayCtx::teleport_as`
   with `why = None` and **no** abnormal window (`HostRequest::TeleportAs`);
   `as_main` sets `turn.main_moved` and marks the move as the [主要移动];
 * `log_as(p, kind, msg)` -- a typed log line (`"status"` for host skip / over
@@ -321,7 +321,7 @@ in time for the turn-start gate checks. So:
    `log.exile_over`, teleport (optionally as the main move);
 3. `tick_state(Tick::TurnStart)` -- `stunStart` -> `stun` here;
 4. `noHand` 2 -> 1;
-5. `turn_snap` / `turn_start_pos` snapshot;
+5. `turn_snapshot` / `turn_start_pos` snapshot;
 6. `turnStart`;
 7. stun -> log `log.stunned_skip`, `end_turn`;
 8. stay && !unstoppable -> `skip_move = true`, log `log.stay_skip`;
@@ -366,9 +366,9 @@ stun / stay checks run after it.
   conditions, kept for `StubRules` (`rules/tests/tests/status_gate_drift.rs` pins them
   equal).
 
-### 3.6 cond vocabulary (`rules/cond`, `game-rules/cond_pre.rs`)
+### 3.6 cond vocabulary (`rules/cond`, `game-rules/condition.rs`)
 
-Today `cond_pre.rs` exposes `stay` / `stun` / `exile` as bespoke CEL fields
+Today `condition.rs` exposes `stay` / `stun` / `exile` as bespoke CEL fields
 (`owner_stay`, `stay(seat)`, ...). Target: read them through the generic
 counter / state vocab. **Feasible without regressing only if** the CEL
 surface keeps the same names as sugar over `state_get`. Plan: leave the
@@ -395,7 +395,7 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
     latch**, closeout-2 ruling). Wired `ctx` -> `sys` -> `hostfns` -> `World`
     like `end_turn_now`.
   - marker-only charge: `gain_marker` / `spend_marker` / `add_marker_max`
-    (name is data) fold the held-token store; readers are `tok` / `tok_max`.
+    (name is data) fold the held-token store; readers are `held_count` / `held_max`.
     The 火罐 policy kernel is `bandori_std::fire` over those; the uncapped
     `gain_charge` / `spend_charge` / `add_charge_max` sugar is **deleted**.
   - `AbKind` is an opaque newtype (wire codec); the game names live in
@@ -415,7 +415,7 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
   are wired `ctx` -> `sys` -> `hostfns` -> `World` trait (plus the kani Op
   enum and native shims). `end_turn_now` is a transient `World::end_turn_request`
   latch (serde-skip, not in the save blob). `teleport_as` is
-  `HostRequest::TeleportAs` (no abnormal window) -> `Cx::teleport_as`.
+  `HostRequest::TeleportAs` (no abnormal window) -> `PlayCtx::teleport_as`.
   `log_as` posts the given event kind.
 * `SAVE_VERSION` bumps only if the serialized `MatchState` shape changes.
   Keeping `MatchPlayer.state` as storage means **no save bump** in the
@@ -450,7 +450,7 @@ is additive.
 | generic end-turn latch | `play.rs` names `exile` | **done**: `end_turn_now` latch after the raise | -- |
 | `stunStart` -> `stun` | `tick_state(TurnStart)` | same (item expiry) | -- |
 | `noHand` 2->1 | `play.rs` (after `tick_state`, before snapshot) | `status:no_hand` `TurnStart` hook (after snapshot) | -- |
-| snapshot | `turn_snap` | same (reads the keys) | -- |
+| snapshot | `turn_snapshot` | same (reads the keys) | -- |
 | `turnStart` | same | same (+ latch check after) | `turnStart` |
 | stun auto-skip | `play.rs` names `stunned()` | engine reads `act`/`move` gate | `log.stunned_skip` |
 | stay skip | `play.rs` names `stay()` | engine reads `move` gate (host sets it) | `log.stay_skip` |
@@ -461,13 +461,13 @@ is additive.
 | `turnEnd` / `turnEndAfter` / `endTurnAfter` | same | same | those |
 
 **noHand placement note (this batch).** There is no hook exactly between
-`tick_state` and `turn_snap` where the inline dance sat. The host therefore
+`tick_state` and `turn_snapshot` where the inline dance sat. The host therefore
 hooks `TurnStart` (fold) / `TurnEnd` (clear). `TurnStartBefore` was rejected
 for the fold: it runs *before* the exile tick, so an exile-skipped turn
 (`log.exiled_skip` -> `end_turn` without reaching `turnStart`) would consume
 the fold and the clear would wipe the key mid-skip. `TurnStart` is not
 reached on that path, matching the old dance exactly. `noHand` is not in
-`turn_snap`, so the fold's shift from "before snapshot" to "after snapshot"
+`turn_snapshot`, so the fold's shift from "before snapshot" to "after snapshot"
 is unobservable. `TurnEnd` is hook-only (no counteraction window).
 
 ---
@@ -606,7 +606,7 @@ registration; was `On::FilterFlag` before ABI 94):
 * **CEL only.** The condition is the whole answer: the ruleset load refuses a
   gate entry with a residual guard or without a condition
   (`host::validate_cel_only_gates`). That is what lets the engine ask the gate
-  in a pure `&self` read (the view, rollouts, `Cx::can_pay`) and a card guard
+  in a pure `&self` read (the view, rollouts, `PlayCtx::can_pay`) and a card guard
   ask it through `rules_status::can_pay` -- a wasm guard could not be run
   there, and a gate cannot be *raised* from inside a pure guard.
 * **Vocabulary.** A condition reads other statuses (`stay` needs

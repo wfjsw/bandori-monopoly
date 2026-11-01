@@ -255,7 +255,7 @@ impl Table {
 
     /// Mark `who` as a bot seat under `mentality`. These tests have no bot
     /// driver, so the engine's own schedule is used: standard / chaos flip
-    /// `ai` on (`Cx::fill_ai` answers them). Production leaves `ai` off for
+    /// `ai` on (`PlayCtx::fill_ai` answers them). Production leaves `ai` off for
     /// every bot seat and drives it over the human interface
     /// (`docs/BOT-DRIVE.md`). Advanced keeps `ai` off here too -- the seat is
     /// held for an external driver and its prompts time out to the fallback.
@@ -764,7 +764,7 @@ impl Table {
     pub fn set_charge(&mut self, who: usize, value: i32, max: i32) {
         self.m
             .world_mut()
-            .set_tok(who as i32, K_CHARGE, value, -1, max);
+            .set_held(who as i32, K_CHARGE, value, -1, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -1047,7 +1047,7 @@ impl Table {
 /// `""`.
 pub fn log_key(e: &MatchEvent) -> String {
     let m = if e.msg.key() == "log.card_effect" {
-        match e.msg.a.get("what") {
+        match e.msg.args.get("what") {
             Some(Arg::Msg(m)) => m.as_ref(),
             _ => &e.msg,
         }
@@ -1059,8 +1059,8 @@ pub fn log_key(e: &MatchEvent) -> String {
 
 /// An integer argument of a message (`.i` / `.n`).
 pub fn int_arg(msg: &Msg, name: &str) -> Option<i64> {
-    match msg.a.get(name) {
-        Some(Arg::I(v)) | Some(Arg::N(v)) => Some(*v),
+    match msg.args.get(name) {
+        Some(Arg::Integer(v)) | Some(Arg::Number(v)) => Some(*v),
         _ => None,
     }
 }

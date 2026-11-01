@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use server::store::{self, dummy, CrossState, RecMeta};
+use server::store::{self, dummy, CrossState, RecordMeta};
 
 /// A shared dummy store is what two `Server`s hold when they share state.
 fn dummy() -> dummy::Store {
@@ -158,21 +158,21 @@ fn publish_reaches_every_subscriber() {
 #[test]
 fn rec_meta_round_trips() {
     let s = dummy();
-    assert!(s.rec_meta_get("R").unwrap().is_none());
-    let meta = RecMeta {
+    assert!(s.record_meta_get("R").unwrap().is_none());
+    let meta = RecordMeta {
         buf: Some((2, 7)),
         inputs: 11,
         ticks: 130,
-        last_ckpt_at: 3,
+        last_checkpoint_at: 3,
         gaps: true,
         members: vec![1, 2],
         done: false,
         dirty: true,
     };
     s.rec_meta_put("R", &meta).unwrap();
-    assert_eq!(s.rec_meta_get("R").unwrap().unwrap(), meta);
+    assert_eq!(s.record_meta_get("R").unwrap().unwrap(), meta);
     s.rec_meta_del("R").unwrap();
-    assert!(s.rec_meta_get("R").unwrap().is_none());
+    assert!(s.record_meta_get("R").unwrap().is_none());
 }
 
 #[test]
@@ -305,18 +305,18 @@ fn redis_live_primitives() {
         .expect("pub/sub round-trip");
     assert_eq!(got.payload, "ping");
 
-    let meta = RecMeta {
+    let meta = RecordMeta {
         buf: Some((1, 2)),
         inputs: 3,
         ticks: 4,
-        last_ckpt_at: 1,
+        last_checkpoint_at: 1,
         gaps: false,
         members: vec![1],
         done: false,
         dirty: false,
     };
     s.rec_meta_put("R", &meta).unwrap();
-    assert_eq!(s.rec_meta_get("R").unwrap().unwrap(), meta);
+    assert_eq!(s.record_meta_get("R").unwrap().unwrap(), meta);
 
     let _ = child.kill();
     let _ = child.wait();

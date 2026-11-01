@@ -1,4 +1,3 @@
-//! `PPP:[衍生]Pipopa` -- C# `CardPipopa`: gain 1,000 and a Popipapapipopa
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]Pipopa`）:
 //! > [衍生]Pipopa：
@@ -30,7 +29,7 @@ fn pipopa(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「然后此卡[移除]」
     ctx::set_dest(ctx::Dest::Banished);
     // 规则书: 「获得1000资金」
-    ctx::gain(player_id, 1000, &Msg::new(key!("pipopa_why")))?;
+    ctx::gain(player_id, 1000, &Msg::new(key!("pipopa_reason")))?;
     // 规则书: 「然后将一张“Popipapapipopa”放置在自身场上」
     ctx::place_card(
         player_id,

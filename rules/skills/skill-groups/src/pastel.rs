@@ -25,7 +25,7 @@ pub const PASTEL: CardDef = CardDef::new(
     &[
         On::Action(Action::DeckAtGameStart("", None, at_start)),
         On::Action(Action::TurnStartBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             None,
             at_turn_start,
         )),

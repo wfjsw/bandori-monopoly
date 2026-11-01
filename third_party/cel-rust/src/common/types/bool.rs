@@ -136,7 +136,7 @@ fn bool_from_bool(this: &Bool) -> Bool {
 }
 
 fn bool_from_string(this: &CelString<'_>) -> Result<Bool, ExecutionError> {
-    // Same accepted set as cel-cpp and cel-java. cel-go's strconv.ParseBool also takes "T" and "F".
+    // Same accepted set as cel-cpp and cel-java.
     match this.inner() {
         "1" | "t" | "true" | "TRUE" | "True" => Ok(Bool(true)),
         "0" | "f" | "false" | "FALSE" | "False" => Ok(Bool(false)),

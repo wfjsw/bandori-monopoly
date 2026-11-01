@@ -93,7 +93,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if bandori_std::fire::spend(player_id, 1, &Msg::new(key!("soyo_spend")))? {
+    if bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("soyo_spend")))? {
         state::set(player_id, ARMED, 1);
     }
     Ok(())

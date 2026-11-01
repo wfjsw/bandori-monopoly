@@ -5,7 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ActionKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};

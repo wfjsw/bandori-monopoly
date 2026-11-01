@@ -1,12 +1,6 @@
 // Pure helpers behind the semantic hooks: no React, no DOM, no fetch. This is
 // the module `node --test` can load directly (see pure.test.ts).
 //
-//   matchHotkey        -- the `useHotkeys` key matcher
-//   countdownLeft      -- the `useCountdown` / `usePerfCountdown` arithmetic
-//   scrollFollowStep   -- the `useScrollFollow` tail-tracking state machine
-//   canvasBox          -- the Live2D stand's portrait fit (Live2DPortrait.Draw)
-//   sameParams         -- the Live2D `params` change detector
-//   bannerDeadline     -- the AutoBanner's hide-at stamp
 
 // ---------------------------------------------------------------- hotkeys
 
@@ -154,7 +148,6 @@ export interface StandBox {
 }
 
 /**
- * Map the canvas into the 3:4 window (Live2DPortrait.Draw).
  *
  * When `eyeY` is known the figure is anchored by its **eyes**: every character
  * lands its eye line on `eyeFrac` of the window height, so casts of different

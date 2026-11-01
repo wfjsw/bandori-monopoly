@@ -1,6 +1,6 @@
 //! Unit `skills_general`: reference specs FROM the clause docs only.
 //!
-//! Write one pure function per clause (pre + effect-log + post -> bool).
+//! Write one pure function per clause (condition + effect-log + post -> bool).
 //! Never derive a spec from engine behaviour.
 //!
 //! Empty until the unit author lands their first clause.

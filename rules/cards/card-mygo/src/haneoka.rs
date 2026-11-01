@@ -1,4 +1,3 @@
-//! `MyGO:羽丘的不可思议女孩` -- C# `CardHaneoka` (MatchHost.cs:6495): roll 1d20
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:羽丘的不可思议女孩`）:
 //! > 羽丘的不可思议女孩：
@@ -16,7 +15,6 @@ pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
     &[
         On::Play("", Some(cant_play), haneoka),
-        // C# `CardHaneoka.PaySplitChoose` -- while placed, may cancel one payment.
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive `ask_yes` + `set_dest` + `set_pay_amount(0)` offer sits
@@ -33,12 +31,10 @@ pub const HANEOKA: CardDef = CardDef::new(
 
 const ID: &str = "MyGO:羽丘的不可思议女孩";
 
-/// 规则书: 「位于属于自己的格子上时」 -- C# `CardHaneoka.WhyNot` refuses the
-/// card off your own tile ("只有站在自己的格子上才能打出").
 fn cant_play(player_id: i32) -> Option<Msg> {
     let pos = ctx::player_pos(player_id);
     if ctx::tile_owner(pos) != player_id {
-        return Some(Msg::new(key!("haneoka_why_not_own")));
+        return Some(Msg::new(key!("haneoka_blocked_own")));
     }
     None
 }
@@ -49,11 +45,6 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     if ctx::tile_owner(pos) != player_id {
         return Ok(());
     }
-    // 规则书: 「投掷1d20」
-    // Windowed (`ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
-    // 「你的任意掷骰结算前」) rings on this card's own 1d20 -- the only way past
-    // 20 (the sheet's place branch is 「至少为20」, so a natural 20 already
-    // reaches it; the window only pushes further).
     // It also honours a forced extreme (「以理论最大值或最小值结算」).
     let r = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
     if r < 10 {
@@ -64,13 +55,8 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
                 .card("card", ID)
                 .i("roll", r as i64),
         );
-        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
-        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
-        // side channel and is not being ported (a routine should *return* whether
-        // it took effect); but before that lands, what "not effective" changes has
-        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
-        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
-        // implies no)? And what counts a use that this would suppress?
+        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without saying
+        // what observes it. And what counts a use that this would suppress?
         return Ok(());
     }
     if r >= 10 {
@@ -102,9 +88,6 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
                     .card("card", ID),
             );
         }
-        // 规则书: 「免费加盖一层房屋」 -- `add_house` itself clamps at the tile's
-        // rent-table max (`rent.Length - 1`), so a tile that cannot take another
-        // house simply does not move.
     }
     if r >= 15 {
         // 规则书 (sheet 2026-10-06): 「若出目至少为15，则额外抽一张卡」
@@ -126,13 +109,8 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardHaneoka.PaySplitChoose` -- while placed, ask to bin the card and cancel
-/// one payment of yours (`p.cancel = true`).
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
-    // 规则书: 「在后续任何时刻可将其置入弃牌堆并抵消一次任意付款」 -- C# `Ask`:
-    // `H.AskYes(Seat, CardName, "要付 ... ：要把「羽丘的不可思议女孩」放入弃卡区，
-    // 抵消这次付款吗？")`, then `p.cancel = true` and `H.Unplace(this, "discard", ...)`.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("haneoka_cancel_title")).card("card", ID),

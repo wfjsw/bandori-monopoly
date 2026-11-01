@@ -69,7 +69,7 @@ fn lookups() {
 }
 
 #[test]
-fn json_defaults_match_csharp_initializers() {
+fn json_defaults_match_initializers() {
     let s: MatchState = serde_json::from_str("{}").unwrap();
     assert_eq!((s.turn, s.roller, s.landed, s.winner), (-1, -1, -1, -1));
     assert_eq!(
@@ -148,7 +148,7 @@ fn every_persona_has_a_complete_legal_preset() {
 }
 
 #[test]
-fn deck_rules_reject_with_csharp_reasons() {
+fn deck_rules_reject_with_reasons() {
     let d = data();
     let alpha = d.persona("Alpha").unwrap();
     let derived = d.cards.iter().find(|c| c.derived).unwrap();
@@ -205,7 +205,7 @@ fn deck_rules_reject_with_csharp_reasons() {
 }
 
 #[test]
-fn clean_name_counts_utf16_units_like_csharp() {
+fn clean_name_counts_utf16_units() {
     assert_eq!(clean_name("   "), "");
     assert_eq!(
         clean_name("一二三四五六七八九十一二三四五六七"),

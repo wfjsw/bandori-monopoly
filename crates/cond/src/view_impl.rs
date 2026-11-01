@@ -50,6 +50,33 @@ impl CondView for SnapshotView<'_> {
     fn pay_is_rent(&self) -> bool {
         self.win.pay_is_rent
     }
+    fn pay_kind(&self) -> i64 {
+        self.win.pay_kind
+    }
+    fn pay_is_fixed(&self) -> i64 {
+        self.win.pay_is_fixed
+    }
+    fn pay_total_stage(&self) -> bool {
+        self.win.pay_total_stage
+    }
+    fn charge_is_skill(&self) -> bool {
+        self.win.charge_is_skill
+    }
+    fn settle_tile(&self) -> i64 {
+        self.win.settle_tile
+    }
+    fn settle_owner(&self) -> i64 {
+        self.win.settle_owner
+    }
+    fn settle_houses(&self) -> i64 {
+        self.win.settle_houses
+    }
+    fn settle_mortgaged(&self) -> bool {
+        self.win.settle_mortgaged
+    }
+    fn settle_outcome(&self) -> i64 {
+        self.win.settle_outcome
+    }
     fn move_roll(&self) -> i64 {
         self.win.mv.roll.unwrap_or(-1)
     }
@@ -60,7 +87,7 @@ impl CondView for SnapshotView<'_> {
         self.win.mv.remaining
     }
     fn move_main(&self) -> bool {
-        self.win.mv.main
+        self.win.mv.is_main_move
     }
     fn move_by_skill(&self) -> bool {
         self.win.mv.by_skill
@@ -79,6 +106,9 @@ impl CondView for SnapshotView<'_> {
     }
     fn move_tag_table(&self) -> Vec<(String, i64)> {
         self.win.mv.tags.clone()
+    }
+    fn resolving_table(&self) -> Vec<(String, i64)> {
+        self.win.resolving.clone()
     }
     fn roll_source(&self) -> i64 {
         self.win.roll_source
@@ -103,6 +133,9 @@ impl CondView for SnapshotView<'_> {
     }
     fn trigger_card(&self) -> i64 {
         self.win.trigger_card
+    }
+    fn trigger_card_is_skill(&self) -> bool {
+        self.win.trigger_card_is_skill
     }
     fn counter_name(&self) -> i64 {
         if self.win.name.is_empty() {
@@ -150,8 +183,8 @@ impl CondView for SnapshotView<'_> {
     fn slot(&self, name: &str) -> i64 {
         self.cand.slot(name)
     }
-    fn tok_named(&self, name: &str) -> i64 {
-        self.cand.tok_named(name)
+    fn held_named(&self, name: &str) -> i64 {
+        self.cand.held_named(name)
     }
     fn cand_set(&self, key: &str) -> Vec<i64> {
         match key {
@@ -239,9 +272,9 @@ impl CondView for SnapshotView<'_> {
             .map(|(k, v)| (k.clone(), *v))
             .collect()
     }
-    fn tok_named_table(&self) -> Vec<(String, i64)> {
+    fn held_named_table(&self) -> Vec<(String, i64)> {
         self.cand
-            .tok_names
+            .held_names
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()
@@ -335,7 +368,8 @@ impl CondView for SnapshotView<'_> {
             if q < 0 {
                 continue;
             }
-            // C# `Next`: `tile_forward(pos, q)` forward, `tile_forward(q, pos)` back.
+            // Steps from `pos` to `q` along `dir`: forward wraps, backward
+            // mirrors the same measurement.
             let fwd = {
                 let f = ((q - pos) % n + n) % n;
                 if dir >= 0 {

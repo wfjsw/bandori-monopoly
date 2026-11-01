@@ -1,4 +1,3 @@
-//! `Mor:你的光芒将照亮前路` -- C# `CardYourLight` (MatchHost.cs:4644-4665): start this
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:你的光芒将照亮前路`）:
 //! > 你的光芒将照亮前路：
@@ -12,8 +11,8 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const YOUR_LIGHT: CardDef = CardDef::new(
     "Mor:你的光芒将照亮前路",
     &[On::Play(
-        // The dist clause stays in the residual guard (not `pre`): a play gate
-        // must not trade its specific refusal (`your_light_why_not`) for the
+        // The dist clause stays in the residual guard (not `condition`): a play gate
+        // must not trade its specific refusal (`your_light_blocked`) for the
         // generic `err.play_pre` a pre-reject surfaces (GUARDS.md §4.4).
         "",
         Some(cant_play),
@@ -27,36 +26,23 @@ pub const YOUR_LIGHT: CardDef = CardDef::new(
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡」
-    // C# `CardYourLight.WhyNot`: refuses outside the 20-tile window
-    // (`H.Dist(H.State.seats[seat].pos, School) <= 20`) and only when
-    // `pos >= 0` (a seat not on the board admits). School unknown admits
-    // (the C# `WhyNot` early-returns `None` then; on such a board the body is
-    // then a no-op -- no start and no start log). The refusal is the specific
-    // `your_light_why_not`, so it lives here, not in `pre`.
+    // The refusal is the specific `your_light_blocked`, so it lives here, not in
+    // `condition`.
     let school = ctx::tile_named("月之森女子学院");
     if school < 0 {
         return None;
     }
     let pos = ctx::player_pos(player_id);
     if pos >= 0 && ctx::dist(pos, school) > 20 {
-        return Some(Msg::new(key!("your_light_why_not")));
+        return Some(Msg::new(key!("your_light_blocked")));
     }
-    // 规则书: 「可以从手牌中打出此卡」 -- the 20-tile window is the only printed
-    // play condition. Whether 「此次移动」 needs the turn's main move is
-    // OPEN-移动起点: the start arm below keeps the `H.MoveWhyNot` gate, the play
-    // itself no longer refuses (the 3-valued `status.move_*` message stays).
-    // TODO(规则书)（可以从手牌中打出此卡）: only the *start* is gated on the main
-    // move -- the book never says 「此次移动」 is the main move (OPEN-移动起点).
+    // TODO(规则书)（可以从手牌中打出此卡）: 规则书: 「可以从手牌中打出此卡」 -- the 20-tile window is the only
+    // printed play condition. only the *start* is gated on the main move -- the book
+    // never says 「此次移动」 is the main move (OPEN-移动起点).
     None
 }
 
 fn your_light(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」
-    // C# `H._turnCtx.Plan.Start = School; Plan.StartWhy = CardName`.
-    // 规则书: 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」
-    // C# `H._turnCtx.Plan.Start = School; Plan.StartWhy = CardName` =
-    //   `plan::set_start(school, why)`.
     let school = ctx::tile_named("月之森女子学院");
     // TODO(规则书)（可以从手牌中打出此卡）: 「此次移动」 as the turn's main move is
     // unresolved (OPEN-移动起点) -- the start arm stays shut while the main move

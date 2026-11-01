@@ -1,14 +1,12 @@
-//! `R:（纱夜）弹奏弹奏弹奏，继续弹奏` -- C# `CardSayoPlay` (MatchHost.cs:10746-10779).
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（纱夜）弹奏弹奏弹奏，继续弹奏`）:
 //! > （纱夜）弹奏弹奏弹奏，继续弹奏：
 //! > [反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。
 //!
 //! Counteraction after your non-teleport main distance is determined, before
-//! moving (same timing as Sayo's skill; the printed card text is unchanged).
-//! 「视为使用一次此卡使用者的技能」 means Sayo's skill (2) extension (+1 or +2):
-//! C# `H.AnnounceSkill`. The skill's press body is not invoked, so the card
-//! currently runs the extension without the skill's 6-[火罐] cost.
+//! moving (same timing as Sayo's skill; the printed card text is unchanged). The
+//! skill's press body is not invoked, so the card currently runs the extension
+//! without the skill's 6-[火罐] cost.
 
 use bandori_std::ctx::{self, plan, state, trigger};
 use card_sdk::abi::{prop, ChainKind};
@@ -22,7 +20,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         // window; `counter_only` explains the timing on a hand play.
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
+            "actor == owner && move.kind == Walk && move.is_main_move && slot('skill.sayoThorns.used') != turn_key",
             Some(can_counteract),
             counteract).counter_reason(key!("sayo_play_when")),
         On::Play("", Some(counter_only), no_play).silent(),
@@ -52,8 +50,8 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && move.kind == Walk && move.main &&
-    // slot('skill.sayoThorns.used') != turn_key` is the pre;
+    // `actor == owner && move.kind == Walk && move.is_main_move &&
+    // slot('skill.sayoThorns.used') != turn_key` is the condition;
     // `!skill_blocked` is the residual guard.
     // Announce the user's character skill. Running its press body again would
     // add a second paid skill offer before this card's free extension.
@@ -81,7 +79,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if !matches!(n, 1 | 2) {
         return Ok(());
     }
-    // 规则书: 「打出时视为使用一次此卡使用者的技能」-- the C# body bumps the move.
     state::set(player_id, "skill.sayoThorns.used", ctx::turn_key());
     plan::set_steps(before + n);
     ctx::log(

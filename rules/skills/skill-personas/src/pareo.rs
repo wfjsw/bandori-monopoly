@@ -29,8 +29,6 @@ pub const PAREO: CardDef = CardDef::new(
             Some(has_house_product),
             on_built,
         )),
-        // （2）'s offer is also a press, so a card can run it out of turn
-        // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
         // On::Play's gate is `Option<Msg>` (WhyNot), not a bool residual.
         On::Play("tok('PAREO标记') >= 1", Some(offer_gate), offer),
     ],
@@ -42,7 +40,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「失去1PAREO标记（初始1，上限3）」 -- the mark exists from
     // match start, one deep. Written before the (1) loop so the early return
     // there cannot skip it.
-    ctx::add_tok(player_id, PAREO_MARK, 1, 3)?;
+    ctx::add_held_by_name(player_id, PAREO_MARK, 1, 3)?;
     for p in 0..ctx::player_count() {
         if p != player_id && !ctx::player_out(p) && ctx::in_group(p, "Pastel✽Palettes") {
             let _ = fans::grant(player_id, 1, 0)?;
@@ -59,11 +57,8 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）'s offer body: lose 1 PAREO mark, the others split-pay a quarter of the
-/// largest `build_cost × houses` among the player's deeds. Reached two ways --
-/// the `houseAdded` hook above, and the press entry (`On::Play`) a card runs
-/// for 「视为你的房屋总数增加」 (pareo_far, C# `SkillPareo -> Offer()`).
-/// Largest `build_cost × houses` over the player's deeds -- 「所有你拥有的格子
-/// 中取最高值」.
+/// largest `build_cost × houses` among the player's deeds. Largest `build_cost ×
+/// houses` over the player's deeds -- 「所有你拥有的格子 中取最高值」.
 fn best_house_product(player_id: i32) -> i32 {
     let mut best = 0;
     for t in ctx::owned_tiles(player_id) {
@@ -106,7 +101,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_tok(player_id, PAREO_MARK, -1, i32::MAX)?;
+    ctx::add_held_by_name(player_id, PAREO_MARK, -1, i32::MAX)?;
     // 「所有非自己的玩家分摊支付你…四分之一的资金」.
     let pot = best / 4;
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
@@ -117,14 +112,14 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     }
     // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes `pot`
     // before it divides (the 「分摊前」 figure).
-    let why = Msg::new(key!("pareo_why"));
-    let Some(shaped) = ctx::pay_total(others[0], player_id, pot, &why)? else {
+    let reason = Msg::new(key!("pareo_reason"));
+    let Some(shaped) = ctx::pay_total(others[0], player_id, pot, &reason)? else {
         return Ok(());
     };
     let per = (shaped + others.len() as i32 - 1) / others.len() as i32;
     let share = ((per + 9) / 10) * 10;
     for p in others {
-        ctx::pay_leg(p, player_id, share, &why)?;
+        ctx::pay_leg(p, player_id, share, &reason)?;
     }
     ctx::log(
         player_id,

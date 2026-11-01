@@ -71,7 +71,11 @@ fn accepted_declare_runs_the_body_once_with_the_arg() {
     t.set_hand(1, &[]);
     t.give_play(0, "TEST:pick").unwrap();
     // The declare prompt is "use this?" -- answer yes.
-    assert!(t.prompt().is_some(), "the declare asks: {}", t.dump_prompt());
+    assert!(
+        t.prompt().is_some(),
+        "the declare asks: {}",
+        t.dump_prompt()
+    );
     t.answer_one(0).unwrap();
     drain(&mut t);
     let hits: Vec<_> = t
@@ -88,7 +92,7 @@ fn accepted_declare_runs_the_body_once_with_the_arg() {
     // The body logs `pick_body` with `{{arg}}`; the declared arg is 7.
     let saw_arg = t.m.world().recent.iter().any(|e| {
         e.msg.key().contains("pick_body")
-            && matches!(e.msg.a.get("arg"), Some(game_core::msg::Arg::I(7)))
+            && matches!(e.msg.args.get("arg"), Some(game_core::msg::Arg::Integer(7)))
     });
     assert!(
         saw_arg,
@@ -152,7 +156,7 @@ fn can_fire_sees_a_closed_gate() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &["TEST:gate_closed"]);
     t.set_hand(1, &[]);
-    // The play is refused at the offer layer (the gate's `why` is shown).
+    // The play is refused at the offer layer (the gate's `reason` is shown).
     let r = t.give_play(0, "TEST:gate_closed");
     drain(&mut t);
     assert!(
@@ -206,7 +210,11 @@ fn counteract_decline_declares_no_counter() {
     );
     t.counteract(1, "TEST:pick_counter").unwrap();
     // `OP_DECLARE` asks "Counter with this?" -- decline.
-    assert!(t.prompt().is_some(), "the declare asks: {}", t.dump_prompt());
+    assert!(
+        t.prompt().is_some(),
+        "the declare asks: {}",
+        t.dump_prompt()
+    );
     t.answer_one(1).unwrap(); // no
     drain(&mut t);
 
@@ -243,9 +251,17 @@ fn prompted_decline_replays_without_re_asking() {
     t.set_hand(1, &["TEST:pick_counter"]);
     t.give_play(0, "TEST:echo").unwrap();
     // No `drain` before the offer assert: that would decline the window away.
-    assert!(t.counteract_offered("TEST:pick_counter"), "{}", t.dump_prompt());
+    assert!(
+        t.counteract_offered("TEST:pick_counter"),
+        "{}",
+        t.dump_prompt()
+    );
     t.counteract(1, "TEST:pick_counter").unwrap();
-    assert!(t.prompt().is_some(), "the declare asks once: {}", t.dump_prompt());
+    assert!(
+        t.prompt().is_some(),
+        "the declare asks once: {}",
+        t.dump_prompt()
+    );
     t.answer_one(1).unwrap(); // no -- and the drive re-runs with this answer
 
     // The re-run consumed the recorded "no" from the log. A second prompt here
@@ -351,8 +367,10 @@ fn logged_i(t: &Table, needle: &str, name: &str) -> Option<i64> {
         if !e.msg.key().contains(needle) {
             return None;
         }
-        match e.msg.a.get(name) {
-            Some(game_core::msg::Arg::I(v)) | Some(game_core::msg::Arg::N(v)) => Some(*v as i64),
+        match e.msg.args.get(name) {
+            Some(game_core::msg::Arg::Integer(v)) | Some(game_core::msg::Arg::Number(v)) => {
+                Some(*v as i64)
+            }
             _ => None,
         }
     })
@@ -413,14 +431,44 @@ fn query_guard_sees_slugs_and_press() {
     let k = |n: &str| logged_i(&t, "query_body", n);
 
     // The right slug on an admitting hook.
-    assert_eq!(k("open"), Some(1), "named_open.\"decay\" admits: {:?}", t.recent_keys(40));
+    assert_eq!(
+        k("open"),
+        Some(1),
+        "named_open.\"decay\" admits: {:?}",
+        t.recent_keys(40)
+    );
     // The same slug on a hook whose guard refuses.
-    assert_eq!(k("shut"), Some(0), "named_shut.\"decay\" refuses: {:?}", t.recent_keys(40));
+    assert_eq!(
+        k("shut"),
+        Some(0),
+        "named_shut.\"decay\" refuses: {:?}",
+        t.recent_keys(40)
+    );
     // A slug the target never declared.
-    assert_eq!(k("wrong"), Some(0), "an undeclared id is not a match: {:?}", t.recent_keys(40));
+    assert_eq!(
+        k("wrong"),
+        Some(0),
+        "an undeclared id is not a match: {:?}",
+        t.recent_keys(40)
+    );
     // A card with no such entry at all.
-    assert_eq!(k("unnamed"), Some(0), "no entry named \"decay\" on TEST:echo: {:?}", t.recent_keys(40));
+    assert_eq!(
+        k("unnamed"),
+        Some(0),
+        "no entry named \"decay\" on TEST:echo: {:?}",
+        t.recent_keys(40)
+    );
     // `entry::PRESS` -- the press surface, which no entry declares.
-    assert_eq!(k("press_open"), Some(1), "TEST:echo has an open press: {:?}", t.recent_keys(40));
-    assert_eq!(k("press_shut"), Some(0), "TEST:gate_closed's press is shut: {:?}", t.recent_keys(40));
+    assert_eq!(
+        k("press_open"),
+        Some(1),
+        "TEST:echo has an open press: {:?}",
+        t.recent_keys(40)
+    );
+    assert_eq!(
+        k("press_shut"),
+        Some(0),
+        "TEST:gate_closed's press is shut: {:?}",
+        t.recent_keys(40)
+    );
 }

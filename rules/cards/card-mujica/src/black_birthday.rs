@@ -1,4 +1,3 @@
-//! `Mujica:黑色生日` -- C# `CardBlackBirthday`: every other player pays you
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:黑色生日`）:
 //! > 黑色生日：
@@ -22,12 +21,8 @@ pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
         // sheet cell J14
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
-/// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「每名你以外」 -- the cell states no playability condition; the
-    // refusal when nobody else is in is C#-sourced.
-    // TODO(规则书)（「每名你以外」）: the book has no "no other player -> unplayable"
-    //   clause -- we refuse a play with no payer (C# `CardBlackBirthday.WhyNot`).
+    // TODO(规则书)（「每名你以外」）:
     if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_others")));
     }
@@ -35,7 +30,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn black_birthday(player_id: i32) -> card_sdk::Asked {
-    let why = Msg::new(key!("black_birthday_why"));
+    let reason = Msg::new(key!("black_birthday_reason"));
     // 规则书: 「每名你以外的资金不多于1000的玩家支付你800资金」 is a single check
     // at resolution. The card body
     // re-runs from the top on each prompt/answer (the host's replay model) and
@@ -43,7 +38,7 @@ fn black_birthday(player_id: i32) -> card_sdk::Asked {
     // slot on the first pass and every replay takes the same branch -- the two
     // 200s for a >1000 player each stay a separate [支付] (each answerable by a
     // counteraction). The `latch:` prefix is load-bearing: the body's world copy
-    // is dropped at each pause and `Cx::adopt_turn_policy` carries only `latch:`
+    // is dropped at each pause and `PlayCtx::adopt_turn_policy` carries only `latch:`
     // state keys across it (`engine/cx.rs`).
     let latch = "latch:black_birthday.bracket";
     // The payer set is latched by **seat** too (bit p+1), not re-read from
@@ -73,15 +68,15 @@ fn black_birthday(player_id: i32) -> card_sdk::Asked {
         }
         if (bits >> (p + 1)) & 1 == 1 {
             // 规则书: 「每名你以外的资金不多于1000的玩家支付你800资金」
-            ctx::transfer(p, player_id, 800, &why)?;
+            ctx::transfer(p, player_id, 800, &reason)?;
         } else {
             // 规则书: 「每名你以外的资金严格在1000以上的玩家支付你两次200资金。」
-            ctx::transfer(p, player_id, 200, &why)?;
+            ctx::transfer(p, player_id, 200, &reason)?;
             // TODO(规则书)（「支付你两次200资金」）: the book says the two payments are
             //   unconditional -- we skip the second once the payer is out (a
             //   no-op today: `money_inner` early-returns for an out payer).
             if !ctx::player_out(p) {
-                ctx::transfer(p, player_id, 200, &why)?;
+                ctx::transfer(p, player_id, 200, &reason)?;
             }
         }
     }

@@ -42,7 +42,7 @@ const runOut = (...args) =>
 
 // ---------------------------------------------------------------- toolchain
 
-/** The wasm-bindgen version `crates/bot-glue` pins (=X.Y.Z). */
+/** The `wasm-bindgen` version pinned in the crate's manifest (exact `=` match). */
 function pinnedBindgen() {
   const toml = readFileSync(join(ROOT, "crates", "bot-glue", "Cargo.toml"), "utf8");
   const m = toml.match(/wasm-bindgen\s*=\s*"=([0-9.]+)"/);

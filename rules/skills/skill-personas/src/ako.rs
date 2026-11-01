@@ -29,7 +29,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const AKO: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
     &[On::Action(Actions::PassRewardAffected(
-        card_sdk::pre::MINE,
+        card_sdk::condition::MINE,
         None,
         on_circle,
     ))],
@@ -82,7 +82,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     // single card there is nothing to choose.
     let cap = deck.len().min(2);
     let n = if cap > 1 {
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             player_id,
             &Msg::new(key!("ako_count_title")),
             &Msg::new(key!("ako_count_ask")),
@@ -97,7 +97,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         cap
     };
     let look: alloc::vec::Vec<NameId> = deck[..n].to_vec();
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("ako_title")),
         &Msg::new(key!("ako_ask")),

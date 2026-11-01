@@ -322,7 +322,7 @@ fails a gate instead of a player's game.
 Per-viewer derived data (`playable` / `estCost` / `skills` / `aiAnswer`) is
 computed **client-side** from what the viewer already legitimately knows
 (public `MatchState` + own hand + own sorted draw + open prompt), and the
-server stops shipping `view_extra` extras to human seats. The bot service
+server stops shipping `view_extras` extras to human seats. The bot service
 still receives a seat view and is still advisory (`docs/BOT.md`); it is not
 a second brain for the seat.
 

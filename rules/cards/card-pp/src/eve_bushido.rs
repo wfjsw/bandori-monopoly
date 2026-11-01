@@ -1,4 +1,3 @@
-//! `PP:[若宫伊芙]属于我的武士道！` -- C# `CardEveBushido`: stay in play, roll 12d4
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[若宫伊芙]属于我的武士道！`）:
 //! > [若宫伊芙]属于我的武士道！：
@@ -67,15 +66,13 @@ fn eve_bushido(player_id: i32) -> card_sdk::Asked {
     ctx::gain(
         player_id,
         n * 60,
-        &Msg::new(key!("eve_bushido_why")).i("n", n as i64),
+        &Msg::new(key!("eve_bushido_reason")).i("n", n as i64),
     )?;
     Ok(())
 }
 
-/// C# `CardEveBushido.Drew` -- per single card drawn, add a crystal (cap 3).
-/// 规则书[持续]（1）: 「[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）」
-/// Pure guard for [`drew`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// 规则书[持续]（1）: 「[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）」 Pure guard for [`drew`] -- the
+/// activation gate. `false` means the card is not activated at all.
 // TODO(规则书)（[使用者]抽卡后）: the hook keys on the field [拥有者], not the card's
 //   [使用者]; placement is always on the caster's own field, so they coincide.
 fn drew_guard(player_id: i32) -> bool {
@@ -91,8 +88,6 @@ fn drew(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardEveBushido.SettleBefore` -- the owner is settling on someone else's
-/// deed and this card still holds a miracle crystal: duel the landlord.
 /// 规则书[持续]（2）: 「[结算]前如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家」
 fn settle_before(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
@@ -127,9 +122,6 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[持续]（2）3: 「[支付]……房屋数量加1×100」
     let mut amount = (ctx::houses_of(at) + 1) * 100;
-    // 规则书[持续]（2）3: 「如果[共鸣]则[支付]金额改为“投掷点差”×50」 -- 「改为」 is
-    // unconditional; the C# only swapped when it was the better deal, which the
-    // clause does not say.
     if crate::resonance::try_resonance(player_id)? {
         amount = (a - b).abs() * 50;
     }
@@ -143,7 +135,7 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
         from,
         to,
         amount,
-        &Msg::new(key!("eve_bushido_why")).i("n", amount as i64),
+        &Msg::new(key!("eve_bushido_reason")).i("n", amount as i64),
     )?;
     Ok(())
 }

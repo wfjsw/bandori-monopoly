@@ -126,7 +126,7 @@ export function normalizeMatchView(raw: unknown): MatchView {
 
 // ---------------------------------------------------------------- page driver
 
-/** The engine the page already runs (`rules.ReplayMatch`). */
+/** A replay driven by the page's own engine, not a worker. */
 export class PageReplayHandle implements ReplayHandle {
   readonly kind = "page" as const;
   readonly apiVersion: number;

@@ -14,7 +14,7 @@
 //!
 //! The hook surface only dispatches to *placed* cards, so the play body places
 //! this card as the live-effect carrier and files it to the discard pile when
-//! the effect finishes -- the same carrier pattern as the other `Fx` cards.
+//! the effect finishes -- the same carrier pattern as the other `hook` cards.
 
 use alloc::vec::Vec;
 
@@ -29,15 +29,15 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
         On::Play("", None, two_donuts),
         // `card.placed` is the uniform gate; per-kind clauses (the other-passer
         // latch, the `move_dir` read) stay in the arms below.
-        On::Action(Action::PassTile("card.placed", None, fx)),
-        On::Action(Action::SettleAfter("card.placed", None, fx)),
+        On::Action(Action::PassTile("card.placed", None, hook)),
+        On::Action(Action::SettleAfter("card.placed", None, hook)),
         // A passer whose move never reaches `settleAfter` still ends the (2)
         // offer here: a 「不触发结算」 teleport raises `passTile` and no settle
         // (`SETTLE-STAGES.md` §6), and a passer who goes bankrupt on the landing
         // tile skips the settle stages entirely. `tileResolved` fires even for
         // an out passer, `moveResolved` for a move that settled to nothing.
-        On::Action(Action::TileResolved("card.placed", None, fx)),
-        On::Action(Action::MoveResolved("card.placed", None, fx)),
+        On::Action(Action::TileResolved("card.placed", None, hook)),
+        On::Action(Action::MoveResolved("card.placed", None, hook)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一人两个甜甜圈"#)
@@ -67,7 +67,7 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
     }
     let pos = ctx::player_pos(player_id);
     // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」 -- a duration
-    // grant (held exile, no layer tick). The pass ends it (see `fx`).
+    // grant (held exile, no layer tick). The pass ends it (see `hook`).
     // TODO(规则书)（获得[除外]直至你原本所在格子被其他玩家经过）: `hold` throws
     //   away its grant verdict -- a refused grant ([不可阻挡] / a countered
     //   abnormal window) leaves the holder still movable, yet the slots, the
@@ -90,8 +90,8 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
 }
 
 /// The `PassTile` / `SettleAfter` hook pair, while this card is placed.
-fn fx(player_id: i32) -> card_sdk::Asked {
-    // `card.placed` is the pre.
+fn hook(player_id: i32) -> card_sdk::Asked {
+    // `card.placed` is the condition.
     match trigger::kind() {
         // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- the exile ends the
         // moment the original tile is passed, not at the passer's settle. Latch
@@ -173,13 +173,10 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
                 &Msg::new(key!("two_donuts_ask")).player_id("by", by),
                 &tiles,
             )?;
-            // `card_move` is the closest shape to `H.Teleport(..., resolve: true)`
-            // and only marks `MainMoved` when the owner is the turn player, so
-            // this settle-teleport does not consume the main move.
             ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
             ctx::plan::set_teleport_to(to);
-            ctx::plan::set_resolve(true);
-            ctx::card_move(player_id);
+            ctx::plan::set_settles(true);
+            ctx::run_planned_move(player_id);
             ctx::log(
                 player_id,
                 &Msg::new(key!("two_donuts_moved"))
@@ -230,6 +227,6 @@ pub fn two_donuts_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn fx_kani(player_id: i32) -> card_sdk::Asked {
-    fx(player_id)
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
 }

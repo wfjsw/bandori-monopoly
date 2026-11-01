@@ -62,7 +62,7 @@ The reward rides `Action::DiceRollAfter`, and the engine raises
 `HostRequest::Roll` (`wasm_rules.rs:4044-4067`) raises only `diceRollBefore`;
 `roll_direct` raises nothing. Effect rolls never pay, and neither does a
 non-main forced walk. The card's own guard narrows it further
-(`move.main`). The source comment at `sports_talent.rs:23-26` already says so.
+(`move.is_main_move`). The source comment at `sports_talent.rs:23-26` already says so.
 
 Expected: every roll pays, whatever cast it. **Root fix (B):** a per-cast
 `diceRollCast` Action raised by the one cast point (4.1).
@@ -113,7 +113,7 @@ later at `diceRollResult`. Expected: the settled ≤X face banks its crystal.
 
 `counteract_with_plan` writes `ctx::plan::*` from inside the `diceRollResult`
 window (`detour.rs:266-281`), but the dispatch already cloned the move and
-reads only `t.value` / the plan's `resolve` back (`play.rs:1447-1471`). Every
+reads only `t.value` / the plan's `settles` back (`play.rs:1447-1471`). Every
 plan mutation (`reverse`, `start`, `parity`, `teleport_to` from other cards)
 is dropped before the walk. Expected: window plan writes reach the walk.
 **Root fix (B):** fold the plan delta into the move after every mid-roll raise
@@ -124,7 +124,7 @@ is dropped before the walk. Expected: window plan writes reach the walk.
 > 「若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记。」
 
 *Already fixed in this branch's A pass:* the options are now `(tile, roll)`
-pairs deduped on the pair, answered by **option index** through `ask_pick`
+pairs deduped on the pair, answered by **option index** through `ask_choice`
 (`hagumi_marks.rs:76-99`), so two rolls on one tile stay two options and the
 chosen roll survives. What remains (B): the prompt carries a `tile`/`roll`
 message per option so the client can highlight the tile, instead of a bare
@@ -135,13 +135,13 @@ unchanged in substance. **Root fix (B):** `ask_tile_pick` (4.5).
 
 > 「[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡…」
 
-The pre requires `move.tag('fireRoll') != 0`; no shipped producer writes that
+The condition requires `move.tag('fireRoll') != 0`; no shipped producer writes that
 tag (`misaki_card.rs:25-30`), and `roll_source` is stamped only on
 `diceRollBefore` (`wasm_rules.rs:4062-4065`), never on `diceRollResult`.
 `layer` recasts with `roll_source::CHARGE`, but the outer move roll's
 result window still reads `NONE`. Expected: the card is playable only after a
 fire-pot-funded move roll. **Root fix (B):** the roll carries a source
-throughout the transaction and the result window reads it (4.4, 5.4); the pre
+throughout the transaction and the result window reads it (4.4, 5.4); the condition
 becomes `roll_source == 1`.
 
 **10. `moca-roll-post-additive-stage` — AG:（摩卡）0.5倍速, row 62**
@@ -258,14 +258,13 @@ obligation, §9):
 
 | id | wire | class | filter | hook-only | meaning |
 |---:|---|---|---|---|---|
-| 123 | `diceRollCast` | Action | no | yes | one cast is on the table, raw. Payload: the roll, value = raw face, source. |
-| 124 | `diceRollSettled` | Action | no | yes | the terminal cast finished settling. Payload: the roll, `value` = settled face, `rerolled`, `chosen`, `unused` (`-1` when none), purpose. |
-| 125 | `diceRollAdd` | Filter (value) | yes | yes | the additive pass. Reads + writes the running face; payload reader sees purpose / rerolled. |
+| 129 | `diceRollCast` | Action | no | yes | one cast is on the table, raw. Payload: the roll, value = raw face, source. |
+| 130 | `diceRollSettled` | Action | no | yes | the terminal cast finished settling. Payload: the roll, `value` = settled face, `rerolled`, `chosen`, `unused` (`-1` when none), purpose. |
+| 131 | `diceRollAdd` | Filter (value) | yes | yes | the additive pass. Reads + writes the running face; payload reader sees purpose / rerolled. |
 
-110 (`paySplitMulBefore`) is the current maximum; 123..=125 are this group's
-README band (111-122 go to earlier-landing groups — 111 `rentAdd`, 112
-`rentMul`, 113 `settleAdd`, 114 `settleMul` landed with MONEY-01 at ABI v105,
-leaving 115-122). Retired
+128 (`settleRentMul`) is the current maximum; 129..=131 are this group's
+README band (111-121 went to earlier-landing groups, 122 is `spendBefore`, and
+123-128 landed with MONEY-01). Retired
 ids (16-20, 22, 94, 104) stay untouched. `diceRollValue` (102) is **redefined
 in place** as the final-settlement (multiplicative) stage; its numeric id and
 wire name do not move.
@@ -345,7 +344,7 @@ pub struct RollValue {
     pub purpose: i32,           // RollPurpose wire code
     pub rerolled: bool,
     pub recorded_roll: Option<i32>,
-    pub resolve: Option<bool>,  // move only; settles to false at 0
+    pub settles: Option<bool>,  // move only; settles to false at 0
 }
 ```
 
@@ -423,7 +422,7 @@ pub fn ask_tile_pick(
 ```
 
 `roll_reroll` is the whole card-facing reroll: `roll_current` →
-`roll_recast(roll, source)` → `ask_pick(keep_old, keep_new)` → `roll_choose`.
+`roll_recast(roll, source)` → `ask_choice(keep_old, keep_new)` → `roll_choose`.
 No new import is spent on the prompt; `source` is only passed through.
 
 `ctx::roll_direct` gains the same `source` parameter; `ctx::do_move_roll`
@@ -452,7 +451,7 @@ fn cast(&mut self, r: &mut RollCtx) -> i32 {
 }
 ```
 
-`Cx::roll` / `roll_tables` (cx.rs:1360) become thin calls into this producer,
+`PlayCtx::roll` / `roll_tables` (cx.rs:1360) become thin calls into this producer,
 so an effect roll and a move roll can never diverge again. `extreme` handling
 from `roll_tables` (play.rs:1578-1591) and `ops.rs::do_move_roll` (506-522)
 moves here; `card_do_move_roll` keeps an `extreme`-honouring wrapper.
@@ -516,13 +515,13 @@ pub struct TriggerRoll {
 Trigger readers (`ctx::trigger`): `roll() -> Option<RollPayload>` (the typed
 view, same shape as `trigger::buy()`), plus the conveniences `roll_id`,
 `roll_purpose`, `roll_rerolled`, `roll_unused`, all reads. The CEL vocabulary
-gains `roll_purpose` / `roll_rerolled` / `roll_unused` (`cond_pre.rs` +
-`cond/src/schema.rs` + `vocab.rs`), so a pre can gate on them. `move_*`
+gains `roll_purpose` / `roll_rerolled` / `roll_unused` (`condition.rs` +
+`cond/src/schema.rs` + `vocab.rs`), so a condition can gate on them. `move_*`
 readers keep working: a `Move` roll synthesizes the move view from the
 transaction (roller = the trigger's `player_id`, `kind = Walk`, `main =
-false`, `resolve = false` for a card-driven `Move` roll) so existing
-`move.main` / `move.tag` pre-conditions do not silently go false. The
-main-move dispatch sets `main = true` on its own transaction.
+false`, `settles = false` for a card-driven `Move` roll) so existing
+`move.is_main_move` / `move.tag` pre-conditions do not silently go false. The
+main-move dispatch sets `is_main_move = true` on its own transaction.
 
 `source` precedence: a recast's source replaces the transaction's when it is
 higher (`Charge` > `Skill` > `Card` > `NONE`). The `diceRollResult` and
@@ -592,7 +591,7 @@ Guard stays: owner, main, unfixed. The card no longer needs to know the reroll
 is raw.
 
 **2. sports_talent.rs** — move the reward entry from
-`Action::DiceRollAfter("actor == owner && card.placed && move.main", …)` to
+`Action::DiceRollAfter("actor == owner && card.placed && move.is_main_move", …)` to
 `Action::DiceRollCast("actor == owner && card.placed", …)`; drop the in-loop
 `reward()` from `reroll_to_ten`, since every recast now raises
 `diceRollCast`. `roll_plan`/`reroll_to_ten` move to a `roll_purpose == 1`
@@ -639,13 +638,13 @@ let pick = ctx::ask_tile_pick(player_id, &title, &text, &options)?;
 let chosen = seen[pick].1;
 ```
 
-**9. misaki_card.rs** — the pre becomes
+**9. misaki_card.rs** — the condition becomes
 `"actor == owner && roll_source == 1 && between(owner) > 0"`; the tag read
 (`move.tag('fireRoll')`) is dropped. `raises_effort` needs no change.
 
 **10. moca_half.rs** — the entry changes kind:
 `On::Filter(Filter::DiceRollAdd(…, roll_half))` stays `DiceRollValue` for the
-half; the pre switches `move.main` → `roll_purpose == 1` (a Move recast and a
+half; the condition switches `move.is_main_move` → `roll_purpose == 1` (a Move recast and a
 non-main forced move are both 「你的移动掷骰」). The TODO and the
 OPEN-ROLLRESHAPE-01 comment resolve to "additive first, then this".
 
@@ -656,11 +655,11 @@ effect rolls (`cut = roll - 2`, unbounded below). Ordering is now the ladder,
 so the TODO disappears.
 
 **12. layer_keep.rs** — the `roll_after` entry changes kind from
-`Action::DiceRollAfter` to `Action::DiceRollSettled` with the pre
+`Action::DiceRollAfter` to `Action::DiceRollSettled` with the condition
 `actor == owner && card.placed && roll_unused >= 0 && roll_purpose == 1`
 (the fire reroll is a Move recast); `counter_fire` records nothing itself, the
 body reads `roll_unused` and banks it into `SLOT_DICE`. `use_die` keeps
-`ask_pick` and `set_fixed_roll`, now with `roll_choose` available if it ever
+`ask_choice` and `set_fixed_roll`, now with `roll_choose` available if it ever
 needs to set the face directly.
 
 **13. please_choose.rs** — filter the hand by `prop::TARGETING` + admits and
@@ -669,8 +668,8 @@ offer option (1) only when the list is non-empty; on pick 0 call
 
 **14. doll_garden.rs** — `ctx::roll(p, 0, 0, RollPurpose::Move,
 roll_source::CARD)` replaces the `Effect` 1d20; the victim is the roller in
-the trigger, `main = false`, and the card still drives the walk with
-`plan::set_steps(r)` / `set_resolve(false)`.
+the trigger, `is_main_move = false`, and the card still drives the walk with
+`plan::set_steps(r)` / `set_settles(false)`.
 
 ---
 
@@ -692,7 +691,7 @@ the trigger, `main = false`, and the card still drives the walk with
 * **Replay.** A recast replays as the same RNG draw. The transaction's
   `casts` vector is rebuilt by the re-run; only the answers (`roll_choose`
   index, `ask_tile_pick` index) come from the log. Archived engine bundles are
-  unaffected: kinds 123-125 are additive, and 102 keeps its id and wire name, but its **stage changes** from the value
+  unaffected: kinds 122-124 are additive, and 102 keeps its id and wire name, but its **stage changes** from the value
 point to the settlement point -- a listener registered on it sees a different
 face and timing. That is the reason this group bumps the version at all.
 
@@ -705,10 +704,10 @@ immediately below the constant and above the newest note:
 ```
 /// v109: **roll transaction + settlement stages**. A roll is a `RollCtx`
 ///    carrying roller / purpose / source / every cast; every cast runs
-///    `diceRollCast` -> `diceRollAdd` (new filter 125, the additive pass) ->
+///    `diceRollCast` -> `diceRollAdd` (new filter 124, the additive pass) ->
 ///    `diceRollValue` (now the final-settlement pass, id/wire unchanged) ->
 ///    `diceRollAfter` -> `diceRollResult` -> `diceRollSettled` (new Action
-///    124). `diceRollCast` is new Action 123. `ruleset_roll` joins an open
+///    123). `diceRollCast` is new Action 122. `ruleset_roll` joins an open
 ///    Move transaction instead of always casting standalone; `ruleset_roll_direct`
 ///    gains the `source` arg. New imports `roll_recast`, `roll_choose`,
 ///    `roll_current`, `roll_face`, `roll_unused`, `roll_rerolled`,
@@ -740,12 +739,12 @@ slots.
 | 8 | `hhw.rs::hagumi_offers_one_option_per_roll_even_on_one_tile` — ≤60 and >60 faces on one tile both reachable |
 | 9 | `hhw.rs::misaki_only_after_a_fire_funded_move_roll` — plain roll refuses, fire reroll admits; `roll_source` on the result payload |
 | 10 | `gap_money.rs::g02_half_speed_plus_expectations_floor_on_a_rent` — retarget to 7 → 5 → 3 (landing moves by one) |
-| 11 | `pp.rs::no_expectation_shaves_effect_rolls_and_card_rerolls`; move floor stays 0 and sets `resolve = false` |
+| 11 | `pp.rs::no_expectation_shaves_effect_rolls_and_card_rerolls`; move floor stays 0 and sets `settles = false` |
 | 12 | `ras.rs::layer_keep_banks_the_unchosen_face_after_the_pick` — fire reroll, pick old ⇒ `unused` = new face, one entry banked, `use_die` offers it later |
 | 13 | `ras.rs::please_choose_opt1_plays_a_targeting_card_at_the_counteractor` |
 | 14 | `mujica.rs::doll_garden_victim_roll_takes_the_victim_modifiers` — no_expectation shaves the victim's roll; a victim's `DiceRollAfter` hook runs |
 
-ABI-level: `crates/game-rules/tests/kind_table_pin.rs` (123-125),
+ABI-level: `crates/game-rules/tests/kind_table_pin.rs` (122-124),
 `crates/game-rules/tests/live_match.rs` (ladder order: Cast → Add → Value → After
 → Result → Settled; `roll_source` on Result; `unused` on Settled),
 `rules/tests/tests/split_hook_entries.rs` (no_expectation now `DiceRollAdd`),
@@ -775,7 +774,7 @@ quotes only; PROTOCOL-LEVEL where the ladder is engine-side):
 ## 10. Alternatives
 
 1. **One `DiceRollValue` with `stage: Add | Final` on the payload**, instead
-   of a second kind. Fewer kinds, but every `match` and CEL pre must switch on
+   of a second kind. Fewer kinds, but every `match` and CEL condition must switch on
    the stage, and the two stages have different purity contracts (Add is
    unbounded below, Final clamps). Two kinds keep the fixed order in the
    engine instead of in card text. Rejected.
@@ -831,16 +830,13 @@ abnormal-move window.
 > 选择自己的舞台：
 > [反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算
 
-Rows 672–674, 1455 are the halves: `resolveOverride` and `stageEnd` are C#
-`H.SetV`/`H._resolveOverride` slots that no current reader consumes.
-
 ### 12.2 The gap (today's tree)
 
 The counteraction body branches on the abnormal kind and writes
 `ctx::set_slot(player_id, "resolveOverride" | "stageEnd", …)`. Nothing reads
 either slot:
 
-* the move always settles (`after_walk` only consults `Move.resolve`, which no
+* the move always settles (`after_walk` only consults `Move.settles`, which no
   card answers), so "no" changes nothing;
 * a blocked move settles at the square on landing today (a 0-step walk still
   runs `after_walk`), and no settle is scheduled for a blocked turn end, so
@@ -856,11 +852,11 @@ cleared with the thing they belong to:
 // window; both are the *answering seat's* own move/turn.
 pub fn move_answer_resolve(yes: bool);        // 「本次移动…是否触发结算」
 pub fn turn_end_settle_answer(yes: bool);     // 「无法移动的回合结束时」 half
-pub fn move_resolve() -> bool;                // read-back (tests, later cards)
+pub fn move_settles() -> bool;                // read-back (tests, later cards)
 pub fn turn_end_settle() -> i8;               // 0 none, 1 settle, 2 skip
 ```
 
-`move_answer_resolve(false)` writes the pending `Move.resolve = false`
+`move_answer_resolve(false)` writes the pending `Move.settles = false`
 (`move_ctx.rs:116`), which `after_walk` already honours
 (`play.rs:2048`); no new engine check. `turn_end_settle_answer` writes one new
 `TurnCtx` byte.
@@ -876,11 +872,11 @@ blocked landing never both settles at the square and at turn end.
 * `TurnCtx.blocked_settle: i8` (`#[serde(default)]`, 0 = none) — rebuilt with
   the turn like every other `TurnCtx` field.
 * In the walk tail, when the abnormal was stay/stun and the piece did not move:
-  set `m.resolve = false` for the blocked landing and `turn.blocked_settle = 1`.
+  set `m.settles = false` for the blocked landing and `turn.blocked_settle = 1`.
 * `end_turn` (`play.rs:725`), before `turnEndBefore`: if
   `turn.blocked_settle == 1` and the seat is live, `self.settle(i, &Move-only
   frame)`; 2 skips. Clear to 0 after.
-* `Move.resolve` is already saved with parked work; only `blocked_settle` is a
+* `Move.settles` is already saved with parked work; only `blocked_settle` is a
   new saved byte, and `TurnCtx` carries it with `serde(default)` — SAVE stays
   at this group's 13.
 
@@ -918,7 +914,7 @@ on the slot living long enough; the two slot keys leave the card.
 
 1. **Does "yes" on an unblocked move force a settle the engine would otherwise
    skip** (e.g. after an [除外]-gated landing)? Design: yes, it only writes the
-   existing `resolve` flag.
+   existing `settles` flag.
 2. **Is the branch the abnormal kind alone, or "the move was actually
    blocked"?** Design keeps the kind branch; a walk-through under
    「不可阻挡」 still takes the turn-end half.

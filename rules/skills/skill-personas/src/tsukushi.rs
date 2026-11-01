@@ -67,7 +67,7 @@ fn other(player_id: i32) -> bool {
         return false;
     }
     // 「你可以将对方的X标记翻面」 -- the mark is the offer's object.
-    if ctx::tok(t, UP) < 1 {
+    if ctx::held_count(t, UP) < 1 {
         return false;
     }
     // 「此效果对"抽牌"动作发动时必须翻面记录数字为2200及以上的标记」
@@ -96,7 +96,7 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     // 「可以改为指定场上除你以外的一个角色」 -- the 「可以」 is a yes/no first
     // (`tsukushi_ask`: 「改为指定另一名角色进行该动作？」), then one pick over the
     // other players (`tsukushi_who`: 「指定哪名角色？」). Declining the yes/no
-    // is "don't redirect" (the gain stays); `ask_pick` has no decline of its own.
+    // is "don't redirect" (the gain stays); `ask_choice` has no decline of its own.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tsukushi_title")),
@@ -104,7 +104,7 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("tsukushi_title")),
         &Msg::new(key!("tsukushi_who")),
@@ -121,7 +121,7 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     // `payAfter` hook on that gain may return `Err(Prompt)`, and the mark must
     // not be lost to that pause (the money has already moved by then).
     ctx::trigger::set_pay_amount(0);
-    ctx::add_tok(who, UP, 1, i32::MAX)?;
+    ctx::add_held_by_name(who, UP, 1, i32::MAX)?;
     state::set(player_id, &rec_key(who), amount);
     ctx::gain(
         who,
@@ -154,8 +154,8 @@ fn on_theirs(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「将对方的X标记翻面」
-    ctx::add_tok(src, UP, -1, i32::MAX)?;
-    ctx::add_tok(src, DOWN, 1, i32::MAX)?;
+    ctx::add_held_by_name(src, UP, -1, i32::MAX)?;
+    ctx::add_held_by_name(src, DOWN, 1, i32::MAX)?;
     // 「以此效果获得的金钱数量不能超过记录数字+300，超出部分由原主获得」
     let cap = recorded + 300;
     let mine = amount.min(cap);
@@ -183,7 +183,7 @@ fn can_cash(player_id: i32) -> Option<Msg> {
     }
     let all = (0..ctx::player_count())
         .filter(|&p| p != player_id && !ctx::player_out(p))
-        .all(|p| ctx::tok(p, DOWN) >= 1);
+        .all(|p| ctx::held_count(p, DOWN) >= 1);
     if !all {
         return Some(Msg::new(key!("tsukushi_not_ready")));
     }
@@ -195,10 +195,10 @@ fn can_cash(player_id: i32) -> Option<Msg> {
 fn cash(player_id: i32) -> card_sdk::Asked {
     let mut n = 0;
     for p in 0..ctx::player_count() {
-        let both = ctx::tok(p, UP) + ctx::tok(p, DOWN);
+        let both = ctx::held_count(p, UP) + ctx::held_count(p, DOWN);
         if both > 0 {
-            ctx::add_tok(p, UP, -ctx::tok(p, UP), i32::MAX)?;
-            ctx::add_tok(p, DOWN, -ctx::tok(p, DOWN), i32::MAX)?;
+            ctx::add_held_by_name(p, UP, -ctx::held_count(p, UP), i32::MAX)?;
+            ctx::add_held_by_name(p, DOWN, -ctx::held_count(p, DOWN), i32::MAX)?;
             n += both;
         }
     }

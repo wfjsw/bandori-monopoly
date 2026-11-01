@@ -31,14 +31,14 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 | R3 | `build_cost_effective` duplicated G09's `build_price(tile)`, which is the identical formula (`max(0, build_cost*pct/100 - discount)`). | Item 12 is handed to G09; G02 drops that import (2.12). |
 | R4 | Op ids 341–350 collide with G01's eight imports (341–348), and G08's twenty (349–368) are not counted anywhere. | G02 takes **369–377**; the README table is corrected and every later group is shifted (§8). |
 | R5 | §7 said `RECORD_VERSION` stays 3. Master is already **4** (`record.rs:48`); G08 landed `SAVE_VERSION` 13. | `SAVE_VERSION` stays **13**; `RECORD_VERSION` stays **4** (§7). |
-| R6 | `SettleOutcome` was designed beside G10's `SettleFacts`, which carries `cancelled`/`body_replaced`/`paid` for the same frame — two representations of one fact, and G10 also claimed the `settle_open` fix. | One stack (`Cx.settle_stack`) owned here; `SettleFacts` becomes a view of it, and G02 ships the `settle_open` fix G10's bullet described (§12, R10 below). |
+| R6 | `SettleOutcome` was designed beside G10's `SettleFacts`, which carries `cancelled`/`body_replaced`/`paid` for the same frame — two representations of one fact, and G10 also claimed the `settle_open` fix. | One stack (`PlayCtx.settle_stack`) owned here; `SettleFacts` becomes a view of it, and G02 ships the `settle_open` fix G10's bullet described (§12, R10 below). |
 | R7 | `rent_quote` was defined as "the figure `charge_rent` would move", which includes the in-flight payment's own factor — so 连接 (`anon_tokyo`) would scale a partner charge by the *triggering* payment's factor. | The quote is a fresh hypothetical charge: own tile factors + standing plan/settle factors, **not** the in-flight payment's rent factor or `milli_scale` (I8, 4.6). |
 | R8 | `Fixed` said the pay windows are "read-only" but did not say what happens to `spare(link, seat)`, `set_pay_target`, or the `ceil10`. | `Fixed` ignores amount, target, cancel and spare writes and skips the round; `must` still applies (I2, 5.2). |
 | R9 | §4.4 let `set_pay_shape` write in any window, including stages that had already run. | Shape is foldable only until the first split leg opens; after that a `set_pay_shape` to a non-`Normal` shape is logged and dropped (4.3). |
 | R10 | `myself`/bridge plumbing was claimed "identical on the three targets" without naming the guest mirror, `bridge_trigger`, `visible_host_request`, `apply_host_request`, the inline host, or `conf_model`, and without `TriggerPay` field changes reaching the mirror. | Named call by call in 4.9; every new `Trigger`/`TriggerPay` field is on the mirror and the bridge (§5.7). |
-| R11 | Item 23's "per-seat gains counter" ignored that `gains_this_turn` already exists and is already a pre field; the defect is six bare `money +=` credits that never bump it. | One `World::credit` write path; the six sites route through it (2.23, 5.8). |
-| R12 | Item 20's reader was assigned to `PayCombinedAddBefore` only, so a `Fixed` command (which skips the combined stages) had no flag and the guard was unreadable at the `effect` window where 主唱太拼命了 actually listens. | `total_stage` moves onto `TriggerPay` and the pre vocabulary; readable on every pay window (§4.7, 5.2). |
-| R13 | `pay_kind` was listed as a pre scalar returning "-1 when not a pay window", but the pre language has no nullable int convention there. | `pay_kind` returns -1 and the docs say the guard is only meaningful with `effect.has(Pay)`; `pay_total_stage` defaults `true` so a non-pay guard fails closed (§4.7). |
+| R11 | Item 23's "per-seat gains counter" ignored that `gains_this_turn` already exists and is already a condition field; the defect is six bare `money +=` credits that never bump it. | One `World::credit` write path; the six sites route through it (2.23, 5.8). |
+| R12 | Item 20's reader was assigned to `PayCombinedAddBefore` only, so a `Fixed` command (which skips the combined stages) had no flag and the guard was unreadable at the `effect` window where 主唱太拼命了 actually listens. | `total_stage` moves onto `TriggerPay` and the condition vocabulary; readable on every pay window (§4.7, 5.2). |
+| R13 | `pay_kind` was listed as a condition scalar returning "-1 when not a pay window", but the condition language has no nullable int convention there. | `pay_kind` returns -1 and the docs say the guard is only meaningful with `effect.has(Pay)`; `pay_total_stage` defaults `true` so a non-pay guard fails closed (§4.7). |
 | R14 | "Design only" claimed nothing is serialized, yet `settle_stack` and the payee half are engine state that a mid-settle save must reproduce. | `settle_stack` is rebuilt from the answer log like the work stack; `partner` is runtime-only and derived from the declared payee (§7). |
 | R15 | §11 Q3/Q8/Q13/Q16/Q17 stated outcomes for behaviour the draft did not define. | Each now points at the section that defines it, and Q13/Q17 are tightened to what the design actually does. |
 | R16 | The draft's test 12 tested a surface the group no longer owns and test 18 tested `SettleAfter` cleanup that G10 also changes. | Test table rewritten; the council test asserts the G02 outcome reader and leaves the G10 bits to G10 (§9). |
@@ -49,7 +49,7 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 |---|------|-----|-------------|-------------|
 | 1 | `rui-fixed-100` | high | 226, 230, 959, 1031, 1241 | B: `PayShape::Fixed` |
 | 2 | `mashiro-pay-kind-rewrite` | medium | 323 | B: `set_pay_kind` + `PayShape::PayeeHalf` |
-| 3 | `sakiko-pay-factor-composition` | medium | 131, 132 | B: scoped `mul_pay_factor` |
+| 3 | `sakiko-pay-factor-composition` | medium | 131, 132 | B: scoped `multiply_pay_factor` |
 | 4 | `kokoro-pay-buy` | medium | 305 | B: kind `Buy` + mandatory pay |
 | 5 | `kokoro-rent-kind` | high | 306, 953 | B: kind `Rent` on a caller-supplied figure |
 | 6 | `kokoro-pay-tile` | high | 309, 1005 | B: `pay_command` tile |
@@ -60,15 +60,15 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 | 11 | `anon-tokyo-link-rent-figure` | medium | 513, 1388 | B: `rent_quote`; **row 513 A** |
 | 12 | `miracle-free-build-choice` (G09's row) | medium | 521 | **Hand to G09** (`build_price`) |
 | 13 | `guerrilla-paid-per-seat` | medium | 1472 | B: `paid_in_settle_by` |
-| 14 | `repaint-pay-factor` | medium | 835 | B: `mul_pay_factor` (move scope) |
-| 15 | `taki-pay-factor-leak` | high | 560, 1361 | B: `mul_pay_factor` (settle scope) |
-| 16 | `rana-pay-factor-multiply` | medium | 1483 | B: `mul_pay_factor` (settle scope) |
+| 14 | `repaint-pay-factor` | medium | 835 | B: `multiply_pay_factor` (move scope) |
+| 15 | `taki-pay-factor-leak` | high | 560, 1361 | B: `multiply_pay_factor` (settle scope) |
+| 16 | `rana-pay-factor-multiply` | medium | 1483 | B: `multiply_pay_factor` (settle scope) |
 | 17 | `fire-bird-paid-signal` | medium | 1441 | B: `PayReceipt::settled` |
 | 18 | `council-check-cancelled-settle` (G10's row) | medium | 1449 | B: `SettleOutcome` on `tileResolved`; the `paid`/`body_replaced` bits stay G10's |
 | 19 | `kokoro-circlenormal-skip` | medium | 1353 | **A** (`trigger::is_settle_redirect()`) |
-| 20 | `vocal-split-leg` | medium | 21 | B: `total_stage` on the trigger + `pay_total_stage` pre |
+| 20 | `vocal-split-leg` | medium | 21 | B: `total_stage` on the trigger + `pay_total_stage` condition |
 | 21 | `tritone-lose-half-unreachable` | medium | 1333 | B: `SpendBefore` on the `lose_raw` path |
-| 22 | `tomori-charge-paying-skill-scope` | low | 458, 459 | B: charge source flag + `charge_is_skill` pre; 459's temp share A |
+| 22 | `tomori-charge-paying-skill-scope` | low | 458, 459 | B: charge source flag + `charge_is_skill` condition; 459's temp share A |
 | 23 | `hagumi-money-in-counter-abi` | medium | 1009, 1353 | B engine-only: every credit bumps `gains_this_turn` |
 
 Group coverage against `BACKLOG.md` section B: the consolidated slugs are
@@ -96,7 +96,7 @@ Wrong site: `rules/cards/card-morfonica/src/rui_devil.rs:34`
 300-back leg stays shapeable.
 
 ```rust
-ctx::transfer(player_id, o, 100, &why)?;
+ctx::transfer(player_id, o, 100, &reason)?;
 ```
 
 `ctx::transfer` enters `HostRequest::Pay`, whose handler raises the `effect`
@@ -145,7 +145,9 @@ ctx::plan::set_pay_factor(500);
 halves stay 0.5 instead of 0.25, and the factor is still there for the owner's
 own later landing.
 
-Root cause **R2** (absolute, turn-scoped factors, no multiply, no read).
+Root cause **R2** (absolute, turn-scoped factors, no multiply, no read). Since
+G02 lands, the write is scoped and composes, so the two halves give 0.25 and
+the owner's later landing is not scaled by this move's factor.
 
 ### 2.4 `kokoro-pay-buy` (medium; row 305)
 
@@ -155,7 +157,7 @@ Wrong site: `rules/cards/card-hhw/src/kokoro_circle.rs:44-45`
 **Demand:** the 10000 is a mandatory Buy-shaped payment with the shortfall path.
 
 ```rust
-let paid = ctx::pay(player_id, 10000, &Msg::new(key!("kokoro_circle_why")))?;
+let paid = ctx::pay(player_id, 10000, &Msg::new(key!("kokoro_circle_reason")))?;
 if paid < 10000 { return Ok(()); }
 ```
 
@@ -223,7 +225,7 @@ auction included.
 On::Action(Action::PaySplitChooseBefore("... value > 0 ...", None, pay_choose)),
 ```
 
-Only the pay arm is hooked. `Cx::apply_redeem` (`play.rs:3432`) and the
+Only the pay arm is hooked. `PlayCtx::commit_redeem` (`play.rs:3432`) and the
 auction win (`play.rs:4683`) write `money -= n` directly.
 
 Root cause **R4** (no window for raw 消耗).
@@ -390,16 +392,14 @@ publishes them as `trig_settle_facts`. The card's refund branch reads G02's
 
 ### 2.19 `kokoro-circlenormal-skip` (medium; row 1353) — demote to A
 
-Fragment: 「若其他玩家在该格[触发结算]则向所有者支付6000资金」 / the C#
-`H.CircleNormal(m, num)` carve-out at `kokoro_circle.rs:99-101`.
+Fragment: 「若其他玩家在该格[触发结算]则向所有者支付6000资金」.
 
-**Demand:** the 6,000 is not charged on the settle a player walked into
-normally (the CiRCLE reward already ran).
+**Demand:** the 6,000 is not charged on a settle a **card** redirected here
+(the CiRCLE reward already ran there); a normal walk-in settle is charged.
 
-C# keys the carve-out on how the move was caused. The trigger already carries
-exactly that: `Move.settle_redirect` (`move_ctx.rs:173-175`), engine-set on
-`card_settle_move` (`play.rs:1115-1122`) and never a plan write, read from the
-body as `card_sdk::ctx::trigger::is_settle_redirect()` (`ctx.rs:3104`).
+The trigger already carries exactly that: `Move.settle_redirect` (`move_ctx.rs:173-175`), engine-set
+on `card_settle_move` (`play.rs:1115-1122`) and never a plan write, read from the body as
+`card_sdk::ctx::trigger::is_settle_redirect()` (`ctx.rs:3104`).
 
 ```rust
 if mover == player_id || mover < 0 || trigger::is_settle_redirect() { return Ok(()); }
@@ -475,8 +475,8 @@ Fragment: 「此卡可在你回合外收到资金的回合结束时打出」 —
 
 **Demand:** every money-in counts, whatever moved it.
 
-`gains_this_turn` exists as a `TurnCtx` counter and as a pre field
-(`cond_pre.rs:1254`). Only two credit implementations bump it:
+`gains_this_turn` exists as a `TurnCtx` counter and as a condition field
+(`condition.rs:1254`). Only two credit implementations bump it:
 `ops.rs:595`/`:922` (`gain_fixed`/`gain_money`) and the settled-payment credit
 at `play.rs:4051`. Six other credits write `money +=` bare: `play.rs:2871`
 (mortgage payout), `:3273` (redeem refund), `:3303` (auction refund), `:3466`
@@ -528,7 +528,7 @@ Testable invariants:
   raises funds and can bankrupt.
 - **I3 (payee half).** `PayeeHalf` captures the declared payee, settles the
   main leg as a delete to the bank, and then charges the captured payee
-  `floor(settled / 2)` as a `Fixed` leg to the payer. No half on cancel or
+  `floor(settled / 2)` as a `Fixed` bank-loss leg. No half on cancel or
   shortfall.
 - **I4 (factor scope).** `pay_factor()` returns the product of every factor
   scope live at this instant (4.5). A factor write outlives exactly its scope:
@@ -598,7 +598,7 @@ keeps its current `Msg` shape and keys.
 - **`SettleEntry` / `settle_stack`** — the frame stack's elements, not a
   "scope": factor *scopes* are a different concept this doc already owns, and
   one word for both made 5.3/5.5 ambiguous. The frame field is `stack_idx`.
-- **`settle.tile` etc.** — pre fields, dotted like `tile.id` / `tile.owner`.
+- **`settle.tile` etc.** — condition fields, dotted like `tile.id` / `tile.owner`.
   The body readers stay `trigger::settle_tile()` / `settle_outcome()`,
   parallel to `trigger::tile()`; the engine field keeps its `settle_tile`
   spelling. Because `settle.*` takes the dotted word, G10's trigger snapshot
@@ -736,13 +736,16 @@ the skipped stages after all).
 ### 4.5 Factor API (`ctx::plan`)
 
 ```rust
-pub fn mul_pay_factor(milli: i32, scope: PayFactorScope);   // load-bearing
+pub fn multiply_pay_factor(milli: i32, scope: PayFactorScope);   // load-bearing
 pub fn pay_factor() -> i32;                                 // milli, scoped product
-pub fn set_pay_factor(milli: i32);                          // absolute, Auto scope
+pub fn set_pay_factor(milli: i32);                          // compose, Auto scope
+pub fn set_rent_factor(milli: i32);                         // compose, settle or move
 // `set_pay_factor` keeps its name and arity; its meaning widens from "the
 // turn plan" to Auto's scoped target. In a settle it now writes the settle
 // scope, where before it always wrote the plan -- a caller inside a settle
-// that means the plan says so with `mul_pay_factor`/scope=ThisMove.
+// that means the plan says so with `multiply_pay_factor`/scope=ThisMove. It
+// also **composes** now (MONEY-01, ABI v108): two live halves are a quarter,
+// and a STACK-01 re-run of one body composes once.
 // Regression test: `g02_settle_set_factor_does_not_leak_to_the_move`.
 ```
 
@@ -773,11 +776,11 @@ pub fn paid_in_settle_by(seat: i32) -> i32;
 pub fn rent_quote(payer: i32, tile: i32) -> i32; // -1 = no rent charge
 ```
 
-The bodies `settle_tile()` / `settle_outcome()` have pre counterparts
+The bodies `settle_tile()` / `settle_outcome()` have condition counterparts
 `settle.tile` / `settle.outcome` (4.7); body readers are for hook bodies, the
-pre fields for guards.
+condition fields for guards.
 
-### 4.7 Extended pre language (`crates/game-rules/src/cond_pre.rs`)
+### 4.7 Extended condition language (`crates/game-rules/src/condition.rs`)
 
 New pure scalars, usable in any guard because they read the trigger. All of
 them join the `GUARDS.md` §4.2 window schema with the default stated here, and
@@ -826,20 +829,20 @@ without another import.
 | Layer | Addition |
 |---|---|
 | `game-rules/src/host.rs` `HostRequest` | `PayCommand { from, to, amount, spec, src }` (`TOTAL_STAGE` decodes from the spec) |
-| `game-rules/src/hostfns.rs` | `pay_command`, `trig_set_pay_kind`, `trig_set_pay_shape`, `mul_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`, `paid_in_settle_by`, `rent_quote`, `raise`(5 slots) |
+| `game-rules/src/hostfns.rs` | `pay_command`, `trig_set_pay_kind`, `trig_set_pay_shape`, `multiply_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`, `paid_in_settle_by`, `rent_quote`, `raise`(5 slots) |
 | `game-rules/src/host.rs` `func_wrap` | one registration per name; `raise`'s closure takes the fifth slot |
 | `game-rules/src/native_shims.rs` | `op_pay_command`, `op_trig_set_pay_kind`, … one per import, plus the extra `op_raise` slot; `ruleset_pay_command` panics on a bad decode (host bug) |
 | `game-rules/src/wasm_rules.rs` | `visible_host_request` gains `PayCommand` next to `Pay`; the `PayCommand` arm and the inline `InlineHost::apply` arm; the `Pay`/`PayCommand` handler passes the settled `Pay` to `money_inner` |
 | `game-rules/src/world.rs` (guest `Trigger` mirror) | `TriggerPay { is_rent, total_stage }`, `Trigger { settle_tile, outcome, charge_skill }`; `bridge_trigger` copies them |
 | `card-sdk/src/ctx/sys.rs` | externs with `#[link_name = "ruleset_*"]` |
 | `card-sdk/src/ctx/sys_kani.rs` | same wrappers over `kani_host::call_i32` |
-| `card-sdk/src/kani_host.rs` | `Op::pay_command = 369`, `Op::trig_set_pay_kind = 370`, `Op::trig_set_pay_shape = 371`, `Op::mul_pay_factor = 372`, `Op::pay_factor = 373`, `Op::settle_tile = 374`, `Op::settle_outcome = 375`, `Op::paid_in_settle_by = 376`, `Op::rent_quote = 377`; `Op::raise` keeps 134 and gains the slot |
+| `card-sdk/src/kani_host.rs` | `Op::pay_command = 369`, `Op::trig_set_pay_kind = 370`, `Op::trig_set_pay_shape = 371`, `Op::multiply_pay_factor = 372`, `Op::pay_factor = 373`, `Op::settle_tile = 374`, `Op::settle_outcome = 375`, `Op::paid_in_settle_by = 376`, `Op::rent_quote = 377`; `Op::raise` keeps 134 and gains the slot |
 | `rules/kani/build.rs` | the same nine names appended in discriminant order; `op_*` HostOps arms in `conf_sym_ops.rs` |
 | `rules/kani/tests/conf_model.rs` | inline-host arms for all nine |
 | `rules/kani/src/proofs/hostops_smoke.rs` | all nine exercised |
-| `card-sdk/src/lib.rs` `TriggerKind::from_str`/`spelling` | `spendBefore = 122` (asserted id in `kind_table_pin`); `game-rules/src/trigger_why.rs` puts it in the pay family |
+| `card-sdk/src/lib.rs` `TriggerKind::from_str`/`spelling` | `spendBefore = 122` (asserted id in `kind_table_pin`); `game-rules/src/trigger_reason.rs` puts it in the pay family |
 
-`ApplyRedeem` and the auction debit raise `spendBefore`; `apply_redeem` and
+`ApplyRedeem` and the auction debit raise `spendBefore`; `commit_redeem` and
 `redeem` become `Flow` so a prompt can suspend them (5.4).
 
 ## 5. Engine wiring
@@ -862,7 +865,7 @@ without another import.
 
 No stage moves. Shape only decides which of 2-5 run and whether their rewrites
 fold. `SpendBefore` is a new **fifth** pipeline-shaped point that is not a
-payment and runs inside `apply_redeem`/auction/`lose_raw` before their direct
+payment and runs inside `commit_redeem`/auction/`lose_raw` before their direct
 debit.
 
 ### 5.2 Shape branches, command shape, charge source
@@ -884,7 +887,9 @@ declared `to` before any response).
   `partner = to`; after the `pay` window (before affordability and commit)
   force `to = None`. After step 8,
   if `partner` is alive and `loss > 0`, run
-  `self.money(Pay { from: partner, to: Some(payer), amount: loss / 2, kind: Card, shape: Fixed, must: true, by_card, reason, .. })`.
+  `self.money(Pay { from: partner, to: None, amount: loss / 2, kind: Card, shape: Fixed, must: true, by_card, reason, .. })`
+  (`to: None` -- the half is another 失去 to the bank, mirroring the engine
+  `H.LoseR(to, amount / 2, must: true)`; the payer gets nothing back).
   The half leg is a fresh pipeline at `money_depth + 1`, so it logs, fires
   `paid` and counts in `paid_in_settle_by`. No half when the main leg was
   cancelled, short or the payer is out.
@@ -918,7 +923,7 @@ a cancel. The handler packs `SETTLED` from `paid.paid`, `SHORTFALL` from
 
 ### 5.3 Settle tile and outcome
 
-`Cx` replaces the bare `settle_open: u32` with
+`PlayCtx` replaces the bare `settle_open: u32` with
 `settle_stack: Vec<SettleEntry>` where
 `SettleEntry { player: usize, tile: usize, pay_factor: f64, outcome: SettleOutcome }`.
 A push initializes `pay_factor` from `turn.next_settle_pay_factor` (milli, then
@@ -949,7 +954,7 @@ depth. The single-entry gate replaces both defects and `settle_open()` becomes
   `RaiseSettleAfter` (out → `PayerOut`, `!playing()` → `Aborted`), and
   `RaiseTileResolved` (`Settled` only when no earlier terminal outcome was
   recorded). `RaiseTileResolved` sets `Trigger.outcome` from the entry and
-  every other raise leaves it `None`. The body readers and the pre fields are
+  every other raise leaves it `None`. The body readers and the condition fields are
   one source: `settle_outcome()` / `settle.outcome` read `trigger.outcome`,
   `settle_tile()` / `settle.tile` read `trigger.settle_tile`, and
   `settle.owner` / `.houses` / `.mortgaged` read that tile's state.
@@ -957,8 +962,8 @@ depth. The single-entry gate replaces both defects and `settle_open()` becomes
 
 ### 5.4 SpendBefore and `lose_raw`
 
-`apply_redeem(i, t, amount, by_card) -> Flow<i32>`, the auction debit and
-`Cx::lose_raw` all:
+`commit_redeem(i, t, amount, by_card) -> Flow<i32>`, the auction debit and
+`PlayCtx::lose_raw` all:
 
 ```
 let t = raise!(self, "spendBefore", i, tile = tile, value = cost, by_card = by_card)?;
@@ -979,9 +984,9 @@ Then the existing direct debit uses `cost`. The auction keeps the original
 `cost` (11.9). `redeem`/`standalone_redeem` become `Flow<bool>`; the
 `ApplyRedeem` handler awaits them. The `ApplyRedeem` host function goes through
 `request_or_pause(..., Pause::Sentinel)` exactly as `pay` does, and the guest
-wrapper `ctx::apply_redeem` switches to `asked(...)` and
+wrapper `ctx::commit_redeem` switches to `asked(...)` and
 `Result<i32, Prompt>`; its one call site (`toko_swap.rs:134`) adds `?`.
-`apply_mortgage` is untouched. The debug `redeem` arm (`debug.rs:94`) awaits it
+`commit_mortgage` is untouched. The debug `redeem` arm (`debug.rs:94`) awaits it
 too, so `debug_open` and the log are restored after the suspension.
 `spendBefore` never opens the pay pipeline, never applies factors, and never
 moves money itself. The fold is exactly the `*Before` stage fold (`cost =
@@ -1021,7 +1026,7 @@ copies it into a follower's `m` only as the carried value.
 ### 5.6 Charge source
 
 `fire::spend` keeps its signature and passes `OTHER`. A new sibling
-`fire::spend_skill(player_id, n, why)` is `spend` with `SKILL`; it is the verb
+`fire::spend_skill(player_id, n, reason)` is `spend` with `SKILL`; it is the verb
 the persona-skill bodies use (the twenty-odd
 `rules/skills/skill-personas/src/*.rs` call sites migrate mechanically). The
 turn-end drain keeps `spend` (`Other`; `DRAIN` is reserved if the drain ever
@@ -1068,7 +1073,7 @@ Add nine `Op` arms with `[i32; 6]` args, all deterministic:
 - `pay_command` decodes the spec, pushes `Effect::PayTo` and a `PayReceipt`,
   mutating `w.money` as `arm_pay_to` does; `Fixed` moves `amount` verbatim.
 - `trig_set_pay_kind` / `trig_set_pay_shape` rewrite the installed trigger.
-- `mul_pay_factor` multiplies the scope model and asserts no overflow;
+- `multiply_pay_factor` multiplies the scope model and asserts no overflow;
   `pay_factor` returns the product.
 - `settle_tile` / `settle_outcome` read the symbolic settle model;
   `paid_in_settle_by` a per-seat array; `rent_quote` a symbolic figure per
@@ -1089,11 +1094,11 @@ and are obligations, not just stubs (9).
 
 Before:
 ```rust
-ctx::transfer(player_id, o, 100, &why)?;
+ctx::transfer(player_id, o, 100, &reason)?;
 ```
 After:
 ```rust
-ctx::PayCommand::new(player_id, o, 100, &why).fixed().send()?;
+ctx::PayCommand::new(player_id, o, 100, &reason).fixed().send()?;
 ```
 The 300-back leg at 42 keeps `ctx::transfer`. `Fixed` raises `paid`, so the
 existing "skill fired" bookkeeping is unchanged; `set_slot` writes stay.
@@ -1116,14 +1121,14 @@ for money. Both writes are in `effect`, so the shape lands (4.4).
 ### 6.3 `sakiko_lead.rs:77`
 
 Before: `ctx::plan::set_pay_factor(500);`
-After: `ctx::plan::mul_pay_factor(500, PayFactorScope::NextMove);`
+After: `ctx::plan::multiply_pay_factor(500, PayFactorScope::NextMove);`
 
 ### 6.4 `kokoro_circle.rs:44-45`
 
 Before: `ctx::pay(..., 10000)` and `if paid < 10000 { return }`.
 After:
 ```rust
-let receipt = ctx::PayCommand::new(player_id, -1, 10000, &why)
+let receipt = ctx::PayCommand::new(player_id, -1, 10000, &reason)
     .kind(PayKind::Buy).send()?;
 if !receipt.settled() { return Ok(()); }
 ```
@@ -1135,7 +1140,7 @@ return stays only for the open "card not effective" ruling (11.4).
 Before: `ctx::transfer(mover, player_id, 6000, ...)`.
 After:
 ```rust
-let receipt = ctx::PayCommand::new(mover, player_id, 6000, &why)
+let receipt = ctx::PayCommand::new(mover, player_id, 6000, &reason)
     .kind(PayKind::Rent).tile(target).send()?;
 ```
 The `paid` value for the log comes from `receipt.amount()`. `.tile(target)`
@@ -1149,7 +1154,8 @@ Add the redirect conjunct to the existing early return (2.19):
 if mover == player_id || mover < 0 || trigger::is_settle_redirect() { return Ok(()); }
 ```
 and delete the Open question's TODO. The TODO(ABI) block at `:102-108` goes
-with 6.5.
+with 6.5. The redirect conjunct is the carve-out: a card-redirected settle
+skips the 6,000 (the CiRCLE reward already ran); a walk-in is charged.
 
 ### 6.7 `tomori_no_longer.rs:61,84` (skill scope)
 
@@ -1182,7 +1188,7 @@ locks the position.
 
 Before: `Action::PaySplitMulBefore(...)`.
 After: `Action::PayCombinedAddBefore("actor == owner && value > 0", None, pay_res)`
-and a `SpendBefore` registration with the same pre and `pay_res`. `pay_res`'s
+and a `SpendBefore` registration with the same condition and `pay_res`. `pay_res`'s
 `(value - 1500).max(0)` needs no change. The sibling `PaySplitAdd` filter at 27
 stays (it is a different clause).
 
@@ -1213,25 +1219,25 @@ After: `if ctx::paid_in_settle_by(player_id) < 1000`.
 ### 6.15 `repaint.rs:98`
 
 Before: `ctx::plan::set_pay_factor(500);`
-After: `ctx::plan::mul_pay_factor(500, PayFactorScope::ThisMove);`
+After: `ctx::plan::multiply_pay_factor(500, PayFactorScope::ThisMove);`
 
 ### 6.16 `taki_serious.rs:77`
 
 Before: `ctx::plan::set_pay_factor(250);` in the loop.
-After: `ctx::plan::mul_pay_factor(250, PayFactorScope::NextSettle);`
-Each iteration arms the next `card_settle_at`, which consumes it.
+After: `ctx::plan::multiply_pay_factor(250, PayFactorScope::NextSettle);`
+Each iteration arms the next `settle_tile_at`, which consumes it.
 
 ### 6.17 `rana_funny.rs:120`
 
 Before: `ctx::plan::set_pay_factor(500);`
-After: `ctx::plan::mul_pay_factor(500, PayFactorScope::NextSettle);`
+After: `ctx::plan::multiply_pay_factor(500, PayFactorScope::NextSettle);`
 
 ### 6.18 `fire_bird.rs:48-53`
 
 Before: `let paid = ctx::pay(...)?; if paid < 1600 { return }`.
 After:
 ```rust
-let receipt = ctx::PayCommand::new(player_id, -1, 1600, &why).send()?;
+let receipt = ctx::PayCommand::new(player_id, -1, 1600, &reason).send()?;
 if !receipt.settled() { return Ok(()); }
 ```
 A discounted 800 has `settled() == true`. The `must` default already gives the
@@ -1302,7 +1308,7 @@ registration is unchanged.
   resumes once. `SpendBefore` prompts are ordinary hook prompts in the same
   log. Nothing in `Pay`, `TriggerPay`, `SettleEntry`, `PayReceipt`, `PayShape`
   or `SettleOutcome` is serialized outside `World`/`TurnCtx`.
-- `settle_stack` and `SettleFrame.stack_idx` are `Cx`/work-stack runtime
+- `settle_stack` and `SettleFrame.stack_idx` are `PlayCtx`/work-stack runtime
   state; a mid-settle save re-derives them by replaying the answer log to the
   prompt, the same way the work stack is re-derived today. `Pay.partner` is
   derived from the declared payee on the same replay, so it needs no field.
@@ -1327,12 +1333,13 @@ source slot; new `ActionKind::SpendBefore = 122`; new `pay_kind` / `pay_shape`
 `PayKind::Loss`, `PayShape`, `PayFactorScope`, `SettleOutcome`,
 `ChargeSource`; `SAVE_VERSION` and `RECORD_VERSION` unchanged.
 
-**Kani `Op` band.** Base is 340. G01's eight new imports take **341–348** and
-G08's twenty take **349–368** — neither was counted in the 2026-10-27 table,
-which only filled Op numbers for G02 onward. This group therefore takes
-**369–377**, and every later group shifts ten: G04 **378–397**, G06
-**398–417**, G05+G13 **418–427**, G07 **428–437**. The README table carries the
-corrected rows (§12).
+**Kani `Op` band.** Base is 340. G01's six new imports take **341–346** (its
+review dropped two with the `Actions` kind) and G05 takes the vacated
+**347–348**; G08's twenty take **349–368** — none was counted in the
+2026-10-27 table, which only filled Op numbers for G02 onward. This group
+therefore takes **369–377**, and every later group shifts ten: G04 **378–397**,
+G06 **398–417**, G05+G13 **418–427**, G07 **428–437**. The README table carries
+the corrected rows (§12).
 
 Why a break even though old imports keep their names: the host checks the
 module export for **exact** equality (`host.rs:3207-3213`) including arity, and
@@ -1344,7 +1351,7 @@ through the archived bundle.
 Source-only changes that do **not** bump: the `PayCommand` builder, the
 `ctx::plan::set_pay_factor` implementation gaining its Auto scope (the one-arg
 signature stays; call sites migrate to `mul` in the same commit),
-`apply_redeem` gaining `Flow`, `World::credit`, and the pre scalars. Old card
+`commit_redeem` gaining `Flow`, `World::credit`, and the condition scalars. Old card
 sources do not need the new verbs until migrated.
 
 ## 9. Tests and Kani obligations
@@ -1372,7 +1379,7 @@ in the reason, per `docs/rulebook/TEST-FINDINGS.md` convention.
 | 15 | `g02_rana_half_composes_with_walk_factor` | a walk already at 0.5 pays 0.25 |
 | 16 | `g02_fire_bird_discounted_payment_places` | a 0.5 modifier settles 800 and the card is placed |
 | 17 | `g02_council_cancelled_settle_refunds` | a cancelled settle and a payer-out both read a non-`Settled` outcome, unplace, refund the cost, clear `SLOT_STOP`, and do not arm the next settle |
-| 18 | `g02_kokoro_normal_settle_skips_6000` | a walk-in settle charges nothing; a card-forced settle on CiRCLE charges 6000 |
+| 18 | `g02_kokoro_normal_settle_skips_6000` | a walk-in settle charges 6000; a card-redirected settle on CiRCLE charges nothing |
 | 19 | `g02_vocal_ignores_split_legs` | a 3×4000 分摊 offers once at the 12000 command total; a leg's own 4000 does not qualify |
 | 20 | `g02_tritone_answers_raw_loss` | `lose_raw` and a redeem raise `spendBefore` as a counteract window with the full cost; playing tritone gains the figure and a reduction lowers the bank debit |
 | 21 | `g02_tomori_skill_only` | a card-effect spend does not open the substitution; a skill cost does |
@@ -1387,7 +1394,7 @@ a named invariant in `rules/kani/src/spec/`):
   `fixed()`; a symbolic factor never changes it.
 - `mor::mashiro_halves_after_scale` — `PayeeHalf` receipt is `settled`, main
   loss equals settled, half leg from the captured partner.
-- `crychic::sakiko_factor_product` — two `mul_pay_factor(500, NextMove)`
+- `crychic::sakiko_factor_product` — two `multiply_pay_factor(500, NextMove)`
   compose to 250; the scope reset restores 1000.
 - `hhw::kokoro_buy_kind` / `hhw::kokoro_rent_tile` — kind and tile reach the
   trigger; `must` is set.
@@ -1442,7 +1449,7 @@ drive all nine imports.
    Rejected: one import with a four-value enum.
 6. **`settle_open` counter plus `player_pos(payer)` as settle-tile heuristic.**
    Breaks under a settle redirect (`settleBefore` re-target) and a
-   `card_settle_at` on another tile, and has no answer for a nested settle.
+   `settle_tile_at` on another tile, and has no answer for a nested settle.
    Rejected: a frame stack is exact. It also is what fixes the counter itself.
 7. **Always raise `settleAfter`, even on cancel/out.** Many settleAfter hooks
    assume a body actually ran; raising them on a cancelled settle would change
@@ -1478,9 +1485,8 @@ silently guess.
    leg? Current proposal: listeners fire for observability but every write,
    cancel and spare included, is ignored; the fixed bit lets a guard exclude
    itself.
-2. **Mashiro rounding.** Is the half `floor`, `ceil10`, or the normal payment
-   rounding? C# uses integer `/2`; this design uses `floor`. Does the half leg
-   round to 10? Current proposal: no rounding because the leg is fixed (I2).
+2. **Mashiro rounding.** Is the half `floor`, `ceil10`, or the normal payment rounding? Does the
+  half leg round to 10? Current proposal: no rounding because the leg is fixed (I2).
 3. **Mashiro's settle counter.** After the rewrite the money goes to the bank.
    Does it still count toward 「本回合的[结算]向其他玩家支付」 for 游击演出?
    Current proposal: yes, because the declaration named a player; stated in I9

@@ -49,7 +49,7 @@ macro_rules! fire_pass_leaf_iff_at {
         let user: i32 = $user;
         debug_assert!(user == 0 || user == 1);
         fire_world(user);
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         invoke::unwrap_done($call);
         kani::cover!(true, "body returned");
         let post = world::snapshot();
@@ -62,22 +62,22 @@ macro_rules! fire_pass_leaf_iff_at {
             "leaf is exactly one +1 GainFire"
         );
         crate::kassert!(
-            post.charge[user as usize] == pre.charge[user as usize] + spec::fire_pass_gain(),
-            "fire is pre+1"
+            post.charge[user as usize] == condition.charge[user as usize] + spec::fire_pass_gain(),
+            "fire is condition+1"
         );
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "frame: money unchanged"
         );
         crate::kassert!(
-            world::arr4_eq(post.pos, pre.pos),
+            world::arr4_eq(post.pos, condition.pos),
             "frame: positions unchanged"
         );
     }};
 }
 
 /// C-RAS-masking-01 leaf: `skill:佐藤益木` `on_pass` requests +1 [火罐].
-/// The tile gate (`白雪学园` / `银河拉面馆`) is the hook's CEL pre and is not
+/// The tile gate (`白雪学园` / `银河拉面馆`) is the hook's CEL condition and is not
 /// re-checked here — this harness proves the leaf the body runs once admitted.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]

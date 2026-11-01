@@ -81,7 +81,7 @@ build cost; the buy figure (price + houses) that the force-buy doubles.
   money-moving event (and, when it contains none, that nobody moved).
 * **Condition:** the window is not a ledger gap (bankrupt / auction /
   build-refund).
-* **Effect:** for each seat `i`, `post.money(i) - pre.money(i)` equals the sum
+* **Effect:** for each seat `i`, `post.money(i) - condition.money(i)` equals the sum
   of that seat's legs (`gain`/`pass` +X, `lose` -X, `pay`/`rent` -loss /
   +received, `mortgage` +X, `redeem` -X, `forcebuy` -X / +X).
 * **Frame:** a seat with no leg has delta 0 -- **only named players change**.
@@ -138,7 +138,7 @@ build cost; the buy figure (price + houses) that the force-buy doubles.
 * **Quote:** 「[支付]拥有格子的玩家购买格子地契和建造已有房子的资金总价的两倍，
   从该玩家处强行购买该格地契，获得的地契仍为抵押状态」
 * **Trigger:** a window containing a `forcebuy` event for tile T.
-* **Condition:** T is mortgaged in `pre` (the mortgaged-deed branch of
+* **Condition:** T is mortgaged in `condition` (the mortgaged-deed branch of
   基础[结算] 6.2).
 * **Effect:** the buyer pays and the owner receives exactly
   `2 * (price + houses * house)`; `owners[T]` is the buyer in `post`;
@@ -223,7 +223,7 @@ build cost; the buy figure (price + houses) that the force-buy doubles.
 * **Source:** `rulebook-doc.md:155`
 * **Quote:** 「可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子地契和拥有权。」
 * **Trigger:** a `buy` event for tile T by player P.
-* **Condition:** T was unowned in `pre`; `houses[T]` is the standing house
+* **Condition:** T was unowned in `condition`; `houses[T]` is the standing house
   count.
 * **Effect:** P paid exactly `price + houses * house` (when no card retuned
   the figure); `owners[T]` is P in `post`.

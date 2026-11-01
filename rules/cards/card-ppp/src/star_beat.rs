@@ -1,4 +1,3 @@
-//! `PPP:STAR BEAT!` -- C# `CardStarBeat` (MatchHost.cs:8693-8734): bank a build
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:STAR BEAT!`）:
 //! > STAR BEAT!：
@@ -43,14 +42,12 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // sheet cell B8
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
-/// 规则书: 「本回合的主要移动改为」 -- both branches replace the main move, so the
-/// card is only playable while it is still available. C# `CardStarBeat.WhyNot`
-/// = `H.MoveWhyNot(seat)`.
+/// 规则书: 「本回合的主要移动改为」 -- both branches replace the main move, so the card is only
+/// playable while it is still available.
 fn cant_play(player_id: i32) -> Option<Msg> {
     rules_status::move_blocked(player_id)
 }
 
-/// C# `H.MoneyHasDigit(seat, '5')` -- the decimal form of |money| contains 5.
 fn money_has_digit5(player_id: i32) -> bool {
     let mut x = ctx::money_of(player_id).unsigned_abs();
     if x == 0 {
@@ -80,13 +77,7 @@ fn money_has_digit5(player_id: i32) -> bool {
 
 fn play(player_id: i32) -> card_sdk::Asked {
     ctx::inc_slot(player_id, "star_beat.layers", 1);
-    // 规则书: 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的格子上进行
-    // 一次盖房，随后减少1层”」 -- the layer is a slot (the stand-in for C#
-    // `H.ExtraOf<StarBeatFx>(i).Layers`); `after_settle` is the offer.
     // TODO(规则书)（下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房）:
-    // C# keeps the state on an invisible player extra -- `SettleAfter` only
-    // dispatches over placed instances, so the card rides the field as its
-    // carrier and never leaves it.
     ctx::place_self_to_field(
         player_id,
         "PPP:STAR BEAT!",
@@ -100,11 +91,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if tiles <= 0 {
         return Ok(());
     }
-    // C# `45 * (num + 1) % H._tiles.Length`.
     let to = (45 * (n + 1)).rem_euclid(tiles);
     let dice = 2 * (n + 1);
-    // 规则书: 「然后进入移动阶段并选择以下操作之一」 -- C# `H.AskPick`.
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("star_beat_title")),
         &Msg::new(key!("star_beat_ask")).i("n", n as i64),
@@ -114,43 +103,32 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ],
     )?;
     if pick == 0 {
-        // 规则书1: 「获得2个星星贴纸」 -- C# `H.AddTok(i, "星星贴纸", 2)`.
-        ctx::add_tok(player_id, "星星贴纸", 2, i32::MAX)?;
+        ctx::add_held_by_name(player_id, "星星贴纸", 2, i32::MAX)?;
         ctx::log(
             player_id,
             &Msg::new(key!("star_beat_stickers"))
                 .player_id("who", player_id)
                 .i("n", 2),
         );
-        // 规则书1: 「本回合的主要移动改为[传送]到(45×“资金数包含5的玩家数量+1”) mod 60格
-        // 并结算」 -- C#
-        // `H.CardMove(c, new MoveCtx { TeleportTo = tile })` (MatchHost.cs:8717;
-        // teleport *with* settle -- `MoveCtx.Resolve` defaults to true). The plan
-        // names the destination and settles, and `card_move` runs it as the main
-        // move.
+        // The plan names the destination and settles, and `run_planned_move` runs it as the
+        // main move.
         if to >= 0 {
             ctx::plan::set_kind(MoveKind::Teleport);
             ctx::plan::set_teleport_to(to);
-            ctx::plan::set_resolve(true);
+            ctx::plan::set_settles(true);
             ctx::log(
                 player_id,
                 &Msg::new(key!("star_beat_moved"))
                     .player_id("who", player_id)
                     .tile("tile", to),
             );
-            ctx::card_move(player_id);
+            ctx::run_planned_move(player_id);
         }
     } else {
-        // 规则书2: 「本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算」
-        // -- C#
-        // `H.CardMove(c, new MoveCtx { Base.Clear(); Base.Add((dice, 10, ...)) })`
-        // (MatchHost.cs:8723-8730): the base dice table becomes `dice`d10
-        // (`set_base_dice` replaces the default 1d20) and the walk runs and
-        // settles (`MoveCtx.Resolve` defaults to true). `card_move` rolls the
-        // dice and walks; no separate `ctx::roll`.
+        // `run_planned_move` rolls the dice and walks; no separate `ctx::roll`.
         ctx::plan::set_base_dice(dice, 10, "（STAR BEAT!）");
-        ctx::plan::set_resolve(true);
-        ctx::card_move(player_id);
+        ctx::plan::set_settles(true);
+        ctx::run_planned_move(player_id);
     }
     Ok(())
 }
