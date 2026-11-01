@@ -2845,7 +2845,7 @@ impl Run {
         let (who, n) = self.factor_write_key();
         let exec = self.ledger_exec;
         let ok = self.world.note_factor(exec, &who, n);
-        if std::env::var_os("STAGE_DBG").is_some() {
+        if game_core::engine::stage_dbg() {
             eprintln!("CLAIM exec={exec} who={who} n={n} ok={ok}");
         }
         ok

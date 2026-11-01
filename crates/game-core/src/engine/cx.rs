@@ -912,7 +912,7 @@ impl<'a> PlayCtx<'a> {
         // at the request, not left stale from an earlier move.
         t.plan.settles = f.plan.settles;
         t.plan.pay_factor = f.plan.pay_factor;
-        if std::env::var_os("STAGE_DBG").is_some() {
+        if crate::engine::stage_dbg() {
             eprintln!(
                 "ADOPT rent_factor {} -> {} pay {} -> {}",
                 t.plan.rent_factor, f.plan.rent_factor, t.plan.pay_factor, f.plan.pay_factor

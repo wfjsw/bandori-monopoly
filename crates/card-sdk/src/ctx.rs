@@ -1324,8 +1324,21 @@ pub fn rolls_by_player(player_id: i32) -> Vec<i32> {
     const CAP: usize = 64;
     let (p, scratch) = out_buf(CAP);
     let n = unsafe { sys::rolls_by_player(player_id, p, CAP as i32) };
-    if n <= 0 || n as usize > CAP {
+    if n <= 0 {
         return Vec::new();
+    }
+    // Over the cap the host writes nothing and returns the **full** length
+    // (`hostfns::write_postcard`), so size a second buffer to it and ask
+    // again -- a long turn (taki rerolls, starry, 运动的天赋) must not read as
+    // "no casts".
+    if n as usize > CAP {
+        let (p2, scratch2) = out_buf(n as usize);
+        let m = unsafe { sys::rolls_by_player(player_id, p2, n) };
+        if m <= 0 || m > n {
+            return Vec::new();
+        }
+        let buf = out_read(p2, m, scratch2);
+        return postcard::from_bytes(&buf[..m as usize]).unwrap_or_default();
     }
     let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()

@@ -926,6 +926,14 @@ host copy is the one that forgot the rest.
 `main_move` and `card_move_seeded` share one `run_move_body` helper so the
 tail, followers and bookkeeping cannot diverge.
 
+The move-phase latch `skip_main_move` and the settle answer are separate, and
+`main_move` keeps its old arm: it answers `blocked_settle_answer` back to
+`Unanswered` as the main move is taken (taking the move lifts the
+「无法移动」 premise, so the withheld turn-end settle is no longer owed --
+the walk settles where it lands). Only the body's immobile clamp re-stamps
+`Settle`. The clear belongs to `main_move`, not `run_move_body`: a forced
+side move does not take the main move, so it must leave the answer alone.
+
 `skip_main_move` stays as it is: it is the turn-flow latch `MatchState.skip_move`,
 not a plan field, and no frame clears or restores it. `void_walk` is narrower —
 it skips one move's walk, not the move phase.

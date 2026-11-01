@@ -358,6 +358,10 @@ impl PlayCtx<'_> {
             let face = r.face();
             if let Some(mv) = t.mv.as_mut() {
                 mv.effective = m.steps.or(m.next_steps).unwrap_or(face);
+                // `move.roll` is the face this trigger is about: `-1` on the
+                // Plan window (`null` after `fill_window`'s negative filter),
+                // the cast from the Cast window on.
+                mv.roll = Some(value);
             }
         }
         t.with_roll(r);
@@ -473,6 +477,7 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         let raw = r.casts[idx].raw;
+        let purpose = r.purpose;
         if let Some(r) = self.tx_mut(id) {
             r.stage = RollStage::Add;
         }
@@ -481,6 +486,14 @@ impl PlayCtx<'_> {
             r.stage = RollStage::Value;
         }
         v = self.fold_roll("diceRollValue", id, m, v)?;
+        // 规则书 「如果为0则此次移动不[结算]」 keys on the **final** figure, and
+        // both folds compose several responders' deltas: a body that floors
+        // its own input to 0 (不要背负期待) cannot know whether a sibling
+        // writes the face back up (想要成为人类's `+N`). Decide it on the
+        // composed result, after both folds, and only for a move roll.
+        if purpose == PURPOSE_MOVE && v == 0 {
+            self.w.plan_mut().settles = false;
+        }
         if let Some(r) = self.tx_mut(id) {
             r.casts[idx].settled = Some(v.max(0));
             r.dirty = false;

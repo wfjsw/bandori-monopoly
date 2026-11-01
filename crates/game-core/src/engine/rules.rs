@@ -312,6 +312,19 @@ impl Fold {
     }
 }
 
+/// `num / den` rounded half away from zero (0 when `den` is 0).
+fn half_rounded(num: i64, den: i64) -> i64 {
+    if den == 0 {
+        return 0;
+    }
+    let half = den.abs() / 2;
+    if (num >= 0) == (den > 0) {
+        num.saturating_add(half) / den
+    } else {
+        num.saturating_sub(half) / den
+    }
+}
+
 /// Apply one responder's write `v` to a fold stage (MONEY-01). Shared by the
 /// engine trigger and the host's payload mirror.
 pub fn fold_apply(fold: Fold, input: i32, value: &mut i32, millis: &mut i64, v: i32) {
@@ -326,9 +339,17 @@ pub fn fold_apply(fold: Fold, input: i32, value: &mut i32, millis: &mut i64, v: 
                 *value = v;
                 return;
             }
-            let factor = (i64::from(v) * 1_000_000) / i64::from(input);
+            // The factor `v / input` is rarely exact in millionths, and the
+            // running product is applied back to the input. Truncating both
+            // divisions loses up to a whole money unit per responder (a
+            // `half()` body over an odd figure loses its ceiling); round each
+            // half-away-from-zero instead, and leave the single money round
+            // (`ceil10`) to the end of the chain.
+            let (input, v) = (i64::from(input), i64::from(v));
+            let num = v.saturating_mul(1_000_000);
+            let factor = half_rounded(num, input);
             *millis = millis.saturating_mul(factor).saturating_div(1_000_000);
-            *value = (i64::from(input).saturating_mul(*millis) / 1_000_000)
+            *value = half_rounded(input.saturating_mul(*millis), 1_000_000)
                 .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
         }
     }

@@ -1261,9 +1261,21 @@ impl World {
         {
             return -1;
         }
-        let (amount, _) = self.rent_figure(data, owner as usize, t);
+        let (mut amount, _) = self.rent_figure(data, owner as usize, t);
         if amount <= 0 {
             return -1;
+        }
+        // The open settle's addends ride the quote exactly as the charge takes
+        // them (add phase before the factors): the pay addend on every leg and
+        // the rent addend on this one -- a quote is always a rent leg.
+        let add = self
+            .turn
+            .settle_pay_add
+            .saturating_add(self.turn.settle_rent_add);
+        let mut modified = false;
+        if add != 0 {
+            amount = amount.saturating_add(add);
+            modified = true;
         }
         // The same arithmetic [`super::play::Play::scale_settle_payment`] runs
         // for a rent, minus the in-flight rent factor and with
@@ -1282,7 +1294,7 @@ impl World {
         } else {
             (amount as f64 * f) as i32
         };
-        if scaled != amount && scaled > 0 {
+        if (scaled != amount || modified) && scaled > 0 {
             super::play::ceil10_money(scaled)
         } else {
             scaled

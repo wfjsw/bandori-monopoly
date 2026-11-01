@@ -168,3 +168,61 @@ fn zz_starry_prompt_faces_are_settled() {
     eprintln!("POS: {}", t.pos(0));
     assert_eq!(t.pos(0), 4);
 }
+
+/// Layer's own fire reroll opens the pair; a counteraction (taki) then recasts
+/// on the same `Roll` link, so three casts exist by the time the player picks.
+/// The keep answer is an option index, `roll_pick` an absolute cast index:
+/// 「keep new」 must name the newest cast, not cast 1.
+#[test]
+fn zz_layer_fire_reroll_keep_new_uses_the_newest() {
+    let mut t = Table::new(&["和奏瑞依", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 1, 1);
+    t.give(0, &[TAKI]);
+    drain(&mut t);
+    t.set_pos(0, 0);
+    // 7 (initial), 3 (layer's fire recast), 9 (taki's counter recast).
+    t.dice(&[7, 3, 9]);
+    t.roll(0).unwrap();
+    // Layer's reroll ask is a yes/no, which `drain_until` (choice-only) would
+    // walk past: decline anything else until it is the open prompt.
+    loop {
+        let p = t.prompt().expect("layer reroll prompt");
+        if p.title.key().ends_with("layer_again_title") {
+            break;
+        }
+        t.decline();
+    }
+    // `ask_yes` answers 0.
+    t.answer_one(0).unwrap();
+    // The recast runs its own ladder; decline whatever else surfaces until
+    // taki's Result window is the open prompt.
+    let mut dumped = String::new();
+    while !t.counteract_offered(TAKI) {
+        let Some(p) = t.prompt() else { break };
+        dumped = t.dump_prompt();
+        if p.kind == "choice" && dumped.contains("layer_keep_new") {
+            break;
+        }
+        t.decline();
+    }
+    assert!(
+        t.counteract_offered(TAKI),
+        "taki offered at the fire recast's Result: {dumped}"
+    );
+    t.counteract(0, TAKI).unwrap();
+    drain_until(&mut t, "layer_keep_new");
+    let k = t
+        .option("layer_keep_new")
+        .unwrap_or_else(|| panic!("keep-new not offered: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    let keys = t.recent_keys(40);
+    assert_eq!(
+        t.pos(0),
+        9,
+        "keep-new must use the newest cast 9, not cast 1 (3): {keys:?}"
+    );
+}

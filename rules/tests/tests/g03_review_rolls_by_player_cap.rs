@@ -1,6 +1,7 @@
-//! G03 review regression: `ctx::rolls_by_player`'s fixed 64-byte
-//! postcard buffer: a 64-entry history encodes to 65 bytes, the host writes
-//! nothing, and the wrapper returns an empty Vec.
+//! G03 review regression: `ctx::rolls_by_player`'s 64-byte postcard buffer.
+//! A 64-entry history encodes to 65 bytes, so the host writes nothing and
+//! returns the full length; the wrapper must re-ask with a buffer sized to it
+//! instead of reading the over-cap history as "no casts".
 
 mod common;
 use common::*;
@@ -68,23 +69,28 @@ fn zz_probe_cap_63_still_reads() {
 }
 
 #[test]
-fn zz_probe_cap_64_goes_empty() {
+fn zz_probe_cap_64_still_reads() {
     // 62 before the main cast, 63 at the body top, 64 after the recast
-    // -> 1+64 = 65 bytes > 64: nothing is written, the wrapper answers [],
-    // and the repeat is invisible.
+    // -> 1+64 = 65 bytes > 64: the host writes nothing and reports 65, so the
+    // wrapper must re-ask with a 65-byte buffer; the repeat stays visible.
     let mut t = setup(62);
     t.counteract(0, TAKI).unwrap();
     assert!(
-        !t.dump_prompt().contains("taki_again"),
-        "64 entries vanish, the repeat must not prompt: {}",
+        t.dump_prompt().contains("taki_again"),
+        "the over-cap history must still decode: {}",
         t.dump_prompt()
+    );
+    assert_eq!(
+        t.m.world().turn.roll_history.len(),
+        64,
+        "the over-cap history is what the body had to read"
     );
 }
 
 #[test]
-fn zz_probe_cap_truncates_the_constant_table_loop() {
+fn zz_probe_cap_does_not_truncate_the_constant_table_loop() {
     // Constant dice: every face repeats, so the loop's only stop is its own
-    // 100-reroll guard -- but the 64-byte cap kills it at ~64 casts.
+    // 100-reroll guard -- the history buffer must not cut it short at ~64.
     let mut t = setup(1);
     t.counteract(0, TAKI).unwrap();
     let mut prompts = 0;
@@ -97,9 +103,9 @@ fn zz_probe_cap_truncates_the_constant_table_loop() {
         "PROBE constant table: {prompts} reroll asks, {} history entries",
         t.m.world().turn.roll_history.len()
     );
-    assert!(
-        prompts < 100,
-        "the 100 guard should allow more than the cap: {prompts}"
+    assert_eq!(
+        prompts, 100,
+        "the reroll guard, not a buffer cap, stops the loop"
     );
     drain(&mut t);
 }

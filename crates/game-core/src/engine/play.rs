@@ -1861,6 +1861,12 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
+        // Taking the main move lifts the 「无法移动」 premise: a withheld
+        // turn-end settle (stamped at a blocked turn start, or by a card) is no
+        // longer owed -- the move settles where it lands instead. A move that
+        // is *still* immobile re-stamps it at the clamp in `run_move_body`.
+        self.w
+            .set_blocked_settle_answer(i, super::world::SettleAnswer::Unanswered);
         let seed = self.w.turn.plan.clone();
         self.w.begin_plan(i, PlanKind::MainMove, seed);
         let m = self.w.plan().clone();
@@ -3099,7 +3105,7 @@ impl PlayCtx<'_> {
         }?;
         // The stage may rewrite the payload (`set_pay_kind` / `set_pay_shape`).
         Self::fold_pay_payload(p, &t, rent, fixed);
-        if std::env::var_os("STAGE_DBG").is_some() {
+        if crate::engine::stage_dbg() {
             eprintln!(
                 "STAGE {kind} rent={rent} before={before} after={} tile={tile} st={settle_tile}",
                 t.value
@@ -3165,7 +3171,7 @@ impl PlayCtx<'_> {
         if let Some(t) = tile {
             milli = milli.saturating_mul(purchase::tile_money_milli(&self.w, t, rent)) / 1_000_000;
         }
-        if std::env::var_os("STAGE_DBG").is_some() {
+        if crate::engine::stage_dbg() {
             eprintln!(
                 "SCALE kind={kind:?} rent={rent} tile={tile:?} milli={milli} amount={amount}"
             );
@@ -4186,6 +4192,16 @@ impl PlayCtx<'_> {
                         amount = amount.saturating_add(add);
                         modified = true;
                     }
+                    // 规则书 twin: `settleRentAdd` is 「本次结算的[地租] +N」 -- a
+                    // rent leg only, so a card leg of the same settle keeps its
+                    // own figure (`docs/CARDS.md`).
+                    if rent {
+                        let radd = self.w.turn.settle_rent_add;
+                        if radd != 0 {
+                            amount = amount.saturating_add(radd);
+                            modified = true;
+                        }
+                    }
                 }
                 if p.runs_total_stage && !fixed {
                     let mut to_slot = to;
@@ -4252,8 +4268,12 @@ impl PlayCtx<'_> {
                     // raise, applied to every leg as one factor of the leg's product.
                     let m = (self.w.turn.settle_pay_factor * 1_000_000.0).round() as i64;
                     amount = apply_milli_factor(amount, m, &mut modified);
-                    let r = (self.w.turn.settle_rent_factor * 1_000_000.0).round() as i64;
-                    amount = apply_milli_factor(amount, r, &mut modified);
+                    // 规则书 twin: `settleRentMul` is 「本次结算的[地租] ×N」 -- a
+                    // rent leg only, like the `rentMul` stage above.
+                    if rent {
+                        let r = (self.w.turn.settle_rent_factor * 1_000_000.0).round() as i64;
+                        amount = apply_milli_factor(amount, r, &mut modified);
+                    }
                 }
                 if p.runs_total_stage && !fixed {
                     let mut to_slot = to;
