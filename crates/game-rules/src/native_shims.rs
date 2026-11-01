@@ -431,8 +431,8 @@ pub trait HostOps {
     fn op_set_settle_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_pay_factor`
     fn op_set_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
-    /// `ruleset_mul_pay_factor`
-    fn op_mul_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_multiply_pay_factor`
+    fn op_multiply_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_pay_factor`
     fn op_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_settle_tile`
@@ -1454,8 +1454,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
         crate::hostfns::set_pay_factor(self, a[0])?;
         Ok(0)
     }
-    fn op_mul_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
-        crate::hostfns::mul_pay_factor(self, a[0], a[1])?;
+    fn op_multiply_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::multiply_pay_factor(self, a[0], a[1])?;
         Ok(0)
     }
     fn op_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
@@ -3864,8 +3864,8 @@ pub unsafe extern "C-unwind" fn ruleset_set_pay_factor(n: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_mul_pay_factor(milli: i32, scope: i32) {
-    with_host(|h| match h.op_mul_pay_factor([milli, scope, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_multiply_pay_factor(milli: i32, scope: i32) {
+    with_host(|h| match h.op_multiply_pay_factor([milli, scope, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })

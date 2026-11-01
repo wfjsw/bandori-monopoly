@@ -309,7 +309,7 @@ const ARRAY_OPS: &[&str] = &[
     "pay_command",
     "trig_set_pay_kind",
     "trig_set_pay_shape",
-    "mul_pay_factor",
+    "multiply_pay_factor",
     "pay_factor",
     "settle_tile",
     "settle_outcome",

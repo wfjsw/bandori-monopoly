@@ -49,7 +49,7 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 |---|------|-----|-------------|-------------|
 | 1 | `rui-fixed-100` | high | 226, 230, 959, 1031, 1241 | B: `PayShape::Fixed` |
 | 2 | `mashiro-pay-kind-rewrite` | medium | 323 | B: `set_pay_kind` + `PayShape::PayeeHalf` |
-| 3 | `sakiko-pay-factor-composition` | medium | 131, 132 | B: scoped `mul_pay_factor` |
+| 3 | `sakiko-pay-factor-composition` | medium | 131, 132 | B: scoped `multiply_pay_factor` |
 | 4 | `kokoro-pay-buy` | medium | 305 | B: kind `Buy` + mandatory pay |
 | 5 | `kokoro-rent-kind` | high | 306, 953 | B: kind `Rent` on a caller-supplied figure |
 | 6 | `kokoro-pay-tile` | high | 309, 1005 | B: `pay_command` tile |
@@ -60,9 +60,9 @@ with the surfaces G01, G08, G09 and G10 designed. What the draft got wrong:
 | 11 | `anon-tokyo-link-rent-figure` | medium | 513, 1388 | B: `rent_quote`; **row 513 A** |
 | 12 | `miracle-free-build-choice` (G09's row) | medium | 521 | **Hand to G09** (`build_price`) |
 | 13 | `guerrilla-paid-per-seat` | medium | 1472 | B: `paid_in_settle_by` |
-| 14 | `repaint-pay-factor` | medium | 835 | B: `mul_pay_factor` (move scope) |
-| 15 | `taki-pay-factor-leak` | high | 560, 1361 | B: `mul_pay_factor` (settle scope) |
-| 16 | `rana-pay-factor-multiply` | medium | 1483 | B: `mul_pay_factor` (settle scope) |
+| 14 | `repaint-pay-factor` | medium | 835 | B: `multiply_pay_factor` (move scope) |
+| 15 | `taki-pay-factor-leak` | high | 560, 1361 | B: `multiply_pay_factor` (settle scope) |
+| 16 | `rana-pay-factor-multiply` | medium | 1483 | B: `multiply_pay_factor` (settle scope) |
 | 17 | `fire-bird-paid-signal` | medium | 1441 | B: `PayReceipt::settled` |
 | 18 | `council-check-cancelled-settle` (G10's row) | medium | 1449 | B: `SettleOutcome` on `tileResolved`; the `paid`/`body_replaced` bits stay G10's |
 | 19 | `kokoro-circlenormal-skip` | medium | 1353 | **A** (`trigger::is_settle_redirect()`) |
@@ -729,13 +729,13 @@ the skipped stages after all).
 ### 4.5 Factor API (`ctx::plan`)
 
 ```rust
-pub fn mul_pay_factor(milli: i32, scope: PayFactorScope);   // load-bearing
+pub fn multiply_pay_factor(milli: i32, scope: PayFactorScope);   // load-bearing
 pub fn pay_factor() -> i32;                                 // milli, scoped product
 pub fn set_pay_factor(milli: i32);                          // absolute, Auto scope
 // `set_pay_factor` keeps its name and arity; its meaning widens from "the
 // turn plan" to Auto's scoped target. In a settle it now writes the settle
 // scope, where before it always wrote the plan -- a caller inside a settle
-// that means the plan says so with `mul_pay_factor`/scope=ThisMove.
+// that means the plan says so with `multiply_pay_factor`/scope=ThisMove.
 // Regression test: `g02_settle_set_factor_does_not_leak_to_the_move`.
 ```
 
@@ -819,14 +819,14 @@ without another import.
 | Layer | Addition |
 |---|---|
 | `game-rules/src/host.rs` `HostRequest` | `PayCommand { from, to, amount, spec, src }` (`TOTAL_STAGE` decodes from the spec) |
-| `game-rules/src/hostfns.rs` | `pay_command`, `trig_set_pay_kind`, `trig_set_pay_shape`, `mul_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`, `paid_in_settle_by`, `rent_quote`, `raise`(5 slots) |
+| `game-rules/src/hostfns.rs` | `pay_command`, `trig_set_pay_kind`, `trig_set_pay_shape`, `multiply_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`, `paid_in_settle_by`, `rent_quote`, `raise`(5 slots) |
 | `game-rules/src/host.rs` `func_wrap` | one registration per name; `raise`'s closure takes the fifth slot |
 | `game-rules/src/native_shims.rs` | `op_pay_command`, `op_trig_set_pay_kind`, … one per import, plus the extra `op_raise` slot; `ruleset_pay_command` panics on a bad decode (host bug) |
 | `game-rules/src/wasm_rules.rs` | `visible_host_request` gains `PayCommand` next to `Pay`; the `PayCommand` arm and the inline `InlineHost::apply` arm; the `Pay`/`PayCommand` handler passes the settled `Pay` to `money_inner` |
 | `game-rules/src/world.rs` (guest `Trigger` mirror) | `TriggerPay { is_rent, total_stage }`, `Trigger { settle_tile, outcome, charge_skill }`; `bridge_trigger` copies them |
 | `card-sdk/src/ctx/sys.rs` | externs with `#[link_name = "ruleset_*"]` |
 | `card-sdk/src/ctx/sys_kani.rs` | same wrappers over `kani_host::call_i32` |
-| `card-sdk/src/kani_host.rs` | `Op::pay_command = 369`, `Op::trig_set_pay_kind = 370`, `Op::trig_set_pay_shape = 371`, `Op::mul_pay_factor = 372`, `Op::pay_factor = 373`, `Op::settle_tile = 374`, `Op::settle_outcome = 375`, `Op::paid_in_settle_by = 376`, `Op::rent_quote = 377`; `Op::raise` keeps 134 and gains the slot |
+| `card-sdk/src/kani_host.rs` | `Op::pay_command = 369`, `Op::trig_set_pay_kind = 370`, `Op::trig_set_pay_shape = 371`, `Op::multiply_pay_factor = 372`, `Op::pay_factor = 373`, `Op::settle_tile = 374`, `Op::settle_outcome = 375`, `Op::paid_in_settle_by = 376`, `Op::rent_quote = 377`; `Op::raise` keeps 134 and gains the slot |
 | `rules/kani/build.rs` | the same nine names appended in discriminant order; `op_*` HostOps arms in `conf_sym_ops.rs` |
 | `rules/kani/tests/conf_model.rs` | inline-host arms for all nine |
 | `rules/kani/src/proofs/hostops_smoke.rs` | all nine exercised |
@@ -1063,7 +1063,7 @@ Add nine `Op` arms with `[i32; 6]` args, all deterministic:
 - `pay_command` decodes the spec, pushes `Effect::PayTo` and a `PayReceipt`,
   mutating `w.money` as `arm_pay_to` does; `Fixed` moves `amount` verbatim.
 - `trig_set_pay_kind` / `trig_set_pay_shape` rewrite the installed trigger.
-- `mul_pay_factor` multiplies the scope model and asserts no overflow;
+- `multiply_pay_factor` multiplies the scope model and asserts no overflow;
   `pay_factor` returns the product.
 - `settle_tile` / `settle_outcome` read the symbolic settle model;
   `paid_in_settle_by` a per-seat array; `rent_quote` a symbolic figure per
@@ -1111,7 +1111,7 @@ for money. Both writes are in `effect`, so the shape lands (4.4).
 ### 6.3 `sakiko_lead.rs:77`
 
 Before: `ctx::plan::set_pay_factor(500);`
-After: `ctx::plan::mul_pay_factor(500, PayFactorScope::NextMove);`
+After: `ctx::plan::multiply_pay_factor(500, PayFactorScope::NextMove);`
 
 ### 6.4 `kokoro_circle.rs:44-45`
 
@@ -1209,18 +1209,18 @@ After: `if ctx::paid_in_settle_by(player_id) < 1000`.
 ### 6.15 `repaint.rs:98`
 
 Before: `ctx::plan::set_pay_factor(500);`
-After: `ctx::plan::mul_pay_factor(500, PayFactorScope::ThisMove);`
+After: `ctx::plan::multiply_pay_factor(500, PayFactorScope::ThisMove);`
 
 ### 6.16 `taki_serious.rs:77`
 
 Before: `ctx::plan::set_pay_factor(250);` in the loop.
-After: `ctx::plan::mul_pay_factor(250, PayFactorScope::NextSettle);`
+After: `ctx::plan::multiply_pay_factor(250, PayFactorScope::NextSettle);`
 Each iteration arms the next `settle_tile_at`, which consumes it.
 
 ### 6.17 `rana_funny.rs:120`
 
 Before: `ctx::plan::set_pay_factor(500);`
-After: `ctx::plan::mul_pay_factor(500, PayFactorScope::NextSettle);`
+After: `ctx::plan::multiply_pay_factor(500, PayFactorScope::NextSettle);`
 
 ### 6.18 `fire_bird.rs:48-53`
 
@@ -1384,7 +1384,7 @@ a named invariant in `rules/kani/src/spec/`):
   `fixed()`; a symbolic factor never changes it.
 - `mor::mashiro_halves_after_scale` — `PayeeHalf` receipt is `settled`, main
   loss equals settled, half leg from the captured partner.
-- `crychic::sakiko_factor_product` — two `mul_pay_factor(500, NextMove)`
+- `crychic::sakiko_factor_product` — two `multiply_pay_factor(500, NextMove)`
   compose to 250; the scope reset restores 1000.
 - `hhw::kokoro_buy_kind` / `hhw::kokoro_rent_tile` — kind and tile reach the
   trigger; `must` is set.

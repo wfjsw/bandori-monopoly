@@ -66,7 +66,7 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「本次结算导致的所有[支付]变为原价的四分之一」 -- the stayer
         // settles there at a quarter price. `NextSettle` is consumed by the
         // `card_settle_at` right below, so later settles are untouched.
-        ctx::plan::mul_pay_factor(250, PayFactorScope::NextSettle);
+        ctx::plan::multiply_pay_factor(250, PayFactorScope::NextSettle);
         // TODO(规则书)（进行一次[触发结算]）: 这个强制结算记为 `main = true`（当作
         //   该回合的落点）-- 书只写[触发结算]；`main` 会改写 `landed` 并让
         //   `move.is_main_move` 的结算体生效（与轮符雨的 `false` 不同）。

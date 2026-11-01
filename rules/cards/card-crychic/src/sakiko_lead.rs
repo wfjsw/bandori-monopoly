@@ -55,7 +55,7 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     // dice), scoped `NextMove` so it rides the next main move and two halvings
     // compose to 0.25; later settles of the turn are untouched. The followers'
     // replays carry the same plan, so their settle payments are halved too.
-    ctx::plan::mul_pay_factor(500, PayFactorScope::NextMove);
+    ctx::plan::multiply_pay_factor(500, PayFactorScope::NextMove);
     Ok(())
 }
 

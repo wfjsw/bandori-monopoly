@@ -742,7 +742,7 @@ use std::borrow::Cow;
 ///      shortfall / fixed flags). `ctx::PayCommand` is the guest builder over
 ///      it; `pay` / `transfer` / `pay_leg` become builder calls.
 ///    * New imports `trig_set_pay_kind`, `trig_set_pay_shape`,
-///      `mul_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`,
+///      `multiply_pay_factor`, `pay_factor`, `settle_tile`, `settle_outcome`,
 ///      `paid_in_settle_by`, `rent_quote`.
 ///    * `ruleset_raise` gains a fifth slot, the raise **source**
 ///      ([`charge_source`]); `ctx::raise_from` is the sibling of `raise`.
@@ -865,7 +865,7 @@ impl PayShape {
     }
 }
 
-/// Which factor store a [`crate::ctx::plan::mul_pay_factor`] write lands in.
+/// Which factor store a [`crate::ctx::plan::multiply_pay_factor`] write lands in.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(i32)]
 pub enum PayFactorScope {

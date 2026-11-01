@@ -102,7 +102,7 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     // 规则书: 「由此卡效果导致[触发结算]时需支付资金减半」 -- the pay factor is
     // milli-units (500 = x0.5), `mul` so it composes with a halving already in
     // force; `NextSettle` is consumed by the forced settle below.
-    ctx::plan::mul_pay_factor(500, PayFactorScope::NextSettle);
+    ctx::plan::multiply_pay_factor(500, PayFactorScope::NextSettle);
     if trigger::move_remaining() > 0 {
         // Mid-walk: stop on this tile -- the walk settles here.
         ctx::plan::set_stop_at(tile);

@@ -81,7 +81,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「对方此次结算的支付减半」 -- the settle of this move pays half
     // (milli-units: 500 = x0.5), multiplied in and scoped `ThisMove` so it
     // covers the move in flight only.
-    ctx::plan::mul_pay_factor(500, PayFactorScope::ThisMove);
+    ctx::plan::multiply_pay_factor(500, PayFactorScope::ThisMove);
     Ok(())
 }
 

@@ -1037,8 +1037,8 @@ pub fn set_pay_factor(n: i32) {
     kani_host::call_unit(Op::set_pay_factor, [n, 0, 0, 0, 0, 0]);
 }
 
-pub fn mul_pay_factor(milli: i32, scope: i32) {
-    kani_host::call_unit(Op::mul_pay_factor, [milli, scope, 0, 0, 0, 0]);
+pub fn multiply_pay_factor(milli: i32, scope: i32) {
+    kani_host::call_unit(Op::multiply_pay_factor, [milli, scope, 0, 0, 0, 0]);
 }
 
 pub fn pay_factor() -> i32 {

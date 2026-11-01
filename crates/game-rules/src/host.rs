@@ -5637,9 +5637,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "mul_pay_factor",
+        "multiply_pay_factor",
         |mut c: C<W>, milli: i32, scope: i32| -> Result<(), Error> {
-            hostfns::mul_pay_factor(&mut c, milli, scope).map_err(HostError::into_err)
+            hostfns::multiply_pay_factor(&mut c, milli, scope).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(m, "pay_factor", |mut c: C<W>| -> Result<i32, Error> {
