@@ -39,7 +39,17 @@ fn setup(prior: usize) -> Table {
     t.roll(0).unwrap();
     assert!(t.counteract_offered(TAKI), "{}", t.dump_prompt());
     assert_eq!(t.m.world().turn.roll_history.len(), prior + 1);
-    println!("PROBE prior={prior} values={:?}", t.m.world().turn.roll_history.iter().map(|e| e.value).collect::<Vec<_>>().last().copied());
+    println!(
+        "PROBE prior={prior} values={:?}",
+        t.m.world()
+            .turn
+            .roll_history
+            .iter()
+            .map(|e| e.value)
+            .collect::<Vec<_>>()
+            .last()
+            .copied()
+    );
     t
 }
 

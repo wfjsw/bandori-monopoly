@@ -1390,13 +1390,22 @@ pub fn roll_reroll(
         }
     };
     roll_recast(roll, source)?;
-    let pick = ask_choice(player_id, title, text, &[keep_old.clone(), keep_new.clone()])?;
+    let pick = ask_choice(
+        player_id,
+        title,
+        text,
+        &[keep_old.clone(), keep_new.clone()],
+    )?;
     // The prompt's options are the pair the recast left as the last two casts
     // (old = n-2, new = n-1); `roll_pick` wants an absolute cast index, so a
     // transaction that already carries earlier casts (taki's rerolls, layer's
     // fire-pot rerolls) must not pass the option index straight through.
     let n = roll_faces(roll).len().max(1);
-    let chosen = if pick == 1 { n - 1 } else { n.saturating_sub(2) };
+    let chosen = if pick == 1 {
+        n - 1
+    } else {
+        n.saturating_sub(2)
+    };
     roll_pick(roll, chosen as i32);
     Ok(RerollOutcome {
         chosen_index: chosen as i32,
@@ -3657,9 +3666,7 @@ pub mod trigger {
 
     /// The face a pick did not take, `None` when none.
     pub fn roll_unused_face() -> Option<i32> {
-        roll_payload()
-            .map(|r| r.unused_face)
-            .filter(|&v| v >= 0)
+        roll_payload().map(|r| r.unused_face).filter(|&v| v >= 0)
     }
 
     /// The trigger's every cast face, in cast order.

@@ -230,10 +230,18 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger.roll_source.as_i32() as i64
     }
     fn roll_purpose(&self) -> i64 {
-        self.trigger.roll.as_ref().map(|r| r.purpose as i64).unwrap_or(-1)
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.purpose as i64)
+            .unwrap_or(-1)
     }
     fn roll_rerolled(&self) -> bool {
-        self.trigger.roll.as_ref().map(|r| r.rerolled).unwrap_or(false)
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.rerolled)
+            .unwrap_or(false)
     }
     fn roll_unused_face(&self) -> i64 {
         self.trigger

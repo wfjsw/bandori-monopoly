@@ -194,9 +194,7 @@ impl TriggerPay {
 /// `card_sdk::abi::roll_source`'s wire codes; the guest ABI still sees the `i32`.
 /// The engine never branches on a game name -- code `1` is the marker-funded
 /// roll that rules-layer clauses match by wire code.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]

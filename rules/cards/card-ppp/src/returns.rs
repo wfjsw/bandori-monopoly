@@ -177,8 +177,8 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
                 pool.len() as i32,
                 RollPurpose::Effect,
                 roll_source::CARD,
-            )? - 1).max(0)
-                as usize
+            )? - 1)
+                .max(0) as usize
                 % pool.len()
         };
         let id = pool.remove(index);

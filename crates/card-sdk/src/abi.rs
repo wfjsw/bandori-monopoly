@@ -759,7 +759,7 @@ use std::borrow::Cow;
 ///    `settleAdd` / `settleMul` / `settleRentAdd` / `settleRentMul` (filters
 ///    128-131). The six kinds renumber around G03's `diceRoll*` Actions,
 ///    which claimed 123-125.
-pub const ABI_VERSION: i32 = 110;
+pub const ABI_VERSION: i32 = 111;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -800,8 +800,7 @@ pub const ABI_VERSION: i32 = 110;
 ///
 ///    SAVE_VERSION / RECORD_VERSION unchanged (the new save fields are
 ///    `#[serde(default)]`).
-<<<<<<< HEAD
-/// v108: **command-scoped move plans and walk control**. The turn plan is a
+/// v111: **command-scoped move plans and walk control**. The turn plan is a
 ///    staging buffer; every move runs on a frame owned by its command
 ///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
 ///    New imports: `ruleset_set_forced` (378), `ruleset_set_main_override` (379),
@@ -817,7 +816,6 @@ pub const ABI_VERSION: i32 = 110;
 ///    main move". `set_parity` canonicalizes `2` to `0` (even). The trigger move
 ///    payload gains `rolled` and `effective`, surfaced as `move.rolled` /
 ///    `move.effective`. SAVE_VERSION / RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 108;
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -826,8 +824,6 @@ pub mod axis {
     pub const LEFT: i32 = 2;
     pub const RIGHT: i32 = 3;
 }
-=======
->>>>>>> master
 
 // v107 wire code tables. Unknown values fall back (`Normal` / `Card`); an
 // unknown flag bit is ignored by the host decoder.
@@ -1676,9 +1672,7 @@ pub enum RollPurpose {
 }
 
 /// One cast of a roll, as the guest sees it.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TriggerCast {
     /// The face this cast produced.
     pub value: i32,
@@ -1690,9 +1684,7 @@ pub struct TriggerCast {
 /// Present on `diceRollCast` / `diceRollBefore` / `diceRollAdd` /
 /// `diceRollValue` / `diceRollAfter` / `diceRollResult` / `diceRollSettled`,
 /// and `None` on every other trigger.
-#[derive(
-    Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RollPayload {
     /// The transaction id (`ctx::roll_current` shape; `-1` when none).
     pub id: i32,

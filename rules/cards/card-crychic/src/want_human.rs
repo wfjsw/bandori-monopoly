@@ -122,7 +122,10 @@ fn boost_armed(_player_id: i32) -> bool {
 /// body so every settle re-folds it after a reroll.
 fn boost_add(player_id: i32, v: RollValue) -> RollValue {
     let boost = (ctx::prop(SLOT_BOOST) - 1).max(0);
-    RollValue { value: v.value + boost, ..v }
+    RollValue {
+        value: v.value + boost,
+        ..v
+    }
 }
 
 /// 规则书（2）: consume the armed boost and snapshot the abnormal counter so

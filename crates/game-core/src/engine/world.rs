@@ -962,7 +962,6 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
-<<<<<<< HEAD
     // ------------------------------------------------ plan frames
 
     /// The plan the move currently reads: the innermost frame, else the
@@ -1088,14 +1087,12 @@ impl World {
         {
             self.turn.plan = command.staging_before;
         }
-=======
+    }
+
     /// The withheld turn-end settle answer for `player` (`Unanswered` when
     /// never stamped; a save predating the field has a short vector).
     pub fn blocked_settle_answer(&self, player: usize) -> SettleAnswer {
-        self.blocked_settle
-            .get(player)
-            .copied()
-            .unwrap_or_default()
+        self.blocked_settle.get(player).copied().unwrap_or_default()
     }
 
     /// Arm / clear `player`'s withheld turn-end settle answer.
@@ -1105,7 +1102,6 @@ impl World {
                 .resize(player + 1, SettleAnswer::Unanswered);
         }
         self.blocked_settle[player] = a;
->>>>>>> master
     }
 
     /// Has the turn end this `end` asks for already happened? 结束 with the

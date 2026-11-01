@@ -37,7 +37,13 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_roll_direct"
         )]
-        pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32;
+        pub fn roll_direct(
+            player_id: i32,
+            count: i32,
+            sides: i32,
+            purpose: i32,
+            source: i32,
+        ) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_roll_recast"

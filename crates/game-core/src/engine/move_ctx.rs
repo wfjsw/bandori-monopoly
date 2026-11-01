@@ -200,34 +200,6 @@ pub struct MoveCtx {
     /// `card_sdk::ctx::trigger::is_settle_redirect()`.
     #[serde(default)]
     pub settle_redirect: bool,
-<<<<<<< HEAD
-=======
-    /// Per-move scope marks, never read by the walk itself. The plan is never
-    /// reset between moves in a turn, so a value written for an *earlier*
-    /// move stays on it and reshapes the next one; the corresponding
-    /// `plan::set_*` write raises these, and the next move's entry consumes
-    /// them ([`crate::engine::play`]'s `drop_stale_plan_shape`). `steps` and
-    /// the two payment factors are per-move by definition; a leftover
-    /// `stop_at` would halt an unrelated later walk, unexplained (the
-    /// `log.outcome.plan_stop` line belongs to the move that wrote it).
-    #[serde(default)]
-    pub steps_fresh: bool,
-    #[serde(default)]
-    pub stop_at_fresh: bool,
-    #[serde(default)]
-    pub pay_fresh: bool,
-    /// The same scope for `rent_factor`, kept apart from `pay_fresh` so a body
-    /// that writes both fingers multiplies each on its own (MONEY-01).
-    #[serde(default)]
-    pub rent_fresh: bool,
-    /// Same one-shot scope for the walk's *direction* (`reverse`) and whether
-    /// it settles (`settles`): a 「向反方向移动」 / 「不[结算]」 move must not
-    /// send the next one backwards or silence its settle.
-    #[serde(default)]
-    pub reverse_fresh: bool,
-    #[serde(default)]
-    pub resolve_fresh: bool,
->>>>>>> master
     /// Whether this move can build on the tile it lands on. `false` is the
     /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
     /// one flag, not two.
@@ -340,15 +312,6 @@ impl Default for MoveCtx {
             rent_factor: 1.0,
             settle_as_agent: false,
             settle_redirect: false,
-<<<<<<< HEAD
-=======
-            steps_fresh: false,
-            stop_at_fresh: false,
-            pay_fresh: false,
-            rent_fresh: false,
-            reverse_fresh: false,
-            resolve_fresh: false,
->>>>>>> master
             can_build: true,
             build_anywhere: false,
             more_steps: 0,
@@ -442,10 +405,10 @@ impl MoveCtx {
         self.roll = if self.roll < 0 { -n } else { n };
     }
 
-    /// The length this move actually takes: a fixed count, else the face (the
-    /// frame mirrors `next_steps` into `roll`).
+    /// The length this move actually takes: a fixed count, else the stored
+    /// `next_steps` count, else the face.
     pub fn effective_steps(&self) -> i32 {
-        self.steps.unwrap_or(self.roll)
+        self.steps.or(self.next_steps).unwrap_or(self.roll)
     }
 
     /// Build the seed of a side frame: every `Command` field the command

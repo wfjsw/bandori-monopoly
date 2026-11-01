@@ -467,12 +467,8 @@ Each new import is added at every layer, or the build fails:
 2. `crates/card-sdk/src/ctx/sys.rs` — `extern` under the
    `wasm32`/`native-rules` attribute pair, link name `ruleset_*`.
 3. `crates/card-sdk/src/ctx/sys_kani.rs` — `kani_host::call_*` stub.
-<<<<<<< HEAD
 4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 378-397;
    this group uses **378-391**).
-=======
-4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 378-397; this group uses 378-391).
->>>>>>> master
 5. `rules/kani/src/host.rs` — arm (stub or model) and every affected card
    proof's `host_subset!`.
 6. `crates/game-rules/src/hostfns.rs` — `HostCtx` implementation.

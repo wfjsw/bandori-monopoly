@@ -6,7 +6,7 @@
 //! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{ActionKind, ChainKind, roll_source};
+use card_sdk::abi::{roll_source, ActionKind, ChainKind};
 use card_sdk::CardText;
 
 use bandori_std::ctx::{self, trigger};

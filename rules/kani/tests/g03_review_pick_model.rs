@@ -66,7 +66,13 @@ fn model_second_pick_uses_the_old_choice_not_the_latest_pair() {
     // records the previous chosen cast (casts[0]).
     let (id, _) = fresh();
     arm_roll_recast([id, 0, 0, 0, 0, 0]); // now n = 3
-    let faces = world::with_world(|w| w.rolls[0].casts.iter().map(|c| c.value).collect::<Vec<i32>>());
+    let faces = world::with_world(|w| {
+        w.rolls[0]
+            .casts
+            .iter()
+            .map(|c| c.value)
+            .collect::<Vec<i32>>()
+    });
     arm_roll_pick([id, 0, 0, 0, 0, 0]);
     arm_roll_pick([id, 1, 0, 0, 0, 0]);
     let unused = arm_roll_unused_face([id, 0, 0, 0, 0, 0]) as i32;

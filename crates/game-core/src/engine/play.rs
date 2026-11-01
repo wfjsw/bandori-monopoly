@@ -9,11 +9,7 @@
 use super::cx::{Ask, Flow, Halt, PlayCtx};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
-<<<<<<< HEAD
-use super::rules::{raise, Dest, RollSource, Trigger, TriggerBuy, TriggerPay};
-=======
 use super::rules::{raise, Dest, Fold, RollSource, Trigger, TriggerBuy, TriggerPay};
->>>>>>> master
 use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
@@ -1063,7 +1059,6 @@ impl PlayCtx<'_> {
         r
     }
 
-<<<<<<< HEAD
     /// Stamp the engine-owned identity and progress of a move onto it. The plan
     /// frame is the move's *shape*; these fields are not `PlanField`s, so a
     /// body that re-reads the frame after a window re-stamps them here.
@@ -1102,87 +1097,112 @@ impl PlayCtx<'_> {
         // Only the turn player's *main* move drives the stage machine.
         if is_main_move {
             self.w.st.step = stage::MOVE;
+            // A stored step count (`next_steps`) is consumed here, before any
+            // window, so the windows see the length the walk will take
+            // (`spec/abi/G04-move-plan.md` §3, R11).
+            if let Some(steps) = self.w.hidden[i].next_steps.take() {
+                let steps = steps.max(0);
+                self.w.plan_mut().next_steps = Some(steps);
+                m.next_steps = Some(steps);
+            }
         }
         let mut ran = true;
         if !self.out(i) {
-            if is_main_move {
-                // `roll` (condition) -- before the d20 is cast. `value = -1` is
-                // the "no roll yet" sentinel.
-                let source = move_roll_source(&m);
-                raise!(self, "diceRollBefore", i, @m m, value = -1, roll_source = source)?;
+            // The roll transaction opens before the plan window so its bodies
+            // see the payload; a teleport rewrite below abandons it without
+            // casting (G03 §3). A non-main move with a fixed step count walks
+            // without a cast at all.
+            let rolled_now = is_main_move || m.steps.is_none();
+            let draft = if rolled_now {
+                self.open_move_roll(i, move_roll_source(&m))
+            } else {
+                0
+            };
+            // The roll window is open from the plan window through the last
+            // raise.
+            let before = self.w.plan().clone();
+            self.w.move_roll_windows.push(i);
+            self.w.turn.plan_scope.window_before.push(before);
+            if rolled_now {
+                self.raise_roll("diceRollPlan", draft, Some(&m), -1)?;
+                // Re-read the window's shape from the frame, but keep the
+                // engine-stamped identity / progress (the frame carries plan
+                // fields only; `player_id` is not a `PlanField`).
+                m = self.w.plan().clone();
+                self.stamp_move_identity(&mut m, i, roller, is_main_move);
+                // The window may have raised the move's own source
+                // (「使用火罐进行移动掷骰」 tags the plan here).
+                self.set_roll_source(draft, move_roll_source(&m));
             }
             if self.out(i) || !self.playing() {
+                if rolled_now {
+                    self.abandon_roll(draft);
+                }
+                self.close_roll_window(&mut m);
                 return self
                     .finish_move_body(i, m, is_main_move, false)
                     .map(|()| false);
             }
             if m.teleport_to.is_some() {
+                // Planted before the roll (have already been rewritten): no die
+                // is cast. The main move's `roll` condition still runs, on the
+                // transaction's own view and with the "no face" sentinel.
+                if is_main_move {
+                    let view = self.roll_move_view(draft, i);
+                    self.raise_roll("diceRollBefore", draft, Some(&view), -1)?;
+                }
+                if rolled_now {
+                    self.abandon_roll(draft);
+                }
                 ran = self.run_planned_teleport(i, &mut m, is_main_move)?;
+            } else if rolled_now {
+                ran = self.run_planned_roll(i, draft, &mut m)?;
+            }
+            // A roll-window body may have written a destination instead of
+            // a face (`plan::set_teleport_to`, saaya's empty face
+            // 「移动到下一个可购买格子」). It is one-shot: take it from the
+            // frame and jump there; the walk below is then skipped.
+            //
+            // A replacement (`void_walk`, §4.4) already ran its teleport
+            // from inside the window and wrote the landing back onto this
+            // frame for the record; taking it again would teleport (and
+            // settle) twice. Leave it on the frame -- `close_roll_window`
+            // folds it into the move's progress -- and jump only for a
+            // bare window write.
+            let after_teleport = if self.w.plan().void_walk {
+                None
             } else {
-                // The roll window is open from here through the last raise.
-                let before = self.w.plan().clone();
-                self.w.move_roll_windows.push(i);
-                self.w.turn.plan_scope.window_before.push(before.clone());
-                if is_main_move || m.steps.is_none() {
-                    raise!(self, "diceRollPlan", i, @m m)?;
-                    // Re-read the window's shape from the frame, but keep the
-                    // engine-stamped identity / progress (the frame carries plan
-                    // fields only; `player_id` is not a `PlanField`).
-                    m = self.w.plan().clone();
-                    self.stamp_move_identity(&mut m, i, roller, is_main_move);
-                }
-                if self.out(i) || !self.playing() {
-                    self.close_roll_window(&mut m);
-                    return self
-                        .finish_move_body(i, m, is_main_move, false)
-                        .map(|()| false);
-                }
-                if m.teleport_to.is_some() {
-                    ran = self.run_planned_teleport(i, &mut m, is_main_move)?;
-                } else if m.steps.is_none() {
-                    ran = self.run_planned_roll(i, &mut m)?;
-                }
-                // A roll-window body may have written a destination instead of
-                // a face (`plan::set_teleport_to`, saaya's empty face
-                // 「移动到下一个可购买格子」). It is one-shot: take it from the
-                // frame and jump there; the walk below is then skipped.
-                //
-                // A replacement (`void_walk`, §4.4) already ran its teleport
-                // from inside the window and wrote the landing back onto this
-                // frame for the record; taking it again would teleport (and
-                // settle) twice. Leave it on the frame -- `close_roll_window`
-                // folds it into the move's progress -- and jump only for a
-                // bare window write.
-                let after_teleport = if self.w.plan().void_walk {
-                    None
-                } else {
-                    self.take_plan_teleport()
-                };
-                if let Some(to) = after_teleport {
-                    let (settles, reason) = (m.settles, m.reason.clone());
-                    ran = self.teleport_as(i, to, settles, reason, is_main_move)?;
-                }
-                if ran {
-                    self.close_roll_window(&mut m);
-                }
-                // A `void_walk` teleport has already run (and raised its tail)
-                // from inside the window; a bare window write teleported above;
-                // only an ordinary move walks. `ran` is not required here: a
-                // replacement whose abnormal gate refused it never reaches the
-                // engine (`HostRequest::Move` returns 0 after clearing
-                // `teleport_to`/`void_walk` and resetting `kind = Walk`), and
-                // the outer walk must resume
-                // (`spec/abi/G04-move-plan.md` §4.4, R16).
-                if !self.out(i)
-                    && self.playing()
-                    && move_plan::walk_runs(
-                        m.teleport_to.is_some() || after_teleport.is_some(),
-                        m.cancelled,
-                        m.void_walk,
-                    )
-                {
-                    self.walk(&mut m)?;
-=======
+                self.take_plan_teleport()
+            };
+            if let Some(to) = after_teleport {
+                let (settles, reason) = (m.settles, m.reason.clone());
+                ran = self.teleport_as(i, to, settles, reason, is_main_move)?;
+            }
+            if ran {
+                self.close_roll_window(&mut m);
+            }
+            // A `void_walk` teleport has already run (and raised its tail)
+            // from inside the window; a bare window write teleported above;
+            // only an ordinary move walks. `ran` is not required here: a
+            // replacement whose abnormal gate refused it never reaches the
+            // engine (`HostRequest::Move` returns 0 after clearing
+            // `teleport_to`/`void_walk` and resetting `kind = Walk`), and
+            // the outer walk must resume
+            // (`spec/abi/G04-move-plan.md` §4.4, R16).
+            if !self.out(i)
+                && self.playing()
+                && move_plan::walk_runs(
+                    m.teleport_to.is_some() || after_teleport.is_some(),
+                    m.cancelled,
+                    m.void_walk,
+                )
+            {
+                self.walk(&mut m)?;
+            }
+        }
+        self.finish_move_body(i, m, is_main_move, ran).map(|()| ran)
+    }
+
     /// Adopt `plan` as the shared `turn.plan` for the move that is about to run.
     ///
     /// The plan a card shaped (or the one `main_move` stamped) is the
@@ -1205,111 +1225,29 @@ impl PlayCtx<'_> {
         self.w.turn.plan = p;
     }
 
-    /// [`Self::run_planned_move`] once the shared plan is seeded.
-    fn card_move_seeded(&mut self, i: usize, mut plan: Move, is_main_move: bool) -> Flow<()> {
-        // `plan` was built from the ctx plan for this call. Drop what an earlier
-        // move in this turn left behind (`drop_stale_plan_shape`; without it a
-        // stale `steps` also skips the roll below outright) and carry the
-        // survivors from the shared plan onto the move.
-        self.drop_stale_plan_shape();
-        plan.steps = self.w.turn.plan.steps;
-        plan.stop_at = self.w.turn.plan.stop_at;
-        plan.pay_factor = self.w.turn.plan.pay_factor;
-        plan.rent_factor = self.w.turn.plan.rent_factor;
-        plan.reverse = self.w.turn.plan.reverse;
-        plan.settles = self.w.turn.plan.settles;
-        if plan.teleport_to.is_some() {
-            let to = plan.teleport_to.unwrap().0 as usize;
-            let settles = plan.settles;
-            let reason = plan.reason.clone();
-            // One-shot: see `main_move`. A `run_planned_move` that teleported must not
-            // leave the destination on the shared turn plan for a later move.
-            self.w.turn.plan.teleport_to = None;
-            // Carry the skill-source tag onto the shared plan so `teleport_as`
-            // stamps it on the raise payload, then clear it (one-shot).
-            self.w.turn.plan.by_skill = plan.by_skill;
-            self.teleport_as(i, to, settles, reason, is_main_move)?;
-            self.w.turn.plan.by_skill = false;
-        } else {
-            if plan.steps.is_none() {
-                // No fixed step count: roll it now, with the same ladder.
-                let draft = self.open_move_roll(i, RollSource::Card);
-                self.raise_roll("diceRollPlan", draft, Some(&plan), -1)?;
-                plan = self.w.turn.plan.clone();
-                // A `rollPlan` body may have rewritten this move as a teleport
-                // (same branch `main_move` takes for the turn's main move).
-                if plan.teleport_to.is_some() {
-                    let to = plan.teleport_to.unwrap().0 as usize;
-                    let settles = plan.settles;
-                    let reason = plan.reason.clone();
-                    self.w.turn.plan.teleport_to = None;
-                    self.abandon_roll(draft);
-                    self.w.turn.plan.by_skill = plan.by_skill;
-                    self.teleport_as(i, to, settles, reason, is_main_move)?;
-                    self.w.turn.plan.by_skill = false;
-                } else {
-                    // Read, not take -- same one-shot reasoning as `main_move`.
-                    let fixed = self.w.turn.fixed_roll;
-                    plan.roll = self.run_move_roll(draft, &plan, fixed, false)?;
-                    self.w.turn.fixed_roll = None;
-                    // The stored count applies to the next **main** move only
-                    // (`main_move` takes it too); a side / forced card walk must
-                    // leave it pending.
-                    if is_main_move {
-                        if let Some(steps) = self.w.hidden[i].next_steps.take() {
-                            plan.roll = steps.max(0);
-                        }
-                    }
-                    if !plan.signed {
-                        if let Some(mr) = plan.min_roll {
-                            plan.roll = plan.roll.max(mr);
-                        };
-                    }
-                    // A `rollAfter` / `diceRollResult` body may have cleared settles
-                    // on the turn plan (`plan::set_settles(false)`, e.g.
-                    // 不要背负期待's 「如果为0则此次移动不[结算]」). The plan is
-                    // never reset between moves, so only pull the *clear*
-                    // direction; `walk_inner`'s `fold_plan_delta` sees writes
-                    // from `moveBefore` onward and the step loop syncs mid-walk,
-                    // but a 0-step walk takes neither path.
-                    if !self.w.turn.plan.settles {
-                        plan.settles = false;
-                    }
->>>>>>> master
-                }
-            }
-        }
-        self.finish_move_body(i, m, is_main_move, ran).map(|()| ran)
-    }
-
     /// The roll ladder inside an open window: cast, the three reshape / window
     /// raises, the `next_steps` override and the immobile clamp. Returns whether
     /// the move still runs.
-    fn run_planned_roll(&mut self, i: usize, m: &mut Move) -> Flow<bool> {
-        // A die is cast for this walk, even when an override replaces the
-        // result (`move.rolled`).
-        m.rolled = true;
-        m.roll = match self.w.turn.fixed_roll {
-            Some(n) => n,
-            None => self.roll_tables(m),
+    fn run_planned_roll(&mut self, i: usize, draft: i32, m: &mut Move) -> Flow<bool> {
+        // The ladder (cast, the three reshape windows, the Result
+        // counteraction window, the settle) is G03's. `rolled` is the
+        // 「掷骰移动」 fact -- the length came from a die, not from a fixed
+        // count -- so it survives an override (`next_steps`) but a fixed step
+        // count is not a dice move.
+        m.rolled = m.steps.is_none();
+        // A stored fixed face replaces the throw. A `next_steps` count is the
+        // length the walk takes, already folded in before the windows (R11), so
+        // it outranks the pin and is the face every window sees.
+        let pinned = self.w.turn.fixed_roll.take();
+        let fixed = match m.next_steps {
+            Some(steps) => Some(super::world::FixedFace {
+                value: steps.max(0),
+                source: pinned.map_or(RollSource::Unattributed, |f| f.source),
+            }),
+            None => pinned,
         };
-        // The stored `next_steps` is the length the walk will take, and the
-        // window must see it.
-        if let Some(steps) = m.next_steps {
-            m.roll = steps.max(0);
-        }
-        let source = move_roll_source(m);
-        let t = raise!(self, "diceRollValue", i, @m m, value = m.roll, roll_source = source)?;
-        m.roll = t.value.max(0);
-        let t = raise!(self, "diceRollAfter", i, @m m, value = m.roll, roll_source = source)?;
-        if t.value != m.roll {
-            m.roll = t.value.max(0);
-        }
-        let t = raise!(self, "diceRollResult", i, @m m, value = m.roll, roll_source = source)?;
-        m.roll = t.value.max(0);
-        if let Some(steps) = m.next_steps {
-            m.roll = steps.max(0);
-        }
+        m.roll = self.run_move_roll(draft, &*m, fixed, false)?;
+        // The unsigned-roll clamp applies to the final face.
         if !m.signed {
             if let Some(mr) = m.min_roll {
                 m.roll = m.roll.max(mr);
@@ -1329,6 +1267,12 @@ impl PlayCtx<'_> {
             m.roll = 0;
             m.steps = Some(0);
             m.settles = false;
+            // 「（或无法移动的回合结束时）」 -- the withheld settle is the
+            // default only; a card that answered `Skip` keeps it.
+            use super::world::SettleAnswer;
+            if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
+                self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
+            }
         }
         Ok(true)
     }
@@ -1917,7 +1861,6 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
-<<<<<<< HEAD
         let seed = self.w.turn.plan.clone();
         self.w.begin_plan(i, PlanKind::MainMove, seed);
         let m = self.w.plan().clone();
@@ -1925,244 +1868,6 @@ impl PlayCtx<'_> {
         let r = self.run_move_body(i, Some(roller), true);
         self.w.end_plan(r.as_ref().is_ok_and(|&ran| ran));
         r.map(|_| ())
-=======
-        // Taking the main move lifts the 「无法移动」 premise: a withheld
-        // turn-end settle (stamped at a blocked turn start, or by a card) is
-        // no longer owed -- the move settles where it lands instead.
-        self.w.set_blocked_settle_answer(
-            i,
-            super::world::SettleAnswer::Unanswered,
-        );
-        // The activation running this move drove it (see `drop_spent_plan_shape`).
-        self.w.turn.play_drove_move = true;
-        // Drop what an earlier move in this turn left behind (`drop_stale_plan_shape`);
-        // a Play body that shaped *this* move marked its writes fresh.
-        self.drop_stale_plan_shape();
-        // Start from the turn's plan, not a fresh move: a **Play** body may have
-        // shaped this move earlier in the turn (change_world's 「你的本次移动掷骰
-        // 变为3d20」 writes the dice table at play time). Only the identity and
-        // the walk's *progress* are forced/ cleared here -- everything a card
-        // shaped carries over.
-        let mut m = self.w.turn.plan.clone();
-        m.player_id = i;
-        m.roller = Some(Seat(roller as i32));
-        m.is_main_move = true;
-        m.from = 0;
-        m.to = 0;
-        m.path.clear();
-        m.total = 0;
-        m.remaining = 0;
-        m.passed_players.clear();
-        m.stopped = false;
-        m.cancelled = false;
-        if !self.out(i) {
-            // `rollPlan` -- every placed card's `On::RollPlan` shapes the move
-            // before the dice (DiceRollPlan -> cast -> diceRollCast ->
-            // diceRollBefore -> diceRollAdd -> [diceRollValue -> diceRollAfter
-            // -> the diceRollResult counteraction window] -> the settlement ->
-            // diceRollSettled).
-            //
-            // The transaction opens first: a plan rewrite (`teleport_to`) below
-            // drops it without casting, and the plan hooks see the
-            // transaction's payload. The card bodies shape `TurnCtx::plan`
-            // (that is what the `World` plan ops write), so the walk has to
-            // take the move back afterwards. Seed first so a body that only
-            // reads sees the fresh move.
-            let draft = self.open_move_roll(roller, RollSource::Unattributed);
-            self.seed_turn_plan(&m);
-            self.raise_roll("diceRollPlan", draft, Some(&m), -1)?;
-            m = self.w.turn.plan.clone();
-            if self.out(i) || !self.playing() {
-                self.abandon_roll(draft);
-                self.w.st.step = stage::END;
-                return Ok(());
-            }
-            // `teleport_to` is one-shot: the plan is never reset between moves
-            // in the same turn (only `next_turn` rebuilds `TurnCtx`), so a
-            // write that this move consumed -- or that a mid-move hook left
-            // behind -- must not turn a later move in the same turn into a
-            // teleport (two_donuts' settle hook writes it for the owner while
-            // the turn player still has a main move to take).
-            if m.teleport_to.is_some() {
-                // A `rollPlan` body -- or a Play body before the roll
-                // (kanon_march 「视为本次主要移动」, lisa 「将此次移动变为
-                // 传送」, ras 「下一次主要移动可变为传送至…」) -- rewrote this
-                // move as a teleport: the destination is the plan's, and no dice
-                // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
-                // …那格」 writes it from a `DiceRollPlan` hook.
-                let to = m.teleport_to.unwrap().0 as usize;
-                let settles = m.settles;
-                let reason = m.reason.clone();
-                self.w.turn.plan.teleport_to = None;
-                // The rolled main move keeps its 「触发结算前」 window even
-                // though it is rewritten into a teleport: it was raised on
-                // every main move before the ladder existed (`value = -1` = no
-                // face yet), and value-independent Before bodies / residual
-                // guards rely on it.
-                let view = self.roll_move_view(draft, i);
-                self.raise_roll("diceRollBefore", draft, Some(&view), -1)?;
-                self.abandon_roll(draft);
-                // `m.is_main_move` is true here (the turn's main move); pass it so the
-                // raise payload's `move.is_main_move` discriminates. A `moveBefore`
-                // counteraction can cancel it; the followers below must not
-                // execute a move that never happened.
-                m.cancelled = !self.teleport_as(i, to, settles, reason, m.is_main_move)?;
-            } else {
-                // The whole cast ladder: a stored fixed face
-                // ([`super::world::TurnCtx`]'s `fixed_roll`) replaces the
-                // throw, otherwise the cast sums the `base` + `dice` tables
-                // (default 1d20; `sides == 0` is a flat `count`). The pin is
-                // read, not taken, so the ladder's windows still see it
-                // (`ctx::fixed_roll()` guards); it is dropped after the ladder
-                // so a later move this turn throws its own dice.
-                let fixed = self.w.turn.fixed_roll;
-                m.roll = self.run_move_roll(draft, &m, fixed, false)?;
-                self.w.turn.fixed_roll = None;
-                // A stored step count (`next_steps`) overrides the roll for this
-                // one main move.
-                if let Some(steps) = self.w.hidden[i].next_steps.take() {
-                    m.roll = steps.max(0);
-                }
-                // The unsigned-roll clamp (`roll = max(min_roll, roll)`) applies
-                // to the final face after the counteractions, so a card that
-                // pushes the roll down still respects the floor.
-                if !m.signed {
-                    if let Some(mr) = m.min_roll {
-                        m.roll = m.roll.max(mr);
-                    };
-                }
-                // A `rollAfter` / `diceRollResult` body may have cleared settles on
-                // the turn plan (`plan::set_settles(false)`, e.g. 不要背负期待's
-                // 「如果为0则此次移动不[结算]」). Only pull the clear direction --
-                // the plan is sticky and a stale `true` must not revive a move
-                // the immobile clamp (below) is about to pin. `walk_inner`
-                // folds `moveBefore` writes and the step loop syncs mid-walk;
-                // a 0-step walk takes neither path.
-                if !self.w.turn.plan.settles {
-                    m.settles = false;
-                }
-                // G-STATUS-02 (glossary 10 / items 11-13):
-                // 「main move的[move end]视为当前所在格子且不settle」. The roll
-                // itself still happens (dice, counteractions, `log.roll`), but
-                // the walk goes nowhere and does not settle. A teleport rewrite
-                // above is unaffected (「无法使用非teleport的移动效果」).
-                // The ruleset's move gate is the whole answer (its CEL clauses
-                // carry the 「不可阻挡」 exception). A press that arms the move
-                // against abnormal movement (白金燐子 (2)
-                // 「本次移动不受异常移动效果影响」) is the same flag and
-                // cancels the whole clamp for this walk.
-                // A press that arms the walk against abnormal movement sets
-                // `key::MOVE_EXEMPT`; that flag cancels the whole clamp for
-                // this walk only (the turn-start move-gate skip is a different
-                // question and is not cancelled).
-                let exempt = self.w.st.players[i].state_get(key::MOVE_EXEMPT) > 0;
-                let immobile = !exempt && !self.w.gate_open(self.rules, super::Gate::Move, i);
-                if immobile {
-                    m.roll = 0;
-                    m.steps = Some(0);
-                    m.settles = false;
-                    // 「（或无法移动的回合结束时）」: the withheld landing settle
-                    // moves to the turn end unless a card says otherwise. The
-                    // cast above already ran normally, and `diceRollSettled`
-                    // already fired -- only the tile settle is withheld
-                    // (G03 §4.7). The stamp is the default only: a card that
-                    // answered `Skip` before the cast keeps it.
-                    use super::world::SettleAnswer;
-                    if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
-                        self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
-                    }
-                }
-                // A `diceRollAfter` / `diceRollResult` hook may have changed the
-                // destination on the plan (saaya_sky's floor 「移动到下一个可购买
-                // 格子」) -- the pre-roll check above ran too early for it. Same
-                // branch as a `rollPlan` rewrite: the plan's destination is the
-                // move and no steps are walked.
-                if let Some(to) = self.take_plan_teleport() {
-                    let settles = m.settles;
-                    let reason = m.reason.clone();
-                    m.cancelled = !self.teleport_as(i, to, settles, reason, m.is_main_move)?;
-                } else {
-                    self.walk(&mut m)?;
-                }
-            }
-            // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
-            // `DiceRollAfter` floor, sakiko_crychic's `SettleBefore` nudge): this
-            // move is over and the write must not shape the next one. Same for
-            // the skill-source tag, and for `start` (「使**本次**移动以…为起点」).
-            self.w.turn.plan.teleport_to = None;
-            self.w.turn.plan.by_skill = false;
-            self.w.turn.plan.start = None;
-            self.w.turn.plan.start_reason.clear();
-            self.drop_plan_fresh();
-            // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
-            // 玩家按行动顺序依次触发结算」:
-            // each follower recorded on the plan replays this move's result,
-            // after the mover has settled, in the order the card added them.
-            // The replay carries the same plan -- steps / kind / destination /
-            // `pay_factor` -- so 「触发结算时进行的支付价格减半」 reaches them too.
-            // No `roll` / `rollPlan` / `rollAfter` / `diceRollResult`: the result is
-            // already resolved, this is the same move re-executed. A move the
-            // `moveBefore` window cancelled has no result to share, so the
-            // followers stay put.
-            // TODO(规则书)（使你的下次主要移动结果对那些玩家一起执行）: the book does
-            //   not say whether a move cancelled before it happens still replays
-            //   for the followers -- we skip it (no result to share).
-            let followers = std::mem::take(&mut m.followers);
-            for &f in &followers {
-                let fi = f as usize;
-                if m.cancelled || self.out(fi) || !self.playing() || fi == i {
-                    continue;
-                }
-                let mut fm = m.clone();
-                fm.player_id = fi;
-                fm.roller = Some(Seat(fi as i32));
-                fm.is_main_move = false;
-                fm.followers.clear();
-                fm.path.clear();
-                fm.total = 0;
-                fm.remaining = 0;
-                fm.passed_players.clear();
-                fm.stopped = false;
-                fm.cancelled = false;
-                fm.from = 0;
-                fm.to = 0;
-                // The replay carries the main move's `pay_factor` /
-                // `rent_factor` (「触发结算时进行的支付价格减半」 reaches the
-                // followers too). The settle reader reads the *plan*, which the
-                // main move's `move_resolved` already reset, so seed it here.
-                self.w.turn.plan.pay_factor = fm.pay_factor;
-                self.w.turn.plan.rent_factor = fm.rent_factor;
-                if fm.teleport_to.is_some() {
-                    let to = fm.teleport_to.unwrap().0 as usize;
-                    let settles = fm.settles;
-                    let reason = fm.reason.clone();
-                    self.teleport(fi, to, settles, reason)?;
-                } else {
-                    self.walk(&mut fm)?;
-                }
-            }
-            // `lastWalk` is written as `total - remaining + 1` after a
-            // non-teleport main walk (0 means "none") -- the tiles actually
-            // walked, so a 「强制停下」 records where it stopped rather than the
-            // planned length.
-            self.w.turn.main_steps = m.total;
-            // `MatchState::plan` -- the broadcast summary of this walk.
-            self.w.st.plan = m.to_plan();
-            if m.kind != MoveKind::Teleport {
-                self.w
-                    .set_slot(i as i32, "lastWalk", (m.total - m.remaining) + 1);
-            }
-        }
-        // 「若受到abnormal move影响，此卡不生效」 (是我自己的问题 (2)):
-        // the longer-lived abnormal latch is consumed by the main move it
-        // would suppress -- the settle-before window above already read it.
-        if let Some(p) = self.w.st.players.get_mut(i) {
-            p.state_set(key::ABNORMAL_HIT, 0);
-        }
-        self.w.st.step = stage::END;
-        self.wait(1.2);
-        Ok(())
->>>>>>> master
     }
 
     /// Sum the move's `base` + `dice` tables into one face.
@@ -2567,119 +2272,6 @@ impl PlayCtx<'_> {
         (t >= 0 && (t as usize) < self.data.tiles.len()).then_some(t as usize)
     }
 
-<<<<<<< HEAD
-=======
-    /// Drop the plan shape that was written for an *earlier* move in this turn.
-    ///
-    /// `turn.plan` is never reset between moves (only `next_turn` rebuilds it),
-    /// so anything an earlier move consumed is still sitting there and reshapes
-    /// this one:
-    ///
-    /// * `stop_at` -- the later walk halts on a tile nobody named for it and
-    ///   with no line of its own (`set_stop_at` logs only the write, which
-    ///   happened in the earlier move), so the piece just stops unexplained;
-    /// * `steps` -- the leftover count *replaces* the roll outright (the roll
-    ///   goes out as that many steps and the walk takes them);
-    /// * `pay_factor` / `rent_factor` -- a 「此次支付」 scaler keeps scaling a
-    ///   later, unrelated payment;
-    /// * `reverse` / `settles` -- the next walk goes the wrong way, or
-    ///   settles nothing because a 「不[结算]」 move said so.
-    ///
-    /// A write meant for the current move (a Play body shaping the main move)
-    /// raises its fresh mark, which this consumes. Values written *inside* a
-    /// move land on the running `Move`; [`Self::drop_plan_fresh`] clears the
-    /// marks at the move's tail so they cannot leak either.
-    fn drop_stale_plan_shape(&mut self) {
-        // A `nextMove` factor is for exactly this move: fold it in and start
-        // the slot clean for the following one.
-        let next = std::mem::take(&mut self.w.turn.next_move_pay_factor);
-        self.w.turn.next_move_pay_factor = 1000;
-        // A move is starting: `thisMove` writes bind to it.
-        self.w.turn.move_open = true;
-        let p = &mut self.w.turn.plan;
-        if !p.steps_fresh {
-            p.steps = None;
-        }
-        if !p.stop_at_fresh {
-            p.stop_at = None;
-        }
-        if !p.pay_fresh {
-            p.pay_factor = 1.0;
-        }
-        // One 「此次支付」 mark covers both halves of the plan's shaping: a
-        // bare `pay_fresh` (a caller writing `rent_factor` directly) is a
-        // write for this move as much as `set_rent_factor`'s own mark.
-        if !p.rent_fresh && !p.pay_fresh {
-            p.rent_factor = 1.0;
-        }
-        // The `nextMove` fold composes on top of whatever the plan carries.
-        p.pay_factor *= f64::from(next) / 1000.0;
-        if !p.reverse_fresh {
-            p.reverse = false;
-        }
-        if !p.resolve_fresh {
-            p.settles = true;
-        }
-        p.steps_fresh = false;
-        p.stop_at_fresh = false;
-        p.pay_fresh = false;
-        p.rent_fresh = false;
-        p.reverse_fresh = false;
-        p.resolve_fresh = false;
-    }
-
-    /// End the per-move scope: a write made during the move must not mark the
-    /// next one fresh (the value itself stays for a post-move read, e.g.
-    /// maze_warehouse's `ctx::plan::stop_at()` charge -- the next move's entry
-    /// drops it).
-    fn drop_plan_fresh(&mut self) {
-        let p = &mut self.w.turn.plan;
-        p.steps_fresh = false;
-        p.stop_at_fresh = false;
-        p.pay_fresh = false;
-        p.rent_fresh = false;
-        p.reverse_fresh = false;
-        p.resolve_fresh = false;
-    }
-
-    /// An **activation** body (a hand Play, an event, a skill press) that
-    /// drove a move is spent when it ends: the `plan::set_steps` /
-    /// `set_stop_at` / `set_reverse` / `set_settles` / `set_pay_factor` writes
-    /// it made were for that walk. The body's replay re-applies them *after*
-    /// the last move, so they sit on the plan as if they were meant for
-    /// whatever comes next: the turn player's main move then takes the event's
-    /// step count in place of its roll, halts on a stop tile that is already
-    /// spent and unannounced, walks backwards, or settles nothing.
-    ///
-    /// An activation that drove **no** move is shaping a move still to come
-    /// (ran (2)'s 「本次移动向后」, sakiko_lead's half price, taki_serious'
-    /// quarter) and keeps everything.
-    ///
-    /// Only at `move_depth == 0` too: an activation nested inside a move (a
-    /// card played from a settle) is shaping that walk, and its write has to
-    /// stay for the settle stages still to run. Hook bodies are left alone
-    /// entirely: a `rollPlan` hook (`kaoru_thief`'s forced stop) runs before
-    /// the walk of the move it shapes and must keep its write.
-    fn drop_spent_plan_shape(&mut self) {
-        if self.move_depth > 0 || !self.w.turn.play_drove_move {
-            return;
-        }
-        let p = &mut self.w.turn.plan;
-        p.steps = None;
-        p.stop_at = None;
-        p.reverse = false;
-        p.settles = true;
-        p.pay_factor = 1.0;
-        p.rent_factor = 1.0;
-        p.steps_fresh = false;
-        p.stop_at_fresh = false;
-        p.reverse_fresh = false;
-        p.resolve_fresh = false;
-        p.pay_fresh = false;
-        p.rent_fresh = false;
-    }
-
->>>>>>> master
     /// Move the player to a plan-written destination, if a hook just wrote one.
     /// A bare write: the stage's own flow (`break` on a step, the `settleBefore`
     /// re-target loop) carries on from the new tile.
@@ -3217,6 +2809,11 @@ impl PlayCtx<'_> {
     /// link on the face. Logs one `"dice"` event (all rolls animate), naming
     /// the plan's dice -- 松原花音's second 「移动掷骰」 reads 「掷 1d20 = 5」,
     /// never a bare `0d0`.
+    ///
+    /// Not on the guest path since v111: `ctx::do_move_roll` is `roll_direct` →
+    /// `run_direct_roll`, whose cast logs the same line and folds the
+    /// `diceRollCast` rewrite. Kept as the host-side helper for a direct plan
+    /// roll (it honours `extreme`, like the turn's own move).
     /// 规则书: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」 -- the
     /// move's `NdM` tables are such an interval, so `roll_tables` settles them at
     /// the armed extreme; the turn's main move rolls through the same helper.
@@ -3559,35 +3156,19 @@ impl PlayCtx<'_> {
         // 0 -- always multiplied, it is not a 「0 means unset」 prop) and the
         // tile's standing factor ([`purchase::tile_money_milli`], the single
         // source for that half; the standing quote reads the same figure).
-        let mut milli = (self.w.turn.plan.pay_factor * 1_000_000.0).round() as i64;
+        let mut milli = (self.w.plan().pay_factor * 1_000_000.0).round() as i64;
         if rent {
-<<<<<<< HEAD
-            f *= self.w.plan().rent_factor;
-        }
-        f *= self.w.plan().pay_factor;
-        // Every open settle's factor, already multiplied into the world
-        // product by the push (`thisSettle` writes compose there too; the
-        // plan half is 1.0 outside a move because the move tail clears it).
-        f *= self.w.turn.settle_pay_factor;
-        // The caller's formula scale (1000 = ×1.0; 0 = free; negative clamps
-        // to 0). Always multiplied -- it is a milli-unit figure, not a
-        // 「0 means unset」 prop.
-        f *= f64::from(milli_scale.max(0)) / 1000.0;
-        // A prop the tile does not carry reads as its default `0`, which here
-        // means 「no scale」 (×1.0) rather than ×0 -- only a positive milli value
-        // is a scale. [`purchase::tile_money_scale`] is the single source for
-        // that tile half (the standing quote reads the same figure).
-=======
-            let rf = (self.w.turn.plan.rent_factor * 1_000_000.0).round() as i64;
+            let rf = (self.w.plan().rent_factor * 1_000_000.0).round() as i64;
             milli = milli.saturating_mul(rf) / 1_000_000;
         }
         milli = milli.saturating_mul(i64::from(milli_scale.max(0)) * 1000) / 1_000_000;
->>>>>>> master
         if let Some(t) = tile {
             milli = milli.saturating_mul(purchase::tile_money_milli(&self.w, t, rent)) / 1_000_000;
         }
         if std::env::var_os("STAGE_DBG").is_some() {
-            eprintln!("SCALE kind={kind:?} rent={rent} tile={tile:?} milli={milli} amount={amount}");
+            eprintln!(
+                "SCALE kind={kind:?} rent={rent} tile={tile:?} milli={milli} amount={amount}"
+            );
         }
         apply_milli_factor(amount, milli, modified)
     }
@@ -6306,7 +5887,8 @@ impl PlayCtx<'_> {
     fn counteract(&mut self, t: &mut Trigger) -> Flow<()> {
         t.step = self.w.st.step;
         let rules = self.rules;
-        rules.counteract(self, t)
+        let r = rules.counteract(self, t)?;
+        Ok(r)
     }
 
     /// Build-and-raise a [`Trigger`], returning it as [`Self::counteract`] left it so

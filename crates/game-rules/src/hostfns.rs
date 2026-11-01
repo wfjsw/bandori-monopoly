@@ -207,8 +207,13 @@ pub fn rolls_by_player<C: HostCtx>(
 /// The `Trigger.roll` payload (postcard `Option<RollPayload>`), `&[]` outside a
 /// roll trigger.
 pub fn trigger_roll<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
-    let payload = c.st().wr().trigger().roll.as_ref().map(|r| {
-        card_sdk::abi::RollPayload {
+    let payload = c
+        .st()
+        .wr()
+        .trigger()
+        .roll
+        .as_ref()
+        .map(|r| card_sdk::abi::RollPayload {
             id: r.id,
             purpose: r.purpose,
             source: r.source,
@@ -221,8 +226,7 @@ pub fn trigger_roll<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, Ho
                 .map(|&(value, source)| card_sdk::abi::TriggerCast { value, source })
                 .collect(),
             final_face: r.final_face,
-        }
-    });
+        });
     write_postcard(c, &payload, buf, cap, "trigger_roll")
 }
 

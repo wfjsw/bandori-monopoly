@@ -167,34 +167,7 @@ impl World {
     pub fn set_settle_tile(&mut self, tile: i32) {
         self.plan_mut().settle_tile = tile;
     }
-<<<<<<< HEAD
-    /// Set a pay factor absolutely (milli; `500` = ×0.5). The `Auto` scope of
-    /// [`ctx::plan::set_pay_factor`](crate::engine::PlayCtx): the innermost live
-    /// scope -- `thisSettle` in a settle, else `thisMove` in a move, else
-    /// `nextMove`.
-    pub fn set_pay_factor(&mut self, milli: i32) {
-        let milli = milli.max(0);
-        if self.turn.settle_open > 0 {
-            self.turn.settle_pay_factor = self.turn.settle_base * f64::from(milli) / 1000.0;
-        } else if self.turn.move_open
-            || self
-                .turn
-                .plan_scope
-                .commands
-                .last()
-                .is_some_and(|c| self.turn.plan_scope.moves > c.moves_at_entry)
-        {
-            // An open move, or a command replaying after its own move: the
-            // write belongs to that move (staging is dropped at command end).
-            self.plan_mut().pay_factor = f64::from(milli) / 1000.0;
-        } else {
-            self.turn.next_move_pay_factor = milli;
-        }
-    }
 
-    /// Compose a pay factor into `scope` (milli). An unopened `this` scope
-    /// falls forward to its next instance; the milli buffers saturate.
-=======
     /// Compose a pay factor into `scope` (milli; `500` = ×0.5). Live factors
     /// **multiply** (规则书 支付阶段 4): 0.5 × 0.5 is a quarter and the order
     /// they were written in cannot matter. An unopened `this` scope falls
@@ -202,18 +175,11 @@ impl World {
     ///
     /// A re-executed body (STACK-01 answer replay) makes the same write again;
     /// the caller drops the replay's copy before calling (`Run::factor_write_key`).
->>>>>>> master
     pub fn multiply_pay_factor(&mut self, milli: i32, scope: PayFactorScope) {
         let milli = milli.max(0);
         match self.resolve_scope(scope) {
             PayFactorScope::ThisMove => {
-<<<<<<< HEAD
                 self.plan_mut().pay_factor *= f64::from(milli) / 1000.0;
-=======
-                self.turn.plan.pay_factor *= f64::from(milli) / 1000.0;
-                self.turn.plan.pay_fresh = true;
-                self.turn.plan.rent_fresh = true;
->>>>>>> master
             }
             PayFactorScope::ThisSettle => {
                 self.turn.settle_pay_factor *= f64::from(milli) / 1000.0;
@@ -282,19 +248,19 @@ impl World {
             .last()
             .is_some_and(|c| self.turn.plan_scope.moves > c.moves_at_entry);
         match scope {
-<<<<<<< HEAD
-            PayFactorScope::ThisMove if !self.turn.move_open && command_already_moved => {
-                PayFactorScope::ThisMove
-=======
             PayFactorScope::Auto => {
                 if self.turn.settle_open > 0 {
                     PayFactorScope::ThisSettle
-                } else if self.turn.move_open {
+                } else if self.turn.move_open || command_already_moved {
+                    // The replaying-command case is the same as an open move
+                    // below: the write belongs to that command's own move.
                     PayFactorScope::ThisMove
                 } else {
                     PayFactorScope::NextMove
                 }
->>>>>>> master
+            }
+            PayFactorScope::ThisMove if !self.turn.move_open && command_already_moved => {
+                PayFactorScope::ThisMove
             }
             PayFactorScope::ThisMove if !self.turn.move_open => PayFactorScope::NextMove,
             PayFactorScope::ThisSettle if self.turn.settle_open == 0 => PayFactorScope::NextSettle,
@@ -305,18 +271,13 @@ impl World {
     /// Scale rent paid for this walk, milli-units and the same composition rule
     /// as [`Self::set_pay_factor`] -- 「地租减半」 twice is a quarter.
     pub fn set_rent_factor(&mut self, milli: i32) {
-<<<<<<< HEAD
-        self.plan_mut().rent_factor = f64::from(milli) / 1000.0;
-=======
         let milli = f64::from(milli.max(0)) / 1000.0;
         if self.turn.settle_open > 0 {
             self.turn.settle_rent_factor *= milli;
         } else {
             // No rent exists before a move: fall forward to the move plan.
-            self.turn.plan.rent_factor *= milli;
-            self.turn.plan.rent_fresh = true;
+            self.plan_mut().rent_factor *= milli;
         }
->>>>>>> master
     }
     /// May build away from the landing (not just on it).
     pub fn set_can_build(&mut self, on: bool) {

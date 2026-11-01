@@ -586,7 +586,10 @@ fn g04_void_walk_replaces_the_walk() {
     let (d, mut w) = setup(2);
     // A destination off the rolled route (the roll walks 1..=5).
     let target = first(&d, |x| !x.is_buyable() && x.name != d.tiles[0].name) as i32;
-    w.turn.fixed_roll = Some(5);
+    w.turn.fixed_roll = Some(crate::engine::world::FixedFace {
+        value: 5,
+        source: crate::engine::rules::RollSource::Unattributed,
+    });
     w.set_settles(false);
     let hook = move |cx: &mut PlayCtx, t: &mut Trigger| {
         if t.kind == "passTile" {
@@ -647,7 +650,10 @@ fn g04_void_walk_replaces_the_walk() {
 fn g04_replacement_settles_before_the_body_resumes() {
     let (d, mut w) = setup(2);
     let target = first(&d, |x| !x.is_buyable() && x.name != d.tiles[0].name) as i32;
-    w.turn.fixed_roll = Some(5);
+    w.turn.fixed_roll = Some(crate::engine::world::FixedFace {
+        value: 5,
+        source: crate::engine::rules::RollSource::Unattributed,
+    });
     let hook = move |cx: &mut PlayCtx, t: &mut Trigger| {
         match t.kind.as_str() {
             "moveAfter" => cx.log(0, Msg::new("marker.after")),
@@ -689,7 +695,10 @@ fn g04_replacement_settles_before_the_body_resumes() {
 fn g04_gate_refusal_restores_the_walk() {
     let (d, mut w) = setup(2);
     let target = first(&d, |x| !x.is_buyable() && x.name != d.tiles[0].name) as i32;
-    w.turn.fixed_roll = Some(5);
+    w.turn.fixed_roll = Some(crate::engine::world::FixedFace {
+        value: 5,
+        source: crate::engine::rules::RollSource::Unattributed,
+    });
     w.set_settles(false);
     let hook = move |cx: &mut PlayCtx, t: &mut Trigger| {
         if t.kind == "moveBefore" {
@@ -753,7 +762,10 @@ fn g04_gate_refusal_restores_the_walk() {
 fn g04_effective_steps_prefers_next_steps() {
     let (d, mut w) = setup(2);
     w.hidden[0].next_steps = Some(7);
-    w.turn.fixed_roll = Some(3);
+    w.turn.fixed_roll = Some(crate::engine::world::FixedFace {
+        value: 3,
+        source: crate::engine::rules::RollSource::Unattributed,
+    });
     w.set_settles(false);
     let hook = |cx: &mut PlayCtx, t: &mut Trigger| {
         if t.kind == "diceRollResult" {
@@ -781,7 +793,10 @@ fn g04_from_is_stamped_before_the_roll() {
     let (d, mut w) = setup(2);
     let start = first(&d, |x| !x.is_buyable()) as i32;
     w.set_start(Some(Tile(start)), "test");
-    w.turn.fixed_roll = Some(2);
+    w.turn.fixed_roll = Some(crate::engine::world::FixedFace {
+        value: 2,
+        source: crate::engine::rules::RollSource::Unattributed,
+    });
     w.set_settles(false);
     let hook = move |cx: &mut PlayCtx, t: &mut Trigger| {
         if t.kind == "diceRollBefore" {
@@ -806,7 +821,10 @@ fn g04_from_is_stamped_before_the_roll() {
 #[test]
 fn g04_extra_steps_add_is_relative() {
     let (d, mut w) = setup(2);
-    w.turn.fixed_roll = Some(3);
+    w.turn.fixed_roll = Some(crate::engine::world::FixedFace {
+        value: 3,
+        source: crate::engine::rules::RollSource::Unattributed,
+    });
     w.set_settles(false);
     let hook = |cx: &mut PlayCtx, t: &mut Trigger| {
         if t.kind == "passTile" && (t.tile == 1 || t.tile == 2) {

@@ -102,7 +102,11 @@ fn drain_until(t: &mut Table, needle: &str) {
 fn drain_until_choice(t: &mut Table) {
     loop {
         let Some(p) = t.prompt() else { return };
-        if p.kind == "choice" && p.options.iter().any(|o| format!("{o:?}").contains("starry_night_keep_new")) {
+        if p.kind == "choice"
+            && p.options
+                .iter()
+                .any(|o| format!("{o:?}").contains("starry_night_keep_new"))
+        {
             return;
         }
         t.decline();
@@ -126,13 +130,20 @@ fn zz_four_casts_keep_old_uses_the_pair_old() {
     t.roll(0).unwrap();
     assert!(t.counteract_offered(TAKI), "{}", t.dump_prompt());
     t.counteract(0, TAKI).unwrap();
-    assert_eq!(t.prompt().unwrap().title.key(), "cards:card-crychic.taki_again_title");
+    assert_eq!(
+        t.prompt().unwrap().title.key(),
+        "cards:card-crychic.taki_again_title"
+    );
     t.answer(0, 0).unwrap(); // reroll again
     drain_until(&mut t, "starry_night_keep_new");
     let k = t.option("starry_night_keep_old").unwrap();
     t.answer(0, k).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), 3, "keep-old must be the pair's old cast 3, not cast 0 (4)");
+    assert_eq!(
+        t.pos(0),
+        3,
+        "keep-old must be the pair's old cast 3, not cast 0 (4)"
+    );
 }
 
 #[test]

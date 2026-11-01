@@ -8,7 +8,10 @@ pub fn roll(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -
 }
 
 pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32 {
-    kani_host::call_i32(Op::roll_direct, [player_id, count, sides, purpose, source, 0])
+    kani_host::call_i32(
+        Op::roll_direct,
+        [player_id, count, sides, purpose, source, 0],
+    )
 }
 
 pub fn log(player_id: i32, ptr: i32, len: i32) {

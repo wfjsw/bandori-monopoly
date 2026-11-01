@@ -124,7 +124,14 @@ fn on_before(player_id: i32) -> card_sdk::Asked {
     // 「为此次投掷结果增加Yd4」 -- the dice are a real throw (skill source): its
     // `diceRollCast` pays per-cast listeners, and the sum is added onto the
     // face the window carries. `n` is the chosen Y; `add` the rolled sum.
-    let add = ctx::roll_direct(player_id, chosen, 4, RollPurpose::Effect, roll_source::SKILL)?.max(0);
+    let add = ctx::roll_direct(
+        player_id,
+        chosen,
+        4,
+        RollPurpose::Effect,
+        roll_source::SKILL,
+    )?
+    .max(0);
     let face = trigger::move_roll().unwrap_or_else(|| trigger::value());
     trigger::set_move_roll(face + add);
     ctx::log(

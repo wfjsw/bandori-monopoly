@@ -743,17 +743,13 @@ impl CardWorld for Run {
     fn set_move_settle_answer(&mut self, player_id: i32, answer: i32) {
         // An `Unanswered` write leaves the armed slot alone (`Match`'s
         // setter semantics).
-        if let Some(slot) =
-            game_core::engine::SettleAnswer::from_i32(answer).slot()
-        {
-            self.world.st.players[player_id.max(0) as usize]
-                .state_set("resolveOverride", slot);
+        if let Some(slot) = game_core::engine::SettleAnswer::from_i32(answer).slot() {
+            self.world.st.players[player_id.max(0) as usize].state_set("resolveOverride", slot);
         }
     }
     fn move_settle_answer(&self, player_id: i32) -> i32 {
         game_core::engine::SettleAnswer::from_i32(
-            self.world.st.players[player_id.max(0) as usize]
-                .state_get("resolveOverride"),
+            self.world.st.players[player_id.max(0) as usize].state_get("resolveOverride"),
         )
         .slot()
         .unwrap_or(0)
@@ -8907,10 +8903,18 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger.roll_source.as_i32() as i64
     }
     fn roll_purpose(&self) -> i64 {
-        self.trigger.roll.as_ref().map(|r| r.purpose as i64).unwrap_or(-1)
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.purpose as i64)
+            .unwrap_or(-1)
     }
     fn roll_rerolled(&self) -> bool {
-        self.trigger.roll.as_ref().map(|r| r.rerolled).unwrap_or(false)
+        self.trigger
+            .roll
+            .as_ref()
+            .map(|r| r.rerolled)
+            .unwrap_or(false)
     }
     fn roll_unused_face(&self) -> i64 {
         self.trigger
@@ -9201,11 +9205,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
 
     // -- turn plan / counters ----------------------------------------------
     fn plan_fixed_roll(&self) -> i64 {
-        self.world
+        let v = self
+            .world
             .turn
             .fixed_roll
             .map(|f| f.value as i64)
-            .unwrap_or(-1)
+            .unwrap_or(-1);
+        v
     }
     fn gains_this_turn(&self, seat: i64) -> i64 {
         if seat < 0 {

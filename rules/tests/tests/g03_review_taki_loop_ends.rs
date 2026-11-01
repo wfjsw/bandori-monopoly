@@ -50,7 +50,11 @@ fn zz_probe_taki_accepted_new_face_ends_the_loop() {
     t.roll(0).unwrap();
     assert!(t.counteract_offered(TAKI), "{}", t.dump_prompt());
     t.counteract(0, TAKI).unwrap();
-    assert!(t.dump_prompt().contains("taki_again"), "{}", t.dump_prompt());
+    assert!(
+        t.dump_prompt().contains("taki_again"),
+        "{}",
+        t.dump_prompt()
+    );
     t.answer(0, 0).unwrap(); // yes: another recast (9)
     let dump = t.dump_prompt();
     assert!(

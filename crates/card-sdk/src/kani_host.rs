@@ -386,8 +386,7 @@ pub enum Op {
     settle_outcome = 375,
     paid_in_settle_by = 376,
     rent_quote = 377,
-<<<<<<< HEAD
-    // v108 (G04): command-scoped plans, walk control and board geometry
+    // v111 (G04): command-scoped plans, walk control and board geometry
     // (`G04-move-plan` §3.3).
     set_forced = 378,
     set_main_override = 379,
@@ -403,7 +402,6 @@ pub enum Op {
     trig_move_effective_steps = 389,
     nearest_tile_on_axis = 390,
     farthest_tile_on_axis = 391,
-=======
     // v109: roll transactions (design G03).
     roll_recast = 398,
     roll_move = 399,
@@ -419,7 +417,6 @@ pub enum Op {
     move_settle_answer = 408,
     set_turn_end_settle_answer = 409,
     turn_end_settle_answer = 410,
->>>>>>> master
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

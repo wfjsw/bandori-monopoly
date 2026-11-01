@@ -41,8 +41,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // face (cast time), and the body replays over the same history after each
     // prompt, so comparing against the raw list would always match.
     fn others(player_id: i32, x: i32) -> alloc::vec::Vec<i32> {
-        let mut seen: alloc::vec::Vec<i32> =
-            ctx::rolls_by_player(player_id).into_iter().map(|r| r.abs()).collect();
+        let mut seen: alloc::vec::Vec<i32> = ctx::rolls_by_player(player_id)
+            .into_iter()
+            .map(|r| r.abs())
+            .collect();
         let x = x.abs();
         if let Some(pos) = seen.iter().rposition(|&v| v == x) {
             seen.remove(pos);

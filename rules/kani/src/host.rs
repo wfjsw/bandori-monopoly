@@ -1885,7 +1885,11 @@ pub fn arm_roll_pick(a: Args) -> i64 {
                     return 0;
                 }
                 let idx = index.max(0) as usize;
-                let idx = if idx >= t.n as usize { t.n as usize - 1 } else { idx };
+                let idx = if idx >= t.n as usize {
+                    t.n as usize - 1
+                } else {
+                    idx
+                };
                 let old = t.chosen as usize;
                 if idx != old {
                     t.unused = t.casts[old].value;
@@ -3448,7 +3452,8 @@ pub fn arm_target(a: Args) -> i64 {
             }
             let owner = w.tiles[tile as usize].owner;
             if owner >= 0 && (owner as usize) < w.n_players as usize {
-                w.targeted_count[owner as usize] = w.targeted_count[owner as usize].saturating_add(1);
+                w.targeted_count[owner as usize] =
+                    w.targeted_count[owner as usize].saturating_add(1);
             }
             tile as i64
         });

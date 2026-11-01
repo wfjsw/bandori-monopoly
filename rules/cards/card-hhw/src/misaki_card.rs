@@ -17,19 +17,11 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         &[ChainKind::DiceRollResult],
         // 规则书[反击]: 「触发结算前可打出此卡」 -- the window is the
         // `diceRollResult` timing, after the roll and before the settle.
-<<<<<<< HEAD
-        // 规则书: 「使用火罐进行移动掷骰后」 -- the fire-pot reroll is a charge
-        // roll, so `roll_source` is `CHARGE`.
-        // 规则书: 「位于你的移动起点与预定移动终点之间」 -- `between(owner) > 0`
-        // (there must be a rival to teleport to). The whole condition is
-        // `actor == owner && roll_source == 1 && between(owner) > 0`.
-=======
         // 「使用火罐进行移动掷骰后」 -- the fire recast stamps the transaction
         // with `roll_source::CHARGE` (the layer-keep die bank), which reaches
         // this Result window as `roll_source == 1`.
         // 规则书: 「位于你的移动起点与预定移动终点之间」 -- `between(owner) > 0`
         // (there must be a rival to teleport to).
->>>>>>> master
         "actor == owner && roll_source == 1 && between(owner) > 0",
         None,
         counteract).counter_reason(key!("misaki_card_when"))],
