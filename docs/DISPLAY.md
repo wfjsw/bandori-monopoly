@@ -192,3 +192,12 @@ above is display-only and lives only in `display.json`.
 Builder calls (`.text(...)` / `.display(...)` / `.color(...)` / `.art(...)` /
 …) stay in the rule sources. `dump_display` reads the defs directly; only the
 emission into `MetaRow` stops (ABI v86).
+
+## Name plates
+
+The roster's name plate is drawn from these display columns: `title` is the
+persona `display` and `color` is its accent (`ui/NameBanner.tsx`, geometry in
+`core/nameBanner.ts`). The plate used to be extracted art (`namePlate` in the
+asset manifest); the vector plate covers every roster row, variants included,
+so the art set no longer gates it. `tools/name-banner.py` builds the same
+shape for offline assets.

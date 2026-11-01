@@ -8,6 +8,7 @@ import { D } from "../core/data";
 import type { PersonaData } from "../core/types";
 import s from "./Character.module.css";
 import { Icon } from "./Icon";
+import { NameBanner } from "./NameBanner";
 import { t as tr } from "../i18n/t";
 
 /** Band filter tabs (CharacterGallery / character select / deck editor). */
@@ -76,16 +77,11 @@ export const Avatar = memo(function Avatar({ c, size = 64, className }: { c: Per
   );
 });
 
-/** The character's name plate art, or a CSS plate when the art has none. */
+/** The character's name plate, drawn from the roster row (colour, name, band). */
 export const NamePlate = memo(function NamePlate({ c, width = 355 }: { c: PersonaData; width?: number }) {
-  const src = charArt(D.artId(c), "namePlate");
-  if (src.includes("/name_")) return <img className={s.plate} style={{ width }} src={src} alt={c.display} />;
-  return (
-    <div className={s.cssPlate} style={{ width, ["--plate" as string]: bandColor(c.group) }}>
-      <b>{c.display}</b>
-      <small>{c.group}</small>
-    </div>
-  );
+  // The plate is drawn at its fitted length and scaled to `width` by CSS, so the
+  // letters keep their proportions however small the slot is.
+  return <NameBanner className={s.plate} style={{ width }} title={c.display} subtitle={c.group} color={c.color || bandColor(c.group)} />;
 });
 
 export const BandMark = memo(function BandMark({ band, className }: { band: string; className?: string }) {
