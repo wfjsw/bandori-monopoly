@@ -16,8 +16,6 @@ const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 /// Stored on the card instance (`FieldCard::props`), not in the player's
 /// keyed-state map, so the write stays inside this rule's scope.
 const PROP_TURN: &str = "charity.turn";
-/// Running count of the walk's `+2` steps this turn (instance prop).
-const PROP_EXTRA: &str = "charity.extra";
 // The per-tile first-pass marker is a dynamic instance prop, `charity.seen.<tile>`,
 // built inline; it has no const of its own.
 
@@ -32,10 +30,8 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
-        // TODO(规则书)（你若进行掷骰移动）: the book wants a dice move -- we gate on
-        //   `move.is_main_move`, which also takes roll-less card walks and misses forced
-        //   dice moves; the `PassTile` payload carries no rolled flag.
-        On::Action(Action::PassTile("card.placed && actor == owner && move.kind != Teleport && move.is_main_move && tile.id >= 0", Some(pass_applies), pass_tile)),
+        // 规则书: 「你若进行掷骰移动」 -- `move.rolled` is a dice move, forced or not.
+        On::Action(Action::PassTile("card.placed && actor == owner && move.kind != Teleport && move.rolled && tile.id >= 0", Some(pass_applies), pass_tile)),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
         On::Action(Action::TurnEndAfter("card.placed && actor == owner", None, turn_end_after)),
     ],
@@ -55,7 +51,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(player_id, ID, &Msg::new(key!("charity_show_note")));
     // Instance props (not player state): scoped to this placed card.
     ctx::set_prop(PROP_TURN, ctx::turn_key());
-    ctx::set_prop(PROP_EXTRA, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("charity_show_played")).player_id("who", player_id),
@@ -134,20 +129,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", t),
     );
-    // `set_extra_steps` assigns, so keep a running count on the instance and write
-    // the sum.
-    let mut extra = ctx::prop(PROP_EXTRA);
-    if extra < 0 {
-        extra = 0;
-    }
-    extra += 2;
-    ctx::set_prop(PROP_EXTRA, extra);
-    ctx::plan::set_extra_steps(extra);
-    // TODO(规则书)（使你的总移动数+2）: the book adds 2 to the total walk -- we only
-    //   write `TurnCtx::plan.extra_steps`, which the in-flight walk never
-    //   re-reads, so the +2 is a no-op on the walk it is earned on (BACKLOG
-    //   CRYSTAL-07). The running prop also overwrites any value another
-    //   `set_extra_steps` writer (`uika`) put on the plan.
+    // 规则书: 「使你的总移动数+2」 -- the walk re-reads this relative field every
+    // step, so the +2 lands on the walk it was earned on.
+    ctx::plan::add_extra_steps(2);
     Ok(())
 }
 

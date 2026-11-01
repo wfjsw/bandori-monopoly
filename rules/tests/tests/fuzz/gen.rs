@@ -107,7 +107,12 @@ pub fn share_surface(card: &str) -> Vec<String> {
 /// Pick a partner for `card` biased toward shared surfaces (falling back to a
 /// uniform draw over the full set).
 pub fn biased_partner(rng: &mut Rng, card: &str) -> String {
-    let shared = share_surface(card);
+    // `footprints.json` also keys an engine-side rule with the empty id; that
+    // name is not playable from a hand, so the partner pick skips it.
+    let shared: Vec<String> = share_surface(card)
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect();
     if !shared.is_empty() && rng.chance(75) {
         if let Some(p) = rng.pick(&shared) {
             return p.clone();

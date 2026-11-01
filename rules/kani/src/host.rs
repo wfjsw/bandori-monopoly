@@ -853,10 +853,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::teleport_as => {
-            let [a0, a1, ..] = a;
+            let [a0, a1, _, a3, ..] = a;
             world::with_world_mut(|w| {
                 if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
                     w.pos[a0 as usize] = a1;
+                }
+                if a3 != 0 {
+                    w.main_moved = true;
                 }
             });
             0
@@ -996,6 +999,29 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 0
             }
         }),
+        Op::trig_move_rolled => {
+            world::with_world(|w| (w.move_snap.present() && w.move_snap.rolled) as i64)
+        }
+        Op::trig_move_effective_steps => arm_trig_move_effective_steps(a),
+        // ---- v108 plan reads ----
+        Op::move_effective_steps => arm_move_effective_steps(a),
+        Op::move_forced => world::with_world(|w| w.forced as i64),
+        Op::move_planned_teleport => world::with_world(|w| w.teleport as i64),
+        Op::move_pay_factor => world::with_world(|w| w.plan_pay_factor) as i64,
+        // The model keeps no rent factor; 1000 (x1) is the neutral answer.
+        Op::move_rent_factor => 1000,
+        // ---- v108 plan setters / walk control / board geometry ----
+        Op::set_forced => arm_set_forced(a),
+        Op::set_main_override => arm_set_main_override(a),
+        Op::void_walk => arm_void_walk(a),
+        Op::clear_steps => arm_clear_steps(a),
+        Op::set_steps => arm_set_steps(a),
+        Op::set_teleport_to => arm_set_teleport_to(a),
+        Op::set_parity => arm_set_parity(a),
+        Op::add_extra_steps => arm_add_extra_steps(a),
+        // The engine resolves the axis readers against the board data; the
+        // model board is not enabled here, so they answer "no tile".
+        Op::nearest_tile_on_axis | Op::farthest_tile_on_axis => -1,
         // `mv.and_then(|m| m.roll).unwrap_or(-1)` — no-move and no-face are -1.
         Op::trig_move_roll => arm_trig_move_roll(a),
         Op::trig_roll_source => world::with_world(|w| w.trig_roll_source) as i64,
@@ -1063,12 +1089,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- move plan / settle (structure only; engine scheduling is
         //      PROTOCOL-LEVEL and out of Kani scope) ----
-        Op::set_steps
-        | Op::set_roller
+        Op::set_roller
         | Op::set_reverse
         | Op::set_signed
         | Op::set_stop_at
-        | Op::set_parity
         | Op::set_settles
         | Op::set_settle_tile
         | Op::set_rent_factor
@@ -1076,7 +1100,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::set_no_build
         | Op::set_build_anywhere
         | Op::set_kind
-        | Op::set_teleport_to
         | Op::set_start
         | Op::set_base_dice
         | Op::add_base_dice
@@ -1502,10 +1525,28 @@ pub fn arm_card_counter(a: Args) -> i64 {
     }) as i64
 }
 
+/// `run_planned_move` — `1` ran, `0` refused.
+///
+/// The engine's decision (`G04-move-plan` §4.10): a main move of the turn
+/// player whose slot is spent is refused, unless the call replaces the open
+/// walk (`window && main_override && void_walk && teleport` — the inlined
+/// `move_plan::replacement_taken`). An accepted main move latches the slot.
 pub fn arm_card_move(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    1
+    let player = a[0];
+    world::with_world_mut(|w| {
+        let is_main_move = player == w.turn_player && (!w.forced || w.main_override);
+        if is_main_move
+            && w.main_moved
+            && !(w.window && w.main_override && w.void_walk && w.teleport)
+        {
+            0
+        } else {
+            if is_main_move {
+                w.main_moved = true;
+            }
+            1
+        }
+    })
 }
 
 pub fn arm_card_offer_build(_a: Args) -> i64 {
@@ -1854,7 +1895,11 @@ pub fn arm_roll_pick(a: Args) -> i64 {
                     return 0;
                 }
                 let idx = index.max(0) as usize;
-                let idx = if idx >= t.n as usize { t.n as usize - 1 } else { idx };
+                let idx = if idx >= t.n as usize {
+                    t.n as usize - 1
+                } else {
+                    idx
+                };
                 let old = t.chosen as usize;
                 if idx != old {
                     t.unused = t.casts[old].value;
@@ -3563,7 +3608,8 @@ pub fn arm_target(a: Args) -> i64 {
             }
             let owner = w.tiles[tile as usize].owner;
             if owner >= 0 && (owner as usize) < w.n_players as usize {
-                w.targeted_count[owner as usize] = w.targeted_count[owner as usize].saturating_add(1);
+                w.targeted_count[owner as usize] =
+                    w.targeted_count[owner as usize].saturating_add(1);
             }
             tile as i64
         });
@@ -4034,6 +4080,71 @@ pub fn arm_protocol_stub(_a: Args) -> i64 {
 pub fn arm_stub_zero(a: Args) -> i64 {
     let _ = a;
     0
+}
+
+pub fn arm_trig_move_effective_steps(_a: Args) -> i64 {
+    world::with_world(|w| {
+        if w.move_snap.present() {
+            w.move_snap.effective as i64
+        } else {
+            0
+        }
+    })
+}
+
+/// `plan::effective_steps()` — the move's length as the plan stands.
+pub fn arm_move_effective_steps(_a: Args) -> i64 {
+    world::with_world(|w| {
+        game_kinds::move_plan::effective_steps(w.steps, None, w.move_snap.roll.max(0)) as i64
+    })
+}
+
+pub fn arm_set_forced(a: Args) -> i64 {
+    world::with_world_mut(|w| w.forced = a[0] != 0);
+    0
+}
+
+pub fn arm_set_main_override(a: Args) -> i64 {
+    world::with_world_mut(|w| w.main_override = a[0] != 0);
+    0
+}
+
+pub fn arm_void_walk(_a: Args) -> i64 {
+    world::with_world_mut(|w| w.void_walk = true);
+    0
+}
+
+pub fn arm_clear_steps(_a: Args) -> i64 {
+    world::with_world_mut(|w| w.steps = None);
+    0
+}
+
+pub fn arm_set_steps(a: Args) -> i64 {
+    world::with_world_mut(|w| w.steps = Some(a[0]));
+    0
+}
+
+pub fn arm_set_teleport_to(a: Args) -> i64 {
+    world::with_world_mut(|w| w.teleport = a[0] >= 0);
+    0
+}
+
+/// `2` canonicalizes to `0` (even), mirroring the engine.
+pub fn arm_set_parity(a: Args) -> i64 {
+    world::with_world_mut(|w| w.parity = if a[0] == 2 { 0 } else { a[0] });
+    0
+}
+
+pub fn arm_add_extra_steps(a: Args) -> i64 {
+    world::with_world_mut(|w| w.steps = Some(w.steps.unwrap_or(0) + a[0]));
+    0
+}
+
+/// Reader stubs whose "nothing here" answer is `-1` (geometry off the model
+/// board, missing payload).
+pub fn arm_stub_neg(a: Args) -> i64 {
+    let _ = a;
+    -1
 }
 
 // ===========================================================================

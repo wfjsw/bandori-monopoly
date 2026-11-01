@@ -103,19 +103,16 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             else {
                 return Ok(());
             };
+            // 规则书: 「你移动到你前方的下一个属于行动序列后一名玩家的格子」 -- an
+            // effect hop, never the main move.
+            ctx::plan::set_forced(true);
             ctx::plan::set_steps(i);
             ctx::plan::set_settles(false);
             // 规则书（2）: 「（1）效果未产生作用」 -- record the hit *before* the move:
             // the body re-runs from the landing tile and re-finds it at 0 above,
             // so the re-run reaches this write again.
             ctx::set_prop(PROP_HIT, 1);
-            // TODO(规则书)(ABI)（你移动到你前方的下一个属于行动序列后一名玩家的格子）:
-            //   the hop is an effect move, not the main move -- `run_planned_move`
-            //   treats it as the main move (refused once the main move is
-            //   spent, and it consumes the main move when it is not). Its bool
-            //   is the abnormal-gate answer, not whether the move ran, so a
-            //   spent main move still reads as a hit. Needs a `plan::set_forced`
-            //   export.
+            // The bool is "ran": a refused move (spent main slot / gate) is no hit.
             if !ctx::run_planned_move(player_id) {
                 // The abnormal gate blocked the move: (1) produced nothing.
                 ctx::set_prop(PROP_HIT, 0);

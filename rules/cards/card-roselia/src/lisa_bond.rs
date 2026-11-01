@@ -22,9 +22,6 @@ pub const LISA_BOND: CardDef = CardDef::new(
     // TODO(规则书): 「后」 names no stage number (closest is stage 13
     // 「传送后在终点触发重叠」). `MoveAfter` is 「移动后」 (行动阶段 13) --
     // the move-end point every movement case raises.
-    // TODO(规则书)（当你使用技能进行传送后）: the window is after any skill teleport --
-    //   a teleport nested inside a settle raises no `MoveAfter` (`card_teleport`
-    //   only writes the position at `move_depth > 0`), so the card is not offered.
     &[On::Counteract(
         &[ChainKind::MoveAfter],
         // 规则书: 「【反击】当你使用技能进行传送后，你可以打出此卡」

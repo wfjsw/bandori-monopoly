@@ -90,6 +90,11 @@ pub struct TileData {
     pub price: i32,
     pub house: i32,
     pub rent: Vec<i32>,
+    /// Board grid cell `[column, row]` for axis queries. `None` on boards
+    /// without a grid; skipped when absent so a coordinate-less board stays
+    /// byte-identical in a record.
+    #[serde(default, rename = "grid_cell", skip_serializing_if = "Option::is_none")]
+    pub grid_cell: Option<[i32; 2]>,
 }
 
 impl TileData {
@@ -348,6 +353,9 @@ pub struct GameData {
     /// [`Self::deck_book`].
     pub strategy_book: StrategyBook,
     card_by_id: HashMap<String, usize>,
+    /// Built once at load from the tile rows; index-aligned with `tiles`. Keeps
+    /// the axis queries allocation-free.
+    grid_cells: Vec<Option<[i32; 2]>>,
 }
 
 /// Host boot tables [`GameData::load`] reads: the board and the bot-naming
@@ -422,7 +430,9 @@ impl GameData {
             deck_book: DeckBook::default(),
             strategy_book: StrategyBook::default(),
             card_by_id: HashMap::new(),
+            grid_cells: Vec::new(),
         };
+        d.rebuild_grid_cells();
         // First card wins on duplicate ids.
         for (i, c) in d.cards.iter().enumerate() {
             if !c.id.is_empty() {
@@ -440,6 +450,28 @@ impl GameData {
             d.strategy_book = StrategyBook::parse_or_empty(&text);
         }
         Ok(d)
+    }
+
+    /// Rebuild the index-aligned grid cache after `tiles` changed (load, a
+    /// host board, a record restore).
+    pub fn rebuild_grid_cells(&mut self) {
+        self.grid_cells = self.tiles.iter().map(|t| t.grid_cell).collect();
+    }
+
+    /// The closest tile strictly along `axis` from `tile`, or -1.
+    pub fn nearest_tile_on_axis(&self, tile: i32, axis: i32) -> i32 {
+        usize::try_from(tile)
+            .ok()
+            .and_then(|t| game_kinds::move_plan::nearest_tile_on_axis(&self.grid_cells, t, axis))
+            .map_or(-1, |t| t as i32)
+    }
+
+    /// The farthest tile strictly along `axis` from `tile`, or -1.
+    pub fn farthest_tile_on_axis(&self, tile: i32, axis: i32) -> i32 {
+        usize::try_from(tile)
+            .ok()
+            .and_then(|t| game_kinds::move_plan::farthest_tile_on_axis(&self.grid_cells, t, axis))
+            .map_or(-1, |t| t as i32)
     }
 
     /// Card by id, first match.

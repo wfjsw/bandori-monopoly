@@ -53,6 +53,8 @@ pub fn ruleset() -> Ruleset {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestWorld {
     pub rng: u64,
+    /// The planned move (the refusal cleanup re-arms it).
+    pub plan: game_core::engine::MoveCtx,
     pub money: Vec<i32>,
     pub marks: Vec<(i32, i32, Msg)>,
     pub events: Vec<String>,
@@ -80,6 +82,7 @@ impl TestWorld {
     pub fn new(seed: u64) -> Self {
         Self {
             rng: seed,
+            plan: game_core::engine::MoveCtx::default(),
             money: vec![10_000; 4],
             marks: vec![],
             events: vec![],
@@ -492,5 +495,8 @@ impl CardWorld for TestWorld {
             .get(uid.max(0) as usize)
             .map(|(_, t)| *t)
             .unwrap_or(-2)
+    }
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx {
+        &mut self.plan
     }
 }

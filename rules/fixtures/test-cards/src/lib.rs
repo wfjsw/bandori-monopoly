@@ -598,6 +598,35 @@ const SETTLE_MUL_HALF: CardDef = CardDef::new(
     &[On::Filter(Filter::SettleMul("card.placed", None, half))],
 );
 
+/// The settle's 「地租」 twins: `settleRentAdd` (+100) and `settleRentMul`
+/// (×0.5) shape the rent leg of a settle only, so a card-driven leg of the
+/// same settle keeps its own figure.
+const SETTLE_RENT_ADD_100: CardDef = CardDef::new(
+    "TEST:settleRentAdd100",
+    &[On::Filter(Filter::SettleRentAdd("card.placed", None, add_100))],
+);
+
+const SETTLE_RENT_MUL_HALF: CardDef = CardDef::new(
+    "TEST:settleRentMulHalf",
+    &[On::Filter(Filter::SettleRentMul("card.placed", None, half))],
+);
+
+/// A second, non-rent leg of the settle: a body that pays 1000 on top.
+const SETTLE_PAY_1000: CardDef = CardDef::new(
+    "TEST:settlePay1000",
+    &[On::Action(Action::SettleBody(
+        "actor == owner && card.placed",
+        None,
+        settle_pay_1000,
+    ))],
+);
+
+fn settle_pay_1000(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("settle_pay_1000_done")));
+    ctx::pay(player_id, 1000, &Msg::new(key!("settle_pay_1000_reason")))?;
+    Ok(())
+}
+
 /// MONEY-01 idempotence probe: arm a 支付减半 and then settle a tile whose
 /// settle has to prompt, so the drive suspends and its prefix re-runs on the
 /// resume. The 减半 must land **once**.
@@ -2593,6 +2622,7 @@ card_sdk::ruleset!(&[
     SPLIT_12K, SHAPE_LATE, LOSE_RAW, SPEND_FIRE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB, SETTLE_CANCEL,
+    SETTLE_RENT_ADD_100, SETTLE_RENT_MUL_HALF, SETTLE_PAY_1000,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     QUIET_COUNTER, QUIET_RAISE,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,

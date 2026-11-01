@@ -1291,12 +1291,14 @@ fn eve_exclusive_crystal_per_draw() {
     t.begin_turn(0);
     while t.prompt().is_some() {
         let p = t.expect_prompt();
+        eprintln!("DBG prompt {}", p.title.key());
         if p.title.key().contains("pastel") {
             let _ = t.answer(0, 0);
         } else {
             t.decline();
         }
     }
+    eprintln!("DBG keys {:?}", t.keys_since(0));
     assert_eq!(
         t.crystals(0, "PP:[若宫伊芙]属于我的武士道！").unwrap_or(0),
         1,

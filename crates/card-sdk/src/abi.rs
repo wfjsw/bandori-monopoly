@@ -761,7 +761,7 @@ use crate::intern::NameId;
 ///    `settleAdd` / `settleMul` / `settleRentAdd` / `settleRentMul` (filters
 ///    128-131). The six kinds renumber around G03's `diceRoll*` Actions,
 ///    which claimed 123-125.
-pub const ABI_VERSION: i32 = 111;
+///
 /// v111: **offers from placed cards**. A clause a player may take on a placed
 ///    card is an `On::Action` hook whose **`declare`** asks at the event the
 ///    clause names, so declining it runs no body and leaves no flash and no
@@ -780,6 +780,7 @@ pub const ABI_VERSION: i32 = 111;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 15 -> 16** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 111;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -820,6 +821,30 @@ pub const ABI_VERSION: i32 = 111;
 ///
 ///    SAVE_VERSION / RECORD_VERSION unchanged (the new save fields are
 ///    `#[serde(default)]`).
+/// v111: **command-scoped move plans and walk control**. The turn plan is a
+///    staging buffer; every move runs on a frame owned by its command
+///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
+///    New imports: `ruleset_set_forced` (378), `ruleset_set_main_override` (379),
+///    `ruleset_void_walk` (380), `ruleset_clear_steps` (381),
+///    `ruleset_add_extra_steps` (382), `ruleset_move_planned_teleport` (383),
+///    `ruleset_move_pay_factor` (384), `ruleset_move_rent_factor` (385),
+///    `ruleset_move_effective_steps` (386), `ruleset_move_forced` (387),
+///    `ruleset_trig_move_rolled` (388),
+///    `ruleset_trig_move_effective_steps` (389),
+///    `ruleset_nearest_tile_on_axis` (390), `ruleset_farthest_tile_on_axis` (391).
+///    `MoveCtx.forced` is the `Forced` flag -- a forced move of the turn player
+///    is still the main move when `main_override` is set -- no longer "never the
+///    main move". `set_parity` canonicalizes `2` to `0` (even). The trigger move
+///    payload gains `rolled` and `effective`, surfaced as `move.rolled` /
+///    `move.effective`. SAVE_VERSION / RECORD_VERSION unchanged.
+
+/// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
+pub mod axis {
+    pub const UP: i32 = 0;
+    pub const DOWN: i32 = 1;
+    pub const LEFT: i32 = 2;
+    pub const RIGHT: i32 = 3;
+}
 
 // v107 wire code tables. Unknown values fall back (`Normal` / `Card`); an
 // unknown flag bit is ignored by the host decoder.
@@ -1730,9 +1755,7 @@ pub enum RollPurpose {
 }
 
 /// One cast of a roll, as the guest sees it.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TriggerCast {
     /// The face this cast produced.
     pub value: i32,
@@ -1744,9 +1767,7 @@ pub struct TriggerCast {
 /// Present on `diceRollCast` / `diceRollBefore` / `diceRollAdd` /
 /// `diceRollValue` / `diceRollAfter` / `diceRollResult` / `diceRollSettled`,
 /// and `None` on every other trigger.
-#[derive(
-    Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RollPayload {
     /// The transaction id (`ctx::roll_current` shape; `-1` when none).
     pub id: i32,

@@ -397,6 +397,13 @@ struct Saved {
 /// is live state, not a rebuildable view, so saves carry it.
 pub const SAVE_VERSION: u32 = 14;
 
+/// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
+/// variable, which wasm32 always answers `None` for: the browser build turns
+/// the same lines on with the `stage-dbg` cargo feature instead.
+pub fn stage_dbg() -> bool {
+    cfg!(feature = "stage-dbg") || std::env::var_os("STAGE_DBG").is_some()
+}
+
 /// A running match.
 pub struct Match {
     data: Arc<GameData>,
@@ -540,6 +547,7 @@ impl Match {
             Some(board) => {
                 let mut d = (*data).clone();
                 d.tiles = board.clone();
+                d.rebuild_grid_cells();
                 Arc::new(d)
             }
             None => data,
@@ -593,6 +601,7 @@ impl Match {
     pub fn set_board(&mut self, board: Vec<crate::data::TileData>) {
         let mut d = (*self.data).clone();
         d.tiles = board.clone();
+        d.rebuild_grid_cells();
         self.data = Arc::new(d);
         self.world.board = Some(board);
     }

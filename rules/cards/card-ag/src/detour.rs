@@ -213,14 +213,12 @@ fn apply_plan(player_id: i32, pick: DetourPick) {
             arm_no_reward(player_id);
         }
         2 => {
-            // TODO(规则书)（视为使用一次初始Afterglow角色的（2） 效果）: the step loop derives the next tile
-            // from the direction alone and never reads `Move.parity`, so the odd/even (2)
-            // (cases 2 and 3) is a no-op.
+            // 规则书: the (2) effect -- only 上/下 tiles until the roll is spent;
+            // the walk reads the frame's parity each step.
             ctx::plan::set_parity(1);
         }
         3 => {
-            // TODO(规则书)（视为使用一次初始Afterglow角色的（2） 效果）: same no-op as case 2 -- the walk never
-            // reads `Move.parity`.
+            // 规则书: the (2) effect -- only 左/右 tiles. `0` canonicalizes to even.
             ctx::plan::set_parity(0);
         }
         _ => {
@@ -246,18 +244,11 @@ fn counteract_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     // This entire thing should splitted to a separate function to keep uniform to the
     // play handler.
 
-    // TODO(规则书)[judgement]: TODO(规则书)（进行一次 “afterglow”式的移动）: 规则书(2): 「进行一次
-    // "afterglow"式的移动」 -- the pick was made at declaration time (`pick_plan`);
-    // `pick` is a [`PLANS`] index. The counter path writes the same `ctx::plan::*`
-    // the play path does -- `diceRollResult` runs before `walk`, so the plan is
-    // still live. which 「afterglow」 plan the counter is. See the judgement block at
-    // the foot of this file. TODO: This used to hard-code the reverse plan and
-    // diverged from `play`; it now shares `apply_plan`, which is a behaviour change
-    // on the counter path. `apply_plan` arms the CiRCLE veto itself for the reverse
-    // plan (case 0) -- the other plans have no 「不获得CiRCLE奖励」 clause. the walk cloned
-    // the move before this `diceRollResult` window and pulls only `roll`/`resolve`
-    // back, so these plan writes are lost -- the counter performs no afterglow move.
-    // The engine has to re-seed the move from `turn.plan` after the raise.
+    // TODO(规则书)[judgement]: 规则书(2): 「进行一次 "afterglow"式的移动」 -- the pick was
+    // made at declaration time (`pick_plan`); `pick` is a [`PLANS`] index. The
+    // counter path writes the same `ctx::plan::*` the play path does --
+    // `diceRollResult` runs inside the move frame and before `walk`, so the walk
+    // reads these writes. See the judgement block at the foot of this file.
     apply_plan(player_id, pick);
     // A counter's card is not placed, so the card's own hooks below have no
     // field instance to dispatch from: bind the def as a turn-scoped lingering

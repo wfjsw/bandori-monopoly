@@ -20,6 +20,10 @@ use card_sdk::abi::{roll_source, ActionKind, RollPurpose, TriggerKind};
 use card_sdk::{it, it_sub, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
+/// The caster (1-based). The hooks key on the [使用者], which the rule names,
+/// not on the field owner that happens to hold the card.
+const USER_KEY: &str = "eve_bushido_user";
+
 pub const EVE_BUSHIDO: CardDef = CardDef::new(
     "PP:[若宫伊芙]属于我的武士道！",
     &[
@@ -60,6 +64,7 @@ fn eve_bushido(player_id: i32) -> card_sdk::Asked {
         "PP:[若宫伊芙]属于我的武士道！",
         &Msg::new(key!("eve_bushido_note")),
     );
+    ctx::set_prop(USER_KEY, player_id + 1);
     // 规则书[手]: 「并投掷12d4，获得投掷结果*60的资金」
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
     let n = ctx::roll(player_id, 12, 4, RollPurpose::Effect, roll_source::CARD)?;
@@ -73,10 +78,19 @@ fn eve_bushido(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书[持续]（1）: 「[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）」 Pure guard for [`drew`] -- the
 /// activation gate. `false` means the card is not activated at all.
-// TODO(规则书)（[使用者]抽卡后）: the hook keys on the field [拥有者], not the card's
-//   [使用者]; placement is always on the caster's own field, so they coincide.
+///
+/// 规则书: 「[使用者]抽卡后」 -- the drawer must be the caster recorded at play,
+/// not merely the field owner.
 fn drew_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
+    if !ctx::is_placed() {
+        return false;
+    }
+    // A card put down without its play body (harness raw placement) recorded no
+    // caster: placement is always on the caster's own field, so fall back to the
+    // field owner rather than never firing.
+    let user = ctx::prop(USER_KEY);
+    let user = if user == 0 { player_id } else { user - 1 };
+    trigger::player_id() == user
 }
 
 fn drew(_player_id: i32) -> card_sdk::Asked {
@@ -112,17 +126,18 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     let a = ctx::roll(owner, 1, 6, RollPurpose::Effect, roll_source::CARD)?;
     // 规则书[持续]（2）2: 「[拥有者]投掷3d4」
     let b = ctx::roll(player_id, 3, 4, RollPurpose::Effect, roll_source::CARD)?;
-    // 规则书[持续]（2）3: 「如果平局则双方互不支付」 -- the 共鸣 rider is printed
-    // after the tie parenthetical, and paying the fuel still resolves its own
-    // effect, so the offer runs on a tie too (the amount stays 0).
+    // 规则书[持续]（2）3: 「如果[共鸣]则[支付]金额改为“投掷点差”×50」 -- the 共鸣
+    // rider is printed after the tie parenthetical and paying the fuel resolves
+    // its own effect, so the offer runs before the tie return too.
+    let resonated = crate::resonance::try_resonance(player_id)?;
+    // 规则书[持续]（2）3: 「如果平局则双方互不支付」
     if a == b {
-        let _ = crate::resonance::try_resonance(player_id)?;
         ctx::log(player_id, &Msg::new(key!("eve_bushido_tie")));
         return Ok(());
     }
     // 规则书[持续]（2）3: 「[支付]……房屋数量加1×100」
     let mut amount = (ctx::houses_of(at) + 1) * 100;
-    if crate::resonance::try_resonance(player_id)? {
+    if resonated {
         amount = (a - b).abs() * 50;
     }
     // 规则书[持续]（2）3: 「投掷点数低的玩家[支付]投掷点数高的玩家」

@@ -28,6 +28,11 @@ the deck and a `CardRules::event` hook but no rules crate, so every event fell
 through `StubRules::event` (「还没有移植」) and went straight to the discard --
 `MatchState::event_active` existed and was never written.
 
+An event's movement is **forced** (`plan::set_forced`): 「效果立刻生效」 happens
+outside the turn's 移动阶段, so it is never 主要移动 and may run with the main
+move already spent. A guest body that shapes the move sets the same flag the
+host stamps on the event's own raise.
+
 ## The crate: `rules/events`
 
 One crate, one `.rs` per event, one `CardDef` each -- the same authoring shape

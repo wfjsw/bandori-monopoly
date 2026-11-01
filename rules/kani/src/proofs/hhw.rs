@@ -36,14 +36,16 @@
 //!   host gap: the body sees an empty deck and takes the short-pile path.
 //!   Assertions stay fail-closed; the covers for the unreachable deck branches
 //!   will report the gap when CBMC runs.
-//! * `arm_card_move` is a protocol stub (returns 1, no Teleport / pos move).
+//! * `arm_card_move` models the refusal and the `main_moved` latch but not the
+//!   walk itself: it moves no `pos` and logs no Teleport. The misaki harness
+//!   rides that model (`G04-move-plan` §4.10, §8.3 item 11).
 //!   balloon-02's teleport frame is blocked-by that stub.
 
 use crate::harness::{self, SparsePlay};
 use crate::host;
 use crate::invoke;
 use crate::spec;
-use crate::world::{self, Effect, FieldCard, NameMap, MAX_LOG};
+use crate::world::{self, Effect, FieldCard, NameMap, World, MAX_LOG};
 
 // ---------------------------------------------------------------------------
 // Per-body host-op subsets. One dispatcher per card body the harnesses call,
@@ -55,6 +57,7 @@ use crate::world::{self, Effect, FieldCard, NameMap, MAX_LOG};
 /// `self_tile` / `pay_to` / trigger reads if a settle harness lands.
 crate::host_subset!(kkr_dispatch {
     pay => arm_pay,
+    pay_command => arm_pay_command,
     set_dest => arm_set_fate,
     log | effect => arm_log,
     tile_named => arm_tile_named,
@@ -79,6 +82,7 @@ crate::host_subset!(athletic_dispatch {
 /// Deck leg is blocked-by the unmodeled `CardPile::Deck` (see module docs).
 crate::host_subset!(believe_dispatch {
     pay => arm_pay,
+    pay_command => arm_pay_command,
     cards_in => arm_cards_in,
     log | effect => arm_log,
     others_count => arm_others_count,
@@ -122,6 +126,11 @@ crate::host_subset!(balloon_dispatch {
     | set_more_steps | add_base_dice | add_extra_dice => arm_protocol_stub,
     run_planned_move => arm_card_move,
     log | effect => arm_log,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// `HHW:（育美）` / `On::Play` → `rolls` (`hagumi_marks::play_kani`).
@@ -888,4 +897,174 @@ pub fn hhw_smoke_cover() {
     let x: bool = kani::any();
     kani::cover!(x, "hhw smoke");
     kani::cover!(!x, "hhw smoke no");
+}
+
+// ===========================================================================
+// C-HHW-misaki-card-01..03 — 「HHW:（美咲）」
+// 「[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至
+// 你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算
+// （视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。」
+//
+// G04 §8.3 item 11. The walk itself is protocol-level (the plan setters only
+// arm the model's `teleport` / flags); what this unit proves is the card's own
+// half: the replacement is armed as a main move and still runs on a **spent**
+// main slot inside a roll window (and is refused outside one), the fire is all
+// spent, and every other player on the landing (and its ±2 ring) pays 500.
+// Isolation: seats 0/1 live at tiles 0/5, the move is 0→10 forward, so seat 1
+// is the only rival between.
+// ===========================================================================
+
+/// `HHW:（美咲）` counteract body.
+crate::host_subset!(misaki_card_dispatch {
+    log => arm_log,
+    tile_count => arm_tile_count,
+    trig_move_effective_steps => arm_trig_move_effective_steps,
+    trig_move_from => arm_stub_zero,
+    trig_move_dir => arm_stub_zero,
+    others_count => arm_others_count,
+    others_at => arm_others_at,
+    player_pos => arm_player_pos,
+    tile_forward | dist => arm_dist,
+    opt_int => arm_opt,
+    ask => arm_ask,
+    count_held | count_held_name => arm_count_held,
+    held_max => arm_tok_max,
+    persona_skill => arm_band_skill,
+    field_instances => arm_protocol_stub,
+    raise => arm_raise,
+    spend_marker => arm_spend_marker,
+    trig_set_cancelled => arm_trig_set_cancelled,
+    set_kind | set_settles => arm_stub_zero,
+    set_teleport_to => arm_set_teleport_to,
+    set_main_override => arm_set_main_override,
+    void_walk => arm_void_walk,
+    run_planned_move => arm_card_move,
+    player_out => arm_player_out,
+    players_on_count => arm_players_on_count,
+    players_on_at => arm_players_on_at,
+    pay_command => arm_pay_command,
+});
+
+fn misaki_world(user: i32, window: bool) {
+    host::install_backend(misaki_card_dispatch);
+    // A wholly concrete world: the replacement rule is the only decision left
+    // and the symbolic version of it is proven in `proofs::move_plan`.
+    world::reset_world(World::new());
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        w.trig_player = user;
+        w.turn_player = user;
+        w.pos = [0, 5, 0, 0];
+        w.money = [0, 2000, 0, 0];
+        w.charge[0] = 3;
+        w.charge_max[0] = 3;
+        w.main_moved = true;
+        w.window = window;
+        w.move_snap = crate::world::MoveSnap {
+            kind: 0,
+            settles: true,
+            dir: 1,
+            from: 0,
+            remaining: 10,
+            total: 10,
+            roll: 10,
+            effective: 10,
+            rolled: true,
+            ..crate::world::MoveSnap::NONE
+        };
+    });
+}
+
+/// Shared iff at a concrete seat. `window` decides whether the call replaces
+/// the open walk; the slot is always already spent.
+fn misaki_card_iff_at(user: i32, window: bool) {
+    debug_assert!(user == 0);
+    misaki_world(user, window);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_hhw::misaki_card::counteract_kani(user));
+    let post = world::snapshot();
+
+    // 规则书: 「消耗所有火罐」 — every pot, even though only the roll needs it.
+    crate::kassert!(condition.charge[user as usize] == 3, "setup fire");
+    crate::kassert!(post.charge[user as usize] == 0, "all fire spent");
+    // 规则书: 「那格及相邻2格上的所有其他玩家[支付]你500资金」 — seat 1 stands on
+    // the chosen tile, so exactly one 500 leg moves.
+    crate::kassert!(
+        post.money[user as usize] == condition.money[user as usize] + 500,
+        "user gains 500"
+    );
+    crate::kassert!(
+        post.money[1] == condition.money[1] - 500,
+        "the rival pays 500"
+    );
+    // 规则书: 「并触发结算（视为你的主要移动）」 — the plan is armed as a
+    // replacement main move.
+    let (main_override, void_walk, teleport, window) =
+        world::with_world(|w| (w.main_override, w.void_walk, w.teleport, w.window));
+    crate::kassert!(main_override && void_walk && teleport, "replacement armed");
+    // The slot is spent; the replacement is what lets the call run.
+    // Not nested inside a `with_world_mut`: the arm opens its own borrow and a
+    // nested one would alias the same `&mut` world.
+    let again = host::arm_card_move([user, 0, 0, 0, 0, 0]);
+    crate::kassert!(
+        (again == 1) == window,
+        "runs inside the roll window, refused outside"
+    );
+    kani::cover!(window, "replacement taken");
+    kani::cover!(!window, "replacement refused");
+}
+
+/// Replacement on a spent main slot inside the `diceRollResult` window.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn misaki_card_replaces_a_spent_main_iff() {
+    misaki_card_iff_at(0, true);
+}
+
+/// Outside the window the same body is refused -- but its money still lands,
+/// so the card is not silent.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn misaki_card_refused_without_the_window_iff() {
+    let user = 0i32;
+    misaki_world(user, false);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_hhw::misaki_card::counteract_kani(user));
+    let post = world::snapshot();
+    crate::kassert!(
+        post.money[user as usize] == condition.money[user as usize] + 500,
+        "money lands even when the move is refused"
+    );
+    crate::kassert!(post.charge[user as usize] == 0, "fire is spent anyway");
+}
+
+/// MUTANT: the window alone (with `main_override` and the teleport) is not
+/// enough -- without `void_walk` the call is a second main move and the spent
+/// slot refuses what the replacement would have allowed.
+///
+/// `main_override` cannot be the mutation here: the seat is the turn player
+/// and the move is not forced, so `is_main_move` is already true and clearing
+/// the flag changes nothing (a forced world would only flip `is_main_move`,
+/// which runs the call through the else arm just the same).
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+#[kani::should_panic]
+pub fn misaki_card_window_alone_mutant() {
+    let user = 0i32;
+    misaki_world(user, true);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_hhw::misaki_card::counteract_kani(user));
+    // The mutation: take back the voided walk, keep everything else.
+    world::with_world_mut(|w| w.void_walk = false);
+    let post = world::snapshot();
+    crate::kassert!(
+        post.money[user as usize] == condition.money[user as usize] + 500,
+        "paid"
+    );
+    let again = host::arm_card_move([user, 0, 0, 0, 0, 0]);
+    crate::kassert!(again == 1, "mutant: window alone still runs");
+    kani::cover!(again == 0, "refused");
 }

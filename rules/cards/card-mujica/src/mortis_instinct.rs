@@ -7,6 +7,7 @@
 //! implemented yet (`run` only logs), and a [反击] card copied may be played in
 //! that window.
 
+use card_sdk::abi::ChainKind;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -14,11 +15,10 @@ pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
     &[
         On::Play("", None, play),
-        // TODO(ABI) counteraction link list: `&[]` maps to an empty trigger list,
-        // which the host never dispatches, so this entry is offered at no chain
-        // kind. The kinds depend on the card being copied (dynamic); needs a
-        // dynamic counteract mask, or an empty-links = all-kinds convention.
-        On::Counteract(&[], "", Some(can_counteract), counteract).counter_reason(key!("mortis_instinct_when")),
+        // 规则书: 「（此卡复制[反击]卡时可在符合条件时打出）」 -- the copied card's
+        // own kind decides when it is offered; `Card` is the playable link the
+        // copy is declared under.
+        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract).counter_reason(key!("mortis_instinct_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)

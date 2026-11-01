@@ -726,8 +726,10 @@ fn please_choose_opt2_teleports_counteractor_without_settle() {
     t.dice(&[1]);
     t.roll(1).unwrap();
     t.counteract(0, "RAS:PLEASE CHOOSE").unwrap();
-    // The settler picks between the two options; pick opt2 (index 1).
-    t.answer(1, 1).unwrap();
+    // The settler picks opt2 (only option: no designating card in hand, so
+    // option (1) is not offered).
+    assert_eq!(t.expect_prompt().options.len(), 1, "{}", t.dump_prompt());
+    t.answer(1, 0).unwrap();
     drain(&mut t);
     assert_eq!(
         t.pos(0),
@@ -2006,8 +2008,9 @@ fn interaction_please_choose_opt2_is_an_abnormal_move() {
     t.dice(&[1]);
     t.roll(1).unwrap();
     t.counteract(0, "RAS:PLEASE CHOOSE").unwrap();
-    t.answer(1, 1).unwrap(); // opt2: teleport p0 to p1
-                             // 安可 may now open against the teleport.
+    // opt2: teleport p0 to p1 (the only option here: no designating card in hand)
+    t.answer(1, 0).unwrap();
+    // 安可 may now open against the teleport.
     if t.counteract_offered("通用:安可") {
         t.counteract(0, "通用:安可").unwrap();
         drain(&mut t);

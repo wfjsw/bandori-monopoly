@@ -28,6 +28,7 @@
   "anim.chainKind.pass": "经过",
   "anim.chainKind.passPlayer": "经过玩家",
   "anim.chainKind.settleBefore": "结算前",
+  "anim.chainKind.spendBefore": "充能支付前",
   "anim.chainKind.settle": "结算",
   "anim.chainKind.mortgage": "抵押",
   "anim.chainKind.pay": "支付",

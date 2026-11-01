@@ -98,8 +98,10 @@ fn hina_sound(player_id: i32) -> card_sdk::Asked {
     // 规则书[特]（1）: 「可替代……的专属卡」 -- run the chosen exclusive card's [手]
     // (大和麻弥 has no [手]; it is placed instead).
     if sub == MAMI {
-        // 大和麻弥 has no [手]: its only play entry is the pile-swap press.
+        // 大和麻弥 has no [手]: its only play entry is the pile-swap press, which
+        // needs the card placed first. The [共鸣] it prints runs inside `swap`.
         ctx::place_card(player_id, sub, &as_msg);
+        crate::infinite_possibility::swap(player_id)?;
     } else {
         ctx::play_card(sub, player_id)?;
     }

@@ -69,13 +69,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if price <= 0 {
         return Ok(());
     }
-    // TODO(规则书)（从该玩家处收购该地契）: 规则书[反击]: 「从该玩家处收购该地契」 -- `ctx::acquire`
-    // (`docs/PURCHASE.md`) is the 收购 pipeline: pay to `from`, then assign → `bought`
-    // → `buyAfter`. HOST-06: `acquire` answers whether the deed actually changed
-    // hands. A refused acquire (`BuyGate` / unpaid) must not log one. the cell calls
-    // it 「收购」, not 「购买」, but `acquire` runs the purchase gate `buyGate` (a 「不能购买」
-    // refuses the 收购), raises the 「购买…时」 listeners (C-Q4 4b), and clears the
-    // mortgage on the hand-over (C-Q4 4c).
+    // 规则书[反击]: 「从该玩家处收购该地契」 -- `ctx::acquire` (`docs/PURCHASE.md`)
+    // is the 收购 pipeline: pay to `from`, then assign → `bought` → `buyAfter`.
+    // HOST-06: `acquire` answers whether the deed actually changed hands. A
+    // refused acquire (`BuyGate` / unpaid) must not log one. The cell calls it
+    // 「收购」, not 「购买」, but `acquire` runs the purchase gate `buyGate` (a
+    // 「不能购买」 refuses the 收购) and raises the 「购买…时」 listeners (C-Q4 4b).
+    // The bought-back deed leaves the mortgage (C-Q4 4c): 「抵押」 in the cell is
+    // the *trigger*, not the state the deed keeps.
     if ctx::acquire(player_id, from, t, price) {
         ctx::log(
             player_id,

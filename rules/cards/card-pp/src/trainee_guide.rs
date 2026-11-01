@@ -85,8 +85,9 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     ctx::set_crystals(fans / 3);
     // TODO(规则书)（根据公开卡中的颜色数量添加一个单色/双色标记） 规则书[手]:
     // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」 -- `cards_in(Deck)` only reads the
-    // deck; the log below carries the distinct colour count, never the revealed
-    // cards. One distinct colour -> 1 mono mark; two or more -> 1 dual mark.
+    // deck; the reveal is logged card by card below and the distinct colour
+    // count drives the mark. One distinct colour -> 1 mono mark; two or more ->
+    // 1 dual mark.
     // OPEN-mark: the colour-count table and the 单色/双色标记 vocabulary are unprinted --
     // we guess 1 colour = mono, >=2 = dual.
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
@@ -97,8 +98,16 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
             seen.push(band);
         }
     }
-    // TODO(ABI) 公开抽卡区: the public reveal itself is missing -- the log gives the
-    //   colour count only; it should name the revealed cards too.
+    // 规则书[手]: 「公开[使用者]的抽卡区」 -- `cards_in` is a private guest read, so
+    // the log names every revealed card.
+    // TODO(ABI) 公开抽卡区: the reveal is log-only; there is no public zone the
+    //   other clients could inspect.
+    for c in deck.iter() {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("trainee_guide_reveal_card")).card("card", c.as_str()),
+        );
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("trainee_guide_revealed")).i("n", seen.len() as i64),

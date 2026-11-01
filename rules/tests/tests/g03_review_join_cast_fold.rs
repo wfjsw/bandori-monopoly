@@ -91,5 +91,9 @@ fn zz_probe_settled_carries_the_folded_face() {
         }
     }
     assert_eq!(t.pos(0), 24, "walk = fold(11) = 24; trace {seen:?}");
-    assert_eq!(settled, Some(24), "Settled must carry the folded face: {seen:?}");
+    assert_eq!(
+        settled,
+        Some(24),
+        "Settled must carry the folded face: {seen:?}"
+    );
 }

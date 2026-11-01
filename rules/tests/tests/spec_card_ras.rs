@@ -492,7 +492,15 @@ fn please_choose_contract() {
         let m0 = t.money(0);
         t.counteract(0, "RAS:PLEASE CHOOSE")
             .map_err(|e| format!("counteract: {e}"))?;
-        t.answer(1, 1).map_err(|e| format!("opt pick: {e}"))?;
+        // opt2 is the only option here: no designating card in the hand.
+        if t.expect_prompt().options.len() != 1 {
+            return Err(format!(
+                "C-RAS-please-choose-02: options {}: {}",
+                t.expect_prompt().options.len(),
+                t.dump_prompt()
+            ));
+        }
+        t.answer(1, 0).map_err(|e| format!("opt pick: {e}"))?;
         drain(&mut t);
         if t.pos(0) != SPACE {
             return Err(format!(

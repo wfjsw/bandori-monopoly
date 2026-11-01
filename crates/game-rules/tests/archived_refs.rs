@@ -41,7 +41,8 @@ fn ref_records() -> Vec<PathBuf> {
 /// `rebuilt.byte_id` (the loader's walk, `docs/REPLAY.md`).
 fn alias_map() -> std::collections::HashMap<String, String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../archive/engine/index.json");
-    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let index: serde_json::Value = serde_json::from_str(&text).expect("index parses");
     let mut out = std::collections::HashMap::new();
     for b in index["bundles"].as_array().into_iter().flatten() {

@@ -75,6 +75,11 @@ pub struct TriggerMove {
     /// Was this settle initiated by a card (`settle_tile_at`), not by the
     /// player's own move landing? Mirrors [`super::move_ctx::MoveCtx::settle_redirect`].
     pub settle_redirect: bool,
+    /// A die was cast for this walk (a `steps` walk and a teleport are `false`;
+    /// a `next_steps` override still casts, so it stays `true`).
+    pub rolled: bool,
+    /// The length the move will actually take.
+    pub effective: i32,
 }
 
 /// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
@@ -189,9 +194,7 @@ impl TriggerPay {
 /// `card_sdk::abi::roll_source`'s wire codes; the guest ABI still sees the `i32`.
 /// The engine never branches on a game name -- code `1` is the marker-funded
 /// roll that rules-layer clauses match by wire code.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]
@@ -309,6 +312,19 @@ impl Fold {
     }
 }
 
+/// `num / den` rounded half away from zero (0 when `den` is 0).
+fn half_rounded(num: i64, den: i64) -> i64 {
+    if den == 0 {
+        return 0;
+    }
+    let half = den.abs() / 2;
+    if (num >= 0) == (den > 0) {
+        num.saturating_add(half) / den
+    } else {
+        num.saturating_sub(half) / den
+    }
+}
+
 /// Apply one responder's write `v` to a fold stage (MONEY-01). Shared by the
 /// engine trigger and the host's payload mirror.
 pub fn fold_apply(fold: Fold, input: i32, value: &mut i32, millis: &mut i64, v: i32) {
@@ -323,9 +339,17 @@ pub fn fold_apply(fold: Fold, input: i32, value: &mut i32, millis: &mut i64, v: 
                 *value = v;
                 return;
             }
-            let factor = (i64::from(v) * 1_000_000) / i64::from(input);
+            // The factor `v / input` is rarely exact in millionths, and the
+            // running product is applied back to the input. Truncating both
+            // divisions loses up to a whole money unit per responder (a
+            // `half()` body over an odd figure loses its ceiling); round each
+            // half-away-from-zero instead, and leave the single money round
+            // (`ceil10`) to the end of the chain.
+            let (input, v) = (i64::from(input), i64::from(v));
+            let num = v.saturating_mul(1_000_000);
+            let factor = half_rounded(num, input);
             *millis = millis.saturating_mul(factor).saturating_div(1_000_000);
-            *value = (i64::from(input).saturating_mul(*millis) / 1_000_000)
+            *value = half_rounded(input.saturating_mul(*millis), 1_000_000)
                 .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
         }
     }
@@ -567,6 +591,8 @@ impl Trigger {
             roll: None,
             by_skill: m.by_skill,
             settle_redirect: m.settle_redirect,
+            rolled: m.rolled,
+            effective: m.effective_steps(),
         });
         self.is_main_move = m.is_main_move;
         self

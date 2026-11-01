@@ -534,6 +534,9 @@ pub struct PlayCtx<'a> {
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
+    /// A nested skill teleport's tail is raising (see
+    /// `PlayCtx::teleport_tail_only`). Transient.
+    pub(crate) in_teleport_tail: bool,
     /// `"card"` activation event ids currently open, innermost last. A nested
     /// drive groups under the top of this stack; `-1` at the bottom.
     pub activation: Vec<i32>,
@@ -909,7 +912,7 @@ impl<'a> PlayCtx<'a> {
         // at the request, not left stale from an earlier move.
         t.plan.settles = f.plan.settles;
         t.plan.pay_factor = f.plan.pay_factor;
-        if std::env::var_os("STAGE_DBG").is_some() {
+        if crate::engine::stage_dbg() {
             eprintln!(
                 "ADOPT rent_factor {} -> {} pay {} -> {}",
                 t.plan.rent_factor, f.plan.rent_factor, t.plan.pay_factor, f.plan.pay_factor
@@ -970,6 +973,27 @@ impl<'a> PlayCtx<'a> {
     /// stands until it is decided. Money is not overlaid at all: a `gain_fixed`
     /// is re-applied on the replay and the pipeline's own moves are routine
     /// effects, not guest writes.
+    /// Adopt the guest copy's move tags before handling a paused host request
+    /// on the live world. A body's `plan::set_tag` lands on its own copy, while
+    /// a nested settle's guards read the *live* plan (`card_settle_move` clones
+    /// it), so without this a redirect tag written right before the settle is
+    /// lost (`spec/abi/G04-move-plan.md` §4.3).
+    ///
+    /// Only the tags cross. Overlaying the whole frame would also move the
+    /// `*_plan` outcome lines' baseline: those compare against the guest copy's
+    /// own `was` (`plan::set_stop_at` etc.), and a live frame already carrying
+    /// the replay's earlier write would suppress the `log.outcome.*` line.
+    pub fn overlay_guest_plan_tags(&mut self, from: &World) {
+        if let (Some(dst), Some(src)) = (
+            self.w.turn.plan_stack.last_mut(),
+            from.turn.plan_stack.last(),
+        ) {
+            dst.plan.tags = src.plan.tags.clone();
+        } else {
+            self.w.turn.plan.tags = from.turn.plan.tags.clone();
+        }
+    }
+
     pub fn overlay_guest_state(&mut self, from: &World) {
         let mut o = GuestOverlay::default();
         let n = self.w.st.players.len().min(from.st.players.len());
@@ -1146,6 +1170,7 @@ impl<'a> PlayCtx<'a> {
             settle_stack: Vec::new(),
             ledger_exec: 0,
             state_raise_depth: 0,
+            in_teleport_tail: false,
             activation: Vec::new(),
             move_start: -1,
             move_depth: 0,

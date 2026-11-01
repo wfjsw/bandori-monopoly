@@ -82,5 +82,5 @@
   "trainee_guide_marks_added": "[共鸣] added 2 marks",
   "trainee_guide_note": "miracle crystals and mono/dual marks; hand limit −1",
   "trainee_guide_resonance_cost": "[共鸣] pay 500",
-  "trainee_guide_revealed": "Revealed the deck: {{n}} distinct colours"
-}
+  "trainee_guide_reveal_card": "Revealed \"{{card}}\"",
+  "trainee_guide_revealed": "Revealed the deck: {{n}} distinct colours"}

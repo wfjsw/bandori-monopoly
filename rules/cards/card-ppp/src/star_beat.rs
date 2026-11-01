@@ -76,8 +76,11 @@ fn money_has_digit5(player_id: i32) -> bool {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「[使用者]获得1层状态…随后减少1层」
     ctx::inc_slot(player_id, "star_beat.layers", 1);
-    // TODO(规则书)（下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房）:
+    // 规则书: 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房」 --
+    // the card must ride the field as the offer's carrier.
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_self_to_field(
         player_id,
         "PPP:STAR BEAT!",
@@ -133,12 +136,23 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Owned tiles within 5 the player can build on -- the offer's destinations.
-fn near_buildable(player_id: i32) -> alloc::vec::Vec<i32> {
+/// Owned tiles within 5 -- 「绝对距离5格以内自己拥有的格子」 (the target set).
+fn near_owned(player_id: i32) -> alloc::vec::Vec<i32> {
     let pos = ctx::player_pos(player_id);
     ctx::owned_tiles(player_id)
         .into_iter()
-        .filter(|&t| ctx::dist(pos, t) <= 5 && ctx::can_build_on(player_id, t))
+        .filter(|&t| ctx::dist(pos, t) <= 5)
+        .collect()
+}
+
+/// [`near_owned`] narrowed to what can actually be built now: `can_build_on`
+/// does not test affordability, so the offer checks the cost too. A tile left
+/// out this way must not burn the layer.
+fn near_buildable(player_id: i32) -> alloc::vec::Vec<i32> {
+    let money = ctx::money_of(player_id);
+    near_owned(player_id)
+        .into_iter()
+        .filter(|&t| ctx::can_build_on(player_id, t) && ctx::build_cost(t) <= money)
         .collect()
 }
 

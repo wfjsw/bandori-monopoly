@@ -8,6 +8,8 @@ description = "Shared match state, data models, step machine and Ruleset boundar
 # Measurement counters for docs/BOT.md §5 (B0). Off by default; zero
 # behavioural difference -- a few `AtomicU64` bumps in `Cx::world_copy`.
 bot-cost = []
+# `STAGE_DBG` for the wasm build, where the environment is empty.
+stage-dbg = []
 
 [dependencies]
 game-kinds = { path = "../game-kinds" }

@@ -336,6 +336,21 @@ const ARRAY_OPS: &[&str] = &[
     "settle_outcome",
     "paid_in_settle_by",
     "rent_quote",
+    // v108 (G04): plan setters, walk control and geometry readers.
+    "set_forced",
+    "set_main_override",
+    "void_walk",
+    "clear_steps",
+    "add_extra_steps",
+    "move_planned_teleport",
+    "move_pay_factor",
+    "move_rent_factor",
+    "move_effective_steps",
+    "move_forced",
+    "trig_move_rolled",
+    "trig_move_effective_steps",
+    "nearest_tile_on_axis",
+    "farthest_tile_on_axis",
 ];
 
 fn main() {

@@ -566,7 +566,6 @@ fn detour_counter_arms_the_next_roll_as_a_lingering_instance() {
     // The fixture cleared `resolve` for its own walk; the main move settles as
     // usual.
     t.m.world_mut().turn.plan.settles = true;
-    t.m.world_mut().turn.plan.resolve_fresh = true;
     let from = t.pos(0);
     let mark = t.mark();
     t.roll(0).unwrap();
@@ -577,19 +576,12 @@ fn detour_counter_arms_the_next_roll_as_a_lingering_instance() {
         0,
         "the one-shot latch was consumed"
     );
-    // ...and the lingering `DiceRollPlan` filter rewrote the main move's dice
-    // table to 1d6 (the base stays on the turn plan).
-    assert!(
-        t.m.world()
-            .turn
-            .plan
-            .base
-            .iter()
-            .any(|d| d.dice.count == 1 && d.dice.sides == 6),
-        "the next plan was rewritten to 1d6: {:?}",
-        t.m.world().turn.plan.base
-    );
-    // The second loaded face (4) is the walk distance.
+    // ...and the lingering `DiceRollPlan` filter rewrote this move's dice
+    // table to 1d6. The write lands on the roll's own live plan frame
+    // (`G04-move-plan.md` §3.2), so it is read by this roll and gone with the
+    // frame afterwards -- the cast face is the observable, not `turn.plan`.
+    // The second loaded face (4) is the walk distance; a d20 would take the
+    // first (3) instead.
     let roll = t
         .events_since(mark)
         .into_iter()
@@ -1312,4 +1304,87 @@ fn tiny_can_used_as_a_counter_asks_the_choice_and_forces() {
     );
     assert_eq!(t.pos(1), bandori, "30 is still the ge26 teleport");
     assert!(t.hand(0).is_empty(), "the counter card left the hand");
+}
+
+// ================================================================ G04 §8.2
+
+/// A Himari-bound table with the detour card and a forced dice walk in hand.
+/// The (2) press (which the detour's play gate depends on) needs a fire pot.
+fn detour_side_roll() -> Table {
+    let mut t = Table::new(&["上原绯玛丽", "户山香澄"]);
+    t.clean();
+    t.set_fire(0, 1, 1);
+    t.give(0, &["AG:回家的路上绕个道", "TEST:diceMover"]);
+    t.begin_turn(0);
+    skip_all(&mut t);
+    t
+}
+
+/// Counter the detour on the forced side roll and pick `option`.
+fn detour_counter_on_side_roll(t: &mut Table, option: &str) {
+    t.m.world_mut().turn.plan.forced = true;
+    t.dice(&[2]);
+    t.play(0, "TEST:diceMover").unwrap();
+    assert!(
+        t.counteract_offered("AG:回家的路上绕个道"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:回家的路上绕个道").unwrap();
+    let k = t
+        .option(option)
+        .unwrap_or_else(|| panic!("{option} not offered: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+}
+
+// 规则书 (1): 「此卡可作为反击使用」 -- 「已经移动过」 (the main move latched,
+// `cant_move_code` 2) is not the [停留] refusal (3), so the counter still opens.
+#[test]
+fn g04_detour_counter_opens_after_the_main_move_latched() {
+    let mut t = detour_side_roll();
+    t.set_pos(0, 10);
+    // `main_move` latches `main_moved` before the roll ladder, so the slot is
+    // spent by the time the `diceRollResult` window opens.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    assert!(
+        t.counteract_offered("AG:回家的路上绕个道"),
+        "a spent main move does not refuse the counter: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:回家的路上绕个道").unwrap();
+    t.decline();
+    skip_all(&mut t);
+}
+
+// 规则书 (2): 「指定你的此次移动仅在单/双数格上进行」 -- the parity step
+// lands on the nearest odd / even tile, never on the other parity.
+#[test]
+fn g04_detour_parity_lands_on_odd_or_even_tiles() {
+    // Odd: 10 -> 11 -> 13.
+    let mut t = detour_side_roll();
+    t.set_pos(0, 10);
+    detour_counter_on_side_roll(&mut t, "detour_opt_odd");
+    skip_all(&mut t);
+    assert_eq!(t.pos(0), 13, "2 odd steps from 10 land on 13");
+
+    // Even: 10 -> 12 -> 14.
+    let mut t = detour_side_roll();
+    t.set_pos(0, 10);
+    detour_counter_on_side_roll(&mut t, "detour_opt_even");
+    skip_all(&mut t);
+    assert_eq!(t.pos(0), 14, "2 even steps from 10 land on 14");
+
+    // Reverse: this walk keeps its direction; the next plan is the reversed
+    // one (「并将下一次的移动掷骰变更为1d6」 rides the same arming).
+    let mut t = detour_side_roll();
+    t.set_pos(0, 10);
+    detour_counter_on_side_roll(&mut t, "detour_opt_reverse");
+    skip_all(&mut t);
+    assert_eq!(t.pos(0), 12, "the countered side walk is not reversed");
+    t.m.world_mut().turn.plan.settles = true;
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.pos(0), 9, "the next (main) walk goes 3 backwards");
 }

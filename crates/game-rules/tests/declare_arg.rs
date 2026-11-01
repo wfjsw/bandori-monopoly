@@ -479,15 +479,16 @@ fn query_guard_sees_slugs_and_press() {
 
 /// `by_instance` of the last `invoked_frame` line (the invoked body logs it).
 fn frame_by(t: &Table) -> Option<i32> {
-    t.m.world()
-        .recent
-        .iter()
-        .filter(|e| e.msg.key().contains("invoked_frame"))
-        .filter_map(|e| match e.msg.args.get("by") {
-            Some(game_core::msg::Arg::Integer(v)) => Some(*v),
-            _ => None,
-        })
-        .next_back()
+    let mut last = None;
+    for e in t.m.world().recent.iter() {
+        if !e.msg.key().contains("invoked_frame") {
+            continue;
+        }
+        if let Some(game_core::msg::Arg::Integer(v)) = e.msg.args.get("by") {
+            last = Some(*v as i32);
+        }
+    }
+    last
 }
 
 /// The frame's `by_instance` is the **caller's** instance: an invocation from a

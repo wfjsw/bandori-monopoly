@@ -92,6 +92,15 @@ impl CondView for SnapshotView<'_> {
     fn move_by_skill(&self) -> bool {
         self.win.mv.by_skill
     }
+    fn move_rolled(&self) -> bool {
+        self.win.mv.rolled
+    }
+    fn move_effective(&self) -> i64 {
+        self.win.mv.effective
+    }
+    fn move_from(&self) -> i64 {
+        self.win.mv.from
+    }
     fn move_dir(&self) -> i64 {
         self.win.mv.dir
     }
@@ -450,7 +459,12 @@ impl CondView for SnapshotView<'_> {
             return 0;
         };
         let roll = roll.abs();
-        let start = self.pos(p);
+        // G04 item 12: the planned start, when one is stamped.
+        let start = if self.move_from() >= 0 {
+            self.move_from()
+        } else {
+            self.pos(p)
+        };
         let n = self.win.tile_count;
         if n <= 0 || start < 0 {
             return 0;

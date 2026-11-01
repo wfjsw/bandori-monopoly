@@ -82,5 +82,5 @@
   "trainee_guide_marks_added": "[共鸣] 添加了 2 个标记",
   "trainee_guide_note": "奇迹水晶与单色/双色标记；手牌上限 −1",
   "trainee_guide_resonance_cost": "[共鸣] 支付 500 资金",
-  "trainee_guide_revealed": "公开了抽卡区：{{n}}种颜色"
-}
+  "trainee_guide_reveal_card": "公开了「{{card}}」",
+  "trainee_guide_revealed": "公开了抽卡区：{{n}}种颜色"}

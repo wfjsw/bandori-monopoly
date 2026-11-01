@@ -960,3 +960,62 @@ fn interaction_ako_counter_vs_a_rent_payment() {
     drain(&mut t);
     assert!(t.state(0, "stun") + t.state(0, "stunStart") >= 1);
 }
+
+// ================================================================ G04 §8.2
+
+// 规则书: 「当你使用技能进行传送后」 -- a teleport nested inside a settle
+// (高松灯 诗超绊 (3)) is still a skill teleport, so the [反击] window opens.
+#[test]
+fn g04_lisa_bond_opens_after_a_nested_skill_teleport() {
+    const LISA_LINK: &str = "R:必然的联系（莉莎）";
+    let mut t = Table::new(&["今井莉莎", "户山香澄"]);
+    t.clean();
+    // P0 is Lisa (the card's `actor == owner`); the teleport is 诗超绊 (3),
+    // so P0 also carries the Tomori skill (`set_persona` only adds).
+    t.m.set_persona(1, "高松灯");
+    t.m.set_persona(1, "今井莉莎");
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &[LISA_LINK]);
+    t.set_draw(0, &["通用:安可"]);
+    t.set_fire(0, 4, 4);
+    let deed = tile("江户川公园");
+    t.set_pos(1, deed);
+    t.set_pos(0, deed + 2); // lands at deed+3, within 5 of P1
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    let mut pressed = false;
+    let mut offered = false;
+    for _ in 0..32 {
+        let Some(p) = t.prompt() else { break };
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori") {
+            let _ = t.answer_one(0); // the 诗超绊 (3) press: teleport to P1
+            pressed = true;
+        } else if t.counteract_offered(LISA_LINK) {
+            offered = true;
+            t.counteract(0, LISA_LINK).unwrap();
+        } else if p.kind == "player" {
+            // 「指定一个和你在同一地块的角色」 -- P1 stands on the landing.
+            let k = p
+                .options
+                .iter()
+                .position(|o| format!("{o:?}").contains("1"))
+                .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()));
+            t.answer(0, k as i32).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(pressed, "诗超绊 was offered; keys={:?}", t.recent_keys(20));
+    assert!(
+        offered,
+        "the nested skill teleport opened 必然的联系; keys={:?}",
+        t.recent_keys(20)
+    );
+    assert_eq!(t.pos(0), deed, "teleported onto P1");
+    assert!(
+        t.on_field(1, LISA_LINK),
+        "card placed on the same-tile target: {:?}",
+        t.field_ids(1)
+    );
+}

@@ -1180,6 +1180,10 @@ responders on one stage sum / multiply instead of the last one winning:
   resume (STACK-01). The body is re-executed from its start, so a factor write
   is idempotent per `(execution, writer, ordinal)` (`TurnCtx::factor_applied`):
   two settles after the resume each pay `R/2`, not `R/2` then `R/4`.
+* **G13** — the rent twins of G09: `TEST:settleRentAdd100` / `TEST:settleRentMulHalf`
+  are 「本次结算的[地租] +N / ×N」 and shape the rent leg only, so a card leg
+  forced in the same settle (`TEST:settlePay1000`) keeps its unshaped amount,
+  while a plain `settleMul` still shapes every leg.
 
 ### G2. Roll
 

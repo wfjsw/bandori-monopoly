@@ -157,11 +157,8 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书（3）: 「X为你收费格上的房屋数」 -- the **counted** value (「视为」),
-    // i.e. what the rent table was read at, not the standing houses.
-    // TODO(规则书)（3）: the sheet says 「房屋数」 without 「视为」; read as the
-    //   counted value because (2) has already redefined what 「房屋数」 means
-    //   for this player's tiles. A reading of the standing houses would make
-    //   X = 0 on the very tiles (2) lifted.
+    // i.e. what the rent table was read at, not the standing houses. A read of
+    // the standing houses makes X = 0 on the very tiles (2) lifted.
     let x = ctx::rent_houses_of(tile);
     // Disarm the half-charge before leaving: the 「视为」 ends with the card
     // (the `RENT_HOUSES` prop rides this instance), and 「受此效果影响获得额外

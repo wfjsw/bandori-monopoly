@@ -28,6 +28,7 @@
   "anim.chainKind.pass": "Pass",
   "anim.chainKind.passPlayer": "Pass player",
   "anim.chainKind.settleBefore": "Before settle",
+  "anim.chainKind.spendBefore": "Before charge spend",
   "anim.chainKind.settle": "Settle",
   "anim.chainKind.mortgage": "Mortgage",
   "anim.chainKind.pay": "Payment",

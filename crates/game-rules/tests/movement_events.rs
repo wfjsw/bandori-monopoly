@@ -13,7 +13,6 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
     t.set_pos(0, from);
     t.set_pos(1, 20);
     t.m.world_mut().turn.plan.reverse = reverse;
-    t.m.world_mut().turn.plan.reverse_fresh = true;
     t.dice(&[steps]);
     let mark = t.mark();
     t.roll(0).unwrap();
@@ -128,9 +127,9 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
     t.set_pos(0, 58);
     t.set_pos(1, 20);
     t.m.world_mut().turn.fixed_roll = Some(game_core::engine::FixedFace {
-            value: 64,
-            source: game_core::engine::rules::RollSource::Unattributed,
-        });
+        value: 64,
+        source: game_core::engine::rules::RollSource::Unattributed,
+    });
     let mark = t.mark();
     t.roll(0).unwrap();
     assert_eq!(t.expect_prompt().title.key(), "ask.pass_reward.title");

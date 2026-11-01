@@ -289,6 +289,12 @@ fn c05_cancels_one_designation_of_four() {
         let asked = t.asked();
         assert_eq!(asked.len(), 1, "{}", t.dump_prompt());
         let who = asked[0];
+        eprintln!(
+            "DBG who={who} kind={} text={} offered={}",
+            p.text.key(),
+            "",
+            t.counteract_offered("通用:网络链接异常")
+        );
         if who == 2 && t.counteract_offered("通用:网络链接异常") {
             t.counteract(2, "通用:网络链接异常").unwrap();
         } else {
@@ -297,6 +303,14 @@ fn c05_cancels_one_designation_of_four() {
         let _ = p;
     }
     // Expected (sheet): only P2's designation is cancelled; P1 and P3 pay.
+    eprintln!(
+        "DBG money {:?} {:?} {:?} {:?}",
+        t.money(0),
+        t.money(1),
+        t.money(2),
+        t.money(3)
+    );
+    eprintln!("DBG keys {:?}", t.keys_since(0));
     let x = ceil10(2000 / 3);
     assert_eq!(x, 670);
     // DISCREPANCY is recorded below if the engine negates the whole card.

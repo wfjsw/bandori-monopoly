@@ -412,7 +412,8 @@ fn a_fire_recast_carries_the_source_and_the_unused_face() {
     let mut m = match_with_rules("TEST:rollTrace", rules_with_fixtures());
     m.give_cards(1, &["TEST:fireRecast"]);
     m.act(1, &play("TEST:rollTrace")).expect("place the trace");
-    m.act(1, &play("TEST:fireRecast")).expect("place the recast");
+    m.act(1, &play("TEST:fireRecast"))
+        .expect("place the recast");
     m.world_mut().rng.load_dice(&[5, 3]);
     m.act(1, &NetMessage::act("roll")).expect("roll");
     decline_prompts(&mut m);
