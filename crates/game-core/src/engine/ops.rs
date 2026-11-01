@@ -152,7 +152,7 @@ impl World {
 
     /// Compose a pay factor into `scope` (milli). An unopened `this` scope
     /// falls forward to its next instance; the milli buffers saturate.
-    pub fn mul_pay_factor(&mut self, milli: i32, scope: PayFactorScope) {
+    pub fn multiply_pay_factor(&mut self, milli: i32, scope: PayFactorScope) {
         let milli = milli.max(0);
         match self.resolve_scope(scope) {
             PayFactorScope::ThisMove => {

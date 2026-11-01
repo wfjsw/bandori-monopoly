@@ -1376,7 +1376,7 @@ pub trait CardWorld: Clone + 'static {
     /// Scale money paid for this walk. Milli-units (500 = x0.5).
     fn set_pay_factor(&mut self, _v: i32) {}
     /// Compose a pay factor into a scope (`pay_factor_scope` code).
-    fn mul_pay_factor(&mut self, _milli: i32, _scope: i32) {}
+    fn multiply_pay_factor(&mut self, _milli: i32, _scope: i32) {}
     /// Scale rent paid for this walk, same units.
     fn set_rent_factor(&mut self, _v: i32) {}
     /// May this move build where it lands. `set_no_build` is the inverse

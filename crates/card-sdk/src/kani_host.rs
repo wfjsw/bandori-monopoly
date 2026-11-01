@@ -380,7 +380,7 @@ pub enum Op {
     pay_command = 369,
     trig_set_pay_kind = 370,
     trig_set_pay_shape = 371,
-    mul_pay_factor = 372,
+    multiply_pay_factor = 372,
     pay_factor = 373,
     settle_tile = 374,
     settle_outcome = 375,

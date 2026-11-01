@@ -1002,7 +1002,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::set_pay_factor => arm_set_pay_factor(a),
         Op::trig_set_pay_kind => arm_trig_set_pay_kind(a),
         Op::trig_set_pay_shape => arm_trig_set_pay_shape(a),
-        Op::mul_pay_factor => arm_mul_pay_factor(a),
+        Op::multiply_pay_factor => arm_multiply_pay_factor(a),
         Op::pay_factor => {
             world::with_world(|w| w.plan_pay_factor.saturating_mul(w.settle_pay_factor)) as i64
         }
@@ -3779,7 +3779,7 @@ fn resolve_scope(w: &crate::world::World, scope: i32) -> i32 {
     }
 }
 
-pub fn arm_mul_pay_factor(a: Args) -> i64 {
+pub fn arm_multiply_pay_factor(a: Args) -> i64 {
     let milli = a[0].max(0);
     world::with_world_mut(|w| match resolve_scope(w, a[1]) {
         1 => w.plan_pay_factor = w.plan_pay_factor.saturating_mul(milli),

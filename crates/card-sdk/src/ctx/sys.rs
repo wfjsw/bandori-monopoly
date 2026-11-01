@@ -1410,9 +1410,9 @@ mod abi {
         // v107: scoped pay factors and the settle / quote readers.
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_mul_pay_factor"
+            link_name = "ruleset_multiply_pay_factor"
         )]
-        pub fn mul_pay_factor(milli: i32, scope: i32);
+        pub fn multiply_pay_factor(milli: i32, scope: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_pay_factor"

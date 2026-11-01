@@ -2394,10 +2394,10 @@ impl CardWorld for Run {
     fn pay_factor(&self) -> i32 {
         self.world.pay_factor()
     }
-    fn mul_pay_factor(&mut self, milli: i32, scope: i32) {
+    fn multiply_pay_factor(&mut self, milli: i32, scope: i32) {
         self.stamp_skill_source();
         let scope = game_core::engine::PayFactorScope::from_i32(scope);
-        self.world.mul_pay_factor(milli, scope);
+        self.world.multiply_pay_factor(milli, scope);
         if scope == game_core::engine::PayFactorScope::ThisMove {
             // Written for the move this body shapes, not for a later one.
             self.world.turn.plan.pay_fresh = true;

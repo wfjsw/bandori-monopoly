@@ -15079,7 +15079,7 @@
   "reason": "`set_pay_factor` is an absolute write (`self.turn.plan.pay_factor = milli / 1000.0`, ops.rs:134-135; ABI doc: \"Replaces `pay_factor`\") while every other halving card (repaint.rs:78, saki_move.rs:64, sakiko_lead.rs:68) writes 500 onto the same never-reset `turn.plan`, and `scale_settle_payment` multiplies `turn.plan.pay_factor` as one of several factors (play.rs:2503). `main_move` seeds from that plan (play.rs:1346) and sakiko_lead writes 0.5 at turn start precisely so it reaches the main move, so a walk that already carries 0.5 and then hits the trap pays x0.5 instead of x0.25.",
   "recorded": false,
   "confidence": "high",
-  "suggest": "Multiply the current plan factor by 0.5 (add a `mul_pay_factor`, or write `ctx::plan::pay_factor * 500`).",
+  "suggest": "Multiply the current plan factor by 0.5 (add a `multiply_pay_factor`, or write `ctx::plan::pay_factor * 500`).",
   "verdict": "confirmed",
   "verify_note": "Cell text and line 116 verified verbatim. ops.rs:135 is an assignment, play.rs:2503 multiplies plan.pay_factor into the settle scale, plan is never reset between moves (play.rs:1384-1389, only next_turn rebuilds TurnCtx), and sakiko_lead/repaint/saki_move all write the same 500. BACKLOG C-Q28 only covers rent-vs-pay (different nouns); no TODO or BACKLOG item records this card. Combination reaches x0.5 instead of x0.25.",
   "verified": true,

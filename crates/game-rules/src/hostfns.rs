@@ -2928,8 +2928,8 @@ pub fn pay_factor<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st_mut().w().pay_factor())
 }
 
-pub fn mul_pay_factor<C: HostCtx>(c: &mut C, milli: i32, scope: i32) -> Result<(), HostError> {
-    c.st_mut().w().mul_pay_factor(milli, scope);
+pub fn multiply_pay_factor<C: HostCtx>(c: &mut C, milli: i32, scope: i32) -> Result<(), HostError> {
+    c.st_mut().w().multiply_pay_factor(milli, scope);
     Ok(())
 }
 

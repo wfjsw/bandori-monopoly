@@ -1020,7 +1020,7 @@ impl CardWorld for ConfWorld {
             self.next_move_pay_factor = milli;
         }
     }
-    fn mul_pay_factor(&mut self, milli: i32, scope: i32) {
+    fn multiply_pay_factor(&mut self, milli: i32, scope: i32) {
         let milli = milli.max(0);
         let scope = match game_core::engine::PayFactorScope::from_i32(scope) {
             game_core::engine::PayFactorScope::ThisMove if !self.move_open => {
@@ -2579,7 +2579,7 @@ fn op_trig_set_pay_kind_and_shape() {
     });
 }
 #[test]
-fn op_mul_pay_factor_scopes() {
+fn op_multiply_pay_factor_scopes() {
     big(|| {
         let conf = base_conf();
         let mut model = base_model();
@@ -2589,43 +2589,43 @@ fn op_mul_pay_factor_scopes() {
         conf.move_open = true;
         model.move_open = true;
         diff_get_with(
-            "mul_pay_factor thisMove",
+            "multiply_pay_factor thisMove",
             conf,
             model,
             |c| {
-                game_rules::hostfns::mul_pay_factor(c, 500, 1).unwrap();
+                game_rules::hostfns::multiply_pay_factor(c, 500, 1).unwrap();
                 game_rules::hostfns::pay_factor(c).unwrap() as i64
             },
             || {
-                rules_kani::host::dispatch(Op::mul_pay_factor, [500, 1, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::multiply_pay_factor, [500, 1, 0, 0, 0, 0]);
                 rules_kani::host::dispatch(Op::pay_factor, [0; 6])
             },
         );
         // `thisMove` without a move falls forward to `nextMove` (getter ignores it).
         diff_get_with(
-            "mul_pay_factor nextMove fallback",
+            "multiply_pay_factor nextMove fallback",
             base_conf(),
             base_model(),
             |c| {
-                game_rules::hostfns::mul_pay_factor(c, 500, 1).unwrap();
+                game_rules::hostfns::multiply_pay_factor(c, 500, 1).unwrap();
                 game_rules::hostfns::pay_factor(c).unwrap() as i64
             },
             || {
-                rules_kani::host::dispatch(Op::mul_pay_factor, [500, 1, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::multiply_pay_factor, [500, 1, 0, 0, 0, 0]);
                 rules_kani::host::dispatch(Op::pay_factor, [0; 6])
             },
         );
         // `thisSettle` without a settle falls forward to `nextSettle`.
         diff_get_with(
-            "mul_pay_factor nextSettle fallback",
+            "multiply_pay_factor nextSettle fallback",
             base_conf(),
             base_model(),
             |c| {
-                game_rules::hostfns::mul_pay_factor(c, 500, 3).unwrap();
+                game_rules::hostfns::multiply_pay_factor(c, 500, 3).unwrap();
                 game_rules::hostfns::pay_factor(c).unwrap() as i64
             },
             || {
-                rules_kani::host::dispatch(Op::mul_pay_factor, [500, 3, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::multiply_pay_factor, [500, 3, 0, 0, 0, 0]);
                 rules_kani::host::dispatch(Op::pay_factor, [0; 6])
             },
         );

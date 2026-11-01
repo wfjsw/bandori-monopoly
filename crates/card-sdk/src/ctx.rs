@@ -3035,8 +3035,8 @@ pub mod plan {
 
     /// Compose a pay factor into `scope` (milli). An unopened `this` scope
     /// falls forward to its next instance.
-    pub fn mul_pay_factor(milli: i32, scope: crate::abi::PayFactorScope) {
-        unsafe { sys::mul_pay_factor(milli, scope.as_i32()) }
+    pub fn multiply_pay_factor(milli: i32, scope: crate::abi::PayFactorScope) {
+        unsafe { sys::multiply_pay_factor(milli, scope.as_i32()) }
     }
 
     /// The scoped pay-factor product in milli: the move plan × every open
