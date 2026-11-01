@@ -14,7 +14,7 @@
 //!   mortgage; `FORCE_STAYS_MORTGAGED` (「获得的地契仍为抵押状态」) keeps it.
 
 use super::super::world::World;
-use super::super::{Cx, Flow};
+use super::super::{Flow, PlayCtx};
 use crate::data::GameData;
 use crate::state::MatchState;
 
@@ -116,7 +116,7 @@ pub struct Deal {
 /// the sim and `StubRules` run -- the price stages (`BuyAdd` → `BuyMul` →
 /// `BuySet`) sit on top of it in the rules crate.
 ///
-/// **Single source** for the land + standing-houses figure: `Cx::buy_price`,
+/// **Single source** for the land + standing-houses figure: `PlayCtx::buy_price`,
 /// `World::buy_price` and the tile quotes all call this, so the caption can
 /// never disagree with the charge.
 pub fn quote_native(data: &GameData, st: &MatchState, t: usize) -> i32 {
@@ -126,7 +126,7 @@ pub fn quote_native(data: &GameData, st: &MatchState, t: usize) -> i32 {
     tile.price + st.houses.get(t).copied().unwrap_or(0) * tile.house
 }
 
-/// The next-building cost (「建造费」). **Single source** for `Cx::build_cost`
+/// The next-building cost (「建造费」). **Single source** for `PlayCtx::build_cost`
 /// and `World::build_cost`.
 pub fn build_cost(data: &GameData, t: usize) -> i32 {
     data.tiles.get(t).map(|tile| tile.house.max(0)).unwrap_or(0)
@@ -163,15 +163,15 @@ pub fn half_ceil10(full: i32) -> i32 {
 /// Standing mortgage (`StubRules` / empty tile-rule instance). Shared by
 /// [`crate::engine::CardRules::deed_mortgage`]'s default and `WasmRules`'s
 /// empty-instance path.
-pub fn standalone_mortgage(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> {
+pub fn standalone_mortgage(cx: &mut PlayCtx, player: usize, tile: usize) -> Flow<bool> {
     cx.mortgage(player, tile, None)
 }
 
 /// Standing redeem (`StubRules` / empty tile-rule instance). Shared by
 /// [`crate::engine::CardRules::deed_redeem`]'s default and `WasmRules`'s
 /// empty-instance path.
-pub fn standalone_redeem(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> {
-    if cx.why_not_redeem(player, tile as i32, false).is_some() {
+pub fn standalone_redeem(cx: &mut PlayCtx, player: usize, tile: usize) -> Flow<bool> {
+    if cx.guard_redeem(player, tile as i32, false).is_some() {
         return Ok(false);
     }
     cx.redeem(player, tile)?;
@@ -181,14 +181,14 @@ pub fn standalone_redeem(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> 
 /// Standing buy (`StubRules` / empty tile-rule instance). Shared by
 /// [`crate::engine::CardRules::deed_buy`]'s default and `WasmRules`'s
 /// empty-instance path.
-pub fn standalone_buy(cx: &mut Cx, player: usize, tile: usize, kind: BuyKind) -> Flow<bool> {
+pub fn standalone_buy(cx: &mut PlayCtx, player: usize, tile: usize, kind: BuyKind) -> Flow<bool> {
     cx.buy(player, tile, kind)
 }
 
 /// Standing build (`StubRules` / empty tile-rule instance). Shared by
 /// [`crate::engine::CardRules::deed_build`]'s default and `WasmRules`'s
 /// empty-instance path.
-pub fn standalone_build(cx: &mut Cx, player: usize, tile: usize) -> Flow<bool> {
+pub fn standalone_build(cx: &mut PlayCtx, player: usize, tile: usize) -> Flow<bool> {
     cx.build(player, tile)
 }
 
@@ -421,7 +421,7 @@ pub fn tile_quotes(
                         value: redeem_cost(data, t),
                         max: None,
                     });
-                } else if w.why_not_build_on(data, me as i32, t as i32).is_none()
+                } else if w.cant_build_on(data, me as i32, t as i32).is_none()
                     && w.gate_open(rules, crate::engine::Gate::Pay, me)
                     && !st.players.get(me).is_some_and(|p| p.out())
                 {

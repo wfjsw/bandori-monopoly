@@ -26,7 +26,7 @@ Primary quotes:
 * **Quote:** 「**其拥有的[可购买格子]变成无主状态**并抽取3张其中格子的地契进行[拍卖]（少于3则全部）。」
 * **Trigger:** an observed input whose event window contains a `bankrupt` or
   `left` event for player `P`.
-* **Condition:** `P` owned at least one buyable tile in `pre`.
+* **Condition:** `P` owned at least one buyable tile in `condition`.
 * **Effect:** in `post`, no buyable tile is owned by `P`. (The auction of
   min(3, n) deeds is `G-BANKRUPT-04`; this one only checks the un-own step.)
 * **Frame:** n/a (read of `owners`).
@@ -87,10 +87,10 @@ Primary quotes:
 * **Source:** `rulebook-doc.md:135`
 * **Quote:** 「**其拥有的[可购买格子]变成无主状态**并抽取3张其中格子的地契进行[拍卖]（少于3则全部）。」
 * **Trigger:** a window that takes `P` out with `n > 0` buyable deeds in
-  `pre`, and the match is still playing afterwards.
-* **Condition:** `P` owned `n` buyable tiles in `pre`.
+  `condition`, and the match is still playing afterwards.
+* **Condition:** `P` owned `n` buyable tiles in `condition`.
 * **Effect:** the window logs an `auction_leftovers` sample of exactly
-  `min(3, n)` tiles, every one of which was `P`'s deed in `pre`.
+  `min(3, n)` tiles, every one of which was `P`'s deed in `condition`.
 * **Frame:** n/a (read of the event list).
 * **Rulings & OPEN:** which 3 of the n are drawn is the engine's shuffle -- the
   book only fixes the count. Mortgage status of the drawn deeds is

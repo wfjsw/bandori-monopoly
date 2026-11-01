@@ -204,23 +204,23 @@ pub fn band_idol_03_no_reward(effects: &[Effect]) -> bool {
 // ===========================================================================
 
 /// Post crystals after the automatic +1 (before any optional spend).
-pub fn band_idol_04_crystals_after_tick(pre: i32) -> i32 {
-    pre + 1
+pub fn band_idol_04_crystals_after_tick(condition: i32) -> i32 {
+    condition + 1
 }
 
 /// If the player takes the option: crystals -5, draw 1. Requires >= 5 after
 /// the tick (the text says 「移除此卡5个」 — the spend needs 5 present).
-pub fn band_idol_04_spend_ok(pre: i32, take: bool) -> bool {
+pub fn band_idol_04_spend_ok(condition: i32, take: bool) -> bool {
     if !take {
         true
     } else {
-        pre + 1 >= 5
+        condition + 1 >= 5
     }
 }
 
 /// Post crystals when the option is taken.
-pub fn band_idol_04_crystals_after_spend(pre: i32) -> i32 {
-    (pre + 1) - 5
+pub fn band_idol_04_crystals_after_spend(condition: i32) -> i32 {
+    (condition + 1) - 5
 }
 
 // ===========================================================================

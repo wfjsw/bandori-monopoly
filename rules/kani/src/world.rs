@@ -244,7 +244,7 @@ pub struct MoveSnap {
     /// `MoveKind`: 0 walk / 1 teleport. Stored as i32 so `World` stays `Copy`.
     pub kind: i32,
     /// Does the move settle where it lands?
-    pub resolve: bool,
+    pub settles: bool,
     /// Direction: 1 forward / -1 backward (guest + CEL encoding).
     pub dir: i32,
     /// 移动起点 (origin tile, 0-based).
@@ -253,18 +253,17 @@ pub struct MoveSnap {
     pub remaining: i32,
     /// Path length.
     pub total: i32,
-    /// `t.Move.Roll`; `-1` = no face to show (`None` in the engine).
     pub roll: i32,
     /// Per-card counters on the move (a [火罐] roll is card-owned state).
     pub tags: NameMap,
-    /// Was this settle initiated by a card (`card_settle_at`)?
+    /// Was this settle initiated by a card (`settle_tile_at`)?
     pub settle_redirect: bool,
 }
 
 impl MoveSnap {
     pub const NONE: MoveSnap = MoveSnap {
         kind: -1,
-        resolve: false,
+        settles: false,
         dir: 1,
         from: -1,
         remaining: 0,
@@ -755,7 +754,7 @@ pub struct World {
     pub pay_amount: i32,
     /// Trigger kind wire **spelling** (`TriggerKind::spelling`). `""` = none.
     /// The `trig_kind` hostcall writes these bytes; the IR `kind` scalar stores
-    /// `id_of` of the same spelling (`VarTy::Str`).
+    /// `id_of` of the same spelling (`VarType::Str`).
     pub trig_kind: &'static str,
     pub trig_target: i32,
     pub trig_tile: i32,
@@ -824,9 +823,9 @@ pub struct World {
     pub msg_name: u16,
     /// `Message.seat` — the holder / subject seat of the payload.
     pub msg_seat: i32,
-    pub msg_a: i32,
-    pub msg_b: i32,
-    pub msg_c: i32,
+    pub msg_arg0: i32,
+    pub msg_arg1: i32,
+    pub msg_arg2: i32,
     pub msg_tile: i32,
     /// Reply the handler set (`ctx::message::reply`).
     pub msg_reply: i32,
@@ -953,9 +952,9 @@ impl World {
             blocked_bands_n: 0,
             msg_name: 0,
             msg_seat: -1,
-            msg_a: 0,
-            msg_b: 0,
-            msg_c: 0,
+            msg_arg0: 0,
+            msg_arg1: 0,
+            msg_arg2: 0,
             msg_tile: -1,
             msg_reply: 0,
             msg_sender_uid: 0,
@@ -1165,7 +1164,7 @@ impl World {
     }
 
     /// Swap-remove the field instance `uid`; returns its card id when present.
-    /// Used by the host's unplace / deferred-fate (`set_dest`) commit.
+    /// Used by the host's unplace / deferred-dest (`set_dest`) commit.
     pub fn remove_field(&mut self, uid: i32) -> Option<u16> {
         let mut i = 0usize;
         while i < self.field_n as usize {
@@ -1378,7 +1377,7 @@ pub fn reset_world(w: World) {
     *world_mut() = w;
 }
 
-/// Snapshot for pre/post comparison. Effects and narration are the log.
+/// Snapshot for condition/post comparison. Effects and narration are the log.
 /// Field names are stable so existing proofs compile.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Snapshot {

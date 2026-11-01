@@ -5,7 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, text_slot, ActionKind, Message, Target};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -127,14 +127,14 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     // state bound to `tile:circle`, across in one move, applied before all
     // hooks that change settlement. Filed as ABI-13.
     if who >= 0 {
-        let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
+        let landing = trigger::move_settles() && trigger::move_remaining() <= 0;
         ctx::send(
             &Target::Board(CIRCLE_RULE.into()),
             "settleReward",
             &Message {
                 name: "settleReward".into(),
                 seat: who,
-                b: landing as i32,
+                arg1: landing as i32,
                 tile: at,
                 ..Default::default()
             },
@@ -164,7 +164,7 @@ fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     if ctx::is_start(at) {
         trigger::set_cancelled();
         // 「选择获得2层[停留]或失去500资金」 -- the settler picks one.
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             who,
             &Msg::new("log.event.rebuild_title"),
             &Msg::new("log.event.rebuild_ask"),

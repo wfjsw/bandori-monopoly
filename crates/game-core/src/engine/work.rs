@@ -1,21 +1,21 @@
 //! Explicit work stack for nested host routines (STACK-01).
 //!
 //! Nested `[触发结算]` used to recurse
-//! `card_settle_at → settle_at → raise → counteract → drive → apply_host_request → card_settle_at`
+//! `settle_tile_at → settle_tile_at → raise → counteract → drive → apply_host_request → settle_tile_at`
 //! with no depth bound. The Rust stack carried every level, so a long bot game
 //! (or a server `spawn_blocking` worker, ~2 MiB) overflowed.
 //!
 //! Structure now:
 //!
-//! * [`Cx::card_settle_at`] / [`Cx::settle_at`] enqueue a [`SettleFrame`] and
-//!   enter [`Cx::drain_work`] -- the **only** pump.
+//! * [`PlayCtx::settle_tile_at`] / [`PlayCtx::settle_tile_at`] enqueue a [`SettleFrame`] and
+//!   enter [`PlayCtx::drain_work`] -- the **only** pump.
 //! * A drive that needs a nested settle while the pump is already running
 //!   **suspends**: it pushes a resume work item and the settle job, then
 //!   returns [`Halt::suspended`](super::Halt). The pump runs the settle first,
 //!   then the resume -- the same order as the old synchronous nest, one Rust
 //!   frame deep.
 //! * Callers with work after a raise that can suspend insert a continuation at
-//!   the current [`Cx::suspend_base`] so it runs after the nested work.
+//!   the current [`PlayCtx::suspend_base`] so it runs after the nested work.
 //!
 //! Prompt halts (`Halt::Ask`) still unwind to [`Match::execute`](super::Match)
 //! and re-run the routine from its snapshot -- unchanged. A nested settle that
@@ -23,13 +23,13 @@
 //! work stack is transient and rebuilt by that re-run.
 
 use super::move_ctx::MoveCtx as Move;
-use super::Cx;
 use super::Flow;
+use super::PlayCtx;
 
 /// One unit of deferred host work. Created by the engine or by card rules
-/// (the wasm drive's resume frames) and run by [`Cx::drain_work`].
+/// (the wasm drive's resume frames) and run by [`PlayCtx::drain_work`].
 pub trait WorkItem {
-    fn run(self: Box<Self>, cx: &mut Cx) -> Flow<()>;
+    fn run(self: Box<Self>, cx: &mut PlayCtx) -> Flow<()>;
 }
 
 /// A `[触发结算]` of one tile for one player, plus how far it has got.
@@ -41,7 +41,7 @@ pub struct SettleFrame {
     pub stage: SettleStage,
     /// Owner of `at` when the settle opened (read once, as today).
     pub owner: i32,
-    /// Index of this frame's [`Cx::settle_stack`](super::Cx::settle_stack)
+    /// Index of this frame's [`PlayCtx::settle_stack`](super::PlayCtx::settle_stack)
     /// entry, or `usize::MAX` before the first step pushed it. A parked frame
     /// keeps its index, so a resume does not push again.
     pub stack_idx: usize,
@@ -85,7 +85,7 @@ pub struct SettleWork {
 }
 
 impl WorkItem for SettleWork {
-    fn run(self: Box<Self>, cx: &mut Cx) -> Flow<()> {
+    fn run(self: Box<Self>, cx: &mut PlayCtx) -> Flow<()> {
         // `step_settle` notes the op (rulebook depth cap).
         let mut frame = self.frame;
         cx.step_settle(&mut frame)
@@ -98,40 +98,40 @@ pub struct ContinueSettleWork {
 }
 
 impl WorkItem for ContinueSettleWork {
-    fn run(self: Box<Self>, cx: &mut Cx) -> Flow<()> {
+    fn run(self: Box<Self>, cx: &mut PlayCtx) -> Flow<()> {
         let mut frame = self.frame;
         cx.step_settle(&mut frame)
     }
 }
 
-/// Apply a card's post-drive fate (discard / hand / ...) once a resumed drive
-/// returns its dest. STACK-01: the fate used to sit on the Rust stack after
+/// Apply a card's post-drive dest (discard / hand / ...) once a resumed drive
+/// returns its dest. STACK-01: the dest used to sit on the Rust stack after
 /// `drive` returned; a suspension must run it from the work stack instead.
 pub struct AfterDriveFateWork {
-    pub f: Box<dyn FnOnce(&mut Cx) -> Flow<()>>,
+    pub f: Box<dyn FnOnce(&mut PlayCtx) -> Flow<()>>,
 }
 
 impl WorkItem for AfterDriveFateWork {
-    fn run(self: Box<Self>, cx: &mut Cx) -> Flow<()> {
+    fn run(self: Box<Self>, cx: &mut PlayCtx) -> Flow<()> {
         (self.f)(cx)
     }
 }
 
 /// Resume a card-rules drive / counteract that suspended for a nested settle.
 /// The closure owns the wasm-side state (call, answers, remaining jobs) and
-/// re-enters the bridge; it must not hold a borrow of `Cx`.
+/// re-enters the bridge; it must not hold a borrow of `PlayCtx`.
 pub struct ResumeFnWork {
-    pub f: Box<dyn FnOnce(&mut Cx) -> Flow<()>>,
+    pub f: Box<dyn FnOnce(&mut PlayCtx) -> Flow<()>>,
 }
 
 impl WorkItem for ResumeFnWork {
-    fn run(self: Box<Self>, cx: &mut Cx) -> Flow<()> {
+    fn run(self: Box<Self>, cx: &mut PlayCtx) -> Flow<()> {
         (self.f)(cx)
     }
 }
 
-impl<'a> Cx<'a> {
-    /// Is the work-stack pump running? A nested `card_settle_at` checks this
+impl<'a> PlayCtx<'a> {
+    /// Is the work-stack pump running? A nested `settle_tile_at` checks this
     /// and suspends instead of recursing.
     pub fn is_draining_work(&self) -> bool {
         self.draining_work
@@ -197,12 +197,12 @@ impl<'a> Cx<'a> {
         }
     }
 
-    /// Store / take the dest a resumed drive returned (card fate).
+    /// Store / take the dest a resumed drive returned (card dest).
     pub fn set_drive_dest(&mut self, dest: i32) {
-        self.last_drive_dest = Some(dest);
+        self.last_drive_fate = Some(dest);
     }
-    pub fn take_drive_dest(&mut self) -> Option<i32> {
-        self.last_drive_dest.take()
+    pub fn take_drive_fate(&mut self) -> Option<i32> {
+        self.last_drive_fate.take()
     }
 
     /// Pump the work stack until it is empty. The only iterative driver of

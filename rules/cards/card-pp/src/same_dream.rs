@@ -1,4 +1,3 @@
-//! `PP:同一个梦想` -- C# `CardSameDream`: +3 band crystals, flip fans for money,
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:同一个梦想`）:
 //! > 同一个梦想：
@@ -55,7 +54,7 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
             ctx::gain(
                 player_id,
                 flipped * 100,
-                &Msg::new(key!("same_dream_why")).i("n", flipped as i64),
+                &Msg::new(key!("same_dream_reason")).i("n", flipped as i64),
             )?;
         }
     }

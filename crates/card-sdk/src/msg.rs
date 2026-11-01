@@ -61,7 +61,7 @@ use serde::Deserialize;
 // Production wire form (wasm / native). Unchanged from master.
 // ---------------------------------------------------------------------------
 
-/// One typed argument, as the engine's `Msg.a` values.
+/// One typed argument, as the engine's `Msg.args` values.
 ///
 /// The tag names are the wire form (`{"player_id": 1}`); they must match the engine's
 /// `Arg` enum in `game-core/src/msg.rs`.
@@ -86,9 +86,11 @@ pub enum Arg {
     /// A persona (data name) -> its display name.
     Persona(String),
     /// Money / price (thousands separators).
-    N(i64),
+    #[serde(rename = "n")]
+    Number(i64),
     /// Count / dice value.
-    I(i64),
+    #[serde(rename = "i")]
+    Integer(i64),
     /// A nested message.
     Msg(Box<Msg>),
 }
@@ -105,9 +107,11 @@ pub enum Arg {
     derive(Deserialize)
 )]
 pub struct Msg {
-    pub k: String,
+    #[serde(rename = "k")]
+    pub key: String,
     /// Always present on the wire: postcard is not self-describing.
-    pub a: BTreeMap<String, Arg>,
+    #[serde(rename = "a")]
+    pub args: BTreeMap<String, Arg>,
 }
 
 // ---------------------------------------------------------------------------
@@ -130,9 +134,9 @@ pub const MAX_INLINE_ARGS: usize = 4;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Msg {
     /// Interned key id (`crate::intern::NameId.0`). 0 is a valid interned name.
-    k: u16,
+    key: u16,
     /// Inline args, little-endian integers. String args are recorded as 0.
-    a: [i64; MAX_INLINE_ARGS],
+    args: [i64; MAX_INLINE_ARGS],
     /// How many of `a` are live.
     n: u8,
 }
@@ -148,16 +152,16 @@ macro_rules! key {
 #[cfg(not(kani))]
 impl Msg {
     /// A message by key. Card keys: `Msg::new(key!("name"))`; engine keys (e.g.
-    /// `log.part.why`) may be used too.
+    /// `log.part.reason`) may be used too.
     pub fn new(key: &str) -> Self {
         Self {
-            k: key.into(),
-            a: BTreeMap::new(),
+            key: key.into(),
+            args: BTreeMap::new(),
         }
     }
 
     fn with(mut self, name: &str, arg: Arg) -> Self {
-        self.a.insert(name.into(), arg);
+        self.args.insert(name.into(), arg);
         self
     }
 
@@ -183,12 +187,12 @@ impl Msg {
 
     /// Money / price (thousands separators).
     pub fn n(self, name: &str, v: i64) -> Self {
-        self.with(name, Arg::N(v))
+        self.with(name, Arg::Number(v))
     }
 
     /// Count / dice value.
     pub fn i(self, name: &str, v: i64) -> Self {
-        self.with(name, Arg::I(v))
+        self.with(name, Arg::Integer(v))
     }
 
     /// A nested message.
@@ -234,7 +238,7 @@ impl Msg {
     fn push(mut self, v: i64) -> Self {
         let i = self.n as usize;
         if i < MAX_INLINE_ARGS {
-            self.a[i] = v;
+            self.args[i] = v;
             self.n = self.n.saturating_add(1);
         }
         self
@@ -281,7 +285,7 @@ impl Msg {
     #[inline(always)]
     pub fn abi_pair(&self) -> (i32, i32) {
         (
-            crate::intern::encode_handle(crate::intern::NameId(self.k)),
+            crate::intern::encode_handle(crate::intern::NameId(self.key)),
             self.n as i32,
         )
     }
@@ -309,7 +313,7 @@ mod tests {
         let m = Msg::new(crate::key!("placed"))
             .tile("tile", 3)
             .player_id("who", 1)
-            .msg("why", &Msg::new("x\"y"));
+            .msg("reason", &Msg::new("x\"y"));
         assert_eq!(roundtrip(&m), m);
         assert_eq!(roundtrip(&Msg::new("k")), Msg::new("k"));
     }
@@ -333,7 +337,7 @@ mod tests {
         // list these kinds under the same names. The engine wire is JSON with these
         // tags -- keep them in lockstep with game-core/src/msg.rs.
         assert_eq!(serde_json_tag(&Arg::PlayerId(1)), "playerId");
-        assert_eq!(serde_json_tag(&Arg::N(1)), "n");
+        assert_eq!(serde_json_tag(&Arg::Number(1)), "n");
         assert_eq!(serde_json_tag(&Arg::Msg(Box::new(Msg::new("x")))), "msg");
     }
 
@@ -344,8 +348,8 @@ mod tests {
             Arg::Tile(_) => "tile",
             Arg::Card(_) => "card",
             Arg::Persona(_) => "persona",
-            Arg::N(_) => "n",
-            Arg::I(_) => "i",
+            Arg::Number(_) => "n",
+            Arg::Integer(_) => "i",
             Arg::Msg(_) => "msg",
         }
     }
@@ -355,7 +359,7 @@ mod tests {
     #[cfg(not(kani))]
     fn production_msg_still_carries_typed_args() {
         let m = Msg::new("k").i("n", 7).player_id("who", 2);
-        assert_eq!(m.a.len(), 2);
-        assert_eq!(m.a.get("n"), Some(&Arg::I(7)));
+        assert_eq!(m.args.len(), 2);
+        assert_eq!(m.args.get("n"), Some(&Arg::Integer(7)));
     }
 }

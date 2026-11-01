@@ -19,15 +19,9 @@
 //! the user** or **called by a field event**, and both already have a hook:
 //!
 //! - **Started by the user** -- a skill button (the viewer's `MatchView.skills`
-//!   list). The player presses it, the effect runs. That is
-//!   [`On::Play`], gate and effect: `On::Play("", Some(why_not), run, None)` where the
-//!   gate is the "can I press this right now?" query (C# `Card.WhyNot`) and
-//!   `run` is what the press does.
-//! - **Called by a field event** -- the skill is a field card on the player
-//!   (C# `Fx`, from `MatchPlayer.field`), which is why [`On::Action`] reaches it.
-//!   It answers settlement points automatically, with no declaration and no
-//!   press. A fire cap that has to hold from the moment the character is taken
-//!   belongs here.
+//!   list). The player presses it, the effect runs. It answers settlement points
+//!   automatically, with no declaration and no press. A fire cap that has to hold
+//!   from the moment the character is taken belongs here.
 //!
 //! So there is no `On::Skill`. Inventing one would be a third axis for a
 //! question the two above already answer.

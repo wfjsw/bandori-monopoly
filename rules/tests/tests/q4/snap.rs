@@ -170,7 +170,10 @@ pub fn snapshot(w: &World) -> Snap {
         "turn.turn_start_pos".into(),
         format!("{:?}", t.turn_start_pos),
     );
-    m.insert("turn.turn_snap".into(), format!("{:?}", t.turn_snap));
+    m.insert(
+        "turn.turn_snapshot".into(),
+        format!("{:?}", t.turn_snapshot),
+    );
     m.insert("turn.turn_rolls".into(), format!("{:?}", t.turn_rolls));
     m.insert("turn.build_discount".into(), t.build_discount.to_string());
     m.insert(
@@ -265,7 +268,7 @@ pub fn is_bookkeeping(path: &str) -> bool {
             | "turn.main_moved"
             | "turn.main_steps"
             | "turn.turn_rolls"
-            | "turn.turn_snap"
+            | "turn.turn_snapshot"
             | "turn.turn_start_pos"
             | "turn.play_from_hand"
             | "next_turn_pending"

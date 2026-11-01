@@ -1,4 +1,3 @@
-//! `PPP:（沙绫）总有一天要给这片天空命名` -- C# `CardSaayaSky` (MatchHost.cs:9199-9240):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（沙绫）总有一天要给这片天空命名`）:
 //! > （沙绫）总有一天要给这片天空命名：
@@ -43,13 +42,9 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]),
 );
 
-/// The pass record (C# `CardSaayaSky._passed`): the uid of the copy the user
-/// walked past, so with two copies only the passed one reacts; 0 = none.
 const SLOT_PASSED: &str = "saaya_sky_passed";
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「将此卡放置在山吹面包房」 -- C# `H.PlaceFromPlay(c, c.Seat,
-    // H.TileNamed("山吹面包房"))`.
     let tile = ctx::tile_named("山吹面包房");
     ctx::set_dest(ctx::Dest::Field);
     // A pass from a previous time on the field must not fire again.
@@ -64,16 +59,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书（2）: 「[使用者][经过]此卡后」 -- C# `CardSaayaSky.PassTile` sets `_passed`.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && card.placed` is the pre. `self_tile` is a derived
+    // `actor == owner && card.placed` is the condition. `self_tile` is a derived
     // lookup (the tile this card is bound to).
     let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
-    // C# `_passed` is a bool: a second crossing of the same copy this turn must
-    // not schedule a second payout.
     let uid = ctx::self_uid();
     if ctx::slot(player_id, SLOT_PASSED) == uid {
         return Ok(());
@@ -91,16 +83,10 @@ fn passed_here(player_id: i32) -> bool {
     ctx::slot(player_id, SLOT_PASSED) == ctx::self_uid()
 }
 
-/// 规则书（2）: 「在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上」
-/// -- C# `CardSaayaSky.TurnEndAfter`.
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_PASSED, 0);
-    // 规则书（2）: 「获得1个[火罐]」 -- C# `H.GainFire(User, 1, CardName)`.
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;
-    // 规则书（2）: 「投掷3d20」 -- C# `H.Roll(User, 3, 20, CardName)`.
     let num = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
-    // 规则书（2）: 「将此卡放置在投掷结果的格子上」 -- C# `Tile = (num - 1) %
-    // H._tiles.Length` (the roll face minus one is the *tile index*, not a hop).
     let n = ctx::tile_count();
     if n <= 0 {
         return Ok(());

@@ -1,13 +1,13 @@
-//! Seat-view extras == server `view_extra` (`docs/BOT.md` §1).
+//! Seat-view extras == server `view_extras` (`docs/BOT.md` §1).
 //!
 //! The key equivalence test: for seeded games at several points, every seat's
 //! view is fed through the client path (`view_extras` -- determinize once,
 //! run the same gates) and compared against the server path
-//! (`Match::view_extra_typed` on the live match).
+//! (`Match::view_extras_typed` on the live match).
 //!
 //! Hard invariants (the gates read only public / own-exact state):
 //! * `playable` -- one flag per hand card, equal every time.
-//! * `est_cost` -- static card property, equal every time.
+//! * `estimated_cost` -- static card property, equal every time.
 //! * `skills` -- same list, same `enabled` / `reason`.
 //!
 //! `ai_answer` may diverge whenever the live match's precomputed [`Ask`] fill
@@ -118,7 +118,7 @@ struct Tallies {
 fn strip_extras(view: &mut SeatView) {
     view.ai_answer = None;
     view.playable = Vec::new();
-    view.est_cost = Vec::new();
+    view.estimated_cost = Vec::new();
 }
 
 fn compare_one(
@@ -131,7 +131,7 @@ fn compare_one(
     label: &str,
     strip: bool,
 ) {
-    let want = live.view_extra_typed(member);
+    let want = live.view_extras_typed(member);
     let mut view = SeatView::from_match(live, member);
     if strip {
         strip_extras(&mut view);
@@ -153,13 +153,13 @@ fn compare_one(
         );
     }
 
-    if got.est_cost == want.est_cost {
+    if got.estimated_cost == want.estimated_cost {
         t.est_cost_ok += 1;
     } else {
         t.est_cost_bad += 1;
         panic!(
-            "{label} member {member}: est_cost diverged: {:?} vs {:?}",
-            want.est_cost, got.est_cost
+            "{label} member {member}: estimated_cost diverged: {:?} vs {:?}",
+            want.estimated_cost, got.estimated_cost
         );
     }
 
@@ -268,7 +268,7 @@ fn seat_view_extras_match_the_server_on_seeded_games() {
 
     assert!(t.views > 50, "too few views sampled: {}", t.views);
     assert_eq!(t.playable_bad, 0, "playable must agree every time");
-    assert_eq!(t.est_cost_bad, 0, "est_cost must agree every time");
+    assert_eq!(t.est_cost_bad, 0, "estimated_cost must agree every time");
     assert_eq!(t.skills_bad, 0, "skills must agree every time");
     assert_eq!(
         t.ai_presence_bad, 0,
@@ -326,7 +326,7 @@ fn seat_view_extras_match_on_a_solo_frame_too() {
                 };
                 // Solo frame: extras remain on the view (`SeatView::from_match`
                 // filled them). `view_extras` must still agree with the live
-                // `view_extra_typed`.
+                // `view_extras_typed`.
                 compare_one(
                     &m,
                     member,

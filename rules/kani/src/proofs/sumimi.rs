@@ -27,9 +27,6 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 crate::host_subset!(idolband_dispatch {
     money => arm_money,
     gain | gain_typed | gain_fixed => arm_gain,
-    // 「将你的资金重设为3000」 is a raw set (C# `fixedAmount`) -- the body
-    // bypasses the paySplit* stages with `adjust_money`, which the model
-    // mirrors one-for-one (no pipeline either side).
     adjust_money => arm_adjust_money,
     log | effect => arm_log,
     state_get => arm_state_get,
@@ -43,7 +40,7 @@ crate::host_subset!(hina_pass_dispatch {
 /// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `after_move` — `gain_charge` + `set_dest`.
 crate::host_subset!(childhood_after_move_dispatch {
     gain_marker => arm_gain_marker,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
 });
 
 /// `Sumimi:一人两个甜甜圈` play body — pos / exile hold / slots / dest / place /
@@ -59,7 +56,7 @@ crate::host_subset!(two_donuts_dispatch {
     state_add => arm_state_add,
     raise_after => arm_raise_after,
     log_as => arm_log,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -98,7 +95,7 @@ fn play_gate_allows(idx: usize, player: i32) -> bool {
     let card = invoke::by_idx(idx);
     for on in card.on.iter() {
         if let card_sdk::On::PlayBody(e) = on {
-            return match e.why_not {
+            return match e.guard {
                 Some(g) => g(player).is_none(),
                 None => true,
             };
@@ -149,12 +146,12 @@ fn idolband_reset_iff_at(user: i32) {
         "C-SUMIMI-idolband-01: gate must allow exactly the not-redeemed case"
     );
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     if !playable {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "rejected play must not touch money"
         );
         let (logbuf, log_n) = log_slice();
@@ -163,9 +160,9 @@ fn idolband_reset_iff_at(user: i32) {
         return;
     }
 
-    let pre_money = pre.money[user as usize];
-    kani::cover!(pre_money < 3000, "pre money < 3000");
-    kani::cover!(pre_money >= 3000, "pre money >= 3000");
+    let pre_money = condition.money[user as usize];
+    kani::cover!(pre_money < 3000, "condition money < 3000");
+    kani::cover!(pre_money >= 3000, "condition money >= 3000");
 
     // DIRECT body call (ppcost).
     invoke::unwrap_done(card_sumimi::idol_and_band::idol_and_band_kani(user));
@@ -179,18 +176,24 @@ fn idolband_reset_iff_at(user: i32) {
     );
     crate::kassert!(
         post.money[user as usize] == spec::sumimi::idolband_post_money(pre_money),
-        "C-SUMIMI-idolband-02: post money must be exactly 3000 when pre < 3000"
+        "C-SUMIMI-idolband-02: post money must be exactly 3000 when condition < 3000"
     );
     for p in 0..MAX_PLAYERS {
         if p != user as usize {
-            crate::kassert!(post.money[p] == pre.money[p], "frame: other players' money");
+            crate::kassert!(
+                post.money[p] == condition.money[p],
+                "frame: other players' money"
+            );
         }
-        crate::kassert!(post.charge[p] == pre.charge[p], "frame: fire");
-        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
-        crate::kassert!(post.stay[p] == pre.stay[p], "frame: stay");
+        crate::kassert!(post.charge[p] == condition.charge[p], "frame: fire");
+        crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
+        crate::kassert!(post.stay[p] == condition.stay[p], "frame: stay");
     }
-    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
-    crate::kassert!(post.discard == pre.discard, "frame: discard bitset");
+    crate::kassert!(
+        world::arr8b_eq(post.hand, condition.hand),
+        "frame: hand bitset"
+    );
+    crate::kassert!(post.discard == condition.discard, "frame: discard bitset");
 }
 
 /// Iff at seat 0 (`n_players = 2`).
@@ -221,10 +224,10 @@ pub fn idolband_mutant_is_detected() {
         w.money[0] = kani::any();
         kani::assume(w.money[0] >= 0 && w.money[0] < 3000);
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_sumimi::idol_and_band::idol_and_band_kani(user));
     let post = world::snapshot();
-    let pre_money = pre.money[user as usize];
+    let pre_money = condition.money[user as usize];
     let wrong = spec::sumimi::idolband_post_money_mutant(pre_money);
     kani::cover!(pre_money < 3000, "mutant region live");
     crate::kassert!(
@@ -282,12 +285,12 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     kani::cover!(admitted, "guard admits (on a CiRCLE tile)");
     kani::cover!(!admitted, "guard rejects (not CiRCLE / not owner)");
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     if !admitted {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
         crate::kassert!(
-            world::arr4_eq(post.charge, pre.charge),
+            world::arr4_eq(post.charge, condition.charge),
             "rejected hook must not touch fire"
         );
         let (logbuf, log_n) = log_slice();
@@ -296,7 +299,7 @@ fn hina_01_pass_circle_iff_at(user: i32) {
         return;
     }
 
-    let pre_fire = pre.charge[user as usize];
+    let pre_fire = condition.charge[user as usize];
     let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     kani::cover!(pre_fire < cap, "under cap (gain applies)");
     kani::cover!(pre_fire >= cap, "at/over cap (global hold-cap forbids)");
@@ -313,17 +316,17 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     );
     crate::kassert!(
         post.charge[user as usize] == spec::sumimi::pass_circle_fire_post(pre_fire, cap),
-        "C-SUMIMI-hina-01: post fire must be pre+1 under the cap and unchanged at the cap"
+        "C-SUMIMI-hina-01: post fire must be condition+1 under the cap and unchanged at the cap"
     );
     for p in 0..MAX_PLAYERS {
         if p != user as usize {
             crate::kassert!(
-                post.charge[p] == pre.charge[p],
+                post.charge[p] == condition.charge[p],
                 "frame: other players' fire"
             );
         }
-        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
-        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.money[p] == condition.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
     }
 }
 
@@ -351,11 +354,11 @@ pub fn hina_01_mutant_is_detected() {
     hina_pass_world(0, 0); // CiRCLE
     let user = 0i32;
     world::with_world_mut(|w| w.charge[0] = 0);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(skill_personas::uika_sumimi::on_pass_kani(user));
     let post = world::snapshot();
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(
-        pre.charge[user as usize],
+        condition.charge[user as usize],
         spec::sumimi::FIRE_CAP_SUMIMI,
     );
     crate::kassert!(
@@ -367,7 +370,7 @@ pub fn hina_01_mutant_is_detected() {
 // ===========================================================================
 // C-SUMIMI-childhood-02 -- after-move +1 [火罐]
 // `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `On::Action(MoveAfter)`.
-// Guard: `"actor == owner && move.main && card.placed"`.
+// Guard: `"actor == owner && move.is_main_move && card.placed"`.
 // C-SUMIMI-childhood-01 (move start = 小豆岛) is PROTOCOL-LEVEL (plan stub).
 // Seat-symmetric (the user's own fire).
 // ===========================================================================
@@ -397,7 +400,7 @@ fn childhood_02_fire_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     childhood_after_move_world(user);
 
-    let gid = crate::guard_id!("actor == owner && move.main && card.placed");
+    let gid = crate::guard_id!("actor == owner && move.is_main_move && card.placed");
     let mut ov = ir_fill::TriggerOverlay::default();
     ov.move_main = true;
     let admitted = world::with_world(|w| {
@@ -407,11 +410,11 @@ fn childhood_02_fire_iff_at(user: i32) {
     kani::cover!(admitted, "guard admits");
     kani::cover!(!admitted, "guard rejects");
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     if !admitted {
         let post = world::snapshot();
         crate::kassert!(
-            world::arr4_eq(post.charge, pre.charge),
+            world::arr4_eq(post.charge, condition.charge),
             "rejected hook must not touch fire"
         );
         let (logbuf, log_n) = log_slice();
@@ -420,7 +423,7 @@ fn childhood_02_fire_iff_at(user: i32) {
         return;
     }
 
-    let pre_fire = pre.charge[user as usize];
+    let pre_fire = condition.charge[user as usize];
     let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     kani::cover!(pre_fire < cap, "under cap");
     kani::cover!(pre_fire >= cap, "at cap");
@@ -441,10 +444,10 @@ fn childhood_02_fire_iff_at(user: i32) {
     );
     for p in 0..MAX_PLAYERS {
         if p != user as usize {
-            crate::kassert!(post.charge[p] == pre.charge[p], "frame: other fire");
+            crate::kassert!(post.charge[p] == condition.charge[p], "frame: other fire");
         }
-        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
-        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.money[p] == condition.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
     }
 }
 
@@ -511,7 +514,7 @@ fn two_donuts_world(user: i32) {
 fn twodonuts_01_exile_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     two_donuts_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // DIRECT body call (ppcost).
     invoke::unwrap_done(card_sumimi::two_donuts::two_donuts_kani(user));
     let post = world::snapshot();
@@ -533,9 +536,9 @@ fn twodonuts_01_exile_iff_at(user: i32) {
         "C-SUMIMI-twodonuts-01: exileHold == 1 after the body"
     );
     for p in 0..MAX_PLAYERS {
-        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
-        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
-        crate::kassert!(post.charge[p] == pre.charge[p], "frame: fire");
+        crate::kassert!(post.money[p] == condition.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
+        crate::kassert!(post.charge[p] == condition.charge[p], "frame: fire");
     }
 }
 
@@ -645,7 +648,7 @@ fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
 
     let to = spec::sumimi::twoinone_fire_target(is_hina);
     let fire_key = intern::intern(bandori_std::state_key::CHARGE).0;
-    let pre = world::snapshot();
+    let condition = world::snapshot();
 
     // DIRECT body call (ppcost).
     invoke::unwrap_done(card_sumimi::two_in_one::play_kani(user));
@@ -667,8 +670,8 @@ fn twoinone_01b_fire_iff_at(user: i32, is_hina: bool) {
     );
     // Money / positions are outside the swap's frame.
     for p in 0..MAX_PLAYERS {
-        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
-        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.money[p] == condition.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == condition.pos[p], "frame: pos");
     }
 }
 
@@ -724,23 +727,23 @@ pub fn twoinone_01b_mutant_is_detected() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn idolband_money_formula() {
-    let pre: i32 = kani::any();
-    kani::assume(pre >= 0 && pre <= 10_000);
-    let post = spec::sumimi::idolband_post_money(pre);
-    if pre >= 3000 {
-        crate::kassert!(post == pre, "no-effect region keeps money");
+    let condition: i32 = kani::any();
+    kani::assume(condition >= 0 && condition <= 10_000);
+    let post = spec::sumimi::idolband_post_money(condition);
+    if condition >= 3000 {
+        crate::kassert!(post == condition, "no-effect region keeps money");
     } else {
         crate::kassert!(post == 3000, "under-3000 region sets exactly 3000");
     }
-    let wrong = spec::sumimi::idolband_post_money_mutant(pre);
-    if pre < 3000 {
+    let wrong = spec::sumimi::idolband_post_money_mutant(condition);
+    if condition < 3000 {
         crate::kassert!(
             wrong == 2999 && post != wrong,
             "mutant 2999 is distinguishable"
         );
     }
-    kani::cover!(pre < 3000, "under 3000");
-    kani::cover!(pre >= 3000, "at/over 3000");
+    kani::cover!(condition < 3000, "under 3000");
+    kani::cover!(condition >= 3000, "at/over 3000");
 }
 
 /// C-SUMIMI-mana-01 / hina-01 fire formula under the hold cap.

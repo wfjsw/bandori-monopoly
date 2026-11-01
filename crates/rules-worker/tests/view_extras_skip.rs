@@ -1,4 +1,4 @@
-//! The worker skips `view_extra` for human-member views (`needExtras: false`)
+//! The worker skips `view_extras` for human-member views (`needExtras: false`)
 //! and still computes them for the bot service (`needExtras: true`).
 
 use std::sync::Arc;

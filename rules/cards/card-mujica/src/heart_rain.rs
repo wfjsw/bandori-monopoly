@@ -1,4 +1,3 @@
-//! `Mujica:心の雨` -- C# `CardHeartRain`: everyone 1-20 tiles ahead rolls 1d20
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:心の雨`）:
 //! > 心の雨：
@@ -25,9 +24,6 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
     let me = ctx::player_pos(player_id);
     let mut any_stay = false;
     for p in ctx::others(player_id) {
-        // 规则书: 「使你前方20格内的所有玩家」
-        // C# `H.Forward(pos, seats[p].pos) in 1..=20`; a same-tile player is not
-        // "ahead" (`H.Forward` returns 0 there).
         let ahead = ctx::tile_forward(me, ctx::player_pos(p));
         if !(1..=20).contains(&ahead) {
             continue;
@@ -61,7 +57,7 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
         );
         rules_status::stun::add(player_id, 1);
         // TODO(规则书)（自身获得一层[晕眩]并获得1000资金）: 晕眩 12「无法收付款」是否挡同一效果里随后的获得 -- 引擎放行，照常 gain（BACKLOG C-Q29）
-        ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")))?;
+        ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_reason")))?;
     }
     Ok(())
 }

@@ -58,7 +58,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「指定你的此次移动仅在单/双数格上进行」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let odd = ctx::ask_pick(
+    let odd = ctx::ask_choice(
         player_id,
         &Msg::new(key!("himari_title")),
         &Msg::new(key!("himari_ask")),

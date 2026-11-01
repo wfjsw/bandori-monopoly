@@ -29,7 +29,7 @@ fn int_arg_deep(msg: &Msg, name: &str) -> Option<i64> {
     if let Some(v) = spec_kit::int_arg(msg, name) {
         return Some(v);
     }
-    for a in msg.a.values() {
+    for a in msg.args.values() {
         if let Arg::Msg(inner) = a {
             if let Some(v) = spec_kit::int_arg(inner, name) {
                 return Some(v);
@@ -48,7 +48,7 @@ fn half_parts(msg: &Msg) -> Option<(i64, i64)> {
     ) {
         return Some((f, c));
     }
-    for a in msg.a.values() {
+    for a in msg.args.values() {
         if let Arg::Msg(inner) = a {
             if let Some(p) = half_parts(inner) {
                 return Some(p);
@@ -66,7 +66,7 @@ pub fn half_ceil10(full: i32) -> i32 {
 /// The rulebook buy figure: 「购买格子地契和建造已有房子的资金总价」.
 pub fn buy_price(step: &Step<'_>, t: usize) -> Option<i32> {
     let tile = step.data.tiles.get(t)?;
-    let houses = step.pre.st.houses.get(t).copied().unwrap_or(0);
+    let houses = step.condition.st.houses.get(t).copied().unwrap_or(0);
     Some(tile.price + houses * tile.house)
 }
 
@@ -93,7 +93,7 @@ pub fn table_rent(step: &Step<'_>, t: usize) -> Option<i32> {
     if tile.rent.is_empty() {
         return None;
     }
-    let h = step.pre.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;
+    let h = step.condition.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;
     Some(tile.rent[h.min(tile.rent.len() - 1)])
 }
 
@@ -215,7 +215,12 @@ fn ledger_legs(step: &Step<'_>) -> Option<Vec<Leg>> {
 
 /// Compare every seat's money delta against the reconstructed legs.
 fn ledger_mismatch(step: &Step<'_>, legs: &[Leg]) -> Option<String> {
-    let n = step.pre.st.players.len().max(step.post.st.players.len());
+    let n = step
+        .condition
+        .st
+        .players
+        .len()
+        .max(step.post.st.players.len());
     let mut expect = vec![0i64; n];
     for l in legs {
         if l.who < 0 || l.who as usize >= n {
@@ -307,7 +312,14 @@ pub fn g_money_01(step: &Step<'_>) -> Result<(), String> {
     if pairs.is_empty() || other_money > 0 {
         return Ok(());
     }
-    let mut delta = vec![0i64; step.pre.st.players.len().max(step.post.st.players.len())];
+    let mut delta = vec![
+        0i64;
+        step.condition
+            .st
+            .players
+            .len()
+            .max(step.post.st.players.len())
+    ];
     for i in 0..delta.len() {
         delta[i] = step.post_money(i) as i64 - step.pre_money(i) as i64;
     }
@@ -385,7 +397,12 @@ pub fn g_money_02(step: &Step<'_>) -> Result<(), String> {
             "[获得]{amount}: player {who} money delta {delta}, expected +{amount}"
         ));
     }
-    let n = step.pre.st.players.len().max(step.post.st.players.len());
+    let n = step
+        .condition
+        .st
+        .players
+        .len()
+        .max(step.post.st.players.len());
     for i in 0..n {
         if i == who {
             continue;
@@ -454,7 +471,12 @@ pub fn g_money_03(step: &Step<'_>) -> Result<(), String> {
             "[消耗]{amount}: player {who} money delta {delta}, expected -{amount}"
         ));
     }
-    let n = step.pre.st.players.len().max(step.post.st.players.len());
+    let n = step
+        .condition
+        .st
+        .players
+        .len()
+        .max(step.post.st.players.len());
     for i in 0..n {
         if i == who {
             continue;
@@ -484,7 +506,7 @@ pub fn g_money_03(step: &Step<'_>) -> Result<(), String> {
 ///   money-moving event.
 /// * **Condition:** the window is not a ledger gap (bankrupt / auction /
 ///   build-refund).
-/// * **Effect:** for each seat `i`, `post.money(i) - pre.money(i)` equals the
+/// * **Effect:** for each seat `i`, `post.money(i) - condition.money(i)` equals the
 ///   sum of that seat's legs (`gain`/`pass` +X, `lose` -X, `pay`/`rent`
 ///   -loss / +received, `mortgage` +X, `redeem` -X, `forcebuy` -X / +X).
 /// * **Frame:** a seat with no leg has delta 0 (「only named players change」).
@@ -507,7 +529,12 @@ pub fn g_money_04(step: &Step<'_>) -> Result<(), String> {
     };
     if legs.is_empty() {
         // No named money movement: nobody may move.
-        let n = step.pre.st.players.len().max(step.post.st.players.len());
+        let n = step
+            .condition
+            .st
+            .players
+            .len()
+            .max(step.post.st.players.len());
         for i in 0..n {
             let d = step.post_money(i) as i64 - step.pre_money(i) as i64;
             if d != 0 {
@@ -711,7 +738,7 @@ pub fn g_money_06(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「[支付]拥有格子的玩家购买格子地契和建造已有房子的资金总价的两倍，
 ///   从该玩家处强行购买该格地契，获得的地契仍为抵押状态」
 /// * **Trigger:** a window containing a `forcebuy` event for tile T.
-/// * **Condition:** T is mortgaged in `pre` (the force-buy path is the
+/// * **Condition:** T is mortgaged in `condition` (the force-buy path is the
 ///   mortgaged-deed branch of 基础[结算] 6.2).
 /// * **Effect:** the buyer pays and the owner receives exactly
 ///   `2 * (price + houses * house)`; `owners[T]` is the buyer in `post`;
@@ -994,7 +1021,7 @@ pub fn g_money_10(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:155`
 /// * **Quote:** 「可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子地契和拥有权。」
 /// * **Trigger:** a `buy` event for tile T by player P.
-/// * **Condition:** T was unowned in `pre`; `houses[T]` is the standing
+/// * **Condition:** T was unowned in `condition`; `houses[T]` is the standing
 ///   house count.
 /// * **Effect:** P paid exactly `price + houses * house` (when no card
 ///   retuned the figure); `owners[T]` is P in `post`.
@@ -1085,7 +1112,7 @@ pub fn g_money_12(step: &Step<'_>) -> Result<(), String> {
             .get(t)
             .ok_or_else(|| format!("build of unknown tile {t}"))?;
         let want = tile.house;
-        let pre_h = step.pre.st.houses.get(t).copied().unwrap_or(0);
+        let pre_h = step.condition.st.houses.get(t).copied().unwrap_or(0);
         let post_h = step.post.st.houses.get(t).copied().unwrap_or(0);
         if post_h != pre_h + 1 {
             return Err(format!(

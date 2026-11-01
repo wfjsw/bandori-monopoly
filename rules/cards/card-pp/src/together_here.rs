@@ -1,4 +1,3 @@
-//! `PP:有你与我在这里共度` -- C# `CardTogetherHere`: flip X face-down fans up.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:有你与我在这里共度`）:
 //! > 有你与我在这里共度：
@@ -11,7 +10,7 @@
 
 use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec};
+use card_sdk::{para, sec, CardText};
 use skill_groups::fans;
 
 pub const TOGETHER_HERE: CardDef =

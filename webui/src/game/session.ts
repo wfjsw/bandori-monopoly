@@ -958,7 +958,7 @@ export class OnlineSession extends GameSession {
   /**
    * Online extras cache (`playable` / `estCost` / `skills` / `aiAnswer`).
    * Solo does **not** use this: the local engine already ships those fields
-   * in its frame (`web-glue`'s `Match::view_extra`) and is the authoritative
+   * in its frame (`web-glue`'s `Match::view_extras`) and is the authoritative
    * engine there -- exact and free (no determinization, no sampling). Online
    * computes them from the seat view through the bot worker because the
    * server no longer ships them and the client must not ask for hidden state.

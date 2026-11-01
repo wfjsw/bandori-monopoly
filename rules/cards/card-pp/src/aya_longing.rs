@@ -1,4 +1,3 @@
-//! `PP:[丸山彩]憧憬的前方` -- C# `CardAyaLonging` (MatchHost.cs:7995-8063):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[丸山彩]憧憬的前方`）:
 //! > [丸山彩]憧憬的前方：
@@ -68,7 +67,6 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // sheet cell D16
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 
-/// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 // 规则书[持续]（1）: 「X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100」
 fn shave_x(player_id: i32) -> i32 {
     let fans = fans::up(player_id) + fans::down(player_id);
@@ -79,7 +77,6 @@ fn shave_x(player_id: i32) -> i32 {
     }
 }
 
-/// C# `CardAyaLonging.Poorest` -- every alive player has at least as much money.
 // 规则书[持续]（1）: 「如果[拥有者]的资金数是所有存活玩家中最少」
 // TODO(规则书)（如果[拥有者]的资金数是所有存活玩家中最少）: the sheet does not say
 //   whether a money tie counts as 「最少」 (OPEN-ties) -- we count it (non-strict `>=`).
@@ -96,9 +93,6 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         "PP:[丸山彩]憧憬的前方",
         &Msg::new(key!("aya_longing_note")),
     );
-    // 规则书[手]: 「并将弃卡区中的一张卡加入手卡」
-    // C# `H._hidden[i].discard.Distinct()` + `H.AskCard` + `H._hidden[i].discard.Remove`
-    // + `H.AddToHand`.
     let mut ids: Vec<NameId> = Vec::new();
     for c in ctx::cards_in(player_id, ctx::CardPile::Graveyard) {
         if !ids.contains(&c) {

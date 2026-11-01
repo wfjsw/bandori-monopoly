@@ -5,7 +5,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{prop, CardPile};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};

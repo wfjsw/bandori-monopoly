@@ -69,7 +69,8 @@ fn mujica_table(n: usize, who: usize, persona: &str) -> Table {
 fn finish_turn(t: &mut Table, who: usize) {
     drain(t);
     if t.step() == 2 {
-        t.roll(who).expect("finish_turn: roll the owed main move");
+        t.roll(who)
+            .expect("finish_turn: roll the owed is_main_move move");
         drain(t);
     }
     t.end(who).expect("finish_turn: end the turn");
@@ -101,7 +102,7 @@ fn black_bday_low_pays_800(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let user = step.player_of_act();
-    for i in 0..step.pre.st.players.len() {
+    for i in 0..step.condition.st.players.len() {
         if i == user {
             continue;
         }
@@ -142,7 +143,7 @@ fn black_bday_high_pays_400(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let user = step.player_of_act();
-    for i in 0..step.pre.st.players.len() {
+    for i in 0..step.condition.st.players.len() {
         if i == user {
             continue;
         }
@@ -189,7 +190,7 @@ fn black_bday_frame(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let user = step.player_of_act();
-    let allowed: Vec<String> = (0..step.pre.st.players.len())
+    let allowed: Vec<String> = (0..step.condition.st.players.len())
         .map(|i| format!("money:P{i}"))
         .chain([
             format!("hand:P{user}"),
@@ -203,10 +204,10 @@ fn black_bday_frame(step: &Step<'_>) -> Result<(), String> {
         ])
         .collect();
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)?;
+    frame(step.condition, step.post, &allowed)?;
     // User's gain equals the sum of the others' losses.
     let mut gain = 0i64;
-    for i in 0..step.pre.st.players.len() {
+    for i in 0..step.condition.st.players.len() {
         if i == user {
             continue;
         }
@@ -241,7 +242,7 @@ fn black_birthday_contract() {
         t.set_money(1, m1);
         t.set_money(2, m2);
         t.give(0, &[BLACK_BDAY]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, BLACK_BDAY)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -262,7 +263,7 @@ fn black_birthday_contract() {
             return Err(format!("user gained {gain}, payers paid {}", d1 + d2));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -305,17 +306,17 @@ fn rain_stay_layers(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let user = step.player_of_act();
-    let n = step.pre.st.players.len() as i32;
-    let board = step.pre.st.owners.len() as i32;
-    let u_pos = step.pre.st.players[user].pos;
-    for i in 0..step.pre.st.players.len() {
+    let n = step.condition.st.players.len() as i32;
+    let board = step.condition.st.owners.len() as i32;
+    let u_pos = step.condition.st.players[user].pos;
+    for i in 0..step.condition.st.players.len() {
         if i == user {
             continue;
         }
-        let p = step.pre.st.players[i].pos;
+        let p = step.condition.st.players[i].pos;
         let ahead = ((p - u_pos).rem_euclid(board) + board) % board;
         let in_range = (1..=20).contains(&ahead);
-        let pre_stay = step.pre.st.players[i].state_get("stay");
+        let pre_stay = step.condition.st.players[i].state_get("stay");
         let post_stay = step.post.st.players[i].state_get("stay");
         let gained = post_stay - pre_stay;
         if in_range {
@@ -349,14 +350,14 @@ fn rain_stay_amount(step: &Step<'_>) -> Result<(), String> {
         .collect();
     let user = step.player_of_act();
     // Pair each in-range other player (seat order) with the rolls in order.
-    let board = step.pre.st.owners.len() as i32;
-    let u_pos = step.pre.st.players[user].pos;
+    let board = step.condition.st.owners.len() as i32;
+    let u_pos = step.condition.st.players[user].pos;
     let mut targets = Vec::new();
-    for i in 0..step.pre.st.players.len() {
+    for i in 0..step.condition.st.players.len() {
         if i == user {
             continue;
         }
-        let p = step.pre.st.players[i].pos;
+        let p = step.condition.st.players[i].pos;
         let ahead = (p - u_pos).rem_euclid(board);
         if (1..=20).contains(&ahead) {
             targets.push(i);
@@ -371,7 +372,7 @@ fn rain_stay_amount(step: &Step<'_>) -> Result<(), String> {
     }
     for (k, &i) in targets.iter().enumerate() {
         let roll = rolls[k];
-        let pre_stay = step.pre.st.players[i].state_get("stay");
+        let pre_stay = step.condition.st.players[i].state_get("stay");
         let post_stay = step.post.st.players[i].state_get("stay");
         let gained = post_stay - pre_stay;
         let expect = if roll <= 3 {
@@ -398,15 +399,15 @@ fn rain_miss_self_stun(step: &Step<'_>) -> Result<(), String> {
     }
     let user = step.player_of_act();
     let mut any_gained = false;
-    for i in 0..step.pre.st.players.len() {
-        let g =
-            step.post.st.players[i].state_get("stay") - step.pre.st.players[i].state_get("stay");
+    for i in 0..step.condition.st.players.len() {
+        let g = step.post.st.players[i].state_get("stay")
+            - step.condition.st.players[i].state_get("stay");
         if g > 0 {
             any_gained = true;
         }
     }
-    let stun_gained =
-        step.post.st.players[user].state_get("stun") - step.pre.st.players[user].state_get("stun");
+    let stun_gained = step.post.st.players[user].state_get("stun")
+        - step.condition.st.players[user].state_get("stun");
     let money_gained = step.post_money(user) as i64 - step.pre_money(user) as i64;
     if !any_gained {
         if stun_gained != 1 {
@@ -443,7 +444,7 @@ fn rain_contract() {
         let roll = rng.range(1, 20);
         t.dice(&[roll]);
         t.give(0, &[RAIN]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, RAIN).map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
@@ -482,7 +483,7 @@ fn rain_contract() {
             }
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "state:P0:stun",
@@ -563,7 +564,7 @@ fn saki_move_forces_three_tiles() {
         let start = rng.range(0, 40);
         t.set_pos(1, start as usize);
         t.give(0, &[SAKI_MOVE]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, SAKI_MOVE)
             .map_err(|e| format!("play rejected: {e}"))?;
         // Target P1 (option index 1: the prompt lists self first).
@@ -586,7 +587,7 @@ fn saki_move_forces_three_tiles() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P1",
@@ -673,7 +674,7 @@ fn sparkler_places_two_crystals() {
     forall(4, 0x57A1, |_rng, _i| {
         let mut t = Table::vanilla(2);
         t.give(0, &[SPARKLER]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, SPARKLER)
             .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
@@ -685,7 +686,7 @@ fn sparkler_places_two_crystals() {
             return Err(format!("crystals {c}, expected 2 (放置2个奇迹水晶)"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "field:P0",
@@ -759,7 +760,7 @@ fn dice_cast_places_and_goes_to_discard() {
     forall(4, 0xD1CE, |_rng, _i| {
         let mut t = Table::vanilla(2);
         t.give(0, &[DICE_CAST]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, DICE_CAST).map_err(|e| format!("play: {e}"))?;
         drain(&mut t);
         if !t.on_field(0, DICE_CAST) {
@@ -782,7 +783,7 @@ fn dice_cast_places_and_goes_to_discard() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "field:P0",
@@ -815,7 +816,7 @@ fn crystal_swap_moves_one() {
         t.set_crystals(0, SPARKLER, 2);
         t.set_crystals(1, NYAMU, 0);
         t.give(0, &[CRYSTAL]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, CRYSTAL).map_err(|e| format!("play: {e}"))?;
         // from-card prompt then to-card prompt; take the only option.
         for _ in 0..4 {
@@ -833,7 +834,7 @@ fn crystal_swap_moves_one() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "crystals:P0",
@@ -974,7 +975,7 @@ fn look_away_only_moves_counteractors() {
         let mut t = Table::vanilla(3);
         // Nobody has used [反击] against seat 0 this turn.
         t.give(0, &[LOOK]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, LOOK).map_err(|e| format!("play: {e}"))?;
         drain(&mut t);
         let p1 = t.pos(1);
@@ -986,7 +987,7 @@ fn look_away_only_moves_counteractors() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "hand:P0",
@@ -1062,7 +1063,7 @@ fn band_state2_pay_is_150_only_on_self() {
         t.own(1, &[1]);
         t.set_pos(0, 0);
         t.dice(&[1]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         drain(&mut t);
         let paid = 5000 - t.money(0);
@@ -1079,7 +1080,7 @@ fn band_state2_pay_is_150_only_on_self() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",

@@ -1,8 +1,7 @@
-//! `MyGO:（灯）不再迷茫` -- C# `CardTomoriNoLonger` (MatchHost.cs:6308-6347):
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（灯）不再迷茫`）:
-//! > （灯）不再迷茫：  
-//! >  
+//! > （灯）不再迷茫：
+//! >
 //! > （1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数
 //! > （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]
 //! > （3）此卡上的奇迹水晶耗尽后，[移除]此卡
@@ -33,7 +32,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // TODO(ABI) trigger uid: `trigger::card_is` is name-only, so with two
         // copies on the field one copy's raise also runs the other copy's
         // `refill`, which consumes the player-wide `SLOT_COVERING` slot.
-        On::Action(Action::CounterChanged(card_sdk::pre::MINE, Some(refill_guard), refill)),
+        On::Action(Action::CounterChanged(card_sdk::condition::MINE, Some(refill_guard), refill)),
         // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept whenever the
         // count empties, whichever write emptied it (the skill-cost swap, a
         // move, or a decay). `CounterChanged` is name-filtered to
@@ -111,7 +110,7 @@ fn cover(player_id: i32) -> card_sdk::Asked {
 /// -- refund any crystal decrease that is not the skill-cost substitution.
 ///
 /// Pure guard for [`refill`] -- the activation gate. `false` means the card is
-/// not activated at all. The entry's pre only scopes the owner (`actor ==
+/// not activated at all. The entry's condition only scopes the owner (`actor ==
 /// owner`); the counter name, this card's id and placedness live here -- the
 /// hook hears a counter change on *every* placed card of the owner's, so a
 /// decrease elsewhere (the band skill's own crystals, another card's) would
@@ -144,25 +143,19 @@ fn refill(player_id: i32) -> card_sdk::Asked {
 const ID: &str = "MyGO:（灯）不再迷茫";
 
 fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「获得两层仅能被自然流失效果移除的[停留]」 -- C#
-    // `H.GiveStay(i, 2, i, CardName)`.
     let before = rules_status::stay::get(player_id);
     rules_status::stay::add(player_id, 2);
-    // 规则书（1）: 「仅能被自然流失效果移除的[停留]」 -- C# `H.IncV(i,
-    // "lockedStay", 2)` marks the layers as locked. Mark only the layers the
-    // grant actually wrote (an Abnormal counteraction cancels it whole), and
-    // give the mark the layers' own wear-off so it cannot outlive them and
-    // shield later, ordinary layers from 壱雫空's `min(lockedStay, stay)` clamp.
+    // Mark only the layers the grant actually wrote (an Abnormal counteraction
+    // cancels it whole), and give the mark the layers' own wear-off so it cannot
+    // outlive them and shield later, ordinary layers from 壱雫空's `min(lockedStay,
+    // stay)` clamp.
     let landed = rules_status::stay::get(player_id) - before;
     if landed > 0 {
         ctx::inc_slot(player_id, "lockedStay", landed);
         ctx::state::set_expires(player_id, "lockedStay", ctx::state::TURN_END);
     }
-    // 规则书（1）: 「将此卡放置于场上」 -- C# `H.PlaceFromPlay(c, -1, -1, list.Count + 1)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("tomori_no_longer_note")));
-    // 规则书（1）: 「并将所有手卡置入弃牌堆」 -- C# walks `H._hidden[i].hand`
-    // (`cards_in(player_id, CardPile::Hand)`) and `H.DiscardFromHand`s each copy.
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let mut discarded = 0;
     for id in &hand {
@@ -170,8 +163,6 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
             discarded += 1;
         }
     }
-    // 规则书（1）: 「在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数」 -- C#
-    // `PlaceFromPlay(..., crystals: list.Count + 1)`.
     ctx::set_crystals(discarded + 1);
     ctx::log(
         player_id,

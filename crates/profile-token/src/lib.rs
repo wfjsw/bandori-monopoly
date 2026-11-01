@@ -88,7 +88,13 @@ pub fn mint(secret: &[u8], claims: &Claims) -> Result<String, Error> {
 }
 
 /// Mint with the default lifetime and `now()` as the issue time.
-pub fn mint_now(secret: &[u8], sub: &str, name: &str, persona: &str, cn_id: &str) -> Result<String, Error> {
+pub fn mint_now(
+    secret: &[u8],
+    sub: &str,
+    name: &str,
+    persona: &str,
+    cn_id: &str,
+) -> Result<String, Error> {
     let iat = now();
     mint(
         secret,
@@ -194,6 +200,6 @@ mod tests {
     fn rejects_shape() {
         assert_eq!(verify(SECRET, ""), Err(Error::Malformed));
         assert_eq!(verify(SECRET, "v1.abc"), Err(Error::Malformed));
-        assert_eq!(verify(b"", "v1.a.b"), Err(Error::Malformed));
+        assert_eq!(verify(b"", "v1.args.arg1"), Err(Error::Malformed));
     }
 }

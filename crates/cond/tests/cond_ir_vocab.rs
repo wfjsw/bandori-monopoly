@@ -1,8 +1,8 @@
 //! The IR variable table is checked against `rules-cond`'s `VOCAB`.
 //! Adding a VOCAB scalar without extending `rules-cond-ir::vars` fails here.
 
-use rules_cond::vocab::{Scope, Ty, VOCAB};
-use rules_cond_ir::vars::{VarTy, SCALAR_COUNT, VARS};
+use rules_cond::vocab::{Scope, Type, VOCAB};
+use rules_cond_ir::vars::{VarType, SCALAR_COUNT, VARS};
 
 #[test]
 fn ir_vars_match_vocab() {
@@ -24,10 +24,10 @@ fn ir_vars_match_vocab() {
         );
         assert_eq!(flat, n.flat, "VARS[{i}] flat name mismatch");
         let expect = match n.ty {
-            Ty::Int => VarTy::Int,
-            Ty::Bool => VarTy::Bool,
-            Ty::OptInt => VarTy::OptInt,
-            Ty::Str => VarTy::Str,
+            Type::Int => VarType::Int,
+            Type::Bool => VarType::Bool,
+            Type::OptInt => VarType::OptInt,
+            Type::Str => VarType::Str,
         };
         assert_eq!(ty, expect, "VARS[{i}] ({flat}) type mismatch");
     }

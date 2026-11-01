@@ -38,7 +38,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]」. The two named
-/// tiles are the pre.
+/// tiles are the condition.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("masking_gain")))?;
     Ok(())

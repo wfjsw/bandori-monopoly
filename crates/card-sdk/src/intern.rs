@@ -375,7 +375,7 @@ fn with_table<R>(f: impl FnOnce(&mut Table) -> R) -> R {
 /// **Zero loops.** A `while` walk is an unwind cliff under CBMC even at 8
 /// iterations (the 900 s profile counted 144 `fnv1a` unrolls). 64 straight
 /// `if i < len` steps have no loop for CBMC to unwind, and when `s` is a
-/// string literal (every `ctx::tok` / `slot` / `state_*` name in a card body)
+/// string literal (every `ctx::held_count` / `slot` / `state_*` name in a card body)
 /// the whole hash constant-folds through `#[inline(always)]`.
 /// Same result as the old 8×8 chunk walk for every `s`.
 #[cfg(kani)]

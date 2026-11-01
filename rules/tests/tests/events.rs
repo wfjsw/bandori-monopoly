@@ -105,7 +105,7 @@ fn draw_event_quiet(t: &mut Table, who: usize, event: &str, faces: &[i32]) {
 
 /// The `Tile` argument of the open prompt's text (the tile it is about).
 fn prompt_tile(p: &game_core::state::MatchPrompt) -> Option<usize> {
-    match p.text.a.get("tile") {
+    match p.text.args.get("tile") {
         Some(Arg::Tile(n)) => Some(*n as usize),
         _ => None,
     }
@@ -2048,14 +2048,17 @@ fn embers_copies_are_removed_on_exile() {
         match e.msg.key() {
             "log.outcome.mark_remove" => panic!("per-tile removal line should be collapsed"),
             "log.outcome.mark_remove_all" => {
-                let kind = format!("{:?}", e.msg.a.get("kind"));
+                let kind = format!("{:?}", e.msg.args.get("kind"));
                 assert!(
                     !kind.contains("log.mark.none"),
                     "unnamed mark removed: {kind}"
                 );
             }
             "log.event.embers_clear" => {
-                assert!(e.msg.a.contains_key("event"), "clear line names no event");
+                assert!(
+                    e.msg.args.contains_key("event"),
+                    "clear line names no event"
+                );
             }
             _ => {}
         }

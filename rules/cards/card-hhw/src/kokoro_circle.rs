@@ -1,11 +1,7 @@
-//! `HHW:（kkr）前往笑容集结的地方！` -- C# `CardKokoroCircle` (MatchHost.cs:3900-3964).
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（kkr）前往笑容集结的地方！`）:
 //! > （kkr）前往笑容集结的地方！：
 //! >  支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款
-//!
-//! The sheet prints no one-copy limit (C# `WhyNot` refused a second copy):
-//! stacked copies each keep their own settle body and each charge the 6000.
 //!
 
 use bandori_std::ctx::{self, trigger};
@@ -36,20 +32,24 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"弦卷心"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「支付10000资金（视为买地花费）」 -- C# `PayCtx { amount = 10000, kind = "buy" }`.
-    // `kind(Buy)` is the 「买地」 stamp for the [支付] riders; mandatory is the
-    // builder default, so a short payer still goes through the shortfall path.
-    let receipt = ctx::PayCommand::new(player_id, -1, 10000, &Msg::new(key!("kokoro_circle_why")))
-        .kind(PayKind::Buy)
-        .send()?;
+    // 规则书: 「支付10000资金（视为买地花费）」 -- `kind(Buy)` is the 「买地」
+    // stamp for the [支付] riders; mandatory is the builder default, so a short
+    // payer still goes through the shortfall path.
+    let receipt = ctx::PayCommand::new(
+        player_id,
+        -1,
+        10000,
+        &Msg::new(key!("kokoro_circle_reason")),
+    )
+    .kind(PayKind::Buy)
+    .send()?;
     if !receipt.settled() {
         // TODO(规则书)（支付10000资金（视为买地花费））: the book does not say what
         // happens when the 10000 cannot be paid -- we keep the card spent and
-        // place nothing. (The foreign phrasing 「视为此卡未生效」 is the C#
-        // `PlayCtx.Effective = false` side channel; BACKLOG CH-07 owns it.)
+        // place nothing. (The foreign phrasing 「视为此卡未生效」 is the
+        // effective-flag side channel; BACKLOG CH-07 owns it.)
         return Ok(());
     }
-    // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H.PlaceFromPlay(c, i, 0)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::log(
         player_id,
@@ -63,23 +63,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
-/// -- C# `CardKokoroCircle.SettleAfter`: a settle on the card's tile by anyone
-/// but the owner pays the owner 6,000 as the tile's collection (`PayKind::Rent`
-/// carrying the tile). `SETTLE-STAGES.md` §4 M3:
-/// an entry in the settle's effect list (行动阶段 15), so a body replace skips
-/// it.
+/// -- a settle on the card's tile by anyone but the owner pays the owner 6,000 as
+/// the tile's collection (`PayKind::Rent` carrying the tile). `SETTLE-STAGES.md`
+/// §4 M3: an entry in the settle's effect list (行动阶段 15), so a body replace
+/// skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     if trigger::cancelled() {
         return Ok(());
     }
-    // C# `H._placed.Contains(this)` / `Tile` -- this card must be the one in
-    // play (`placed_tile` asks about *this* id; `is_placed` only asks about
-    // "any card").
     let Some(tile) = ctx::self_tile() else {
         return Ok(());
     };
-    // C# `num != Tile` -- the settle is on the card's tile. When the card is
-    // not tile-bound (`Some(-1)`) fall back to CiRCLE, the tile the play names.
+    // When the card is not tile-bound (`Some(-1)`) fall back to CiRCLE, the tile the
+    // play names.
     let target = if tile >= 0 {
         tile
     } else {
@@ -88,26 +84,30 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if target < 0 || trigger::tile() != target {
         return Ok(());
     }
-    // C# `m.Seat == Seat` -- the owner settling there does not pay themselves,
-    // and C# `H.CircleNormal` runs for the ordinary reward instead of the
-    // 6,000 on a settle redirected here (2.19).
+    // The owner settling there does not pay themselves, and the ordinary tile
+    // reward runs instead of the 6,000 on a settle redirected here (2.19).
     let mover = trigger::player_id();
     if mover == player_id || mover < 0 || trigger::is_settle_redirect() {
         return Ok(());
     }
     // TODO(规则书)（若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款）:
     //   the book prints no carve-out for a normal CiRCLE settle (the reward that
-    //   already ran), yet C# `H.CircleNormal(m, num)` skips the 6,000 there. That
-    //   move-tag read is not on the trigger payload (BACKLOG ABI-02), so the
-    //   6,000 is charged on every such settle by another player until it lands.
+    //   already ran), yet the engine's settle-redirect tag skips the 6,000 there.
+    //   The read lives on the trigger (BACKLOG ABI-02 closed by `is_settle_redirect`);
+    //   a card redirect is the only shape that skips it.
     // 规则书: 「向所有者支付6000资金，视为格子的收款」 -- `kind(Rent)` is the
     // 收款 stamp and `tile(target)` carries CiRCLE, so `pay_is_rent`, the
     // tile-keyed riders and the *owner's* per-seat settle ledger all see it
     // (`charge_rent` cannot: CiRCLE is unowned and the 6,000 is fixed).
-    let receipt = ctx::PayCommand::new(mover, player_id, 6000, &Msg::new(key!("kokoro_circle_rent")))
-        .kind(PayKind::Rent)
-        .tile(target)
-        .send()?;
+    let receipt = ctx::PayCommand::new(
+        mover,
+        player_id,
+        6000,
+        &Msg::new(key!("kokoro_circle_rent")),
+    )
+    .kind(PayKind::Rent)
+    .tile(target)
+    .send()?;
     ctx::log(
         player_id,
         &Msg::new(key!("kokoro_circle_settled"))

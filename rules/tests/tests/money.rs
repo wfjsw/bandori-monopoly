@@ -63,12 +63,8 @@ fn card_payment_opens_the_counteract_window() {
 // per-pair cancel
 // =====================================================================
 
-/// Per-pair cancel: a multi-target payment's individual entries can be
-/// cancelled one at a time. `通用:网络链接异常`'s 「取消其对目标之一的[指定]」
-/// is the archetype. The static targeting query (`ctx::designations`) names
-/// the play's recipients before its body runs; `ctx::cancel_designation`
-/// drops one (`play.Tags["immune"+seat]`), and the rest of the play's
-/// designations still land.
+/// Per-pair cancel: a multi-target payment's individual entries can be cancelled
+/// one at a time. `通用:网络链接异常`'s 「取消其对目标之一的[指定]」 is the archetype.
 ///
 /// 规则书（网络链接异常）: 「取消其对目标之一的[指定]」
 #[test]
@@ -622,8 +618,8 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
     {
         let w = t.m.world_mut();
         w.note_marker_owner("抹茶芭菲", "skill:要乐奈:投币式停车场的猫");
-        w.set_tok(1, "抹茶芭菲", 2, -1, 0); // arrange-only row; name-keyed lookup
-                                            // One parfait row on Space (fresh row, owner seat 1).
+        w.set_held(1, "抹茶芭菲", 2, -1, 0); // arrange-only row; name-keyed lookup
+                                             // One parfait row on Space (fresh row, owner seat 1).
         w.place_mark(
             -1,
             "抹茶芭菲",

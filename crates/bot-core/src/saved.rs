@@ -24,7 +24,7 @@
 //!   is still not reproduced.
 //! * `Ask.ai` / `Ask.ai_picked` / `Ask.worth` -- per-seat heuristic answers
 //!   and auction ceilings, computed at ask time. Only the *own* seat's entry
-//!   is public (`view_extra`). Stub: own seat from `aiAnswer`, others =
+//!   is public (`view_extras`). Stub: own seat from `aiAnswer`, others =
 //!   prompt fallback; auction `worth` = the quoted price capped at
 //!   `money - 1000`.
 //! * `World.turn` (`TurnCtx`) extras, `scheduled`, `targeted`, `gains`,

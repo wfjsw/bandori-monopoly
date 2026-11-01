@@ -37,9 +37,9 @@ fn ev_args(t: &Table, name: &str, arg: &str) -> Vec<i64> {
 fn who_of(t: &Table, name: &str) -> Vec<i64> {
     events(t, name)
         .iter()
-        .map(|e| match e.msg.a.get("who") {
+        .map(|e| match e.msg.args.get("who") {
             Some(game_core::msg::Arg::PlayerId(v)) => *v as i64,
-            Some(game_core::msg::Arg::I(v)) | Some(game_core::msg::Arg::N(v)) => *v,
+            Some(game_core::msg::Arg::Integer(v)) | Some(game_core::msg::Arg::Number(v)) => *v,
             other => panic!("who is not a player arg: {other:?}"),
         })
         .collect()

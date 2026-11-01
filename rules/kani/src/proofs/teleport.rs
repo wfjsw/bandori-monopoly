@@ -39,7 +39,7 @@ fn symbolic_play_world() -> World {
 pub fn tae_sound_teleport_and_fire_iff() {
     let w = symbolic_play_world();
     let player = w.trig_player;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -51,24 +51,30 @@ pub fn tae_sound_teleport_and_fire_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    kani::cover!(pre.charge[player as usize] == 0, "pre fire 0");
-    kani::cover!(pre.pos[player as usize] != TILE_SHOP, "pre not on shop");
+    kani::cover!(condition.charge[player as usize] == 0, "condition fire 0");
+    kani::cover!(
+        condition.pos[player as usize] != TILE_SHOP,
+        "condition not on shop"
+    );
 
     crate::kassert!(
         spec::tae_sound_effects_ok(effects, player, TILE_SHOP),
         "teleport+charge: effect log must be exactly Teleport(shop), GainFire(1)"
     );
     crate::kassert!(
-        spec::tae_sound_post_ok(&post, player, TILE_SHOP, pre.charge[player as usize]),
+        spec::tae_sound_post_ok(&post, player, TILE_SHOP, condition.charge[player as usize]),
         "teleport+charge: post must be on shop with fire+1"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            crate::kassert!(post.pos[p] == pre.pos[p], "frame: other players unmoved");
             crate::kassert!(
-                post.charge[p] == pre.charge[p],
+                post.pos[p] == condition.pos[p],
+                "frame: other players unmoved"
+            );
+            crate::kassert!(
+                post.charge[p] == condition.charge[p],
                 "frame: other players' fire"
             );
         }

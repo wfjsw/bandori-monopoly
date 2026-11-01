@@ -218,7 +218,7 @@ export interface MatchEvent {
   // and `parent` links it under the activation that posted it. Those play
   // through the same cardFlash path and are once-per-flash by event id.
 }
-/** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
+/** `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */
 export interface MovePlan {
   playerId: number; from: number; steps: number; started: boolean; reach: number[];
@@ -231,9 +231,9 @@ export interface MatchState {
   roller: number; busy: boolean; skipMove: boolean; landed: number;
   /** ThinkTime room setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited. */
   thinkTime: number;
-  /** Would `act {act:"roll"}` be accepted now (`why_not_act`'s roll branch). */
+  /** Would `act {act:"roll"}` be accepted now (`cant_act`'s roll branch). */
   canRollHere: boolean;
-  /** Would `act {act:"end"}` be accepted now (`why_not_act`'s end branch). */
+  /** Would `act {act:"end"}` be accepted now (`cant_act`'s end branch). */
   canEndHere: boolean;
   /** The movement this turn is taking. */
   plan: MovePlan;
@@ -282,7 +282,7 @@ export interface MatchView {
   cardsPlayed?: number;
   /**
    * The engine's own AI answer for *this* player's live prompt, only while they
-   * are still waiting on it (`Match::view_extra`). Never another seat's entry.
+   * are still waiting on it (`Match::view_extras`). Never another seat's entry.
    * Absent online when the frame predates the field; the autopilot then falls
    * back to the prompt's `fallback`.
    */
@@ -303,9 +303,9 @@ export interface MatchView {
    */
   tileQuotes?: (TileQuote | null)[];
   /**
-   * The viewer's pressable skills (`Match::view_extra`'s `skills`): every
+   * The viewer's pressable skills (`Match::view_extras`'s `skills`): every
    * `skill:*` field instance with an `On::Play` entry, each gated through the
-   * same `why_not_act` the `act: "skill"` request takes. Absent when the
+   * same `cant_act` the `act: "skill"` request takes. Absent when the
    * engine bundle predates the field.
    */
   skills?: SkillAction[];
@@ -343,14 +343,9 @@ export interface ClockSettings {
   bankruptAuctionTime: number;
 }
 /**
- * Bot decision policy: `standard` is the ported C# bot, `chaos` is legal but
- * maximally disruptive, `advanced` is the server-side search bot
- * (`docs/BOT.md` B5 -- online rooms only; solo stays standard / chaos until
- * the browser bundle lands). Serde-defaults to `standard` on the wire, so a
- * missing field is standard. Only meaningful on a `bot` member. With no
- * `bot-service` attached the server rewrites `advanced` to `standard` when
- * the match starts.
- */
+ * Serde-defaults to `standard` on the wire, so a missing field is standard. Only
+ * meaningful on a `bot` member. With no `bot-service` attached the server
+ * rewrites `advanced` to `standard` when the match starts. */
 export type BotMentality = "standard" | "chaos" | "advanced";
 export interface RoomMember {
   id: number; player: string; persona: string; cnId: string;

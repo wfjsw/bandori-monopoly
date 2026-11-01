@@ -36,7 +36,7 @@ pub const YUKINA: CardDef = CardDef::new(
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
         On::Action(Action::DeckBeforeGame("", None, at_start)),
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass)),
+        On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass)),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
@@ -73,7 +73,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// 「当其他玩家移动[经过]您时」 -- another player's step onto **my** tile.
 /// `actor != owner && tile.id == owner.pos && charge(owner) >= 1 &&
-/// move.remaining > 0` is the pre.
+/// move.remaining > 0` is the condition.
 
 /// （1）「初始获得"RiNG 4"格子，从"RiNG 4"格子开始游戏，首次经过CiRCLE不获得
 /// 经过奖励」.
@@ -136,7 +136,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// used to sit on `passPlayer`, where `move_remaining()` is always 0 and the
 /// force-stop could never fire (§4 M4's latent bug).
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    // `charge(owner) >= 1 && move.remaining > 0` is the pre.
+    // `charge(owner) >= 1 && move.remaining > 0` is the condition.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("yukina_force_title")),
@@ -158,7 +158,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 /// （3）「移动终点为任意"RiNG"时，获得一个火罐（上限1）」 -- the move's end
 /// tile, 行动阶段 13 (`SETTLE-STAGES.md` §4 M1). `moveAfter` runs after [重叠]
 /// and before any settle, for every completed move -- a 「不触发结算」 move
-/// grants the pot too. `actor == owner && is_deed(tile.id)` is the pre.
+/// grants the pot too. `actor == owner && is_deed(tile.id)` is the condition.
 fn on_move_end(player_id: i32) -> card_sdk::Asked {
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("yukina_gain")))?;
     Ok(())

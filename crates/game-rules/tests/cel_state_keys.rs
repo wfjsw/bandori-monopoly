@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use game_rules::cond_pre;
+use game_rules::condition;
 use rules_cond::view::CondView;
 use rules_cond::{CandidateCtx, PlayerSnap, SnapshotView, WindowCtx};
 
@@ -17,8 +17,8 @@ fn win_with_sugar() -> WindowCtx {
     p0.state = [
         ("charge", 7i64),
         ("crystals", 3),
-        ("persona", cond_pre::id_of("三角初华（Sumimi）")),
-        ("group", cond_pre::id_of("Pastel✽Palettes")),
+        ("persona", condition::id_of("三角初华（Sumimi）")),
+        ("group", condition::id_of("Pastel✽Palettes")),
         ("noHand", 1),
         ("stay", 2),
     ]
@@ -57,22 +57,26 @@ fn state_table_carries_every_sugar_key() {
     assert_eq!(seen[bandori_std::cel::KEY_CRYSTALS], 3);
     assert_eq!(
         seen[bandori_std::cel::KEY_PERSONA],
-        cond_pre::id_of("三角初华（Sumimi）")
+        condition::id_of("三角初华（Sumimi）")
     );
     assert_eq!(
         seen[bandori_std::cel::KEY_GROUP],
-        cond_pre::id_of("Pastel✽Palettes")
+        condition::id_of("Pastel✽Palettes")
     );
     assert_eq!(seen[bandori_std::cel::KEY_NO_HAND], 1);
     // `state()` agrees with the table (one door).
     for key in bandori_std::cel::STATE_KEYS {
-        assert_eq!(view.state(0, key), seen[key], "state() vs state_table() {key}");
+        assert_eq!(
+            view.state(0, key),
+            seen[key],
+            "state() vs state_table() {key}"
+        );
     }
 }
 
 #[test]
 fn install_vocab_then_first_sugar_guard_compiles() {
-    cond_pre::install_vocab();
+    condition::install_vocab();
     // A real production spelling. Must compile after install.
     let c = rules_cond::compile("charge(owner) > 0").expect("sugar guard compiles");
     let win = win_with_sugar();
@@ -85,7 +89,7 @@ fn install_vocab_then_first_sugar_guard_compiles() {
 
 #[test]
 fn install_vocab_then_owner_sugar_compiles() {
-    cond_pre::install_vocab();
+    condition::install_vocab();
     let c = rules_cond::compile("owner.charge == 7 && owner.group > 0").expect("owner sugar");
     let win = win_with_sugar();
     let cand = CandidateCtx {
@@ -99,7 +103,7 @@ fn install_vocab_then_owner_sugar_compiles() {
 fn persona_group_name_spellings_hash() {
     // Brief 9.2: the host publishes `id_of(persona_name())` /
     // `id_of(group_name())` — the exact spelling the CallEq sugar compares.
-    cond_pre::install_vocab();
+    condition::install_vocab();
     for (name, key, cel) in [
         (
             "三角初华（Sumimi）",
@@ -116,12 +120,16 @@ fn persona_group_name_spellings_hash() {
             bandori_std::cel::KEY_GROUP,
             "group_is(0, 'Pastel✽Palettes')",
         ),
-        ("CRYCHIC", bandori_std::cel::KEY_GROUP, "group_is(0, 'CRYCHIC')"),
+        (
+            "CRYCHIC",
+            bandori_std::cel::KEY_GROUP,
+            "group_is(0, 'CRYCHIC')",
+        ),
     ] {
         let mut win = win_with_sugar();
         win.players[0]
             .state
-            .insert(key.to_string(), cond_pre::id_of(name));
+            .insert(key.to_string(), condition::id_of(name));
         let cand = CandidateCtx {
             owner: 0,
             ..Default::default()
@@ -132,7 +140,7 @@ fn persona_group_name_spellings_hash() {
         };
         assert_eq!(
             view.state(0, key),
-            cond_pre::id_of(name),
+            condition::id_of(name),
             "state(0, {key}) must be id_of({name:?})"
         );
         let c = rules_cond::compile(cel).unwrap();

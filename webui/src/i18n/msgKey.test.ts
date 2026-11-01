@@ -1,6 +1,6 @@
 // Run with: node --test webui/src/i18n/msgKey.test.ts
 //
-// A tile-mark kind **is** its i18n key (`trigger_why::mark_kind_name` ->
+// A tile-mark kind **is** its i18n key (`trigger_reason::mark_kind_name` ->
 // `Msg::new(kind)`), so a key like `mark:cp` must resolve in `game`. i18next's
 // `nsSeparator` would otherwise split it as namespace `mark` and every mark on
 // the board would render as a raw key. These tests pin the lookup options and

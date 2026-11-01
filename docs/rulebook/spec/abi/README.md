@@ -163,7 +163,7 @@ map (consolidated → slugs the document names):
 | `plan-shape-scope` | `pure-wings-stale-steps`, `pure-wings-stale-direction`, `pure-wings-pay-factor-leak`, `saki-move-leaks-plan-shape`, `dg-plan-reset`, `sakiko-pay-factor-composition`, `repaint-pay-factor`, `taki-pay-factor-leak`, `rana-pay-factor-multiply` |
 | `charity-rolled-flag` | `charity-dice-move-gate` |
 | `plan-live-sync` | `charity-extra-steps-sync`, `detour-plan-writes-lost`, `misaki-effective-steps` |
-| `effect-move-forced-path` | `sakiko-followers-card-move`, `misaki-teleport`, `fate-forced-hop`, `plan-set-forced` |
+| `effect-move-forced-path` | `sakiko-followers-card-move`, `misaki-teleport`, `dest-forced-hop`, `plan-set-forced` |
 | `trigger-walk-payload` | `detour-parity-unused`, `misaki-planned-start`, `misaki-fire-roll-signal` |
 | `nested-teleport-tail` | `lisa-bond-nested-teleport-window` |
 | `press-surface-placed-card` | `kanon-press-surface-abi`, `even-lost-not-pressable`, `placed-card-press-surface`, `hina-clause-2-swap-missing` |

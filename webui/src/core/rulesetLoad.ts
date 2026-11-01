@@ -5,10 +5,10 @@
 //
 // The glue is the browser build, `rules-cond` `runtime-only` (docs/GUARDS.md
 // §8/§8.3): it cannot compile a CEL condition source. Every guarded entry's
-// `pre` therefore ships as a precompiled blob (`conds-<sha256>.bin`, §8.2)
+// `condition` therefore ships as a precompiled blob (`conds-<sha256>.bin`, §8.2)
 // named in `index.json`, and `ruleset_precompiled` feeds it in before
-// `ruleset_build`. A card with a `pre` and no blob is a loud build error
-// (`BadPre`) -- never silently treated as true.
+// `ruleset_build`. A card with a `condition` and no blob is a loud build error
+// (`BadCondition`) -- never silently treated as true.
 //
 // The sequence is split in two so a live source switch can fetch everything
 // before touching the live glue: `fetchRuleset` only reads and digests,
@@ -30,7 +30,7 @@ export interface RulesetGlue {
 export interface RulesetIndex {
   modules: { file: string }[];
   /** Precompiled guard conditions (docs/GUARDS.md §8.2); absent when the set
-   *  declares no `pre` -- older bundles and cond-less rulesets stay valid. */
+   *  declares no `condition` -- older bundles and cond-less rulesets stay valid. */
   conds?: { file: string } | null;
 }
 

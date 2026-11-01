@@ -99,7 +99,7 @@ Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
 | C-PPP-returns-c4 | 通用卡[手]后获得1个星星贴纸 | **FAILS(LESS)** | `returns_c4_blocked_residual_noop` | written | book grants +1 星星贴纸 after a 通用 [手]; body/engine never grants it (ppp.md Findings / `returns_sticker_after_general`). Residual `on_played_is_general` also BLOCKED-HOST `Op::trig_cards==0` | — |
 | C-PPP-star-beat-01 | 获得1层状态（盖房） | PROVEN* | `star_beat_01_layer_iff`, `…_mutant_plus_2` | written, verdict pending | status key unnamed in the book | OPEN-status-name |
 | C-PPP-star-beat-02 | 进入移动阶段并选择以下操作之一 | PROTOCOL-LEVEL | — | — | move-stage prompt | — |
-| C-PPP-star-beat-03 | +2星星贴纸，传送 (45×(F+1)) mod 60 | PROVEN* (sticker leg) / PROTOCOL (walk) | `star_beat_03_stickers_iff`, `…_mutant` | written, verdict pending | teleport+settle is `card_move` plan stub | — |
+| C-PPP-star-beat-03 | +2星星贴纸，传送 (45×(F+1)) mod 60 | PROVEN* (sticker leg) / PROTOCOL (walk) | `star_beat_03_stickers_iff`, `…_mutant` | written, verdict pending | teleport+settle is `run_planned_move` plan stub | — |
 | C-PPP-star-beat-04 | 移动 (2×(F+1)) d10 格 | PROTOCOL-LEVEL | — | — | dice walk plan | — |
 | C-PPP-door-01 | 指定序列（10个具名格） | **PROVEN** | `door_01_sequence_const` | SUCCESSFUL 0.7 s | — | — |
 | C-PPP-door-02 | 放置在流星堂…[经过]沿序列前进 | BLOCKED-HOST / PROTOCOL | — | — | `tile_named('流星堂')` = −1 in Kani host; walk is pass pipeline | OPEN-door-hill |
@@ -113,10 +113,10 @@ Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
 | C-PPP-auction-off-c2 | 不受任何其他效果影响 | OPEN | — | — | immunity is a card flag; no universal effect list | OPEN-immunity |
 | C-PPP-random-star-01 | 放置自身…洗入卡组…拍卖撤下来了放牌堆底 | PARTIAL / BLOCKED-HOST | `random_star_01_place_and_deck_bottom_iff` | written | `Op::shuffle_into_deck` is a silent 0 | — |
 | C-PPP-random-star-02 | [经过]流星堂可使用2星星贴纸强制停下并[结算] | PROTOCOL-LEVEL | — | — | force-stop + settle | OPEN-强制停下 |
-| C-PPP-signpost-01 | 主要移动设为移动60格并不触发结算 | PROTOCOL-LEVEL | — | — | `plan::set_steps` / `card_move` stubs | OPEN-结算定义 |
+| C-PPP-signpost-01 | 主要移动设为移动60格并不触发结算 | PROTOCOL-LEVEL | — | — | `plan::set_steps` / `run_planned_move` stubs | OPEN-结算定义 |
 | C-PPP-signpost-02 | 回合结束时[失去]1000资金 | PROVEN* | `signpost_02_lose_1000_at_end_iff`, `…_mutant_lose_500` | written, verdict pending | host `pay` clamps money at 0 | — |
-| C-PPP-caught-01 | 移动到前方一名玩家的格子…可选择盖房 | PROTOCOL-LEVEL | — | — | `card_move` | — |
-| C-PPP-far-away-01 | [传送]至绝对距离最远的玩家并[结算] | PROTOCOL-LEVEL | pure dest-is-farthest spec | written | `card_move` + settle | — |
+| C-PPP-caught-01 | 移动到前方一名玩家的格子…可选择盖房 | PROTOCOL-LEVEL | — | — | `run_planned_move` | — |
+| C-PPP-far-away-01 | [传送]至绝对距离最远的玩家并[结算] | PROTOCOL-LEVEL | pure dest-is-farthest spec | written | `run_planned_move` + settle | — |
 | C-PPP-far-away-02 | 可给最远的可盖房格子加盖 | PROTOCOL-LEVEL | — | — | optional house after settle | — |
 | C-PPP-maze-01 | 位于流星堂前后5格内时可打出 | **PROVEN** (predicate) / BLOCKED-HOST (body gate) | `maze_01_distance_predicate` | SUCCESSFUL | body gate uses `tile_named('流星堂')` = −1 | — |
 | C-PPP-maze-02 | 投掷1d10从流星堂移动… | PROTOCOL-LEVEL | — | — | walk | OPEN-强制停下 |

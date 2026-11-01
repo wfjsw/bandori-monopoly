@@ -343,7 +343,7 @@ pub fn strategy_for(
 
 /// Why `persona` may not use `card` (a `Msg` as JSON), or `undefined`.
 #[wasm_bindgen]
-pub fn deck_why_not(persona_name: &str, card: &str) -> Result<Option<String>, JsError> {
+pub fn deck_blocked(persona_name: &str, card: &str) -> Result<Option<String>, JsError> {
     let d = data()?;
     let c = persona(&d, persona_name)?;
     let k = d.card(card).ok_or_else(|| JsError::new("unknown card"))?;
@@ -653,7 +653,7 @@ pub fn ruleset_add_hashed(bytes: &[u8], sha256: &str) -> Result<(), JsError> {
 
 /// Feed the precompiled-condition blob (`conds-<sha>.bin`, postcard) that
 /// `tools/build-ruleset.mjs` ships beside `index.json` (`docs/GUARDS.md` §8.2).
-/// Required whenever any loaded card declares a `pre`: this build links
+/// Required whenever any loaded card declares a `condition`: this build links
 /// `rules-cond` with `runtime-only` (no CEL parser, §8.3), so a source-only
 /// condition is a loud `ruleset_build` error and never "treat as true".
 /// Call after `ruleset_add`, before `ruleset_build`.
@@ -706,9 +706,9 @@ pub fn ruleset_build() -> Result<usize, JsError> {
 ///
 /// A test seam for `webui/src/game/ruleset.test.ts`: it proves the shipped
 /// precompiled blob does not merely *load* in this runtime-only build but
-/// actually evaluates -- the thing that broke when cards first gained `pre`s
+/// actually evaluates -- the thing that broke when cards first gained `condition`s
 /// and nothing shipped the compiled form. Throws when the entry declares no
-/// condition, so a card with a `pre` can be asserted to be present and live.
+/// condition, so a card with a `condition` can be asserted to be present and live.
 #[wasm_bindgen]
 pub fn ruleset_pre_eval(
     card: &str,
@@ -716,7 +716,7 @@ pub fn ruleset_pre_eval(
     window_json: &str,
     candidate_json: &str,
 ) -> Result<bool, JsError> {
-    use game_rules::cond_pre::{CandidateCtx, WindowCtx};
+    use game_rules::condition::{CandidateCtx, WindowCtx};
     let win: WindowCtx =
         serde_json::from_str(window_json).map_err(|e| JsError::new(&format!("window: {e}")))?;
     let cand: CandidateCtx = serde_json::from_str(candidate_json)
@@ -728,12 +728,12 @@ pub fn ruleset_pre_eval(
         .ruleset()
         .card(card)
         .ok_or_else(|| JsError::new(&format!("no card {card:?}")))?;
-    let pre = set.ruleset().pre_at(handle, entry).ok_or_else(|| {
+    let condition = set.ruleset().pre_at(handle, entry).ok_or_else(|| {
         JsError::new(&format!(
             "card {card:?} entry {entry} declares no condition"
         ))
     })?;
-    Ok(pre.eval(&win, &cand))
+    Ok(condition.eval(&win, &cand))
 }
 
 fn rules() -> Result<Arc<dyn CardRules>, JsError> {
@@ -754,11 +754,11 @@ fn frame(
     state: &game_core::state::MatchState,
 ) -> serde_json::Value {
     let player_id = state.player_of(member);
-    // Typed twin of `view_extra`: same fields, without building an
+    // Typed twin of `view_extras`: same fields, without building an
     // intermediate `serde_json::Value` and cloning its members back out
     // just to re-embed them here. `view()` / `views()` are the per-dirty-tick
     // hot path (one call per human seat plus one per advanced bot).
-    let extra = m.view_extra_typed(member);
+    let extra = m.view_extras_typed(member);
     // The turn's public play history rides the frame: a seat-view fork's
     // max-plays cap and skill de-dup read it (`SeatView::played`), and only
     // the live world has it otherwise.
@@ -774,7 +774,7 @@ fn frame(
         "cardsPlayed": cards_played,
         "aiAnswer": extra.ai_answer,
         "playable": extra.playable,
-        "estCost": extra.est_cost,
+        "estCost": extra.estimated_cost,
         "tileQuotes": m.tile_quotes(member),
         "skills": extra.skills,
     })
@@ -913,7 +913,7 @@ impl SoloMatch {
     /// `{state, hand, handNotes, draw, you, playerId, aiAnswer, playable,
     /// tileQuotes}` -- the same shape as the server's `match` frame.
     /// `aiAnswer` / `playable` are the per-viewer extras from
-    /// [`Match::view_extra`] (the 托管 autopilot's inputs); `tileQuotes` is
+    /// [`Match::view_extras`] (the 托管 autopilot's inputs); `tileQuotes` is
     /// the per-viewer board caption data ([`Match::tile_quotes`]).
     pub fn view(&self, member: i32) -> String {
         let m = self.m.inner();
@@ -1083,7 +1083,7 @@ impl ReplayMatch {
     /// still filled -- the seat-independent reading.
     ///
     /// The spectator branch is an explicit special case and must not go
-    /// through [`frame`]: `view_extra_typed` on an unknown member returns
+    /// through [`frame`]: `view_extras_typed` on an unknown member returns
     /// `ViewExtra::default()`, whose vectors serialise to `[]`, not the
     /// `null`s this frozen replay shape (`docs/REPLAY.md` §9.3) carries for
     /// `playable` / `estCost` / `skills`.

@@ -155,8 +155,8 @@ pub fn eve_bushido_01_sum_ok(sum: i32) -> bool {
 // ===========================================================================
 
 /// Post crystals after +1, capped at 3.
-pub fn eve_bushido_04_crystals(pre: i32) -> i32 {
-    (pre + 1).min(3)
+pub fn eve_bushido_04_crystals(condition: i32) -> i32 {
+    (condition + 1).min(3)
 }
 
 // ===========================================================================
@@ -308,8 +308,8 @@ pub fn ranger_02_band(count: i32) -> i32 {
 }
 
 /// Money after the ladder: leg 1 gain, then leg 4's 「失去2000资金」 at 5+.
-pub fn ranger_money_after(pre: i32, count: i32) -> i32 {
-    let mut m = pre + ranger_01_money(count);
+pub fn ranger_money_after(condition: i32, count: i32) -> i32 {
+    let mut m = condition + ranger_01_money(count);
     if count >= 5 {
         m = (m - 2000).max(0);
     }
@@ -317,8 +317,8 @@ pub fn ranger_money_after(pre: i32, count: i32) -> i32 {
 }
 
 /// Band pool after legs 2 (＋3) and 3 (－4, OPEN-floor at 0).
-pub fn ranger_band_after(pre: i32, count: i32) -> i32 {
-    let mut b = pre + ranger_02_band(count);
+pub fn ranger_band_after(condition: i32, count: i32) -> i32 {
+    let mut b = condition + ranger_02_band(count);
     if count >= 4 {
         b = (b - 4).max(0);
     }
@@ -408,7 +408,7 @@ pub fn shine_again_01_fan() -> i32 {
 // ===========================================================================
 
 /// Place + Draw(1). Deck insert is silent in the effect log.
-/// SetToken from the 持续 skill-block stamp (`set_tok`) is bookkeeping —
+/// SetToken from the 持续 skill-block stamp (`set_held`) is bookkeeping —
 /// ignored (class B: the exact-match originally rejected it).
 pub fn first_accident_01_effects_ok(effects: &[Effect], player: i32) -> bool {
     let mut place = 0;
@@ -550,13 +550,13 @@ pub fn together_02_draw() -> i32 {
 // ===========================================================================
 
 /// Post crystals after one draw tick.
-pub fn dream_ahead_01_crystals(pre: i32) -> i32 {
-    (pre + 1).min(5)
+pub fn dream_ahead_01_crystals(condition: i32) -> i32 {
+    (condition + 1).min(5)
 }
 
 /// Overflow that increments X (0 when still under the cap).
-pub fn dream_ahead_01_overflow(pre: i32) -> i32 {
-    if pre >= 5 {
+pub fn dream_ahead_01_overflow(condition: i32) -> i32 {
+    if condition >= 5 {
         1
     } else {
         0
@@ -594,8 +594,8 @@ pub fn guide_01_band_after(pre_band: i32) -> i32 {
 // 「（2）回合结束时添加1个[奇迹水晶]。」
 // ===========================================================================
 
-pub fn guide_04_crystals(pre: i32) -> i32 {
-    pre + 1
+pub fn guide_04_crystals(condition: i32) -> i32 {
+    condition + 1
 }
 
 // ===========================================================================
@@ -606,9 +606,9 @@ pub fn title_idol_01_band_after_mutant(pre_band: i32) -> i32 {
     pre_band + 3
 }
 
-pub fn eve_bushido_04_crystals_mutant(pre: i32) -> i32 {
+pub fn eve_bushido_04_crystals_mutant(condition: i32) -> i32 {
     // forgot the cap
-    pre + 1
+    condition + 1
 }
 
 pub fn seeyou_03_flip_mutant(_up: i32, down: i32) -> i32 {
@@ -634,9 +634,9 @@ pub fn guide_01_crystals_mutant(up: i32, down: i32) -> i32 {
     (up + down + 2) / 3
 }
 
-pub fn maya_inf_02_card_crystals_mutant(pre: i32) -> i32 {
-    if pre < 4 {
-        pre + 1
+pub fn maya_inf_02_card_crystals_mutant(condition: i32) -> i32 {
+    if condition < 4 {
+        condition + 1
     } else {
         // left one behind
         1
@@ -648,19 +648,20 @@ pub fn maya_inf_02_card_crystals_mutant(pre: i32) -> i32 {
 // ===========================================================================
 
 /// Money of every player unchanged.
-pub fn frame_money(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr4_eq(pre.money, post.money)
+pub fn frame_money(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr4_eq(condition.money, post.money)
 }
 
 /// Fan views unchanged.
-pub fn frame_fans(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr4_eq(pre.fans_pos, post.fans_pos)
-        && crate::world::arr4_eq(pre.fans_neg, post.fans_neg)
+pub fn frame_fans(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr4_eq(condition.fans_pos, post.fans_pos)
+        && crate::world::arr4_eq(condition.fans_neg, post.fans_neg)
 }
 
 /// Hand / discard bitsets unchanged.
-pub fn frame_piles(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr8b_eq(pre.hand, post.hand) && crate::world::arr8b_eq(pre.discard, post.discard)
+pub fn frame_piles(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr8b_eq(condition.hand, post.hand)
+        && crate::world::arr8b_eq(condition.discard, post.discard)
 }
 
 /// Quiet: no effects at all.

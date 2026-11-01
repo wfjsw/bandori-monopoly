@@ -37,8 +37,8 @@ fn deck_before_game_self_place_announces_once() {
                 && e.card == "PPP:Returns"
                 && e.msg.key() == "log.effect_applied"
                 && e.msg
-                    .a
-                    .get("why")
+                    .args
+                    .get("reason")
                     .map(|w| format!("{w:?}").contains("deck_before"))
                     .unwrap_or(false)
         })

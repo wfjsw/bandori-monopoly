@@ -10,7 +10,7 @@ use game_core::net::NetMessage;
 use game_core::state::stage;
 
 // ---------------------------------------------------------- local helpers
-// `Table::settle` treats `stage::MOVE` as "not at rest", but `card_move` for a
+// `Table::settle` treats `stage::MOVE` as "not at rest", but `run_planned_move` for a
 // non-turn player (祥，移动 etc.) leaves `step` at MOVE. These helpers tolerate
 // that and restore the step afterwards.
 
@@ -551,7 +551,10 @@ fn crystal_swap_skips_a_full_destination() {
         keys.iter().any(|k| k.ends_with("crystal_swap_none")),
         "no legal destination: {keys:?}"
     );
-    assert!(!keys.iter().any(|k| k.ends_with("crystal_swap_moved")), "{keys:?}");
+    assert!(
+        !keys.iter().any(|k| k.ends_with("crystal_swap_moved")),
+        "{keys:?}"
+    );
     assert_eq!(
         t.m.world().counter_at(src, "crystals"),
         1,
@@ -1337,7 +1340,11 @@ fn umiri_two_copies_keep_their_own_user() {
         v.sort();
         v
     };
-    assert_eq!(by_user(&t), vec![(1, 1), (2, 2)], "each copy has its own user");
+    assert_eq!(
+        by_user(&t),
+        vec![(1, 1), (2, 2)],
+        "each copy has its own user"
+    );
     // P0's turn start: only P0's copy moves (from p1 to p2).
     t.begin_turn(0);
     drain(&mut t);

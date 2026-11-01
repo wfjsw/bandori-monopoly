@@ -105,7 +105,9 @@ fn src_files(root: &Path) -> Vec<std::path::PathBuf> {
         let dir = root.join(crate_dir);
         let mut stack = vec![dir];
         while let Some(d) = stack.pop() {
-            let Ok(rd) = std::fs::read_dir(&d) else { continue };
+            let Ok(rd) = std::fs::read_dir(&d) else {
+                continue;
+            };
             for e in rd.flatten() {
                 let p = e.path();
                 if p.is_dir() {
@@ -158,7 +160,10 @@ fn purity_matcher_covers_segments_not_substrings() {
     // Standalone word.
     assert_eq!(segment_hits("charge(p)", "charge").len(), 1);
     // Quoted tile kind.
-    assert_eq!(segment_hits("tile_is(t, \"circle\")", "\"circle\"").len(), 1);
+    assert_eq!(
+        segment_hits("tile_is(t, \"circle\")", "\"circle\"").len(),
+        1
+    );
     // `SeatField::Exile` is allowed; bare `Exile` is not.
     assert!(exile_hits("SeatField::Exile").is_empty());
     assert_eq!(exile_hits("kind == Exile").len(), 1);

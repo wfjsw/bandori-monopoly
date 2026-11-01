@@ -144,7 +144,7 @@ fn user_card_frame(step: &Step<'_>, card: &str) -> Result<(), String> {
         format!("discard_pub:P{who}"),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 // =====================================================================
@@ -280,7 +280,7 @@ fn great_contract() {
         t.set_draw(0, &["通用:安可", "通用:尽力后的收获"]);
         t.give(0, &["通用:GREAT"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(GREAT_CLAUSES);
         t.play(0, "通用:GREAT")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -303,7 +303,7 @@ fn great_contract() {
             return Err(format!("draw {:?}, expected one PERFECT", t.draw_pile(0)));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -476,7 +476,7 @@ fn perfect_contract() {
         // A FEVER! is already in hand: 「加入一张新的」 must not consume it.
         t.give(0, &["通用:[衍生]PERFECT", "通用:[衍生]FEVER!"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(PERFECT_CLAUSES);
         t.play(0, "通用:[衍生]PERFECT")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -503,7 +503,7 @@ fn perfect_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -622,7 +622,7 @@ pub fn c_gen_fever_frame(step: &Step<'_>) -> Result<(), String> {
         "targeted".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// The clause set a FEVER! contract arms on `Table::observe`.
@@ -819,10 +819,12 @@ pub fn c_gen_budokan_01(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let n_players = step.pre.st.players.len();
+    let n_players = step.condition.st.players.len();
     // 「[使用者]以外的[存活]玩家」 -- not bankrupt and not left the game.
     let alive_others = (0..n_players)
-        .filter(|&i| i != who && !step.pre.st.players[i].bankrupt && !step.pre.st.players[i].left)
+        .filter(|&i| {
+            i != who && !step.condition.st.players[i].bankrupt && !step.condition.st.players[i].left
+        })
         .count();
     let x = budokan_x(alive_others);
     let mut expect = vec![0i64; n_players];
@@ -860,7 +862,7 @@ pub fn c_gen_budokan_frame(step: &Step<'_>) -> Result<(), String> {
         "targeted".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// The clause set a 武道馆 contract arms on `Table::observe`.
@@ -893,7 +895,7 @@ fn budokan_contract() {
             })
             .collect();
         t.give(0, &["通用:登上武道馆"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(BUDOKAN_CLAUSES);
         t.play(0, "通用:登上武道馆")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -906,7 +908,7 @@ fn budokan_contract() {
             }
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P",
@@ -1022,7 +1024,7 @@ pub fn c_gen_tsugu_frame(step: &Step<'_>) -> Result<(), String> {
         "targeted".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// The clause set a Tsugu contract arms on `Table::observe`.
@@ -1043,7 +1045,7 @@ fn tsugu_ge22_draws() {
         t.set_draw(0, &["通用:GREAT", "通用:安可"]);
         t.give(0, &["通用:@Tsugu ycm"]);
         t.dice(&[8, 8, 6]); // 3d10 sum = 22
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(TSUGU_CLAUSES);
         t.play(0, "通用:@Tsugu ycm")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -1064,7 +1066,7 @@ fn tsugu_ge22_draws() {
             return Err(format!("money delta {d}, expected +1000 (branch 4 gain)"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P",
@@ -1280,7 +1282,7 @@ pub fn c_gen_party_frame(step: &Step<'_>) -> Result<(), String> {
         "targeted".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// The clause set a THANKS PARTY contract arms on `Table::observe`.
@@ -1703,7 +1705,7 @@ pub fn c_gen_parking_frame(step: &Step<'_>) -> Result<(), String> {
         "pool:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// The name carries 「[都筑诗船]」; a non-都筑 seat cannot play it.
@@ -1911,7 +1913,7 @@ pub fn c_gen_harvest_frame(step: &Step<'_>) -> Result<(), String> {
         "houses:T".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// C-GEN-harvest-01: six options 1..=6; the chosen distance settles.
@@ -1924,7 +1926,7 @@ fn harvest_moves_and_settles() {
         // tile prompt (its settle offers the same-colour buys).
         t.set_pos(0, 3);
         t.give(0, &["通用:尽力后的收获"]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-GEN-harvest-frame",
             "roster#通用:尽力后的收获",
@@ -1954,7 +1956,7 @@ fn harvest_moves_and_settles() {
         }
         skip_all(&mut t);
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P",
@@ -2194,7 +2196,7 @@ pub fn c_gen_clearcp_frame(step: &Step<'_>) -> Result<(), String> {
         "pool:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// C-GEN-clearcp-01: one tile mark + six on-card CP.
@@ -2405,7 +2407,7 @@ pub fn c_gen_rain_frame(step: &Step<'_>) -> Result<(), String> {
         "turn.abnormal".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// C-GEN-rain-01: X from 2d2; X players including the user get [停留].
@@ -2422,7 +2424,7 @@ fn rain_stays_x() {
         let f2 = rng.range(1, 2);
         let x = f1 + f2; // 2..=4
         t.dice(&[f1, f2]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-GEN-rain-frame",
             "roster#通用:雨啊，快点来吧",
@@ -2452,7 +2454,7 @@ fn rain_stays_x() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P",

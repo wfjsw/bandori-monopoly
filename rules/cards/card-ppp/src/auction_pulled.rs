@@ -1,4 +1,3 @@
-//! `PPP:[衍生]拍卖撤下来了` -- C# `CardAuctionPulled` (MatchHost.cs:8971-9017):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]拍卖撤下来了`）:
 //! > [衍生]拍卖撤下来了：
@@ -8,7 +7,6 @@
 //!
 //! auto-placed when it enters the hand; on the owner's own turn start it eats a
 //! placed 仓库里的Random Star, and it raises the owner's fire-pot cap.
-//! A pure [特] card (C# has no `Play`, `Normal => false`, `Immune => true`).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, CardPile, TriggerKind};
@@ -40,10 +38,6 @@ pub const AUCTION_PULLED: CardDef = CardDef::new(
         // sheet cell B13
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
-/// `Fx.Drawn` (C# `CardAuctionPulled.Drawn`) -- pull the card out of the hand
-/// and place it on the owner's field the moment it enters the hand.
-/// `Fx.TurnStart` (C# `CardAuctionPulled.TurnStart` -> `Remove`) -- eat the
-/// placed 仓库里的Random Star and charge 540.
 fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::Drawn => {
@@ -56,23 +50,17 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             }
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("auction_pulled_note")));
-            // 规则书[持续]: 「此卡拥有者火罐上限加1」 -- C# `FireMaxDelta() => 1`.
-            // TODO(ABI)（此卡拥有者火罐上限加1）: no leave-field hook point -- the cap is
-            //   written on the seat row and never reverted when this card leaves play.
+            // TODO(ABI)（此卡拥有者火罐上限加1）: no leave-field hook point -- the cap is written on the
+            // seat row and never reverted when this card leaves play.
             bandori_std::fire::add_max(player_id, 1);
             ctx::log(
                 player_id,
                 &Msg::new(key!("auction_pulled_placed")).player_id("who", player_id),
             );
-            // 规则书[持续]: 「且不受任何其他效果影响」 -- C# `Card.Immune`, a flag
-            // on the card that effects read and skip.
             ctx::set_self_immune(true);
         }
         TriggerKind::TurnStart => {
-            // C# `TurnStart(int turn)`: `if (turn != Player) return Ok(null);` -- only
-            // the owner's own turn start.
-            // TODO(规则书)（每回合开始时）: 「每回合开始时」 has no owner qualifier -- we fire
-            //   only on the owner's own turn start (C# gate; spec C-PPP-auction-off-02 reads it so).
+            // TODO(规则书)（每回合开始时）:
             if trigger::player_id() != player_id || !ctx::is_placed() {
                 return Ok(());
             }
@@ -82,8 +70,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if !field.iter().any(|c| c == STAR) {
                 return Ok(());
             }
-            // C# `H.Unplace(star, "removed", ...)` -- off the field, out of the
-            // game. `take_card(Field, ..)` drops it without sending it anywhere.
+            // `take_card(Field, ..)` drops it without sending it anywhere.
             if ctx::take_card(player_id, STAR, CardPile::Field) {
                 ctx::log(
                     player_id,

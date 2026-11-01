@@ -99,7 +99,7 @@ fn parked_match() -> (Match, i32) {
 fn view_frame(m: &Match, member: i32) -> Value {
     let st = m.state();
     let player_id = st.player_of(member);
-    let extra = m.view_extra(member);
+    let extra = m.view_extras(member);
     json!({
         "state": st,
         "hand": m.hand_of(member),

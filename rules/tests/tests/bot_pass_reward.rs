@@ -1,7 +1,7 @@
 //! The standard bot's [pass-reward] choice (user ruling 2026-10-28): the
 //! 2 000 money print at low cash, the card once the stack passes the ramp,
 //! and always the card above the cap. The behaviour is engine-side
-//! (`Cx::ai_answer_for_entry`), so it holds for server bots and timed-out
+//! (`PlayCtx::ai_answer_for_entry`), so it holds for server bots and timed-out
 //! seats alike.
 
 use game_core::state::BotMentality;

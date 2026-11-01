@@ -1,4 +1,3 @@
-//! `RAS:（chuchu）演奏我的音乐吧` -- C# `CardChuchuMusic` (MatchHost.cs:9905-10002):
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（chuchu）演奏我的音乐吧`）:
 //! > （chuchu）演奏我的音乐吧：
@@ -20,12 +19,6 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
         // 规则书: 「此卡奇迹水晶为0时」 -- a state clause on the count, so it rides
         // `CounterChanged` (any write that empties it), not the decay tick.
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_empty_guard), crystals_empty)),
-        // 规则书: 「场上存在此卡的玩家下次购买地契时」 -- the acquisition moment,
-        // C# `CardChuchuMusic.Bought` (`Fx.Bought` = 「a player became the owner
-        // of `t.tile`」), the same hook Afterglow / Roselia / 朝日 listen on for
-        // their 「购买…时」 clauses. It was `BuyAfter` (「after `Card.Buy`
-        // resolves」), which `ctx::raise_bought`'s card-driven hand-over (巴's
-        // 「收购该地契」) does not raise -- so the bonus never fired there.
         On::Action(Action::Bought("", Some(buy_after_guard), buy_after)),
     ],
 )
@@ -41,13 +34,10 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
 
 const ID: &str = "RAS:（chuchu）演奏我的音乐吧";
 
-/// The player who played the card (C# `User`), 1-based so seat 0 survives a
-/// default-0 read. A prop on the instance: two copies can lie at once.
+/// A prop on the instance: two copies can lie at once.
 const PROP_USER: &str = "chuchu_music.user";
-/// How many times the buy effect has fired (C# `Mem["hits"]`).
 const PROP_HITS: &str = "chuchu_music.hits";
 
-/// C# `CardChuchuMusic.WhyNot`: 「没有别的玩家」 when `H.Others(seat)` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("chuchu_music_no_others")));
@@ -57,16 +47,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let others = ctx::others(player_id);
-    // C# `WhyNot` refuses the play with no other player alive; the gate is now
-    // `cant_play` above.
     if others.is_empty() {
         return Ok(());
     }
-    // 规则书: 「将此卡放置于你以外的一名玩家场上」 -- C# `H.PickTarget` over
-    // `H.Others(seat)` then `H.PlaceFromPlay(c, r.index, -1, 3)`.
-    // `H.PickTarget` = the player prompt, then the `H.Target` gate (C#
-    // `Target(c, r.index, t); res.index = t.yes ? t.index : -1`); a failed
-    // target means `c.Effective = false` and no placement.
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("chuchu_music_title")),
@@ -80,9 +63,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于你以外的一名玩家场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(hit, ID, &Msg::new(key!("chuchu_music_note")));
-    // 规则书: 「并为其添加3个奇迹水晶」 -- C# `H.PlaceFromPlay(c, r.index, -1, 3)`.
     ctx::set_crystals(3);
-    // C# `User` is the player who played the card; `Mem["hits"]` starts at 0.
     // 规则书: 「[使用者]获得100资金」
     ctx::set_prop(PROP_USER, player_id + 1);
     // 规则书: 「此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）」
@@ -96,11 +77,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `DecayCard.TurnEnd` (C# `CardChuchuMusic : DecayCard`) -- burn one miracle
-/// crystal at the holder's turn end; at 0 the card goes to the user's discard
-/// and the user draws (C# `Empty` -> `Done`).
-/// Pure guard for [`turn_end`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// Pure guard for [`turn_end`] -- the activation gate. `false` means the card is
+/// not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
 }
@@ -108,18 +86,15 @@ fn turn_end_guard(player_id: i32) -> bool {
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     // 「那名玩家的每个回合结束时失去一个」 -- the tick.
     ctx::dec_turns_left();
-    // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
-    // The zero test is not re-checked here: the write raises `CounterChanged`
-    // and [`crystals_empty`] owns it (a clause on the count, not on the tick).
+    // The zero test is not re-checked here: the write raises `CounterChanged` and
+    // [`crystals_empty`] owns it (a clause on the count, not on the tick).
     ctx::add_crystals(-1, 0)?;
     Ok(())
 }
 
-/// 规则书: 「此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡」 --
-/// C# `Empty` -> `Done`: unplace into the user's discard, the user draws 1.
 /// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
-/// `counter::CRYSTALS`), so a count emptied by any write trips it.
-/// Pure guard for [`crystals_empty`] -- the activation gate.
+/// `counter::CRYSTALS`), so a count emptied by any write trips it. Pure guard for
+/// [`crystals_empty`] -- the activation gate.
 fn crystals_empty_guard(_player_id: i32) -> bool {
     trigger::card_is(ID) && trigger::name() == counter::CRYSTALS
 }
@@ -140,11 +115,8 @@ fn crystals_empty(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardChuchuMusic.Bought` / `Move` -- when the holder buys a tile, the user
-/// gains `Pay` money, the card hops to the next non-user player, and crystals
-/// refill to 3.
-/// Pure guard for [`buy_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// Pure guard for [`buy_after`] -- the activation gate. `false` means the card is
+/// not activated at all.
 fn buy_after_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
 }
@@ -154,14 +126,8 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
     if user < 0 {
         return Ok(());
     }
-    // 规则书: 「场上存在此卡的玩家下次购买地契时，[使用者]获得100资金」
-    // -- C# `Pay = Math.Min(500, 100 + 100 * Hits)`; each trigger bumps Hits.
-    // 规则书: 「此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）」
-    // -- the cap rides the **extra**, not the whole payout (base 100 stays).
-    // TODO(规则书)（此卡获得资金时）: OPEN-chuchu-which-gain -- the clause does not
-    //   say which 「获得资金」 the +100 rides; we read it as the clause-03 payout
-    //   to the user growing by +100 per **past** trigger (spec executable: 100,
-    //   200, 300, … with the extra capped), not the C# total-500 cap.
+    // TODO(规则书)（此卡获得资金时）: 规则书: 「此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）」 -- the cap
+    // rides the **extra**, not the whole payout (base 100 stays).
     let hits = ctx::prop(PROP_HITS);
     let pay = 100 + (100 * hits).min(500);
     ctx::set_prop(PROP_HITS, hits + 1);
@@ -173,8 +139,6 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("chuchu_music_gain")).i("n", pay as i64),
         )?;
     }
-    // 规则书: 「将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个」
-    // -- C# `Move()`: next player in action order skipping the user and outed players.
     let n = ctx::player_count();
     let mut to = -1;
     for i in 1..n {
@@ -185,9 +149,8 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
         }
     }
     if to < 0 {
-        // Nobody to hop to (2p, or every other seat out): the card stays and
-        // still refills -- the refill is not conditional on the move.
-        // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`.
+        // Nobody to hop to (2p, or every other seat out): the card stays and still
+        // refills -- the refill is not conditional on the move.
         ctx::set_crystals(3);
         return Ok(());
     }
@@ -198,8 +161,7 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
     // instance's).
     ctx::set_prop(PROP_USER, user + 1);
     ctx::set_prop(PROP_HITS, hits + 1);
-    // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`. A fresh countdown
-    // starts on the new holder.
+    // A fresh countdown starts on the new holder.
     ctx::set_crystals(3);
     ctx::set_turns_left(3);
     ctx::log(

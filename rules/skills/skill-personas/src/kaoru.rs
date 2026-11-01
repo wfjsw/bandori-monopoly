@@ -9,7 +9,7 @@
 //!
 //! （1） is one clause with two branches on the same question -- is there a
 //! 「[怪盗标记]」 anywhere on the board? The mark is planted 「向一名玩家场上」
-//! (`HHW:（薰）怪盗hello happy` uses `add_tok` on the chosen player), so the
+//! (`HHW:（薰）怪盗hello happy` uses `add_held_by_name` on the chosen player), so the
 //! question is a per-seat held-counter scan and the two branches are a pot or
 //! a mark removal.
 //!
@@ -44,7 +44,7 @@ pub const KAORU: CardDef = CardDef::new(
         // of 「[经过]或被[经过]」 never both fire on one step: `Pass` here needs
         // the owner to be the passer, and `PassTile` below needs someone else
         // to step onto the owner's tile.
-        On::Action(Action::Pass(card_sdk::pre::MINE, None, on_pass))
+        On::Action(Action::Pass(card_sdk::condition::MINE, None, on_pass))
             .label("（1）")
             .quiet_when_empty(),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
@@ -75,9 +75,9 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「被[经过]」 -- another player's step onto **my** tile (行动阶段 12,
-/// `SETTLE-STAGES.md` §4 M4). `actor != owner && tile.id == owner.pos` is the pre.
+/// `SETTLE-STAGES.md` §4 M4). `actor != owner && tile.id == owner.pos` is the condition.
 
-/// （1） 「每次[经过]…时」 -- the owner's own step. `actor == owner` is the pre.
+/// （1） 「每次[经过]…时」 -- the owner's own step. `actor == owner` is the condition.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     settle(player_id)?;
     Ok(())
@@ -95,9 +95,9 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 fn settle(player_id: i32) -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         for name in [THIEF, THIEF_WIRE] {
-            if ctx::tok(p, name) > 0 {
+            if ctx::held_count(p, name) > 0 {
                 // 「移除场上的一个[怪盗标记]」 -- one unit off that player's mark.
-                ctx::add_tok(p, name, -1, i32::MAX)?;
+                ctx::add_held_by_name(p, name, -1, i32::MAX)?;
                 ctx::log(
                     player_id,
                     &Msg::new(key!("kaoru_removed")).player_id("who", p),
@@ -143,7 +143,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if near.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("kaoru_title")),
         &Msg::new(key!("kaoru_ask")),
@@ -162,7 +162,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // (held counters, the same plant the printed card makes). Three units, not
     // three tile rows: 「玩家场上」 is the player's field.
     for _ in 0..3 {
-        ctx::add_tok(who, THIEF, 1, i32::MAX)?;
+        ctx::add_held_by_name(who, THIEF, 1, i32::MAX)?;
     }
     // 「使你的本次移动以微笑号为起点」
     let ship = ctx::tile_named("微笑号");

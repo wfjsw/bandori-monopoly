@@ -69,8 +69,7 @@ into `rules/spec` is a separate follow-up.
 2. **`docs/rulebook/rulebook-doc.md`** for global rules.
 3. **TEST-FINDINGS §6 rulings** unless newer sheet text supersedes them.
 
-`rulebook.txt` is **not** authoritative. Never derive a spec from
-implementation behaviour, and never from the C#.
+`rulebook.txt` is **not** authoritative.
 
 ## Clause ID scheme
 
@@ -136,7 +135,7 @@ template). Shape:
 3. Arrange with `Table` setters (unchecked -- the arranged state is not a
    transition), then `t.observe(CLAUSES)`.
 4. Drive **one** transition (`t.play`, `t.skill`, ...).
-5. Assert exact numbers, then `frame(pre, post, allowed_prefixes)`.
+5. Assert exact numbers, then `frame(condition, post, allowed_prefixes)`.
 
 A card unit owns `rules/tests/tests/spec_card_<group>.rs` +
 `docs/rulebook/spec/cards/<group>.md`. Group membership for skills comes from
@@ -213,7 +212,7 @@ Any clause that depends on one of these records the OPEN id in its
   write whatever the test asks for (over-limit hands, odd statuses). Only
   transitions are observed; never check the arranged pre-state itself. A
   clause that reads an absolute `post` invariant should also require the same
-  fact held in `pre`, or skip when `pre` is already broken.
+  fact held in `condition`, or skip when `condition` is already broken.
 * **The event tail is capped at 400 entries** (`EVENT_KEEP`). Read per-act
   windows (`Step::events`); never walk further back.
 * **Cards have no instance identity** (`Hidden.hand` is `Vec<String>`).

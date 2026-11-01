@@ -213,8 +213,8 @@ pub fn dice_cast_place_effects(effects: &[Effect], player: i32, card: u8) -> boo
 /// Turn-end body: dest becomes Graveyard (discard). Under the model this is
 /// `set_dest(Graveyard)` + a narration line; the host's `UnplaceCard` is the
 /// discard motion and is PROTOCOL-LEVEL (see unit table).
-pub fn dice_cast_turn_end_sets_graveyard(dest_after: i32) -> bool {
-    dest_after == 1 // Dest::Graveyard
+pub fn dice_cast_turn_end_sets_graveyard(fate_after: i32) -> bool {
+    fate_after == 1 // Dest::Graveyard
 }
 
 // ===========================================================================
@@ -260,8 +260,8 @@ pub fn sparkler_last_crystal_effects(effects: &[Effect], user: i32) -> bool {
 
 /// Dest flag after the last-crystal body: Graveyard (0).
 /// Wire values (`card_sdk::ctx::Dest`): Graveyard=0, Hand=1, Field=2, Banished=3.
-pub fn sparkler_last_crystal_dest(dest_after: i32) -> bool {
-    dest_after == 0
+pub fn sparkler_last_crystal_fate(fate_after: i32) -> bool {
+    fate_after == 0
 }
 
 /// Turn-end burn body: one crystal removed. The extra-turn grant is a
@@ -314,7 +314,7 @@ pub fn saki_move_steps() -> i32 {
 
 /// Destination after a 3-tile walk in `dir` (1 = clockwise, -1 = counter).
 /// `tile_count` is the board size (60).
-pub fn saki_move_dest(from: i32, dir: i32, tile_count: i32) -> i32 {
+pub fn saki_move_fate(from: i32, dir: i32, tile_count: i32) -> i32 {
     let d = if dir >= 0 { 3 } else { -3 };
     let n = tile_count;
     (((from + d) % n) + n) % n
@@ -493,10 +493,16 @@ pub fn mortis_inert_is_noop(effects: &[Effect]) -> bool {
 // ===========================================================================
 
 /// Money frame: only `user` and `others` may move; every other seat is equal.
-pub fn money_frame_ok(pre: &Snapshot, post: &Snapshot, user: i32, others: &[i32], n: i32) -> bool {
+pub fn money_frame_ok(
+    condition: &Snapshot,
+    post: &Snapshot,
+    user: i32,
+    others: &[i32],
+    n: i32,
+) -> bool {
     for p in 0..n.min(MAX_PLAYERS as i32) {
         let touched = p == user || others.contains(&p);
-        if !touched && pre.money[p as usize] != post.money[p as usize] {
+        if !touched && condition.money[p as usize] != post.money[p as usize] {
             return false;
         }
     }
@@ -504,9 +510,9 @@ pub fn money_frame_ok(pre: &Snapshot, post: &Snapshot, user: i32, others: &[i32]
 }
 
 /// Stay-frame: only `touched` seats may change stay/stun.
-pub fn stay_frame_ok(pre: &Snapshot, post: &Snapshot, touched: &[i32], n: i32) -> bool {
+pub fn stay_frame_ok(condition: &Snapshot, post: &Snapshot, touched: &[i32], n: i32) -> bool {
     for p in 0..n.min(MAX_PLAYERS as i32) {
-        if !touched.contains(&p) && pre.stay[p as usize] != post.stay[p as usize] {
+        if !touched.contains(&p) && condition.stay[p as usize] != post.stay[p as usize] {
             return false;
         }
     }

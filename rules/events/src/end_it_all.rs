@@ -6,8 +6,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::keep;
 
@@ -69,7 +69,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .map(|id| Msg::new("ask.cardOption").card("event", id))
             .collect();
         // 「选择3个移除」 -- without replacement; a picked id leaves the pool.
-        let pick = ctx::ask_pick(
+        let pick = ctx::ask_choice(
             player_id,
             &Msg::new("log.event.end_it_title"),
             &Msg::new("log.event.end_it_ask"),

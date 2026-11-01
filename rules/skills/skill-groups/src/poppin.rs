@@ -27,7 +27,7 @@ pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
         On::Action(Action::TurnStartBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             None,
             at_turn_start,
         ))
@@ -138,7 +138,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // presence (gone with the card).
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
     // （4）「不能通过[主要移动]的[结算]盖房」 -- `prop::NO_BUILD` on this
-    // instance (`docs/TILES.md`), read by `why_not_build_on` off the owner's
+    // instance (`docs/TILES.md`), read by `cant_build_on` off the owner's
     // field. Gone with the card. Neutralised by Returns' [持续]（1）.
     if !returns_neutralises_skill4(player_id) {
         ctx::set_prop(card_sdk::abi::prop::NO_BUILD, 1);
@@ -149,9 +149,9 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸」. The spots are
-/// the pre (`tile.id == 1 || …`) -- the body only hands the sticker out.
+/// the condition (`tile.id == 1 || …`) -- the body only hands the sticker out.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::add_tok(player_id, STICKER, 1, i32::MAX)?;
+    ctx::add_held_by_name(player_id, STICKER, 1, i32::MAX)?;
     ctx::log(
         player_id,
         &Msg::new(key!("poppin_sticker")).tile("tile", ctx::trigger::tile()),
@@ -189,15 +189,15 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes the settled
     // amount before it divides among the payees (the 「分摊前」 figure).
-    let why = Msg::new(key!("poppin_share"));
+    let reason = Msg::new(key!("poppin_share"));
     let from = ctx::trigger::player_id();
-    let Some(shaped) = ctx::pay_total(from, payees[0], amount, &why)? else {
+    let Some(shaped) = ctx::pay_total(from, payees[0], amount, &reason)? else {
         return Ok(());
     };
     let each = shaped / (payees.len() as i32).max(1);
     ctx::trigger::set_pay_amount(0);
     for p in payees {
-        ctx::pay_leg(from, p, each, &why)?;
+        ctx::pay_leg(from, p, each, &reason)?;
     }
     ctx::log(
         player_id,
@@ -217,7 +217,7 @@ fn available(player_id: i32, tax: i32) -> [bool; 2] {
         return [false, false];
     }
     [
-        ctx::tok(player_id, STICKER) >= 2 + tax,
+        ctx::held_count(player_id, STICKER) >= 2 + tax,
         state::get(player_id, USED) == 0 && crate::cover_crystals(player_id) >= 2,
     ]
 }
@@ -230,7 +230,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书（`PPP:Returns` [持续]（3））: 「使用因此卡获得的团卡的主动效果时需要
     // 支付1星星贴纸」 -- the sticker is a cost of activation on the borrowed copy.
     let tax = crate::copy_sticker_cost(player_id);
-    if tax > 0 && ctx::tok(player_id, STICKER) < tax {
+    if tax > 0 && ctx::held_count(player_id, STICKER) < tax {
         return Some(Msg::new(key!("skill_band_no_sticker")));
     }
     let avail = available(player_id, tax);
@@ -238,7 +238,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         return None;
     }
     // Neither: name the closest reason.
-    if ctx::tok(player_id, STICKER) < 2 + tax && crate::cover_crystals(player_id) < 2 {
+    if ctx::held_count(player_id, STICKER) < 2 + tax && crate::cover_crystals(player_id) < 2 {
         return Some(Msg::new(key!("poppin_no_sticker")));
     }
     if state::get(player_id, USED) != 0 {
@@ -265,7 +265,7 @@ fn press(player_id: i32) -> card_sdk::Asked {
     if cash_ok && !crystal {
         return cash(player_id);
     }
-    let k = ctx::ask_pick(
+    let k = ctx::ask_choice(
         player_id,
         &Msg::new(key!("poppin_title")),
         &Msg::new(key!("poppin_press_which")),
@@ -284,10 +284,10 @@ fn press(player_id: i32) -> card_sdk::Asked {
 /// （1）「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]」.
 fn to_crystal(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
-    if ctx::tok(player_id, STICKER) < 2 {
+    if ctx::held_count(player_id, STICKER) < 2 {
         return Ok(());
     }
-    ctx::add_tok(player_id, STICKER, -2, i32::MAX)?;
+    ctx::add_held_by_name(player_id, STICKER, -2, i32::MAX)?;
     ctx::add_crystals(1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("poppin_crystal")));
     Ok(())

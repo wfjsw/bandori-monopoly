@@ -6,7 +6,7 @@
 use bandori_std::ctx::{self, plan};
 use bandori_std::state_key;
 use card_sdk::abi::MoveKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
@@ -38,14 +38,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let park = ctx::tile_named("飞鸟山公园");
     for p in all_players() {
         if p == player_id {
-            // The drawer's jump is a `card_move` (a host request, replay-stable)
+            // The drawer's jump is a `run_planned_move` (a host request, replay-stable)
             // rather than `teleport_to`: the walk below is also a host request,
             // and a replay of this body would otherwise re-teleport them back to
             // the park after the walk has already run.
             plan::set_kind(MoveKind::Teleport);
             plan::set_teleport_to(park);
-            plan::set_resolve(false);
-            ctx::card_move(p);
+            plan::set_settles(false);
+            ctx::run_planned_move(p);
         } else {
             ctx::teleport_to(p, park);
         }
@@ -57,14 +57,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", face as i64),
     );
-    // 「抽到此卡的玩家移动1d20」 -- `card_move` of the rolled length; the landing
-    // settles (`MoveCtx.Resolve` defaults to true). Reset the plan the teleport
-    // above shaped: this is a walk of `face` steps, not another jump.
+    // Reset the plan the teleport above shaped: this is a walk of `face` steps, not
+    // another jump.
     plan::set_kind(MoveKind::Walk);
     plan::set_teleport_to(-1);
-    plan::set_resolve(true);
+    plan::set_settles(true);
     plan::set_steps(face);
-    ctx::card_move(player_id);
+    ctx::run_planned_move(player_id);
 
     // 「行动序列上…的上一位玩家」 / 「下一位玩家」 -- `neighbor` walks the
     // present-player turn order around the drawer.

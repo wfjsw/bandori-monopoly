@@ -819,6 +819,7 @@
   "prompt.addingToDraw": "正在加入抽卡区（{{n}}/{{total}}）",
   "prompt.pickRetry": "提交未完成，请选择剩余的卡牌重试",
   "card.counter": "计数",
+  "card.is_skill": "技能卡",
   "card.id": "编号",
   "card.placed": "已放置",
   "card.tile": "格子",

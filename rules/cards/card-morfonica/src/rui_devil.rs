@@ -40,20 +40,20 @@ const X: &str = "skill.yuriCrit.x";
 
 fn rui_devil(player_id: i32) -> card_sdk::Asked {
     let others = ctx::others(player_id);
-    let why = Msg::new(key!("rui_devil_why"));
-    // Outbound 100s are `fixedAmount` in C#: `fixed()` is the `Fixed` pay shape,
-    // so the amount lands unbent while the leg still raises `paid` (the user's
-    // own 「正论暴击」 fires on it, `On::Action(Pay)`).
+    let reason = Msg::new(key!("rui_devil_reason"));
+    // The outbound 100s are the card's own figure: `fixed()` is the `Fixed` pay
+    // shape, so the amount lands unbent while the leg still raises `paid` (the
+    // user's own 「正论暴击」 fires on it, `On::Action(Pay)`).
     for &o in &others {
         // 规则书: 「向全场玩家支付100资金（该数值不可被任何效果影响）」
-        ctx::PayCommand::new(player_id, o, 100, &why)
+        ctx::PayCommand::new(player_id, o, 100, &reason)
             .fixed()
             .send()?;
     }
     for &o in &others {
         if !ctx::player_out(o) {
             // 规则书: 「之后全场玩家向你支付300资金（可被影响）」
-            ctx::transfer(o, player_id, 300, &why)?;
+            ctx::transfer(o, player_id, 300, &reason)?;
         }
     }
     // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」 -- the

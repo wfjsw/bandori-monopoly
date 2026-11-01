@@ -375,7 +375,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::add_house => arm_add_house(a),
         Op::mortgaged_of => arm_mortgaged_of(a),
         Op::set_mortgaged => arm_set_mortgaged(a),
-        Op::apply_redeem => arm_apply_redeem(a),
+        Op::commit_redeem => arm_apply_redeem(a),
         Op::set_owner => arm_set_owner(a),
         Op::owned_count => arm_owned_count(a),
         Op::owned_at => arm_owned_at(a),
@@ -571,7 +571,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::shuffle_into_deck => arm_shuffle_into_deck(a),
         Op::place_card_at => arm_place_card_at(a),
         Op::place_card_on => arm_place_card_on(a),
-        Op::set_dest => arm_set_dest(a),
+        Op::set_dest => arm_set_fate(a),
         Op::set_transfer_to_dest => 0,
         Op::send_to_dest => arm_send_to_dest(a),
         Op::transfer_to_dest => 0,
@@ -762,12 +762,12 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::count_held | Op::count_held_name => arm_count_held(a),
         Op::add_held => arm_add_held(a),
         Op::set_held_name => arm_set_held_name(a),
-        Op::tok_max => arm_tok_max(a),
+        Op::held_max => arm_tok_max(a),
         Op::state_get => arm_state_get(a),
         Op::state_set => arm_state_set(a),
         Op::state_add => arm_state_add(a),
         Op::raise_after => arm_raise_after(a),
-        Op::tok_names => arm_tok_names(a),
+        Op::held_names => arm_tok_names(a),
 
         // ---- marks ----
         Op::place_mark => arm_place_mark(a),
@@ -865,7 +865,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
             n
         }) as i64,
-        Op::card_move => arm_card_move(a),
+        Op::run_planned_move => arm_card_move(a),
 
         // ---- band / skills ----
         Op::group_pool => arm_band_crystals(a),
@@ -936,7 +936,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 -1
             }
         }),
-        Op::trig_move_resolve => world::with_world(|w| w.move_snap.resolve as i64),
+        Op::trig_move_settles => world::with_world(|w| w.move_snap.settles as i64),
         Op::trig_move_tag => {
             let key = name_id(a0, a1);
             world::with_world(|w| w.move_snap.tags.get(key)) as i64
@@ -990,14 +990,12 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_set_pay_kind => arm_trig_set_pay_kind(a),
         Op::trig_set_pay_shape => arm_trig_set_pay_shape(a),
         Op::mul_pay_factor => arm_mul_pay_factor(a),
-        Op::pay_factor => world::with_world(|w| {
-            w.plan_pay_factor.saturating_mul(w.settle_pay_factor)
-        }) as i64,
+        Op::pay_factor => {
+            world::with_world(|w| w.plan_pay_factor.saturating_mul(w.settle_pay_factor)) as i64
+        }
         Op::settle_tile => world::with_world(|w| w.trig_settle_tile) as i64,
         Op::settle_outcome => world::with_world(|w| w.trig_settle_outcome) as i64,
-        Op::paid_in_settle_by => {
-            world::with_world(|w| w.paid_in_settle_by[player_idx(a0)]) as i64
-        }
+        Op::paid_in_settle_by => world::with_world(|w| w.paid_in_settle_by[player_idx(a0)]) as i64,
         Op::rent_quote => world::with_world(|w| w.rent_quote) as i64,
         Op::trig_set_price => {
             world::with_world_mut(|w| w.buy_snap.price = a0);
@@ -1048,7 +1046,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::set_signed
         | Op::set_stop_at
         | Op::set_parity
-        | Op::set_resolve
+        | Op::set_settles
         | Op::set_settle_tile
         | Op::set_rent_factor
         | Op::set_no_buy
@@ -1078,7 +1076,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_stopped
         | Op::move_stop_at
         | Op::move_parity
-        | Op::move_resolve
+        | Op::move_settles
         | Op::move_steps
         | Op::move_remaining
         | Op::move_total
@@ -1086,7 +1084,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::fixed_roll
         | Op::turn_main_steps
         | Op::turn_rolls
-        | Op::turn_snap
+        | Op::turn_snapshot
         | Op::turn_start_pos
         | Op::schedule_turn_end
         | Op::linger
@@ -1109,7 +1107,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_build
         | Op::card_buy
         | Op::card_offer_build
-        | Op::card_settle_at
+        | Op::settle_tile_at
         | Op::card_mortgage
         | Op::query_guard
         | Op::declared_arg
@@ -1139,9 +1137,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::msg_sender_uid => arm_msg_sender_uid(a),
         Op::msg_sender_seat => arm_msg_sender_seat(a),
         Op::msg_name => arm_msg_name(a),
-        Op::msg_a => arm_msg_a(a),
-        Op::msg_b => arm_msg_b(a),
-        Op::msg_c => arm_msg_c(a),
+        Op::msg_arg0 => arm_msg_a(a),
+        Op::msg_arg1 => arm_msg_b(a),
+        Op::msg_arg2 => arm_msg_c(a),
         Op::msg_tile => arm_msg_tile(a),
         Op::msg_seat => arm_msg_seat(a),
         Op::msg_text => arm_msg_text(a),
@@ -2197,7 +2195,7 @@ pub fn arm_place_card(a: Args) -> i64 {
     let slot = card_slot(a1, a2);
     world::with_world_mut(|w| {
         // `place_card` puts the **new** instance on the owner's field. The
-        // running card's fate (`w.dest`, set by `set_dest`) is a different
+        // running card's dest (`w.dest`, set by `set_dest`) is a different
         // thing — it is where the *running* instance goes when the effect
         // finishes. The PlaceCard effect's `dest` is the Dest code of the
         // **placed** card = Field (2). (pipopa: `set_dest(Banished)` for
@@ -2234,7 +2232,7 @@ pub fn arm_place_card_at(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
-        // Same fate/dest split as `arm_place_card`: PlaceCard.dest is
+        // Same dest/dest split as `arm_place_card`: PlaceCard.dest is
         // Field (2) for the placed instance, not `w.dest`.
         let id = card_u16(a1, a2);
         let slot = card_slot(a1, a2);
@@ -2558,14 +2556,14 @@ pub fn arm_set_counter_self(a: Args) -> i64 {
     }
 }
 
-pub fn arm_set_dest(a: Args) -> i64 {
+pub fn arm_set_fate(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         world::with_world_mut(|w| {
             w.dest = a0;
-            // Field-effect fate: the real engine defers to `apply_dest` at
+            // Field-effect dest: the real engine defers to `apply_dest` at
             // the run's commit (unplace-and-send the running instance).
-            // A play from hand names the *hand card's* fate instead and is
+            // A play from hand names the *hand card's* dest instead and is
             // applied by the play pipeline, so only apply here when the
             // instance is live on the field. `Dest::Field` (2) = stay.
             //
@@ -2590,9 +2588,9 @@ pub fn arm_set_dest(a: Args) -> i64 {
     }
 }
 
-/// `Op::send_to_dest` — apply the running instance's fate **now**
+/// `Op::send_to_dest` — apply the running instance's dest **now**
 /// (`ctx::send_to_dest`), not at the run commit. Same pile routing as
-/// [`arm_set_dest`]; returns the owner the card left, or -1 when it was
+/// [`arm_set_fate`]; returns the owner the card left, or -1 when it was
 /// not in play. The old inline arm mistook `w.dest` for a tile and
 /// teleported the player there (class C host-model defect).
 pub fn arm_send_to_dest(a: Args) -> i64 {
@@ -2680,7 +2678,7 @@ pub fn arm_set_mortgaged(a: Args) -> i64 {
     }
 }
 
-/// `apply_redeem(player, tile, amount)` -- the mechanism half of a redeem:
+/// `commit_redeem(player, tile, amount)` -- the mechanism half of a redeem:
 /// clear the mortgage flag. Modelled as the unmortgage write (the `redeemed`
 /// state key and the fee have no model field).
 pub fn arm_apply_redeem(a: Args) -> i64 {
@@ -3492,13 +3490,11 @@ fn resolve_scope(w: &crate::world::World, scope: i32) -> i32 {
 
 pub fn arm_mul_pay_factor(a: Args) -> i64 {
     let milli = a[0].max(0);
-    world::with_world_mut(|w| {
-        match resolve_scope(w, a[1]) {
-            1 => w.plan_pay_factor = w.plan_pay_factor.saturating_mul(milli),
-            2 => w.next_settle_pay_factor = w.next_settle_pay_factor.saturating_mul(milli),
-            3 => w.settle_pay_factor = w.settle_pay_factor.saturating_mul(milli),
-            _ => w.next_move_pay_factor = w.next_move_pay_factor.saturating_mul(milli),
-        }
+    world::with_world_mut(|w| match resolve_scope(w, a[1]) {
+        1 => w.plan_pay_factor = w.plan_pay_factor.saturating_mul(milli),
+        2 => w.next_settle_pay_factor = w.next_settle_pay_factor.saturating_mul(milli),
+        3 => w.settle_pay_factor = w.settle_pay_factor.saturating_mul(milli),
+        _ => w.next_move_pay_factor = w.next_move_pay_factor.saturating_mul(milli),
     });
     0
 }
@@ -3667,9 +3663,9 @@ pub fn arm_send(a: Args) -> i64 {
     world::with_world_mut(|w| {
         w.msg_name = name.0;
         w.msg_seat = seat;
-        w.msg_a = av;
-        w.msg_b = bv;
-        w.msg_c = cv;
+        w.msg_arg0 = av;
+        w.msg_arg1 = bv;
+        w.msg_arg2 = cv;
         w.msg_tile = tile;
         w.msg_reply = 0;
         w.msg_sender_uid = sender_uid;
@@ -3699,15 +3695,15 @@ pub fn arm_msg_name(a: Args) -> i64 {
 }
 
 pub fn arm_msg_a(_a: Args) -> i64 {
-    world::with_world(|w| w.msg_a) as i64
+    world::with_world(|w| w.msg_arg0) as i64
 }
 
 pub fn arm_msg_b(_a: Args) -> i64 {
-    world::with_world(|w| w.msg_b) as i64
+    world::with_world(|w| w.msg_arg1) as i64
 }
 
 pub fn arm_msg_c(_a: Args) -> i64 {
-    world::with_world(|w| w.msg_c) as i64
+    world::with_world(|w| w.msg_arg2) as i64
 }
 
 pub fn arm_msg_tile(_a: Args) -> i64 {

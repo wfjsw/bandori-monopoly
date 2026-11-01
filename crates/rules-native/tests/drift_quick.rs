@@ -10,12 +10,12 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use game_core::MatchMode;
 use game_core::data::GameData;
 use game_core::engine::{CardRules, Match};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
+use game_core::MatchMode;
 use game_rules::WasmRules;
 use rules_native::native_rules;
 
@@ -61,7 +61,9 @@ fn act_drive(m: &mut Match) -> bool {
     let members = m.state().drive;
     let mut any = false;
     for member in members {
-        let Some(msg) = bot_msg(m, member) else { continue };
+        let Some(msg) = bot_msg(m, member) else {
+            continue;
+        };
         if m.act(member, &msg).is_ok() {
             any = true;
         }

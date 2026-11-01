@@ -24,7 +24,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
   (「如果格子地契未抵押则**[支付]…现等级地租**」 is the only rent case).
 * **Trigger:** an observed input whose event window contains a `rent` leg
   attributed to a landed settle on tile `T`.
-* **Condition:** `T` is a player-owned buyable tile that is mortgaged in `pre`.
+* **Condition:** `T` is a player-owned buyable tile that is mortgaged in `condition`.
 * **Effect:** no `rent` event for `T` in this window.
 * **Frame:** n/a (read of the event window).
 * **Rulings & OPEN:** the force-buy branch of a mortgaged tile is `G-SETTLE-11`,
@@ -91,9 +91,9 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **ID:** `G-SETTLE-05`
 * **Source:** `rulebook-doc.md:154`
 * **Quote:** 「如果没有事件可抽取则将事件弃卡区洗切并当作新的事件卡堆来抽取。」
-* **Trigger:** an observed input that draws an event while `pre`'s event deck
+* **Trigger:** an observed input that draws an event while `condition`'s event deck
   is empty and the discard is non-empty.
-* **Condition:** `pre.event_deck` empty, `pre.event_discard` non-empty.
+* **Condition:** `condition.event_deck` empty, `condition.event_discard` non-empty.
 * **Effect:** the draw succeeds (an `event` is logged).
 * **Frame:** n/a.
 * **Rulings & OPEN:** 「洗切」 is a shuffle -- order is not specified.
@@ -106,7 +106,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **ID:** `G-SETTLE-06`
 * **Source:** `rulebook-doc.md:155`
 * **Quote:** 「无主的[可购买格子]的[结算]是：**可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子地契和拥有权。**」
-* **Trigger:** a `buy` event on a buyable tile that was unowned in `pre`.
+* **Trigger:** a `buy` event on a buyable tile that was unowned in `condition`.
 * **Condition:** no card activation (BuyAdd / BuyMul / BuySet are L6).
 * **Effect:** the buyer's money falls by exactly `price + houses * house_cost`;
   ownership goes to the buyer.
@@ -125,8 +125,8 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **ID:** `G-SETTLE-07`
 * **Source:** `rulebook-doc.md:157`
 * **Quote:** 「如果格子地契未抵押则**可选择[消耗]格子地契所标注的房屋建筑费进行升级建造**，每块地有标注的等级上限（例：所有RiNG不可升级，购物中心最大等级为三栋房屋）。」
-* **Trigger:** a `build` event on a buyable tile owned by the builder in `pre`.
-* **Condition:** the tile was not mortgaged in `pre`; no card activation.
+* **Trigger:** a `build` event on a buyable tile owned by the builder in `condition`.
+* **Condition:** the tile was not mortgaged in `condition`; no card activation.
 * **Effect:** money falls by the tile's `house` cost; houses rise by 1.
 * **Frame:** only that player's money and that tile's houses move.
 * **Rulings & OPEN:** level cap is G-SETTLE-08; funding restriction is
@@ -144,7 +144,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Source:** `rulebook-doc.md:157`
 * **Quote:** 「每块地有标注的等级上限（例：所有RiNG不可升级，购物中心最大等级为三栋房屋）。」
 * **Trigger:** any observed input (a `build` event, or a post-state house count).
-* **Condition:** `pre` was at or below the cap (arranged states are
+* **Condition:** `condition` was at or below the cap (arranged states are
   non-canonical).
 * **Effect:** after a build, `houses[t] <= level_cap(t)`; a `build` never lands
   on a `ring` tile; 购物中心 caps at 3.
@@ -181,7 +181,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Source:** `rulebook-doc.md:160`
 * **Quote:** 「如果格子地契未抵押则**[支付]拥有格子的玩家格子地契所标记的现等级地租。**」
 * **Trigger:** a `rent` event on a buyable tile owned by someone else.
-* **Condition:** the tile was not mortgaged in `pre`; no card activation; not
+* **Condition:** the tile was not mortgaged in `condition`; no card activation; not
   a RiNG (OPEN-RING-RENT); not an agent half-charge window -- neither the
   all-owned sweep (`log.agent_all_owned`) nor the choose-one else-branch
   kind=2 commit (`log.agent_offer_commit`).
@@ -203,7 +203,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Source:** `rulebook-doc.md:161`
 * **Quote:** 「如果格子地契已抵押则可选择**[支付]拥有格子的玩家购买格子地契和建造已有房子的资金总价的两倍，从该玩家处强行购买该格地契，获得的地契仍为抵押状态**。」
 * **Trigger:** a `forcebuy` event on tile `T`.
-* **Condition:** `T` was mortgaged and owned by someone else in `pre`.
+* **Condition:** `T` was mortgaged and owned by someone else in `condition`.
 * **Effect:** the buyer pays exactly `2 * (price + houses * house_cost)`;
   ownership moves to the buyer; `mortgaged[T]` stays true; houses unchanged.
 * **Frame:** only the two money balances and the tile's owner move; the
@@ -240,7 +240,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Quote:** 「若与该格子同色的所有[可购买格子]均已属于其他玩家则需向该格子同色的所有[可购买格子]从前到后依次进行一次半价收费的[结算]（向上取整10）。」
 * **Trigger:** a window that logs `log.agent_all_owned` and then `rent` legs
   on the agent's colour set.
-* **Condition:** every same-colour buyable was owned by someone else in `pre`;
+* **Condition:** every same-colour buyable was owned by someone else in `condition`;
   no card activation.
 * **Effect:** each tile charges `ceil(full / 2 / 10) * 10` where `full` is its
   marked current-level rent; charges appear in board (「从前到后」) order.
@@ -258,7 +258,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Source:** `rulebook-doc.md:162`
 * **Quote:** 「否则可选择该格子同色的无主或玩家拥有的[可购买格子]之一进行一次[结算]。」
 * **Trigger:** a window that settles an agent without `log.agent_all_owned`.
-* **Condition:** some same-colour buyable is unowned or self-owned in `pre`.
+* **Condition:** some same-colour buyable is unowned or self-owned in `condition`.
 * **Effect:** at most one nested settle of a same-colour unowned-or-own
   buyable. Other-owned tiles are never the chosen target of this branch.
 * **Frame:** n/a.

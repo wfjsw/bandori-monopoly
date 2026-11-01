@@ -8,7 +8,7 @@
 //!
 //! Never derived from engine behaviour. Each function is the clause's
 //! Trigger / Condition / Effect / Frame as an executable predicate on
-//! pre + effect-log + post.
+//! condition + effect-log + post.
 //!
 //! ## Host-model notes (not spec — see `docs/rulebook/spec/kani/tiles.md`)
 //!
@@ -49,10 +49,8 @@ pub fn g_settle_02_draw_one_ok_mutant_wrong_player(effects: &[Effect], player: i
 // 「CiRCLE咖啡厅和流星堂的的[结算]是：抽取一张手卡，然后抽取一个事件卡。」
 // (`rulebook-doc.md:152`, settle.md G-SETTLE-03)
 //
-// G-SETTLE-04 / 05 (event publicity, event-discard, reshuffle) are the
-// engine's `H.DrawEvent` half — see settle.md; they are not this body's
-// effects. Under the Kani host `draw_event` is a protocol stub (returns 0,
-// logs no effect), so the *observable* half is the hand draw alone.
+// Under the Kani host `draw_event` is a protocol stub (returns 0, logs no
+// effect), so the *observable* half is the hand draw alone.
 // ===========================================================================
 
 /// Observable half of G-SETTLE-03: exactly one hand-card draw, then the
@@ -239,7 +237,7 @@ pub fn circle_reward_effects_ok(effects: &[Effect], mover: i32, pick: i32) -> bo
 /// Frame: money of every seat outside `a`/`b` is unchanged; used by rent /
 /// force-buy / buy legs (G-MONEY-01 「only named players change」).
 pub fn frame_others_money_unchanged(
-    pre: &[i32; 4],
+    condition: &[i32; 4],
     post: &[i32; 4],
     a: i32,
     b: i32,
@@ -247,7 +245,7 @@ pub fn frame_others_money_unchanged(
 ) -> bool {
     for i in 0..n {
         let i = i as usize;
-        if (i as i32) != a && (i as i32) != b && pre[i] != post[i] {
+        if (i as i32) != a && (i as i32) != b && condition[i] != post[i] {
             return false;
         }
     }

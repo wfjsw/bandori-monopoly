@@ -24,7 +24,7 @@ type S = State<Arc<Server>>;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-pub struct SessionReq {
+pub struct SessionRequest {
     pub player: String,
     pub persona: String,
     pub cn_id: String,
@@ -56,7 +56,7 @@ fn view(s: &Session) -> SessionView {
 /// on every game server it connects to.
 pub async fn create_session(
     State(s): S,
-    Json(req): Json<SessionReq>,
+    Json(req): Json<SessionRequest>,
 ) -> ApiResult<impl IntoResponse> {
     let player = net::clean_name(&req.player);
     if player.is_empty() {
@@ -307,7 +307,7 @@ pub async fn create_room(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-pub struct JoinReq {
+pub struct JoinRequest {
     pub password: String,
     pub version: String,
     /// Join as a watcher: no seat, allowed while the room is playing or full.
@@ -321,7 +321,7 @@ pub async fn join_room(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-    Json(req): Json<JoinReq>,
+    Json(req): Json<JoinRequest>,
 ) -> ApiResult<Json<Joined>> {
     if sess.room.as_ref().is_some_and(|r| r.0 != id) {
         leave_current(&s, &sess);
@@ -420,7 +420,7 @@ pub fn as_viewer<T>(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-pub struct ReadyReq {
+pub struct ReadyRequest {
     pub on: bool,
 }
 
@@ -428,7 +428,7 @@ pub async fn ready(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-    Json(req): Json<ReadyReq>,
+    Json(req): Json<ReadyRequest>,
 ) -> ApiResult<Json<RoomInfo>> {
     let info = as_member(&s, &sess, &id, |r, me| {
         r.set_ready(me, req.on)?;
@@ -439,7 +439,7 @@ pub async fn ready(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-pub struct BotReq {
+pub struct BotRequest {
     /// `"add"` or `"remove"`.
     pub op: String,
     pub member: i32,
@@ -451,7 +451,7 @@ pub async fn bots(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-    Json(req): Json<BotReq>,
+    Json(req): Json<BotRequest>,
 ) -> ApiResult<Json<RoomInfo>> {
     let info = as_member(&s, &sess, &id, |r, me| {
         match req.op.as_str() {
@@ -500,7 +500,7 @@ pub async fn clock(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-pub struct StartReq {
+pub struct StartRequest {
     /// Start even if not everyone is ready or the room is short of players.
     pub force: bool,
 }
@@ -509,7 +509,7 @@ pub async fn start(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-    Json(req): Json<StartReq>,
+    Json(req): Json<StartRequest>,
 ) -> ApiResult<Json<RoomInfo>> {
     // The tick quantum this match will run on, sealed into its record header
     // so a replay reproduces the same `tick(dt)` f32s (docs/REPLAY.md §1).
@@ -532,7 +532,7 @@ pub async fn start(
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-pub struct NonceReq {
+pub struct NonceRequest {
     /// 32 random bytes as lower-case hex (`crypto.getRandomValues` on the
     /// client). `docs/FAIRNESS.md`.
     pub nonce: String,
@@ -546,7 +546,7 @@ pub async fn nonce(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-    Json(req): Json<NonceReq>,
+    Json(req): Json<NonceRequest>,
 ) -> ApiResult<Json<RoomInfo>> {
     let info = tokio::task::spawn_blocking(move || {
         as_member(&s, &sess, &id, |r, me| {
@@ -682,7 +682,7 @@ pub async fn room_state(
 /// applies if this never arrives). Recorded as `Input::AnimDone`.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AnimDoneReq {
+pub struct AnimationDoneRequest {
     pub seq: i32,
 }
 
@@ -690,7 +690,7 @@ pub async fn anim_done(
     State(s): S,
     Auth(sess): Auth,
     Path(id): Path<String>,
-    Json(req): Json<AnimDoneReq>,
+    Json(req): Json<AnimationDoneRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let (m, me) = as_member(&s, &sess, &id, |r, me| {
         let m = r

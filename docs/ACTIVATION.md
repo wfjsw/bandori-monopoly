@@ -115,20 +115,20 @@ fn pick(player_id: i32) -> Declared<DetourPick> {
 
 fn body(player_id: i32, pick: DetourPick) -> Asked { /* … */ }
 
-On::Counteract(links, pre, reason, guard, body).declare_arg(pick, body),
+On::Counteract(links, condition, reason, guard, body).declare_arg(pick, body),
 ```
 
 `Result` keeps the `?` propagation the codebase's `Asked = Result<(), Prompt>`
 relies on; the two-arm is in `Activation` so "declined" is never confused with
 "proceed".
 
-Attached with a builder, same style as `On::pre`:
+Attached with a builder, same style as `On::condition`:
 
 ```rust
-On::Counteract(links, pre, guard, body).counter_reason(..)
+On::Counteract(links, condition, guard, body).counter_reason(..)
     .declare_arg(pick, body),   // pick: fn(i32) -> Declared<T>, body: fn(i32, T) -> Asked
 
-On::Play(pre, why_not, body).counter_reason(..)
+On::Play(condition, guard, body).counter_reason(..)
     .declare_arg(pick, body),
 ```
 
@@ -451,9 +451,9 @@ This generalises the existing `card_replayable` seam
 nests `OP_GUARD` under `admits_gate`). GUARDS.md §4.4 item 6 already names the
 case:
 
-> **Every other path that reaches a guard** (UI `playable` / `why_not_act`,
+> **Every other path that reaches a guard** (UI `playable` / `cant_act`,
 > `ai_play`, **any host request that asks another card's guard**, …) goes
-> through one host function `admits(entry, ctx) = pre(ctx) && guard(ctx)`.
+> through one host function `admits(entry, ctx) = condition(ctx) && guard(ctx)`.
 > No caller may call a guard directly.
 
 `query_guard` **is** that host request. It is callable from a residual guard,
@@ -473,9 +473,9 @@ kept. The identifier is the fix for the ambiguity they carried.
   there (the `mutsumi_never` pattern: the skill body re-checks its own
   「若你的抽牌堆与弃牌堆中都没有卡」 gate).
 * **Cost.** One nested wasm instantiation per query, same as today's
-  `query_guard`. Prefer a CEL `pre` when the question is expressible
+  `query_guard`. Prefer a CEL `condition` when the question is expressible
   there; `query_guard` is for "the answer lives in another card's residual
-  guard", which `pre` cannot see.
+  guard", which `condition` cannot see.
 
 ### Who may query whom
 
@@ -535,7 +535,7 @@ fn pick_afterglow_2(player_id: i32) -> Declared<DetourPick> {
     let live: Vec<usize> = (0..PLANS.len())
         .filter(|&i| ctx::query_guard(player_id, PLANS[i], entry::PRESS))
         .collect();
-    let k = ctx::ask_pick(player_id, &title, &text, &labels(&live))?;
+    let k = ctx::ask_choice(player_id, &title, &text, &labels(&live))?;
     Ok(Activation::Arg(DetourPick {
         plan: live[k] as i32,
         tile: ctx::tile_named("银河拉面馆"),
@@ -554,25 +554,17 @@ On::Counteract(
 ```
 
 * `pick_afterglow_2` builds its option list with `ctx::query_guard` per
-  candidate skill's press entry (`entry::PRESS`), then `ctx::ask_pick`. Decline = no counter
+  candidate skill's press entry (`entry::PRESS`), then `ctx::ask_choice`. Decline = no counter
   declared. The whole `DetourPick` is the arg.
-* `counteract_with_plan(player_id, pick)` receives it. Until
-  **OPEN-afterglow式移动** (docs/rulebook/spec/OPEN-QUESTIONS.md:224) is
-  resolved it keeps the inlined C# plan mutations and the existing
-  `TODO(规则书)[judgement]`; once the book names which (2), the body becomes
-  `ctx::invoke_skill(player_id, PLANS[pick.plan as usize])` plus the
-  「并将下一次的移动掷骰变更为1d6」 half.
+* `counteract_with_plan(player_id, pick)` receives it.
 
 The same split applies to the `On::Play` entry (the play path's four-way pick
 moves into its `declare`).
 
 ### Rulings this deliberately does **not** make
 
-* **OPEN-afterglow式移动** -- which character's (2) is 「"afterglow"式的移动」.
-  The book never says 「初始」. The four plans stay the C# reading, flagged.
-* **Does 「视为使用」 pay the skill's cost?** `ctx::invoke_skill` runs the body,
-  which spends a fire pot; the C# detour was free. That is a consequence of
-  switching to `invoke_skill`, not of these two mechanisms.
+* **OPEN-afterglow式移动** -- which character's (2) is 「"afterglow"式的移动」. The book never says 「初始」.
+That is a consequence of switching to `invoke_skill`, not of these two mechanisms.
 * **Does 「视为使用」 raise `skillUsed`?** `invoke_skill` deliberately does not
   (ABI v35); the engine's `use_skill` does. Needed only if the press should
   tick Afterglow (1)'s rest counter / feed `CardUsed` hooks.

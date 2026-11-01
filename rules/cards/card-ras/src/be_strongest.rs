@@ -1,4 +1,3 @@
-//! `RAS:成为最强` -- C# `CardBeStrongest` (MatchHost.cs:9532-9564): roll 1d10
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:成为最强`）:
 //! > 成为最强：
@@ -21,15 +20,12 @@ pub const BE_STRONGEST: CardDef =
         // sheet cell H6
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
-/// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
-/// turn's main move.
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「视为你的主要移动」
     rules_status::move_blocked(player_id)
 }
 
-/// C# `H._tiles[t].group == 6` in tile-index order (board.json). Index 0 is the
-/// destination for a 1d10 roll of 1.
+/// Index 0 is the destination for a 1d10 roll of 1.
 // 规则书: 「传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”）」
 // TODO(规则书)（按格子编号排序）: the book names a sorted livehouse table but not
 //   its set -- we read it board-wide (every group-6 tile); the owned-only
@@ -50,12 +46,9 @@ fn be_strongest(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「roll 1d10，…」 -- the die is cast first; the 若 clause only
     // redirects the destination, so the fallback rolls too (its face is ignored).
     let r = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::CARD)?;
-    // 规则书: 「若你没有Livehouse格子，传送到“Live House”」
-    // -- C# `H.OwnedBy(i).Any((int t) => H.IsLiveHouse(i, t))`, which also
-    // counts an `Fx.ExtraColor` deed (e.g. 「游击演出」's designated one).
-    // TODO(ABI) HOST-01: a write inside a nested settle (the agent-tile offer
-    //   buying a deed) may not be on live for the next pass, so this read can
-    //   see the pre-buy deed; needs the write journal on `Run`.
+    // TODO(ABI) 「游击演出」's designated one). HOST-01: a write inside a nested settle
+    // (the agent-tile offer buying a deed) may not be on live for the next pass, so
+    // this read can see the pre-buy deed; needs the write journal on `Run`.
     let owns_livehouse = ctx::owned_tiles(player_id)
         .into_iter()
         .any(|t| ctx::is_live_house_for(player_id, t));
@@ -84,11 +77,8 @@ fn be_strongest(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", to),
     );
-    // 规则书: 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo
-    // = teleportTo })`: a teleport to the chosen tile that consumes the turn's
-    // main move and settles where it lands (Resolve defaults to true).
     ctx::plan::set_teleport_to(to);
-    ctx::card_move(player_id);
+    ctx::run_planned_move(player_id);
     Ok(())
 }
 

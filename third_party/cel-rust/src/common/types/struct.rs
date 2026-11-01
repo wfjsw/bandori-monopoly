@@ -20,9 +20,7 @@ use crate::{
 /// `has(.f)` tests for it. Two structs are equal when they are of the same
 /// type, with equal fields.
 ///
-/// A struct literal such as `acme.User{name: 'alex'}` makes one, when its type
-/// is registered with [`Env::add_type`](crate::Env::add_type), e.g. as a
-/// [`StructDef`](crate::StructDef).
+/// as a [`StructDef`](crate::StructDef).
 ///
 /// [`Kind::Struct`]: super::Kind::Struct
 #[derive(Debug, Eq, PartialEq)]

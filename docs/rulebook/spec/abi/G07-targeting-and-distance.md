@@ -91,11 +91,9 @@ computes the nearest with an inline loop (`:74-87`) that cannot see the card.
 The TODO is at `lisa_bond.rs:76-78`; recorded as BACKLOG ABI-10
 (`docs/rulebook/BACKLOG.md:827-836`).
 
-The blocker is that the placed instance cannot even say **who** granted it: `World::place_card` sets `owner = user = player_id`
-(`ops.rs:1230-1242`), i.e. both fields are the *designated* player. C#'s
-`PlaceCard(owner = r.index, user = c.Seat)` keeps the caster in `user`; the
-Rust port drops it. No player decision is missing — only a durable grantor
-fact and a query the skill can call.
+The blocker is that the placed instance cannot even say **who** granted it: `World::place_card` sets
+`owner = user = player_id` (`ops.rs:1230-1242`), i.e. both fields are the *designated* player. No
+player decision is missing — only a durable grantor fact and a query the skill can call.
 
 ---
 
@@ -521,7 +519,7 @@ non-skill 「最近」 loops (`my_own_problem.rs:44-59`, `kaoru.rs:127-137`,
 ## 7. Versioning
 
 `ABI_VERSION` 111 → **112** (ninth group in landing order). 104 is already taken in the working tree by the
-in-flight `turn_snap` change (`abi.rs:845`); if another group in the batch
+in-flight `turn_snapshot` change (`abi.rs:845`); if another group in the batch
 lands 105 first, renumber to the next free integer — the entry text is the
 contract. Entry inserted immediately below the constant, above the newest note (the tree keeps notes newest-first):
 

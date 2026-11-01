@@ -50,10 +50,8 @@ export interface Live2DModelApi {
 }
 
 /**
- * The animated Cubism 2 viewer: a canvas with a RAF loop driving the ported
- * `Live2DPortrait.RenderFrame` (idle motion, tap reactions, hair physics, eye
- * blink). Without animation (or with no `catalog.json` motion) it holds the
- * posed frame and redraws only when the pose goes dirty.
+ * Without animation (or with no `catalog.json` motion) it holds the posed frame
+ * and redraws only when the pose goes dirty.
  *
  * Subscribes to nothing; owns the GL renderer, the model, the animation state
  * and the draw loop, and drops the GL side on unmount (the texture cache stays
@@ -266,7 +264,7 @@ export function useLive2DModel(opts: {
   };
 }
 
-/** `window.__live2dTick` / `__live2dState` / `__live2dForce` for tests. */
+/** `window.__live2d` debugging hooks (off unless the dev build asks). */
 function useLive2DDebugHooks(
   anim: { current: AnimState | null },
   model: { current: LoadedLive2D | null },

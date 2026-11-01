@@ -110,8 +110,6 @@ The Lua/CEL split above is **superseded**. What replaced it, and why:
 
 ### 1. Deterministic replay instead of coroutines
 
-An analysis of all prompt sites in `MatchHost.cs` showed:
-
 | | count |
 |---|---|
 | prompt sites whose options are known before the effect runs | 174 / 189 (92%) |
@@ -140,7 +138,7 @@ The same engine runs on the server (native) and in the browser (inside our wasm3
   card in a shared module adds ~1–2 KB. Removing `format!` saved nothing — the floor is
   std's allocator/panic machinery. A `no_std` SDK would likely shrink it (not measured).
 * Cross-card coupling: 63/184 cards create, copy or play other cards; 24 use shared
-  `*Fx` helpers; 8 share `DecayCard`. Cross-card calls go through the host import
+  `*hook` helpers; 8 share `DecayCard`. Cross-card calls go through the host import
   `play_card(id, player_id)` (ABI v2), which runs the other module nested in the same run:
   same world copy, same answer log, shared fuel, nesting limit 8.
 * The ABI allows 1..N cards per module, so per-band or single-module packaging remains

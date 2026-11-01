@@ -34,15 +34,19 @@ pub const ROSELIA: CardDef = CardDef::new(
         On::Action(Action::Bought(
             "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
             Some(on_bought_applies),
-            on_bought)).silent(),
+            on_bought,
+        ))
+        .silent(),
         On::Action(Action::Bought(
             "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
             Some(on_live_bought_applies),
-            on_live_bought)),
+            on_live_bought,
+        )),
         On::Action(Action::TurnStartBefore(
             "actor == owner && slot('skill.roselia.first') != 0",
             None,
-            at_turn_start)),
+            at_turn_start,
+        )),
     ],
 );
 

@@ -355,7 +355,6 @@ pub const AG_TOMOE_SAVIOR: usize = 12;
 /// `AG:（鸫）微小的『能做到』的事`  (`RULESET[0][13]`, `TSUGUMI_CAN`)
 pub const AG_TSUGUMI_CAN: usize = 13;
 
-/// `AG:Y.O.L.O`  (`RULESET[0][14]`, `YOLO`)
 pub const AG_YOLO: usize = 14;
 
 /// `CRYCHIC:初演大成功`  (`RULESET[1][0]`, `DEBUT_SUCCESS`)
@@ -1493,4 +1492,3 @@ pub fn card_id_const(id: &str) -> usize {
         None => panic!("card_id!: unknown id {id}"),
     }
 }
-

@@ -198,13 +198,13 @@ impl Simulator for MatchSim {
         }
         let st = fork.state();
         let hand = fork.hand_of(self.member);
-        let extra = fork.view_extra_typed(self.member);
+        let extra = fork.view_extras_typed(self.member);
         action::legal_actions_with_cost(
             &self.data,
             &st,
             &hand,
             &extra.playable,
-            &extra.est_cost,
+            &extra.estimated_cost,
             seat,
         )
     }
@@ -266,7 +266,7 @@ impl Simulator for MatchSim {
         }
         let st = fork.state();
         let hand = fork.hand_of(self.member);
-        let extra = fork.view_extra_typed(self.member);
+        let extra = fork.view_extras_typed(self.member);
         let ai_answer = extra.ai_answer.map(|a| AiAnswer {
             answer: a.answer,
             picked: a.picked,
@@ -276,7 +276,7 @@ impl Simulator for MatchSim {
             &self.data,
             &st,
             &hand,
-            &extra.est_cost,
+            &extra.estimated_cost,
             ai_answer.as_ref(),
             seat,
             actions,
@@ -430,22 +430,22 @@ pub fn ai_answer_to_action(st: &MatchState, a: &AiAnswer, seat: usize) -> Option
             index: a.answer.max(0),
         }),
         "choice" => {
-            if p.title.k.as_ref() == "ask.counteract.title" {
+            if p.title.key.as_ref() == "ask.counteract.title" {
                 // Counteract surface (`action.rs`): the offered card lives on
                 // the option label, not on `MatchPrompt::card` (the answered link).
                 Some(crate::action::counteract_action(p, a.answer))
             } else {
-                Some(Action::Offer {
+                Some(Action::Answer {
                     index: a.answer.max(0),
                 })
             }
         }
         "multi" => {
-            // The answer is the bitmask itself; `Action::Offer` carries it as
+            // The answer is the bitmask itself; `Action::Answer` carries it as
             // `value`. Clamp negatives to the valid fallback mask so the
             // mapped action is never an invalid answer.
             let bits = if a.answer < 0 { p.fallback } else { a.answer };
-            Some(Action::Offer { index: bits })
+            Some(Action::Answer { index: bits })
         }
         _ => None,
     }
@@ -488,7 +488,7 @@ pub fn heuristic_message_view(_data: &GameData, view: &SeatView) -> NetMessage {
         }
     }
     if st.step == stage::OPS {
-        // `end` only where the engine accepts it (`why_not_act`'s end branch).
+        // `end` only where the engine accepts it (`cant_act`'s end branch).
         // The public `skip_move` re-derives from the layer counters and can disagree
         // with the gate (uncancellable / mid-turn timed layer / off-board layer) -- trusting it
         // sent `end` into `err.roll_first` and stalled the seat (bot_cpu §6).
@@ -518,7 +518,7 @@ pub fn heuristic_message_view(_data: &GameData, view: &SeatView) -> NetMessage {
 /// prompt-open fill runs; the turn surface is the policy itself (redeem / play
 /// / skill / roll / end / discard).
 ///
-/// Rollout hot path: no `SeatView`, no `view_extra` JSON. `BOT_STRENGTH_AB_NO_GATES`
+/// Rollout hot path: no `SeatView`, no `view_extras` JSON. `BOT_STRENGTH_AB_NO_GATES`
 /// keeps its old bare roll/end turn surface for A/B runs.
 pub fn heuristic_message_with(
     _data: &GameData,

@@ -1,25 +1,20 @@
 # Match engine (P3)
 
-`crates/game-core/src/engine/` — the port of `MatchHost`'s game shell. Runs natively
-(server) and in wasm32 (browser).
+Runs natively (server) and in wasm32 (browser).
 
 ## Decisions
 
-* **Behaviour, not bits.** The port reproduces the game's rules, not its exact numbers.
-  The RNG is our own seeded xoshiro256\*\* (`rng.rs`), not .NET `System.Random`. The
-  .NET golden-master oracle from the original plan is dropped; verification is by
-  scenario tests and invariants instead.
+* **Behaviour, not bits.** The port reproduces the game's rules, not its exact numbers. The .NET
+  golden-master oracle from the original plan is dropped; verification is by scenario tests and
+  invariants instead.
 * **Determinism is still required**: the same seed and the same inputs give the same
   game on server and browser. Replay depends on it.
-* **Replay instead of coroutines.** The C# runs game flow as nested coroutines that
-  suspend at prompts. Here flow is straight-line Rust over a `Cx`. `Cx::ask` returns
-  the logged answer, or halts the routine; the host shows the prompt and later re-runs
-  the routine from its starting snapshot with the answer appended. Card effects
-  (`ruleset.wasm`) use the same model, so engine prompts and card prompts are one
-  mechanism. **Simulation mode** (`docs/BOT.md` §3.2) installs an
-  `AnswerProvider` on the `Cx`: every ask whose log entry is missing is answered
-  inline instead of halting, so a routine runs once per simulation. The live match
-  never installs one.
+Here flow is straight-line Rust over a `PlayCtx`. `PlayCtx::ask` returns the logged answer, or halts the
+routine; the host shows the prompt and later re-runs the routine from its starting snapshot with the
+answer appended. Card effects (`ruleset.wasm`) use the same model, so engine prompts and card
+prompts are one mechanism. **Simulation mode** (`docs/BOT.md` §3.2) installs an `AnswerProvider` on
+the `PlayCtx`: every ask whose log entry is missing is answered inline instead of halting, so a routine
+runs once per simulation. The live match never installs one.
 
 ## Structure
 
@@ -27,9 +22,9 @@
 |---|---|
 | `mod.rs` | `Match` (host): clocks, live prompt (bot answers, time-outs, auction bidding), end-match vote, pending routine + snapshot + answer log, deferred host events, commands (`act`) |
 | `world.rs` | `World` — everything a routine touches, incl. RNG and event/prompt counters |
-| `cx.rs` | `Cx` routine context, `Flow`/`Halt`, `Ask` prompt builders |
+| `cx.rs` | `PlayCtx` routine context, `Flow`/`Halt`, `Ask` prompt builders |
 | `play.rs` | routines: turns, movement, CiRCLE reward, landing, agents, rent, forced purchase, buy/build, payments, raising funds, bankruptcy, auctions, hand/draw, events, play card, scoring |
-| `ai.rs` | bot decisions: the standard policy (same thresholds as the C#) and the chaos one |
+| `ai.rs` | bot decisions: the standard policy and the chaos one |
 | `setup.rs` | turn order, ban (Ranked), pick, deck (bots take the deck book entry) |
 | `rules.rs` | `CardRules` — where card/event content plugs in; `StubRules` = no effects |
 
@@ -62,7 +57,7 @@ Tile settlement is **rule instances**, the way card and skill content is -- see
 [TILES.md](TILES.md). At match start `bind_tiles` places one instance per board
 tile on a neutral board owner (`state::BOARD_OWNER = -1`, `World::board_field`),
 stamping the tile's data (price, rent table, group, level cap) into the
-instance's `props`. `settle_at` is a two-phase link: `settle` (the declaration
+instance's `props`. `settle_tile_at` is a two-phase link: `settle` (the declaration
 and its [反击] window), then `settleBody` -- which is **its own chain link**
 (ABI v32, `ChainKind::SettleBody`), so 「replace the body」 (「将本次结算改为…」)
 and 「the settle never happened」 are two separate [反击] targets. Cancelling
@@ -74,20 +69,20 @@ Monopoly settlement), which is what `StubRules` and an unbound kind get.
 ### Settle work stack (STACK-01)
 
 Nested `[触发结算]` used to recurse
-`card_settle_at → settle_at → raise → counteract → drive → apply_host_request → card_settle_at`
+`settle_tile_at → settle_tile_at → raise → counteract → drive → apply_host_request → settle_tile_at`
 with no depth bound. Long bot games overflowed the stack (`ckpt_equiv`), and a
 server `spawn_blocking` worker (~2 MiB) crashed at a quarter of that depth.
 
 Now:
 
-* `Cx` carries an explicit **work stack** (`engine/work.rs`).
-  `card_settle_at` / `settle_at` enqueue a [`SettleFrame`] and enter
-  `Cx::drain_work` -- the only pump.
+* `PlayCtx` carries an explicit **work stack** (`engine/work.rs`).
+  `settle_tile_at` / `settle_tile_at` enqueue a [`SettleFrame`] and enter
+  `PlayCtx::drain_work` -- the only pump.
 * A drive that needs a nested settle **while the pump is running** suspends:
   it pushes a resume work item (the drive's saved answers) and the settle job,
   then returns `Halt::Suspended`. The pump runs the settle first, then the
   resume -- the same order as the old synchronous nest, one Rust frame deep.
-* `settle_at` is a stage machine (`step_settle`): `settle → settleBody →
+* `settle_tile_at` is a stage machine (`step_settle`): `settle → settleBody →
   settle_tile → settleAfter → tileResolved`. A raise that suspends parks a
   `ContinueSettleWork` at the suspension-group base.
 * `flush_deferred` is iterative (a re-entrancy guard). `Deferred::Leave →
@@ -250,7 +245,7 @@ The rulebook (「[支付]时可以打出」) opens a [反击] window for every p
 no depth limit. Nested money movements (a hook that forces another payment)
 therefore open their windows at every depth. The **termination argument** is
 that a hook cannot re-trigger on its own movement: while card X's hook is
-running, nested money pipelines skip X (`Cx::reentrant_hooks`). A safety cap
+running, nested money pipelines skip X (`PlayCtx::reentrant_hooks`). A safety cap
 (`MAX_MONEY_DEPTH = 32`) exists only to catch genuine runaway recursion and
 **traps loudly** (panics) rather than settling silently.
 
@@ -453,7 +448,7 @@ MyGO:无路矢's 「在[除外]层数归0后[传送]至该格子，视为当回�
 `exileMain` slot (`state_key::EXILE_MAIN`). The exile tick reads and consumes
 it: the return teleport runs as the main move (`teleport_as(..., main: true)`)
 and `TurnCtx::main_moved` is set, so 「一回合只能触发一次［主要移动］」 keeps the
-player from rolling as well. `why_not_act`'s `roll` / `end` gates both look at
+player from rolling as well. `cant_act`'s `roll` / `end` gates both look at
 `main_moved`. Clearing a [停留] down to 0 also un-skips the move
 (`give_stay`): 「[停留]：处于该状态时[无法移动]」 makes the skip a consequence of
 the state, not a latch.
@@ -465,20 +460,18 @@ Every seat carries a **`BotMentality`** (`state.rs`, serde-defaulted to
 the match is created -- solo (`SoloSetup`, one choice for all bots with a
 per-bot override) or online (`POST /api/rooms/{id}/bots`, stored on the room
 member and copied onto the seat by `Match::new`) -- and it is what
-`Cx::bot_mentality` reads. Only `bot` seats take one: **a human who times out or
+`PlayCtx::bot_mentality` reads. Only `bot` seats take one: **a human who times out or
 disconnects is always answered with the standard policy** (`ai` flips on,
 `bot` stays off).
 
 Two policies, one decision surface (`ai_step`, `tick_live`, `tick_choice`,
 `auto_mortgage`, and the precomputed `Ask::ai` / `ai_picked` / `worth`):
 
-**`standard`** is the ported C# bot. Its thresholds live in `ai.rs` as the
-**defaults of `game-core/src/strategy.rs`'s `StrategyParams`** (`docs/BOT.md`
-§3.8) and are mirrored by the web client's 托管 autopilot
-(`webui/src/game/autopilot.ts`) -- keep the two in sync. A seat's resolved
-params come from the strategy book (`data/strategy_book.json`, back-off lookup
-by public table key); an empty or absent book leaves every constant at the
-values below, which is the pre-book policy exactly. Chaos is not
+Its thresholds live in `ai.rs` as the **defaults of `game-core/src/strategy.rs`'s `StrategyParams`**
+(`docs/BOT.md` §3.8) and are mirrored by the web client's 托管 autopilot
+(`webui/src/game/autopilot.ts`) -- keep the two in sync. A seat's resolved params come from the
+strategy book (`data/strategy_book.json`, back-off lookup by public table key); an empty or absent
+book leaves every constant at the values below, which is the pre-book policy exactly. Chaos is not
 parameterised -- it keeps its own literals.
 
 | Constant | Value | Meaning |
@@ -526,7 +519,7 @@ included -- "is a bot" is not a rulebook reason to skip one (out / [除外] /
 The offer is an ordinary prompt and is answered without stalling:
 
 * **standard / chaos** (`ai` on) answer inline through the precomputed `Ask::ai`
-  fill (`Cx::fill_ai` / `counteract_pick`), which `tick_live`'s bot schedule
+  fill (`PlayCtx::fill_ai` / `counteract_pick`), which `tick_live`'s bot schedule
   applies: standard declares per [`CounterParams`] propensity
   (`docs/BOT.md` §3.8; **default `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰
   per offered card**, drawn from the match RNG -- user ruling 2026-10-08,
@@ -557,9 +550,9 @@ chaos game replays and restores like any other (`tests/mentality.rs`).
 
 ## Not in the shell (card content / later phases)
 
-| What | C# | Where it goes |
+| What | port | Where it goes |
 |---|---|---|
-| Card, skill, band and `Fx` hooks (`PaySplitAdd`, `CircleRewardChoice`, `SkipTile`, `BuyPrice`...) | nested classes | card rules (WASM) |
+| Card, skill, band and `hook` hooks (`PaySplitAdd`, `CircleRewardChoice`, `SkipTile`, `BuyPrice`...) | nested classes | card rules (WASM) |
 | Event cards (事件卡: 对邦, 协助CiRCLE重建, Forbidden Moca, ...) | `EventEffect` | `rules/events` (`docs/EVENTS.md`); the engine keeps the deck, the draw, the active list and the filing away |
 | Per-player card variables (`V(i, ...)`), marks, embers, field cards | `V`/`AddMark`/... | with card content |
 | Character skills (`skill` command) | `DoSkill` | card rules; currently rejected with a message |
@@ -699,14 +692,13 @@ allocator surface changed in 5.x). Bot-game loop through the glue API under node
 
 Adopted: better on both size and speed (~8% faster mean, ~14% faster median).
 
-
 ## Drive replay semantics (HostRequest rebase)
 
 A card body runs under the learn/commit (or replay multi-pass) model: the body
 is interrupted by a [`HostRequest`] (pay, move, …), the host routine is applied
 against the **live** world, and the body re-runs from the top.
 
-**What a re-run reads.** Each pass starts from `Cx::share_world()` -- the live
+**What a re-run reads.** Each pass starts from `PlayCtx::share_world()` -- the live
 world *after* every host routine the earlier passes discovered. The pass that
 lands (`commit_after`) is therefore a snapshot of `live + host_effects`, with
 the guest's own writes on top. A query in the body (money, ownership, …) on

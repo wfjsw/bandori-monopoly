@@ -585,7 +585,7 @@ No signature is removed and no existing byte layout changes.
 ```rust
 // before (rui_devil.rs:29-54)
 for &o in &others {
-    ctx::transfer(player_id, o, 100, &why)?;
+    ctx::transfer(player_id, o, 100, &reason)?;
     ctx::set_slot(player_id, X, 5);          // unconditional
 }
 …

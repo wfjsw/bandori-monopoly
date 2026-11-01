@@ -130,7 +130,7 @@ pub fn trig_move_sentinels() {
     crate::kassert!(call(Op::trig_move_roll, [0; 6]) == -1);
     crate::kassert!(call(Op::trig_move_remaining, [0; 6]) == 0);
     crate::kassert!(call(Op::trig_move_total, [0; 6]) == 0);
-    crate::kassert!(call(Op::trig_move_resolve, [0; 6]) == 0);
+    crate::kassert!(call(Op::trig_move_settles, [0; 6]) == 0);
     // `trig_move_main` is `Trigger::main`, independent of the move payload.
     crate::kassert!(call(Op::trig_move_main, [0; 6]) == 1);
 }
@@ -162,7 +162,7 @@ pub fn trig_move_payload_reads() {
         m.remaining = remaining;
         m.total = total;
         m.roll = roll;
-        m.resolve = resolve;
+        m.settles = resolve;
         w.move_snap = m;
     });
     crate::kassert!(call(Op::trig_move_kind, [0; 6]) == kind as i64);
@@ -171,7 +171,7 @@ pub fn trig_move_payload_reads() {
     crate::kassert!(call(Op::trig_move_remaining, [0; 6]) == remaining as i64);
     crate::kassert!(call(Op::trig_move_total, [0; 6]) == total as i64);
     crate::kassert!(call(Op::trig_move_roll, [0; 6]) == roll as i64);
-    crate::kassert!(call(Op::trig_move_resolve, [0; 6]) == resolve as i64);
+    crate::kassert!(call(Op::trig_move_settles, [0; 6]) == resolve as i64);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,3 @@
-//! `Mor:再次牵起手来` -- C# `CardHoldHandsAgain` (MatchHost.cs:5108-5155): mirror the
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:再次牵起手来`）:
 //! > 再次牵起手来：
@@ -54,14 +53,13 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
-    // 规则书[反击]: 「并[消耗]等量资金」 -- C# `H.LoseR(i, c.Trigger.Value, CardName)`.
-    // TODO(规则书)（将此卡放置在[使用者]的[场地]并[消耗]等量资金）: the book places, then
-    //   spends -- we spend first so the fresh copy cannot cancel its own cost, and a
-    //   cost that knocks the counteruser out skips the placement entirely.
+    // TODO(规则书)（将此卡放置在[使用者]的[场地]并[消耗]等量资金）: the book places, then spends -- we spend
+    // first so the fresh copy cannot cancel its own cost, and a cost that knocks the
+    // counteruser out skips the placement entirely.
     ctx::pay(
         player_id,
         amount,
-        &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64),
+        &Msg::new(key!("hold_hands_again_reason")).n("money", amount as i64),
     )?;
     if ctx::player_out(player_id) {
         return Ok(());
@@ -78,11 +76,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[持续]: 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 -- C#
-/// `CardHoldHandsAgain.PaySplitAt` cancels the next `PayCtx` with `p.from == Player` and
-/// `H.Unplace(this, "discard", "用掉了")`. Runs through the Fx hook dispatch at
-/// `paySplitAt` (after `PaySplitChoose`, before the `pay` [反击] window), so this is a
-/// field effect, not a [反击].
+/// Runs through the hook dispatch at `paySplitAt` (after `PaySplitChoose`,
+/// before the `pay` [反击] window), so this is a field effect, not a [反击].
 ///
 /// Split (ABI v74): the Filter returns 0 (「取消此次资金变动」) and logs; the
 /// `set_dest(Graveyard)` half is `pay_after` on `PayAfter`.

@@ -1,4 +1,3 @@
-//! `PPP:抓到了` -- C# `CardCaught` (MatchHost.cs:8776-8813): walk to a player
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:抓到了`）:
 //! > 抓到了：
@@ -25,12 +24,8 @@ pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play("", Some(ca
     );
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「视为本回合的主要移动」 -- `H.MoveWhyNot` refuses once the main move
-    // is spent. 规则书: 「移动到你前方一名玩家的格子」 -- C# `CardCaught.WhyNot` then
-    // refuses with 「前方没有别的玩家」 unless another present player stands on a
-    // different tile.
-    if let Some(why) = rules_status::move_blocked(player_id) {
-        return Some(why);
+    if let Some(reason) = rules_status::move_blocked(player_id) {
+        return Some(reason);
     }
     let pos = ctx::player_pos(player_id);
     if ctx::others(player_id)
@@ -44,13 +39,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
-    // 规则书: 「移动到你前方一名玩家的格子」 -- C# `CardCaught.Play` offers the other
-    // players at a different tile, nearest forward first (`orderby H.Forward`).
     let mut list: Vec<i32> = ctx::others(player_id)
         .into_iter()
         .filter(|&p| ctx::player_pos(p) != pos)
         .collect();
-    // C# `Play` only prompts when the list is non-empty (`if (list.Count != 0)`).
     if list.is_empty() {
         return Ok(());
     }
@@ -62,11 +54,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &list,
     )?;
     let steps = ctx::tile_forward(pos, ctx::player_pos(who));
-    // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove(c, new MoveCtx { Steps =
-    // H.Forward(...) })`: the walk passes intervening tiles and settles on the
-    // target, and `card_move` consumes the turn's main move (`MainMoveAs`). A
-    // stale `resolve = false` on the shared plan must not skip that settle.
-    ctx::plan::set_resolve(true);
+    // A stale `resolve = false` on the shared plan must not skip that settle.
+    ctx::plan::set_settles(true);
     ctx::plan::set_steps(steps);
     ctx::log(
         player_id,
@@ -75,10 +64,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .player_id("target", who)
             .i("n", steps as i64),
     );
-    ctx::card_move(player_id);
-    // 规则书: 「且可选择盖房」 -- C# arms `H._turnCtx.BuildOk`; the landing settle
-    // offers that build itself when the mover owns the tile, so no explicit
-    // `OfferBuildAmong` here (unlike `bang_dream`, whose teleport does not settle).
+    ctx::run_planned_move(player_id);
     Ok(())
 }
 

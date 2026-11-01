@@ -1,6 +1,3 @@
-//! The lists extension library: member functions on `list`, `lists.range`
-//! and the `sortBy` macro, following cel-go's `ext.Lists()`.
-
 use super::{arg, iterable};
 #[cfg(feature = "parser")]
 use crate::common::ast::{CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr, LiteralValue};

@@ -1,4 +1,3 @@
-//! `Mujica:会被骗着买水晶的人` -- C# `CardCrystalSwap` (MatchHost.cs:5981-6049):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:会被骗着买水晶的人`）:
 //! > 会被骗着买水晶的人：
@@ -11,8 +10,8 @@
 
 use alloc::vec::Vec;
 
-use bandori_std::ctx;
 use bandori_std::counter;
+use bandori_std::ctx;
 use card_sdk::ctx::NameId;
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
@@ -35,11 +34,9 @@ pub const CRYSTAL_SWAP: CardDef = CardDef::new(
 
 /// One pool entry: a card instance on some player's field.
 ///
-/// C# `CardCrystalSwap.Slots`'s `(label, get, add)` tuple, but per **uid** --
-/// `get` / `add` are [`ctx::counter_at`] / [`ctx::add_counter_at`] on this
-/// instance's `counter::CRYSTALS`, not on the running card. `band` only picks
-/// the label: a band-skill instance is called 「团卡」 (`crystal_swap_band`),
-/// everything else is named by its card id (`crystal_swap_card`).
+/// `band` only picks the label: a band-skill instance is called 「团卡」
+/// (`crystal_swap_band`), everything else is named by its card id
+/// (`crystal_swap_card`).
 struct Slot {
     uid: i32,
     player_id: i32,
@@ -48,20 +45,17 @@ struct Slot {
 }
 
 impl Slot {
-    /// C# `get` -- the crystal count on this card.
     fn get(&self) -> i32 {
         ctx::counter_at(self.uid, counter::CRYSTALS)
     }
 
-    /// C# `add` -- `Card.AddCrystals(n, ...)` on this instance. `max = 0` is
-    /// the call-local bound; the instance's stored `counter_max.crystals` (its
-    /// printed 上限) is the separate clamp `add_counter_at` applies itself.
+    /// Add `n` to this instance's crystals. `max = 0` is the call-local bound;
+    /// the instance's stored `counter_max.crystals` (its printed 上限) is the
+    /// separate clamp `add_counter_at` applies itself.
     fn add(&self, n: i32) {
         ctx::add_counter_at(self.uid, counter::CRYSTALS, n, 0);
     }
 
-    /// C# `label` -- `"{{who}}'s band card ({{n}})"` / `"{{who}}'s \"{{card}}\"
-    /// ({{n}})"`.
     fn label(&self) -> Msg {
         let n = self.get() as i64;
         if self.group_skill {
@@ -93,11 +87,6 @@ fn is_group_label(card: &str, player_id: i32) -> bool {
     !ctx::persona_is(player_id, owner)
 }
 
-/// C# `CardCrystalSwap.Slots` -- every card on every live player's field.
-/// 「可以放置奇迹水晶的卡」 is treated as any card in play (the instance
-/// carries `Card.Crystals`); a card already at its own 上限 is still offered
-/// and overfilled (see the TODO at the destination filter). Face-down and
-/// 「不受任何效果影响」 cards are not touchable (C# `p.Live && !p.Immune`).
 fn slots() -> Vec<Slot> {
     let mut v: Vec<Slot> = Vec::new();
     for s in 0..ctx::player_count() {
@@ -105,10 +94,9 @@ fn slots() -> Vec<Slot> {
             continue;
         }
         for (uid, c) in ctx::field_instances(s) {
-            // 规则书: 「场上一张卡」 -- C# `p.Live && !p.Immune` is the field scope.
-            // TODO(规则书)（「场上一张卡」）: the cell names no face-down exclusion --
-            //   face-down cards are dropped from both endpoints; only the immune
-            //   half is grounded in 「不受任何效果影响」.
+            // TODO(规则书)（「场上一张卡」）: the cell names no face-down exclusion -- face-down cards
+            // are dropped from both endpoints; only the immune half is grounded in
+            // 「不受任何效果影响」.
             if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
                 continue;
             }
@@ -128,10 +116,8 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     // -- pick the source among the cards that hold one, then the destination
     // among the rest, and move exactly one crystal between the two uids.
     let all = slots();
-    // C# `from = slots.Where(x => x.get() > 0)`.
     let from: Vec<usize> = (0..all.len()).filter(|&i| all[i].get() > 0).collect();
     if from.is_empty() || all.len() < 2 {
-        // C# `c.Effective = false` + a log line when no crystal can move.
         ctx::log(
             player_id,
             &Msg::new(key!("crystal_swap_none")).player_id("who", player_id),
@@ -140,15 +126,15 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动」 -- pick the source.
     let from_labels: Vec<Msg> = from.iter().map(|&i| all[i].label()).collect();
-    let src_i = ctx::ask_pick(
+    let src_i = ctx::ask_choice(
         player_id,
         &Msg::new(key!("crystal_swap_title")),
         &Msg::new(key!("crystal_swap_from")),
         &from_labels,
     )?;
     let src = from[src_i.min(from.len() - 1)];
-    // 规则书: 「到另一张可以放置奇迹水晶的卡上」 -- pick the destination
-    // (C# `slots.Where(x => x.label != src.label)`).
+    // 规则书: 「到另一张可以放置奇迹水晶的卡上」 -- pick the destination, never
+    // the source itself.
     // 「可以放置」: a card at its own printed 上限 cannot take one. The cap is the
     // per-instance `counter_max.crystals` store; no cap (0) is uncapped.
     let can_take = |s: &Slot| {
@@ -167,15 +153,13 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let to_labels: Vec<Msg> = to.iter().map(|&i| all[i].label()).collect();
-    let dst_i = ctx::ask_pick(
+    let dst_i = ctx::ask_choice(
         player_id,
         &Msg::new(key!("crystal_swap_title")),
         &Msg::new(key!("crystal_swap_to")),
         &to_labels,
     )?;
     let dst = to[dst_i.min(to.len() - 1)];
-    // 规则书: 「一个奇迹水晶」 -- exactly one, from the chosen uid to the
-    // chosen uid (C# `src.AddCrystals(-1)` + `dst.AddCrystals(1)`).
     all[src].add(-1);
     all[dst].add(1);
     ctx::log(

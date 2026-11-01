@@ -22,7 +22,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use card_sdk::kani_host::{Args, Op};
 use game_rules::native_shims::{install_host, take_host};
 use game_rules::{
-    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostErr, HostRequest,
+    with_inline_host, CallOut, CardInfo, CardPile, CardWorld, HostCtx, HostError, HostRequest,
     HostState, InlineHost, Msg as EngineMsg, Prompt as EnginePrompt, RulesHandle,
 };
 
@@ -163,7 +163,7 @@ pub struct ConfWorld {
     pub pay_amount_set: bool,
     pub move_present: bool,
     pub move_kind: i32,
-    pub move_resolve: bool,
+    pub move_settles: bool,
     pub move_dir: i32,
     pub move_from: i32,
     pub move_remaining: i32,
@@ -232,7 +232,7 @@ impl ConfWorld {
             pay_amount_set: false,
             move_present: false,
             move_kind: -1,
-            move_resolve: false,
+            move_settles: false,
             move_dir: 1,
             move_from: -1,
             move_remaining: 0,
@@ -742,12 +742,8 @@ impl CardWorld for ConfWorld {
                 self.stay[p] = (self.stay[p].saturating_add(delta)).max(0);
                 self.events.push(format!("give_stay {player_id} {delta}"));
             }
-            "stun" => self
-                .events
-                .push(format!("give_stun {player_id} {delta}")),
-            "exile" => self
-                .events
-                .push(format!("give_exile {player_id} {delta}")),
+            "stun" => self.events.push(format!("give_stun {player_id} {delta}")),
+            "exile" => self.events.push(format!("give_exile {player_id} {delta}")),
             _ => {}
         }
         out
@@ -786,7 +782,7 @@ impl CardWorld for ConfWorld {
         0
     }
     // fire / stay
-    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+    fn gain_marker(&mut self, player_id: i32, _name: &str, n: i32, _reason: EngineMsg) -> i32 {
         // Matches `game_core::engine::ops::gain_marker`: return the amount
         // actually gained (clamped under cap), not the new total.
         let p = player_id.max(0) as usize % 4;
@@ -801,7 +797,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("gain_marker {player_id} {got}"));
         got
     }
-    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _why: EngineMsg) -> i32 {
+    fn spend_marker(&mut self, player_id: i32, _name: &str, n: i32, _reason: EngineMsg) -> i32 {
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
             return 1;
@@ -866,19 +862,19 @@ impl CardWorld for ConfWorld {
         let mut t = game_rules::Trigger::default();
         t.value = self.trig_value;
         t.target = self.trig_target;
-        t.main = self.trig_main;
+        t.is_main_move = self.trig_main;
         t.roll_source = game_core::engine::rules::RollSource::from_i32(self.trig_roll_source);
         if self.move_present {
             t.mv = Some(game_rules::TriggerMove {
                 kind: game_rules::MoveKind::from_i32(self.move_kind)
                     .unwrap_or(game_rules::MoveKind::Walk),
-                resolve: self.move_resolve,
+                settles: self.move_settles,
                 tags: self
                     .move_tags
                     .iter()
                     .map(|(k, v)| (k.clone(), *v))
                     .collect(),
-                main: self.trig_main,
+                is_main_move: self.trig_main,
                 dir: game_core::engine::rules::Dir::from_i32(self.move_dir),
                 from: self.move_from,
                 remaining: self.move_remaining,
@@ -967,7 +963,10 @@ impl CardWorld for ConfWorld {
         0
     }
     fn paid_in_settle_by(&self, seat: i32) -> i32 {
-        *self.paid_in_settle_by.get(seat.max(0) as usize % 4).unwrap_or(&0)
+        *self
+            .paid_in_settle_by
+            .get(seat.max(0) as usize % 4)
+            .unwrap_or(&0)
     }
     fn rent_quote(&mut self, _payer: i32, _tile: i32) -> i32 {
         self.rent_quote
@@ -986,8 +985,7 @@ impl CardWorld for ConfWorld {
         self.trig_settle_outcome
     }
     fn pay_factor(&self) -> i32 {
-        self.plan_pay_factor
-            .saturating_mul(self.settle_pay_factor)
+        self.plan_pay_factor.saturating_mul(self.settle_pay_factor)
     }
     fn set_pay_factor(&mut self, milli: i32) {
         let milli = milli.max(0);
@@ -1093,17 +1091,17 @@ impl HostCtx for ConfHost {
     fn st_mut(&mut self) -> &mut HostState<ConfWorld, ConfRules> {
         &mut self.state
     }
-    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr> {
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostError> {
         Ok(card_sdk::native::read(ptr, len.max(0) as usize))
     }
-    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr> {
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostError> {
         card_sdk::native::write(ptr, bytes);
         Ok(())
     }
-    fn fuel(&mut self) -> Result<u64, HostErr> {
+    fn fuel(&mut self) -> Result<u64, HostError> {
         Ok(self.fuel)
     }
-    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostError> {
         self.fuel = v;
         Ok(())
     }
@@ -1117,13 +1115,15 @@ impl HostCtx for ConfHost {
         _arg: &[u8],
         _want_msg: bool,
     ) -> (
-        Result<CallOut, HostErr>,
+        Result<CallOut, HostError>,
         HostState<ConfWorld, ConfRules>,
         u64,
     ) {
         // Nested `play_card` is out of scope for the thin adapter.
         (
-            Err(HostErr::trap("conf_model: nested call_entry not supported")),
+            Err(HostError::trap(
+                "conf_model: nested call_entry not supported",
+            )),
             HostState::new(ConfRules, ConfWorld::new(), vec![], 0),
             self.fuel,
         )
@@ -1150,7 +1150,7 @@ impl InlineHost for ConfInline {
                 from,
                 to,
                 amount,
-                total_stage: _,
+                runs_total_stage: _,
                 ..
             } => {
                 if amount <= 0 {
@@ -2189,7 +2189,9 @@ fn op_tile_at_set_tile_at_match_engine() {
             (a, s, b, missing)
         };
         if real != model {
-            panic!("MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}");
+            panic!(
+                "MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}"
+            );
         }
     });
 }
@@ -2200,7 +2202,7 @@ fn trig_conf() -> ConfWorld {
     w.trig_pay_is_rent = true;
     w.move_present = true;
     w.move_kind = 0;
-    w.move_resolve = true;
+    w.move_settles = true;
     w.move_dir = 1;
     w.move_from = 2;
     w.move_remaining = 3;
@@ -2225,7 +2227,7 @@ fn trig_model() -> KWorld {
     w.trig_pay_is_rent = true;
     let mut ms = MoveSnap::NONE;
     ms.kind = 0;
-    ms.resolve = true;
+    ms.settles = true;
     ms.dir = 1;
     ms.from = 2;
     ms.remaining = 3;
@@ -2253,159 +2255,155 @@ fn trig_get(label: &str, real: impl FnOnce(&mut ConfHost) -> i64, op: Op, args: 
 
 #[test]
 fn op_trig_move_payload_matches_engine() {
-    big(|| {
-        let _g = model_lock();
-        trig_get(
-            "trig_move_kind",
-            |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
-            Op::trig_move_kind,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_resolve",
-            |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-            Op::trig_move_resolve,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_main",
-            |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
-            Op::trig_move_main,
-            [0; 6],
-        );
-        trig_get(
-            "trig_settle_redirect",
-            |c| game_rules::hostfns::trig_settle_redirect(c).unwrap() as i64,
-            Op::trig_settle_redirect,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_dir",
-            |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
-            Op::trig_move_dir,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_remaining",
-            |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
-            Op::trig_move_remaining,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_from",
-            |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
-            Op::trig_move_from,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_total",
-            |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
-            Op::trig_move_total,
-            [0; 6],
-        );
-        trig_get(
-            "trig_move_roll",
-            |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
-            Op::trig_move_roll,
-            [0; 6],
-        );
-        let (tp, tl) = intern_str("firePot");
-        trig_get(
-            "trig_move_tag",
-            move |c| game_rules::hostfns::trig_move_tag(c, tp, tl).unwrap() as i64,
-            Op::trig_move_tag,
-            [tp, tl, 0, 0, 0, 0],
-        );
-    });
+    let _g = model_lock();
+    trig_get(
+        "trig_move_kind",
+        |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
+        Op::trig_move_kind,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_settles",
+        |c| game_rules::hostfns::trig_move_settles(c).unwrap() as i64,
+        Op::trig_move_settles,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_main",
+        |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
+        Op::trig_move_main,
+        [0; 6],
+    );
+    trig_get(
+        "trig_settle_redirect",
+        |c| game_rules::hostfns::trig_settle_redirect(c).unwrap() as i64,
+        Op::trig_settle_redirect,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_dir",
+        |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
+        Op::trig_move_dir,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_remaining",
+        |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
+        Op::trig_move_remaining,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_from",
+        |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
+        Op::trig_move_from,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_total",
+        |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
+        Op::trig_move_total,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_roll",
+        |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
+        Op::trig_move_roll,
+        [0; 6],
+    );
+    let (tp, tl) = intern_str("firePot");
+    trig_get(
+        "trig_move_tag",
+        move |c| game_rules::hostfns::trig_move_tag(c, tp, tl).unwrap() as i64,
+        Op::trig_move_tag,
+        [tp, tl, 0, 0, 0, 0],
+    );
 }
 #[test]
 fn op_trig_move_sentinels_match_engine() {
-    big(|| {
-        let _g = model_lock();
-        // No-move sentinels: kind=-1, roll=-1, dir=1, from=-1, remaining=0,
-        // total=0, resolve=0; main is Trigger::main (independent of mv).
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move kind",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_kind, [0; 6]),
-        );
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move dir",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_dir, [0; 6]),
-        );
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move from",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_from, [0; 6]),
-        );
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move roll",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]),
-        );
-        let mut conf = base_conf();
-        conf.trig_main = true;
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move main",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_main, [0; 6]),
-        );
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move remaining",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_remaining, [0; 6]),
-        );
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move total",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_total, [0; 6]),
-        );
-        let conf = base_conf();
-        let mut model = base_model();
-        model.trig_main = true;
-        diff_get_with(
-            "no-move resolve",
-            conf,
-            model,
-            |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::trig_move_resolve, [0; 6]),
-        );
-    });
+    let _g = model_lock();
+    // No-move sentinels: kind=-1, roll=-1, dir=1, from=-1, remaining=0,
+    // total=0, resolve=0; main is Trigger::main (independent of mv).
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move kind",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_kind, [0; 6]),
+    );
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move dir",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_dir, [0; 6]),
+    );
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move from",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_from, [0; 6]),
+    );
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move roll",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]),
+    );
+    let mut conf = base_conf();
+    conf.trig_main = true;
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move is_main_move",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_main, [0; 6]),
+    );
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move remaining",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_remaining, [0; 6]),
+    );
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move total",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_total, [0; 6]),
+    );
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with(
+        "no-move resolve",
+        conf,
+        model,
+        |c| game_rules::hostfns::trig_move_settles(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_settles, [0; 6]),
+    );
 }
 #[test]
 fn op_trig_buy_deal_payload_matches_engine() {
@@ -2699,15 +2697,15 @@ fn op_pay_command_moves_money() {
     });
 }
 #[test]
-fn op_apply_redeem_folds_spend_before() {
+fn op_commit_redeem_folds_spend_before() {
     big(|| {
         // No write: the asked amount is the cost.
         diff_op(
-            "apply_redeem plain",
+            "commit_redeem plain",
             &[],
-            |c| game_rules::hostfns::apply_redeem(c, 0, 1, 400).unwrap() as i64,
+            |c| game_rules::hostfns::commit_redeem(c, 0, 1, 400).unwrap() as i64,
             [0, 1, 400, 0, 0, 0],
-            Op::apply_redeem,
+            Op::commit_redeem,
         );
         // A written cost (a `spendBefore` reduction) wins.
         let mut conf = base_conf();
@@ -2717,11 +2715,11 @@ fn op_apply_redeem_folds_spend_before() {
         model.pay_amount = 90;
         model.pay_amount_set = true;
         diff_get_with(
-            "apply_redeem folded",
+            "commit_redeem folded",
             conf,
             model,
-            |c| game_rules::hostfns::apply_redeem(c, 0, 1, 400).unwrap() as i64,
-            || rules_kani::host::dispatch(Op::apply_redeem, [0, 1, 400, 0, 0, 0]),
+            |c| game_rules::hostfns::commit_redeem(c, 0, 1, 400).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::commit_redeem, [0, 1, 400, 0, 0, 0]),
         );
     });
 }

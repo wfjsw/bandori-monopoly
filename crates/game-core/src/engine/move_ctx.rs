@@ -18,7 +18,7 @@ pub use game_kinds::MoveKind;
 
 // Settling is not its own axis beside [`MoveKind`]: the kind already says
 // *where* resolution happens -- a walk resolves the route it travels and its
-// landing, a teleport only its destination. [`MoveCtx::resolve`] is the one
+// landing, a teleport only its destination. [`MoveCtx::settles`] is the one
 // remaining boolean: *whether* the move settles where it lands, and a card
 // effect can clear it to prevent settle at all.
 
@@ -26,28 +26,28 @@ pub use game_kinds::MoveKind;
 ///
 /// `dice.count`d`dice.sides`, summed. **`sides == 0` is a flat `count`** --
 /// that is how a 「+2 to the roll」 effect is expressed, instead of a separate
-/// `bonus` field; the roll total is just the sum of the terms. `why` is the
+/// `bonus` field; the roll total is just the sum of the terms. `reason` is the
 /// log's parenthetical for this term.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Roll {
     pub dice: Dice,
-    pub why: String,
+    pub reason: String,
 }
 
 impl Roll {
     /// `count`d`sides` (or a flat `count` when `sides == 0`).
-    pub fn new(count: i32, sides: i32, why: impl Into<String>) -> Self {
+    pub fn new(count: i32, sides: i32, reason: impl Into<String>) -> Self {
         Self {
             dice: Dice { count, sides },
-            why: why.into(),
+            reason: reason.into(),
         }
     }
 
     /// `count`d`sides` (or a flat `count` when `sides == 0`).
-    pub fn from_dice(dice: Dice, why: impl Into<String>) -> Self {
+    pub fn from_dice(dice: Dice, reason: impl Into<String>) -> Self {
         Self {
             dice,
-            why: why.into(),
+            reason: reason.into(),
         }
     }
 
@@ -80,12 +80,12 @@ pub struct MoveCtx {
     // -- who ---------------------------------------------------------------
     pub player_id: usize,
     /// Who rolled, when that is not the player (shown on the log line).
-    /// `None` until someone claims it -- `card_move` then defaults it to the
+    /// `None` until someone claims it -- `run_planned_move` then defaults it to the
     /// mover, and a substitution (幻觉来了 「上一名玩家代替进行此次投掷」)
     /// writes the stand-in through `plan::set_roller`.
     pub roller: Option<Seat>,
     /// The turn's main move, as opposed to a card's side move.
-    pub main: bool,
+    pub is_main_move: bool,
     /// An event-driven forced move (「移动X」 / 「移动1d20」): not a main move, so
     /// it goes through even when the turn's main move is already spent
     /// (`docs/EVENTS.md`). Set by the host when the running rule is `event:*`.
@@ -96,7 +96,7 @@ pub struct MoveCtx {
     pub by_skill: bool,
     /// Why the move happened (a card / effect), shown in parentheses on the
     /// log line.
-    pub why: Option<Msg>,
+    pub reason: Option<Msg>,
 
     // -- what kind of move ---------------------------------------------------
     /// How the player gets there: one walk or one teleport.
@@ -113,7 +113,7 @@ pub struct MoveCtx {
     /// of just the endpoint, and B41 raises [pass],overlap there before the
     /// (gated) settle. The movement tail (`moveAfter` / `moveResolved`) runs
     /// either way.
-    pub resolve: bool,
+    pub settles: bool,
 
     // -- the dice ------------------------------------------------------------
     /// The dice the roll starts from (default 1d20).
@@ -137,7 +137,7 @@ pub struct MoveCtx {
     pub to: i32,
     /// The tile the walk begins on. `None` = the player's own tile.
     pub start: Option<Tile>,
-    pub start_why: String,
+    pub start_reason: String,
     /// The walk goes backwards ([`Self::dir`] is -1).
     pub reverse: bool,
     /// The tiles the walk visits, in order.
@@ -165,7 +165,7 @@ pub struct MoveCtx {
     pub rent_factor: f64,
     /// Settle on another player's behalf.
     pub settle_as_agent: bool,
-    /// This settle was initiated by a card (`card_settle_at`), not by the
+    /// This settle was initiated by a card (`settle_tile_at`), not by the
     /// player's own move landing. The engine sets it on the nested move
     /// `card_settle_move` builds; it is **never** a plan write (`plan::set_*`)
     /// and the plan's own flag remains default `false` so a later move cannot
@@ -188,7 +188,7 @@ pub struct MoveCtx {
     #[serde(default)]
     pub pay_fresh: bool,
     /// Same one-shot scope for the walk's *direction* (`reverse`) and whether
-    /// it settles (`resolve`): a 「向反方向移动」 / 「不[结算]」 move must not
+    /// it settles (`settles`): a 「向反方向移动」 / 「不[结算]」 move must not
     /// send the next one backwards or silence its settle.
     #[serde(default)]
     pub reverse_fresh: bool,
@@ -227,25 +227,25 @@ pub struct MoveCtx {
 
 impl Default for MoveCtx {
     /// `Option` / `bool` defaults are correct for every sentinel field. The
-    /// remaining non-default bits: `resolve = true`, `base = 1d20`,
+    /// remaining non-default bits: `settles = true`, `base = 1d20`,
     /// `pay_factor` / `rent_factor = 1.0`, `can_build = true`.
     fn default() -> Self {
         Self {
             player_id: 0,
             roller: None,
-            main: false,
+            is_main_move: false,
             forced: false,
             by_skill: false,
-            why: None,
+            reason: None,
             kind: MoveKind::Walk,
             teleport_to: None,
-            resolve: true,
+            settles: true,
             base: vec![Roll {
                 dice: Dice {
                     count: 1,
                     sides: 20,
                 },
-                why: String::new(),
+                reason: String::new(),
             }],
             dice: Vec::new(),
             roll: 0,
@@ -256,7 +256,7 @@ impl Default for MoveCtx {
             from: 0,
             to: 0,
             start: None,
-            start_why: String::new(),
+            start_reason: String::new(),
             reverse: false,
             path: Vec::new(),
             total: 0,

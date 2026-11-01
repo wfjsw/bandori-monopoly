@@ -464,7 +464,7 @@ fn expect_face_zero_shave_does_not_settle() {
 }
 
 /// 规则书: 「如果为0则此次移动不[结算]」 -- standing *on* a foreign rent tile
-/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.resolve`
+/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.settles`
 /// before the walk so a 0-step move honours the clear (the mid-step sync only
 /// runs when at least one step is taken).
 #[test]

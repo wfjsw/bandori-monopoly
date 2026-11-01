@@ -1,4 +1,3 @@
-//! `AG:商店街的青梅竹马` -- C# `CardShopFriends` (MatchHost.cs:988-1013):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:商店街的青梅竹马`）:
 //! > 商店街的青梅竹马：
@@ -22,7 +21,6 @@ pub const SHOP_FRIENDS: CardDef =
         // sheet cell C4
         .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
-/// C# `CardShopFriends.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「视为你的主要移动」 -- still the turn's main move (own turn, main
     // move not yet spent). A [传送] is exempt from [无法移动] (glossary 10
@@ -36,9 +34,6 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「商店街自己拥有的对应的格子（从商店街格子开始数）」 -- C# walks
-    // `(street + d) % n` for d in 1..n,
-    // keeping `H.IsShop(t) && H.State.owners[t] == i`.
     let street = ctx::tile_named("商店街");
     let n = ctx::tile_count();
     let mut list: Vec<i32> = Vec::new();
@@ -61,7 +56,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    let why = if (1..=list.len() as i32).contains(&roll) {
+    let reason = if (1..=list.len() as i32).contains(&roll) {
         Msg::new(key!("shop_friends_to_own"))
             .tile("tile", to)
             .i("roll", roll as i64)
@@ -70,14 +65,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("roll", roll as i64)
             .i("count", list.len() as i64)
     };
-    ctx::log(player_id, &why);
+    ctx::log(player_id, &reason);
     // 规则书: 「[传送]」 + 「视为你的主要移动」 -- one move, not a bare hop: it is
     // the turn's main move and it consumes it.
     // TODO(规则书)（视为你的主要移动）: 卡面未写是否结算，这里按默认 resolve=true
     //   结算 -- OPEN-传送主要移动结算 (BACKLOG MOVE-07 / C-Q21).
     plan::set_kind(MoveKind::Teleport);
     plan::set_teleport_to(to);
-    ctx::card_move(player_id);
+    ctx::run_planned_move(player_id);
     Ok(())
 }
 

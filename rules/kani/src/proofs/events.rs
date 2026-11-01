@@ -1,7 +1,7 @@
 //! Unit `events`: clause proofs.
 //!
 //! Per clause (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
+//! 1. iff proof (post == spec(condition) and effect log exactly and frame);
 //! 2. no-op proof when the trigger/condition is false;
 //! 3. kani::cover! each branch;
 //! 4. MUTANT (reachable-disagreement companion).
@@ -187,7 +187,7 @@ pub fn duobang_01_02_two_player_iff() {
     // multi-extremes is not this harness).
     w.n_players = 2;
     let drawer: i32 = 0;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -206,10 +206,10 @@ pub fn duobang_01_02_two_player_iff() {
     if n_log == 0 {
         // E-duobang no-op leg: gap 0 ⇒ nothing moves.
         crate::kassert!(
-            arr4_eq(post.money, pre.money),
+            arr4_eq(post.money, condition.money),
             "E-duobang: tie must not move money"
         );
-        crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
+        crate::kassert!(arr4_eq(post.pos, condition.pos), "frame: positions");
         return;
     }
 
@@ -230,11 +230,11 @@ pub fn duobang_01_02_two_player_iff() {
             kani::cover!(n == 50 * 19, "max gap 19 → 950");
             // Money: payer lost n, payee gained n (pre-money was ample).
             crate::kassert!(
-                post.money[from as usize] == pre.money[from as usize] - n,
+                post.money[from as usize] == condition.money[from as usize] - n,
                 "E-duobang: payer pays exactly n"
             );
             crate::kassert!(
-                post.money[to as usize] == pre.money[to as usize] + n,
+                post.money[to as usize] == condition.money[to as usize] + n,
                 "E-duobang: payee receives exactly n"
             );
             // Spec shape helper (same reading as the body / OPEN-duobang-tie).
@@ -248,9 +248,15 @@ pub fn duobang_01_02_two_player_iff() {
         }
         _ => crate::kassert!(false, "E-duobang: only PayTo effects are legal"),
     }
-    crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
-    crate::kassert!(arr4_eq(post.charge, pre.charge), "frame: fire unchanged");
-    crate::kassert!(arr4b_eq(post.hand, pre.hand), "frame: hand unchanged");
+    crate::kassert!(
+        arr4_eq(post.pos, condition.pos),
+        "frame: positions unchanged"
+    );
+    crate::kassert!(
+        arr4_eq(post.charge, condition.charge),
+        "frame: fire unchanged"
+    );
+    crate::kassert!(arr4b_eq(post.hand, condition.hand), "frame: hand unchanged");
 }
 
 /// MUTANT companion: the off-by-one spec (`each+50`) does not match the card.
@@ -261,7 +267,7 @@ pub fn duobang_01_02_two_player_iff() {
 pub fn duobang_01_mutant_is_detected() {
     let mut w = base_world();
     w.n_players = 2;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -273,7 +279,7 @@ pub fn duobang_01_mutant_is_detected() {
     if let Some(Effect::PayTo { n, .. }) = effects.first() {
         // Card pays n; mutant wants n+50. They must differ.
         crate::kassert!(*n != *n + 50, "mutant off-by-one must not match the card");
-        let _ = pre;
+        let _ = condition;
         let _ = post;
         let _ = spec::events::duobang_each_mutant(18, 16);
     } else {
@@ -316,7 +322,7 @@ fn tears_world(share: bool) -> World {
 #[kani::unwind(32)]
 pub fn tears_01_same_colour_next_pays_700() {
     let w = tears_world(true);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -346,10 +352,10 @@ pub fn tears_01_same_colour_next_pays_700() {
     );
     // Money: net zero over the pair, each leg 700.
     crate::kassert!(
-        post.money[0] == pre.money[0] && post.money[1] == pre.money[1],
+        post.money[0] == condition.money[0] && post.money[1] == condition.money[1],
         "E-tears-01: symmetric 700s net out"
     );
-    crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
+    crate::kassert!(arr4_eq(post.pos, condition.pos), "frame: positions");
 }
 
 #[kani::proof]
@@ -357,7 +363,7 @@ pub fn tears_01_same_colour_next_pays_700() {
 #[kani::unwind(32)]
 pub fn tears_02_different_colour_current_pays_300() {
     let w = tears_world(false);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -379,10 +385,10 @@ pub fn tears_02_different_colour_current_pays_300() {
         "E-tears-02: both directions 300 without a shared colour"
     );
     crate::kassert!(
-        post.money[0] == pre.money[0] && post.money[1] == pre.money[1],
+        post.money[0] == condition.money[0] && post.money[1] == condition.money[1],
         "E-tears-02: symmetric 300s net out"
     );
-    crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
+    crate::kassert!(arr4_eq(post.pos, condition.pos), "frame: positions");
 }
 
 /// MUTANT: 700/300 swapped is distinguishable.
@@ -440,7 +446,7 @@ fn pico_world(exile: [i32; 4]) -> World {
 pub fn pico_swap_01_rotates_positions() {
     let w = pico_world([0, 0, 0, 0]);
     let pre_pos = w.pos;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -470,7 +476,7 @@ pub fn pico_swap_01_rotates_positions() {
         post.pos[0] == 20 && post.pos[1] == 30 && post.pos[2] == 10,
         "post positions"
     );
-    crate::kassert!(arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(arr4_eq(post.money, condition.money), "frame: money");
     let _ = pre_pos;
 }
 
@@ -480,7 +486,7 @@ pub fn pico_swap_01_rotates_positions() {
 pub fn pico_swap_02_skips_exiled_players() {
     // Player 1 is exiled; ring = [0, 2].
     let w = pico_world([0, 1, 0, 0]);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -526,7 +532,7 @@ pub fn pico_swap_mutant_is_detected() {
         0,
     ));
     let post = world::snapshot();
-    // Latched: 2 lands on 10 (0's pre). Cascade mutant: 2 lands on 20 (0's post).
+    // Latched: 2 lands on 10 (0's condition). Cascade mutant: 2 lands on 20 (0's post).
     crate::kassert!(
         post.pos[2] != 20 || post.pos[0] == 20,
         "mutant cascade would move seat 2 onto seat 0's NEW square (20) while seat 0 left it"
@@ -550,7 +556,7 @@ pub fn pico_swap_mutant_is_detected() {
 #[kani::unwind(16)]
 pub fn moca_01_activation_keeps_the_card() {
     let w = base_world();
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -573,9 +579,9 @@ pub fn moca_01_activation_keeps_the_card() {
         effects.is_empty(),
         "E-moca-01 activation: no money/pos effects"
     );
-    crate::kassert!(arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
-    crate::kassert!(arr4b_eq(post.hand, pre.hand), "frame: hand");
+    crate::kassert!(arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(arr4_eq(post.pos, condition.pos), "frame: positions");
+    crate::kassert!(arr4b_eq(post.hand, condition.hand), "frame: hand");
 }
 
 /// Expiry tick: `AtEnd` body permanently removes the event (`EventExpire`).
@@ -588,7 +594,7 @@ pub fn moca_02_expiry_tick_files_away() {
         world::reset_world(w);
     }
     // Expiry entry (「在你的下个回合结束时永久移除此事件」).
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:Forbidden Moca"),
         "Schedule",
         "",
@@ -612,7 +618,7 @@ pub fn moca_02_mutant_is_detected() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:Forbidden Moca"),
         "Schedule",
         "",
@@ -680,7 +686,7 @@ pub fn moca_02_mutant_is_detected() {
 #[kani::unwind(16)]
 pub fn aao_01_activation_keeps_the_card() {
     let w = base_world();
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -695,7 +701,7 @@ pub fn aao_01_activation_keeps_the_card() {
         "E-aao-01 activation: keep (dest=Field)"
     );
     crate::kassert!(
-        arr4_eq(post.money, pre.money) && arr4_eq(post.pos, pre.pos),
+        arr4_eq(post.money, condition.money) && arr4_eq(post.pos, condition.pos),
         "frame"
     );
 }
@@ -707,7 +713,7 @@ pub fn aao_01_expiry_tick_files_away() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:A！A！O！"),
         "Schedule",
         "",
@@ -813,7 +819,7 @@ pub fn front_or_back_01_equal_iff() {
     w.pos[1] = 40;
     w.pos[2] = 10;
     w.pos[3] = 50;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -840,8 +846,8 @@ pub fn front_or_back_01_equal_iff() {
             spec::events::log_is_gains(effects, &expected),
             "E-front-or-back-01: X=Y ⇒ every player gains exactly 500"
         );
-        crate::kassert!(post.money[0] == pre.money[0] + 500, "P0 +500");
-        crate::kassert!(post.money[1] == pre.money[1] + 500, "P1 +500");
+        crate::kassert!(post.money[0] == condition.money[0] + 500, "P0 +500");
+        crate::kassert!(post.money[1] == condition.money[1] + 500, "P1 +500");
     } else {
         crate::kassert!(is_share, "exactly one of equal / share fires");
         // Sole winner takes the whole 1000 (1000/1). Read the winner off the
@@ -857,7 +863,7 @@ pub fn front_or_back_01_equal_iff() {
             "E-front-or-back-02: sole winner of the higher half takes 1000"
         );
     }
-    crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
+    crate::kassert!(arr4_eq(post.pos, condition.pos), "frame: positions");
 }
 
 /// MUTANT: swapped 500 / 1000. On the split setup the equal branch pays 500
@@ -936,7 +942,7 @@ pub fn front_or_back_mutant_swapped_is_detected() {
 #[kani::unwind(24)]
 pub fn ex_quest_01_rolls_and_files() {
     let w = base_world();
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -954,9 +960,9 @@ pub fn ex_quest_01_rolls_and_files() {
         spec::events::ex_quest_01_no_state_effects(effects),
         "E-ex-quest-01: only dice — no money/pos/mark effects"
     );
-    crate::kassert!(arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
-    crate::kassert!(arr4_eq(post.charge, pre.charge), "frame: fire");
+    crate::kassert!(arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(arr4_eq(post.pos, condition.pos), "frame: positions");
+    crate::kassert!(arr4_eq(post.charge, condition.charge), "frame: fire");
     // Cosmetic skin (E-ex-quest-02) cannot test — no match-state seam.
 }
 
@@ -1085,15 +1091,21 @@ pub fn chart_rush_01_spends_fire() {
     kani::assume(w.charge[0] >= 0 && w.charge[0] <= 3);
     w.charge[1] = kani::any();
     kani::assume(w.charge[1] >= 0 && w.charge[1] <= 3);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:冲榜"), 0));
     let post = world::snapshot();
 
-    kani::cover!(pre.charge[0] == 0 && pre.charge[1] == 0, "no pots");
-    kani::cover!(pre.charge[0] > 0 || pre.charge[1] > 0, "some pots spent");
+    kani::cover!(
+        condition.charge[0] == 0 && condition.charge[1] == 0,
+        "no pots"
+    );
+    kani::cover!(
+        condition.charge[0] > 0 || condition.charge[1] > 0,
+        "some pots spent"
+    );
     crate::kassert!(
         spec::events::chart_rush_fire_spent(&post.charge, 2),
         "E-chart-rush-01: all fire pots spent"
@@ -1109,7 +1121,7 @@ pub fn chart_rush_01_spends_fire() {
 #[kani::unwind(24)]
 pub fn chart_rush_02_yes_2000() {
     let w = chart_rush_world(0, 0, 0); // answers[0]=0 → ask_yes is yes
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1130,13 +1142,13 @@ pub fn chart_rush_02_yes_2000() {
                 if *n == 2000 {
                     kani::cover!(*player == 0, "P0 takes rank-1 money");
                     crate::kassert!(
-                        post.money[*player as usize] == pre.money[*player as usize] + 2000,
+                        post.money[*player as usize] == condition.money[*player as usize] + 2000,
                         "rank-1 money"
                     );
                 } else {
                     kani::cover!(*player == 1, "P1 takes rank-2 purse");
                     crate::kassert!(
-                        post.money[*player as usize] == pre.money[*player as usize] + 1500,
+                        post.money[*player as usize] == condition.money[*player as usize] + 1500,
                         "rank-2 purse"
                     );
                 }
@@ -1169,7 +1181,7 @@ pub fn chart_rush_02_yes_2000() {
 #[kani::unwind(24)]
 pub fn chart_rush_02_no_draw() {
     let w = chart_rush_world(0, 0, 1); // answers[0]=1 → ask_yes is no
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1201,7 +1213,7 @@ pub fn chart_rush_02_no_draw() {
     kani::cover!(rank2 == 1, "distinct faces — rank-2 purse paid");
     kani::cover!(rank2 == 0, "tied faces — no rank-2 seat");
     crate::kassert!(rank2 <= 1, "at most one rank-2 purse");
-    let _ = pre;
+    let _ = condition;
     let _ = post;
 }
 
@@ -1250,7 +1262,7 @@ pub fn marina_box_02_decline_is_noop() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:麻里奈小姐的礼物箱"),
         "Action",
         "PassTile",
@@ -1260,7 +1272,7 @@ pub fn marina_box_02_decline_is_noop() {
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
 
-    // symbolic ask_pick explores 0 (decline) and 1 (accept).
+    // symbolic ask_choice explores 0 (decline) and 1 (accept).
     let declined = spec::events::marina_box_02_decline_ok(effects);
     let accepted = spec::events::marina_box_02_accept_ok(effects, 0);
     kani::cover!(declined, "decline — no spend (OPEN-marina-default)");
@@ -1303,7 +1315,7 @@ pub fn marina_box_02_mutant_always_pays() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:麻里奈小姐的礼物箱"),
         "Action",
         "PassTile",
@@ -1337,7 +1349,7 @@ pub fn marina_box_02_mutant_always_pays() {
 /// `idx` is a `crate::card_id!` index (no string scan).
 fn assert_activation_keep(idx: usize) {
     let w = base_world();
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1351,7 +1363,7 @@ fn assert_activation_keep(idx: usize) {
         spec::events::permanent_keep(dest),
         "{id}: 「放置于场地中央」 keeps the card (dest=Field)"
     );
-    let _ = pre;
+    let _ = condition;
     let _ = effects;
 }
 
@@ -1378,7 +1390,7 @@ pub fn hallucination_01_expiry_tick() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:幻觉来了"), 2, 0));
+    invoke::unwrap_done(invoke::entry_index(crate::card_id!("event:幻觉来了"), 2, 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1412,7 +1424,7 @@ pub fn pool_bug_02_expiry_on_next_event() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:卡池BUG"), 1, 0));
+    invoke::unwrap_done(invoke::entry_index(crate::card_id!("event:卡池BUG"), 1, 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1436,7 +1448,7 @@ pub fn pool_bug_03_blocks_expensive_build() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:卡池BUG"), 2, 0));
+    invoke::unwrap_done(invoke::entry_index(crate::card_id!("event:卡池BUG"), 2, 0));
     let cancelled = world::with_world(|w| w.trig_cancelled);
     crate::kassert!(
         spec::events::pool_bug_03_cancelled(cancelled),
@@ -1450,7 +1462,7 @@ pub fn pool_bug_03_blocks_expensive_build() {
     {
         world::reset_world(w2);
     }
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:卡池BUG"), 2, 0));
+    invoke::unwrap_done(invoke::entry_index(crate::card_id!("event:卡池BUG"), 2, 0));
     let cancelled2 = world::with_world(|w| w.trig_cancelled);
     crate::kassert!(!cancelled2, "E-pool-bug-03: cheap builds are not vetoed");
 }
@@ -1481,7 +1493,7 @@ pub fn bangdream_chan_01_expiry_blocked_by_set_prop() {
         world::reset_world(w);
     }
     // On:: index 1 = TurnStartBefore.
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("event:元祖！邦多利酱"),
         1,
         0,
@@ -1516,7 +1528,11 @@ pub fn surprise_duel_02_expiry_blocked_by_set_prop() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:意外的对邦"), 2, 0));
+    invoke::unwrap_done(invoke::entry_index(
+        crate::card_id!("event:意外的对邦"),
+        2,
+        0,
+    ));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1564,7 +1580,7 @@ pub fn heat_head_03_phase_end_files_away() {
     // Arm phase 1 the way Play does (set_crystals writes trig_player's key).
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     // First AtEnd: phase 1 → 2.
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:超燃甩头"),
         "Schedule",
         "",
@@ -1574,7 +1590,7 @@ pub fn heat_head_03_phase_end_files_away() {
     crate::kassert!(phase == 2, "E-heat-head-02: first turn end arms phase 2");
     // Second AtEnd: expire.
     let n0 = log_n_of();
-    invoke::unwrap_done(invoke::hook_idx(
+    invoke::unwrap_done(invoke::hook_index(
         crate::card_id!("event:超燃甩头"),
         "Schedule",
         "",
@@ -1622,7 +1638,7 @@ pub fn fix_note_01_activation_keeps() {
 // 「触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上…」
 // On:: 0=Play. event_banish is a PROTOCOL stub; the 3 asks are determined.
 
-// Class E: `ask_pick` + `Vec<Msg>` fold (String ABI) dominate the SSA cost.
+// Class E: `ask_choice` + `Vec<Msg>` fold (String ABI) dominate the SSA cost.
 // This half only needs dest=Field; pick-count lives in
 // `end_it_all_01_three_picks_counted`. Dropped the unused `picks` scan.
 #[kani::proof]
@@ -1630,7 +1646,7 @@ pub fn fix_note_01_activation_keeps() {
 #[kani::unwind(32)]
 pub fn end_it_all_01_three_picks_and_keep() {
     let mut w = base_world();
-    // 3 `ask_pick`s must not hit `Err(Prompt)` — symbolic answers satisfy them.
+    // 3 `ask_choice`s must not hit `Err(Prompt)` — symbolic answers satisfy them.
     w.symbolic_answers = true;
     world::reset_world(w);
     invoke::unwrap_done(invoke::event_play_idx(
@@ -1644,7 +1660,7 @@ pub fn end_it_all_01_three_picks_and_keep() {
     );
 }
 
-/// Concrete-answers companion: 3 `ask_pick`s run (next_answer advances by 3).
+/// Concrete-answers companion: 3 `ask_choice`s run (next_answer advances by 3).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(32)]
@@ -1746,7 +1762,7 @@ pub fn embers_03_settle_costs_ten_per_copy() {
         0,
     ));
     let n0 = log_n_of();
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("event:火种燃尽之后会怎么样呢？"),
         3,
         0,
@@ -1787,7 +1803,7 @@ pub fn embers_04_clear_on_exile_blocked() {
         w.trig_kind = "r:bandori:21"; // Exile
         w.trig_player = 0;
     });
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("event:火种燃尽之后会怎么样呢？"),
         4,
         0,
@@ -1957,7 +1973,7 @@ pub fn lulu_02_decline_leaves_put() {
     w.symbolic_answers = false;
     w.answers = [1, 1, 1, 1, 0, 0, 0, 0];
     w.next_answer = 0;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1974,7 +1990,7 @@ pub fn lulu_02_decline_leaves_put() {
         "E-lulu-02: decline pays nothing and does not teleport"
     );
     crate::kassert!(
-        arr4_eq(post.money, pre.money) && arr4_eq(post.pos, pre.pos),
+        arr4_eq(post.money, condition.money) && arr4_eq(post.pos, condition.pos),
         "frame"
     );
 }
@@ -2100,7 +2116,7 @@ pub fn estate_02_all_pass_no_pay() {
     w.symbolic_answers = false;
     w.answers = [0, 0, 0, 0, 0, 0, 0, 0];
     w.next_answer = 0;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -2116,7 +2132,7 @@ pub fn estate_02_all_pass_no_pay() {
         effects.is_empty(),
         "E-estate-02: a 0 bid costs 0 (raise_bought is a PROTOCOL stub)"
     );
-    crate::kassert!(arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// E-estate-01: a positive bid is paid. P0 bids 1000 (steps index 1), P1
@@ -2133,7 +2149,7 @@ pub fn estate_01_auction_pay() {
     w.symbolic_answers = false;
     w.answers = [1, 0, 0, 0, 0, 0, 0, 0]; // P0 → 1000, P1 → 0
     w.next_answer = 0;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -2152,7 +2168,7 @@ pub fn estate_01_auction_pay() {
         "E-estate-01: highest bidder pays their bid"
     );
     crate::kassert!(
-        post.money[0] == pre.money[0] - 1000,
+        post.money[0] == condition.money[0] - 1000,
         "winner pays exactly the bid"
     );
     kani::cover!(
@@ -2162,10 +2178,10 @@ pub fn estate_01_auction_pay() {
 }
 
 // ===========================================================================
-// E-this-hand-01 / 02 / 03 — 这只手我不会放开 (PROTOCOL-LEVEL: card_move stub)
+// E-this-hand-01 / 02 / 03 — 这只手我不会放开 (PROTOCOL-LEVEL: run_planned_move stub)
 // 「所有玩家移动X，X=1d20-1d20+1d20，如果X是负数则向自身移动方向的反方向
 // 移动（每个玩家独立投掷三个1d20进行计算，不触发场地效果）」
-// card_move returns 1 and does NOT move pos; plan::set_* are stubs.
+// run_planned_move returns 1 and does NOT move pos; plan::set_* are stubs.
 // The dice formula is determined but not observable in the effect log.
 // ===========================================================================
 
@@ -2175,7 +2191,7 @@ pub fn estate_01_auction_pay() {
 pub fn this_hand_01_move_is_protocol() {
     let mut w = base_world();
     w.n_players = 2;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -2187,14 +2203,14 @@ pub fn this_hand_01_move_is_protocol() {
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
-    // card_move stub: no Teleport, no money. Book walks X steps.
+    // run_planned_move stub: no Teleport, no money. Book walks X steps.
     crate::kassert!(
         effects.is_empty(),
-        "E-this-hand PROTOCOL-LEVEL(card_move): stub produces no effect log"
+        "E-this-hand PROTOCOL-LEVEL(run_planned_move): stub produces no effect log"
     );
     crate::kassert!(
-        arr4_eq(post.pos, pre.pos),
-        "E-this-hand-01 PROTOCOL-LEVEL: card_move does not move pos under Kani"
+        arr4_eq(post.pos, condition.pos),
+        "E-this-hand-01 PROTOCOL-LEVEL: run_planned_move does not move pos under Kani"
     );
 }
 
@@ -2203,7 +2219,7 @@ pub fn this_hand_01_move_is_protocol() {
 // 「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，…上一位玩家
 // 获得2层…[眩晕]，下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家
 // 获得1层…[除外]」
-// tile_named(飞鸟山公园) = 56. card_move is a stub.
+// tile_named(飞鸟山公园) = 56. run_planned_move is a stub.
 // state::add / set IS modeled; give_exile IS modeled (log only).
 // On:: 0=Play.
 // ===========================================================================
@@ -2295,7 +2311,7 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-habinel-01             PROVEN (GiveExile n∈1..=2, to=微笑号 tile 26)
 // E-habinel-02             PROTOCOL-LEVEL (engine status tick)
 // E-habinel-03             OPEN-habinel-end (return is stored on the exile grant)
-// E-this-hand-01/02/03     PROTOCOL-LEVEL (card_move stub)
+// E-this-hand-01/02/03     PROTOCOL-LEVEL (run_planned_move stub)
 // E-pico-swap-01/02        PROVEN
 // E-circle-rebuild-01      PROVEN (keep + 5 crystals)
 // E-circle-rebuild-02      PROTOCOL-LEVEL (counter mirror is the same key)
@@ -2307,7 +2323,7 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-bear-cookie-01         PROTOCOL-LEVEL (event_deck_push stub) — proof FAILS
 // E-bear-cookie-02         PROTOCOL-LEVEL (draw of the pushed card)
 // E-bear-cookie-03         cannot test (skill-gated X/cap; card_text_mentions=0)
-// E-asukayama-01           PROTOCOL-LEVEL (card_move); tile_named(飞鸟山公园)=56
+// E-asukayama-01           PROTOCOL-LEVEL (run_planned_move); tile_named(飞鸟山公园)=56
 // E-asukayama-02           BLOCKED-HOST(neighbor returns a tile, not a seat) + partial
 //                          (non-drawer GiveExile leg); stun/noHand split NOT proven
 // E-asukayama-03           PROTOCOL-LEVEL (status tick)

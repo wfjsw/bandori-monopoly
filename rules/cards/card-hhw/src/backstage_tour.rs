@@ -1,4 +1,3 @@
-//! `HHW:出发！后台之旅！` -- C# `CardBackstageTour` (MatchHost.cs:3718-3779): look
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:出发！后台之旅！`）:
 //! > 出发！后台之旅！：
@@ -30,8 +29,6 @@ pub const BACKSTAGE_TOUR: CardDef = CardDef::new(
 );
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「看牌堆顶2张牌」 -- C# `CardBackstageTour.WhyNot` also refuses the play
-    // when the draw pile and the discard pile are both empty ("抽卡区没有卡").
     if ctx::deck_count(player_id) + ctx::discard_size(player_id) == 0 {
         return Some(Msg::new(key!("x_no_deck_cards")));
     }
@@ -39,15 +36,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // C# `if (h.draw.Count < 2 && h.discard.Count > 0) { h.draw.InsertRange(0,
-    // h.discard); h.discard.Clear(); }` -- when the draw pile is too thin, the
-    // discard comes back underneath it (the C# log calls this 洗回).
-    // TODO(规则书)（看牌堆顶2张牌）: the book names only the top 2 and not a short
-    //   pile -- with <2 we shuffle the whole discard in first (OPEN-HHW-SHORT-PILE).
+    // TODO(规则书)（看牌堆顶2张牌）: the book names only the top 2 and not a short pile -- with
+    // <2 we shuffle the whole discard in first (OPEN-HHW-SHORT-PILE).
     if ctx::deck_count(player_id) < 2 && ctx::discard_size(player_id) > 0 {
         let discard = ctx::cards_in(player_id, CardPile::Graveyard);
-        // C# `InsertRange(0, …)` puts the discard in its own order underneath;
-        // the graveyard is oldest-first and `DeckBottom` is `insert(0, …)`.
         for id in discard.iter().rev() {
             ctx::take_card(player_id, id.as_str(), CardPile::Graveyard);
             ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom);
@@ -56,14 +48,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
             player_id,
             &Msg::new(key!("backstage_tour_reshuffled")).player_id("who", player_id),
         );
-        // C# also fires `H.Each((Fx f) => f.Reshuffled(i))`. These are bare
-        // `DeckBottom` writes, so no `reshuffled` rides them -- raise it here
-        // (`shuffle_into_deck` raises on commit, but it would also randomize and
+        // These are bare `DeckBottom` writes, so no `reshuffled` rides them -- raise it
+        // here (`shuffle_into_deck` raises on commit, but it would also randomize and
         // change the peek order; cf. `card-roselia`'s 曲奇时间).
         ctx::raise(player_id, card_sdk::abi::ActionKind::Reshuffled, 0)?;
     }
-    // 规则书: 「看牌堆顶2张牌」 -- C# `h.draw.Skip(Count - 2).Reverse()` = the top
-    // two of the draw pile, top card first (`cards_in(Deck)` is top-first).
     let top: Vec<NameId> = ctx::cards_in(player_id, CardPile::Deck)
         .into_iter()
         .take(2)
@@ -71,13 +60,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if top.is_empty() {
         return Ok(());
     }
-    // C# removes the peeked cards from the draw pile before the keep/discard
-    // prompts, then puts the keepers back on top.
     for id in &top {
         ctx::take_card(player_id, id.as_str(), CardPile::Deck);
     }
-    // 规则书: 「选择0~2张以任意顺序放回」 -- C# `H.AskYes(..., "放回", "翻入弃卡区")`
-    // per card (yes = keep on top of the draw pile).
     let mut keep: Vec<NameId> = Vec::new();
     for (i, id) in top.iter().enumerate() {
         // 规则书: 「看牌堆顶2张牌，选择0~2张以任意顺序放回」 -- both peeked cards
@@ -99,11 +84,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
             keep.push(*id);
             continue;
         }
-        // 规则书: 「剩余的翻入弃牌堆，每翻入一张获得1000资金」 -- C#
-        // `H.ToDiscard(i, id)` + `H.GainR(i, 1000, CardName)`.
-        // TODO(规则书)（剩余的翻入弃牌堆）: the peek can empty the draw pile, so
-        //   `to_discard` fires the base-rule refill and shuffles the flipped card
-        //   straight back -- it never stays in the discard (defer the flips).
+        // TODO(规则书)（剩余的翻入弃牌堆）: the peek can empty the draw pile, so `to_discard` fires
+        // the base-rule refill and shuffles the flipped card straight back -- it never
+        // stays in the discard (defer the flips).
         ctx::to_discard(player_id, id.as_str());
         ctx::gain(
             player_id,
@@ -111,9 +94,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("backstage_tour_flip")).card("card", id.as_str()),
         )?;
     }
-    // 规则书: 「以任意顺序放回」 -- when both are kept, C# `H.AskCard(..., "哪一张
-    // 放在最上面？")` picks which one is the new top (`h.draw.Add(under);
-    // h.draw.Add(top)`).
     if keep.len() == 2 {
         let refs: Vec<&str> = keep.iter().map(|c| c.as_str()).collect();
         let pick = ctx::ask_card(

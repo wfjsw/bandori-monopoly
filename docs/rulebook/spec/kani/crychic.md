@@ -65,7 +65,7 @@ Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
 | C-CRYCHIC-haruhikage-02 | 「使用一次Crychic角色的技能」 | PROTOCOL-LEVEL | — | — | [反击] borrows a character skill | — |
 | C-CRYCHIC-myown-01 | 「主要移动结束时…远离绝对距离最近的玩家一格」 | OPEN / PROTOCOL-LEVEL | — | — | settle-before window + nearest-player rule | OPEN-触发结算 |
 | C-CRYCHIC-myown-02 | 「若受到[异常移动效果]影响，此卡不生效」 | OPEN | — | — | G-STATUS [异常移动效果] set | — |
-| C-CRYCHIC-soyoreturn-01 | 「[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一」 | PROTOCOL-LEVEL (trigger) / PROVEN candidate (branch-2 leaf, needs re-time) | `soyoreturn_01_branch2_iff` | central TIMEOUT 1800 s **E** (BMC on discard branch `cards_in` + `ask_pick`) | batch 15: pick pinned to option 2 (`answers[0]=1`) so the leaf is branch 2 only — discard branch is a separate multi-step leaf | — |
+| C-CRYCHIC-soyoreturn-01 | 「[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一」 | PROTOCOL-LEVEL (trigger) / PROVEN candidate (branch-2 leaf, needs re-time) | `soyoreturn_01_branch2_iff` | central TIMEOUT 1800 s **E** (BMC on discard branch `cards_in` + `ask_choice`) | batch 15: pick pinned to option 2 (`answers[0]=1`) so the leaf is branch 2 only — discard branch is a separate multi-step leaf | — |
 | C-CRYCHIC-soyoreturn-02 | 「（2）[手] 获得500资金」 | PROVEN | `soyoreturn_02_hand_iff`, `soyoreturn_02_mutant_is_detected` | see log | exactly `GainMoney{500}` | — |
 | C-CRYCHIC-tomoricry-01 | 「重置一次…X…获得两个X差值*120的资金」 | OPEN | — | — | formula ambiguous | OPEN-两个X差值 |
 | C-CRYCHIC-tomoricry-02 | 「不会被…（2）效果移除…洗入抽牌堆」 | PROTOCOL-LEVEL | — | — | band-(2) transform exemption | — |
@@ -124,11 +124,11 @@ that the wrong spec disagrees.
 * **PROTOCOL-LEVEL** — [反击] windows, multi-turn deferrals, walk/settle
   pipelines, band transform. Cite KANI.md §6. Leaf bodies that are single
   entries (waive, gain, give_stay/stun, cash-out) are still proven.
-* **ifonly-02** — body is `ctx::send_to_dest(Graveyard)` (applies the fate
+* **ifonly-02** — body is `ctx::send_to_dest(Graveyard)` (applies the dest
   now). The Kani host's `Op::send_to_dest` was a player-teleport stub and the
   per-harness subset did not declare the op (central `outside_subset`).
   Fixed in triage3 batch 15: `arm_send_to_dest` commits the instance to the
-  dest pile (same world-state shape as `arm_set_dest`).
+  dest pile (same world-state shape as `arm_set_fate`).
 
 ## Harness verdict log
 
@@ -171,7 +171,7 @@ verdicts land as slots free; coordinator can re-run
 1. **C-CRYCHIC-ifonly-02 — RECLASSIFIED (triage3).** Was recorded LESS;
    it is a **class C host** gap, not a book/body discrepancy. Book
    「此卡立即置入弃牌堆」; body `ctx::send_to_dest(Dest::Graveyard)` applies
-   the fate immediately (engine `apply_dest`). The Kani host's
+   the dest immediately (engine `apply_dest`). The Kani host's
    `Op::send_to_dest` used to teleport the player to tile `w.dest`.
    Fixed in batch 15: `arm_send_to_dest` unplaces the running instance into
    the dest pile (world state, no in-run `UnplaceCard` effect).

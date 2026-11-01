@@ -1,4 +1,3 @@
-//! `PPP:向着未来的路标` -- C# `CardSignpost` (MatchHost.cs:9018-9036): walk a full
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:向着未来的路标`）:
 //! > 向着未来的路标：
@@ -35,29 +34,22 @@ pub const SIGNPOST: CardDef = CardDef::new(
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]),
 );
 
-/// 规则书: 「本回合的主要移动设为移动60格子」 -- the card replaces the main move,
-/// so only while it is still available. C# `CardSignpost.WhyNot` =
-/// `H.MoveWhyNot(seat)`.
+/// 规则书: 「本回合的主要移动设为移动60格子」 -- the card replaces the main move, so only while it
+/// is still available.
 fn cant_play(player_id: i32) -> Option<Msg> {
     rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「本回合的主要移动设为移动60格子」 -- C# `H.CardMove(c, new MoveCtx
-    // { Steps = 60, Resolve = false })`: the walk runs now and is the main move.
     ctx::plan::set_steps(60);
-    // 规则书: 「并不触发结算」 -- C# `MoveCtx.Resolve = false` on the same move:
-    // the 60-step walk passes every tile without landing on one.
-    ctx::plan::set_resolve(false);
+    ctx::plan::set_settles(false);
     ctx::log(
         player_id,
         &Msg::new(key!("signpost_move"))
             .player_id("who", player_id)
             .i("n", 60),
     );
-    ctx::card_move(player_id);
-    // 规则书: 「回合结束时[失去]1000资金」 -- C# `H._turnCtx.AtEnd.Add(() =>
-    // H.LoseR(i, 1000, ...))`, scheduled onto `On::Schedule`.
+    ctx::run_planned_move(player_id);
     ctx::before_turn_end(player_id, "at_end");
     ctx::log(
         player_id,
@@ -68,14 +60,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「回合结束时[失去]1000资金」 -- `On::Schedule` (C# `H._turnCtx.AtEnd` ->
-/// `H.LoseR(i, 1000, ...)`) scheduled by `ctx::before_turn_end` in `play`; runs
-/// once when the turn ends. The "still in the game" gate is the entry's
-/// condition (`owner.out == 0`).
+/// The "still in the game" gate is the entry's condition (`owner.out == 0`).
 fn at_end(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「回合结束时[失去]1000资金」 -- an out-of-pocket loss (C# `H.LoseR`)
-    // through the pay pipeline, the same shape as `fire_bird`'s 「失去400资金」: a
-    // raw `lose_raw` would raise no `pay` chain for the 「失去资金」 answerers.
     ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")))?;
     Ok(())
 }

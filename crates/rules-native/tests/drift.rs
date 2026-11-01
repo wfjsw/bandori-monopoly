@@ -81,7 +81,9 @@ fn act_drive(m: &mut Match) -> bool {
     let members = m.state().drive;
     let mut any = false;
     for member in members {
-        let Some(msg) = bot_msg(m, member) else { continue };
+        let Some(msg) = bot_msg(m, member) else {
+            continue;
+        };
         if m.act(member, &msg).is_ok() {
             any = true;
         }
@@ -192,7 +194,7 @@ fn native_is_deterministic() {
 /// event streams, identical final saves.
 ///
 /// Root causes closed 2026-10-09 (docs/BOT.md §5 "native-rules drift"):
-/// `RulesHandle::pre` defaulted to `None` on `NativeRulesHandle`, so every
+/// `RulesHandle::condition` defaulted to `None` on `NativeRulesHandle`, so every
 /// CEL condition read as absent and G4-deleted guards ran unfiltered; and
 /// `card-sdk`'s native ABI passed 64-bit guest buffers as truncated `i32`
 /// pointers (`cards_in` &co. returned empty, `rt::leak` handed the host a
@@ -233,7 +235,11 @@ fn native_and_sandbox_agree_on_the_manifest() {
         for (j, (oa, ob)) in a.on.iter().zip(b.on.iter()).enumerate() {
             assert_eq!(oa.kind, ob.kind, "card {} entry {j} kind", a.id);
             assert_eq!(oa.triggers, ob.triggers, "card {} entry {j} triggers", a.id);
-            assert_eq!(oa.pre, ob.pre, "card {} entry {j} condition", a.id);
+            assert_eq!(
+                oa.condition, ob.condition,
+                "card {} entry {j} condition",
+                a.id
+            );
             assert_eq!(oa.has_guard, ob.has_guard, "card {} entry {j} guard", a.id);
             assert_eq!(oa.label, ob.label, "card {} entry {j} label", a.id);
             assert_eq!(
@@ -242,10 +248,10 @@ fn native_and_sandbox_agree_on_the_manifest() {
                 a.id
             );
             // The compiled condition must be present exactly when the source
-            // string is -- the `RulesHandle::pre` default-`None` bug left
+            // string is -- the `RulesHandle::condition` default-`None` bug left
             // every condition silently uncompiled on native.
-            let src = oa.pre.as_deref();
-            let compiled = native.pre(i as i32, j as i32).is_some();
+            let src = oa.condition.as_deref();
+            let compiled = native.condition(i as i32, j as i32).is_some();
             assert_eq!(
                 src.is_some_and(|s| !s.is_empty()),
                 compiled,

@@ -337,7 +337,7 @@ pub trait Subtractor {
 ///
 /// `optional.ofNonZeroValue(x)` calls it: it is `optional.none()` for a zero
 /// value, and `optional.of(x)` otherwise, including for a value without a
-/// `Zeroer`. It mirrors cel-go's `traits.Zeroer`.
+/// `Zeroer`.
 pub trait Zeroer {
     /// Returns whether `self` is the zero value of its type.
     fn is_zero_value(&self) -> bool;
@@ -369,8 +369,6 @@ pub trait Zeroer {
 /// use cel::common::value::{CowVal, StaticVal, Val};
 /// use cel::ExecutionError;
 /// use std::any::Any;
-///
-/// static POINT: Type = Type::new_unspecified_type("acme.Point");
 ///
 /// #[derive(Clone, Debug)]
 /// struct Point {

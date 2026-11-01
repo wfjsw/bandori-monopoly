@@ -20,7 +20,7 @@
 //!
 //! **Information boundary** (`docs/BOT.md` §1): the only input is one seat's
 //! view -- the exact frame the page renders for that seat (`MatchState` + own
-//! hand + own sorted draw + `view_extra`). Never a `World`, a match seed, or
+//! hand + own sorted draw + `view_extras`). Never a `World`, a match seed, or
 //! another seat's hand / deck order / `aiAnswer`. The reply is a proposed
 //! `NetMessage`; the engine (solo glue / server) remains authoritative and
 //! applies it through the ordinary `act` path.
@@ -39,7 +39,7 @@
 //!   [`SeatView::decision_key`]; a later `decide` on the same key answers
 //!   `reused: true` without spending its budget (BOT-RESEARCH #5).
 //! * `extras(view_json, seed)` -> `{playable, estCost, skills, aiAnswer}` --
-//!   the per-viewer extras the server's `view_extra` computes, derived from
+//!   the per-viewer extras the server's `view_extras` computes, derived from
 //!   the viewer's own frame (the seat-view engine). `seed` is the
 //!   determinizer's sampling seed, never the match's.
 //!
@@ -324,7 +324,7 @@ pub fn ruleset_add(_bytes: &[u8]) -> Result<(), JsError> {
 }
 
 /// Feed the precompiled-condition blob (`conds-<sha>.bin`, `docs/GUARDS.md`
-/// §8.2). Required whenever any loaded card declares a `pre`.
+/// §8.2). Required whenever any loaded card declares a `condition`.
 /// Monolith: no-op -- conditions are compiled from the linked table.
 #[wasm_bindgen]
 #[cfg(not(feature = "native-rules"))]
@@ -508,10 +508,10 @@ pub fn info() -> String {
 
 /// `{view, seed}` -> `{playable, estCost, skills, aiAnswer}`.
 ///
-/// The per-viewer extras the server's `Match::view_extra` computes, derived
+/// The per-viewer extras the server's `Match::view_extras` computes, derived
 /// from the viewer's **own** seat frame (the same input `decide` takes). Builds
 /// the determinized world once and runs the same engine gates (`cant_play` /
-/// `why_not_act` / `card_prop`, and the `ai_*` choice functions for
+/// `cant_act` / `card_prop`, and the `ai_*` choice functions for
 /// `aiAnswer`). Information boundary unchanged: never a `World`, a match seed,
 /// or another seat's hand / deck order / `aiAnswer`.
 ///
@@ -589,7 +589,7 @@ pub fn decide(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
         &view.state,
         &view.hand,
         &view.playable,
-        &view.est_cost,
+        &view.estimated_cost,
         seat,
     );
     // Trivial root (docs/BOT.md §3.4): one forced action, or a free menu.
@@ -758,7 +758,7 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
         &target.state,
         &target.hand,
         &target.playable,
-        &target.est_cost,
+        &target.estimated_cost,
         seat,
     );
     if action::trivial_decision(&searched).is_some() {

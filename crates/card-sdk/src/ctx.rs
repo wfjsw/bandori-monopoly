@@ -17,7 +17,7 @@ use crate::msg::Msg;
 use crate::Prompt;
 
 /// Interned name ids returned by the identity-list seams ([`cards_in`],
-/// [`tok_names`], …). Re-exported here so a body that names the item type can
+/// [`held_names`], …). Re-exported here so a body that names the item type can
 /// say `use card_sdk::ctx::NameId` without reaching into `intern`.
 /// [`intern`] is re-exported alongside it for pushing literals into a
 /// `Vec<NameId>` (`out.push(intern("PP:…"))`).
@@ -35,7 +35,7 @@ fn s(v: &str) -> (i32, i32) {
 ///
 /// Under `cfg(kani)` this is `intern::encode_handle(intern(v))` — the handle
 /// *is* the interned `NameId`, so the host never re-hashes or heap-copies the
-/// bytes. Card bodies keep calling `ctx::tok(p, "literal")` unchanged; the
+/// bytes. Card bodies keep calling `ctx::held_count(p, "literal")` unchanged; the
 /// literal's FNV hash constant-folds through the zero-loop `intern::fnv1a`.
 /// Production wasm / native keep the real `ptr, len` arena ABI.
 #[cfg(not(target_arch = "wasm32"))]
@@ -78,7 +78,7 @@ fn in_bytes(v: &[u8]) -> (i32, i32) {
 /// The i32 wire form of a message: `postcard` bytes leaked for the host to read
 /// (same lifetime convention as every other buffer crossing the ABI).
 #[cfg(all(target_arch = "wasm32", not(kani)))]
-fn mj(m: &Msg) -> (i32, i32) {
+fn msg_bytes(m: &Msg) -> (i32, i32) {
     let b = m.to_bytes();
     let out = (b.as_ptr() as i32, b.len() as i32);
     core::mem::forget(b);
@@ -90,12 +90,12 @@ fn mj(m: &Msg) -> (i32, i32) {
 /// ints, no `Vec<u8>`, no arena intern (which would push a heap `Vec` per log
 /// and unwind as `drop_glue`). Production builds keep the real bytes.
 #[cfg(kani)]
-fn mj(m: &Msg) -> (i32, i32) {
+fn msg_bytes(m: &Msg) -> (i32, i32) {
     m.abi_pair()
 }
 
 #[cfg(all(not(target_arch = "wasm32"), not(kani)))]
-fn mj(m: &Msg) -> (i32, i32) {
+fn msg_bytes(m: &Msg) -> (i32, i32) {
     in_bytes(&m.to_bytes())
 }
 
@@ -173,8 +173,8 @@ pub mod raw {
     pub fn s(v: &str) -> (i32, i32) {
         super::s(v)
     }
-    pub fn mj(m: &Msg) -> (i32, i32) {
-        super::mj(m)
+    pub fn msg_bytes(m: &Msg) -> (i32, i32) {
+        super::msg_bytes(m)
     }
     pub fn asked(i: i32) -> Result<i32, Prompt> {
         super::asked(i)
@@ -224,7 +224,7 @@ pub fn roll_direct(
 
 /// Log a message line for `player_id`.
 pub fn log(player_id: i32, msg: &Msg) {
-    let (p, l) = mj(msg);
+    let (p, l) = msg_bytes(msg);
     unsafe { sys::log(player_id, p, l) }
 }
 
@@ -233,7 +233,7 @@ pub fn log(player_id: i32, msg: &Msg) {
 /// branch (e.g. a 1d10 that names the branch taken) and the player should see
 /// which. Additive with [`log`], not a replacement for it.
 pub fn effect(player_id: i32, msg: &Msg) {
-    let (p, l) = mj(msg);
+    let (p, l) = msg_bytes(msg);
     unsafe { sys::effect(player_id, p, l) }
 }
 
@@ -264,7 +264,7 @@ pub fn no_flash() {
 /// drive; use [`flash_card_keyed`] when the position can shift between runs.
 pub fn flash_card(card_id: &str, msg: &Msg) {
     let (cp, cl) = s(card_id);
-    let (p, l) = mj(msg);
+    let (p, l) = msg_bytes(msg);
     unsafe { sys::flash_card(cp, cl, p, l) }
 }
 
@@ -273,14 +273,14 @@ pub fn flash_card(card_id: &str, msg: &Msg) {
 pub fn flash_card_keyed(key: &str, card_id: &str, msg: &Msg) {
     let (kp, kl) = s(key);
     let (cp, cl) = s(card_id);
-    let (p, l) = mj(msg);
+    let (p, l) = msg_bytes(msg);
     unsafe { sys::flash_card_keyed(kp, kl, cp, cl, p, l) }
 }
 
 /// Proactively flash a tile as a "look here" cue -- its own `"flash"` event,
 /// parent-linked under the activation. Identified by the next flash ordinal.
 pub fn flash_tile(tile: i32, msg: &Msg) {
-    let (p, l) = mj(msg);
+    let (p, l) = msg_bytes(msg);
     unsafe { sys::flash_tile(tile, p, l) }
 }
 
@@ -559,7 +559,7 @@ pub fn money_of(player_id: i32) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::gain");
-    let (p, l) = mj(src);
+    let (p, l) = msg_bytes(src);
     asked(unsafe { sys::gain(player_id, amount, p, l) })
 }
 
@@ -570,7 +570,7 @@ pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
 #[cfg_attr(kani, inline(always))]
 pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<i32, Prompt> {
     let (tp, tl) = s(typ);
-    let (xp, xl) = mj(text);
+    let (xp, xl) = msg_bytes(text);
     asked(unsafe { sys::gain_typed(player_id, amount, tp, tl, xp, xl) })
 }
 
@@ -582,7 +582,7 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
 /// returns the amount actually moved (0 = the seat was out).
 #[cfg_attr(kani, inline(always))]
 pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> i32 {
-    let (p, l) = mj(src);
+    let (p, l) = msg_bytes(src);
     unsafe { sys::adjust_money(player_id, delta, p, l) }
 }
 
@@ -601,7 +601,9 @@ pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
 
 /// Money out (what the player could pay), logged.
 pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
-    PayCommand::new(player_id, -1, amount, src).send().map(|r| r.amount())
+    PayCommand::new(player_id, -1, amount, src)
+        .send()
+        .map(|r| r.amount())
 }
 
 /// A payment command: the `pay` / `transfer` verb with its context (shape,
@@ -690,7 +692,7 @@ impl PayCommand {
         if self.tile >= 0 {
             spec |= (self.tile + 1) << 12;
         }
-        let (p, l) = mj(&self.src);
+        let (p, l) = msg_bytes(&self.src);
         asked(unsafe { sys::pay_command(self.from, self.to, self.amount, spec, p, l) })
             .map(PayReceipt)
     }
@@ -734,7 +736,9 @@ impl PayReceipt {
 /// declaration names both the payer and the payee and 「向其他玩家支付」 sees it.
 /// The receiver gets exactly what the payer could pay.
 pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
-    PayCommand::new(from, to, amount, src).send().map(|r| r.amount())
+    PayCommand::new(from, to, amount, src)
+        .send()
+        .map(|r| r.amount())
 }
 
 /// A rent-shaped 「收费」 at `milli_scale` (1000 = ×1.0) of `tile`'s
@@ -768,7 +772,7 @@ pub fn charge_rent(payer: i32, tile: i32, milli_scale: i32) -> Result<i32, Promp
 /// [`transfer`] / [`pay`] / [`gain`] -- call this only when *you* are about to
 /// split, and follow it with [`pay_leg`] per share (see [`split_pay`]).
 pub fn pay_total(from: i32, to: i32, total: i32, src: &Msg) -> Result<Option<i32>, Prompt> {
-    let (p, l) = mj(src);
+    let (p, l) = msg_bytes(src);
     let shaped = asked(unsafe { sys::pay_total(from, to, total, p, l) })?;
     Ok((shaped >= 0).then_some(shaped))
 }
@@ -912,7 +916,7 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     }
 }
 
-/// Draw the top event and resolve it (「抽取一个事件卡」).
+/// Draw the top event and settles it (「抽取一个事件卡」).
 /// The card does not enter the hand: it is revealed to every player, its
 /// effect takes effect at once, and it goes to the event discard (reshuffling
 /// that into a new event deck when the deck runs dry). Rulebook 「基础[结算]规则」.
@@ -1165,20 +1169,20 @@ pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
     let (cp, cl) = s(card);
-    let (p, l) = mj(note);
+    let (p, l) = msg_bytes(note);
     unsafe { sys::place_card_at(player_id, cp, cl, p, l) }
 }
 
 /// 「将此卡放置在场上」 -- [`set_dest`]`(`[`Dest::Field`]`)` then [`place_card`],
 /// the fold every play body that stays in play wants. Two axes, one call:
-/// `place_card` creates the field instance **now**; the `Dest::Field` fate
+/// `place_card` creates the field instance **now**; the `Dest::Field` dest
 /// tells the commit that the played hand card *became* that instance, so it is
-/// not also spent to the default fate (the discard). Returns the new
+/// not also spent to the default dest (the discard). Returns the new
 /// instance's uid ([`place_card_at`]'s contract).
 ///
 /// Only for the body that places **its own** card (its `ID`). A body placing
 /// some *other* card still calls [`place_card`] alone -- that instance is not
-/// the played hand card's fate -- and a play whose hand card retires elsewhere
+/// the played hand card's dest -- and a play whose hand card retires elsewhere
 /// (「…然后此卡[移除]」) names its own [`Dest`].
 #[cfg_attr(kani, inline(always))]
 pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg) -> i32 {
@@ -1188,7 +1192,7 @@ pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg) -> i32 {
 }
 
 /// Where this card goes afterwards (see [`Dest`]). For a
-/// play it is the hand card's fate; for a field effect, the instance's.
+/// play it is the hand card's dest; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
     crate::pure::refuse_if_filter("ctx::set_dest");
     unsafe { sys::set_dest(dest as i32) }
@@ -1438,7 +1442,7 @@ pub fn place_mark(
 ) -> crate::abi::MarkRef {
     let (kp, kl) = s(kind);
     let (cp, cl) = s(category);
-    let (np, nl) = mj(note);
+    let (np, nl) = msg_bytes(note);
     crate::abi::MarkRef::from(unsafe {
         sys::place_mark(
             tile,
@@ -1477,7 +1481,7 @@ pub fn place_mark_pair(
 ) -> bool {
     let (kp, kl) = s(kind);
     let (cp, cl) = s(category);
-    let (np, nl) = mj(note);
+    let (np, nl) = msg_bytes(note);
     unsafe {
         sys::place_mark_pair(
             a,
@@ -1579,7 +1583,7 @@ pub fn count_on_tile(kind: &str, tile: i32) -> i32 {
 ///
 /// Returns the [`crate::abi::MarkRef`] to that designation row. The mark is
 /// the displayed record; the stored ref is the retrievable handle -- keep it
-/// in card state (`set_slot` / `state::set`) and later resolve the pick
+/// in card state (`set_slot` / `state::set`) and later settles the pick
 /// (`MarkRef::tile`), check liveness (`MarkRef::is_live`), or drop it
 /// ([`undesignate`]).
 pub fn designate_tile(tile: i32, owner: i32, note: &Msg) -> crate::abi::MarkRef {
@@ -1724,7 +1728,7 @@ pub fn self_uid() -> i32 {
 /// Addressing (`abi::Target`): a specific uid, the instance of a card id on a
 /// seat, or a standing board-owned pseudo card (`mark:cp`). Multiple receivers
 /// of a name: the first admitted one in field order answers. A handler whose
-/// `pre` / guard rejects is not a receiver.
+/// `condition` / guard rejects is not a receiver.
 #[cfg_attr(kani, inline(always))]
 pub fn send(
     target: &crate::abi::Target,
@@ -1733,7 +1737,7 @@ pub fn send(
 ) -> Result<i32, Prompt> {
     let (tp, tl) = target_bytes(target);
     let (np, nl) = s(name);
-    let (pp, pl) = msg_bytes(payload);
+    let (pp, pl) = abi_msg_bytes(payload);
     asked(unsafe { sys::send(tp, tl, np, nl, pp, pl) })
 }
 
@@ -1759,13 +1763,13 @@ pub mod message {
 
     /// The payload ints.
     pub fn a() -> i32 {
-        unsafe { sys::msg_a() }
+        unsafe { sys::msg_arg0() }
     }
     pub fn b() -> i32 {
-        unsafe { sys::msg_b() }
+        unsafe { sys::msg_arg1() }
     }
     pub fn c() -> i32 {
-        unsafe { sys::msg_c() }
+        unsafe { sys::msg_arg2() }
     }
     pub fn tile() -> i32 {
         unsafe { sys::msg_tile() }
@@ -1817,16 +1821,16 @@ fn target_bytes(t: &crate::abi::Target) -> (i32, i32) {
     }
 }
 
-fn msg_bytes(m: &crate::abi::Message) -> (i32, i32) {
+fn abi_msg_bytes(m: &crate::abi::Message) -> (i32, i32) {
     #[cfg(kani)]
     {
         // Fixed pack, no postcard/heap. The message **name** rides the
         // `send()` `np` slot (interned via `s`); this is only the typed ints.
         let mut buf = [0u8; 20];
         buf[0..4].copy_from_slice(&m.seat.to_le_bytes());
-        buf[4..8].copy_from_slice(&m.a.to_le_bytes());
-        buf[8..12].copy_from_slice(&m.b.to_le_bytes());
-        buf[12..16].copy_from_slice(&m.c.to_le_bytes());
+        buf[4..8].copy_from_slice(&m.args.to_le_bytes());
+        buf[8..12].copy_from_slice(&m.arg1.to_le_bytes());
+        buf[12..16].copy_from_slice(&m.arg2.to_le_bytes());
         buf[16..20].copy_from_slice(&m.tile.to_le_bytes());
         in_bytes(&buf)
     }
@@ -1868,7 +1872,7 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
 /// Units of counter `name` held by `player_id` (name-keyed; the name is
 /// unique to its creating rule).
 #[cfg_attr(kani, inline(always))]
-pub fn tok(player_id: i32, name: &str) -> i32 {
+pub fn held_count(player_id: i32, name: &str) -> i32 {
     let (p, l) = s(name);
     unsafe { sys::count_held_name(p, l, player_id) }
 }
@@ -1878,22 +1882,22 @@ pub fn tok(player_id: i32, name: &str) -> i32 {
 /// stamps or rebinds the owning card instance (`< 0` keeps an existing row's
 /// owner and falls back to the running card on a fresh row).
 #[cfg_attr(kani, inline(always))]
-pub fn set_tok(player_id: i32, name: &str, value: i32, max: i32, instance: i32) {
+pub fn set_held(player_id: i32, name: &str, value: i32, max: i32, instance: i32) {
     let (p, l) = s(name);
     unsafe { sys::set_held_name(p, l, player_id, value, max, instance) }
 }
 
 /// Live ceiling stored on the held row (`0` = uncapped / undeclared).
 #[cfg_attr(kani, inline(always))]
-pub fn tok_max(player_id: i32, name: &str) -> i32 {
+pub fn held_max(player_id: i32, name: &str) -> i32 {
     let (p, l) = s(name);
-    unsafe { sys::tok_max(p, l, player_id) }
+    unsafe { sys::held_max(p, l, player_id) }
 }
 
-/// Bind `by` more units of `name` to `player_id`. Returns how
+/// Bind `n` more units of `name` to `player_id`. Returns how
 /// much actually moved. Marker window can pause.
-pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Prompt> {
-    add_held(name, player_id, by, max)
+pub fn add_held_by_name(player_id: i32, name: &str, n: i32, max: i32) -> Result<i32, Prompt> {
+    add_held(name, player_id, n, max)
 }
 
 // ---------------------------------------------------------- keyed state
@@ -2018,9 +2022,9 @@ pub fn set_persona(player_id: i32, name: &str) {
 }
 
 #[cfg_attr(kani, inline(always))]
-pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
+pub fn inc_slot(player_id: i32, key: &str, n: i32) -> i32 {
     crate::pure::refuse_if_filter("ctx::inc_slot");
-    state::add(player_id, key, by)
+    state::add(player_id, key, n)
 }
 
 // ----------------------------------------------------------- pots & status
@@ -2094,17 +2098,17 @@ pub fn end_turn_now(player_id: i32) {
     unsafe { sys::end_turn_now(player_id) }
 }
 
-/// Teleport with the move's `main` flag named. Opens **no** abnormal window
-/// (the caller's own clause). `as_main` marks the move as the turn's
+/// Teleport with the move's `is_main_move` flag named. Opens **no** abnormal window
+/// (the caller's own clause). `is_main_move` marks the move as the turn's
 /// [主要移动] and consumes the main-move slot.
-pub fn teleport_as(player_id: i32, tile: i32, resolve: bool, as_main: bool) {
-    unsafe { sys::teleport_as(player_id, tile, resolve as i32, as_main as i32) }
+pub fn teleport_as(player_id: i32, tile: i32, settles: bool, is_main_move: bool) {
+    unsafe { sys::teleport_as(player_id, tile, settles as i32, is_main_move as i32) }
 }
 
 /// [`log`] with an explicit event kind (`"status"` for host skip / over lines).
 pub fn log_as(player_id: i32, kind: &str, msg: &Msg) {
     let (kp, kn) = s(kind);
-    let (p, l) = mj(msg);
+    let (p, l) = msg_bytes(msg);
     unsafe { sys::log_as(player_id, kp, kn, p, l) }
 }
 
@@ -2137,8 +2141,8 @@ pub fn cant_move(player_id: i32) -> Option<Msg> {
 /// [`plan`] first (`set_steps` / `set_kind` / `set_tag` / ...), then call this:
 /// the engine runs the move (it may prompt, and the usual move triggers fire)
 /// and the effect continues after it. Like `play_card`, the run pauses for it.
-pub fn card_move(player_id: i32) -> bool {
-    unsafe { sys::card_move(player_id) != 0 }
+pub fn run_planned_move(player_id: i32) -> bool {
+    unsafe { sys::run_planned_move(player_id) != 0 }
 }
 
 // ------------------------------------------------------------- named markers
@@ -2148,17 +2152,17 @@ pub fn card_move(player_id: i32) -> bool {
 /// Dumb add of `n` to the named counter; returns how many landed. Opens
 /// `markerGain` first. No cap policy: the rules-layer kernel clamps and
 /// narrates.
-pub fn gain_marker(player_id: i32, name: &str, n: i32, why: &Msg) -> Result<i32, Prompt> {
+pub fn gain_marker(player_id: i32, name: &str, n: i32, reason: &Msg) -> Result<i32, Prompt> {
     let (np, nl) = s(name);
-    let (p, l) = mj(why);
+    let (p, l) = msg_bytes(reason);
     asked(unsafe { sys::gain_marker(player_id, np, nl, n, p, l) })
 }
 
 /// Spend `n` of the named counter; 1 when the player had enough. Opens
 /// `markerSpend` first (a cancelled window spends nothing).
-pub fn spend_marker(player_id: i32, name: &str, n: i32, why: &Msg) -> Result<i32, Prompt> {
+pub fn spend_marker(player_id: i32, name: &str, n: i32, reason: &Msg) -> Result<i32, Prompt> {
     let (np, nl) = s(name);
-    let (p, l) = mj(why);
+    let (p, l) = msg_bytes(reason);
     asked(unsafe { sys::spend_marker(player_id, np, nl, n, p, l) })
 }
 
@@ -2189,7 +2193,7 @@ pub fn turn_key() -> i32 {
 /// Where a card goes when its effect finishes. Wire values 0..=3 are the
 /// Graveyard / Hand / Field / Banished order; 4..=6 are the draw-pile fates.
 ///
-/// One fate, two movers. A **play** names where its hand card ends and the
+/// One dest, two movers. A **play** names where its hand card ends and the
 /// engine applies it (`play_from_hand`); a **field effect** names where the
 /// instance it is running for ends and the host applies it when the run
 /// commits. 「将此卡放入[使用者]弃卡区」 is `Dest::Graveyard` either way -- no
@@ -2247,8 +2251,8 @@ fn asked(i: i32) -> Result<i32, Prompt> {
 }
 
 fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<i32, Prompt> {
-    let (tp, tl) = mj(title);
-    let (xp, xl) = mj(text);
+    let (tp, tl) = msg_bytes(title);
+    let (xp, xl) = msg_bytes(text);
     asked(unsafe { sys::ask(kind as i32, player_id, tp, tl, xp, xl) })
 }
 
@@ -2257,7 +2261,7 @@ fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<
 pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
     #[cfg(kani)]
     {
-        // Zero-loop option list (see `ask_pick`).
+        // Zero-loop option list (see `ask_choice`).
         if let Some(&t) = tiles.get(0) {
             unsafe { sys::opt_int(t) }
         }
@@ -2352,7 +2356,7 @@ pub fn ask_tiles(
     ai: i32,
 ) -> Result<i32, Prompt> {
     for (i, &t) in tiles.iter().enumerate() {
-        let (lp, ll) = mj(&labels[i]);
+        let (lp, ll) = msg_bytes(&labels[i]);
         unsafe { sys::opt_tile(t, lp, ll) }
         unsafe { sys::opt_price(*prices.get(i).unwrap_or(&0)) }
     }
@@ -2365,7 +2369,12 @@ pub fn ask_tiles(
 }
 
 /// Returns the chosen option index.
-pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Result<usize, Prompt> {
+pub fn ask_choice(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    options: &[Msg],
+) -> Result<usize, Prompt> {
     #[cfg(kani)]
     {
         // Bounded option list (16 slots). Covers the widest card range seen
@@ -2374,13 +2383,13 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
         let mut i = 0usize;
         while i < CAP {
             if let Some(o) = options.get(i) {
-                let (p, l) = mj(o);
+                let (p, l) = msg_bytes(o);
                 unsafe { sys::opt_str(p, l) }
             }
             i += 1;
         }
         if options.len() > CAP {
-            kani::assert(false, "ask_pick: more than 16 options under Kani");
+            kani::assert(false, "ask_choice: more than 16 options under Kani");
         }
         // 0 or 1 options: the pick is forced. Take the ask so `opt_n`
         // accounting matches the host, but return a **literal** index — a
@@ -2397,7 +2406,7 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
     #[cfg(not(kani))]
     {
         for o in options {
-            let (p, l) = mj(o);
+            let (p, l) = msg_bytes(o);
             unsafe { sys::opt_str(p, l) }
         }
         let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
@@ -2413,7 +2422,7 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
 /// the lowest unset indices, too many keeps the lowest `count` set bits, so
 /// the result is always exactly `count` distinct in-range indices -- including
 /// under Kani's symbolic answers.
-pub fn ask_pick_multi(
+pub fn ask_choices(
     player_id: i32,
     title: &Msg,
     text: &Msg,
@@ -2424,26 +2433,26 @@ pub fn ask_pick_multi(
     let want = (count as usize).clamp(1, n.max(1));
     #[cfg(kani)]
     {
-        // Same bounded zero-loop push as `ask_pick`; 5 options (this card's
+        // Same bounded zero-loop push as `ask_choice`; 5 options (this card's
         // widest multi) sit well under the 16-slot cap, so the existing
         // proofs keep compiling.
         const CAP: usize = 16;
         let mut i = 0usize;
         while i < CAP {
             if let Some(o) = options.get(i) {
-                let (p, l) = mj(o);
+                let (p, l) = msg_bytes(o);
                 unsafe { sys::opt_str(p, l) }
             }
             i += 1;
         }
         if options.len() > CAP {
-            kani::assert(false, "ask_pick_multi: more than 16 options under Kani");
+            kani::assert(false, "ask_choices: more than 16 options under Kani");
         }
     }
     #[cfg(not(kani))]
     {
         for o in options {
-            let (p, l) = mj(o);
+            let (p, l) = msg_bytes(o);
             unsafe { sys::opt_str(p, l) }
         }
     }
@@ -2523,7 +2532,7 @@ pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> R
 /// answer is still the chosen player; only the label gains a `card` argument,
 /// so a client renders the card in the option instead of a bare name.
 ///
-/// Built on [`ask_pick`] (`PromptKind::Choice`) rather than `PromptKind::Player`
+/// Built on [`ask_choice`] (`PromptKind::Choice`) rather than `PromptKind::Player`
 /// because only the string-option path can carry a card per option. Bot /
 /// autopilot answering is unchanged (an index either way).
 pub fn ask_player_cards(
@@ -2555,7 +2564,7 @@ pub fn ask_player_cards(
         if n == 0 {
             return Ok(-1);
         }
-        let i = ask_pick(player_id, title, text, &options[..n])?;
+        let i = ask_choice(player_id, title, text, &options[..n])?;
         return Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))]);
     }
     #[cfg(not(kani))]
@@ -2568,7 +2577,7 @@ pub fn ask_player_cards(
         if options.is_empty() {
             return Ok(-1);
         }
-        let i = ask_pick(player_id, title, text, &options)?;
+        let i = ask_choice(player_id, title, text, &options)?;
         Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
     }
 }
@@ -2577,7 +2586,7 @@ pub fn ask_player_cards(
 pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
     #[cfg(kani)]
     {
-        // Zero-loop option list (same 4-slot tree as `ask_pick`). The prompt
+        // Zero-loop option list (same 4-slot tree as `ask_choice`). The prompt
         // profile showed `ctx::ask_card` 31 — the `for c in cards` over a
         // symbolic-length slice.
         macro_rules! opt {
@@ -2586,7 +2595,7 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
                     // `opt_str` takes a serialized `Msg`, not a raw string -- a
                     // card id wrapped as `{{card}}` is the label. Under kani
                     // `Msg` is Copy and `mj` is two ints (no postcard Vec).
-                    let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
+                    let (p, l) = msg_bytes(&Msg::new("ask.cardOption").card("card", c));
                     unsafe { sys::opt_str(p, l) }
                 }
             };
@@ -2606,7 +2615,7 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
         for c in cards {
             // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
             // wrapped as `{{card}}` is the label.
-            let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
+            let (p, l) = msg_bytes(&Msg::new("ask.cardOption").card("card", c));
             unsafe { sys::opt_str(p, l) }
         }
         let i = ask_raw(PromptKind::Card, player_id, title, text)?;
@@ -2661,7 +2670,7 @@ pub fn pick_from_pile(
     pick_take_from(player_id, pile, title, text, empty, &ids)
 }
 
-/// A number in `min..=max`, built as an [`ask_pick`] over the range (ranges in
+/// A number in `min..=max`, built as an [`ask_choice`] over the range (ranges in
 /// the card pool are small; for a wide range, narrow the candidates yourself
 /// first).
 pub fn ask_number(
@@ -2692,7 +2701,7 @@ pub fn ask_number(
         if n == 0 {
             return Ok(min);
         }
-        let i = ask_pick(player_id, title, text, &options[..n])?;
+        let i = ask_choice(player_id, title, text, &options[..n])?;
         return Ok(min + i as i32);
     }
     #[cfg(not(kani))]
@@ -2704,7 +2713,7 @@ pub fn ask_number(
         if options.is_empty() {
             return Ok(min);
         }
-        let i = ask_pick(player_id, title, text, &options)?;
+        let i = ask_choice(player_id, title, text, &options)?;
         Ok(min + i as i32)
     }
 }
@@ -2815,8 +2824,8 @@ pub mod plan {
     }
 
     /// Settle where the walk lands.
-    pub fn set_resolve(on: bool) {
-        unsafe { sys::set_resolve(on as i32) }
+    pub fn set_settles(on: bool) {
+        unsafe { sys::set_settles(on as i32) }
     }
 
     /// Settle on this tile instead of the landing; -1 clears.
@@ -2939,28 +2948,28 @@ pub mod plan {
     }
 
     /// The tile the walk begins on instead of the player's own; -1 for the
-    /// player's own. `why` is shown on the move's log line.
-    pub fn set_start(tile: i32, why: &str) {
-        let (p, l) = s(why);
+    /// player's own. `reason` is shown on the move's log line.
+    pub fn set_start(tile: i32, reason: &str) {
+        let (p, l) = s(reason);
         unsafe { sys::set_start(tile, p, l) }
     }
 
     /// Replace the roll's dice table with `count`d`sides`.
-    pub fn set_base_dice(count: i32, sides: i32, why: &str) {
-        let (p, l) = s(why);
+    pub fn set_base_dice(count: i32, sides: i32, reason: &str) {
+        let (p, l) = s(reason);
         unsafe { sys::set_base_dice(count, sides, p, l) }
     }
 
     /// Append `count`d`sides` to the roll's base dice.
-    pub fn add_base_dice(count: i32, sides: i32, why: &str) {
-        let (p, l) = s(why);
+    pub fn add_base_dice(count: i32, sides: i32, reason: &str) {
+        let (p, l) = s(reason);
         unsafe { sys::add_base_dice(count, sides, p, l) }
     }
 
     /// Append `count`d`sides` to the roll as an extra term. A flat add is a
-    /// A flat add is a `0`-sided term (`add_extra_dice(n, 0, why)`).
-    pub fn add_extra_dice(count: i32, sides: i32, why: &str) {
-        let (p, l) = s(why);
+    /// A flat add is a `0`-sided term (`add_extra_dice(n, 0, reason)`).
+    pub fn add_extra_dice(count: i32, sides: i32, reason: &str) {
+        let (p, l) = s(reason);
         unsafe { sys::add_extra_dice(count, sides, p, l) }
     }
 
@@ -2981,8 +2990,8 @@ pub mod plan {
     }
 
     /// Does the walk settle where it lands?
-    pub fn resolve() -> bool {
-        unsafe { sys::move_resolve() != 0 }
+    pub fn settles() -> bool {
+        unsafe { sys::move_settles() != 0 }
     }
 
     /// The planned length.
@@ -3203,33 +3212,28 @@ pub mod trigger {
         TriggerKind::from_str(&s)
     }
 
-    /// `t.Seat` -- whose action this is (the mover, the payer, the player of the card).
     pub fn player_id() -> i32 {
         unsafe { sys::trig_player() }
     }
 
-    /// `t.Target` -- who it is aimed at (`t.Pay.to` on pay triggers), or -1.
     pub fn target() -> i32 {
         unsafe { sys::trig_target() }
     }
 
-    /// `t.Tile` -- the tile involved (settled on, passed, mortgaged), or -1.
     pub fn tile() -> i32 {
         unsafe { sys::trig_tile() }
     }
 
-    /// `t.Value` -- the amount involved (`t.Pay.amount` on pay triggers), or 0.
     pub fn value() -> i32 {
         unsafe { sys::trig_value() }
     }
 
-    /// `t.Name` -- the counter name on a `CounterChanged` hook, or the
-    /// message name on a `Message` entry. Empty otherwise.
+    /// Empty otherwise.
     pub fn name() -> String {
         read_str(|b, c| unsafe { sys::trig_name(b, c) })
     }
 
-    /// `t.Uid` -- the raise's unique id, shared by every job the raise
+    /// The raise's unique id, shared by every job the raise
     /// dispatches and stable across a replay of the same action. `0` outside a
     /// raise and on a hand-built test trigger. A hook keys one-shot claims on
     /// it (`ctx::prop(CLAIM) != trigger::uid()`).
@@ -3237,7 +3241,7 @@ pub mod trigger {
         unsafe { sys::trig_uid() }
     }
 
-    /// `t.Instance` -- the instance/row this raise is **about**: the changed
+    /// The instance/row this raise is **about**: the changed
     /// instance on `counterChanged`, the mark's creating instance on
     /// `markChanged`, `-1` otherwise. Never restamped per hook job, so copy A
     /// can ignore a raise about copy B (`trigger::instance() != ctx::self_uid()`).
@@ -3245,47 +3249,38 @@ pub mod trigger {
         unsafe { sys::trig_instance() }
     }
 
-    /// `t.Step` -- the turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
+    /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
     /// Only meaningful for kinds that aren't step-specific (e.g. `mortgage`
     /// can fire during both step 1 and step 3).
     pub fn step() -> i32 {
         unsafe { sys::trig_step() }
     }
 
-    /// `t.ByCard` -- the player whose card caused this trigger, or `None` when the
-    /// trigger was not card-caused (board-driven: rent, buy, build, turn flow).
-    /// `by_card().is_some_and(|by| by != player)` means "another player's card
-    /// did this to me". Distinct from `player_id()` (the mover/payer/target),
-    /// which on a `pay` trigger is the *payer*, not the card that forced the
-    /// payment.
+    /// `by_card().is_some_and(|by| by != player)` means "another player's card did
+    /// this to me". Distinct from `player_id()` (the mover/payer/target), which on a
+    /// `pay` trigger is the *payer*, not the card that forced the payment.
     pub fn by_card() -> Option<i32> {
         let v = unsafe { sys::trig_by_card() };
         (v >= 0).then_some(v)
     }
 
-    /// `t.Pay.IsRent` -- is this `pay`/`paid` trigger rent,
-    /// as opposed to a buy, a build, or a forced loss. Always false on a
-    /// card-driven payment.
+    /// Always false on a card-driven payment.
     pub fn pay_is_rent() -> bool {
         unsafe { sys::trig_pay_is_rent() != 0 }
     }
 
-    /// `t.Move` -- how the move that caused this trigger got there:
-    /// `None` when the move did not cause it. Present on
-    /// `diceRollResult` / `pass` / `settleBefore` / `settle` / `settleAfter` raised
-    /// while a player is moving. A walk enters every tile it steps on; a teleport
-    /// enters only its destination.
+    /// Present on `diceRollResult` / `pass` / `settleBefore` / `settle` /
+    /// `settleAfter` raised while a player is moving. A walk enters every tile it
+    /// steps on; a teleport enters only its destination.
     pub fn move_kind() -> Option<MoveKind> {
         MoveKind::from_i32(unsafe { sys::trig_move_kind() })
     }
 
-    /// `t.Move.Resolve` -- does that move settle where it lands?
     /// False = a card effect prevented settle at all.
-    pub fn move_resolve() -> bool {
-        unsafe { sys::trig_move_resolve() != 0 }
+    pub fn move_settles() -> bool {
+        unsafe { sys::trig_move_settles() != 0 }
     }
 
-    /// `t.Move.Tags[key]` -- a per-card counter the move carries.
     /// A [火罐] roll is card-owned state: whoever armed it tagged the move
     /// (`"fireRoll"` by convention).
     pub fn move_tag(key: &str) -> i32 {
@@ -3293,13 +3288,10 @@ pub mod trigger {
         unsafe { sys::trig_move_tag(p, l) }
     }
 
-    /// `t.Move.Main` -- was this the turn's [主要移动]?
     pub fn move_is_main() -> bool {
         unsafe { sys::trig_move_main() != 0 }
     }
 
-    /// `t.Move.SettleRedirect` -- was this settle initiated by a card
-    /// (`ctx::card_settle_at`), rather than by the player's own move landing?
     ///
     /// A `tileResolved` / `settleBody` hook uses this to tell a card's own
     /// redirected settle from a real player settle on the same tile (笑容大游行
@@ -3309,8 +3301,8 @@ pub mod trigger {
         unsafe { sys::trig_settle_redirect() != 0 }
     }
 
-    /// `t.Move.Dir` -- the direction of the move: 1 forward, -1 backward.
-    /// Only meaningful when the move caused the trigger ([`move_kind`]`().is_some()`).
+    /// Only meaningful when the move caused the trigger
+    /// ([`move_kind`]`().is_some()`).
     pub fn move_dir() -> i32 {
         unsafe { sys::trig_move_dir() }
     }
@@ -3339,48 +3331,39 @@ pub mod trigger {
         decode_name_list(&buf)
     }
 
-    /// `t.Move.Remaining` -- steps the move has left to walk.
     pub fn move_remaining() -> i32 {
         unsafe { sys::trig_move_remaining() }
     }
 
-    /// `t.Move.From` -- the move's 移动起点, or -1 when no move is in flight.
     pub fn move_from() -> i32 {
         unsafe { sys::trig_move_from() }
     }
 
-    /// `t.Move.Path.Count` -- the move's path length so far.
     pub fn move_total() -> i32 {
         unsafe { sys::trig_move_total() }
     }
 
-    /// `t.Move.Roll` -- the roll being counteracted to, or -1.
     pub fn move_roll() -> Option<i32> {
         let v = unsafe { sys::trig_move_roll() };
         (v >= 0).then_some(v)
     }
 
-    /// `t.Roll.Source` -- where a `diceRollBefore` / `diceRollResult` face came from, as a
-    /// [`crate::abi::roll_source`] code (`0` = unattributed, `1` = a fire pot,
-    /// `2` = a card, `3` = a skill). 「当你使用火罐进行掷骰时」 reads this.
-    /// [`crate::abi::roll_source::NONE`] on every non-roll trigger.
+    /// 「当你使用火罐进行掷骰时」 reads this. [`crate::abi::roll_source::NONE`] on every non-roll
+    /// trigger.
     pub fn roll_source() -> i32 {
         unsafe { sys::trig_roll_source() }
     }
 
     // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
 
-    /// `t.Buy.Kind` -- a [`crate::abi::BuyKind`] as `i32` (`0` = land).
     pub fn buy_kind() -> i32 {
         unsafe { sys::trig_buy_kind() }
     }
 
-    /// `t.Buy.Seller` -- the payee (`-1` = the bank).
     pub fn seller() -> i32 {
         unsafe { sys::trig_seller() }
     }
 
-    /// `t.Buy.Price` -- the price the buyer would be charged.
     pub fn price() -> i32 {
         unsafe { sys::trig_price() }
     }
@@ -3390,7 +3373,6 @@ pub mod trigger {
         unsafe { sys::trig_set_price(v) }
     }
 
-    /// `t.Buy.DealOwner` -- ownership after the deal (default: the buyer).
     pub fn deal_owner() -> i32 {
         unsafe { sys::trig_deal_owner() }
     }
@@ -3400,7 +3382,6 @@ pub mod trigger {
         unsafe { sys::trig_set_deal_owner(v) }
     }
 
-    /// `t.Buy.DealHouses` -- houses after the deal (default: as standing).
     pub fn deal_houses() -> i32 {
         unsafe { sys::trig_deal_houses() }
     }
@@ -3410,7 +3391,6 @@ pub mod trigger {
         unsafe { sys::trig_set_deal_houses(v) }
     }
 
-    /// `t.Buy.DealMortgaged` -- mortgage after the deal.
     pub fn deal_mortgaged() -> bool {
         unsafe { sys::trig_deal_mortgaged() != 0 }
     }
@@ -3438,9 +3418,7 @@ pub mod trigger {
         unsafe { sys::trig_set_pay_amount(v) }
     }
 
-    /// Redirect the payee of a pending `pay` (`t.Pay.to`); `-1` sends the
-    /// money to the bank instead. Combine with [`set_pay_amount`] to reshape a
-    /// payment completely.
+    /// Combine with [`set_pay_amount`] to reshape a payment completely.
     pub fn set_pay_target(to: i32) {
         unsafe { sys::trig_set_pay_target(to) }
     }
@@ -3497,12 +3475,10 @@ pub mod trigger {
         unsafe { sys::trig_set_spare(seat) }
     }
 
-    /// Has a counteraction already cancelled this trigger (`Trigger.Cancelled`)?
     pub fn cancelled() -> bool {
         unsafe { sys::trig_cancelled() != 0 }
     }
 
-    /// `t.Card == id` / `t.Play.Id == id` -- is this trigger about that card?
     pub fn card_is(id: &str) -> bool {
         let (p, l) = s(id);
         unsafe { sys::trig_card_is(p, l) != 0 }
@@ -3606,13 +3582,13 @@ pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
 }
 
 /// Names of the player's non-zero counters whose name starts with `prefix`.
-/// The listing half of the counter query; [`tok`] reads one by name.
+/// The listing half of the counter query; [`held`] reads one by name.
 #[cfg_attr(kani, inline(always))]
-pub fn tok_names(player_id: i32, prefix: &str) -> Vec<NameId> {
+pub fn held_names(player_id: i32, prefix: &str) -> Vec<NameId> {
     let (p, l) = s(prefix);
     let cap = 4096;
     let (bp, scratch) = out_buf(cap as usize);
-    let n = unsafe { sys::tok_names(player_id, p, l, bp, cap) };
+    let n = unsafe { sys::held_names(player_id, p, l, bp, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
@@ -3629,10 +3605,10 @@ pub fn gate(player_id: i32, kind: crate::abi::AbKind) -> bool {
 }
 
 /// A full [触发结算] of `tile` for this player. The player does
-/// not move; the tile's own effect resolves. `main` marks it as the turn's
+/// not move; the tile's own effect resolves. `is_main_move` marks it as the turn's
 /// landing (it writes `landed`).
-pub fn card_settle_at(player_id: i32, tile: i32, main: bool) -> bool {
-    unsafe { sys::card_settle_at(player_id, tile, main as i32) != 0 }
+pub fn settle_tile_at(player_id: i32, tile: i32, is_main_move: bool) -> bool {
+    unsafe { sys::settle_tile_at(player_id, tile, is_main_move as i32) != 0 }
 }
 
 /// Prompt to build on one of `tiles`, then build there.
@@ -3819,15 +3795,16 @@ pub fn card_mortgage(player_id: i32, tile: i32) -> bool {
 /// pipeline -- 规则书 基础规则 6). Returns the amount actually credited
 /// (`0` when the deed was already mortgaged / not owned).
 #[cfg_attr(kani, inline(always))]
-pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
-    unsafe { sys::apply_mortgage(player_id, tile, amount) }
+pub fn commit_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
+    unsafe { sys::commit_mortgage(player_id, tile, amount) }
 }
 
 /// Mechanism half of a redeem the tile rule already approved: clear the
-/// mortgage flag and charge `amount` directly. Returns the amount charged.
+/// mortgage flag and charge `amount`. Runs the `spendBefore` window (a raw
+/// 消耗 debit), so it may prompt; answers the amount charged.
 #[cfg_attr(kani, inline(always))]
-pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> Result<i32, Prompt> {
-    asked(unsafe { sys::apply_redeem(player_id, tile, amount) })
+pub fn commit_redeem(player_id: i32, tile: i32, amount: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::commit_redeem(player_id, tile, amount) })
 }
 
 /// Pay the buy price through the money pipeline (`PayKind::Buy`). `kind` is
@@ -3877,8 +3854,8 @@ pub fn card_prop(id: &str, key: &str) -> i32 {
 /// 的资金金额」 is money movement and goes through the same pipeline as any
 /// other gain -- the `effect` [反击] window, the modifier stages and the `pay`
 /// settlement all see it. This is [`gain`] under a name the cards already use.
-pub fn gain_fixed(player_id: i32, amount: i32, why: &Msg) -> Result<i32, Prompt> {
-    gain(player_id, amount, why)
+pub fn gain_fixed(player_id: i32, amount: i32, reason: &Msg) -> Result<i32, Prompt> {
+    gain(player_id, amount, reason)
 }
 
 /// What this turn's [触发结算]s have cost the player so far.
@@ -3905,7 +3882,7 @@ pub fn rent_quote(payer: i32, tile: i32) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn place_card_on(player_id: i32, tile: i32, card: &str, note: &Msg) -> i32 {
     let (cp, cl) = s(card);
-    let (p, l) = mj(note);
+    let (p, l) = msg_bytes(note);
     unsafe { sys::place_card_on(player_id, tile, cp, cl, p, l) }
 }
 
@@ -3960,7 +3937,7 @@ pub fn turn_rolls() -> Vec<i32> {
 
 /// Turn-start snapshot payload (`ruleset_turn_snap`): starting square, keyed
 /// state map, that player's money and the board ownership arrays. Field order
-/// mirrors `game_core::engine::TurnSnap` -- postcard carries no field names,
+/// mirrors `game_core::engine::TurnSnapshot` -- postcard carries no field names,
 /// so the two must stay in step.
 #[derive(Debug, Clone, Default, serde::Deserialize)]
 pub struct TurnSnapshot {
@@ -3976,7 +3953,7 @@ pub struct TurnSnapshot {
 pub fn turn_snap_map(player_id: i32) -> TurnSnapshot {
     let cap = 16_384;
     let (p, scratch) = out_buf(cap);
-    let n = unsafe { sys::turn_snap(player_id, p) };
+    let n = unsafe { sys::turn_snapshot(player_id, p) };
     if n <= 0 || n as usize > cap {
         return TurnSnapshot {
             pos: -1,
@@ -3992,7 +3969,7 @@ pub fn turn_snap_map(player_id: i32) -> TurnSnapshot {
 
 /// `(pos, v0, v1, v2)` for the caller's three keys (the caller names them) --
 /// the three layer counters 「回到起始地点并取消所有受到的效果」 restores.
-pub fn turn_snap(player_id: i32, k0: &str, k1: &str, k2: &str) -> (i32, i32, i32, i32) {
+pub fn turn_snapshot(player_id: i32, k0: &str, k1: &str, k2: &str) -> (i32, i32, i32, i32) {
     let snap = turn_snap_map(player_id);
     (
         snap.pos,
@@ -4012,7 +3989,7 @@ pub fn turn_start_pos(player_id: i32) -> i32 {
 
 /// Pay `tile`'s build cost and raise one house.
 /// `true` only when a house was added (HOST-06): `false` on
-/// `why_not_build_on` / `buildBefore` cancel / unpaid cost / max houses.
+/// `cant_build_on` / `buildBefore` cancel / unpaid cost / max houses.
 pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
 }

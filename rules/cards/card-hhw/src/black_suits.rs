@@ -1,4 +1,3 @@
-//! `HHW:黑衣人的补给` -- C# `CardBlackSuits` (MatchHost.cs:3966-3993): [反击] past
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:黑衣人的补给`）:
 //! > 黑衣人的补给：
@@ -17,9 +16,8 @@ use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
-/// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
-/// (C# `H.AddMark(..., "黑衣人的补给", ...)`). It is a locale key so the
-/// placement line reads as a 奇迹水晶, not as the card's own name.
+/// It is a locale key so the placement line reads as a 奇迹水晶, not as the card's
+/// own name.
 const MARK: &str = key!("black_suits_crystal");
 
 /// One-shot claim for the pass body: the raise uid that already spent this
@@ -47,8 +45,8 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
             Some(changed_is_my_crystal),
             resync,
         )),
-        // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
-        // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
+        // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 --
+        // `t.Kind == "pass" && t.Seat == seat && Tile(t.Tile)?.kind == "circle"`.
         // `PassBefore` is the category; the owner's own pass of CiRCLE is the
         // condition. The `circle < 0` defensive check is dropped (`tile_named`
         // missing = -1 never equals a live `tile.id`).
@@ -68,14 +66,12 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
-    // 规则书[反击]: 「在“弦卷集团”（#29格）格子上放置一个奇迹水晶」 -- C#
-    // `H.AddMark(tsurumakiAgent, "黑衣人的补给", c.Seat, 1, ...)`: a tile mark
-    // owned by the player of this card. `place_mark_new`: one row per crystal.
+    // `place_mark_new`: one row per crystal.
     if group >= 0 {
         // 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- field hooks only
         // dispatch to placed instances, and a [反击] declaration would otherwise
         // be discarded, leaving the `Pass` hook below dead. Place this card
-        // as the stand-in for C# `BlackSuitFx` (same pattern as `HHW:育美标记`),
+        // as the stand-in for the effect (same pattern as `HHW:育美标记`),
         // *before* the mark, so the row is bound to the stand-in
         // (`place_mark` stamps `instance = ctx::self_uid()`) and the
         // `MarkChanged` guard can name it.
@@ -164,7 +160,7 @@ fn sync_circle_instance(group: i32) {
     }
 }
 
-/// 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
+/// 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- the pass-tile effect's
 /// `mark.count--`, which is `bump_mark`'s single-tick form. Dropping the last
 /// crystal takes the borrowed `tile:circle` instance with it.
 ///
@@ -173,7 +169,7 @@ fn sync_circle_instance(group: i32) {
 /// (the trailing `own_crystals == 0` check runs outside the claim), so the
 /// other copy leaves too.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && tile.id == tile_named('弦卷集团')` is the pre.
+    // `actor == owner && tile.id == tile_named('弦卷集团')` is the condition.
     let t = trigger::tile();
     if ctx::state::get(player_id, CLAIM) != trigger::uid() {
         ctx::state::set(player_id, CLAIM, trigger::uid());

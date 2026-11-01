@@ -798,14 +798,14 @@ impl RaceState {
     }
 }
 
-/// One `(cand, seed_idx)` draw. The seed is a function of (cfg.seed, task,
-/// seed_idx) alone -- common random numbers across candidates.
-fn game_seed(cfg: &Config, task: &Task, seed_idx: usize) -> u64 {
+/// One `(cand, seed_index)` draw. The seed is a function of (cfg.seed, task,
+/// seed_index) alone -- common random numbers across candidates.
+fn game_seed(cfg: &Config, task: &Task, seed_index: usize) -> u64 {
     let mut h = cfg.seed;
     for b in task.id().bytes() {
         h = splitmix64(h ^ b as u64);
     }
-    splitmix64(h ^ (seed_idx as u64).wrapping_mul(0x1000_0000_01B3))
+    splitmix64(h ^ (seed_index as u64).wrapping_mul(0x1000_0000_01B3))
 }
 
 /// What a race produced: the per-candidate stats plus the raw cost.

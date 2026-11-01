@@ -385,8 +385,8 @@ def run(args) -> int:
                 continue
             shutil.copy2(f, dst)
             p.stats.add("data", dst)
-        # skill_simple.json (display-only `simple` skill text, C#
-        # GameDataLoader.WithSimple) is a normal game-data file -- copied above.
+        # skill_simple.json (display-only `simple` skill text) is a normal
+        # game-data file -- copied above.
         # It used to be merged into characters.json / bands.json as `simple`;
         # those files are gone, so no merge.
 

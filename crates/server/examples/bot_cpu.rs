@@ -152,7 +152,7 @@ fn flag(name: &str) -> bool {
 fn view_frame(m: &Match, member: i32) -> Value {
     let st = m.state();
     let player_id = st.player_of(member);
-    let extra = m.view_extra(member);
+    let extra = m.view_extras(member);
     serde_json::json!({
         "state": st,
         "hand": m.hand_of(member),
@@ -181,10 +181,10 @@ fn surface_label(v: &BotSeatView) -> String {
         let p = &st.prompt;
         return match p.kind.as_str() {
             "choice" => {
-                if p.title.k.as_ref() == "ask.counteract.title" {
+                if p.title.key.as_ref() == "ask.counteract.title" {
                     "prompt/counteract".into()
                 } else {
-                    format!("prompt/choice:{}", p.title.k.as_ref())
+                    format!("prompt/choice:{}", p.title.key.as_ref())
                 }
             }
             k => format!("prompt/{k}"),
@@ -502,7 +502,7 @@ fn run_match(
                 &seat.state,
                 &seat.hand,
                 &seat.playable,
-                &seat.est_cost,
+                &seat.estimated_cost,
                 me,
             )
             .len();
@@ -566,7 +566,7 @@ fn run_match(
                     act_refused = true;
                     if let Some(last) = st.reqs.last_mut() {
                         last.act_refused = true;
-                        last.refuse_reason = e.k.to_string();
+                        last.refuse_reason = e.key.to_string();
                     }
                     let c0 = process_cpu();
                     let fallback = m.act(member, &heuristic_msg);
@@ -1125,7 +1125,7 @@ fn main() {
 fn dump_bot_cost() {
     use game_core::engine::bot_cost as gc;
     use game_rules::bot_cost as gr;
-    use game_rules::cond_pre::guard_cost;
+    use game_rules::condition::guard_cost;
     let g = |v: &std::sync::atomic::AtomicU64| v.load(std::sync::atomic::Ordering::Relaxed);
     println!("-- bot-cost counters (whole run) --");
     println!(
@@ -1152,7 +1152,7 @@ fn dump_bot_cost() {
         g(&gr::COUNTERACT_DECLARED)
     );
     println!(
-        "  cond_pre: evals {}  skipped-by-condition {}  guard-asked {}  cond-eval {:.1}s",
+        "  condition: evals {}  skipped-by-condition {}  guard-asked {}  cond-eval {:.1}s",
         g(&guard_cost::COND_EVALS),
         g(&guard_cost::SKIPPED_BY_CONDITION),
         g(&guard_cost::GUARD_ASKED),

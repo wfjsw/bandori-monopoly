@@ -248,7 +248,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-HHW-PATROL-PRICE** | 「付款」 amount on 微笑巡逻队 | patrol-02 | Printed build cost, table cost, or free? |
 | **OPEN-HHW-PATROL-3D20** | 3d20 as sum vs three tiles | patrol-02 | Is 3d20 one sum for one build, or three separate tiles? |
 | **OPEN-HHW-BUILDABLE** | 「可建造格子」 | patrol-02 | Is it exactly [可购买格子]? |
-| **OPEN-HHW-RETURN-AMOUNT / OPEN-HHW-RETURN-BOOK / OPEN-HHW-RETURN-RELIEF** | pay amount; crystal 「records」 a player; relief pre/post double | return-02..05 | Is relief half of the doubled amount or of the base? |
+| **OPEN-HHW-RETURN-AMOUNT / OPEN-HHW-RETURN-BOOK / OPEN-HHW-RETURN-RELIEF** | pay amount; crystal 「records」 a player; relief condition/post double | return-02..05 | Is relief half of the doubled amount or of the base? |
 | **OPEN-HHW-CHARITY-RECOMPUTE** | 「初次经过」 after path recompute | charity-01 | Does recompute reset "first pass"? |
 | **OPEN-HHW-KKR-OWNER** | 「所有者」 of CiRCLE-placed card | kkr-03 | The placer or the tile owner? |
 | **OPEN-HHW-NEIGHBOUR** | 「相邻2格」 | misaki | Two tiles away or the two adjacent tiles? |

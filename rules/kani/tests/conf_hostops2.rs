@@ -106,23 +106,21 @@ fn play_doubled_defaults_to_no_doubling() {
 /// packs `[0;6]`. The call **is** the effect.
 #[test]
 fn trig_set_cancelled_and_negate_are_noarg_setters() {
-    big(|| {
-        let _g = model_lock();
-        install(base());
-        assert_eq!(
-            kworld::with_world(|w| w.trig_cancelled),
-            false,
-            "pre: not cancelled"
-        );
-        rules_kani::host::dispatch(Op::trig_set_cancelled, [0; 6]);
-        assert_eq!(
-            kworld::with_world(|w| w.trig_cancelled),
-            true,
-            "setter with [0;6] must still cancel"
-        );
-        rules_kani::host::dispatch(Op::trig_set_negate_effect, [0; 6]);
-        assert_eq!(kworld::with_world(|w| w.trig_negate), true);
-    });
+    let _g = model_lock();
+    install(base());
+    assert_eq!(
+        kworld::with_world(|w| w.trig_cancelled),
+        false,
+        "condition: not cancelled"
+    );
+    rules_kani::host::dispatch(Op::trig_set_cancelled, [0; 6]);
+    assert_eq!(
+        kworld::with_world(|w| w.trig_cancelled),
+        true,
+        "setter with [0;6] must still cancel"
+    );
+    rules_kani::host::dispatch(Op::trig_set_negate_effect, [0; 6]);
+    assert_eq!(kworld::with_world(|w| w.trig_negate), true);
 }
 /// `tile_named` resolves every `board.json` name (0-based engine index).
 #[test]
@@ -346,7 +344,8 @@ fn generated_card_ids_match_ruleset() {
             assert_eq!(def.id, rules_kani::generated::IDS[i], "index {i}");
         }
     });
-}/// Event instances (no `field[]` slot) still own their crystals / phase.
+}
+/// Event instances (no `field[]` slot) still own their crystals / phase.
 /// `set_counter_self`/`counter_self` fall back to `World::self_crystals` —
 /// heat_head's two-phase machine and circle_rebuild's 5 miracle crystals.
 #[test]

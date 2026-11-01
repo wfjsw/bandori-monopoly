@@ -89,7 +89,7 @@ fn skill_uid(player_id: i32) -> i32 {
 /// Does a live row already exist? A declared pool keeps its row even at
 /// `value == 0` (the `max > 0` latch); an undeclared name has neither.
 fn row_live(player_id: i32, name: &str) -> bool {
-    ctx::tok(player_id, name) > 0 || ctx::tok_max(player_id, name) > 0
+    ctx::held_count(player_id, name) > 0 || ctx::held_max(player_id, name) > 0
 }
 
 /// Can this seat hold fire? A persona-skill instance owns the pool; a row
@@ -107,7 +107,7 @@ fn writable(player_id: i32) -> bool {
 /// [`writable`].
 fn set_row(player_id: i32, name: &str, value: i32, max: i32) {
     let uid = skill_uid(player_id);
-    ctx::set_tok(player_id, name, value, max, uid);
+    ctx::set_held(player_id, name, value, max, uid);
 }
 
 // ------------------------------------------------------------- pure policy
@@ -136,7 +136,7 @@ pub fn get(player_id: i32) -> i32 {
     if !writable(player_id) {
         return 0;
     }
-    ctx::tok(player_id, KEY)
+    ctx::held_count(player_id, KEY)
 }
 
 /// The declared cap (0 = none declared).
@@ -144,7 +144,7 @@ pub fn max(player_id: i32) -> i32 {
     if !writable(player_id) {
         return 0;
     }
-    ctx::tok_max(player_id, KEY)
+    ctx::held_max(player_id, KEY)
 }
 
 /// Total pots the seat can spend: the pool plus any live temp pots
@@ -260,7 +260,7 @@ pub fn end_overlay(player_id: i32) -> i32 {
 /// **not** police it. Opens `markerGain` before the pots move (host verb,
 /// unchanged window). The window payload is the **actual** `want` (what will
 /// land); a cancelled window moves nothing.
-pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
+pub fn gain(player_id: i32, n: i32, reason: &Msg) -> Result<i32, Prompt> {
     if n <= 0 {
         return Ok(0);
     }
@@ -279,7 +279,7 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
             player_id,
             &Msg::new("log.gain_charge_capped")
                 .player_id("who", player_id)
-                .msg("why", why)
+                .msg("reason", reason)
                 .i("charge", have as i64)
                 .i("max", cap as i64),
         );
@@ -293,7 +293,7 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     // Window payload is the actual `want` (the amount that will land);
     // a cancelled window writes nothing. The host verb is a dumb add and
     // logs `log.gain_charge` with the actual.
-    ctx::gain_marker(player_id, KEY, want, why)
+    ctx::gain_marker(player_id, KEY, want, reason)
 }
 
 /// Spend `n` pots. `ChargePaying` runs first over the **whole** cost -- one
@@ -311,22 +311,22 @@ pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
 /// substitution path) and for a fully-temp cost, which never reaches the pool
 /// verb. A pre-check on the pool would skip the window and break
 /// 「以代替此次技能的火罐消耗」.
-pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-    spend_from(player_id, n, why, card_sdk::abi::ChargeSource::Other)
+pub fn spend(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
+    spend_from(player_id, n, reason, card_sdk::abi::ChargeSource::Other)
 }
 
 /// [`spend`] for a **skill cost**: the same pots and window, with
 /// `ChargeSource::Skill` on the raise so the `ChargePaying` hook reads
 /// `charge_is_skill` (I12). The skill bodies use this verb; a card's own
 /// counter cost keeps [`spend`].
-pub fn spend_skill(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-    spend_from(player_id, n, why, card_sdk::abi::ChargeSource::Skill)
+pub fn spend_skill(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
+    spend_from(player_id, n, reason, card_sdk::abi::ChargeSource::Skill)
 }
 
 fn spend_from(
     player_id: i32,
     n: i32,
-    why: &Msg,
+    reason: &Msg,
     source: card_sdk::abi::ChargeSource,
 ) -> Result<bool, Prompt> {
     if n <= 0 {
@@ -345,22 +345,22 @@ fn spend_from(
     // Temp first: the over-cap allowance is spent before the declared pool.
     // A cancelled temp `markerSpend` leaves the temp pots, so the pool must
     // then cover the whole cost.
-    if from_temp > 0 && !temp::spend(player_id, from_temp, why)? {
-        return spend_pool(player_id, n, why);
+    if from_temp > 0 && !temp::spend(player_id, from_temp, reason)? {
+        return spend_pool(player_id, n, reason);
     }
     if from_pool > 0 {
-        return spend_pool(player_id, from_pool, why);
+        return spend_pool(player_id, from_pool, reason);
     }
     Ok(true)
 }
 
 /// Pool-only spend (never temp): `markerSpend`, then the write. The caller has
 /// already opened the `ChargePaying` window for the whole cost.
-fn spend_pool(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+fn spend_pool(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }
-    Ok(ctx::spend_marker(player_id, KEY, n, why)? != 0)
+    Ok(ctx::spend_marker(player_id, KEY, n, reason)? != 0)
 }
 
 /// Move the cap by `n`; pulls the value down under the new ceiling (I2
@@ -403,15 +403,15 @@ pub mod regime {
 
     /// 「将火罐补充至上限」 -- fill the pool to the declared cap. Returns how
     /// many landed.
-    pub fn fill_to_cap(player_id: i32, why: &Msg) -> Result<i32, Prompt> {
+    pub fn fill_to_cap(player_id: i32, reason: &Msg) -> Result<i32, Prompt> {
         let room = (max(player_id) - get(player_id)).max(0);
-        gain(player_id, room, why)
+        gain(player_id, room, reason)
     }
 
     /// 「每回合结束时失去1火罐」 -- drain `n` from the pool (not temp).
     /// Returns how many actually left. Opens the same `ChargePaying` window as
     /// [`super::spend`]; a substituted loss leaves the pool alone.
-    pub fn drain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
+    pub fn drain(player_id: i32, n: i32, reason: &Msg) -> Result<i32, Prompt> {
         let have = get(player_id);
         let take = n.clamp(0, have);
         if take <= 0 {
@@ -420,7 +420,7 @@ pub mod regime {
         if !ctx::raise(player_id, crate::kind::ChargePaying, take)? {
             return Ok(0);
         }
-        if !spend_pool(player_id, take, why)? {
+        if !spend_pool(player_id, take, reason)? {
             return Ok(0);
         }
         Ok(take)
@@ -428,9 +428,9 @@ pub mod regime {
 
     /// 「退出状态2时，失去所有剩余火罐」 -- burn the pool (not temp) down to 0.
     /// Returns how many left.
-    pub fn burn_all(player_id: i32, why: &Msg) -> Result<i32, Prompt> {
+    pub fn burn_all(player_id: i32, reason: &Msg) -> Result<i32, Prompt> {
         let have = get(player_id);
-        drain(player_id, have, why)
+        drain(player_id, have, reason)
     }
 }
 
@@ -453,7 +453,7 @@ pub mod temp {
         if !writable(player_id) {
             return 0;
         }
-        ctx::tok(player_id, TEMP_KEY)
+        ctx::held_count(player_id, TEMP_KEY)
     }
 
     /// The temp ceiling. lisa's face allows exceeding the pool cap, so this
@@ -462,7 +462,7 @@ pub mod temp {
         if !writable(player_id) {
             return 0;
         }
-        ctx::tok_max(player_id, TEMP_KEY)
+        ctx::held_max(player_id, TEMP_KEY)
     }
 
     /// Grant `n` temp pots (「获得一个可超过上限的临时火罐」). These are the
@@ -491,13 +491,13 @@ pub mod temp {
     /// Spend `n` temp pots. Returns whether the full amount left. A temp pot is
     /// a 火罐, so the spend also raises `markerSpent` (name [`TEMP_KEY`]) like
     /// the pool does -- 「每当你消耗火罐时」 sees it.
-    pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    pub fn spend(player_id: i32, n: i32, reason: &Msg) -> Result<bool, Prompt> {
         if n <= 0 {
             return Ok(true);
         }
         if !writable(player_id) {
             return Ok(false);
         }
-        Ok(ctx::spend_marker(player_id, TEMP_KEY, n, why)? != 0)
+        Ok(ctx::spend_marker(player_id, TEMP_KEY, n, reason)? != 0)
     }
 }

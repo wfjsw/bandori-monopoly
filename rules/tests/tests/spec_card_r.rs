@@ -81,7 +81,7 @@ pub fn cookie_return(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = actor(step);
-    let pre_discard: Vec<&str> = step.pre.hidden[who]
+    let pre_discard: Vec<&str> = step.condition.hidden[who]
         .graveyard
         .iter()
         .map(String::as_str)
@@ -104,7 +104,7 @@ pub fn cookie_pay(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = actor(step);
-    let x = step.pre.hidden[who].graveyard.len() as i64;
+    let x = step.condition.hidden[who].graveyard.len() as i64;
     let delta = step.post_money(who) as i64 - step.pre_money(who) as i64;
     if delta != 500 * x {
         return Err(format!(
@@ -149,7 +149,7 @@ fn cookie_time_contract() {
         }
         t.set_discard(0, &discard);
         let money0 = t.money(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(COOKIE_CLAUSES);
         t.give_play(0, COOKIE)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -183,7 +183,7 @@ fn cookie_time_contract() {
             }
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -278,7 +278,7 @@ fn resolve_contract() {
     forall(6, 0xC0C0_0002, |_rng, _i| {
         let mut t = vanilla2();
         let money0 = t.money(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(RESOLVE_CLAUSES);
         t.give_play(0, RESOLVE)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -294,7 +294,7 @@ fn resolve_contract() {
             return Err("觉悟 still in a zone after [移除]".into());
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -328,7 +328,7 @@ pub fn louder_mult(step: &Step<'_>) -> Result<(), String> {
     }
     let bonus =
         |w: &game_core::engine::World| w.rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0);
-    let delta = bonus(step.post) as i64 - bonus(step.pre) as i64;
+    let delta = bonus(step.post) as i64 - bonus(step.condition) as i64;
     if delta != 5 {
         return Err(format!(
             "rentUnitMult bonus delta {delta}, expected +5 (「ring的价格基础乘数+5」)"
@@ -358,7 +358,7 @@ fn louder_contract() {
             .get("rentUnitMult")
             .copied()
             .unwrap_or(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(LOUDER_CLAUSES);
         for _ in 0..times {
             t.give_play(0, LOUDER)
@@ -379,7 +379,7 @@ fn louder_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "rule_param_bonus",
@@ -457,7 +457,7 @@ fn sprechchor_contract() {
         let money0 = t.money(0);
         let face = rng.range(1, 20);
         t.dice(&[face]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(SPRECH_CLAUSES);
         t.give_play(0, SPRECH).map_err(|e| format!("play refused on Livehouse: {e}"))?;
         drain(&mut t);
@@ -469,7 +469,7 @@ fn sprechchor_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -509,7 +509,7 @@ pub fn fire_bird_place(step: &Step<'_>) -> Result<(), String> {
 /// C-R-Fire bird-04 -- exhausted crystals drop the card to the discard.
 pub fn fire_bird_exhaust(step: &Step<'_>) -> Result<(), String> {
     let who = actor(step);
-    let pre_on = step.pre.st.players[who]
+    let pre_on = step.condition.st.players[who]
         .field
         .iter()
         .any(|f| f.card == FIRE_BIRD);
@@ -554,7 +554,7 @@ fn fire_bird_place_contract() {
         let mut t = vanilla2();
         let money = 1600 + rng.range(0, 30) * 100;
         t.set_money(0, money);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(FIRE_BIRD_CLAUSES);
         t.give(0, &[FIRE_BIRD]);
         t.play(0, FIRE_BIRD)
@@ -591,7 +591,7 @@ fn fire_bird_place_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -625,7 +625,7 @@ fn fire_bird_turn_end_burn() {
         let _ = t.roll(0);
         drain(&mut t);
         let money0 = t.money(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(FIRE_BIRD_CLAUSES);
         t.end(0).map_err(|e| format!("end rejected: {e}"))?;
         drain(&mut t);
@@ -642,7 +642,7 @@ fn fire_bird_turn_end_burn() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "field:P0", "crystals:P0", "pool:", "fprop:P0"],
         )
@@ -660,7 +660,7 @@ fn fire_bird_exhaust_to_discard() {
         t.dice(&[1]);
         let _ = t.roll(0);
         drain(&mut t);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(FIRE_BIRD_CLAUSES);
         t.end(0).map_err(|e| format!("end rejected: {e}"))?;
         drain(&mut t);
@@ -680,7 +680,7 @@ fn fire_bird_exhaust_to_discard() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -711,7 +711,7 @@ fn fire_bird_rent_1_5x() {
         drain(&mut t);
         t.set_pos(1, (blue + 60 - 1) % 60);
         t.dice(&[1]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(FIRE_BIRD_CLAUSES);
         t.roll(1).map_err(|e| format!("roll rejected: {e}"))?;
         drain(&mut t);
@@ -724,7 +724,7 @@ fn fire_bird_rent_1_5x() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -967,7 +967,7 @@ fn live_prep_contract() {
         let store = tile("江户川乐器店");
         t.set_pos(0, (store + 60 - 3) % 60);
         t.dice(&[5]); // path crosses the store
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(LIVE_PREP_CLAUSES);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
         if !t.counteract_offered(LIVE_PREP) {
@@ -980,7 +980,7 @@ fn live_prep_contract() {
             return Err(format!("stopped at {}, expected {store}", t.pos(0)));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P0",
@@ -1024,7 +1024,7 @@ fn toward_top_contract() {
         let mut t = vanilla2();
         t.set_pos(0, 0); // CiRCLE
         let r1 = tile("RiNG 1");
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(TOP_CLAUSES);
         t.give_play(0, TOP)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -1036,7 +1036,7 @@ fn toward_top_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P0",
@@ -1082,7 +1082,7 @@ fn blue_rose_payout_contract() {
         let r1 = tile("RiNG 1");
         t.own(0, &[r1]); // 1 Livehouse, 0 others -> >= holds
         let money0 = t.money(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(BLUE_CLAUSES);
         t.give_play(0, BLUE)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -1093,7 +1093,7 @@ fn blue_rose_payout_contract() {
             return Err(format!("money delta {delta}, expected 200 (20% of 1000)"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -1217,7 +1217,7 @@ fn student_council_contract() {
         t.set_pos(0, (blue + 60 - 1) % 60);
         t.give(0, &[COUNCIL]);
         t.dice(&[1]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(COUNCIL_CLAUSES);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
         // Take the card from the post-move / pre-settle window.
@@ -1256,7 +1256,7 @@ fn student_council_contract() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -1349,7 +1349,7 @@ fn nores_marks(t: &Table, mark: i32) -> Vec<bool> {
     t.events_since(mark)
         .iter()
         .filter(|e| e.msg.key() == "log.teleport")
-        .map(|e| e.msg.a.get("nores").is_some())
+        .map(|e| e.msg.args.get("nores").is_some())
         .collect()
 }
 
@@ -1400,8 +1400,8 @@ pub fn ako_dark_stun(step: &Step<'_>) -> Result<(), String> {
     if !played_now {
         return Ok(());
     }
-    let pre_stun = step.pre.st.players[who].state_get("stun")
-        + step.pre.st.players[who].state_get("stunStart");
+    let pre_stun = step.condition.st.players[who].state_get("stun")
+        + step.condition.st.players[who].state_get("stunStart");
     let post_stun = step.post.st.players[who].state_get("stun")
         + step.post.st.players[who].state_get("stunStart");
     if post_stun != pre_stun + 1 {
@@ -1431,7 +1431,7 @@ fn ako_dark_contract() {
         t.set_owner(blue, Some(1));
         t.set_pos(0, (blue + 60 - 1) % 60);
         t.dice(&[1]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(AKO_DARK_CLAUSES);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
         if !t.counteract_offered(AKO_DARK) {
@@ -1445,7 +1445,7 @@ fn ako_dark_contract() {
             return Err(format!("no [眩晕] after the play; stun={stun}"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -1499,7 +1499,7 @@ fn ringing_bloom_place_contract() {
         let mut t = Table::new(&["白金燐子", "户山香澄"]);
         t.begin_turn(0);
         drain(&mut t);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(RINGING_CLAUSES);
         t.give_play(0, RINGING)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -1508,7 +1508,7 @@ fn ringing_bloom_place_contract() {
             return Err(format!("not on field: {:?}", t.field_ids(0)));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "hand:P0",

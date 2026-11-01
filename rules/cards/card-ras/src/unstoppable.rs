@@ -1,4 +1,3 @@
-//! `RAS:UNSTOPPABLE` -- C# `CardUnstoppable` (MatchHost.cs:9823-9849).
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:UNSTOPPABLE`）:
 //! > UNSTOPPABLE：
@@ -19,17 +18,13 @@ pub const UNSTOPPABLE: CardDef =
         // sheet cell H10
         .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
-/// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
-/// turn's main move, so the printed main-move gate applies (off-turn, spent,
-/// move closed).
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move.
     rules_status::move_blocked(player_id)
 }
 
-/// C# `CardUnstoppable.Spots` -- the six destinations, indexed by the 1d6.
-/// 规则书: 「根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
-/// -- 1-based, in printed order.
+/// 规则书: 「根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」 -- 1-based, in
+/// printed order.
 const SPOTS: [&str; 6] = [
     "白雪学园",
     "艺术学院高中",
@@ -49,13 +44,9 @@ fn unstoppable(player_id: i32) -> card_sdk::Asked {
     let spot = SPOTS[(k - 1) as usize];
     let to = ctx::tile_named(spot);
     if to >= 0 {
-        // 规则书: 「本次传送不触发结算，视为你的主要移动」 -- C#
-        // `H.CardMove(c, new MoveCtx { TeleportTo = ..., Resolve = false })`:
-        // a teleport to the chosen tile that consumes the turn's main move and
-        // does not settle.
         ctx::plan::set_teleport_to(to);
-        ctx::plan::set_resolve(false);
-        ctx::card_move(player_id);
+        ctx::plan::set_settles(false);
+        ctx::run_planned_move(player_id);
     }
     // 规则书: 「且若骰点为1-3获得2000资金，若为4-6则获得1000资金」
     if !ctx::player_out(player_id) {
@@ -63,7 +54,7 @@ fn unstoppable(player_id: i32) -> card_sdk::Asked {
         ctx::gain(
             player_id,
             money,
-            &Msg::new(key!("unstoppable_why")).i("roll", r as i64),
+            &Msg::new(key!("unstoppable_reason")).i("roll", r as i64),
         )?;
     }
     Ok(())

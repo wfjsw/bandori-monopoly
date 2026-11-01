@@ -1,7 +1,7 @@
 //! Unit `pp`: clause proofs for the Pastel✽Palettes card set.
 //!
 //! Per clause emit (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
+//! 1. iff proof (post == spec(condition) and effect log exactly and frame);
 //! 2. no-op proof when the trigger/condition is false;
 //! 3. kani::cover! each branch;
 //! 4. mutant companion (`*_mutant_is_detected`).
@@ -99,9 +99,9 @@ crate::host_subset!(same_dream_dispatch {
     trig_value => arm_trig_value,
     send => arm_send,
     msg_name => arm_msg_name,
-    msg_a => arm_msg_a,
-    msg_b => arm_msg_b,
-    msg_c => arm_msg_c,
+    msg_arg0 => arm_msg_a,
+    msg_arg1 => arm_msg_b,
+    msg_arg2 => arm_msg_c,
     msg_seat => arm_msg_seat,
     msg_tile => arm_msg_tile,
     msg_reply => arm_msg_reply,
@@ -314,13 +314,13 @@ pub fn floor_c_sparse_world() {
     crate::kassert!(false, "floor-c: sparse world + body");
 }
 
-/// (d) + snapshot pre/post + effect-log scan.
+/// (d) + snapshot condition/post + effect-log scan.
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_d_snapshot_and_log() {
     same_dream_world();
     let user = any_player_in();
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
@@ -332,7 +332,7 @@ pub fn floor_d_snapshot_and_log() {
             _ => None,
         })
         .sum();
-    let _ = (pre, post, gained);
+    let _ = (condition, post, gained);
     crate::kassert!(false, "floor-d: snapshot + log scan");
 }
 
@@ -390,7 +390,7 @@ pub fn floor_f_spec_compare() {
     world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     let pre_up = fans_pos_of(user as usize);
     let pre_down = fans_neg_of(user as usize);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
@@ -421,7 +421,7 @@ pub fn floor_f_spec_compare() {
         post.fans_pos[user as usize] == pre_up + pre_down,
         "floor-f step3b"
     );
-    let _ = pre;
+    let _ = condition;
     crate::kassert!(false, "floor-f: spec compare reached");
 }
 
@@ -443,7 +443,7 @@ fn same_dream_01_iff_at(user: i32) {
     let pre_up = fans_pos_of(user as usize);
     let pre_down = fans_neg_of(user as usize);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // DIRECT body call (ppcost): `call_body_idx_c` still lists every
     // `call_card_N` in its match arms, so reachability-slice keeps all 19
     // trampolines (and their bodies) alive. The cfg(kani) `*_kani` wrapper
@@ -492,13 +492,14 @@ fn same_dream_01_iff_at(user: i32) {
     for q in 0..MAX_PLAYERS {
         if q != user as usize {
             crate::kassert!(
-                post.fans_pos[q] == pre.fans_pos[q] && post.fans_neg[q] == pre.fans_neg[q],
+                post.fans_pos[q] == condition.fans_pos[q]
+                    && post.fans_neg[q] == condition.fans_neg[q],
                 "C-PP-same-dream-03: without [共鸣] other players are untouched"
             );
         }
     }
     crate::kassert!(
-        !world::arr4_eq(post.money, pre.money) || pre_up == 0,
+        !world::arr4_eq(post.money, condition.money) || pre_up == 0,
         "money moves iff step 2 fired"
     );
 }
@@ -671,8 +672,8 @@ pub fn seeyou_03_flip_iff() {
     for q in 0..MAX_PLAYERS {
         crate::kassert!(post.money[q] == 0 || true, "money frame checked below");
     }
-    let pre = world::snapshot();
-    let _ = pre;
+    let condition = world::snapshot();
+    let _ = condition;
 }
 
 /// MUTANT: flip every reverse regardless of `owned`.
@@ -964,20 +965,20 @@ pub fn first_accident_01_place_deck_draw_iff() {
 #[kani::unwind(24)]
 pub fn maya_inf_02_crystal_formula() {
     // Pure formula obligations (the hook body is a second harness below).
-    let pre: i32 = kani::any();
-    kani::assume(pre >= 0 && pre <= 8);
-    let post = spec::pp::maya_inf_02_card_crystals(pre);
-    let band = spec::pp::maya_inf_02_band_bump(pre);
-    kani::cover!(pre < 4, "under the cap: +1 crystal");
-    kani::cover!(pre >= 4, "at the cap: clear and bump band");
-    if pre < 4 {
-        crate::kassert!(post == pre + 1 && band == 0, "under-cap leg");
+    let condition: i32 = kani::any();
+    kani::assume(condition >= 0 && condition <= 8);
+    let post = spec::pp::maya_inf_02_card_crystals(condition);
+    let band = spec::pp::maya_inf_02_band_bump(condition);
+    kani::cover!(condition < 4, "under the cap: +1 crystal");
+    kani::cover!(condition >= 4, "at the cap: clear and bump band");
+    if condition < 4 {
+        crate::kassert!(post == condition + 1 && band == 0, "under-cap leg");
     } else {
         crate::kassert!(post == 0 && band == 1, "at-cap leg");
     }
     // MUTANT distinguishability (pure)
-    let m = spec::pp::maya_inf_02_card_crystals_mutant(pre);
-    if pre >= 4 {
+    let m = spec::pp::maya_inf_02_card_crystals_mutant(condition);
+    if condition >= 4 {
         crate::kassert!(m != post, "mutant leaves one crystal behind");
     }
 }
@@ -1060,7 +1061,7 @@ pub fn shine_again_01_formula() {
 // Isolation: card placed; trigger value > 0; no [共鸣].
 // NOTE: the Kani host's `add_counter_self` currently ignores the `max`
 // argument, so the cap-3 clamp is not modelled. The +1 increment is proved
-// on the `pre < 3` region; the `pre >= 3` region is BLOCKED-HOST on `max`.
+// on the `condition < 3` region; the `condition >= 3` region is BLOCKED-HOST on `max`.
 // ===========================================================================
 
 #[kani::proof]
@@ -1069,8 +1070,8 @@ pub fn shine_again_01_formula() {
 pub fn eve_bushido_04_crystal_per_draw_iff() {
     symbolic_play_world();
     let me = any_player_in();
-    let pre = kani::any();
-    kani::assume(pre >= 0 && pre < 3); // cap region is BLOCKED-HOST (max ignored)
+    let condition = kani::any();
+    kani::assume(condition >= 0 && condition < 3); // cap region is BLOCKED-HOST (max ignored)
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 1);
     world::with_world_mut(|w| w.pay_amount = 1);
@@ -1083,21 +1084,21 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: pre,
+            crystals: condition,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("PP:[若宫伊芙]属于我的武士道！"),
         1,
         me,
     ) /* Hook Drew */);
     let cry = self_crystals();
     crate::kassert!(
-        cry == spec::pp::eve_bushido_04_crystals(pre),
-        "C-PP-eve-bushido-04: +1 crystal (pre < 3 region)"
+        cry == spec::pp::eve_bushido_04_crystals(condition),
+        "C-PP-eve-bushido-04: +1 crystal (condition < 3 region)"
     );
 }
 
@@ -1111,7 +1112,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 0);
     world::with_world_mut(|w| w.pay_amount = 0);
-    let pre = 1;
+    let condition = 1;
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
@@ -1120,20 +1121,20 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: pre,
+            crystals: condition,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("PP:[若宫伊芙]属于我的武士道！"),
         1,
         me,
     ) /* Hook Drew */);
     let cry = self_crystals();
     crate::kassert!(
-        cry == pre,
+        cry == condition,
         "C-PP-eve-bushido-04: zero-value draw is a no-op"
     );
 }
@@ -1150,10 +1151,10 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
 pub fn guide_04_turn_end_crystal_iff() {
     symbolic_play_world();
     let me = any_player_in();
-    let pre = kani::any();
-    // `pre <= 3` so `pre+1 < 5` — the ≥5 cash-in (clause 3) stays off-path.
-    // (`pre == 4` → 5 crystals enters the cash-in, which may unplace the card.)
-    kani::assume(pre >= 0 && pre <= 3);
+    let condition = kani::any();
+    // `condition <= 3` so `condition+1 < 5` — the ≥5 cash-in (clause 3) stays off-path.
+    // (`condition == 4` → 5 crystals enters the cash-in, which may unplace the card.)
+    kani::assume(condition >= 0 && condition <= 3);
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
@@ -1163,7 +1164,7 @@ pub fn guide_04_turn_end_crystal_iff() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: pre,
+            crystals: condition,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
@@ -1176,8 +1177,8 @@ pub fn guide_04_turn_end_crystal_iff() {
     ));
     let cry = self_crystals();
     crate::kassert!(
-        cry == spec::pp::guide_04_crystals(pre),
-        "C-PP-guide-04: +1 crystal at turn end (pre < 5 region)"
+        cry == spec::pp::guide_04_crystals(condition),
+        "C-PP-guide-04: +1 crystal at turn end (condition < 5 region)"
     );
 }
 
@@ -1186,7 +1187,7 @@ pub fn guide_04_turn_end_crystal_iff() {
 // 「（1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每获得一个超出上限的
 //  [奇迹水晶]就为此卡的X加1（X初始0）。」
 // Body: `On::Action(Drew)` guard `actor == owner && card.placed`.
-// Isolation: pre < 5 so the cap / overflow leg is not entered (overflow X
+// Isolation: condition < 5 so the cap / overflow leg is not entered (overflow X
 // is a named counter the host models as a key; cap clamp is BLOCKED-HOST).
 // ===========================================================================
 
@@ -1196,10 +1197,10 @@ pub fn guide_04_turn_end_crystal_iff() {
 pub fn dream_ahead_01_crystal_per_draw_iff() {
     symbolic_play_world();
     let me = any_player_in();
-    // Concrete `pre` (0): `crystals() < 5` constant-folds to true so the
-    // overflow-X else branch is dead in the CFG. A symbolic `pre` left both
+    // Concrete `condition` (0): `crystals() < 5` constant-folds to true so the
+    // overflow-X else branch is dead in the CFG. A symbolic `condition` left both
     // branches live and the symex cliffed (class E).
-    let pre = 0i32;
+    let condition = 0i32;
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 1);
     world::with_world_mut(|ww| {
@@ -1210,27 +1211,27 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: pre,
+            crystals: condition,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
         ww.last_uid = 1;
     });
-    invoke::unwrap_done(invoke::entry_idx(
+    invoke::unwrap_done(invoke::entry_index(
         crate::card_id!("PP:梦在前方，结彩当下"),
         2,
         me,
     ) /* Hook Drew */);
     let cry = self_crystals();
     crate::kassert!(
-        cry == spec::pp::dream_ahead_01_crystals(pre),
-        "C-PP-dream-ahead-01: +1 crystal (pre < 5 region)"
+        cry == spec::pp::dream_ahead_01_crystals(condition),
+        "C-PP-dream-ahead-01: +1 crystal (condition < 5 region)"
     );
     // Overflow counter is the body's `SLOT_X` slot (`dream_ahead_x`).
     let x = world::with_world(|ww| ww.key_get(me, crate::intern::intern("dream_ahead_x")));
     crate::kassert!(
-        x == 0 || x == spec::pp::dream_ahead_01_overflow(pre),
-        "C-PP-dream-ahead-01: overflow only when pre >= 5"
+        x == 0 || x == spec::pp::dream_ahead_01_overflow(condition),
+        "C-PP-dream-ahead-01: overflow only when condition >= 5"
     );
 }
 

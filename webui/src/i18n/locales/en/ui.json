@@ -821,6 +821,7 @@
   "prompt.addingToDraw": "Adding to draw pile ({{n}}/{{total}})",
   "prompt.pickRetry": "The selection was not completed. Choose the remaining cards and retry.",
   "card.counter": "Counter",
+  "card.is_skill": "Skill card",
   "card.id": "ID",
   "card.placed": "Placed",
   "card.tile": "Tile",

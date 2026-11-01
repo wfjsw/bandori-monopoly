@@ -20,14 +20,14 @@ use crate::world::{self, Effect, MAX_CARDS, MAX_PLAYERS};
 // ---------------------------------------------------------------------------
 
 /// `RAS:UNSTOPPABLE` play — money + (BLOCKED-HOST) teleport half.
-/// Isolation: `tile_named` cannot resolve the campus names and `card_move` is
+/// Isolation: `tile_named` cannot resolve the campus names and `run_planned_move` is
 /// a plan stub, so the teleport branch is never entered — still declared.
 crate::host_subset!(unstoppable_dispatch {
     roll => arm_roll,
     tile_named => arm_tile_named,
-    set_teleport_to | set_resolve | set_kind | set_steps | move_dir | fixed_roll
+    set_teleport_to | set_settles | set_kind | set_steps | move_dir | fixed_roll
         | schedule_turn_end => arm_stub_zero,
-    card_move => arm_card_move,
+    run_planned_move => arm_card_move,
     player_count => arm_player_count,
     player_out => arm_player_out,
     gain | gain_typed | gain_fixed => arm_gain,
@@ -132,7 +132,7 @@ fn pareo_world(user: i32, pre_marks: i32) {
 // C-RAS-unstoppable-card-03
 // 「若骰点为1-3获得2000资金，若为4-6则获得1000资金」
 // Isolation: the teleport half is BLOCKED-HOST (`tile_named` cannot resolve
-// 「白雪学园」…`CHUCHU的公寓` and `card_move` is a plan stub).
+// 「白雪学园」…`CHUCHU的公寓` and `run_planned_move` is a plan stub).
 // Seat-symmetric (the user gains the rolled face money).
 // ===========================================================================
 
@@ -141,7 +141,7 @@ fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
     debug_assert!(user == 0 || user == 1);
     debug_assert!(face >= 1 && face <= 6);
     unstoppable_world(user, face);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -149,7 +149,7 @@ fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    let gained = post.money[user as usize] - pre.money[user as usize];
+    let gained = post.money[user as usize] - condition.money[user as usize];
     let expected = spec::unstoppable_card_03_money(face);
     crate::kassert!(
         gained == expected,
@@ -161,22 +161,25 @@ fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
     );
     // Frame: nothing but the money moved.
     crate::kassert!(
-        world::arr4_eq(post.pos, pre.pos),
+        world::arr4_eq(post.pos, condition.pos),
         "frame: no movement (teleport is BLOCKED-HOST)"
     );
     crate::kassert!(
-        world::arr4_eq(post.charge, pre.charge),
+        world::arr4_eq(post.charge, condition.charge),
         "frame: fire unchanged"
     );
     crate::kassert!(
-        world::arr8b_eq(post.hand, pre.hand),
+        world::arr8b_eq(post.hand, condition.hand),
         "frame: hand unchanged"
     );
-    crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");
+    crate::kassert!(
+        post.discard == condition.discard,
+        "frame: discard unchanged"
+    );
     for q in 0..MAX_PLAYERS {
         if q != user as usize {
             crate::kassert!(
-                post.money[q] == pre.money[q],
+                post.money[q] == condition.money[q],
                 "frame: other players' money unchanged"
             );
         }
@@ -215,7 +218,7 @@ pub fn unstoppable_card_03_money_noop_when_out() {
     unstoppable_world(0, 1);
     let user = 0i32;
     world::with_world_mut(|w| w.out[0] = true);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -227,7 +230,7 @@ pub fn unstoppable_card_03_money_noop_when_out() {
         "C-RAS-unstoppable-card-03: out player produces no effects"
     );
     crate::kassert!(
-        post == pre,
+        post == condition,
         "C-RAS-unstoppable-card-03: out player leaves the frame"
     );
 }
@@ -239,10 +242,10 @@ pub fn unstoppable_card_03_money_noop_when_out() {
 pub fn unstoppable_card_03_money_mutant_is_detected() {
     unstoppable_world(0, 4);
     let user = 0i32;
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
     let post = world::snapshot();
-    let gained = post.money[user as usize] - pre.money[user as usize];
+    let gained = post.money[user as usize] - condition.money[user as usize];
 
     // Pin a face in the high band (the mutant only differs there).
     kani::assume(gained == 1000);
@@ -269,14 +272,14 @@ fn riot_02_03_cycle_iff_at(holder: i32) {
     world::with_world_mut(|w| {
         w.out[holder as usize] = false;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_ras::riot::counteract_kani(holder));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    let n = pre.n_players;
+    let n = condition.n_players;
     kani::cover!(
         hand_ns[holder as usize] == 0,
         "holder hand empty (extra draw only)"
@@ -287,11 +290,11 @@ fn riot_02_03_cycle_iff_at(holder: i32) {
     );
 
     crate::kassert!(
-        spec::riot_cycle_log_ok(effects, &hands, &hand_ns, &pre.out, n, holder),
+        spec::riot_cycle_log_ok(effects, &hands, &hand_ns, &condition.out, n, holder),
         "C-RAS-riot-02/03: discard-all then redraw h (+1 for holder)"
     );
     crate::kassert!(
-        spec::riot_cycle_frame_ok(&pre, &post),
+        spec::riot_cycle_frame_ok(&condition, &post),
         "C-RAS-riot-02: the cycle itself moves no money / pos / fire"
     );
 }
@@ -323,12 +326,12 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
     // Need the holder to actually hold a card so h vs h+1 differ in the log.
     kani::assume(hand_ns[0] >= 1);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_ras::riot::counteract_kani(holder));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let n = pre.n_players;
+    let n = condition.n_players;
 
     // Rebuild the expected log with the mutant draw count (no extra).
     // Bounded whiles: `0..hand_ns[p]` is a symbolic usize bound (class A).
@@ -336,7 +339,7 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
     let mut ok = true;
     let mut p = 0usize;
     while p < n as usize {
-        if !pre.out[p] {
+        if !condition.out[p] {
             let mut k = 0usize;
             while k < 2 {
                 if k < hand_ns[p] {
@@ -357,7 +360,7 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
     }
     for p in 0..n {
         let p = p as usize;
-        if pre.out[p] {
+        if condition.out[p] {
             continue;
         }
         // One host request per card, so the mutant expectation is `h` draws of
@@ -395,7 +398,7 @@ fn pareo_01_marks_iff_at(user: i32) {
     let pre_marks: i32 = kani::any();
     kani::assume(pre_marks >= 0 && pre_marks <= 1);
     pareo_world(user, pre_marks);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_ras::pareo_far::pareo_far_kani(user));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -413,10 +416,10 @@ fn pareo_01_marks_iff_at(user: i32) {
     );
     crate::kassert!(
         marks_after == pre_marks + spec::pareo_01_mark_delta(),
-        "C-RAS-pareo-01: marks must be pre+2"
+        "C-RAS-pareo-01: marks must be condition+2"
     );
     crate::kassert!(
-        spec::pareo_01_frame_ok(&pre, &post),
+        spec::pareo_01_frame_ok(&condition, &post),
         "C-RAS-pareo-01: frame untouched"
     );
 }

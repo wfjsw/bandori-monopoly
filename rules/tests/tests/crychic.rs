@@ -183,7 +183,7 @@ fn want_to_be_human_crystal_on_low_roll() {
 
 #[test]
 fn want_human_x_is_per_instance_and_dies_with_it() {
-    // 规则书（1）: 「将其写下」 -- X belongs to the card instance (C# `Mem`), so two
+    // 规则书（1）: 「将其写下」 -- X belongs to the card instance (`Mem`), so two
     // copies keep separate values and a value dies with its instance.
     let mut t = Table::vanilla(2);
     let a = t.place_raw(0, "CRYCHIC:想要成为人类");
@@ -813,7 +813,7 @@ fn soyo_crychic_card_special_on_draw() {
     // 规则书: 「[特] 抽到此卡时立刻从抽牌堆打出」 -- triggers on draw.
     // Draw the card (e.g. landing on CiRCLE or a draw effect).
     t.set_pos(0, 30);
-    t.dice(&[30]); // actually main move is 1d20; let's just end and let the next draw happen.
+    t.dice(&[30]); // actually is_main_move move is 1d20; let's just end and let the next draw happen.
                    // Simpler: just put it in hand and verify.
     t.give(0, &["CRYCHIC:（soyo）回到曾经"]);
     assert!(t.hand(0).contains(&"CRYCHIC:（soyo）回到曾经".to_string()));
@@ -973,7 +973,7 @@ fn sakiko_crychic_nudge_moves_the_destination() {
         .events_since(mark)
         .into_iter()
         .find(|e| log_key(e) == "log.rent")
-        .and_then(|e| match e.msg.a.get("tile") {
+        .and_then(|e| match e.msg.args.get("tile") {
             Some(Arg::Tile(v)) => Some(*v),
             _ => None,
         });

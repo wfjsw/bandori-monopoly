@@ -1,7 +1,7 @@
 //! Unit `tiles`: clause proofs.
 //!
 //! Per clause (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
+//! 1. iff proof (post == spec(condition) and effect log exactly and frame);
 //! 2. no-op proof when the trigger/condition is false;
 //! 3. kani::cover! each branch;
 //! 4. mutant whose disagreement is reachable.
@@ -15,7 +15,7 @@
 //! | `tile:event` settle | **partial** — hand draw modeled; `draw_event` is a protocol stub |
 //! | `tile:property` / `tile:ring` | **BLOCKED-HOST** `trig_move_main` (unmodeled `Op`) |
 //! | `tile:agent` | **BLOCKED-HOST** `is_color` (protocol stub ⇒ 同色 set always empty) |
-//! | `tile:circle` [经过] reward | **BLOCKED-HOST** `trig_move_from` / `trig_move_resolve` / `trig_move_remaining` |
+//! | `tile:circle` [经过] reward | **BLOCKED-HOST** `trig_move_from` / `trig_move_settles` / `trig_move_remaining` |
 //!
 //! Blocked harnesses are **not** written as vacuous proofs. Specs for those
 //! clauses live in `spec/tiles.rs` so they flip on when the host lands.
@@ -84,7 +84,7 @@ pub fn edogawa_settle_draw_one_iff() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     let pre_hand_n = w.hand_n;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -107,10 +107,10 @@ pub fn edogawa_settle_draw_one_iff() {
         "G-SETTLE-02 edogawa: hand count must rise by 1"
     );
     // Frame: money / pos / fire / stay untouched (draw is the only write).
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
 }
 
 /// MUTANT: a wrong spec that wants two cards. Must be distinguishable.
@@ -162,7 +162,7 @@ pub fn circle_settle_draw_one_iff() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     let pre_hand_n = w.hand_n;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -183,10 +183,10 @@ pub fn circle_settle_draw_one_iff() {
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-02 circle: hand count must rise by 1"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
 }
 
 /// MUTANT: two cards.
@@ -229,9 +229,7 @@ pub fn circle_settle_mutant_wrong_player() {
 // G-SETTLE-03 — `tile:event` (CiRCLE咖啡厅 / 流星堂)
 // 「[结算]是：抽取一张手卡，然后抽取一个事件卡。」
 //
-// Observable half only: the hand draw. `ctx::draw_event` is a protocol stub
-// (returns 0, logs no effect) — the event half is PROTOCOL-LEVEL / BLOCKED-HOST
-// until the host models `H.DrawEvent` (G-SETTLE-04 / 05 ride on it).
+// Observable half only: the hand draw.
 // ===========================================================================
 
 /// IFF (observable half): settling the cafe / 流星堂 draws exactly one hand card.
@@ -242,7 +240,7 @@ pub fn event_settle_draw_one_iff() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     let pre_hand_n = w.hand_n;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -263,10 +261,10 @@ pub fn event_settle_draw_one_iff() {
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-03: hand count must rise by 1"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
 }
 
 /// MUTANT: two cards.

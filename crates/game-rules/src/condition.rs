@@ -7,7 +7,7 @@
 //! part of the decision, so every path that asks a guard goes through one
 //! [`admits`] / [`admits_bool`] / [`admits_gate`] entry point.
 //!
-//! Wire form: [`CompiledPre::blob`] is `rules_cond::Cond::to_bytes(false)` (the
+//! Wire form: [`CompiledCondition::blob`] is `rules_cond::Cond::to_bytes(false)` (the
 //! lean postcard AST). The host compiles from source (`compile`, the `cel`
 //! parser); the browser glue loads the blob with `rules-cond`'s `runtime-only`
 //! feature and never ships the parser.
@@ -122,7 +122,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger.pay.map(|p| p.is_rent).unwrap_or(false)
     }
     fn pay_kind(&self) -> i64 {
-        self.trigger.pay.map(|p| p.kind.as_i32() as i64).unwrap_or(-1)
+        self.trigger
+            .pay
+            .map(|p| p.kind.as_i32() as i64)
+            .unwrap_or(-1)
     }
     fn pay_is_fixed(&self) -> i64 {
         self.trigger
@@ -183,7 +186,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger.mv.as_ref().map(|m| m.remaining).unwrap_or(0) as i64
     }
     fn move_main(&self) -> bool {
-        self.trigger.main
+        self.trigger.is_main_move
     }
     fn move_by_skill(&self) -> bool {
         self.trigger
@@ -315,11 +318,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             0
         }
     }
-    fn tok_named(&self, name: &str) -> i64 {
-        // Same data the guest's `ctx::tok(owner, name)` reads
-        // (`CardWorld::tok`).
+    fn held_named(&self, name: &str) -> i64 {
+        // Same data the guest's `ctx::held(owner, name)` reads
+        // (`CardWorld::held`).
         if self.owner_seat >= 0 {
-            self.src.tok(self.owner_seat, name) as i64
+            self.src.held_count(self.owner_seat, name) as i64
         } else {
             0
         }
@@ -347,7 +350,8 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         // Sugar keys published through the one `state` door (CondView contract).
         match key {
             bandori_std::cel::KEY_CHARGE => {
-                self.src.tok(seat as i32, bandori_std::cel::KEY_CHARGE) as i64
+                self.src
+                    .held_count(seat as i32, bandori_std::cel::KEY_CHARGE) as i64
             }
             bandori_std::cel::KEY_CRYSTALS => {
                 self.src
@@ -417,15 +421,15 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             })
             .collect()
     }
-    fn tok_named_table(&self) -> Vec<(String, i64)> {
+    fn held_named_table(&self) -> Vec<(String, i64)> {
         if self.owner_seat < 0 {
             return Vec::new();
         }
         self.src
-            .tok_names(self.owner_seat, "")
+            .held_names(self.owner_seat, "")
             .into_iter()
             .map(|n| {
-                let v = self.src.tok(self.owner_seat, &n) as i64;
+                let v = self.src.held_count(self.owner_seat, &n) as i64;
                 (n, v)
             })
             .collect()
@@ -717,10 +721,10 @@ pub trait SnapSrc {
     /// The player's group **name** -- the spelling `ctx::in_group` matches.
     /// `group_is(p, "Group")` compares `id_of(name)` to this.
     fn group_name(&self, player_id: i32) -> Option<String>;
-    /// Named token counter (`ctx::tok`); 0 when absent.
-    fn tok(&self, player_id: i32, name: &str) -> i32;
-    /// Non-zero named token counters (`ctx::tok_names`); `tok('name')` missing = 0.
-    fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String>;
+    /// Named token counter (`ctx::held`); 0 when absent.
+    fn held_count(&self, player_id: i32, name: &str) -> i32;
+    /// Non-zero named token counters (`ctx::held_names`); `held('name')` missing = 0.
+    fn held_names(&self, player_id: i32, prefix: &str) -> Vec<String>;
     fn owned_count(&self, player_id: i32) -> i32;
     fn card_pool(&self, player_id: i32, card: &str, name: &str) -> i32;
     /// Named counter `name` on the instance of `card` at `player_id`
@@ -891,12 +895,12 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::group_name(self, player_id)
     }
     #[inline]
-    fn tok(&self, player_id: i32, name: &str) -> i32 {
-        CardWorld::tok(self, player_id, name)
+    fn held_count(&self, player_id: i32, name: &str) -> i32 {
+        CardWorld::held_count(self, player_id, name)
     }
     #[inline]
-    fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
-        CardWorld::tok_names(self, player_id, prefix)
+    fn held_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+        CardWorld::held_names(self, player_id, prefix)
     }
     #[inline]
     fn owned_count(&self, player_id: i32) -> i32 {
@@ -986,7 +990,7 @@ pub fn cond_reads_window_hand(cond: &Cond) -> bool {
 
 /// One guarded entry's compiled condition plus its lean wire bytes.
 #[derive(Clone, Debug)]
-pub struct CompiledPre {
+pub struct CompiledCondition {
     /// Authoring source (tooling / `precheck`); `None` when loaded from bytes.
     pub src: Option<String>,
     /// `Cond::to_bytes(false)` -- what the runtime-only path loads.
@@ -1002,7 +1006,7 @@ pub fn install_vocab() {
     let _ = rules_cond::install_ext(bandori_std::cel::ext());
 }
 
-impl CompiledPre {
+impl CompiledCondition {
     /// Host path: parse + lint + rewrite once (docs/GUARDS.md §4.3). Fail-closed:
     /// a parse / unknown-var / float error is a build error, never "treat as
     /// true" -- the clauses the condition carries are gone from the guard.
@@ -1055,7 +1059,7 @@ pub struct PrecompiledCond {
 }
 
 /// The shipped precompiled-condition blob (`docs/GUARDS.md` §8.2): every
-/// guarded entry's [`CompiledPre`], postcard in a versioned envelope.
+/// guarded entry's [`CompiledCondition`], postcard in a versioned envelope.
 ///
 /// `tools/build-ruleset.mjs` writes this next to the ruleset index as
 /// `conds-<sha256>.bin`; the browser glue feeds it to
@@ -1073,9 +1077,12 @@ pub struct PrecompiledConds {
 
 impl PrecompiledConds {
     /// Collect every compiled condition of a built set, in canonical order.
-    pub fn collect(cards: &[crate::CardInfo], pre: &[Vec<Option<CompiledPre>>]) -> Self {
+    pub fn collect(
+        cards: &[crate::CardInfo],
+        condition: &[Vec<Option<CompiledCondition>>],
+    ) -> Self {
         let mut entries = Vec::new();
-        for (c, row) in cards.iter().zip(pre) {
+        for (c, row) in cards.iter().zip(condition) {
             for (ei, p) in row.iter().enumerate() {
                 if let Some(p) = p {
                     entries.push(PrecompiledCond {
@@ -1174,16 +1181,16 @@ fn bump(stat: &std::sync::atomic::AtomicU64) {
 /// Evaluate the condition half of [`admits`]. `true` when the entry has no
 /// condition or its condition accepts the (window, candidate) pair.
 ///
-/// `scope` may be `None` only when `pre` is `None` -- a condition needs a
+/// `scope` may be `None` only when `condition` is `None` -- a condition needs a
 /// window scope to evaluate against. That shape lets a caller skip building
 /// the (expensive) CEL scope entirely for unconditioned entries.
 #[inline]
 pub fn condition_allows(
-    pre: Option<&CompiledPre>,
+    condition: Option<&CompiledCondition>,
     scope: Option<&WindowScope>,
     cand: &CandidateCtx,
 ) -> bool {
-    let Some(pre) = pre else {
+    let Some(condition) = condition else {
         return true;
     };
     let scope = scope.expect("a condition evaluation needs a window scope");
@@ -1191,7 +1198,7 @@ pub fn condition_allows(
     bump(&guard_cost::COND_EVALS);
     #[cfg(feature = "bot-cost")]
     let t0 = std::time::Instant::now();
-    let ok = scope.eval(&pre.cond, cand);
+    let ok = scope.eval(&condition.cond, cand);
     #[cfg(feature = "bot-cost")]
     guard_cost::COND_EVAL_NS.fetch_add(
         t0.elapsed().as_nanos() as u64,
@@ -1214,12 +1221,12 @@ pub fn condition_allows(
 /// condition short-circuits before the wasm guard is ever instantiated.
 #[inline]
 pub fn admits<E, F: FnOnce() -> Result<bool, E>>(
-    pre: Option<&CompiledPre>,
+    condition: Option<&CompiledCondition>,
     scope: Option<&WindowScope>,
     cand: &CandidateCtx,
     guard: F,
 ) -> Result<bool, E> {
-    if !condition_allows(pre, scope, cand) {
+    if !condition_allows(condition, scope, cand) {
         return Ok(false);
     }
     bump(&guard_cost::GUARD_ASKED);
@@ -1234,13 +1241,13 @@ pub fn admits<E, F: FnOnce() -> Result<bool, E>>(
 /// hands).
 #[inline]
 pub fn admits_gate<T, E, F: FnOnce() -> Result<Option<T>, E>>(
-    pre: Option<&CompiledPre>,
+    condition: Option<&CompiledCondition>,
     scope: Option<&WindowScope>,
     cand: &CandidateCtx,
     blocked: impl FnOnce() -> T,
     gate: F,
 ) -> Result<Option<T>, E> {
-    if !condition_allows(pre, scope, cand) {
+    if !condition_allows(condition, scope, cand) {
         bump(&guard_cost::GUARD_ASKED);
         return Ok(Some(blocked()));
     }
@@ -1250,14 +1257,14 @@ pub fn admits_gate<T, E, F: FnOnce() -> Result<Option<T>, E>>(
 }
 
 /// `admits` for a pure "does this entry apply" question with no residual
-/// guard at all (`pre` only). Used when the guard was deleted (`None`) in G4.
+/// guard at all (`condition` only). Used when the guard was deleted (`None`) in G4.
 #[inline]
-pub fn admits_pre(
-    pre: Option<&CompiledPre>,
+pub fn admits_condition(
+    condition: Option<&CompiledCondition>,
     scope: Option<&WindowScope>,
     cand: &CandidateCtx,
 ) -> bool {
-    if !condition_allows(pre, scope, cand) {
+    if !condition_allows(condition, scope, cand) {
         return false;
     }
     bump(&guard_cost::GUARD_ASKED);
@@ -1280,7 +1287,10 @@ fn fill_state_map<S: SnapSrc>(world: &S, p: i32) -> std::collections::BTreeMap<S
         .into_iter()
         .map(|(k, v)| (k, v as i64))
         .collect();
-    state.insert(KEY_CHARGE.to_string(), world.tok(p, KEY_CHARGE) as i64);
+    state.insert(
+        KEY_CHARGE.to_string(),
+        world.held_count(p, KEY_CHARGE) as i64,
+    );
     state.insert(
         KEY_CRYSTALS.to_string(),
         world.group_pool(p, KEY_CRYSTALS) as i64,
@@ -1359,7 +1369,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         remaining: t.mv.as_ref().map(|m| m.remaining).unwrap_or(0) as i64,
         // `t.Move.Main` (`trigger::move_is_main()` in the guest) lives on the
         // trigger itself, not the move payload.
-        main: t.main,
+        is_main_move: t.is_main_move,
         // `t.Move.Dir` (`trigger::move_dir()` in the guest) -- 1 forward,
         // -1 backward; the trigger default is 1 when no move caused it.
         dir: t.mv.as_ref().map(|m| m.dir.as_i32() as i64).unwrap_or(1),
@@ -1437,10 +1447,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             Some(card) if !card.is_empty() => id_of(card),
             _ => 0,
         },
-        trigger_card_is_skill: t
-            .card
-            .as_deref()
-            .is_some_and(|c| c.starts_with("skill:")),
+        trigger_card_is_skill: t.card.as_deref().is_some_and(|c| c.starts_with("skill:")),
         name: t.name.clone().unwrap_or_default(),
         players,
         tile_ids,
@@ -1646,14 +1653,14 @@ pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: boo
             None
         },
         slots: Default::default(),
-        // Non-zero named counters only: `tok('name')` missing = 0, so the
+        // Non-zero named counters only: `held('name')` missing = 0, so the
         // zero entries are exactly the absent ones. Same data
-        // `ctx::tok_names` / `ctx::tok` read.
-        tok_names: world
-            .tok_names(p, "")
+        // `ctx::held_names` / `ctx::held` read.
+        held_names: world
+            .held_names(p, "")
             .into_iter()
             .map(|n| {
-                let v = world.tok(p, &n) as i64;
+                let v = world.held_count(p, &n) as i64;
                 (n, v)
             })
             .collect(),
@@ -1672,7 +1679,7 @@ pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: boo
 
 /// `fill_candidate`, but every `card.*` instance read resolves through `uid`
 /// instead of the first copy of `card`. Used where the candidate **is** the
-/// running card (its own `pre`), so two copies of one id answer separately.
+/// running card (its own `condition`), so two copies of one id answer separately.
 pub fn fill_candidate_uid<S: SnapSrc>(
     world: &S,
     owner: i32,
@@ -1706,7 +1713,7 @@ pub fn fill_candidate_uid<S: SnapSrc>(
 /// key -- the same one `ctx::slot(player_id, name)` reads via
 /// `CardWorld::slot`, **not** a `slot:`-prefixed alias (that mismatch made
 /// `slot('lastWalk') > 0` read 0 and silently close a counteraction window).
-/// Extend this list when a new `slot('…')` shows up in a `pre`.
+/// Extend this list when a new `slot('…')` shows up in a `condition`.
 pub const SLOT_NAMES: &[&str] = &[
     "asUsualTurn",
     "lastWalk",
@@ -1722,13 +1729,13 @@ pub const SLOT_NAMES: &[&str] = &[
     "noRoad.who",
     // `骰子已经掷下` turn-key lock, current spelling
     // (`ctx::set_slot(player_id, state_key::NO_COUNTERACT_TURN, turn_key)`) --
-    // the name the card writes and its counter pre reads.
+    // the name the card writes and its counter condition reads.
     "noCounteractTurn",
-    // The same lock's older spelling: an older build's served `pre` blob still
+    // The same lock's older spelling: an older build's served `condition` blob still
     // reads `slot('diceCastActive')`, and build rulesets load under this glue.
     "diceCastActive",
     // `Change the world` once-per-turn tag -- a player slot before the latch
-    // moved onto the instance's `cw_turn` counter; an older build's served `pre`
+    // moved onto the instance's `cw_turn` counter; an older build's served `condition`
     // blob still reads `slot('change_world_turn')`, so keep it resolvable.
     "change_world_turn",
     // `here_the_world` held-cards count (`ctx::set_slot(player_id, SLOT_HELD_LEN, n)`).
@@ -1795,7 +1802,7 @@ pub const SLOT_NAMES: &[&str] = &[
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read
-/// (`slot('asUsualTurn')`, `tok(kind)`). Only worth the copy when the
+/// (`slot('asUsualTurn')`, `held(kind)`). Only worth the copy when the
 /// condition actually names them -- the caller can pass `false` otherwise.
 pub fn fill_candidate_extras<S: SnapSrc>(
     world: &S,

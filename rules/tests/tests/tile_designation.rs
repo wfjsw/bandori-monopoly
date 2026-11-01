@@ -368,7 +368,7 @@ fn placement_logs_never_speak_a_raw_mark_key() {
             saw_designate = true;
         }
         if key == "log.outcome.mark_add" {
-            let kind = e.msg.a.get("kind");
+            let kind = e.msg.args.get("kind");
             let raw = match kind {
                 Some(Arg::Text(s)) => s.clone(),
                 Some(Arg::Msg(m)) => m.key().to_string(),
@@ -381,7 +381,7 @@ fn placement_logs_never_speak_a_raw_mark_key() {
             );
         }
         // No plain-text argument may be a raw namespace key.
-        for (name, arg) in e.msg.a.iter() {
+        for (name, arg) in e.msg.args.iter() {
             if let Arg::Text(s) = arg {
                 assert!(
                     !(s.starts_with("mark:") || s.starts_with("cards:")),

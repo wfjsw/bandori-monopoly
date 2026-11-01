@@ -18,8 +18,8 @@ no weakened specs, no silent zeros on unmodeled `Op`s.
 (`offer_buy` / `offer_build` / `pay_rent` / `offer_force_buy` / `agent_offer` /
 `draw_event`) are **PROTOCOL-LEVEL stubs** (return `0`, log no effect), and
 whose move-trigger readers (`trig_move_main`, `trig_move_from`,
-`trig_move_resolve`, `trig_move_remaining`) and message payload readers
-(`msg_tile`, `msg_a`, `msg_sender_uid`) are either unmodeled (`Op` → loud
+`trig_move_settles`, `trig_move_remaining`) and message payload readers
+(`msg_tile`, `msg_arg0`, `msg_sender_uid`) are either unmodeled (`Op` → loud
 `unmodeled()`) or protocol stubs. `bump_mark_f` is a no-op and `mark_src_at`
 always returns `−1`. Per KANI-FOUNDATION §8 those clauses are tagged
 **PROTOCOL-LEVEL** / **BLOCKED-HOST** rather than faked. A host-ops agent is
@@ -34,9 +34,9 @@ rows when those arrive.
 |---|---|---|---|---|---|---|
 | G-SETTLE-02 (edogawa) | 「江户川乐器店的[结算]是：抽取一张手卡。」 | **PROVEN** | `edogawa_settle_draw_one_iff`, `edogawa_settle_mutant_two_cards`, `edogawa_settle_mutant_wrong_player` | see run table | — | — |
 | G-SETTLE-02 (circle settle) | 「CiRCLE…[结算]是：抽取一张手卡。」 | **PROVEN** | `circle_settle_draw_one_iff`, `circle_settle_mutant_two_cards`, `circle_settle_mutant_wrong_player` | see run table | — | — |
-| G-SETTLE-02 / 151 [CiRCLE奖励] | 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]。」 「[获得]2000资金或抽1张卡。」 | **BLOCKED-HOST** | (specs: `circle_pass_pays`, `circle_reward_money_ok`, `circle_reward_card_ok`) | not run | needs `trig_move_from`, `trig_move_resolve`, `trig_move_remaining` (all unmodeled `Op`) before `tile:circle`'s `On::Action(PassTile)` can even run | — |
+| G-SETTLE-02 / 151 [CiRCLE奖励] | 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]。」 「[获得]2000资金或抽1张卡。」 | **BLOCKED-HOST** | (specs: `circle_pass_pays`, `circle_reward_money_ok`, `circle_reward_card_ok`) | not run | needs `trig_move_from`, `trig_move_settles`, `trig_move_remaining` (all unmodeled `Op`) before `tile:circle`'s `On::Action(PassTile)` can even run | — |
 | G-SETTLE-03 | 「抽取一张手卡，然后抽取一个事件卡。」 | **PROVEN** (observable half) + **PROTOCOL-LEVEL** (event half) | `event_settle_draw_one_iff`, `event_settle_mutant_two_cards`, `event_settle_mutant_wrong_player` | see run table | event draw is `ctx::draw_event` = protocol stub (no effect); G-SETTLE-04/05 ride on it | OPEN-结算定义 |
-| G-SETTLE-04 | 「抽取的事件卡不进入手卡…效果立刻生效。」 | **PROTOCOL-LEVEL** | — | — | engine `H.DrawEvent` / event pipeline (KANI.md §6) | — |
+| G-SETTLE-04 | 「抽取的事件卡不进入手卡…效果立刻生效。」 | **PROTOCOL-LEVEL** | — | — | engine draw-event / event pipeline (KANI.md §6) | — |
 | G-SETTLE-05 | 「如果没有事件可抽取则将事件弃卡区洗切…」 | **PROTOCOL-LEVEL** | — | — | same; reshuffle is engine scheduling | — |
 | G-SETTLE-01 | 「如果格子地契已抵押则无效果。」 (owner) / mortgaged ⇒ no rent (other) | **PROVEN** (pure spec) + body **BLOCKED-HOST** | `property_leg_unowned_is_buy` (leg table) | see run table | `tile:property` body cannot run: `trigger::move_is_main` → unmodeled `trig_move_main` | — |
 | G-SETTLE-06 + G-MONEY-11 | 「无主的[可购买格子]的[结算]是：可选择[消耗]购买格子地契和建造已有房子的资金总价…」 | **BLOCKED-HOST** + expected **FAILS(LESS)** once unblocked | specs: `g_settle_property_leg`, `buy_total` | not run | (a) `trig_move_main` unmodeled; (b) `offer_buy` is a protocol stub. settle.md Findings already records the LESS: the body only *announces* on a main landing (`log.land_unowned`) and defers the offer to the end step, while the book makes the optional buy *the settle*. | — |
@@ -54,7 +54,7 @@ rows when those arrive.
 | mark:cp `on_land` gain | 「…[获得]800资金。」 | **PROVEN** (observable half) | `mark_cp_land_gain_iff`, `mark_cp_land_mutant_900`, `mark_cp_land_mutant_wrong_seat` | see run table | 800 to the settling player. **Re-run 2026-10-28**: the harness was stale (the erased `RuleEntry::body` no longer type-checks as `fn(i32)`), and after re-plumbing it through the entry's `drive` it FAILS under Kani 0.68 on `__rust_dealloc` size / `same_allocation` unsupported-construct checks (the known allocator false-positive class, not a body discrepancy) — the PROVEN status predates the body-erasure refactor and needs a fresh green run | — |
 | mark:cp `on_land` mark+counter | 「移除格子上的个[CP点]和自己[场上]1个[CP点]」 | **BLOCKED-HOST** | `mark_cp_land_tile_cp_visible_to_count_marks` (prefix only) | see run table | `bump_mark_f` is a no-op stub; `mark_src_at` always `−1` so the guard's 「自己[场上]1个[CP点]」 conjunct can never admit and `add_counter_at` is unreachable | — |
 | mark:cp `on_land` guard / no-op | 「在拥有[CP]点的格子上[结算]时」 | **PROVEN** (guard rejects) | `mark_cp_land_guard_rejects_without_tile_cp`, `mark_cp_land_guard_rejects_when_cancelled` | see run table | no tile CP / cancelled ⇒ entry does not fire | — |
-| mark:cp `on_place` | 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]…」 | **BLOCKED-HOST** | — | not run | `msg_tile` / `msg_a` / `msg_sender_uid` are protocol stubs (return 0) ⇒ the handler cannot see the payload. Specs kept (`mark_cp_place_guard`, `mark_cp_place_effects_ok`). | — |
+| mark:cp `on_place` | 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]…」 | **BLOCKED-HOST** | — | not run | `msg_tile` / `msg_arg0` / `msg_sender_uid` are protocol stubs (return 0) ⇒ the handler cannot see the payload. Specs kept (`mark_cp_place_guard`, `mark_cp_place_effects_ok`). | — |
 
 ---
 
@@ -74,13 +74,13 @@ rows when those arrive.
 | op | who needs it | host status today |
 |---|---|---|
 | `trig_move_main` | `tile:property`, `tile:ring` settle entry | **unmodeled** (loud fail) |
-| `trig_move_from` / `trig_move_resolve` / `trig_move_remaining` | `tile:circle` [经过] reward | **unmodeled** |
+| `trig_move_from` / `trig_move_settles` / `trig_move_remaining` | `tile:circle` [经过] reward | **unmodeled** |
 | `is_color` | `tile:agent` 同色 set | protocol stub (returns 0) |
 | `pay_rent` / `offer_buy` / `offer_build` / `offer_force_buy` / `agent_offer` | property / agent settle effects | protocol stub (returns 0) |
 | `draw_event` | `tile:event` event half (G-SETTLE-03/04/05) | protocol stub (returns 0) |
 | `bump_mark_f` | `mark:cp` tile-mark removal | no-op stub |
 | `mark_src_at` | `mark:cp` provenance / on-card spend | stub (returns −1) |
-| `msg_tile` / `msg_a` / `msg_sender_uid` | `mark:cp` `"place"` payload | protocol stubs (return 0) |
+| `msg_tile` / `msg_arg0` / `msg_sender_uid` | `mark:cp` `"place"` payload | protocol stubs (return 0) |
 | `rent_of` | rent amount in specs (G-MONEY-09) | unmodeled (host-ops agent) |
 | `tile_at` / `trig_price` | price reads in buy/force-buy specs | unmodeled (host-ops agent) |
 
@@ -147,7 +147,7 @@ All 20 harnesses compile under `cargo build -p rules-kani` on this branch.
   `g_settle_13_all_owned_by_other`, `g_settle_14_legal_target`) pin the book
   arithmetic and gate.
 * **circle [经过].** `pass_pays` reads `trigger::move_from()` /
-  `exile_of` / `is_circle`; `on_pass` reads `move_resolve` / `move_remaining`.
+  `exile_of` / `is_circle`; `on_pass` reads `move_settles` / `move_remaining`.
   The first two move readers are unmodeled `Op`s. Specs kept.
 * **mark:cp on_land.** The gain half is proven. The mark/counter half cannot
   be: `mark_src_at` is a stub, so the shipped guard `lands_on_cp` can never

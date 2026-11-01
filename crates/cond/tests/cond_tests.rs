@@ -60,7 +60,7 @@ fn win() -> WindowCtx {
             roll: Some(5),
             kind: Some(rules_cond::mv::Walk),
             remaining: 5,
-            main: true,
+            is_main_move: true,
             dir: 1,
             tags: Vec::new(),
             by_skill: false,
@@ -107,7 +107,7 @@ fn cand(owner: i64) -> CandidateCtx {
         card_id: 42,
         card_placed: false,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
-        tok_names: [("水母标记".to_string(), 2)].into_iter().collect(),
+        held_names: [("水母标记".to_string(), 2)].into_iter().collect(),
         blocked_groups: vec![2],
         ..CandidateCtx::default()
     }
@@ -424,11 +424,13 @@ fn tile_kind_predicates() {
 #[test]
 fn move_main() {
     // `win()` carries `main: true`.
-    assert!(compile("move.main").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("!move.main").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("move.is_main_move").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("!move.is_main_move")
+        .unwrap()
+        .eval(&win(), &cand(0)));
     let mut w = win();
-    w.mv.main = false;
-    assert!(!compile("move.main").unwrap().eval(&w, &cand(0)));
+    w.mv.is_main_move = false;
+    assert!(!compile("move.is_main_move").unwrap().eval(&w, &cand(0)));
 }
 
 #[test]
@@ -442,7 +444,7 @@ fn tok_lookup() {
     assert!(!cond.eval(&win(), &cand(0)));
 
     let mut c = cand(0);
-    c.tok_names.insert("星星贴纸".to_string(), 3);
+    c.held_names.insert("星星贴纸".to_string(), 3);
     assert!(cond.eval(&win(), &c));
 }
 
@@ -1053,9 +1055,15 @@ fn resolving_is_a_predicate_over_the_running_bodies() {
     let mut w = WindowCtx::default();
     w.resolving = vec![("X".to_string(), 1)];
     let c = CandidateCtx::default();
-    assert!(compile("resolving('X')").unwrap().eval(&w, &c), "the running body");
+    assert!(
+        compile("resolving('X')").unwrap().eval(&w, &c),
+        "the running body"
+    );
     assert!(compile("resolving('X') && true").unwrap().eval(&w, &c));
-    assert!(!compile("resolving('Y') && true").unwrap().eval(&w, &c), "a bystander");
+    assert!(
+        !compile("resolving('Y') && true").unwrap().eval(&w, &c),
+        "a bystander"
+    );
     let mut w2 = WindowCtx::default();
     w2.resolving = vec![("X".to_string(), 1)];
     w2.trigger_card = 42;
@@ -1070,8 +1078,14 @@ fn card_is_skill_reads_the_trigger_card() {
     // over the trigger's card, false for a play or a hook body.
     let mut w = WindowCtx::default();
     let c = CandidateCtx::default();
-    assert!(!compile("card.is_skill").unwrap().eval(&w, &c), "no trigger card");
+    assert!(
+        !compile("card.is_skill").unwrap().eval(&w, &c),
+        "no trigger card"
+    );
     w.trigger_card_is_skill = true;
-    assert!(compile("card.is_skill").unwrap().eval(&w, &c), "a skill body");
+    assert!(
+        compile("card.is_skill").unwrap().eval(&w, &c),
+        "a skill body"
+    );
     assert!(compile("card.is_skill && true").unwrap().eval(&w, &c));
 }

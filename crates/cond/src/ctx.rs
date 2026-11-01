@@ -84,9 +84,9 @@ pub struct MoveSnap {
     /// [`crate::kinds::mv`] value; `None` when the window has no move.
     pub kind: Option<i64>,
     pub remaining: i64,
-    /// `t.Move.Main` -- was this the turn's main move (`move.main`)? `false`
+    /// Was this the turn's main move (`move.is_main_move`)? `false`
     /// when the window has no move.
-    pub main: bool,
+    pub is_main_move: bool,
     /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward. `1` when the
     /// window has no move (the trigger default, matching the guest).
     pub dir: i64,
@@ -102,7 +102,7 @@ impl Default for MoveSnap {
             roll: None,
             kind: None,
             remaining: 0,
-            main: false,
+            is_main_move: false,
             // Matches `Trigger::new`'s `move_dir: 1` -- forward when no move
             // caused the window (the guest's `trigger::move_dir()` reads 1).
             dir: 1,
@@ -293,7 +293,7 @@ pub struct CandidateCtx {
     pub slots: BTreeMap<String, i64>,
     /// `tok('name')` lookup -- the owner's named token counters, the same
     /// data `ctx::tok(player_id, name)` reads. Missing name = `0`.
-    pub tok_names: BTreeMap<String, i64>,
+    pub held_names: BTreeMap<String, i64>,
     /// Set keys the host publishes behind `cand_has(key, member)`
     /// (`CondView::cand_set`).
     pub blocked_groups: Vec<i64>,
@@ -308,8 +308,8 @@ impl CandidateCtx {
         self.card_counters.get(name).copied().unwrap_or(0)
     }
 
-    pub fn tok_named(&self, name: &str) -> i64 {
-        self.tok_names.get(name).copied().unwrap_or(0)
+    pub fn held_named(&self, name: &str) -> i64 {
+        self.held_names.get(name).copied().unwrap_or(0)
     }
 
     pub fn blocked(&self, group: i64) -> bool {

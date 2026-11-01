@@ -86,12 +86,12 @@ impl Match {
                 "mortgage" => {
                     let t = m.value as usize;
                     let v = cx.mortgage_value(t);
-                    let _ = cx.apply_mortgage(target, t, v);
+                    let _ = cx.commit_mortgage(target, t, v);
                 }
                 "redeem" => {
                     let t = m.value as usize;
                     let v = cx.redeem_cost(t);
-                    let _ = cx.apply_redeem(target, t, v, None);
+                    let _ = cx.commit_redeem(target, t, v, None);
                 }
                 _ => unreachable!(),
             }

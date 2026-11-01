@@ -21,7 +21,7 @@ Pure contracts were also spot-checked via
 | `Op::set_dest` writes `World::dest` only | dest checked on post-state |
 | `Op::play_doubled` stub returns `0`; `ctx::n(0, v)` then doubles | clauses whose printed amount is `ctx::n(0, …)` are BLOCKED-HOST |
 | `Op::target` / `targeted_count` / `designations` / `cancel_designation` return `0` | [指定] pipeline is PROTOCOL-LEVEL |
-| `Op::give_extra_turn` / plan setters / `card_move` / `card_buy` are stubs | move / buy / extra-turn halves are PROTOCOL-LEVEL |
+| `Op::give_extra_turn` / plan setters / `run_planned_move` / `card_buy` are stubs | move / buy / extra-turn halves are PROTOCOL-LEVEL |
 | `Op::trig_set_negate_effect` is a **unit** call but models `trig_negate = (a0 != 0)` with `a0 = 0` | encore's negation flag never sets — BLOCKED-HOST |
 
 ## Summary counts
@@ -123,7 +123,7 @@ empty.
   to seat 0 and `target(who)` always "hits" seat 0. budokan / rain / party
   designation halves are PROTOCOL-LEVEL (the `target` [反击] window is
   engine scheduling per KANI.md §6).
-* **move plan / buy / extra turn**: `card_move` returns 1 and the plan setters
+* **move plan / buy / extra turn**: `run_planned_move` returns 1 and the plan setters
   / `give_extra_turn` / `card_buy` / `linger` are structure-only stubs. tsugu,
   harvest, parking-02 are PROTOCOL-LEVEL.
 * **counteraction windows** (marina / encore / net): engine scheduling

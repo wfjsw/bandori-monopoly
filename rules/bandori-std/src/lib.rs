@@ -131,7 +131,7 @@ pub mod ctx {
         group_skill, group_skills, in_group, invoke_skill, is_agent, is_buyable, is_color, is_deed,
         is_live_house_for, is_shop, is_start, is_venue, offer_build, offer_buy, offer_force_buy,
         pay_rent, persona_is, persona_skill, remove_crystal, rent_unit_mult, ring_multiplier,
-        set_crystals, skill_blocked, turn_snap,
+        set_crystals, skill_blocked, turn_snapshot,
     };
 }
 
@@ -150,7 +150,7 @@ pub struct TurnRestore {
     pub mortgaged: Vec<bool>,
 }
 
-pub fn turn_snap(player_id: i32) -> TurnRestore {
+pub fn turn_snapshot(player_id: i32) -> TurnRestore {
     let snap = card_sdk::ctx::turn_snap_map(player_id);
     TurnRestore {
         pos: snap.pos,
@@ -373,12 +373,12 @@ pub fn in_group(player_id: i32, name: &str) -> bool {
 
 /// 「位于此卡所在格子上的玩家无法使用角色及乐队技能」 / one band's skills.
 pub fn skill_blocked(player_id: i32, group: &str) -> bool {
-    if card_sdk::ctx::tok(player_id, "skillBlock") > 0 {
+    if card_sdk::ctx::held_count(player_id, "skillBlock") > 0 {
         return true;
     }
     if !group.is_empty() {
         let key = format!("skillBlock:{}", group);
-        if card_sdk::ctx::tok(player_id, &key) > 0 {
+        if card_sdk::ctx::held_count(player_id, &key) > 0 {
             return true;
         }
     }

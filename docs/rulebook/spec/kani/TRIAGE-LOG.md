@@ -25,7 +25,6 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | cond_ops::ir_div_matches_spec | TIMEOUT 1800 s | E (two-divider circuit equivalence) | reformulate: error class (full width) + truncating-divmod characterisation on the i16 image + kissat; mutants | **SUCCESSFUL 152 s** |
 | cond_ops::ir_rem_matches_spec | TIMEOUT 1800 s | E | same (i16 split + kissat) | **SUCCESSFUL** (see results.tsv) |
 
-
 ## money_shave (next)
 
 | id | before | class | action | after |
@@ -159,7 +158,7 @@ Tears cleanup `33a9704` is docs-only. Status-hosts does not touch
 ### Root cause (class E — SAT instance size)
 
 CBMC `--show-goto-functions` on the 6aa73e0 duobang binary shows
-`invoke::entry_idx` after *Removal of function pointers*:
+`invoke::entry_index` after *Removal of function pointers*:
 
 * one shared `code*` call (`body_of(on)(player)`)
 * expanded to an IF-chain of **4313** targets (`IF ptr = address_of(f_i) THEN GOTO …`)
@@ -184,7 +183,7 @@ Msg facade additionally walked the intern `static mut` table on every
    `Op::log` / `Op::effect` only bump a narration counter and never read
    the key; `ctx::s()` names the host compares still intern.
 
-No card-body edits. Production (`cfg(not(kani))`) `entry_idx` / `Msg`
+No card-body edits. Production (`cfg(not(kani))`) `entry_index` / `Msg`
 paths unchanged. `cargo build -p game-rules -p rules-native -p rules-kani`
 green; `cargo test -p rules-kani` green; `cargo test -p rules-cond
 --features lower` green; wasm32 workspace check green.
@@ -203,7 +202,7 @@ trampolines (each loads one constant `&CardDef`) + a thin integer
 `call_body_idx` match. A shared `body_of(on)(player)` site unions every
 `fn(i32) -> Asked` in the binary into one 874–4313 target IF-chain.
 
-### Events proofs likely on the same path (same `entry_idx` / `all_players` / `Msg` / `Vec` shape)
+### Events proofs likely on the same path (same `entry_index` / `all_players` / `Msg` / `Vec` shape)
 
 | id | shape | note |
 |---|---|---|
@@ -212,7 +211,7 @@ trampolines (each loads one constant `&CardDef`) + a thin integer
 | `tears_01` / `02` / mutant | all_players + Vec + Msg + transfer | 724 s after class-A cut |
 | `front_or_back_*` | all_players + Vec winners + Msg + split_pay | old TIMEOUT |
 | `chart_rush_*` | all_players + Vec + Msg | old TIMEOUT after Msg facade |
-| `asukayama_02`, `ex_quest`, `habinel`, `lulu`, `school_time`, `kizuna`, `never_ends`, `lost_chase`, `embers_*`, `estate_*`, `bear_cookie`, `this_hand` | all_players + Msg | same `entry_idx` cliff |
+| `asukayama_02`, `ex_quest`, `habinel`, `lulu`, `school_time`, `kizuna`, `never_ends`, `lost_chase`, `embers_*`, `estate_*`, `bear_cookie`, `this_hand` | all_players + Msg | same `entry_index` cliff |
 
 Every harness that goes through `invoke::event_play_idx` shares the
 IF-chain; the per-card dispatch is a global win for the unit.
@@ -254,7 +253,7 @@ First cut (285 `call_card_N` trampolines) kept every IF-chain live —
 `call_body_idx` is a 285-arm match and `idx` is a parameter, so SSA held
 285×874 chains (75 MB goto, 3.4 GB SSA). Replaced with **one** `code*`
 site: match `idx` → `&'static CardDef` constant, one `On` load + call
-(42 MB goto, 1×874 chain). `inline(always)` on `entry_idx` / `play_idx` /
+(42 MB goto, 1×874 chain). `inline(always)` on `entry_index` / `play_idx` /
 `event_play_idx` / `call_body_idx` so a `card_id!` constant can fold.
 
 `pp::same_dream_01_band_plus_3_iff` unwind is now only
@@ -376,8 +375,8 @@ class A–F, fix or why none.
 
 | id | verdict (central) | phase split | dominant cost | class | action |
 |---|---|---|---|---|---|
-| `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → unwind `base_world` 4 + **memcmp 38** (`Not unwinding at 16`) | `[i32;4]::eq` on `post.money == pre.money` → 16-byte `memcmp` | **A** | element-wise `arr4_eq` / `arr4b_eq` (no memcmp). **SUCCESSFUL 394 s** |
-| `events::aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | same — memcmp 30 (`Not unwinding at 16`) | same `post.money == pre.money && post.pos == pre.pos` | **A** | same fix. **SUCCESSFUL 310 s** |
+| `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → unwind `base_world` 4 + **memcmp 38** (`Not unwinding at 16`) | `[i32;4]::eq` on `post.money == condition.money` → 16-byte `memcmp` | **A** | element-wise `arr4_eq` / `arr4b_eq` (no memcmp). **SUCCESSFUL 394 s** |
+| `events::aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | same — memcmp 30 (`Not unwinding at 16`) | same `post.money == condition.money && post.pos == condition.pos` | **A** | same fix. **SUCCESSFUL 310 s** |
 | `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s | BMC → **8725 VCC** / 719 after simp → SSA 4.5 s → SAT **703k vars / 761k clauses** (first SAT 0.04 s, then many) | unwind **memchr_naive 1193** + memchr_aligned 284 + memcmp 237; `PadAdapter::write_str` recursion 81 — fmt of `kani::assert` / `fail_*` message strings | **E** (fmt/memchr) | no cheap fix without dropping assert-message fmt; mutant has extra `iter().any` paths into it. **remains TIMEOUT (FAIL)** |
 | `events::aao_02_hand_veto_is_armed` | FAILED 550 s | (see prior) | body LESS — no [手] veto surface | **D GENUINE E-aao-02** | keep FAILING (not a perf bug) |
 | `events::front_or_back_01_equal_iff` | TIMEOUT 1800 s (unwind 32) | BMC → unwind `front_or_back::play` **31** (`Not unwinding at 32`) + `log_is_gains` 31 + slice `all`/`any`/`find_map` 31 | `for &p in &winners` over a **symbolic-length `Vec<i32>`** (body, cannot edit) + `effects.iter().all/any` over `MAX_LOG=24` | **A/E** | body Vec length not a constant bound; raising unwind past 32 explodes. **remains TIMEOUT (FAIL)** — no cheap fix without body edit |
@@ -399,7 +398,7 @@ Phase markers used: `Starting Bounded Model Checking`, `Generated N VCC(s)`,
 
 ### Preventive memcmp cut (all units)
 
-`post.money == pre.money` is `[i32;4]::eq` → 16-byte `memcmp` at unwind 16.
+`post.money == condition.money` is `[i32;4]::eq` → 16-byte `memcmp` at unwind 16.
 Helpers `world::arr4_eq` / `arr8b_eq` / `arr4b_eq` applied across **23 proof
 files + 7 spec files**. Cheap, no behaviour change.
 
@@ -460,7 +459,6 @@ verify the clause. Class **E** for the pp rows.
 crychic static assert message (format-arg `kassert!` did not match the
 macro). Production `rules/` restored to master.
 
-
 ## Batch 3e/4 triage — remaining rows
 
 | id | verdict | class | dominant cost | action |
@@ -478,7 +476,6 @@ macro). Production `rules/` restored to master.
 Branch is **docs + crychic static kassert message only** (production
 `rules/` matches master; dist hashes identical).
 
-
 ## strvec — String/Vec unwinding facades (branch `kani-strvec`)
 
 Goal: remove the `String`/`Vec` unwinding cost that times out
@@ -495,7 +492,7 @@ plus harness-side fixed arrays. Production wasm/native **byte-identical**
 | `card-sdk/kani_alloc.rs` | system `malloc`/`free` (CBMC heap objects) | static 16 KiB bump: `alloc`=cursor, `dealloc`=no-op, `realloc` grows last block |
 | `card-sdk/native.rs` arena | `Vec<Vec<Vec<u8>>>` + `vec![0u8; len]` | `[[[u8;64];8];8]` frame stack; zero-loop intern/read/write/pad |
 | `out_buf` / `out_read` | `vec![0u8; cap]` (`extend_with` 31) | empty scratch + fixed arena pull |
-| `ask_pick` / `ask_card` / `ask_player` / `ask_player_cards` / `ask_number` | `for` over symbolic-length slice (`ctx::ask_card` 31) | 4-slot branch trees; `kani::assert` if >4 |
+| `ask_choice` / `ask_card` / `ask_player` / `ask_player_cards` / `ask_number` | `for` over symbolic-length slice (`ctx::ask_card` 31) | 4-slot branch trees; `kani::assert` if >4 |
 | `cond-ir` `named_get` / `named_set` | 4-iter + 10×8 chunk walks (`named_set` 8) | zero-loop 80-step scan (`.get`, no index panic) |
 | `ir_fill::fill_pay_add` | `named_set` ×2 | direct `named[0..2]` slots |
 | `invoke::hook_kind_only_idx` / `hook_kind_matches` | `kinds.iter().any` | zero-loop 4-slot match |
@@ -534,7 +531,7 @@ slot, 1800 s cap, unwind 32):
 | v5 | `from_raw_parts` over a real 1-byte `alloc` (constant `len=1`) + len 0-or-4 | **TIMEOUT 1800 s** | `memcmp` 2015 (`slice_contains` 63 × 32); drop_glue only 13 (constant-len helps); 187 `__rust_dealloc`/`same_allocation` path aborts |
 
 **What is gone for good (all runs after v1):** `Vec<u8>::extend_with`,
-`ctx::ask_card` / `ask_pick` / `ask_player` / `ask_tile` loops,
+`ctx::ask_card` / `ask_choice` / `ask_player` / `ask_tile` loops,
 `named_set` 8, `by_idx` 10, `drop_glue<[String]>` (constant-length
 `cards_in`), the `String` `map().collect()` fold.
 
@@ -700,7 +697,7 @@ no cheap proof-file lever beyond the bound.
 
 ### `end_it_all_01_three_picks_and_keep` — dropped unused `picks` scan
 
-`ask_pick` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
+`ask_choice` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
 in `three_picks_counted`. Simplified the keep half (re-timing pending).
 
 ### `moca_02_mutant_is_detected` — **SUCCESSFUL 340 s** (was TIMEOUT 1800 s)
@@ -740,7 +737,7 @@ facades. Central rows older than those fixes are re-timed, not re-derived.
 | `front_or_back_mutant_swapped_is_detected` | TIMEOUT 1800 s | same | **A/E** | same + zero-loop leg sum | pending |
 | `habinel_01_grants_exiles` | TIMEOUT 1800 s (unwind 24) | body+spec loops 24; 7.8M vars / 30.8M clauses; **stale `to=-1`** (`tile_named(微笑号)` now **26**) | **A/E + B** | assert `to=26`; drop harness cover loop | pending |
 | `kizuna_01_teleport_and_exile` | TIMEOUT 1800 s (unwind 24) | `Vec::extend_with` 24 (old base) + `find_map` + `expect` fmt | **E + A** | strvec facades on master; zero-loop dest scan; no `expect` | pending |
-| `end_it_all_01_three_picks_and_keep` | TIMEOUT 1800 s (unwind 32) | `ask_pick` + `Vec<Msg>` / String ABI | **E** | no cheap proof-file lever (body ABI) | pending |
+| `end_it_all_01_three_picks_and_keep` | TIMEOUT 1800 s (unwind 32) | `ask_choice` + `Vec<Msg>` / String ABI | **E** | no cheap proof-file lever (body ABI) | pending |
 | `estate_01_auction_pay` | TIMEOUT 1800 s (unwind 32) | body `for t in 0..tile_count()` 60-trip (log at iter 19/22) | **A/E** | raise attr to **64** (sound; cost is the body loop) | pending |
 | `estate_02_all_pass_no_pay` | TIMEOUT 1800 s | same 60-trip scan | **A/E** | same | pending |
 | `lost_chase_rolls_and_pushes_stub` | TIMEOUT 1800 s (unwind 24) | body `for p` + `faces.iter().find/all` 24; 7.3M vars / 28.4M clauses | **A/E** | no cheap proof-file lever (body Vec iters) | pending |
@@ -795,7 +792,7 @@ proof bugs. No host.rs edit on this branch (owned by kani-ppcost).
 | `tile_named` full board | lulu / habinel / never_ends / school_time | **already fixed** on master |
 | `remove_marks` stub | embers_04 | still a stub — proof documents it |
 | `event_deck_push` / `event_banish` | bear_cookie / lost_chase / end_it_all | still stubs |
-| `card_move` / `plan::set_*` | this_hand / asukayama-01 | still stubs |
+| `run_planned_move` / `plan::set_*` | this_hand / asukayama-01 | still stubs |
 | `trig_move_*` unmodeled | moca halve / heat_head / circle_rebuild | still unmodeled |
 | `format!` in `never_ends` body | never_ends_01 | **card-body** cost (cannot edit); class E |
 
@@ -885,7 +882,6 @@ are `cfg(kani)` only.
 - production hash check (`build-ruleset` without `CARGO_TARGET_DIR`)
 - `cargo test -p rules-kani` ×3, `rules-cond --features lower`, wasm check
 
-
 ### ppcost: host packing mismatch (class C, fixed first per coordinator)
 
 After the `name_id` loud-FAIL cut, shared `Op` arms decoded `name_id(a1,a2)`
@@ -921,7 +917,6 @@ without `CARGO_TARGET_DIR`): **identical** — card_all wasm
 Tests: `rules-kani` ×3 green; `rules-cond --features lower` 58 green;
 wasm32 workspace check green; `game-rules`/`rules-native`/`server` build green.
 
-
 ### ppcost timing table (one serial CBMC, unwind 32, `--features band-pp`)
 
 | run | change | goto | call graph | verdict |
@@ -942,7 +937,6 @@ Non-vacuity: not reached (TIMEOUT before any property verdict). Probes
 `same_dream_01_probe_setup_only` / `same_dream_01_probe_post_invoke`
 added for the next pass; `assert!(false)` probe must FAIL once a run
 finishes.
-
 
 ## ppcost FLOOR bisect + fix (branch `kani-ppcost`, post master merge)
 
@@ -988,7 +982,6 @@ seat-symmetric: 「自己的」).
 Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
 `kassert!(false)` probes **FAILED** (body ran). Production hashes
 unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
-
 
 ## bands-b — concrete-user rollout across band units (branch `kani-bands-b`)
 
@@ -1067,7 +1060,6 @@ hashed a slice of symbolic length (`board::tile_hash` while-loop). Two fixes:
 remaining ~220 harnesses (crychic → mor → mujica → mygo → ras → skills_* →
 sumimi, alphabetical). Times in the 130–300 s band match the ppcost floor
 (concrete user) once the tile_named / forced_roll cliffs are gone.
-
 
 **Sweep status at hand-off (2026-10-14):** 17/235 harnesses recorded,
 **17 SUCCESSFUL / 0 FAILED / 0 TIMEOUT**. `tools/kani/bands-b-sweep.sh`
@@ -1168,17 +1160,17 @@ arm" — not a stand-in for real semantics.
 |---|---|---|---|
 | ppp::ppp_dispatch | `unplace_card\|unplace_at\|unplace_card_named` | **yes** (`returns.rs`) | **real** `arm_unplace` (pushes `Effect::UnplaceCard`) |
 | ppp::ppp_dispatch | `targeted_count` | no | `arm_protocol_stub` (dispatch is benign-0) |
-| ppp::ppp_dispatch | plan/settle/offer list (`set_steps`, `set_resolve`, `card_offer_build`, `can_build_on`, …) | **yes** (signpost/star_beat/bang_dream/…) | `arm_protocol_stub` — these ARE the dispatch PROTOCOL-0 arms (KANI.md §6). Not silent stand-ins. |
-| ppp::ppp_dispatch | `card_move` | **yes** | **real** `arm_card_move` (returns 1) |
+| ppp::ppp_dispatch | plan/settle/offer list (`set_steps`, `set_settles`, `card_offer_build`, `can_build_on`, …) | **yes** (signpost/star_beat/bang_dream/…) | `arm_protocol_stub` — these ARE the dispatch PROTOCOL-0 arms (KANI.md §6). Not silent stand-ins. |
+| ppp::ppp_dispatch | `run_planned_move` | **yes** | **real** `arm_card_move` (returns 1) |
 | r::ako_dark_dispatch | `play_from_hand` | **yes** (`ako_dark.rs`) | `arm_protocol_stub` (dispatch returns 0 = not-from-hand). **TODO(规则书)** if a proof needs the from-hand path (polarity-sensitive; 0 skips that leg). |
-| r::nfo_play_dispatch | `set_steps\|set_resolve` | **yes** (`nfo.rs`) | `arm_protocol_stub` (PROTOCOL-0) |
-| r::nfo_play_dispatch | `card_move` | **yes** | **real** `arm_card_move` |
+| r::nfo_play_dispatch | `set_steps\|set_settles` | **yes** (`nfo.rs`) | `arm_protocol_stub` (PROTOCOL-0) |
+| r::nfo_play_dispatch | `run_planned_move` | **yes** | **real** `arm_card_move` |
 | r::nfo_play_dispatch | `card_replayable\|play_card` | **yes** (`nfo.rs` replay) | `arm_protocol_stub` (0 = not replayable / did not land) |
 | r::council_dispatch | `linger` | yes | `arm_protocol_stub` (PROTOCOL-0) |
 | skills_*::\* | `state_add` | **yes** (rinko/lisa/…) | **real** `arm_inc_slot` (same keyed-add as dispatch) |
 | skills_ag::skills_ag_dispatch | `trig_target` | **yes** (`trigger::target`) | **real** `arm_trig_target` |
 | skills_ag::skills_ag_dispatch | `place_mark` | **yes** (tae/hagumi) | **real** `arm_place_mark` |
-| skills_pp/hhw/ppp | `card_move` | yes | **real** `arm_card_move` |
+| skills_pp/hhw/ppp | `run_planned_move` | yes | **real** `arm_card_move` |
 | skills_pp/hhw/ppp | `card_offer_build\|can_build_on\|offer_*\|buy\|acquire` | rimi offers | `arm_protocol_stub` (PROTOCOL-0 / 0=did-not-land) |
 | hhw::\* | plan setters (`set_kind`, `set_steps`, dice, …) | yes (balloon/hagumi) | `arm_protocol_stub` (PROTOCOL-0) |
 
@@ -1213,17 +1205,17 @@ specs. Production `cfg(not(kani))` untouched.
 | `pp::guide_01_mutant_is_detected` | SUCCESSFUL (vacuous) | — | **F→B** | same wrong read made `cry==0` always; now reads the real counter | **SUCCESSFUL 442 s** |
 | `pp::eve_bushido_01_gain_iff` | FAILED 332 s | `C-PP-eve-bushido-01: 12d4 sum in 12..=48` | **C** | `roll_dice` clamped count to `min(8)` → 8d4 (8..=32); raise to `min(100)` (engine `1..=100`) | **SUCCESSFUL 283 s** |
 | `pp::no_expect_02_place_deck_draw_iff` | FAILED 370 s | `C-PP-no-expect-02: place on field + draw 1` | **B** | exact-match spec rejected 持续 `set_slot` → `SetState`; ignore bookkeeping | **SUCCESSFUL 382 s** |
-| `pp::first_accident_01_place_deck_draw_iff` | FAILED 354 s | `C-PP-first-accident-01: place on field + draw 1` | **B** | same; body stamps `set_tok` → `SetToken`; ignore bookkeeping | **SUCCESSFUL 462 s** |
-| `pp::eve_bushido_04_crystal_per_draw_iff` | FAILED 321 s | `C-PP-eve-bushido-04: +1 crystal (pre<3)` | **B** | crystal storage: body writes `field_crystals`, proof read player key | **SUCCESSFUL 296 s** |
-| `pp::guide_04_turn_end_crystal_iff` | FAILED 344 s | `C-PP-guide-04: +1 crystal at turn end` | **B** | same; also `pre<=4` entered the ≥5 cash-in (unplaces the card) → `pre<=3` | FAILED 664 s (cash-in region); `pre<=3` queued |
-| `pp::dream_ahead_01_crystal_per_draw_iff` | FAILED 357 s | `C-PP-dream-ahead-01: +1 crystal (pre<5)` | **B** | same; X is slot `"dream_ahead_x"` not `"dreamAhead.X"` | TIMEOUT 1800 s (E, symex; was FAILED 357 s) — re-queue |
-| `crychic::ifonly_02_discard_at_seven_iff` | FAILED 175 s | `C-CRYCHIC-ifonly-02: card must go to discard` | **C** | host `set_dest` never committed the field fate (`apply_dest`); now unplaces + to-discard. **Not D** — body `set_dest(Graveyard)` is the SDK's documented field-fate API | **SUCCESSFUL 253 s** |
+| `pp::first_accident_01_place_deck_draw_iff` | FAILED 354 s | `C-PP-first-accident-01: place on field + draw 1` | **B** | same; body stamps `set_held` → `SetToken`; ignore bookkeeping | **SUCCESSFUL 462 s** |
+| `pp::eve_bushido_04_crystal_per_draw_iff` | FAILED 321 s | `C-PP-eve-bushido-04: +1 crystal (condition<3)` | **B** | crystal storage: body writes `field_crystals`, proof read player key | **SUCCESSFUL 296 s** |
+| `pp::guide_04_turn_end_crystal_iff` | FAILED 344 s | `C-PP-guide-04: +1 crystal at turn end` | **B** | same; also `condition<=4` entered the ≥5 cash-in (unplaces the card) → `condition<=3` | FAILED 664 s (cash-in region); `condition<=3` queued |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | FAILED 357 s | `C-PP-dream-ahead-01: +1 crystal (condition<5)` | **B** | same; X is slot `"dream_ahead_x"` not `"dreamAhead.X"` | TIMEOUT 1800 s (E, symex; was FAILED 357 s) — re-queue |
+| `crychic::ifonly_02_discard_at_seven_iff` | FAILED 175 s | `C-CRYCHIC-ifonly-02: card must go to discard` | **C** | host `set_dest` never committed the field dest (`apply_dest`); now unplaces + to-discard. **Not D** — body `set_dest(Graveyard)` is the SDK's documented field-dest API | **SUCCESSFUL 253 s** |
 | `crychic::ifonly_02_user1_discard_at_seven_iff` | FAILED 154 s | same | **C** | same | **SUCCESSFUL 461 s** |
-| `crychic::soyoreturn_01_branch2_iff` | TIMEOUT 1800 s | (no VCC — died in BMC/symex) | **E** | phase: symex over `arm_cards_in` deck/hand scan + `ask_pick` prompt paths; body ABI, no cheap lever | pending |
+| `crychic::soyoreturn_01_branch2_iff` | TIMEOUT 1800 s | (no VCC — died in BMC/symex) | **E** | phase: symex over `arm_cards_in` deck/hand scan + `ask_choice` prompt paths; body ABI, no cheap lever | pending |
 | `crychic::soyoreturn_01_user1_branch2_iff` | TIMEOUT 1800 s | same | **E** | same | pending |
 | `mor::rui_demon_01_iff` | FAILED 369 s | `C-MOR-rui-demon-01: post money must match the face-value legs` | **B** | spec's other-seat legs swapped. Book 「向全场玩家支付100…之后全场玩家向你支付300」: others **+100 then −300** (spec had −100 then +300) | **SUCCESSFUL 629 s** |
 | `mor::rui_demon_01_user1_iff` | FAILED 297 s | same | **B** | same | **SUCCESSFUL 612 s** |
-| `mor::rainbow_01_half_iff` | FAILED 203 s | `C-MOR-rainbow-01: effect log must be exactly SetPayAmount(amount/2)` | **D** GENUINE | keep FAILING. Book 「此次支付金额减半」; body does C# `CeilTo(half, 10)` | FAILED 238 s (D kept) |
+| `mor::rainbow_01_half_iff` | FAILED 203 s | `C-MOR-rainbow-01: effect log must be exactly SetPayAmount(amount/2)` | **D** GENUINE | keep FAILING. | FAILED 238 s (D kept) |
 | `mor::rainbow_01_half_user1_iff` | FAILED 180 s | same | **D** | keep | pending |
 | `mor::rainbow_02_boost_iff` | FAILED 203 s | `C-MOR-rainbow-02: …SetPayAmount(1.5×amount)` | **D** GENUINE | keep. Book 「变成1.5倍」; body CeilTo-10 | pending |
 | `mor::rainbow_02_boost_user1_iff` | FAILED 262 s | same | **D** | keep | pending |
@@ -1243,11 +1235,11 @@ specs. Production `cfg(not(kani))` untouched.
    rewrote 12d4 into 8d4 (range 8..=32). The real engine (`hostfns::roll`)
    accepts `1..=100`; the multi-dice model is a symbolic sum in `c..=c*s`,
    so the wider range is free. → `min(100)`.
-2. **`set_dest` field-fate commit (class C).** The real engine defers to
+2. **`set_dest` field-dest commit (class C).** The real engine defers to
    `apply_dest` at the run's commit (unplace-and-send the running instance
    to the named pile). The Kani arm only stored `w.dest`. A play from hand
-   names the *hand card's* fate (applied by the play pipeline); a field
-   effect names the instance's fate. Now applies immediately when the
+   names the *hand card's* dest (applied by the play pipeline); a field
+   effect names the instance's dest. Now applies immediately when the
    instance is live on the field — **world state only** (field slot drops,
    pile gains the card), **not** an in-run `UnplaceCard` effect: specs
    `again_02_effects_ok` / `starry_06_effects_ok` / `tritone_02_tick_effects_ok`
@@ -1257,21 +1249,18 @@ specs. Production `cfg(not(kani))` untouched.
 
 ### Proof/spec fixes (commit `0b25d27d`)
 
-3. **Crystal storage (class B, 4 rows + 1 vacuous mutant; also 2 skills_pp rows pre-empted).** Bodies call
-   `ctx::add_crystals` / `ctx::set_crystals` → `add_counter("crystals")` /
-   `set_counter("crystals")`, which the host lands on
-   `field_crystals(last_uid)`. Proofs set/read the player-level key
-   `"奇迹水晶"` (never written) — every +1-crystal iff failed and
-   `guide_01_mutant` passed vacuously (`cry==0` vs a positive mutant).
-   `dream_ahead`'s overflow X is `ctx::slot(..., "dream_ahead_x")`, not
-   `"dreamAhead.X"`.
+3. **Crystal storage (class B, 4 rows + 1 vacuous mutant; also 2 skills_pp rows pre-empted).**
+  Bodies call `ctx::add_crystals` / `ctx::set_crystals` → `add_counter("crystals")` /
+  `set_counter("crystals")`, which the host lands on `field_crystals(last_uid)`. Proofs set/read the
+  player-level key `"奇迹水晶"` (never written) — every +1-crystal iff failed and `guide_01_mutant`
+  passed vacuously (`cry==0` vs a positive mutant).
 4. **`together_01` mutant region (class B).** `min(X, down)` collapses body
    (`min(5+bonus, down)`) and mutant (`min(6, down)`) to `down` when
    `down<=6`. The assume `ceil_half != 1` left that region live. →
    `down >= 7`.
 5. **Effects filters (class B, 2 rows).** `no_expect_02` / `first_accident_01`
    exact-match specs rejected the 持续 stamping (`SetState` from `set_slot`,
-   `SetToken` from `set_tok`). Those are bookkeeping, not clause effects.
+   `SetToken` from `set_held`). Those are bookkeeping, not clause effects.
 6. **`rui_demon_01_post_ok` legs (class B).** Spec had the other-seat legs
    swapped (−100 then +300). Book: user pays 100 to each other, then each
    other pays 300 to the user → others **+100 then −300**.
@@ -1285,27 +1274,22 @@ specs. Production `cfg(not(kani))` untouched.
 > （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。
 > （2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。
 
-Book pins 减半 / 1.5倍 (integer half / 1.5×; the doc example 140 → 210).
-Body (`secret_rainbow.rs`) does C# `CeilTo(amount/2.0, 10)` /
-`CeilTo(amount*1.5, 10)` — rounds up to a multiple of 10. Example:
-amount 25 → body 20, book 12 (or 13). The iff spec pins the book; it must
-keep failing. The mutant rows fail for the same root (CeilTo-10 collides
-with `amount/2+1` on amounts like 18, 38, 58).
+Book pins 减半 / 1.5倍 (integer half / 1.5×; the doc example 140 → 210). Example: amount 25 → body 20,
+book 12 (or 13). The iff spec pins the book; it must keep failing. The mutant rows fail for the same
+root (CeilTo-10 collides with `amount/2+1` on amounts like 18, 38, 58).
 
-**ifonly-02 is NOT class D.** The earlier suspicion ("book wants UnplaceCard,
-body set_dest Graveyard") does not hold: `ctx::set_dest` is the SDK's
-documented field-fate API ("Where this card goes when its effect finishes.
-For a play it is the hand card's fate; for a field effect, the instance's."),
-and the real engine's `apply_dest` unplaces-and-sends at the run's commit.
-C# `H.Unplace(this, "discard", …)` is the same outcome via a different API.
-The Kani host was missing the commit step → class C, fixed.
+**ifonly-02 is NOT class D.** The earlier suspicion ("book wants UnplaceCard, body set_dest
+Graveyard") does not hold: `ctx::set_dest` is the SDK's documented field-dest API ("Where this card
+goes when its effect finishes. For a play it is the hand card's dest; for a field effect, the
+instance's."), and the real engine's `apply_dest` unplaces-and-sends at the run's commit. The Kani
+host was missing the commit step → class C, fixed.
 
 ### Class E note
 
 `soyoreturn_01_branch2_*` TIMEOUT 1800 s: the log never reaches
 `Generated N VCC(s)` — BMC/symex dies over `host::arm_cards_in` deck/hand
-scans (4×4 chunk walk) and the `ask_pick` prompt path (`symbolic_answers`).
-The body ABI (`cards_in` + `ask_pick` + multi-branch cashout) is the cost;
+scans (4×4 chunk walk) and the `ask_choice` prompt path (`symbolic_answers`).
+The body ABI (`cards_in` + `ask_choice` + multi-branch cashout) is the cost;
 no proof-file lever. Recorded, not weakened.
 
 ### Soundness kept
@@ -1334,7 +1318,7 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 | `mor::rui_demon_01_user1_iff` | **SUCCESSFUL 612 s** |
 | `mor::rainbow_01_half_iff` | FAILED 238 s (D kept) |
 | `mor::rainbow_01_mutant_is_detected` | FAILED 209 s (D kept) |
-| `pp::guide_04_turn_end_crystal_iff` | FAILED 664 s — crystal storage fixed, but `pre<=4` entered the ≥5 cash-in (unplaces the card). `pre<=3` queued |
+| `pp::guide_04_turn_end_crystal_iff` | FAILED 664 s — crystal storage fixed, but `condition<=4` entered the ≥5 cash-in (unplaces the card). `condition<=3` queued |
 | `pp::dream_ahead_01_crystal_per_draw_iff` | TIMEOUT 1800 s (E, symex on `add_crystals` prompt path) — re-queued |
 | `mor::courage_01_*` | FAILED (pay vs agent arm not partitioned) — partitioned, queued |
 
@@ -1353,7 +1337,7 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 
 | id | after |
 |---|---|
-| `pp::guide_04_turn_end_crystal_iff` | **SUCCESSFUL** (`pre<=3` isolated the cash-in) |
+| `pp::guide_04_turn_end_crystal_iff` | **SUCCESSFUL** (`condition<=3` isolated the cash-in) |
 | `mor::courage_01_pay_iff_blocked_host` | **SUCCESSFUL** (pay-vs-agent arm split) |
 | `mor::courage_01_pay_user1_iff_blocked_host` | **SUCCESSFUL** |
 | `skills_pp::band_idol_02_body_never_overflows` | **SUCCESSFUL** (1/1 cover; `placed_cards` in subset) |
@@ -1367,7 +1351,7 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 
 | id | before | failing assertion | class | action |
 |---|---|---|---|---|
-| `ppp::pipopa_01_iff` + user1 | FAILED 354 s | `log must be exactly GainMoney(1000), PlaceCard(…, Field)` | **C** | `arm_place_card` leaked `w.dest` (the running card's fate) into `PlaceCard.dest`. pipopa does `set_dest(Banished)` for 「此卡[移除]」 then `place_card` a Popipapapipopa — effect recorded dest=3 not 2. Fixed: PlaceCard.dest is always Field (2) |
+| `ppp::pipopa_01_iff` + user1 | FAILED 354 s | `log must be exactly GainMoney(1000), PlaceCard(…, Field)` | **C** | `arm_place_card` leaked `w.dest` (the running card's dest) into `PlaceCard.dest`. pipopa does `set_dest(Banished)` for 「此卡[移除]」 then `place_card` a Popipapapipopa — effect recorded dest=3 not 2. Fixed: PlaceCard.dest is always Field (2) |
 
 ### batch-2 re-time final
 
@@ -1392,8 +1376,8 @@ finished on the combined master. Non-success rows:
 | `pp::first_accident_02_blocks_pp_skill_2_iff` | FAILED 8.9 s | `cargo kani` "Failed to match the harness" | **B** | harness was `#[cfg(feature = "skills-personas")]` which the pp unit's features (`band-pp`) do not compile → symbol missing. Moved to `proofs/skills_pp.rs` (features already right) + user1 companion |
 | `pp::ranger_01_02_steps_by_count_iff` | TIMEOUT 1800 s | BMC/symex on `arm_cards_in` + `card_slot_of_bytes::eq` + the `cards_in` String facade | **B+E** | Kani `cards_in` facade returns 0 or 4 (padded Vec), not the literal count. Concrete `others` ∈ {0,1} + `count = 0\|4`. Old symbolic 0..=3 made the body see 4 for 1..=3 and the String facade was the cliff |
 | `pp::chisato_mask_01_total_iff` | TIMEOUT 1800 s | BMC/symex on `chisato_mask::split_pay` `find`/`try_fold` (slice iters) | **E** | pin `n_players=2`; `ctx::others` is a symbolic-length Vec at 2..=4. The OPEN-分摊 total (2000) is seat-count independent |
-| `pp::dream_ahead_01_crystal_per_draw_iff` | TIMEOUT 1800 s | BMC/symex on `add_crystals` `?` prompt path + overflow-X else branch | **E** | concrete `pre=0` so `crystals()<5` constant-folds and the else branch is dead in the CFG |
-| `pp::shine_again_01_rescue_iff` | TIMEOUT 1800 s | BMC/symex on `SliceContains` fold + `ask_pick` prompt + `owned_tiles` | **E** | `ask_pick` prompt path pulls `Msg` → memchr; body ABI. No cheap lever |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | TIMEOUT 1800 s | BMC/symex on `add_crystals` `?` prompt path + overflow-X else branch | **E** | concrete `condition=0` so `crystals()<5` constant-folds and the else branch is dead in the CFG |
+| `pp::shine_again_01_rescue_iff` | TIMEOUT 1800 s | BMC/symex on `SliceContains` fold + `ask_choice` prompt + `owned_tiles` | **E** | `ask_choice` prompt path pulls `Msg` → memchr; body ABI. No cheap lever |
 
 ## triage3 batch 4 — central retry rows (kani-pass@566b6761)
 
@@ -1440,7 +1424,7 @@ Per-proof detail lives in `docs/rulebook/spec/kani/mor.md`.
 | id | before | failing assertion / phase | class | action |
 |---|---|---|---|---|
 | `starry_05_circle_iff` + `starry_05_circle_user1_iff` | FAILED 236/208 s | `C-MOR-starry-05: owner passing CiRCLE removes one crystal` | **B** | `trig_tile = 1` was the board.json 1-based CiRCLE index. After `board::tile_slot` became the 0-based identity, `TILES[1]` is a property (kind 1), so `is_start` never admitted and the PassTile arm was a no-op. → `trig_tile = 0` (TILES[0] kind 0 = CiRCLE) |
-| `nnm_05_empty_discard_iff_fails_less` + `_user1_` | FAILED 244/225 s | `C-MOR-nnm-05 FAILS(LESS): book wants dest=Graveyard` | **B** (suspected D, disproved) | (4) 「当奇迹水晶耗尽时」 is a CounterChanged state clause; the body registered `on_crystals_changed` → `set_dest(Graveyard)` long before the central pass. The iff drove the Play press with *already* empty crystals (a correct no-op) and a stale comment claiming `exhausted` was dead. Rewritten to drive `on_crystals_changed_kani` (starry-02/06 style); companion is now `nnm_05_press_empty_is_noop`. Host `arm_set_dest` commits dest as world state — proof observes `w.dest == 0` |
+| `nnm_05_empty_discard_iff_fails_less` + `_user1_` | FAILED 244/225 s | `C-MOR-nnm-05 FAILS(LESS): book wants dest=Graveyard` | **B** (suspected D, disproved) | (4) 「当奇迹水晶耗尽时」 is a CounterChanged state clause; the body registered `on_crystals_changed` → `set_dest(Graveyard)` long before the central pass. The iff drove the Play press with *already* empty crystals (a correct no-op) and a stale comment claiming `exhausted` was dead. Rewritten to drive `on_crystals_changed_kani` (starry-02/06 style); companion is now `nnm_05_press_empty_is_noop`. Host `arm_set_fate` commits dest as world state — proof observes `w.dest == 0` |
 | `nnm_03_amount_iff_fails_wrong` | FAILED 3.9 s | `C-MOR-nnm-03 FAILS(WRONG): body pays x·2000` | **B** (suspected D, disproved) | Spec-only formula compared book `x·reward` against a stale `nnm_03_amount_body = x·2000`. CRYSTAL-04 already fixed the body: `gain_circle_money` raises `PassRewardAffected`; Morfonica `on_circle` rewrites to 1000/1500/2000 and cancels the default (test `nnm_option2_gains_x_times_circle_money_reward` expects 1000). `CIRCLE_MONEY=2000` is the 专有名词 11 default, not a hard-coding bug. → body model is `x·live_reward`; mutant of the hard-coding is detected |
 | `tritone_01_gain_place_iff` + `_user1_iff` | FAILED 270/280 s | `C-MOR-tritone-01: GainMoney + PlaceCard + SetState(owed)` | **B** | Spec claimed `set_crystals(3)` logs no effect. `arm_set_counter_self` **does** push `AddCounter` (same bookkeeping as AG half-speed / R fire-bird). Spec now pins 4 effects: GainMoney, PlaceCard, AddCounter(n=3), SetState(owed) |
 | `tritone_02_tick_iff` + `_user1_iff` | FAILED 332/291 s | `C-MOR-tritone-02: tick is decay-only, or decay + payback(owed)` | **B** | Spec required `AddCounter + PayMoney` on the last crystal even when `owed == 0`. `arm_pay` logs nothing for a zero payment. Spec now: `owed <= 0` → decay-only; `owed > 0` → decay + payback |
@@ -1506,7 +1490,7 @@ Per-proof detail lives in `docs/rulebook/spec/kani/mor.md` § skills_mor triage.
 | `nanami_01_fire_iff` + `nanami_01_user1_fire_iff` | UNWINDING 156/118 s | same `pass_world` 60-trip | **A** | same |
 | `touko_01_mutant_is_detected` | UNWINDING 116 s | same `pass_world` | **A** | same |
 | `touko_01_noop_not_circle` | UNWINDING 39 s (`#[kani::unwind(8)]`) | `fill_pass_circle` `while i < 60` (fill `SetId::Circle`), `skills_mor.rs:69` iteration 8 | **A** | 8×8 chunk walk (true N 60 → 8) |
-| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsukushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_pick)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_pick` returns a literal 0 when `options.len()<=1` (forced pick; `crates/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`crates/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
+| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsukushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_choice)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_choice` returns a literal 0 when `options.len()<=1` (forced pick; `crates/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`crates/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
 
 ### CONFIRMED genuine discrepancies
 
@@ -1538,8 +1522,8 @@ D rulebook gap / E perf / F vacuous.
 
 | unit | id | before | class | root cause | fix | re-time |
 |---|---|---|---|---|---|---|
-| skills_mygo | `band_02_crystal_on_16_iff` + `_user1_` | FAILED 196/209 s | **B** → **D** | (1) `key_get(user,"crystals")` vs `field_crystals(last_uid)` (class B). (2) After the fix: body `add_crystals(1,1)` + production `add_counter_at` clamp-down eats (3)'s over-cap crystals at `pre∈{2,3}` | `self_crystals()`; book formula kept | FAILED (D) |
-| skills_mygo | `band_04_ineffective_overcap_iff` + `_user1_` | FAILED 220/202 s | **B** | crystals via `key_get`; `over` was treated as a formula input but the body *sets* `skill.mygo.over` as audit. Book ceiling is the held total (3) | `self_crystals()`; `pre>=3 ? pre : pre+1`; SetState audit tolerated | **SUCCESSFUL** 3/3 covers ×2 |
+| skills_mygo | `band_02_crystal_on_16_iff` + `_user1_` | FAILED 196/209 s | **B** → **D** | (1) `key_get(user,"crystals")` vs `field_crystals(last_uid)` (class B). (2) After the fix: body `add_crystals(1,1)` + production `add_counter_at` clamp-down eats (3)'s over-cap crystals at `condition∈{2,3}` | `self_crystals()`; book formula kept | FAILED (D) |
+| skills_mygo | `band_04_ineffective_overcap_iff` + `_user1_` | FAILED 220/202 s | **B** | crystals via `key_get`; `over` was treated as a formula input but the body *sets* `skill.mygo.over` as audit. Book ceiling is the held total (3) | `self_crystals()`; `condition>=3 ? condition : condition+1`; SetState audit tolerated | **SUCCESSFUL** 3/3 covers ×2 |
 | mygo | `rainday_01_place_five_crystals_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT ×3 | **E** | body `rain()` `Vec` area over 10 symbolic 1d10 agents (production) | pin die to face 1 (`arm_roll_face_one`); stand user on 「主要街道」 | queued |
 | mygo | `hitoshizuku_money_iff` + `_user1_` | TIMEOUT ×2 | **E** (stale D note) | effect-list `for` + `filter().count()` + `zip().all()` SSA cliff. Body is per-player (matches book) | bounded `while` scans | queued |
 | mygo | `hitoshizuku_body_global_pay_observed` + `_user1_` | TIMEOUT ×2 | **E** | same | repurposed as global-kinds **mutant** detector | queued |
@@ -1554,7 +1538,7 @@ the (2) cap applies to the roll gain; (3)'s over-cap crystals are a different
 clause. Body `add_crystals(1,1)` and production
 `game-core/src/engine/ops.rs` `add_counter_at` (`min(was+n, max)`) force the
 held total down to 1 and destroy over-cap crystals. Setup legal
-(`pre ∈ 0..=3`). Proof kept FAILING.
+(`condition ∈ 0..=3`). Proof kept FAILING.
 
 Hitoshizuku is **not** D (stale note retired): body `transfer(j,user,1000*n)`
 is per-player, matching the 2026-10-06 ruling.
@@ -1612,12 +1596,12 @@ Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F
 
 | unit | id | before | class | root cause | fix | re-time |
 |---|---|---|---|---|---|---|
-| mujica | `sparkler_last_crystal_stun_two_iff` + `_user1_` | FAILED 158/135 s (`C-MUJICA-花火-03: dest becomes Graveyard`) | **B** | Spec `sparkler_last_crystal_dest` pinned `dest_after == 1` (Hand). Wire `Dest::Graveyard = 0` (`card-sdk/src/ctx.rs`). Body `set_dest(Graveyard)` is correct | `dest_after == 0` | queued |
+| mujica | `sparkler_last_crystal_stun_two_iff` + `_user1_` | FAILED 158/135 s (`C-MUJICA-花火-03: dest becomes Graveyard`) | **B** | Spec `sparkler_last_crystal_fate` pinned `fate_after == 1` (Hand). Wire `Dest::Graveyard = 0` (`card-sdk/src/ctx.rs`). Body `set_dest(Graveyard)` is correct | `fate_after == 0` | queued |
 | skills_mujica | `band_state2_bend_hook_rewrites_amount` + `_user1_` + `band_state2_bend_mutant_is_detected` | FAILED 184 s ×3 (`host op outside declared per-harness subset`) | **C** | Central body was the pre-v78 `bend(player)` that did `state::set(ORIG)` + `trig_set_pay_amount`; `ave_bend_dispatch` had no `state_set`. Master ABI v78 pure Filter `bend(player, value) -> fold` only reads `trig_player`/`trig_target` | already on this tree after `git merge master` (pure bend + harness `bend_kani(user, amount) -> i32`); subset matches | queued |
 | crychic | `debut_02_turn_end_iff` + `_user1_` | FAILED 174/196 s (`C-CRYCHIC-debut-02: band crystal +1`) | **C** | `arm_add_band_crystals` treated `a1` as the delta. ABI is `add_group_pool(player, np, nl, n, max)` so the delta is `a3`; `a1` is the interned name handle (`0x4000_0000 \| id`) | use `a3` as `n`, honor `max > 0`, keep the `0..=99` model bound | queued |
 | crychic | `ifonly_01_cashout_iff` + `_user1_` | FAILED 322/302 s (`C-CRYCHIC-ifonly-01: all band crystals removed`) | **C** | same `arm_add_band_crystals` arg bug — the drain wrote the name handle, never `-x` | same | queued |
-| crychic | `ifonly_02_discard_at_seven_iff` + `_user1_` | FAILED 140/175 s (`host op outside declared per-harness subset`) | **C** | Body is `ctx::send_to_dest(Graveyard)` (not `set_dest`). Subset omitted `send_to_dest`; host `Op::send_to_dest` was a player-teleport-into-`w.dest` stub | `arm_send_to_dest` unplaces `last_uid` into the dest pile (same world-state commit as `arm_set_dest`); subset declares it; harness observes field drop + discard gain | queued |
-| crychic | `soyoreturn_01_branch2_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E**+**B** | Symbolic `ask_pick` forced BMC down branch 1 (discard-all: `cards_in` + `discard_from_hand` loop) even though the harness name is branch 2 | pin pick = 1 (`symbolic_answers=false`, `answers[0]=1`) so the leaf is 「获得1000资金并将此卡加入手牌」 only | queued |
+| crychic | `ifonly_02_discard_at_seven_iff` + `_user1_` | FAILED 140/175 s (`host op outside declared per-harness subset`) | **C** | Body is `ctx::send_to_dest(Graveyard)` (not `set_dest`). Subset omitted `send_to_dest`; host `Op::send_to_dest` was a player-teleport-into-`w.dest` stub | `arm_send_to_dest` unplaces `last_uid` into the dest pile (same world-state commit as `arm_set_fate`); subset declares it; harness observes field drop + discard gain | queued |
+| crychic | `soyoreturn_01_branch2_iff` + `_user1_` | TIMEOUT 1800 s ×2 | **E**+**B** | Symbolic `ask_choice` forced BMC down branch 1 (discard-all: `cards_in` + `discard_from_hand` loop) even though the harness name is branch 2 | pin pick = 1 (`symbolic_answers=false`, `answers[0]=1`) so the leaf is 「获得1000资金并将此卡加入手牌」 only | queued |
 
 ### CONFIRMED genuine discrepancies
 
@@ -1759,7 +1743,7 @@ Goal: a sound **general** lever for the persistent class-E TIMEOUT rows
 | row | dominant cost | lever applies? | status after levers |
 |---|---|---|---|
 | `skills_pp::aya_02_*` | fmt/memchr + symbolic world | yes (stubs) | BMC reached; residual solver-bound (re-time pending) |
-| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | memchr 2705→**0**; residual `ask_pick` 16 + `fmt::num::__fmt_inner` 2 + RawVec `with_capacity` aborts; BMC reached |
+| `skills_mor::tsukushi_01_*` | `format!` `rec_key` → PadAdapter/memchr | yes (`fmt::format` + memchr stubs) | memchr 2705→**0**; residual `ask_choice` 16 + `fmt::num::__fmt_inner` 2 + RawVec `with_capacity` aborts; BMC reached |
 | `ras::riot_02_03_*` | RawVec grow abort paths | yes (kani-bump + handle_error stub) | re-time queued |
 | `pp::chisato_mask_01_total_iff` | `split_pay` find + `others` Vec | partial (memchr); body `Vec` ABI remains | irreducible without body edit (TUNING §11 residual) |
 | `pp::ranger_01_02_steps_by_count_iff` | `cards_in` facade + String eq | partial (exact-length facade already on master) | re-time queued |

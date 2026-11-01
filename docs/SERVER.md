@@ -69,9 +69,9 @@ cd webui && npx tsc --noEmit
 `ruleset.test.ts` is the one that would have caught G4's breakage: it loads
 `webui/public/assets/rules` (or `dist/cards`) through the same
 `loadRulesetInto` sequence the page uses and asserts zero load errors, that a
-card with a `pre` evaluates, and that a missing precompiled blob fails loudly
+card with a `condition` evaluates, and that a missing precompiled blob fails loudly
 instead of treating the condition as true. `cargo test -p game-rules` pins the
-shipped `conds-*.bin` against a fresh host compile of every `pre`.
+shipped `conds-*.bin` against a fresh host compile of every `condition`.
 
 Localization is documented in [I18N.md](I18N.md): the server sends message
 keys (`Msg`), the client renders them per player.
@@ -267,7 +267,7 @@ fetches the whole new source (rules and tables) before replacing anything, then
 remounts the scenes on the new data without a page reload. If the load fails it
 restores the previous choice and reloads that source; only a failed restore
 falls back to a full page reload. A custom solo ruleset is one wasm module, so
-it must carry no uncompiled `pre` conditions (the browser glue is
+it must carry no uncompiled `condition` conditions (the browser glue is
 `runtime-only`, `docs/GUARDS.md` §8.3). A live session is bound to the source it
 started on (SSE stream, REST base, engine ruleset), so a successful switch
 drops it: a solo match keeps its save and resumes on the new source, and a room
@@ -581,7 +581,7 @@ narrow, since the full record reveals every hand and the deck order.
   clock). The in-progress log gets the same expiry so a box that dies mid-match
   does not leak a list.
 * **`gaps`.** The open tick run and the record-log counters live in the store
-  (`RecMeta`), written under the match lock, so a process that dies mid-match
+  (`RecordMeta`), written under the match lock, so a process that dies mid-match
   (or a second server taking over) continues the same log. `header.gaps = true`
   only when something was actually lost: a store write failed, or a holder died
   between the blob put and its log append (the `dirty` flag). A gapped record

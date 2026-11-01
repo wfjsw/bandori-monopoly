@@ -72,8 +72,8 @@ fn drain(t: &mut Table) {
         }
         // A mortgage raise wants deeds chosen, not a yes/no.
         if p.kind == "mortgage" {
-            let need = match p.text.a.get("need") {
-                Some(Arg::N(n)) => *n as i32,
+            let need = match p.text.args.get("need") {
+                Some(Arg::Number(n)) => *n as i32,
                 _ => 0,
             };
             let mut covered = 0;
@@ -132,7 +132,11 @@ fn land_on_card(t: &mut Table, who: usize, tile: usize) {
     t.roll(who).unwrap();
     while let Some(p) = t.prompt() {
         let reward = format!("{:?}", p.title).contains("pass_reward");
-        let k = if reward && p.options.len() > 1 { 1 } else { p.fallback };
+        let k = if reward && p.options.len() > 1 {
+            1
+        } else {
+            p.fallback
+        };
         for w in t.asked() {
             let _ = t.answer(w, k);
         }
@@ -159,9 +163,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -214,7 +218,12 @@ fn g02_rui_fixed_leg_ignores_pay_modifiers() {
     t.dice(&[6, 1, 1, 1]);
     t.give_play(0, RUI_DEVIL).unwrap();
     drain(&mut t);
-    assert_eq!(t.money(0), 10_000 - 100 + 600, "the 300 doubled: {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        10_000 - 100 + 600,
+        "the 300 doubled: {:?}",
+        t.recent_keys(8)
+    );
     assert_eq!(t.money(1), 10_000 + 100 - 600);
 
     // (c) crit misses every leg: the plain 100 / 300.
@@ -355,7 +364,12 @@ fn g02_kokoro_10000_is_buy_and_must() {
     t.m.world_mut().turn.plan.pay_fresh = true;
     t.give_play(0, KOKORO_CIRCLE).unwrap();
     drain(&mut t);
-    assert_eq!(t.money(0), 0, "the 10000 landed unscaled: keys {:?}", t.recent_keys(8));
+    assert_eq!(
+        t.money(0),
+        0,
+        "the 10000 landed unscaled: keys {:?}",
+        t.recent_keys(8)
+    );
     assert!(t.on_field(0, KOKORO_CIRCLE), "the card is placed");
 
     // (b) must: 5000 plus mortgageable deeds -> the shortfall is raised by
@@ -368,7 +382,11 @@ fn g02_kokoro_10000_is_buy_and_must() {
     t.set_money(0, 5000);
     t.give_play(0, KOKORO_CIRCLE).unwrap();
     drain(&mut t);
-    assert!(!t.p(0).bankrupt, "the shortfall was raisable: keys {:?}", t.recent_keys(12));
+    assert!(
+        !t.p(0).bankrupt,
+        "the shortfall was raisable: keys {:?}",
+        t.recent_keys(12)
+    );
     assert!(
         deeds.iter().any(|&d| t.mortgaged(d)),
         "the shortfall was raised by mortgaging"
@@ -385,7 +403,11 @@ fn g02_kokoro_10000_is_buy_and_must() {
     t.set_money(0, 5000);
     t.give_play(0, KOKORO_CIRCLE).unwrap();
     drain(&mut t);
-    assert!(t.p(0).bankrupt, "the payer went out: keys {:?}", t.recent_keys(12));
+    assert!(
+        t.p(0).bankrupt,
+        "the payer went out: keys {:?}",
+        t.recent_keys(12)
+    );
     assert_eq!(t.money(0), 0);
 }
 
@@ -413,7 +435,11 @@ fn g02_kokoro_6000_is_rent_kind() {
     let before = (t.money(0), t.money(1), t.money(2));
     let m = t.mark();
     land_on_card(&mut t, 0, 0);
-    let evts: String = t.events_since(m).iter().map(|e| format!("{:?}", e.msg)).collect();
+    let evts: String = t
+        .events_since(m)
+        .iter()
+        .map(|e| format!("{:?}", e.msg))
+        .collect();
     // The rent factor halves the 6,000 to 3,000 and the umiri split halves the
     // owner's take again; `pay_is_rent` is what let both stages see it.
     assert_eq!(
@@ -456,14 +482,28 @@ fn g02_kokoro_6000_carries_circle_tile() {
     let before = (t.money(0), t.money(1), t.money(2));
     let m = t.mark();
     land_on_card(&mut t, 0, circle);
-    let evts: String = t.events_since(m).iter().map(|e| format!("{:?}", e.msg)).collect();
-    assert!(evts.contains("tomorrows_door_tax"), "the door taxed: {evts}");
-    assert!(evts.contains("umiri_split"), "umiri split on the tile: {evts}");
+    let evts: String = t
+        .events_since(m)
+        .iter()
+        .map(|e| format!("{:?}", e.msg))
+        .collect();
+    assert!(
+        evts.contains("tomorrows_door_tax"),
+        "the door taxed: {evts}"
+    );
+    assert!(
+        evts.contains("umiri_split"),
+        "umiri split on the tile: {evts}"
+    );
     // The 6,000 is CiRCLE's own collection, so both tile-keyed riders see it:
     // the split halves the payer's charge and the tax lands on the owner.
     assert_eq!(t.m.world().paid_in_settle_by(0), 3000, "half of the 6,000");
     assert_eq!(t.money(1) - before.1, 3000, "the owner's half");
-    assert!(t.money(2) - before.2 > 1500, "the tax rode in: {}", t.money(2) - before.2);
+    assert!(
+        t.money(2) - before.2 > 1500,
+        "the tax rode in: {}",
+        t.money(2) - before.2
+    );
 }
 
 // =====================================================================
@@ -490,7 +530,12 @@ fn g02_popi_crystal_choice_on_redeem_and_auction() {
     let before = t.money(0);
     t.redeem(0, deed).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "choice", "the spendBefore hook asks: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "choice",
+        "the spendBefore hook asks: {}",
+        t.dump_prompt()
+    );
     // The window saw the full cost.
     assert!(
         format!("{p:?}").contains(&cost.to_string()),
@@ -502,7 +547,9 @@ fn g02_popi_crystal_choice_on_redeem_and_auction() {
     assert!(!t.mortgaged(deed), "the deed was redeemed");
     assert_eq!(t.money(0), before - (cost - 300), "2 crystals cut 300");
     assert!(
-        t.recent_keys(10).iter().any(|k| k.contains("popipapapipopa_used")),
+        t.recent_keys(10)
+            .iter()
+            .any(|k| k.contains("popipapapipopa_used")),
         "the crystals were spent: {:?}",
         t.recent_keys(10)
     );
@@ -536,7 +583,12 @@ fn g02_popi_crystal_choice_on_redeem_and_auction() {
     // The other seat passes (`value < 0`), so the bid stands.
     t.answer(other, -1).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "choice", "the bid opened spendBefore: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "choice",
+        "the bid opened spendBefore: {}",
+        t.dump_prompt()
+    );
     t.answer_one(2).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(deed), Some(bidder), "the bidder owns the deed");
@@ -544,7 +596,9 @@ fn g02_popi_crystal_choice_on_redeem_and_auction() {
         assert_eq!(t.money(bidder), 10_000 - 200, "the 500 bid was cut by 300");
     }
     assert!(
-        t.recent_keys(20).iter().any(|k| k.contains("popipapapipopa_used")),
+        t.recent_keys(20)
+            .iter()
+            .any(|k| k.contains("popipapapipopa_used")),
         "the crystals were spent: {:?}",
         t.recent_keys(20)
     );
@@ -592,10 +646,21 @@ fn g02_aya_1500_once_per_command_at_stage_two() {
         .iter()
         .map(|c| c.to_string())
         .collect();
-    assert!(!hand.iter().any(|c| c.contains("共鸣")), "the fuel was spent: {hand:?}");
-    let legs = (before.1 - t.money(1), before.2 - t.money(2), before.3 - t.money(3));
+    assert!(
+        !hand.iter().any(|c| c.contains("共鸣")),
+        "the fuel was spent: {hand:?}"
+    );
+    let legs = (
+        before.1 - t.money(1),
+        before.2 - t.money(2),
+        before.3 - t.money(3),
+    );
     assert_eq!(legs, (3340, 3340, 3340), "one cut on the total, split flat");
-    assert_eq!(t.money(0) - before.0, 3 * 3340, "the receiver got every leg");
+    assert_eq!(
+        t.money(0) - before.0,
+        3 * 3340,
+        "the receiver got every leg"
+    );
 }
 
 // =====================================================================
@@ -638,7 +703,11 @@ fn g02_door_surcharge_needs_settle_tile() {
         t.roll(2).unwrap();
         drain(&mut t);
     }
-    assert_eq!(t.crystals(2, STUDIO_STORM), Some(2), "two CiRCLE passes charged it");
+    assert_eq!(
+        t.crystals(2, STUDIO_STORM),
+        Some(2),
+        "two CiRCLE passes charged it"
+    );
 
     // (a) the storm's remote 收费 from a tile 2 away (x2 = half): no settle, no
     // tax. The victim settles on an unowned tile.
@@ -653,9 +722,16 @@ fn g02_door_surcharge_needs_settle_tile() {
     t.roll(victim).unwrap();
     drain(&mut t);
     let paid = before - t.money(victim);
-    assert_eq!(paid, 120, "only the storm's 240 x (4-2)/4: {:?}", t.recent_keys(16));
+    assert_eq!(
+        paid,
+        120,
+        "only the storm's 240 x (4-2)/4: {:?}",
+        t.recent_keys(16)
+    );
     assert!(
-        !t.recent_keys(16).iter().any(|k| k.contains("tomorrows_door_tax")),
+        !t.recent_keys(16)
+            .iter()
+            .any(|k| k.contains("tomorrows_door_tax")),
         "no tax outside the owner's settle"
     );
 
@@ -676,7 +752,10 @@ fn g02_door_surcharge_needs_settle_tile() {
         400,
         "300 rent + 100 tax on the settle: {keys:?}"
     );
-    assert!(keys.iter().any(|k| k.contains("tomorrows_door_tax")), "the tax joined: {keys:?}");
+    assert!(
+        keys.iter().any(|k| k.contains("tomorrows_door_tax")),
+        "the tax joined: {keys:?}"
+    );
 }
 
 // =====================================================================
@@ -714,7 +793,12 @@ fn g02_anon_half_of_real_charge() {
     t.set_mortgaged(b, true);
     let before = t.money(0);
     land_on(&mut t, 0, a);
-    assert_eq!(before - t.money(0), 300, "only the landed rent: {:?}", t.recent_keys(12));
+    assert_eq!(
+        before - t.money(0),
+        300,
+        "only the landed rent: {:?}",
+        t.recent_keys(12)
+    );
 
     // (b) the partner's real charge: 260 / 2 = 130, and moca (0.5 on the payer)
     // halves the whole 430 once -- the quote is not halved on its own.
@@ -727,9 +811,16 @@ fn g02_anon_half_of_real_charge() {
     let before = t.money(0);
     land_on(&mut t, 0, a);
     let expect = ceil10((300 + 130) / 2);
-    assert_eq!(before - t.money(0), expect, "300 + half of 260, halved once: {:?}", t.recent_keys(12));
+    assert_eq!(
+        before - t.money(0),
+        expect,
+        "300 + half of 260, halved once: {:?}",
+        t.recent_keys(12)
+    );
     assert!(
-        t.recent_keys(12).iter().any(|k| k.contains("anon_tokyo_link_rent")),
+        t.recent_keys(12)
+            .iter()
+            .any(|k| k.contains("anon_tokyo_link_rent")),
         "the link bonus ran: {:?}",
         t.recent_keys(12)
     );
@@ -787,16 +878,23 @@ fn g02_guerrilla_counts_only_own_payments() {
     t.set_houses(land, 3);
     t.begin_turn(0);
     t.discard_card(0, GUERRILLA).unwrap();
-    assert!(t.discard(0).iter().any(|c| c == GUERRILLA), "the card is in the discard");
+    assert!(
+        t.discard(0).iter().any(|c| c == GUERRILLA),
+        "the card is in the discard"
+    );
     t.set_hand(0, &["PP:[衍生]共鸣"]); // back under the limit
     land_on(&mut t, 0, land); // the owner's own 6,680 settle payment
     assert_eq!(t.money(0), 10_000 - 6_680);
     t.end(0).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "choice", "the turn-end revive offer: {}", t.dump_prompt());
+    assert_eq!(
+        p.kind,
+        "choice",
+        "the turn-end revive offer: {}",
+        t.dump_prompt()
+    );
     assert!(
-        format!("{p:?}").to_lowercase().contains("guerrilla")
-            || format!("{p:?}").contains("游击"),
+        format!("{p:?}").to_lowercase().contains("guerrilla") || format!("{p:?}").contains("游击"),
         "the guerrilla revive: {}",
         t.dump_prompt()
     );
@@ -813,7 +911,7 @@ fn g02_guerrilla_counts_only_own_payments() {
     t.begin_turn(0);
     t.discard_card(0, GUERRILLA).unwrap();
     t.set_hand(0, &["PP:[衍生]共鸣"]); // back under the limit
-    // 祥，移动 walks P1 three tiles forward onto P0's charged tile, settling.
+                                       // 祥，移动 walks P1 three tiles forward onto P0's charged tile, settling.
     t.set_pos(1, (land + data().tiles.len() - 3) % data().tiles.len());
     t.give_play(0, SAKI_MOVE).unwrap();
     answer_player(&mut t, 0, 1);
@@ -826,10 +924,21 @@ fn g02_guerrilla_counts_only_own_payments() {
         "P1 paid the half rent into P0 (got {})",
         t.money(0)
     );
-    assert_eq!(t.m.world().paid_in_settle_by(0), 0, "P0 paid nothing in a settle");
-    assert!(t.m.world().paid_in_settle_by(1) >= 1000, "P1's ledger has it");
+    assert_eq!(
+        t.m.world().paid_in_settle_by(0),
+        0,
+        "P0 paid nothing in a settle"
+    );
+    assert!(
+        t.m.world().paid_in_settle_by(1) >= 1000,
+        "P1's ledger has it"
+    );
     t.end(0).unwrap();
-    let asked = if t.prompt().is_some() { t.dump_prompt() } else { String::from("<no prompt>") };
+    let asked = if t.prompt().is_some() {
+        t.dump_prompt()
+    } else {
+        String::from("<no prompt>")
+    };
     assert!(
         !asked.to_lowercase().contains("guerrilla") && !asked.contains("游击"),
         "another seat's payment does not revive: {asked}"
@@ -869,7 +978,12 @@ fn g02_repaint_two_halves_compose() {
         t.counteract(1, REPAINT).unwrap();
     }
     drain(&mut t);
-    assert_eq!(before - t.money(0), 90, "340 x0.25 = 85, ceil10: {:?}", t.recent_keys(16));
+    assert_eq!(
+        before - t.money(0),
+        90,
+        "340 x0.25 = 85, ceil10: {:?}",
+        t.recent_keys(16)
+    );
 
     // The next move is full.
     pass(&mut t, 0);
@@ -983,7 +1097,12 @@ fn g02_fire_bird_discounted_payment_places() {
     // The X prompt: the first option is X = 1, so the second is X = 2.
     t.answer_one(1).unwrap();
     drain(&mut t);
-    assert_eq!(before - t.money(0), 800, "1600 halved: {:?}", t.recent_keys(10));
+    assert_eq!(
+        before - t.money(0),
+        800,
+        "1600 halved: {:?}",
+        t.recent_keys(10)
+    );
     assert!(t.on_field(0, FIRE_BIRD), "the card is placed");
     assert_eq!(t.crystals(0, FIRE_BIRD), Some(2), "X crystals landed");
 }
@@ -1034,8 +1153,16 @@ fn g02_council_cancelled_settle_refunds() {
     arrange(&mut t);
     place_on_tile(&mut t, 2, PARKING, space);
     play_check(&mut t);
-    assert!(t.on_field(1, COUNCIL), "the copy is on Space: keys {:?}", t.recent_keys(20));
-    assert_eq!(t.money(1), 10_000 - 250, "half the Space house cost was paid");
+    assert!(
+        t.on_field(1, COUNCIL),
+        "the copy is on Space: keys {:?}",
+        t.recent_keys(20)
+    );
+    assert_eq!(
+        t.money(1),
+        10_000 - 250,
+        "half the Space house cost was paid"
+    );
 
     // P0 walks over Space: the council stops it there, parking cancels the
     // settle.
@@ -1068,7 +1195,11 @@ fn g02_council_cancelled_settle_refunds() {
     t.roll(2).unwrap();
     drain(&mut t);
     assert_eq!(t.money(2), 10_000 - 340, "the deed's rent is charged");
-    assert_eq!(t.money(1), 10_000 + 340, "the rent came in, no second refund");
+    assert_eq!(
+        t.money(1),
+        10_000 + 340,
+        "the rent came in, no second refund"
+    );
 
     // (b) a payer who goes out.
     let mut t = Table::vanilla(3);
@@ -1085,7 +1216,11 @@ fn g02_council_cancelled_settle_refunds() {
     drain(&mut t);
     assert!(t.p(0).bankrupt, "the payer went out");
     assert!(!t.on_field(1, COUNCIL), "the copy left the field");
-    assert_eq!(t.money(1), 10_000, "the cost came back on the payer-out too");
+    assert_eq!(
+        t.money(1),
+        10_000,
+        "the cost came back on the payer-out too"
+    );
 }
 
 // =====================================================================
@@ -1096,7 +1231,7 @@ fn g02_council_cancelled_settle_refunds() {
 // 支付6000资金」 -- the book prints no carve-out for a normal CiRCLE walk-in.
 //
 // The row pins 「a walk-in settle charges 6000; a card-forced (redirected)
-// settle on CiRCLE charges nothing」 -- the C# `CircleNormal` carve-out runs on
+// settle on CiRCLE charges nothing」 -- the engine's settle-redirect carve-out runs on
 // the redirect only (the CiRCLE reward already ran there), spec §2.19.
 #[test]
 fn g02_kokoro_normal_settle_skips_6000() {
@@ -1224,14 +1359,26 @@ fn g02_tritone_answers_raw_loss() {
     t.redeem(0, deed).unwrap();
     // Both cards answer the same `spendBefore` window, which carries the full cost.
     let p = t.expect_prompt();
-    assert!(t.counteract_offered(TRITONE), "the spend window: {}", t.dump_prompt());
-    assert!(format!("{p:?}").contains(&cost.to_string()), "full cost {cost}: {}", t.dump_prompt());
+    assert!(
+        t.counteract_offered(TRITONE),
+        "the spend window: {}",
+        t.dump_prompt()
+    );
+    assert!(
+        format!("{p:?}").contains(&cost.to_string()),
+        "full cost {cost}: {}",
+        t.dump_prompt()
+    );
     // Tritone gains the lost figure back ...
     t.counteract(0, TRITONE).unwrap();
     // ... and aya's 共鸣 link lowers the debit by 1500 (its body asks for the
     // fuel instead of a second [反击] offer).
     let r = t.expect_prompt();
-    assert!(format!("{:?}", r.title).contains("resonance"), "the 共鸣 link: {}", t.dump_prompt());
+    assert!(
+        format!("{:?}", r.title).contains("resonance"),
+        "the 共鸣 link: {}",
+        t.dump_prompt()
+    );
     t.answer_one(0).unwrap();
     drain(&mut t);
     assert!(!t.mortgaged(deed), "the deed was redeemed");
@@ -1348,7 +1495,10 @@ fn g02_hagumi_counts_every_credit() {
     t.set_hand(1, &[HAGUMI]);
     t.own(0, &[tile("购物中心")]);
     t.set_state(1, bandori_std::state_key::STAY, 1);
-    t.set_pos(1, (tile("购物中心") + data().tiles.len() - 2) % data().tiles.len());
+    t.set_pos(
+        1,
+        (tile("购物中心") + data().tiles.len() - 2) % data().tiles.len(),
+    );
     t.begin_turn(0);
     t.give_play(0, TAKI_SERIOUS).unwrap();
     t.answer_tile(0, tile("购物中心")).unwrap();
@@ -1361,7 +1511,10 @@ fn g02_hagumi_counts_every_credit() {
     } else {
         String::from("<no prompt>")
     };
-    assert!(!d.contains("育美") && !d.contains("hagumi"), "not offered: {d}");
+    assert!(
+        !d.contains("育美") && !d.contains("hagumi"),
+        "not offered: {d}"
+    );
 }
 
 // =====================================================================
@@ -1408,7 +1561,11 @@ fn g02_settle_set_factor_does_not_leak_to_the_move() {
     // CiRCLE lies on the way; take its card half so the money stays clean.
     while let Some(p) = t.prompt() {
         let reward = format!("{:?}", p.title).contains("pass_reward");
-        let k = if reward && p.options.len() > 1 { 1 } else { p.fallback };
+        let k = if reward && p.options.len() > 1 {
+            1
+        } else {
+            p.fallback
+        };
         for w in t.asked() {
             let _ = t.answer(w, k);
         }
@@ -1427,7 +1584,11 @@ fn g02_settle_set_factor_does_not_leak_to_the_move() {
     t.roll(0).unwrap();
     while let Some(p) = t.prompt() {
         let reward = format!("{:?}", p.title).contains("pass_reward");
-        let k = if reward && p.options.len() > 1 { 1 } else { p.fallback };
+        let k = if reward && p.options.len() > 1 {
+            1
+        } else {
+            p.fallback
+        };
         for w in t.asked() {
             let _ = t.answer(w, k);
         }
@@ -1458,7 +1619,10 @@ fn g02_pay_shape_too_late() {
     let before = t.money(0);
     land_on(&mut t, 0, land);
     let keys = t.keys_since(m);
-    assert!(keys.iter().any(|k| k.contains("shape_late_done")), "the write ran: {keys:?}");
+    assert!(
+        keys.iter().any(|k| k.contains("shape_late_done")),
+        "the write ran: {keys:?}"
+    );
     let wrote: Vec<i64> = t
         .events_since(m)
         .into_iter()
@@ -1466,5 +1630,9 @@ fn g02_pay_shape_too_late() {
         .filter_map(|e| int_arg(&e.msg, "wrote"))
         .collect();
     assert_eq!(wrote, vec![0], "the write reports false");
-    assert_eq!(before - t.money(0), 160, "still Normal: moca halved the 320");
+    assert_eq!(
+        before - t.money(0),
+        160,
+        "still Normal: moca halved the 320"
+    );
 }

@@ -3,7 +3,7 @@
 //! Sources: `docs/rulebook/spec/events.md` (clause IDs `E-*`) and the primary
 //! text `data/events.json`. Never derive a spec from engine behaviour.
 //!
-//! Per clause a pure predicate over (pre, effect-log, post). Narration
+//! Per clause a pure predicate over (condition, effect-log, post). Narration
 //! (`ctx::log`) is NOT part of the frame. OPEN items prove only what the text
 //! determines; see the OPEN table in the clause doc.
 
@@ -306,7 +306,7 @@ pub fn pico_ring(all: &[i32], exile: &[i32]) -> Vec<i32> {
     out
 }
 
-/// Expected teleports: each ring member to the next ring member's **pre**
+/// Expected teleports: each ring member to the next ring member's **condition**
 /// position (last wraps to first). Empty when the ring has fewer than 2.
 pub fn pico_expected_teleports(ring: &[i32], pre_pos: &[i32]) -> Vec<(i32, i32)> {
     let mut out = Vec::new();
@@ -356,7 +356,7 @@ pub fn aao_activation_dest_is_field(dest: i32) -> bool {
 }
 
 /// E-aao-02: while up, some hand-effect veto is armed. The body arms nothing.
-pub fn aao_hand_veto_armed(_dest: i32, _effects: &[Effect]) -> bool {
+pub fn aao_hand_veto_armed(_fate: i32, _effects: &[Effect]) -> bool {
     false
 }
 

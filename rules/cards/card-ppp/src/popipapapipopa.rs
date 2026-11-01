@@ -1,4 +1,3 @@
-//! `PPP:[衍生]Popipapapipopa` -- C# `CardPopipapapipopa` (MatchHost.cs:8352-8402):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]Popipapapipopa`）:
 //! > [衍生]Popipapapipopa：
@@ -9,9 +8,7 @@
 //! > （2）消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。
 //!
 //! placed card that banks [奇迹水晶] when its owner passes five named tiles and
-//! spends them to shrink payments.
-//! A pure [持续] card: the C# has no `Play`, it is placed by `CardPipopa`
-//! (`place_card` in `pipopa.rs`). Both continuous clauses are Fx hooks.
+//! spends them to shrink payments. Both continuous clauses are hooks.
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
@@ -53,17 +50,11 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // sheet cell B4
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
-// C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal (now the
-// `PassTile` pre's `tile_named` disjunction).
-
-/// C# `MaxCrystals = 10`.
 const MAX_CRYSTALS: i32 = 10;
 
-/// `Fx.PassTile` (C# `CardPopipapapipopa.PassTile`) -- the owner passing one of
-/// the five named tiles banks a crystal on this card.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // `card.placed && actor == owner && (tile.id == tile_named('…') || …)` is
-    // the pre.
+    // the condition.
     let t = trigger::tile();
     // 规则书[持续]（1）: 「每次[经过]…时为此卡添加1个[奇迹水晶]（上限10个）。」
     let before = ctx::crystals();
@@ -80,14 +71,10 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.PaySplitChoose` (C# `CardPopipapapipopa.PaySplitChoose` -> `Use`) -- the owner may
-/// spend crystals to shrink the pending payment by 150 each.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && actor == owner && value > 0 && card.counter('crystals') > 0` is the pre.
+    // `card.placed && actor == owner && value > 0 && card.counter('crystals') > 0` is the condition.
     let amount = trigger::value();
     let have = ctx::crystals();
-    // C# `max = Math.Min(Crystals, (p.amount + 149) / 150)` -- never ask for
-    // more than can actually cut the payment to zero.
     let max = have.min((amount + 149) / 150);
     // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。」
     let n = ctx::ask_number(
@@ -104,7 +91,6 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     ctx::add_crystals(-n, 0)?;
     let cut = 150 * n;
-    // C# `p.amount = Math.Max(0, p.amount - 150 * r.value)`.
     trigger::set_pay_amount((amount - cut).max(0));
     ctx::log(
         player_id,

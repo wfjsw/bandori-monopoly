@@ -1,4 +1,3 @@
-//! `AG:（鸫）微小的『能做到』的事` -- C# `CardTsugumiCan` (MatchHost.cs:1818-1901):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（鸫）微小的『能做到』的事`）:
 //! > （鸫）微小的『能做到』的事：打出此卡时，选择其中一个效果发动：
@@ -38,19 +37,11 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"羽泽鸫"#)]));
 
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书（1）【反击】: 「时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算」
-    // -- C# counteracts while another `RangeCard` play is resolving
-    // (`t.Kind == "card" && t.Play.Def.RangeCard && t.Play.Extreme == 0`).
     let _ = player_id;
-    // 规则书（1）: 「除@Tsugu ycm以外无法直接改变骰子点数」 -- ycm is the one
+    // TODO(规则书)[judgement](ABI) 规则书（1）: 「除@Tsugu ycm以外无法直接改变骰子点数」 -- ycm is the one
     // exception, i.e. the card whose pips MAY be forced, so a ycm play is not
     // excluded here (OPEN-@Tsugu reads the sheet mention as garbled); a future
     // RangeCard filter must keep letting ycm through.
-    // TODO(规则书)[judgement](ABI)（使任意结果只有数字区间的效果以理论最大值或最小值结算）:
-    // the clause limits the counter to numeric-interval effects (YOLO yes,
-    // 「无论是何种颜色的夕阳」 no) and to a play with no extreme yet armed, but
-    // the trigger vocabulary has no `t.Play.Def.RangeCard` / `t.Play.Extreme`,
-    // so every `card` play falls through to `true` (BACKLOG ABI-04).
     true
 }
 
@@ -65,8 +56,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // stored the pick before this body; (1) already ran its force there, so only
     // (2) does work here.
     if ctx::slot(player_id, PICK) == 2 {
-        // 规则书（2）: 「视为打出一张@Tsugu ycm」 -- C# `Ycm.Play(c)` on a shared
-        // `CardTsuguYcm` instance (id `通用:@Tsugu ycm`).
         ctx::log(
             player_id,
             &Msg::new(key!("tsugumi_can_ycm")).player_id("who", player_id),
@@ -77,18 +66,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「打出此卡时，选择其中一个效果发动」 -- the whole card is one of
-    // two effects. The engine's own-play follow-up reaches this body before the
-    // play body runs (it used to run both (1) and (2) unconditionally); a
-    // declared counteraction against another card reaches it directly, so the
-    // choice is asked here for both. Stored per play: `play` plays the ycm only
-    // on (2).
-    // The own-play dispatch hands over this card's own play trigger (`t.Card`
-    // is this card); a declared counteraction hands over the **answered**
-    // card's trigger instead.
+    // 规则书: 「打出此卡时，选择其中一个效果发动」 -- the whole card is one of two effects. The engine's
+    // own-play follow-up reaches this body before the play body runs (it used to run
+    // both (1) and (2) unconditionally); a declared counteraction against another
+    // card reaches it directly, so the choice is asked here for both. Stored per
+    // play: `play` plays the ycm only on (2).
     let own_play = trigger::card_is("AG:（鸫）微小的『能做到』的事");
     ctx::set_slot(player_id, PICK, 0);
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("tsugumi_can_title")),
         &Msg::new(key!("tsugumi_can_choose")),
@@ -111,9 +96,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         return Ok(());
     }
-    // 规则书（1）【反击】: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」
-    // -- C# asks max/min and writes `target.Extreme = 1 / -1`.
-    let extreme = ctx::ask_pick(
+    let extreme = ctx::ask_choice(
         player_id,
         &Msg::new(key!("tsugumi_can_title")),
         &Msg::new(key!("tsugumi_can_ask")),
@@ -122,9 +105,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("tsugumi_can_min")),
         ],
     )?;
-    // 规则书（1）: 「以理论最大值或最小值结算」 -- C# `target.Extreme = 1 / -1`,
-    // so the play being counteracted to settles its number ranges at the theoretical
-    // extreme the picker named.
     ctx::set_extreme(if extreme == 0 { 1 } else { -1 });
     ctx::log(
         player_id,

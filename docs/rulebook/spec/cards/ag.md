@@ -139,7 +139,6 @@ Exclusive to 美竹兰 (`characters.json#美竹兰.exclusiveCards`).
 ### C-AG-yolo-01
 
 * **ID:** `C-AG-yolo-01`
-* **Source:** `cards.json#AG:Y.O.L.O`
 * **Quote:** 「你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字」
 * **Trigger:** before any of the user's dice rolls is finalised.
 * **Condition:** the card is playable at that timing ([反击]-like window).
@@ -778,8 +777,7 @@ Exclusive to 羽泽鸫.
 * **Source:** `cards.json#AG:（鸫）微小的『能做到』的事`
 * **Quote:** 「（1）【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）」
 * **Trigger:** as a [反击], when another effect would roll a numeric interval.
-* **Condition:** the effect's result is a pure number-interval (e.g. Y.O.L.O's
-  1d4), not a die-face table (e.g. 无论是何种颜色的夕阳's 1d6).
+* **Condition:** the effect's result is a pure number-interval (e.g. 无论是何种颜色的夕阳's 1d6).
 * **Effect:** that interval resolves at its theoretical max or min (the
   player's choice of which).
 * **Frame:** the interval result only.
@@ -1003,10 +1001,7 @@ Every Afterglow character shares clause (1). Per-character (2) (and (3) for
 
 * **Book:** 「你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字」 +
   rulebook-doc.md:126 「使用后的非[持续]手卡进入弃卡区」.
-* **Engine:** the +1d4 **does** land (event `cards:card-ag.yolo_boost`,
-  `pos = start + face + 1d4`), but the card is left in the hand
-  (`hand = ["AG:Y.O.L.O"]`, `discard = []`). A used non-[持续] hand card must
-  enter the 弃卡区.
+A used non-[持续] hand card must enter the 弃卡区.
 * **Test:** `card_ag.rs::yolo_adds_1d4` (plain failing; no ignore).
 * **Note:** the numeric half of the clause is honoured. Only the card's zone
   after use is wrong. Intermittent in the forall (other seeds take a

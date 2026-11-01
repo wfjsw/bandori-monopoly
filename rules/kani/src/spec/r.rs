@@ -16,7 +16,7 @@ use crate::world::{Effect, Snapshot, MAX_CARDS, MAX_PLAYERS};
 
 /// Only the user's money may move among the money fields.
 pub fn only_player_money_delta(
-    pre: &Snapshot,
+    condition: &Snapshot,
     post: &Snapshot,
     player: i32,
     delta: i32,
@@ -26,14 +26,14 @@ pub fn only_player_money_delta(
     if me >= MAX_PLAYERS {
         return false;
     }
-    if post.money[me] != pre.money[me].saturating_add(delta) {
+    if post.money[me] != condition.money[me].saturating_add(delta) {
         return false;
     }
     for p in 0..MAX_PLAYERS {
         if p == me {
             continue;
         }
-        if post.money[p] != pre.money[p] {
+        if post.money[p] != condition.money[p] {
             return false;
         }
     }
@@ -72,13 +72,13 @@ pub fn resolve_play_log_ok(effects: &[Effect], player: i32) -> bool {
 }
 
 /// Post: the user's money rose by exactly 1000; nobody else moved.
-pub fn resolve_play_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
-    only_player_money_delta(pre, post, player, resolve_gain_amount(), 1)
-        && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.charge, pre.charge)
-        && crate::world::arr4_eq(post.stay, pre.stay)
-        && crate::world::arr8b_eq(post.hand, pre.hand)
-        && crate::world::arr8b_eq(post.discard, pre.discard)
+pub fn resolve_play_post_ok(condition: &Snapshot, post: &Snapshot, player: i32) -> bool {
+    only_player_money_delta(condition, post, player, resolve_gain_amount(), 1)
+        && crate::world::arr4_eq(post.pos, condition.pos)
+        && crate::world::arr4_eq(post.charge, condition.charge)
+        && crate::world::arr4_eq(post.stay, condition.stay)
+        && crate::world::arr8b_eq(post.hand, condition.hand)
+        && crate::world::arr8b_eq(post.discard, condition.discard)
 }
 
 /// MUTANT: wants 2000.
@@ -110,8 +110,8 @@ pub fn cookie_pay_log_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 }
 
 /// Post money rose by `500*X`.
-pub fn cookie_pay_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, x: i32) -> bool {
-    only_player_money_delta(pre, post, player, cookie_pay_amount(x), 1)
+pub fn cookie_pay_post_ok(condition: &Snapshot, post: &Snapshot, player: i32, x: i32) -> bool {
+    only_player_money_delta(condition, post, player, cookie_pay_amount(x), 1)
 }
 
 /// MUTANT: off-by-one X (wants 500*(X+1)).
@@ -137,11 +137,11 @@ pub fn sprechchor_log_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 }
 
 /// Post: only the user's money moved, by `1000 + X*120`.
-pub fn sprechchor_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, x: i32) -> bool {
-    only_player_money_delta(pre, post, player, sprechchor_gain(x), 1)
-        && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.charge, pre.charge)
-        && crate::world::arr4_eq(post.stay, pre.stay)
+pub fn sprechchor_post_ok(condition: &Snapshot, post: &Snapshot, player: i32, x: i32) -> bool {
+    only_player_money_delta(condition, post, player, sprechchor_gain(x), 1)
+        && crate::world::arr4_eq(post.pos, condition.pos)
+        && crate::world::arr4_eq(post.charge, condition.charge)
+        && crate::world::arr4_eq(post.stay, condition.stay)
 }
 
 /// MUTANT: off-by-one on the X term (1000 + (X+1)*120).
@@ -198,9 +198,9 @@ pub fn ako_dark_stun_ok(pre_stun: i32, post_stun: i32) -> bool {
 }
 
 /// Post: money unchanged at activation, pay_amount zeroed.
-pub fn ako_dark_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
+pub fn ako_dark_post_ok(condition: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let me = player as usize;
-    me < MAX_PLAYERS && crate::world::arr4_eq(post.money, pre.money) && post.pay_amount == 0
+    me < MAX_PLAYERS && crate::world::arr4_eq(post.money, condition.money) && post.pay_amount == 0
 }
 
 /// MUTANT: wants 2 stun layers.
@@ -230,7 +230,7 @@ pub fn louder_mult_delta() -> i32 {
     5
 }
 
-/// If a ring-multiplier slot existed, post = pre + 5.
+/// If a ring-multiplier slot existed, post = condition + 5.
 pub fn louder_mult_ok(pre_mult: i32, post_mult: i32) -> bool {
     post_mult == pre_mult + louder_mult_delta()
 }
@@ -276,8 +276,8 @@ pub fn fire_bird_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool
 }
 
 /// Post: money -1600, card on the user's field.
-pub fn fire_bird_place_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
-    only_player_money_delta(pre, post, player, -fire_bird_cost(), 1)
+pub fn fire_bird_place_post_ok(condition: &Snapshot, post: &Snapshot, player: i32) -> bool {
+    only_player_money_delta(condition, post, player, -fire_bird_cost(), 1)
 }
 
 /// MUTANT: wants a 1600 gain instead of a pay.

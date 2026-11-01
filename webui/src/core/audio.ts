@@ -3,7 +3,6 @@
 import { res } from "./assets";
 import { settings } from "./store";
 
-/** BgmPlayer.SceneTracks */
 const SCENE_TRACKS: Record<string, string> = {
   boot: "21_Enjoy",
   menu: "21_Enjoy",
@@ -309,7 +308,7 @@ function playBuffer(buf: AudioBuffer, volume: number, dest?: AudioNode): AudioBu
   return node;
 }
 
-/** Sfx.Play(name) -- rate-limited per name. */
+/** Play a one-shot effect; the same name is rate-limited by `minGapMs`. */
 export function sfx(name: string, minGapMs = 60): void {
   const level = settings().se;
   if (level <= 0 || !unlocked) return;
@@ -323,8 +322,6 @@ export function sfx(name: string, minGapMs = 60): void {
   });
 }
 
-// Lip sync (Live2DPortrait.UpdateLipSync): the mouth opens from the playing
-// voice line's RMS with asymmetric smoothing -- faster to open than to close.
 // Voice lines pass through an AnalyserNode and the smoothing lives here so the
 // model just reads one value per frame.
 

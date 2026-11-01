@@ -46,10 +46,10 @@ fn offer_shows_resolved_distance_and_each_landing_before_walking() {
     let mut t = sayo();
     offer(&mut t);
     let p = t.expect_prompt();
-    assert_eq!(p.text.a.get("n"), Some(&Arg::I(5)));
-    assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(6)));
-    assert_eq!(p.options[1].a.get("tile"), Some(&Arg::Tile(7)));
-    assert_eq!(p.options[0].a.get("tile"), Some(&Arg::Tile(8)));
+    assert_eq!(p.text.args.get("n"), Some(&Arg::Integer(5)));
+    assert_eq!(p.text.args.get("tile"), Some(&Arg::Tile(6)));
+    assert_eq!(p.options[1].args.get("tile"), Some(&Arg::Tile(7)));
+    assert_eq!(p.options[0].args.get("tile"), Some(&Arg::Tile(8)));
 }
 
 #[test]
@@ -127,8 +127,8 @@ fn final_distance_override_and_existing_extra_steps_are_preserved() {
     t.m.world_mut().turn.plan.extra_steps = 2;
     offer(&mut t);
     let p = t.expect_prompt();
-    assert_eq!(p.text.a.get("n"), Some(&Arg::I(9)));
-    assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(10)));
+    assert_eq!(p.text.args.get("n"), Some(&Arg::Integer(9)));
+    assert_eq!(p.text.args.get("tile"), Some(&Arg::Tile(10)));
     t.answer(0, 0).unwrap();
     t.counteract(0, SKILL).unwrap();
     assert_eq!(t.pos(0), 12, "7 determined + 2 existing + 2 Sayo");
@@ -144,8 +144,8 @@ fn reverse_move_previews_and_extends_in_the_same_direction() {
     t.dice(&[5]);
     t.roll(0).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(15)));
-    assert_eq!(p.options[0].a.get("tile"), Some(&Arg::Tile(13)));
+    assert_eq!(p.text.args.get("tile"), Some(&Arg::Tile(15)));
+    assert_eq!(p.options[0].args.get("tile"), Some(&Arg::Tile(13)));
     t.answer(0, 0).unwrap();
     t.counteract(0, SKILL).unwrap();
     assert_eq!(t.pos(0), 13);

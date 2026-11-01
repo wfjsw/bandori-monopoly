@@ -58,16 +58,9 @@ pub fn expire_removed(id: &str) {
     ctx::event_expire(id, true);
 }
 
-/// `X = count d sides` from the match RNG, summed. Opens the 「掷骰结算前」
-/// [反击] window (the default -- an event's 「掷骰」 is a real roll). A roll that
-/// only measures something and must not be answered takes `ctx::roll_direct`
-/// instead; a roll cast *inside* a roll-window counteraction (Y.O.L.O's boost)
-/// must.
-pub fn roll(
-    player_id: i32,
-    count: i32,
-    sides: i32,
-) -> Result<i32, card_sdk::Prompt> {
+/// `X = count d sides` from the match RNG, summed. Opens the 「掷骰结算前」 [反击] window
+/// (the default -- an event's 「掷骰」 is a real roll).
+pub fn roll(player_id: i32, count: i32, sides: i32) -> Result<i32, card_sdk::Prompt> {
     ctx::roll(
         player_id,
         count,

@@ -774,7 +774,7 @@ impl Table {
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
         self.m
             .world_mut()
-            .set_tok(who as i32, bandori_std::fire::KEY, value, -1, max);
+            .set_held(who as i32, bandori_std::fire::KEY, value, -1, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -950,7 +950,12 @@ impl Table {
         self.field(who)
             .into_iter()
             .find(|f| f.card == card)
-            .map(|f| f.props.get(bandori_std::marker::TURNS_LEFT).copied().unwrap_or(0))
+            .map(|f| {
+                f.props
+                    .get(bandori_std::marker::TURNS_LEFT)
+                    .copied()
+                    .unwrap_or(0)
+            })
             .unwrap_or(-1)
     }
 
@@ -1018,7 +1023,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().held_max(who as i32, bandori_std::fire::KEY)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {
