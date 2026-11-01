@@ -77,11 +77,14 @@ export const Avatar = memo(function Avatar({ c, size = 64, className }: { c: Per
   );
 });
 
-/** The character's name plate, drawn from the roster row (colour, name, band). */
+/** The character's name plate, drawn from the roster row (colour, name, romanisation). */
 export const NamePlate = memo(function NamePlate({ c, width = 355 }: { c: PersonaData; width?: number }) {
   // The plate is drawn at its fitted length and scaled to `width` by CSS, so the
   // letters keep their proportions however small the slot is.
-  return <NameBanner className={s.plate} style={{ width }} title={c.display} subtitle={c.group} color={c.color || bandColor(c.group)} />;
+  return (
+    <NameBanner className={s.plate} style={{ width }} title={c.display}
+      subtitle={c.latin || c.group} color={c.color || bandColor(c.group)} />
+  );
 });
 
 export const BandMark = memo(function BandMark({ band, className }: { band: string; className?: string }) {

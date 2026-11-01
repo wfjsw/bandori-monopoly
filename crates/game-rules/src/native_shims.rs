@@ -3865,10 +3865,12 @@ pub unsafe extern "C-unwind" fn ruleset_set_pay_factor(n: i32) {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_multiply_pay_factor(milli: i32, scope: i32) {
-    with_host(|h| match h.op_multiply_pay_factor([milli, scope, 0, 0, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_multiply_pay_factor([milli, scope, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]

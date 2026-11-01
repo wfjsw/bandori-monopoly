@@ -49,6 +49,9 @@ pub mod meta_key {
 pub struct PersonaDef {
     pub name: &'static str,
     pub display: &'static str,
+    /// Romanised name (`Matsubara Kanon`): the name plate's subtitle. Variants
+    /// reuse their base character's.
+    pub latin: &'static str,
     pub group: &'static str,
     pub color: &'static str,
     pub skill: &'static str,
@@ -67,6 +70,7 @@ impl PersonaDef {
         Self {
             name,
             display: name,
+            latin: "",
             group: "",
             color: "",
             skill: "",
@@ -83,6 +87,10 @@ impl PersonaDef {
 
     pub const fn display(mut self, display: &'static str) -> Self {
         self.display = display;
+        self
+    }
+    pub const fn latin(mut self, latin: &'static str) -> Self {
+        self.latin = latin;
         self
     }
     pub const fn group(mut self, group: &'static str) -> Self {
@@ -134,8 +142,9 @@ impl PersonaDef {
 impl ToMetaRow for PersonaDef {
     /// Runtime-only row. `text` is emitted: the ruleset queries it at runtime
     /// (`card_text_mentions` over `skill:<owner>:<skill>`, 「技能中含有…」).
-    /// Display columns (`display` / `color` / `variantTag` / `art` / `costume`
-    /// / `cnId`) stay on the def and go to `display.json` (`docs/DISPLAY.md`).
+    /// Display columns (`display` / `latin` / `color` / `variantTag` / `art` /
+    /// `costume` / `cnId`) stay on the def and go to `display.json`
+    /// (`docs/DISPLAY.md`).
     fn to_meta_row(&self) -> MetaRow {
         MetaRow {
             kind: alloc_string("persona"),

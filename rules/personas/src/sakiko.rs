@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"丰川祥子"#)
     .display(r#"丰川祥子"#)
+    .latin(r#"Toyokawa Sakiko"#)
     .group(r#"Ave Mujica"#)
     .color(r#"#7799CC"#)
     .skill(r#"请把你们的人生交给我"#)

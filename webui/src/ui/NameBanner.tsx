@@ -39,7 +39,9 @@ export interface NameBannerProps {
   style?: CSSProperties;
 }
 
-export function NameBanner({ title, subtitle = "", color, width, className, style }: NameBannerProps) {
+export function NameBanner({ title, subtitle: rawSubtitle = "", color, width, className, style }: NameBannerProps) {
+  // The artwork sets its latin subtitle in caps; callers store it in natural case.
+  const subtitle = rawSubtitle.toUpperCase();
   const W = width ?? bannerWidth(title, subtitle);
   const size = titleSize(title, W);
   const subSize = subtitleSize(subtitle, W);

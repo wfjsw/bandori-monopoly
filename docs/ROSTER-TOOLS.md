@@ -28,7 +28,7 @@ externally set one stages stale artifacts.
 
 Display-only columns that live outside the engine structs (`counterReason`,
 and the slimmed roster copy -- card `text` / `rawName` /
-`cell`, persona `display` / `text` / `color` / `variantTag` / `art` /
+`cell`, persona `display` / `latin` / `text` / `color` / `variantTag` / `art` /
 `costume` / `cnId`, group `shortName` / `color` / `text` / `logo`) are **not**
 in the dump. `display.json` is the source for the rest of the display copy.
 

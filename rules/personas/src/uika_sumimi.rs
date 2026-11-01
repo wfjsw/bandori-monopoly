@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"三角初华（Sumimi）"#)
     .display(r#"三角初华（Sumimi）"#)
+    .latin(r#"Misumi Uika"#)
     .group(r#"Sumimi"#)
     .color(r#"#BB9955"#)
     .skill(r#"成为偶像"#)

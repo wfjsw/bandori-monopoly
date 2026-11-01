@@ -61,3 +61,24 @@ pub mod uika;
 pub mod uika_sumimi;
 pub mod umiri;
 pub mod yukina;
+
+#[cfg(test)]
+mod tests {
+    use super::roster_table::PERSONAS;
+
+    /// The name plate draws `latin` as its subtitle (`docs/DISPLAY.md`); every
+    /// row needs one and a variant reuses its base character's.
+    #[test]
+    fn every_row_has_a_romanised_name() {
+        for p in PERSONAS {
+            assert!(!p.latin.is_empty(), "{} has no latin", p.name);
+            if !p.variant_of.is_empty() {
+                let base = PERSONAS
+                    .iter()
+                    .find(|b| b.name == p.variant_of && b.variant_of.is_empty())
+                    .unwrap_or_else(|| panic!("{} has no base row", p.name));
+                assert_eq!(p.latin, base.latin, "{} differs from its base", p.name);
+            }
+        }
+    }
+}

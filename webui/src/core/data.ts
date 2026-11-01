@@ -350,6 +350,7 @@ async function loadTables(target: Target, run: number, onProgress?: (p: number) 
     return {
       ...p,
       display: d.display ?? "",
+      latin: d.latin ?? "",
       text: d.text ?? p.text ?? "",
       color: d.color ?? "",
       cnId: d.cnId ?? "",

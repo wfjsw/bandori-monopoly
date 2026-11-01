@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"松原花音"#)
     .display(r#"松原花音"#)
+    .latin(r#"Matsubara Kanon"#)
     .group(r#"Hello, Happy World!"#)
     .color(r#"#44DDFF"#)
     .skill(r#"真正的迷子"#)

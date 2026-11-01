@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"广町七深"#)
     .display(r#"广町七深"#)
+    .latin(r#"Hiromachi Nanami"#)
     .group(r#"Morfonica"#)
     .color(r#"#EE7744"#)
     .skill(r#"这是很普通的事吧？"#)

@@ -37,7 +37,7 @@ export interface CardData {
 /** Merged persona row: identity from `glue.roster_json()`, display from
  *  `generated/display.json`. */
 export interface PersonaData {
-  name: string; display: string; group: string; color: string; skill: string; text: string;
+  name: string; display: string; latin: string; group: string; color: string; skill: string; text: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
   /** Base character of an alternate form (`高松灯（CRYCHIC）` -> `高松灯`). */
   variantOf?: string;
@@ -68,7 +68,7 @@ export interface DisplayFile {
     text?: string; body?: Block[]; rawName?: string; counterReason?: string;
   }>;
   personas: Record<string, {
-    display?: string; text?: string; color?: string; variantTag?: string;
+    display?: string; latin?: string; text?: string; color?: string; variantTag?: string;
     art?: string; costume?: string; cnId?: string;
   }>;
   groups: Record<string, {

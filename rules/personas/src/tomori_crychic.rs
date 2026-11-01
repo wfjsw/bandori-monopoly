@@ -4,6 +4,7 @@ use bandori_std::roster::PersonaDef;
 pub const CHARACTER: PersonaDef =
 PersonaDef::new(r#"高松灯（CRYCHIC）"#)
     .display(r#"高松灯（CRYCHIC）"#)
+    .latin(r#"Takamatsu Tomori"#)
     .group(r#"CRYCHIC"#)
     .color(r#"#77BBDD"#)
     .skill(r#"跌跌撞撞..."#)

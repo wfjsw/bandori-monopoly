@@ -176,6 +176,7 @@ fn personas_map() -> JsonMap {
     for p in personas::roster_table::PERSONAS {
         let mut row = JsonMap::new();
         insert_str(&mut row, "display", p.display);
+        insert_str(&mut row, "latin", p.latin);
         insert_str(&mut row, "text", p.text);
         insert_str(&mut row, "color", p.color);
         insert_str(&mut row, "variantTag", p.variant_tag);

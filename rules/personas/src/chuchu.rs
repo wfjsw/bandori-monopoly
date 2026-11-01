@@ -3,6 +3,7 @@ use bandori_std::roster::PersonaDef;
 /// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: PersonaDef = PersonaDef::new(r#"珠手知由"#)
     .display(r#"珠手知由"#)
+    .latin(r#"Tamade Chiyu"#)
     .group(r#"RAISE A SUILEN"#)
     .color(r#"#00BBFF"#)
     .skill(r#"天才制作人"#)
