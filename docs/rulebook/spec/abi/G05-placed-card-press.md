@@ -16,17 +16,21 @@ button. This document uses one mechanism for each:
 
 * an **offer** is a question the engine raises, because a printed condition just
   became true — 「主要阶段中，若此卡上有至少9个水母标记，可以…」,
-  「你可以移除一个奇迹水晶…」, 「主要阶段中，你可将此卡置入弃牌堆并进入移动
-  阶段…」. It is an `On::Action` hook plus `ctx::ask_yes`; the player answers
-  发动/不发动 and the effect runs. An offer is anchored at the *event the
-  clause names* — the pre-dice plan pass for the two movement offers, the end of
-  (3)'s placement for the crystal. An offer has no button;
+  「主要阶段中，你可将此卡置入弃牌堆并进入移动阶段…」. It is an `On::Action`
+  hook whose **declare** asks; the player answers 发动/不发动 and the effect
+  runs. An offer is anchored at the *event the clause names* — the pre-dice plan
+  pass for the two movement offers. An offer has no button;
 * a **passive clause** is a printed effect with no question at all: it applies
   when the card enters and is a property of the instance from then on
   (「本卡在[场地]时改变本卡代替的专属卡效果」).
 
 The remaining terms:
 
+* the **declare** is an entry's pre-body collector (`docs/ACTIVATION.md` §2):
+  it runs at the admission layer, may ask, and answers
+  `Activation::Decline` — the entry does not fire at all, so there is no body,
+  no header, **no flash and no log** — or `Activation::Arg`, the value the body
+  receives. Whether a question belongs in a declare or in the body is §4.1;
 * the **instance** is the `FieldCard` row (`FieldCard.uid`). A hook body runs on
   the instance that carries the hook, and the engine binds it
   (`Run::current_uid`), so every instance read answers for that copy;
@@ -114,10 +118,12 @@ same rows:
   nothing evaluates them today, so nothing is waived (row 735).
 
 The clause is an immediate **offer**, already printed as one: 「你可以移除一个
-奇迹水晶」 is asked as part of resolving (3), at the moment the card lands. The
-fix is `ctx::ask_yes` before the crystal is spent, then the invocation (§9.1);
-the invocation itself is still a named entry (`"2"`), which is why G13 is
-needed.
+奇迹水晶」 is asked as part of resolving (3), at the moment the card lands. This
+one is a **sub-choice**, not a declare: (3) has already fired (the card is
+placed either way), so the question belongs in its body, after the placement
+and before the crystal is spent — the decline arm logs nothing, so the only
+visible trace is (3)'s own placement (§4.1, §9.1). The invocation itself is a named entry
+(`"2"`), which is why G13 is needed.
 
 ### 1.2 `kanon-press-surface-abi` (rows 607, 608, 610, 611, 612, 619, 620, 621)
 
@@ -144,7 +150,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 and the body branches again at line 62. The jump is on no surface at all: it is
 not a key kind but a *condition*, and there is no hook on the main move. The
 jump is therefore an **offer raised before the main move's dice** (§9.2), gated
-on ≥9 markers and on no other offer having claimed the same move. Rows 610-612 add that the jump only
+on ≥9 markers and on no other offer having claimed the same move. It spends the
+marker pool and the card, so the question is the entry's **declare**: a
+decline is silent (§4.1). Rows 610-612 add that the jump only
 writes the turn plan and never runs it (this tree already calls
 `run_planned_move`, so those three are closed; they stay listed because they
 were the original evidence). Row 621's main-move gate and row 620's second-copy
@@ -167,6 +175,8 @@ phase — before the main move's dice are thrown. Asked any earlier it competes
 with the normal move (the player would have to decide before seeing whether they
 even want to move); asked after the roll it is too late. The distance is
 「你当前手牌张数」, a fixed count, so the move must not throw a die at all.
+Using it discards the card, so the question is the entry's **declare** rather
+than a body ask: a decline must leave no log line and no card flash (§4.1).
 
 Today `go` runs a whole second move of its own instead
 (`rules/cards/card-mygo/src/even_lost.rs:65-78`): it calls `plan::set_steps`
@@ -235,12 +245,14 @@ and the swap must keep the same `place_card` arm. Row 936 is a stale TODO
    (for these cards) "the placed clause". The body and gate recover which one by
    `is_placed()` / `play_from_hand()` / `hand_count()`. The recovery is per
    card, unenforced, and wrong with a second copy in hand.
-2. **A stage body cannot ask.** `On::Filter` bodies are pure value folds
-   (`fn(i32, PlanValue) -> PlanValue`, no `Result`), so a question raised at the
-   plan pass — the only point before the dice — is impossible to write. The
-   engine raises `diceRollPlan` (`play.rs:1623`), and every hook kind is
-   dispatched the same way (`wasm_rules.rs:5836-5870`), but the SDK exposes no
-   `Action` constructor over that kind and the loader refuses one (§4).
+2. **A stage body cannot ask — and cannot decline.** `On::Filter` bodies are
+   pure value folds (`fn(i32, PlanValue) -> PlanValue`, no `Result`), so a
+   question raised at the plan pass — the only point before the dice — is
+   impossible to write; the loader refuses a declare on a filter outright and
+   points at the Action pre-stage (`host.rs:1079-1085`). The engine raises
+   `diceRollPlan` (`play.rs:1623`), and every hook kind is dispatched the same
+   way (`wasm_rules.rs:5836-5870`), but the SDK exposes no `Action` constructor
+   over that kind (§4).
 3. **Nothing marks a move as already claimed.** Two offers at the same pass
    would both fire and both spend a card on one move (§5).
 4. **An instance has exactly one printed surface.** Hook dispatch resolves
@@ -269,11 +281,11 @@ hole the triage graded high.
 | offers without the invocation half | item 3 alone | nanami still runs the wrong clause; item 1 is the group's shared row with G13 |
 
 **Four mechanisms, and only the plan stage is new machinery.** The crystal
-question is an ordinary `ask_yes` inside a resolving body; the marker question
-is an ordinary `ask_yes` inside a hook — the engine already pauses a hook body
-(`host.rs:1960-2014`) and resumes it with the answer. Only the two movement
-offers need something absent: an **action** hook at the plan pass (§4), and a
-per-move claim so the two do not both spend (§5). Hina needs none of that and
+question is an ordinary `ask_yes` inside a resolving body. The two movement
+offers need something absent: an **action** hook at the plan pass, with the
+question in its declare so a decline is silent (§4), and a per-move claim so
+the two do not both spend (§5). The engine already runs an action hook's
+declare and pauses it (`host.rs:1792-1834`, `1960-2014`). Hina needs none of that and
 gets the marker instead (§6.2).
 
 **The instance is the common denominator.** Every one of the four needs the
@@ -284,11 +296,13 @@ runs. That, and only that, is the ABI this group adds — one `Action` construct
 over an existing kind, one claim, G13, and the effective-card marker.
 
 **The cost is small and half already paid.** The hook drive already binds
-`current_uid` and already pauses for prompts; the plan pass already re-reads the
-plan after the raise (`play.rs:1624`). What is added is one guest constructor
-plus its loader relaxation, one `TurnCtx` bool and one import, two imports for
-the marker, and two card rewrites that delete code rather than add it. No
-existing body shape moves; no client, wire or bot surface changes (§8).
+`current_uid` and already pauses for prompts; `declare` and its silencing
+already exist (an entry can be declined at the admission layer, silently); the
+plan pass already re-reads the plan after the raise (`play.rs:1624`). What is
+added is one guest constructor plus its loader relaxation, one `TurnCtx` bool
+and one import, two imports for the marker, and two card rewrites that delete
+code rather than add it. No existing body shape moves; no client, wire or bot
+surface changes (§8).
 
 **G13 is in the same window.** Item 1's invocation is G13's surface; landing G05
 later means writing the offer against a call it cannot make.
@@ -302,10 +316,10 @@ surface and could ship on G13 alone — but the four remaining cards stay broken
 
 ## 3. Capability as an invariant
 
-**An offer printed on a placed card is a question raised by the engine at the
-event the clause names, on the instance that carries it, and at most one offer
-per event is taken — never a button, never an origin guess, never a card
-activation.**
+**An offer printed on a placed card is a question the entry's declare raises at
+the event the clause names, on the instance that carries it, and at most one
+offer per event is taken — never a button, never an origin guess, never a card
+activation, and a decline runs, logs and flashes nothing.**
 
 Corollaries, all of which the surface below makes true:
 
@@ -318,8 +332,9 @@ Corollaries, all of which the surface below makes true:
    (`is_placed`, named counters, `crystals`, props, `dest`) answers for that
    instance, and the discard moves that copy.
 4. The question is asked only when its own guard admits — the guard is the
-   printed condition's remainder (the count, the movement gate, the phase). A
-   declined offer writes nothing.
+   printed condition's remainder (the count, the movement gate, the phase) —
+   and it is asked in the **declare**, so a decline runs no body: no log, no
+   flash, no write.
 5. The first accepted offer on a move **claims** it; later offers at the same
    event stand down (§5). The claim dies with the move.
 6. A hook is not an activation: no `cardUsed` raise, no `cards_played`
@@ -334,7 +349,7 @@ Corollaries, all of which the surface below makes true:
 
 ---
 
-## 4. Surface — an action hook at the plan pass
+## 4. Surface — a declaring action hook at the plan pass
 
 **No new engine kind.** The pass exists (`TriggerKind::DiceRollPlan`, engine id
 67), it is raised on every move (`play.rs:1623` for the main move,
@@ -343,24 +358,61 @@ already runs there. What is missing is the *action* side of it: `DiceRollPlan`
 is declared only in `filter_kinds!` (`crates/card-sdk/src/kinds.rs:619`), its
 kind constant sits in `impl FilterKind` (`abi.rs:2496`), and the loader rejects
 an `On::Action` that lists a filter kind
-(`crates/game-rules/src/host.rs:1058-1078`).
+(`crates/game-rules/src/host.rs:1058-1083`).
 
 A filter body cannot pause: its type is `fn(i32, PlanValue) -> PlanValue`
-(`crates/card-sdk/src/lib.rs:720`), with no `Result` to carry a prompt. An
-action body is `fn(i32) -> Asked` and may ask. Both write the plan through the
-same `ctx::plan::*` setters, and the pass re-reads the plan after the raise, so
-the two forms are interchangeable in effect and differ only in whether they may
-wait.
+(`crates/card-sdk/src/lib.rs:720`), with no `Result` to carry a prompt
+and no decline channel either. An action body may ask, and its entry may
+**declare**. Both write the plan through the same `ctx::plan::*` setters, and
+the pass re-reads the plan after the raise, so the two forms are
+interchangeable in effect and differ only in whether they may wait.
+
+### 4.1 The question is the declare, not the body
+
+Both movement clauses spend the card, so the question decides whether the
+clause is used at all — that makes it the entry's **declare**, not an
+`ask_yes` in the body. `Activation::Decline` means the entry does not fire at
+all: no body, no header, no flash, no log (`lib.rs:134-138`). A body ask cannot
+give that: the body has already been entered, so the run is announced, flashed
+and logged, and a "no" would animate and log a use that never happened.
+
+The engine already runs it. `entry_admitted` calls the collector on every
+admitting entry before anything is announced (`host.rs:1792-1834`), maps
+`EXIT_DECLINED` to `Admitted::No`, and `run_hook` returns `None` when no entry
+ran (`:1966-2030`). The announce (flash + header) is the `on_body` callback,
+which fires only at body entry (`:1997-1999`), and `drive_hook` maps `Ok(None)`
+to "nothing about the card reaches the UI" (`wasm_rules.rs:3577-3579`). So a
+declined offer posts neither the flash nor a log line. `detour` is the existing
+user of the shape (`detour.rs:49-52`, `:66-68`).
+
+Two consequences:
+
+* **the declare decides, the body acts.** `T` carries the decision (kanon's
+  chosen tile, even-lost's hand size) and the body reads it as its second
+  parameter, so the body never re-asks and replay never re-derives it;
+* **declare writes are dropped.** `declare_after` keeps the arg and the answer
+  cursor, not the collector's world (`host.rs:1807-1835`), so every state
+  change — the claim of §5, the plan writes — is a body write.
+
+What stays in the body is a **sub-choice** of an entry that fires anyway:
+nanami's crystal and hina's [共鸣] (§9.1, §9.5). Their activation is the
+placement; declining the sub-choice must not un-place, and the body logs
+nothing on the decline arm.
+
+A filter could do none of this — no `Result` for a prompt, no decline. The
+loader says so verbatim: `On::Filter cannot declare -- use an On::Action
+pre-stage instead` (`host.rs:1079-1085`).
 
 `crates/card-sdk/src/abi.rs`, inside `impl ActionKind` (line 1988):
 
 ```rust
     /// Action. The move's plan pass (行动阶段 8, before the dice are rolled) --
-    /// the **prompting** side of [`FilterKind::DiceRollPlan`], same engine kind
-    /// 67. An action body may pause (`ask_yes`) and rewrites the plan through
-    /// `ctx::plan::*`; a filter body folds `PlanValue`. Both run, actions first
-    /// (`host::CardInfo::hook_entries`); a body that pausing-replays re-runs
-    /// from the saved pre-action state, so a write before the ask is safe.
+    /// the **declaring** side of [`FilterKind::DiceRollPlan`], same engine kind
+    /// 67. The entry's `declare` (`On::declare_arg`) asks before anything is
+    /// announced, so a decline is silent; the body acts on the declared arg and
+    /// rewrites the plan through `ctx::plan::*`. A filter body folds
+    /// `PlanValue` instead. Both run, actions first
+    /// (`host::CardInfo::hook_entries`).
     pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan);
 ```
 
@@ -382,9 +434,10 @@ filter kind; an `Action` entry may list any engine kind that is not
 filter-*only* — i.e. `!tk.is_filter() || tk.is_dual_action_filter()`. A dual
 kind on a `Filter` entry is unchanged behaviour, so no manifest needs a rewrite.
 
-The export is called with the `fn(i32) -> Asked` signature (`call_card`,
-`host.rs:3140-3147`); the kind does not pick the signature, the entry does, so an
-action body at a filter kind is invoked as an action with no other change.
+The body is driven by the entry's `BodyShape` (`drive_body_arg` for a
+declaring entry, `lib.rs:169-176`); the engine kind picks neither the signature
+nor the arg, so an action body at a filter kind is invoked as an action with no
+other change.
 
 **Not on `On::Gate`**: a gate is a pure decision and is folded per gate kind
 (`load` refuses a gate at a hook kind), so the offer stays an Action.
@@ -427,9 +480,13 @@ state, like `fixed_roll`):
 if ctx::plan::is_claimed() { return false; }
 ```
 
-and call `ctx::plan::claim()` immediately **before** their ask, so a decline
-leaves the move open for the other card. A body is re-run from the saved
-pre-action state after the answer, so the claim write repeats harmlessly.
+The claim itself is the **first body write**, because a declare's writes are
+dropped (§4.1) and because only an accepted offer may claim: a declined offer
+leaves the move to the next one, and the guard of the next job reads the flag
+from the committed world. Within one card's two entries the guard sees a stale
+world (`entry_admitted` runs against the run's starting world), so a second
+offer entry at the same kind on the same card would not see its sibling's
+claim; no card here has two at one kind.
 
 ---
 
@@ -487,6 +544,11 @@ placed instance.
 
 The frame's `by_instance` is the **caller's** `current_uid` — for this group
 always the placed instance whose hook asked. It is `-1` from a hand card.
+
+An invoked entry is **not** declared: `invoke_entry` runs the body only, so a
+declaring target would receive a default arg (G13 §4.7, §11 q9). Nothing
+here is invoked that way — the crystal offer invokes the skill's (2), which is
+a plain `Action` — so G05 leaves G13's rule alone.
 
 ### 6.2 Effective card
 
@@ -560,30 +622,33 @@ declarations through `sys_kani` to the model ops (§7.6).
 instances in placement order, skips face-down cards (`card_face_down`), and
 emits one job per instance whose rule hooks the kind; `run_hook_job` →
 `drive_hook(cx, call, card_id, uid, trigger)` binds `current_uid = uid` and
-pushes the resolving frame (`:3268`). A paced body suspends the raise and parks
-a resume (`:6011-6020`). **No engine change is needed to offer from a placed
+pushes the resolving frame (`:3268`). A paced body or declare suspends the
+raise and parks a resume (`:6011-6020`). **No engine change is needed to offer from a placed
 card** — the offers are card-side once §4 exists.
 
 ### 7.2 Ask, replay, ordering
 
-A hook body that asks is rolled back to the saved pre-action state and re-run
-with the answer (`host.rs:1960-2014`: each entry's condition and guard are re-evaluated and
-the body re-entered; the shape `hagumi_marks.rs:143-150` already relies on), so every write before an `ask_yes` is re-applied once, not
-twice. Body order is therefore:
+A pausing hook is rolled back to the saved pre-action state and re-run with the
+answer: each pass re-evaluates the entry's condition and guard and then runs the
+collector again (`host.rs:1792-1834`, `1966-2030`). A prompted decline keeps its
+answer-log slot and stays declined on replay (`docs/ACTIVATION.md` §2 — only a
+prompt-free decline is log-silent), so the guard must read the same state on
+every pass. The order is therefore split:
 
 ```
-guard -> claim (§5) -> ask -> [decline: nothing] -> writes -> set_dest
+admission: condition -> guard -> declare (ask) -> [decline: nothing]
+body     : claim (§5) -> writes -> set_dest
 ```
 
-The ask is always the first thing that can pause, so a decline leaves the
-instance untouched.
+Nothing that a decline should undo may happen before the declare. The body is
+entered only on `Admitted::Yes`, so every write in it is re-applied once, and
+the claim is first among them.
 
 Dispatcher order is `On::Action` entries first, then `On::Filter`
-(`host.rs:213-221`), both in declaration order: a prompting body always sees the
-plan before any pure fold of the same raise. An offer's own guard is re-evaluated on the resume pass
-(`host.rs:1966-1980`: `entry_admitted` runs per pass), so a guard reading `is_claimed` after
-the claim must not exclude itself — the cards read it *before* claiming (§9.2,
-§9.3).
+(`host.rs:213-221`), both in declaration order: a declaring body always sees the
+plan before any pure fold of the same raise. A guard reading `is_claimed` sits
+*outside* the claim (§9.2, §9.3): the claim is a body write, so it cannot make
+the entry's own guard fail on the resume pass.
 
 ### 7.3 Plan writes from a hook
 
@@ -613,11 +678,17 @@ the offered copy is the one that leaves and nothing else is touched.
 
 ### 7.5 `Ruleset::build`
 
-One new rule beside the existing kind/variant check (`host.rs:1058-1078`, §4):
+One new rule beside the existing kind/variant check (`host.rs:1058-1083`, §4):
 `An Action entry may list a filter kind only when it is dual`. A typo'd
-`On::Action(Filter::SettleMul(…))` still fails to load.
+`On::Action(Filter::SettleMul(…))` still fails to load. The existing
+declare-on-`Filter` rejection needs no change: the dual kind is an `Action`, so
+`declare` is legal on it and still illegal on the filter spelling.
 
 ### 7.6 Kani model
+
+The Kani host runs the same `entry_admitted` / `declare_after` code, so a
+declaring hook needs no model change beyond the ops below; the proofs prescribe
+the decline answer to hit the silent arm.
 
 * `Op::effective_card_at = 347`, `Op::set_effective_card_at = 348`,
   `Op::plan_claimed = 349`. Model: `effective_card: [NameId; MAX_FIELD]` plus
@@ -653,6 +724,10 @@ Scope, stated so the review can reject it as a whole:
   follow-up, not part of this group.
 * **No `TurnCtx.pressed`.** Without buttons nothing needs per-turn
   de-duplication; the claim of §5 is per move, not per turn.
+* **No flash or "silence" machinery.** A declined declare never enters the
+  body, and the announce already sits at body entry (`host.rs:1539-1552`,
+  `1997-1999`), so an offer the player passes leaves no flash and no log
+  without a new flag.
 * **No `On::Play` `.field()` bit.** A Play stays a hand play; the placed clause
   is a second entry.
 * **No `Call::Press`, no `CardRules::press*`, no `entry::PRESS` change.**
@@ -709,7 +784,10 @@ if ctx::ask_yes(
 The old `cant_press` disappears with the press: the offer's own conditions are
 the two inline checks. The order is deliberate — a pot and a skill must exist
 before the question is asked, so the answer is never a dead end, and the crystal
-leaves only after a yes (row 734's burn).
+leaves only after a yes (row 734's burn). It is a **body** ask and not a
+declare: (3) fires either way (the card is placed regardless) and a decline
+must not un-place it. The decline arm logs nothing, so the only visible trace
+is (3)'s own placement (§4.1).
 
 nanami's skill gains `.id("2")` on its `Action::CardUsed` entry
 (`skill-personas/src/nanami.rs:58`); the label 「（2）」 stays. New locale keys
@@ -737,8 +815,8 @@ On::Play("", Some(cant_place), place),           // hand play: placement only
 On::Action(Action::DiceRollPlan(
     "card.placed && actor == owner && move.is_main_move",
     Some(can_jump),
-    jump,
-)),
+    unused_body,                                 // replaced by declare_arg
+)).declare_arg(pick_jump, jump),
 On::Action(Action::MoveAfter(
     "actor == owner && move.kind != Teleport && move.dir < 0",
     None,
@@ -750,6 +828,26 @@ fn can_jump(player_id: i32) -> bool {
     ctx::held_count(player_id, JELLY) >= 9 && !ctx::plan::is_claimed()
 }
 
+/// 「可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅」 -- asked at the
+/// admission layer, so a decline leaves no body, no flash and no log. The
+/// pick is the declaration's arg; the jump below acts on it.
+fn pick_jump(player_id: i32) -> Declared<i32> {
+    let a = ctx::tile_named("水族馆");
+    let b = ctx::tile_named("弦卷豪宅");
+    let a = if a >= 0 { a } else { 3 };
+    let b = if b >= 0 { b } else { 29 };
+    let pool: Vec<i32> = [a, b].into_iter().filter(|t| *t >= 0).collect();
+    if pool.is_empty() {
+        return Ok(Activation::Decline);
+    }
+    Ok(Activation::Arg(ctx::ask_tile(
+        player_id,
+        &Msg::new(key!("kanon_march_title")),
+        &Msg::new(key!("kanon_march_where")),
+        &pool,
+    )?))
+}
+
 fn place(player_id: i32) -> Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("kanon_march_note")));
@@ -757,24 +855,10 @@ fn place(player_id: i32) -> Asked {
     ctx::add_held_by_name(player_id, JELLY, 0, 9)
 }
 
-/// 「主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆
-/// 或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆」.
-fn jump(player_id: i32) -> Asked {
-    let a = ctx::tile_named("水族馆");
-    let b = ctx::tile_named("弦卷豪宅");
-    let a = if a >= 0 { a } else { 3 };
-    let b = if b >= 0 { b } else { 29 };
-    let pool: Vec<i32> = [a, b].into_iter().filter(|t| *t >= 0).collect();
-    if pool.is_empty() {
-        return Ok(());
-    }
+/// 「…视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆」 -- the accepted
+/// half. `pick` is the tile the declare already chose.
+fn jump(player_id: i32, pick: i32) -> Asked {
     ctx::plan::claim();
-    let pick = ctx::ask_tile(
-        player_id,
-        &Msg::new(key!("kanon_march_title")),
-        &Msg::new(key!("kanon_march_where")),
-        &pool,
-    )?;
     ctx::set_held(player_id, JELLY, 0, 0, -1);        // 「清除所有标记」
     // 「视为本次主要移动」 -- this *is* that move: the plan becomes a teleport and
     // main_move's teleport branch runs it, no die, landing settles.
@@ -789,7 +873,11 @@ fn jump(player_id: i32) -> Asked {
 
 `run_planned_move` leaves the body: the plan pass is already inside the move
 (§7.3). `cant_place` keeps its old shape with the marker/press arm removed
-(「[场]」 placement is unconditional; `place` keeps the 9-cap).
+(「[场]」 placement is unconditional; `place` keeps the 9-cap). `unused_body` is
+the constructor placeholder `.declare_arg` replaces
+(`const fn unused_body(_p: i32) -> Asked { Ok(()) }`, `detour.rs:185-188`);
+§9.3 reuses it. `Declared` / `Activation` are `card_sdk`'s declare types; the
+file's existing `use card_sdk::…` gains them.
 
 A teleport is legal while [停留]/[晕眩] (rules.txt 47 「无法使用非[传送]的移动
 效果」), so the jump needs no movement-gate guard — only the main move's
@@ -805,6 +893,7 @@ placed by its [反击] body, never played) and the clause becomes the offer:
 ```rust
 use bandori_std::{ctx, status};
 use card_sdk::abi::roll_source;
+use card_sdk::{Activation, Declared};
 
 &[
     On::Counteract(
@@ -816,8 +905,8 @@ use card_sdk::abi::roll_source;
     On::Action(Action::DiceRollPlan(
         "card.placed && actor == owner && move.is_main_move",
         Some(can_use),
-        use_it,
-    )),
+        unused_body,                                 // replaced by declare_arg
+    )).declare_arg(ask_use, use_it),
 ];
 
 fn can_use(player_id: i32) -> bool {
@@ -830,15 +919,23 @@ fn can_use(player_id: i32) -> bool {
         && status::exile::get(player_id) == 0
 }
 
-fn use_it(player_id: i32) -> Asked {
+/// 「你可将此卡置入弃牌堆并进入移动阶段」 -- the question is the declare, so a
+/// 不发动 leaves no flash and no log. The face is taken here and carried as
+/// the arg: nothing between the answer and the body changes the hand.
+fn ask_use(player_id: i32) -> Declared<i32> {
     let n = ctx::hand_size(player_id);
-    if !ctx::ask_yes(
+    if ctx::ask_yes(
         player_id,
         &Msg::new(key!("even_lost_title")),
         &Msg::new(key!("even_lost_ask")).i("n", n as i64),
     )? {
-        return Ok(());
+        Ok(Activation::Arg(n))
+    } else {
+        Ok(Activation::Decline)
     }
+}
+
+fn use_it(player_id: i32, n: i32) -> Asked {
     ctx::plan::claim();
     // 「将此卡置入弃牌堆」 -- this instance, through the run's bound uid.
     ctx::set_dest(ctx::Dest::Graveyard);
@@ -857,6 +954,8 @@ uses (`stay.rs:55`, `stun.rs:54`, `exile.rs:72`; `unstoppable` exempts stay only
 `rules.txt` 51). The `fixed_roll` half of the guard mirrors eve's
 (`eve.rs:60-65`): another card that already pinned the face wins.
 `hand_size <= 0` is refused because a 0-step move discards the card for nothing.
+The declined answer stays in the drive's answer log, so a replay declines again
+instead of re-asking (`docs/ACTIVATION.md` §2).
 
 No Play entry is left. `ctx::play_card("MyGO:即使迷茫着")` from a card that
 wants a forced play would find none (`DEST_UNSET` no-op); nothing calls it, and
@@ -956,7 +1055,9 @@ fn hina_change(player_id: i32, instance: i32) -> Asked {
   its two crystals). It is offered once, when the substitute lands — the same
   shape 千圣's (2) uses on its turn-start offer — so a decline leaves the
   substitute running its own effect, and no [共鸣] is asked again until the
-  effect is used again.
+  effect is used again. It is a body ask like nanami's crystal (§9.1): the Play
+  has already fired and placed the substitute, and the decline arm writes no
+  log, so the only trace is the placement itself.
 * The crystals are read as a plain counter and re-added at the new instance —
   the same read/write pair `card-mujica/src/crystal_swap.rs:49,56` uses. They
   are the substitute's own (its `[手]` filler), so they travel with the change.
@@ -979,11 +1080,15 @@ fn hina_change(player_id: i32, instance: i32) -> Asked {
   SAVE bump in the README landing order — take the next free one if the order
   moves).
 * **Record:** nothing on the wire changes. `RECORD_VERSION` stays 4.
-* **Replay:** an old record of a played nanami replays into the new body and
-  meets a prompt the old run answered implicitly; the answer is in the event
-  log, so the replay answers it identically instead of re-deriving it. A record
-  of a *placed* nanami/kanon/even-lost now has effects where it had none — that
-  difference is the rulebook fix itself and is accepted.
+* **Replay:** records ride their archived engine bundle, so a pre-v111 record
+  replays under the bundle it was made with and is unaffected. On a newer
+  bundle a declare inserts one answer into its drive's log and shifts the
+  later answers of that same drive, so a record made before v111 that is forced
+  onto a new bundle may feed the wrong answer — accepted, and narrow: the hook
+  drives have almost no other prompts. An answer, once recorded, is replayed
+  rather than re-derived, so a decline stays a decline. A record of a *placed*
+  nanami/kanon/even-lost has effects where it had none — that difference is the
+  rulebook fix itself and is accepted.
 * **Event log:** no new `MatchEvent.kind`. The offers log through their existing
   `ctx::log` lines and the generic prompt entries.
 * **Bots:** nothing to save; the claim is per move, so no restored seat can loop.
@@ -1003,12 +1108,15 @@ README's kind column stays `—`. Changelog block, after the
 
 ```rust
 /// v111: **offers from placed cards**. A clause a player may take on a placed
-///    card is an `On::Action` hook that raises `ask_yes` at the event the
-///    clause names; the movement offers ask at the plan pass, which gains its
-///    action side (`ActionKind::DiceRollPlan` / `Action::DiceRollPlan`, engine
-///    kind 67, dual with `FilterKind::DiceRollPlan`). `TURN.plan.claimed` and
-///    `plan_claim` / `plan_claimed` let one offer take a move and stand the
-///    others down. New imports `effective_card_at` / `set_effective_card_at`
+///    card is an `On::Action` hook whose **`declare`** asks at the event the
+///    clause names, so declining it runs no body and leaves no flash and no
+///    log (`On::declare_arg`; `Activation::Decline`); the movement offers
+///    declare at the plan pass, which gains its action side
+///    (`ActionKind::DiceRollPlan` / `Action::DiceRollPlan`, engine kind 67,
+///    dual with `FilterKind::DiceRollPlan`). `TURN.plan.claimed` and
+///    `plan_claim` / `plan_claimed` let one accepted offer take a move and
+///    stand the others down. New imports `effective_card_at` /
+///    `set_effective_card_at`
 ///    name the card a stand-in's instance runs (dispatch, play and
 ///    invocation resolve it). Shared with G13: `invoke_entry` /
 ///    `invoke_frame`, guest `ctx::invoke_entry` / `invoke_entry_paid` /
@@ -1046,19 +1154,26 @@ helpers — drive a main move up to the plan raise and answer the offer):
   `…_jump_teleports_and_settles_the_destination`; `…_jump_clears_the_pool`;
   `…_jump_discards_the_card`; `…_jump_offered_while_stayed` (a teleport is legal
   under the movement gate); `…_hand_play_places_and_offers_nothing`;
-  `…_second_copy_not_offered_after_a_claim`.
+  `…_second_copy_not_offered_after_a_claim`; `…_jump_declined_is_silent` (no
+  log, no flash, pool and card untouched).
 * 3 (even-lost): `tests/mygo.rs::even_lost_offered_before_the_dice`;
   `…_yes_discards_and_sets_the_face_to_the_hand`;
   `…_no_die_is_thrown` (no cast in the roll log);
   `…_declined_rolls_normally`; `…_not_offered_while_stayed`;
   `…_not_offered_after_the_main_move`; `…_empty_hand_not_offered`;
-  `…_second_copy_after_a_claim_not_offered`.
+  `…_second_copy_after_a_claim_not_offered`; `…_declined_is_silent` (no log, no
+  flash, card stays placed).
 * 4 (surface): `crates/game-core/tests/plan_hook.rs::action_at_a_filter_kind_runs`,
   `…_action_runs_before_the_filter_fold`, `…_decline_writes_nothing`,
-  `…_ask_replays_once` (a write before the ask lands once);
+  `…_decline_logs_nothing` (no event beyond the prompt),
+  `…_decline_does_not_flash` (no `"card"` / flash event for the instance),
+  `…_declare_replays_once` (the answer is replayed, the body runs once);
   `tests/engine.rs::claim_survives_the_resume`, `…_claim_cleared_after_the_move`;
   `tests/basic.rs::hand_only_card_not_offered` (a card with no hook offers
-  nothing).
+  nothing). The declare shape itself is
+  `crates/game-rules/tests/declare_arg.rs::hook_declare_declined_is_silent` and
+  `…_hook_declare_runs_the_body_once_with_the_arg` (the file covers plays and
+  counteracts; the hook arm is untested today).
 * 5 (hina): `tests/pp.rs::hina_swap_marks_the_substitute_instance`,
   `…_swap_declined_leaves_no_marker`, `…_swap_carries_the_crystals`,
   `…_marked_instance_runs_the_stand_in_surface` (a later hook on the substitute
@@ -1086,10 +1201,12 @@ Kani obligations (`rules/kani`):
   `…_third_no_crystal_noop_at`; `…_third_no_pot_noop_at`;
   `…_third_binds_second_instance`.
 * `proofs/hhw.rs`: `kanon_jump_at_nine_iff` (pool cleared, teleport plan, dest
-  graveyard), `…_jump_below_nine_noop`, `…_jump_claimed_move_noop`.
+  graveyard), `…_jump_below_nine_noop`, `…_jump_claimed_move_noop`,
+  `…_jump_declined_noop_and_silent` (world and log equal, nothing announced).
 * `proofs/mygo.rs`: `even_lost_yes_sets_face_and_steps_iff` (face = hand size,
   steps = hand size, dest graveyard, claim set),
-  `…_blocked_move_noop` ([停留] preset), `…_claimed_move_noop`.
+  `…_blocked_move_noop` ([停留] preset), `…_claimed_move_noop`,
+  `…_declined_noop_and_silent`.
 * `proofs/pp.rs`: `hina_mark_iff` — post = exactly one new instance with
   `effective_card = "PP:[冰川日菜]会发出怎样的声音呢？"` and the carried crystal
   count, the fuel row gone, a second marked copy unchanged;
@@ -1119,9 +1236,9 @@ card prints a genuinely player-timed action (a 「可随时」 without a trigger
 event).
 
 **A4 — a raise-based press.** `ctx::raise` a new `cardPressed` kind and let a
-hook run the body; the client sends only the card id. A raise has no return
-`Dest` and no declare barrier, so the discard of even-lost/kanon would need
-`set_dest` at the tail anyway (it has it), but the button still lacks a phase.
+hook run the body; the client sends only the card id. A raise can carry a
+declare, so the silence holds, but the button still lacks a phase — the card
+is offered whenever it is pressable, not when the move opens.
 
 **A5 — declare (2) on each substitute card instead of a marker.** The stand-in's
 `[共鸣]` clause would live on 丸山彩, 大和麻弥, 白鹭千圣 and 若宫伊芙, found by
@@ -1145,6 +1262,12 @@ Cleaner to validate (no dual concept) but wastes an id and duplicates a raise
 the engine already performs, with a second payload struct and a second
 `is_filter` answer to document. The dual spelling reuses kind 67 and its plan
 semantics exactly.
+
+**A8 — ask in the body instead of the declare.** Simpler (no arg, no
+`unused_body`, the question next to its effects). Rejected: the body has
+announced by then, so a 不发动 still posts the 「效果适用」 line and flashes the
+card for a use that did not happen. Every offer here spends the card, so the
+question belongs to declaring it (§4.1).
 
 ---
 
@@ -1192,3 +1315,8 @@ semantics exactly.
     effect *to* is unprinted (pp.md). The re-pick in §9.5 is the interim
     reading; when the text arrives it replaces `hina_change`'s body, and possibly
     needs entries of its own.
+13. **Which questions are declare-worthy.** The rule used here is "whatever the
+    clause spends decides whether the entry fires" (§4.1) — both movement
+    clauses spend the card. A future offer that only tweaks a value without
+    spending could keep a body ask, but would then flash on a decline. Confirm
+    the verdict is spend-based rather than "every 可选择 is a declare".

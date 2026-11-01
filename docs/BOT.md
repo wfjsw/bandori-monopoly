@@ -1027,10 +1027,12 @@ entry takes `counteract_propensity_milli`. Chaos is **not** parameterised: it
 keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE` as literals.
 
 **Offers from placed cards (G05).** A clause printed on a plain placed card is
-an engine-raised question (`ask_yes`), not a button, so it never appears in the
-viewer list and `skills[id]` does not describe it. `answer_for_entry` answers it
-with the ask's own fallback, which is **decline**: the standard bot therefore
-ignores 即使迷茫着's movement offer and 進行曲's jump until a weight is added.
+an engine-raised question (`ask_yes`) in the entry's **declare**, not a button,
+so it never appears in the viewer list and `skills[id]` does not describe it.
+`answer_for_entry` answers it with the ask's own fallback, which is **decline**
+— and a declined declare runs no body, so the bot leaves no log and no flash:
+the standard bot therefore ignores 即使迷茫着's movement offer and 進行曲's jump
+until a weight is added.
 A tuned weight belongs in its own sparse map keyed by card id (same shape as
 `skills`, default fallback) and is a follow-up to the ABI landing, not part of
 it. `skill:` buttons keep every rule above unchanged.

@@ -69,7 +69,9 @@ engine-raised offer (a prompt at the event the clause names) or a passive
 change, so no card gets a button. The card-side bit, the press `Call` and the
 wire field are gone; the group instead needs one guest `Action` constructor over
 the existing plan kind (kind 67, no new id), a per-move offer claim, and the
-effective-card marker. The claim takes `Op` 349, so **G08 shifts to 350** and
+effective-card marker. The offer itself is the entry's `declare`
+(`On::declare_arg`), not an ask in the body: a declined offer must leave no
+card flash and no log line, which only a decline at the admission layer gives. The claim takes `Op` 349, so **G08 shifts to 350** and
 its twenty imports take 350–369; the kind column stays `—` because no engine id
 is consumed. `SAVE_VERSION` still moves for the marker's field.
 

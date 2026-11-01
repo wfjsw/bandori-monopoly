@@ -342,10 +342,11 @@ prompt-free `Decline` is log-silent.*
 
 > **Reading note (G05).** "Press" below is the button on a placed **skill**. A
 > clause printed on a plain placed card is not a button: it is an offer -- an
-> `On::Action` hook that raises `ask_yes` at the event its condition names
-> (G05 §3) -- so it asks the owner directly and needs no query. "Play entry"
-> still reads as "the card's activation entry", and `entry::PRESS` aliases the
-> card's first Play ("press" stays reserved).
+> `On::Action` hook whose **`declare`** asks at the event its condition names
+> (§2, G05 §4.1) -- so it asks the owner directly and needs no query, and a
+> decline is the silent `Activation::Decline` rather than a body that ran and
+> did nothing. "Play entry" still reads as "the card's activation entry", and
+> `entry::PRESS` aliases the card's first Play ("press" stays reserved).
 
 ### Named entries
 
