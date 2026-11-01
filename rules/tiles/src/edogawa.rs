@@ -22,9 +22,6 @@ pub const EDOGAWA: CardDef = CardDef::new(
 
 /// 规则书: 「江户川乐器店的[结算]是：抽取一张手卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「[结算]是：抽取一张手卡」 -- `ctx::draw` is the engine's `H.DrawR`;
-    // the reshuffle-when-empty half is the engine's (rulebook: 「当抽卡区抽光时
-    // 将弃卡区洗卡并放回抽卡区」), not this body's.
     let at = ctx::self_tile().unwrap_or(-1);
     ctx::log(
         player_id,

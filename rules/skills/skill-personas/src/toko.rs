@@ -29,7 +29,12 @@ pub const TOKO: CardDef = CardDef::new(
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, None, reset)).silent(),
+        On::Action(Action::TurnStartBefore(
+            card_sdk::condition::MINE,
+            None,
+            reset,
+        ))
+        .silent(),
     ],
 )
 // 「（初始1，上限1）」
@@ -80,7 +85,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if mine.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("toko_title")),
         &Msg::new(key!("toko_ask")),
@@ -105,7 +110,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("toko_nobody")).tile("tile", tile));
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("toko_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("toko_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);
@@ -117,7 +122,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             p,
             player_id,
             x,
-            &Msg::new(key!("toko_why"))
+            &Msg::new(key!("toko_reason"))
                 .tile("tile", tile)
                 .n("n", x as i64),
         )?;

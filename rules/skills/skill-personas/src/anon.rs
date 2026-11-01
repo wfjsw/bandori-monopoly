@@ -69,7 +69,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 2, &Msg::new(key!("anon_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 2, &Msg::new(key!("anon_spend")))? {
         return Ok(());
     }
     ctx::draw(player_id, 1)?;

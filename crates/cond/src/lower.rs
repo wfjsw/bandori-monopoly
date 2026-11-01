@@ -48,7 +48,7 @@ pub struct OwnedProgram {
 }
 
 impl OwnedProgram {
-    pub fn eval(&self, ctx: &rules_cond_ir::IrCtx) -> rules_cond_ir::Val {
+    pub fn eval(&self, ctx: &rules_cond_ir::IrCtx) -> rules_cond_ir::Value {
         rules_cond_ir::eval_node(&self.nodes, self.root, ctx)
     }
 
@@ -129,7 +129,7 @@ fn lower_ident(name: &str, nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16,
     if let Some((idx, _)) = by_flat(name) {
         return push(nodes, Node::leaf_var(idx));
     }
-    // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarTy::Str`
+    // Kind spellings bake to `id_of(spelling)` -- the same hash a `VarType::Str`
     // scalar holds and the same hash a string literal bakes to. Eq compares
     // hashes; no string pool.
     if let Some((_, s)) = v.str_constants().find(|(n, _)| *n == name) {
@@ -142,7 +142,12 @@ fn lower_ident(name: &str, nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16,
     Err(CondError::UnknownVar(name.to_string()))
 }
 
-fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
+fn lower_call(
+    name: &str,
+    args: &[IdedExpr],
+    nodes: &mut Vec<Node>,
+    v: &ext::Vocab,
+) -> Result<u16, CondError> {
     // Operator names (post-parse).
     match name {
         operators::ADD => return bin(Kind::Add, args, nodes, v),
@@ -207,8 +212,7 @@ fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Voc
     }
     match n.lower_as {
         LowerAs::Direct => {
-            let fid = direct_fn_id(n.flat)
-                .ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
+            let fid = direct_fn_id(n.flat).ok_or_else(|| CondError::UnknownFn(name.to_string()))?;
             let first = nodes.len() as u16;
             for a in args {
                 lower_expr(a, nodes, v)?;
@@ -240,7 +244,10 @@ fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Voc
                 }
             }
             let arity = user_arity + bake.len();
-            push(nodes, Node::new(Kind::Call, fid as i64, first, arity as u16, 0))
+            push(
+                nodes,
+                Node::new(Kind::Call, fid as i64, first, arity as u16, 0),
+            )
         }
         LowerAs::CallEq { fid, bake } => {
             // `Eq(Call(fid, [user_args[..n-1]…, Const(id_of(bake))…]),
@@ -267,7 +274,12 @@ fn lower_call(name: &str, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Voc
     }
 }
 
-fn bin(kind: Kind, args: &[IdedExpr], nodes: &mut Vec<Node>, v: &ext::Vocab) -> Result<u16, CondError> {
+fn bin(
+    kind: Kind,
+    args: &[IdedExpr],
+    nodes: &mut Vec<Node>,
+    v: &ext::Vocab,
+) -> Result<u16, CondError> {
     require_arity("binop", args, 2)?;
     let a = lower_expr(&args[0], nodes, v)?;
     let b = lower_expr(&args[1], nodes, v)?;
@@ -478,9 +490,11 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             let mut rest = text.as_str();
             while let Some(i) = rest.find(&pat) {
                 rest = &rest[i + pat.len()..];
-                if let Some(s) =
-                    on_pre_string(rest, kind == "Filter" || kind == "Action", kind == "Schedule")
-                {
+                if let Some(s) = on_pre_string(
+                    rest,
+                    kind == "Filter" || kind == "Action",
+                    kind == "Schedule",
+                ) {
                     if !s.is_empty() {
                         out.push(s);
                     }
@@ -691,7 +705,11 @@ fn pre_string(s: &str) -> Option<String> {
     if path == "pre::MINE" || path.ends_with("::pre::MINE") {
         return Some("actor == owner".to_string());
     }
-    if let Some(lit) = ext::ext().guard_consts.iter().find(|(p, _)| *p == path).map(|(_, lit)| *lit)
+    if let Some(lit) = ext::ext()
+        .guard_consts
+        .iter()
+        .find(|(p, _)| *p == path)
+        .map(|(_, lit)| *lit)
     {
         return Some(lit.to_string());
     }

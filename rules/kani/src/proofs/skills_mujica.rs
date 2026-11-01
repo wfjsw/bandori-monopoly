@@ -121,7 +121,7 @@ fn band_init_iff_at(user: i32) {
         w.key_set(user, skill_state, 0);
     });
     let pre_state = world::with_world(|ww| ww.key_get(user, skill_state));
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(skill_groups::ave_mujica::at_turn_start_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -139,7 +139,7 @@ fn band_init_iff_at(user: i32) {
         spec::band_init_effects(effects, user, skill_state.0),
         "C-MUJICA-团技能-00: SetState(skillState, 1)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// Band init iff at seat 0.
@@ -224,7 +224,7 @@ fn bend_world(user: i32) -> i32 {
 fn band_bend_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let pre_amount = bend_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // ABI v75 pure Filter: the body RETURNS the folded amount; the host folds
     // it into the running figure. Stage moved out of `set_pay_amount`.
     let folded = skill_groups::ave_mujica::bend_kani(user, pre_amount);
@@ -252,10 +252,10 @@ fn band_bend_iff_at(user: i32) {
         );
     }
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money (hook only rewrites the amount)"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// Bend hook iff at seat 0 (user is the payer side of the 0→1 payment).

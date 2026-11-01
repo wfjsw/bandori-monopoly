@@ -166,8 +166,8 @@ pub fn generate_with(
     out.push_str("/// Evaluate the guard at `id` as a condition (host root rule).\n");
     out.push_str("pub fn eval_id(id: usize, ctx: &IrCtx) -> bool {\n    BY_ID[id].program.eval_bool(ctx)\n}\n\n");
 
-    out.push_str("/// Evaluate the guard at `id`, returning the raw [`Val`].\n");
-    out.push_str("pub fn eval_id_val(id: usize, ctx: &IrCtx) -> rules_cond_ir::Val {\n    BY_ID[id].program.eval(ctx)\n}\n");
+    out.push_str("/// Evaluate the guard at `id`, returning the raw [`Value`].\n");
+    out.push_str("pub fn eval_id_val(id: usize, ctx: &IrCtx) -> rules_cond_ir::Value {\n    BY_ID[id].program.eval(ctx)\n}\n");
     Ok(Generated {
         source: out,
         count: lowered.len(),

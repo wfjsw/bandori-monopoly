@@ -174,7 +174,10 @@ pub fn snapshot(w: &World) -> Snap {
         "turn.turn_start_pos".into(),
         format!("{:?}", t.turn_start_pos),
     );
-    m.insert("turn.turn_snap".into(), format!("{:?}", t.turn_snap));
+    m.insert(
+        "turn.turn_snapshot".into(),
+        format!("{:?}", t.turn_snapshot),
+    );
     m.insert("turn.turn_rolls".into(), format!("{:?}", t.turn_rolls));
     m.insert("turn.build_discount".into(), t.build_discount.to_string());
     m.insert(
@@ -257,7 +260,7 @@ pub fn is_bookkeeping(path: &str) -> bool {
             | "turn.main_moved"
             | "turn.main_steps"
             | "turn.turn_rolls"
-            | "turn.turn_snap"
+            | "turn.turn_snapshot"
             | "turn.turn_start_pos"
             | "turn.play_from_hand"
             | "next_turn_pending"
@@ -325,12 +328,12 @@ pub fn diff(before: &Snap, after: &Snap, keep_bookkeeping: bool) -> Vec<Delta> {
 ///
 /// ```
 /// # use spec_kit::snap::frame;
-/// # fn demo(pre: &game_core::engine::World, post: &game_core::engine::World) {
-/// frame(pre, post, &["money:P0", "hand:P0", "draw:P0"]).expect("frame");
+/// # fn demo(condition: &game_core::engine::World, post: &game_core::engine::World) {
+/// frame(condition, post, &["money:P0", "hand:P0", "draw:P0"]).expect("frame");
 /// # }
 /// ```
-pub fn frame(pre: &World, post: &World, allowed_prefixes: &[&str]) -> Result<(), String> {
-    let a = snapshot(pre);
+pub fn frame(condition: &World, post: &World, allowed_prefixes: &[&str]) -> Result<(), String> {
+    let a = snapshot(condition);
     let b = snapshot(post);
     let deltas = diff(&a, &b, false);
     // Named-counter pools (`pool:P<seat>:<card>`) are instance-scoped: they

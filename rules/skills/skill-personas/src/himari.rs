@@ -58,13 +58,13 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「指定你的此次移动仅在单/双数格上进行」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let odd = ctx::ask_pick(
+    let odd = ctx::ask_choice(
         player_id,
         &Msg::new(key!("himari_title")),
         &Msg::new(key!("himari_ask")),
         &[Msg::new(key!("himari_odd")), Msg::new(key!("himari_even"))],
     )?;
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("himari_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("himari_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

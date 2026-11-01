@@ -215,19 +215,19 @@ fn a_card_whose_named_counters_run_out_leaves_the_field() {
 
 #[test]
 fn an_immediate_dest_move_lands_before_the_rest_of_the_run() {
-    // TEST:dest_now places itself and `send_to_dest`s straight out, then logs
+    // TEST:fate_now places itself and `send_to_dest`s straight out, then logs
     // `is_placed`. `set_dest` would still have it on the field there.
-    let mut m = match_with_rules("TEST:dest_now", rules_with_fixtures());
-    m.act(1, &play("TEST:dest_now")).expect("play");
+    let mut m = match_with_rules("TEST:fate_now", rules_with_fixtures());
+    m.act(1, &play("TEST:fate_now")).expect("play");
     let st = m.state();
-    let left: Vec<i64> = fixture_events(&st, "dest_now_left")
+    let left: Vec<i64> = fixture_events(&st, "fate_now_left")
         .iter()
         .map(|e| int_arg(e, "placed"))
         .collect();
     assert_eq!(left, vec![0], "the card was gone before its effect ended");
     let me = st.players.iter().find(|p| p.member == 1).expect("human");
     assert!(
-        me.discard.iter().any(|c| c == "TEST:dest_now"),
+        me.discard.iter().any(|c| c == "TEST:fate_now"),
         "and it landed in the discard: {:?}",
         me.discard
     );
@@ -258,7 +258,7 @@ fn a_transferred_dest_lands_in_the_named_players_pile() {
 /// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
 fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
     if msg.key() == "log.card_effect" {
-        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+        if let Some(Arg::Msg(m)) = msg.args.get("what") {
             return m;
         }
     }
@@ -281,8 +281,8 @@ fn fixture_events<'a>(
 }
 
 fn int_arg(msg: &game_core::msg::Msg, name: &str) -> i64 {
-    match msg.a.get(name) {
-        Some(Arg::I(v)) | Some(Arg::N(v)) => *v,
+    match msg.args.get(name) {
+        Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v,
         other => panic!("{name} is not an integer arg: {other:?}"),
     }
 }
@@ -428,9 +428,10 @@ fn a_fire_recast_carries_the_source_and_the_unused_face() {
         assert_eq!(int_arg(r, "source"), 1, "the Result source is CHARGE");
     }
     let settled = rows.last().unwrap();
-    // The unpicked face is the **settled** one (rollTrace's Add 5 -> 6 then
-    // Value 6 -> 12): that is the face the pick prompt offered.
-    assert_eq!(int_arg(settled, "unused"), 12, "the unpicked face");
+    // The unpicked face is the **raw** one (the old cast's 5): a banked die is
+    // recast later and re-folds the Add/Value modifiers itself, so the settled
+    // 12 would apply them twice (G03 I5).
+    assert_eq!(int_arg(settled, "unused"), 5, "the unpicked raw face");
     assert_eq!(int_arg(settled, "rerolled"), 1, "more than one cast");
     assert_eq!(int_arg(settled, "casts"), 2);
 }

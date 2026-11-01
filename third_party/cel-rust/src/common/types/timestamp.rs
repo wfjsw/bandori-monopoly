@@ -9,9 +9,6 @@ use std::cmp::Ordering;
 use std::ops::{Add, Sub};
 use std::sync::LazyLock;
 
-/// A CEL `google.protobuf.Timestamp`, of type
-/// [`TIMESTAMP_TYPE`](super::TIMESTAMP_TYPE): a [`chrono::DateTime`] with a
-/// fixed offset.
 ///
 /// A `duration` adds to and subtracts from it, and subtracting another
 /// `timestamp` yields a `duration`. A `timestamp` must lie between years 1
@@ -31,8 +28,6 @@ impl Timestamp {
         &self.0
     }
 
-    /// Formats like cel-go's `Timestamp.ConvertToType(StringType)`: UTC,
-    /// always `Z`, and a trimmed fractional part (dropped when it's zero).
     pub(crate) fn to_rfc3339_nano(&self) -> String {
         let utc = self.0.with_timezone(&chrono::Utc);
         let nanos = utc.timestamp_subsec_nanos() % 1_000_000_000;
@@ -466,7 +461,6 @@ mod tests {
             Ok(1234567890.into())
         );
         assert_eq!(eval("int(timestamp(-1))"), Ok((-1).into()));
-        // Floors like cel-go's time.Unix(), not truncation toward zero.
         assert_eq!(
             eval("int(timestamp('1969-12-31T23:59:59.500Z'))"),
             Ok((-1).into())

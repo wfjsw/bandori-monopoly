@@ -44,7 +44,7 @@ pub const SAYO: CardDef = CardDef::new(
         // the residual is the any-band `skill_blocked`.
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6",
+            "actor == owner && move.is_main_move && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6",
             Some(can_offer),
             offer),
     ],
@@ -90,7 +90,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「被别的玩家[经过]」 -- another player's step onto **my** tile (行动阶段 12,
-/// `SETTLE-STAGES.md` §4 M4). `actor != owner && tile.id == owner.pos` is the pre.
+/// `SETTLE-STAGES.md` §4 M4). `actor != owner && tile.id == owner.pos` is the condition.
 
 /// （1）「每次被别的玩家[经过]时获得1个[火罐]」 -- someone passed *this* player.
 fn on_passed(player_id: i32) -> card_sdk::Asked {
@@ -99,8 +99,8 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Residual guard for （2）'s offer -- `skill_blocked` (any-band) stays here
-/// (not yet in the condition vocabulary). `move.main && move.kind == Walk &&
-/// slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6` is the pre.
+/// (not yet in the condition vocabulary). `move.is_main_move && move.kind == Walk &&
+/// slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6` is the condition.
 fn can_offer(player_id: i32) -> bool {
     !ctx::skill_blocked(player_id, "")
 }
@@ -114,7 +114,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     if !matches!(n, 1 | 2) {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 6, &Msg::new(key!("sayo_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 6, &Msg::new(key!("sayo_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, ctx::turn_key());

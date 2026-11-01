@@ -244,7 +244,7 @@ pub struct MoveSnap {
     /// `MoveKind`: 0 walk / 1 teleport. Stored as i32 so `World` stays `Copy`.
     pub kind: i32,
     /// Does the move settle where it lands?
-    pub resolve: bool,
+    pub settles: bool,
     /// Direction: 1 forward / -1 backward (guest + CEL encoding).
     pub dir: i32,
     /// 移动起点 (origin tile, 0-based).
@@ -253,18 +253,17 @@ pub struct MoveSnap {
     pub remaining: i32,
     /// Path length.
     pub total: i32,
-    /// `t.Move.Roll`; `-1` = no face to show (`None` in the engine).
     pub roll: i32,
     /// Per-card counters on the move (a [火罐] roll is card-owned state).
     pub tags: NameMap,
-    /// Was this settle initiated by a card (`card_settle_at`)?
+    /// Was this settle initiated by a card (`settle_tile_at`)?
     pub settle_redirect: bool,
 }
 
 impl MoveSnap {
     pub const NONE: MoveSnap = MoveSnap {
         kind: -1,
-        resolve: false,
+        settles: false,
         dir: 1,
         from: -1,
         remaining: 0,
@@ -480,34 +479,22 @@ impl NamedVal {
 /// scan unrolled 8× per `get`/`set` and was the pp-unit unwind cliff
 /// (144 + 80 unrolls in `same_dream_01`).
 ///
-/// The presence bitset is one `u64` word, so only the first [`BITS`] bucket
-/// indices are direct-indexed. Under Kani `intern::SLOTS` is 64 and `BITS`
-/// covers the whole table. Natively `SLOTS` is 4096 and a hashed `NameId`
-/// routinely lands past 64, so every such key goes through the `extra`
-/// table like the derived MIN/MAX/EXPIRES ids always did — the model stays
-/// correct under the native unit tests and the `cfg(kani)` unwind shape is
-/// unchanged.
-///
+/// Presence is a bitset of one `u64` word per 64 slots; a single `u64` word
+/// overflows at slot 64 in the debug build.
 /// `NameId::INVALID` / out-of-range ids never alias a live key: `get_opt`
 /// is `None`, `set` is a documented no-op.
-/// Extra (key, value) slots for ids at or past [`BITS`] (derived
-/// `key + 0x2000/0x4000/0x8000` MIN/MAX/EXPIRES columns and — natively —
-/// every hashed bucket past the word).
-#[cfg(kani)]
+/// Extra (key, value) slots for derived ids (`key + 0x2000/0x4000/0x8000`
+/// MIN/MAX/EXPIRES columns) that live outside the intern bucket range.
 const MAX_EXTRA: usize = 16;
-#[cfg(not(kani))]
-const MAX_EXTRA: usize = 128;
-
-/// Bucket indices the `present` word covers.
-const BITS: usize = 64;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct NameMap {
     vals: [i32; crate::intern::SLOTS],
-    /// Bit `i` set = key `NameId(i)` is present (even if `vals[i] == 0`),
-    /// for `i < BITS`.
-    present: u64,
-    /// Linear fallback for `NameId.0 >= BITS`.
+    /// Bit `i` of word `i / 64` set = key `NameId(i)` is present (even if
+    /// `vals[i] == 0`). One word per 64 slots -- a single `u64` overflows at
+    /// slot 64 in the debug build.
+    present: [u64; (crate::intern::SLOTS + 63) / 64],
+    /// Linear fallback for `NameId.0 >= SLOTS` (derived MIN/MAX/EXPIRES).
     extra: [(NameId, i32); MAX_EXTRA],
     extra_n: u8,
 }
@@ -516,7 +503,7 @@ impl NameMap {
     pub const fn new() -> Self {
         Self {
             vals: [0; crate::intern::SLOTS],
-            present: 0,
+            present: [0; (crate::intern::SLOTS + 63) / 64],
             extra: [(NameId::INVALID, 0); MAX_EXTRA],
             extra_n: 0,
         }
@@ -530,8 +517,8 @@ impl NameMap {
     /// O(1): one range check + one bit test. No loop.
     pub fn get_opt(&self, key: NameId) -> Option<i32> {
         let i = key.0 as usize;
-        if i < BITS {
-            if ((self.present >> i) & 1) == 1 {
+        if i < crate::intern::SLOTS {
+            if ((self.present[i / 64] >> (i % 64)) & 1) == 1 {
                 return Some(self.vals[i]);
             }
             return None;
@@ -551,9 +538,9 @@ impl NameMap {
     /// O(1). Out-of-range / `INVALID` ids are a no-op (never alias).
     pub fn set(&mut self, key: NameId, value: i32) -> i32 {
         let i = key.0 as usize;
-        if i < BITS {
+        if i < crate::intern::SLOTS {
             self.vals[i] = value;
-            self.present |= 1u64 << i;
+            self.present[i / 64] |= 1u64 << (i % 64);
             return value;
         }
         if !key.is_valid() {
@@ -589,18 +576,14 @@ impl NameMap {
     /// not the hot `get`/`set`. `f` sees at most `MAX_KEYS` live keys in
     /// practice (the engine budget); extra slots are model headroom.
     pub fn for_each(&self, mut f: impl FnMut(NameId, i32)) {
-        // 8×8 chunk walk over the 64 intern slots (unwind bound 8, not 64).
-        let mut outer = 0usize;
-        while outer < 8 {
-            let mut k = 0usize;
-            while k < 8 {
-                let i = outer * 8 + k;
-                if i < crate::intern::SLOTS && ((self.present >> i) & 1) == 1 {
-                    f(NameId(i as u16), self.vals[i]);
-                }
-                k += 1;
+        // Walk every bucket. The bound is `SLOTS` (64 under Kani, 4096 in a
+        // native test build), so a native id lands wherever the hash puts it.
+        let mut i = 0usize;
+        while i < crate::intern::SLOTS {
+            if ((self.present[i / 64] >> (i % 64)) & 1) == 1 {
+                f(NameId(i as u16), self.vals[i]);
             }
-            outer += 1;
+            i += 1;
         }
         let mut e = 0usize;
         while e < MAX_EXTRA {
@@ -824,7 +807,7 @@ pub struct World {
     pub pay_amount: i32,
     /// Trigger kind wire **spelling** (`TriggerKind::spelling`). `""` = none.
     /// The `trig_kind` hostcall writes these bytes; the IR `kind` scalar stores
-    /// `id_of` of the same spelling (`VarTy::Str`).
+    /// `id_of` of the same spelling (`VarType::Str`).
     pub trig_kind: &'static str,
     pub trig_target: i32,
     pub trig_tile: i32,
@@ -845,6 +828,34 @@ pub struct World {
     pub trig_roll_source: i32,
     /// `Trigger::pay.is_rent` — pay-only fact (`hostfns::trig_pay_is_rent`).
     pub trig_pay_is_rent: bool,
+    /// `TriggerPay.kind` wire code, `-1` = no payment (`pay_kind` pre).
+    pub trig_pay_kind: i32,
+    /// `TriggerPay.shape == Fixed` (`pay_is_fixed` pre).
+    pub trig_pay_is_fixed: bool,
+    /// `TriggerPay.total_stage` (`pay_total_stage` pre); `true` is neutral.
+    pub trig_pay_total_stage: bool,
+    /// `Trigger.charge_skill` (`charge_is_skill` pre).
+    pub trig_charge_skill: bool,
+    /// `Trigger.settle_tile` — the innermost open settle, `-1` = none.
+    pub trig_settle_tile: i32,
+    /// `Trigger.outcome` as `SettleOutcome::as_i32`, `-1` = none.
+    pub trig_settle_outcome: i32,
+    /// `pay_amount` was written since the last fold (`spendBefore` reads it).
+    pub pay_amount_set: bool,
+    /// Pay factors per scope, milli (1000 = x1); `pay_factor` composes the
+    /// live ones.
+    pub next_move_pay_factor: i32,
+    pub plan_pay_factor: i32,
+    pub next_settle_pay_factor: i32,
+    pub settle_pay_factor: i32,
+    /// A `thisMove` scope is open.
+    pub move_open: bool,
+    /// Number of open settles (`thisSettle` is open while non-zero).
+    pub settle_open: u32,
+    /// `paid_in_settle_by` — per-seat array, index = seat.
+    pub paid_in_settle_by: [i32; MAX_PLAYERS],
+    /// A symbolic `rent_quote` figure; `-1` = no rent charge.
+    pub rent_quote: i32,
     /// Move payload (`Trigger::mv`); `MoveSnap::NONE` = no move.
     pub move_snap: MoveSnap,
     /// Buy payload (`Trigger::buy`); `BuySnap::NONE` = no buy.
@@ -878,9 +889,9 @@ pub struct World {
     pub msg_name: u16,
     /// `Message.seat` — the holder / subject seat of the payload.
     pub msg_seat: i32,
-    pub msg_a: i32,
-    pub msg_b: i32,
-    pub msg_c: i32,
+    pub msg_arg0: i32,
+    pub msg_arg1: i32,
+    pub msg_arg2: i32,
     pub msg_tile: i32,
     /// Reply the handler set (`ctx::message::reply`).
     pub msg_reply: i32,
@@ -983,6 +994,21 @@ impl World {
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,
             trig_pay_is_rent: false,
+            trig_pay_kind: -1,
+            trig_pay_is_fixed: false,
+            trig_pay_total_stage: true,
+            trig_charge_skill: false,
+            trig_settle_tile: -1,
+            trig_settle_outcome: -1,
+            pay_amount_set: false,
+            next_move_pay_factor: 1000,
+            plan_pay_factor: 1000,
+            next_settle_pay_factor: 1000,
+            settle_pay_factor: 1000,
+            move_open: false,
+            settle_open: 0,
+            paid_in_settle_by: [0; MAX_PLAYERS],
+            rent_quote: -1,
             move_snap: MoveSnap::NONE,
             buy_snap: BuySnap::NONE,
             trig_card: 0,
@@ -1000,9 +1026,9 @@ impl World {
             blocked_bands_n: 0,
             msg_name: 0,
             msg_seat: -1,
-            msg_a: 0,
-            msg_b: 0,
-            msg_c: 0,
+            msg_arg0: 0,
+            msg_arg1: 0,
+            msg_arg2: 0,
             msg_tile: -1,
             msg_reply: 0,
             msg_sender_uid: 0,
@@ -1212,7 +1238,7 @@ impl World {
     }
 
     /// Swap-remove the field instance `uid`; returns its card id when present.
-    /// Used by the host's unplace / deferred-fate (`set_dest`) commit.
+    /// Used by the host's unplace / deferred-dest (`set_dest`) commit.
     pub fn remove_field(&mut self, uid: i32) -> Option<u16> {
         let mut i = 0usize;
         while i < self.field_n as usize {
@@ -1425,7 +1451,7 @@ pub fn reset_world(w: World) {
     *world_mut() = w;
 }
 
-/// Snapshot for pre/post comparison. Effects and narration are the log.
+/// Snapshot for condition/post comparison. Effects and narration are the log.
 /// Field names are stable so existing proofs compile.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Snapshot {

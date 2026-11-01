@@ -384,8 +384,8 @@ fn kind_shapes_cover_all_payload_families() {
 fn pre_string_reads_inner_ctor_arg() {
     let shapes = shapes();
     let _ = &shapes;
-    // Filter: pre is ctor arg 1 of the inner call.
-    let after = r#"Filter::DiceRollPlan(pre::MINE, None, on_plan)),"#;
+    // Filter: condition is ctor arg 1 of the inner call.
+    let after = r#"Filter::DiceRollPlan(condition::MINE, None, on_plan)),"#;
     assert_eq!(on_pre_string(after).as_deref(), Some("actor == owner"));
 
     let after = r#"Action::PassTile("card.placed && actor == owner", None, on_pass)),"#;

@@ -19,7 +19,7 @@
 //! pending settle -- `after_walk` re-raises `settleBefore` at the new tile and
 //! then settles **once** at the destination, never at the abandoned landing
 //! (`play.rs` Q7 / `SETTLE-STAGES.md` §2). So 「传送…并[触发结算]」 is exactly
-//! that redirected settle; no extra `card_settle_at` is needed (and adding one
+//! that redirected settle; no extra `settle_tile_at` is needed (and adding one
 //! would double-settle).
 //!
 //! （2）'s follow-up -- the 1d20, the [停留] on 6 or less, and 「支付价格变为
@@ -45,7 +45,7 @@ pub const TOMORI: CardDef = CardDef::new(
         // （2）/（3） applicability: a landing within five tiles of the other
         // party. `actor == owner` is （3） (own landing near someone else);
         // `actor != owner` is （2） (someone else's landing near us). Both arms
-        // live in the residual guard -- the CEL `pre` only needs a real tile.
+        // live in the residual guard -- the CEL `condition` only needs a real tile.
         // The pot-cost split and the fire balance stay residual (dynamic).
         // `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
         On::Action(Action::SettleBefore(
@@ -94,7 +94,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// destination).
 ///
 /// The `dist` scan is live board geometry (docs/GUARDS.md §4.2); it stays out
-/// of the CEL `pre` so the host and the IR fill cannot disagree on
+/// of the CEL `condition` so the host and the IR fill cannot disagree on
 /// `dist(tile.id, pos(owner))`.
 ///
 /// The fire balance is **not** a gate: 不再迷茫 (2) 「可移除此卡上的一个
@@ -124,7 +124,7 @@ fn before_settle_applies(player_id: i32) -> bool {
 
 /// （2） and （3） -- the landing is within five tiles of the other party, and a
 /// pot buys a teleport onto their square before the settle.
-/// Applicability is the `pre` + [`before_settle_applies`]; this side only
+/// Applicability is the `condition` + [`before_settle_applies`]; this side only
 /// spends the pot and teleports.
 ///
 /// 「并[触发结算]」: `teleport_to` inside `SettleBefore` is a bare position
@@ -167,7 +167,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, cost, &Msg::new(key!("tomori_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, cost, &Msg::new(key!("tomori_spend")))? {
         return Ok(());
     }
     // `teleport_to` runs the [传送] abnormal gate itself (`HostRequest::Teleport`).
@@ -218,7 +218,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if at < 0 {
         return Ok(());
     }
-    ctx::card_settle_at(player_id, at, true);
+    ctx::settle_tile_at(player_id, at, true);
     Ok(())
 }
 

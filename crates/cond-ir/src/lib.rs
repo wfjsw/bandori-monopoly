@@ -4,7 +4,7 @@
 //! (vendored `cel` interpreter). Kani cannot: the `cel` crate pulls `String` /
 //! `Vec` / `BTreeMap` and hits unwinding cliffs. This crate is the **Rust
 //! evaluator of the same linted/rewritten AST**: a heap-free arena IR, a total
-//! interpreter over [`Val`], and an independently written reference semantics
+//! interpreter over [`Value`], and an independently written reference semantics
 //! ([`spec`]) that the Kani proofs pin the interpreter to.
 //!
 //! Single source of truth: the CEL `&'static str` on each `On::*` entry.
@@ -37,13 +37,13 @@ pub mod vars;
 pub use ctx::{FnId, IrCtx, SeatField, SetId};
 pub use eval::{eval_node, ListBuf};
 pub use nodes::{Kind, Node, Program};
-pub use vars::{VarId, VarTy, SCALAR_COUNT};
+pub use vars::{VarId, VarType, SCALAR_COUNT};
 
 /// The value lattice of the closed operator set. `Err` is the absorbing
 /// "evaluation failed" result; the host maps it to `false` at the root.
 /// `List` is only produced by list literals and consumed by `in` / `size`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Val {
+pub enum Value {
     Int(i64),
     Bool(bool),
     /// A kind-spelling scalar: the payload is `id_of(spelling)`. Only `Eq` /
@@ -57,23 +57,23 @@ pub enum Val {
     Err,
 }
 
-impl Val {
+impl Value {
     pub fn is_err(self) -> bool {
-        matches!(self, Val::Err)
+        matches!(self, Value::Err)
     }
 
     /// CEL `try_bool`: only a real bool is truthy/falsy; anything else is an
     /// error (including `null`, `List`, and `Err`).
     pub fn try_bool(self) -> Result<bool, ()> {
         match self {
-            Val::Bool(b) => Ok(b),
+            Value::Bool(b) => Ok(b),
             _ => Err(()),
         }
     }
 
     /// Host root rule: any error (or a non-bool root) is `false`.
     pub fn as_cond_bool(self) -> bool {
-        matches!(self, Val::Bool(true))
+        matches!(self, Value::Bool(true))
     }
 }
 
@@ -85,7 +85,7 @@ pub struct ProgramRef<'a> {
 }
 
 impl<'a> ProgramRef<'a> {
-    pub fn eval(&self, ctx: &IrCtx) -> Val {
+    pub fn eval(&self, ctx: &IrCtx) -> Value {
         eval_node(self.nodes, self.root, ctx)
     }
 

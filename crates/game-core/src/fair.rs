@@ -683,11 +683,11 @@ pub fn verify_replay(
         }
     }
     if rep.status().diverged {
-        let why = rep
+        let reason = rep
             .first_mismatch()
             .map(|m| format!("{}: want {} got {}", m.field, m.want, m.got))
             .unwrap_or_else(|| "diverged".into());
-        r.push("replay", false, why);
+        r.push("replay", false, reason);
     } else {
         r.push("replay", true, "");
     }

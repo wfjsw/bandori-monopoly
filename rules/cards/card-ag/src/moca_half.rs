@@ -1,4 +1,3 @@
-//! `AG:（摩卡）0.5倍速` -- C# `CardMocaHalf` (MatchHost.cs:1161-1197):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（摩卡）0.5倍速`）:
 //! > （摩卡）0.5倍速：
@@ -23,7 +22,7 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 ///
 /// Migrated to CEL: the former Rust residual guard (`trigger::card_is(ID) &&
 /// trigger::name() == bandori_std::counter::CRYSTALS`) is folded into this
-/// pre as `trigger_card == card.id && counter_is('crystals')`. The cond
+/// condition as `trigger_card == card.id && counter_is('crystals')`. The cond
 /// vocabulary has no `card_is` function; `trigger_card` / `card.id` are the
 /// same `id_of` hashes and this entry only runs as this card, so the
 /// comparison is the exact `trigger::card_is(ID)` spelling.
@@ -74,7 +73,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书(1): 「将此卡放置在场上」 -- the place-now + fate-later fold
+    // 规则书(1): 「将此卡放置在场上」 -- the place-now + dest-later fold
     // (`place_card` creates the instance, `Dest::Field` stops the commit from
     // also spending the hand card); see `ctx::place_self_to_field`.
     ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
@@ -106,11 +105,12 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- C#
-/// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's
-/// own move rolls. A pure `DiceRollValue` body, so it always runs *after* every
-/// `DiceRollAdd` — 「最终结算」 (`docs/rulebook/spec/cards/ag.md`
-/// `C-AG-half-speed-03`): 7 − 2 = 5, then ceil(5/2) = **3**.
+/// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- a pure
+/// `DiceRollValue` body, so it always runs *after* every `DiceRollAdd` —
+/// 「最终结算」 (`docs/rulebook/spec/cards/ag.md` `C-AG-half-speed-03`):
+/// 7 − 2 = 5, then ceil(5/2) = **3**. That ordering is what settled the former
+/// equal-stage fold question: the sheet does not order equal-stage effects,
+/// and this body names the final-settlement stage instead.
 fn roll_half(player_id: i32, v: RollValue) -> RollValue {
     let roll = v.value.max(0);
     // TODO: Replace to .div_ceil as soon as https://github.com/rust-lang/rust/issues/88581

@@ -24,9 +24,9 @@ fn probe_boost_keep_old() {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "户山香澄"]);
     t.strip_skills();
     t.clean();
-    t.place_raw(0, WANT_HUMAN);
+    let wh = t.place_raw(0, WANT_HUMAN);
     t.place_raw(0, STARRY);
-    t.m.world_mut().set_slot(0, "want_human_x", 15);
+    t.m.world_mut().set_prop_at(wh, "want_human_x", 15);
     t.set_crystals(0, WANT_HUMAN, 2);
     t.set_crystals(0, STARRY, 2);
     t.begin_turn(0);
@@ -44,9 +44,9 @@ fn probe_boost_keep_new() {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "户山香澄"]);
     t.strip_skills();
     t.clean();
-    t.place_raw(0, WANT_HUMAN);
+    let wh = t.place_raw(0, WANT_HUMAN);
     t.place_raw(0, STARRY);
-    t.m.world_mut().set_slot(0, "want_human_x", 15);
+    t.m.world_mut().set_prop_at(wh, "want_human_x", 15);
     t.set_crystals(0, WANT_HUMAN, 2);
     t.set_crystals(0, STARRY, 2);
     t.begin_turn(0);

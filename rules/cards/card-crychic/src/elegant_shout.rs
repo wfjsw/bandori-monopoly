@@ -1,4 +1,3 @@
-//! `CRYCHIC:优雅的呐喊` -- C# `CardElegantShout` (MatchHost.cs:2912-2936): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:优雅的呐喊`）:
 //! > 优雅的呐喊
@@ -8,7 +7,7 @@
 //!
 //! The engine raises `drawOut` at the `ctx::draw` chokepoint when the draw is
 //! effect-caused and lands outside the drawer's own turn (wasm_rules
-//! `HostRequest::Draw`). `pre::MINE` is the drawer (「你」).
+//! `HostRequest::Draw`). `condition::MINE` is the drawer (「你」).
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, ChainKind};
@@ -19,9 +18,14 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
         // 规则书[反击]: 「当你在回合外受到抽卡效果时打出」 -- `DrawOut` is the
-        // out-of-turn effect-caused draw; `pre::MINE` is the drawer (「你」).
-        On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract)
-            .counter_reason(key!("elegant_shout_when")),
+        // out-of-turn effect-caused draw; `condition::MINE` is the drawer (「你」).
+        On::Counteract(
+            &[ChainKind::DrawOut],
+            card_sdk::condition::MINE,
+            None,
+            counteract,
+        )
+        .counter_reason(key!("elegant_shout_when")),
         // 规则书[反击]: 「你的下回合结束时抽一张卡」 -- the deferred draw runs in
         // the `at_end` handler below.
         On::Schedule("at_end", "", None, at_end),
@@ -45,13 +49,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("elegant_shout_note")).player_id("who", player_id),
     );
-    // C# `H.ExtraOf<ElegantFx>(c.Seat).Count++` -- each counteraction stacks one
-    // draw; scheduling one `AtEnd` per counteraction stacks the same way.
     ctx::at_next_turn_end(player_id, "at_end");
     Ok(())
 }
 
-/// C# `ElegantFx.TurnEnd` -- one draw at the end of the player's next turn.
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」
     ctx::draw(player_id, 1)?;

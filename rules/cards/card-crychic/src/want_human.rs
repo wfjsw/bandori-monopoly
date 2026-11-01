@@ -1,4 +1,3 @@
-//! `CRYCHIC:想要成为人类` -- C# `CardWantHuman` (MatchHost.cs:2502-2583): place the
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要成为人类`）:
 //! > 想要成为人类
@@ -29,8 +28,8 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
         // 规则书（2）: the armed boost rides the Add stage, so a reroll re-folds
         // it instead of losing the already-applied `set_move_roll`.
         On::Filter(Filter::DiceRollAdd(
-            "actor == owner && card.placed && roll_purpose == 1 && slot('want_human_boost') > 0",
-            None,
+            "actor == owner && card.placed && roll_purpose == 1",
+            Some(boost_armed),
             boost_add,
         )),
         // 规则书（2）: consume the one-shot boost and snapshot the abnormal
@@ -52,20 +51,18 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
         // sheet cell M2
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
-/// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).
-/// A per-player slot stands in for the per-field-card `Mem` map; 0 means
-/// "never declared" (the C# default X is 10).
+/// Where the declared X is written down (`Mem["x"]`). A prop of the placed
+/// instance stands in for the per-field-card `Mem` map; 0 means "never declared"
+/// (the default X is 10).
 pub(crate) const SLOT_X: &str = "want_human_x";
 
 fn want_human(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「将此卡置于场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "CRYCHIC:想要成为人类",
         &Msg::new(key!("want_human_note")),
     );
-    // 规则书（1）: 「从1-20间选择并声明X，将其写下」 -- C# `H.AskNumber(..., 1, 20, ...)`.
     let x = ctx::ask_number(
         player_id,
         &Msg::new(key!("want_human_title")),
@@ -73,14 +70,12 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
         1,
         20,
     )?;
-    // 规则书（1）: 「将其写下」 -- `Mem["x"]`; the player slot is the stand-in.
-    // TODO(规则书)（将此卡置于场上并从1-20间选择并声明X，将其写下）: X / boost /
-    //   abBefore 属于该卡实例 (C# `Mem`) -- 都写在玩家 slot 上：卡离场不清，
-    //   同一玩家两张会共用。
-    ctx::set_slot(player_id, SLOT_X, x);
-    // Fresh placement: no boost snapshot from a previous instance (C# `Mem` is
-    // per-card-instance; the player slot persists across re-places).
-    ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
+    // 规则书（1）: 「将其写下」 -- `Mem["x"]`; an on-instance prop is the stand-in.
+    // The props ride the instance just placed (`current_uid`), so two copies
+    // keep their own X and the value dies with the card.
+    ctx::set_prop(SLOT_X, x);
+    // Fresh placement: no boost snapshot from a previous instance.
+    ctx::set_prop(SLOT_AB_BEFORE, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_declared"))
@@ -93,25 +88,18 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Where the armed boost is written down (C# `CardWantHuman.Mem["boost"]`),
-/// stored as the pending total **+ 1** so 0 still means "not armed" (X = 20
-/// arms a legitimate +0).
 const SLOT_BOOST: &str = "want_human_boost";
 
-/// Snapshot of `abnormal_count` taken when the boost was consumed (C#
-/// `CardWantHuman.Mem["abBefore"]`), stored as `count + 1` so that 0 means
-/// "boost not consumed this turn".
 const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 
-/// `Fx.DiceRollCast` (C# `CardWantHuman.DiceRollAfter`). Every cast of one of
-/// your move rolls is checked -- a reroll lands as another Cast, not a later
-/// `DiceRollAfter`.
+/// The `DiceRollCast` window. Every cast of one of your move rolls is checked
+/// -- a reroll lands as another Cast, not a later `DiceRollAfter`.
 ///
 /// 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
 /// 为此卡添加一个奇迹水晶。」 (was 「小于X」).
 fn on_cast(player_id: i32) -> card_sdk::Asked {
     let roll = trigger::value();
-    let x = ctx::slot(player_id, SLOT_X);
+    let x = ctx::prop(SLOT_X);
     if x > 0 && roll <= x {
         ctx::add_crystals(1, 0)?;
         ctx::log(
@@ -124,26 +112,31 @@ fn on_cast(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书（2）: the boost armed last turn start lands on this roll (the slot
-/// holds the total + 1, so `armed - 1` may be 0). A pure Add body so every
-/// settle re-folds it after a reroll.
+/// Residual guard for [`boost_add`]: a boost is armed (the prop holds the
+/// boost + 1, so `armed - 1` may be 0).
+fn boost_armed(_player_id: i32) -> bool {
+    ctx::prop(SLOT_BOOST) > 0
+}
+
+/// 规则书（2）: the boost armed last turn start lands on this roll. A pure Add
+/// body so every settle re-folds it after a reroll.
 fn boost_add(player_id: i32, v: RollValue) -> RollValue {
-    let boost = (ctx::slot(player_id, SLOT_BOOST) - 1).max(0);
+    let boost = (ctx::prop(SLOT_BOOST) - 1).max(0);
     RollValue { value: v.value + boost, ..v }
 }
 
 /// 规则书（2）: consume the armed boost and snapshot the abnormal counter so
-/// 「若该次移动过程中受到异常移动效果影响」 can be checked at turn end
-/// (C# `Mem["abBefore"]`). The result is final here, so a reroll can no
-/// longer replace the face the boost was logged against.
+/// 「若该次移动过程中受到异常移动效果影响」 can be checked at turn end. The
+/// result is final here, so a reroll can no longer replace the face the boost
+/// was logged against.
 fn on_settled(player_id: i32) -> card_sdk::Asked {
-    let armed = ctx::slot(player_id, SLOT_BOOST);
+    let armed = ctx::prop(SLOT_BOOST);
     if armed <= 0 {
         return Ok(());
     }
     let boost = armed - 1;
-    ctx::set_slot(player_id, SLOT_BOOST, 0);
-    ctx::set_slot(player_id, SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
+    ctx::set_prop(SLOT_BOOST, 0);
+    ctx::set_prop(SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_boost"))
@@ -153,9 +146,9 @@ fn on_settled(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.TurnStart` / `Fx.TurnEnd` (C# `CardWantHuman.TurnStart` / `TurnEnd`).
-/// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
-/// `actor == owner && card.placed` is the pre; the arms branch on kind.
+/// `TurnStart` / `TurnEnd`. Runs through the hook dispatch, so this is a field
+/// effect, not a [反击]. `actor == owner && card.placed` is the pre; the arms
+/// branch on kind.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（2）: 「若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部
@@ -164,15 +157,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if ctx::crystals() < 2 {
                 return Ok(());
             }
-            let x = ctx::slot(player_id, SLOT_X);
+            let x = ctx::prop(SLOT_X);
             let boost = (20 - x).max(0);
             ctx::set_crystals(0);
             // An earlier arming that never met its move targets the same
             // 「下次的移动掷骰」, so add to it; only an unarmed slot gains the
             // "+1 = armed" bit.
-            let armed = ctx::slot(player_id, SLOT_BOOST);
-            ctx::set_slot(
-                player_id,
+            let armed = ctx::prop(SLOT_BOOST);
+            ctx::set_prop(
                 SLOT_BOOST,
                 if armed > 0 { armed + boost } else { boost + 1 },
             );
@@ -183,18 +175,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                     .i("n", boost as i64),
             );
         }
-        // 规则书（2）: 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹
-        // 水晶。」 -- C# `TurnEnd`: `H._abnormalTurn[Player] > Mem["abBefore"]` when
-        // the boost was consumed this turn.
-        // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 --
-        //   这里是整回合的 `abnormal_count` 在回合结束时比，移动之后、回合结束
-        //   之前落下的异常也会算数。
+        // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 -- 这里是整回合的 `abnormal_count`
+        // 在回合结束时比，移动之后、回合结束 之前落下的异常也会算数。
         TriggerKind::TurnEnd => {
-            let ab_before = ctx::slot(player_id, SLOT_AB_BEFORE);
+            let ab_before = ctx::prop(SLOT_AB_BEFORE);
             if ab_before <= 0 {
                 return Ok(());
             }
-            ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
+            ctx::set_prop(SLOT_AB_BEFORE, 0);
             if ctx::abnormal_count(player_id) > ab_before - 1 {
                 ctx::add_crystals(2, 0)?;
                 ctx::log(

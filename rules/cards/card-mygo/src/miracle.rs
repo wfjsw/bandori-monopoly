@@ -1,4 +1,3 @@
-//! `MyGO:难以复刻的奇迹` -- C# `CardMiracle` (MatchHost.cs:7010-7086): place
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:难以复刻的奇迹`）:
 //! > 难以复刻的奇迹：
@@ -11,10 +10,10 @@
 //! instead of money when building; after passing every other player once,
 //! collect the "last three digits" purse of the crystal-closest rival.
 
-use bandori_std::ctx::{self, trigger};
 use bandori_std::counter;
-use card_sdk::abi::{ActionKind};
-use card_sdk::{CardText, it};
+use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::ActionKind;
+use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new(
@@ -48,15 +47,12 @@ pub const MIRACLE: CardDef = CardDef::new(
 const ID: &str = "MyGO:难以复刻的奇迹";
 
 fn miracle(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）[手]: 「将此卡置于场上」 -- C# `H.PlaceFromPlay(c, -1, -1, num)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("miracle_note")));
     // A fresh copy starts with an empty [经过] mask -- the slot is player-scoped
     // and would otherwise carry a previous copy's bits.
     ctx::set_slot(player_id, "miracle_passed", 0);
-    // 规则书（1）[手]: 「将你乐队技能上的奇迹水晶全部转移至此卡上」 -- C# drains
-    // `H.BandCrystals(seat)` into `PlaceFromPlay(..., crystals: num)`. Every
-    // band-skill instance is drained (an `extra` attachment can hold crystals
+    // Every band-skill instance is drained (an `extra` attachment can hold crystals
     // too); `group_crystals`/`add_group_crystals` read only the first one.
     let mut n = 0;
     for (uid, _, _) in bandori_std::group_skills(player_id) {
@@ -80,22 +76,16 @@ fn miracle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费」 -- C#
-/// `CardMiracle.BuildCost` returns 0 while a crystal remains.
 fn before_build(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
     ctx::set_build_discount(ctx::build_cost(t), 1);
     Ok(())
 }
 
-/// （1）'s 「移除此卡上的一个奇迹水晶」 -- C# `CardMiracle.Built` spends one.
 fn after_build(player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费）:
-    // 「可…代替资金花费」 is an owner choice and only bites when there is a 资金花费
-    // to replace -- we always zero the cost and always spend a crystal. Deciding
-    // needs the effective build cost, which no guest reader exposes
-    // (`build_cost` is the base; `build_cost_pct` / `build_discount` are
-    // write-only), so C# `BuildCost`'s conditional return is not reproducible.
+    // TODO(规则书)（当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费）: 「可…代替资金花费」 is an owner choice and
+    // only bites when there is a 资金花费 to replace -- we always zero the cost and
+    // always spend a crystal.
     ctx::add_crystals(-1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("miracle_built")));
     Ok(())
@@ -117,9 +107,7 @@ fn record_pass_applies(player_id: i32) -> bool {
     false
 }
 
-/// 规则书（2）: 「当你[经过]场上的所有玩家各一次」 -- C# `CardMiracle.PassSeat`
-/// bookkeeping: remember each player [经过]. Silent -- the player never sees the
-/// running mask.
+/// Silent -- the player never sees the running mask.
 fn record_pass(player_id: i32) -> card_sdk::Asked {
     let key = "miracle_passed";
     let mut mask = ctx::slot(player_id, key);
@@ -142,8 +130,6 @@ fn all_others_passed(player_id: i32) -> bool {
     all != 0 && mask & all == all
 }
 
-/// C# `CardMiracle.PassSeat` -- record this step's [经过], then, once every other
-/// player has been passed once, collect the closest rival's purse.
 fn pass_player(player_id: i32) -> card_sdk::Asked {
     // Record first: the body reads the mask the recorder just wrote (a guard
     // would only see the pre-step world).
@@ -152,11 +138,6 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let others = ctx::others(player_id);
-    // 规则书（2）: 「获得相当于场上奇迹水晶数与你最相近的玩家资金后三位的资金，然后此卡
-    // 进入弃牌堆。」 -- C# `Reward()`: `mine = PlacedOf(Player).Sum(Crystals) +
-    // BandCrystals(Player)`. Band-card crystals live on the band skill's own
-    // field instance now, so `field_crystals` already counts them -- the C# sum
-    // is one term, not two.
     let mine = field_crystals(player_id);
     let mut best = -1;
     let mut best_d = i32::MAX;
@@ -184,13 +165,11 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
             ctx::gain(player_id, purse, &msg)?;
         }
     }
-    // C# `H.Unplace(this, "discard", left ? "上面还有奇迹水晶：视为没有生效" : "完成了")`.
+    // "上面还有奇迹水晶：视为没有生效" : "完成了")`.
     ctx::set_dest(ctx::Dest::Graveyard);
     if left {
-        // TODO(规则书)[judgement]（3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 --
-        // we only log `miracle_wasted`; the card is not actually marked 未生效.
-        // Needs `PlayCtx.Effective` / `H.CardWasted` so the band skill's (3)
-        // 「你的卡在未生效的情况下进入弃牌堆时」 can tell this discard apart.
+        // TODO(规则书)[judgement] （3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- we only log
+        // `miracle_wasted`; the card is not actually marked 未生效.
         ctx::log(
             player_id,
             &Msg::new(key!("miracle_wasted")).player_id("who", player_id),
@@ -199,8 +178,6 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「场上奇迹水晶数」 -- `H.PlacedOf(p).Sum(x => x.Crystals)`: the crystals on
-/// every card that player has placed, not the player's own running counter.
 fn field_crystals(p: i32) -> i32 {
     ctx::field_instances(p)
         .into_iter()

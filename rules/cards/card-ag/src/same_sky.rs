@@ -1,4 +1,3 @@
-//! `AG:朝同一片天空迈进` -- C# `CardSameSky` (MatchHost.cs:1547-1582):
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:朝同一片天空迈进`）:
 //! > 朝同一片天空迈进：
@@ -29,11 +28,10 @@ pub const SAME_SKY: CardDef = CardDef::new(
 
 const ID: &str = "AG:朝同一片天空迈进";
 
-/// 规则书[反击]: 「（开局时抽到此卡洗回）」 -- C# `ReturnAtOpening` /
-/// `FixOpeningHand`. The opening deal and mulligan raise no `Drawn` hooks, so
-/// the old `step() == 0` branch is unreachable; this rides
-/// `On::Action(Action::DeckAtGameStart("", None, return_at_opening))`, which
-/// fires on this card over draw + hand after the mulligan.
+/// The opening deal and mulligan raise no `Drawn` hooks, so the old `step() == 0`
+/// branch is unreachable; this rides `On::Action(Action::DeckAtGameStart("",
+/// None, return_at_opening))`, which fires on this card over draw + hand after
+/// the mulligan.
 fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
@@ -50,8 +48,6 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[反击]: 「抽出此卡时立刻打出」 -- C# `CardSameSky.Drawn` auto-plays it
-/// the moment it is drawn; it never answers the [反击] window.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was drawn".
     // 规则书[反击]: 「抽出此卡时立刻打出」 -- the drawn copy is played, one
@@ -68,7 +64,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         ctx::gain(
             player_id,
             n * 600,
-            &Msg::new(key!("same_sky_why")).i("n", n as i64),
+            &Msg::new(key!("same_sky_reason")).i("n", n as i64),
         )?;
     } else {
         // 规则书[反击]: 「如果你的手牌数小于3，抽一张卡」

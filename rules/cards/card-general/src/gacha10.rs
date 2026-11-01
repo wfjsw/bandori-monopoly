@@ -1,4 +1,3 @@
-//! `通用:10次招募（1回限定）` -- C# `CardGacha10`: spend 1,500, draw 1.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:10次招募（1回限定）`）:
 //! > 10次招募（1回限定）：
@@ -11,15 +10,14 @@ use card_sdk::{para, sec, CardText};
 
 pub const GACHA10: CardDef = CardDef::new(
     "通用:10次招募（1回限定）",
-    // NEGATION-AUDIT V2 (settled): no activation cost. The 「[消耗]1500资金」
-    // is effect content (rulebook L13-14), so there is no `money >= 1500` play
-    // gate -- an unaffordable in-body payment takes the Q1 shortfall path
-    // (mortgage, then bankruptcy). C# `CardGacha10.WhyNot` had one.
-    // TODO(规则书)（1回限定）: the book puts a once-only limit on the card -- the
-    //   gate below records one use per player per game (a never-expiring player
-    //   state), so a second copy is refused once *that player* has used it;
-    //   whether the limit is per player or per card type is still open
-    //   (OPEN-GEN-recruit-once).
+    // TODO(规则书)（1回限定）: NEGATION-AUDIT V2 (settled): no activation cost. The
+    // 「[消耗]1500资金」 is effect content (rulebook L13-14), so there is no `money >=
+    // 1500` play gate -- an unaffordable in-body payment takes the Q1 shortfall path
+    // (mortgage, then bankruptcy). the book puts a once-only limit on the card --
+    // the gate below records one use per player per game (a never-expiring player
+    // state), so a second copy is refused once *that player* has used it; whether
+    // the limit is per player or per card type is still open
+    // (OPEN-GEN-recruit-once).
     &[On::Play("", Some(cant_play), gacha10)],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 1500)])
@@ -45,7 +43,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // TODO(规则书)（1回限定）: per-player reading -- a second *player* holding a
     //   copy is still allowed; the book does not say whose limit it is.
     if ctx::state::get(player_id, USED) != 0 {
-        return Some(Msg::new(key!("gacha10_why")));
+        return Some(Msg::new(key!("gacha10_reason")));
     }
     None
 }
@@ -53,7 +51,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn gacha10(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「[消耗]1500资金」 -- effect content; `Pay::must = true` runs
     // the Q1 shortfall path (规则书 L16/L76) when the payer cannot cover it.
-    ctx::pay(player_id, 1500, &Msg::new(key!("gacha10_why")))?;
+    ctx::pay(player_id, 1500, &Msg::new(key!("gacha10_reason")))?;
     // 规则书（1回限定）: the play is spent once its payment has resolved, even
     // when no money moved or the payer went bankrupt.
     ctx::state::set(player_id, USED, 1);

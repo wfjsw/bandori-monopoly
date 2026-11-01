@@ -9,14 +9,14 @@
 mod testworld;
 use testworld::*;
 
-use game_rules::cond_pre::{self, CompiledPre};
+use game_rules::condition::{self, CompiledCondition};
 
 /// Evaluate `src` against the window/candidate snapshots of `w`.
 fn ask(w: &TestWorld, src: &str, owner: i32, card: &str, placed: bool) -> bool {
-    let pre = CompiledPre::compile(src).expect("pre compiles");
-    let win = cond_pre::fill_window(w);
-    let cand = cond_pre::fill_candidate(w, owner, card, placed);
-    pre.eval(&win, &cand)
+    let condition = CompiledCondition::compile(src).expect("condition compiles");
+    let win = condition::fill_window(w);
+    let cand = condition::fill_candidate(w, owner, card, placed);
+    condition.eval(&win, &cand)
 }
 
 /// A world with `n` seats on a `size`-board loop at `pos`, owning `owners`.
@@ -78,7 +78,7 @@ fn card_tile_matches_ctx_self_tile() {
     w.field = vec![("MyGO:（乐奈）有趣的女人".to_string(), 5)];
     // The instance (uid 0) sits on tile 5.
     assert_eq!(w.tile_at(0), 5, "guest self_tile raw");
-    let cand = cond_pre::fill_candidate(&w, 0, "MyGO:（乐奈）有趣的女人", true);
+    let cand = condition::fill_candidate(&w, 0, "MyGO:（乐奈）有趣的女人", true);
     assert_eq!(cand.card_tile, Some(5), "snapshot");
     assert!(ask(
         &w,
@@ -100,7 +100,7 @@ fn card_tile_matches_ctx_self_tile() {
     ));
 
     // Not placed: the fill leaves `card_tile` None -> binds -2.
-    let cand = cond_pre::fill_candidate(&w, 0, "MyGO:（乐奈）有趣的女人", false);
+    let cand = condition::fill_candidate(&w, 0, "MyGO:（乐奈）有趣的女人", false);
     assert_eq!(cand.card_tile, None);
     assert!(ask(
         &w,
@@ -310,9 +310,9 @@ fn ref_on_path(w: &TestWorld, me: i32, them: i32, roll: i32) -> i32 {
 fn set_move(w: &mut TestWorld, roll: Option<i32>, dir: i32) {
     w.trigger.mv = Some(game_rules::TriggerMove {
         kind: game_rules::MoveKind::Walk,
-        resolve: true,
+        settles: true,
         tags: vec![],
-        main: true,
+        is_main_move: true,
         dir: if dir < 0 {
             game_core::engine::rules::Dir::Backward
         } else {
@@ -403,8 +403,7 @@ fn between_matches_ctx() {
 
 #[test]
 fn repeated_digits_matches_reference() {
-    // No guest reader -- a pure int predicate. Spot-check the C# `RepeatedDigits`
-    // bit-twiddle no_breakup's `cant_play` uses.
+    // No guest reader -- a pure int predicate.
     for (n, want) in [
         (0, false),
         (5, false),

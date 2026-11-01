@@ -1,4 +1,3 @@
-//! `RAS:PLEASE CHOOSE` -- C# `CardPleaseChoose` (MatchHost.cs:9565-9636):
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:PLEASE CHOOSE`）:
 //! > PLEASE CHOOSE：
@@ -53,16 +52,13 @@ fn can_counteract(_player_id: i32) -> bool {
     if t < 0 {
         return false;
     }
-    // 规则书[反击]: 「在livehouse格子上结算」 -- C# `H.IsLiveHouse(t.Seat, t.Tile)`
-    // + `IsBuyable`: the class `livehouse` as the *settler* sees it (buyable,
-    // group 6, this player's `Fx.ExtraColor` or a colour/class override).
     // `Live House` the agent is not buyable, so not a livehouse.
     ctx::is_live_house_for(trigger::player_id(), t)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let other = trigger::player_id();
-    // 规则书[反击]: 「使对方选择以下效果之一执行」 -- C# `H.AskPick` of `other`.
+    // 规则书[反击]: 「使对方选择以下效果之一执行」 -- the `other` seat picks.
     // 规则书[反击]（1）: 「立即打出一张可将你指定为目标的牌…」 -- the cards in
     // `other`'s hand that designate (`prop::DESIGNATES`) and pass their own
     // press gate for `other`. Offered only when the list is non-empty.
@@ -85,7 +81,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[反击]（2）: 「使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）」
     opts.push(Msg::new(key!("please_choose_opt2")).player_id("who", player_id));
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         other,
         &Msg::new(key!("please_choose_title")),
         &Msg::new(key!("please_choose_ask"))
@@ -109,11 +105,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // 规则书[反击]（2）: 「使你立即传送至对方所在格子」 -- C# `H.ForceTeleport(i,
-    // to, resolve: false, ...)`. `teleport_as` is that teleport as a move of its
-    // own: the landing raises `passTile` (「视为可触发乐队技能」; `resolve: false`
-    // then runs no settle). A bare `teleport_to` would be a position write here
-    // (the counteraction resolves inside the settler's move) and raise nothing.
+    // `teleport_as` is that teleport as a move of its own: the landing raises
+    // `passTile` (「视为可触发乐队技能」; `settles: false` then runs no settle). A bare
+    // `teleport_to` would be a position write here (the counteraction resolves
+    // inside the settler's move) and raise nothing.
     let to = ctx::player_pos(other);
     if to >= 0 {
         // `player_pos` only reads -1 for a removed player: keep the write
@@ -131,11 +126,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", to),
     );
-    // TODO(规则书)[judgement][反击]（2）: 「（不触发结算但视为可触发乐队技能）」 -- the
-    //   the clause under-specifies -- see the note above it
-    // The landing raise is `passTile` (what band skills hang on), but it also
-    // reaches field cards' `PassTile` hooks, which C# (`H.EachOf(i, f =>
-    // f.PassTile(m, to))`) did not fan.
+    // TODO(规则书)[judgement]
     Ok(())
 }
 

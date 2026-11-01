@@ -54,7 +54,7 @@ fn station_exists(_player_id: i32) -> bool {
 /// （2）「回合结束时如果本回合的[主要移动][经过]"流星堂"且[移动终点]不为
 /// "流星堂"时抽取一个视为在"流星堂"抽取的事件并获得一个[火罐]」.
 /// `pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0`
-/// is the pre; [`station_exists`] the residual.
+/// is the condition; [`station_exists`] the residual.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "skill.arisa.passedStation", 0);
     // 「抽取一个视为在"流星堂"抽取的事件」 -- the draw is tagged as the
@@ -81,7 +81,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if bandori_std::fire::spend(player_id, 2, &Msg::new(key!("arisa_spend")))? {
+    if bandori_std::fire::spend_skill(player_id, 2, &Msg::new(key!("arisa_spend")))? {
         ctx::add_group_crystals(player_id, 1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("arisa_crystal")));
     }

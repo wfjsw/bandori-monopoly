@@ -1,4 +1,3 @@
-//! `通用:CiRCLE THANKS PARTY!` -- C# `CardThanksParty`: others may chip in 500,
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:CiRCLE THANKS PARTY!`）:
 //! > CiRCLE THANKS PARTY!：
@@ -32,12 +31,10 @@ pub const THANKS_PARTY: CardDef =
         .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn thanks_party(player_id: i32) -> card_sdk::Asked {
-    let why = Msg::new(key!("thanks_party_why"));
-    // 规则书[手]: 「所有其他玩家可选择[消耗]500资金」 -- **every** other player may
-    // choose. There is no printed cash gate: a player under 500 still gets the
-    // offer, and accepting runs the shortfall path (same reading as
-    // LOY-SOUL-01's un-capped 「1到5次」). C# skipped `money < 500` seats; that
-    // narrowing is not in the text.
+    let reason = Msg::new(key!("thanks_party_reason"));
+    // 规则书[手]: 「所有其他玩家可选择[消耗]500资金」 -- **every** other player may choose. There is no
+    // printed cash gate: a player under 500 still gets the offer, and accepting runs
+    // the shortfall path (same reading as LOY-SOUL-01's un-capped 「1到5次」).
     let mut payers: Vec<i32> = Vec::new();
     for p in ctx::others(player_id) {
         // `ctx::others` already drops out-of-the-game seats; `can_pay` adds the
@@ -54,15 +51,13 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
             .n("prize", 1500);
         if ctx::ask_yes(p, &title, &text)? {
             // 规则书[手]: 「[消耗]500资金」
-            if ctx::pay(p, 500, &why)? > 0 {
+            if ctx::pay(p, 500, &reason)? > 0 {
                 payers.push(p);
             }
         }
     }
     // 规则书[手]: 「你消耗500资金」
-    ctx::pay(player_id, 500, &why)?;
-    // 规则书[手]: 「将X设为因此卡[消耗]资金的玩家数量加1」 -- the joining others
-    // plus the user (C# `payers.Count + 1`).
+    ctx::pay(player_id, 500, &reason)?;
     let x = payers.len() as i32 + 1;
     if x == 1 {
         // 规则书[手]: 「2. X等于1则[使用者]的本回合结束后获得一个额外回合」
@@ -87,12 +82,12 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
     // -- `ctx::n(1/2, …)` so 「后勤人员的努力」 can double one of the payouts
     // (one-shot: the named index spends the flag).
-    ctx::gain(player_id, ctx::n(1, 3000), &why)?;
+    ctx::gain(player_id, ctx::n(1, 3000), &reason)?;
     for p in payers {
         // TODO(规则书)（其他因此卡[消耗]资金的玩家[获得]1500资金）: 书按资格给
         //   -- 本次结算中离场的参加者拿不到.
         if !ctx::player_out(p) {
-            ctx::gain(p, ctx::n(2, 1500), &why)?;
+            ctx::gain(p, ctx::n(2, 1500), &reason)?;
         }
     }
     Ok(())

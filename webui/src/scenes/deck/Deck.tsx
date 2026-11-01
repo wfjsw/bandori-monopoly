@@ -91,7 +91,7 @@ export function Deck() {
 
   function toggle(id: string): void {
     const c = D.card(id)!;
-    const why = rules.deck_why_not(character.name, id);
+    const why = rules.deck_blocked(character.name, id);
     if (why) return toast(why);
     const has = cards.includes(id);
     if (!has && cards.length >= SIZE && slot !== 0) return toast(tr("deck.fullToast", { n: SIZE }));
@@ -132,7 +132,7 @@ export function Deck() {
     const next = [...cards];
     for (const c of pool) {
       if (next.length >= SIZE) break;
-      if (!c.derived && !next.includes(c.id) && !rules.deck_why_not(character.name, c.id)) next.push(c.id);
+      if (!c.derived && !next.includes(c.id) && !rules.deck_blocked(character.name, c.id)) next.push(c.id);
     }
     const cleaned: string[] = JSON.parse(rules.deck_clean(character.name, JSON.stringify(next)));
     save(slot, cleaned);

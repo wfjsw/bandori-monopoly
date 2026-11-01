@@ -67,22 +67,22 @@ fn zz_probe_settled_carries_the_folded_face() {
     let mut seen = Vec::new();
     for e in t.events_since(mark) {
         let msg = if e.msg.key() == "log.card_effect" {
-            match e.msg.a.get("what") {
+            match e.msg.args.get("what") {
                 Some(game_core::msg::Arg::Msg(m)) => m.as_ref(),
                 _ => &e.msg,
             }
         } else {
             &e.msg
         };
-        if msg.a.get("kind").is_none() || msg.a.get("face").is_none() {
+        if msg.args.get("kind").is_none() || msg.args.get("face").is_none() {
             continue;
         }
-        let kind = match msg.a.get("kind") {
-            Some(game_core::msg::Arg::I(n)) => *n,
+        let kind = match msg.args.get("kind") {
+            Some(game_core::msg::Arg::Integer(n)) => *n,
             _ => -1,
         };
-        let face = match msg.a.get("face") {
-            Some(game_core::msg::Arg::I(n)) => *n,
+        let face = match msg.args.get("face") {
+            Some(game_core::msg::Arg::Integer(n)) => *n,
             _ => -1,
         };
         seen.push((kind, face));

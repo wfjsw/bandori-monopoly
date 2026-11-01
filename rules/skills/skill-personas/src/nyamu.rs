@@ -130,7 +130,7 @@ fn fire_at_cap(player_id: i32) -> bool {
 }
 
 /// The turn-end tick also catches a pot that filled outside a payment.
-/// `slot('skillState') != 2` is the pre and [`fire_at_cap`] the residual -- the
+/// `slot('skillState') != 2` is the condition and [`fire_at_cap`] the residual -- the
 /// body is the transition itself.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     enter_two(player_id);
@@ -161,7 +161,7 @@ fn enter_two(player_id: i32) {
 /// 「你退出状态2后，被你翻面的卡自动翻回」 -- whatever clears `skillState`
 /// (the band skill's fire-pot drain) leaves 状态2 at a turn end, so the sweep
 /// runs here and catches it. `slot('skillState') != 2 && slot('skill.nyamu.flipped') > 0`
-/// is the pre.
+/// is the condition.
 fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
     for (uid, _c) in ctx::field_instances(player_id) {
         if ctx::is_immune_at(uid) {

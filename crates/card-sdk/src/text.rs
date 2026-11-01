@@ -151,7 +151,9 @@ impl CardText {
             Self::Empty => true,
             Self::Para(t) => t.is_empty(),
             Self::Items(list) => list.is_empty(),
-            Self::Sections(secs) => secs.iter().all(|s| s.label.is_empty() && s.blocks.is_empty()),
+            Self::Sections(secs) => secs
+                .iter()
+                .all(|s| s.label.is_empty() && s.blocks.is_empty()),
         }
     }
 
@@ -302,7 +304,13 @@ mod tests {
 
     const TWO_STATES: CardText = CardText::of(&[
         sec("状态1：", &[items(&[it("进入状态2。")])]),
-        sec("状态2：", &[items(&[it("保留至多一张手牌。"), it("每回合开始时打出一张。")])]),
+        sec(
+            "状态2：",
+            &[items(&[
+                it("保留至多一张手牌。"),
+                it("每回合开始时打出一张。"),
+            ])],
+        ),
     ]);
 
     const PROSE: CardText = CardText::of(&[sec(
@@ -312,7 +320,10 @@ mod tests {
 
     #[test]
     fn flat_simple_para() {
-        assert_eq!(SIMPLE.flat(), "获得2个PAREO标记，然后视为你的房屋总数增加。");
+        assert_eq!(
+            SIMPLE.flat(),
+            "获得2个PAREO标记，然后视为你的房屋总数增加。"
+        );
     }
 
     #[test]

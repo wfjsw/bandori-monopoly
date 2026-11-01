@@ -42,21 +42,20 @@ fn zz_probe_taki_new_face_ends_the_loop() {
 }
 
 #[test]
-fn zz_probe_taki_accepted_new_face_still_repeats() {
+fn zz_probe_taki_accepted_new_face_ends_the_loop() {
     let mut t = setup();
-    // 3 -> recast 5 (brand new). Accepting at the prompt recasts 9 (brand new
-    // again), yet the body re-runs and sees its own 5 as "already rolled".
-    t.dice(&[3, 5, 9]);
+    // 3 -> recast 3 (a repeat, so the prompt is owed) -> accepting recasts 9, a
+    // brand-new face: the loop must end there without asking again.
+    t.dice(&[3, 3, 9]);
     t.roll(0).unwrap();
     assert!(t.counteract_offered(TAKI), "{}", t.dump_prompt());
     t.counteract(0, TAKI).unwrap();
     assert!(t.dump_prompt().contains("taki_again"), "{}", t.dump_prompt());
     t.answer(0, 0).unwrap(); // yes: another recast (9)
     let dump = t.dump_prompt();
-    println!("PROBE after accepting a reroll to a new 9: {dump}");
     assert!(
-        dump.contains("taki_again"),
-        "PROBE: the loop never ended on its own: {dump}"
+        !dump.contains("taki_again"),
+        "PROBE: the loop must end on the brand-new 9: {dump}"
     );
     drain(&mut t);
     assert_eq!(t.pos(0), 9);

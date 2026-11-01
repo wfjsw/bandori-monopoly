@@ -1,4 +1,3 @@
-//! `HHW:（育美）` -- C# `CardHagumiMarks` (MatchHost.cs:4293-4313).
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（育美）`）:
 //! > （育美）We Can☆Hurray!
@@ -10,10 +9,6 @@
 //! card instead of placing. The prompt's options come from dice rolled inside
 //! the effect; replay re-rolls them identically on every run.
 //!
-//! The mid-walk stop rides the `PassTile` hook: the C# `HagumiMarkFx` is an
-//! `H.ExtraOf` player attachment, and the hook surface only dispatches to
-//! *placed* cards, so the play body places this card as the `HagumiMarkFx`
-//! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{roll_source, ActionKind, ChainKind, MarkFilter, MoveKind, RollPurpose};
@@ -21,6 +16,12 @@ use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
+
+/// One-shot claim for the stop body: the raise uid that already answered this
+/// copy. A fixed-key seat latch holding the last raise uid: one key,
+/// overwritten in place, shared by every copy so two stand-ins answer one
+/// pass once.
+const CLAIM: &str = "hagumi.claimed";
 
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
@@ -46,7 +47,7 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
             // sale, build refund, mortgage) does not offer the (2).
             "actor != owner && gains_this_turn(owner) > 0",
             None,
-            counteract2),
+            counteract_per_gain),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"We Can☆Hurray!"#)
@@ -71,11 +72,7 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    // 规则书（1）[手]: 「投掷2次4d20」 -- C# `H.Roll(i, 4, 20, ...)`. (2) adds
-    // 「此卡的投掷次数+1」 per gain, so `times` is the count of 4d20 rolls.
-    // Each option is one *roll* `(tile, roll)`; identical pairs collapse (C#
-    // `.Distinct()`), but two different results on one tile stay two options --
-    // 「若选择的投掷结果大于60」 is about the chosen roll, not the tile.
+    // (2) adds 「此卡的投掷次数+1」 per gain, so `times` is the count of 4d20 rolls.
     let mut options: alloc::vec::Vec<(i32, i32)> = alloc::vec::Vec::new();
     let mut opts: alloc::vec::Vec<ctx::TileOption> = alloc::vec::Vec::new();
     for _ in 0..times.max(1) {
@@ -100,16 +97,14 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记」
     // -- the book's literal 60 (not the tile count: a custom board may differ).
     if chosen > 60 {
-        ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_marks_over_why")))?;
+        ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_marks_over_reason")))?;
         ctx::draw(player_id, 1)?;
         return Ok(());
     }
-    // 规则书（1）: 「你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记」
-    // -- C# `HagumiMarkFx.PassTile` / `Stop` (an `H.ExtraOf` attachment). The
-    // hook surface only dispatches to placed cards, so this placement stands in
-    // for the player attachment (same pattern as `HHW:爱心义演`); the `PassTile`
-    // hook below is the stop body. Place the stand-in *before* the mark so
-    // `self_uid()` is its instance and the mark dies with it.
+    // The hook surface only dispatches to placed cards, so this placement stands in
+    // for the player attachment (same pattern as `HHW:爱心义演`); the `PassTile` hook
+    // below is the stop body. Place the stand-in *before* the mark so `self_uid()`
+    // is its instance and the mark dies with it.
     if !ctx::is_placed() {
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, ID, &Msg::new(key!("hagumi_marks_note")));
@@ -134,63 +129,66 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `HagumiMarkFx.PassTile` / `Stop` (MatchHost.cs:4314-4384).
 /// Residual guard for [`hook`]: one of this player's 育美标记 is on the tile.
-/// C# `H.CountMarks(t, "育美标记", Seat) > 0`.
 fn has_mark_here(player_id: i32) -> bool {
-    ctx::count_marks(trigger::tile(), &mark_filter(player_id)) > 0
+    // A spent-out copy is admitted too (no mark anywhere): the body's trailing
+    // cleanup is the only thing left for it, and the guard runs per copy -- a
+    // second stand-in would otherwise be refused by the first one's removal and
+    // stay on the field forever.
+    ctx::count_marks(trigger::tile(), &mark_filter(player_id)) > 0 || !any_marks(player_id)
 }
 
 /// Applicability is the entry's condition + `has_mark_here`.
 fn hook(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
-    // 规则书（1）: 「可在那格强制停下并获得2000资金」 -- C# `Stop`:
-    // `H.AskYes(..., aiYes: true)` then `m.Stopped = true` (behind
-    // `H.AbnormalGate`), remove the mark, `H.GainR(Seat, 2000, ...)`.
-    if !ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("hagumi_marks_stop_title")),
-        &Msg::new(key!("hagumi_marks_stop_ask")).tile("tile", t),
-    )? {
-        return Ok(());
+    // One ask/gain/removal per raise: a pass dispatches one job per placed
+    // stand-in, so each job first claims the raise on its own prop. The claim
+    // is written **before** the ask -- a pause replays the whole action from its
+    // saved pre-action state and writes it again.
+    if ctx::state::get(player_id, CLAIM) != trigger::uid() {
+        ctx::state::set(player_id, CLAIM, trigger::uid());
+        // 规则书（1）: 「可在那格强制停下并获得2000资金」
+        if !ctx::ask_yes(
+            player_id,
+            &Msg::new(key!("hagumi_marks_stop_title")),
+            &Msg::new(key!("hagumi_marks_stop_ask")).tile("tile", t),
+        )? {
+            return Ok(());
+        }
+        // 规则书（1）: 「[强制停下]」 -- behind `abnormal::Stop`: a guarded or
+        // unstoppable mover is not stopped, and the mark is not spent.
+        // TODO(规则书)（可在那格强制停下并获得2000资金）: the book attaches the 2000
+        // and the removal to the pass unconditionally -- a refused gate here skips
+        // both, and the sheet carries no such carve-out.
+        if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
+            return Ok(());
+        }
+        // Only a mid-walk tile can be stopped (a teleport's remaining is 0, so it
+        // arrives here for the gain/removal only).
+        if trigger::move_remaining() > 0 {
+            // The walk settles at the stop tile.
+            ctx::plan::set_stop_at(t);
+        }
+        // 规则书（1）: 「获得2000资金，然后移除该标记」 -- the gain lands first, then
+        // one mark is spent (`bump_mark`: 「该标记」 is one mark, not every row that
+        // happens to share the tile).
+        ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
+        ctx::bump_mark(t, &mark_filter(player_id), -1);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("hagumi_marks_stop_done"))
+                .player_id("who", player_id)
+                .tile("tile", t),
+        );
     }
-    // 规则书（1）: 「[强制停下]」 -- behind `H.AbnormalGate`: a guarded or
-    // unstoppable mover is not stopped, and the mark is not spent.
-    // TODO(规则书)（可在那格强制停下并获得2000资金）: the book attaches the 2000
-    // and the removal to the pass unconditionally -- a refused gate here skips
-    // both (C# `H.AbnormalGate`), and the sheet carries no such carve-out.
-    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
-        return Ok(());
-    }
-    // C# `m.Remaining > 0 && !m.Teleport` -- only a mid-walk tile can be stopped
-    // (a teleport's remaining is 0, so it arrives here for the gain/removal only).
-    if trigger::move_remaining() > 0 {
-        // C# `m.Stopped = true` -- the walk settles at the stop tile.
-        ctx::plan::set_stop_at(t);
-    }
-    // 规则书（1）: 「获得2000资金，然后移除该标记」 -- C# `H.GainR(Seat, 2000,
-    // "育美标记")` first, then one mark is spent (`bump_mark`: 「该标记」 is one
-    // mark, not every row that happens to share the tile).
-    ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
-    ctx::bump_mark(t, &mark_filter(player_id), -1);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("hagumi_marks_stop_done"))
-            .player_id("who", player_id)
-            .tile("tile", t),
-    );
     // Stand-in cleanup: when the owner has no marks left the attachment is
-    // spent (C# `HagumiMarkFx` just goes quiet; the field-card stand-in files
-    // itself away).
-    // TODO(规则书)（你经过育美标记时可在那格强制停下并获得2000资金）: the cleanup
-    // files only the answering copy -- should a second stand-in of this card sit
-    // on the field, it stays behind inert (there is no per-instance dest write).
+    // spent (the effect just goes quiet; the field-card stand-in files itself
+    // away). Outside the claim, so every stand-in files itself.
+    // `set_dest` applies to the drive's own copy at `commit_after`.
     if !any_marks(player_id) {
         ctx::set_dest(ctx::Dest::Graveyard);
     }
-    // TODO(规则书)（1）[judgement]: C# `HagumiMarkFx.PassTile` also has a circle-tile case
-    //   (`H.Tile(t)?.kind == "circle"` -> `All(n)`: remove every 育美标记 and
-    //   gain 1,000 per mark 「经过起点」). Not in the rulebook text, so held.
+    // TODO(规则书)（1）[judgement]: Not in the rulebook text, so held.
     Ok(())
 }
 
@@ -209,7 +207,7 @@ fn any_marks(player_id: i32) -> bool {
 
 /// 规则书（2）: 「当前回合内你每获得过一次资金，此卡的投掷次数+1」 -- the (1)
 /// body with 2 + gains rolls of 4d20 instead of 2.
-fn counteract2(player_id: i32) -> card_sdk::Asked {
+fn counteract_per_gain(player_id: i32) -> card_sdk::Asked {
     let gains = ctx::gains_this_turn(player_id);
     // 规则书（2）: 「此卡的投掷次数+1」 per gain, on top of (1)'s 「投掷2次」.
     // TODO(规则书)（此卡的投掷次数+1）: 「投掷次数+1」 is read as one more whole 4d20
@@ -236,6 +234,6 @@ pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn counteract2_kani(player_id: i32) -> card_sdk::Asked {
-    counteract2(player_id)
+pub fn counteract_per_gain_kani(player_id: i32) -> card_sdk::Asked {
+    counteract_per_gain(player_id)
 }

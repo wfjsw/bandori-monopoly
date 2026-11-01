@@ -1,8 +1,3 @@
-//! `AG:Y.O.L.O` -- C# `CardYolo` (MatchHost.cs:956-987).
-//!
-//! 规则书（docs/rulebook/cards.json, id `AG:Y.O.L.O`）:
-//! > Y.O.L.O：
-//! >  你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字
 //!
 //! Sheet 2026-10-06 新卡组卡 C3: 「你的**任意**掷骰结算前」 (was 「你的掷骰
 //! 结算前」) -- any of the user's rolls, not only the main move roll.

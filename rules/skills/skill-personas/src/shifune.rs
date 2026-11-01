@@ -91,7 +91,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("shifune_title")),
         &Msg::new(key!("shifune_ask")),
@@ -103,7 +103,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = others.get(pick) else {
         return Ok(());
     };
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("shifune_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("shifune_spend")))? {
         return Ok(());
     }
     state::set(player_id, PARTNER, who);
@@ -134,7 +134,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         ctx::trigger::set_move_roll(0);
         let at = ctx::player_pos(ctx::trigger::player_id());
         if at >= 0 {
-            ctx::card_settle_at(ctx::trigger::player_id(), at, true);
+            ctx::settle_tile_at(ctx::trigger::player_id(), at, true);
         }
         ctx::log(player_id, &Msg::new(key!("shifune_zero")));
         return Ok(());

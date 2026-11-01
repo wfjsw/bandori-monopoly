@@ -1,6 +1,4 @@
-// SoloSetupView: you + 2..9 bots named from SoloMatch.BotNames, a character
-// per seat (or 随机), score rules, and each bot's mentality (标准 / 混沌). A
-// solo match left running (or saved before a refresh) can be continued.
+// A solo match left running (or saved before a refresh) can be continued.
 
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { navigate } from "../../app/router";

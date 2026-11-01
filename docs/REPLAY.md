@@ -316,7 +316,7 @@ design — all of them forced by something the design already says:
   still `STEP`. `Replayer` has always read `header.step`.
 * **`RecordHeader.gaps`** (new, `#[serde(default)]`) marks a record where
   something was actually lost -- a store write failed, or a process died
-  between the blob put and its log append (the `RecMeta.dirty` flag). The open
+  between the blob put and its log append (the `RecordMeta.dirty` flag). The open
   tick run itself is persisted under the match lock, so a clean handover
   between processes (or a restart) loses nothing. §1's "mark the record
   unverifiable" needed somewhere to put the flag.
@@ -770,8 +770,8 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
   (`docs/GUARDS.md` §8.2): the real built ruleset (modules + the
   `conds-*.bin` precompiled guard conditions) loads into the real browser glue
   through the same `loadRulesetInto` sequence the page uses, with zero load
-  errors; a card with a `pre` evaluates; a card with a `pre` and no blob fails
-  loudly (`BadPre`) rather than treating the condition as true. Needs
+  errors; a card with a `condition` evaluates; a card with a `condition` and no blob fails
+  loudly (`BadCondition`) rather than treating the condition as true. Needs
   `tools/build-ruleset.mjs` + `tools/build-glue.mjs` first. Without this, the
   silent failure mode is a solo match running on `StubRules` while a record
   sealed elsewhere names a ruleset the player never actually played.
@@ -779,7 +779,7 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
 * `cargo test -p game-core --test bundle_id` -- the recipe known vector and
   the serde default for pre-bundle records.
 * `cargo test -p game-rules --test pre_conditions` -- the shipped `conds-*.bin`
-  is exactly the host compile of every `pre` (`shipped_precompiled_blobs_match_host_compile`),
+  is exactly the host compile of every `condition` (`shipped_precompiled_blobs_match_host_compile`),
   and a mismatched / stale blob is a build error.
 * `crates/game-core/tests/record.rs` / `record_codec.rs` stay green.
 
@@ -1070,7 +1070,7 @@ therefore **4**, and a replay must not put such a seat back on the engine:
 Both are hash-exact against the way the record was written; the gate is the
 format, never a guess about the body.
 
-**One v3 caveat.** `Cx::use_skill` now records the press in `turn.played`
+**One v3 caveat.** `PlayCtx::use_skill` now records the press in `turn.played`
 (before, only `Match::ai_step` did, so a client-driven seat could not de-dup
 its own skill and re-pressed it every tick). An old v3 record with a skill
 press replays on its **archived bundle** unchanged, but replaying it on a

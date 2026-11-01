@@ -5,11 +5,11 @@
 //! (`ban_seconds` / `pick_seconds` / `deck_seconds`) and are **dedicated**
 //! timers -- they never draw on a seat's time pool.
 
-use super::cx::Cx;
+use super::cx::PlayCtx;
 use crate::deck;
 use crate::msg::{Arg, Msg};
 
-impl Cx<'_> {
+impl PlayCtx<'_> {
     /// 1d20 each, ties re-roll; players are reordered high to low.
     pub(crate) fn roll_order(&mut self) {
         let n = self.w.player_count();

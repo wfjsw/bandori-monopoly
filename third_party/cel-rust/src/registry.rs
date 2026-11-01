@@ -5,7 +5,7 @@ use crate::ExecutionError;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 
-/// A struct type that expressions can construct, e.g. `acme.Account{id: 1}`.
+/// A struct type that expressions can construct, e.g.
 ///
 /// [`StructDef`](crate::StructDef) is one; implementing this trait lets
 /// a struct literal construct any other [`Val`], e.g. a Rust type of your own.
@@ -33,10 +33,7 @@ pub trait StructType: Send + Sync {
 /// expressions can then name, or a [`StructType`], which they can also
 /// construct.
 pub enum TypeDecl {
-    /// A type expressions can name: `type(x) == my.pkg.Ip`.
     Type(Type),
-    /// A struct type, which expressions can also construct:
-    /// `acme.Account{id: 1}`.
     Struct(Box<dyn StructType>),
 }
 
@@ -91,12 +88,11 @@ impl TypeRegistry {
     ///
     /// # Errors
     ///
-    /// Fails with [`DeclarationError::TypeConflict`] if another type, or
-    /// another struct type, is registered under the same name, and with
+    /// Fails with [`DeclarationError::TypeConflict`] if another type, or another
+    /// struct type, is registered under the same name, and with
     /// [`DeclarationError::InvalidTypeName`] if the name is not a, possibly
-    /// qualified, identifier, e.g. `int` or `my.pkg.Type`, which no
-    /// expression could refer to. A failed registration leaves the registry
-    /// as it was.
+    /// qualified, identifier, e.g. A failed registration leaves the registry as it
+    /// was.
     pub(crate) fn register(&mut self, decl: impl Into<TypeDecl>) -> Result<(), DeclarationError> {
         match decl.into() {
             TypeDecl::Type(t) => self.register_type(t),

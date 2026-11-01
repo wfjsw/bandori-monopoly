@@ -40,10 +40,8 @@ export interface Live2DModelProps {
 }
 
 /**
- * Cubism 2 model viewer: a canvas with a RAF loop driving the ported
- * `Live2DPortrait.RenderFrame` (idle motion, tap reactions, hair physics, eye
- * blink) and redrawing the deformed pose every frame. Without animation (or
- * with no `catalog.json` motion) it holds the posed frame like before.
+ * Without animation (or with no `catalog.json` motion) it holds the posed frame
+ * like before.
  *
  * All of the resource work (load, draw loop, GL teardown, debug hooks) lives
  * in `useLive2DModel`; this component is the box and the status banner.

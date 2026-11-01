@@ -110,8 +110,8 @@ fn title_idol_band_plus_2(step: &Step<'_>) -> Result<(), String> {
             "C-PP-title-idol-01: user {who} has no {BAND_SKILL} to receive +2"
         ));
     };
-    let pre = step
-        .pre
+    let condition = step
+        .condition
         .st
         .players
         .get(who)
@@ -121,7 +121,7 @@ fn title_idol_band_plus_2(step: &Step<'_>) -> Result<(), String> {
     // Step 2 also writes the band card when its effect mentions [奇迹水晶]
     // (the band skill's text does). The clause checks the step-1 leg is among
     // the writes: the pool must have risen by at least 2.
-    let delta = band.counters.get("crystals").copied().unwrap_or(0) as i64 - pre as i64;
+    let delta = band.counters.get("crystals").copied().unwrap_or(0) as i64 - condition as i64;
     if delta < 2 {
         return Err(format!(
             "C-PP-title-idol-01: band crystals delta {delta}, expected >= 2 (step 1 +2)"
@@ -136,8 +136,8 @@ fn same_dream_band_plus_3(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre = step
-        .pre
+    let condition = step
+        .condition
         .st
         .players
         .get(who)
@@ -150,7 +150,7 @@ fn same_dream_band_plus_3(step: &Step<'_>) -> Result<(), String> {
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == BAND_SKILL))
         .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
-    match (pre, post) {
+    match (condition, post) {
         (Some(a), Some(b)) if b - a >= 3 => Ok(()),
         (Some(a), Some(b)) => Err(format!(
             "C-PP-same-dream-01: band crystals {a} -> {b}, expected +3"
@@ -207,7 +207,7 @@ fn title_idol_crystals() {
         let dream0 = t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0);
         t.give(0, &["PP:TITLE IDOL"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, "PP:TITLE IDOL")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -233,7 +233,7 @@ fn title_idol_crystals() {
             return Err(format!("TITLE IDOL still in hand: {:?}", t.hand(0)));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -267,7 +267,7 @@ fn title_idol_echo_adds_two() {
         let dream0 = t.crystals(0, "PP:梦在前方，结彩当下").unwrap_or(0);
         t.give(0, &[ECHO, "PP:TITLE IDOL"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, "PP:TITLE IDOL")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -285,7 +285,7 @@ fn title_idol_echo_adds_two() {
             return Err(format!("dream {dream0} -> {dream}, expected +2 with 共鸣"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -324,7 +324,7 @@ fn same_dream_three_steps() {
         let money0 = 10_000;
         t.give(0, &["PP:同一个梦想"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, "PP:同一个梦想")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -352,7 +352,7 @@ fn same_dream_three_steps() {
             return Err(format!("band {band0} -> {band}, expected +3"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -385,7 +385,7 @@ fn same_dream_echo_all_pp_characters() {
         set_fans(&mut t, 2, 0, rng.range(1, 4));
         t.give(0, &[ECHO, "PP:同一个梦想"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.play(0, "PP:同一个梦想")
             .map_err(|e| format!("play rejected: {e}"))?;
         accept_echo(&mut t);
@@ -401,7 +401,7 @@ fn same_dream_echo_all_pp_characters() {
             return Err("non-PP seat 1 reverse fans must stay".into());
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -433,7 +433,7 @@ fn first_accident_hand() {
         t.set_draw(0, &pile);
         t.give(0, &["PP:初次演出事故"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, "PP:初次演出事故")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -455,7 +455,7 @@ fn first_accident_hand() {
             return Err(format!("hand should hold 1 drawn card: {:?}", t.hand(0)));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -493,7 +493,10 @@ fn first_accident_blocks_pp_skill_2() {
             let hit = |k: &str| {
                 p.title.key().contains(k) || p.options.iter().any(|o| format!("{o:?}").contains(k))
             };
-            ["aya", "maya", "hina"]
+            // `maya` before `aya`: the substring `aya` is inside `maya`, so a
+            // maya prompt would otherwise be reported as aya and never match
+            // the allowed exception below.
+            ["maya", "aya", "hina"]
                 .into_iter()
                 .find(|&k| hit(k))
                 .map(|k| k.to_string())
@@ -674,7 +677,7 @@ fn no_expect_hand() {
         t.set_draw(0, &pile);
         t.give(0, &["PP:不要背负期待"]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.play(0, "PP:不要背负期待")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -703,7 +706,7 @@ fn no_expect_hand() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",

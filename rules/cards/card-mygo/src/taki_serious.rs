@@ -1,4 +1,3 @@
-//! `MyGO:（立希）想认真去做` -- C# `CardTakiSerious` (MatchHost.cs:6749-6791):
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（立希）想认真去做`）:
 //! > （立希）想认真去做：
@@ -9,14 +8,12 @@
 
 use alloc::vec::Vec;
 
+use card_sdk::abi::PayFactorScope;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TAKI_SERIOUS: CardDef = CardDef::new(
     "MyGO:（立希）想认真去做",
-    // 规则书: 「使场上所有拥有[停留]的玩家立刻…」 -- the cell carries no [限], and
-    // the 专有名词 「[限]」 entry makes only 「[限]X」 cards conditional on X, so an
-    // empty set is still a legal (no-op) play; the C# `WhyNot` refusal is gone.
     &[On::Play("", None, taki_serious)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想认真去做"#)
@@ -26,12 +23,10 @@ pub const TAKI_SERIOUS: CardDef = CardDef::new(
         // sheet cell I10
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"椎名立希"#)]));
 
-/// C# `CardTakiSerious.Stayers` -- present players holding [停留].
 fn stayers() -> Vec<i32> {
-    // 规则书: 「使场上所有拥有[停留]的玩家」 -- C# `H.Present(p) && H.State.seats[p].stay > 0`.
     // `Present` is "in the game and not exiled": an exiled piece is on no tile
-    // (`rules/status/src/exile.rs`), so it has no 所在格子 to settle, yet it
-    // keeps its [停留] layers -- both halves are checked here.
+    // (`rules/status/src/exile.rs`), so it has no 所在格子 to settle, yet it keeps its
+    // [停留] layers -- both halves are checked here.
     (0..ctx::player_count())
         .filter(|&p| {
             !ctx::player_out(p)
@@ -51,8 +46,7 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         let pos = ctx::player_pos(p);
-        // 规则书: 「所在格子前后2格内」 -- C# `Enumerable.Range(-2, 5)` over the
-        // ring, distinct. Ready for the settle below.
+        // Ready for the settle below.
         let mut tiles: Vec<i32> = Vec::new();
         for d in -2..=2 {
             let t = ((pos + d) % n + n) % n;
@@ -70,15 +64,13 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
             &tiles,
         )?;
         // 规则书: 「本次结算导致的所有[支付]变为原价的四分之一」 -- the stayer
-        // settles there at a quarter price.
-        // TODO(规则书)（本次结算导致的所有[支付]变为原价的四分之一）: 只限本次结算
-        //   -- `set_pay_factor` 写整回合的 `turn.plan`，之后本回合的移动落地也按
-        //   四分之一付。
-        ctx::plan::set_pay_factor(250);
+        // settles there at a quarter price. `NextSettle` is consumed by the
+        // `card_settle_at` right below, so later settles are untouched.
+        ctx::plan::mul_pay_factor(250, PayFactorScope::NextSettle);
         // TODO(规则书)（进行一次[触发结算]）: 这个强制结算记为 `main = true`（当作
         //   该回合的落点）-- 书只写[触发结算]；`main` 会改写 `landed` 并让
-        //   `move.main` 的结算体生效（与轮符雨的 `false` 不同）。
-        ctx::card_settle_at(p, pick, true);
+        //   `move.is_main_move` 的结算体生效（与轮符雨的 `false` 不同）。
+        ctx::settle_tile_at(p, pick, true);
         ctx::log(
             player_id,
             &Msg::new(key!("taki_serious_settled"))

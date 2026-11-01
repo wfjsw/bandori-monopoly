@@ -10,10 +10,8 @@
 //! from inside this rule, `ctx::group_crystals` / `ctx::add_group_crystals` from
 //! any card meaning 「乐队卡 / 团卡」. One pool, no keyed-state side store.
 //!
-//! Hooks: the same two the character skills use, no third kind. A half the
-//! player presses is [`On::Play`] with its gate; a half a field event calls is
-//! [`On::Action`] (the skill is a field card, C# `Fx`). See the module docs in
-//! `skill-personas` for the shape and for what is still missing (id
+//! Hooks: the same two the character skills use, no third kind. See the module
+//! docs in `skill-personas` for the shape and for what is still missing (id
 //! resolution, not hooks).
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
@@ -91,7 +89,7 @@ pub fn copy_sticker_cost(player_id: i32) -> i32 {
     {
         return 0;
     }
-    let borrow = bandori_std::ctx::tok(player_id, "returns.borrow_uid");
+    let borrow = bandori_std::ctx::held_count(player_id, "returns.borrow_uid");
     if borrow != 0 && bandori_std::ctx::self_uid() == borrow {
         1
     } else {
@@ -106,7 +104,7 @@ pub fn copy_sticker_cost(player_id: i32) -> i32 {
 /// (`card-sdk`), not a refusal — the refusal belongs on the press's `cant_play`.
 pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
     let cost = copy_sticker_cost(player_id);
-    if cost > 0 && bandori_std::ctx::tok(player_id, "星星贴纸") < cost {
+    if cost > 0 && bandori_std::ctx::held_count(player_id, "星星贴纸") < cost {
         Some(card_sdk::Msg::new(card_sdk::key!("skill_band_no_sticker")))
     } else {
         None
@@ -118,7 +116,7 @@ pub fn copy_sticker_gate(player_id: i32) -> Option<card_sdk::Msg> {
 pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
     let cost = copy_sticker_cost(player_id);
     if cost > 0 {
-        bandori_std::ctx::add_tok(player_id, "星星贴纸", -cost, i32::MAX)?;
+        bandori_std::ctx::add_held_by_name(player_id, "星星贴纸", -cost, i32::MAX)?;
     }
     Ok(())
 }

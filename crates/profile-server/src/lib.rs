@@ -78,7 +78,7 @@ pub fn now() -> u64 {
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-pub struct SessionReq {
+pub struct SessionRequest {
     pub player: String,
     pub persona: String,
     pub cn_id: String,
@@ -128,7 +128,10 @@ pub async fn health(State(app): S) -> Json<serde_json::Value> {
 
 /// `POST /api/session` -- sign in by display name, creating the account on
 /// first use (there is no password; the id, not the name, is the identity).
-pub async fn create_session(State(app): S, Json(req): Json<SessionReq>) -> ApiResult<impl IntoResponse> {
+pub async fn create_session(
+    State(app): S,
+    Json(req): Json<SessionRequest>,
+) -> ApiResult<impl IntoResponse> {
     let player = net::clean_name(&req.player);
     if player.is_empty() {
         return Err(ApiError::bad("err.name_required"));
@@ -136,8 +139,14 @@ pub async fn create_session(State(app): S, Json(req): Json<SessionReq>) -> ApiRe
     let account = app
         .store
         .ensure_account(&player, &req.persona, &req.cn_id, now())?;
-    let token = profile_token::mint_now(&app.secret, &account.id, &account.name, &account.persona, &account.cn_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let token = profile_token::mint_now(
+        &app.secret,
+        &account.id,
+        &account.name,
+        &account.persona,
+        &account.cn_id,
+    )
+    .map_err(|e| ApiError::internal(e.to_string()))?;
     let body = view(token.clone(), &account);
     let ttl = profile_token::DEFAULT_TTL_SECS;
     let cookie = format!("{COOKIE}={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age={ttl}");
@@ -146,15 +155,27 @@ pub async fn create_session(State(app): S, Json(req): Json<SessionReq>) -> ApiRe
 
 /// `GET /api/session` -- the identity behind the presented ticket.
 pub async fn get_session(State(app): S, Auth(claims): Auth) -> ApiResult<Json<SessionView>> {
-    let account = app.store.account(&claims.sub).ok_or_else(ApiError::unauthorized)?;
-    let token = profile_token::mint_now(&app.secret, &account.id, &account.name, &account.persona, &account.cn_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let account = app
+        .store
+        .account(&claims.sub)
+        .ok_or_else(ApiError::unauthorized)?;
+    let token = profile_token::mint_now(
+        &app.secret,
+        &account.id,
+        &account.name,
+        &account.persona,
+        &account.cn_id,
+    )
+    .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(Json(view(token, &account)))
 }
 
 pub async fn logout() -> impl IntoResponse {
     let cookie = format!("{COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
-    ([(header::SET_COOKIE, cookie)], Json(serde_json::json!({ "ok": true })))
+    (
+        [(header::SET_COOKIE, cookie)],
+        Json(serde_json::json!({ "ok": true })),
+    )
 }
 
 #[derive(Debug, Serialize)]
@@ -163,7 +184,10 @@ pub struct ProfileView {
 }
 
 pub async fn get_profile(State(app): S, Auth(claims): Auth) -> ApiResult<Json<ProfileView>> {
-    let a = app.store.account(&claims.sub).ok_or_else(ApiError::unauthorized)?;
+    let a = app
+        .store
+        .account(&claims.sub)
+        .ok_or_else(ApiError::unauthorized)?;
     Ok(Json(ProfileView { profile: a.profile }))
 }
 
@@ -172,7 +196,11 @@ pub struct ProfileReq {
     pub profile: String,
 }
 
-pub async fn put_profile(State(app): S, Auth(claims): Auth, Json(req): Json<ProfileReq>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn put_profile(
+    State(app): S,
+    Auth(claims): Auth,
+    Json(req): Json<ProfileReq>,
+) -> ApiResult<Json<serde_json::Value>> {
     if req.profile.len() > MAX_PROFILE {
         return Err(ApiError::bad("err.profile.too_large"));
     }
@@ -194,7 +222,11 @@ pub struct NewServer {
 
 impl Default for NewServer {
     fn default() -> Self {
-        Self { name: String::new(), url: String::new(), note: String::new() }
+        Self {
+            name: String::new(),
+            url: String::new(),
+            note: String::new(),
+        }
     }
 }
 
@@ -264,7 +296,10 @@ pub struct UploadQuery {
 
 impl Default for UploadQuery {
     fn default() -> Self {
-        Self { name: String::new(), kind: String::new() }
+        Self {
+            name: String::new(),
+            kind: String::new(),
+        }
     }
 }
 
@@ -305,7 +340,10 @@ pub async fn serve_upload(State(app): S, Path((id, file)): Path<(String, String)
     if id.is_empty() || id == "." || id.contains(['/', '\\']) {
         return StatusCode::NOT_FOUND.into_response();
     }
-    if file.split('/').any(|seg| seg.is_empty() || seg == "." || seg == "..") {
+    if file
+        .split('/')
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
         return StatusCode::NOT_FOUND.into_response();
     }
     let path = app.store.upload_dir(&id).join(&file);
@@ -376,7 +414,10 @@ pub fn router(app: Arc<App>, static_dir: Option<PathBuf>, game_data: Option<Path
 
 async fn spa_index(State(index): State<PathBuf>, uri: Uri) -> Response {
     let path = uri.path();
-    let file_like = path.rsplit('/').next().is_some_and(|last| last.contains('.'));
+    let file_like = path
+        .rsplit('/')
+        .next()
+        .is_some_and(|last| last.contains('.'));
     if file_like || path.starts_with("/api/") {
         return StatusCode::NOT_FOUND.into_response();
     }

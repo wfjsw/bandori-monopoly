@@ -80,8 +80,6 @@ fn settle(player_id: i32) -> card_sdk::Asked {
                 .i("n", same.len() as i64),
         );
         for t in same {
-            // 「半价收费的[结算]（向上取整10）」 -- `H.PayRent` with the half
-            // flag; the ceil-10 rounding lives in the rent pipeline.
             ctx::pay_rent(player_id, t, true)?;
         }
         return Ok(());
@@ -150,10 +148,8 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // The ask carries the per-option labels, their prices, and the AI's
-    // preferred index (`H.AgentLanding`'s `ai_agent_choice`). It answers
-    // with the **tile id** (`PromptKind::TileId`), so the commit-pass re-run
-    // of this body -- whose `set` the just-committed host effect reshaped --
+    // It answers with the **tile id** (`PromptKind::TileId`), so the commit-pass
+    // re-run of this body -- whose `set` the just-committed host effect reshaped --
     // still maps the pick to the same tile.
     let ai = ctx::ai_agent_choice(player_id, &options);
     let t = ctx::ask_tiles(
@@ -173,9 +169,7 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // The chosen branch settles once -- 「进行一次[结算]」. `H.AgentOffer`
-    // runs the buy / build / half-rent as one host routine, so the commit
-    // pass's pre-filled answer cannot double-act.
+    // The chosen branch settles once -- 「进行一次[结算]」.
     let owner = ctx::tile_owner(t);
     let kind = if owner < 0 {
         0

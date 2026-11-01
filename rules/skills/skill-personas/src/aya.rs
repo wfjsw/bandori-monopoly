@@ -14,12 +14,9 @@
 //! named skill to each non-P◇P player.
 //!
 //! AYA-GRANT-01 (settled 2026-10-20): the clause names the character -- here
-//! 「获得丸山彩的（2）技能」 -- so the grantee **does** run 丸山彩's (2). That is
-//! the rulebook text, not a mis-dispatch. C# reached it via `H.ReplaceSkill`
-//! (replace the (2) slot); we place the skill rule on the grantee's field
-//! instead, which is the same clause with a different mechanism. C# is not a
-//! spec. `aya_flip_all_pp_clause2_crystal` pins the grantee running 丸山彩's
-//! (2). Each of `chisato` / `eve` likewise places its own named
+//! 「获得丸山彩的（2）技能」 -- so the grantee **does** run 丸山彩's (2). That is the rulebook
+//! text, not a mis-dispatch. `aya_flip_all_pp_clause2_crystal` pins the grantee
+//! running 丸山彩's (2). Each of `chisato` / `eve` likewise places its own named
 //! skill.
 //!
 //! （2）'s 「分摊前」 is the figure *before* any split-pay divides it -- so the
@@ -69,7 +66,7 @@ fn mine(player_id: i32) -> bool {
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
+    // the grantees of the (2) below -- the `group_is(owner, …)` condition owns that.
     // Grant via the band card; no band card on the board → no markers.
     let _ = fans::grant(player_id, 5, 0)?;
     // 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- a grant is the skill

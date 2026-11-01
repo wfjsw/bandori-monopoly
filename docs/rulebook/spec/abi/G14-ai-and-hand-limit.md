@@ -7,10 +7,8 @@ carries money + board arrays).
 
 **Group:** G14, family "CardDef AI hooks and hand limit".
 
-**Ground truth:** `docs/rulebook/cards.json`; every fragment below was re-read
-from that file on 2026-10-28 against the card id named beside it. The two
-behaviours are different in kind: item 1 is book text, item 2 is C#-derived
-behaviour that the sheet does not print.
+**Ground truth:** `docs/rulebook/cards.json`; every fragment below was re-read from that file on
+2026-10-28 against the card id named beside it.
 
 **Closed slugs and rows:** both items are covered.
 
@@ -92,9 +90,7 @@ Card text (`cards.json#Mor:夏日合宿`):
 
 > 「打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌」
 
-The sheet says nothing about bots. The C# reference (`CardSummerCamp`,
-`MatchHost.cs:4584-4643`) declares `AiPlay => false`; the card file records
-that as prose only (`summer_camp.rs:44-45`, `TODO(ABI) ai-play`).
+The sheet says nothing about bots.
 
 The engine seam exists and standard bots use it: `ai_card_choice` filters hand
 cards through `self.rules.ai_play(self, i, &id)`
@@ -255,7 +251,7 @@ destructure the variant exhaustively and need the new binding:
 ### 4.3 Host import (`game-rules/src/hostfns.rs`, `host.rs`, `native_shims.rs`)
 
 ```rust
-pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32, flags: i32) -> Result<i32, HostErr>
+pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32, flags: i32) -> Result<i32, HostError>
 ```
 
 * `over = flags & abi::import::DRAW_OVER_HAND != 0`.
@@ -353,7 +349,7 @@ pair to the same slice.)
 
 ```rust
 /// Would a bot play it now? Static card fact: `prop::AI_NEVER`.
-fn ai_play(&self, _cx: &Cx, _player: usize, card: &str) -> bool {
+fn ai_play(&self, _cx: &PlayCtx, _player: usize, card: &str) -> bool {
     self.card_prop(card, card_sdk::abi::prop::AI_NEVER) == 0
 }
 ```
@@ -371,7 +367,7 @@ pub struct ViewExtra {
     /// Would a bot offer it: `playable[i] && rules.ai_play(..)`.
     /// Static facts only, so the seat-view engine computes it exactly.
     pub ai_playable: Vec<bool>,
-    pub est_cost: Vec<i32>,
+    pub estimated_cost: Vec<i32>,
     pub skills: Vec<SkillAction>,
 }
 ```
@@ -395,12 +391,12 @@ Client / bot plumbing (all additive, no game rules):
 * `bot-glue/src/lib.rs` (`:587`, `:740`), `bot-service/src/lib.rs` (`:400`,
   `:569`), `bot-core/src/sim.rs` (`:202`): pass `offerable()` / the same
   `playable & !aiPlayable` combination to `legal_actions_with_cost` instead of
-  `&view.playable`. The `est_cost` argument and the function's own contract are
+  `&view.playable`. The `estimated_cost` argument and the function's own contract are
   unchanged (search policy, never legality).
 * `rules-worker/src/lib.rs`: `needExtras` copies `"aiPlayable"` (`:365` beside
   `"playable"`; the field-list comment at `:333` is updated).
 * `web-glue/src/lib.rs::frame` (`:761-773`, the offline/托管 twin of
-  `view_extra_typed`): emit `"aiPlayable": extra.ai_playable` beside
+  `view_extras_typed`): emit `"aiPlayable": extra.ai_playable` beside
   `"playable"` — without it the browser autopilot never sees the flag.
 * `webui/src/core/types.ts`: optional `aiPlayable?: boolean[]`;
   `webui/src/game/botPool.ts` / `viewExtras.ts`: type + `mergeExtras` and the
@@ -497,7 +493,6 @@ bots still offer it.
 
 ```rust
 use card_sdk::abi::prop;
-// C# `CardSummerCamp.AiPlay => false`: standard/advanced bots never offer it.
 // Human legality is untouched -- `aiNever` is not a `cant_play` gate.
 pub const SUMMER_CAMP: CardDef = CardDef::new("Mor:夏日合宿", &[
     On::Play("", None, summer_camp),
@@ -508,9 +503,8 @@ pub const SUMMER_CAMP: CardDef = CardDef::new("Mor:夏日合宿", &[
 .meta(...);
 ```
 
-The play body, the untargetable filter, the turn-start end path and the
-`*_kani` exports (`summer_camp_kani` / `untargetable_kani` / `turn_start_kani`)
-are unchanged. The TODO is removed; the source comment keeps the C# provenance.
+The play body, the untargetable filter, the turn-start end path and the `*_kani` exports
+(`summer_camp_kani` / `untargetable_kani` / `turn_start_kani`) are unchanged.
 
 ---
 
@@ -540,8 +534,8 @@ are unchanged. The TODO is removed; the source comment keeps the C# provenance.
 
 ## 8. Versioning
 
-`ABI_VERSION` 116 → **117** (last group; next after current if the order holds; if G06
-`counteraction-and-join` lands first, this becomes 106 — one bump per delivery).
+`ABI_VERSION` 116 → **117** (last group in the README order; if the order ever
+changes, take the number the table then leaves free — one bump per delivery).
 Entry inserted immediately **below** the `pub const ABI_VERSION` line for
 newest-first order (`abi.rs:846`, where v104 already sits; the older entries
 live in the fenced list below the constant), matching the `/// vNNN:` style:
@@ -561,7 +555,7 @@ live in the fenced list below the constant), matching the `/// vNNN:` style:
 ///    hidden reads. SAVE_VERSION / RECORD_VERSION unchanged.
 ```
 
-The ABI bump is for the **import arity**, not for the prop: a v104 module
+The ABI bump is for the **import arity**, not for the prop: a v116 module
 calling two-arg `ruleset_draw` would misread the stack on a v117 host.
 
 Manifest line text (both prop modules, identical):
@@ -599,7 +593,7 @@ Item 2:
 | `g14_standard_bot_plays_a_normal_card` | contrast: the same setup with a control card that declares no `aiNever` does play |
 | `g14_chaos_still_plays_summer_camp` | chaos keeps its "play everything" contract (open question 1; invert if the ruling changes) |
 | `g14_human_can_still_play_summer_camp` | `playable` is true and the manual `act:"play"` is accepted |
-| `g14_view_extra_ai_playable_marks_summer_false` (`game-core/tests/view_extra.rs`) | `playable[i] == true`, `ai_playable[i] == false`, other cards true |
+| `g14_view_extra_ai_playable_marks_summer_false` (`game-core/tests/view_extras.rs`) | `playable[i] == true`, `ai_playable[i] == false`, other cards true |
 | `standard_skips_ai_never` / `chaos_plays_ai_never` (`webui/src/game/autopilot.test.ts`) | the autopilot command list honours / ignores `aiPlayable` |
 | `view_extra_equiv` (`bot-core/tests/view_extra_equiv.rs`: the seeded and solo tests) | `aiPlayable` is compared with the same "must agree every time" counter as `playable`, and `strip_extras` clears it |
 
@@ -651,12 +645,9 @@ static facts to the host and the client and the inverted default is confined to
 one documented key. A1 remains the migration path if `aiNever` ever needs more
 than a bool.
 
-**A2 — a wasm `OP_AI_PLAY` hook (`fn(&Cx, player, card) -> bool`).**
-Truest to "hook" and lets a card inspect the world. Rejected now: every view
-extra would instantiate and run a module per hand card (the client extras are
-on the interaction path), and the C# reference and every current card are
-static. Note the seam can be added later: a card prop `aiHook` could name an
-entry, with the static bool as the fast path.
+**A2 — a wasm `OP_AI_PLAY` hook (`fn(&PlayCtx, player, card) -> bool`).** Truest to "hook" and lets a
+card inspect the world. Note the seam can be added later: a card prop `aiHook` could name an entry,
+with the static bool as the fast path.
 
 **A3 — let guest state increases cross the routine boundary (general fix).**
 One condition in `overlay_guest_state` (accept `wrote.value > base_v`, not only
@@ -696,8 +687,8 @@ draw hooks saw the wrong hand size. Rejected.
    `aiNever` as a standard/advanced fact only (design default), or make it
    absolute so chaos also skips 夏日合宿? The engine and the client must agree
    either way.
-2. **Conditional AI.** C# is a bool. If a future card wants "skip only when
-   X", does that become a CEL-valued prop, a second prop, or A2's hook?
+2. If a future card wants "skip only when X", does that become a CEL-valued prop, a second prop, or
+  A2's hook?
 3. **Advanced search.** Exclude an `aiNever` card from the action set
    (design default, cheaper and matches "never offer") or leave it in the tree
    with a lower prior?

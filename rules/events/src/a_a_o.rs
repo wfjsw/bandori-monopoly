@@ -5,7 +5,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -30,16 +30,12 @@ pub const A_A_O: CardDef = CardDef::new(
             // sheet cell A15
             .derived(false));
 
-/// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌」
-/// -- keep the event and schedule the drawer's next turn end (`AtEnd`).
-/// 规则书: 「此卡在场时全场玩家不能使用卡牌的[手]效果」 -- a global hand-effect
-/// veto over every player while the event is up.
-/// TODO(规则书)/TODO(engine): that veto has no ctx surface. The C#
-/// `CannotPlay` / `Fx.CantPlayHand` gate has no engine field yet
-/// (`crates/game-rules/src/wasm_rules.rs`: 「`_noCounteractTurn` and
-/// Fx.CantPlayHand have no engine field yet」; `docs/EVENTS.md` 「Left short」).
-/// Nothing is written to stand in for it -- no hook both sees every hand [手]
-/// effect and can refuse it -- so the clause is left short rather than faked.
+/// TODO(规则书) 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合结束时放入事件弃牌」 -- keep the event and schedule
+/// the drawer's next turn end (`AtEnd`). 规则书: 「此卡在场时全场玩家不能使用卡牌的[手]效果」 -- a global
+/// hand-effect veto over every player while the event is up. /TODO(engine): that
+/// veto has no ctx surface. Nothing is written to stand in for it -- no hook both
+/// sees every hand [手] effect and can refuse it -- so the clause is left short
+/// rather than faked.
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);

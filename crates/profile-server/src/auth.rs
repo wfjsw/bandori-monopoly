@@ -32,15 +32,24 @@ fn token_from(parts: &Parts) -> Option<String> {
             }
         }
     }
-    parts.uri.query()?.split('&').find_map(|kv| kv.strip_prefix("token=")).map(str::to_string)
+    parts
+        .uri
+        .query()?
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("token="))
+        .map(str::to_string)
 }
 
 impl FromRequestParts<Arc<App>> for Auth {
     type Rejection = ApiError;
 
-    async fn from_request_parts(parts: &mut Parts, app: &Arc<App>) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        app: &Arc<App>,
+    ) -> Result<Self, Self::Rejection> {
         let token = token_from(parts).ok_or_else(ApiError::unauthorized)?;
-        let claims = profile_token::verify(&app.secret, &token).map_err(|_| ApiError::unauthorized())?;
+        let claims =
+            profile_token::verify(&app.secret, &token).map_err(|_| ApiError::unauthorized())?;
         Ok(Auth(claims))
     }
 }

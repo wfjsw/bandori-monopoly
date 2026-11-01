@@ -119,11 +119,11 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         )? {
             return Ok(());
         }
-        let x = ctx::tok(mover, HELD);
+        let x = ctx::held_count(mover, HELD);
         ctx::transfer(mover, player_id, 50 * x, &Msg::new(key!("hagumi_fee")))?;
     } else {
         // 「你经过…可以将其转移到自己场上（持有上限10）」
-        if ctx::tok(player_id, HELD) >= 10 {
+        if ctx::held_count(player_id, HELD) >= 10 {
             return Ok(());
         }
         if !ctx::ask_yes(
@@ -137,7 +137,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     // The croquette moves from the tile to the collector.
     ctx::bump_mark(t, &MarkFilter::any().kind(ON_TILE), -1);
     let who = mover;
-    ctx::add_tok(who, HELD, 1, 10)?;
+    ctx::add_held_by_name(who, HELD, 1, 10)?;
     // 「你将可乐饼转移至自己场上时可用其替换掉一个其他不位于[持续]卡上的标记」 --
     // offered when the collector is this player.
     if mine {
@@ -158,7 +158,7 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     let Some(&other) = ctx::players_on(t, player_id).first() else {
         return Ok(());
     };
-    let have = ctx::tok(player_id, HELD);
+    let have = ctx::held_count(player_id, HELD);
     if have <= 0 {
         return Ok(());
     }
@@ -171,7 +171,7 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    let room = 10 - ctx::tok(other, HELD);
+    let room = 10 - ctx::held_count(other, HELD);
     let max = have.min(room).max(0);
     if max <= 0 {
         return Ok(());
@@ -186,8 +186,8 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    ctx::add_tok(player_id, HELD, -n, 10)?;
-    ctx::add_tok(other, HELD, n, 10)?;
+    ctx::add_held_by_name(player_id, HELD, -n, 10)?;
+    ctx::add_held_by_name(other, HELD, n, 10)?;
     ctx::log(
         player_id,
         &Msg::new(key!("hagumi_given"))
@@ -204,7 +204,7 @@ fn can_cash(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if ctx::tok(player_id, HELD) < 4 {
+    if ctx::held_count(player_id, HELD) < 4 {
         return Some(Msg::new(key!("hagumi_no_croquette")));
     }
     None
@@ -213,10 +213,10 @@ fn can_cash(player_id: i32) -> Option<Msg> {
 /// 「消耗4个可乐饼兑换1000资金」 -- a counter spend, not money. 1000 is already
 /// a multiple of 10 (money rounds once after every add/mul).
 fn cash(player_id: i32) -> card_sdk::Asked {
-    if ctx::tok(player_id, HELD) < 4 {
+    if ctx::held_count(player_id, HELD) < 4 {
         return Ok(());
     }
-    ctx::add_tok(player_id, HELD, -4, 10)?;
+    ctx::add_held_by_name(player_id, HELD, -4, 10)?;
     ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_cash")))?;
     Ok(())
 }
@@ -234,7 +234,7 @@ fn sweep_overflow(player_id: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) {
             continue;
         }
-        let n = ctx::tok(p, HELD);
+        let n = ctx::held_count(p, HELD);
         if n < 4 {
             continue;
         }
@@ -246,7 +246,7 @@ fn sweep_overflow(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", p)
                 .i("n", n as i64),
         );
-        ctx::add_tok(p, HELD, -n, 10)?;
+        ctx::add_held_by_name(p, HELD, -n, 10)?;
         rules_status::stay::add(p, 1);
     }
     Ok(())
@@ -256,7 +256,7 @@ fn sweep_overflow(player_id: i32) -> card_sdk::Asked {
 /// The host folds `extra` via `add_extra_dice`, so a single `(n, 2)` pair is the
 /// same dice pool as the old `n` one-die calls.
 fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
-    let n = ctx::tok(player_id, HELD);
+    let n = ctx::held_count(player_id, HELD);
     if n > 0 {
         v.extra = Some(Dice { count: n, sides: 2 });
     }
@@ -264,7 +264,7 @@ fn on_plan(player_id: i32, mut v: PlanValue) -> PlanValue {
 }
 
 // TODO(规则书): 「其他角色拥有4个可乐饼时」 is a standing count clause. Held
-// tokens (`add_tok`) raise only the pre-move `markerGain` window -- there is no
+// tokens (`add_held_by_name`) raise only the pre-move `markerGain` window -- there is no
 // post-commit held-changed event to hang the sweep on, so it is re-run at this
 // skill's own write sites (plus the turn-end tick). A host `heldChanged` event
 // would let this be a pure event handler.

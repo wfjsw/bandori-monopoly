@@ -475,11 +475,11 @@ impl StrategyParams {
 
     /// Card-play reserve check against the card's bot-only estimated
     /// execution cost. A cost of `0` always passes.
-    pub fn wants_play_card(&self, money: i32, est_cost: i32, card: &str) -> bool {
-        if est_cost <= 0 {
+    pub fn wants_play_card(&self, money: i32, estimated_cost: i32, card: &str) -> bool {
+        if estimated_cost <= 0 {
             return true;
         }
-        money - est_cost >= self.play_card_reserve_for(card)
+        money - estimated_cost >= self.play_card_reserve_for(card)
     }
 
     /// `PLAY_CARD_CHANCE` as an f64 probability (`700 / 1000.0 == 0.7`

@@ -22,7 +22,7 @@ A macro that emits **both** a CEL string and a Rust evaluator.
 |---|---|
 | pros | one authoring site next to the card; looks tidy |
 | cons | real guards use single-quoted strings (`slot('skillState')`), dotted names (`move.roll`), bare kind constants (`Teleport`) and `null` — a Rust token-tree `stringify!` cannot produce valid CEL (`'x'` is not a Rust literal; `null`/kind ids need mapping). A real `cond!` would need its **own CEL-subset parser** → a second trusted parser that can diverge from the vendored `cel` one |
-| cons | 138 distinct condition strings / ~226 non-empty `pre` sites would all need re-authoring; byte-identical production output is at risk |
+| cons | 138 distinct condition strings / ~226 non-empty `condition` sites would all need re-authoring; byte-identical production output is at risk |
 | cons | proof obligation becomes `print(macro AST) re-parses to the identical cel AST` — an extra equivalence to establish per guard |
 | cons | string arguments inside the macro (`tok('PAREO标记')`) force a quoting story that is not Rust's |
 
@@ -72,7 +72,7 @@ was authored separately.
 ## 2. Architecture
 
 ```
-On::* "pre"  (the one source)
+On::* "condition"  (the one source)
     │
     ├─► rules-cond::compile  ──► rewritten CEL AST
     │         │                        │
@@ -85,7 +85,7 @@ On::* "pre"  (the one source)
     │                                            ├─► rules-cond-ir::spec   (written reference)
     │                                            └─► generated const data → Kani harness
     │
-    └─► ManifestOn.pre  (unchanged wire format; ABI untouched)
+    └─► ManifestOn.condition  (unchanged wire format; ABI untouched)
 ```
 
 Crates (host-only; never in the rules/ wasm workspace):
@@ -207,7 +207,7 @@ harnesses).
 | | count |
 |---|---|
 | `On::*` declarations scanned | 626 |
-| distinct condition strings that lower | **139** (incl. `pre::MINE` = `actor == owner`) |
+| distinct condition strings that lower | **139** (incl. `condition::MINE` = `actor == owner`) |
 | empty conditions (`""`) | 400 |
 | junk extracted then rejected (Msg names etc.) | 5 |
 | operators actually used | `&&` `==` `!=` `>=` `>` `\|\|` `<=` `-` `<` `/` |
@@ -254,7 +254,7 @@ every one of the 139 generated guards must agree:
 
 | path | fill | eval |
 |---|---|---|
-| (A) production | `cond_pre::{fill_window, fill_candidate}` over a `SnapSrc` on the fixture | `CompiledPre::compile` + `WindowScope::eval` (error ⇒ false) |
+| (A) production | `condition::{fill_window, fill_candidate}` over a `SnapSrc` on the fixture | `CompiledCondition::compile` + `WindowScope::eval` (error ⇒ false) |
 | (B) Kani IR | `ir_fill::fill_from_world` (+ geometry bins the production `CondView` computes live) | `generated::cond_irs::eval_id` |
 
 This pins `fill_window`/`fill_candidate` **field semantics** against `ir_fill`

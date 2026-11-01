@@ -71,10 +71,10 @@ know. It is the expected-divergence table for the seat-view equivalence
 tests: anything not listed here must match bit-for-bit.
 
 **Legend.** `reads` names the world slice the gate touches. `client vs
-server` is whether the seat-view fork and the live `view_extra` can disagree.
+server` is whether the seat-view fork and the live `view_extras` can disagree.
 `blast radius` is what a disagreement does to the player.
 
-#### A. `playable` -- `Cx::cant_play` (`engine/play.rs`)
+#### A. `playable` -- `PlayCtx::cant_play` (`engine/play.rs`)
 
 `view_extra_parts` calls `cant_play(i, id, asking = false)` once per distinct
 hand id (own hand only).
@@ -83,16 +83,16 @@ hand id (own hand only).
 |---|---|---|---|
 | hand membership (`hidden[i].hand` contains id) | **own-hand-exact** (determinizer keeps the viewer's hand verbatim) | always equal | grey-out wrong |
 | `playing() && turn == i && step == OPS` (phase / turn / step) | **public** `MatchState` | always equal | grey-out wrong |
-| `asking` -- `cant_play`'s third arg. `view_extra` always passes `false`; the live `act:"play"` path via `why_not_act` passes `busy` (`pending.is_some()`). Not a client/server split -- both extras paths pass `false` -- but the extras `playable` bit is deliberately stricter than the act gate when a prompt is open. | public pending (via caller) | always equal (both pass `false`) | none (shared quirk) |
+| `asking` -- `cant_play`'s third arg. `view_extras` always passes `false`; the live `act:"play"` path via `cant_act` passes `busy` (`pending.is_some()`). Not a client/server split -- both extras paths pass `false` -- but the extras `playable` bit is deliberately stricter than the act gate when a prompt is open. | public pending (via caller) | always equal (both pass `false`) | none (shared quirk) |
 | `cannot_play` -- `exile` / `stun` / `no_hand`; stun skipped when `card_prop(PLAYABLE_STUNNED) != 0` | **public** `MatchPlayer` flags + static prop | always equal | grey-out wrong |
 | exclusive-card check (`card.owner` vs `players[i].character` / base / CRYCHIC) | **static** card data + **public** character | always equal | grey-out wrong |
 | `rules.normal(id)` | **static** (`CardRules::normal`, default `true`; no ruleset overrides it) | always equal | grey-out wrong |
-| `rules_cant_play` = `CardRules::cant_play` = CEL `pre` on `On::Play` + wasm `OP_GUARD` (`game-rules/src/host.rs` `cant_play`) | see B / C / D below | see those rows | grey-out wrong |
+| `rules_cant_play` = `CardRules::cant_play` = CEL `condition` on `On::Play` + wasm `OP_GUARD` (`game-rules/src/host.rs` `cant_play`) | see B / C / D below | see those rows | grey-out wrong |
 
-#### B. `rules_cant_play` -- CEL `pre` (`On::Play`'s condition)
+#### B. `rules_cant_play` -- CEL `condition` (`On::Play`'s condition)
 
 Evaluated against `fill_window_ambient` + `fill_candidate`
-(`game-rules/src/cond_pre.rs`) / `LiveSnap`. Full vocabulary audit is in
+(`game-rules/src/condition.rs`) / `LiveSnap`. Full vocabulary audit is in
 `docs/GUARDS.md` §4.2b; summary:
 
 | name / gate | reads | client vs server | blast radius |
@@ -104,13 +104,13 @@ Evaluated against `fill_window_ambient` + `fill_candidate`
 | `slot(name)`, `tok(name)`, `card.counter(name)`, `card.placed`, `blocked(band)`, `counter_is` | **public** player-state latches / tokens / field-card counters | always equal | grey-out wrong |
 | anything that would name a hand **card id**, a deck **order**, or the RNG | **no such CEL name exists** | n/a -- forbidden | would grey-out wrong / leak |
 
-The only `On::Play` in the live pool with a non-empty CEL `pre` is
+The only `On::Play` in the live pool with a non-empty CEL `condition` is
 `skill-characters/pareo` (`tok('PAREO标记') >= 1`) -- a public token.
 
 #### C. `rules_cant_play` -- wasm `OP_GUARD` (the card's `cant_play` / `can_*` body)
 
 `host.rs` `cant_play` runs the residual guest guard after (or instead of)
-the CEL `pre`. Every live `On::Play` gate was scanned (`rules/cards/**`,
+the CEL `condition`. Every live `On::Play` gate was scanned (`rules/cards/**`,
 `rules/skills/**`). Hidden-relevant readers, and **only** these:
 
 | name / gate | reads | client vs server | blast radius |
@@ -132,7 +132,7 @@ diverge from the server (the fork samples those zones / owns a fresh RNG).
 No live `On::Play` gate does today. A future gate that does is a
 client/server split -- list it here.
 
-#### D. `skills` -- `why_not_act(cx, i, act:"skill")` (`engine/mod.rs`)
+#### D. `skills` -- `cant_act(cx, i, act:"skill")` (`engine/mod.rs`)
 
 | name / gate | reads | client vs server | blast radius |
 |---|---|---|---|
@@ -150,7 +150,7 @@ client/server split -- list it here.
 #### F. `aiAnswer` -- the prompt prefill
 
 `aiAnswer` is the answer the engine stamps **once, at prompt-open**, on the
-live stream (`Ask::ai` / `ai_picked` / `worth`: `Cx::fill_ai` for ordinary
+live stream (`Ask::ai` / `ai_picked` / `worth`: `PlayCtx::fill_ai` for ordinary
 prompts, `Ask::mortgage`'s `ai_pick` from `auto_mortgage(_from)`,
 `Ask::auction`'s `worth` from `ai_auction_worth` per seat). It is no longer a
 scheduled decision (`docs/BOT-DRIVE.md`); it serves two jobs:
@@ -159,7 +159,7 @@ scheduled decision (`docs/BOT-DRIVE.md`); it serves two jobs:
   driver never answered, and
 * the hint the search's priors and the 托管 fallback table rank with.
 
-Solo ships it in `view_extra`; online ships it on the same field, and the
+Solo ships it in `view_extras`; online ships it on the same field, and the
 seat-view engine mirrors it into the fork's stub (`determinize` ->
 `saved::stub_pending`) rather than recomputing -- so the extras echo exactly
 what the server stamped. Every way the value can be wrong:
@@ -204,11 +204,10 @@ pick) may diverge from the server's own draw. The blast radius is the sent
 command, which the server applies verbatim -- a divergence is a different but
 legal play, never a desync.
 
-
-#### G. `why_not_act` -- the other branches (not extras, listed for completeness)
+#### G. `cant_act` -- the other branches (not extras, listed for completeness)
 
 Only `act:"skill"` and `act:"play"` feed the seat-view extras. The rest of
-`why_not_act` is public throughout (phase / turn / step / `busy` /
+`cant_act` is public throughout (phase / turn / step / `busy` /
 `st.turn` / `st.step` / `st.bought` / `st.built` / `st.roller` /
 `st.skip_move` / `turn.main_moved` / ownership / money / quote / hand
 **size** vs `hand_limit`). `act:"discard"` is the one other branch that
@@ -238,7 +237,7 @@ order, or the match RNG.
 |---|---|---|
 | fork | ready | `World: Clone` (`world.rs:329`), COW `EventTail` (`world.rs:215-247`); no wasm-side state |
 | step | ready, private | `execute` / `Pending` / `Routine` are private (`mod.rs:119-125, 562-616`) |
-| legal actions | ready | `why_not_act` (`mod.rs:1448-1555`), `cant_play`, prompt options; auction bids are numeric |
+| legal actions | ready | `cant_act` (`mod.rs:1448-1555`), `cant_play`, prompt options; auction bids are numeric |
 | randomness | ready | one xoshiro256** per `World` (`rng.rs:14-44`) |
 | info boundary | ready | hand counts only, sorted own deck, per-seat `aiAnswer` |
 | determinization | missing | hidden: opponent hands, every draw order, discards, event-deck order, RNG |
@@ -259,7 +258,7 @@ modules. The bot links them directly.
   [`HostCtx`] trait. `HostCtx` supplies what differs between backends: guest
   memory (wasm linear memory vs `card_sdk::native`'s arena), fuel (store fuel
   vs a plain counter), and `call_entry` (a nested `Store` vs a thread-local
-  host swap). Errors are a backend-neutral `HostErr::{NeedInput, Trap}`;
+  host swap). Errors are a backend-neutral `HostError::{NeedInput, Trap}`;
   each backend converts at its boundary. The sandbox linker is unchanged
   from the outside (`Ruleset::run` / `run_hook` / `can_counteract` /
   `cant_play` / `declares` / `card_props` keep their semantics).
@@ -296,7 +295,7 @@ modules. The bot links them directly.
 
 Today an `ask_*` halts and the run is replayed with the answer appended
 (card runs and engine routines alike). In a simulation every decision belongs
-to the bot, so `Cx` gets an answer-provider mode: an ask calls the
+to the bot, so `PlayCtx` gets an answer-provider mode: an ask calls the
 provider (tree policy, then rollout policy) and returns the answer at once.
 The live match keeps the halt/replay model; the default (no provider) path is
 byte-identical (checkpoints, sim counts — `cargo run -p game-core --release
@@ -305,7 +304,7 @@ byte-identical (checkpoints, sim counts — `cargo run -p game-core --release
 **What landed.**
 
 * [`AnswerProvider`] (`engine/cx.rs`): `fn answer(&mut self, ask: &Ask) ->
-  Option<Answered>`. `Cx::ask` consults it after the replay log is exhausted;
+  Option<Answered>`. `PlayCtx::ask` consults it after the replay log is exhausted;
   `None` keeps the halt so the tree can still branch on a prompt it cares
   about. [`HeuristicProvider`] is the rollout policy — the seat heuristic the
   engine's own bot schedule would have applied (`ask.ai` / `ai_picked` /
@@ -317,7 +316,7 @@ byte-identical (checkpoints, sim counts — `cargo run -p game-core --release
 * **Card rules.** `game_rules::inline` is a thread-local [`InlineHost`] stack
   that `hostfns` consults at every pause point (`request_or_pause` /
   `prompt_or_pause`). The drive installs one around each guest call when the
-  `Cx` has a provider. Both backends see it (the sandbox's `Caller` and
+  `PlayCtx` has a provider. Both backends see it (the sandbox's `Caller` and
   `rules-native`'s `NativeHost` share `hostfns`).
 * **Prompts inline, host requests through the loop.** A player prompt is
   answered as it happens, so it no longer costs a body re-run. A
@@ -373,7 +372,7 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
 * **Input** ([`view::SeatView`]): one seat's view only — the same frame
   web-glue's `SoloMatch::view` sends (`MatchState` + own hand + own sorted
   draw composition + the open prompt + `aiAnswer` / `playable`). Built from
-  `Match::{state, hand_of, draw_of, view_extra}`; never a `World`, seed, or
+  `Match::{state, hand_of, draw_of, view_extras}`; never a `World`, seed, or
   another seat's hand / deck order / `aiAnswer`.
 * **Determinizer** ([`determinize::determinize`]): samples every hidden zone
   and materialises a playable fork through the engine's **save format**
@@ -416,13 +415,13 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     on StubRules (`net_worth` is buy-neutral at the instant, so the tie goes
     to the bias, which leans Decline below `BUY_RESERVE`). See §5 C1.
   * **Legality gate (2026-10-08).** *Superseded 2026-10-16: buy/build are
-    settle-prompt answers only (`Action::Offer` → `act:"answer"`); the END
+    settle-prompt answers only (`Action::Answer` → `act:"answer"`); the END
     Buy/Build menu and `can_buy_here` / `can_build_here` /
     `st.buy_price` / `st.build_cost` are gone. Roll / end gates stand.* Buy / Build / roll / end ride the engine's
-    own `why_not_act` predicates, computed into the view as
+    own `cant_act` predicates, computed into the view as
     `MatchState::can_buy_here` / `can_build_here` / `can_roll_here` /
     `can_end_here` (buyable shape + the plan's no-buy flag + the quote's
-    `eligible` gate + the funds; `why_not_build` + funds for a build; the live
+    `eligible` gate + the funds; `guard_build` + funds for a build; the live
     `skip_move` latch / `main_moved` / `over_hand` for roll and end). The
     abstraction never offers a command the engine would refuse — before this,
     an unaffordable Buy was proposed at 结束, the engine refused it
@@ -433,7 +432,7 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     [除外]); trusting it sent `end` into `err.roll_first` — the heuristic's
     运营 branch now picks roll vs end by `can_roll_here` / `can_end_here`.
     The **policy** branch (`policy::turn_action`) mirrors the same gates from
-    the live world (a `Cx` carries no `MatchState`, whose convenience fields
+    the live world (a `PlayCtx` carries no `MatchState`, whose convenience fields
     are only filled by `Match::state`) instead of reading `skip_move`, and
     discards first while over the hand: nobody but the seat's own client can
     end its turn, so a refused command is a permanent stall, not a retry
@@ -441,9 +440,25 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   * **Auction answers (2026-10-28).** The prompt's `worth` is a ceiling, not a
     bid: `policy::act_for` passes when the seat is already the top bidder
     (`err.already_top_bid`) or cannot reach the minimum raise (`err.bid_min`),
-    and otherwise bids from that minimum by its own `bid_step`. A refused
-    auction answer holds the whole table on the prompt, because nobody marks
-    an answer the engine turned down.
+    and otherwise bids from that minimum by its own `bid_step`. The minimum
+    still moves between the frame a seat decides from and its `act` (another
+    seat bids first), so a refusal there is a race, not a verdict: the driver
+    re-arms the answer and retries once from the frame the engine has now
+    (`botDrive.ts` `recordAnswer` / `retryFresh`, 2026-10-31). Without that a
+    refused bid is recorded as answered and -- Solo having no prompt clock --
+    parks the whole table on the prompt.
+  * **A bid is not an answer either (2026-10-31).** A bid leaves the seat
+    pending; only a pass marks its slot. The driver therefore records the bid
+    an answer left live and re-arms the seat when the live bid moves past it,
+    so an outbid seat decides again instead of going quiet with the engine
+    still counting it open (`botDrive.ts` `needsAnswer`; pinned end-to-end by
+    `bot-core/tests/auction_drive.rs`).
+  * **Auto mode can leave the bid to the player (2026-10-31).** 托管 answers
+    auctions like every other surface unless the global `autoBid` setting is
+    off (Settings → 托管参与竞拍). Off, the autopilot skips auction prompts
+    (`botDrive.ts` `autopilotAnswers`), the board still opens the sheet
+    (`Board.tsx`) with its controls live over the input lock (`Prompt.tsx`),
+    and the seat waits for the player; every other surface stays automatic.
   * **Trivial decisions (2026-10-08).**
     [`action::trivial_decision`] skips the search when the root has exactly
     one legal action (it is forced) or when no candidate moves money,
@@ -561,7 +576,7 @@ them; to be added once the purchasing migration stops touching
    wrong base — the root decision still evaluates fine, deeper play is fuzzy.
 2. **`Ask::ai` / `Ask::ai_picked` / `Ask::worth` in the view** — per-seat
    heuristic answers and auction ceilings, computed at ask time. Only the
-   own seat's entry is public today (`view_extra`); a fork's other seats fall
+   own seat's entry is public today (`view_extras`); a fork's other seats fall
    back to the prompt fallback / a price-scaled ceiling. Wanted: either the
    full columns (they are engine-side heuristics, not hidden game state —
    `aiAnswer` already ships the own column), or a public
@@ -580,7 +595,7 @@ them; to be added once the purchasing migration stops touching
    a `cardCreated(card, seat)` log event would make it exact.
 
 Not needed (already public): `Match::restore` + `SAVE_VERSION` (fork
-materialisation), `Match::{state, hand_of, draw_of, view_extra, act, tick}`,
+materialisation), `Match::{state, hand_of, draw_of, view_extras, act, tick}`,
 `deck::{pool, derived, preset}`, `purchase::quote_native`, the heuristic's
 thresholds (`wants_buy` / `wants_build` / …).
 
@@ -911,7 +926,7 @@ placeholder until the post-purchasing full run.
   ```
 
   Flags: `--cap-rounds` (short capped games, scored at the cap with
-  `scoring.rs` weights / `MatchPlayer::score`, not binary win), 
+  `scoring.rs` weights / `MatchPlayer::score`, not binary win),
   `--games-per-candidate`, `--characters` (subset), `--threads`,
   `--budget-minutes` (0 = unlimited), `--levels` (`me`, `seat_bands`,
   `bands`, `exact`), `--margin`, `--seed`, `--out` (never defaults to
@@ -1034,7 +1049,7 @@ advanced search.
 - **托管 autopilot:** `webui/src/game/autopilot.ts` gets the seat's resolved params from the glue (one source of truth, like `deck_suggest`).
 - **Information boundary:** keys and parameters are public / static. Nothing reads hidden state.
 
-**Shipped (S1, 2026-10-08).** `data/strategy_book.json` (optional -- absent or empty = behaviour unchanged), loaded by `GameData::load` into `GameData::strategy_book` and resolved by `strategy::for_seat` / `StrategyBook::resolve` (`crates/game-core/src/strategy.rs`) from `engine/ai.rs` (`Cx::strategy_of`), `bot-core`'s `heuristic_message_view` / `action_priors` / `HeuristicProvider` and web-glue's `strategy_for` (which `autopilot.ts`'s `AutopilotCtx.strategyFor` reads). Not in `data_sha256`, like `deck_book.json`. Levels are `char_bands` / `me` / `band`; a stale ruleset hash, policy or `params_version` ignores the whole book (warned once). An entry's `params` is a partial object merged over the defaults (`#[serde(default)]` per field); a deck-tagged entry only applies to that deck (or when the deck is unknown).
+**Shipped (S1, 2026-10-08).** `data/strategy_book.json` (optional -- absent or empty = behaviour unchanged), loaded by `GameData::load` into `GameData::strategy_book` and resolved by `strategy::for_seat` / `StrategyBook::resolve` (`crates/game-core/src/strategy.rs`) from `engine/ai.rs` (`PlayCtx::strategy_of`), `bot-core`'s `heuristic_message_view` / `action_priors` / `HeuristicProvider` and web-glue's `strategy_for` (which `autopilot.ts`'s `AutopilotCtx.strategyFor` reads). Not in `data_sha256`, like `deck_book.json`. Levels are `char_bands` / `me` / `band`; a stale ruleset hash, policy or `params_version` ignores the whole book (warned once). An entry's `params` is a partial object merged over the defaults (`#[serde(default)]` per field); a deck-tagged entry only applies to that deck (or when the deck is unknown).
 
 **S1 gate (2026-10-08).** With the shipped empty book: `cargo run -p game-core --release --example sim -- 50 4 200` counts identical to the pre-S1 baseline (avg rounds 196.3; end reasons `last 11 / settle 39`; `buy 2899`, `forcebuy 392`, `auction won 255`, `rent 19567`, `bankrupt 96`, …), and `cargo run -p game-rules --release --example ckpt_equiv -- 3 4 60` (real `WasmRules`, seeded games, `Match::save` hash at every turn boundary) is byte-identical before / after. Lookup tests: `crates/game-core/tests/strategy_book.rs` (back-off order, first-hit, stale hash / policy / `params_version` fallback, partial-params merge, deck-tagged entries, defaults == the old formulas incl. the auction float expression and the mortgage sort, and an in-memory book whose `buy_reserve` blocks every purchase -- the plumbing proof). `webui/src/game/autopilot.test.ts` pins that the policy reads the glue's params and asks `strategyFor` for the public key.
 
@@ -1058,7 +1073,7 @@ advanced search.
 |---|---|---|
 | B0 | measure: sim with real `WasmRules` (ms/game, ms/round, runs/round, clone µs) | numbers in §5 |
 | B1 | host split + `HostCtx`; macro table mode; `rules-native`; drift check — **done** (suite green, native self-deterministic, one known divergence `#[ignore]`d; §5) | game-rules suite, drift test, sim parity |
-| B2 | inline answers in `Cx` + host asks + two-pass drive — **done** (StubRules checkpoints identical; one known real-rules gap, §3.2) | identical outcomes vs halt/replay on seeded games |
+| B2 | inline answers in `PlayCtx` + host asks + two-pass drive — **done** (StubRules checkpoints identical; one known real-rules gap, §3.2) | identical outcomes vs halt/replay on seeded games |
 | B3 | COW world chunks (if B1/B2 profiling shows clone cost) | sim time, save() equality |
 | B4 | `bot-core`: determinizer, ISMCTS, bid abstraction, evaluation — **done** (StubRules smoke; engine-API gaps in §3.4) | determinizer consistency tests; win rate vs standard bot |
 | B5 | `bot-service` + server protocol / budget / fallback + match option — **done** (server tests green; real-ruleset latency in §5) | server tests, latency under load |
@@ -1074,7 +1089,7 @@ B0, 2026-10-07. AMD Ryzen 7 5800H (8C/16T, 3.2 GHz), 32 GB RAM, Windows 11,
 release profile. Bench: `crates/game-rules/examples/bot_cost.rs` (4 standard
 bots, seeds 0..n, 200-round cap, the shipped `dist/cards` ruleset). Counters
 ride a `bot-cost` feature (compiled out by default): a few `AtomicU64`s in
-`Cx::world_copy` and around `Ruleset::store` / `call_card`, plus a counting
+`PlayCtx::world_copy` and around `Ruleset::store` / `call_card`, plus a counting
 `CardRules` wrapper in the example.
 
 ```
@@ -1166,7 +1181,7 @@ the 2-5 ms ISMCTS wants.
   final saves. `DRIFT_LONG=1` plays full games over more seeds.
 * `native_and_sandbox_agree_on_the_manifest` — same card ids / entries /
   declared conditions, and every non-empty condition string is present as a
-  `CompiledPre` on the native handle (the `RulesHandle::pre` default-`None`
+  `CompiledCondition` on the native handle (the `RulesHandle::condition` default-`None`
   bug left them silently uncompiled).
 * `tests/abi_link_names.rs` — every `mod sys` import has both the native
   `link_name` and a `ruleset_*` shim.
@@ -1242,7 +1257,7 @@ ms/game** (≤ 323 budget), counts identical (buy 2899 / forcebuy 392 /
 auctions 255 / rent 19567 / bankrupt 96). The instantiation cut is the
 per-card kind bitmask + the condition pre-filter (docs/GUARDS.md §10.3)
 rejecting probes before any `Run`/`world_copy`/guard. The modest rollout cut
-reflects that only 12/51 counteract entries carry a `pre` so far — moving the
+reflects that only 12/51 counteract entries carry a `condition` so far — moving the
 remaining ~39 bodies (G4 batch 2) is what closes the 131 ms → 20–40 ms gap.
 
 ### G4 batch 2 + sim path fix (2026-10-07/08)
@@ -1271,18 +1286,18 @@ counts identical.
 What moved (batch 2): 8 counteract entries (`elegant_shout`, `taki_even_if`,
 `marina_work`, `layer_keep`, `two_in_one`, `hold_hands_again`, `even_lost`,
 `mana_champion` — plus `here_the_world`'s prefix) got their expressible clauses
-into `pre` (`actor`/`by`/`target` relations, `move.roll`, `roll_source`,
+into `condition` (`actor`/`by`/`target` relations, `move.roll`, `roll_source`,
 `effect.hits`, `character_is`, `neighbor`, `value`) with `legacy_*` copies for
 the audit (since removed). **All 34 kind re-checks the precheck flagged are stripped** (the
 category list owns the kind; compound forms kept their residual clauses).
 Play-gate `cant_play` money/fire thresholds are still in the gate bodies —
 next batch.
 
-**`slot()` read the wrong key.** `cond_pre::fill_candidate` looked the CEL
+**`slot()` read the wrong key.** `condition::fill_candidate` looked the CEL
 `slot('name')` up under `slot:<name>`, while the guest's `ctx::slot(player_id,
 name)` reads the bare player-state key. Every `slot('lastWalk') > 0` condition
 read 0 and silently closed the window (`guards::ordinary_matches_only_abnormal`
-caught it). Fixed in `cond_pre` (bare key + `SLOT_NAMES` now covers
+caught it). Fixed in `condition` (bare key + `SLOT_NAMES` now covers
 `asUsualTurn`/`lastWalk`); `fill_candidate` always fills them.
 
 The 20–40 ms depth-2 target is still open: at N=2 a wasmtime inline rollout is
@@ -1313,7 +1328,7 @@ the StubRules sim counts are unchanged):
    `(seat, card)` probe's verdict is reused when the inputs it reads cannot
    have changed -- the ring's only world change is a declaration removing a
    card from a hand, so a verdict that reads no hand field is stable for the
-   window. `cant_play` in `view_extra` is likewise memoised per distinct card
+   window. `cant_play` in `view_extras` is likewise memoised per distinct card
    id within one view, and `Ruleset::cant_play` skips the CEL scope entirely
    when the entry has no condition.
 
@@ -1331,15 +1346,10 @@ bypassed, `declare_one` builds the old per-offer `win_run` + per-candidate
 | ms/game (real ruleset) | 14 639 | **13 210** (−10 %) |
 | inline rollout N=1 / N=2 / N=3 | 36.2 / 90.9 / 132.9 ms | 36.4 / 89.6 / 131.9 ms (noise) |
 
-Every seat was an AI (`can_counteract_now` rejected AI seats -- C# parity), so
-`declare_one` never ran in an all-bot bench: the 22 403 windows were raises
-nobody could answer, and the win there was the pre-scan skipping the whole ring
-(answer-tree `Trigger` clone, `Priority`, the per-visit loop). Two changes land
-on top of that bench (both 2026-10-08): the AI exclusion is gone ("is a bot" is
-not a rulebook reason; out / [除外] / `CannotPlay` still are), and standard's
-default [反击] propensity moved from "never declare" to
-`DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ (user ruling *"bots must be able
-to counteract"*). Same bench (4 g × 4 standard bots, real `dist/cards`):
+Two changes land on top of that bench (both 2026-10-08): the AI exclusion is gone ("is a bot" is not
+a rulebook reason; out / [除外] / `CannotPlay` still are), and standard's default [反击] propensity
+moved from "never declare" to `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ (user ruling *"bots must
+be able to counteract"*). Same bench (4 g × 4 standard bots, real `dist/cards`):
 
 | | AI seats excluded | bots offered, propensity 0 | bots offered, default 600‰ |
 |---|---|---|---|
@@ -1401,17 +1411,17 @@ layers:
    `On::Play` entry, or G4 deleted the gate *and* it declares no condition --
    the verdict is always "playable", so `RulesBridge::cant_play` returns
    before the uid lookup, the `Run` and the CEL scope.
-2. A **per-world memo** on `Cx` (`rules_cant_play`): `rules.cant_play` is a
+2. A **per-world memo** on `PlayCtx` (`rules_cant_play`): `rules.cant_play` is a
    pure query of the world, so within one unchanged world stamp the same
    `(player, card)` always answers the same. A small linear map (no hashing;
    a hand scan has few unique ids) keyed on the `SharedWorld` stamp -- it is
    dropped the moment anything writes. Covers the engine gate
-   (`Cx::cant_play`) and the skill gate (`ai_skill_choice`) alike.
+   (`PlayCtx::cant_play`) and the skill gate (`ai_skill_choice`) alike.
 
-**B -- no `World` copies for pure checks.** `Cx::w` and `Run::world` are now a
+**B -- no `World` copies for pure checks.** `PlayCtx::w` and `Run::world` are now a
 `SharedWorld` (copy-on-write handle, `Arc<World>` + `Deref`/`DerefMut`):
 reads deref with **no clone**; the first write `Arc::make_mut`s a private copy.
-Pure checks share the live handle (`Cx::share_world`, a refcount bump):
+Pure checks share the live handle (`PlayCtx::share_world`, a refcount bump):
 
 - `cant_play` probes: uid lookup reads `cx.world()`; the `Run` shares
   `cx.share_world()`. A gate body that never writes never copies the world;
@@ -1454,8 +1464,8 @@ rounds 61.0 match exactly, so the counter deltas are pure overhead):
 
 The `cant_play` memo shows 0 hits at this bench (one query per card per step,
 no duplicates in hand): the win is the **pre-filter** and the missing copies,
-not the memo. The memo pays on the live search, where `view_extra` /
-`why_not_act` / the hand scan re-ask the same card inside one unchanged world.
+not the memo. The memo pays on the live search, where `view_extras` /
+`cant_act` / the hand scan re-ask the same card inside one unchanged world.
 
 Wall times are ±30 % between reps on a loaded machine (the `StubRules` row is
 the tell). `bot_cost -- 4 4 120` **stack-overflows on the default main-thread
@@ -1506,7 +1516,7 @@ coordinator noted) -- `ckpt-merged.txt` sha256 `bed8588d…` (same 730 lines
 / 723 turns; master's card-flash events replace some `text` events) and
 `sim -- 50 4 200` gives rounds 192.5 / end reasons `{last: 15, settle: 35}`
 -- and this change's engine-side edits are timing-only / additive APIs
-(`rtimer`, `state_inner` split, `view_extra_typed`, `surface_probe`,
+(`rtimer`, `state_inner` split, `view_extras_typed`, `surface_probe`,
 `hand_len_first`), none of which touch `Match::save`, the RNG, or event
 construction, so they cannot move those numbers. `RECORD_VERSION` 2 is
 master's bump (reads of older records default the new fields), not ours.
@@ -1518,18 +1528,18 @@ surface. `surface_probe` reads `round` / `prompt_id` / `waiting` / `step` /
 `turn` straight off the live world (no clone, no previews); `Match::state`
 runs only when a surface is actually found.
 
-**2 -- typed `view_extra` + `heuristic_message_direct`.** `Match::view_extra`
+**2 -- typed `view_extras` + `heuristic_message_direct`.** `Match::view_extras`
 returned a `serde_json::Value` that `legal_actions` / `action_priors` /
 `SeatView::from_match` immediately parsed back, and `heuristic_message_with`
 built a full `SeatView` (state + hand + sorted `draw` + JSON extra) for every
-rollout prompt and turn. Now: `view_extra_typed` returns
-`ViewExtra { ai_answer, playable, est_cost }` (JSON form is a wrapper for
+rollout prompt and turn. Now: `view_extras_typed` returns
+`ViewExtra { ai_answer, playable, estimated_cost }` (JSON form is a wrapper for
 the wire), and the rollout heuristic reads only `st` + `hand_len_first` +
 `aiAnswer` when a prompt is open.
 
 Later the policy itself moved to `bot-core` (§1.1 F2), so
 `heuristic_message_with` delegates to it, and since the frame no longer carries
-a whole-command extra the search's per-node `view_extra_typed` is the only
+a whole-command extra the search's per-node `view_extras_typed` is the only
 extras call.
 
 Measured with `bot_cpu` (same seed 1, same budget, `RUST_MIN_STACK=16MiB`):
@@ -1537,7 +1547,7 @@ Measured with `bot_cpu` (same seed 1, same budget, `RUST_MIN_STACK=16MiB`):
 | | before | after |
 |---|---|---|
 | `Match::state()` | 7.70 s | **0.99 s** (−87 %) |
-| `view_extra` | 0.92 s | 0.51 s (−45 %) |
+| `view_extras` | 0.92 s | 0.51 s (−45 %) |
 | bot CPU / 200 game-s | 44.1 s | 44.2 s (budget-bound) |
 | searched decides | 57 @ 701 ms CPU, 3.16 iters | 58 @ 703 ms CPU, **3.67 iters** |
 | wall / decide | 515 ms | **411 ms** |
@@ -1560,15 +1570,15 @@ The `#[ignore]`d `native_and_sandbox_agree_on_a_seeded_game` (B1, 2026-10-07)
 is green and the test is a real suite covering checkpoints, event streams and
 final saves. Three root causes, all at the native/guest ABI boundary:
 
-1. **`RulesHandle::pre` defaulted to `None`.** `NativeRulesHandle` overrode
-   `by_id` / `card` but not `pre`, so every CEL condition read as *absent* on
-   native. `admits_pre` / `admits_gate` then admitted every entry -- a
-   `pre::MINE` hook (`"actor == owner"`) fired for **every** player instead of
+1. **`RulesHandle::condition` defaulted to `None`.** `NativeRulesHandle` overrode
+   `by_id` / `card` but not `condition`, so every CEL condition read as *absent* on
+   native. `admits_condition` / `admits_gate` then admitted every entry -- a
+   `condition::MINE` hook (`"actor == owner"`) fired for **every** player instead of
    the trigger's actor, which is what raised the extra prompts and reshuffled
    the draw pile in round 1. The compiled conditions were built correctly in
-   `NativeIndex` and then never read (the compiler's "field `pre` is never
-   read" warning was the smoking gun). Fix: `RulesHandle::pre` delegates to
-   `NativeIndex::pre` (`crates/rules-native/src/lib.rs`); pinned by
+   `NativeIndex` and then never read (the compiler's "field `condition` is never
+   read" warning was the smoking gun). Fix: `RulesHandle::condition` delegates to
+   `NativeIndex::condition` (`crates/rules-native/src/lib.rs`); pinned by
    `native_and_sandbox_agree_on_the_manifest`.
 2. **Guest buffers crossed the ABI as truncated 64-bit pointers.**
    `card-sdk`'s `ctx` passed `buf.as_mut_ptr() as i32` (and
@@ -1581,7 +1591,7 @@ final saves. Three root causes, all at the native/guest ABI boundary:
    `1d21` where the sandbox rolled `1d11`. Fix: `in_bytes` / `out_buf` /
    `out_read` helpers in `card-sdk/src/ctx.rs` route through the arena
    (`native::intern` / `reserve` / `read`) on non-wasm, the same shape
-   `turn_rolls` / `turn_snap` already used. `rt::leak` (the `cant_play` gate's
+   `turn_rolls` / `turn_snapshot` already used. `rt::leak` (the `cant_play` gate's
    packed `Msg`) had the same truncation and now interns too.
 3. **`NativeModules::run_hook` gave the guard and the body separate
    `HostState`s.** The sandbox runs both on one `store`, so a guard's world
@@ -2077,7 +2087,7 @@ unaffordable Buy was proposed, refused (`err.buy_poor` / `err.cannot_buy` /
 `err.poor`), and the service replayed the cached refusal every 200 ms until
 the turn bank expired — **45–54% of match time stalled**, live matches
 included. Fixed by (a) `MatchState::can_buy_here` / `can_build_here` /
-`can_roll_here` / `can_end_here` (the engine's own `why_not_act` predicates,
+`can_roll_here` / `can_end_here` (the engine's own `cant_act` predicates,
 computed in `Match::state`), (b) `Action::Decline` (`act: "end"` at 结束)
 always on the menu where the engine accepts `end`, and (c) defence in depth:
 on an `act` refusal the drive drops the cached answer (`op: "invalidate"`)

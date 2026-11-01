@@ -313,11 +313,9 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
 fn an_unported_card_falls_back_gracefully() {
     let mut m = match_with("AG:Y.O.L.O");
     let before = m.hand_of(1).len();
-    // Y.O.L.O is a counteraction (「你的任意掷骰结算前打出此卡」) with no
-    // `On::Play`. A hand `play` is therefore refused (`err.play_timing`) and
-    // the card stays in hand -- a graceful refusal, not a crash. (Same
-    // correction as `inter_yolo_pushes_haneoka_over_20`: do not `play` a
-    // counteract-only card.)
+    // A hand `play` is therefore refused (`err.play_timing`) and the card stays in
+    // hand -- a graceful refusal, not a crash. (Same correction as
+    // `inter_yolo_pushes_haneoka_over_20`: do not `play` a counteract-only card.)
     let r = m.act(1, &play("AG:Y.O.L.O"));
     assert!(
         r.is_err(),
@@ -347,7 +345,7 @@ fn ported_official_cards_run_in_a_match() {
     assert!(
         st.events
             .iter()
-            .any(|e| format!("{:?}", e.msg).contains("press_why")),
+            .any(|e| format!("{:?}", e.msg).contains("press_reason")),
         "its reason was logged"
     );
 
@@ -370,7 +368,7 @@ fn ported_official_cards_run_in_a_match() {
 /// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
 fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
     if msg.key() == "log.card_effect" {
-        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+        if let Some(Arg::Msg(m)) = msg.args.get("what") {
             return m;
         }
     }

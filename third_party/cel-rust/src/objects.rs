@@ -374,21 +374,12 @@ where
 ///     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult { write!(f, "MyId({})", self.0) }
 /// }
 ///
-/// impl Opaque for MyId {
-///     fn runtime_type_name(&self) -> &str { "example.MyId" }
-/// }
-///
 /// // Values of `MyId` can now be wrapped in `Value::Opaque` and compared.
 /// let a = Value::Opaque(Arc::new(MyId(7)));
 /// let b = Value::Opaque(Arc::new(MyId(7)));
 /// assert_eq!(a, b);
 ///
 /// // Registering its type lets expressions name it.
-/// let mut env = Env::stdlib();
-/// env.add_type(Type::new_opaque_type("example.MyId")).unwrap();
-/// let program = env.compile("type(id) == example.MyId").unwrap();
-/// let mut context = Context::with_env(Arc::new(env));
-/// context.add_variable_from_value("id", a);
 ///
 /// assert_eq!(program.execute(&context), Ok(Value::Bool(true)));
 /// ```
@@ -396,9 +387,7 @@ pub trait Opaque: Any + OpaqueEq + AsDebug + Send + Sync {
     /// Returns a stable, fully-qualified type name for this value's runtime type.
     ///
     /// This name is used to check type compatibility before attempting downcasts
-    /// during equality checks and other operations. It should be stable across
-    /// versions and unique within your application or library (e.g., a package
-    /// qualified name like `my.pkg.Type`).
+    /// during equality checks and other operations.
     fn runtime_type_name(&self) -> &str;
 
     /// Optional JSON representation (requires the `json` feature).
@@ -1450,13 +1439,6 @@ impl Value {
                 let accu_init = Value::resolve_val(&comprehension.accu_init, ctx)?;
                 let iter = Value::resolve_val(&comprehension.iter_range, ctx)?;
 
-                // Mirror cel-go's optimization (see `folder.ResolveName` in
-                // `cel-go/interpreter/interpretable.go`): when the
-                // accumulator starts out as an empty list and the loop step
-                // only ever appends to it (`map` / `filter`), build the
-                // result in a single preallocated `MutableList` instead of
-                // paying O(n) clone-and-extend on every iteration
-                // (`@result + [expr]`).
                 if let Some(step) = AppendStep::of(comprehension) {
                     if accu_init
                         .downcast_ref::<CelList>()
@@ -2418,10 +2400,6 @@ mod tests {
         assert!(eval("[1, 0].map(x, 1 / x)").is_err());
     }
 
-    /// Selecting a field from something that has none reports the `_._` overload
-    /// and the runtime types involved, whether the operand is borrowed (a variable)
-    /// or owned (a literal, consumed by the lookup); a missing key on a real map
-    /// is still a `NoSuchKey`.
     #[test]
     fn test_select_errors_report_the_overload_and_types() {
         let mut context = Context::default();
@@ -3269,8 +3247,6 @@ mod tests {
             assert_eq!(execute(&context, "y"), Ok("plain".into()));
         }
 
-        /// For container `a.b.c` and name `R.s`, candidates are tried most
-        /// specific first: `a.b.c.R.s`, `a.b.R.s`, `a.R.s`, then `R.s`.
         #[test]
         fn a_qualified_identifier_tries_every_container_prefix() {
             let mut context = context_in("a.b.c");

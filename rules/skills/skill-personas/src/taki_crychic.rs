@@ -36,7 +36,12 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
         ))
         .silent(),
         On::Action(Action::DiceRollAfter("", None, on_roll)),
-        On::Action(Action::CardUsed(card_sdk::pre::MINE, None, on_skill_used)).silent(),
+        On::Action(Action::CardUsed(
+            card_sdk::condition::MINE,
+            None,
+            on_skill_used,
+        ))
+        .silent(),
     ],
 );
 

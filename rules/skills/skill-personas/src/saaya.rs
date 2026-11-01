@@ -30,7 +30,7 @@ pub const SAAYA: CardDef = CardDef::new(
         On::Action(Action::PayAfter("", Some(pay_after_applies), on_pay_after)),
         // （1）'s 「拥有saaya标记时」 -- the mark is the applicability.
         On::Action(Action::DiceRollAfter(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(roll_needs_mark),
             on_roll,
         )),
@@ -39,7 +39,7 @@ pub const SAAYA: CardDef = CardDef::new(
         // Interactive (ask_yes + fire spend + amount rewrite). Rides
         // `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
         On::Action(Action::PaySplitChooseBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(pay_cut_applies),
             on_pay,
         )),
@@ -59,14 +59,14 @@ fn other(player_id: i32) -> bool {
 /// player holds no saaya mark yet.
 fn pay_after_applies(player_id: i32) -> bool {
     other(player_id)
-        && ctx::tok(player_id, MARK) == 0
+        && ctx::held_count(player_id, MARK) == 0
         && ctx::trigger::value() >= 1000
         && ctx::trigger::player_id() >= 0
 }
 
 /// （1）'s applicability for the dice cut: the mark is there to spend.
 fn roll_needs_mark(player_id: i32) -> bool {
-    ctx::tok(player_id, MARK) >= 1
+    ctx::held_count(player_id, MARK) >= 1
 }
 
 /// （2）'s applicability: a non-zero money change and the 5-pot price.
@@ -92,7 +92,7 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_tok(player_id, MARK, 1, 1)?;
+    ctx::add_held_by_name(player_id, MARK, 1, 1)?;
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_gain")))?;
     if !ctx::player_out(payer) {
         ctx::gain(payer, 200, &Msg::new(key!("saaya_payee")))?;
@@ -103,7 +103,7 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
 /// （1）「拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷结果减1d10
 /// （计算后小等于0则移动到下一个可购买格子）」.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    ctx::add_tok(player_id, MARK, -1, 1)?;
+    ctx::add_held_by_name(player_id, MARK, -1, 1)?;
     let cut = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::SKILL)?.max(0);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     let after = before - cut;
@@ -151,7 +151,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if bandori_std::fire::spend(player_id, 5, &Msg::new(key!("saaya_spend")))? {
+    if bandori_std::fire::spend_skill(player_id, 5, &Msg::new(key!("saaya_spend")))? {
         ctx::trigger::set_pay_amount((amount - 5000).max(0));
     }
     Ok(())

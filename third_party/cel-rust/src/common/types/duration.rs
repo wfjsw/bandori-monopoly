@@ -5,14 +5,10 @@ use crate::{ExecutionError, Value};
 use std::any::Any;
 use std::ops::Deref;
 
-/// CEL durations are limited to what fits in an `i64` count of nanoseconds,
-/// the same range as cel-go's `time.Duration`.
 pub(crate) fn out_of_range(d: &chrono::Duration) -> bool {
     d.num_nanoseconds().is_none()
 }
 
-/// A CEL `google.protobuf.Duration`, of type
-/// [`DURATION_TYPE`](super::DURATION_TYPE): a [`chrono::Duration`].
 ///
 /// It adds to and subtracts from another `duration`, and adds to a
 /// `timestamp`. A `duration` must fit in an `i64` count of nanoseconds, as in

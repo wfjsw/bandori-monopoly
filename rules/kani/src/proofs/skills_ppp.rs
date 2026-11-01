@@ -40,7 +40,7 @@ crate::host_subset!(skills_ppp_dispatch {
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     place_card_at => arm_place_card,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     teleport_to => arm_teleport_to,
     player_count => arm_player_count,
     player_out => arm_player_out,
@@ -66,10 +66,10 @@ crate::host_subset!(skills_ppp_dispatch {
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,
-    set_steps | set_resolve | schedule_turn_end | linger
+    set_steps | set_settles | schedule_turn_end | linger
     | card_offer_build | can_build_on | card_build | card_buy | acquire
     | offer_buy | offer_build | buy | acquire => arm_protocol_stub,
-    card_move => arm_card_move,
+    run_planned_move => arm_card_move,
 });
 
 /// Install sparse 2-seat world + subset (concrete owner seat).
@@ -189,7 +189,7 @@ pub fn kasumi_skill_01_iff() {
         return;
     }
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -208,10 +208,10 @@ pub fn kasumi_skill_01_iff() {
         "C-PPP-kasumi-skill-01: log exactly GainFire(+1) (or empty at cap)"
     );
     crate::kassert!(
-        spec::frame_others_fire(&pre, &post, owner),
+        spec::frame_others_fire(&condition, &post, owner),
         "C-PPP-kasumi-skill-01: frame others' fire"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// NO-OP: own settle on the hill must not pay out. Host residual excludes it.
@@ -281,7 +281,7 @@ fn kasumi_02_world() -> (World, i32) {
 pub fn kasumi_skill_02_spend_charge_iff() {
     let (w, owner) = kasumi_02_world();
     let pre_fire = w.charge[owner as usize];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -294,7 +294,7 @@ pub fn kasumi_skill_02_spend_charge_iff() {
         "C-PPP-kasumi-skill-02: must spend exactly 1 fire"
     );
     crate::kassert!(
-        spec::frame_others_fire(&pre, &post, owner),
+        spec::frame_others_fire(&condition, &post, owner),
         "C-PPP-kasumi-skill-02: frame others' fire"
     );
 }
@@ -360,7 +360,7 @@ pub fn megumi_skill_01a_rabbit_iff() {
     });
     // Force a known dice total by rolling inside the body via the host RNG
     // (symbolic 3d20). Cover both landing cases via the host's roll.
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -390,8 +390,8 @@ pub fn megumi_skill_01a_rabbit_iff() {
             "C-PPP-megumi-skill-01a: empty log when landing is 星空齿科"
         );
     }
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// Spec-level: `#S格` mapping and the 星空齿科 veto.
@@ -460,7 +460,7 @@ pub fn megumi_skill_01b_fire_iff() {
         w.marks_n = rabbits as u8;
     });
     let pre_fire = w.charge[me as usize];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -473,7 +473,7 @@ pub fn megumi_skill_01b_fire_iff() {
     // Host `gain_charge` is uncapped under Kani; the body asks for `rabbits`.
     // Assert the requested gain equals the rabbit count (the book's 「等量」)
     // via the effect log, clamped by the cap (host `gain_charge` caps at
-    // `cap - charge`). `post.charge == pre + gained`.
+    // `cap - charge`). `post.charge == condition + gained`.
     let gained = if log_n >= 1 {
         let mut g = 0;
         for e in effects {
@@ -499,7 +499,7 @@ pub fn megumi_skill_01b_fire_iff() {
         "C-PPP-megumi-skill-01b: fire rises by the gained amount"
     );
     crate::kassert!(
-        spec::frame_others_fire(&pre, &post, me),
+        spec::frame_others_fire(&condition, &post, me),
         "C-PPP-megumi-skill-01b: frame others' fire"
     );
     // Mark-removal is BLOCKED-HOST (`remove_marks_f` stub) — not asserted.
@@ -512,11 +512,11 @@ pub fn megumi_skill_01b_fire_iff() {
 pub fn megumi_skill_01b_fire_amount_spec() {
     let rabbits: i32 = kani::any();
     kani::assume((1..=4).contains(&rabbits));
-    let pre: i32 = kani::any();
-    kani::assume((0..=4).contains(&pre));
-    let n = spec::megumi_01b_fire_gain(rabbits, pre, 4);
-    crate::kassert!(n <= 4 - pre);
-    crate::kassert!(n == rabbits.min((4 - pre).max(0)));
+    let condition: i32 = kani::any();
+    kani::assume((0..=4).contains(&condition));
+    let n = spec::megumi_01b_fire_gain(rabbits, condition, 4);
+    crate::kassert!(n <= 4 - condition);
+    crate::kassert!(n == rabbits.min((4 - condition).max(0)));
 }
 
 /// MUTANT: wants 2 pots per rabbit. Companion at rabbits=1.
@@ -525,9 +525,9 @@ pub fn megumi_skill_01b_fire_amount_spec() {
 #[kani::unwind(8)]
 pub fn megumi_skill_01b_mutant_double_gain_reachable() {
     let rabbits = 1;
-    let pre = 2;
+    let condition = 2;
     crate::kassert!(
-        spec::megumi_01b_fire_gain(rabbits, pre, 4) == 1,
+        spec::megumi_01b_fire_gain(rabbits, condition, 4) == 1,
         "mutant companion: one rabbit = one pot"
     );
 }
@@ -558,7 +558,7 @@ pub fn megumi_skill_02_leaf_iff() {
     });
     let pre_fire = w.charge[me as usize];
     let pre_money = [w.money[me as usize], w.money[other as usize]];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -652,7 +652,7 @@ pub fn rimi_skill_01_turn_end_iff() {
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_RIMI_PASSED), 1);
     });
     let pre_fire = w.charge[me as usize];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -674,7 +674,7 @@ pub fn rimi_skill_01_turn_end_iff() {
         "C-PPP-rimi-skill-01: fire after payout"
     );
     crate::kassert!(
-        spec::frame_others_fire(&pre, &post, me),
+        spec::frame_others_fire(&condition, &post, me),
         "frame others' fire"
     );
 }
@@ -870,7 +870,7 @@ fn saaya_01a_world(accept: bool) -> (World, i32, i32) {
 #[kani::unwind(24)]
 pub fn saaya_skill_01a_accept_iff() {
     let (w, me, payer) = saaya_01a_world(true);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -894,7 +894,10 @@ pub fn saaya_skill_01a_accept_iff() {
             "C-PPP-saaya-skill-01a: declined ⇒ empty log"
         );
     }
-    crate::kassert!(spec::frame_others_money(&pre, &post, me) || took, "frame");
+    crate::kassert!(
+        spec::frame_others_money(&condition, &post, me) || took,
+        "frame"
+    );
 }
 
 /// NO-OP: payer is self ⇒ residual rejects (host would not call).
@@ -969,7 +972,7 @@ pub fn saaya_skill_02_shave_iff() {
     });
     let pre_fire = w.charge[me as usize];
     let pre_amount = w.pay_amount;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -998,7 +1001,7 @@ pub fn saaya_skill_02_shave_iff() {
         );
     }
     crate::kassert!(
-        spec::frame_others_fire(&pre, &post, me),
+        spec::frame_others_fire(&condition, &post, me),
         "frame others' fire"
     );
 }
@@ -1008,13 +1011,13 @@ pub fn saaya_skill_02_shave_iff() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(16)]
 pub fn saaya_skill_02_mutant_off_by_one_reachable() {
-    let pre = 6000;
+    let condition = 6000;
     crate::kassert!(
-        spec::saaya_02_amount(pre) == 1000,
+        spec::saaya_02_amount(condition) == 1000,
         "mutant companion: max(pre-5000,0) = 1000"
     );
     crate::kassert!(
-        spec::saaya_02_amount_mutant(pre) != spec::saaya_02_amount(pre),
+        spec::saaya_02_amount_mutant(condition) != spec::saaya_02_amount(condition),
         "mutant amount disagrees with the book"
     );
 }
@@ -1044,7 +1047,7 @@ pub fn aoki_skill_01_iff() {
     let applies = spec::aoki_01_applies(other, me, spec::TILE_RYUSEIDO);
     kani::cover!(applies, "other draws at 流星堂");
     crate::kassert!(applies);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1060,7 +1063,7 @@ pub fn aoki_skill_01_iff() {
         post.charge[me as usize] == spec::aoki_01_fire_after(pre_fire),
         "C-PPP-aoki-skill-01: fire after"
     );
-    crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame");
+    crate::kassert!(spec::frame_others_fire(&condition, &post, me), "frame");
 }
 
 /// NO-OP: self draw, or not at 流星堂.
@@ -1130,7 +1133,7 @@ pub fn aoki_skill_02_turn_end_iff() {
     let admits = spec::aoki_02_end_admits(w.pos[0], 1);
     kani::cover!(admits, "turn-end admits");
     crate::kassert!(admits);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1210,11 +1213,11 @@ pub fn aoki_skill_02_mutant_no_draw() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn aoki_skill_03_spend_spec() {
-    let pre: i32 = kani::any();
-    kani::assume((0..=6).contains(&pre));
-    crate::kassert!(spec::aoki_03_fire_after(pre) == (pre - 2).max(0));
-    kani::cover!(pre >= 2, "can spend");
-    kani::cover!(pre < 2, "cannot spend");
+    let condition: i32 = kani::any();
+    kani::assume((0..=6).contains(&condition));
+    crate::kassert!(spec::aoki_03_fire_after(condition) == (condition - 2).max(0));
+    kani::cover!(condition >= 2, "can spend");
+    kani::cover!(condition < 2, "cannot spend");
 }
 
 // ===========================================================================
@@ -1291,7 +1294,7 @@ pub fn band_skill_01a_sticker_iff() {
     let admitted = band_pass_guard(tile, me, me);
     kani::cover!(admitted, "guard admits");
     crate::kassert!(admitted, "forced tile must admit the single-source guard");
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1303,7 +1306,7 @@ pub fn band_skill_01a_sticker_iff() {
         spec::band_01a_log_ok(effects_of(&logbuf, log_n), me, key),
         "C-PPP-band-01a: sticker +1"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// NO-OP: actor ≠ owner ⇒ guard rejects.
@@ -1359,7 +1362,7 @@ pub fn band_skill_01b_crystal_iff() {
         w.player_keys[me as usize].set(crate::intern::intern("crystals"), 0);
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_POPPIN_USED), 0);
     });
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1450,7 +1453,7 @@ pub fn band_skill_01c_crystal_spend_iff() {
         w.deck_pile[1] = 12;
         w.symbolic_answers = true;
     });
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -1653,8 +1656,8 @@ pub fn band_skill_04_no_build_spec() {
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn skills_ppp_frame_helpers() {
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let post = world::snapshot();
-    crate::kassert!(spec::frame_others_money(&pre, &post, 0));
-    crate::kassert!(spec::frame_others_fire(&pre, &post, 0));
+    crate::kassert!(spec::frame_others_money(&condition, &post, 0));
+    crate::kassert!(spec::frame_others_fire(&condition, &post, 0));
 }

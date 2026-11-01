@@ -160,9 +160,9 @@ fn g03_want_human_boost_survives_a_reroll() {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "户山香澄"]);
     t.strip_skills();
     t.clean();
-    t.place_raw(0, WANT_HUMAN);
+    let wh = t.place_raw(0, WANT_HUMAN);
     t.place_raw(0, STARRY);
-    t.m.world_mut().set_slot(0, "want_human_x", 15);
+    t.m.world_mut().set_prop_at(wh, "want_human_x", 15);
     t.set_crystals(0, WANT_HUMAN, 2);
     t.set_crystals(0, STARRY, 2);
     // Turn start drains the 2 crystals and arms +5 (20 - 15).
@@ -174,7 +174,11 @@ fn g03_want_human_boost_survives_a_reroll() {
     pick(&mut t, 0, "starry_night_keep_new");
     drain(&mut t);
     assert_eq!(t.pos(0), 3 + 5, "the kept rerolled 3 still carries +5");
-    assert_eq!(t.state(0, "want_human_boost"), 0, "one-shot boost consumed");
+    assert_eq!(
+        t.m.world().prop_at(wh, "want_human_boost"),
+        0,
+        "one-shot boost consumed"
+    );
     assert_eq!(
         t.crystals(0, WANT_HUMAN),
         Some(2),
@@ -189,9 +193,9 @@ fn g03_want_human_banks_every_low_cast() {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "户山香澄"]);
     t.strip_skills();
     t.clean();
-    t.place_raw(0, WANT_HUMAN);
+    let wh = t.place_raw(0, WANT_HUMAN);
     t.place_raw(0, STARRY);
-    t.m.world_mut().set_slot(0, "want_human_x", 10);
+    t.m.world_mut().set_prop_at(wh, "want_human_x", 10);
     t.set_crystals(0, STARRY, 2);
     t.begin_turn(0);
     drain(&mut t);
@@ -356,8 +360,8 @@ fn g03_no_expectation_leaves_a_turn_start_roll_alone() {
         .events_since(mark)
         .into_iter()
         .find(|e| e.msg.key() == "that_day_rain_log" || e.msg.key().ends_with("that_day_rain_log"))
-        .and_then(|e| match e.msg.a.get("roll") {
-            Some(game_core::msg::Arg::I(v)) => Some(*v),
+        .and_then(|e| match e.msg.args.get("roll") {
+            Some(game_core::msg::Arg::Integer(v)) => Some(*v),
             _ => None,
         })
         .expect("the turn-start roll logged");

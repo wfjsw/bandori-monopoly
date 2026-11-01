@@ -80,9 +80,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -425,7 +425,7 @@ fn g14_amekomi_replaces_a_started_backward_walk() {
     assert_eq!(
         t.pos(0),
         cafe,
-        "the teleport is the main move: pos = {}",
+        "the teleport is the is_main_move move: pos = {}",
         t.pos(0)
     );
     assert_eq!(t.dice_left(), 0, "every loaded face was rolled");

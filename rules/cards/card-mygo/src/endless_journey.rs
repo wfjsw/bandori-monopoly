@@ -1,4 +1,3 @@
-//! `MyGO:哪怕这旅程没有终点` -- C# `CardEndlessJourney` (MatchHost.cs:6971-7009):
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:哪怕这旅程没有终点`）:
 //! > 哪怕这旅程没有终点：
@@ -23,7 +22,7 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
         // body replace cancels this entry, but only once it has run: `SettleBody`
         // hooks dispatch seat by seat and then in field order, so a replacer
         // that runs *after* this one no longer stops the payout.
-        On::Action(Action::SettleBody("actor == owner && move.main && card.placed", None, settle_body)),
+        On::Action(Action::SettleBody("actor == owner && move.is_main_move && card.placed", None, settle_body)),
         On::Action(Action::CounterChanged("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed)),
     ],
 )
@@ -58,12 +57,7 @@ fn endless_journey(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardEndlessJourney.TurnEnd` -- when the owner's main move walked more
-/// than 6 steps, burn one miracle crystal; at 0 the card is discarded.
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    // 规则书[手]: 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹
-    // 水晶数量为0时，将此卡置入弃牌堆。」 -- C# `H._turnCtx.LastMain > 6` ->
-    // `AddCrystals(-1)` and `H.Unplace(this, "discard", ...)` at 0.
     if ctx::turn_main_steps() <= 6 {
         return Ok(());
     }
@@ -73,8 +67,6 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[手]: 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 -- C#
-/// `H.Unplace(this, "discard", ...)`.
 ///
 /// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
@@ -96,11 +88,9 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardEndlessJourney.SettleAfter` -- when the owner settles off their own
-/// main move, pay out 60 per tile that walk passed.
-/// 规则书（2）: 「[持续] 触发结算时，获得X*60资金」 -- 行动阶段 15
-/// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
-/// replace (`trigger::cancelled()`) skips it.
+/// 规则书（2）: 「[持续] 触发结算时，获得X*60资金」 -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M2): an entry
+/// in the settle's effect list, so a body replace (`trigger::cancelled()`) skips
+/// it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（触发结算时，获得X*60资金）: the sheet makes this an entry of the
     // settle effect list, so a body replace must suppress it -- we only see a
@@ -109,14 +99,12 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if trigger::cancelled() {
         return Ok(());
     }
-    // 规则书（2）: 「[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数」
-    // -- C# `m.Path.Count` is the tiles this main move walked. The payload's
-    // `move_total` is the *planned* walk (a 强制停下 leaves it at the full
-    // length), so take the entered tiles: total minus what is still left.
-    // TODO(规则书)（触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数）: the
-    // book counts the tiles 经过 -- the payload's `move_total` is the planned
-    // walk, so no term carries the count itself and X is only derived as total
-    // minus remaining (load-bearing on a forced stop).
+    // TODO(规则书)（触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数）: The payload's `move_total` is the
+    // *planned* walk (a 强制停下 leaves it at the full length), so take the entered
+    // tiles: total minus what is still left. the book counts the tiles 经过 -- the
+    // payload's `move_total` is the planned walk, so no term carries the count
+    // itself and X is only derived as total minus remaining (load-bearing on a
+    // forced stop).
     let x = trigger::move_total() - trigger::move_remaining();
     if x <= 0 {
         return Ok(());

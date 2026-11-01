@@ -107,7 +107,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn eval(&self, ctx: &crate::ctx::IrCtx) -> crate::Val {
+    pub fn eval(&self, ctx: &crate::ctx::IrCtx) -> crate::Value {
         crate::eval::eval_node(self.nodes, self.root, ctx)
     }
 

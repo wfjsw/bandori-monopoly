@@ -78,5 +78,5 @@
   "studio_storm_not_on_lh": "can only be played while standing on your own Live House tile",
   "studio_storm_note": "Studio Storm",
   "studio_storm_placed": "{{who}} placed Studio Storm on {{tile}}",
-  "unstoppable_why": "UNSTOPPABLE"
+  "unstoppable_reason": "UNSTOPPABLE"
 }

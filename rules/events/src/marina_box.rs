@@ -5,7 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::ActionKind;
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Msg, On};
 
 use crate::util::{expire, keep, roll};
@@ -65,7 +65,7 @@ fn on_pass(_player_id: i32) -> card_sdk::Asked {
     // 「可」 means the spend is opt-in, so 「不消耗」 is the default (the choice
     // prompt's fallback is index 0). The two behaviour tests answer 「消耗」
     // explicitly; `drain()` (fallback) therefore declines.
-    let pay = ctx::ask_pick(
+    let pay = ctx::ask_choice(
         who,
         &Msg::new("log.event.marina_box_title"),
         &Msg::new("log.event.marina_box_ask"),

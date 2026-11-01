@@ -48,6 +48,16 @@ fn full_build_cost() -> i32 {
     100
 }
 
+/// Serde default for a milli factor (`1000` = ×1).
+fn milli_one() -> i32 {
+    1000
+}
+
+/// Serde default for an `f64` pay factor (`1.0` = ×1).
+fn one() -> f64 {
+    1.0
+}
+
 /// How a play settles its number-range dice (「以理论最大值或最小值结算」).
 /// The wire encoding is the old `1` / `0` / `-1` triple; only the Rust side is
 /// an enum.
@@ -126,7 +136,7 @@ mod opt_i32_neg1 {
 /// two in step (the postcard payload has no field names).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct TurnSnap {
+pub struct TurnSnapshot {
     pub pos: i32,
     pub state: std::collections::BTreeMap<String, i32>,
     pub money: i32,
@@ -234,7 +244,7 @@ pub struct TurnCtx {
     /// it ends -- its per-move plan writes were for the move it drove, and its
     /// replay re-applies them afterwards; one that drove none wrote for a move
     /// still to come (ran 「本次移动向后」, sakiko_lead's half price) and
-    /// keeps them (`Cx::drop_spent_plan_shape`). Reset at the activation's
+    /// keeps them (`PlayCtx::drop_spent_plan_shape`). Reset at the activation's
     /// entry alongside `extreme`.
     #[serde(default)]
     pub play_drove_move: bool,
@@ -262,6 +272,38 @@ pub struct TurnCtx {
     /// 「本回合的settle向其他玩家支付了至少1000资金」.
     #[serde(default)]
     pub paid_in_settle: i32,
+    /// The same figure per **payer** seat: guerrilla's 「本回合的[结算]向其他
+    /// 玩家支付了至少1000资金」 counts the owner's own payments only
+    /// (`ctx::paid_in_settle_by`). Resized at turn start.
+    #[serde(default)]
+    pub paid_in_settle_by: Vec<i32>,
+    /// Pay factor for the **next** move, in milli (1000 = ×1). Folded into
+    /// the plan at move start, then reset.
+    #[serde(default = "milli_one")]
+    pub next_move_pay_factor: i32,
+    /// Pay factor for the **next** settle, in milli. Moved into the settle
+    /// entry when it is pushed, then reset.
+    #[serde(default = "milli_one")]
+    pub next_settle_pay_factor: i32,
+    /// A move is in flight (walk / teleport through its tail). The `thisMove`
+    /// factor scope is open while this holds.
+    #[serde(default)]
+    pub move_open: bool,
+    /// Depth of the open settles (`PlayCtx::settle_stack`). The guest factor API
+    /// needs the depth without the stack; the stack stays the truth and this
+    /// is kept level with it.
+    #[serde(default)]
+    pub settle_open: u32,
+    /// The product of every open settle's factor (`thisSettle` composes on
+    /// top of [`Self::settle_base`]). This is what the payment scale and the
+    /// factor getter read.
+    #[serde(default = "one")]
+    pub settle_pay_factor: f64,
+    /// The product of the **outer** settle factors -- the innermost entry's
+    /// `base`. A `thisSettle` write replaces the innermost factor, so it
+    /// recomposes from here instead of dividing.
+    #[serde(default = "one")]
+    pub settle_base: f64,
     /// Where each player stood when the turn started. 「在场地地块开始
     /// 回合时」 is a question about that square, not the one a mid-turn walk has
     /// since reached.
@@ -270,7 +312,7 @@ pub struct TurnCtx {
     /// Each player's pos / the layer counters when the turn started.
     /// 「回到起始地点并取消所有受到的效果」 restores from here.
     #[serde(default)]
-    pub turn_snap: Vec<TurnSnap>,
+    pub turn_snapshot: Vec<TurnSnapshot>,
     /// Every face rolled this turn, in order. 「与本回合内你骰出过的所有骰点
     /// 都不同」 compares against this. Mirrors [`Self::roll_history`] (which
     /// also carries the roller); kept for readers that only want the faces.
@@ -333,8 +375,15 @@ impl Default for TurnCtx {
             cancelled_designations: Vec::new(),
             play_doubled: None,
             paid_in_settle: 0,
+            paid_in_settle_by: Vec::new(),
+            next_move_pay_factor: milli_one(),
+            next_settle_pay_factor: milli_one(),
+            move_open: false,
+            settle_open: 0,
+            settle_pay_factor: one(),
+            settle_base: one(),
             turn_start_pos: Vec::new(),
-            turn_snap: Vec::new(),
+            turn_snapshot: Vec::new(),
             turn_rolls: Vec::new(),
             roll_history: Vec::new(),
             build_discount: 0,
@@ -431,7 +480,7 @@ struct WindowCache {
     events: Arc<Vec<MatchEvent>>,
 }
 
-/// One pending walk segment awaiting lazy flush (`Cx::walk`).
+/// One pending walk segment awaiting lazy flush (`PlayCtx::walk`).
 ///
 /// A walk's `roll` / `move` event is not logged per step: steps accumulate
 /// here and the segment is published when the walk reaches the start square / its last
@@ -455,7 +504,7 @@ pub struct WalkSeg {
     pub pending_first: bool,
     /// The walk is the turn's main move: the first publish is kind `roll`
     /// carrying `dice = roll`, not a bare `move`.
-    pub main: bool,
+    pub is_main_move: bool,
     /// The dice face the head `roll` event shows (`m.roll`).
     pub roll: i32,
     /// Prebuilt head text (`head(false)` -- 「…n格」 without 「原地」).
@@ -470,10 +519,10 @@ pub struct WalkSeg {
 /// [`World`] would otherwise drag a mid-walk `Some` into a mismatch.
 #[derive(Debug, Default, Clone)]
 pub struct WalkFlush {
-    /// Innermost last: `Cx::walk` pushes, so a nested walk's first event must
+    /// Innermost last: `PlayCtx::walk` pushes, so a nested walk's first event must
     /// still flush the outer approach first (see [`World::flush_walk`]).
     stack: Vec<WalkSeg>,
-    /// Presentation time owed to the host for flushed segments. [`crate::engine::cx::Cx::wait`]
+    /// Presentation time owed to the host for flushed segments. [`crate::engine::cx::PlayCtx::wait`]
     /// drains it into `delay`.
     delay: f32,
     /// Re-entrancy guard: the flush itself logs.
@@ -680,6 +729,22 @@ impl EventTail {
     }
 }
 
+/// One mark mutation, replayed as a `markChanged` raise at commit.
+///
+/// `card` is the row's provenance captured at mutation time, because the
+/// creating instance may already be gone by the drain (`unplace_at` removes
+/// before the commit).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkLog {
+    pub uid: i32,
+    pub tile: i32,
+    pub kind: String,
+    pub instance: i32,
+    pub owner: i32,
+    pub delta: i32,
+    pub card: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub st: MatchState,
@@ -768,6 +833,11 @@ pub struct World {
     /// serialized, not compared.
     #[serde(skip)]
     pub walk_flush: WalkFlush,
+    /// Mark mutations of the current run, drained by `commit_after` into
+    /// `markChanged` raises. Transient: a save at a routine boundary has no
+    /// live run and the action replays from its pre-action state.
+    #[serde(skip)]
+    pub mark_log: Vec<MarkLog>,
     /// When set, `log` does not push an event (the caller posts write-through).
     #[serde(skip)]
     pub skip_log: bool,
@@ -787,7 +857,7 @@ pub struct World {
     #[serde(skip)]
     pub flash: SharedFlash,
     /// Match clock / timer settings (see [`crate::clock`]). Constant for the
-    /// life of the match; rides here so a routine's [`super::Cx`] can read the
+    /// life of the match; rides here so a routine's [`super::PlayCtx`] can read the
     /// setup windows and refill caps. `#[serde(default)]` so a World snapshot
     /// written before this field still loads (pre-settings values).
     #[serde(default)]
@@ -900,6 +970,7 @@ impl World {
             gains: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             walk_flush: WalkFlush::default(),
+            mark_log: Vec::new(),
             skip_log: false,
             stub: MatchEvent::default(),
             flash: SharedFlash::default(),
@@ -949,9 +1020,113 @@ impl World {
         self.marker_owner.get(name).map(|s| s.as_str())
     }
 
+    /// What `player_id` paid other players during this turn's settles
+    /// (`ctx::paid_in_settle_by`). 0 outside a seat's range.
+    /// The ordinary-settle rent figure of `t` as `pay_rent` charges it, plus
+    /// its detail note (`log.part.rent_houses` / `log.part.rent_dice`).
+    /// **Single source** for the engine's `pay_rent` / `card_charge_rent` and
+    /// the guest `rent_quote` reader. Needs no `PlayCtx`, so a card `Run` can call
+    /// it.
+    pub fn rent_figure(
+        &mut self,
+        data: &crate::data::GameData,
+        owner: usize,
+        t: usize,
+    ) -> (i32, Option<crate::msg::Msg>) {
+        use crate::msg::Msg;
+        // The tile prop marks dice rent; the unit comes from the live
+        // `rentUnitMult` rule param (a card's +N lands there).
+        if self.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT) > 0 {
+            let dice_mult = self.rent_unit_mult();
+            let d = self.rng.d(20);
+            let kind = data.tiles[t].kind.as_str().to_string();
+            let unit = super::play::purchase::dice_rent_unit(data, self, owner, &kind, dice_mult);
+            let n = super::play::purchase::count_owned_kind(data, self, owner, &kind).max(1);
+            (
+                unit * d,
+                Some(
+                    Msg::new("log.part.rent_dice")
+                        .i("n", n)
+                        .i("mult", dice_mult)
+                        .i("d", d),
+                ),
+            )
+        } else {
+            // The counted house count ([`Self::rent_houses`]): a
+            // 「房屋数视为…」 override rides here, and real `st.houses` is
+            // untouched.
+            let h = self.rent_houses(t as i32);
+            let rent = super::play::purchase::table_rent(data, self, t);
+            (
+                rent,
+                (h > 0).then(|| Msg::new("log.part.rent_houses").i("h", h)),
+            )
+        }
+    }
+
+    /// The figure a fresh `payer -> owner` rent charge on `t` would move here:
+    /// base x the tile's own rent scale x the standing plan and open-settle
+    /// pay factors, one end-of-calculation round, and **not** the in-flight
+    /// payment's own rent factor or `milli_scale`. `-1` = no rent charge
+    /// (unowned, own tile, mortgaged, an endpoint out, or a zero table).
+    /// Moves no money but rolls a fresh d20 on a dice-rent tile.
+    pub fn rent_quote(&mut self, data: &crate::data::GameData, payer: usize, t: usize) -> i32 {
+        let owner = self.st.owners.get(t).copied().unwrap_or(-1);
+        if owner < 0
+            || owner as usize == payer
+            || self.out(payer)
+            || self.out(owner as usize)
+            || self.st.mortgaged.get(t).copied().unwrap_or(false)
+        {
+            return -1;
+        }
+        let (amount, _) = self.rent_figure(data, owner as usize, t);
+        if amount <= 0 {
+            return -1;
+        }
+        // The same arithmetic [`super::play::Play::scale_settle_payment`] runs
+        // for a rent, minus the in-flight rent factor and with
+        // `milli_scale = 1000`: the tile's rent half and every standing plan /
+        // open-settle pay factor, then the single end-of-calculation round the
+        // pay chain applies.
+        let mut f = self.turn.plan.pay_factor;
+        f *= self.turn.settle_pay_factor;
+        f *= super::play::purchase::tile_money_scale(self, t, true);
+        let scaled = if (f - 1.0).abs() <= f64::EPSILON {
+            amount
+        } else {
+            (amount as f64 * f) as i32
+        };
+        if scaled != amount && scaled > 0 {
+            super::play::ceil10_money(scaled)
+        } else {
+            scaled
+        }
+    }
+
+    pub fn paid_in_settle_by(&self, player_id: i32) -> i32 {
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.turn.paid_in_settle_by.get(s).copied())
+            .unwrap_or(0)
+    }
+
     /// Zero every player's turn-gain counter (「当前回合内」 starts fresh).
     pub fn reset_gains(&mut self) {
         self.gains.iter_mut().for_each(|n| *n = 0);
+    }
+
+    /// The one credit write path: add `amount` to the player's money and count
+    /// the gain (「当前回合内你每获得过一次资金」). Every money-in funnels through
+    /// here; a debit never bumps.
+    pub fn credit(&mut self, player_id: i32, amount: i32) {
+        let Ok(s) = usize::try_from(player_id) else {
+            return;
+        };
+        if let Some(p) = self.st.players.get_mut(s) {
+            p.money += amount;
+            self.bump_gain(player_id, 1);
+        }
     }
 
     /// Append an event to the log. Returns it for further fields.
@@ -1002,10 +1177,10 @@ impl World {
         // `log` takes `&mut self`, so the stack cannot remain borrowed.
         let mut pending = Vec::new();
         for seg in self.walk_flush.stack.iter_mut() {
-            if seg.value == 0 && !(seg.pending_first && seg.main) {
+            if seg.value == 0 && !(seg.pending_first && seg.is_main_move) {
                 continue;
             }
-            let ek = if seg.pending_first && seg.main {
+            let ek = if seg.pending_first && seg.is_main_move {
                 "diceRollBefore"
             } else {
                 "move"
@@ -1015,7 +1190,7 @@ impl World {
             } else {
                 Msg::new("log.move_on").player_id("who", seg.player)
             };
-            let dice = if seg.pending_first && seg.main {
+            let dice = if seg.pending_first && seg.is_main_move {
                 seg.roll
             } else {
                 0
@@ -1034,7 +1209,7 @@ impl World {
             e.value = value;
             e.dice = dice;
             e.ahead = ahead;
-            // Same pacing the old per-publish `Cx::wait` applied (1.5s for the
+            // Same pacing the old per-publish `PlayCtx::wait` applied (1.5s for the
             // head `roll`, 0.3s for a continuation, plus 0.15s/step).
             let pace = if ek == "diceRollBefore" { 1.5 } else { 0.3 };
             self.walk_flush.delay += pace + value.unsigned_abs() as f32 * 0.15;
@@ -1043,17 +1218,17 @@ impl World {
     }
 
     /// Drain the presentation time [`Self::flush_walk`] accumulated since the
-    /// last drain (the host's `Cx::wait` equivalent).
+    /// last drain (the host's `PlayCtx::wait` equivalent).
     pub fn take_walk_delay(&mut self) -> f32 {
         std::mem::take(&mut self.walk_flush.delay)
     }
 
-    /// Arm a new innermost walk segment (`Cx::walk` on entry).
+    /// Arm a new innermost walk segment (`PlayCtx::walk` on entry).
     pub fn push_walk_seg(&mut self, seg: WalkSeg) {
         self.walk_flush.stack.push(seg);
     }
 
-    /// Drop the innermost walk segment (`Cx::walk` on exit, after flushing).
+    /// Drop the innermost walk segment (`PlayCtx::walk` on exit, after flushing).
     pub fn pop_walk_seg(&mut self) {
         self.walk_flush.stack.pop();
     }

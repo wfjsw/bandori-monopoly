@@ -27,10 +27,10 @@
 //! prompt.
 //!
 //! TODO(规则书): 「因任意原因投掷前」 also covers card-driven rolls, but the
-//! card_move site (`play.rs` ~743) never raises `diceRollBefore` (only
+//! run_planned_move site (`play.rs` ~743) never raises `diceRollBefore` (only
 //! `diceRollPlan` / `diceRollValue` / `diceRollAfter` / `diceRollResult`), so
 //! this skill cannot prompt before those dice. `DiceRollPlan` is Filter-only
-//! (no prompts). Fixing that needs a `diceRollBefore` raise on the card_move
+//! (no prompts). Fixing that needs a `diceRollBefore` raise on the run_planned_move
 //! path.
 
 use bandori_std::ctx::{self, trigger};
@@ -56,7 +56,7 @@ pub const EVE: CardDef = CardDef::new(
 );
 /// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).
-/// `actor == owner && slot('ppFansUp') >= 1` is the pre.
+/// `actor == owner && slot('ppFansUp') >= 1` is the condition.
 fn roll_ok(player_id: i32) -> bool {
     if bandori_std::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
@@ -68,7 +68,7 @@ fn roll_ok(player_id: i32) -> bool {
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
+    // the grantees of the (2) below -- the `group_is(owner, …)` condition owns that.
     let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {

@@ -15,7 +15,7 @@ fn set_draw_n(t: &mut Table, who: usize, n: usize) {
 
 /// Place `card` on `who`'s field at board `tile` (the arrangement for cards the
 /// sheet drops on a square). `place_raw` leaves `tile: -1`, so a
-/// `card.placed && self_tile() == tile.id` pre never matches.
+/// `card.placed && self_tile() == tile.id` condition never matches.
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);
@@ -51,9 +51,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -66,22 +66,16 @@ fn rent(t: usize, h: usize) -> i32 {
     tile.rent[(h).min(tile.rent.len().saturating_sub(1))]
 }
 
-// =====================================================================
-// M1. Y.O.L.O works only on your own roll
-// =====================================================================
+// ===================================================================== M1.
 
-// 规则书: Y.O.L.O: 「你的掷骰结算前打出此卡，使结果增加1d4」. Live sheet:
-// 「你的掷骰结算前」 -- own roll only.
+// Live sheet: 「你的掷骰结算前」 -- own roll only.
 #[test]
 fn m01_yolo_own_roll_only() {
     let mut t = Table::vanilla(2);
     t.give(0, &["AG:Y.O.L.O"]);
     t.give(1, &["AG:Y.O.L.O"]);
-    // Queue d20 = 5 and Y.O.L.O's 1d4 = 3 up front -- `dice` cannot run
-    // while a prompt is open.
     t.dice(&[5, 3]);
     t.roll(0).unwrap();
-    // Only P0 is offered Y.O.L.O.
     let mut saw_p0 = false;
     let mut saw_p1 = false;
     loop {
@@ -142,15 +136,12 @@ fn m02_two_counters_on_one_roll() {
     );
 }
 
-// =====================================================================
-// M3. 若宫伊芙 (2) before the roll, Y.O.L.O after
-// =====================================================================
+// ===================================================================== M3.
 
-// 规则书: 若宫伊芙 (2): 「投掷前…Y个正面[P✽P粉丝]变反…增加Yd4」.
-// Y.O.L.O: +1d4 after the roll.
-// Drive shape matches the green twins (`g10_eve_plus_yd4_on_a_2d20_move`,
-// `g32`): Eve's (2) is an `ask_number` 0..=up choice prompt, so the Y answer
-// is the option *index* (Y = 2 is `answer(0, 2)`), not a title substring.
+// 规则书: 若宫伊芙 (2): 「投掷前…Y个正面[P✽P粉丝]变反…增加Yd4」. Drive shape matches the green twins
+// (`g10_eve_plus_yd4_on_a_2d20_move`, `g32`): Eve's (2) is an `ask_number`
+// 0..=up choice prompt, so the Y answer is the option *index* (Y = 2 is
+// `answer(0, 2)`), not a title substring.
 #[test]
 fn m03_eve_then_yolo() {
     let mut t = Table::new(&["若宫伊芙", "花园多惠"]);
@@ -163,7 +154,6 @@ fn m03_eve_then_yolo() {
     // Before the roll: flip Y = 2 fans for +2d4 (loaded 1, 1). d20 = 4.
     t.dice(&[4, 1, 1, 2]);
     t.roll(0).unwrap();
-    // Y.O.L.O adds 1d4 = 2; Eve's (2) asks how many fans to flip (Y = 2).
     loop {
         let Some(p) = t.prompt() else { break };
         if t.counteract_offered("AG:Y.O.L.O") {
@@ -184,9 +174,7 @@ fn m03_eve_then_yolo() {
     assert_eq!(t.state(0, "ppFansUp"), 3, "flipped 2 of the 5 face-up fans");
 }
 
-// =====================================================================
-// M4. 不要背负期待 −2 plus Y.O.L.O
-// =====================================================================
+// ===================================================================== M4.
 
 // 规则书: 不要背负期待: 「非回合开始时进行投掷的投掷结果减少2…最终结果最小为0」.
 #[test]
@@ -207,7 +195,7 @@ fn m04_minus_two_plus_yolo() {
     assert_eq!(t.pos(0), 4, "5 + 1 - 2");
 }
 
-// 规则书: 同上. Roll of 1 and no Y.O.L.O: clamped to 0, no settle.
+// 规则书: 同上.
 #[test]
 fn m04b_minus_two_clamped_to_zero() {
     let mut t = Table::vanilla(2);
@@ -224,7 +212,7 @@ fn m04b_minus_two_clamped_to_zero() {
 // 规则书: 不要背负期待 [持续]（1）: 「如果为0则此次移动不[结算]」 -- a face
 // that shaves to 0 while already standing on a foreign rent tile must not
 // settle that tile (the 0-step walk takes neither `fold_plan_delta` nor the
-// mid-step sync, so the engine has to pull `plan.resolve` before the walk).
+// mid-step sync, so the engine has to pull `plan.settles` before the walk).
 #[test]
 fn m04c_zero_step_walk_does_not_settle_the_tile_underfoot() {
     let mut t = Table::vanilla(2);
@@ -544,12 +532,9 @@ fn m10_rinko_while_stunned() {
     assert_eq!(t.charge(0), 0, "fire spent");
 }
 
-// =====================================================================
-// M11. 白金燐子 (2) plus Y.O.L.O
-// =====================================================================
+// ===================================================================== M11.
 
-// 规则书: 同上 + Y.O.L.O. RULING: whether 「固定为X*6」 overrides later additions.
-// Drive: press (X prompt) → `t.roll` (fixed face) → Y.O.L.O [反击] on diceRollResult.
+// RULING: whether 「固定为X*6」 overrides later additions.
 #[test]
 fn m11_rinko_plus_yolo() {
     let mut t = Table::new(&["白金燐子", "花园多惠"]);
@@ -557,7 +542,6 @@ fn m11_rinko_plus_yolo() {
     t.begin_turn(0);
     t.set_fire(0, 2, 3);
     t.give(0, &["AG:Y.O.L.O"]);
-    // Loaded 1d4 face for Y.O.L.O's +2, and a spare for any table fallback.
     t.dice(&[2, 2]);
     let sid = t.skill_id(0, "即使1cm也要前进");
     t.skill(0, &sid).unwrap();
@@ -575,7 +559,6 @@ fn m11_rinko_plus_yolo() {
             }
         }
     }
-    // The main move: the face is the fixed 12; Y.O.L.O may still add on diceRollResult.
     t.roll(0).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
@@ -772,7 +755,7 @@ fn m14b_kasumi_card_countered() {
 
 // 规则书: 86 -- 「如果某个格子的[经过]效果会改变[移动终点]则重新计算[路径]」.
 // Both stop-pot cards must be tile-bound (`place_on_tile`); `place_raw` leaves
-// `tile: -1` so the `card.placed && self_tile() == tile.id` pre never matches.
+// `tile: -1` so the `card.placed && self_tile() == tile.id` condition never matches.
 #[test]
 fn m15_first_forced_stop_wins() {
     let mut t = Table::new(&["户山香澄", "花园多惠", "要乐奈"]);
@@ -899,9 +882,7 @@ fn m18_plain_and_ordinary() {
     assert_eq!(moved, 7, "P0 moves 7 (the recorded distance), not 15");
 }
 
-// =====================================================================
-// M19. 你的光芒将照亮前路 plus Y.O.L.O
-// =====================================================================
+// ===================================================================== M19.
 
 // 规则书: 你的光芒: 「此次移动以月之森女子学院为起点（不触发起点地块效果）」.
 #[test]
@@ -1020,7 +1001,8 @@ fn m22_mygo_band_move1() {
     let band = t.skill_id(0, "迷途之星");
     t.set_crystals(0, &band, 1);
     // 想要成为人类 on the field -- `place_raw` runs no play body, so no X is
-    // declared (the slot stays 0 and the (1) guard `x > 0` cannot fire).
+    // declared (the instance has no `want_human_x` prop, so the (1) guard
+    // `x > 0` cannot fire).
     t.place_raw(0, "CRYCHIC:想要成为人类");
     // Replace the roll with a 1-tile move (the press runs the move itself).
     t.dice(&[15]);
@@ -1049,9 +1031,9 @@ fn m23_human_boost_hit_by_stop() {
     let mut t = Table::new(&["高松灯", "凑友希那"]);
     t.clean();
     // Everything the turn start reads must already be in place: `place_raw`
-    // runs no play body, so X is written through the player slot by hand.
-    t.place_raw(0, "CRYCHIC:想要成为人类");
-    t.m.world_mut().set_slot(0, "want_human_x", 15);
+    // runs no play body, so X is written onto the instance's prop by hand.
+    let human = t.place_raw(0, "CRYCHIC:想要成为人类");
+    t.m.world_mut().set_prop_at(human, "want_human_x", 15);
     t.set_crystals(0, "CRYCHIC:想要成为人类", 2);
     t.begin_turn(0);
     t.set_pos(0, 30);

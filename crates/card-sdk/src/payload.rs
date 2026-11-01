@@ -37,7 +37,7 @@ pub struct PlanValue {
     /// Walk | Teleport.
     pub move_kind: Option<MoveKind>,
     pub teleport_to: Option<Tile>,
-    pub resolve: Option<bool>,
+    pub settles: Option<bool>,
     /// One-shot: `true` clears the extra dice now.
     pub clear_dice: bool,
     pub min_roll: Option<i32>,
@@ -60,7 +60,7 @@ pub struct RollValue {
     /// Host-supplied recorded roll (`None` = none for this raise).
     pub recorded_roll: Option<i32>,
     /// Move rolls only: pin the settle off (`false`) or back on (`true`).
-    pub resolve: Option<bool>,
+    pub settles: Option<bool>,
 }
 
 /// BuyAssign -- deal rewrite before the ownership write.
@@ -153,7 +153,7 @@ pub fn drive_flag(player_id: i32, body: *const ()) {
 }
 
 /// `fn(i32, P) -> P` typed payload rewrite: snapshot, call (pure), apply delta.
-/// Shared by every `payload(Ty)` / `gate` kind -- including downstream custom
+/// Shared by every `payload(Type)` / `gate` kind -- including downstream custom
 /// payloads that impl [`FilterPayload`].
 pub fn drive_payload<P: FilterPayload>(player_id: i32, body: *const ()) {
     // SAFETY: `body` was packed by `kinds::filter_payload::<P>` from a
@@ -283,9 +283,9 @@ impl FilterPayload for PlanValue {
                     plan::set_teleport_to(t.0);
                 }
             }
-            if let Some(on) = after.resolve {
-                if before.resolve != Some(on) {
-                    plan::set_resolve(on);
+            if let Some(on) = after.settles {
+                if before.settles != Some(on) {
+                    plan::set_settles(on);
                 }
             }
             if after.clear_dice {
@@ -331,7 +331,7 @@ impl FilterPayload for RollValue {
                     .map(|r| r.rerolled)
                     .unwrap_or(false),
                 recorded_roll: crate::ctx::plan::recorded_roll(),
-                resolve: None,
+                settles: None,
             }
         }
         #[cfg(not(any(target_arch = "wasm32", feature = "guest")))]
@@ -346,9 +346,9 @@ impl FilterPayload for RollValue {
             if after.value != before.value {
                 crate::ctx::trigger::set_move_roll(after.value);
             }
-            if let Some(on) = after.resolve {
-                if before.resolve != Some(on) {
-                    crate::ctx::plan::set_resolve(on);
+            if let Some(on) = after.settles {
+                if before.settles != Some(on) {
+                    crate::ctx::plan::set_settles(on);
                 }
             }
         }

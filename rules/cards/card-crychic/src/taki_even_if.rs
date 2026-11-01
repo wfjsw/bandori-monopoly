@@ -1,4 +1,3 @@
-//! `CRYCHIC:（立希）即便比不上...` -- C# `CardTakiEvenIf`: reroll the move dice
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（立希）即便比不上...`）:
 //! > （立希）即便比不上...：
@@ -18,9 +17,9 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         // 规则书[反击]: 「[反击] 进入移动阶段后，触发结算前可打出」 -- the counter
         // rides the turn's main move roll.
         // TODO(规则书)（进入移动阶段后，触发结算前可打出）: 事件引起的强制移动
-        //   (`plan.forced`) 不是主要移动 -- `move.main` 把「进入移动阶段后」读成
+        //   (`plan.forced`) 不是主要移动 -- `move.is_main_move` 把「进入移动阶段后」读成
         //   主要移动，事件「移动1d20」的出目不能重骰。
-        "actor == owner && move.main && move.roll != null",
+        "actor == owner && move.is_main_move && move.roll != null",
         None,
         counteract).counter_reason(key!("taki_even_if_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -32,7 +31,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    let Some(before) = trigger::move_roll() else {
+    let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
     // 规则书[反击]: 「进行一次重骰」 -- a recast on the move's transaction, so the

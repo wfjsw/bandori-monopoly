@@ -4,11 +4,11 @@
 Verifies that the extracted assets cover everything the original game loads:
   * every file the manifest points to exists
   * every card / character / band in game data has its art
-  * every voice line, BGM track, SFX, boot image and animated background the C#
-    code requests resolves through manifest["resources"]
+  * every voice line, BGM track, SFX, boot image and animated background the
+    game requests resolves through manifest["resources"]
   * every Live2D model compiles to model.json + its textures (tools/live2d/build.sh)
 
-Keys are copied from the decompiled C# (file:line in comments). Exit status 1 on
+Keys are copied from the original game's data (file:line in comments). Exit status 1 on
 any hard failure; warnings are printed but do not fail.
 
   python tools/asset-pipe/check.py

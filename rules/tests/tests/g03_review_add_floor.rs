@@ -16,14 +16,15 @@ fn run(noexp_first: bool) -> usize {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "户山香澄"]);
     t.strip_skills();
     t.clean();
-    if noexp_first {
+    let wh = if noexp_first {
         t.place_raw(0, NO_EXPECTATION);
-        t.place_raw(0, WANT_HUMAN);
+        t.place_raw(0, WANT_HUMAN)
     } else {
-        t.place_raw(0, WANT_HUMAN);
+        let wh = t.place_raw(0, WANT_HUMAN);
         t.place_raw(0, NO_EXPECTATION);
-    }
-    t.m.world_mut().set_slot(0, "want_human_x", 15);
+        wh
+    };
+    t.m.world_mut().set_prop_at(wh, "want_human_x", 15);
     t.set_crystals(0, WANT_HUMAN, 2);
     t.begin_turn(0);
     drain(&mut t);

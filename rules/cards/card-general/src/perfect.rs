@@ -1,4 +1,4 @@
-//! `通用:[衍生]PERFECT` -- C# `CardPerfect`: remove, FEVER! to the discard, +3,000.
+//! to the discard, +3,000.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[衍生]PERFECT`）:
 //! > [衍生]PERFECT：
@@ -49,7 +49,11 @@ fn perfect(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「3. [获得]3000资金」 -- `ctx::n(1, …)` so
     // 「后勤人员的努力」 (「将打出的那张卡[手]效果中的一个数字变为两倍」)
     // can double it. Index 1 is this effect's only tagged number.
-    ctx::gain(player_id, ctx::n(1, 3000), &Msg::new(key!("perfect_why")))?;
+    ctx::gain(
+        player_id,
+        ctx::n(1, 3000),
+        &Msg::new(key!("perfect_reason")),
+    )?;
     Ok(())
 }
 

@@ -27,7 +27,7 @@
 //! than describe the game: the short-lived locks ([`CrossState::lock_acquire`]
 //! and friends, used through [`with_lock`]), the change notes
 //! ([`CrossState::publish`] / [`CrossState::subscribe`]), the per-stream
-//! presence keys, and the record-log bookkeeping ([`RecMeta`]). Per-connection
+//! presence keys, and the record-log bookkeeping ([`RecordMeta`]). Per-connection
 //! caches (the SSE cursor, the local broadcast fan-out, bot ponder trees) remain
 //! in the process -- they are performance only, and a missed note is recovered
 //! by re-polling the store.
@@ -150,7 +150,10 @@ pub trait CrossState: Send + Sync {
     /// Subscribe to `channel`. The receiver gets every message published from
     /// now on; a backend that reconnects may drop messages in between (the
     /// consumers re-poll).
-    fn subscribe(&self, channel: &str) -> Result<std::sync::mpsc::Receiver<PubMsg>, StoreError>;
+    fn subscribe(
+        &self,
+        channel: &str,
+    ) -> Result<std::sync::mpsc::Receiver<PublishedMessage>, StoreError>;
 
     // ----------------------------------------------------------- presence
     //
@@ -178,12 +181,12 @@ pub trait CrossState: Send + Sync {
 
     // ------------------------------------------------ record-log bookkeeping
     //
-    // [`RecMeta`], the driver's counters beside the record log. Always read
+    // [`RecordMeta`], the driver's counters beside the record log. Always read
     // and written under the match lock (see [`with_lock`]), so one JSON blob
     // is enough -- no CAS.
 
-    fn rec_meta_get(&self, room: &str) -> Result<Option<RecMeta>, StoreError>;
-    fn rec_meta_put(&self, room: &str, meta: &RecMeta) -> Result<(), StoreError>;
+    fn record_meta_get(&self, room: &str) -> Result<Option<RecordMeta>, StoreError>;
+    fn rec_meta_put(&self, room: &str, meta: &RecordMeta) -> Result<(), StoreError>;
     fn rec_meta_del(&self, room: &str) -> Result<(), StoreError>;
 }
 
@@ -271,7 +274,7 @@ impl From<SessionRecord> for Session {
 
 /// One published note: the channel it came in on and its payload.
 #[derive(Debug, Clone)]
-pub struct PubMsg {
+pub struct PublishedMessage {
     pub channel: String,
     pub payload: String,
 }
@@ -283,7 +286,7 @@ pub struct PubMsg {
 ///
 /// Read and written only under the match lock.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct RecMeta {
+pub struct RecordMeta {
     /// The open tick run (`Input::Ticks`), not yet flushed to the log. Run-
     /// length merging of consecutive ticks is what keeps a long match's log
     /// small; the run lives here (not in a process) until it closes.
@@ -294,9 +297,9 @@ pub struct RecMeta {
     /// Tick calls recorded -- the sum of every `Ticks.n`.
     pub ticks: u64,
     /// `at` of the last checkpoint, so a run closes at a turn boundary.
-    pub last_ckpt_at: u32,
+    pub last_checkpoint_at: u32,
     /// Something was lost: a store write failed, or a previous holder died
-    /// mid-operation (see [`RecMeta::dirty`]). The sealed record is then
+    /// mid-operation (see [`RecordMeta::dirty`]). The sealed record is then
     /// unverifiable (`RecordHeader::gaps`).
     pub gaps: bool,
     /// Members seated when the match started -- the record's participants.
@@ -307,7 +310,7 @@ pub struct RecMeta {
     /// A recorded operation was in flight. Set under the match lock *before*
     /// the worker call and cleared after its log lines are written; a leftover
     /// on load means that operation's input may be missing from the log and
-    /// [`RecMeta::gaps`] must be raised. Never set outside the lock.
+    /// [`RecordMeta::gaps`] must be raised. Never set outside the lock.
     pub dirty: bool,
 }
 

@@ -20,7 +20,7 @@ use wasmtime::{Config, InstancePre};
 pub const MAX_MEMORY_BYTES: usize = 16 * 1024 * 1024;
 
 /// Host errors and traps. The "a prompt is waiting" signal is a marker error the
-/// host raises instead of a plain message, so `is_need_input` can recognize it.
+/// host raises instead of a plain message, so `needs_input` can recognize it.
 pub type Error = wasmtime::Error;
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl std::error::Error for NeedInputTrap {}
 /// `Result` -- those return `card_sdk::abi::EXIT_NEED_INPUT` as their value, and
 /// `host::fold_exit` turns that sentinel back into this marker at the
 /// `ruleset_on` boundary. It is still raised by the imports whose guest wrappers
-/// read a plain `bool`/`Option` (`gate`, `target`, `card_move`, the buy/build
+/// read a plain `bool`/`Option` (`gate`, `target`, `run_planned_move`, the buy/build
 /// routines): those have nowhere to carry a sentinel without it reading as
 /// `true`/`Some(..)`, so the trap -- which tears the stack and therefore cannot
 /// be swallowed -- is the correct shape for them until their wrappers are
@@ -49,7 +49,7 @@ pub fn need_input() -> Error {
     Error::new(NeedInputTrap)
 }
 
-pub fn is_need_input(e: &Error) -> bool {
+pub fn needs_input(e: &Error) -> bool {
     e.downcast_ref::<NeedInputTrap>().is_some()
 }
 

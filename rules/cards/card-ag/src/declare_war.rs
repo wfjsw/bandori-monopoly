@@ -36,17 +36,9 @@ fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」
     //
     // One condition on the *effect*, and it now reads as one: any effect another
-    // player's card declared at me. It used to be reconstructed by unioning
-    // `Target`/`Abnormal` (via `t.Target`) with `Pay` (via `t.Pay.from`) and
-    // matching on two different fields -- the union this refactor removes.
-    // `effect::hits` covers both because a payment touches its payer *and* its
-    // payee.
+    // player's card declared at me. `effect::hits` covers both because a payment
+    // touches its payer *and* its payee.
     //
-    // 规则书: 「或你拥有的格子」 -- the declaration names the owner when a
-    // tile-affecting effect aims at a tile, so the [指定] half lands here;
-    // effects that touch a tile without naming its owner (house removal and
-    // friends) declare nothing aimed at the owner and stay out of reach -- the
-    // same gap the C# has.
 
     // TODO: Move some to CEL?
     // TODO(规则书)（当你或你拥有的格子被其他玩家的卡效果影响时）: an effect that only
@@ -75,9 +67,6 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // C# `int byCard = c.Trigger.ByCard` -- the player whose card affected this
-    // one, not `t.Seat`. On a `pay` trigger `trigger::player_id()` is the *payer*
-    // (this player, `t.Pay.from`), so the 500 must come from `by_card`.
     let Some(by) = trigger::by_card() else {
         return Ok(());
     };
@@ -85,17 +74,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // No by == player_id check needed: Handled by the guard
 
     // 规则书[反击]: 「[指定]那名玩家」 -- the designation is the card's player.
-    // C# `H.Target(c, byCard, r)`: the full targeting gate (out / exile /
-    // ImmuneAll / Untargetable / Redirect / the `target` [反击] window), and
-    // `r.yes` gates everything below. `Some(hit)` is the player actually hit --
-    // a `Redirect` hook may have moved it (`r.index` in the C#).
     let Some(hit) = ctx::target(by) else {
         return Ok(());
     };
-    // 规则书[反击]: 「被[指定]的玩家[支付][使用者]500资金」 -- C#
-    // `H.PayR(r.index, c.Seat, 500, ...)`: from the player actually targeted.
-    let why = Msg::new(key!("declare_war_why")).card("card", "AG:宣战布告");
-    ctx::transfer(hit, player_id, 500, &why)?;
+    let reason = Msg::new(key!("declare_war_reason")).card("card", "AG:宣战布告");
+    ctx::transfer(hit, player_id, 500, &reason)?;
     // 规则书[反击]: 「且[使用者]抽1张卡」
     ctx::draw(player_id, 1)?;
     Ok(())

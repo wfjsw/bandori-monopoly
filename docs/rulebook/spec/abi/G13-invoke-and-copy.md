@@ -144,7 +144,7 @@ shout's cost (1 fire) and the shout's own [停留]-clearing schedule.
 
 **Demote to A:** the roll spelling (`ctx::roll(mover, 1, 20,
 RollPurpose::Effect, roll_source::SKILL)`), `rules_status::stay::add`, and
-`ctx::card_settle_at` all exist; a copy could be finished with no ABI. The B
+`ctx::settle_tile_at` all exist; a copy could be finished with no ABI. The B
 part is "run the borrowed body, not a copy".
 
 ### 2.3 Shared root causes
@@ -192,7 +192,7 @@ Invariants the implementation must hold (each gets a test or a Kani obligation,
   residual guard and play gate are *not* evaluated; a caller that must know
   first asks `ctx::query_guard` (which now seeds the same frame). `On::Filter`
   (a value fold) is not invocable.
-* **I6 Fate.** The import returns the inner body's `Dest`; moving the card is
+* **I6 Dest.** The import returns the inner body's `Dest`; moving the card is
   the caller's job (the `play_card` contract, `ctx.rs:2490-2497`). The engine
   never silently unplaces the target.
 * **I7 Determinism.** No import asks a player. Prompts inside the body pause the
@@ -332,8 +332,8 @@ This is required, not cosmetic: a gate shaped as a reaction residual
 otherwise always false under a press and the probe is useless.
 
 The CEL scope needs the same fact. `fill_window_ambient` fills
-`actor = player_id` and `trigger_card = 0` (`cond_pre.rs:1393-1422`), and a
-reaction-shaped pre such as `"actor != owner && trigger_card != 0 && …"`
+`actor = player_id` and `trigger_card = 0` (`condition.rs:1393-1422`), and a
+reaction-shaped condition such as `"actor != owner && trigger_card != 0 && …"`
 (`nanami.rs:62-65`) therefore refuses. After the scope is built,
 `query_guard_entry` overwrites `scope.trigger_card = card` (and keeps
 `actor = player_id`) so the probe asks the question the invoke would answer. No
@@ -417,7 +417,7 @@ A raise is **not** added: an invocation is already committed on the caller's
 line, and a second counteraction window would let a [反击] negate a body whose
 cost was paid three effects ago.
 
-### 5.4 Limits, fate and traps
+### 5.4 Limits, dest and traps
 
 * `MAX_NESTING` and the shared fuel budget are reused verbatim; the nested
   guest and the outer run share one budget (`call_entry` already does,
@@ -440,8 +440,8 @@ pub fn arm_invoke_entry(a: Args) -> i64 {
         w.invoke_n += 1;
         w.last_invoke = (name_id(a[1], a[2]), name_id(a[3], a[4]), a[5] & 1);
     });
-    // symbolic fate: DEST_UNSET, Graveyard or Field, the three a borrowed body uses
-    world::with_world(|w| w.dest_hint) as i64   // a `dest_hint` field on the model
+    // symbolic dest: DEST_UNSET, Graveyard or Field, the three a borrowed body uses
+    world::with_world(|w| w.fate_hint) as i64   // a `fate_hint` field on the model
 }
 ```
 
@@ -457,7 +457,7 @@ Nanami's gate becomes "a crystal, a persona skill, and its (2) admits":
 `ctx::query_guard(player_id, skill, "2")`. Because the query seeds the frame
 (4.6), `on_skill_applies` sees `trigger_cards = [skill]` and the pot precondition
 `charge(owner) >= 1`, so the probe answers (almost) exactly "would the (2) body
-do anything". One gap stays: the pre gates on **pots**, while `fire::spend` can
+do anything". One gap stays: the condition gates on **pots**, while `fire::spend` can
 substitute a 不再迷茫 crystal, so a 0-pot owner with a crystal is refused before
 the substitution window (open question 8). The press then invokes **unpaid**:
 the (2)'s own pot cost is part of the clause and is still collected by the
@@ -468,7 +468,7 @@ body's ask.
 ## 6. Card usage — before / after
 
 **G05 note.** The button/press *surface* — when a skill is offered, its
-`why_not` text, the `use_skill` dispatch — is the G05 group's. This document
+`guard` text, the `use_skill` dispatch — is the G05 group's. This document
 only guarantees what a press (and a card) can *address* and *bind*; the gate
 rewrites below are the minimum to keep the cards coherent with the clause and
 are G05's to finish.
@@ -478,7 +478,7 @@ are G05's to finish.
 ```rust
 // before: cant_play (:77-84)
 if owner_skill(player_id).is_none() { …no_skill }
-if ctx::tok_names(player_id, TOKEN_PREFIX).is_empty() { …no_mark }
+if ctx::held_names(player_id, TOKEN_PREFIX).is_empty() { …no_mark }
 // after: the (2) needs a pot, not a mark
 let Some(skill) = ctx::persona_skill(player_id) else { …no_skill };
 if !ctx::query_guard(player_id, &skill, "2") { …no_pot_or_cd }
@@ -603,7 +603,7 @@ effect body, gated by the `OFFERED` latch (cleared on entry) or by
 `DUE` moves from the owner to the **mover** (`state::set(mover, DUE, 1)`), which
 makes the existing `half` filter correct as written: its body receives the payer
 and reads `state::get(player_id, DUE) > 0` (`tomori.rs:74-78`). The
-`TurnEnd` entry and its `actor == owner` pre go away; a schedule fires on the
+`TurnEnd` entry and its `actor == owner` condition go away; a schedule fires on the
 mover's next turn end (already skip-safe, `ctx.rs:2929-2934`), which is what
 「自己的下回合结束时」 means, and it survives the card not being placed — the
 borrowed case. `due_settle` clears `DUE` first, then settles.
@@ -622,7 +622,7 @@ ctx::log(...);                                            // 「使用一次…�
 
 `clear_latch` on `MoveResolved` clears `latch_key` and **`half_key`** (the forced
 settle is over). The shout adds its own `On::Schedule("due_settle", …)` entry:
-set `half_key`, `ctx::card_settle_at(mover, pos, true)`, clear `half_key`. One
+set `half_key`, `ctx::settle_tile_at(mover, pos, true)`, clear `half_key`. One
 fire (not four) because the shout paid before invoking (`COST_PAID`); the roll
 and delay come from the skill body.
 
@@ -760,10 +760,8 @@ facts rather than running the nested guest):
    persona skill; if the sheet ever means the card's owner instead, the lookup
    moves to the card's owner (a new owner-of-instance reader) and the entry id
    stays.
-2. **Should an invoke run the gate too?** Body-only matches C# `Offer()` and the
-   press path, and 「不受数量或轮数限制」 depends on skipping. A
-   `invoke_entry_gated` wrapper could ask `query_guard` first if a clause ever
-   needs "normal limits".
+2. A `invoke_entry_gated` wrapper could ask `query_guard` first if a clause ever needs "normal
+  limits".
 3. **Trigger kind.** The invoked body inherits the caller's kind. Should an
    `Action` entry instead present its own declared kind for the frame? Today's
    bodies do not read it, but a future guard might.
@@ -782,7 +780,7 @@ facts rather than running the nested guest):
    invoked from a zone it is not placed in (a hand or pile card), where the
    lookup is empty and `is_placed()` false; if such an entry needs it true, the
    engine must materialize a transient instance. Today's bodies do not.
-8. **Pot gates vs the crystal substitution.** 七深's (2) pre says
+8. **Pot gates vs the crystal substitution.** 七深's (2) condition says
    `charge(owner) >= 1`; `fire::spend` can take a 不再迷茫 crystal instead
    (`tomori.rs:101-104` is the same question on the poem side and omits the
    gate). Should the (2) gate be `charge(owner) >= 1 || a substitute is armed`,

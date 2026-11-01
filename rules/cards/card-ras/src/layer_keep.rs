@@ -1,4 +1,3 @@
-//! `RAS:（和奏瑞依）寄于指尖的执念` -- C# `CardLayerKeep` (MatchHost.cs:10118-10187):
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（和奏瑞依）寄于指尖的执念`）:
 //! > （和奏瑞依）寄于指尖的执念：
@@ -59,9 +58,8 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
-/// How many dice are kept (C# `_kept.Count`).
+/// How many dice are kept.
 const SLOT_COUNT: &str = "layer_keep_count";
-/// Kept-die slots (C# `_kept` list); 8 is the practical cap.
 const SLOT_DICE: [&str; 8] = [
     "layer_keep_0",
     "layer_keep_1",
@@ -93,8 +91,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if ctx::is_placed() {
         return use_die(player_id);
     }
-    // 规则书: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
-    // itself just stays in play (C# `H.PlaceFromPlay(c)`).
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(
@@ -106,10 +102,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- a
 /// counteract declaration runs this body, never `play`, so the placement is here
-/// (C# `H.PlaceFromPlay(c)`; the even_lost shape). A field copy answering a
-/// later fire already sits there and must not be placed twice. The die itself
-/// is read later by [`roll_after`], after the pick has recorded the unchosen
-/// face.
+/// (the even_lost shape). A field copy answering a later fire already sits there
+/// and must not be placed twice. The die itself is read later by [`roll_after`],
+/// after the pick has recorded the unchosen face.
 fn counter_fire(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
         ctx::set_dest(ctx::Dest::Field);
@@ -130,8 +125,7 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
     let Some(die) = trigger::roll_unused_face() else {
         return Ok(());
     };
-    // C# `_kept.Add(num - 1)` -- the kept-dice list; slots stand in for the
-    // per-field-card `List<int>` memory.
+    // The kept-dice list; slots stand in for the per card list memory.
     let n = ctx::slot(player_id, SLOT_COUNT);
     if n >= 0 && (n as usize) < SLOT_DICE.len() {
         ctx::set_slot(player_id, SLOT_DICE[n as usize], die);
@@ -167,7 +161,7 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     if vals.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("layer_keep_title")),
         &Msg::new(key!("layer_keep_which")),

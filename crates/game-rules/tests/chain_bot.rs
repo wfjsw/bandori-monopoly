@@ -3,7 +3,7 @@
 //! The rulebook's eligibility is out / off-board (plus `CannotPlay`: gated).
 //! "Is a bot" is not a rulebook reason, so every mentality is offered
 //! exactly like a human and answers through the engine's AI fill
-//! (`Cx::fill_ai`): standard by its `CounterParams` propensity (default
+//! (`PlayCtx::fill_ai`): standard by its `CounterParams` propensity (default
 //! `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰, user ruling 2026-10-08 --
 //! "bots must be able to counteract"), chaos by `CHAOS_COUNTER_CHANCE`. An
 //! Advanced seat is held (`ai` off) for an external driver -- the offer is an
@@ -36,7 +36,7 @@ fn ev(name: &str) -> String {
 /// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
 fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
     if msg.key() == "log.card_effect" {
-        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+        if let Some(Arg::Msg(m)) = msg.args.get("what") {
             return m;
         }
     }
@@ -66,9 +66,9 @@ fn ev_args(t: &Table, name: &str, arg: &str) -> Vec<i64> {
 fn who_of(t: &Table, name: &str) -> Vec<i64> {
     events(t, name)
         .iter()
-        .map(|e| match unadorned(&e.msg).a.get("who") {
+        .map(|e| match unadorned(&e.msg).args.get("who") {
             Some(Arg::PlayerId(v)) => *v as i64,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v,
             other => panic!("who is not a player arg: {other:?}"),
         })
         .collect()

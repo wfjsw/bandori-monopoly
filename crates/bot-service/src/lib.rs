@@ -2,7 +2,7 @@
 //!
 //! The game server asks this process for one seat's answer. The request
 //! carries **exactly one seat's view** -- the same frame the client gets
-//! (`MatchState` + own hand + own sorted draw composition + `view_extra` +
+//! (`MatchState` + own hand + own sorted draw composition + `view_extras` +
 //! the open prompt) -- never a `World`, a match seed, or another seat's
 //! hidden information (`docs/BOT.md` §1). The reply is a proposed
 //! [`NetMessage`]; the server remains authoritative and applies it through the
@@ -428,7 +428,7 @@ fn decide(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         &st,
         &view.hand,
         &view.playable,
-        &view.est_cost,
+        &view.estimated_cost,
         seat,
     );
     // Trivial root (`docs/BOT.md` §3.4): one forced action, or a free menu.
@@ -597,7 +597,7 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         &st,
         &target.hand,
         &target.playable,
-        &target.est_cost,
+        &target.estimated_cost,
         seat,
     );
     if action::trivial_decision(&searched).is_some() {

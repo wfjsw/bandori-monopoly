@@ -16,18 +16,18 @@ use core::cmp::Ordering;
 use crate::ctx::{FnId, IrCtx};
 use crate::eval::ListBuf;
 use crate::nodes::{Kind, Node};
-use crate::Val;
+use crate::Value;
 
 /// Whole-expression reference: same short-circuit + error absorption as the
 /// interpreter, but every leaf operator is a [`spec_*`] call.
-pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
+pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Value {
     let Some(n) = nodes.get(root as usize) else {
-        return Val::Err;
+        return Value::Err;
     };
     match n.kind {
-        Kind::ConstInt => Val::Int(n.payload),
-        Kind::ConstBool => Val::Bool(n.payload != 0),
-        Kind::ConstNull => Val::Null,
+        Kind::ConstInt => Value::Int(n.payload),
+        Kind::ConstBool => Value::Bool(n.payload != 0),
+        Kind::ConstNull => Value::Null,
         Kind::Var => ctx.scalar_val(n.payload as u16),
         Kind::Neg => spec_neg(eval_node(nodes, n.a, ctx)),
         Kind::Not => spec_not(eval_node(nodes, n.a, ctx)),
@@ -36,7 +36,7 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
             let l = eval_node(nodes, n.a, ctx);
             let lb = l.try_bool();
             if lb == Ok(false) {
-                Val::Bool(false)
+                Value::Bool(false)
             } else {
                 let r = eval_node(nodes, n.b, ctx);
                 spec_and(l, r, true)
@@ -46,7 +46,7 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
             let l = eval_node(nodes, n.a, ctx);
             let lb = l.try_bool();
             if lb == Ok(true) {
-                Val::Bool(true)
+                Value::Bool(true)
             } else {
                 let r = eval_node(nodes, n.b, ctx);
                 spec_or(l, r, true)
@@ -57,7 +57,7 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
             match c.try_bool() {
                 Ok(true) => eval_node(nodes, n.b, ctx),
                 Ok(false) => eval_node(nodes, n.c, ctx),
-                Err(()) => Val::Err,
+                Err(()) => Value::Err,
             }
         }
         Kind::Add => spec_arith(
@@ -113,16 +113,16 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
             let len = n.payload as usize;
             let first = n.a as usize;
             if len > 8 || first + len > nodes.len() {
-                return Val::Err;
+                return Value::Err;
             }
             let mut items = [0i64; 8];
             for i in 0..len {
                 match eval_node(nodes, (first + i) as u16, ctx) {
-                    Val::Int(v) => items[i] = v,
-                    _ => return Val::Err,
+                    Value::Int(v) => items[i] = v,
+                    _ => return Value::Err,
                 }
             }
-            Val::List(ListBuf {
+            Value::List(ListBuf {
                 n: len as u8,
                 items,
             })
@@ -165,14 +165,14 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
                 33 => FnId::State,
                 34 => FnId::CandHas,
                 35 => FnId::CardIs,
-                _ => return Val::Err,
+                _ => return Value::Err,
             };
             let nargs = n.b as usize;
             let first = n.a as usize;
             if nargs > 3 || first + nargs > nodes.len() {
-                return Val::Err;
+                return Value::Err;
             }
-            let mut args = [Val::Err; 3];
+            let mut args = [Value::Err; 3];
             for i in 0..nargs {
                 args[i] = eval_node(nodes, (first + i) as u16, ctx);
             }
@@ -203,27 +203,27 @@ pub enum Cmp {
 }
 
 /// `-a`. `i64::MIN` overflows (matches `checked_neg`).
-pub fn spec_neg(a: Val) -> Val {
+pub fn spec_neg(a: Value) -> Value {
     match a {
-        Val::Int(v) => match v.checked_neg() {
-            Some(w) => Val::Int(w),
-            None => Val::Err,
+        Value::Int(v) => match v.checked_neg() {
+            Some(w) => Value::Int(w),
+            None => Value::Err,
         },
-        _ => Val::Err,
+        _ => Value::Err,
     }
 }
 
 /// `!a`. Non-bool is an error.
-pub fn spec_not(a: Val) -> Val {
+pub fn spec_not(a: Value) -> Value {
     match a.try_bool() {
-        Ok(b) => Val::Bool(!b),
-        Err(()) => Val::Err,
+        Ok(b) => Value::Bool(!b),
+        Err(()) => Value::Err,
     }
 }
 
 /// `a && b` with CEL error absorption. `right_evaluated` is informational for
 /// the lazy form: when the left side short-circuits, the caller must NOT
-/// evaluate `b` (pass `Val::Err` as a placeholder and `false`).
+/// evaluate `b` (pass `Value::Err` as a placeholder and `false`).
 ///
 /// Truth table (left, right) → result:
 ///
@@ -234,10 +234,10 @@ pub fn spec_not(a: Val) -> Val {
 /// | err   | true  | false | err |
 ///
 /// Non-bool on either side is `err`.
-pub fn spec_and(l: Val, r: Val, right_evaluated: bool) -> Val {
+pub fn spec_and(l: Value, r: Value, right_evaluated: bool) -> Value {
     let lb = l.try_bool();
     if lb == Ok(false) {
-        return Val::Bool(false);
+        return Value::Bool(false);
     }
     if !right_evaluated {
         // Short-circuit: left is not false, so we would evaluate right. The
@@ -246,9 +246,9 @@ pub fn spec_and(l: Val, r: Val, right_evaluated: bool) -> Val {
     }
     let rb = r.try_bool();
     match (lb, rb) {
-        (Ok(true), Ok(b)) => Val::Bool(b),
-        (Err(()), Ok(false)) => Val::Bool(false),
-        _ => Val::Err,
+        (Ok(true), Ok(b)) => Value::Bool(b),
+        (Err(()), Ok(false)) => Value::Bool(false),
+        _ => Value::Err,
     }
 }
 
@@ -259,34 +259,34 @@ pub fn spec_and(l: Val, r: Val, right_evaluated: bool) -> Val {
 /// | true  | true  | true  | true |
 /// | false | true  | false | err |
 /// | err   | true  | false | err |
-pub fn spec_or(l: Val, r: Val, right_evaluated: bool) -> Val {
+pub fn spec_or(l: Value, r: Value, right_evaluated: bool) -> Value {
     let lb = l.try_bool();
     if lb == Ok(true) {
-        return Val::Bool(true);
+        return Value::Bool(true);
     }
     let _ = right_evaluated;
     let rb = r.try_bool();
     match (lb, rb) {
-        (Ok(false), Ok(b)) => Val::Bool(b),
-        (Err(()), Ok(true)) => Val::Bool(true),
-        _ => Val::Err,
+        (Ok(false), Ok(b)) => Value::Bool(b),
+        (Err(()), Ok(true)) => Value::Bool(true),
+        _ => Value::Err,
     }
 }
 
 /// Ternary: lazy; only the taken branch is evaluated (the tree evaluator
 /// handles laziness; this is the value-level form).
-pub fn spec_tern(c: Val, t: Val, f: Val) -> Val {
+pub fn spec_tern(c: Value, t: Value, f: Value) -> Value {
     match c.try_bool() {
         Ok(true) => t,
         Ok(false) => f,
-        Err(()) => Val::Err,
+        Err(()) => Value::Err,
     }
 }
 
 /// Arithmetic. Int-only; overflow and div/rem by zero are errors.
-pub fn spec_arith(a: Val, b: Val, op: Arith) -> Val {
+pub fn spec_arith(a: Value, b: Value, op: Arith) -> Value {
     match (a, b) {
-        (Val::Int(x), Val::Int(y)) => {
+        (Value::Int(x), Value::Int(y)) => {
             let r = match op {
                 Arith::Add => x.checked_add(y),
                 Arith::Sub => x.checked_sub(y),
@@ -307,112 +307,112 @@ pub fn spec_arith(a: Val, b: Val, op: Arith) -> Val {
                 }
             };
             match r {
-                Some(z) => Val::Int(z),
-                None => Val::Err,
+                Some(z) => Value::Int(z),
+                None => Value::Err,
             }
         }
-        (Val::Err, _) | (_, Val::Err) => Val::Err,
-        _ => Val::Err,
+        (Value::Err, _) | (_, Value::Err) => Value::Err,
+        _ => Value::Err,
     }
 }
 
 /// Equality is total: like-with-like compares; cross-type (including `null`
 /// vs int/bool) is `false`. Errors propagate.
-pub fn spec_eq(a: Val, b: Val) -> Val {
+pub fn spec_eq(a: Value, b: Value) -> Value {
     match (a, b) {
-        (Val::Err, _) | (_, Val::Err) => Val::Err,
-        (Val::Int(x), Val::Int(y)) => Val::Bool(x == y),
+        (Value::Err, _) | (_, Value::Err) => Value::Err,
+        (Value::Int(x), Value::Int(y)) => Value::Bool(x == y),
         // Hash-baked strings: `Str(h)` equals `Int(h)` (string-literal nodes).
-        (Val::Str(x), Val::Str(y)) | (Val::Str(x), Val::Int(y)) | (Val::Int(x), Val::Str(y)) => {
-            Val::Bool(x == y)
-        }
-        (Val::Bool(x), Val::Bool(y)) => Val::Bool(x == y),
-        (Val::Null, Val::Null) => Val::Bool(true),
-        (Val::List(x), Val::List(y)) => Val::Bool(x == y),
-        _ => Val::Bool(false),
+        (Value::Str(x), Value::Str(y))
+        | (Value::Str(x), Value::Int(y))
+        | (Value::Int(x), Value::Str(y)) => Value::Bool(x == y),
+        (Value::Bool(x), Value::Bool(y)) => Value::Bool(x == y),
+        (Value::Null, Value::Null) => Value::Bool(true),
+        (Value::List(x), Value::List(y)) => Value::Bool(x == y),
+        _ => Value::Bool(false),
     }
 }
 
 /// `a != b` ≡ `!(a == b)` on the non-error lattice.
-pub fn spec_ne(a: Val, b: Val) -> Val {
+pub fn spec_ne(a: Value, b: Value) -> Value {
     match spec_eq(a, b) {
-        Val::Bool(b) => Val::Bool(!b),
-        Val::Err => Val::Err,
+        Value::Bool(b) => Value::Bool(!b),
+        Value::Err => Value::Err,
         other => other,
     }
 }
 
 /// Ordering. Incomparable pairs (including anything involving `null` except
 /// `null` vs `null`) are errors.
-pub fn spec_cmp(a: Val, b: Val, op: Cmp) -> Val {
+pub fn spec_cmp(a: Value, b: Value, op: Cmp) -> Value {
     match (a, b) {
-        (Val::Err, _) | (_, Val::Err) => Val::Err,
-        (Val::Int(x), Val::Int(y)) => {
+        (Value::Err, _) | (_, Value::Err) => Value::Err,
+        (Value::Int(x), Value::Int(y)) => {
             let o = x.cmp(&y);
-            Val::Bool(match op {
+            Value::Bool(match op {
                 Cmp::Lt => o == Ordering::Less,
                 Cmp::Le => o != Ordering::Greater,
                 Cmp::Gt => o == Ordering::Greater,
                 Cmp::Ge => o != Ordering::Less,
             })
         }
-        (Val::Bool(x), Val::Bool(y)) => {
+        (Value::Bool(x), Value::Bool(y)) => {
             let o = x.cmp(&y);
-            Val::Bool(match op {
+            Value::Bool(match op {
                 Cmp::Lt => o == Ordering::Less,
                 Cmp::Le => o != Ordering::Greater,
                 Cmp::Gt => o == Ordering::Greater,
                 Cmp::Ge => o != Ordering::Less,
             })
         }
-        (Val::Null, Val::Null) => {
+        (Value::Null, Value::Null) => {
             // FINDING: the vendored `cel` crate errors on **every** ordering
             // involving `null`, including `null <= null`. `CelNull` does not
             // implement `Comparer`, so `compare_values` fails and the host
             // maps the error to `false`. We match that: no null ordering.
-            Val::Err
+            Value::Err
         }
-        _ => Val::Err,
+        _ => Value::Err,
     }
 }
 
 /// `a in b`. Membership of a scalar in a list. Errors propagate; a non-list
 /// `b` is an error.
-pub fn spec_in(a: Val, b: Val) -> Val {
+pub fn spec_in(a: Value, b: Value) -> Value {
     match (a, b) {
-        (Val::Err, _) | (_, Val::Err) => Val::Err,
-        (x, Val::List(items)) => Val::Bool(
+        (Value::Err, _) | (_, Value::Err) => Value::Err,
+        (x, Value::List(items)) => Value::Bool(
             items
                 .as_slice()
                 .iter()
-                .any(|i| spec_eq(x, Val::Int(*i)) == Val::Bool(true)),
+                .any(|i| spec_eq(x, Value::Int(*i)) == Value::Bool(true)),
         ),
-        _ => Val::Err,
+        _ => Value::Err,
     }
 }
 
 /// `size(list)`. Non-list is an error.
-pub fn spec_size(a: Val) -> Val {
+pub fn spec_size(a: Value) -> Value {
     match a {
-        Val::List(items) => Val::Int(items.n as i64),
-        Val::Err => Val::Err,
-        _ => Val::Err,
+        Value::List(items) => Value::Int(items.n as i64),
+        Value::Err => Value::Err,
+        _ => Value::Err,
     }
 }
 
 /// Vocabulary functions. Same accessors as [`crate::eval::call_fn`]; the two
 /// are pinned together by the Kani function proofs and the differential tests.
-pub fn spec_call(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
+pub fn spec_call(ctx: &IrCtx, fid: FnId, args: &[Value]) -> Value {
     crate::eval::call_fn(ctx, fid, args)
 }
 
 /// Utility used by the proofs: the closed scalar lattice (no lists).
-pub fn scalar_lattice() -> [Val; 5] {
+pub fn scalar_lattice() -> [Value; 5] {
     [
-        Val::Int(i64::MIN),
-        Val::Int(-1),
-        Val::Int(0),
-        Val::Int(1),
-        Val::Int(i64::MAX),
+        Value::Int(i64::MIN),
+        Value::Int(-1),
+        Value::Int(0),
+        Value::Int(1),
+        Value::Int(i64::MAX),
     ]
 }

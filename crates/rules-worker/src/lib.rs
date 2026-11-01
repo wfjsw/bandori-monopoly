@@ -340,7 +340,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         }
 
         // Read-only ops: the blob comes back unchanged, so it is not echoed.
-        // `needExtras` (default false): compute the per-viewer `view_extra`
+        // `needExtras` (default false): compute the per-viewer `view_extras`
         // fields (`aiAnswer` / `playable` / `estCost` / `skills`). A human
         // client derives those itself from the seat view (the seat-view
         // engine, `docs/BOT.md` §1) -- skipping here is pure saved work. The
@@ -358,7 +358,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             m.personalize_prompt_time(&mut state, member);
             let player_id = state.player_of(member);
             let extra = if need_extras {
-                m.view_extra(member)
+                m.view_extras(member)
             } else {
                 Value::Null
             };

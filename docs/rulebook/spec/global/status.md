@@ -41,7 +41,7 @@ start) that is not named in the book -- see G-STATUS-01.
 * **Quote:** 「[无法移动]：处于该状态时[主要移动]的[移动终点]视为当前所在格子且不[结算]。无法使用非[传送]的移动效果（如果因效果随机到非[传送]的移动效果则抵消该效果）。」
 * **Trigger:** a `roll` (the [主要移动]) by a player who is [无法移动], or a
   non-[传送] movement effect targeting them.
-* **Condition:** in `pre`, the player has [停留] (unless [不可阻挡]), [晕眩],
+* **Condition:** in `condition`, the player has [停留] (unless [不可阻挡]), [晕眩],
   or [除外] -- any of which grants [无法移动] (items 11-13).
 * **Effect:** the [主要移动] does not leave the current tile and does not
   [结算]; a non-[传送] movement effect is cancelled.
@@ -82,7 +82,7 @@ start) that is not named in the book -- see G-STATUS-01.
 * **Quote:** 「[晕眩]：处于该状态时[无法移动]，无法使用[主动]技能和手卡的[手]效果，无法收付款。」
 * **Trigger:** a skill press or hand-card play by a stunned player, or a money
   leg to / from one.
-* **Condition:** `stun + stunStart > 0` on that player in `pre`.
+* **Condition:** `stun + stunStart > 0` on that player in `condition`.
 * **Effect:** the skill / [手] play does not run; no money moves to or from
   them (the pay is blocked).
 * **Frame:** n/a (the act is a no-op).
@@ -121,7 +121,7 @@ start) that is not named in the book -- see G-STATUS-01.
 * **Quote:** 「[除外]：处于该状态时[无法移动]，不能被[指定]，无法使用[主动]技能和手卡的[手]效果，无法收付款；玩家棋子不失为存在于任何格子上。」
 * **Trigger:** a skill press / hand play by an exiled player, a [指定] targeting
   them, or a money leg to / from them.
-* **Condition:** `exile > 0` on that player in `pre`.
+* **Condition:** `exile > 0` on that player in `condition`.
 * **Effect:** the skill / [手] play does not run; they are not a legal [指定]
   target; no money moves to or from them; the pawn counts as on no tile.
 * **Frame:** n/a (the act is a no-op).
@@ -145,7 +145,7 @@ start) that is not named in the book -- see G-STATUS-01.
   「负面效果：移除一层[除外]」
 * **Trigger:** a grant of [除外] while already exiled; the player's own turn
   start.
-* **Condition:** `exile > 0` in `pre`.
+* **Condition:** `exile > 0` in `condition`.
 * **Effect:** a second grant does not raise the counter; at their turn start
   (before the turn proper) one layer is removed.
 * **Frame:** only `state:P*:exile` / `exileTo` move on a pure decay.
@@ -170,7 +170,7 @@ start) that is not named in the book -- see G-STATUS-01.
 * **Quote:** 「处于该状态时玩家技能和[场地]上的[持续]效果停止生效。获得该状态的效果会写明状态结束后在玩家回合开始时要[传送]到的格子。」
 * **Trigger:** any window in which an exiled player would fire a skill /
   [持续] hook, and the turn start where their [除外] ticks out.
-* **Condition:** `exile > 0` in `pre` (or ticking to 0 at this turn start).
+* **Condition:** `exile > 0` in `condition` (or ticking to 0 at this turn start).
 * **Effect:** no player-skill or tile-[持续] body runs on their behalf; when
   the last layer ticks out, they [传送] to the tile the granting effect wrote
   (`exileTo`).
@@ -192,7 +192,7 @@ start) that is not named in the book -- see G-STATUS-01.
 * **Source:** `rulebook-doc.md:99`
 * **Quote:** 「[不可阻挡]：处于该状态时无视已存在的[停留]，[晕眩]效果也不会获得新的层数；无法获得新的[除外]层数。[停留]，[晕眩]，[除外]在适当时机依旧掉层。处于该状态时可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效。」
 * **Trigger:** any act while `unstoppable > 0`.
-* **Condition:** `unstoppable > 0` in `pre`.
+* **Condition:** `unstoppable > 0` in `condition`.
 * **Effect:** existing [停留] does not skip the move; no new [晕眩] or [除外]
   layers are gained; existing layers still tick at their book timing;
   [传送]/[强制移动]/[强制停下] are optional to the receiver.

@@ -2,7 +2,7 @@
 //! stability, duplicate ids, fuel / nesting traps. Build the modules first:
 //! `node tools/build-ruleset.mjs`.
 //!
-//! The `TEST:pre*` guard-condition tests live in `pre_conditions.rs` (their
+//! The `TEST:condition*` guard-condition tests live in `pre_conditions.rs` (their
 //! own binary): they assert on the process-global `guard_cost` counters,
 //! which every test here would otherwise race.
 //!
@@ -60,18 +60,23 @@ fn duplicate_card_ids_are_rejected() {
 fn runaway_nesting_is_stopped() {
     let r = load(&["cards", "fixtures"]);
     let card = r.card("TEST:recurse").unwrap();
-    let err = r
-        .run(
-            &TestWorld::new(1),
-            Call::Play {
-                card,
-                player_id: 0,
-                arg: Vec::new()
-            },
-            &[],
-            None,
-        )
-        .unwrap_err();
+    let call = || Call::Play {
+        card,
+        player_id: 0,
+        arg: Vec::new(),
+    };
+    // Every body entry announces `cardFired`, a host request: the run pauses on
+    // it and replays with the answer. Drive the raises (`1` = the fire stands)
+    // until the recursion hits the depth bound.
+    let mut answers: Vec<i32> = Vec::new();
+    let err = loop {
+        match r.run(&TestWorld::new(1), call(), &answers, None) {
+            Ok(Outcome::NeedHost(_, _)) => answers.push(1),
+            Ok(other) => panic!("expected the nesting trap, got {other:?}"),
+            Err(e) => break e,
+        }
+        assert!(answers.len() < 64, "no trap after {} raises", answers.len());
+    };
     assert!(
         matches!(err, RuleError::Trap(ref m) if m.contains("nested deeper")),
         "{err}"

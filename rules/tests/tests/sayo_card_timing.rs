@@ -24,8 +24,8 @@ fn roll(t: &mut Table) {
     let p = t.expect_prompt();
     assert_eq!(p.text.key(), "ask.counteract.move_extension");
     assert_eq!(p.options.len(), 3);
-    assert_eq!(p.options[0].a.get("n"), Some(&Arg::I(2)));
-    assert_eq!(p.options[1].a.get("n"), Some(&Arg::I(1)));
+    assert_eq!(p.options[0].args.get("n"), Some(&Arg::Integer(2)));
+    assert_eq!(p.options[1].args.get("n"), Some(&Arg::Integer(1)));
     assert_eq!(p.options[2].key(), "ask.counteract.skip");
     assert_eq!(p.fallback, 2);
     assert_eq!(t.pos(0), 1);
@@ -35,7 +35,7 @@ fn distance(t: &mut Table, extra: i32) {
     t.answer(0, 2 - extra).unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.text.key(), "ask.counteract.move_extension_payment");
-    assert_eq!(p.text.a.get("n"), Some(&Arg::I(extra as i64)));
+    assert_eq!(p.text.args.get("n"), Some(&Arg::Integer(extra as i64)));
     assert_eq!(p.options.last().unwrap().key(), "ask.counteract.back");
     assert_eq!(p.fallback as usize, p.options.len() - 1);
     assert_eq!(t.pos(0), 1);
@@ -62,11 +62,14 @@ fn card_uses_final_override_and_shows_landings_before_walking() {
     t.m.world_mut().hidden[0].next_steps = Some(7);
     roll(&mut t);
     let p = t.expect_prompt();
-    assert_eq!(p.text.a.get("n"), Some(&Arg::I(7)));
-    assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(8)));
-    assert_eq!(p.options[0].a.get("tile"), Some(&Arg::Tile(10)));
+    assert_eq!(p.text.args.get("n"), Some(&Arg::Integer(7)));
+    assert_eq!(p.text.args.get("tile"), Some(&Arg::Tile(8)));
+    assert_eq!(p.options[0].args.get("tile"), Some(&Arg::Tile(10)));
     distance(&mut t, 2);
-    assert_eq!(t.expect_prompt().text.a.get("tile"), Some(&Arg::Tile(10)));
+    assert_eq!(
+        t.expect_prompt().text.args.get("tile"),
+        Some(&Arg::Tile(10))
+    );
     t.counteract(0, CARD).unwrap();
     // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt;
     // answer it so the walk routine finishes and writes main_steps.
@@ -320,8 +323,8 @@ fn reverse_move_and_existing_extra_steps_are_preserved() {
     t.dice(&[5]);
     t.roll(0).unwrap();
     let p = t.expect_prompt();
-    assert_eq!(p.text.a.get("n"), Some(&Arg::I(7)));
-    assert_eq!(p.options[0].a.get("tile"), Some(&Arg::Tile(11)));
+    assert_eq!(p.text.args.get("n"), Some(&Arg::Integer(7)));
+    assert_eq!(p.options[0].args.get("tile"), Some(&Arg::Tile(11)));
     t.answer(0, 0).unwrap();
     t.counteract(0, CARD).unwrap();
     assert_eq!(t.pos(0), 11);

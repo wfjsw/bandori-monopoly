@@ -1,4 +1,3 @@
-//! `HHW:笑容大游行` -- C# `CardSmileParade` (MatchHost.cs:3597-3717): [反击] onto
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:笑容大游行`）:
 //! > 笑容大游行：
@@ -14,7 +13,7 @@
 //! position are untouched (「what the tile *is*, not what is on it」). After any
 //! settle on the card's tile the card goes to the discard. The swap is one
 //! level deep — the redirected settle must not swap back: the card arms
-//! `TAG_REDIRECT` before its own `card_settle_at` and the nested move carries
+//! `TAG_REDIRECT` before its own `settle_tile_at` and the nested move carries
 //! it, so neither hook re-enters (STACK-01 / SETTLE-01). Only the card's own
 //! redirects are marked; another card's settle is a real settle and swaps.
 
@@ -34,7 +33,7 @@ const TAG_AS_AGENT: &str = "smile_as_agent";
 /// not read as (3)'s 「在此卡放置的格子上[触发结算]后」. One-shot, same-settle
 /// only (no nested settle between set and read). Dies with the instance.
 const PROP_ARRIVED: &str = "smile_arrived";
-/// One-shot move tag armed right before this card's own `card_settle_at`, so
+/// One-shot move tag armed right before this card's own `settle_tile_at`, so
 /// the nested settle does not swap back. `plan::set_tag` writes the plan (the
 /// `SettleAt` pause carries plan tags across, and `card_settle_move` clones it
 /// onto that one settle's move); the body's replay pass clears it again, so
@@ -62,7 +61,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // 规则书（2）: 「[触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint, a teleport's endpoint included. A
-        // card-initiated settle (`card_settle_at`) is not a move and has no
+        // card-initiated settle (`settle_tile_at`) is not a move and has no
         // [移动终点] at all, so [`settle_after_guard`] keeps those out -- the
         // (1)/(3) redirects among them (they would offer 移动终点 = 弦卷集团
         // and clear the crystals while the card is still there).
@@ -91,18 +90,15 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // sheet cell F3
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
-/// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).
 fn group_tile() -> i32 {
     ctx::tile_named("弦卷集团")
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null`
-    // is the pre; no residual guard (`tile_named` is -1 when unknown and
+    // is the condition; no residual guard (`tile_named` is -1 when unknown and
     // `tile.id == -1` is false).
     let group = group_tile();
-    // 规则书（1）[反击]: 「可将此卡放置在其上」 -- C# `H.PlaceFromPlay(c, c.Seat,
-    // Group, 3)` places the card on the 弦卷集团 tile, charged with 3 crystals.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(
         player_id,
@@ -110,8 +106,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         ID,
         &Msg::new(key!("smile_parade_note")).tile("tile", group),
     );
-    // 规则书（1）: 「为此卡添加3个[奇迹水晶]」 -- the placement's crystal charge
-    // (C# `H.PlaceFromPlay(c, ..., 3)`).
     ctx::set_crystals(3);
     ctx::log(
         player_id,
@@ -119,21 +113,16 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", group),
     );
-    // 规则书（1）: 「当次移动的移动终点视为“弦卷集团”地产商」 -- arm a one-shot
-    // move tag that [`settle_body_guard`] reads so **that move's** endpoint
-    // settle (and not every later settle the owner makes) runs as the agent.
-    // `set_settle_as_agent` is kept for `H.AgentLanding`'s shape, but nothing
-    // in the engine reads it.
+    // 规则书（1）: 「当次移动的移动终点视为“弦卷集团”地产商」 -- arm a one-shot move tag that
+    // [`settle_body_guard`] reads so **that move's** endpoint settle (and not every
+    // later settle the owner makes) runs as the agent.
     ctx::plan::set_tag(TAG_AS_AGENT, 1);
     ctx::plan::set_settle_as_agent(true);
     Ok(())
 }
 
-/// 规则书（1）: 「你的每回合结束时移除一个」 -- C# `CardSmileParade.TurnEnd`
-/// (`turn == Player && Tile == Group && Crystals > 0` -> `AddCrystals(-1)`).
 /// The printed tick is **unconditional**; only the zero-crystal discard names
-/// 「仍位于"弦卷集团"」. C# had `Tile == Group`; text is ground fact.
-/// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
+/// 「仍位于"弦卷集团"」. The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
 /// [`on_crystals_changed`].
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     // 「你的每回合结束时移除一个」 -- the tick.
@@ -151,8 +140,6 @@ fn on_group() -> bool {
     }
 }
 
-/// 规则书（1）: 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 -- C#
-/// `H.Unplace(this, "discard")`.
 ///
 /// 「若此卡仍位于"弦卷集团"」 is a real condition, not a restatement of the
 /// tick's own gate: （2） moves the card to the [移动终点] and strips its
@@ -207,14 +194,14 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // （1）: the placement move's endpoint settles as the agent. The nested
-    // `card_settle_at` carries `TAG_REDIRECT`, so its `tileResolved` does not
+    // `settle_tile_at` carries `TAG_REDIRECT`, so its `tileResolved` does not
     // read as (3)'s 「在此卡放置的格子上[触发结算]」 (the card is on 弦卷集团
     // right now).
     if trigger::move_tag(TAG_AS_AGENT) != 0 {
         ctx::trigger::set_cancelled();
         ctx::plan::set_settle_as_agent(true);
         ctx::plan::set_tag(TAG_REDIRECT, 1);
-        ctx::card_settle_at(player_id, group, true);
+        ctx::settle_tile_at(player_id, group, true);
         ctx::plan::set_tag(TAG_REDIRECT, 0);
         ctx::plan::set_tag(TAG_AS_AGENT, 0);
         ctx::log(
@@ -246,7 +233,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // argument is the field instance's holder, so it stays the log seat only.
     // 规则书（3）: 「任何玩家在此卡放置的格子上[触发结算]后」
     ctx::plan::set_tag(TAG_REDIRECT, 1);
-    ctx::card_settle_at(trigger::player_id(), dest, true);
+    ctx::settle_tile_at(trigger::player_id(), dest, true);
     ctx::plan::set_tag(TAG_REDIRECT, 0);
     ctx::log(
         player_id,

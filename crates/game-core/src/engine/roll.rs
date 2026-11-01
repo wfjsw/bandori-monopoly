@@ -26,7 +26,7 @@
 //! mutate through the stack by id between raises instead of holding a borrow
 //! across `self.raise`.
 
-use super::cx::{Cx, Flow};
+use super::cx::{PlayCtx, Flow};
 use super::play::{plan_dice_msg, Move};
 use super::rules::{RollSource, Trigger};
 use super::world::{FixedFace, RollHistoryEntry, World};
@@ -89,7 +89,7 @@ pub struct RollTransaction {
     pub has_result_window: bool,
     /// The innermost open transaction at open time, or `-1`.
     pub parent: i32,
-    /// The transaction is the turn's own main move (`move.main` on a
+    /// The transaction is the turn's own main move (`move.is_main_move` on a
     /// synthesized view; false for a side move, a preview or a victim roll).
     #[serde(default)]
     pub main: bool,
@@ -156,7 +156,7 @@ impl RollTransaction {
 
 /// Transaction accessors on the **world** itself. The card rules read them
 /// through the run's world copy (`CardWorld for Run`), so the lookups cannot
-/// live on [`Cx`] alone; the `Cx` methods below delegate.
+/// live on [`PlayCtx`] alone; the `PlayCtx` methods below delegate.
 impl World {
     /// The innermost open transaction id, `-1` when none.
     pub fn open_roll_id(&self) -> i32 {
@@ -189,8 +189,8 @@ impl World {
         let mut m = self.turn.plan.clone();
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
-        m.main = self.roll_by_id(id).map(|r| r.main).unwrap_or(false);
-        m.resolve = false;
+        m.is_main_move = self.roll_by_id(id).map(|r| r.main).unwrap_or(false);
+        m.settles = false;
         m
     }
 
@@ -216,11 +216,12 @@ impl World {
         // I5: the keep point is the cast of the latest pair the pick did not
         // take, so it is recorded even when the pick re-keeps the face that
         // was already chosen. A single cast has nothing unchosen. The recorded
-        // face is the settled one -- that is what the player saw offered.
+        // face is the **raw** one: a banked die (寄于指尖的执念) is recast
+        // later and re-folds the result modifiers itself, so a settled value
+        // would apply them twice.
         if n >= 2 {
             let other = if idx == n - 1 { n - 2 } else { n - 1 };
-            let c = &r.casts[other];
-            r.unused_face = c.settled.unwrap_or(c.raw);
+            r.unused_face = r.casts[other].raw;
         }
         if idx == r.chosen_index {
             return;
@@ -250,7 +251,7 @@ impl World {
     }
 }
 
-impl Cx<'_> {
+impl PlayCtx<'_> {
     // ---- stack ---------------------------------------------------------
 
     fn next_roll_id(&mut self) -> i32 {
@@ -526,7 +527,7 @@ impl Cx<'_> {
         log_dice: bool,
     ) -> Flow<i32> {
         if let Some(r) = self.tx_mut(id) {
-            r.main = m.main;
+            r.main = m.is_main_move;
         }
         if fixed.is_some() {
             let f = fixed.expect("checked");
@@ -608,7 +609,7 @@ impl Cx<'_> {
         let mut r = RollTransaction::new(id, roller, PURPOSE_MOVE, 0, 0, parent);
         r.source = source;
         r.has_result_window = false;
-        r.main = m.main;
+        r.main = m.is_main_move;
         self.w.open_rolls.push(r);
 
         self.cast(id, Some(m), source, true)?;
@@ -658,8 +659,8 @@ impl Cx<'_> {
         let mut m = saved.clone();
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
-        m.main = false;
-        m.resolve = false;
+        m.is_main_move = false;
+        m.settles = false;
         self.seed_turn_plan(&m);
         let id = self.open_move_roll(roller, source);
         self.raise_roll("diceRollPlan", id, Some(&m), -1)?;
@@ -668,8 +669,8 @@ impl Cx<'_> {
         let mut m = self.w.turn.plan.clone();
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
-        m.main = false;
-        m.resolve = false;
+        m.is_main_move = false;
+        m.settles = false;
         let face = self.run_move_roll(id, &m, None, true)?;
         self.w.turn.plan = saved;
         Ok(face)

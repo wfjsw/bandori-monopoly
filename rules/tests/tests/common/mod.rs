@@ -230,7 +230,7 @@ impl Table {
     }
 
     /// Mark `who` as a bot seat under `mentality`. Standard / chaos flip `ai`
-    /// on (a machine seat: the pump drives it and `Cx::fill_ai` prefills its
+    /// on (a machine seat: the pump drives it and `PlayCtx::fill_ai` prefills its
     /// prompts); Advanced
     /// leaves `ai` off -- the seat is held for an external driver (bot-service
     /// / the browser worker) and its prompts time out to the fallback.
@@ -786,7 +786,7 @@ impl Table {
         let uid = self.m.world().persona_skill_uid(who as i32);
         self.m
             .world_mut()
-            .set_tok(who as i32, bandori_std::fire::KEY, value, uid, max);
+            .set_held(who as i32, bandori_std::fire::KEY, value, uid, max);
     }
 
     /// Drive the fire kernel's gain policy (`bandori_std::fire::gain_clamped`,
@@ -794,8 +794,11 @@ impl Table {
     /// a dumb add -- the card implementation polices 「不能超过持有上限」.
     /// Returns how many landed.
     pub fn gain_fire(&mut self, who: usize, n: i32) -> i32 {
-        let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
-        let cap = self.m.world().tok_max(who as i32, bandori_std::fire::KEY);
+        let have = self
+            .m
+            .world()
+            .held_count(who as i32, bandori_std::fire::KEY);
+        let cap = self.m.world().held_max(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::gain_clamped(have, cap, n);
         if want > 0 {
             self.m
@@ -816,15 +819,18 @@ impl Table {
         let cap = self
             .m
             .world()
-            .tok_max(who as i32, bandori_std::fire::KEY)
+            .held_max(who as i32, bandori_std::fire::KEY)
             .saturating_add(n)
             .max(0);
-        let have = self.m.world().tok(who as i32, bandori_std::fire::KEY);
+        let have = self
+            .m
+            .world()
+            .held_count(who as i32, bandori_std::fire::KEY);
         let want = bandori_std::fire::pull_under_cap(have, cap);
         let uid = self.m.world().persona_skill_uid(who as i32);
         self.m
             .world_mut()
-            .set_tok(who as i32, bandori_std::fire::KEY, want, uid, cap);
+            .set_held(who as i32, bandori_std::fire::KEY, want, uid, cap);
         cap
     }
 
@@ -1096,7 +1102,7 @@ impl Table {
 
     /// Live fire ceiling (`Counter.max` on the `"charge"` row; 0 = undeclared).
     pub fn charge_max(&self, who: usize) -> i32 {
-        self.m.world().tok_max(who as i32, bandori_std::fire::KEY)
+        self.m.world().held_max(who as i32, bandori_std::fire::KEY)
     }
 
     /// A standing tile prop (`World::tile_prop`). Used to read per-player
@@ -1155,7 +1161,7 @@ pub fn turns_left(t: &Table, who: usize, card: &str) -> i32 {
 /// `""`.
 pub fn log_key(e: &MatchEvent) -> String {
     let m = if e.msg.key() == "log.card_effect" {
-        match e.msg.a.get("what") {
+        match e.msg.args.get("what") {
             Some(Arg::Msg(m)) => m.as_ref(),
             _ => &e.msg,
         }
@@ -1167,8 +1173,8 @@ pub fn log_key(e: &MatchEvent) -> String {
 
 /// An integer argument of a message (`.i` / `.n`).
 pub fn int_arg(msg: &Msg, name: &str) -> Option<i64> {
-    match msg.a.get(name) {
-        Some(Arg::I(v)) | Some(Arg::N(v)) => Some(*v),
+    match msg.args.get(name) {
+        Some(Arg::Integer(v)) | Some(Arg::Number(v)) => Some(*v),
         _ => None,
     }
 }

@@ -43,8 +43,8 @@ fn probe_layer_keep_keep_new_banks_the_old_face() {
         .events_since(mark)
         .into_iter()
         .filter(|e| e.msg.key().ends_with("fire_recast_note"))
-        .find_map(|e| match e.msg.a.get("unused") {
-            Some(game_core::msg::Arg::I(v)) => Some(*v),
+        .find_map(|e| match e.msg.args.get("unused") {
+            Some(game_core::msg::Arg::Integer(v)) => Some(*v),
             _ => None,
         })
         .expect("the reroll outcome logged");

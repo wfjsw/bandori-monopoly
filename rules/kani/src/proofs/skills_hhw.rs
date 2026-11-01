@@ -35,9 +35,9 @@ crate::host_subset!(skills_hhw_dispatch {
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,
-    set_steps | set_resolve | schedule_turn_end | linger
+    set_steps | set_settles | schedule_turn_end | linger
     | card_offer_build | can_build_on => arm_protocol_stub,
-    card_move => arm_card_move,
+    run_planned_move => arm_card_move,
     trig_target => arm_trig_target,
     trig_value => arm_trig_value,
     trig_set_pay_amount => arm_trig_set_pay_amount,
@@ -112,7 +112,7 @@ pub fn kokoro_01_opening_1000_iff() {
         return;
     }
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -121,20 +121,20 @@ pub fn kokoro_01_opening_1000_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    kani::cover!(pre.money[owner as usize] == 0, "pre money 0");
+    kani::cover!(condition.money[owner as usize] == 0, "condition money 0");
     crate::kassert!(
         spec::skills_hhw::kokoro_01_log_ok(effects, owner),
         "C-HHW-kokoro-01: log is the latch + GainMoney(1000)"
     );
     crate::kassert!(
         post.money[owner as usize]
-            == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount(),
+            == condition.money[owner as usize] + spec::skills_hhw::kokoro_01_amount(),
         "C-HHW-kokoro-01: money rises by exactly 1000"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
-    crate::kassert!(post.discard == pre.discard, "frame: discard");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(world::arr8b_eq(post.hand, condition.hand), "frame: hand");
+    crate::kassert!(post.discard == condition.discard, "frame: discard");
 }
 
 #[kani::proof]
@@ -146,7 +146,7 @@ pub fn kokoro_01_mutant_500() {
     skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 0);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -154,7 +154,7 @@ pub fn kokoro_01_mutant_500() {
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
-            == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
+            == condition.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
         "mutant: card must not match +500"
     );
 }
@@ -167,7 +167,7 @@ pub fn kokoro_01_mutant_is_detected() {
     skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 0);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -175,7 +175,7 @@ pub fn kokoro_01_mutant_is_detected() {
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
-            != pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
+            != condition.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
         "mutant +500 must disagree with the card"
     );
 }
@@ -224,7 +224,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         return;
     }
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -239,11 +239,11 @@ pub fn kokoro_02_circle_pass_1500_iff() {
     );
     crate::kassert!(
         post.money[owner as usize]
-            == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount(),
+            == condition.money[owner as usize] + spec::skills_hhw::kokoro_02_amount(),
         "C-HHW-kokoro-02: money rises by exactly 1500 extra"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
 }
 
 /// No-op: passing a non-CiRCLE tile must not fire the extra.
@@ -271,7 +271,7 @@ pub fn kokoro_02_mutant_2000() {
     let owner: i32 = 0;
     skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -279,7 +279,7 @@ pub fn kokoro_02_mutant_2000() {
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
-            == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
+            == condition.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
         "mutant: card must not match +2000"
     );
 }
@@ -291,7 +291,7 @@ pub fn kokoro_02_mutant_is_detected() {
     let owner: i32 = 0;
     skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -299,7 +299,7 @@ pub fn kokoro_02_mutant_is_detected() {
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize]
-            != pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
+            != condition.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
         "mutant +2000 must disagree"
     );
 }
@@ -334,7 +334,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
     }
 
     let pre_fire = w.charge[owner as usize];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -343,8 +343,8 @@ pub fn misaki_skill_01_pass_fire_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    kani::cover!(pre_fire == 0, "pre fire 0");
-    kani::cover!(pre_fire == 1, "pre fire 1 (clamp path)");
+    kani::cover!(pre_fire == 0, "condition fire 0");
+    kani::cover!(pre_fire == 1, "condition fire 1 (clamp path)");
     crate::kassert!(
         spec::skills_hhw::misaki_skill_01_log_ok(effects, owner),
         "C-HHW-misaki-skill-01: log is GainFire(+2) (+ latch)"
@@ -354,8 +354,8 @@ pub fn misaki_skill_01_pass_fire_iff() {
         post.charge[owner as usize] == expected,
         "C-HHW-misaki-skill-01: fire rises by +2, capped at 2"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 /// No-op: a non-弦卷集团 pass does not admit the grant.
@@ -412,18 +412,18 @@ pub fn kaoru_01_pot_arm_iff() {
     // (The mark write is a separate arm; FINDINGS documents that the live
     // counter the card plants is not seen by this check.)
     let pre_fire = w.charge[owner as usize];
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
-    // `On::Action(Pass)` with `card_sdk::pre::MINE`.
+    // `On::Action(Pass)` with `card_sdk::condition::MINE`.
     invoke::unwrap_done(skill_personas::kaoru::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    kani::cover!(pre_fire == 0, "pre fire 0");
-    kani::cover!(pre_fire == 6, "pre fire 6 (cap path)");
+    kani::cover!(pre_fire == 0, "condition fire 0");
+    kani::cover!(pre_fire == 6, "condition fire 6 (cap path)");
     // Book: +1 火罐, cap 7, when no mark exists. The body's mark-existence
     // check is a residual guard; with no marks planted in the world this is
     // the pot arm.
@@ -440,8 +440,8 @@ pub fn kaoru_01_pot_arm_iff() {
         let delta = post.charge[owner as usize] - pre_fire;
         crate::kassert!(delta <= 1, "C-HHW-kaoru-01: at most +1 火罐 per step");
     }
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -488,7 +488,7 @@ pub fn band_01_declined_is_noop() {
     // (events.rs `chart_rush_world`: `answers[0]=0 → ask_yes is yes`).
     w.answers[0] = 1; // decline (no)
     let pre_amount = w.pay_amount;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -501,7 +501,7 @@ pub fn band_01_declined_is_noop() {
         "C-HHW-band-01: decline produces no effects"
     );
     crate::kassert!(post.pay_amount == pre_amount, "decline leaves the amount");
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 #[kani::proof]
@@ -519,7 +519,7 @@ pub fn band_01_accepted_doubles_iff() {
     w.symbolic_answers = false;
     w.answers[0] = 0; // accept (yes) — ask_yes: 0 = yes
     let pre_amount = w.pay_amount;
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -560,7 +560,7 @@ pub fn band_01_accepted_doubles_iff() {
         post.pay_amount == spec::skills_hhw::band_01_amount(pre_amount),
         "C-HHW-band-01: post pay_amount is double"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 #[kani::proof]

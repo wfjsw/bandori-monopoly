@@ -80,8 +80,8 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | C-SUMIMI-idolband-01 | 「未进行过赎回操作时可打出」 | PROVEN | `idolband_reset_iff` | SUCCESSFUL | gate admits iff `redeemed==0` | — |
-| C-SUMIMI-idolband-02 | 「将你的资金重设为3000」 | PROVEN | `idolband_reset_iff` | SUCCESSFUL | one GainMoney of `3000-pre` when pre&lt;3000 | — |
-| C-SUMIMI-idolband-03 | 「若你的资金为3000以上则无效果」 | PROVEN | `idolband_reset_iff` | SUCCESSFUL | money path empty when pre≥3000 | — |
+| C-SUMIMI-idolband-02 | 「将你的资金重设为3000」 | PROVEN | `idolband_reset_iff` | SUCCESSFUL | one GainMoney of `3000-condition` when condition&lt;3000 | — |
+| C-SUMIMI-idolband-03 | 「若你的资金为3000以上则无效果」 | PROVEN | `idolband_reset_iff` | SUCCESSFUL | money path empty when condition≥3000 | — |
 | C-SUMIMI-idolband-frame | only `money:P{user}` | PROVEN | `idolband_reset_iff` | SUCCESSFUL | frame asserts | — |
 | C-SUMIMI-idolband (formula) | set target 3000 | formula | `idolband_money_formula` | pending | cheap spec math | — |
 | C-SUMIMI-idolband mutant | 2999 target | companion | `idolband_mutant_is_detected` | pending | reachable disagreement | — |
@@ -140,7 +140,7 @@ matches the 规则书 text. （2） is `PaySplitMul` with `target == owner && ca
 |---|---|---|---|---|---|---|
 | C-SUMIMI-band-01 add | 「添加1个奇迹水晶」 | PROVEN | `band_01_clear_iff` (add branch) | SUCCESSFUL 371/411 s | guard is `actor == owner`; both halves live in the body (batch 4 + 6e64b58d) | — |
 | C-SUMIMI-band-01 clear | 「移除所有奇迹水晶」 | PROVEN | `band_01_clear_iff` | SUCCESSFUL | clear-all when latch clear | — |
-| C-SUMIMI-band-02 | 「每个奇迹水晶…+100」 | PROVEN* | `band_02_rent_bonus_iff` | FAILED 225 s (batch 16: subset vs pre-v74 `bend`; pure Filter already on master) | return folds to pre+c×100; no effects | re-time queued |
+| C-SUMIMI-band-02 | 「每个奇迹水晶…+100」 | PROVEN* | `band_02_rent_bonus_iff` | FAILED 225 s (batch 16: subset vs pre-v74 `bend`; pure Filter already on master) | return folds to condition+c×100; no effects | re-time queued |
 | C-SUMIMI-band-02 (formula) | bonus formula | formula | `band_02_rent_bonus_formula` | SUCCESSFUL 4.0 s | cheap spec math | — |
 | C-SUMIMI-band-02 mutant | +100 total | companion | `band_02_rent_bonus_mutant_is_detected` | FAILED 143 s (same) | reachable disagreement once subset matches | re-time queued |
 | C-SUMIMI-band-03 | 「角色卡为对应角色时才可打出」 | PARTIAL | `band_03_exclusive_gate_predicate` | pending | pure predicate; carry-two is deck composition | — |

@@ -1,12 +1,12 @@
 //! Match routines: turns, movement, landing, money, property, cards, events, scoring.
 //!
 //! The engine's generic match flow (「回合」/「移动」/「结算」/「支付」), shaped by
-//! the 规则书 and `docs/ENGINE.md`. Card/skill/group hooks (`Fx`), active events
+//! the 规则书 and `docs/ENGINE.md`. Card/skill/group hooks, active events
 //! and per-player card variables are card content and enter through
 //! [`super::rules::CardRules`]; card- or event-specific branches belong there,
 //! not here.
 
-use super::cx::{Ask, Cx, Flow, Halt};
+use super::cx::{Ask, Flow, Halt, PlayCtx};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, RollSource, Trigger, TriggerBuy, TriggerPay};
@@ -21,7 +21,7 @@ pub mod purchase;
 /// Safety cap on nested money pipelines. The rulebook (「pay时可以打出」)
 /// has no depth limit, so nested money movements past any reasonable depth
 /// should still open their counteraction windows. The real termination argument is
-/// that a hook cannot re-trigger on its own movement (`Cx::reentrant_hooks`);
+/// that a hook cannot re-trigger on its own movement (`PlayCtx::reentrant_hooks`);
 /// this is the runaway guard behind it and **traps loudly** rather than
 /// settling silently. See `docs/ENGINE.md`.
 pub(crate) const MAX_MONEY_DEPTH: u32 = 32;
@@ -66,17 +66,17 @@ pub const MAX_SETTLE_DEPTH: u32 = 64;
 /// Distinct from [`purchase::half_ceil10`] (half-rent 「向上取整10」) and from
 /// the kani `round10` twins: those take a half already taken; this one is the
 /// end-of-calc money round and is positive-only.
-fn ceil10_money(x: i32) -> i32 {
+pub(crate) fn ceil10_money(x: i32) -> i32 {
     if x <= 0 {
         return x;
     }
     ((x as i64 + 9) / 10 * 10).clamp(0, i32::MAX as i64) as i32
 }
 
-/// The `log.dice` line a move-plan roll posts ([`Cx::card_do_move_roll`]).
+/// The `log.dice` line a move-plan roll posts ([`PlayCtx::card_do_move_roll`]).
 ///
 /// The first `base`/`dice` term becomes the `count`d`sides` pair -- a flat
-/// term is a `0`-sided `count`, the same convention [`Cx::card_roll`] uses --
+/// term is a `0`-sided `count`, the same convention [`PlayCtx::card_roll`] uses --
 /// and any further terms ride `extra` (`+1d4`, `+2`). Empty tables are `0d0`,
 /// the roll of nothing. This is what keeps 松原花音's second 「移动掷骰」
 /// reading 「掷 1d20 = 5」 instead of the old hardcoded 「掷 0d0 = 5」.
@@ -112,8 +112,8 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.teleport_to != before.teleport_to && plan.teleport_to.is_some() {
         m.teleport_to = plan.teleport_to;
     }
-    if plan.resolve != before.resolve {
-        m.resolve = plan.resolve;
+    if plan.settles != before.settles {
+        m.settles = plan.settles;
     }
     if plan.base != before.base {
         m.base = plan.base.clone();
@@ -135,7 +135,7 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     }
     if plan.start != before.start && plan.start.is_some() {
         m.start = plan.start;
-        m.start_why = plan.start_why.clone();
+        m.start_reason = plan.start_reason.clone();
     }
     if plan.reverse != before.reverse {
         m.reverse = plan.reverse;
@@ -181,7 +181,7 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
 /// Why a payment is happening -- what caused the money to move. Distinct from
 /// [`PayEvent`] (what the log line is called); a rent payment logs as `rent`,
 /// a forced loss as `lose`, and so on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PayKind {
     /// 「pay」 rent on a landed deed.
     Rent,
@@ -196,7 +196,11 @@ pub enum PayKind {
     /// A card-driven `pay` / `gain` from a guest body (the old kind string
     /// `"card"`). Scaled by 「支付」 settle factors (it is *not* in the
     /// never-scale set), and never rent.
+    #[default]
     Card,
+    /// 「受到损失」 -- a raw loss off the payer (Mashiro's redirect lands here).
+    /// Logs as a loss and keeps the declared `rent` flag.
+    Loss,
 }
 
 impl PayKind {
@@ -209,6 +213,78 @@ impl PayKind {
             PayKind::Gain => "gain",
             PayKind::ForceBuy => "forcebuy",
             PayKind::Card => "card",
+            PayKind::Loss => "loss",
+        }
+    }
+
+    /// The guest wire code (the `pay_kind` pre reads it).
+    pub const fn as_i32(self) -> i32 {
+        match self {
+            PayKind::Card => 0,
+            PayKind::Rent => 1,
+            PayKind::Buy => 2,
+            PayKind::Build => 3,
+            PayKind::Loss => 4,
+            PayKind::ForceBuy => 5,
+            PayKind::Gain => 6,
+        }
+    }
+
+    /// Decode the guest wire code; an unknown code is `Card`.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => PayKind::Rent,
+            2 => PayKind::Buy,
+            3 => PayKind::Build,
+            4 => PayKind::Loss,
+            5 => PayKind::ForceBuy,
+            6 => PayKind::Gain,
+            _ => PayKind::Card,
+        }
+    }
+}
+
+/// How a payment is shaped. `Normal` is the full pipeline; `Fixed` is the
+/// immutable leg (a responder cannot touch amount, target, cancel or spare, and
+/// no factor or rounding applies); `PayeeHalf` charges the declared payee half
+/// of what the payer lost, as a fresh `Fixed` child ([`PlayCtx::money`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PayShape {
+    #[default]
+    Normal,
+    Fixed,
+    PayeeHalf,
+}
+
+impl PayShape {
+    /// Decode the guest wire code; an unknown code is `Normal`.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => PayShape::Fixed,
+            2 => PayShape::PayeeHalf,
+            _ => PayShape::Normal,
+        }
+    }
+}
+
+/// Which scope a pay factor belongs to (guest code order). `Auto` is not a
+/// wire scope: `set_pay_factor` resolves it to the innermost live scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PayFactorScope {
+    NextMove,
+    ThisMove,
+    NextSettle,
+    ThisSettle,
+}
+
+impl PayFactorScope {
+    /// Decode the guest wire code; an unknown code is `NextMove`.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => PayFactorScope::ThisMove,
+            2 => PayFactorScope::NextSettle,
+            3 => PayFactorScope::ThisSettle,
+            _ => PayFactorScope::NextMove,
         }
     }
 }
@@ -245,7 +321,7 @@ impl PayEvent {
 
 /// One money movement: print (`from = None`), delete (player -> game,
 /// `to = None`) and pay-player (both `Some`) -- whatever caused it (rent,
-/// card, skill, the start square reward, buy, build, ...). See [`Cx::money`].
+/// card, skill, the start square reward, buy, build, ...). See [`PlayCtx::money`].
 #[derive(Debug, Clone)]
 pub struct Pay {
     pub from: Option<usize>,
@@ -253,6 +329,14 @@ pub struct Pay {
     pub amount: i32,
     /// What caused this payment.
     pub kind: PayKind,
+    /// How the payment is shaped ([`PayShape`]).
+    pub shape: PayShape,
+    /// Is this payment rent? Declared, not derived: Mashiro keeps 「同等的资金」
+    /// a rent while `kind` becomes `Loss`, so the rent factor still applies.
+    pub rent: bool,
+    /// The declared payee of a [`PayShape::PayeeHalf`] leg, captured before any
+    /// response. Runtime-only (derived from the declared `to` on replay).
+    pub partner: Option<usize>,
     /// Event type; derived from `kind`/direction when `None`.
     pub typ: Option<PayEvent>,
     pub tile: Option<usize>,
@@ -280,9 +364,9 @@ pub struct Pay {
     /// → `payCombinedCancel`) on this payment's amount. `true` for every ordinary
     /// payment: a single-pair payment's command total *is* its amount. A
     /// 「[分摊]」 leg sets it `false` -- the card body has already shaped the
-    /// command total through [`Cx::pay_total`] before dividing it into shares
+    /// command total through [`PlayCtx::pay_total`] before dividing it into shares
     /// (`PIPELINE-AUDIT` Q2).
-    pub total_stage: bool,
+    pub runs_total_stage: bool,
     /// Q3 (PIPELINE-AUDIT, user ruling 2026-10-07): how many times this
     /// payment has already reversed direction. A reverse child starts at
     /// `parent + 1` and is refused past [`MAX_PAY_REVERSALS`].
@@ -305,6 +389,9 @@ impl Pay {
             to: None,
             amount,
             kind,
+            shape: PayShape::Normal,
+            rent: kind == PayKind::Rent,
+            partner: None,
             typ: None,
             tile: None,
             must: false,
@@ -313,7 +400,7 @@ impl Pay {
             source: "",
             reason: None,
             by_card: None,
-            total_stage: true,
+            runs_total_stage: true,
             reverse_depth: 0,
             milli_scale: 1000,
         }
@@ -322,11 +409,16 @@ impl Pay {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Paid {
+    /// Did the payment commit? `true` for any commit, a `money_locked` zero
+    /// included -- the receipt packs this as `SETTLED`.
     pub paid: bool,
     /// What the payer lost (0 for a print).
     pub loss: i32,
     /// What the payee gained (0 for a delete).
     pub gain: i32,
+    /// A mandatory payment the payer could not complete -- they went out
+    /// through `raise_funds` ([`super::Paid::shortfall`] on the receipt).
+    pub shortfall: bool,
 }
 
 impl Paid {
@@ -336,7 +428,7 @@ impl Paid {
     }
 }
 
-impl Cx<'_> {
+impl PlayCtx<'_> {
     // =============================================================== turn flow
 
     /// Match start without prompts (the host then runs `opening`).
@@ -596,6 +688,12 @@ impl Cx<'_> {
         // 结束时」) sees just that turn's credits. Everyone's counter starts
         // fresh with the turn.
         self.w.reset_gains();
+        // Pending pay factors are turn-scoped: a `nextMove` / `nextSettle`
+        // write lands on exactly one move / settle and the turn starts them
+        // clean. The per-seat settle counter is stamped through this turn.
+        self.w.turn.next_move_pay_factor = 1000;
+        self.w.turn.next_settle_pay_factor = 1000;
+        self.w.turn.paid_in_settle_by = vec![0; self.w.st.players.len()];
         // 「a new turn starts them all at 0」. The turn ctx is rebuilt at
         // `next_turn`, so this is already empty there; zero it again at the
         // turn-start boundary so a world carried across a card's run cannot
@@ -606,7 +704,7 @@ impl Cx<'_> {
         // another player's turn -- today they last exactly one turn.
         let round = self.w.st.round;
         self.w.turn.lingering.retain(|l| l.expires > round);
-        // `turnStartBefore` -- before any status ticks resolve, so a
+        // `turnStartBefore` -- before any status ticks settles, so a
         // counteraction sees the turn exactly as it was left last turn. Status
         // hosts (e.g. the off-board host's layer tick) run as field hooks collected
         // last inside this raise (`docs/STATUS-HOSTS.md` §4).
@@ -626,16 +724,16 @@ impl Cx<'_> {
         // the pending-layer counter. The hand-gate 2->1 fold is that host's `TurnStart`
         // hook (in `rules/status`), not an inline dance here.
         s.tick_state(Tick::TurnStart);
-        // Snapshot the turn's starting square and keyed state (`turn_snap` /
+        // Snapshot the turn's starting square and keyed state (`turn_snapshot` /
         // `turn_start_pos`): 「在场地地块开始回合时」 is about the starting
         // square, and 「回到起始地点并取消所有受到的效果」 restores from here.
         self.w.turn.turn_start_pos = self.w.st.players.iter().map(|p| p.pos).collect();
-        self.w.turn.turn_snap = self
+        self.w.turn.turn_snapshot = self
             .w
             .st
             .players
             .iter()
-            .map(|p| super::world::TurnSnap {
+            .map(|p| super::world::TurnSnapshot {
                 pos: p.pos,
                 state: p.state.iter().map(|(k, v)| (k.clone(), v.value)).collect(),
                 money: p.money,
@@ -765,7 +863,7 @@ impl Cx<'_> {
             m.player_id = i;
             m.from = at;
             m.to = at;
-            m.resolve = true;
+            m.settles = true;
             self.after_walk(&mut m)?;
         }
         self.w
@@ -790,9 +888,9 @@ impl Cx<'_> {
         // counter: it is a scheduled turn-end rule op (`On::Schedule`, whose body
         // calls `ctx::settle`) -- `docs/TILES.md`.
         self.w.next_turn_pending = true;
-        // `turnEnd` (Fx hook point) -- every placed card decays/acts here.
+        // `turnEnd` (hook point) -- every placed card decays/acts here.
         raise!(self, "turnEnd", i)?;
-        // `turnEndAfter` (Fx) -- also runs the `at_turn_end` callbacks, so a
+        // `turnEndAfter` (hook) -- also runs the `at_turn_end` callbacks, so a
         // the layer they grant survives this turn's wear-off.
         raise!(self, "turnEndAfter", i)?;
         // `endTurnAfter` -- the turn is over and the next one is queued. Raised
@@ -807,7 +905,7 @@ impl Cx<'_> {
     /// a position write with no settle. Runs through [`Self::teleport_as`] so the
     /// move tail (`moveBefore` / `moveAfter` / `moveResolved`) raises like every
     /// other movement case (B41 raises [pass],overlap at the endpoint;
-    /// `resolve = false` gates only the settle stages).
+    /// `settles = false` gates only the settle stages).
     pub fn card_teleport(&mut self, player_id: usize, tile: usize) -> Flow<()> {
         if self.move_depth > 0 {
             // Nested jump (a `passTile` / move hook calling `ctx::teleport_to`):
@@ -832,13 +930,13 @@ impl Cx<'_> {
     ///
     /// Returns `Ok(())` without moving when the turn's main move is already
     /// spent (logging 「这回合已经进行过 main move，这次移动无效」).
-    pub fn card_move(&mut self, player_id: usize, mut plan: Move) -> Flow<()> {
+    pub fn run_planned_move(&mut self, player_id: usize, mut plan: Move) -> Flow<()> {
         let i = player_id;
         let is_turn = self.w.st.turn == i as i32;
         // An event's forced side move is never the main move -- even for the
         // turn player, and even mid-landing of the main move.
-        let as_main = is_turn && !plan.forced;
-        if as_main && self.w.turn.main_moved {
+        let is_main_move = is_turn && !plan.forced;
+        if is_main_move && self.w.turn.main_moved {
             self.w.log(
                 "text",
                 i as i32,
@@ -849,10 +947,10 @@ impl Cx<'_> {
             // later move.
             self.w.turn.plan.teleport_to = None;
             self.w.turn.plan.start = None;
-            self.w.turn.plan.start_why.clear();
+            self.w.turn.plan.start_reason.clear();
             return Ok(());
         }
-        if as_main {
+        if is_main_move {
             self.w.turn.main_moved = true;
         }
         // The activation running this move drove it (see `drop_spent_plan_shape`).
@@ -863,21 +961,21 @@ impl Cx<'_> {
         if plan.roller.is_none() {
             plan.roller = Some(Seat(i as i32));
         }
-        plan.main = as_main;
+        plan.is_main_move = is_main_move;
         // Only the turn player's *main* move drives the stage machine; a card
         // moving somebody else, and an event's forced move of the turn player,
         // must not leave `step` parked in MOVE.
-        if as_main {
+        if is_main_move {
             self.w.st.step = stage::MOVE;
         }
-        // A nested card move (a hook of an outer move calling `ctx::card_move`)
+        // A nested card move (a hook of an outer move calling `ctx::run_planned_move`)
         // borrows the shared plan for its own duration and hands the outer one
         // back afterwards, so the outer walk's per-step sync keeps reading its
         // own move instead of the nested one's.
         let outer_plan = (self.move_depth > 0)
             .then(|| std::mem::replace(&mut self.w.turn.plan, Move::default()));
         self.seed_turn_plan(&plan);
-        let r = self.card_move_seeded(i, plan, as_main);
+        let r = self.card_move_seeded(i, plan, is_main_move);
         if let Some(outer) = outer_plan {
             self.w.turn.plan = outer;
             // The moved plan -- and the tail clear `card_move_seeded` made on
@@ -897,13 +995,13 @@ impl Cx<'_> {
     /// authoritative shape: `plan::set_*` writes land on it. Seed `turn.plan`
     /// from it before anything the move raises -- the settle-side readers
     /// (`scale_settle_payment`) and the walk's per-step sync
-    /// (`walk_inner_depth`) read `turn.plan`, and a stale `resolve = true`
+    /// (`walk_inner_depth`) read `turn.plan`, and a stale `settles = true`
     /// there revives settlement on a 「不触发结算」 move.
     ///
-    /// Note this carries **more** than `Cx::adopt_turn_policy`, which only
+    /// Note this carries **more** than `PlayCtx::adopt_turn_policy`, which only
     /// ferries the purchase/settle policy knobs (`pay_factor`, `rent_factor`,
     /// `can_build`, `no_buy`) across a host-routine pause; the rest of the
-    /// shape (`resolve`, `steps`, `kind`, `teleport_to`, …) is not carried and
+    /// shape (`settles`, `steps`, `kind`, `teleport_to`, …) is not carried and
     /// must be seeded here.
     pub(crate) fn seed_turn_plan(&mut self, plan: &Move) {
         // `settle_redirect` is engine-set on `card_settle_move` only; never let
@@ -913,8 +1011,8 @@ impl Cx<'_> {
         self.w.turn.plan = p;
     }
 
-    /// [`Self::card_move`] once the shared plan is seeded.
-    fn card_move_seeded(&mut self, i: usize, mut plan: Move, as_main: bool) -> Flow<()> {
+    /// [`Self::run_planned_move`] once the shared plan is seeded.
+    fn card_move_seeded(&mut self, i: usize, mut plan: Move, is_main_move: bool) -> Flow<()> {
         // `plan` was built from the ctx plan for this call. Drop what an earlier
         // move in this turn left behind (`drop_stale_plan_shape`; without it a
         // stale `steps` also skips the roll below outright) and carry the
@@ -925,18 +1023,18 @@ impl Cx<'_> {
         plan.pay_factor = self.w.turn.plan.pay_factor;
         plan.rent_factor = self.w.turn.plan.rent_factor;
         plan.reverse = self.w.turn.plan.reverse;
-        plan.resolve = self.w.turn.plan.resolve;
+        plan.settles = self.w.turn.plan.settles;
         if plan.teleport_to.is_some() {
             let to = plan.teleport_to.unwrap().0 as usize;
-            let resolve = plan.resolve;
-            let why = plan.why.clone();
-            // One-shot: see `main_move`. A `card_move` that teleported must not
+            let settles = plan.settles;
+            let reason = plan.reason.clone();
+            // One-shot: see `main_move`. A `run_planned_move` that teleported must not
             // leave the destination on the shared turn plan for a later move.
             self.w.turn.plan.teleport_to = None;
             // Carry the skill-source tag onto the shared plan so `teleport_as`
             // stamps it on the raise payload, then clear it (one-shot).
             self.w.turn.plan.by_skill = plan.by_skill;
-            self.teleport_as(i, to, resolve, why, as_main)?;
+            self.teleport_as(i, to, settles, reason, is_main_move)?;
             self.w.turn.plan.by_skill = false;
         } else {
             if plan.steps.is_none() {
@@ -948,12 +1046,12 @@ impl Cx<'_> {
                 // (same branch `main_move` takes for the turn's main move).
                 if plan.teleport_to.is_some() {
                     let to = plan.teleport_to.unwrap().0 as usize;
-                    let resolve = plan.resolve;
-                    let why = plan.why.clone();
+                    let settles = plan.settles;
+                    let reason = plan.reason.clone();
                     self.w.turn.plan.teleport_to = None;
                     self.abandon_roll(draft);
                     self.w.turn.plan.by_skill = plan.by_skill;
-                    self.teleport_as(i, to, resolve, why, as_main)?;
+                    self.teleport_as(i, to, settles, reason, is_main_move)?;
                     self.w.turn.plan.by_skill = false;
                 } else {
                     // Read, not take -- same one-shot reasoning as `main_move`.
@@ -963,7 +1061,7 @@ impl Cx<'_> {
                     // The stored count applies to the next **main** move only
                     // (`main_move` takes it too); a side / forced card walk must
                     // leave it pending.
-                    if as_main {
+                    if is_main_move {
                         if let Some(steps) = self.w.hidden[i].next_steps.take() {
                             plan.roll = steps.max(0);
                         }
@@ -973,15 +1071,15 @@ impl Cx<'_> {
                             plan.roll = plan.roll.max(mr);
                         };
                     }
-                    // A `rollAfter` / `diceRollResult` body may have cleared resolve
-                    // on the turn plan (`plan::set_resolve(false)`, e.g.
+                    // A `rollAfter` / `diceRollResult` body may have cleared settles
+                    // on the turn plan (`plan::set_settles(false)`, e.g.
                     // 不要背负期待's 「如果为0则此次移动不[结算]」). The plan is
                     // never reset between moves, so only pull the *clear*
                     // direction; `walk_inner`'s `fold_plan_delta` sees writes
                     // from `moveBefore` onward and the step loop syncs mid-walk,
                     // but a 0-step walk takes neither path.
-                    if !self.w.turn.plan.resolve {
-                        plan.resolve = false;
+                    if !self.w.turn.plan.settles {
+                        plan.settles = false;
                     }
                 }
             }
@@ -990,9 +1088,9 @@ impl Cx<'_> {
             // shape `main_move` takes). Teleport there; do not also walk.
             let after_teleport = self.take_plan_teleport();
             if let Some(to) = after_teleport {
-                let resolve = plan.resolve;
-                let why = plan.why.clone();
-                self.teleport_as(i, to, resolve, why, as_main)?;
+                let settles = plan.settles;
+                let reason = plan.reason.clone();
+                self.teleport_as(i, to, settles, reason, is_main_move)?;
             }
             if after_teleport.is_none() && !plan.cancelled && !self.out(i) {
                 self.walk(&mut plan)?;
@@ -1004,13 +1102,13 @@ impl Cx<'_> {
         self.w.turn.plan.teleport_to = None;
         self.w.turn.plan.by_skill = false;
         self.w.turn.plan.start = None;
-        self.w.turn.plan.start_why.clear();
+        self.w.turn.plan.start_reason.clear();
         self.drop_plan_fresh();
         // Record the walked length: `lastWalk` is the last **non-teleport main**
         // walk (「你最近一次非传送的主要移动」), so a forced / side card walk
         // must not overwrite it -- and it is the distance actually walked
         // (`total - remaining`), not the planned total a 「强制停下」 cut short.
-        if as_main {
+        if is_main_move {
             self.w.turn.main_steps = if plan.kind == MoveKind::Teleport {
                 0
             } else {
@@ -1018,11 +1116,11 @@ impl Cx<'_> {
             };
         }
         self.w.st.plan = plan.to_plan();
-        if as_main && plan.kind != MoveKind::Teleport {
+        if is_main_move && plan.kind != MoveKind::Teleport {
             self.w
                 .set_slot(i as i32, "lastWalk", (plan.total - plan.remaining) + 1);
         }
-        if as_main {
+        if is_main_move {
             // 「若受到abnormal move影响，此卡不生效」 (是我自己的问题 (2)):
             // the longer-lived abnormal latch is consumed by the main move it
             // would suppress -- the settle-before window above already read it.
@@ -1039,8 +1137,8 @@ impl Cx<'_> {
     ///
     /// A skill is a card rule -- it just lives on the player's field rather than
     /// in a hand -- so the card's play entry answers for it. Nothing moves: there
-    /// is no hand card to spend and no destination to resolve, unlike playing a
-    /// card. The gate is not re-checked here; `why_not_act` has already asked the
+    /// is no hand card to spend and no destination to settles, unlike playing a
+    /// card. The gate is not re-checked here; `cant_act` has already asked the
     /// rule's `cant_play` and refused the press if it named a reason, which is
     /// the same shape as every other turn action.
     pub fn use_skill(&mut self, player_id: usize, card: &str) -> Flow<()> {
@@ -1105,7 +1203,12 @@ impl Cx<'_> {
     /// Nested calls (a card settling from inside another settle) must go
     /// through the drive's `NeedHost` arm, which suspends instead of recursing;
     /// this entry is the outermost / non-drive path.
-    pub fn card_settle_at(&mut self, player_id: usize, tile: usize, main: bool) -> Flow<()> {
+    pub fn settle_tile_at(
+        &mut self,
+        player_id: usize,
+        tile: usize,
+        is_main_move: bool,
+    ) -> Flow<()> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
         }
@@ -1115,7 +1218,7 @@ impl Cx<'_> {
         // [`MAX_SETTLE_DEPTH`] nested settles.
         // Depth cap lives in `step_settle` (both this path and a work-stack
         // `SettleWork` go through it).
-        let m = self.card_settle_move(player_id, tile, main);
+        let m = self.card_settle_move(player_id, tile, is_main_move);
         let frame = crate::engine::work::SettleFrame::new(player_id, tile, m);
         // Always go through the pump: nested jobs suspend and resume on the
         // work stack (the pump catches `Halt::Suspended` and keeps going).
@@ -1131,22 +1234,22 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// The [`Move`] a `card_settle_at` threads through the settle stages:
+    /// The [`Move`] a `settle_at` threads through the settle stages:
     /// the plan's payment shaping (`pay_factor`, tags) but not its walk. A
     /// settle at an arbitrary tile is not the turn's move, and inheriting
     /// `from`/`to`/`steps` left the piece one tile past a `teleport_to` +
-    /// `card_settle_at` (游击演出 ends on chosen+1).
+    /// `settle_at` (游击演出 ends on chosen+1).
     ///
     /// Sets [`Move::settle_redirect`] so a hook on the nested settle can tell
     /// a card-initiated redirect from a real player settle. The plan is
     /// cloned, never written back: the plan's own flag remains `false` (there
     /// is no `plan::` setter for it) so a later move cannot inherit a sticky
     /// `true`.
-    pub fn card_settle_move(&self, player_id: usize, tile: usize, main: bool) -> Move {
+    pub fn card_settle_move(&self, player_id: usize, tile: usize, is_main_move: bool) -> Move {
         let mut m = self.w.turn.plan.clone();
         m.settle_redirect = true;
         m.player_id = player_id;
-        m.main = main;
+        m.is_main_move = is_main_move;
         m.kind = MoveKind::Teleport;
         m.teleport_to = Some(Tile(tile as i32));
         m.from = tile as i32;
@@ -1198,7 +1301,12 @@ impl Cx<'_> {
     /// on it).
     /// `true` when the hand-over landed (the player is in play and the tile
     /// exists). HOST-06: the guest's `ctx::raise_bought` `-> bool` is this.
-    pub fn card_raise_bought(&mut self, player_id: usize, tile: usize, by: usize) -> Flow<bool> {
+    pub fn card_raise_bought(
+        &mut self,
+        player_id: usize,
+        tile: usize,
+        by_player: usize,
+    ) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
@@ -1211,11 +1319,11 @@ impl Cx<'_> {
         }
         let mut t = Trigger::new("bought", player_id);
         t.tile = tile as i32;
-        t.by_card = Some(by as i32);
+        t.by_card = Some(by_player as i32);
         self.raise(t)?;
         let mut t = Trigger::new("buyAfter", player_id);
         t.tile = tile as i32;
-        t.by_card = Some(by as i32);
+        t.by_card = Some(by_player as i32);
         self.raise(t)?;
         Ok(true)
     }
@@ -1357,20 +1465,25 @@ impl Cx<'_> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
-        if let Some(why) = self.why_not_build_on(player_id, tile) {
-            self.w.log("text", player_id as i32, why);
+        if let Some(reason) = self.cant_build_on(player_id, tile) {
+            self.w.log("text", player_id as i32, reason);
             return Ok(false);
         }
         self.deed_build(player_id, tile)
     }
 
     /// Prompt to build on one of `tiles`, then build there.
-    /// `why` names the effect (shown on the prompt). Skips silently when nothing
+    /// `reason` names the effect (shown on the prompt). Skips silently when nothing
     /// in the list can take a house.
     /// Prompt to build on one of `tiles`, then build there.
-    /// `why` names the effect (shown on the prompt). Skips silently when nothing
+    /// `reason` names the effect (shown on the prompt). Skips silently when nothing
     /// in the list can take a house. `true` when a house was added. HOST-06.
-    pub fn card_offer_build(&mut self, player_id: usize, tiles: &[usize], why: &str) -> Flow<bool> {
+    pub fn card_offer_build(
+        &mut self,
+        player_id: usize,
+        tiles: &[usize],
+        reason: &str,
+    ) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
@@ -1378,7 +1491,7 @@ impl Cx<'_> {
             .iter()
             .copied()
             .filter(|&t| {
-                self.why_not_build_on(player_id, t).is_none()
+                self.cant_build_on(player_id, t).is_none()
                     && self.w.st.players[player_id].money >= self.build_cost(t)
             })
             .collect();
@@ -1399,7 +1512,7 @@ impl Cx<'_> {
             Msg::new("ask.build.title"),
             Msg::new("ask.build.among")
                 .player_id("who", player_id)
-                .text("why", why)
+                .text("reason", reason)
                 .i("n", options.len() as i64),
             &options,
             labels,
@@ -1419,8 +1532,8 @@ impl Cx<'_> {
         if self.out(player_id) || !self.playing() {
             return Ok(false);
         }
-        if let Some(why) = self.why_not_mortgage(player_id, tile as i32, false) {
-            self.w.log("text", player_id as i32, why);
+        if let Some(reason) = self.guard_mortgage(player_id, tile as i32, false) {
+            self.w.log("text", player_id as i32, reason);
             return Ok(false);
         }
         self.deed_mortgage(player_id, tile, 0)
@@ -1439,7 +1552,7 @@ impl Cx<'_> {
             // The move that a `plan::set_start` was written for is this turn's
             // main move; drop the one-shot start with it.
             self.w.turn.plan.start = None;
-            self.w.turn.plan.start_why.clear();
+            self.w.turn.plan.start_reason.clear();
             return Ok(());
         }
         self.w.turn.main_moved = true;
@@ -1463,7 +1576,7 @@ impl Cx<'_> {
         let mut m = self.w.turn.plan.clone();
         m.player_id = i;
         m.roller = Some(Seat(roller as i32));
-        m.main = true;
+        m.is_main_move = true;
         m.from = 0;
         m.to = 0;
         m.path.clear();
@@ -1508,21 +1621,22 @@ impl Cx<'_> {
                 // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
                 // …那格」 writes it from a `DiceRollPlan` hook.
                 let to = m.teleport_to.unwrap().0 as usize;
-                let resolve = m.resolve;
-                let why = m.why.clone();
+                let settles = m.settles;
+                let reason = m.reason.clone();
                 self.w.turn.plan.teleport_to = None;
                 // The rolled main move keeps its 「触发结算前」 window even
-                // though it is rewritten into a teleport: master raised it on
-                // every main move (`value = -1` = no face yet), and
-                // value-independent Before bodies / residual guards rely on it.
+                // though it is rewritten into a teleport: it was raised on
+                // every main move before the ladder existed (`value = -1` = no
+                // face yet), and value-independent Before bodies / residual
+                // guards rely on it.
                 let view = self.roll_move_view(draft, i);
                 self.raise_roll("diceRollBefore", draft, Some(&view), -1)?;
                 self.abandon_roll(draft);
-                // `m.main` is true here (the turn's main move); pass it so the
-                // raise payload's `move.main` discriminates. A `moveBefore`
+                // `m.is_main_move` is true here (the turn's main move); pass it so the
+                // raise payload's `move.is_main_move` discriminates. A `moveBefore`
                 // counteraction can cancel it; the followers below must not
                 // execute a move that never happened.
-                m.cancelled = !self.teleport_as(i, to, resolve, why, m.main)?;
+                m.cancelled = !self.teleport_as(i, to, settles, reason, m.is_main_move)?;
             } else {
                 // The whole cast ladder: a stored fixed face
                 // ([`super::world::TurnCtx`]'s `fixed_roll`) replaces the
@@ -1547,15 +1661,15 @@ impl Cx<'_> {
                         m.roll = m.roll.max(mr);
                     };
                 }
-                // A `rollAfter` / `diceRollResult` body may have cleared resolve on
-                // the turn plan (`plan::set_resolve(false)`, e.g. 不要背负期待's
+                // A `rollAfter` / `diceRollResult` body may have cleared settles on
+                // the turn plan (`plan::set_settles(false)`, e.g. 不要背负期待's
                 // 「如果为0则此次移动不[结算]」). Only pull the clear direction --
                 // the plan is sticky and a stale `true` must not revive a move
                 // the immobile clamp (below) is about to pin. `walk_inner`
                 // folds `moveBefore` writes and the step loop syncs mid-walk;
                 // a 0-step walk takes neither path.
-                if !self.w.turn.plan.resolve {
-                    m.resolve = false;
+                if !self.w.turn.plan.settles {
+                    m.settles = false;
                 }
                 // G-STATUS-02 (glossary 10 / items 11-13):
                 // 「main move的[move end]视为当前所在格子且不settle」. The roll
@@ -1576,7 +1690,7 @@ impl Cx<'_> {
                 if immobile {
                     m.roll = 0;
                     m.steps = Some(0);
-                    m.resolve = false;
+                    m.settles = false;
                     // 「（或无法移动的回合结束时）」: the withheld landing settle
                     // moves to the turn end unless a card says otherwise. The
                     // cast above already ran normally, and `diceRollSettled`
@@ -1594,9 +1708,9 @@ impl Cx<'_> {
                 // branch as a `rollPlan` rewrite: the plan's destination is the
                 // move and no steps are walked.
                 if let Some(to) = self.take_plan_teleport() {
-                    let resolve = m.resolve;
-                    let why = m.why.clone();
-                    m.cancelled = !self.teleport_as(i, to, resolve, why, m.main)?;
+                    let settles = m.settles;
+                    let reason = m.reason.clone();
+                    m.cancelled = !self.teleport_as(i, to, settles, reason, m.is_main_move)?;
                 } else {
                     self.walk(&mut m)?;
                 }
@@ -1608,7 +1722,7 @@ impl Cx<'_> {
             self.w.turn.plan.teleport_to = None;
             self.w.turn.plan.by_skill = false;
             self.w.turn.plan.start = None;
-            self.w.turn.plan.start_why.clear();
+            self.w.turn.plan.start_reason.clear();
             self.drop_plan_fresh();
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
@@ -1632,7 +1746,7 @@ impl Cx<'_> {
                 let mut fm = m.clone();
                 fm.player_id = fi;
                 fm.roller = Some(Seat(fi as i32));
-                fm.main = false;
+                fm.is_main_move = false;
                 fm.followers.clear();
                 fm.path.clear();
                 fm.total = 0;
@@ -1642,11 +1756,17 @@ impl Cx<'_> {
                 fm.cancelled = false;
                 fm.from = 0;
                 fm.to = 0;
+                // The replay carries the main move's `pay_factor` /
+                // `rent_factor` (「触发结算时进行的支付价格减半」 reaches the
+                // followers too). The settle reader reads the *plan*, which the
+                // main move's `move_resolved` already reset, so seed it here.
+                self.w.turn.plan.pay_factor = fm.pay_factor;
+                self.w.turn.plan.rent_factor = fm.rent_factor;
                 if fm.teleport_to.is_some() {
                     let to = fm.teleport_to.unwrap().0 as usize;
-                    let resolve = fm.resolve;
-                    let why = fm.why.clone();
-                    self.teleport(fi, to, resolve, why)?;
+                    let settles = fm.settles;
+                    let reason = fm.reason.clone();
+                    self.teleport(fi, to, settles, reason)?;
                 } else {
                     self.walk(&mut fm)?;
                 }
@@ -1688,7 +1808,7 @@ impl Cx<'_> {
             } else if extreme != Extreme::Plain {
                 // 规则书: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」
                 // -- a move roll's `NdM` is such an interval: settle every die at
-                // the armed extreme instead of casting (as `Cx::roll` does).
+                // the armed extreme instead of casting (as `PlayCtx::roll` does).
                 let face = if extreme == Extreme::Max {
                     t.dice.sides.max(1)
                 } else {
@@ -1783,10 +1903,15 @@ impl Cx<'_> {
         let steps = m.steps.unwrap_or(m.roll);
         // Snapshot the log-line fields: the loop below writes `m.total` /
         // `m.remaining` / `m.path`, so the closure must not borrow `m`.
-        let (main, roller, why, dir, resolve) =
-            (m.main, m.roller, m.why.clone(), m.dir(), m.resolve);
+        let (is_main_move, roller, reason, dir, settles) = (
+            m.is_main_move,
+            m.roller,
+            m.reason.clone(),
+            m.dir(),
+            m.settles,
+        );
         let head = move |still: bool| {
-            let base = if main {
+            let base = if is_main_move {
                 Msg::new("log.roll").opt(
                     "by",
                     (roller != Some(Seat(i as i32))).then(|| {
@@ -1801,23 +1926,29 @@ impl Cx<'_> {
                     "log.move_forward"
                 })
                 .opt(
-                    "why",
-                    why.clone().map(|w| Msg::new("log.part.why").msg("why", w)),
+                    "reason",
+                    reason
+                        .clone()
+                        .map(|w| Msg::new("log.part.reason").msg("reason", w)),
                 )
             };
             base.player_id("who", i)
                 .i("n", steps)
-                .opt("nores", (!resolve).then(|| Msg::new("log.part.no_resolve")))
+                .opt("nores", (!settles).then(|| Msg::new("log.part.no_resolve")))
                 .opt("still", still.then(|| Msg::new("log.part.no_move")))
         };
-        let kind = if m.main { "diceRollBefore" } else { "move" };
+        let kind = if m.is_main_move {
+            "diceRollBefore"
+        } else {
+            "move"
+        };
         let pos = self.w.st.players[i].pos;
         if steps <= 0 {
             let e = self.w.log(kind, i as i32, head(true));
             e.from = pos;
             e.to = pos;
-            e.dice = if m.main { steps.max(0) } else { 0 };
-            self.wait(if m.main { 1.2 } else { 0.3 });
+            e.dice = if m.is_main_move { steps.max(0) } else { 0 };
+            self.wait(if m.is_main_move { 1.2 } else { 0.3 });
             // 行动阶段 13 (`E14`) 「原地teleport/移动(移动0格)时触发overlap」: a
             // 0-step move still raises overlap at the tile it stands on.
             // TODO(规则书): `E14` names only overlap for the 0-step case; whether
@@ -1850,7 +1981,7 @@ impl Cx<'_> {
             value: 0,
             ahead: steps.max(0) + m.extra_steps.max(0),
             pending_first: true,
-            main: m.main,
+            is_main_move: m.is_main_move,
             roll: m.roll,
             head: head(false),
         });
@@ -1900,7 +2031,7 @@ impl Cx<'_> {
                 // back to `from`. Other mid-walk events use the lazy flush.
                 self.w.flush_walk();
             }
-            // `passTile` (Fx) -- the player has stepped onto this tile. A hook
+            // `passTile` (hook) -- the player has stepped onto this tile. A hook
             // that logs here flushes the segment covering steps up to `next`.
             raise!(self, "passTile", i, @m m, tile = next)?;
             if self.out(i) || !self.playing() {
@@ -1910,7 +2041,7 @@ impl Cx<'_> {
             // A pass-reward (if any) is the tile rule's Pass entry on the
             // `passTile` hook above. The engine keeps no built-in fallback.
             // `pass` -- every traversed tile, like `passBefore` / `passTile`
-            // (glossary 「[pass]」). `passTile` is the Fx hook kind for the same
+            // (glossary 「[pass]」). `passTile` is the hook kind for the same
             // walk; a card uses one or the other, never both.
             raise!(self, "pass", i, @m m, tile = next)?;
             if self.out(i) || !self.playing() {
@@ -1925,8 +2056,8 @@ impl Cx<'_> {
             if self.w.turn.plan.stop_at.is_some() {
                 m.stop_at = self.w.turn.plan.stop_at;
             }
-            if self.w.turn.plan.resolve != m.resolve {
-                m.resolve = self.w.turn.plan.resolve;
+            if self.w.turn.plan.settles != m.settles {
+                m.settles = self.w.turn.plan.settles;
             }
             if m.stop_at == Some(Tile(next)) {
                 m.stopped = true;
@@ -1967,10 +2098,10 @@ impl Cx<'_> {
         &mut self,
         i: usize,
         to: usize,
-        resolve: bool,
-        why: Option<Msg>,
+        settles: bool,
+        reason: Option<Msg>,
     ) -> Flow<bool> {
-        self.teleport_as(i, to, resolve, why, false)
+        self.teleport_as(i, to, settles, reason, false)
     }
 
     /// [`Self::teleport`] with the move's `main` flag named (「视为当回合的主要
@@ -1980,12 +2111,12 @@ impl Cx<'_> {
         &mut self,
         i: usize,
         to: usize,
-        resolve: bool,
-        why: Option<Msg>,
-        main: bool,
+        settles: bool,
+        reason: Option<Msg>,
+        is_main_move: bool,
     ) -> Flow<bool> {
         self.move_depth += 1;
-        let r = self.teleport_as_depth(i, to, resolve, why, main);
+        let r = self.teleport_as_depth(i, to, settles, reason, is_main_move);
         self.move_depth -= 1;
         r
     }
@@ -1996,8 +2127,8 @@ impl Cx<'_> {
     /// plan alike, and is consumed here so it cannot leak into the next move.
     fn take_resolve_override(&mut self, i: usize, m: &mut Move) {
         match self.w.st.players[i].state_get("resolveOverride") {
-            1 => m.resolve = true,
-            2 => m.resolve = false,
+            1 => m.settles = true,
+            2 => m.settles = false,
             _ => return,
         }
         self.w.st.players[i].state_set("resolveOverride", 0);
@@ -2059,7 +2190,7 @@ impl Cx<'_> {
     ///   goes out as that many steps and the walk takes them);
     /// * `pay_factor` / `rent_factor` -- a 「此次支付」 scaler keeps scaling a
     ///   later, unrelated payment;
-    /// * `reverse` / `resolve` -- the next walk goes the wrong way, or
+    /// * `reverse` / `settles` -- the next walk goes the wrong way, or
     ///   settles nothing because a 「不[结算]」 move said so.
     ///
     /// A write meant for the current move (a Play body shaping the main move)
@@ -2067,6 +2198,12 @@ impl Cx<'_> {
     /// move land on the running `Move`; [`Self::drop_plan_fresh`] clears the
     /// marks at the move's tail so they cannot leak either.
     fn drop_stale_plan_shape(&mut self) {
+        // A `nextMove` factor is for exactly this move: fold it in and start
+        // the slot clean for the following one.
+        let next = std::mem::take(&mut self.w.turn.next_move_pay_factor);
+        self.w.turn.next_move_pay_factor = 1000;
+        // A move is starting: `thisMove` writes bind to it.
+        self.w.turn.move_open = true;
         let p = &mut self.w.turn.plan;
         if !p.steps_fresh {
             p.steps = None;
@@ -2078,11 +2215,13 @@ impl Cx<'_> {
             p.pay_factor = 1.0;
             p.rent_factor = 1.0;
         }
+        // The `nextMove` fold composes on top of whatever the plan carries.
+        p.pay_factor *= f64::from(next) / 1000.0;
         if !p.reverse_fresh {
             p.reverse = false;
         }
         if !p.resolve_fresh {
-            p.resolve = true;
+            p.settles = true;
         }
         p.steps_fresh = false;
         p.stop_at_fresh = false;
@@ -2106,7 +2245,7 @@ impl Cx<'_> {
 
     /// An **activation** body (a hand Play, an event, a skill press) that
     /// drove a move is spent when it ends: the `plan::set_steps` /
-    /// `set_stop_at` / `set_reverse` / `set_resolve` / `set_pay_factor` writes
+    /// `set_stop_at` / `set_reverse` / `set_settles` / `set_pay_factor` writes
     /// it made were for that walk. The body's replay re-applies them *after*
     /// the last move, so they sit on the plan as if they were meant for
     /// whatever comes next: the turn player's main move then takes the event's
@@ -2130,7 +2269,7 @@ impl Cx<'_> {
         p.steps = None;
         p.stop_at = None;
         p.reverse = false;
-        p.resolve = true;
+        p.settles = true;
         p.pay_factor = 1.0;
         p.rent_factor = 1.0;
         p.steps_fresh = false;
@@ -2153,17 +2292,17 @@ impl Cx<'_> {
         &mut self,
         i: usize,
         to: usize,
-        resolve: bool,
-        why: Option<Msg>,
-        main: bool,
+        settles: bool,
+        reason: Option<Msg>,
+        is_main_move: bool,
     ) -> Flow<bool> {
         if to >= self.data.tiles.len() || self.out(i) {
             return Ok(false);
         }
         let from = self.w.st.players[i].pos;
         let mut m = Move::new(i);
-        m.main = main;
-        m.resolve = resolve;
+        m.is_main_move = is_main_move;
+        m.settles = settles;
         m.kind = MoveKind::Teleport;
         m.teleport_to = Some(Tile(to as i32));
         m.from = from;
@@ -2192,13 +2331,16 @@ impl Cx<'_> {
         if to >= self.data.tiles.len() {
             return Ok(false);
         }
-        let resolve = m.resolve;
+        let settles = m.settles;
         self.w.st.players[i].pos = to as i32;
         let text = Msg::new("log.teleport")
             .player_id("who", i)
             .tile("to", to)
-            .opt("why", why.map(|w| Msg::new("log.part.why").msg("why", w)))
-            .opt("nores", (!resolve).then(|| Msg::new("log.part.no_resolve")));
+            .opt(
+                "reason",
+                reason.map(|w| Msg::new("log.part.reason").msg("reason", w)),
+            )
+            .opt("nores", (!settles).then(|| Msg::new("log.part.no_resolve")));
         let e = self.w.log("teleport", i as i32, text);
         e.from = from;
         e.to = to as i32;
@@ -2208,7 +2350,7 @@ impl Cx<'_> {
         // endpoint in that order. 其他规则注意事项 1.2 then removes only the
         // settle -- so a 「不[触发结算]」 teleport still raises `passTile`
         // ([pass]) and `passPlayer` (overlap) at its destination, never mid-route
-        // squares. The old "a teleport with resolve clear resolves nothing"
+        // squares. The old "a teleport with settles clear resolves nothing"
         // reading over-read 「是否settle」.
         raise!(self, "passTile", i, @m m, tile = to as i32)?;
         if self.out(i) || !self.playing() {
@@ -2216,13 +2358,13 @@ impl Cx<'_> {
         }
         // 规则书: 「强制停下并触发结算」 -- a `passTile` counteraction (live前的
         // 准备) may arm the settle this teleport skipped. The walk syncs that
-        // plan write at each step; the teleport's `resolve` capture is from
+        // plan write at each step; the teleport's `settles` capture is from
         // before the window, so re-read it here.
-        if self.w.turn.plan.resolve != m.resolve {
-            m.resolve = self.w.turn.plan.resolve;
+        if self.w.turn.plan.settles != m.settles {
+            m.settles = self.w.turn.plan.settles;
         }
         self.take_resolve_override(i, &mut m);
-        let resolve = m.resolve;
+        let settles = m.settles;
         self.overlap_at(&mut m, to)?;
         if self.out(i) || !self.playing() {
             return Ok(true);
@@ -2239,7 +2381,7 @@ impl Cx<'_> {
         }
         // The settle stages (14–15) run only when the move settles (其他规则
         // 注意事项 1.2: 「是否settle」 gates only the settle).
-        if resolve {
+        if settles {
             self.after_walk(&mut m)?;
         }
         // `Teleported` after the settlement (or at once when the move
@@ -2295,6 +2437,7 @@ impl Cx<'_> {
     fn move_after(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         if self.out(i) || !self.playing() {
+            self.w.turn.move_open = false;
             return Ok(());
         }
         m.to = self.w.st.players[i].pos as i32;
@@ -2309,9 +2452,14 @@ impl Cx<'_> {
     fn move_resolved(&mut self, m: &Move) -> Flow<()> {
         let i = m.player_id;
         if self.out(i) || !self.playing() {
+            self.w.turn.move_open = false;
             return Ok(());
         }
         raise!(self, "moveResolved", i, @m m, tile = self.w.st.players[i].pos)?;
+        // A `thisMove` factor dies with its move (the settle above already saw
+        // it); a later landing pays full again.
+        self.w.turn.plan.pay_factor = 1.0;
+        self.w.turn.move_open = false;
         Ok(())
     }
 
@@ -2321,7 +2469,7 @@ impl Cx<'_> {
     /// tail and skips only this.
     fn after_walk(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
-        if self.out(i) || !self.playing() || !m.resolve {
+        if self.out(i) || !self.playing() || !m.settles {
             return Ok(());
         }
         // Q7 (`SETTLE-STAGES.md` §7, user ruling 2026-10-07): a relocation
@@ -2400,7 +2548,7 @@ impl Cx<'_> {
     ///
     /// Order is the old synchronous nest: the nested settle (and the drive
     /// that asked for it) finish before this settle's next stage, exactly
-    /// where `card_settle_at` returned to the hook body.
+    /// where `settle_at` returned to the hook body.
     pub fn step_settle(&mut self, frame: &mut crate::engine::work::SettleFrame) -> Flow<()> {
         use crate::engine::work::ContinueSettleWork;
         // Rulebook runaway guard (not stack safety): two cards can settle each
@@ -2416,21 +2564,45 @@ impl Cx<'_> {
             );
             return Ok(());
         }
-        // 「结算中」 for the payments the settle carries (RAS:游击演出's
-        // 「本回合的[结算]…」). A suspended settle keeps its count: the parked
-        // frame resumes here and decrements on its way out.
-        self.settle_open += 1;
+        // One entry per frame, pushed on its **first** step only: a parked
+        // frame keeps `stack_idx`, so a resume never pushes again. The
+        // `nextSettle` factor is consumed here (and reset), so it lands on
+        // exactly this settle.
+        if frame.stack_idx == usize::MAX {
+            let f = std::mem::take(&mut self.w.turn.next_settle_pay_factor) as f64 / 1000.0;
+            self.w.turn.next_settle_pay_factor = 1000;
+            let base = self.w.turn.settle_pay_factor;
+            self.settle_stack.push(super::cx::SettleEntry {
+                player: frame.player,
+                tile: frame.at,
+                base,
+                outcome: super::cx::SettleOutcome::Settled,
+            });
+            frame.stack_idx = self.settle_stack.len() - 1;
+            // The guest factor API reads the product and the innermost base
+            // off the world (`settle_pay_factor` already includes every outer
+            // settle; the new one composes on top of it).
+            self.w.turn.settle_open = self.settle_stack.len() as u32;
+            self.w.turn.settle_base = base;
+            self.w.turn.settle_pay_factor = base * f;
+        }
         let r = self.step_settle_run(frame);
         let suspended = r.as_ref().err().map(|e| e.is_suspended()).unwrap_or(false);
         if suspended {
             // Stage not advanced: the re-entered raise adopts
             // `counteract_resume`. Park this settle to resume after the
-            // nested work.
+            // nested work (its stack entry stays).
             self.insert_work(crate::engine::work::ContinueSettleWork {
                 frame: frame.clone(),
             });
         } else {
-            self.settle_open = self.settle_open.saturating_sub(1);
+            // Completions nest LIFO, so the finished entry is the top: its
+            // `base` is the product of every outer settle, which restores.
+            let finished = self.settle_stack[frame.stack_idx];
+            self.settle_stack.truncate(frame.stack_idx);
+            self.w.turn.settle_open = self.settle_stack.len() as u32;
+            self.w.turn.settle_pay_factor = finished.base;
+            self.w.turn.settle_base = self.settle_stack.last().map_or(1.0, |s| s.base);
         }
         r
     }
@@ -2447,8 +2619,21 @@ impl Cx<'_> {
                     let owner = frame.owner;
                     let (i, at) = (frame.player, frame.at);
                     let m = frame.m.clone();
-                    let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
+                    let t = raise!(
+                        self,
+                        "settle",
+                        i,
+                        @m m,
+                        tile = at as i32,
+                        target = owner,
+                        settle_tile = at as i32
+                    )?;
                     if self.out(i) || t.is_cancelled() {
+                        self.settle_stack[frame.stack_idx].outcome = if self.out(i) {
+                            super::cx::SettleOutcome::PayerOut
+                        } else {
+                            super::cx::SettleOutcome::Cancelled
+                        };
                         frame.stage = SettleStage::RaiseTileResolved;
                     } else {
                         frame.stage = SettleStage::RaiseSettleBody;
@@ -2463,8 +2648,18 @@ impl Cx<'_> {
                     let owner = frame.owner;
                     let (i, at) = (frame.player, frame.at);
                     let m = frame.m.clone();
-                    let si = raise!(self, "settleBody", i, @m m, tile = at as i32, target = owner)?;
+                    let si = raise!(
+                        self,
+                        "settleBody",
+                        i,
+                        @m m,
+                        tile = at as i32,
+                        target = owner,
+                        settle_tile = at as i32
+                    )?;
                     if si.is_cancelled() {
+                        self.settle_stack[frame.stack_idx].outcome =
+                            super::cx::SettleOutcome::Cancelled;
                         frame.stage = SettleStage::RaiseSettleAfter;
                     } else {
                         frame.stage = SettleStage::SettleTile;
@@ -2473,18 +2668,31 @@ impl Cx<'_> {
                 }
                 SettleStage::SettleTile => {
                     let rules = self.rules;
-                    rules.settle_tile(self, frame.player, frame.at, frame.m.main)?;
+                    rules.settle_tile(self, frame.player, frame.at, frame.m.is_main_move)?;
                     frame.stage = SettleStage::RaiseSettleAfter;
                     true
                 }
                 SettleStage::RaiseSettleAfter => {
                     if self.out(frame.player) || !self.playing() {
+                        self.settle_stack[frame.stack_idx].outcome = if self.out(frame.player) {
+                            super::cx::SettleOutcome::PayerOut
+                        } else {
+                            super::cx::SettleOutcome::Aborted
+                        };
                         frame.stage = SettleStage::RaiseTileResolved;
                     } else {
                         let owner = frame.owner;
                         let (i, at) = (frame.player, frame.at);
                         let m = frame.m.clone();
-                        raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
+                        raise!(
+                            self,
+                            "settleAfter",
+                            i,
+                            @m m,
+                            tile = at as i32,
+                            target = owner,
+                            settle_tile = at as i32
+                        )?;
                         frame.stage = SettleStage::RaiseTileResolved;
                     }
                     true
@@ -2493,7 +2701,19 @@ impl Cx<'_> {
                     let owner = frame.owner;
                     let (i, at) = (frame.player, frame.at);
                     let m = frame.m.clone();
-                    raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
+                    // The terminal raise: the settle played out unless an
+                    // earlier terminal branch already recorded otherwise.
+                    let outcome = self.settle_stack[frame.stack_idx].outcome;
+                    raise!(
+                        self,
+                        "tileResolved",
+                        i,
+                        @m m,
+                        tile = at as i32,
+                        target = owner,
+                        settle_tile = at as i32,
+                        outcome = Some(outcome)
+                    )?;
                     frame.stage = SettleStage::Done;
                     false
                 }
@@ -2549,23 +2769,23 @@ impl Cx<'_> {
     }
 
     /// Resolve the tile a player stopped on.
-    pub fn land(&mut self, i: usize, main: bool) -> Flow<()> {
+    pub fn land(&mut self, i: usize, is_main_move: bool) -> Flow<()> {
         let at = self.w.st.players[i].pos as usize;
-        self.land_at_built_in(i, at, main)
+        self.land_at_built_in(i, at, is_main_move)
     }
 
     /// The landing gates and bookkeeping both settle bodies share: nothing
     /// settles for an off-board / out player or off the board, and a main landing
     /// records where the player stopped (the end-step buy/build gates ask).
     /// Returns false when the settle does not run at all.
-    pub fn prep_land(&mut self, i: usize, at: usize, main: bool) -> bool {
+    pub fn prep_land(&mut self, i: usize, at: usize, is_main_move: bool) -> bool {
         if at >= self.data.tiles.len()
             || !self.w.gate_open(self.rules, super::Gate::OnBoard, i)
             || self.out(i)
         {
             return false;
         }
-        if main {
+        if is_main_move {
             self.w.st.landed = at as i32;
         }
         true
@@ -2577,8 +2797,8 @@ impl Cx<'_> {
     /// to when the ruleset has no rule instance for the tile (`StubRules`, or
     /// a kind not yet migrated -- `docs/TILES.md`). Also the whole of `land`
     /// for a card that resolves a tile directly.
-    pub fn land_at_built_in(&mut self, i: usize, at: usize, main: bool) -> Flow<()> {
-        if !self.prep_land(i, at, main) {
+    pub fn land_at_built_in(&mut self, i: usize, at: usize, is_main_move: bool) -> Flow<()> {
+        if !self.prep_land(i, at, is_main_move) {
             return Ok(());
         }
         let tile = self.tile(at);
@@ -2682,6 +2902,17 @@ impl Cx<'_> {
         Ok(if paid.paid { paid.loss } else { 0 })
     }
 
+    /// The figure `card_charge_rent(payer, tile)` would charge as a **fresh**
+    /// hypothetical charge: the quote of the tile's rent scaled by the tile's
+    /// own factors and the standing plan / settle factors. The in-flight
+    /// payment's own rent factor and `milli_scale` are not in it, so a
+    /// half-charge on top of a rent is not scaled twice. `-1` = no rent charge
+    /// (unowned, own tile, mortgaged, or a zero table). Rolls a fresh d20 for a
+    /// dice-rent tile and therefore advances the RNG.
+    pub fn rent_quote(&mut self, payer: usize, t: usize) -> i32 {
+        self.w.rent_quote(self.data, payer, t)
+    }
+
     /// The `ctx::offer_force_buy` primitive: 「可选择pay…两倍…强行购买」.
     pub fn card_offer_force_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         self.offer_force_buy(i, t)
@@ -2706,39 +2937,7 @@ impl Cx<'_> {
     /// the table number at the counted house count ([`World::rent_houses`]) or
     /// the dice-rent roll (`unit × 1d20`).
     fn rent_figure(&mut self, owner: usize, t: usize) -> (i32, Option<Msg>) {
-        let tile = self.tile(t);
-        // The tile prop marks dice rent; the unit comes from the live
-        // `rentUnitMult` rule param (a card's +N lands there).
-        if self
-            .w
-            .tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT)
-            > 0
-        {
-            let dice_mult = self.w.rent_unit_mult();
-            let d = self.w.rng.d(20);
-            let kind = tile.kind.as_str().to_string();
-            let unit = purchase::dice_rent_unit(self.data, &self.w, owner, &kind, dice_mult);
-            let n = purchase::count_owned_kind(self.data, &self.w, owner, &kind).max(1);
-            (
-                unit * d,
-                Some(
-                    Msg::new("log.part.rent_dice")
-                        .i("n", n)
-                        .i("mult", dice_mult)
-                        .i("d", d),
-                ),
-            )
-        } else {
-            // The counted house count ([`super::world::World::rent_houses`]):
-            // a 「房屋数视为…」 override rides here, and real `st.houses` is
-            // untouched.
-            let h = self.w.rent_houses(t as i32);
-            let rent = purchase::table_rent(self.data, &self.w, t);
-            (
-                rent,
-                (h > 0).then(|| Msg::new("log.part.rent_houses").i("h", h)),
-            )
-        }
+        self.w.rent_figure(self.data, owner, t)
     }
 
     fn pay_rent(&mut self, i: usize, t: usize, half: bool) -> Flow<()> {
@@ -2842,6 +3041,10 @@ impl Cx<'_> {
             f *= self.w.turn.plan.rent_factor;
         }
         f *= self.w.turn.plan.pay_factor;
+        // Every open settle's factor, already multiplied into the world
+        // product by the push (`thisSettle` writes compose there too; the
+        // plan half is 1.0 outside a move because the move tail clears it).
+        f *= self.w.turn.settle_pay_factor;
         // The caller's formula scale (1000 = ×1.0; 0 = free; negative clamps
         // to 0). Always multiplied -- it is a milli-unit figure, not a
         // 「0 means unset」 prop.
@@ -2931,7 +3134,7 @@ impl Cx<'_> {
             // Direct transfer: 「此次购买的价格不受任何资金变动效果影响，收款方
             // 无论处于何种状态都可正常收款」. The pay pipeline does not see it.
             self.w.st.players[i].money -= price;
-            self.w.st.players[owner].money += price;
+            self.w.credit(owner as i32, price);
             // The deal: `BuyAssign` rewrites owner / houses / mortgage before
             // the one ownership write (`docs/PURCHASE.md`). The rulebook default
             // is 「获得的地契仍为抵押状态」; TODO(规则书): `FORCE_STAYS_MORTGAGED`
@@ -3041,7 +3244,7 @@ impl Cx<'_> {
     /// the ONE offer site for a normal build (规则书 「玩家拥有的[可购买格子]的
     /// [结算]是：…可选择[消耗]…进行升级建造」).
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
-        if self.why_not_build_on(i, t).is_some()
+        if self.cant_build_on(i, t).is_some()
             || self.w.purchase_funds(self.data, i, Some(t)) < self.build_cost(t)
         {
             let note = self.w.st.mortgaged[t].then(|| Msg::new("log.part.mortgaged"));
@@ -3070,7 +3273,7 @@ impl Cx<'_> {
         )
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
-        if self.ask(ask)?.of(i) == 0 && self.why_not_build_on(i, t).is_none() {
+        if self.ask(ask)?.of(i) == 0 && self.cant_build_on(i, t).is_none() {
             self.deed_build(i, t)?;
         }
         Ok(())
@@ -3164,9 +3367,9 @@ impl Cx<'_> {
 
     /// The rule lives on [`super::ops`] so a card asking
     /// "where may I build?" gets the same answer the build step does.
-    pub(crate) fn why_not_build_on(&self, i: usize, t: usize) -> Option<Msg> {
+    pub(crate) fn cant_build_on(&self, i: usize, t: usize) -> Option<Msg> {
         self.w
-            .why_not_build_on(self.data, i as i32, t as i32)
+            .cant_build_on(self.data, i as i32, t as i32)
             // The payer's gate (the pay-gate layers 「无法收付款」) -- `can_pay` also
             // refuses an out seat.
             .or_else(|| (!self.can_pay(i)).then(|| Msg::new("err.cannot_spend")))
@@ -3298,7 +3501,7 @@ impl Cx<'_> {
         let e = self.w.log("buy", i as i32, text);
         e.value = 0;
         e.to = t as i32;
-        // `bought` (Fx) -- the owner is set.
+        // `bought` (hook) -- the owner is set.
         raise!(self, "bought", i, tile = t as i32)?;
         // `buyAfter` -- the deed has changed hands.
         raise!(self, "buyAfter", i, tile = t as i32)?;
@@ -3333,7 +3536,7 @@ impl Cx<'_> {
         }
         if cost < 0 {
             let refund = -cost;
-            self.w.st.players[i].money += refund;
+            self.w.credit(i as i32, refund);
             cost = 0;
         }
         if self.w.turn.build_discount_layers > 0 {
@@ -3363,7 +3566,7 @@ impl Cx<'_> {
         let full = self.tile(t).rent.len().saturating_sub(1) as i32;
         if self.w.st.owners[t] != i as i32 || self.w.st.houses[t] >= full {
             if cost > 0 && !self.out(i) {
-                self.w.st.players[i].money += cost;
+                self.w.credit(i as i32, cost);
                 let key = if self.w.st.owners[t] != i as i32 {
                     "log.build_refund_not_owned"
                 } else {
@@ -3396,7 +3599,7 @@ impl Cx<'_> {
         // guest's `add_house` logs at its own commit (`wasm_rules.rs`
         // `house_log`). The engine's build writes `houses[t]` directly and used
         // to raise nothing here, so a real 盖房 never offered the skill.
-        // Raised before `buildAfter` (the Fx point before the action hook,
+        // Raised before `buildAfter` (the hook point before the action hook,
         // matching `buy()`'s `bought` → `buyAfter`).
         raise!(self, "houseAdded", i, tile = t as i32, value = h)?;
         // `buildAfter` -- only after the house actually commits (not on the
@@ -3406,7 +3609,7 @@ impl Cx<'_> {
     }
 
     /// Why this deed cannot be mortgaged, or `None` when it can.
-    pub fn why_not_mortgage(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
+    pub fn guard_mortgage(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
         let st = &self.w.st;
         if !self.playing() {
             return Some(Msg::new("err.not_playing"));
@@ -3442,7 +3645,7 @@ impl Cx<'_> {
     }
 
     /// Why this deed cannot be redeemed, or `None` when it can.
-    pub fn why_not_redeem(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
+    pub fn guard_redeem(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
         let st = &self.w.st;
         if !self.playing() {
             return Some(Msg::new("err.not_playing"));
@@ -3471,9 +3674,9 @@ impl Cx<'_> {
 
     /// Mortgage a deed and credit its value to the owner.
     /// Mechanism only -- the tile rule's `On::Mortgage` body owns eligibility
-    /// and the amount (`ctx::apply_mortgage`). Raises the mortgage hooks so
+    /// and the amount (`ctx::commit_mortgage`). Raises the mortgage hooks so
     /// 「当你抵押…时」 listeners (and their counteractions) still fire.
-    pub fn apply_mortgage(&mut self, i: usize, t: usize, amount: i32) -> Flow<i32> {
+    pub fn commit_mortgage(&mut self, i: usize, t: usize, amount: i32) -> Flow<i32> {
         if t >= self.w.st.mortgaged.len() || self.w.st.mortgaged[t] {
             return Ok(0);
         }
@@ -3492,14 +3695,24 @@ impl Cx<'_> {
     }
 
     /// Lift a mortgage and charge `amount` directly. Mechanism only.
-    pub fn apply_redeem(&mut self, i: usize, t: usize, amount: i32) -> i32 {
+    ///
+    /// The `spendBefore` window runs first, at the full cost, before the
+    /// direct debit: a responder may reduce (or zero) it, and a cancel leaves
+    /// the figure alone. It never moves money itself.
+    pub fn commit_redeem(
+        &mut self,
+        i: usize,
+        t: usize,
+        amount: i32,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
         if t >= self.w.st.mortgaged.len() || !self.w.st.mortgaged[t] {
-            return 0;
+            return Ok(0);
         }
         if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
-            return 0;
+            return Ok(0);
         }
-        let cost = amount.max(0);
+        let cost = self.spend_before(i, t as i32, amount, by_card)?;
         self.w.st.mortgaged[t] = false;
         self.w.st.players[i].money -= cost;
         // 「本回合进行过赎回操作」 -- same record, same timing.
@@ -3515,23 +3728,26 @@ impl Cx<'_> {
         let e = self.w.log("redeem", i as i32, text);
         e.value = cost;
         e.to = t as i32;
-        cost
+        Ok(cost)
     }
 
     /// Mortgage a deed and credit `v` to the owner (raw mechanism).
-    fn do_mortgage(&mut self, i: usize, t: usize, v: i32, why: Option<Msg>) {
+    fn do_mortgage(&mut self, i: usize, t: usize, v: i32, reason: Option<Msg>) {
         // 「本回合进行过抵押操作」 -- a record the card gates ask about. Timed to
         // the turn end so it does not leak.
         let s = &mut self.w.st.players[i];
         s.state_set(key::MORTGAGED, 1);
         s.state_set_expires(key::MORTGAGED, Some(Tick::TurnEnd));
         self.w.st.mortgaged[t] = true;
-        self.w.st.players[i].money += v;
+        self.w.credit(i as i32, v);
         let text = Msg::new("log.mortgage")
             .player_id("who", i)
             .tile("tile", t)
             .n("n", v)
-            .opt("why", why.map(|w| Msg::new("log.part.why").msg("why", w)));
+            .opt(
+                "reason",
+                reason.map(|w| Msg::new("log.part.reason").msg("reason", w)),
+            );
         let e = self.w.log("mortgage", i as i32, text);
         e.value = v;
         e.to = t as i32;
@@ -3570,7 +3786,7 @@ impl Cx<'_> {
 
     /// Mortgage one of the player's deeds.
     /// `true` when the deed actually went onto mortgage (HOST-06).
-    pub fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<bool> {
+    pub fn mortgage(&mut self, i: usize, t: usize, reason: Option<Msg>) -> Flow<bool> {
         // `mortgageBefore` -- runs before any guard, so it is a real pre-hook
         // (a counteraction can block the mortgage). The post half below only runs
         // when the mortgage actually applied.
@@ -3580,17 +3796,43 @@ impl Cx<'_> {
         }
         if self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
             let v = self.mortgage_value(t);
-            self.do_mortgage(i, t, v, why);
+            self.do_mortgage(i, t, v, reason);
             raise!(self, "mortgage", i, tile = t as i32)?;
             return Ok(true);
         }
         Ok(false)
     }
 
-    /// Pay the redeem cost and lift the mortgage.
-    pub fn redeem(&mut self, i: usize, t: usize) {
+    /// The `spendBefore` window of a raw spend (redeem, auction, `lose_raw`).
+    ///
+    /// Opens as a counteraction link *and* a hook dispatch (`SpendBefore` has
+    /// a `ChainKind`, like the `*Before` pay stages): a hand card answers with
+    /// `On::Counteract`, a placed card hooks it as an action. Responders see
+    /// the **full cost** and reduce it with `trigger::set_pay_amount`; a cancel
+    /// is not a failure and leaves the figure as it is. Never moves money.
+    pub fn spend_before(
+        &mut self,
+        i: usize,
+        tile: i32,
+        value: i32,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
+        let t = raise!(
+            self,
+            "spendBefore",
+            i,
+            tile = tile,
+            value = value.max(0),
+            by_card = by_card
+        )?;
+        Ok(t.value.max(0))
+    }
+
+    /// Pay the redeem cost and lift the mortgage. `true` when the deed was
+    /// lifted.
+    pub fn redeem(&mut self, i: usize, t: usize) -> Flow<bool> {
         let cost = self.redeem_cost(t);
-        self.apply_redeem(i, t, cost);
+        Ok(self.commit_redeem(i, t, cost, None)? > 0)
     }
 
     // =============================================================== money
@@ -3605,9 +3847,28 @@ impl Cx<'_> {
     /// `paid` -- and runs before/after money events on every entry.
     ///
     /// Re-entrancy is bounded: a hook cannot re-trigger on its own money
-    /// movement (`Cx::reentrant_hooks`), and [`MAX_MONEY_DEPTH`] is a safety
+    /// movement (`PlayCtx::reentrant_hooks`), and [`MAX_MONEY_DEPTH`] is a safety
     /// cap that traps loudly. The rulebook has no depth limit, so nested money
     /// opens its counteraction windows at every depth.
+    /// Fold a pay window's payload writes into the in-flight payment: `kind`
+    /// from `set_pay_kind`, `shape` from `set_pay_shape`, with the rent flag
+    /// they carry. Last writer wins (the trigger payload holds the pending
+    /// write; a hostfn enforces shape only before the first split leg).
+    fn fold_pay_trigger(p: &mut Pay, t: &Trigger) {
+        let Some(tp) = t.pay else {
+            return;
+        };
+        p.kind = tp.kind;
+        p.rent = tp.is_rent;
+        p.shape = tp.shape;
+    }
+
+    fn fold_pay_payload(p: &mut Pay, t: &Trigger, rent: &mut bool, fixed: &mut bool) {
+        Self::fold_pay_trigger(p, t);
+        *rent = p.rent;
+        *fixed = p.shape == PayShape::Fixed;
+    }
+
     pub fn money(&mut self, p: Pay) -> Flow<Paid> {
         let depth = self.money_depth;
         self.money_depth = depth + 1;
@@ -3619,6 +3880,7 @@ impl Cx<'_> {
     /// [`Self::money`] with the depth already bracketed. `depth` is how many
     /// money pipelines are already open around this one (0 = top-level).
     fn money_inner(&mut self, p: Pay, depth: u32) -> Flow<Paid> {
+        let mut p = p;
         if depth >= MAX_MONEY_DEPTH {
             // Safety cap hit -- the real termination argument (a hook cannot
             // re-trigger on its own movement) should make this unreachable.
@@ -3690,9 +3952,20 @@ impl Cx<'_> {
         // of them may rewrite the amount (`set_pay_amount`).
         let payer = p.from.map_or(-1, |f| f as i32);
         let side = p.from.or(p.to).expect("a payment has a side");
-        let rent = p.kind == PayKind::Rent;
+        // Declared rent, not the (possibly rewritten) kind: Mashiro keeps
+        // 「同等的资金」 a rent while `kind` becomes `Loss`.
+        let mut rent = p.rent;
+        let total_stage = p.runs_total_stage;
         let mut amount = p.amount;
         let mut to = p.to;
+        // `PayeeHalf` captures the declared payee before any response and lets
+        // a responder rewrite `to`; it pays the captured partner half of what
+        // the payer lost after this leg commits ([`Pay::partner`]).
+        let mut partner = None;
+        if p.shape == PayShape::PayeeHalf {
+            partner = p.to;
+        }
+        let mut fixed = p.shape == PayShape::Fixed;
         // User ruling 2026-10-15 (OPEN-取整 family): money rounds up to a
         // multiple of 10 **once**, after every add/mul modifier has rewritten
         // the running figure. Modifiers transform exactly and must not CeilTo
@@ -3716,7 +3989,7 @@ impl Cx<'_> {
         //
         // The `effect` counteraction window opens for every money movement at every
         // depth (the rulebook has no depth limit); the re-entrancy guard
-        // (`Cx::reentrant_hooks`) is the termination argument.
+        // (`PlayCtx::reentrant_hooks`) is the termination argument.
         if amount > 0 {
             let t = raise!(
                 self,
@@ -3726,7 +3999,7 @@ impl Cx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = amount,
                 by_card = p.by_card,
-                @p TriggerPay::new(rent),
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
                 tile = p.tile.map_or(-1, |t| t as i32),
                 effects = vec![super::rules::Effect {
                     kind: "pay".into(),
@@ -3736,7 +4009,15 @@ impl Cx<'_> {
                     value: amount,
                 }],
             )?;
-            if t.is_cancelled() || !t.settles_for(side as i32) {
+            // Kind / shape writes land before the shape is read.
+            Self::fold_pay_payload(&mut p, &t, &mut rent, &mut fixed);
+            // The shape may have arrived in this window; `PayeeHalf` still
+            // needs the declared payee as its half victim (the write may not
+            // have moved `to`).
+            if partner.is_none() && p.shape == PayShape::PayeeHalf {
+                partner = to;
+            }
+            if !fixed && (t.is_cancelled() || !t.settles_for(side as i32)) {
                 raise!(
                     self,
                     "payAfter",
@@ -3745,19 +4026,25 @@ impl Cx<'_> {
                     target = to.map_or(-1, |t| t as i32),
                     value = 0,
                     by_card = p.by_card,
-                    @p TriggerPay::new(rent),
+                    @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                    settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
                 return Ok(Paid::default());
             }
-            // Q3: adjustments compose freely -- no floor. A negative here is
-            // still an in-flight figure later stages may reshape; the reverse
-            // decision happens only after the whole chain has resolved.
-            if t.value != amount {
-                modified = true;
+            // A `Fixed` leg still raises the window but ignores what a
+            // responder wrote into the declared figure / payee, and never
+            // cancels: the amount is the card's own.
+            if !fixed {
+                // Q3: adjustments compose freely -- no floor. A negative here is
+                // still an in-flight figure later stages may reshape; the
+                // reverse decision happens only after the whole chain resolved.
+                if t.value != amount {
+                    modified = true;
+                }
+                amount = t.value;
+                to = (t.target >= 0).then_some(t.target as usize);
             }
-            amount = t.value;
-            to = (t.target >= 0).then_some(t.target as usize);
         }
         // ---- pre-split (command-wide) ------------------------------------
         // `PIPELINE-AUDIT` Q2: `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`
@@ -3770,18 +4057,10 @@ impl Cx<'_> {
         // They run *after* the `effect` declaration, so a counter still hears
         // the **declared** amount (`docs/ENGINE.md` 「Effect vs settlement」) --
         // the same position the per-share `paySplitAdd` occupies, one level up.
-        if p.total_stage {
+        if total_stage && !fixed {
             let mut to_slot = to;
             let before_total = amount;
-            match self.pay_total_stages(
-                side,
-                payer,
-                &mut to_slot,
-                amount,
-                p.by_card,
-                rent,
-                p.tile,
-            )? {
+            match self.pay_total_stages(side, payer, &mut to_slot, &mut p, amount)? {
                 // `payCombinedCancel` dropped the whole command.
                 None => {
                     raise!(
@@ -3792,12 +4071,17 @@ impl Cx<'_> {
                         target = to.map_or(-1, |t| t as i32),
                         value = 0,
                         by_card = p.by_card,
-                        @p TriggerPay::new(rent),
+                        @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                        settle_tile = self.settle_tile(),
                         tile = p.tile.map_or(-1, |t| t as i32)
                     )?;
                     return Ok(Paid::default());
                 }
                 Some(shaped) => {
+                    // The pre-split windows may have rewritten kind / rent /
+                    // shape (`set_pay_kind` / `set_pay_shape`).
+                    rent = p.rent;
+                    fixed = p.shape == PayShape::Fixed;
                     if shaped != before_total {
                         modified = true;
                     }
@@ -3812,7 +4096,14 @@ impl Cx<'_> {
         // **not** stop at zero. A figure driven negative is still in flight;
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
-        for kind in ["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"] {
+        // A `Fixed` leg skips the per-share stages (and so the factors and
+        // `milli_scale` that ride `paySplitMul`).
+        let split_stages: &[&str] = if fixed {
+            &[]
+        } else {
+            &["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"]
+        };
+        for &kind in split_stages {
             // v78 / v96: interactive pre-stages. A prompt that used to live
             // inside a pure Filter rides the matching `*Before` Action so the
             // prompt is at the rulebook position and the pure Filter still
@@ -3831,9 +4122,11 @@ impl Cx<'_> {
                     target = to.map_or(-1, |t| t as i32),
                     value = amount,
                     by_card = p.by_card,
-                    @p TriggerPay::new(rent),
+                    @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                    settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
+                Self::fold_pay_payload(&mut p, &ask, &mut rent, &mut fixed);
                 if ask.value != amount {
                     modified = true;
                 }
@@ -3851,9 +4144,11 @@ impl Cx<'_> {
                     target = to.map_or(-1, |t| t as i32),
                     value = amount,
                     by_card = p.by_card,
-                    @p TriggerPay::new(rent),
+                    @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                    settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
+                Self::fold_pay_payload(&mut p, &ask, &mut rent, &mut fixed);
                 if ask.value != amount {
                     modified = true;
                 }
@@ -3871,9 +4166,11 @@ impl Cx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = amount,
                 by_card = p.by_card,
-                @p TriggerPay::new(rent),
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
+            Self::fold_pay_payload(&mut p, &t, &mut rent, &mut fixed);
             // V5 (`NEGATION-AUDIT`) at the settlement stages: `paySplitChoose`
             // is the Flag-shaped one -- a `false` Filter answer is folded to
             // `set_cancelled()` by `drive_flag`, and that **stops the payment**
@@ -3894,7 +4191,8 @@ impl Cx<'_> {
                     target = to.map_or(-1, |t| t as i32),
                     value = 0,
                     by_card = p.by_card,
-                    @p TriggerPay::new(rent),
+                    @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                    settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
                 return Ok(Paid::default());
@@ -3940,10 +4238,15 @@ impl Cx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = amount,
                 by_card = p.by_card,
-                @p TriggerPay::new(rent),
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
-            if t.is_cancelled() {
+            Self::fold_pay_payload(&mut p, &t, &mut rent, &mut fixed);
+            if fixed {
+                // Read-only: the leg keeps its figure and payee and cannot be
+                // cancelled here.
+            } else if t.is_cancelled() {
                 amount = 0;
             } else {
                 if t.value != before {
@@ -3953,6 +4256,11 @@ impl Cx<'_> {
                 to = (t.target >= 0).then_some(t.target as usize);
             }
         }
+        // A `PayeeHalf` leg pays the partner directly; its own `to` is forced
+        // off before affordability (the partner charge is the half leg below).
+        if partner.is_some() {
+            to = None;
+        }
         // User ruling 2026-10-15: the one money round. After every add/mul
         // modifier has rewritten the running figure (and the settlement hook
         // has had its say), a **positive** figure some modifier touched is
@@ -3961,7 +4269,7 @@ impl Cx<'_> {
         // left as-is. A negative figure is not rounded: the reversal below
         // would otherwise see a CeilTo toward +inf (e.g. -7 → 0) and drop the
         // child payment.
-        if modified && amount > 0 {
+        if !fixed && modified && amount > 0 {
             amount = ceil10_money(amount);
         }
         // Q3 (PIPELINE-AUDIT, user ruling 2026-10-07): adjustments compose
@@ -3984,7 +4292,8 @@ impl Cx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = 0,
                 by_card = p.by_card,
-                @p TriggerPay::new(rent),
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
             if p.reverse_depth >= MAX_PAY_REVERSALS {
@@ -4014,7 +4323,7 @@ impl Cx<'_> {
             rev.must = true;
             rev.reason = p.reason.clone();
             rev.by_card = p.by_card;
-            rev.total_stage = true;
+            rev.runs_total_stage = true;
             rev.reverse_depth = p.reverse_depth + 1;
             let _ = self.money(rev)?;
             return Ok(Paid::default());
@@ -4037,7 +4346,8 @@ impl Cx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = 0,
                 by_card = p.by_card,
-                @p TriggerPay::new(rent),
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
             return Ok(Paid::default());
@@ -4069,7 +4379,8 @@ impl Cx<'_> {
                     target = t as i32,
                     value = 0,
                     by_card = p.by_card,
-                    @p TriggerPay::new(rent),
+                    @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                    settle_tile = self.settle_tile(),
                     tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
                 return Ok(Paid::default());
@@ -4081,7 +4392,12 @@ impl Cx<'_> {
                 if p.must {
                     self.raise_funds(f, loss, to)?;
                     if self.out(f) {
-                        return Ok(Paid::default());
+                        // The payer could not complete a mandatory payment and
+                        // went out -- the receipt's `SHORTFALL`.
+                        return Ok(Paid {
+                            shortfall: true,
+                            ..Paid::default()
+                        });
                     }
                 } else if p.allow_mortgage {
                     // Fund the final amount after the payment hooks, without
@@ -4111,10 +4427,10 @@ impl Cx<'_> {
         let gain = if p.from.is_some() { loss } else { amount };
         if let Some(t) = to {
             if !self.out(t) {
-                self.w.st.players[t].money += gain;
                 // 「当前回合内你每获得过一次资金」 -- one count per settled credit,
-                // whatever the cause (rulebook 支付阶段 7 「资金变动」).
-                self.w.bump_gain(t as i32, 1);
+                // whatever the cause (rulebook 支付阶段 7 「资金变动」); the one
+                // credit path is [`World::credit`].
+                self.w.credit(t as i32, gain);
             }
         }
         self.log_money(&p, to, loss, gain);
@@ -4122,11 +4438,20 @@ impl Cx<'_> {
         // payment that leaves the payer for another player while a [触发结算]
         // is open counts, whatever its kind (a card's 「收费」, a forced buy,
         // the settle's own rent). A payment outside any settle does not.
-        if self.settle_open > 0 && loss > 0 && p.from.is_some() && p.to.is_some() && p.to != p.from
+        // A `PayeeHalf` main leg committed `to = None` but still paid a settle.
+        if self.settle_open() > 0
+            && loss > 0
+            && p.from.is_some()
+            && (p.to.is_some() || p.partner.is_some())
+            && p.to != p.from
         {
             self.w.turn.paid_in_settle += gain;
+            let f = p.from.unwrap_or(0);
+            if let Some(n) = self.w.turn.paid_in_settle_by.get_mut(f) {
+                *n += gain;
+            }
         }
-        // `payAfter` (Fx) -- every settled payment, then the `paid` counteraction
+        // `payAfter` (hook) -- every settled payment, then the `paid` counteraction
         // window only when the payer lost money.
         let moved = if p.from.is_some() { loss } else { gain };
         raise!(
@@ -4137,7 +4462,8 @@ impl Cx<'_> {
             target = to.map_or(-1, |t| t as i32),
             value = moved,
             by_card = p.by_card,
-            @p TriggerPay::new(rent),
+            @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+            settle_tile = self.settle_tile(),
             tile = p.tile.map_or(-1, |t| t as i32)
         )?;
         if let Some(f) = p.from.filter(|_| loss > 0) {
@@ -4148,15 +4474,39 @@ impl Cx<'_> {
                 target = to.map_or(-1, |t| t as i32),
                 value = loss,
                 by_card = p.by_card,
-                @p TriggerPay::new(rent),
+                @p TriggerPay::new(p.kind, rent, total_stage, p.shape),
+                settle_tile = self.settle_tile(),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
         }
-        Ok(Paid {
+        let paid = Paid {
             paid: true,
             loss,
             gain,
-        })
+            shortfall: false,
+        };
+        // The `PayeeHalf` leg: the declared partner now *loses* half of what
+        // the payer just lost (规则书 「令此次支付的对象失去此次金额一半的资金」
+        // -- a delete, not a payment back), as its own `Fixed` pipeline one
+        // depth down (so it logs, fires `paid` and counts in
+        // `paid_in_settle_by`). No half when the main leg was cancelled, short,
+        // or the payer is out.
+        if let (Some(partner), Some(payer_ix)) = (partner, p.from) {
+            if loss > 0 && !self.out(partner) && !self.out(payer_ix) {
+                let mut half = Pay::new(loss / 2, PayKind::Card);
+                half.from = Some(partner);
+                half.to = None;
+                half.shape = PayShape::Fixed;
+                half.tile = p.tile;
+                half.must = true;
+                half.by_card = p.by_card;
+                half.source = p.source;
+                half.reason = p.reason.clone();
+                half.reverse_depth = p.reverse_depth;
+                let _ = self.money(half)?;
+            }
+        }
+        Ok(paid)
     }
 
     /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2):
@@ -4176,11 +4526,10 @@ impl Cx<'_> {
         side: usize,
         payer: i32,
         to: &mut Option<usize>,
+        p: &mut Pay,
         total: i32,
-        by_card: Option<i32>,
-        rent: bool,
-        tile: Option<usize>,
     ) -> Flow<Option<i32>> {
+        let total_stage = p.runs_total_stage;
         let mut amount = total;
         for kind in ["payCombinedAdd", "payCombinedMul", "payCombinedCancel"] {
             // v78: interactive pre-stage (see the paySplitChooseBefore note above).
@@ -4194,10 +4543,12 @@ impl Cx<'_> {
                     player_id = payer,
                     target = to.map_or(-1, |t| t as i32),
                     value = amount,
-                    by_card = by_card,
-                    @p TriggerPay::new(rent),
-                    tile = tile.map_or(-1, |t| t as i32)
+                    by_card = p.by_card,
+                    @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape),
+                    settle_tile = self.settle_tile(),
+                    tile = p.tile.map_or(-1, |t| t as i32)
                 )?;
+                Self::fold_pay_trigger(p, &ask);
                 amount = ask.value;
                 if ask.target >= 0 {
                     *to = Some(ask.target as usize);
@@ -4210,10 +4561,12 @@ impl Cx<'_> {
                 player_id = payer,
                 target = to.map_or(-1, |t| t as i32),
                 value = amount,
-                by_card = by_card,
-                @p TriggerPay::new(rent),
-                tile = tile.map_or(-1, |t| t as i32)
+                by_card = p.by_card,
+                @p TriggerPay::new(p.kind, p.rent, total_stage, p.shape),
+                settle_tile = self.settle_tile(),
+                tile = p.tile.map_or(-1, |t| t as i32)
             )?;
+            Self::fold_pay_trigger(p, &t);
             if kind == "payCombinedCancel" && t.is_cancelled() {
                 return Ok(None);
             }
@@ -4225,7 +4578,7 @@ impl Cx<'_> {
         Ok(Some(amount))
     }
 
-    /// `Cx::pay_total` -- the public face of [`Self::pay_total_stages`]. A card
+    /// `PlayCtx::pay_total` -- the public face of [`Self::pay_total_stages`]. A card
     /// body that is about to 「[分摊]」 a figure calls this first, so the
     /// command-wide stage shapes the **total**, then divides the result and
     /// runs each share through [`Self::money`] with `Pay::total_stage = false`
@@ -4248,7 +4601,9 @@ impl Cx<'_> {
         let mut to = to;
         let side = from.or(to).expect("a payment has a side");
         let payer = from.map_or(-1, |f| f as i32);
-        let shaped = self.pay_total_stages(side, payer, &mut to, total, by_card, false, None)?;
+        let mut probe = Pay::new(total, PayKind::Card);
+        probe.by_card = by_card;
+        let shaped = self.pay_total_stages(side, payer, &mut to, &mut probe, total)?;
         // A cancelled command is `None`. A non-positive shaped total is nothing
         // to divide -- the per-leg `money()` calls (and their Q3 reversal) live
         // on the shares, not here.
@@ -4267,6 +4622,8 @@ impl Cx<'_> {
     fn log_money(&mut self, p: &Pay, to: Option<usize>, loss: i32, gain: i32) {
         let typ = p.typ.unwrap_or(if p.kind == PayKind::Rent {
             PayEvent::Rent
+        } else if p.kind == PayKind::Loss {
+            PayEvent::Lose
         } else if p.from.is_some() && to.is_some() {
             PayEvent::Pay
         } else if p.from.is_some() {
@@ -4275,16 +4632,16 @@ impl Cx<'_> {
             PayEvent::Gain
         });
         let amount = if p.from.is_some() { loss } else { gain };
-        // The cause, in parentheses (`log.part.why`). A card's own reason key
+        // The cause, in parentheses (`log.part.reason`). A card's own reason key
         // rides `reason` as a `Msg`; a board-driven one is the static `src.*`
         // key in `source`. Never the whole line: `text` is for that, and a bare
         // card name (「登上武道馆」) says nothing about who paid what.
-        let why = match &p.reason {
+        let reason = match &p.reason {
             Some(r) => Some(r.clone()),
             None if !p.source.is_empty() => Some(Msg::new(p.source)),
             _ => None,
         };
-        let src = why.map(|w| Msg::new("log.part.why").msg("why", w));
+        let src = reason.map(|w| Msg::new("log.part.reason").msg("reason", w));
         let mut text = match &p.text {
             Some(t) => t.clone().n("amount", amount),
             None => {
@@ -4350,7 +4707,7 @@ impl Cx<'_> {
         if reply.of(i) == 1 {
             return Ok(false);
         }
-        for id in &reply.a.picked {
+        for id in &reply.answered.picked {
             if let Ok(t) = id.parse::<usize>() {
                 if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t]
                 {
@@ -4388,7 +4745,7 @@ impl Cx<'_> {
             .msg("what", what)
             .n("need", need);
         let reply = self.ask(Ask::mortgage(i, need, text, &deeds, ai))?;
-        for id in &reply.a.picked {
+        for id in &reply.answered.picked {
             if let Ok(t) = id.parse::<usize>() {
                 if t < self.data.tiles.len()
                     && self.w.st.owners[t] == i as i32
@@ -4445,12 +4802,12 @@ impl Cx<'_> {
             self.w.st.mortgaged[t] = true;
             cashed += self.mortgage_value(t);
         }
-        self.w.st.players[i].money += cashed;
+        self.w.credit(i as i32, cashed);
         let all = self.w.st.players[i].money.max(0);
         self.w.st.players[i].money = 0;
         let creditor = creditor.filter(|&c| !self.out(c));
         if let Some(c) = creditor {
-            self.w.st.players[c].money += all;
+            self.w.credit(c as i32, all);
         }
         let text = Msg::new("log.bankrupt")
             .player_id("who", i)
@@ -4472,9 +4829,9 @@ impl Cx<'_> {
         e.value = all;
         self.wait(1.6);
         raise!(self, "bankrupt", i)?;
-        // `beforeOut` (Fx) -- before the player is cleared.
+        // `beforeOut` (hook) -- before the player is cleared.
         raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i);
+        let deeds = self.remove_from_game(i)?;
         // `bankruptResolved` (Q6 / K11) -- the terminal: cash-in done, the seat
         // cleared, the leftover auctions finished. Nothing else observes
         // "cleanup + auctions finished", so this is the point a 「结算完成时」
@@ -4506,9 +4863,9 @@ impl Cx<'_> {
             i as i32,
             Msg::new("log.forfeit").player_id("who", i),
         );
-        // `beforeOut` (Fx) -- before the player is cleared.
+        // `beforeOut` (hook) -- before the player is cleared.
         raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i);
+        let deeds = self.remove_from_game(i)?;
         // `leaveAfter` -- after the player is cleared out, but before the
         // game-over check so it still runs when leaving ends the match.
         raise!(self, "leaveAfter", i)?;
@@ -4523,7 +4880,7 @@ impl Cx<'_> {
     }
 
     /// Clear the player; its land returns to the bank.
-    fn remove_from_game(&mut self, i: usize) -> Vec<usize> {
+    fn remove_from_game(&mut self, i: usize) -> Flow<Vec<usize>> {
         // Collect the rule ids this seat's field carries **before** the clear
         // below: markers those rules own leave the game with them (user ruling
         // 2026-10-07), wherever the copies sit.
@@ -4592,7 +4949,27 @@ impl Cx<'_> {
                 Msg::new(key).player_id("who", i).i("n", deeds.len() as i64),
             );
         }
-        deeds
+        // Raise the purge's mark removals even though no further run commits
+        // for this player: the `markChanged` drain needs a committing frame.
+        self.commit_marks_delta()?;
+        Ok(deeds)
+    }
+
+    /// Drain the pending mark log into `markChanged` raises. Called by
+    /// `commit_after` and by paths that clear marks with no later run
+    /// (`remove_from_game`).
+    fn commit_marks_delta(&mut self) -> Flow<()> {
+        let rows = std::mem::take(&mut self.w.mark_log);
+        for row in rows {
+            let mut t = Trigger::new("markChanged", row.owner as usize);
+            t.tile = row.tile;
+            t.name = Some(row.kind);
+            t.value = row.delta;
+            t.card = row.card;
+            t.instance = row.instance;
+            self.raise(t)?;
+        }
+        Ok(())
     }
 
     /// User ruling 2026-10-07 (marker ownership): drop every marker whose
@@ -4613,6 +4990,17 @@ impl Cx<'_> {
         for name in doomed {
             for p in self.w.st.players.iter_mut() {
                 p.tokens.retain(|t| t.name != name);
+            }
+            let gone: Vec<crate::state::TileMark> = self
+                .w
+                .st
+                .marks
+                .iter()
+                .filter(|m| m.owner != crate::state::BOARD_OWNER && m.kind == name)
+                .cloned()
+                .collect();
+            for m in &gone {
+                self.w.log_mark_row(m, -m.count);
             }
             self.w
                 .st
@@ -4710,12 +5098,12 @@ impl Cx<'_> {
             false,
         );
         let r = self.ask(ask)?;
-        if r.a.bidder < 0 {
+        if r.answered.bidder < 0 {
             self.w
                 .log("text", -1, Msg::new("log.auction_no_bid").tile("tile", t));
             return Ok(());
         }
-        let (b, bid) = (r.a.bidder as usize, r.a.bid);
+        let (b, bid) = (r.answered.bidder as usize, r.answered.bid);
         if self.w.st.owners[t] >= 0 || !self.can_pay(b) {
             self.w.log(
                 "text",
@@ -4724,14 +5112,19 @@ impl Cx<'_> {
             );
             return Ok(());
         }
+        // `spendBefore` -- the raw-spend window runs before affordability, so a
+        // reduction can prevent a shortfall. Only the affordability test and
+        // the debit use the shaped figure; the bid itself (and the deal)
+        // stays the bid.
+        let cost = self.spend_before(b, t as i32, bid, None)?;
         // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76: 「pay或spend资金且资金不足
         // 时可以选择抵押拥有的地契」. A short bidder is offered the mortgage path
         // to fund the bid; only a bidder who cannot raise it (and therefore goes
         // out) voids the auction. L20 「spend同等资金」 keeps the bid itself a
         // direct delete (ruling 7, TODO(规则书) ruling 7).
-        if self.w.st.players[b].money < bid {
-            self.raise_funds(b, bid, None)?;
-            if self.out(b) || self.w.st.players[b].money < bid {
+        if self.w.st.players[b].money < cost {
+            self.raise_funds(b, cost, None)?;
+            if self.out(b) || self.w.st.players[b].money < cost {
                 self.w.log(
                     "text",
                     b as i32,
@@ -4741,7 +5134,7 @@ impl Cx<'_> {
             }
         }
         // Money remains direct until ruling 7 (TODO(规则书) ruling 7).
-        self.w.st.players[b].money -= bid;
+        self.w.st.players[b].money -= cost;
         // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
         // one ownership write (`docs/PURCHASE.md`).
         let mut deal = purchase::default_deal(
@@ -4791,7 +5184,7 @@ impl Cx<'_> {
         let e = self.w.log("buy", b as i32, text);
         e.value = bid;
         e.to = t as i32;
-        // `bought` (Fx) -- the auction winner is set as the owner.
+        // `bought` (hook) -- the auction winner is set as the owner.
         raise!(
             self,
             "bought",
@@ -4960,7 +5353,7 @@ impl Cx<'_> {
             )
             .card = card.to_string();
         self.refill_draw_pile(i, true)?;
-        // `discarded` (Fx) -- on the filed card, which may already have been
+        // `discarded` (hook) -- on the filed card, which may already have been
         // shuffled into its owner's newly refilled deck.
         raise!(self, "discarded", i, card = Some(card.to_string()))?;
         // `discardAfter` -- after filing and immediate deck maintenance.
@@ -5025,13 +5418,13 @@ impl Cx<'_> {
         {
             return Some(Msg::new("err.play_phase"));
         }
-        if let Some(why) = self.cannot_play(i, id) {
-            return Some(why);
+        if let Some(reason) = self.cannot_play(i, id) {
+            return Some(reason);
         }
         if let Some(card) = self.data.card(id) {
             if card.exclusive() {
-                if let Some(why) = self.exclusive_play(i, id, card) {
-                    return Some(why);
+                if let Some(reason) = self.exclusive_play(i, id, card) {
+                    return Some(reason);
                 }
             }
         }
@@ -5167,7 +5560,7 @@ impl Cx<'_> {
             cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
-        // `cardPlayed` (Fx) -- a card's hand effect resolved (its `Dest` is final).
+        // `cardPlayed` (hook) -- a card's hand effect resolved (its `Dest` is final).
         raise!(
             self,
             "cardPlayed",
@@ -5205,7 +5598,7 @@ impl Cx<'_> {
         self.w.event_removed.clear();
     }
 
-    /// Draw the top event and resolve it.
+    /// Draw the top event and settles it.
     ///
     /// Also the `ctx::draw_event` primitive (`docs/TILES.md`): `tile:event`'s
     /// body is 「抽取一张手卡，然后抽取一个事件卡」 and the event half is this.
@@ -5244,7 +5637,7 @@ impl Cx<'_> {
         let t = raise!(self, "event", i, card = Some(id.clone()))?;
         let rules = self.rules;
         // A cancelled trigger (`is_cancelled`) -- the event's effect is negated; it is still
-        // filed away below but does not resolve.
+        // filed away below but does not settles.
         //
         // Bind the rule instance first so the body's `On::Play` and any hook it
         // declares run against a live instance. `bind_event` is a no-op for
@@ -5386,7 +5779,7 @@ impl Cx<'_> {
         self.w.next_turn_pending = false;
         self.w.leftovers.clear();
         let winner = self.w.st.winner;
-        let why = match reason {
+        let reason = match reason {
             "out" if self.w.st.mode == crate::MatchMode::Solo as i32 => Msg::new("end.out_solo"),
             "out" => Msg::new("end.out"),
             "vote" => Msg::new("end.vote"),
@@ -5397,7 +5790,7 @@ impl Cx<'_> {
             "text",
             -1,
             Msg::new("log.match_end")
-                .msg("why", why)
+                .msg("reason", reason)
                 .player_id("winner", winner),
         );
     }

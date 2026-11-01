@@ -81,11 +81,11 @@ pub mod native;
 pub mod kinds;
 
 pub use kinds::{Action, ActionEntry, Filter, FilterEntry, FilterShape, KindInfo};
+pub use msg::Msg;
 /// Re-exported so a card can `use card_sdk::serde;` and derive
 /// [`ActivationArg`](crate::ActivationArg)'s bounds on its own activation
 /// struct without adding a direct `serde` dependency.
 pub use serde;
-pub use msg::Msg;
 pub use text::{
     it, it_sub, items, para, sec, steps, CardText, TextBlock, TextItem, TextPiece, TextSection,
 };
@@ -244,8 +244,8 @@ pub mod rt;
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play("", None, play),
-///     On::Action(Action::TurnEnd(pre::MINE, None, guard, tick)),
-///     On::Filter(Filter::ImmuneAll(pre::MINE, None, immune)),
+///     On::Action(Action::TurnEnd(condition::MINE, None, guard, tick)),
+///     On::Filter(Filter::ImmuneAll(condition::MINE, None, immune)),
 /// ]);
 /// ```
 ///
@@ -267,7 +267,7 @@ pub mod rt;
 /// ```
 #[derive(Clone, Copy)]
 pub struct CardDef {
-    /// Exact id from `game-the roster`, e.g. `"AG:Y.O.L.O"`.
+    /// Exact id from `game-the roster`, e.g.
     pub id: &'static str,
     pub on: &'static [On],
     /// The card's declared static properties, `(key, value)` in declaration
@@ -340,7 +340,6 @@ impl CardDef {
             exemption_prop: self.exemption_prop,
         }
     }
-
 
     /// How entry `index` presents itself in the log: the header mode plus the
     /// flash policy. Both ride the entry itself ([`On::silent`] /
@@ -510,14 +509,14 @@ pub struct PlayEntry {
     /// free). Unique per card, not globally.
     pub id: &'static str,
     /// Gate condition (docs/GUARDS.md §4.3). `""` = no condition.
-    pub pre: &'static str,
+    pub condition: &'static str,
     /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
     /// no clause).
     pub counter_reason: Option<MsgKey>,
     /// The gate (the old `On::CantPlay`): a pure query with no prompts,
-    /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
+    /// `None` = playable, `Some(reason)` = blocked and `reason` is the reason to
     /// show. `None` for the gate itself means no gate.
-    pub why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+    pub guard: Option<fn(player_id: i32) -> Option<Msg>>,
     /// The effect, erased. See [`BodyShape`] / [`BodyDrive`].
     pub body: *const (),
     /// Monomorphized driver; casts `body` back to its fn type.
@@ -573,7 +572,7 @@ pub struct CounteractEntry {
     /// The chain links this [反击] answers.
     pub links: &'static [abi::ChainKind],
     /// The guard's condition (docs/GUARDS.md §4.3). `""` = no condition.
-    pub pre: &'static str,
+    pub condition: &'static str,
     /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
     /// no clause).
     pub counter_reason: Option<MsgKey>,
@@ -607,7 +606,7 @@ pub struct RuleEntry {
     /// See [`PlayEntry::id`].
     pub id: &'static str,
     /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
-    pub pre: &'static str,
+    pub condition: &'static str,
     /// Residual guard. `None` = G4-deleted (condition-only entry).
     pub guard: Option<fn(player_id: i32) -> bool>,
     /// The effect, erased. See [`PlayEntry::body`].
@@ -638,7 +637,7 @@ pub struct MessageEntry {
     /// Message names this card answers (`ctx::send`); empty = never dispatched.
     pub names: &'static [&'static str],
     /// Condition (docs/GUARDS.md §4.3). `""` = no condition.
-    pub pre: &'static str,
+    pub condition: &'static str,
     /// Residual guard. `None` = G4-deleted (condition-only entry).
     pub guard: Option<fn(player_id: i32) -> bool>,
     /// The effect, erased. See [`PlayEntry::body`].
@@ -693,10 +692,10 @@ unsafe impl Sync for MessageEntry {}
 /// entry (kind/variant agreement is enforced at ruleset build).
 ///
 /// Guarded entries (`Play` gate / `Counteract` / `Action` / `Filter*` / `Gate` /
-/// `Settle`) carry a **condition** string (`pre`)
+/// `Settle`) carry a **condition** source string
 /// immediately before the residual guard -- category → condition → guard → body
 /// (docs/GUARDS.md §4.3, the three-layer model). `""` = no condition. Sugar:
-/// [`pre::MINE`] (`actor == owner`); or attach one with [`On::pre`]. The
+/// [`condition::MINE`] (`actor == owner`); or attach one with [`On::condition`]. The
 /// condition is compiled once at ruleset build (host) and evaluated natively
 /// before the wasm guard is instantiated.
 #[derive(Clone, Copy)]
@@ -709,11 +708,11 @@ pub enum On {
     /// while the card is in play. Same body shape as [`On::Counteract`]. May
     /// emit effects; does not modify the triggering value. One kind per entry
     /// -- a card that listens at two raises declares two entries. Built from
-    /// the `action_kinds!` constructors (`Action::TurnStart(pre, reason, guard, body)`).
+    /// the `action_kinds!` constructors (`Action::TurnStart(condition, reason, guard, body)`).
     Action(ActionEntry),
     /// **Pure value / decision / gate / payload rewrite** at one filter kind.
     /// Built from the `filter_kinds!` constructors
-    /// (`Filter::DiceRollPlan(pre, guard, body)`). The entry's [`FilterShape`]
+    /// (`Filter::DiceRollPlan(condition, guard, body)`). The entry's [`FilterShape`]
     /// names the body type:
     /// - [`FilterShape::Value`] -- `fn(i32, i32) -> i32` scalar fold
     /// - [`FilterShape::Flag`] -- `fn(i32, i32) -> bool` decision
@@ -737,12 +736,12 @@ pub enum On {
     /// [`On::Settle`]. The body owns eligibility (规则书 基础规则 5: 「运营阶段
     /// 及需[支付]或[消耗]资金且资金不足时可以选择抵押拥有的地契」) and the
     /// payout amount; the engine keeps only the flag write + direct money move
-    /// via [`crate::ctx::apply_mortgage`]. Built by [`On::Mortgage`].
+    /// via [`crate::ctx::commit_mortgage`]. Built by [`On::Mortgage`].
     MortgageBody(RuleEntry),
     /// The rule's **redeem body** -- what runs when the deed is [赎回]d
     /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」). Same shape as
     /// [`On::Mortgage`]; the engine keeps only the flag clear + direct money
-    /// move via [`crate::ctx::apply_redeem`]. Built by [`On::Redeem`].
+    /// move via [`crate::ctx::commit_redeem`]. Built by [`On::Redeem`].
     RedeemBody(RuleEntry),
     /// The rule's **buy body** -- what runs when the deed this rule instance
     /// governs is bought (settle offer, card-driven `ctx::buy`, agent branch,
@@ -777,7 +776,7 @@ pub enum On {
 
 /// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
 /// schema is the §4.2 window/candidate vocabulary, compiled at ruleset build.
-pub mod pre {
+pub mod condition {
     /// `actor == owner` -- the 118 `mine` guards. Turns a same-seat-only
     /// guard into a condition plus (at most) a residual guard.
     pub const MINE: &str = "actor == owner";
@@ -862,22 +861,22 @@ macro_rules! on_entry_field {
 impl On {
     /// Play this card from hand.
     ///
-    /// `pre` is the gate's condition (see the type doc). `why_not` is the gate
-    /// (the old `On::CantPlay`): a pure query with no prompts, `None` =
-    /// playable, `Some(why)` = blocked and `why` is the reason to show. `None`
-    /// for the gate itself means no gate. `body` is the effect. Attach the
+    /// `condition` is the gate's CEL condition. `guard` is the residual pure
+    /// query (the old `On::CantPlay`): no prompts, `None` = playable,
+    /// `Some(reason)` = blocked and `reason` is the reason to show. Both empty
+    /// (`""` / `None`) means no gate. `body` is the effect. Attach the
     /// 「…时」 clause with [`Self::counter_reason`].
     #[allow(non_snake_case)]
     pub const fn Play(
-        pre: &'static str,
-        why_not: Option<fn(player_id: i32) -> Option<Msg>>,
+        condition: &'static str,
+        guard: Option<fn(player_id: i32) -> Option<Msg>>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::PlayBody(PlayEntry {
             id: "",
-            pre,
+            condition,
             counter_reason: None,
-            why_not,
+            guard,
             body: body as *const (),
             drive: drive_body_plain,
             shape: BodyShape::Plain,
@@ -896,14 +895,14 @@ impl On {
     #[allow(non_snake_case)]
     pub const fn Counteract(
         links: &'static [abi::ChainKind],
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::CounteractBody(CounteractEntry {
             id: "",
             links,
-            pre,
+            condition,
             counter_reason: None,
             guard,
             body: body as *const (),
@@ -921,13 +920,13 @@ impl On {
     /// The rule's **settle body** (`docs/TILES.md`).
     #[allow(non_snake_case)]
     pub const fn Settle(
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::SettleBody(RuleEntry {
             id: "",
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -944,13 +943,13 @@ impl On {
     /// The rule's **mortgage body**.
     #[allow(non_snake_case)]
     pub const fn Mortgage(
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::MortgageBody(RuleEntry {
             id: "",
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -967,13 +966,13 @@ impl On {
     /// The rule's **redeem body**.
     #[allow(non_snake_case)]
     pub const fn Redeem(
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::RedeemBody(RuleEntry {
             id: "",
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -990,13 +989,13 @@ impl On {
     /// The rule's **buy body**.
     #[allow(non_snake_case)]
     pub const fn Buy(
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::BuyBody(RuleEntry {
             id: "",
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -1013,13 +1012,13 @@ impl On {
     /// The rule's **build body**.
     #[allow(non_snake_case)]
     pub const fn Build(
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::BuildBody(RuleEntry {
             id: "",
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -1037,14 +1036,14 @@ impl On {
     #[allow(non_snake_case)]
     pub const fn Message(
         names: &'static [&'static str],
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::MessageBody(MessageEntry {
             id: "",
             names,
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -1066,13 +1065,13 @@ impl On {
     #[allow(non_snake_case)]
     pub const fn Schedule(
         id: &'static str,
-        pre: &'static str,
+        condition: &'static str,
         guard: Option<fn(player_id: i32) -> bool>,
         body: fn(player_id: i32) -> Asked,
     ) -> Self {
         Self::ScheduleBody(RuleEntry {
             id,
-            pre,
+            condition,
             guard,
             body: body as *const (),
             drive: drive_body_plain,
@@ -1091,12 +1090,12 @@ impl On {
         /// builder so a declaration can remain a one-liner:
         ///
         /// ```ignore
-        /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).pre(pre::MINE)
+        /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(key!("yolo_pay")), Some(can_counteract), counteract).condition(condition::MINE)
         /// ```
-        pre, pre, &'static str,
+        condition, condition, &'static str,
         /// The entry's condition source (`""` = none). Compiled by the host at
         /// ruleset build (`docs/GUARDS.md` §4.3).
-        condition
+        condition_of
     }
 
     /// Attach an **activation-argument collector** (docs/ACTIVATION.md §2).
@@ -1112,7 +1111,7 @@ impl On {
     /// ```ignore
     /// // 规则书[持续]（1）: 「可选择移除此卡的1个[奇迹水晶]」 -- the offer is
     /// // applicability: decline = the pay hook does not fire.
-    /// On::Action(Action::PaySplitChooseBefore(pre, Some(key!("when")), None, pay))
+    /// On::Action(Action::PaySplitChooseBefore(condition, Some(key!("when")), None, pay))
     ///     .declare(pay_offer),
     /// ```
     ///
@@ -1213,7 +1212,7 @@ impl On {
     /// ```ignore
     /// // detour: the four-way 「"afterglow"式的移动」 pick is part of declaring
     /// // the counter, so it runs here -- not in the body, after commit.
-    /// On::Counteract(links, pre, None, Some(detour_eligible), unused)
+    /// On::Counteract(links, condition, None, Some(detour_eligible), unused)
     ///     .declare_arg(pick_afterglow_2, counteract),
     /// ```
     ///
@@ -1465,7 +1464,7 @@ impl On {
     }
 
     /// Delete the residual guard (G4): the condition alone decides. The host
-    /// then skips the `OP_GUARD` instantiation entirely (`admits_pre`).
+    /// then skips the `OP_GUARD` instantiation entirely (`admits_condition`).
     pub const fn no_guard(self) -> Self {
         match self {
             On::CounteractBody(mut e) => {
@@ -1532,10 +1531,10 @@ impl On {
     }
 
     /// Does this entry have a residual wasm guard / gate the host must call?
-    /// `false` = G4-deleted: the condition alone decides (`admits_pre`).
+    /// `false` = G4-deleted: the condition alone decides (`admits_condition`).
     pub const fn has_guard(&self) -> bool {
         match self {
-            On::PlayBody(e) => e.why_not.is_some(),
+            On::PlayBody(e) => e.guard.is_some(),
             On::CounteractBody(e) => e.guard.is_some(),
             On::SettleBody(e) => e.guard.is_some(),
             On::MortgageBody(e) => e.guard.is_some(),
@@ -1628,9 +1627,9 @@ mod tests {
             assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
             assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
         }
-        // Count pin: the docs name 27 filter kinds (the 10 gates + the
+        // Count pin: the docs name 28 filter kinds (the 10 gates + the
         // modifier stages). Adding one means the docs table moves too.
-        assert_eq!(Filter::KINDS.len(), 27, "Filter::KINDS row count");
+        assert_eq!(Filter::KINDS.len(), 28, "Filter::KINDS row count");
     }
 
     /// Pin the typed sides against `TriggerKind::is_filter()` (the single
@@ -1761,5 +1760,13 @@ mod tests {
             "paySplitMulBefore"
         );
         assert_eq!(TriggerKind::PaySplitMulBefore.id, 110);
+        // v105 hook kinds (104 / 107 stay retired).
+        assert_eq!(TriggerKind::from_str("cardFired").spelling(), "cardFired");
+        assert_eq!(
+            TriggerKind::from_str("markChanged").spelling(),
+            "markChanged"
+        );
+        assert_eq!(TriggerKind::CardFired.id, 111);
+        assert_eq!(TriggerKind::MarkChanged.id, 112);
     }
 }

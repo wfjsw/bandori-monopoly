@@ -3,7 +3,7 @@
 //! A rules host (`game-rules`) runs card modules against a copy of the world and
 //! calls these; they are pure state moves and log lines, so a module's replay
 //! remains deterministic. Anything that needs a player decision is *not* here --
-//! those go through `Cx::ask`, which halts and replays like any engine routine.
+//! those go through `PlayCtx::ask`, which halts and replays like any engine routine.
 
 use std::collections::BTreeMap;
 
@@ -11,8 +11,9 @@ use crate::data::GameData;
 use crate::msg::Msg;
 use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
+use super::play::PayFactorScope;
 use super::world::World;
-use crate::engine::world::Extreme;
+use crate::engine::world::{Extreme, MarkLog};
 
 impl World {
     // ------------------------------------------- move shaping
@@ -43,8 +44,8 @@ impl World {
     }
     /// Settle at the [move end] (「到达终点后是否settle」). Clear it to skip
     /// settle entirely; the player still moves.
-    pub fn set_resolve(&mut self, on: bool) {
-        self.turn.plan.resolve = on;
+    pub fn set_settles(&mut self, on: bool) {
+        self.turn.plan.settles = on;
     }
     /// How the move gets there: 0 = walk the path, 1 = teleport.
     pub fn set_kind(&mut self, kind: i32) {
@@ -71,13 +72,13 @@ impl World {
     /// Passing the start square pays nothing on this walk.
 
     /// The tile the walk begins on instead of where the player stands
-    /// (`None` = the player's own tile). `why` names the effect on the log line.
-    pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, why: &str) {
+    /// (`None` = the player's own tile). `reason` names the effect on the log line.
+    pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, reason: &str) {
         self.turn.plan.start = tile;
-        self.turn.plan.start_why = why.to_string();
+        self.turn.plan.start_reason = reason.to_string();
     }
     /// The movement is a teleport to this tile (`None` = a walk / clear).
-    /// `card_move` branches on this.
+    /// `run_planned_move` branches on this.
     pub fn set_teleport_to(&mut self, tile: Option<game_kinds::Tile>) {
         self.turn.plan.teleport_to = tile;
         // Naming a destination makes it a teleport.
@@ -90,27 +91,27 @@ impl World {
     /// Replace the dice the roll starts from (default 1d20). Each
     /// entry is `count`d`sides`, summed into the face. `sides == 0` is a flat
     /// `count` (see [`crate::engine::move_ctx::Roll`]).
-    pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+    pub fn set_base_dice(&mut self, count: i32, sides: i32, reason: &str) {
         // A rewrite of the dice is the new face: drop a stale `fixed_roll` so a
         // card played after `set_fixed_roll` (e.g. STAR BEAT's `set_base_dice` +
-        // `card_move`) gets its own dice instead of the pinned face.
+        // `run_planned_move`) gets its own dice instead of the pinned face.
         self.turn.fixed_roll = None;
         self.turn.plan.base.clear();
         if count > 0 && sides >= 0 {
             self.turn
                 .plan
                 .base
-                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
+                .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
     /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
-    pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+    pub fn add_base_dice(&mut self, count: i32, sides: i32, reason: &str) {
         if count > 0 && sides >= 0 {
             self.turn
                 .plan
                 .base
-                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
+                .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
     /// Drop every extra die another effect added. A rewrite that
@@ -120,13 +121,13 @@ impl World {
         self.turn.plan.dice.clear();
     }
     /// Extra dice added to the roll (summed into the face). A flat add
-    /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
-    pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
+    /// is a `0`-sided term: `add_extra_dice(n, 0, reason)`.
+    pub fn add_extra_dice(&mut self, count: i32, sides: i32, reason: &str) {
         if count > 0 && sides >= 0 {
             self.turn
                 .plan
                 .dice
-                .push(crate::engine::move_ctx::Roll::new(count, sides, why));
+                .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
 
@@ -134,9 +135,69 @@ impl World {
     pub fn set_settle_tile(&mut self, tile: i32) {
         self.turn.plan.settle_tile = tile;
     }
-    /// Scale money paid for this walk. Milli-units (500 = x0.5).
+    /// Set a pay factor absolutely (milli; `500` = ×0.5). The `Auto` scope of
+    /// [`ctx::plan::set_pay_factor`](crate::engine::PlayCtx): the innermost live
+    /// scope -- `thisSettle` in a settle, else `thisMove` in a move, else
+    /// `nextMove`.
     pub fn set_pay_factor(&mut self, milli: i32) {
-        self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
+        let milli = milli.max(0);
+        if self.turn.settle_open > 0 {
+            self.turn.settle_pay_factor = self.turn.settle_base * f64::from(milli) / 1000.0;
+        } else if self.turn.move_open {
+            self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
+        } else {
+            self.turn.next_move_pay_factor = milli;
+        }
+    }
+
+    /// Compose a pay factor into `scope` (milli). An unopened `this` scope
+    /// falls forward to its next instance; the milli buffers saturate.
+    pub fn mul_pay_factor(&mut self, milli: i32, scope: PayFactorScope) {
+        let milli = milli.max(0);
+        match self.resolve_scope(scope) {
+            PayFactorScope::ThisMove => {
+                self.turn.plan.pay_factor *= f64::from(milli) / 1000.0;
+            }
+            PayFactorScope::ThisSettle => {
+                self.turn.settle_pay_factor *= f64::from(milli) / 1000.0;
+            }
+            // Both `next*` slots hold a milli **product** (1000 = x1.0), so a
+            // compose multiplies and re-normalises; the consumer divides by
+            // 1000 once more.
+            PayFactorScope::NextMove => {
+                self.turn.next_move_pay_factor =
+                    Self::milli_product(self.turn.next_move_pay_factor, milli);
+            }
+            PayFactorScope::NextSettle => {
+                self.turn.next_settle_pay_factor =
+                    Self::milli_product(self.turn.next_settle_pay_factor, milli);
+            }
+        }
+    }
+
+    /// The scoped pay-factor product in milli: the move plan × the open
+    /// settles. The per-payment rent factor, tile props and `milli_scale` are
+    /// not in it (they need the pending payment).
+    pub fn pay_factor(&self) -> i32 {
+        Self::milli_product(
+            (self.turn.plan.pay_factor * 1000.0) as i32,
+            (self.turn.settle_pay_factor * 1000.0) as i32,
+        )
+    }
+
+    /// Two milli factors folded into one (`1000` = x1.0), clamped rather than
+    /// wrapping: a runaway product saturates.
+    fn milli_product(a: i32, b: i32) -> i32 {
+        ((i64::from(a) * i64::from(b.max(0))) / 1000).clamp(0, i64::from(i32::MAX)) as i32
+    }
+
+    /// An unopened `this` scope falls forward to its next instance.
+    fn resolve_scope(&self, scope: PayFactorScope) -> PayFactorScope {
+        match scope {
+            PayFactorScope::ThisMove if !self.turn.move_open => PayFactorScope::NextMove,
+            PayFactorScope::ThisSettle if self.turn.settle_open == 0 => PayFactorScope::NextSettle,
+            s => s,
+        }
     }
     /// Scale rent paid for this walk, same units.
     pub fn set_rent_factor(&mut self, milli: i32) {
@@ -195,8 +256,8 @@ impl World {
         self.turn.plan.parity
     }
     /// Does the planned move settle at its [move end]?
-    pub fn move_resolve(&self) -> bool {
-        self.turn.plan.resolve
+    pub fn move_settles(&self) -> bool {
+        self.turn.plan.settles
     }
     /// How the move gets there: 0 = walk, 1 = teleport.
     pub fn move_kind(&self) -> i32 {
@@ -485,8 +546,8 @@ impl World {
         self.state_set(player_id, key, value);
     }
 
-    pub fn inc_slot(&mut self, player_id: i32, key: &str, by: i32) -> i32 {
-        self.state_add(player_id, key, by)
+    pub fn inc_slot(&mut self, player_id: i32, key: &str, n: i32) -> i32 {
+        self.state_add(player_id, key, n)
     }
 
     // ------------------------------------------------------------- tokens
@@ -494,7 +555,7 @@ impl World {
     /// Board markers, kept out of the keyed state on purpose: they render on
     /// the board rather than being a value a rule enforces.
     /// Names of the player's counters whose name starts with `prefix`, in the
-    /// order they were added. The listing half of a counter query -- [`Self::tok`]
+    /// order they were added. The listing half of a counter query -- [`Self::held_count`]
     /// reads one of them by name.
     /// Sum the move plan's `base` + `dice` tables into one
     /// face. Flat terms (`sides <= 0`) add their `count` directly, which is how a
@@ -550,7 +611,7 @@ impl World {
                 .opt("detail", None),
         )
         // The event carries the result so the client can show it on the dice
-        // rather than only in the log line (same as `Cx::roll`).
+        // rather than only in the log line (same as `PlayCtx::roll`).
         .value = total;
         total
     }
@@ -582,24 +643,24 @@ impl World {
     /// The ledger still closes: the movement is logged as a `gain` event with
     /// its bank leg (`value`), even though it bypasses the `paySplitAdd`/`paySplitMul`/
     /// `paySplitChoose` modifier pipeline.
-    pub fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::msg::Msg) -> i32 {
+    pub fn gain_fixed(&mut self, player_id: i32, amount: i32, reason: crate::msg::Msg) -> i32 {
         if amount == 0 {
             return 0;
         }
-        if let Some(s) = self.player_mut(player_id) {
+        // 「当前回合内你每获得过一次资金」 -- only money **in** counts; a
+        // negative `gain_fixed` is a loss. A credit goes through the one
+        // credit path (which bumps); a loss is a bare debit.
+        if amount > 0 {
+            self.credit(player_id, amount);
+        } else if let Some(s) = self.player_mut(player_id) {
             s.money += amount;
         }
-        // 「当前回合内你每获得过一次资金」 -- only money **in** counts; a
-        // negative `gain_fixed` is a loss.
-        if amount > 0 {
-            self.bump_gain(player_id, 1);
-        }
-        let e = self.log("gain", player_id, why);
+        let e = self.log("gain", player_id, reason);
         e.value = amount;
         amount
     }
 
-    pub fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+    pub fn held_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
         self.player_id(player_id)
             .map(|s| {
                 s.tokens
@@ -611,7 +672,7 @@ impl World {
             .unwrap_or_default()
     }
 
-    pub fn tok(&self, player_id: i32, name: &str) -> i32 {
+    pub fn held_count(&self, player_id: i32, name: &str) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.tokens.iter().find(|c| c.name == name))
             .map_or(0, |c| c.value)
@@ -625,14 +686,14 @@ impl World {
     /// dropping the row; `< 0` leaves any stored ceiling alone). A row with
     /// `max > 0` is kept even at `value == 0` so the declaration latch survives
     /// a spent pool.
-    pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32, instance: i32, max: i32) {
+    pub fn set_held(&mut self, player_id: i32, name: &str, value: i32, instance: i32, max: i32) {
         if let Some(s) = self.player_mut(player_id) {
             set_named(&mut s.tokens, name, value, instance, max);
         }
     }
 
     /// The live ceiling stored on the held row (`0` = uncapped / undeclared).
-    pub fn tok_max(&self, player_id: i32, name: &str) -> i32 {
+    pub fn held_max(&self, player_id: i32, name: &str) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.tokens.iter().find(|c| c.name == name))
             .map_or(0, |c| c.max)
@@ -643,12 +704,19 @@ impl World {
     /// `instance` is stamped on a new row. `max` is stored on the row (the
     /// declared ceiling); `0` leaves any already-stored ceiling alone and
     /// clamps at `i32::MAX`.
-    pub fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32, instance: i32) -> i32 {
-        let was = self.tok(player_id, name);
-        let stored_max = self.tok_max(player_id, name);
+    pub fn add_held_by_name(
+        &mut self,
+        player_id: i32,
+        name: &str,
+        n: i32,
+        max: i32,
+        instance: i32,
+    ) -> i32 {
+        let was = self.held_count(player_id, name);
+        let stored_max = self.held_max(player_id, name);
         let ceiling = if max > 0 { max } else { i32::MAX };
         let now = (was + n).clamp(0, ceiling);
-        self.set_tok(
+        self.set_held(
             player_id,
             name,
             now,
@@ -831,7 +899,7 @@ impl World {
     /// `pull_under_cap`, applied 「在任意时刻」). The name is data -- the frozen
     /// wire key is just one caller.
     pub fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
-        let cap = self.tok_max(player_id, name).saturating_add(n).max(0);
+        let cap = self.held_max(player_id, name).saturating_add(n).max(0);
         // Keep any already-bound instance; a fresh row is unowned until a
         // re-declare stamps the creating rule (user ruling 2026-10-10).
         let inst = self
@@ -839,7 +907,7 @@ impl World {
             .and_then(|s| s.tokens.iter().find(|t| t.name == name))
             .and_then(|t| t.instance)
             .unwrap_or(-1);
-        self.set_tok(player_id, name, self.tok(player_id, name), inst, cap);
+        self.set_held(player_id, name, self.held_count(player_id, name), inst, cap);
         cap
     }
 
@@ -912,27 +980,28 @@ impl World {
 
     /// Money in (「gain」), logged with its reason.
     pub fn gain_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
-        let Some(s) = self.player_mut(player_id) else {
-            return 0;
-        };
-        if amount <= 0 || s.out() {
-            return 0;
+        {
+            let Some(s) = self.player_mut(player_id) else {
+                return 0;
+            };
+            if amount <= 0 || s.out() {
+                return 0;
+            }
         }
-        s.money += amount;
-        self.bump_gain(player_id, 1);
+        self.credit(player_id, amount);
         self.log(
             "gain",
             player_id,
             Msg::new("log.gain")
                 .player_id("who", player_id)
                 .n("amount", amount)
-                .msg("src", Msg::new("log.part.why").msg("why", src)),
+                .msg("src", Msg::new("log.part.reason").msg("reason", src)),
         );
         amount
     }
 
     /// Money out (「pay」), logged. Routines that may need to raise funds are
-    /// driven through `Cx` instead (they prompt).
+    /// driven through `PlayCtx` instead (they prompt).
     pub fn pay_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         if amount > 0 && self.money_locked(player_id) {
             self.log(
@@ -958,7 +1027,7 @@ impl World {
             Msg::new("log.lose")
                 .player_id("who", player_id)
                 .n("amount", paid)
-                .msg("src", Msg::new("log.part.why").msg("why", src)),
+                .msg("src", Msg::new("log.part.reason").msg("reason", src)),
         );
         paid
     }
@@ -1063,7 +1132,7 @@ impl World {
     /// May this player build on this tile at all? The one
     /// build gate, asked both by the engine's build step and by a card choosing
     /// a destination. `None` = yes; otherwise the reason.
-    pub fn why_not_build_on(
+    pub fn cant_build_on(
         &self,
         data: &crate::data::GameData,
         player_id: i32,
@@ -1239,6 +1308,7 @@ impl World {
             props,
             group_skill,
             extra: false,
+            counter_max: BTreeMap::new(),
             note,
         };
         if player_id == crate::state::BOARD_OWNER {
@@ -1871,7 +1941,7 @@ impl World {
     //
     // A **tile mark** is a unit of some card instance's named counter, bound to
     // a tile. The same counter may also have units bound to a holder
-    // ([`Self::add_tok`] / `Counter`) or sitting on the card itself
+    // ([`Self::add_held_by_name`] / `Counter`) or sitting on the card itself
     // ([`Self::counter_at`]). Destroying the owning instance destroys every
     // unit, wherever it sits ([`Self::destroy_instance_units`]).
     //
@@ -1949,6 +2019,15 @@ impl World {
                     && m.src == src
             }) {
                 m.count += count;
+                self.mark_log.push(MarkLog {
+                    uid: m.uid,
+                    tile: m.tile,
+                    kind: m.kind.clone(),
+                    instance: m.instance.unwrap_or(-1),
+                    owner: m.owner,
+                    delta: count,
+                    card: Some(m.card.clone()).filter(|c| !c.is_empty()),
+                });
                 return m.uid;
             }
         }
@@ -1956,6 +2035,7 @@ impl World {
             .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
+        let log_card = Some(card.clone()).filter(|c| !c.is_empty());
         let uid = self.next_mark_uid();
         self.st.marks.push(TileMark {
             uid,
@@ -1970,6 +2050,15 @@ impl World {
             partner: None,
             note,
         });
+        self.mark_log.push(MarkLog {
+            uid,
+            tile,
+            kind: kind.to_string(),
+            instance: instance.unwrap_or(-1),
+            owner,
+            delta: count,
+            card: log_card,
+        });
         uid
     }
 
@@ -1982,6 +2071,13 @@ impl World {
         let uid = self.st.next_mark_uid.max(floor);
         self.st.next_mark_uid = uid.saturating_add(1);
         uid
+    }
+
+    /// Allocate the next raise uid. Monotonic and never-reuse for the lifetime
+    /// of the match; saved, so a replayed action re-issues the same ids.
+    pub fn next_trigger_uid(&mut self) -> i32 {
+        self.st.trigger_uid = self.st.trigger_uid.saturating_add(1);
+        self.st.trigger_uid
     }
 
     /// The marked tile of the row at `uid`, or -1 when no such row (the handle
@@ -2003,9 +2099,12 @@ impl World {
         if uid < 0 {
             return false;
         }
-        let before = self.st.marks.len();
+        let Some(m) = self.st.marks.iter().find(|m| m.uid == uid).cloned() else {
+            return false;
+        };
         self.st.marks.retain(|m| m.uid != uid);
-        self.st.marks.len() != before
+        self.log_mark_row(&m, -m.count);
+        true
     }
 
     /// Partner tile (`TileMark::partner`) of the first matching mark on `tile`,
@@ -2071,6 +2170,15 @@ impl World {
         let uid_a = self.next_mark_uid();
         let uid_b = self.next_mark_uid();
         for (uid, tile, partner) in [(uid_a, a, b), (uid_b, b, a)] {
+            self.mark_log.push(MarkLog {
+                uid,
+                tile,
+                kind: kind.to_string(),
+                instance: instance.unwrap_or(-1),
+                owner,
+                delta: count,
+                card: Some(card.clone()).filter(|c| !c.is_empty()),
+            });
             self.st.marks.push(TileMark {
                 uid,
                 tile,
@@ -2099,22 +2207,37 @@ impl World {
         else {
             return 0;
         };
+        let was = m.count;
         m.count = (m.count + delta).max(0);
         let now = m.count;
         let uid = m.uid;
+        let row = (now != was).then(|| m.clone());
         if now == 0 {
             self.st.marks.retain(|m| m.uid != uid);
+        }
+        if let Some(row) = row {
+            self.log_mark_row(&row, now - was);
         }
         now
     }
 
     /// Drop every matching mark on `tile`; returns how many rows were removed.
     pub fn remove_marks(&mut self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
-        let before = self.st.marks.len();
+        let gone: Vec<TileMark> = self
+            .st
+            .marks
+            .iter()
+            .filter(|m| m.tile == tile && filter.matches(m))
+            .cloned()
+            .collect();
+        for m in &gone {
+            self.log_mark_row(m, -m.count);
+        }
+        let n = gone.len() as i32;
         self.st
             .marks
             .retain(|m| !(m.tile == tile && filter.matches(m)));
-        (before - self.st.marks.len()) as i32
+        n
     }
 
     /// Destroy every counter unit owned by the instance at `uid` -- tile marks
@@ -2125,10 +2248,34 @@ impl World {
         if uid < 0 {
             return;
         }
+        let gone: Vec<TileMark> = self
+            .st
+            .marks
+            .iter()
+            .filter(|m| m.instance == Some(uid))
+            .cloned()
+            .collect();
+        for m in &gone {
+            self.log_mark_row(m, -m.count);
+        }
         self.st.marks.retain(|m| m.instance != Some(uid));
         for p in self.st.players.iter_mut() {
             p.tokens.retain(|t| t.instance != Some(uid));
         }
+    }
+
+    /// Record one mark mutation for the commit's `markChanged` drain. `delta`
+    /// is the effective signed change (a removal is negative).
+    pub(crate) fn log_mark_row(&mut self, m: &TileMark, delta: i32) {
+        self.mark_log.push(MarkLog {
+            uid: m.uid,
+            tile: m.tile,
+            kind: m.kind.clone(),
+            instance: m.instance.unwrap_or(-1),
+            owner: m.owner,
+            delta,
+            card: Some(m.card.clone()).filter(|c| !c.is_empty()),
+        });
     }
 
     // ------------------------------------------------- named card counters
@@ -2151,10 +2298,14 @@ impl World {
         let Some(f) = self.field_by_uid_mut(uid) else {
             return 0;
         };
+        let cap = f.counter_max.get(name).copied().unwrap_or(0);
         let slot = f.counters.entry(name.to_string()).or_insert(0);
         *slot = (*slot + n).max(0);
         if max > 0 {
             *slot = (*slot).min(max);
+        }
+        if cap > 0 {
+            *slot = (*slot).min(cap);
         }
         let now = *slot;
         // Event instances mirror their named counter count into the public
@@ -2172,6 +2323,28 @@ impl World {
             }
         }
         now
+    }
+
+    /// Stored per-instance ceiling of `name` at `uid` (`0` = uncapped).
+    pub fn counter_max_at(&self, uid: i32, name: &str) -> i32 {
+        self.field_by_uid(uid)
+            .and_then(|f| f.counter_max.get(name).copied())
+            .unwrap_or(0)
+    }
+
+    /// Set (`max > 0`) or clear (`0`) the instance's ceiling for `name`.
+    /// Returns the stored value, or `0` when the uid is dead.
+    pub fn set_counter_max_at(&mut self, uid: i32, name: &str, max: i32) -> i32 {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return 0;
+        };
+        if max > 0 {
+            f.counter_max.insert(name.to_string(), max);
+            max
+        } else {
+            f.counter_max.remove(name);
+            0
+        }
     }
 
     /// Set the on-card count of `name` on the instance at `uid`.

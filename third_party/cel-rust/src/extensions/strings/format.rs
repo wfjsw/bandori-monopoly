@@ -359,7 +359,6 @@ fn lossy_utf8(bytes: &[u8]) -> String {
     out
 }
 
-/// `d` in seconds, as Go's `Duration.Seconds()` computes them.
 #[cfg(feature = "chrono")]
 fn seconds(d: &CelDuration) -> f64 {
     d.num_seconds() as f64 + f64::from(d.subsec_nanos()) / 1e9

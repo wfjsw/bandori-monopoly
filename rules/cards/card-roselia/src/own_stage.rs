@@ -1,4 +1,3 @@
-//! `R:选择自己的舞台` -- C# `CardOwnStage` (MatchHost.cs:10710-10745): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:选择自己的舞台`）:
 //! > 选择自己的舞台：
@@ -33,10 +32,6 @@ pub const OWN_STAGE: CardDef = CardDef::new(
 
 /// The [异常移动效果] this chain link declared, as its `AbKind`.
 ///
-/// `trigger::abnormal_kind()` reads `t.Ab.Kind` on the settlement-hook kinds
-/// (`abnormal` / `abnormalGuard`); inside the `effect` [反击] window the kind
-/// is `Effect` and the abnormal rides the link's effect list instead -- each
-/// entry's `value` is its `AbKind`.
 fn abnormal_kind() -> Option<AbKind> {
     (0..ctx::effect::count()).find_map(|i| {
         (ctx::effect::kind(i) == TriggerKind::Abnormal)
@@ -59,17 +54,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("own_stage_ask_title")),
         &Msg::new(key!("own_stage_ask_text")),
     )?;
-    let why = if yes {
+    let reason = if yes {
         Msg::new(key!("own_stage_settle")).player_id("who", player_id)
     } else {
         Msg::new(key!("own_stage_no_settle")).player_id("who", player_id)
     };
-    ctx::log(player_id, &why);
+    ctx::log(player_id, &reason);
     // 规则书[反击]: 「选择自己的本次移动（或无法移动的回合结束时）是否触发结算」
-    // -- C# branched on `c.Trigger.Ab.Kind` (`stay`/`stun` → `stageEnd`, else
-    // `_resolveOverride[i]`). Both answers are engine state now (G03 §5.8): the
-    // move half is consumed into the move, the turn-end half by the settle
-    // runner before `turnEndBefore`.
+    // -- the old port branched on the abnormal kind (`stay`/`stun` → `stageEnd`,
+    // else the per-player settle override). Both answers are engine state now
+    // (G03 §5.8): the move half is consumed into the move, the turn-end half by
+    // the settle runner before `turnEndBefore`.
     use card_sdk::abi::SettleAnswer::{Settle, Skip};
     if matches!(
         abnormal_kind(),

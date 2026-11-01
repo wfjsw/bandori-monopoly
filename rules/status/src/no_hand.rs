@@ -16,7 +16,7 @@
 //!
 //! ## Placement (ordering -- `docs/STATUS-HOSTS.md` §4)
 //!
-//! There is no hook exactly between `tick_state` and `turn_snap` where the
+//! There is no hook exactly between `tick_state` and `turn_snapshot` where the
 //! old inline dance sat. The host therefore hooks:
 //!
 //! * **fold (2 -> 1) on `TurnStart`** -- *after* `tick_state(TurnStart)` and
@@ -24,7 +24,7 @@
 //!   the exile tick, so an exile-skipped turn (`log.exiled_skip` -> `end_turn`
 //!   without ever reaching `turnStart`) would consume the fold and the clear
 //!   would wipe the key mid-skip. `TurnStart` is not reached on that path,
-//!   matching the old dance exactly. `noHand` is not in `turn_snap`, so the
+//!   matching the old dance exactly. `noHand` is not in `turn_snapshot`, so the
 //!   shift from "before snapshot" to "after snapshot" is unobservable.
 //! * **clear (1 -> 0) on `TurnEnd`** -- hook-only (no counteraction window),
 //!   raised after `tick_state(TurnEnd)`, the same slot the inline clear had.

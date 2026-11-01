@@ -90,16 +90,16 @@ fn two_in_one_matches_the_pair_defs() {
     assert_eq!(t.charge_max(0), 2, "mana 上限2");
     let uid_after = t.m.world().persona_skill_uid(0);
     assert!(uid_after >= 0, "persona skill is on the field");
-    let row = t
-        .m
-        .world()
-        .st
-        .players[0]
+    let row = t.m.world().st.players[0]
         .tokens
         .iter()
         .find(|c| c.name == bandori_std::fire::KEY)
         .expect("fire row");
-    assert_eq!(row.instance, Some(uid_after), "fire is owned by the new skill");
+    assert_eq!(
+        row.instance,
+        Some(uid_after),
+        "fire is owned by the new skill"
+    );
     t.give(0, &["Sumimi:Sumimi是二人一体的"]);
     t.play(0, "Sumimi:Sumimi是二人一体的").expect("swap back");
     assert_eq!(t.charge(0), 2, "hina 初始2");
@@ -107,11 +107,7 @@ fn two_in_one_matches_the_pair_defs() {
     let uid_back = t.m.world().persona_skill_uid(0);
     assert!(uid_back >= 0);
     assert_ne!(uid_back, uid_after, "swap replaced the skill instance");
-    let rows: Vec<_> = t
-        .m
-        .world()
-        .st
-        .players[0]
+    let rows: Vec<_> = t.m.world().st.players[0]
         .tokens
         .iter()
         .filter(|c| c.name == bandori_std::fire::KEY)
@@ -133,16 +129,16 @@ fn fire_is_a_counter_of_the_persona_skill() {
     t.set_character_raw(0, "千早爱音");
     let skill = t.place_raw(0, "skill:千早爱音:重新开始");
     t.set_fire(0, 2, 3);
-    let row = t
-        .m
-        .world()
-        .st
-        .players[0]
+    let row = t.m.world().st.players[0]
         .tokens
         .iter()
         .find(|c| c.name == bandori_std::fire::KEY)
         .expect("fire row");
-    assert_eq!(row.instance, Some(skill), "instance is the persona-skill uid");
+    assert_eq!(
+        row.instance,
+        Some(skill),
+        "instance is the persona-skill uid"
+    );
     assert_eq!(row.value, 2);
     assert_eq!(row.max, 3, "live cap rides Counter.max");
 }
@@ -156,10 +152,7 @@ fn skill_unplace_drops_the_pots() {
     t.set_fire(0, 2, 3);
     t.m.world_mut().unplace_at(skill);
     assert_eq!(
-        t.m
-            .world()
-            .st
-            .players[0]
+        t.m.world().st.players[0]
             .tokens
             .iter()
             .filter(|c| c.name == bandori_std::fire::KEY)
@@ -178,23 +171,14 @@ fn temp_fire_is_a_second_row_of_the_same_instance() {
     let skill = t.place_raw(0, "skill:今井莉莎:慈爱女神");
     t.set_fire(0, 1, 2);
     // Grant through the kernel (arranges the row with the same owner).
-    t.m
-        .world_mut()
-        .set_tok(0, bandori_std::fire::TEMP_KEY, 1, skill, i32::MAX);
-    let pool = t
-        .m
-        .world()
-        .st
-        .players[0]
+    t.m.world_mut()
+        .set_held(0, bandori_std::fire::TEMP_KEY, 1, skill, i32::MAX);
+    let pool = t.m.world().st.players[0]
         .tokens
         .iter()
         .find(|c| c.name == bandori_std::fire::KEY)
         .expect("pool row");
-    let temp = t
-        .m
-        .world()
-        .st
-        .players[0]
+    let temp = t.m.world().st.players[0]
         .tokens
         .iter()
         .find(|c| c.name == bandori_std::fire::TEMP_KEY)
@@ -220,16 +204,12 @@ fn clearing_the_cap_to_zero_drops_the_row() {
     let skill = t.place_raw(0, "skill:千早爱音:重新开始");
     t.set_fire(0, 2, 3);
     // `redeclare(0, 0)` / `end_overlay` end up here: value 0, ceiling 0.
-    t.m
-        .world_mut()
-        .set_tok(0, bandori_std::fire::KEY, 0, skill, 0);
+    t.m.world_mut()
+        .set_held(0, bandori_std::fire::KEY, 0, skill, 0);
     assert_eq!(t.charge(0), 0, "value cleared");
     assert_eq!(t.charge_max(0), 0, "ceiling cleared, not left at 3");
     assert!(
-        t.m
-            .world()
-            .st
-            .players[0]
+        t.m.world().st.players[0]
             .tokens
             .iter()
             .all(|c| c.name != bandori_std::fire::KEY),
@@ -253,11 +233,7 @@ fn adjust_cap_binds_the_row_to_the_skill() {
     assert_eq!(t.charge(0), 0);
     assert_eq!(t.charge_max(0), 0);
     assert_eq!(t.adjust_fire_cap(0, 1), 1, "ceiling created at 1");
-    let row = t
-        .m
-        .world()
-        .st
-        .players[0]
+    let row = t.m.world().st.players[0]
         .tokens
         .iter()
         .find(|c| c.name == bandori_std::fire::KEY)
@@ -265,10 +241,7 @@ fn adjust_cap_binds_the_row_to_the_skill() {
     assert_eq!(row.instance, Some(skill), "owned by the persona-skill uid");
     t.m.world_mut().unplace_at(skill);
     assert!(
-        t.m
-            .world()
-            .st
-            .players[0]
+        t.m.world().st.players[0]
             .tokens
             .iter()
             .all(|c| c.name != bandori_std::fire::KEY),
@@ -385,7 +358,8 @@ fn fire_regime_fill_drain_burn() {
     assert_eq!(t.charge(0), 4);
     // drain 1 / burn_all: the spend path is `fire::regime::{drain,burn_all}` →
     // the pool spend verb. Pin the storage fold here (a dumb value op).
-    t.m.world_mut().set_tok(0, bandori_std::fire::KEY, 3, -1, 4);
+    t.m.world_mut()
+        .set_held(0, bandori_std::fire::KEY, 3, -1, 4);
     assert_eq!(t.charge(0), 3, "drain 1");
     t.set_fire(0, 0, 4);
     assert_eq!(t.charge(0), 0, "burn_all");

@@ -29,12 +29,22 @@ pub const CHUCHU: CardDef = CardDef::new(
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
         On::Action(Action::TurnStartBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             None,
             at_turn_start,
         )),
-        On::Action(Action::HouseAdded(card_sdk::pre::MINE, None, on_built)).silent(),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, at_turn_end)).silent(),
+        On::Action(Action::HouseAdded(
+            card_sdk::condition::MINE,
+            None,
+            on_built,
+        ))
+        .silent(),
+        On::Action(Action::TurnEnd(
+            card_sdk::condition::MINE,
+            None,
+            at_turn_end,
+        ))
+        .silent(),
     ],
 );
 

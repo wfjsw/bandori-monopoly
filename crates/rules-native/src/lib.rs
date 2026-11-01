@@ -27,7 +27,7 @@ use card_sdk::On;
 use game_rules::hostfns;
 use game_rules::tile_class;
 use game_rules::{
-    Call, CallOut, CardInfo, CardModules, DeclareOut, HookRun, HostCtx, HostErr, HostState,
+    Call, CallOut, CardInfo, CardModules, DeclareOut, HookRun, HostCtx, HostError, HostState,
     Outcome, RuleError, RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
 };
 use game_rules::{CardWorld, Msg, RulesBridge};
@@ -71,14 +71,17 @@ struct NativeIndex {
     /// Compiled guard conditions (docs/GUARDS.md G0), parallel to
     /// `cards[i].on[j]`. Read from the same `On::condition()` strings the
     /// sandbox manifest carries.
-    pre: Vec<Vec<Option<game_rules::CompiledPre>>>,
+    condition: Vec<Vec<Option<game_rules::CompiledCondition>>>,
     by_id: HashMap<String, i32>,
     declared: game_rules::KindMask,
 }
 
 impl NativeIndex {
-    fn pre(&self, card: i32, entry: i32) -> Option<&game_rules::CompiledPre> {
-        self.pre.get(card as usize)?.get(entry as usize)?.as_ref()
+    fn condition(&self, card: i32, entry: i32) -> Option<&game_rules::CompiledCondition> {
+        self.condition
+            .get(card as usize)?
+            .get(entry as usize)?
+            .as_ref()
     }
 }
 
@@ -87,7 +90,7 @@ impl NativeRulesHandle {
         tile_class::set_class_defs(bandori_std::kind::class_defs());
         game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
         let mut cards = Vec::new();
-        let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
+        let mut condition: Vec<Vec<Option<game_rules::CompiledCondition>>> = Vec::new();
         let mut by_id = HashMap::new();
         let mut declared = game_rules::KindMask::default();
         for module in RULESET {
@@ -101,8 +104,8 @@ impl NativeRulesHandle {
                     .map(|(_, o)| ManifestOn {
                         kind: o.kind() as i32,
                         triggers: o.triggers(),
-                        pre: {
-                            let p = o.condition();
+                        condition: {
+                            let p = o.condition_of();
                             if p.is_empty() {
                                 None
                             } else {
@@ -161,21 +164,22 @@ impl NativeRulesHandle {
                 let _ = &mut props;
                 // Compile every condition once (docs/GUARDS.md §4.3), from the
                 // same strings the sandbox manifest carries. Fail-closed.
-                let mut row: Vec<Option<game_rules::CompiledPre>> =
+                let mut row: Vec<Option<game_rules::CompiledCondition>> =
                     Vec::with_capacity(card.on.len());
                 for o in card.on.iter() {
-                    let src = o.condition();
-                    let compiled =
-                        if src.is_empty() {
-                            None
-                        } else {
-                            Some(game_rules::CompiledPre::compile(src).unwrap_or_else(|e| {
+                    let src = o.condition_of();
+                    let compiled = if src.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            game_rules::CompiledCondition::compile(src).unwrap_or_else(|e| {
                                 panic!("{}: bad condition {src:?}: {e}", card.id)
-                            }))
-                        };
+                            }),
+                        )
+                    };
                     row.push(compiled);
                 }
-                pre.push(row);
+                condition.push(row);
                 cards.push(CardInfo {
                     id: card.id.to_string(),
                     on,
@@ -214,7 +218,7 @@ impl NativeRulesHandle {
         Self {
             inner: Arc::new(NativeIndex {
                 cards,
-                pre,
+                condition,
                 by_id,
                 declared,
             }),
@@ -314,12 +318,12 @@ impl RulesHandle for NativeRulesHandle {
     }
     /// The compiled condition of `cards[i].on[entry]` (docs/GUARDS.md G0).
     /// **Must not fall back to the `RulesHandle` default (`None`)** -- that
-    /// reads as "no condition" and `admits_pre` / `admits_gate` then admit
-    /// every entry, which is how a `pre::MINE` hook ran for the wrong
+    /// reads as "no condition" and `admits_condition` / `admits_gate` then admit
+    /// every entry, which is how a `condition::MINE` hook ran for the wrong
     /// player on native while the sandbox skipped it (the drift `tests/drift.rs`
     /// caught in round 1).
-    fn pre(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledPre> {
-        self.inner.pre(i, entry)
+    fn condition(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledCondition> {
+        self.inner.condition(i, entry)
     }
 }
 
@@ -328,7 +332,7 @@ impl RulesHandle for NativeRulesHandle {
 // ---------------------------------------------------------------------------
 
 /// A host import aborted the run with a panic, so the guest never returns.
-/// The entry point folds this back into [`HostErr`] / `EXIT_NEED_INPUT`.
+/// The entry point folds this back into [`HostError`] / `EXIT_NEED_INPUT`.
 pub enum NativeExit {
     NeedInput,
     Trap(String),
@@ -354,17 +358,17 @@ impl HostCtx for NativeHost {
     fn st_mut(&mut self) -> &mut NativeHostState {
         &mut self.state
     }
-    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr> {
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostError> {
         Ok(card_sdk::native::read(ptr, len as usize))
     }
-    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr> {
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostError> {
         card_sdk::native::write(ptr, bytes);
         Ok(())
     }
-    fn fuel(&mut self) -> Result<u64, HostErr> {
+    fn fuel(&mut self) -> Result<u64, HostError> {
         Ok(self.fuel)
     }
-    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostError> {
         self.fuel = v;
         Ok(())
     }
@@ -378,7 +382,7 @@ impl HostCtx for NativeHost {
         player_id: i32,
         arg: &[u8],
         want_msg: bool,
-    ) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
+    ) -> (Result<CallOut, HostError>, NativeHostState, u64) {
         let fuel = self.fuel;
         let (res, state, left) = run_on(nested, card, entry, op, player_id, arg, want_msg, fuel);
         (res, state, left)
@@ -396,7 +400,7 @@ fn quiet_control_flow_panics() {
     INSTALL.call_once(|| {
         let prev = take_hook();
         set_hook(Box::new(move |info: &PanicHookInfo<'_>| {
-            if info.payload().is::<NativeExit>() || info.payload().is::<HostErr>() {
+            if info.payload().is::<NativeExit>() || info.payload().is::<HostError>() {
                 return;
             }
             prev(info);
@@ -423,11 +427,11 @@ thread_local! {
 struct DepthGuard;
 
 impl DepthGuard {
-    fn enter() -> Result<Self, HostErr> {
+    fn enter() -> Result<Self, HostError> {
         RUN_DEPTH.with(|d| {
             let v = d.get();
             if v >= MAX_RUN_DEPTH {
-                return Err(HostErr::trap(format!(
+                return Err(HostError::trap(format!(
                     "guest call nested deeper than {MAX_RUN_DEPTH}"
                 )));
             }
@@ -452,10 +456,16 @@ fn run_on(
     arg: &[u8],
     want_msg: bool,
     fuel: u64,
-) -> (Result<CallOut, HostErr>, NativeHostState, u64) {
+) -> (Result<CallOut, HostError>, NativeHostState, u64) {
     let rules = match nested.rules.clone() {
         Some(r) => r,
-        None => return (Err(HostErr::trap("call_entry without rules")), nested, fuel),
+        None => {
+            return (
+                Err(HostError::trap("call_entry without rules")),
+                nested,
+                fuel,
+            )
+        }
     };
     let _depth = match DepthGuard::enter() {
         Ok(g) => g,
@@ -485,20 +495,20 @@ fn run_on(
     let out = match res {
         Ok(v) => {
             if v == card_sdk::abi::EXIT_NEED_INPUT as i64 {
-                Err(HostErr::NeedInput)
+                Err(HostError::NeedInput)
             } else {
                 Ok(CallOut::Code(v))
             }
         }
         Err(p) => {
             if let Some(NativeExit::NeedInput) = p.downcast_ref::<NativeExit>() {
-                Err(HostErr::NeedInput)
+                Err(HostError::NeedInput)
             } else if let Some(NativeExit::Trap(m)) = p.downcast_ref::<NativeExit>() {
-                Err(HostErr::Trap(m.clone()))
-            } else if let Some(e) = p.downcast_ref::<HostErr>() {
+                Err(HostError::Trap(m.clone()))
+            } else if let Some(e) = p.downcast_ref::<HostError>() {
                 Err(e.clone())
             } else {
-                Err(HostErr::Trap(
+                Err(HostError::Trap(
                     p.downcast_ref::<String>()
                         .cloned()
                         .unwrap_or_else(|| "card panicked".into()),
@@ -517,7 +527,7 @@ fn run_on(
                 let bytes = card_sdk::native::read(ptr as i32, len as usize);
                 match postcard::from_bytes::<card_sdk::msg::Msg>(&bytes) {
                     Ok(m) => Ok(CallOut::Msg(Some(game_rules::engine_msg(m)))),
-                    Err(_) => Err(HostErr::trap(
+                    Err(_) => Err(HostError::trap(
                         "cant_play: guest message is not Msg postcard",
                     )),
                 }
@@ -534,7 +544,7 @@ fn run_on(
 /// `host::finish`.
 fn finish(
     state: NativeHostState,
-    res: Result<CallOut, HostErr>,
+    res: Result<CallOut, HostError>,
 ) -> Result<Outcome<Run>, RuleError> {
     match res {
         Ok(_) => {
@@ -547,7 +557,7 @@ fn finish(
                 state.world.expect("world is restored after nested calls"),
             ))
         }
-        Err(HostErr::NeedInput) => {
+        Err(HostError::NeedInput) => {
             if let Some(req) = state.host_request {
                 let world = state.world.expect("world is restored after nested calls");
                 Ok(Outcome::NeedHost(req, world))
@@ -557,7 +567,7 @@ fn finish(
                 Err(RuleError::Trap("need-input exit without a prompt".into()))
             }
         }
-        Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+        Err(HostError::Trap(m)) => Err(RuleError::Trap(m)),
     }
 }
 
@@ -611,7 +621,7 @@ impl NativeModules {
         }
         let mut first_ungated = None;
         for &entry in &entries {
-            if self.entry_guard_is_none(card, entry) && self.pre(card, entry).is_none() {
+            if self.entry_guard_is_none(card, entry) && self.condition(card, entry).is_none() {
                 first_ungated.get_or_insert(entry);
                 continue;
             }
@@ -650,14 +660,14 @@ impl NativeModules {
         card: i32,
         entry: i32,
         player_id: i32,
-        scope: &game_rules::cond_pre::WindowScope,
-        cand: &game_rules::cond_pre::CandidateCtx,
+        scope: &game_rules::condition::WindowScope,
+        cand: &game_rules::condition::CandidateCtx,
         answers: &[i32],
     ) -> bool {
-        let pre = self.index.pre(card, entry);
+        let condition = self.index.condition(card, entry);
         if self.entry_guard_is_none(card, entry) {
             // G4 deleted the residual: the condition alone decides.
-            return game_rules::cond_pre::admits_pre(pre, Some(scope), cand);
+            return game_rules::condition::admits_condition(condition, Some(scope), cand);
         }
         let mut state = Some(HostState::new(
             self.index.clone(),
@@ -665,29 +675,30 @@ impl NativeModules {
             answers.to_vec(),
             0,
         ));
-        let asked: Result<bool, ()> = game_rules::cond_pre::admits(pre, Some(scope), cand, || {
-            let st = state.take().expect("host state present");
-            // A guard is a pure query: refuse inline answers (see
-            // `game_rules::inline`).
-            let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
-                run_on(
-                    st,
-                    card,
-                    entry,
-                    export::OP_GUARD,
-                    player_id,
-                    &[],
-                    false,
-                    DEFAULT_FUEL,
-                )
+        let asked: Result<bool, ()> =
+            game_rules::condition::admits(condition, Some(scope), cand, || {
+                let st = state.take().expect("host state present");
+                // A guard is a pure query: refuse inline answers (see
+                // `game_rules::inline`).
+                let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
+                    run_on(
+                        st,
+                        card,
+                        entry,
+                        export::OP_GUARD,
+                        player_id,
+                        &[],
+                        false,
+                        DEFAULT_FUEL,
+                    )
+                });
+                state = Some(st);
+                Ok(match res {
+                    Ok(CallOut::Code(0)) => false,
+                    Ok(_) => true,
+                    Err(_) => false,
+                })
             });
-            state = Some(st);
-            Ok(match res {
-                Ok(CallOut::Code(0)) => false,
-                Ok(_) => true,
-                Err(_) => false,
-            })
-        });
         matches!(asked, Ok(true))
     }
 }
@@ -724,8 +735,8 @@ impl CardModules for NativeModules {
     fn declares(&self, kind: TriggerKind) -> bool {
         self.index.declares(kind)
     }
-    fn pre(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledPre> {
-        self.index.pre(i, entry)
+    fn condition(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledCondition> {
+        self.index.condition(i, entry)
     }
     fn entry_guard_is_none(&self, card: i32, entry: i32) -> bool {
         self.cards()
@@ -743,7 +754,7 @@ impl CardModules for NativeModules {
         let Some(entry) = info.entry(OnKind::Play, None) else {
             return true;
         };
-        self.entry_guard_is_none(card, entry) && self.pre(card, entry).is_none()
+        self.entry_guard_is_none(card, entry) && self.condition(card, entry).is_none()
     }
     fn sha256(&self) -> Option<&str> {
         Some(&self.sha)
@@ -782,8 +793,8 @@ impl CardModules for NativeModules {
                 | Call::Build { .. }
         ) {
             let scope =
-                game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
-            let cand = game_rules::cond_pre::fill_candidate(
+                game_rules::condition::window_scope(&game_rules::condition::fill_window(world));
+            let cand = game_rules::condition::fill_candidate(
                 world,
                 player_id,
                 &info.id,
@@ -829,8 +840,8 @@ impl CardModules for NativeModules {
         if entries.is_empty() {
             return Ok(None);
         }
-        let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
-        let cand = game_rules::cond_pre::fill_candidate(
+        let scope = game_rules::condition::window_scope(&game_rules::condition::fill_window(world));
+        let cand = game_rules::condition::fill_candidate(
             world,
             player_id,
             &info.id,
@@ -839,6 +850,11 @@ impl CardModules for NativeModules {
         let mut cur = world.clone();
         let mut announced = false;
         let mut ran_any = false;
+        // One cursor threads the whole `run_hook` call, mirrors
+        // `Ruleset::run_hook` (`Admitted`): every guard, declare and body
+        // reads the shared answer log in order, so an answer one entry's
+        // raise consumed is never re-read by the next entry's body.
+        let mut next_answer = 0usize;
         for entry in entries {
             let mut state = Some(HostState::new(
                 self.index.clone(),
@@ -846,18 +862,19 @@ impl CardModules for NativeModules {
                 answers.to_vec(),
                 0,
             ));
+            state.as_mut().expect("host state present").next_answer = next_answer;
             // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
             // flashes).
             {
                 // docs/GUARDS.md §4.4: every guard call goes through `admits`.
-                let pre = self.index.pre(card, entry);
+                let condition = self.index.condition(card, entry);
                 let admitted = if self.entry_guard_is_none(card, entry) {
                     // G4 deleted the residual: the condition alone decides.
-                    game_rules::cond_pre::admits_pre(pre, Some(&scope), &cand)
+                    game_rules::condition::admits_condition(condition, Some(&scope), &cand)
                 } else {
                     let asked: Result<bool, ()> =
-                        game_rules::cond_pre::admits(pre, Some(&scope), &cand, || {
+                        game_rules::condition::admits(condition, Some(&scope), &cand, || {
                             let st = state.take().expect("host state present");
                             // A guard is a pure query: refuse inline answers (see
                             // `game_rules::inline`).
@@ -883,6 +900,9 @@ impl CardModules for NativeModules {
                     matches!(asked, Ok(true))
                 };
                 if !admitted {
+                    if let Some(st) = state.as_ref() {
+                        next_answer = st.next_answer;
+                    }
                     continue;
                 }
                 announced = true;
@@ -902,10 +922,13 @@ impl CardModules for NativeModules {
                 DEFAULT_FUEL,
             );
             ran_any = true;
+            let after_body = state.next_answer;
             let outcome = finish(state, res)?;
             match outcome {
                 Outcome::Done(w) => {
+                    // Later entries see earlier writes and earlier answers.
                     cur = w;
+                    next_answer = after_body;
                 }
                 paused => {
                     return Ok(Some(HookRun {
@@ -925,7 +948,7 @@ impl CardModules for NativeModules {
     }
 
     fn can_counteract(&self, world: &Run, card: i32, player_id: i32) -> Result<bool, RuleError> {
-        let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
+        let scope = game_rules::condition::window_scope(&game_rules::condition::fill_window(world));
         self.can_counteract_scoped(world, card, player_id, &scope)
     }
 
@@ -937,7 +960,7 @@ impl CardModules for NativeModules {
         world: &Run,
         card: i32,
         player_id: i32,
-        scope: &game_rules::cond_pre::WindowScope,
+        scope: &game_rules::condition::WindowScope,
     ) -> Result<bool, RuleError> {
         let info = self
             .index
@@ -947,13 +970,17 @@ impl CardModules for NativeModules {
             return Ok(false);
         };
         // docs/GUARDS.md §4.4: condition first, guard second, one `admits`.
-        let pre = self.index.pre(card, entry);
-        let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
+        let condition = self.index.condition(card, entry);
+        let cand = game_rules::condition::fill_candidate(world, player_id, &info.id, false);
         if self.entry_guard_is_none(card, entry) {
             // G4 deleted the residual: the condition alone decides.
-            return Ok(game_rules::cond_pre::admits_pre(pre, Some(scope), &cand));
+            return Ok(game_rules::condition::admits_condition(
+                condition,
+                Some(scope),
+                &cand,
+            ));
         }
-        game_rules::cond_pre::admits(pre, Some(scope), &cand, || {
+        game_rules::condition::admits(condition, Some(scope), &cand, || {
             let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
             let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
                 run_on(
@@ -973,8 +1000,8 @@ impl CardModules for NativeModules {
             match res {
                 Ok(CallOut::Code(v)) => Ok(v != 0),
                 Ok(_) => Ok(true),
-                Err(HostErr::NeedInput) => Err(RuleError::GuardPrompted),
-                Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+                Err(HostError::NeedInput) => Err(RuleError::GuardPrompted),
+                Err(HostError::Trap(m)) => Err(RuleError::Trap(m)),
             }
         })
     }
@@ -987,21 +1014,21 @@ impl CardModules for NativeModules {
         let Some(entry) = info.entry(OnKind::Play, None) else {
             return Ok(None);
         };
-        let pre = self.index.pre(card, entry);
-        // Scope only when a condition exists (`pre == None` never reads it) --
+        let condition = self.index.condition(card, entry);
+        // Scope only when a condition exists (`condition == None` never reads it) --
         // the `cant_play` hot path (the policy / view extras ask it per hand card).
         let scope;
-        let scope: Option<&game_rules::cond_pre::WindowScope> = if pre.is_some() {
-            scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window_ambient(
-                world, player_id,
-            ));
+        let scope: Option<&game_rules::condition::WindowScope> = if condition.is_some() {
+            scope = game_rules::condition::window_scope(
+                &game_rules::condition::fill_window_ambient(world, player_id),
+            );
             Some(&scope)
         } else {
             None
         };
-        let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
-        game_rules::cond_pre::admits_gate(
-            pre,
+        let cand = game_rules::condition::fill_candidate(world, player_id, &info.id, false);
+        game_rules::condition::admits_gate(
+            condition,
             scope,
             &cand,
             || Msg::new("err.play_pre"),
@@ -1023,8 +1050,8 @@ impl CardModules for NativeModules {
                     Ok(CallOut::Msg(m)) => Ok(m),
                     Ok(CallOut::Code(0)) => Ok(None),
                     Ok(CallOut::Code(_)) => Ok(None),
-                    Err(HostErr::NeedInput) => Err(RuleError::GuardPrompted),
-                    Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+                    Err(HostError::NeedInput) => Err(RuleError::GuardPrompted),
+                    Err(HostError::Trap(m)) => Err(RuleError::Trap(m)),
                 }
             },
         )
@@ -1078,14 +1105,14 @@ impl CardModules for NativeModules {
                 Ok(DeclareOut::Arg(bytes))
             }
             Ok(_) => Ok(DeclareOut::Arg(Vec::new())),
-            Err(HostErr::NeedInput) => {
+            Err(HostError::NeedInput) => {
                 if let Some(p) = st.asked {
                     Ok(DeclareOut::Paused(p))
                 } else {
                     Err(RuleError::Trap("need-input without a prompt".into()))
                 }
             }
-            Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+            Err(HostError::Trap(m)) => Err(RuleError::Trap(m)),
         }
     }
 }

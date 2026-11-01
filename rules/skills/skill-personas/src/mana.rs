@@ -107,7 +107,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("mana_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("mana_spend")))? {
         return Ok(());
     }
     // 「可向抵押格子正常支付其原本收费，若为无主格子则为消耗对应收费资金」 --
@@ -128,7 +128,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「你的资金消耗减半」. `value > 0` is the pre.
+/// 「你的资金消耗减半」. `value > 0` is the condition.
 /// Pure Filter body (ABI v74 Pattern A): the ceil-half figure is the return.
 fn on_pay(_player_id: i32, value: i32) -> i32 {
     (value + 1) / 2

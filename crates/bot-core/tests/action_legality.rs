@@ -2,7 +2,7 @@
 //! (`docs/BOT.md` §3.4; `bot_cpu` §6's forced-buy refusal loop).
 //!
 //! Buy / build are no longer END-step turn acts. They happen only by answering
-//! a settle Ask (`ctx::offer_buy` / `ctx::offer_build` → `Action::Offer` →
+//! a settle Ask (`ctx::offer_buy` / `ctx::offer_build` → `Action::Answer` →
 //! `act:"answer"`). These tests pin that split: the END surface is decline /
 //! end only, and settle buy / build prompts remain on the prompt-answer path.
 
@@ -91,7 +91,7 @@ fn end_surface(data: &GameData, tile: usize, money: i32) -> (MatchState, Vec<Str
     st.owners = vec![-1; data.tiles.len()];
     st.houses = vec![0; data.tiles.len()];
     st.mortgaged = vec![false; data.tiles.len()];
-    // The engine's end gate (why_not_act's end branch): a player under the
+    // The engine's end gate (cant_act's end branch): a player under the
     // hand limit at 结束 may end the turn.
     st.can_end_here = true;
     st.can_roll_here = false;
@@ -217,7 +217,7 @@ fn end_surface_poor_seat_still_only_decline() {
 #[test]
 fn settle_buy_prompt_is_an_offer_answer_not_a_buy_act() {
     // The settle Ask (`ctx::offer_buy`) is the ONE buy path: both options are
-    // `Action::Offer`, and they serialize to `act:"answer"`.
+    // `Action::Answer`, and they serialize to `act:"answer"`.
     let data = data();
     let tile = some_property(&data);
     let price = data.tiles.get(tile).map(|t| t.price).unwrap_or(0);
@@ -225,7 +225,7 @@ fn settle_buy_prompt_is_an_offer_answer_not_a_buy_act() {
     let acts = action::legal_actions(&data, &st, &[], &[], 1);
     assert_eq!(
         acts,
-        vec![Action::Offer { index: 0 }, Action::Offer { index: 1 }],
+        vec![Action::Answer { index: 0 }, Action::Answer { index: 1 }],
         "buy Ask is yes/no offers: {:?}",
         acts
     );
@@ -246,7 +246,7 @@ fn settle_build_prompt_is_an_offer_answer_not_a_build_act() {
     let acts = action::legal_actions(&data, &st, &[], &[], 1);
     assert_eq!(
         acts,
-        vec![Action::Offer { index: 0 }, Action::Offer { index: 1 }],
+        vec![Action::Answer { index: 0 }, Action::Answer { index: 1 }],
         "build Ask is yes/no offers: {:?}",
         acts
     );
@@ -273,7 +273,7 @@ fn settle_buy_is_always_optional_so_no_forced_mortgage_to_buy() {
     let st = state_with_prompt(settle_buy_prompt(tile, price));
     let acts = action::legal_actions(&data, &st, &[], &[], 1);
     assert!(
-        acts.contains(&Action::Offer { index: 1 }),
+        acts.contains(&Action::Answer { index: 1 }),
         "the no-buy fallback must remain on the menu: {:?}",
         acts
     );

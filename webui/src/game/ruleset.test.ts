@@ -4,7 +4,7 @@
 //
 // Loads the REAL built ruleset into the REAL browser glue -- the same
 // `loadRulesetInto` sequence `webui/src/core/data.ts` runs on the page -- and
-// asserts it comes up with zero load errors and that a card with a `pre`
+// asserts it comes up with zero load errors and that a card with a `condition`
 // actually evaluates. This is what broke when G4 first shipped conditions:
 // the glue is `runtime-only` (no CEL parser) and nothing was shipping the
 // compiled form to it, so every solo match silently lost its card rules.
@@ -21,12 +21,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadRulesetInto, type RulesetGlue, type RulesetIndex } from "../core/rulesetLoad.ts";
 
 /** The real `index.json`: module entries embed the card manifests, which is
- *  where `pre` sources live (`ManifestOn.pre`). */
+ *  where `condition` sources live (`ManifestOn.condition`). */
 type BuiltIndex = RulesetIndex & {
   ruleset_sha256: string;
   modules: {
     file: string;
-    cards: { id: string; on: ({ pre?: string | null } | null)[] }[];
+    cards: { id: string; on: ({ condition?: string | null } | null)[] }[];
   }[];
 };
 
@@ -70,14 +70,14 @@ function reader(dir: string) {
   return async (rel: string) => new Uint8Array(readFileSync(join(dir, rel)));
 }
 
-/** Every `(card, entry)` the built index says declares a `pre`, plus its
+/** Every `(card, entry)` the built index says declares a `condition`, plus its
  *  source text -- from the same `index.json` the loader reads. */
-function preSources(index: BuiltIndex): { card: string; entry: number; pre: string }[] {
-  const out: { card: string; entry: number; pre: string }[] = [];
+function preSources(index: BuiltIndex): { card: string; entry: number; condition: string }[] {
+  const out: { card: string; entry: number; condition: string }[] = [];
   for (const m of index.modules) {
     for (const c of m.cards ?? []) {
       (c.on ?? []).forEach((o, entry) => {
-        if (o?.pre) out.push({ card: c.id, entry, pre: o.pre });
+        if (o?.condition) out.push({ card: c.id, entry, condition: o.condition });
       });
     }
   }
@@ -117,7 +117,7 @@ test("the real built ruleset loads into the browser glue exactly like the page",
   const n = await loadRulesetInto(glue as unknown as RulesetGlue, reader(dir));
   assert.equal(n, index.modules.length, "every listed module loads");
   assert.ok(n > 0, "the ruleset is not empty");
-  // Zero load errors: `ruleset_build` returned, so no `BadPre`, and the glue
+  // Zero load errors: `ruleset_build` returned, so no `BadCondition`, and the glue
   // has a live ruleset (not StubRules) -- `engine_stamp` reports its hash.
   const stamp = JSON.parse(glue.engine_stamp());
   assert.match(stamp.ruleset_sha256, /^[0-9a-f]{64}$/, "a real ruleset, not \"stub\"");
@@ -128,7 +128,7 @@ test("the shipped ruleset has precompiled conditions and they evaluate", async (
   const { glue, dir } = await loadGlue("eval");
   const index = readIndex(dir);
   const pres = preSources(index);
-  assert.ok(pres.length > 0, "the gate is meaningless until a shipped card has a `pre`");
+  assert.ok(pres.length > 0, "the gate is meaningless until a shipped card has a `condition`");
   assert.ok(index.conds?.file, "index.json must name the precompiled conds blob");
   assert.ok(existsSync(join(dir, index.conds!.file)), `and it must be shipped: ${index.conds!.file}`);
 
@@ -138,23 +138,23 @@ test("the shipped ruleset has precompiled conditions and they evaluate", async (
   // Walk == 0, Teleport == 1 (rules-cond kinds::mv).
   const found = pres.find((p) => p.card === REPORTED.card && p.entry === REPORTED.entry);
   if (found) {
-    assert.equal(found.pre, "actor == owner && move.roll != null && move.kind != Teleport");
+    assert.equal(found.condition, "actor == owner && move.roll != null && move.kind != Teleport");
     const ev = (w: readonly [string, string]) => glue.ruleset_pre_eval(REPORTED.card, REPORTED.entry, w[0], w[1]);
     assert.equal(ev(probe({ actor: 0, owner: 0, roll: 5, moveKind: 0 })), true, "own move with a roll: yes");
     assert.equal(ev(probe({ actor: 1, owner: 0, roll: 5, moveKind: 0 })), false, "someone else's move: no");
     assert.equal(ev(probe({ actor: 0, owner: 0, roll: null, moveKind: 0 })), false, "no roll: no");
     assert.equal(ev(probe({ actor: 0, owner: 0, roll: 5, moveKind: 1 })), false, "teleport: no");
   } else {
-    // Card renamed/retargeted: still exercise a live `pre` -- any `actor ==
+    // Card renamed/retargeted: still exercise a live `condition` -- any `actor ==
     // owner` clause must distinguish seats.
-    const mine = pres.find((p) => /\bactor == owner\b/.test(p.pre));
+    const mine = pres.find((p) => /\bactor == owner\b/.test(p.condition));
     assert.ok(mine, `no probeable pre among ${pres.length}; update this gate`);
     const ev = (w: readonly [string, string]) => glue.ruleset_pre_eval(mine.card, mine.entry, w[0], w[1]);
     assert.equal(ev(probe({ actor: 0, owner: 0 })), true, "own window: yes");
     assert.equal(ev(probe({ actor: 1, owner: 0 })), false, "other seat: no");
   }
 
-  // Every shipped `pre` decodes and evaluates through the runtime-only path
+  // Every shipped `condition` decodes and evaluates through the runtime-only path
   // (a missing blob entry would have failed the load above; a corrupt one
   // fails here).
   for (const p of pres) {
@@ -163,7 +163,7 @@ test("the shipped ruleset has precompiled conditions and they evaluate", async (
   }
 });
 
-test("a card with a `pre` and no precompiled entry fails loudly", async () => {
+test("a card with a `condition` and no precompiled entry fails loudly", async () => {
   const { glue, dir } = await loadGlue("noblob");
   const index = readIndex(dir);
   assert.ok(index.conds?.file, "this test needs a ruleset that ships conditions");
@@ -173,7 +173,7 @@ test("a card with a `pre` and no precompiled entry fails loudly", async () => {
   await assert.rejects(
     async () => void glue.ruleset_build(),
     (e: Error) => {
-      assert.match(String(e), /BadPre|precompiled/i, `loud, not "treat as true": ${e}`);
+      assert.match(String(e), /BadCondition|bad condition|precompiled/i, `loud, not "treat as true": ${e}`);
       return true;
     },
   );

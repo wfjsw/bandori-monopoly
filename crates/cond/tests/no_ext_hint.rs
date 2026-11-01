@@ -27,7 +27,10 @@ fn unknown_var_names_spelling_and_install_hint() {
         other => panic!("expected UnknownVar, got {other:?}"),
     }
     let msg = err.to_string();
-    assert!(msg.contains("owner.charge"), "must name the spelling: {msg}");
+    assert!(
+        msg.contains("owner.charge"),
+        "must name the spelling: {msg}"
+    );
     assert!(
         msg.contains("CondExt not installed"),
         "must say CondExt not installed: {msg}"

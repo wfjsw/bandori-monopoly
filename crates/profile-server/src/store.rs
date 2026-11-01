@@ -245,7 +245,13 @@ impl Store {
 
     /// Store one uploaded blob. The bytes land under `uploads/{id}/` before
     /// the index entry is written; a failed index write removes them again.
-    pub fn put_upload(&self, name: &str, kind: &str, owner: &str, bytes: &[u8]) -> ApiResult<Upload> {
+    pub fn put_upload(
+        &self,
+        name: &str,
+        kind: &str,
+        owner: &str,
+        bytes: &[u8],
+    ) -> ApiResult<Upload> {
         let id = random_hex(12);
         let name = safe_filename(name);
         let dir = self.upload_dir(&id);
@@ -303,7 +309,11 @@ fn safe_filename(name: &str) -> String {
         .take(96)
         .collect();
     let cleaned = cleaned.trim_start_matches('.').to_string();
-    if cleaned.is_empty() { "upload.bin".to_string() } else { cleaned }
+    if cleaned.is_empty() {
+        "upload.bin".to_string()
+    } else {
+        cleaned
+    }
 }
 
 /// `n` random bytes as hex.

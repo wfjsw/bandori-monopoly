@@ -25,17 +25,19 @@ pub const MORFONICA: CardDef = CardDef::new(
         On::Action(Action::PayAfter(
             "actor == owner && value >= 2000 && target != owner",
             None,
-            after_pay)),
+            after_pay,
+        )),
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
         On::Action(Actions::PassRewardAffected(
             "actor == owner && value == 0",
             None,
-            on_circle)),
+            on_circle,
+        )),
     ],
 );
 
-/// （1）「当你一次性失去2000以上资金时，抽一张卡」. Applicability is the `pre`;
+/// （1）「当你一次性失去2000以上资金时，抽一张卡」. Applicability is the `condition`;
 /// this side only draws.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
     ctx::draw(player_id, 1)?;
@@ -47,7 +49,7 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「[CiRCLE奖励]选择[获得]资金时…设资金量为1000，1500，2000的循环」 --
-/// `value == 0` is the money option (the `pre`).
+/// `value == 0` is the money option (the `condition`).
 fn on_circle(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, TAKEN) % 3;
     state::set(player_id, TAKEN, state::get(player_id, TAKEN) + 1);

@@ -16,15 +16,11 @@ use card_sdk::serde;
 use card_sdk::{it, Activation, CardText};
 use card_sdk::{key, Action, CardDef, Declared, Filter, Msg, On, PlanValue};
 
-/// The four 「"afterglow"式的移动」 plans the C# offers, as the skill ids whose
-/// press entry (`On::Play`, the character's （2）) each one is.
 ///
 /// TODO(规则书)[judgement] OPEN-afterglow式移动
-/// (`docs/rulebook/spec/OPEN-QUESTIONS.md:224`): 「初始Afterglow角色」 is never
-/// named in the book, so which (2) is 「"afterglow"式的移动」 is still open.
-/// These four stay the C# reading (Ran reverse / Tomoe start / Himari odd /
-/// Himari even). The two Himari rows are the same skill -- the pick is the
-/// parity, not a second character.
+/// (`docs/rulebook/spec/OPEN-QUESTIONS.md:224`): 「初始Afterglow角色」 is never named
+/// in the book, so which (2) is 「"afterglow"式的移动」 is still open. The two Himari
+/// rows are the same skill -- the pick is the parity, not a second character.
 const PLANS: [&str; 4] = [
     "skill:美竹兰:叛逆的红挑染",
     "skill:宇田川巴:豚骨酱油拉面大姐",
@@ -41,8 +37,8 @@ pub const DETOUR: CardDef = CardDef::new(
             // candidate (2) is activatable (docs/ACTIVATION.md §3 -- the
             // card's own activation depends on the skill's gate).
             Some(|player_id| {
-                if let Some(why) = rules_status::move_blocked(player_id) {
-                    return Some(why);
+                if let Some(reason) = rules_status::move_blocked(player_id) {
+                    return Some(reason);
                 }
                 if !some_plan_fires(player_id) {
                     return Some(Msg::new(key!("detour_no_skill")));
@@ -60,13 +56,10 @@ pub const DETOUR: CardDef = CardDef::new(
         // 规则书: 「(1)此卡可作为反击使用」
         On::Counteract(
             &[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport",
-            // The window opens at `diceRollResult`, after the main move already
-            // latched `main_moved` (`cant_move` 2) and possibly for a roll
-            // outside this seat's turn (1) -- both are expected here, so only
-            // the [停留] move gate (3) refuses.
-            // TODO(规则书)（(1)此卡可作为反击使用）: the sheet gives no gate -- the
-            //   not-your-turn / already-moved / [停留] split is the C#
-            //   `MoveWhyNot` reading.
+            // TODO(规则书)（(1)此卡可作为反击使用）: The window opens at `diceRollResult`, after the main
+            // move already latched `main_moved` (`cant_move` 2) and possibly for a roll
+            // outside this seat's turn (1) -- both are expected here, so only the [停留] move
+            // gate (3) refuses.
             Some(|player_id| {
                 ctx::cant_move_code(player_id) != 3 && some_plan_fires(player_id)
             }),
@@ -176,7 +169,7 @@ fn pick_plan(player_id: i32) -> Declared<DetourPick> {
             map.push(i);
         }
     }
-    let k = ctx::ask_pick(
+    let k = ctx::ask_choice(
         player_id,
         &Msg::new(key!("detour_title")),
         &Msg::new(key!("detour_ask")),
@@ -195,20 +188,10 @@ const fn unused_body(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn play_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
-    // 规则书(2): 「进行一次 "afterglow"式的移动（视为使用一次初始Afterglow角色的（2）效果）」
-    // The pick was made at declaration time (`pick_plan`); `pick.plan` is a
-    // [`PLANS`] index.
-    // TODO(规则书)[judgement] OPEN-afterglow式移动: the four plans below are
-    //   the C# reading, not the text's.
-    // TODO(规则书)（视为使用一次初始Afterglow角色的（2）效果）: calling the skill
-    //   card instead (`ctx::invoke_skill`) would make the skill body spend a
-    //   fire pot and reset `REST_TURNS`, which the C# detour did not -- whether
-    //   「视为使用」 pays the cost is an open ruling, so the plan mutations stay
-    //   inlined.
+    // TODO(规则书)[judgement] TODO(规则书)（视为使用一次初始Afterglow角色的（2） 规则书(2): 「进行一次
+    // "afterglow"式的移动（视为使用一次初始Afterglow角色的（2）效果）」 The pick was made at declaration
+    // time (`pick_plan`); `pick.plan` is a [`PLANS`] index.
     apply_plan(player_id, pick);
-    // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `plan.Base.Clear();
-    // plan.Base.Add((1, 6, "（回家的路上绕个道）"))` (MatchHost.cs:1337-1338)
-    // replaces this turn's move dice with 1d6 (`plan::set_base_dice` is that).
     // The counteraction path's `NextRollFx` half is separate (below).
     ctx::plan::set_base_dice(1, 6, "（回家的路上绕个道）");
     ctx::log(
@@ -218,38 +201,29 @@ fn play_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     Ok(())
 }
 
-/// The four plans mutate the turn's `MoveCtx` (C# `H._turnCtx.Plan`).
-/// `pick` is a [`PLANS`] index.
-/// 规则书: 「视为使用一次初始Afterglow角色的（2）效果」
+/// `pick` is a [`PLANS`] index. 规则书: 「视为使用一次初始Afterglow角色的（2）效果」
 fn apply_plan(player_id: i32, pick: DetourPick) {
     match pick.plan {
         0 => {
-            // Ran: `plan.Reverse = !plan.Reverse; plan.NoCircleReward = true`.
-            // The walk already cloned the move, so a `set_reverse` here would
-            // not reach it; the reverse rides the next plan instead, applied
-            // by the `DiceRollPlan` hook ([`next_roll`]) that rewrites the
-            // roll -- the direction is read now, off the move being countered.
+            // The walk already cloned the move, so a `set_reverse` here would not reach it;
+            // the reverse rides the next plan instead, applied by the `DiceRollPlan` hook
+            // ([`next_roll`]) that rewrites the roll -- the direction is read now, off the
+            // move being countered.
             ctx::state::set(player_id, REVERSE, (ctx::plan::dir() >= 0) as i32);
             arm_no_reward(player_id);
         }
         2 => {
-            // Himari odd: `plan.Parity = 1`.
-            // TODO(规则书)（视为使用一次初始Afterglow角色的（2）效果）: the step loop
-            //   derives the next tile from the direction alone and never reads
-            //   `Move.parity`, so the odd/even (2) (cases 2 and 3) is a no-op.
+            // TODO(规则书)（视为使用一次初始Afterglow角色的（2） 效果）: the step loop derives the next tile
+            // from the direction alone and never reads `Move.parity`, so the odd/even (2)
+            // (cases 2 and 3) is a no-op.
             ctx::plan::set_parity(1);
         }
         3 => {
-            // Himari even: `plan.Parity = 0`.
-            // TODO(规则书)（视为使用一次初始Afterglow角色的（2）效果）: same no-op as
-            //   case 2 -- the walk never reads `Move.parity`.
+            // TODO(规则书)（视为使用一次初始Afterglow角色的（2） 效果）: same no-op as case 2 -- the walk never
+            // reads `Move.parity`.
             ctx::plan::set_parity(0);
         }
         _ => {
-            // Tomoe: `plan.Start = (pos + toward * 10) % n` -- 10 tiles toward
-            // 银河拉面馆 (C# `num3 = (Forward(pos, b) <= n - Forward(pos, b)) ? 1
-            // : -1`), `plan.StartWhy = "回家的路上绕个道"` =
-            // `plan::set_start(start, why)`.
             let n = ctx::tile_count();
             let pos = ctx::player_pos(player_id);
             let b = ctx::tile_named("银河拉面馆");
@@ -272,23 +246,18 @@ fn counteract_with_plan(player_id: i32, pick: DetourPick) -> card_sdk::Asked {
     // This entire thing should splitted to a separate function to keep uniform to the
     // play handler.
 
-    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the pick was made at
-    // declaration time (`pick_plan`); `pick` is a [`PLANS`] index. The counter
-    // path writes the same `ctx::plan::*` the play path does -- `diceRollResult`
-    // runs before `walk`, so the plan is still live.
-    // TODO(规则书)[judgement]: which 「afterglow」 plan the counter is. The C# logs
-    //   this one 「羽泽鸫式」 while implementing 美竹兰's reverse; 羽泽鸫's （2） also
-    //   grants 「你的下回合开始时，进行一次双倍掷骰的移动」, which neither does. See the
-    //   judgement block at the foot of this file.
-    // TODO: This used to hard-code the reverse plan and diverged from `play`;
-    //   it now shares `apply_plan`, which is a behaviour change on the
-    //   counter path.
-    // `apply_plan` arms the CiRCLE veto itself for the reverse plan (case 0) --
-    // the other plans have no 「不获得CiRCLE奖励」 clause.
-    // TODO(规则书)（进行一次 “afterglow”式的移动）: the walk cloned the move before
-    //   this `diceRollResult` window and pulls only `roll`/`resolve` back, so
-    //   these plan writes are lost -- the counter performs no afterglow move.
-    //   The engine has to re-seed the move from `turn.plan` after the raise.
+    // TODO(规则书)[judgement]: TODO(规则书)（进行一次 “afterglow”式的移动）: 规则书(2): 「进行一次
+    // "afterglow"式的移动」 -- the pick was made at declaration time (`pick_plan`);
+    // `pick` is a [`PLANS`] index. The counter path writes the same `ctx::plan::*`
+    // the play path does -- `diceRollResult` runs before `walk`, so the plan is
+    // still live. which 「afterglow」 plan the counter is. See the judgement block at
+    // the foot of this file. TODO: This used to hard-code the reverse plan and
+    // diverged from `play`; it now shares `apply_plan`, which is a behaviour change
+    // on the counter path. `apply_plan` arms the CiRCLE veto itself for the reverse
+    // plan (case 0) -- the other plans have no 「不获得CiRCLE奖励」 clause. the walk cloned
+    // the move before this `diceRollResult` window and pulls only `roll`/`resolve`
+    // back, so these plan writes are lost -- the counter performs no afterglow move.
+    // The engine has to re-seed the move from `turn.plan` after the raise.
     apply_plan(player_id, pick);
     // A counter's card is not placed, so the card's own hooks below have no
     // field instance to dispatch from: bind the def as a turn-scoped lingering

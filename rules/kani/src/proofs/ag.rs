@@ -1,7 +1,7 @@
 //! Unit `ag`: clause proofs (cards).
 //!
 //! Per clause (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff — post == spec(pre) ∧ effect log exactly ∧ frame;
+//! 1. iff — post == spec(condition) ∧ effect log exactly ∧ frame;
 //! 2. no-op — trigger/condition false ⇒ log empty ∧ frame;
 //! 3. kani::cover! each branch;
 //! 4. mutant — reachable disagreement (`*_mutant_is_detected`).
@@ -84,7 +84,7 @@ crate::host_subset!(ag_dispatch {
     cards_in => arm_cards_in,
     hand_size => arm_hand_size,
     // field / dest
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     // counters (奇迹水晶 on the instance)
     counter_self => arm_counter_self,
@@ -176,7 +176,7 @@ fn half_speed_01_place_iff_at(user: i32) {
     ag_world(user);
     let player = user;
     let card = slot_of(CARD_MOCA_HALF);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
 
     invoke::unwrap_done(card_ag::moca_half::play_kani(user));
 
@@ -194,9 +194,9 @@ fn half_speed_01_place_iff_at(user: i32) {
         spec::ag::half_speed_01_post_ok(post_crystals),
         "C-AG-half-speed-01: exactly 3 crystals on the card"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
 }
 
 /// C-AG-half-speed-01 iff at seat 0 (`n_players = 2`).
@@ -324,7 +324,7 @@ fn half_speed_04_pay_mul_iff_at(user: i32) {
     ag_world(user);
     let player = user;
     let pre_amount = amount;
-    // Card is on the field (PaySplitMul pre: `card.placed && value > 0`).
+    // Card is on the field (PaySplitMul condition: `card.placed && value > 0`).
     // `trig_value` under Kani reads `pay_amount`.
     world::with_world_mut(|w| {
         w.pay_amount = amount;
@@ -960,7 +960,7 @@ fn glory_02_03_swap_iff_at(user: i32, other: i32) {
     });
     // Residual `can_counteract` requires someone on `trigger::tile()`.
     // Invoke the body directly — the residual is a derived list
-    // (players_on), not the host pre (`pre::MINE`).
+    // (players_on), not the host condition (`condition::MINE`).
     invoke::unwrap_done(card_ag::proud_light::counteract_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();

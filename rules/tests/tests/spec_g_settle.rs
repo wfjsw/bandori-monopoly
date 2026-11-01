@@ -354,7 +354,7 @@ fn g_settle_08_level_caps() {
 
 /// G-SETTLE-09: 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得。」
 /// The pay pipeline's optional-funding arm excludes the deed being upgraded
-/// (`Cx::offer_mortgage_funds`'s `exclude`); a mortgaged deed settles to
+/// (`PlayCtx::offer_mortgage_funds`'s `exclude`); a mortgaged deed settles to
 /// nothing (5.2).
 #[test]
 fn g_settle_09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
@@ -560,7 +560,7 @@ fn g_settle_10_frame_only_money_moves() {
     let land = tile("购物中心");
     t.own(1, &[land]);
     t.set_houses(land, 1);
-    let pre = t.snapshot_world();
+    let condition = t.snapshot_world();
     t.begin_turn(0);
     t.set_pos(0, (land + 59) % 60);
     t.dice(&[1]);
@@ -570,7 +570,7 @@ fn g_settle_10_frame_only_money_moves() {
     assert_eq!(t.money(0), 10_000 - rent);
     assert_eq!(t.money(1), 10_000 + rent);
     frame(
-        &pre,
+        &condition,
         t.world(),
         &[
             "money:P0", "money:P1", "pos:P0", "turn", "step", "landed", "round", "recent", "hidden",
@@ -580,7 +580,7 @@ fn g_settle_10_frame_only_money_moves() {
 }
 
 /// The book's 「购买格子地契和建造已有房子的资金总价」 is price + houses * house_cost.
-/// (The per-act `deed_value` helper reads the same two fields from `pre`.)
+/// (The per-act `deed_value` helper reads the same two fields from `condition`.)
 #[test]
 fn g_settle_deed_value_is_price_plus_houses() {
     let mut t = Table::vanilla(2);

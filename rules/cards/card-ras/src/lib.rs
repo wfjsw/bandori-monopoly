@@ -1,4 +1,3 @@
-//! Official cards of band `ras` (C# `Card*` classes in MatchHost.cs).
 //!
 //! One crate per band, one module per card; the card id is a data key from
 //! the roster. Message keys are namespaced by the crate name and

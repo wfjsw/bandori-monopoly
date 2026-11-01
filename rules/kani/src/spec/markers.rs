@@ -89,7 +89,7 @@ pub fn mark_cp_land_gain_ok_mutant_wrong_seat(effects: &[Effect], settler: i32) 
 //
 // The placement gate (no character, no [CP点]) is the **placer's**; this
 // owner only stamps category + provenance. Under the Kani host the message
-// payload ops (`msg_tile` / `msg_a` / `msg_sender_uid`) are protocol stubs
+// payload ops (`msg_tile` / `msg_arg0` / `msg_sender_uid`) are protocol stubs
 // that return 0, so the handler cannot see the target tile or count —
 // BLOCKED-HOST. Spec kept for when they land.
 // ===========================================================================

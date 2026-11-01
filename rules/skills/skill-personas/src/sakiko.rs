@@ -33,7 +33,7 @@ pub const SAKIKO: CardDef = CardDef::new(
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
         On::Action(Action::TurnStartBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(state2_or_fire_capped),
             at_turn_start,
         )),
@@ -41,7 +41,7 @@ pub const SAKIKO: CardDef = CardDef::new(
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
         On::Action(Action::PassTile(
-            "actor == owner && move.main && slot('skillState') != 2",
+            "actor == owner && move.is_main_move && slot('skillState') != 2",
             None,
             on_pass_player,
         )),

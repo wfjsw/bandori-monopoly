@@ -41,9 +41,9 @@ fn outs_of(step: &Step<'_>) -> Vec<(usize, i32)> {
     out
 }
 
-/// Buyable tiles `p` owned in `pre` (the deed set 游戏流程 9.2 draws from).
+/// Buyable tiles `p` owned in `condition` (the deed set 游戏流程 9.2 draws from).
 fn buyable_owned(step: &Step<'_>, p: usize) -> Vec<usize> {
-    step.pre
+    step.condition
         .st
         .owners
         .iter()
@@ -68,11 +68,11 @@ fn auction_sample(step: &Step<'_>) -> Vec<usize> {
         if event_key(e) != "log.auction_leftovers" {
             continue;
         }
-        if let Some(Arg::List(items)) = e.msg.a.get("tiles") {
+        if let Some(Arg::List(items)) = e.msg.args.get("tiles") {
             for it in items {
                 match it {
                     Arg::Tile(t) => out.push(*t as usize),
-                    Arg::I(v) | Arg::N(v) => out.push(*v as usize),
+                    Arg::Integer(v) | Arg::Number(v) => out.push(*v as usize),
                     _ => {}
                 }
             }
@@ -88,7 +88,7 @@ fn auction_sample(step: &Step<'_>) -> Vec<usize> {
 /// * **Quote:** 「**其拥有的[可购买格子]变成无主状态**并抽取3张其中格子的地契进行[拍卖]（少于3则全部）。」
 /// * **Trigger:** an observed input whose event window contains a `bankrupt`
 ///   or `left` event for player `P`.
-/// * **Condition:** `P` owned at least one buyable tile in `pre`.
+/// * **Condition:** `P` owned at least one buyable tile in `condition`.
 /// * **Effect:** in `post`, no buyable tile is owned by `P`. (The auction of
 ///   min(3, n) deeds is [`G_BANKRUPT_04`]; this one only checks the un-own step.)
 /// * **Frame:** n/a (read of `owners`).
@@ -241,11 +241,11 @@ pub fn g_bankrupt_03(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:135`
 /// * **Quote:** 「**其拥有的[可购买格子]变成无主状态**并抽取3张其中格子的地契进行[拍卖]（少于3则全部）。」
 /// * **Trigger:** a window that takes `P` out with `n > 0` buyable deeds in
-///   `pre`, and the match is still playing afterwards (a last-survivor end
+///   `condition`, and the match is still playing afterwards (a last-survivor end
 ///   cancels the auction).
-/// * **Condition:** `P` owned `n` buyable tiles in `pre`.
+/// * **Condition:** `P` owned `n` buyable tiles in `condition`.
 /// * **Effect:** the window logs an `auction_leftovers` sample of exactly
-///   `min(3, n)` tiles, every one of which was `P`'s deed in `pre`.
+///   `min(3, n)` tiles, every one of which was `P`'s deed in `condition`.
 /// * **Frame:** n/a (read of the event list).
 /// * **Rulings & OPEN:** which 3 of the n are drawn is the engine's shuffle --
 ///   the book only fixes the count. Mortgage status of the drawn deeds is
@@ -302,7 +302,7 @@ pub fn g_bankrupt_04(step: &Step<'_>) -> Result<(), String> {
         for &t in &sample {
             if !deeds.contains(&t) {
                 return Err(format!(
-                    "auction sample tile {t} was not a buyable deed of out player {p} in pre (deeds {deeds:?})"
+                    "auction sample tile {t} was not a buyable deed of out player {p} in condition (deeds {deeds:?})"
                 ));
             }
         }
@@ -439,7 +439,7 @@ pub fn g_bankrupt_06(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「仅剩一名[存活]玩家时游戏结束，那名玩家获胜。」
 /// * **Trigger:** a step that leaves exactly one [存活] player and ends the
 ///   match (`phase` went to `ended`).
-/// * **Condition:** `pre` had more than one [存活]; `post` has one.
+/// * **Condition:** `condition` had more than one [存活]; `post` has one.
 /// * **Effect:** the match is over and `post.st.winner` is that [存活] seat.
 /// * **Frame:** n/a (reads of flags / `phase` / `winner`).
 /// * **Rulings & OPEN:** the quote is the 正规-mode rule; 娱乐 mode ends by
@@ -457,7 +457,7 @@ const G_BANKRUPT_07: Clause = Clause::new(
 
 /// Executable form of [`G_BANKRUPT_07`].
 pub fn g_bankrupt_07(step: &Step<'_>) -> Result<(), String> {
-    if step.pre.st.phase == "ended" || step.post.st.phase != "ended" {
+    if step.condition.st.phase == "ended" || step.post.st.phase != "ended" {
         return Ok(());
     }
     let alive: Vec<usize> = (0..step.post.st.players.len())
@@ -506,7 +506,12 @@ const G_BANKRUPT_08: Clause = Clause::new(
 
 /// Executable form of [`G_BANKRUPT_08`].
 pub fn g_bankrupt_08(step: &Step<'_>) -> Result<(), String> {
-    let n = step.pre.st.players.len().max(step.post.st.players.len());
+    let n = step
+        .condition
+        .st
+        .players
+        .len()
+        .max(step.post.st.players.len());
     let mut credit = vec![0i64; n];
     let mut saw = false;
     for e in step.events {

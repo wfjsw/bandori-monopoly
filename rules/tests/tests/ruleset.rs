@@ -10,6 +10,11 @@
 mod testworld;
 use testworld::*;
 
+/// The answer to the `cardFired` raise every body entry makes (raise answers
+/// are host answers here; `1` = the fire stands, the body runs). It occupies
+/// the first slot of every body's answer log.
+const FIRE: i32 = 1;
+
 #[test]
 fn loads_and_validates() {
     let r = ruleset();
@@ -82,7 +87,8 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     };
     // The two 4d20 rolls are host answers (a roll is a `NeedHost` request in
     // this harness): 15 -> tile 14, 48 -> tile 47.
-    let faces = [15, 48];
+    let rolls = [15, 48];
+    let faces = [FIRE, rolls[0], rolls[1]];
 
     // Pass 1: the rolls answered, the pick not -> blocked on the choice.
     let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
@@ -90,8 +96,9 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     };
     assert_eq!(p.kind, PromptKind::Choice);
     assert_eq!(p.player_id, 1);
-    // Two roll answers are already on the log; the pick is the third slot.
-    assert_eq!(p.answer_slot, 2);
+    // The fire and two roll answers are already on the log; the pick is the
+    // fourth slot.
+    assert_eq!(p.answer_slot, 3);
     assert_eq!(p.title.key(), "cards:card-hhw.hagumi_marks_ask_title");
     assert_eq!(p.options.len(), 2, "one option per roll: {:?}", p.options);
 
@@ -107,12 +114,12 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let PromptOption::Str(opt) = &p.options[pick as usize] else {
         panic!("roll options are labelled")
     };
-    let Some(game_core::msg::Arg::Tile(expected_tile)) = opt.a.get("tile") else {
+    let Some(game_core::msg::Arg::Tile(expected_tile)) = opt.args.get("tile") else {
         panic!("the option carries its tile: {opt:?}")
     };
     let expected_tile = *expected_tile;
     assert_eq!(expected_tile, 47, "the 48 roll maps to tile 47");
-    let answers = [faces[0], faces[1], pick];
+    let answers = [FIRE, rolls[0], rolls[1], pick];
     let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
         panic!("expected Done")
     };
@@ -153,9 +160,9 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
         player_id: 0,
         mv: Some(game_rules::TriggerMove {
             kind: game_rules::MoveKind::Walk,
-            resolve: true,
+            settles: true,
             tags: Vec::new(),
-            main: true,
+            is_main_move: true,
             dir: game_core::engine::rules::Dir::Forward,
             from: 0,
             remaining: 0,
@@ -168,7 +175,8 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
     };
     assert!(r.can_counteract(&world, card, 0).unwrap());
 
-    // The 1d4 is a host request (`roll_direct`): answer it with a 3.
+    // The body entry's `cardFired` raise, then the 1d4 (a host request,
+    // `roll_direct`): answer the fire and roll a 3.
     let Outcome::Done(after) = r
         .run(
             &world,
@@ -177,7 +185,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
                 player_id: 0,
                 arg: Vec::new(),
             },
-            &[3],
+            &[FIRE, 3],
             None,
         )
         .unwrap()
@@ -240,19 +248,22 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     };
 
     // The prompt raised inside the *nested* card aborts the whole outer run.
-    // The inner card's two 4d20 rolls are host answers and come first
-    // (15 -> tile 14, 48 -> tile 47); the pick is the third slot.
-    let faces = [15, 48];
-    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
+    // Both bodies announce themselves first (outer, then inner `cardFired`),
+    // then the inner card's two 4d20 rolls (15 -> tile 14, 48 -> tile 47); the
+    // pick is the fifth slot.
+    let Outcome::NeedInput(p, _) = r
+        .run(&world, call.clone(), &[FIRE, FIRE, 15, 48], None)
+        .unwrap()
+    else {
         panic!("expected a prompt")
     };
     assert_eq!(
         (p.kind, p.player_id, p.answer_slot),
-        (PromptKind::Choice, 2, 2)
+        (PromptKind::Choice, 2, 4)
     );
 
     // Replay with the answer: outer and inner effects both complete, in order.
-    let answers = [faces[0], faces[1], 0];
+    let answers = [FIRE, FIRE, 15, 48, 0];
     let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
         panic!("expected Done")
     };
@@ -273,7 +284,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     let PromptOption::Str(opt) = &p.options[0] else {
         panic!()
     };
-    let Some(game_core::msg::Arg::Tile(t)) = opt.a.get("tile") else {
+    let Some(game_core::msg::Arg::Tile(t)) = opt.args.get("tile") else {
         panic!()
     };
     assert_eq!(after.marks[0].0, *t);

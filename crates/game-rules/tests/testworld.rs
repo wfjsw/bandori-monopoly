@@ -276,11 +276,11 @@ impl CardWorld for TestWorld {
     fn remove_marks(&mut self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0
     }
-    fn tok(&self, _: i32, _: &str) -> i32 {
+    fn held_count(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn set_tok(&mut self, _: i32, _: &str, _: i32, _: i32) {}
-    fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
+    fn set_held(&mut self, _: i32, _: &str, _: i32, _: i32) {}
+    fn add_held_by_name(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {

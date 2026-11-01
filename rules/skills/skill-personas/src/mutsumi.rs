@@ -37,13 +37,17 @@ pub const MUTSUMI: CardDef = CardDef::new(
             None,
             at_turn_start,
         )),
-        On::Action(Action::CardPlayed(card_sdk::pre::MINE, None, on_play)).silent(),
-        On::Action(Action::TurnEnd(card_sdk::pre::MINE, None, at_turn_end)),
+        On::Action(Action::CardPlayed(card_sdk::condition::MINE, None, on_play)).silent(),
+        On::Action(Action::TurnEnd(
+            card_sdk::condition::MINE,
+            None,
+            at_turn_end,
+        )),
     ],
 );
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    // `slot('skillState') != 2` is the pre.
+    // `slot('skillState') != 2` is the condition.
     // 「你的每6回合不打出任何手牌，在回合开始前抽1张牌」
     if state::get(player_id, QUIET) >= 6 {
         state::set(player_id, QUIET, 0);

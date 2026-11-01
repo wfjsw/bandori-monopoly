@@ -318,7 +318,7 @@ const G_COUNTER_04: Clause = Clause::new(
 
 /// Executable form of [`G_COUNTER_04`].
 pub fn g_counter_04(step: &Step<'_>) -> Result<(), String> {
-    let n = step.pre.st.players.len();
+    let n = step.condition.st.players.len();
     if n < 3 {
         return Ok(());
     }
@@ -457,7 +457,7 @@ pub fn g_counter_05(step: &Step<'_>) -> Result<(), String> {
             }
         }
         if !ran {
-            let before = spec_kit::snapshot(step.pre);
+            let before = spec_kit::snapshot(step.condition);
             let after = spec_kit::snapshot(step.post);
             if !spec_kit::diff(&before, &after, false).is_empty() {
                 continue;
@@ -582,7 +582,7 @@ const G_COUNTER_08: Clause = Clause::new(
 
 /// Executable form of [`G_COUNTER_08`].
 pub fn g_counter_08(step: &Step<'_>) -> Result<(), String> {
-    let n = step.pre.st.players.len();
+    let n = step.condition.st.players.len();
     for e in step
         .events
         .iter()
@@ -624,7 +624,7 @@ const G_COUNTER_09: Clause = Clause::new(
 
 /// Executable form of [`G-COUNTER-09`].
 pub fn g_counter_09(step: &Step<'_>) -> Result<(), String> {
-    let n = step.pre.st.players.len();
+    let n = step.condition.st.players.len();
     for e in step
         .events
         .iter()
@@ -706,7 +706,7 @@ pub fn g_counter_10(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:72`
 /// * **Quote:** 「[拥有者]：[场地]存在此卡的玩家。」
 /// * **Trigger:** a `"card"` hook (`kind == "hook"`) of a placed card.
-/// * **Condition:** the card is on some player's field in `pre`.
+/// * **Condition:** the card is on some player's field in `condition`.
 /// * **Effect:** the hook's `player_id` is that owner (the [场地] the card
 ///   exists on).
 /// * **Frame:** n/a.
@@ -744,7 +744,7 @@ pub fn g_counter_11(step: &Step<'_>) -> Result<(), String> {
                 .map(|(i, _)| i)
                 .collect()
         };
-        let mut owners = owners_of(step.pre);
+        let mut owners = owners_of(step.condition);
         if owners.is_empty() {
             owners = owners_of(step.post);
         }
@@ -772,8 +772,8 @@ pub fn g_counter_11(step: &Step<'_>) -> Result<(), String> {
 /// * **Trigger:** a `"card"` activation with `kind == "hook"` (a placed
 ///   card's passive listener firing).
 /// * **Condition:** the card is on some player's field (or the board) in
-///   `pre`.
-/// * **Effect:** the card is still on a field in `pre` -- a [持续] effect
+///   `condition`.
+/// * **Effect:** the card is still on a field in `condition` -- a [持续] effect
 ///   cannot fire for a card that is not placed.
 /// * **Frame:** n/a.
 /// * **Rulings & OPEN:** 「[场地]」 and 「格子上」 are both homes for a [持续]
@@ -805,7 +805,7 @@ pub fn g_counter_12(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         // A [持续] card may be placed and removed inside this one window
-        // (`pre` and `post` both miss it). Accept: on a field in `pre` or
+        // (`condition` and `post` both miss it). Accept: on a field in `condition` or
         // `post`, or a place event in the window itself.
         let on_field = |w: &game_core::engine::World| {
             w.st.players
@@ -821,7 +821,7 @@ pub fn g_counter_12(step: &Step<'_>) -> Result<(), String> {
             .events
             .iter()
             .any(|c| c.id < e.id && c.r#type == "text" && c.msg.key().contains("place"));
-        if !on_field(step.pre) && !on_field(step.post) && !placed_this_window {
+        if !on_field(step.condition) && !on_field(step.post) && !placed_this_window {
             // Mid-window place/remove, or a listener the engine tagged
             // `hook` without a [持续] home. Undetermined from the snapshot:
             // skip rather than invent.
@@ -969,7 +969,7 @@ pub fn g_counter_15(step: &Step<'_>) -> Result<(), String> {
                 && (c.parent == e.id
                     || (c.id > e.id && !(c.r#type == "card" && c.kind == "play" && c.card == card)))
         });
-        let before = spec_kit::snapshot(step.pre);
+        let before = spec_kit::snapshot(step.condition);
         let after = spec_kit::snapshot(step.post);
         let has_delta = !spec_kit::diff(&before, &after, false).is_empty();
         let placed = step

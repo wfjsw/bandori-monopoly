@@ -78,5 +78,5 @@
   "studio_storm_not_on_lh": "只有站在自己的 Live House 格子上才能打出",
   "studio_storm_note": "练习室里的风暴",
   "studio_storm_placed": "{{who}} 将「练习室里的风暴」放在 {{tile}}",
-  "unstoppable_why": "UNSTOPPABLE"
+  "unstoppable_reason": "UNSTOPPABLE"
 }

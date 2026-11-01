@@ -337,7 +337,7 @@ pub fn soul_01_post_ok_mutant(post_crystals: i32, k: i32) -> bool {
 // ===========================================================================
 
 /// Accepted spend of one crystal on a [支付] to a live payee:
-/// payee +500, crystal −1, amount = max(pre−1000, 0).
+/// payee +500, crystal −1, amount = max(condition−1000, 0).
 pub fn soul_02_pay_log_ok(
     effects: &[Effect],
     owner: i32,
@@ -502,18 +502,18 @@ pub fn one_of_us_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> bo
 // ===========================================================================
 
 /// Frame check: everything outside the listed money/card slots is unchanged.
-pub fn frame_money_only(pre: &Snapshot, post: &Snapshot, touched: &[usize]) -> bool {
+pub fn frame_money_only(condition: &Snapshot, post: &Snapshot, touched: &[usize]) -> bool {
     for p in 0..4 {
         if touched.contains(&p) {
             continue;
         }
-        if pre.money[p] != post.money[p] {
+        if condition.money[p] != post.money[p] {
             return false;
         }
     }
-    pre.pos == post.pos
-        && pre.charge == post.charge
-        && pre.stay == post.stay
-        && crate::world::arr4b_eq(pre.out, post.out)
-        && pre.pay_amount == post.pay_amount
+    condition.pos == post.pos
+        && condition.charge == post.charge
+        && condition.stay == post.stay
+        && crate::world::arr4b_eq(condition.out, post.out)
+        && condition.pay_amount == post.pay_amount
 }

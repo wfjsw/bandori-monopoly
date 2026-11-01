@@ -83,7 +83,7 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
     // Seed the on-card crystal counter (see `self_crystals`).
     world::with_world_mut(|w| w.self_crystals = kani::any());
     kani::assume(self_crystals() >= 0 && self_crystals() <= 3);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let pre_c = self_crystals();
 
     invoke::unwrap_done(skill_groups::mygo::after_roll_kani(user));
@@ -102,17 +102,23 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
     );
     crate::kassert!(
         post_c == spec::skills_mygo::band_02_crystals_after(pre_c),
-        "C-MYGO-band-02: crystals must be min(pre+1, 1) under the roll cap"
+        "C-MYGO-band-02: crystals must be min(condition+1, 1) under the roll cap"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
+    crate::kassert!(post.stay == condition.stay, "frame: stay unchanged");
 
-    kani::cover!(pre_c == 0, "pre crystals 0 (gain lands)");
-    kani::cover!(pre_c >= 1, "pre crystals at cap (gain refused by max)");
+    kani::cover!(pre_c == 0, "condition crystals 0 (gain lands)");
+    kani::cover!(
+        pre_c >= 1,
+        "condition crystals at cap (gain refused by max)"
+    );
 }
 
 /// Band-02 iff at seat 0.
@@ -164,7 +170,7 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
     let pre_c: i32 = kani::any();
     kani::assume(pre_c >= 0 && pre_c <= 3);
     on_discarded_world(user, pre_c);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(skill_groups::mygo::on_discarded_kani(user));
 
     let post = world::snapshot();
@@ -189,10 +195,13 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
         );
     }
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
 }
 
 /// Band-04 iff at seat 0.

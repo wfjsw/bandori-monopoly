@@ -1,4 +1,3 @@
-//! `MyGO:（soyo）混合的颜色` -- C# `CardSoyoColors` (MatchHost.cs:6705-6748):
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（soyo）混合的颜色`）:
 //! > （soyo）混合的颜色：
@@ -68,10 +67,8 @@ fn half_again(player_id: i32, value: i32) -> i32 {
 }
 
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- C# `CardSoyoColors.WhyNot`
-    // refuses the play with no deed ("你还没有地").
     if ctx::owned_count(player_id) == 0 {
-        return Some(Msg::new(key!("soyo_colors_why_not_deed")));
+        return Some(Msg::new(key!("soyo_colors_blocked_deed")));
     }
     None
 }
@@ -81,8 +78,6 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
     if mine.is_empty() {
         return Ok(());
     }
-    // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- C# `H.AskTileOf` over
-    // `H.OwnedBy(i)`, then `H.PlaceFromPlay(c, i, tile)`.
     let tile = ctx::ask_tile(
         player_id,
         &Msg::new(key!("soyo_colors_title")),
