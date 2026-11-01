@@ -340,12 +340,12 @@ prompt-free `Decline` is log-silent.*
 
 ## 3. Mechanism B -- `ctx::query_guard` (cross-card applicability)
 
-> **Reading note (G05).** This section was written when `On::Play` *was* the
-> press surface. Every "play entry" below reads as "the card's press entry":
-> a `[手]` card keeps `On::Play`, a placed card's press is `On::Press(id, …)`,
-> and `entry::PRESS` aliases the default press entry. A card that becomes
-> press-only has no Play left, so the hand-activation channel disappears with it
-> — nothing here depends on `play_from_hand`.
+> **Reading note (G05).** A press is the card's `On::Play` run on a placed
+> instance; the entry is marked `.field()` so the instance is offered. Every
+> "play entry" below therefore reads as "the card's activation entry", and
+> `entry::PRESS` aliases that entry (the first `.field()` Play, else the first
+> Play). A prompt raised by a condition (a marker count, a crystal) asks the
+> owner directly and needs no query.
 
 ### Named entries
 
@@ -376,11 +376,11 @@ An id that is printable rulebook text is a bug even though it "works":
   a mismatch that looks identical in a diff;
 * it invites someone to "fix the wording" in the one place that is not wording.
 
-So: a press entry carries the clause as its **label**, and `entry::PRESS` is the
-alias for a card's **default** press entry (its first `On::Press`, or its first
-`On::Play` for a card not yet migrated); `"press"` is reserved so no entry may
-declare it. A *hook* that wants to be queried declares its own slug
-(`.id("decay")`), and so does a press entry that a body has to address by name.
+So: a press carries the clause as its **label**, and `entry::PRESS` is the
+alias for a card's **activation entry** (its first `.field()` Play, else its
+first Play); `"press"` is reserved so no entry may declare it. A *hook* that
+wants to be queried declares its own slug (`.id("decay")`), and so does any
+entry a body has to address by name.
 `build-ruleset` **rejects a non-slug id** (the same fail-closed net as
 `On::Filter` cannot declare): an id must match
 `[A-Za-z0-9_][A-Za-z0-9_.:-]*`, and may not be `entry::PRESS`. The rulebook
@@ -388,7 +388,7 @@ clause is not an id.
 
 ```rust
 // In the skill's file -- identity and display are separate fields.
-On::Press("invoke_skill_two", "", Some(can_use), use_skill).label("（2）")
+On::Action(Action::CardUsed("…", Some(can_use), use_skill).id("2").label("（2）")
 
 On::Action(Action::TurnEnd("card.placed", None, tick)).id("decay")
 
@@ -396,9 +396,9 @@ On::Action(Action::TurnEnd("card.placed", None, tick)).id("decay")
 ctx::query_guard(player_id, "skill:美竹兰:叛逆的红挑染", entry::PRESS)
 ```
 
-An unmigrated skill still declares `On::Play(...).label("（2）")` and answers
-`entry::PRESS` through the fallback. Once it gains a press entry, `PRESS`
-resolves the press, so a hand-activation query must then name the Play's own id.
+A skill's own Play is `On::Play(...).label("（2）")` and answers `entry::PRESS`
+through the fallback. Once a card's Play carries `.field()`, `PRESS` resolves
+that Play, so a hand-activation query must then name the Play's own id.
 
 `id` is `&'static str` on the entry, `""` = not externally addressable (the
 common case; nothing pays for it). It rides the manifest as
@@ -414,15 +414,15 @@ are those strings -- so it is out of scope. The new field is the per-entry
 ### Guest surface — one query
 
 `card_replayable` is **not** a second concept: "may I press this card?" is
-just "does the press entry admit?", asked of the press entry. So there is one
+just "does the activation entry admit?", asked of it. So there is one
 function and one reserved id.
 
 ```rust
 pub mod entry {
-    /// The reserved alias of a card's **default press entry** -- the
+    /// The reserved alias of a card's **activation entry** -- the
     /// **press surface** question, "may I use this card / this skill
     /// button?". Not a declared id: it resolves the card's first
-    /// `On::Press`, or its first `On::Play` for an unmigrated card.
+    /// `.field()` Play, else its first `On::Play`.
     /// `build-ruleset` rejects a declaration of `.id(PRESS)` so the word
     /// cannot be squatted.
     pub const PRESS: &str = "press";

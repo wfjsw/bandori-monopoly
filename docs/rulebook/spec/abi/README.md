@@ -82,7 +82,7 @@ Recommended landing order (foundation → dependent):
 
 Couplings a reviewer must keep in one head:
 
-- **G05 ↔ G13** share `invoke_entry` and the press-entry resolution; G05 adopts
+- **G05 ↔ G13** share `invoke_entry` and the activation-entry resolution; G05 adopts
   G13's import verbatim.
 - **G01 ↔ G08** share instance uid and the per-instance store; G08 also
   carries the creator edge (`created_by`) that G01's borrowed-row hooks rely

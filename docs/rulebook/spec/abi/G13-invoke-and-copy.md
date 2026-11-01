@@ -167,7 +167,7 @@ part is "run the borrowed body, not a copy".
 running instance, seeds the invoked card as the skill in use, and pushes a frame
 that survives re-entrancy and prompt pauses; the frame is popped on return with
 the caller's instance, card and trigger restored. A press resolves by clause id
-when one is named, and by the reserved press entry otherwise.**
+when one is named, and by the card's own activation entry otherwise.**
 
 Invariants the implementation must hold (each gets a test or a Kani obligation,
 §9):
@@ -298,19 +298,19 @@ logged invocation names (`by_instance`), and what future entries will branch on.
 ### 4.4 Entry addressing
 
 * `entry::PRESS` (`abi.rs:1153-1162`) keeps its spelling, and resolves
-  **press-entry-first with an `On::Play` fallback** (G05 §6.1): the card's first
-  `On::Press`, else its first `On::Play`. That is "whatever the engine would
-  press" for both a migrated card and an unmigrated skill.
+  **field-Play-first with a first-Play fallback** (G05 §6.1): the card's first
+  Play carrying `.field()`, else its first Play. That is "whatever the engine
+  would press" for both a pressable card and an unmigrated skill.
   `ctx::invoke_skill` is therefore exactly `invoke_entry(…, entry::PRESS)`.
   `ctx::play_card` is not: it picks a Play first.
 * Clause slugs are declared by the target: 广町七深's (2) becomes
   `On::Action(Action::CardUsed(…), …).id("2").label("（2）")`; 诗超绊's (2)
   offer becomes `.id("2")` and its effect half `.id("2-effect")`. `"2"` is a
   valid slug (`is_entry_slug`, `host.rs:3108`); labels stay display text.
-* `entry::PRESS` remains reserved (`host.rs:1098-1109`); the press entry *may*
+* `entry::PRESS` remains reserved (`host.rs:1098-1109`); the activation entry *may*
   also carry `.id("2")` where the sheet numbers it, because a clause id is
   identity and `PRESS` is a resolver, not a name.
-* Resolution: `PRESS` → first press entry, else `play_entry_preferring_gated()`;
+* Resolution: `PRESS` → first field Play, else `play_entry_preferring_gated()`;
   any other id → `entry_by_id` (`host.rs:162-170`). Card unknown ⇒ trap
   (`invoke_entry: unknown card {id:?}`); entry unknown/unnamed ⇒ **no-op**
   returning `DEST_UNSET`, matching today's "no `On::Play` entry" path.
@@ -464,18 +464,18 @@ table that uses them. A proof-only reader `last_invoke()` exposes
 
 ### 5.6 Probing and the gate
 
-**The (2) condition does not survive a self-press, so `query_guard` cannot be
-the press gate.** The condition is
+**The (2) condition does not survive a self-invocation, so `query_guard` cannot
+be the gate.** The condition is
 `actor != owner && trigger_card != 0 && charge(owner) >= 1`
 (`nanami.rs:58-62`) and `query_guard_entry` fills its candidate with
 `fill_candidate(world, player_id, id, false)`
-(`hostfns.rs:3210`), which sets `owner = player_id`. On the owner's own press
-`actor == owner`, so `actor != owner` is false and the probe answers `false` for
-exactly the case it is asked about. (The remaining terms — a trigger card and a
+(`hostfns.rs:3210`), which sets `owner = player_id`. On the owner's own
+invocation `actor == owner`, so `actor != owner` is false and the probe answers
+`false` for exactly the case it is asked about. (The remaining terms — a trigger card and a
 pot — are true whenever a pot exists, so the probe is not "nearly right"; it is
 always wrong.)
 
-Nanami's press gate therefore tests its own costs directly, in the card
+Nanami's prompt therefore tests its own costs directly, in the card
 (G05 §9.1): a crystal on the instance, `bandori_std::fire::total(player_id) >= 1`,
 and an owned persona skill. The body then invokes **unpaid** — the (2)'s pot cost
 is part of the clause and is collected by its own ask. `fire::total` includes

@@ -36,7 +36,7 @@ and are identified by their triage row id.
 
 | # | draft said | why it was wrong | revision |
 |---|---|---|---|
-| R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Press(id, …)`, `NetMessage.{instance,entry}`, `act = "press"`, `SkillAction.{instance,entry,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §9.5. | Drop the offer half entirely. G01 ships no offer wire; the effective-card store and accessors are G05 §6.2. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
+| R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Play(...).field()`, `NetMessage.instance`, `act = "press"`, `SkillAction.{instance,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §9.5. | Drop the offer half entirely. G01 ships no offer wire; the effective-card store and accessors are G05 §6.2. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
 | R2 | uid is stamped only in `Match::counteract` (`play.rs:5918`) and `cardFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
 | R3 | hook jobs are enumerated from fields only | A `markChanged` caused by destruction names an instance that is **already unplaced** by the time the raise commits (`unplace_at` removes before `commit_after`), so the field walk misses the very instance whose hook must resync/discard. | `collect_hook_jobs` also adds a job for the raise's subject instance (alive or dead) and one per resolving frame (§5.3). |
 | R4 | umiri's fix reads `card.counter('umiri_user')` in a pre | `fill_candidate` resolves `card.*` by `(player, card id)` — the **first** copy — so two copies read one counter and item 9 stays broken. | `CandidateCtx` gains the running `uid`; `card.counter` / `card.tile` / `card.placed` resolve through it when set (§5.5). |
@@ -362,9 +362,9 @@ pub const MarkChanged: Self = Self::engine(112);  // wire "markChanged", hook-on
 - `kind_table_pin`, `game-kinds`'s `every_row_round_trips` /
   `retired_ids_are_unnamed` / `filter_and_hook_sets`, and `hostops_smoke` are
   extended with the two names.
-- **No `Actions` kind and no `entry::ACTION`.** G05's `On::Press` +
-  `entry::PRESS` are the offer vocabulary (R1). `kind_table_pin`'s kind-id
-  ceiling becomes 112; G08 continues at 113.
+- **No `Actions` kind and no `entry::ACTION`.** G05's `On::Play(...).field()`
+  plus `entry::PRESS` are the offer vocabulary (R1). `kind_table_pin`'s kind-id
+  ceiling stays 112; G08 continues at 113.
 
 ### 4.4 Condition vocabulary — `crates/cond`
 
