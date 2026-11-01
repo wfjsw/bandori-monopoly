@@ -426,14 +426,14 @@ fn g31_aya_fan_flip_leaves_the_rabbit_marks() {
     assert_eq!(t.marks_on(mark_tile).len(), 2);
     // P0 pays a rent on a tile past the mark tile... no: land on a tile that
     // does not pass the marks, so only the fan flip happens here.
-    let fate = tile("江户川公园");
-    let rent = data().tiles[fate].rent[0];
-    t.set_owner(fate, Some(1));
-    t.set_pos(0, fate);
+    let dest = tile("江户川公园");
+    let rent = data().tiles[dest].rent[0];
+    t.set_owner(dest, Some(1));
+    t.set_pos(0, dest);
     // Trigger Aya's (2) with a 1-step walk that stays clear of the marks:
-    // from `fate` to `fate` + 1 is 江户川公园's neighbour, not 星空齿科.
-    // Simpler: land on `fate` from the tile before it, which is 江户川公园-1.
-    t.set_pos(0, (fate + 59) % 60);
+    // from `dest` to `dest` + 1 is 江户川公园's neighbour, not 星空齿科.
+    // Simpler: land on `dest` from the tile before it, which is 江户川公园-1.
+    t.set_pos(0, (dest + 59) % 60);
     t.dice(&[1]);
     t.roll(0).unwrap();
     // Aya's (2) may prompt to flip fans; answer 2 if asked.

@@ -73,7 +73,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     ctx::add_group_crystals(player_id, 3, i32::MAX);
     // 规则书[手]: 「并将此卡放置在[使用者]的[场地]」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "PP:练习生解密指南",
@@ -192,10 +192,10 @@ fn cash_in(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    // 「随后进入弃卡区」 -- `send_to_fate` leaves **now**, so a second crystal
+    // 「随后进入弃卡区」 -- `send_to_dest` leaves **now**, so a second crystal
     // write in the same raise batch cannot re-enter this body (a deferred
-    // `set_fate` would still see `is_placed()` and need a latch).
-    ctx::send_to_fate(ctx::Fate::Graveyard);
+    // `set_dest` would still see `is_placed()` and need a latch).
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

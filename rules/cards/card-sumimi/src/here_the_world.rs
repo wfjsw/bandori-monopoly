@@ -119,7 +119,7 @@ fn can_counteract(player_id: i32) -> bool {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let them = trigger::player_id();
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(them, ID, &Msg::new(key!("here_the_world_note")));
     // Written on the instance `place_card` just bound (not on the player).
     ctx::set_prop(USER_PROP, player_id + 1);
@@ -176,7 +176,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     }
     let user = ctx::prop(USER_PROP) - 1;
     if let Some(id) = load_held() {
-        ctx::add_to_fate(player_id, &id, ctx::Fate::Hand);
+        ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
     }
     clear_held();
     ctx::log(
@@ -185,7 +185,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     );
     // TODO(规则书)（当奇迹水晶数为0时，那名玩家将那张卡加入手牌）: 书里不说此卡 何时离场 -- 我们完成时把它弃置（W3-HERE-01 /
     // C-Q49）。
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_prop(USER_PROP, 0);
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1)?;

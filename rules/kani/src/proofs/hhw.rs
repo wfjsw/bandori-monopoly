@@ -31,7 +31,7 @@
 //!   `charity_show`, `black_suits`) are outside this unit's harness list.
 //!   If a later harness reaches them the subset will loud-FAIL — correct.
 //! * `arm_cards_in` / `arm_take_card` do not model `CardPile::Deck`
-//!   (`deck_pile` is written by `add_to_fate` but never read). believe-04
+//!   (`deck_pile` is written by `add_to_dest` but never read). believe-04
 //!   (keep two from the deck) and backstage's flip count are blocked-by this
 //!   host gap: the body sees an empty deck and takes the short-pile path.
 //!   Assertions stay fail-closed; the covers for the unreachable deck branches
@@ -55,7 +55,7 @@ use crate::world::{self, Effect, FieldCard, NameMap, MAX_LOG};
 /// `self_tile` / `pay_to` / trigger reads if a settle harness lands.
 crate::host_subset!(kkr_dispatch {
     pay => arm_pay,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     log | effect => arm_log,
     tile_named => arm_tile_named,
     place_card_on => arm_place_card_on,
@@ -66,7 +66,7 @@ crate::host_subset!(kkr_dispatch {
 /// crystals-changed guard are separate entries (not called here).
 /// `ctx::decay` → `add_counter_self`; `ctx::set_crystals` → `set_counter_self`.
 crate::host_subset!(athletic_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     set_counter_self => arm_set_counter_self,
     add_counter_self => arm_add_counter_self,
@@ -87,7 +87,7 @@ crate::host_subset!(believe_dispatch {
     ask => arm_ask,
     discard_from_hand => arm_discard_from_hand,
     take_card => arm_take_card,
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
 });
 
 /// `HHW:出发！后台之旅！` / `On::Play` (`backstage_tour::play`).
@@ -97,7 +97,7 @@ crate::host_subset!(backstage_dispatch {
     discard_size => arm_discard_size,
     cards_in => arm_cards_in,
     take_card => arm_take_card,
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     log | effect => arm_log,
     opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
     ask => arm_ask,
@@ -137,7 +137,7 @@ crate::host_subset!(hagumi_dispatch {
     self_uid => arm_self_uid,
     log | effect => arm_log,
     is_placed => arm_is_placed,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
 });
 
@@ -318,27 +318,27 @@ fn kkr_place_on_circle_iff_at(user: i32) {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     // (02): the card lands on CiRCLE. Under the host, `place_card_on` logs
-    // `PlaceCard { fate }` where fate is the landing tile (CiRCLE = 0).
+    // `PlaceCard { dest }` where dest is the landing tile (CiRCLE = 0).
     let mut placed_circle = false;
     for e in effects {
         if let Effect::PlaceCard {
             player: p,
-            fate,
+            dest,
             card: _,
         } = e
         {
-            if *p == player && (*fate == CIRCLE || *fate == 0) {
+            if *p == player && (*dest == CIRCLE || *dest == 0) {
                 placed_circle = true;
             }
         }
     }
     // Book: 「并将此卡置于CiRCLE上」. If the host's `place_card_on` arg layout
-    // routes fate through `Fate::Field` instead of the tile, this is a host
+    // routes dest through `Dest::Field` instead of the tile, this is a host
     // finding — the body asked for CiRCLE.
-    kani::cover!(placed_circle, "PlaceCard fate is CiRCLE");
+    kani::cover!(placed_circle, "PlaceCard dest is CiRCLE");
     kani::cover!(
         !placed_circle,
-        "PlaceCard fate is not CiRCLE (host finding)"
+        "PlaceCard dest is not CiRCLE (host finding)"
     );
     // Pin the weaker determined fact: a PlaceCard by this player happens.
     crate::kassert!(
@@ -428,7 +428,7 @@ fn athletic_place_three_crystals_iff_at(user: i32) {
     crate::kassert!(
         effects
             .iter()
-            .any(|e| matches!(e, Effect::PlaceCard { player: p, fate: 2, .. } if *p == player)),
+            .any(|e| matches!(e, Effect::PlaceCard { player: p, dest: 2, .. } if *p == player)),
         "C-HHW-athletic-01: PlaceCard on the user's field"
     );
     let crystals = world::with_world(|w| w.field_crystals(w.last_uid));
@@ -459,7 +459,7 @@ pub fn athletic_place_three_crystals_user1_iff() {
 
 /// Turn-end decay: the owner's TurnEnd with the card placed logs exactly one
 /// AddCounter(crystals, −1). The empty→discard half is the crystals-changed
-/// hook; if that hook only sets fate without unplacing, the book's
+/// hook; if that hook only sets dest without unplacing, the book's
 /// 「为0时置入弃牌堆」 is LESS.
 fn athletic_turn_end_decay_iff_at(user: i32) {
     athletic_world_placed(user, 3);
@@ -516,8 +516,8 @@ pub fn athletic_decay_to_zero_discards() {
 }
 
 /// The crystals-changed hook: when the count hits 0 the card leaves the field.
-/// Book: 「为0时置入弃牌堆」. The body calls `set_fate(Graveyard)` which the
-/// host's `apply_fate` commits as unplace-and-send (field-count drop +
+/// Book: 「为0时置入弃牌堆」. The body calls `set_dest(Graveyard)` which the
+/// host's `apply_dest` commits as unplace-and-send (field-count drop +
 /// discard pile write). The commit is world-state, not an in-run effect
 /// (matching `again_02` / `starry_06` "exactly N effects" specs).
 #[kani::proof]
@@ -532,7 +532,7 @@ pub fn athletic_empty_discards() {
     let effects = effects_of(&logbuf, log_n);
     let post_field_n = world::with_world(|w| w.field_n);
     // Book: the card is put into the discard. Observable: field-count drop
-    // (the `set_fate` commit) or an explicit UnplaceCard effect.
+    // (the `set_dest` commit) or an explicit UnplaceCard effect.
     let discarded = post_field_n < pre_field_n
         || effects
             .iter()
@@ -743,7 +743,7 @@ pub fn backstage_mutant_is_detected() {
 // C-HHW-balloon-02 -- 「选择其中之一，传送至结果对应序号的格子，视为你的主要移动」
 // Entry: `HHW:热气球演出` / `On::Play`
 // (01)'s four `3d20 mod 60` rolls are symbolic; the pick is a player choice.
-// Spec: fate = (r == 0 ? 60 : r) − 1.
+// Spec: dest = (r == 0 ? 60 : r) − 1.
 // Teleport frame is blocked-by `arm_card_move` stub (module docs).
 // ===========================================================================
 
@@ -761,24 +761,24 @@ fn balloon_teleports_to_a_chosen_result_iff_at(user: i32) {
     // destinations. The rolls themselves are not in the Effect log (they are
     // plan/roll state); the book's frame for (02) is the teleport as main move.
     // blocked-by host: `run_planned_move` is a protocol stub and logs no Teleport.
-    let mut fate = -1;
+    let mut dest = -1;
     for e in effects {
         if let Effect::Teleport { player: p, tile } = e {
             if *p == player {
-                fate = *tile;
+                dest = *tile;
             }
         }
     }
-    kani::cover!(fate >= 0, "teleport happened");
-    crate::kassert!(fate >= 0, "C-HHW-balloon-02: the player is teleported");
+    kani::cover!(dest >= 0, "teleport happened");
+    crate::kassert!(dest >= 0, "C-HHW-balloon-02: the player is teleported");
     // Destination must be a legal board tile (0..60). The 序号 wrap is the
     // spec's `balloon_02_fate`; with symbolic rolls the host's `roll` covers
-    // the face range, so any in-range fate is a legal pick of some result.
+    // the face range, so any in-range dest is a legal pick of some result.
     crate::kassert!(
-        fate < 60,
-        "C-HHW-balloon-02: fate is a board tile (序号 1..=60 → 0..60)"
+        dest < 60,
+        "C-HHW-balloon-02: dest is a board tile (序号 1..=60 → 0..60)"
     );
-    crate::kassert!(post.pos[player as usize] == fate, "post pos is the fate");
+    crate::kassert!(post.pos[player as usize] == dest, "post pos is the dest");
     crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
@@ -798,16 +798,16 @@ pub fn balloon_teleports_to_a_chosen_result_user1_iff() {
     balloon_teleports_to_a_chosen_result_iff_at(1);
 }
 
-/// Pure-formula mutant: fate(r) vs fate_mutant(r) differ for r=0 (wrap).
+/// Pure-formula mutant: dest(r) vs fate_mutant(r) differ for r=0 (wrap).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
 pub fn balloon_mutant_is_detected() {
-    // Spec unit check: fate(r) vs fate_mutant(r) differ for r=0 (wrap).
+    // Spec unit check: dest(r) vs fate_mutant(r) differ for r=0 (wrap).
     let r = 0;
     crate::kassert!(
         spec::hhw::balloon_02_fate(r) != spec::hhw::balloon_02_dest_mutant(r),
-        "mutant raw-result fate disagrees on the mod-60 wrap"
+        "mutant raw-result dest disagrees on the mod-60 wrap"
     );
 }
 

@@ -125,7 +125,7 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
         ctx::state::add(player_id, BUILD_OFF, 1);
         // The hooks ride this instance, so the card stays in play (it also
         // counts for a later Ranger's 「场上你拥有的卡数量」).
-        ctx::set_fate(ctx::Fate::Field);
+        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(
             player_id,
             ID,

@@ -157,7 +157,7 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
         ctx::inc_slot(player_id, "lockedStay", landed);
         ctx::state::set_expires(player_id, "lockedStay", ctx::state::TURN_END);
     }
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("tomori_no_longer_note")));
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let mut discarded = 0;
@@ -213,9 +213,9 @@ fn pending_refund(player_id: i32) -> i32 {
 }
 
 /// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- `[移除]` is
-/// [`Fate::Banished`] (gone from the field, not into the discard).
+/// [`Dest::Banished`] (gone from the field, not into the discard).
 fn sweep(_player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     Ok(())
 }
 

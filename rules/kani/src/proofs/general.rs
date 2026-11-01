@@ -128,7 +128,7 @@ pub fn recruit_01_mutant_is_detected() {
 // 「1. [移除]此卡；2. 将一张“PERFECT“加入抽卡区并洗切；3. [获得]2000资金。」
 // ===========================================================================
 
-/// IFF: fate Banished, deck holds one more PERFECT, money +2000, log is the gain.
+/// IFF: dest Banished, deck holds one more PERFECT, money +2000, log is the gain.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -148,7 +148,7 @@ pub fn great_01_02_03_iff() {
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
-    let post_fate = world::with_world(|ww| ww.fate);
+    let post_fate = world::with_world(|ww| ww.dest);
     let (post_deck_n, post_deck) = world::with_world(|ww| (ww.deck_n, ww.deck_pile));
     let post_deck_perfect = intern_count(&post_deck, post_deck_n, "通用:[衍生]PERFECT");
 
@@ -201,7 +201,7 @@ pub fn great_01_mutant_is_detected() {
 // 「1. [移除]此卡；2. 将一张“FEVER!“加入弃卡区；3. [获得]3000资金。」
 // ===========================================================================
 
-/// IFF: fate Banished, discard holds one more FEVER!, money +3000.
+/// IFF: dest Banished, discard holds one more FEVER!, money +3000.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -223,7 +223,7 @@ pub fn perfect_01_02_03_iff() {
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
-    let post_fate = world::with_world(|ww| ww.fate);
+    let post_fate = world::with_world(|ww| ww.dest);
     let (post_discard_n, post_discard) = world::with_world(|ww| (ww.discard_n, ww.discard_pile));
     let post_discard_fever = intern_count(&post_discard, post_discard_n, "通用:[衍生]FEVER!");
 
@@ -326,7 +326,7 @@ pub fn fever_01_iff() {
     );
 }
 
-/// MUTANT companion: fate Graveyard must not match.
+/// MUTANT companion: dest Graveyard must not match.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -343,7 +343,7 @@ pub fn fever_01_mutant_is_detected() {
     let this_card = world::card_slot_of("通用:[衍生]FEVER!");
     crate::kassert!(
         !spec::fever_01_log_ok_mutant(&logbuf[..log_n], player, this_card),
-        "mutant fate=Graveyard must not match the card"
+        "mutant dest=Graveyard must not match the card"
     );
 }
 
@@ -385,8 +385,8 @@ fn fever_guard_admits(w: &World, player: i32, placed: bool) -> bool {
     crate::guard!(gid, &ctx)
 }
 
-/// IFF: when the card is placed and the turn-start is the owner's, fate becomes
-/// Graveyard and the effect log is empty (set_fate is unlogged).
+/// IFF: when the card is placed and the turn-start is the owner's, dest becomes
+/// Graveyard and the effect log is empty (set_dest is unlogged).
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -411,9 +411,9 @@ pub fn fever_04_turn_start_iff() {
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
-    let post_fate = world::with_world(|ww| ww.fate);
+    let post_fate = world::with_world(|ww| ww.dest);
 
-    kani::cover!(log_n == 0, "no effects (set_fate is unlogged)");
+    kani::cover!(log_n == 0, "no effects (set_dest is unlogged)");
 
     crate::kassert!(
         spec::fever_04_log_ok(effects),
@@ -421,7 +421,7 @@ pub fn fever_04_turn_start_iff() {
     );
     crate::kassert!(
         post_fate == spec::DEST_GRAVEYARD,
-        "C-GEN-fever-04: fate must be Graveyard (弃卡区)"
+        "C-GEN-fever-04: dest must be Graveyard (弃卡区)"
     );
     crate::kassert!(
         world::arr4_eq(post.money, condition.money),
@@ -443,7 +443,7 @@ pub fn fever_04_wrong_turn_noop() {
     let w = fever_turn_start_world(true, false);
     let player = w.trig_player;
     let admitted = fever_guard_admits(&w, player, true);
-    let pre_fate = w.fate;
+    let pre_fate = w.dest;
     let condition = {
         world::reset_world(w);
         world::snapshot()
@@ -458,9 +458,9 @@ pub fn fever_04_wrong_turn_noop() {
     ));
     let post = world::snapshot();
     let (log_n, _) = take_log();
-    let post_fate = world::with_world(|ww| ww.fate);
+    let post_fate = world::with_world(|ww| ww.dest);
     crate::kassert!(log_n == 0, "C-GEN-fever-04: wrong turn start is a no-op");
-    crate::kassert!(post_fate == pre_fate, "C-GEN-fever-04: fate untouched");
+    crate::kassert!(post_fate == pre_fate, "C-GEN-fever-04: dest untouched");
     crate::kassert!(
         world::arr4_eq(post.money, condition.money),
         "C-GEN-fever-04: frame money"
@@ -482,7 +482,7 @@ pub fn fever_04_not_placed_guard_rejects() {
     );
 }
 
-/// MUTANT companion: fate Banished must not match.
+/// MUTANT companion: dest Banished must not match.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(24)]
@@ -495,10 +495,10 @@ pub fn fever_04_mutant_is_detected() {
         "TurnStart",
         player,
     ));
-    let post_fate = world::with_world(|ww| ww.fate);
+    let post_fate = world::with_world(|ww| ww.dest);
     crate::kassert!(
         !spec::fever_04_dest_ok_mutant(post_fate),
-        "mutant fate=Banished must not match the card"
+        "mutant dest=Banished must not match the card"
     );
 }
 

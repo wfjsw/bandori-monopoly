@@ -55,7 +55,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         1,
         10,
     )?;
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("fire_bird_note")));
     let n = x.max(1);
     ctx::set_crystals(n);
@@ -130,7 +130,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("fire_bird_decayed")).player_id("who", player_id),

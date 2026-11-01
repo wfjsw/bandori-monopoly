@@ -38,7 +38,7 @@ use std::sync::{Arc, OnceLock};
 
 use game_core::data::{GameData, Roster};
 use game_core::engine::{
-    AnswerProvider, Answered, Ask, CardRules, Fate, Flow, Match, PlayCtx, StubRules,
+    AnswerProvider, Answered, Ask, CardRules, Dest, Flow, Match, PlayCtx, StubRules,
 };
 use game_core::msg::Msg;
 use game_core::net::RoomMember;
@@ -315,7 +315,7 @@ fn equivalence(seed: u64, n: usize, rules: Arc<dyn CardRules>) -> (usize, usize)
 struct AskingStub;
 
 impl CardRules for AskingStub {
-    fn play(&self, cx: &mut PlayCtx, player_id: usize, card: &str) -> Flow<Fate> {
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, card: &str) -> Flow<Dest> {
         StubRules.play(cx, player_id, card)
     }
     fn event(&self, cx: &mut PlayCtx, player_id: usize, id: &str) -> Flow<bool> {

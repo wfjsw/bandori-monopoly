@@ -88,7 +88,7 @@ fn jennifer(player_id: i32) -> card_sdk::Asked {
         Some(h) => h,
         None => return Ok(()),
     };
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         hit,
         "PP:找回珍妮弗",
@@ -120,9 +120,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // 2. X = 1; the band card applies clause （2） when 1 > the owner's face-downs.
     let _ = fans::flip_up(player_id, 1)?;
     // 3.
-    ctx::send_to_fate(ctx::Fate::Banished);
+    ctx::send_to_dest(ctx::Dest::Banished);
     if user >= 0 {
-        ctx::add_to_fate(user, "PP:[衍生]魔法战队Pastel✽Ranger", ctx::Fate::Hand);
+        ctx::add_to_dest(user, "PP:[衍生]魔法战队Pastel✽Ranger", ctx::Dest::Hand);
         ctx::log(
             user,
             &Msg::new(key!("jennifer_ranger")).player_id("who", user),

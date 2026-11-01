@@ -504,7 +504,7 @@ pub struct PlayCtx<'a> {
     /// here; the re-entered `CardRules::counteract` adopts them instead of
     /// re-collecting from a world the nested settle already changed.
     pub(crate) counteract_resume: Option<Box<dyn std::any::Any + Send>>,
-    /// Fate a just-resumed drive returned (STACK-01). The card-fate work
+    /// Dest a just-resumed drive returned (STACK-01). The card-dest work
     /// item reads it after the resume completes.
     pub(crate) last_drive_fate: Option<i32>,
     /// STACK-01: skip this many `drive` calls on the next counteract

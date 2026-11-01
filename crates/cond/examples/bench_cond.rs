@@ -78,6 +78,8 @@ fn window() -> WindowCtx {
         tile_count: 12,
         tile_owners: vec![0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
         plan_fixed_roll: None,
+        resolving: Vec::new(),
+        trigger_card_is_skill: false,
     }
 }
 

@@ -185,18 +185,18 @@ pub fn kkr_01_amount_mutant() -> i32 {
 // ===========================================================================
 
 /// Exactly one PlaceCard whose destination tile is CiRCLE. Under the host,
-/// `place_card_on` logs `PlaceCard { fate }` with `fate` = the tile index.
+/// `place_card_on` logs `PlaceCard { dest }` with `dest` = the tile index.
 pub fn kkr_02_log_ok(effects: &[Effect], player: i32, circle: i32) -> bool {
     effects
         .iter()
-        .any(|e| matches!(e, Effect::PlaceCard { player: p, fate, .. } if *p == player && *fate == circle))
+        .any(|e| matches!(e, Effect::PlaceCard { player: p, dest, .. } if *p == player && *dest == circle))
 }
 
-/// MUTANT: placed on the player's field (fate 2 = Fate::Field) instead of CiRCLE.
+/// MUTANT: placed on the player's field (dest 2 = Dest::Field) instead of CiRCLE.
 pub fn kkr_02_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
     effects
         .iter()
-        .any(|e| matches!(e, Effect::PlaceCard { player: p, fate: 2, .. } if *p == player))
+        .any(|e| matches!(e, Effect::PlaceCard { player: p, dest: 2, .. } if *p == player))
 }
 
 // ===========================================================================
@@ -208,7 +208,7 @@ pub fn athletic_01_crystals() -> i32 {
     3
 }
 
-/// Place this card on the user's field (Fate::Field = 2). The crystal charge
+/// Place this card on the user's field (Dest::Field = 2). The crystal charge
 /// is `set_crystals(3)`, which under the host is a counter write (no
 /// `Effect` variant) — the observable is the post crystal count.
 pub fn athletic_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> bool {
@@ -217,7 +217,7 @@ pub fn athletic_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> boo
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card
             } if p == player && card == this_card
         )
@@ -345,12 +345,12 @@ pub fn balloon_02_fate(result: i32) -> i32 {
 
 /// The teleport is the turn's [主要移动]; the log has exactly one Teleport
 /// of the player to that destination (plus nothing else in the frame).
-pub fn balloon_02_log_ok(effects: &[Effect], player: i32, fate: i32) -> bool {
+pub fn balloon_02_log_ok(effects: &[Effect], player: i32, dest: i32) -> bool {
     effects.len() == 1
-        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == player && tile == fate)
+        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == player && tile == dest)
 }
 
-/// MUTANT: fate is the raw result (no 序号→index, no wrap).
+/// MUTANT: dest is the raw result (no 序号→index, no wrap).
 pub fn balloon_02_dest_mutant(result: i32) -> i32 {
     result
 }
@@ -407,8 +407,8 @@ pub fn wacha_02_qualifies(markers: i32) -> bool {
 pub const WACHA_AQUA: i32 = 3; // #4 水族馆
 pub const WACHA_MANSION: i32 = 29; // #30 弦卷豪宅
 
-pub fn wacha_02_dest_ok(fate: i32) -> bool {
-    fate == WACHA_AQUA || fate == WACHA_MANSION
+pub fn wacha_02_dest_ok(dest: i32) -> bool {
+    dest == WACHA_AQUA || dest == WACHA_MANSION
 }
 
 /// MUTANT: threshold is 8.

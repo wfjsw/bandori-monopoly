@@ -993,7 +993,7 @@ pub fn toko_swap_user1_iff_blocked_host() {
 // C-MOR-starry-01  `Mor:蝴蝶飞舞的星月夜`
 // 「（1）支付X次1000的的资金，将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
 // OPEN-X: engine offers 1..=5. Host note: `pay` always returns the requested
-// amount under Kani (no shortfall path); `set_fate` is folded into PlaceCard.
+// amount under Kani (no shortfall path); `set_dest` is folded into PlaceCard.
 // Seat-symmetric.
 // ===========================================================================
 
@@ -1003,7 +1003,7 @@ crate::host_subset!(starry_play_dispatch {
     opt_int | opt_str | opt_tile => arm_opt,
     ask => arm_ask,
     pay => arm_pay,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     add_counter_self => arm_add_counter_self,
     log | effect => arm_log,
@@ -1100,7 +1100,7 @@ pub fn starry_01_mutant_is_detected() {
 // (`crystals_changed_guard`) is a Rust residual: `trigger::card_is` is an
 // unmodeled stub returning 0 under Kani, so the guard cannot be evaluated
 // here — the body is invoked directly (existing unit style) and the residual
-// is listed. The discard commit is engine post (`set_fate(Graveyard)`).
+// is listed. The discard commit is engine post (`set_dest(Graveyard)`).
 // Seat-symmetric on the owner.
 // ===========================================================================
 
@@ -1109,7 +1109,7 @@ crate::host_subset!(starry_changed_dispatch {
     trig_value => arm_trig_value,
     gain | gain_typed | gain_fixed => arm_gain,
     counter_self => arm_counter_self,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     log | effect => arm_log,
 });
 
@@ -1119,11 +1119,11 @@ fn starry_changed_world(user: i32, crystals: i32, delta: i32) {
         w.pay_amount = delta; // trigger::value()
         w.trig_value = delta;
         w.field_n = 1; // is_placed
-        w.fate = 2; // sentinel (Field): not Graveyard, so a fate write is visible
+        w.dest = 2; // sentinel (Field): not Graveyard, so a dest write is visible
     });
 }
 
-/// IFF (removal → payout + empty → discard fate).
+/// IFF (removal → payout + empty → discard dest).
 fn starry_06_payout_iff_at(user: i32) {
     let removed: i32 = kani::any();
     kani::assume(removed >= 1 && removed <= 3);
@@ -1146,12 +1146,12 @@ fn starry_06_payout_iff_at(user: i32) {
         spec::starry_06_effects_ok(effects, user, removed),
         "C-MOR-starry-06: owner gains 1000 per crystal removed"
     );
-    // -02: empty crystals send the card to the discard (fate write).
-    let fate = world::with_world(|w| w.fate);
+    // -02: empty crystals send the card to the discard (dest write).
+    let dest = world::with_world(|w| w.dest);
     if after == 0 {
         crate::kassert!(
-            spec::starry_02_dest_is_graveyard(fate),
-            "C-MOR-starry-02: empty crystals ⇒ fate = Graveyard"
+            spec::starry_02_dest_is_graveyard(dest),
+            "C-MOR-starry-02: empty crystals ⇒ dest = Graveyard"
         );
     }
     crate::kassert!(
@@ -1335,11 +1335,11 @@ pub fn starry_05_noop_user1() {
 // OPEN-多分支选择 (engine runs the first Play only).
 //
 // C-MOR-nnm-05 is a state clause (「当奇迹水晶耗尽时」) and lives on the
-// CounterChanged hook (`on_crystals_changed` → `set_fate(Graveyard)`), same
+// CounterChanged hook (`on_crystals_changed` → `set_dest(Graveyard)`), same
 // shape as starry-02 / AG half-speed. The play press with *already* empty
 // crystals is a no-op (it does not itself discard) — that is correct, not a
 // LESS: exhaustion is observed on the count *change*. The iff below drives
-// the hook and pins the fate write; `arm_set_fate` commits it as world state
+// the hook and pins the dest write; `arm_set_fate` commits it as world state
 // (field slot drops, discard pile gains the card).
 // Seat-symmetric.
 // ===========================================================================
@@ -1364,7 +1364,7 @@ crate::host_subset!(nnm_play_dispatch {
     schedule_turn_end => arm_stub_zero,
     raise => arm_raise,
     gain | gain_typed | gain_fixed => arm_gain,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
 });
 
@@ -1379,13 +1379,13 @@ fn nnm_world(user: i32, crystals: i32) {
     set_self_crystals(crystals);
     sparse2(nnm_play_dispatch, user, |w| {
         w.field_n = 1; // the card is already placed (branch (3))
-        w.fate = 2; // sentinel (Field): not Graveyard
+        w.dest = 2; // sentinel (Field): not Graveyard
     });
 }
 
 /// IFF C-MOR-nnm-05: the CounterChanged hook (「当奇迹水晶耗尽时」) requests
-/// `fate = Graveyard`. Book: 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」.
-/// Body: `on_crystals_changed` → `set_fate(Fate::Graveyard)`; `arm_set_fate`
+/// `dest = Graveyard`. Book: 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」.
+/// Body: `on_crystals_changed` → `set_dest(Dest::Graveyard)`; `arm_set_fate`
 /// commits it as world state (field slot drops, discard pile gains the card).
 /// Driven directly (the CEL residual `trigger::card_is` is unmodeled under
 /// Kani — same style as starry-02/06).
@@ -1396,12 +1396,12 @@ fn nnm_05_empty_discard_iff_at(user: i32) {
         user,
     ));
     kani::cover!(true, "body returned");
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
 
     // Book pin: exhausted crystals ⇒ the card goes to the discard.
     crate::kassert!(
-        spec::nnm_05_wants_discard(fate),
-        "C-MOR-nnm-05: book wants fate=Graveyard when crystals hit 0"
+        spec::nnm_05_wants_discard(dest),
+        "C-MOR-nnm-05: book wants dest=Graveyard when crystals hit 0"
     );
 }
 
@@ -1420,7 +1420,7 @@ pub fn nnm_05_empty_discard_user1_iff() {
 }
 
 /// Companion: the Play press with *already* empty crystals is a no-op —
-/// `use_skill` returns without writing fate. That is correct (exhaustion is
+/// `use_skill` returns without writing dest. That is correct (exhaustion is
 /// observed on the CounterChanged *change*), not a LESS.
 fn nnm_05_press_empty_is_noop_at(user: i32) {
     nnm_world(user, 0);
@@ -1431,15 +1431,15 @@ fn nnm_05_press_empty_is_noop_at(user: i32) {
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
 
     kani::cover!(
-        spec::nnm_05_press_empty_noop(effects, fate, pre_fate),
+        spec::nnm_05_press_empty_noop(effects, dest, pre_fate),
         "empty press is a no-op"
     );
     crate::kassert!(
-        spec::nnm_05_press_empty_noop(effects, fate, pre_fate),
-        "C-MOR-nnm-05: Play press with 0 crystals is a no-op (no fate write)"
+        spec::nnm_05_press_empty_noop(effects, dest, pre_fate),
+        "C-MOR-nnm-05: Play press with 0 crystals is a no-op (no dest write)"
     );
     let post = world::snapshot();
     crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
@@ -1465,7 +1465,7 @@ fn nnm_05_atend_at(user: i32) {
     world::with_world_mut(|w| {
         w.trig_player = user;
         w.field_n = 1;
-        w.fate = 2;
+        w.dest = 2;
     });
     invoke::unwrap_done(card_morfonica::nanami_effort::discard_down_to_five_kani(
         user,
@@ -1474,7 +1474,7 @@ fn nnm_05_atend_at(user: i32) {
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
 
     // AtEnd only touches the hand; the field card stays. (4) is the
     // CounterChanged hook, not this entry.
@@ -1485,8 +1485,8 @@ fn nnm_05_atend_at(user: i32) {
         "C-MOR-nnm-05: AtEnd must not be the discard-on-empty path (and is not)"
     );
     crate::kassert!(
-        fate == 2 || log_n == 0,
-        "C-MOR-nnm-05: no Graveyard fate from AtEnd for the field card"
+        dest == 2 || log_n == 0,
+        "C-MOR-nnm-05: no Graveyard dest from AtEnd for the field card"
     );
 }
 
@@ -1572,7 +1572,7 @@ crate::host_subset!(tritone_dispatch {
     add_counter_self => arm_add_counter_self,
     set_counter_self => arm_set_counter_self,
     counter_self => arm_counter_self,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     state_set => arm_state_set,
     state_get => arm_state_get,
@@ -1650,7 +1650,7 @@ fn tritone_02_tick_iff_at(user: i32) {
         w.trig_kind = "turnEnd";
         // Own turn end: the tick is gated on `trig_player == user`.
         w.field_n = 1;
-        w.fate = 2; // sentinel (Field): not Graveyard
+        w.dest = 2; // sentinel (Field): not Graveyard
     });
     let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::tritone::counteract_kani(user));
@@ -1677,18 +1677,18 @@ fn tritone_02_tick_iff_at(user: i32) {
             post.money[user as usize] == (condition.money[user as usize] - owed).max(0),
             "C-MOR-tritone-02: owner pays back the loan (OPEN-三全音收款人: bank)"
         );
-        let fate = world::with_world(|w| w.fate);
+        let dest = world::with_world(|w| w.dest);
         crate::kassert!(
-            fate == 0,
-            "C-MOR-tritone-02: empty crystals ⇒ fate = Graveyard"
+            dest == 0,
+            "C-MOR-tritone-02: empty crystals ⇒ dest = Graveyard"
         );
     } else {
         crate::kassert!(
             world::arr4_eq(post.money, condition.money),
             "frame: money on a decay-only tick"
         );
-        let fate = world::with_world(|w| w.fate);
-        crate::kassert!(fate == 2, "frame: fate unchanged on a decay-only tick");
+        let dest = world::with_world(|w| w.dest);
+        crate::kassert!(dest == 2, "frame: dest unchanged on a decay-only tick");
     }
 }
 
@@ -1867,7 +1867,7 @@ pub fn noble_02_mutant_is_detected() {
 /// `Mor:再次牵起手来` PaySplitAt hook body ops.
 crate::host_subset!(hold_hands_dispatch {
     trig_set_pay_amount => arm_trig_set_pay_amount,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     log | effect => arm_log,
 });
 
@@ -1875,11 +1875,11 @@ fn again_02_world(user: i32, pay_amount: i32) {
     sparse2(hold_hands_dispatch, user, |w| {
         w.pay_amount = pay_amount;
         w.field_n = 1;
-        w.fate = 2; // sentinel (Field): not Graveyard
+        w.dest = 2; // sentinel (Field): not Graveyard
     });
 }
 
-/// IFF: cancel half returns 0, discard half sets fate = Graveyard.
+/// IFF: cancel half returns 0, discard half sets dest = Graveyard.
 fn again_02_cancel_iff_at(user: i32) {
     let pay_amount: i32 = kani::any();
     kani::assume(pay_amount >= 1 && pay_amount <= 5_000);
@@ -1887,7 +1887,7 @@ fn again_02_cancel_iff_at(user: i32) {
     let condition = world::snapshot();
     // ABI v75 pure Filter (PayAt): 「取消此次资金变动」 -- the body RETURNS 0
     // and the host folds that into the running amount. Stage moved out of
-    // `set_pay_amount` / `set_fate` (the old combined Action wrote both).
+    // `set_pay_amount` / `set_dest` (the old combined Action wrote both).
     let cancelled = card_morfonica::hold_hands_again::pay_at_kani(user, pay_amount);
     kani::cover!(true, "body returned");
     // Action half (PayAfter): 「并将此卡放置到弃卡区」.
@@ -1905,10 +1905,10 @@ fn again_02_cancel_iff_at(user: i32) {
         spec::again_02_cancel_ok(cancelled),
         "C-MOR-again-02: the money change is cancelled (Filter returns 0)"
     );
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     crate::kassert!(
-        fate == 0,
-        "C-MOR-again-02: card is sent to the discard (fate = Graveyard)"
+        dest == 0,
+        "C-MOR-again-02: card is sent to the discard (dest = Graveyard)"
     );
     crate::kassert!(
         world::arr4_eq(post.money, condition.money),
@@ -1992,7 +1992,7 @@ fn wing_01_teleport_iff_at(user: i32) {
     let effects = &ebuf[..log_n];
 
     // The body calls `tile_steps_ahead(player, 20 * plan::dir())` then
-    // `teleport_to`. Under the stub, dir = 0 ⇒ fate = pos.
+    // `teleport_to`. Under the stub, dir = 0 ⇒ dest = pos.
     let dir = 0i32; // Op::move_dir stub
     let want = spec::wing_01_fate(pos, dir);
     kani::cover!(want == pos, "stub dir=0 lands on the current tile");

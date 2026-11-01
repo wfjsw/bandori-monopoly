@@ -10,7 +10,7 @@
 //!
 //! grab / jump effects are the GrabFx hooks: `PassPlayer` / `SettleBefore` /
 //! `TurnStart` are hook kinds now; the walk body is expressible with
-//! `run_planned_move`, and the card stays in play (`Fate::Field`) so those hooks
+//! `run_planned_move`, and the card stays in play (`Dest::Field`) so those hooks
 //! attach; only the grid-nearest teleport (「视为你的主要移动」) is still held
 //! (see the TODO on `on_turn_start`).
 
@@ -70,7 +70,7 @@ fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, PASSER, NEVER);
     // 规则书（2）: 「你的下回合开始前」 -- the card waits in play for its window:
     // the `PassPlayer` / `SettleBefore` hooks only reach a placed field card.
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "CRYCHIC:想要抓住...",
@@ -114,7 +114,7 @@ fn grab(player_id: i32) -> card_sdk::Asked {
 /// closes and the card leaves play (with it the two hooks above).
 fn on_turn_start(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::state::set(player_id, PASSER, NEVER);
     Ok(())
 }

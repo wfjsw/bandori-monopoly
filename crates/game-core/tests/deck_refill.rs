@@ -1,6 +1,6 @@
 //! An exhausted deck is restored before draw/event effects can observe it.
 use game_core::data::GameData;
-use game_core::engine::{CardRules, Fate, Flow, Match, PlayCtx, StubRules, Trigger, World};
+use game_core::engine::{CardRules, Dest, Flow, Match, PlayCtx, StubRules, Trigger, World};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
@@ -45,8 +45,8 @@ struct Probe {
     cancel_draw: bool,
 }
 impl CardRules for Probe {
-    fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Fate> {
-        Ok(Fate::Graveyard)
+    fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Dest> {
+        Ok(Dest::Graveyard)
     }
     fn counteract(&self, cx: &mut PlayCtx, t: &mut Trigger) -> Flow<()> {
         if t.kind == "drewBefore" && self.cancel_draw {

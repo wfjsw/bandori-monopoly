@@ -49,9 +49,10 @@ impl Slot {
         ctx::counter_at(self.uid, counter::CRYSTALS)
     }
 
+    /// Add `n` to this instance's crystals. `max = 0` is the call-local bound;
+    /// the instance's stored `counter_max.crystals` (its printed 上限) is the
+    /// separate clamp `add_counter_at` applies itself.
     fn add(&self, n: i32) {
-        // TODO(ABI)（每卡奇迹水晶上限）: `MaxCrystals` -- no per-uid cap read, so
-        //   `add_counter_at(max = 0)` never clamps (see the destination TODO).
         ctx::add_counter_at(self.uid, counter::CRYSTALS, n, 0);
     }
 
@@ -132,11 +133,25 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
         &from_labels,
     )?;
     let src = from[src_i.min(from.len() - 1)];
-    // TODO(规则书)[judgement] （「另一张可以放置奇迹水晶的卡上」）: 「可以放置」 is undefined as a class --
-    // every non-face-down, non-immune field card is treated as a legal destination
-    // (one already at its own 上限 included) and the write is uncapped (TODO(ABI): no
-    // per-uid `MaxCrystals` read).
-    let to: Vec<usize> = (0..all.len()).filter(|&i| i != src).collect();
+    // 规则书: 「到另一张可以放置奇迹水晶的卡上」 -- pick the destination, never
+    // the source itself.
+    // 「可以放置」: a card at its own printed 上限 cannot take one. The cap is the
+    // per-instance `counter_max.crystals` store; no cap (0) is uncapped.
+    let can_take = |s: &Slot| {
+        let cap = ctx::counter_max_at(s.uid, counter::CRYSTALS);
+        cap == 0 || s.get() < cap
+    };
+    let to: Vec<usize> = (0..all.len())
+        .filter(|&i| i != src && can_take(&all[i]))
+        .collect();
+    if to.is_empty() {
+        // Every other card is full: nothing can move.
+        ctx::log(
+            player_id,
+            &Msg::new(key!("crystal_swap_none")).player_id("who", player_id),
+        );
+        return Ok(());
+    }
     let to_labels: Vec<Msg> = to.iter().map(|&i| all[i].label()).collect();
     let dst_i = ctx::ask_choice(
         player_id,

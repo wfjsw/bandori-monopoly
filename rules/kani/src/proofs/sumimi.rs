@@ -37,13 +37,13 @@ crate::host_subset!(hina_pass_dispatch {
     gain_marker => arm_gain_marker,
 });
 
-/// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `after_move` — `gain_charge` + `set_fate`.
+/// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `after_move` — `gain_charge` + `set_dest`.
 crate::host_subset!(childhood_after_move_dispatch {
     gain_marker => arm_gain_marker,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
 });
 
-/// `Sumimi:一人两个甜甜圈` play body — pos / exile hold / slots / fate / place /
+/// `Sumimi:一人两个甜甜圈` play body — pos / exile hold / slots / dest / place /
 /// log. Isolation: the multi-act `PassTile` / `SettleAfter` half (clause (2)) is
 /// PROTOCOL-LEVEL and not entered here.
 /// `state_get` reads [不可阻挡] in the host `grant` guard (STA-01).
@@ -56,7 +56,7 @@ crate::host_subset!(two_donuts_dispatch {
     state_add => arm_state_add,
     raise_after => arm_raise_after,
     log_as => arm_log,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });

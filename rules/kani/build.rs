@@ -75,7 +75,7 @@ const ARRAY_OPS: &[&str] = &[
     "pay_buy",
     "pay_build",
     "assign_deed",
-    "add_to_fate",
+    "add_to_dest",
     "take_card",
     "cards_in",
     "to_discard",
@@ -87,10 +87,10 @@ const ARRAY_OPS: &[&str] = &[
     "discard_from_hand",
     "shuffle_into_deck",
     "place_card_at",
-    "set_fate",
-    "set_transfer_to_fate",
-    "send_to_fate",
-    "transfer_to_fate",
+    "set_dest",
+    "set_transfer_to_dest",
+    "send_to_dest",
+    "transfer_to_dest",
     "rent_unit_mult",
     "add_rent_unit_bonus",
     "teleport_to",
@@ -298,6 +298,13 @@ const ARRAY_OPS: &[&str] = &[
     "adjust_money",
     "card_prop",
     "raise_after",
+    // v105: raise identity, resolution frame, per-instance counter cap.
+    "trig_uid",
+    "trig_instance",
+    "body_enter",
+    "body_leave",
+    "counter_max_at",
+    "set_counter_max_at",
 ];
 
 fn main() {

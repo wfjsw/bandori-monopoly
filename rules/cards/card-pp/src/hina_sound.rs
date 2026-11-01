@@ -70,7 +70,7 @@ fn hina_sound(player_id: i32) -> card_sdk::Asked {
     } else {
         ctx::play_card(sub, player_id)?;
     }
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     // TODO(规则书)[特] TODO(规则书)[特]
     Ok(())
 }

@@ -54,7 +54,7 @@ pub const FEVER: CardDef = CardDef::new(
 
 fn fever(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("fever_note")));
     // 1-based so player 0 is representable (unset prop reads back as 0). Written on
     // the instance `place_card` just bound the run to -- the same shape as
@@ -96,7 +96,7 @@ fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
 }
 
 /// 规则书（2）[持续]: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」 -- the
-/// **user's** discard, not the owner's (`set_transfer_to_fate`).
+/// **user's** discard, not the owner's (`set_transfer_to_dest`).
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     if trigger::player_id() != player_id {
         return Ok(());
@@ -105,9 +105,9 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     // discard is then the best we have -- same pile whenever owner == user).
     let user = ctx::prop(PROP_USER) - 1;
     if user >= 0 {
-        ctx::set_transfer_to_fate(user, ctx::Fate::Graveyard);
+        ctx::set_transfer_to_dest(user, ctx::Dest::Graveyard);
     } else {
-        ctx::set_fate(ctx::Fate::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard);
     }
     ctx::log(
         player_id,

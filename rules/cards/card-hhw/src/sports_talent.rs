@@ -44,7 +44,7 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
 const SLOT_NEXT: &str = "sports_talent_next";
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("sports_talent_note")));
     ctx::set_crystals(3);
     ctx::log(
@@ -146,7 +146,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("sports_talent_decayed")).player_id("who", player_id),

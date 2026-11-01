@@ -27,7 +27,7 @@ pub const RESOLVE: CardDef = CardDef::new(
 
 fn resolve(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「[手]：[移除]此卡。」
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     // TODO(规则书)（此卡[移除]时获得1000资金）: [特] pays on any [移除] (from any
     //   zone) -- only this play pays; no removal event exists to key on.
     // 规则书: 「[特]：此卡[移除]时获得1000资金。」

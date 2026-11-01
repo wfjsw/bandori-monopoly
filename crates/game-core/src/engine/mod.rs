@@ -47,7 +47,7 @@ pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;
 pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use rules::{
-    CardRules, Dir, Effect, ExclusiveAsk, Fate, Gate, Negation, Payee, RollSource, StubRules,
+    CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
     TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
 };
 pub use work::{

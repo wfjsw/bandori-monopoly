@@ -527,9 +527,9 @@ fn exile_decays_one_layer_before_turn_start() {
 #[test]
 fn exile_expiry_teleports_to_named_tile() {
     let mut t = Table::vanilla(3);
-    let fate = rules_spec::tile("银河拉面馆");
+    let dest = rules_spec::tile("银河拉面馆");
     arm_layer(&mut t, 1, "exile", 1);
-    t.set_state(1, "exileTo", fate as i32);
+    t.set_state(1, "exileTo", dest as i32);
     with_clauses(&mut t);
     let condition = t.snapshot_world();
     finish_turn(&mut t, 0);
@@ -541,7 +541,7 @@ fn exile_expiry_teleports_to_named_tile() {
     );
     assert_eq!(
         t.pos(1),
-        fate,
+        dest,
         "G-STATUS-08: pawn landed on the named return tile"
     );
     // Frame: only the exile keys and the pawn's pos.

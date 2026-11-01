@@ -33,9 +33,9 @@ use crate::world::{self, Effect, MAX_LOG};
 // break surfaces as a spec failure rather than an undeclared-op panic.
 // ---------------------------------------------------------------------------
 
-/// `R:[衍生] 觉悟` play — `set_fate` + `gain`.
+/// `R:[衍生] 觉悟` play — `set_dest` + `gain`.
 crate::host_subset!(resolve_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     gain | gain_typed | gain_fixed => arm_gain,
 });
 
@@ -76,7 +76,7 @@ crate::host_subset!(ako_dark_dispatch {
 crate::host_subset!(fire_bird_play_dispatch {
     pay => arm_pay,
     ask => arm_ask,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     set_counter_self => arm_set_counter_self,
     log | effect => arm_log,
@@ -111,14 +111,14 @@ crate::host_subset!(nfo_play_dispatch {
     run_planned_move => arm_card_move,
     tile_steps_ahead => arm_tile_steps_ahead,
     pay_total | pay_leg => arm_pay_to,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     cards_in => arm_cards_in,
     query_guard | declared_arg | play_card => arm_protocol_stub,
     ask | opt_str | opt_int | opt_tile | opt_price | opt_ai => arm_ask,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     add_held => arm_add_held,
     // face 5 keeps a lingering hook alive and adds crystals to the character
     // card -- the mock has no persona skill, so the player-token fallback runs.
@@ -140,7 +140,7 @@ crate::host_subset!(nfo_at_end_dispatch {
 /// the post-return ops (`pay` / place / `rent_of` for the refund threshold) are
 /// listed so an isolation break is a spec failure.
 crate::host_subset!(council_dispatch {
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     log | effect => arm_log,
     set_self_prop => arm_set_self_prop,
     linger => arm_protocol_stub,
@@ -152,14 +152,14 @@ crate::host_subset!(council_dispatch {
     rent_of => arm_rent_of,
     ask => arm_ask,
     pay => arm_pay,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_on => arm_place_card_on,
     state_set => arm_state_set,
 });
 
 /// `R:（燐子）Ringing Bloom` play — place + (2) house-count override.
 crate::host_subset!(ringing_bloom_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     log | effect => arm_log,
     owned_count => arm_owned_count,
@@ -825,7 +825,7 @@ fn student_council_add_resolve_iff_at(user: i32) {
     );
     let _ = condition;
     let _ = post;
-    // No effect-log entry: `add_to_fate` is a silent pile write.
+    // No effect-log entry: `add_to_dest` is a silent pile write.
     let (logbuf, log_n) = log_slice();
     let _ = logbuf;
     crate::kassert!(

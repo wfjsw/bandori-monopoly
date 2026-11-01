@@ -210,7 +210,7 @@ fn check(player_id: i32) -> card_sdk::Asked {
         .into_iter()
         .max_by_key(|&t| ctx::tile_price(t))
         .unwrap_or(-1);
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("guerrilla_note")));
     // 规则书[特]: 「指定你拥有的一个最贵的地契」 -- the [指定] is a designation
     // mark on that deed (owned by this field instance, so it dies with the card).

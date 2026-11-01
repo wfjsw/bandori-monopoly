@@ -54,7 +54,7 @@ pub const EVE_BUSHIDO: CardDef = CardDef::new(
 
 fn eve_bushido(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]场上」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "PP:[若宫伊芙]属于我的武士道！",

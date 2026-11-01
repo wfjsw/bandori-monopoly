@@ -67,7 +67,7 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
     // TODO(规则书)（将此卡放置在场地中央）: 「场地中央」 is not a board slot -- the
     //   card is a field card of the owner (OPEN-场地中央).
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         ID,
@@ -100,9 +100,10 @@ fn remove_crystal(_player_id: i32) -> card_sdk::Asked {
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
-        // TODO(ABI) trigger uid: `trigger::card_is` is name-only and the hook
-        //   dispatch has no per-uid dedupe, so with two copies of this card on
-        //   one field a single crystal removal runs both copies' payout.
+        // The raise names the changed instance, so the other copy of this card
+        // ignores it (`trigger::instance` is the raise's subject, not the job's).
+        && trigger::instance() == ctx::self_uid()
+        // Redundant once the instance matches, but keeps the name check readable.
         && trigger::card_is(ID)
         && trigger::name() == bandori_std::counter::CRYSTALS
         // （3） pays for removals; （1） leaves when the count lands on 0.
@@ -121,7 +122,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
     if ctx::crystals() == 0 && trigger::value() <= 0 {
-        ctx::set_fate(ctx::Fate::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard);
         ctx::log(
             player_id,
             &Msg::new(key!("starry_night_empty")).player_id("who", player_id),

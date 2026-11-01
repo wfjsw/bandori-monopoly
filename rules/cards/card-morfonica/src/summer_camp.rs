@@ -37,7 +37,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
 
 fn summer_camp(player_id: i32) -> card_sdk::Asked {
     // TODO(ABI)
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("summer_camp_note")));
     ctx::log(
         player_id,
@@ -59,7 +59,7 @@ fn untargetable(player_id: i32, mut g: GateValue) -> GateValue {
 
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && card.placed` is the condition.
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("summer_camp_end")).player_id("who", player_id),

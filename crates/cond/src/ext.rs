@@ -41,7 +41,7 @@ pub struct CondExt {
     /// Bare-ident CEL string constants: (`"SomeKind"`, `"wire:ns:id"`).
     /// Merged into `kinds::str_constants()` at lookup time.
     pub kind_consts: &'static [(&'static str, &'static str)],
-    /// Source-scanner expansions for Rust const refs in `condition` position:
+    /// Source-scanner expansions for Rust const refs in `pre` position:
     /// (`"content::guards::OWN_START"`,
     ///  `"actor == owner && tile_is(tile.id, \"kind\")")`).
     pub guard_consts: &'static [(&'static str, &'static str)],
@@ -125,7 +125,7 @@ impl<'a> Vocab<'a> {
         )
     }
 
-    /// Expansion for a Rust const path in `condition` position.
+    /// Expansion for a Rust const path in `pre` position.
     pub fn guard_const(&self, path: &str) -> Option<&'static str> {
         self.ext?
             .guard_consts

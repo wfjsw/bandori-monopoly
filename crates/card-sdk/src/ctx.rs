@@ -27,7 +27,7 @@ pub mod sys;
 
 #[cfg(target_arch = "wasm32")]
 #[cfg_attr(kani, inline(always))]
-fn str_ptr(v: &str) -> (i32, i32) {
+fn s(v: &str) -> (i32, i32) {
     in_bytes(v.as_bytes())
 }
 
@@ -40,7 +40,7 @@ fn str_ptr(v: &str) -> (i32, i32) {
 /// Production wasm / native keep the real `ptr, len` arena ABI.
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg_attr(kani, inline(always))]
-fn str_ptr(v: &str) -> (i32, i32) {
+fn s(v: &str) -> (i32, i32) {
     #[cfg(kani)]
     {
         let id = crate::intern::intern(v);
@@ -170,8 +170,8 @@ fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8>
 pub mod raw {
     pub use super::sys;
     use super::*;
-    pub fn str_ptr(v: &str) -> (i32, i32) {
-        super::str_ptr(v)
+    pub fn s(v: &str) -> (i32, i32) {
+        super::s(v)
     }
     pub fn msg_bytes(m: &Msg) -> (i32, i32) {
         super::msg_bytes(m)
@@ -263,7 +263,7 @@ pub fn no_flash() {
 /// cards (tiles, `mark:*`). Identified by the next flash ordinal within the
 /// drive; use [`flash_card_keyed`] when the position can shift between runs.
 pub fn flash_card(card_id: &str, msg: &Msg) {
-    let (cp, cl) = str_ptr(card_id);
+    let (cp, cl) = s(card_id);
     let (p, l) = msg_bytes(msg);
     unsafe { sys::flash_card(cp, cl, p, l) }
 }
@@ -271,8 +271,8 @@ pub fn flash_card(card_id: &str, msg: &Msg) {
 /// Like [`flash_card`] but with an explicit identity key: the same `key` in one
 /// drive flashes once, even if its position shifts between re-runs.
 pub fn flash_card_keyed(key: &str, card_id: &str, msg: &Msg) {
-    let (kp, kl) = str_ptr(key);
-    let (cp, cl) = str_ptr(card_id);
+    let (kp, kl) = s(key);
+    let (cp, cl) = s(card_id);
     let (p, l) = msg_bytes(msg);
     unsafe { sys::flash_card_keyed(kp, kl, cp, cl, p, l) }
 }
@@ -294,7 +294,7 @@ pub fn tile_count() -> i32 {
 /// Tile index of a name (a data key), or -1.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_named(name: &str) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::tile_named(p, l) }
 }
 
@@ -373,7 +373,7 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
 /// game sugar (`is_deed` / `is_start` / …) lives in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_is(tile: i32, kind: &str) -> bool {
-    let (p, l) = str_ptr(kind);
+    let (p, l) = s(kind);
     unsafe { sys::tile_is(tile, p, l) != 0 }
 }
 
@@ -382,7 +382,7 @@ pub fn tile_is(tile: i32, kind: &str) -> bool {
 /// live in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_attr(tile: i32, attr: &str) -> i32 {
-    let (p, l) = str_ptr(attr);
+    let (p, l) = s(attr);
     unsafe { sys::tile_attr(tile, p, l) }
 }
 
@@ -391,7 +391,7 @@ pub fn tile_attr(tile: i32, attr: &str) -> i32 {
 /// class-membership props. Game sugar lives in `bandori-std`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_in(player_id: i32, tile: i32, class: &str) -> bool {
-    let (p, l) = str_ptr(class);
+    let (p, l) = s(class);
     unsafe { sys::tile_in(player_id, tile, p, l) != 0 }
 }
 
@@ -569,7 +569,7 @@ pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
 /// scalars (`scale_settle_payment`) do not reach a print.
 #[cfg_attr(kani, inline(always))]
 pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<i32, Prompt> {
-    let (tp, tl) = str_ptr(typ);
+    let (tp, tl) = s(typ);
     let (xp, xl) = msg_bytes(text);
     asked(unsafe { sys::gain_typed(player_id, amount, tp, tl, xp, xl) })
 }
@@ -796,30 +796,30 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
-/// Put one copy of `card` into `player_id`'s pile at `fate`.
+/// Put one copy of `card` into `player_id`'s pile at `dest`.
 ///
-/// The named-card counterpart of [`send_to_fate`] / [`transfer_to_fate`], which
-/// move the *running instance*. `Fate::Hand` is 「加入手牌」; `Fate::Graveyard` is
+/// The named-card counterpart of [`send_to_dest`] / [`transfer_to_dest`], which
+/// move the *running instance*. `Dest::Hand` is 「加入手牌」; `Dest::Graveyard` is
 /// 「放入弃卡区」 (prefer [`to_discard`] when you want the discarded hooks); the
-/// deck fates name the draw-pile insert position (`Fate::DeckTop` /
+/// deck fates name the draw-pile insert position (`Dest::DeckTop` /
 /// `DeckBottom` / `DeckRandom` -- the default is **shuffle**).
-/// `Fate::Field` / `Fate::Banished` are not piles and trap.
+/// `Dest::Field` / `Dest::Banished` are not piles and trap.
 ///
 /// Replaces `add_to_hand` / `add_to_deck` / `add_to_deck_at`.
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_fate(player_id: i32, card: &str, fate: Fate) {
-    let (p, l) = str_ptr(card);
-    unsafe { sys::add_to_fate(player_id, p, l, fate as i32) }
+pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
+    let (p, l) = s(card);
+    unsafe { sys::add_to_dest(player_id, p, l, dest as i32) }
 }
 
 /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
 /// anywhere -- the caller decides where it goes next. Returns whether it was
-/// there. Card before zone, matching [`add_to_fate`].
+/// there. Card before zone, matching [`add_to_dest`].
 ///
 /// Replaces `take_from_hand` (that was `src = CardPile::Hand`).
 #[cfg_attr(kani, inline(always))]
 pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
 }
 
@@ -933,7 +933,9 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     decode_name_list(&buf)
 }
 
-/// Distinct card ids in `pile`, first-seen order.
+/// Distinct card ids in `pile`, first-seen order. A pile can hold several
+/// copies of one card; when the player is picking a *title*, list each id
+/// once.
 pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     // Concrete cap (see `owned_tiles`): the mixed push/realloc growth is
     // capped at `cards_in`'s own 8 anyway.
@@ -951,14 +953,14 @@ pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
 
 #[cfg_attr(kani, inline(always))]
 pub fn to_discard(player_id: i32, card: &str) {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::to_discard(player_id, p, l) }
 }
 
 /// Copies of `card` in the player's hand.
 #[cfg_attr(kani, inline(always))]
 pub fn hand_count(player_id: i32, card: &str) -> i32 {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::hand_count(player_id, p, l) }
 }
 
@@ -986,7 +988,7 @@ pub fn inc_start_hand(player_id: i32, delta: i32) {
 /// Copies of `card` in the player's discard pile.
 #[cfg_attr(kani, inline(always))]
 pub fn discard_count(player_id: i32, card: &str) -> i32 {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::discard_count(player_id, p, l) }
 }
 
@@ -1005,7 +1007,7 @@ pub fn discard_size(player_id: i32) -> i32 {
 /// pile. True when the player held one.
 #[cfg_attr(kani, inline(always))]
 pub fn discard_from_hand(player_id: i32, card: &str) -> bool {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::discard_from_hand(player_id, p, l) != 0 }
 }
 
@@ -1036,55 +1038,55 @@ pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
 /// hold this rather than re-resolving by name.
 #[cfg_attr(kani, inline(always))]
 pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
-    let (cp, cl) = str_ptr(card);
+    let (cp, cl) = s(card);
     let (p, l) = msg_bytes(note);
     unsafe { sys::place_card_at(player_id, cp, cl, p, l) }
 }
 
-/// 「将此卡放置在场上」 -- [`set_fate`]`(`[`Fate::Field`]`)` then [`place_card`],
+/// 「将此卡放置在场上」 -- [`set_dest`]`(`[`Dest::Field`]`)` then [`place_card`],
 /// the fold every play body that stays in play wants. Two axes, one call:
-/// `place_card` creates the field instance **now**; the `Fate::Field` fate
+/// `place_card` creates the field instance **now**; the `Dest::Field` dest
 /// tells the commit that the played hand card *became* that instance, so it is
-/// not also spent to the default fate (the discard). Returns the new
+/// not also spent to the default dest (the discard). Returns the new
 /// instance's uid ([`place_card_at`]'s contract).
 ///
 /// Only for the body that places **its own** card (its `ID`). A body placing
 /// some *other* card still calls [`place_card`] alone -- that instance is not
-/// the played hand card's fate -- and a play whose hand card retires elsewhere
-/// (「…然后此卡[移除]」) names its own [`Fate`].
+/// the played hand card's dest -- and a play whose hand card retires elsewhere
+/// (「…然后此卡[移除]」) names its own [`Dest`].
 #[cfg_attr(kani, inline(always))]
 pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg) -> i32 {
     crate::pure::refuse_if_filter("ctx::place_self_to_field");
-    set_fate(Fate::Field);
+    set_dest(Dest::Field);
     place_card(player_id, card, note)
 }
 
-/// Where this card goes afterwards (see [`Fate`]). For a
-/// play it is the hand card's fate; for a field effect, the instance's.
-pub fn set_fate(fate: Fate) {
-    crate::pure::refuse_if_filter("ctx::set_fate");
-    unsafe { sys::set_fate(fate as i32) }
+/// Where this card goes afterwards (see [`Dest`]). For a
+/// play it is the hand card's dest; for a field effect, the instance's.
+pub fn set_dest(dest: Dest) {
+    crate::pure::refuse_if_filter("ctx::set_dest");
+    unsafe { sys::set_dest(dest as i32) }
 }
 
-/// [`set_fate`] aimed at another player's pile -- 「将此卡放入[使用者]弃卡区」
+/// [`set_dest`] aimed at another player's pile -- 「将此卡放入[使用者]弃卡区」
 /// when [使用者] is not the one holding the card. `to` is whose discard / hand
 /// / deck it lands in.
-pub fn set_transfer_to_fate(to: i32, fate: Fate) {
-    unsafe { sys::set_transfer_to_fate(to, fate as i32) }
+pub fn set_transfer_to_dest(to: i32, dest: Dest) {
+    unsafe { sys::set_transfer_to_dest(to, dest as i32) }
 }
 
-/// [`set_fate`] applied **now** rather than when this effect finishes: for a
+/// [`set_dest`] applied **now** rather than when this effect finishes: for a
 /// card that must be gone before the rest of the effect runs (a move or a
 /// settle follows). Lands in its own owner's pile. Returns the owner it left,
 /// or `None` when it was not in play.
-pub fn send_to_fate(fate: Fate) -> Option<i32> {
-    let v = unsafe { sys::send_to_fate(fate as i32) };
+pub fn send_to_dest(dest: Dest) -> Option<i32> {
+    let v = unsafe { sys::send_to_dest(dest as i32) };
     (v >= 0).then_some(v)
 }
 
-/// [`send_to_fate`] aimed at another player's pile: `to` is whose.
-pub fn transfer_to_fate(to: i32, fate: Fate) -> Option<i32> {
-    let v = unsafe { sys::transfer_to_fate(to, fate as i32) };
+/// [`send_to_dest`] aimed at another player's pile: `to` is whose.
+pub fn transfer_to_dest(to: i32, dest: Dest) -> Option<i32> {
+    let v = unsafe { sys::transfer_to_dest(to, dest as i32) };
     (v >= 0).then_some(v)
 }
 
@@ -1106,14 +1108,14 @@ pub fn unplace_self() -> i32 {
 /// the body does not remain.
 #[cfg_attr(kani, inline(always))]
 pub fn event_expire(id: &str, removed: bool) {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::event_expire(p, l, removed as i32) }
 }
 
 /// Is `id` active and face-up? 「此卡在场上则…」
 #[cfg_attr(kani, inline(always))]
 pub fn event_is_active(id: &str) -> bool {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::event_is_active(p, l) != 0 }
 }
 
@@ -1121,7 +1123,7 @@ pub fn event_is_active(id: &str) -> bool {
 /// 牌堆顶部」 -- the draw still reveals it (「向所有玩家公开」).
 #[cfg_attr(kani, inline(always))]
 pub fn event_deck_push(id: &str, face_down: bool) {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::event_deck_push(p, l, face_down as i32) }
 }
 
@@ -1129,7 +1131,7 @@ pub fn event_deck_push(id: &str, face_down: bool) {
 /// 「从所有非衍生事件中选择3个移除」.
 #[cfg_attr(kani, inline(always))]
 pub fn event_banish(id: &str) {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::event_banish(p, l) }
 }
 
@@ -1145,7 +1147,7 @@ pub fn is_placed() -> bool {
 /// running -- same reasoning as [`crystals`].
 #[cfg_attr(kani, inline(always))]
 pub fn prop(key: &str) -> i32 {
-    let (p, l) = str_ptr(key);
+    let (p, l) = s(key);
     unsafe { sys::self_prop(p, l) }
 }
 
@@ -1155,7 +1157,7 @@ pub fn prop(key: &str) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn set_prop(key: &str, value: i32) -> i32 {
     crate::pure::refuse_if_filter("ctx::set_prop");
-    let (p, l) = str_ptr(key);
+    let (p, l) = s(key);
     unsafe { sys::set_self_prop(p, l, value) }
 }
 
@@ -1165,7 +1167,7 @@ pub fn set_prop(key: &str, value: i32) -> i32 {
 /// A tile with no rule instance reads as the key's default (`0`).
 #[cfg_attr(kani, inline(always))]
 pub fn tile_prop(tile: i32, key: &str) -> i32 {
-    let (p, l) = str_ptr(key);
+    let (p, l) = s(key);
     unsafe { sys::tile_prop(tile, p, l) }
 }
 
@@ -1174,7 +1176,7 @@ pub fn tile_prop(tile: i32, key: &str) -> i32 {
 /// `tile:circle` instance this way, and the reward step reads it back.
 #[cfg_attr(kani, inline(always))]
 pub fn set_tile_prop(tile: i32, key: &str, value: i32) -> i32 {
-    let (p, l) = str_ptr(key);
+    let (p, l) = s(key);
     unsafe { sys::set_tile_prop(tile, p, l, value) }
 }
 
@@ -1183,14 +1185,14 @@ pub fn set_tile_prop(tile: i32, key: &str, value: i32) -> i32 {
 /// the instance is named by uid, not by tile or by the running card.
 #[cfg_attr(kani, inline(always))]
 pub fn prop_at(uid: i32, key: &str) -> i32 {
-    let (p, l) = str_ptr(key);
+    let (p, l) = s(key);
     unsafe { sys::prop_at(uid, p, l) }
 }
 
 /// Write [`prop_at`] on the instance at `uid`. Returns the stored value.
 #[cfg_attr(kani, inline(always))]
 pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
-    let (p, l) = str_ptr(key);
+    let (p, l) = s(key);
     unsafe { sys::set_prop_at(uid, p, l, value) }
 }
 
@@ -1204,7 +1206,7 @@ pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
 /// names, or a card-invented name).
 #[cfg_attr(kani, inline(always))]
 pub fn counter(name: &str) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::counter_self(p, l) }
 }
 
@@ -1214,21 +1216,39 @@ pub fn counter(name: &str) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter(name: &str, n: i32, max: i32) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::add_counter");
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     asked(unsafe { sys::add_counter_self(p, l, n, max) })
 }
 
 /// Set this instance's on-card counter `name` to `n`.
 #[cfg_attr(kani, inline(always))]
 pub fn set_counter(name: &str, n: i32) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::set_counter_self(p, l, n) }
+}
+
+/// The hard per-instance maximum stored for the counter `name` on `uid` (`0` =
+/// uncapped / absent). `add_counter*` clamps at it in addition to the
+/// call-local `max`; the static form is a `counter_max.<name>` placement prop
+/// ([`crate::abi::prop::COUNTER_MAX_PREFIX`]).
+#[cfg_attr(kani, inline(always))]
+pub fn counter_max_at(uid: i32, name: &str) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::counter_max_at(uid, p, l) }
+}
+
+/// Write the per-instance maximum of the counter `name` on `uid`; `0` clears
+/// it. Returns the stored value. The key is removed with the instance.
+#[cfg_attr(kani, inline(always))]
+pub fn set_counter_max_at(uid: i32, name: &str, max: i32) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::set_counter_max_at(uid, p, l, max) }
 }
 
 /// On-card named counter of the instance at `uid`.
 #[cfg_attr(kani, inline(always))]
 pub fn counter_at(uid: i32, name: &str) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::counter_at(uid, p, l) }
 }
 
@@ -1240,7 +1260,7 @@ pub fn counter_at(uid: i32, name: &str) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
     crate::pure::refuse_if_filter("ctx::add_counter_at");
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::add_counter_at(uid, p, l, n, max) }
 }
 
@@ -1248,8 +1268,8 @@ pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
 /// (first copy).
 #[cfg_attr(kani, inline(always))]
 pub fn card_counter(player_id: i32, card: &str, name: &str) -> i32 {
-    let (cp, cl) = str_ptr(card);
-    let (np, nl) = str_ptr(name);
+    let (cp, cl) = s(card);
+    let (np, nl) = s(name);
     unsafe { sys::card_counter(player_id, cp, cl, np, nl) }
 }
 
@@ -1257,8 +1277,8 @@ pub fn card_counter(player_id: i32, card: &str, name: &str) -> i32 {
 /// receiver should decide; this is the engine-level form.
 #[cfg_attr(kani, inline(always))]
 pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32) -> i32 {
-    let (cp, cl) = str_ptr(card);
-    let (np, nl) = str_ptr(name);
+    let (cp, cl) = s(card);
+    let (np, nl) = s(name);
     unsafe { sys::add_card_counter(player_id, cp, cl, np, nl, n, max) }
 }
 
@@ -1290,8 +1310,8 @@ pub fn place_mark(
     note: &Msg,
     stack: crate::abi::Stack,
 ) -> crate::abi::MarkRef {
-    let (kp, kl) = str_ptr(kind);
-    let (cp, cl) = str_ptr(category);
+    let (kp, kl) = s(kind);
+    let (cp, cl) = s(category);
     let (np, nl) = msg_bytes(note);
     crate::abi::MarkRef::from(unsafe {
         sys::place_mark(
@@ -1329,8 +1349,8 @@ pub fn place_mark_pair(
     note: &Msg,
     stack: crate::abi::Stack,
 ) -> bool {
-    let (kp, kl) = str_ptr(kind);
-    let (cp, cl) = str_ptr(category);
+    let (kp, kl) = s(kind);
+    let (cp, cl) = s(category);
     let (np, nl) = msg_bytes(note);
     unsafe {
         sys::place_mark_pair(
@@ -1498,7 +1518,7 @@ pub fn designates(tile: i32) -> bool {
 /// Units of **this** instance's counter `name` held by `player_id`.
 #[cfg_attr(kani, inline(always))]
 pub fn count_held(name: &str, player_id: i32) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::count_held(p, l, player_id) }
 }
 
@@ -1520,7 +1540,7 @@ impl crate::abi::MarkRef {
 /// `markerSpend` / `markerGain` window (user ruling 2026-10-07).
 #[cfg_attr(kani, inline(always))]
 pub fn add_held(name: &str, player_id: i32, n: i32, max: i32) -> Result<i32, Prompt> {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     asked(unsafe { sys::add_held(p, l, player_id, n, max) })
 }
 
@@ -1539,8 +1559,28 @@ pub fn move_units(
     to_player: i32,
     n: i32,
 ) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::move_units(p, l, from_tile, from_player, to_tile, to_player, n) }
+}
+
+/// Announce the body about to run as `card` (the one dispatcher `rt::on` calls;
+/// card code does not). `1` runs the body, `0` skips it (the body's
+/// `cardFired` raise was cancelled), and the pause sentinel
+/// [`crate::abi::EXIT_NEED_INPUT`] halts the body too -- the raise asked a
+/// question, and the replayed action re-enters.
+///
+/// The frame itself is the host's: the host pushes it before the drive, and
+/// the raise that carried the body truncates it afterwards (the hooks a body
+/// raises are walked *after* it returns, so the guest cannot time the pop).
+pub fn body_enter(card: &str) -> i32 {
+    let (p, l) = s(card);
+    unsafe { sys::body_enter(p, l) }
+}
+
+/// Close the body's scope. Called after every [`body_enter`] that ran or
+/// parked; the frame outlives it (see there), so today this is a no-op.
+pub fn body_leave() {
+    unsafe { sys::body_leave() }
 }
 
 /// The uid of the running instance (`FieldCard::uid`). Provenance default for
@@ -1566,7 +1606,7 @@ pub fn send(
     payload: &crate::abi::Message,
 ) -> Result<i32, Prompt> {
     let (tp, tl) = target_bytes(target);
-    let (np, nl) = str_ptr(name);
+    let (np, nl) = s(name);
     let (pp, pl) = abi_msg_bytes(payload);
     asked(unsafe { sys::send(tp, tl, np, nl, pp, pl) })
 }
@@ -1703,7 +1743,7 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
 /// unique to its creating rule).
 #[cfg_attr(kani, inline(always))]
 pub fn held_count(player_id: i32, name: &str) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::count_held_name(p, l, player_id) }
 }
 
@@ -1713,14 +1753,14 @@ pub fn held_count(player_id: i32, name: &str) -> i32 {
 /// owner and falls back to the running card on a fresh row).
 #[cfg_attr(kani, inline(always))]
 pub fn set_held(player_id: i32, name: &str, value: i32, max: i32, instance: i32) {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::set_held_name(p, l, player_id, value, max, instance) }
 }
 
 /// Live ceiling stored on the held row (`0` = uncapped / undeclared).
 #[cfg_attr(kani, inline(always))]
 pub fn held_max(player_id: i32, name: &str) -> i32 {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::held_max(p, l, player_id) }
 }
 
@@ -1741,7 +1781,7 @@ pub fn add_held_by_name(player_id: i32, name: &str, n: i32, max: i32) -> Result<
 /// (the marker helpers do) or ignore it. There is no engine-side
 /// `match key`, and a raw [`Self::set`] / [`Self::add`] is never clamped.
 pub mod state {
-    use super::{str_ptr, sys};
+    use super::{s, sys};
 
     /// Which column of a state item.
     pub const VALUE: i32 = 0;
@@ -1761,12 +1801,12 @@ pub mod state {
     pub const TURN_END: i32 = 2;
 
     fn get_field(player_id: i32, key: &str, field: i32) -> i32 {
-        let (p, l) = str_ptr(key);
+        let (p, l) = s(key);
         unsafe { sys::state_get(player_id, p, l, field) }
     }
 
     fn set_field(player_id: i32, key: &str, field: i32, value: i32) -> i32 {
-        let (p, l) = str_ptr(key);
+        let (p, l) = s(key);
         unsafe { sys::state_set(player_id, p, l, field, value) }
     }
 
@@ -1797,7 +1837,7 @@ pub mod state {
 
     /// Move the value by `delta` raw. No clamping, no logging.
     pub fn add(player_id: i32, key: &str, delta: i32) -> i32 {
-        let (p, l) = str_ptr(key);
+        let (p, l) = s(key);
         unsafe { sys::state_add(player_id, p, l, delta) }
     }
 
@@ -1847,7 +1887,7 @@ pub fn set_slot(player_id: i32, key: &str, value: i32) {
 /// separately (Two-in-One 「替换为sumimi的另一名角色」).
 #[cfg_attr(kani, inline(always))]
 pub fn set_persona(player_id: i32, name: &str) {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::set_persona(player_id, p, l) }
 }
 
@@ -1875,7 +1915,7 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result<bool, Prompt> {
     let kind = kind.into();
-    let (p, l) = str_ptr(&kind.spelling());
+    let (p, l) = s(&kind.spelling());
     asked(unsafe { sys::raise(player_id, p, l, value) }).map(|v| v != 0)
 }
 
@@ -1889,7 +1929,7 @@ pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result
 /// This is how a rule raises a ruleset-declared event after the current effect
 /// commits (e.g. the wire id 21 event). `value` is the trigger's payload.
 pub fn raise_after(player_id: i32, name: &str, value: i32) {
-    let (p, l) = str_ptr(name);
+    let (p, l) = s(name);
     unsafe { sys::raise_after(player_id, p, l, value) }
 }
 
@@ -1926,7 +1966,7 @@ pub fn teleport_as(player_id: i32, tile: i32, settles: bool, is_main_move: bool)
 
 /// [`log`] with an explicit event kind (`"status"` for host skip / over lines).
 pub fn log_as(player_id: i32, kind: &str, msg: &Msg) {
-    let (kp, kn) = str_ptr(kind);
+    let (kp, kn) = s(kind);
     let (p, l) = msg_bytes(msg);
     unsafe { sys::log_as(player_id, kp, kn, p, l) }
 }
@@ -1972,7 +2012,7 @@ pub fn run_planned_move(player_id: i32) -> bool {
 /// `markerGain` first. No cap policy: the rules-layer kernel clamps and
 /// narrates.
 pub fn gain_marker(player_id: i32, name: &str, n: i32, reason: &Msg) -> Result<i32, Prompt> {
-    let (np, nl) = str_ptr(name);
+    let (np, nl) = s(name);
     let (p, l) = msg_bytes(reason);
     asked(unsafe { sys::gain_marker(player_id, np, nl, n, p, l) })
 }
@@ -1980,7 +2020,7 @@ pub fn gain_marker(player_id: i32, name: &str, n: i32, reason: &Msg) -> Result<i
 /// Spend `n` of the named counter; 1 when the player had enough. Opens
 /// `markerSpend` first (a cancelled window spends nothing).
 pub fn spend_marker(player_id: i32, name: &str, n: i32, reason: &Msg) -> Result<i32, Prompt> {
-    let (np, nl) = str_ptr(name);
+    let (np, nl) = s(name);
     let (p, l) = msg_bytes(reason);
     asked(unsafe { sys::spend_marker(player_id, np, nl, n, p, l) })
 }
@@ -1988,7 +2028,7 @@ pub fn spend_marker(player_id: i32, name: &str, n: i32, reason: &Msg) -> Result<
 /// Raise (or lower) the named counter's advertised cap; returns the new cap.
 /// Storage-only: the pull-under is the rules-layer kernel's job.
 pub fn add_marker_max(player_id: i32, name: &str, n: i32) -> i32 {
-    let (np, nl) = str_ptr(name);
+    let (np, nl) = s(name);
     unsafe { sys::add_marker_max(player_id, np, nl, n) }
 }
 
@@ -2012,19 +2052,19 @@ pub fn turn_key() -> i32 {
 /// Where a card goes when its effect finishes. Wire values 0..=3 are the
 /// Graveyard / Hand / Field / Banished order; 4..=6 are the draw-pile fates.
 ///
-/// One fate, two movers. A **play** names where its hand card ends and the
+/// One dest, two movers. A **play** names where its hand card ends and the
 /// engine applies it (`play_from_hand`); a **field effect** names where the
 /// instance it is running for ends and the host applies it when the run
-/// commits. 「将此卡放入[使用者]弃卡区」 is `Fate::Graveyard` either way -- no
+/// commits. 「将此卡放入[使用者]弃卡区」 is `Dest::Graveyard` either way -- no
 /// separate unplace-plus-discard dance. A run that names nothing leaves a
 /// placed card where it is.
 ///
 /// Planned: the draw-pile fates, one per insert position -- `DeckTop` = 4,
 /// `DeckBottom` = 5, `DeckRandom` = 6 (the default is **shuffle**, not top).
-/// When they land they need arms in `game-rules`'s `fate_from` and
-/// `game-core`'s play-from-hand fate handling.
+/// When they land they need arms in `game-rules`'s `dest_from` and
+/// `game-core`'s play-from-hand dest handling.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Fate {
+pub enum Dest {
     /// The discard pile (弃卡区) -- the default.
     Graveyard = 0,
     /// Back to the hand (手牌).
@@ -2041,7 +2081,7 @@ pub enum Fate {
     DeckRandom = 6,
 }
 
-impl Fate {
+impl Dest {
     pub fn from_i32(v: i32) -> Self {
         match v {
             1 => Self::Hand,
@@ -2538,13 +2578,13 @@ pub fn ask_number(
 }
 
 /// Run another card's `play` inside this run, as that card.
-/// Returns where it says it goes (its `Fate`); moving it there is the caller's
+/// Returns where it says it goes (its `Dest`); moving it there is the caller's
 /// job, since only the caller knows where the card came from.
 #[cfg_attr(kani, inline(always))]
-pub fn play_card(id: &str, player_id: i32) -> Result<Fate, Prompt> {
-    let (p, l) = str_ptr(id);
+pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
+    let (p, l) = s(id);
     let v = asked(unsafe { sys::play_card(p, l, player_id) })?;
-    Ok(Fate::from_i32(v))
+    Ok(Dest::from_i32(v))
 }
 
 /// Reserved entry ids -- see [`query_guard`]. Re-exported from
@@ -2578,8 +2618,8 @@ pub use crate::abi::entry;
 /// unnamed entry, or nesting overflow answer `false` too.
 #[cfg_attr(kani, inline(always))]
 pub fn query_guard(player_id: i32, card_id: &str, entry_id: &str) -> bool {
-    let (p, l) = str_ptr(card_id);
-    let (ep, el) = str_ptr(entry_id);
+    let (p, l) = s(card_id);
+    let (ep, el) = s(entry_id);
     unsafe { sys::query_guard(player_id, p, l, ep, el) != 0 }
 }
 
@@ -2705,7 +2745,7 @@ pub mod plan {
     /// readers ask [`trigger::move_tag`].
     pub fn set_tag(key: &str, value: i32) {
         crate::pure::refuse_if_filter("plan::set_tag");
-        let (p, l) = str_ptr(key);
+        let (p, l) = s(key);
         unsafe { sys::set_tag(p, l, value) }
     }
 
@@ -2756,26 +2796,26 @@ pub mod plan {
     /// The tile the walk begins on instead of the player's own; -1 for the
     /// player's own. `reason` is shown on the move's log line.
     pub fn set_start(tile: i32, reason: &str) {
-        let (p, l) = str_ptr(reason);
+        let (p, l) = s(reason);
         unsafe { sys::set_start(tile, p, l) }
     }
 
     /// Replace the roll's dice table with `count`d`sides`.
     pub fn set_base_dice(count: i32, sides: i32, reason: &str) {
-        let (p, l) = str_ptr(reason);
+        let (p, l) = s(reason);
         unsafe { sys::set_base_dice(count, sides, p, l) }
     }
 
     /// Append `count`d`sides` to the roll's base dice.
     pub fn add_base_dice(count: i32, sides: i32, reason: &str) {
-        let (p, l) = str_ptr(reason);
+        let (p, l) = s(reason);
         unsafe { sys::add_base_dice(count, sides, p, l) }
     }
 
     /// Append `count`d`sides` to the roll as an extra term. A flat add is a
     /// A flat add is a `0`-sided term (`add_extra_dice(n, 0, reason)`).
     pub fn add_extra_dice(count: i32, sides: i32, reason: &str) {
-        let (p, l) = str_ptr(reason);
+        let (p, l) = s(reason);
         unsafe { sys::add_extra_dice(count, sides, p, l) }
     }
 
@@ -2928,7 +2968,7 @@ pub fn abnormal_count(player_id: i32) -> i32 {
 /// (-1 when it is not on a tile), `None` when the player has no such card in play.
 #[cfg_attr(kani, inline(always))]
 pub fn placed_tile(player_id: i32, id: &str) -> Option<i32> {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     let v = unsafe { sys::placed_tile(player_id, p, l) };
     (v >= -1).then_some(v)
 }
@@ -2961,7 +3001,7 @@ pub fn n(k: i32, value: i32) -> i32 {
 /// grants lasts through the next turn). The card need not be in play.
 /// Scheduling twice runs it twice. An unknown / unmatching `id` is a no-op.
 pub fn at_turn_end(player_id: i32, id: &str) {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::schedule_turn_end(player_id, 0, p, l) }
 }
 
@@ -2969,7 +3009,7 @@ pub fn at_turn_end(player_id: i32, id: &str) {
 /// current turn ends, *before* the status wear-off (「回合结束时」 money losses,
 /// discarding down to a hand size). An unknown / unmatching `id` is a no-op.
 pub fn before_turn_end(player_id: i32, id: &str) {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::schedule_turn_end(player_id, 2, p, l) }
 }
 
@@ -2978,7 +3018,7 @@ pub fn before_turn_end(player_id: i32, id: &str) {
 /// it is `player_id`'s), after its wear-off. An unknown / unmatching `id` is a
 /// no-op.
 pub fn at_next_turn_end(player_id: i32, id: &str) {
-    let (p, l) = str_ptr(id);
+    let (p, l) = s(id);
     unsafe { sys::schedule_turn_end(player_id, 1, p, l) }
 }
 
@@ -3039,8 +3079,25 @@ pub mod trigger {
         read_str(|b, c| unsafe { sys::trig_name(b, c) })
     }
 
-    /// Only meaningful for kinds that aren't step-specific (e.g. `mortgage` can fire
-    /// during both step 1 and step 3).
+    /// The raise's unique id, shared by every job the raise
+    /// dispatches and stable across a replay of the same action. `0` outside a
+    /// raise and on a hand-built test trigger. A hook keys one-shot claims on
+    /// it (`ctx::prop(CLAIM) != trigger::uid()`).
+    pub fn uid() -> i32 {
+        unsafe { sys::trig_uid() }
+    }
+
+    /// The instance/row this raise is **about**: the changed
+    /// instance on `counterChanged`, the mark's creating instance on
+    /// `markChanged`, `-1` otherwise. Never restamped per hook job, so copy A
+    /// can ignore a raise about copy B (`trigger::instance() != ctx::self_uid()`).
+    pub fn instance() -> i32 {
+        unsafe { sys::trig_instance() }
+    }
+
+    /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
+    /// Only meaningful for kinds that aren't step-specific (e.g. `mortgage`
+    /// can fire during both step 1 and step 3).
     pub fn step() -> i32 {
         unsafe { sys::trig_step() }
     }
@@ -3073,7 +3130,7 @@ pub mod trigger {
     /// A [火罐] roll is card-owned state: whoever armed it tagged the move
     /// (`"fireRoll"` by convention).
     pub fn move_tag(key: &str) -> i32 {
-        let (p, l) = str_ptr(key);
+        let (p, l) = s(key);
         unsafe { sys::trig_move_tag(p, l) }
     }
 
@@ -3191,7 +3248,7 @@ pub mod trigger {
 
     /// A `BuyGate` refusal's reason key, shown instead of a bare cancel.
     pub fn set_reason(reason: &str) {
-        let (p, l) = str_ptr(reason);
+        let (p, l) = s(reason);
         unsafe { sys::trig_set_reason(p, l) }
     }
 
@@ -3245,7 +3302,7 @@ pub mod trigger {
     }
 
     pub fn card_is(id: &str) -> bool {
-        let (p, l) = str_ptr(id);
+        let (p, l) = s(id);
         unsafe { sys::trig_card_is(p, l) != 0 }
     }
 
@@ -3269,7 +3326,7 @@ pub mod trigger {
 /// `CRYCHIC:主唱太拼命了` (「一次性向其他玩家支付至少5000资金时」) wants one
 /// entry. Both are here; the card picks.
 pub mod effect {
-    use super::{read_str, str_ptr, sys};
+    use super::{read_str, s, sys};
     use crate::abi::TriggerKind;
 
     /// How many effects this link declares.
@@ -3331,7 +3388,7 @@ pub mod effect {
     /// Append an effect to the current link, naming its recipient now -- at
     /// declaration, not at settlement.
     pub fn declare(kind: TriggerKind, target: i32, from: i32, tile: i32, value: i32) {
-        let (p, l) = str_ptr(&kind.spelling());
+        let (p, l) = s(&kind.spelling());
         unsafe { sys::declare_effect(p, l, target, from, tile, value) }
     }
 }
@@ -3342,7 +3399,7 @@ pub mod effect {
 /// [`unplace_card`] is the special case where the named card is the one running.
 #[cfg_attr(kani, inline(always))]
 pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::unplace_card_named(player_id, p, l) != 0 }
 }
 
@@ -3350,7 +3407,7 @@ pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
 /// The listing half of the counter query; [`held`] reads one by name.
 #[cfg_attr(kani, inline(always))]
 pub fn held_names(player_id: i32, prefix: &str) -> Vec<NameId> {
-    let (p, l) = str_ptr(prefix);
+    let (p, l) = s(prefix);
     let cap = 4096;
     let (bp, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::held_names(player_id, p, l, bp, cap) };
@@ -3442,7 +3499,7 @@ pub fn set_build_cost_pct(pct: i32) {
 /// Flip a placed card face-down / face-up.
 #[cfg_attr(kani, inline(always))]
 pub fn set_card_face_down(player_id: i32, card: &str, down: bool) -> bool {
-    let (cp, cl) = str_ptr(card);
+    let (cp, cl) = s(card);
     unsafe { sys::set_card_face_down(player_id, cp, cl, down as i32) != 0 }
 }
 
@@ -3450,7 +3507,7 @@ pub fn set_card_face_down(player_id: i32, card: &str, down: bool) -> bool {
 /// face-down test; [`cards_in`] lists face-down cards too.
 #[cfg_attr(kani, inline(always))]
 pub fn card_face_down(player_id: i32, card: &str) -> bool {
-    let (p, l) = str_ptr(card);
+    let (p, l) = s(card);
     unsafe { sys::card_face_down(player_id, p, l) != 0 }
 }
 
@@ -3544,7 +3601,7 @@ pub fn linger(player_id: i32, expires: i32) -> bool {
 /// Is this placed field card immune to other effects?
 #[cfg_attr(kani, inline(always))]
 pub fn card_immune(player_id: i32, card: &str) -> bool {
-    let (cp, cl) = str_ptr(card);
+    let (cp, cl) = s(card);
     unsafe { sys::card_immune(player_id, cp, cl) != 0 }
 }
 
@@ -3596,8 +3653,8 @@ pub fn assign_deed(player_id: i32, tile: i32, owner: i32, houses: i32, mortgaged
 /// is this query.
 #[cfg_attr(kani, inline(always))]
 pub fn card_text_mentions(card: &str, needle: &str) -> bool {
-    let (cp, cl) = str_ptr(card);
-    let (np, nl) = str_ptr(needle);
+    let (cp, cl) = s(card);
+    let (np, nl) = s(needle);
     unsafe { sys::card_text_mentions(cp, cl, np, nl) != 0 }
 }
 
@@ -3607,8 +3664,8 @@ pub fn card_text_mentions(card: &str, needle: &str) -> bool {
 /// vocabulary in the query itself.
 #[cfg_attr(kani, inline(always))]
 pub fn card_prop(id: &str, key: &str) -> i32 {
-    let (ip, il) = str_ptr(id);
-    let (kp, kl) = str_ptr(key);
+    let (ip, il) = s(id);
+    let (kp, kl) = s(key);
     unsafe { sys::card_prop(ip, il, kp, kl) }
 }
 
@@ -3632,7 +3689,7 @@ pub fn paid_in_settle() -> i32 {
 /// rather than with its owner). Returns the new instance's uid.
 #[cfg_attr(kani, inline(always))]
 pub fn place_card_on(player_id: i32, tile: i32, card: &str, note: &Msg) -> i32 {
-    let (cp, cl) = str_ptr(card);
+    let (cp, cl) = s(card);
     let (p, l) = msg_bytes(note);
     unsafe { sys::place_card_on(player_id, tile, cp, cl, p, l) }
 }
@@ -3654,7 +3711,7 @@ pub fn set_build_discount(n: i32, layers: i32) {
 /// would touch the card read [`card_immune`] and skip.
 #[cfg_attr(kani, inline(always))]
 pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
-    let (cp, cl) = str_ptr(card);
+    let (cp, cl) = s(card);
     unsafe { sys::set_card_immune(player_id, cp, cl, on as i32) != 0 }
 }
 
@@ -3663,7 +3720,7 @@ pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
 /// owner.
 #[cfg_attr(kani, inline(always))]
 pub fn set_card_tile(player_id: i32, card: &str, tile: i32) -> bool {
-    let (cp, cl) = str_ptr(card);
+    let (cp, cl) = s(card);
     unsafe { sys::set_card_tile(player_id, cp, cl, tile) != 0 }
 }
 

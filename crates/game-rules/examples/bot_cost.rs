@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use game_core::data::{GameData, Roster};
-use game_core::engine::{CardRules, Fate, Flow, Match, PlayCtx, StubRules, Trigger, World};
+use game_core::engine::{CardRules, Dest, Flow, Match, PlayCtx, StubRules, Trigger, World};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
@@ -81,7 +81,7 @@ impl CardRules for CountingRules {
     fn ai_play(&self, cx: &PlayCtx, player: usize, card: &str) -> bool {
         self.inner.ai_play(cx, player, card)
     }
-    fn play(&self, cx: &mut PlayCtx, player: usize, card: &str) -> Flow<Fate> {
+    fn play(&self, cx: &mut PlayCtx, player: usize, card: &str) -> Flow<Dest> {
         self.counts.play.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.play(cx, player, card);

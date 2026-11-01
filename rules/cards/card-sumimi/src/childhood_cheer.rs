@@ -63,7 +63,7 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
     }
     // TODO(规则书)（并在移动后获得一个火罐）: 书里只有“改起点、移动后得一个火罐” -- 我们把此卡放在场上当挂件，两个钩子都因此挂在
     // `card.placed` 上。
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("childhood_cheer_note")));
     ctx::at_turn_end(player_id, "at_end");
     Ok(())
@@ -77,7 +77,7 @@ fn after_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在移动后获得一个火罐」 -- 行动阶段 13, after [重叠] and
     // before any settle. Fires for a 「不触发结算」 move too.
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 
@@ -85,7 +85,7 @@ fn after_move(player_id: i32) -> card_sdk::Asked {
 /// entry's condition (`card.placed`).
 fn at_end(_player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（并在移动后获得一个火罐）:
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

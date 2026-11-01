@@ -36,7 +36,7 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
     while ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
-        ctx::add_to_fate(player_id, ID, ctx::Fate::DeckRandom);
+        ctx::add_to_dest(player_id, ID, ctx::Dest::DeckRandom);
         returned += 1;
     }
     if returned > 0 {

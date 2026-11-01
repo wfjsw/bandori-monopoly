@@ -106,7 +106,7 @@ fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
 }
 // ---- the viewer's skill list (`ViewExtra::skills`) ---------------------------
 
-use game_core::engine::{CardRules, Fate, Flow, PlayCtx};
+use game_core::engine::{CardRules, Dest, Flow, PlayCtx};
 use game_core::msg::Msg;
 use game_core::net::NetMessage;
 use game_core::state::stage;
@@ -130,8 +130,8 @@ impl CardRules for TestRules {
             None
         }
     }
-    fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Fate> {
-        Ok(Fate::Field)
+    fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Dest> {
+        Ok(Dest::Field)
     }
     fn event(&self, _cx: &mut PlayCtx, _player: usize, _id: &str) -> Flow<bool> {
         Ok(false)

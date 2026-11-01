@@ -215,7 +215,7 @@ fn light_move_starts_from_tsukinomori() {
     let tsukinomori = tile("月之森女子学院");
     t.set_pos(0, tsukinomori + 5);
     t.give_play(0, "Mor:你的光芒将照亮前路").unwrap();
-    t.dice(&[4]);
+    t.dice(&[4, 4]);
     t.roll(0).unwrap();
     decline_all(&mut t);
     assert_eq!(t.pos(0), tsukinomori + 4, "start = 月之森, +4 steps");
@@ -320,6 +320,42 @@ fn starry_no_crystals_removes_the_card() {
         t.field_ids(0)
     );
     assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), None);
+}
+
+#[test]
+fn starry_one_payout_per_instance() {
+    // 规则书（3）: 「此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金」 -- the
+    // payout belongs to the instance whose crystal left, not to every copy of the id
+    // on the field.
+    let mut t = Table::vanilla(2);
+    let a = t.place_raw(0, "Mor:蝴蝶飞舞的星月夜");
+    let b = t.place_raw(0, "Mor:蝴蝶飞舞的星月夜");
+    assert_ne!(a, b);
+    t.set_crystals(0, "Mor:蝴蝶飞舞的星月夜", 2); // the first copy (a)
+    t.set_pos(0, 58);
+    t.dice(&[3]); // 58 -> 59 -> 0(CiRCLE) -> 1
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    decline_all(&mut t);
+    let keys = t.keys_since(mark);
+    // The payout is `ctx::gain` (`starry_night_remove` is its why-key).
+    assert_eq!(
+        keys.iter().filter(|k| *k == "log.gain").count(),
+        1,
+        "one payout for one removal: {keys:?}"
+    );
+    let left = t
+        .field(0)
+        .iter()
+        .find(|f| f.uid == a)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+        .unwrap_or(-1);
+    assert_eq!(left, 1, "copy a lost exactly one crystal");
+    assert!(
+        t.field(0).iter().any(|f| f.uid == b),
+        "copy b (no crystals) is not discarded by a's removal: {:?}",
+        t.field_ids(0)
+    );
 }
 
 #[test]
@@ -1185,6 +1221,13 @@ fn rui_pays_100_to_all_then_receives_300_from_all() {
     let mut t = Table::new(&["八潮瑠唯", "户山香澄", "花园多惠", "牛込里美"]);
     t.clean();
     t.begin_turn(0);
+    // Persona skills are stripped so the figures are the card's own, with no
+    // 「正论暴击」 die riding the legs. After the turn start: that is where a
+    // skill's `declare` places it.
+    t.strip_skills();
+    // Every 「正论暴击」 fire misses (a 20 always beats X), so the legs carry the
+    // card's own figures.
+    t.dice(&[20, 20, 20, 20, 20, 20, 20, 20]);
     t.give(0, &["Mor:（Rui）正论恶魔"]);
     t.play(0, "Mor:（Rui）正论恶魔").unwrap();
     // -300 + 900
@@ -1198,14 +1241,108 @@ fn rui_pays_100_to_all_then_receives_300_from_all() {
 fn rui_card_sets_x_to_5_when_the_skill_fires() {
     // 规则书 (sheet 2026-10-06 新卡组卡 G15): 「在此卡结算过程中，每当你的技能被触发后，
     // 立即将x设置为5」 (was 「若你的技能被触发，将x设置为5」 -- now every fire, immediately).
-    let mut t = Table::new(&["八潮瑠唯", "户山香澄", "花园多惠", "牛込里美"]);
+    // The write happens at the fire, before 「正论暴击」's own d20: with X left at 0 a
+    // face of 1 misses, with X=5 it hits.
+    let mut t = Table::new(&["八潮瑠唯", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
+    t.set_state(0, "skill.yuriCrit.x", 0);
     t.give(0, &["Mor:（Rui）正论恶魔"]);
+    t.dice(&[1, 1]);
+    let mark = t.mark();
     t.play(0, "Mor:（Rui）正论恶魔").unwrap();
-    assert_eq!(t.state(0, "skill.yuriCrit.x"), 5);
+    decline_all(&mut t);
+    assert!(
+        t.keys_since(mark).iter().any(|k| k.ends_with("rui_hit")),
+        "X was 5 when the d20 of 1 landed: {:?}",
+        t.keys_since(mark)
+    );
 }
 
+#[test]
+fn rui_x_only_when_the_users_skill_fires() {
+    // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」 -- one write
+    // per fire, none without one.
+    //
+    // A fire: the hook sets X=5 before 「正论暴击」 rolls, so a face of 4 (≤ 5) is a
+    // hit and resets X. With X left at 3 the same face would be a miss (4 > 3).
+    let mut t = Table::new(&["八潮瑠唯", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_state(0, "skill.yuriCrit.x", 3);
+    t.give(0, &["Mor:（Rui）正论恶魔"]);
+    t.dice(&[4, 4]);
+    let mark = t.mark();
+    t.play(0, "Mor:（Rui）正论恶魔").unwrap();
+    decline_all(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.ends_with("rui_hit")),
+        "the fire set X=5, so the d20 of 4 was a hit: {keys:?}"
+    );
+    assert!(
+        keys.iter().any(|k| k.ends_with("rui_devil_crit")),
+        "the fire wrote X: {keys:?}"
+    );
+    // The same probe rides the guest-invoked `invoke_skill` path too: the raise
+    // lives in the one body wrapper, not in the host drive.
+
+    // Scoping: every fire here is the user's own skill, so each one writes --
+    // including the leg another seat *pays* (`by == owner`: the fire's cause,
+    // not the payer). Every die misses, so the misses climb X in between.
+    let mut t = Table::new(&["八潮瑠唯", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_state(0, "skill.yuriCrit.x", 3);
+    t.dice(&[20, 20, 20, 20, 20, 20, 20, 20]);
+    let mark = t.mark();
+    t.give_play(0, "Mor:（Rui）正论恶魔").unwrap();
+    decline_all(&mut t);
+    let keys = t.keys_since(mark);
+    // `rui_*` logs climb twice per roll (one per side of the money move).
+    // Two rolls: the outbound 100 (p0 pays) and the inbound 300 (p1 pays), both
+    // of which fire p0's skill.
+    let fires = keys.iter().filter(|k| k.ends_with("rui_miss")).count() / 2;
+    assert_eq!(fires, 2, "two money moves: {keys:?}");
+    assert_eq!(
+        keys.iter()
+            .filter(|k| k.ends_with("rui_devil_crit"))
+            .count(),
+        fires,
+        "one write per fire, the inbound leg included: {keys:?}"
+    );
+    // The fires' last word is 5 -- the misses in between moved X, and the
+    // body's tail re-asserts the write after the last one.
+    assert_eq!(
+        t.state(0, "skill.yuriCrit.x"),
+        5,
+        "the fire's write stands over the misses: {keys:?}"
+    );
+}
+
+#[test]
+fn rui_ignores_the_cards_own_play_body() {
+    // `cardFired` is every body, this card's own play included -- and it is
+    // inside `resolving`. `card.is_skill` is the 「技能」 precondition that
+    // keeps the play body out. With the skills stripped no fire happens at all,
+    // so X must sit untouched (a non-skill write would force it to 5).
+    let mut t = Table::new(&["八潮瑠唯", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.strip_skills();
+    t.set_state(0, "skill.yuriCrit.x", 7);
+    t.give(0, &["Mor:（Rui）正论恶魔"]);
+    t.dice(&[1, 1]);
+    let mark = t.mark();
+    t.play(0, "Mor:（Rui）正论恶魔").unwrap();
+    decline_all(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        !keys.iter().any(|k| k.ends_with("rui_devil_crit")),
+        "no skill fired, no write: {keys:?}"
+    );
+    assert_eq!(t.state(0, "skill.yuriCrit.x"), 7, "X untouched: {keys:?}");
+}
 // --------------------------------------------------- （筑紫）迷茫的庭园
 
 #[test]

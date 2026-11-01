@@ -59,7 +59,7 @@ pub fn vocalist_01_log_ok_mutant(effects: &[Effect]) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Play body also arms the PASSER latch (`state::set(PASSER, -1)`) and places
-/// the card on the field (`Fate::Field`, the (2)/(3) window's instance).
+/// the card on the field (`Dest::Field`, the (2)/(3) window's instance).
 /// `passer_key` is the interned `want_to_grab_passer` NameId.
 pub fn grab_01_log_ok(effects: &[Effect], player: i32, passer_key: u16) -> bool {
     effects.len() == 3
@@ -70,7 +70,7 @@ pub fn grab_01_log_ok(effects: &[Effect], player: i32, passer_key: u16) -> bool 
         )
         && matches!(
             effects[2],
-            Effect::PlaceCard { player: p, fate: 2, .. } if p == player
+            Effect::PlaceCard { player: p, dest: 2, .. } if p == player
         )
 }
 
@@ -84,7 +84,7 @@ pub fn grab_01_log_ok_mutant(effects: &[Effect], player: i32, passer_key: u16) -
         )
         && matches!(
             effects[2],
-            Effect::PlaceCard { player: p, fate: 2, .. } if p == player
+            Effect::PlaceCard { player: p, dest: 2, .. } if p == player
         )
 }
 
@@ -118,7 +118,7 @@ pub fn ifonly_01_amount(x: i32) -> i32 {
 }
 
 /// Play body: drain crystals (unlogged) + gain + place the card on field as
-/// [持续]. `fate` is `Fate::Field` (2); `card_slot` of a non-pilot id is 2.
+/// [持续]. `dest` is `Dest::Field` (2); `card_slot` of a non-pilot id is 2.
 pub fn ifonly_01_log_ok(effects: &[Effect], player: i32, x: i32) -> bool {
     let expected = ifonly_01_amount(x);
     effects.len() == 2
@@ -128,7 +128,7 @@ pub fn ifonly_01_log_ok(effects: &[Effect], player: i32, x: i32) -> bool {
         )
         && matches!(
             effects[1],
-            Effect::PlaceCard { player: p, fate: 2, .. } if p == player
+            Effect::PlaceCard { player: p, dest: 2, .. } if p == player
         )
 }
 
@@ -142,7 +142,7 @@ pub fn ifonly_01_log_ok_mutant(effects: &[Effect], player: i32, x: i32) -> bool 
         )
         && matches!(
             effects[1],
-            Effect::PlaceCard { player: p, fate: 2, .. } if p == player
+            Effect::PlaceCard { player: p, dest: 2, .. } if p == player
         )
 }
 
@@ -152,7 +152,7 @@ pub fn ifonly_01_log_ok_mutant(effects: &[Effect], player: i32, x: i32) -> bool 
 
 /// The card must leave the field into the discard. Observed as an
 /// `UnplaceCard` effect (explicit `unplace`) or a field-count drop (the
-/// `set_fate(Graveyard)` commit — world state only, not an in-run effect).
+/// `set_dest(Graveyard)` commit — world state only, not an in-run effect).
 pub fn ifonly_02_log_ok(effects: &[Effect], uid: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::UnplaceCard { uid: u } if u == uid)
 }

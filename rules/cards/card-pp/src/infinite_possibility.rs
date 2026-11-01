@@ -82,19 +82,19 @@ fn swap(player_id: i32) -> card_sdk::Asked {
     // An exchange, not a copy: each card leaves its pile first. The discard is
     // emptied into the deck before the deck is emptied, so the draw pile never
     // runs dry mid-swap (an empty draw pile reshuffles the discard back in).
-    // The deck half files with the create-only `add_to_fate(Graveyard)` --
+    // The deck half files with the create-only `add_to_dest(Graveyard)` --
     // `to_discard` would first consume a same-named hand copy.
     for c in &disc {
         ctx::take_card(player_id, c.as_str(), ctx::CardPile::Graveyard);
     }
     for c in &disc {
-        ctx::add_to_fate(player_id, c.as_str(), ctx::Fate::DeckTop);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckTop);
     }
     for c in &deck {
         ctx::take_card(player_id, c.as_str(), ctx::CardPile::Deck);
     }
     for c in &deck {
-        ctx::add_to_fate(player_id, c.as_str(), ctx::Fate::Graveyard);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Graveyard);
     }
     ctx::log(player_id, &Msg::new(key!("infinite_possibility_swapped")));
     Ok(())

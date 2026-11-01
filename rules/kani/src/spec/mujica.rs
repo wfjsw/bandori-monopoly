@@ -190,7 +190,7 @@ pub fn heart_rain_stay_layers_mutant(roll: i32) -> i32 {
 // 「回合结束后放入弃牌堆」
 // ===========================================================================
 
-/// Play body: place this card on the user's field (Fate::Field).
+/// Play body: place this card on the user's field (Dest::Field).
 pub fn dice_cast_place_effects(effects: &[Effect], player: i32, card: u8) -> bool {
     // PlaceCard + the once-per-turn slot latch (SetState) + the no-counteract
     // latch (SetState) are the play's records. Narration is not in the frame.
@@ -200,7 +200,7 @@ pub fn dice_cast_place_effects(effects: &[Effect], player: i32, card: u8) -> boo
         match e {
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card: c,
             } if *p == player && *c == card => placed = true,
             Effect::SetState { .. } => slot_writes += 1,
@@ -210,11 +210,11 @@ pub fn dice_cast_place_effects(effects: &[Effect], player: i32, card: u8) -> boo
     placed && slot_writes >= 1
 }
 
-/// Turn-end body: fate becomes Graveyard (discard). Under the model this is
-/// `set_fate(Graveyard)` + a narration line; the host's `UnplaceCard` is the
+/// Turn-end body: dest becomes Graveyard (discard). Under the model this is
+/// `set_dest(Graveyard)` + a narration line; the host's `UnplaceCard` is the
 /// discard motion and is PROTOCOL-LEVEL (see unit table).
 pub fn dice_cast_turn_end_sets_graveyard(fate_after: i32) -> bool {
-    fate_after == 1 // Fate::Graveyard
+    fate_after == 1 // Dest::Graveyard
 }
 
 // ===========================================================================
@@ -234,7 +234,7 @@ pub fn sparkler_place_effects(effects: &[Effect], player: i32, card: u8) -> bool
         match e {
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card: c,
             } if *p == player && *c == card => placed = true,
             Effect::AddCounter { n, .. } => {
@@ -250,16 +250,16 @@ pub fn sparkler_place_effects(effects: &[Effect], player: i32, card: u8) -> bool
 }
 
 /// Last-crystal body: the user gains **2** [眩晕] layers, immediately.
-/// 「置入弃牌堆」 is expressed by the body as `set_fate(Graveyard)`; the host
-/// records that as the `fate` field and does **not** push an `UnplaceCard`
+/// 「置入弃牌堆」 is expressed by the body as `set_dest(Graveyard)`; the host
+/// records that as the `dest` field and does **not** push an `UnplaceCard`
 /// effect (see unit table — discard motion itself is PROTOCOL-LEVEL).
 pub fn sparkler_last_crystal_effects(effects: &[Effect], user: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GiveStun { player: p, n } if p == user && n == 2)
 }
 
-/// Fate flag after the last-crystal body: Graveyard (0).
-/// Wire values (`card_sdk::ctx::Fate`): Graveyard=0, Hand=1, Field=2, Banished=3.
+/// Dest flag after the last-crystal body: Graveyard (0).
+/// Wire values (`card_sdk::ctx::Dest`): Graveyard=0, Hand=1, Field=2, Banished=3.
 pub fn sparkler_last_crystal_fate(fate_after: i32) -> bool {
     fate_after == 0
 }
@@ -322,9 +322,9 @@ pub fn saki_move_fate(from: i32, dir: i32, tile_count: i32) -> i32 {
 
 /// Teleport-style effect log for the forced walk (the walk itself is a
 /// move-plan; under the model the body records `Teleport` / `MoveUnits`).
-pub fn saki_move_walk_effects(effects: &[Effect], target: i32, fate: i32) -> bool {
+pub fn saki_move_walk_effects(effects: &[Effect], target: i32, dest: i32) -> bool {
     effects.len() == 1
-        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == target && tile == fate)
+        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == target && tile == dest)
 }
 
 /// Halve a settle payment. Even prices: exact half. Odd: OPEN-取整; this
@@ -446,7 +446,7 @@ pub fn welcome_next_state_mutant(current: i32, has_state2: bool) -> i32 {
 
 pub fn nyamu_place_effects(effects: &[Effect], player: i32, card: u8) -> bool {
     effects.len() == 1
-        && matches!(effects[0], Effect::PlaceCard { player: p, fate: 2, card: c } if p == player && c == card)
+        && matches!(effects[0], Effect::PlaceCard { player: p, dest: 2, card: c } if p == player && c == card)
 }
 
 // ===========================================================================
@@ -467,7 +467,7 @@ pub fn umiri_place_effects(effects: &[Effect], holder: i32, card: u8) -> bool {
         match e {
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card: c,
             } if *p == holder && *c == card => placed = true,
             Effect::SetState { .. } => {}

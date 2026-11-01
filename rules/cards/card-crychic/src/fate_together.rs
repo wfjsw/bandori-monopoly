@@ -47,9 +47,9 @@ const ID: &str = "CRYCHIC:一起演奏音乐的命运共同体";
 const PROP_HIT: &str = "fate_hit";
 
 fn fate_together(player_id: i32) -> card_sdk::Asked {
-    // The free-floating `FateFx` maps to this card in play: the `PayAfter` /
+    // The free-floating effect maps to this card in play: the `PayAfter` /
     // `TurnStart` hooks below fire while it is placed.
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         ID,
@@ -137,13 +137,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             //   watermark, so the next draw still sees a 4→5 crossing (before 4,
             //   now 6) and adds the crystal.
             if ctx::prop(PROP_HIT) == 0 {
-                ctx::set_fate(ctx::Fate::Hand);
+                ctx::set_dest(ctx::Dest::Hand);
                 ctx::log(
                     player_id,
                     &Msg::new(key!("fate_together_returned")).player_id("who", player_id),
                 );
             } else {
-                ctx::set_fate(ctx::Fate::Graveyard);
+                ctx::set_dest(ctx::Dest::Graveyard);
             }
         }
         _ => {}

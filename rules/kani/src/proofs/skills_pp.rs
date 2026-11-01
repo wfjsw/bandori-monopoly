@@ -55,7 +55,7 @@ crate::host_subset!(skills_pp_dispatch {
     count_held | count_held_name => arm_count_held,
     set_held_name => arm_set_held_name,
     place_card_at => arm_place_card,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     add_group_pool => arm_add_band_crystals,
     group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
@@ -71,7 +71,7 @@ crate::host_subset!(skills_pp_dispatch {
     hand_count => arm_hand_count,
     take_card => arm_take_card,
     draw => arm_draw,
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     state_get => arm_state_get,
     state_set => arm_state_set,
     state_add => arm_inc_slot,  // same keyed-add as inc_slot (real)

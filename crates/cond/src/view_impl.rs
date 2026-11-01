@@ -80,6 +80,9 @@ impl CondView for SnapshotView<'_> {
     fn move_tag_table(&self) -> Vec<(String, i64)> {
         self.win.mv.tags.clone()
     }
+    fn resolving_table(&self) -> Vec<(String, i64)> {
+        self.win.resolving.clone()
+    }
     fn roll_source(&self) -> i64 {
         self.win.roll_source
     }
@@ -103,6 +106,9 @@ impl CondView for SnapshotView<'_> {
     }
     fn trigger_card(&self) -> i64 {
         self.win.trigger_card
+    }
+    fn trigger_card_is_skill(&self) -> bool {
+        self.win.trigger_card_is_skill
     }
     fn counter_name(&self) -> i64 {
         if self.win.name.is_empty() {
@@ -335,6 +341,8 @@ impl CondView for SnapshotView<'_> {
             if q < 0 {
                 continue;
             }
+            // Steps from `pos` to `q` along `dir`: forward wraps, backward
+            // mirrors the same measurement.
             let fwd = {
                 let f = ((q - pos) % n + n) % n;
                 if dir >= 0 {

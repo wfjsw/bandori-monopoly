@@ -75,7 +75,7 @@ fn banish_accident(player_id: i32) {
 }
 
 fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」
     banish_accident(player_id);
     ctx::at_turn_end(player_id, "at_end");
@@ -100,7 +100,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     rules_status::stay::add(player_id, 1);
     let _ = fans::grant(player_id, 1, 0)?;
     // 规则书[手]3: 「将1张“明天见”加入手卡」
-    ctx::add_to_fate(player_id, "PP:[衍生]明天见", ctx::Fate::Hand);
+    ctx::add_to_dest(player_id, "PP:[衍生]明天见", ctx::Dest::Hand);
     ctx::log(
         player_id,
         &Msg::new(key!("overlapping_voices_after")).player_id("who", player_id),

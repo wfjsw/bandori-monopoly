@@ -67,11 +67,11 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-asukayama-01 | 全员传送到飞鸟山公园，抽卡者移动1d20 | BLOCKED-HOST | — | — | `tile_named(飞鸟山公园)`; `run_planned_move` stub | — |
 | E-asukayama-02 | 上一位2眩晕 / 下一位锁手 / 其余1除外 | PROVEN (status, seat neighbour) | `asukayama_02_status_spread_blocked_neighbor` SUCCESSFUL 989 s | host `neighbor` fixed to next present seat | — |
 | E-asukayama-03 | 状态回合开始衰减 | PROTOCOL-LEVEL | — | — | engine status tick | — |
-| E-school-time-01 | 移到学校格并+1除外 | PROVEN (exile leg) | `school_time_01_exile_leg` | TBD | fate = school / 周边学区 (17); `give_exile` modeled | — |
+| E-school-time-01 | 移到学校格并+1除外 | PROVEN (exile leg) | `school_time_01_exile_leg` | TBD | dest = school / 周边学区 (17); `give_exile` modeled | — |
 | E-school-time-02 | 无学校 → 周边学区 | PROVEN (exile leg) | same | TBD | same | — |
 | E-tears-01 | 同色 ⇒ 下一位付当前700 | PROVEN | `tears_01_same_colour_next_pays_700` **SUCCESSFUL 724 s** (covers sat) | class A 60-tile clear deleted | — | OPEN-tears-colour |
 | E-tears-02 | 否则当前付下一位300 | PROVEN | `tears_02_different_colour_current_pays_300` **SUCCESSFUL 761 s**, `tears_mutant_is_detected` **SUCCESSFUL 609 s** | same | — | — |
-| E-kizuna-01 | 投X+1d20，全员传送 mod60 +1除外 | PARTIAL / BLOCKED-HOST | — | — | teleport fate is `face%60` (no `tile_named`) — effect log of `Teleport`+`GiveExile` provable; song X undefined | OPEN-kizuna-song |
+| E-kizuna-01 | 投X+1d20，全员传送 mod60 +1除外 | PARTIAL / BLOCKED-HOST | — | — | teleport dest is `face%60` (no `tile_named`) — effect log of `Teleport`+`GiveExile` provable; song X undefined | OPEN-kizuna-song |
 | E-chart-rush-01 | 失去所有火罐，投Xd20 X=lost+1 | PROVEN | `chart_rush_01_spends_fire` **SUCCESSFUL 654 s** (2/2 covers) | — | raise polarity C fixed on master | — |
 | E-chart-rush-02 | 名次 2000/1500/1000/500，同点共高档 | PROVEN | `chart_rush_02_*` | TBD | — | OPEN-chart-rush-or, OPEN-chart-rush-tie |
 | E-fix-note-01 | 指定格加盖金额减半 | PROTOCOL-LEVEL | — | — | `set_build_discount` stub | — |
@@ -103,7 +103,7 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-lost-chase-02 | 否则一切不会结束置顶 | PROTOCOL-LEVEL | — | — | same | — |
 | E-end-it-all-01 | 选3个非衍生移除，永久在场 | PROVEN (keep + 3 picks) / PROTOCOL (banish) | `end_it_all_01_*` | TBD | `event_banish` stub | — |
 | E-end-it-all-02 | 在场时迷子不再推让我来结束一切 | PROVEN | `end_it_all_02_*` | TBD | `event_is_active` modeled | — |
-| E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | PROVEN (log) / class E cost | `never_ends_01_teleport_and_exile` | TBD | fate RiNG 1..4 = 8/16/36/53; body `format!` is a class-E cliff | — |
+| E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | PROVEN (log) / class E cost | `never_ends_01_teleport_and_exile` | TBD | dest RiNG 1..4 = 8/16/36/53; body `format!` is a class-E cliff | — |
 
 ## Summary counts (clause-level)
 

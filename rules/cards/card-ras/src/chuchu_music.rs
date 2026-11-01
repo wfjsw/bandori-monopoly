@@ -61,7 +61,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         None => return Ok(()),
     };
     // 规则书: 「将此卡放置于你以外的一名玩家场上」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(hit, ID, &Msg::new(key!("chuchu_music_note")));
     ctx::set_crystals(3);
     // 规则书: 「[使用者]获得100资金」
@@ -102,9 +102,9 @@ fn crystals_empty_guard(_player_id: i32) -> bool {
 fn crystals_empty(player_id: i32) -> card_sdk::Asked {
     let user = ctx::prop(PROP_USER) - 1;
     let to = if user >= 0 { user } else { player_id };
-    // 规则书: 「放入[使用者]的弃牌堆」 -- `transfer_to_fate` files it *now*, so the
+    // 规则书: 「放入[使用者]的弃牌堆」 -- `transfer_to_dest` files it *now*, so the
     // user's draw can reshuffle it (the book's order is discard, then draw).
-    ctx::transfer_to_fate(to, ctx::Fate::Graveyard);
+    ctx::transfer_to_dest(to, ctx::Dest::Graveyard);
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1)?;
     }

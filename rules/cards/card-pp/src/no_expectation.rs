@@ -81,7 +81,7 @@ fn stacks() -> i32 {
 
 fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "PP:不要背负期待",
@@ -91,7 +91,7 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // 现只在一次实际加减时耗尽
     ctx::set_prop(PROP_STACKS, 2);
     // 规则书[手]: 「并将1张“共鸣”加入卡组」
-    ctx::add_to_fate(player_id, "PP:[衍生]共鸣", ctx::Fate::DeckRandom);
+    ctx::add_to_dest(player_id, "PP:[衍生]共鸣", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("no_expectation_added"))

@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use game_core::data::event_rule_id;
-use game_core::engine::{CardRules, Fate, Flow, Match, PlayCtx, StubRules};
+use game_core::engine::{CardRules, Dest, Flow, Match, PlayCtx, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BOARD_OWNER;
@@ -28,8 +28,8 @@ impl CardRules for OneEvent {
     fn has_rule(&self, id: &str) -> bool {
         id == "event:EVT1"
     }
-    fn play(&self, _cx: &mut PlayCtx, _player_id: usize, _card: &str) -> Flow<Fate> {
-        Ok(Fate::Graveyard)
+    fn play(&self, _cx: &mut PlayCtx, _player_id: usize, _card: &str) -> Flow<Dest> {
+        Ok(Dest::Graveyard)
     }
     fn event(&self, _cx: &mut PlayCtx, _player_id: usize, id: &str) -> Flow<bool> {
         Ok(id == "EVT1")

@@ -73,6 +73,7 @@ fn win() -> WindowCtx {
         turn_player: 1,
         turn_key: 7,
         trigger_card: 0,
+        trigger_card_is_skill: false,
         name: String::new(),
         players: vec![p0, p1, PlayerSnap::default(), PlayerSnap::default()],
         tile_ids: [("festival".to_string(), 9)].into_iter().collect(),
@@ -82,6 +83,7 @@ fn win() -> WindowCtx {
         tile_count: 12,
         tile_owners: vec![0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
         plan_fixed_roll: None,
+        resolving: Vec::new(),
     }
 }
 
@@ -1034,4 +1036,47 @@ fn repeated_digits_predicate() {
     assert!(!compile("repeated_digits(money(owner))")
         .unwrap()
         .eval(&w, &cand(0)));
+}
+
+#[test]
+fn resolving_is_a_predicate_over_the_running_bodies() {
+    // `resolving('id')` answers a *bool* -- a card pre writes it as a bare
+    // conjunct (`resolving('X') && actor == owner`), so an int answer would
+    // never admit (`true && 1` is a type error, and the bare int binds false).
+    let mut w = WindowCtx::default();
+    w.resolving = vec![("X".to_string(), 1)];
+    let c = CandidateCtx::default();
+    assert!(
+        compile("resolving('X')").unwrap().eval(&w, &c),
+        "the running body"
+    );
+    assert!(compile("resolving('X') && true").unwrap().eval(&w, &c));
+    assert!(
+        !compile("resolving('Y') && true").unwrap().eval(&w, &c),
+        "a bystander"
+    );
+    let mut w2 = WindowCtx::default();
+    w2.resolving = vec![("X".to_string(), 1)];
+    w2.trigger_card = 42;
+    assert!(compile("resolving('X') && trigger_card == 42")
+        .unwrap()
+        .eval(&w2, &c));
+}
+
+#[test]
+fn card_is_skill_reads_the_trigger_card() {
+    // The 「技能」 precondition of a `cardFired` listener: a bare Bool conjunct
+    // over the trigger's card, false for a play or a hook body.
+    let mut w = WindowCtx::default();
+    let c = CandidateCtx::default();
+    assert!(
+        !compile("card.is_skill").unwrap().eval(&w, &c),
+        "no trigger card"
+    );
+    w.trigger_card_is_skill = true;
+    assert!(
+        compile("card.is_skill").unwrap().eval(&w, &c),
+        "a skill body"
+    );
+    assert!(compile("card.is_skill && true").unwrap().eval(&w, &c));
 }

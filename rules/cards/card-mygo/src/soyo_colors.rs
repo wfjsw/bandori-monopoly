@@ -84,7 +84,7 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("soyo_colors_ask")),
         &mine,
     )?;
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- bound to the chosen tile.
     ctx::place_card_on(
         player_id,

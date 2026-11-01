@@ -70,8 +70,8 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书(1): 「将此卡放置在场上」 -- the place-now + fate-later fold
-    // (`place_card` creates the instance, `Fate::Field` stops the commit from
+    // 规则书(1): 「将此卡放置在场上」 -- the place-now + dest-later fold
+    // (`place_card` creates the instance, `Dest::Field` stops the commit from
     // also spending the hand card); see `ctx::place_self_to_field`.
     ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
     // 规则书(1): 「并获得3个奇迹水晶」
@@ -94,7 +94,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_decayed")).player_id("who", player_id),

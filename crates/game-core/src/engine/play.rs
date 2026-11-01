@@ -9,7 +9,7 @@
 use super::cx::{Ask, Flow, Halt, PlayCtx};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
-use super::rules::{raise, Fate, Trigger, TriggerBuy, TriggerPay};
+use super::rules::{raise, Dest, Trigger, TriggerBuy, TriggerPay};
 use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
@@ -4443,7 +4443,7 @@ impl PlayCtx<'_> {
         raise!(self, "bankrupt", i)?;
         // `beforeOut` (hook) -- before the player is cleared.
         raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i);
+        let deeds = self.remove_from_game(i)?;
         // `bankruptResolved` (Q6 / K11) -- the terminal: cash-in done, the seat
         // cleared, the leftover auctions finished. Nothing else observes
         // "cleanup + auctions finished", so this is the point a 「结算完成时」
@@ -4477,7 +4477,7 @@ impl PlayCtx<'_> {
         );
         // `beforeOut` (hook) -- before the player is cleared.
         raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i);
+        let deeds = self.remove_from_game(i)?;
         // `leaveAfter` -- after the player is cleared out, but before the
         // game-over check so it still runs when leaving ends the match.
         raise!(self, "leaveAfter", i)?;
@@ -4492,7 +4492,7 @@ impl PlayCtx<'_> {
     }
 
     /// Clear the player; its land returns to the bank.
-    fn remove_from_game(&mut self, i: usize) -> Vec<usize> {
+    fn remove_from_game(&mut self, i: usize) -> Flow<Vec<usize>> {
         // Collect the rule ids this seat's field carries **before** the clear
         // below: markers those rules own leave the game with them (user ruling
         // 2026-10-07), wherever the copies sit.
@@ -4561,7 +4561,27 @@ impl PlayCtx<'_> {
                 Msg::new(key).player_id("who", i).i("n", deeds.len() as i64),
             );
         }
-        deeds
+        // Raise the purge's mark removals even though no further run commits
+        // for this player: the `markChanged` drain needs a committing frame.
+        self.commit_marks_delta()?;
+        Ok(deeds)
+    }
+
+    /// Drain the pending mark log into `markChanged` raises. Called by
+    /// `commit_after` and by paths that clear marks with no later run
+    /// (`remove_from_game`).
+    fn commit_marks_delta(&mut self) -> Flow<()> {
+        let rows = std::mem::take(&mut self.w.mark_log);
+        for row in rows {
+            let mut t = Trigger::new("markChanged", row.owner as usize);
+            t.tile = row.tile;
+            t.name = Some(row.kind);
+            t.value = row.delta;
+            t.card = row.card;
+            t.instance = row.instance;
+            self.raise(t)?;
+        }
+        Ok(())
     }
 
     /// User ruling 2026-10-07 (marker ownership): drop every marker whose
@@ -4582,6 +4602,17 @@ impl PlayCtx<'_> {
         for name in doomed {
             for p in self.w.st.players.iter_mut() {
                 p.tokens.retain(|t| t.name != name);
+            }
+            let gone: Vec<crate::state::TileMark> = self
+                .w
+                .st
+                .marks
+                .iter()
+                .filter(|m| m.owner != crate::state::BOARD_OWNER && m.kind == name)
+                .cloned()
+                .collect();
+            for m in &gone {
+                self.w.log_mark_row(m, -m.count);
             }
             self.w
                 .st
@@ -5089,10 +5120,10 @@ impl PlayCtx<'_> {
         }
         let rules = self.rules;
         // A cancelled trigger (`is_cancelled`) -- the play is negated; the card still goes to its
-        // Fate below but its effect body does not run. The card still flashes,
+        // Dest below but its effect body does not run. The card still flashes,
         // marked negated. A play that goes through announces itself at its body
         // (`drive_inner_body`), which is the point the effect actually runs.
-        let fate = if t.is_cancelled() {
+        let dest = if t.is_cancelled() {
             self.card_activated(
                 crate::state::card_trigger::PLAY,
                 i as i32,
@@ -5101,12 +5132,12 @@ impl PlayCtx<'_> {
                 t.tile,
                 true,
             );
-            Fate::Graveyard
+            Dest::Graveyard
         } else {
             rules.play(self, i, id)?
         };
-        match fate {
-            Fate::Graveyard => {
+        match dest {
+            Dest::Graveyard => {
                 if !self.out(i) {
                     self.w.hidden[i].graveyard.push(id.to_string());
                     self.refill_draw_pile(i, true)?;
@@ -5114,18 +5145,18 @@ impl PlayCtx<'_> {
                     raise!(self, "discarded", i, card = Some(id.to_string()))?;
                 }
             }
-            Fate::Hand => self.w.hidden[i].hand.push(id.to_string()),
-            Fate::Banished => {
+            Dest::Hand => self.w.hidden[i].hand.push(id.to_string()),
+            Dest::Banished => {
                 self.w.log(
                     "text",
                     i as i32,
                     Msg::new("log.card_removed").card("card", id),
                 );
             }
-            Fate::Field => {}
+            Dest::Field => {}
         }
         // `cardAfter` -- the card's own effect is fully resolved and it has
-        // landed wherever its `Fate` sent it. The played id rides `cards` too
+        // landed wherever its `Dest` sent it. The played id rides `cards` too
         // (the `card` / `skillUsed` pattern), so a residual can read
         // `trigger::cards()` and match the id's band prefix.
         raise!(
@@ -5136,7 +5167,7 @@ impl PlayCtx<'_> {
             cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
-        // `cardPlayed` (hook) -- a card's hand effect resolved (its `Fate` is final).
+        // `cardPlayed` (hook) -- a card's hand effect resolved (its `Dest` is final).
         raise!(
             self,
             "cardPlayed",

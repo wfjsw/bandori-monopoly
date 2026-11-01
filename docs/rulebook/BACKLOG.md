@@ -110,7 +110,7 @@ in `docs/rulebook/spec/abi/`.
 Design: `docs/rulebook/spec/abi/G01-instance-identity-and-state.md`
 
 - **skill-fired-signal** (high, rows 152,184,232,445,1091,1243,1244,1481) — No per-resolution skill-fire signal, no guest emit, and X/skill-instance scope; `rules/cards/card-morfonica/src/rui_devil.rs`
-- **trigger-instance-identity** (medium, rows 252,283,285,1029,1039) — Trigger/marker identity and per-instance state are not addressable (uid, marker tile, card.prop, fate-by-uid); `rules/cards/card-morfonica/src/starry_night.rs`
+- **trigger-instance-identity** (medium, rows 252,283,285,1029,1039) — Trigger/marker identity and per-instance state are not addressable (uid, marker tile, card.prop, dest-by-uid); `rules/cards/card-morfonica/src/starry_night.rs`
 - **counter-cap-uid** (medium, rows 301,342,1056) — No per-uid counter cap read or clamp beyond one call; `rules/cards/card-mujica/src/sparkler.rs`
 
 ## G02 — Pay pipeline payload, stages and raw-money windows
@@ -1146,7 +1146,7 @@ the status crate's grant verbs do not yet enforce every glossary clause.
 - **locations**: `rules/cards/card-roselia/src/lisa_bond.rs:21-23`
 - **rulebook**: closest is stage 13 「传送后在终点触发重叠」.
 
-## HARU-SOYO-FX — 春日影 rent-cancel half needs `H.ExtraOf<SoyoTeleportFx>`
+## HARU-SOYO-FX — 春日影 rent-cancel half needs the `ExtraOf` lookup
 - **kind**: ABI defect
 - **class**: B
 - **severity**: medium
@@ -1541,7 +1541,7 @@ Do not guess.
 - **LOY-MUSTBUY-02** [low/A] — the settle's optional buy still opens before the
   「必须购买」 offer on both cards. 「必须购买」 should replace the optional.
 - **LOY-MUTSUMI-01** `CRYCHIC:（睦）从没有觉得...` [low/C] — (2)'s
-  `set_fate(Banished)` is an unprinted `[移除]`; only (3) prints 「此卡[移除]」.
+  `set_dest(Banished)` is an unprinted `[移除]`; only (3) prints 「此卡[移除]」.
 - **LOY-BLACK-02** `HHW:黑衣人的补给` [low/C] — the borrowed pass-reward's
   「移动起点不为CiRCLE」 exemption does not re-bind (弦卷集团 is kind `agent`, so
   `is_start` never applies). Two readings of 「获得"CiRCLE"格子的全部效果」.
@@ -2070,12 +2070,12 @@ Current: turn_snapshot pos (the turn-start square) with no record.
 
 Decision needed: What is 「起始地点」 — CiRCLE, the seat's opening tile, or the pre-move position?
 
-**C-Q69 (mutsumi-removal-fate).** *(filed 2026-10-28; rows 101, 102, 1154; `rules/cards/card-crychic/src/mutsumi_never.rs`)*
+**C-Q69 (mutsumi-removal-dest).** *(filed 2026-10-28; rows 101, 102, 1154; `rules/cards/card-crychic/src/mutsumi_never.rs`)*
 消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。
 
 Current: Comment claimed a nonexistent Removed variant and that Banished posts nothing.
 
-Decision needed: Does (2) banish the played card (an unprinted [移除]) or use the default graveyard fate that only (3) prints?
+Decision needed: Does (2) banish the played card (an unprinted [移除]) or use the default graveyard dest that only (3) prints?
 
 **C-Q70 (out-of-turn-self-caused-draw).** *(filed 2026-10-28; rows 1000, 55; `rules/cards/card-crychic/src/elegant_shout.rs, crates/game-rules/src/wasm_rules.rs`)*
 当你在回合外受到抽卡效果时打出

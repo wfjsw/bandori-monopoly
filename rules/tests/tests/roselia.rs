@@ -675,7 +675,7 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
     t.begin_turn(0);
     drain(&mut t);
     t.give(0, &[LISA_LINK]);
-    // Keep a non-empty draw pile so the played copy's graveyard fate cannot be
+    // Keep a non-empty draw pile so the played copy's graveyard dest cannot be
     // undone by the empty-deck refill reshuffling it back into the deck.
     t.set_draw(0, &["通用:安可"]);
     t.set_pos(0, 0);
@@ -724,7 +724,7 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
         t.field_ids(1)
     );
     // 「当你发动该效果后，此卡进入弃牌堆」 -- the played copy takes the default
-    // graveyard fate; the field copy above is the `place_card_at` instance.
+    // graveyard dest; the field copy above is the `place_card_at` instance.
     assert!(
         t.discard(0).contains(&LISA_LINK.to_string()),
         "the played copy was discarded: {:?}",

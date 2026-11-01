@@ -44,7 +44,7 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | C-R-觉悟-01 | 「[特]：此卡[移除]时获得1000资金。」 | PROVEN (body slice) | `resolve_play_iff`, `resolve_play_mutant_is_detected`, `resolve_play_mutant_2000` | `resolve_play_iff` **SUCCESSFUL** 645s (1/1 cover); runner labels UNMODELED because the host's `unmodeled host op` assert string appears in the CBMC log — the verdict line is `VERIFICATION:- SUCCESSFUL` | body pays exactly 1000; zone motion of the played copy is the engine play pipeline | — |
-| C-R-觉悟-02 | 「[手]：[移除]此卡。」 | PROTOCOL-LEVEL | (same body) | — | [移除] of the played copy is the engine play pipeline (`Fate::Banished` is the body's return); not a world-slot write under Kani | — |
+| C-R-觉悟-02 | 「[手]：[移除]此卡。」 | PROTOCOL-LEVEL | (same body) | — | [移除] of the played copy is the engine play pipeline (`Dest::Banished` is the body's return); not a world-slot write under Kani | — |
 | C-R-曲奇时间-01 | 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 | BLOCKED-HOST | — | — | body calls `shuffle_into_deck`; host arm is a protocol stub that does not move piles | — |
 | C-R-曲奇时间-02 | 「获得500*X资金，X为返回卡的总数。」 | PROVEN (amount) | `cookie_pay_iff`, `cookie_pay_mutant_is_detected` | (pending) | X = condition `discard_n`; gain is exactly 500·X | — |
 | C-R-Sprechchor-01 | 「在Livehouse地块开始回合时，可打出此卡」 | PROTOCOL-LEVEL | — | — | turn-start Livehouse gate is `cant_play` + `turn_start_pos` (protocol stub) + `is_live_house_for` | — |

@@ -356,7 +356,7 @@ fn bind_candidate(ctx: &mut Context<'_, '_>, cond: &Cond, view: &dyn CondView) {
 }
 
 // ---------------------------------------------------------------------------
-// lookup functions (registered per window root, shaped by VOCAB's `func`)
+// lookup functions (registered per window root, shaped by VOCAB's FuncKind)
 // ---------------------------------------------------------------------------
 
 fn install_functions(ctx: &mut Context<'static, 'static>) {

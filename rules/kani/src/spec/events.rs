@@ -128,7 +128,7 @@ pub fn log_is_gains(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
 /// Book-visible effect log is exactly the listed `Teleport`s, in order.
 ///
 /// `Effect::SetState` from `ctx::set_slot` is latch/slot plumbing (the card's
-/// `latch:pico.fate` snapshot), not a book effect — it is skipped. Narration
+/// `latch:pico.dest` snapshot), not a book effect — it is skipped. Narration
 /// (`ctx::log`) lives in a separate buffer and is not in this slice. Any
 /// other effect (pay, gain, …) is a mismatch. This is what made
 /// `pico_swap_01`/`02` FAIL on the old base while the native tests passed
@@ -315,8 +315,8 @@ pub fn pico_expected_teleports(ring: &[i32], pre_pos: &[i32]) -> Vec<(i32, i32)>
     }
     for (k, &p) in ring.iter().enumerate() {
         let to = ring[(k + 1) % ring.len()];
-        let fate = pre_pos[to as usize];
-        out.push((p, fate));
+        let dest = pre_pos[to as usize];
+        out.push((p, dest));
     }
     out
 }
@@ -326,14 +326,14 @@ pub fn pico_expected_teleports(ring: &[i32], pre_pos: &[i32]) -> Vec<(i32, i32)>
 // 「直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除
 // 此事件！」
 //
-// Activation: keep in play (set_fate Field) + schedule. Expiry tick: permanent
+// Activation: keep in play (set_dest Field) + schedule. Expiry tick: permanent
 // removal (`EventExpire`). The dice-halve hook needs `trig_move_roll`
 // (BLOCKED-HOST). The scheduling of 「下个回合结束」 is engine protocol.
 // ===========================================================================
 
-/// Activation: fate is Field (`Fate::Field = 2`).
-pub fn moca_activation_dest_is_field(fate: i32) -> bool {
-    fate == 2
+/// Activation: dest is Field (`Dest::Field = 2`).
+pub fn moca_activation_dest_is_field(dest: i32) -> bool {
+    dest == 2
 }
 
 /// Expiry tick log: exactly one `EventExpire`.
@@ -350,9 +350,9 @@ pub fn moca_expiry_log_ok(effects: &[Effect], key: NameId) -> bool {
 // is LESS (body leaves it short).
 // ===========================================================================
 
-/// Activation: fate = Field (keep). Schedule is protocol.
-pub fn aao_activation_dest_is_field(fate: i32) -> bool {
-    fate == 2
+/// Activation: dest = Field (keep). Schedule is protocol.
+pub fn aao_activation_dest_is_field(dest: i32) -> bool {
+    dest == 2
 }
 
 /// E-aao-02: while up, some hand-effect veto is armed. The body arms nothing.
@@ -539,16 +539,16 @@ pub fn habinel_01_exiles_ok(effects: &[Effect], players: &[i32], to: i32) -> boo
 // tile_named("RiNG {n}") resolves to board 8 / 16 / 36 / 53.
 // ===========================================================================
 
-/// One `Teleport` to `fate` + one `GiveExile` of 1 (`to` = -1, turn-start tick)
+/// One `Teleport` to `dest` + one `GiveExile` of 1 (`to` = -1, turn-start tick)
 /// per living player, in seat order.
-pub fn never_ends_01_ok(effects: &[Effect], players: &[i32], fate: i32) -> bool {
+pub fn never_ends_01_ok(effects: &[Effect], players: &[i32], dest: i32) -> bool {
     if effects.len() != players.len() * 2 {
         return false;
     }
     for (i, &p) in players.iter().enumerate() {
         let a = &effects[i * 2];
         let b = &effects[i * 2 + 1];
-        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == fate) {
+        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == dest) {
             return false;
         }
         if !matches!(b, Effect::GiveExile { player, n, to } if *player == p && *n == 1 && *to == -1)
@@ -641,15 +641,15 @@ pub fn marina_box_02_decline_mutant(effects: &[Effect]) -> bool {
 // Shared activation / expiry shapes (active events)
 // ===========================================================================
 
-/// Activation keep: fate is Field and the body moved no money / pos.
-pub fn activation_keep_only(fate: i32, effects: &[Effect]) -> bool {
-    fate == 2 && effects.is_empty()
+/// Activation keep: dest is Field and the body moved no money / pos.
+pub fn activation_keep_only(dest: i32, effects: &[Effect]) -> bool {
+    dest == 2 && effects.is_empty()
 }
 
-/// Permanent keep (no expiry clause): fate is Field; nothing else is required
+/// Permanent keep (no expiry clause): dest is Field; nothing else is required
 /// beyond the body's own modeled side effects.
-pub fn permanent_keep(fate: i32) -> bool {
-    fate == 2
+pub fn permanent_keep(dest: i32) -> bool {
+    dest == 2
 }
 
 // ===========================================================================
@@ -710,11 +710,11 @@ pub fn end_it_all_01_picked_three(picks: usize) -> bool {
 // E-lulu / E-school-time / E-kizuna — pay / exile legs
 // 「如果选择[传送]需支付500资金」 / 「获得1层[除外]」
 // Destinations 快餐店 (33) / 周边学区 (17) resolve via `tile_named`;
-// Kizuna's fate is `roll mod 60` and is modeled.
+// Kizuna's dest is `roll mod 60` and is modeled.
 // ===========================================================================
 
-/// Lulu accept: the chooser pays exactly 500 and teleports to `fate` (快餐店).
-pub fn lulu_01_pay_ok(effects: &[Effect], who: i32, fate: i32) -> bool {
+/// Lulu accept: the chooser pays exactly 500 and teleports to `dest` (快餐店).
+pub fn lulu_01_pay_ok(effects: &[Effect], who: i32, dest: i32) -> bool {
     effects.len() == 2
         && matches!(
             effects[0],
@@ -722,7 +722,7 @@ pub fn lulu_01_pay_ok(effects: &[Effect], who: i32, fate: i32) -> bool {
         )
         && matches!(
             effects[1],
-            Effect::Teleport { player, tile } if player == who && tile == fate
+            Effect::Teleport { player, tile } if player == who && tile == dest
         )
 }
 
@@ -747,14 +747,14 @@ pub fn exile_one_each(effects: &[Effect], players: &[i32]) -> bool {
 
 /// Kizuna: everyone teleports to `face % 60` and gains 1 exile (X = 0 when
 /// no song cards are in any deck — OPEN-kizuna-song).
-pub fn kizuna_01_ok(effects: &[Effect], players: &[i32], fate: i32) -> bool {
+pub fn kizuna_01_ok(effects: &[Effect], players: &[i32], dest: i32) -> bool {
     if effects.len() != players.len() * 2 {
         return false;
     }
     for (i, &p) in players.iter().enumerate() {
         let a = &effects[i * 2];
         let b = &effects[i * 2 + 1];
-        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == fate) {
+        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == dest) {
             return false;
         }
         if !matches!(b, Effect::GiveExile { player, n, to } if *player == p && *n == 1 && *to == -1)
@@ -782,6 +782,6 @@ pub fn pool_bug_03_cancelled(cancelled: bool) -> bool {
 
 /// Activation keep + designated tiles recorded (props are a no-op under Kani;
 /// only keep is determined here).
-pub fn fix_note_01_keep(fate: i32) -> bool {
-    fate == 2
+pub fn fix_note_01_keep(dest: i32) -> bool {
+    dest == 2
 }

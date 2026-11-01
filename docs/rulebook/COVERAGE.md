@@ -1594,7 +1594,7 @@ override the rulebook (特别注意 3), so a card bending a clause is not a hit.
 ### 专有名词 -- 卡与技能 (12)
 
 Card domain (the `rules/tests/tests/<group>` suites). The engine-side hooks these name are
-present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Fate::Banished`),
+present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`),
 `[主动]` (`use_skill`), `[手]` (`play_from_hand` gate), `[反击]`
 (`hand_counteractions` / `chain`), `[持续]` (`FieldCard`),
 `[特]` (`deckBeforeGame` / `deckAtGameStart`), `[限]` (`cant_play`).

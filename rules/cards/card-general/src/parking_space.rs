@@ -64,7 +64,7 @@ fn cant_play(_player: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     let space = ctx::tile_named("Space");
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- bound to the Space tile, not
     // to the player's field.

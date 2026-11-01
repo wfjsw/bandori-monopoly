@@ -102,7 +102,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         // Place the stand-in **before** the crystal so the two rows bind to its instance
         // and die with it.
         if !ctx::is_placed() {
-            ctx::set_fate(ctx::Fate::Field);
+            ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("anon_tokyo_linked")));
         }
         // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- the

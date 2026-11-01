@@ -25,8 +25,8 @@ An activation is irreversible at a specific line, not "somewhere in the body":
 | hooks (`On::Action` / `Filter` / `Settle` / …) | the hook fires and announces | `run_hook` / `entry_admitted` |
 
 Everything after that line -- the `card` counteraction window, the body, the
-fate -- runs with the commitment already made. The only "undo" is a post-hoc
-`ctx::set_fate(Fate::Hand)` from inside the body, which still leaves the play
+dest -- runs with the commitment already made. The only "undo" is a post-hoc
+`ctx::set_dest(Dest::Hand)` from inside the body, which still leaves the play
 announced (log, `card` window, played counters). That is
 `rules/cards/card-pp/src/see_you_tomorrow.rs:65-70` and backlog **LOY-SEEYOU-01**
 (docs/rulebook/BACKLOG.md): *"do not commit the play until 共鸣 is paid."*

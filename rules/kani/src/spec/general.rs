@@ -4,10 +4,10 @@
 //! `docs/rulebook/cards.json` keys `通用:*`. Never derived from engine behaviour.
 //!
 //! Effect-log notes (host model limits, not book re-reads):
-//! * `Op::add_to_fate` / `Op::to_discard` mutate piles but push **no** `Effect`
+//! * `Op::add_to_dest` / `Op::to_discard` mutate piles but push **no** `Effect`
 //!   (there is no `AddToDeck` / `ToDiscard` variant). Those halves are checked
 //!   on post-state (pile membership / counts).
-//! * `Op::set_fate` writes `World::fate` only (no `Effect`). The fate is part
+//! * `Op::set_dest` writes `World::dest` only (no `Effect`). The dest is part
 //!   of the body's contract and is checked on post-state.
 //! * `Op::play_doubled` is a protocol stub returning `0`, and `ctx::n(0, v)`
 //!   therefore doubles every tagged-0 number. Specs of clauses whose printed
@@ -56,22 +56,22 @@ pub fn recruit_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // C-GEN-great-01 / 02 / 03
 // 「依次进行以下操作：1. [移除]此卡；2. 将一张“PERFECT“加入抽卡区并洗切；
 //   3. [获得]2000资金。」
-// 01: the card leaves every zone (fate = Banished).
+// 01: the card leaves every zone (dest = Banished).
 // 02: exactly one 通用:[衍生]PERFECT is in the user's draw pile.
 // 03: user's money rises by exactly 2000.
 // ===========================================================================
 
-/// Fate constant for 「[移除]」 (`Fate::Banished`).
+/// Dest constant for 「[移除]」 (`Dest::Banished`).
 pub const DEST_BANISHED: i32 = 3;
 
 /// Exactly one logged effect: the +2000 gain.
-/// (add_to_fate / set_fate are unlogged in the host model; see module docs.)
+/// (add_to_dest / set_dest are unlogged in the host model; see module docs.)
 pub fn great_01_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == 2000)
 }
 
-/// Post 01: fate is Banished. Post 02: deck holds exactly one more PERFECT
+/// Post 01: dest is Banished. Post 02: deck holds exactly one more PERFECT
 /// (count may include a pre-existing one; the delta is +1). Post 03: money +2000.
 pub fn great_post_ok(
     post_fate: i32,
@@ -95,7 +95,7 @@ pub fn great_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // C-GEN-perfect-01 / 02 / 03
 // 「依次进行以下操作：1. [移除]此卡；2. 将一张“FEVER!“加入弃卡区；
 //   3. [获得]3000资金。」
-// 01: fate = Banished. 02: one 通用:[衍生]FEVER! enters the discard.
+// 01: dest = Banished. 02: one 通用:[衍生]FEVER! enters the discard.
 // 03: money +3000.
 // ===========================================================================
 
@@ -105,7 +105,7 @@ pub fn perfect_01_log_ok(effects: &[Effect], player: i32) -> bool {
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == 3000)
 }
 
-/// Post: fate Banished, discard holds one more FEVER!, money +3000.
+/// Post: dest Banished, discard holds one more FEVER!, money +3000.
 pub fn perfect_post_ok(
     post_fate: i32,
     pre_discard_fever: i32,
@@ -130,7 +130,7 @@ pub fn perfect_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // Effect: a field instance sits on the user's field (owner == user == player).
 // ===========================================================================
 
-/// Fate constant for 「[场地]」 (`Fate::Field`).
+/// Dest constant for 「[场地]」 (`Dest::Field`).
 pub const DEST_FIELD: i32 = 2;
 
 /// Exactly one logged effect: PlaceCard on Field.
@@ -138,16 +138,16 @@ pub fn fever_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> bool {
     effects.len() == 1
         && matches!(
             effects[0],
-            Effect::PlaceCard { player: p, fate, card } if p == player && fate == DEST_FIELD && card == this_card
+            Effect::PlaceCard { player: p, dest, card } if p == player && dest == DEST_FIELD && card == this_card
         )
 }
 
-/// MUTANT: the reference wants fate = Graveyard.
+/// MUTANT: the reference wants dest = Graveyard.
 pub fn fever_01_log_ok_mutant(effects: &[Effect], player: i32, this_card: u8) -> bool {
     effects.len() == 1
         && matches!(
             effects[0],
-            Effect::PlaceCard { player: p, fate, card } if p == player && fate == 0 && card == this_card
+            Effect::PlaceCard { player: p, dest, card } if p == player && dest == 0 && card == this_card
         )
 }
 
@@ -188,20 +188,20 @@ pub fn fever_x_mutant(n_cards: i32) -> i32 {
 // ===========================================================================
 // C-GEN-fever-04
 // 「[持续]（2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。」
-// Effect: the instance leaves the field; fate becomes Graveyard (弃卡区).
+// Effect: the instance leaves the field; dest becomes Graveyard (弃卡区).
 // Note: the destination is the **user**'s discard when owner != user
 // (normal play: same seat).
 // ===========================================================================
 
-/// Fate constant for 「弃卡区」 (`Fate::Graveyard`).
+/// Dest constant for 「弃卡区」 (`Dest::Graveyard`).
 pub const DEST_GRAVEYARD: i32 = 0;
 
-/// Exactly zero logged effects (set_fate is unlogged); post fate is Graveyard.
+/// Exactly zero logged effects (set_dest is unlogged); post dest is Graveyard.
 pub fn fever_04_log_ok(effects: &[Effect]) -> bool {
     effects.is_empty()
 }
 
-/// MUTANT: the reference wants fate = Banished.
+/// MUTANT: the reference wants dest = Banished.
 pub fn fever_04_dest_ok_mutant(post_fate: i32) -> bool {
     post_fate == DEST_BANISHED
 }

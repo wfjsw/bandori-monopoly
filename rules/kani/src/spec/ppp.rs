@@ -14,9 +14,9 @@ use crate::world::{Effect, Snapshot, World, MAX_PLAYERS};
 // ---------------------------------------------------------------------------
 
 /// 「[移除]」 = leave every private / public zone (not the discard).
-/// Expressed by `ctx::set_fate(Fate::Banished)`.
+/// Expressed by `ctx::set_dest(Dest::Banished)`.
 pub const DEST_BANISHED: i32 = 3;
-/// `ctx::Fate::Field`.
+/// `ctx::Dest::Field`.
 pub const DEST_FIELD: i32 = 2;
 
 pub const CARD_POPIPA: &str = "PPP:Popipa";
@@ -55,7 +55,7 @@ pub fn deck_count_named(w: &World, name: &str) -> i32 {
 
 /// Exact effect log the clause allows, in order.
 /// Deck insert is a pile mutation (no typed Effect arm); the banish is the
-/// played-card destination (`w.fate`).
+/// played-card destination (`w.dest`).
 pub fn popipa_effects_ok(effects: &[Effect], player: i32) -> bool {
     if effects.len() != 2 {
         return false;
@@ -73,12 +73,12 @@ pub fn popipa_post_ok(
     post_money: i32,
     deck_pipopa: i32,
     hand_n: i32,
-    fate: i32,
+    dest: i32,
 ) -> bool {
     post_money == pre_money + 1000
         && deck_pipopa == pre_deck_pipopa + 1
         && hand_n == pre_hand_n + 1
-        && fate == DEST_BANISHED
+        && dest == DEST_BANISHED
 }
 
 /// Mutant: reference demands +1100 money. Card must FAIL to match.
@@ -109,14 +109,14 @@ pub fn pipopa_effects_ok(effects: &[Effect], player: i32, popipapapipopa_slot: u
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                fate: DEST_FIELD,
+                dest: DEST_FIELD,
                 card
             } if p == player && card == popipapapipopa_slot
         )
 }
 
-pub fn pipopa_post_ok(pre_money: i32, post_money: i32, fate: i32, field_has_new: bool) -> bool {
-    post_money == pre_money + 1000 && fate == DEST_BANISHED && field_has_new
+pub fn pipopa_post_ok(pre_money: i32, post_money: i32, dest: i32, field_has_new: bool) -> bool {
+    post_money == pre_money + 1000 && dest == DEST_BANISHED && field_has_new
 }
 
 /// Mutant: reference wants a 2000 gain.
@@ -129,7 +129,7 @@ pub fn pipopa_effects_ok_mutant(effects: &[Effect], player: i32, popipapapipopa_
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                fate: DEST_FIELD,
+                dest: DEST_FIELD,
                 card
             } if p == player && card == popipapapipopa_slot
         )
@@ -188,7 +188,7 @@ pub fn auction_off_01_effects_ok(effects: &[Effect], player: i32, this_slot: u8)
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: DEST_FIELD,
+                dest: DEST_FIELD,
                 card
             } if p == player && card == this_slot
         )
@@ -410,7 +410,7 @@ pub fn auction_off_01_effects_ok_mutant(effects: &[Effect], player: i32, this_sl
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: DEST_BANISHED,
+                dest: DEST_BANISHED,
                 card
             } if p == player && card == this_slot
         )
@@ -508,7 +508,7 @@ pub fn wait_aoki_01_effects_ok(effects: &[Effect], player: i32, this_slot: u8) -
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: DEST_FIELD,
+                dest: DEST_FIELD,
                 card
             } if p == player && card == this_slot
         )
@@ -521,7 +521,7 @@ pub fn wait_aoki_01_effects_ok_mutant(effects: &[Effect], player: i32, this_slot
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: DEST_BANISHED,
+                dest: DEST_BANISHED,
                 card
             } if p == player && card == this_slot
         )
@@ -549,7 +549,7 @@ pub fn random_star_01_effects_ok(
     auction_slot: u8,
 ) -> bool {
     // PlaceCard(this) is the only typed effect the host models on this body
-    // (`add_to_fate` is a pile mutation with no Effect arm).
+    // (`add_to_dest` is a pile mutation with no Effect arm).
     if effects.len() != 1 {
         return false;
     }
@@ -558,7 +558,7 @@ pub fn random_star_01_effects_ok(
         effects[0],
         Effect::PlaceCard {
             player: p,
-            fate: DEST_FIELD,
+            dest: DEST_FIELD,
             card
         } if p == player && card == this_slot
     )
@@ -699,7 +699,7 @@ pub fn maze_01_playable(pos: i32) -> bool {
 // ===========================================================================
 
 pub fn far_away_01_dest_is_farthest(
-    fate: i32,
+    dest: i32,
     me_pos: i32,
     other_pos: &[i32],
     n_others: usize,
@@ -718,7 +718,7 @@ pub fn far_away_01_dest_is_farthest(
     }
     let mut j = 0;
     while j < n_others {
-        if abs_dist(me_pos, other_pos[j]) == best && other_pos[j] == fate {
+        if abs_dist(me_pos, other_pos[j]) == best && other_pos[j] == dest {
             return true;
         }
         j += 1;

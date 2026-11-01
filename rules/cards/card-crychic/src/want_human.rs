@@ -32,10 +32,13 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
         // sheet cell M2
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
+/// Where the declared X is written down (`Mem["x"]`). A prop of the placed
+/// instance stands in for the per-field-card `Mem` map; 0 means "never declared"
+/// (the default X is 10).
 pub(crate) const SLOT_X: &str = "want_human_x";
 
 fn want_human(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "CRYCHIC:想要成为人类",
@@ -48,10 +51,12 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
         1,
         20,
     )?;
-    // TODO(规则书)（将此卡置于场上并从1-20间选择并声明X，将其写下）: 规则书（1）: 「将其写下」 -- `Mem["x"]`; the player
-    // slot is the stand-in.
-    ctx::set_slot(player_id, SLOT_X, x);
-    ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
+    // 规则书（1）: 「将其写下」 -- `Mem["x"]`; an on-instance prop is the stand-in.
+    // The props ride the instance just placed (`current_uid`), so two copies
+    // keep their own X and the value dies with the card.
+    ctx::set_prop(SLOT_X, x);
+    // Fresh placement: no boost snapshot from a previous instance.
+    ctx::set_prop(SLOT_AB_BEFORE, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_declared"))
@@ -75,7 +80,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // 为此卡添加一个奇迹水晶。」 (was 「小于X」).
         TriggerKind::DiceRollAfter => {
             let roll = trigger::value();
-            let x = ctx::slot(player_id, SLOT_X);
+            let x = ctx::prop(SLOT_X);
             // TODO(规则书)（每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶）: a
             //   重骰后的出目也要检查 -- the check runs only at diceRollAfter, the
             //   reroll lands later at diceRollResult.
@@ -90,15 +95,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             }
             // 规则书（2）: the boost armed last turn start lands on this roll
             // (the slot holds the total + 1, so `armed - 1` may be 0).
-            let armed = ctx::slot(player_id, SLOT_BOOST);
+            let armed = ctx::prop(SLOT_BOOST);
             if armed > 0 {
                 let boost = armed - 1;
-                ctx::set_slot(player_id, SLOT_BOOST, 0);
-                ctx::set_slot(
-                    player_id,
-                    SLOT_AB_BEFORE,
-                    ctx::abnormal_count(player_id) + 1,
-                );
+                ctx::set_prop(SLOT_BOOST, 0);
+                // 规则书（2）: snapshot the abnormal counter so 「若该次移动过程中受到
+                // 异常移动效果影响」 can be checked at turn end (`Mem["abBefore"]`).
+                ctx::set_prop(SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
                 // TODO(规则书)（使你下次的移动掷骰结果额外增加20-X）: a rerolled
                 //   结果也要带上 +N -- this runs at diceRollAfter, before the
                 //   diceRollResult reroll window, and the reroll replaces the face.
@@ -117,15 +120,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if ctx::crystals() < 2 {
                 return Ok(());
             }
-            let x = ctx::slot(player_id, SLOT_X);
+            let x = ctx::prop(SLOT_X);
             let boost = (20 - x).max(0);
             ctx::set_crystals(0);
             // An earlier arming that never met its move targets the same
             // 「下次的移动掷骰」, so add to it; only an unarmed slot gains the
             // "+1 = armed" bit.
-            let armed = ctx::slot(player_id, SLOT_BOOST);
-            ctx::set_slot(
-                player_id,
+            let armed = ctx::prop(SLOT_BOOST);
+            ctx::set_prop(
                 SLOT_BOOST,
                 if armed > 0 { armed + boost } else { boost + 1 },
             );
@@ -139,11 +141,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 -- 这里是整回合的 `abnormal_count`
         // 在回合结束时比，移动之后、回合结束 之前落下的异常也会算数。
         TriggerKind::TurnEnd => {
-            let ab_before = ctx::slot(player_id, SLOT_AB_BEFORE);
+            let ab_before = ctx::prop(SLOT_AB_BEFORE);
             if ab_before <= 0 {
                 return Ok(());
             }
-            ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
+            ctx::set_prop(SLOT_AB_BEFORE, 0);
             if ctx::abnormal_count(player_id) > ab_before - 1 {
                 ctx::add_crystals(2, 0)?;
                 ctx::log(

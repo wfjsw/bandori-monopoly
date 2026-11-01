@@ -140,7 +140,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("that_day_rain_decayed")).player_id("who", player_id),
@@ -149,7 +149,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 fn that_day_rain(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("that_day_rain_note")));
     ctx::set_crystals(5);
     ctx::log(

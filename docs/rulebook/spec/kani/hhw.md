@@ -66,7 +66,7 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-parade-04 | 「那格视为与弦卷集团交换位置」 | PROTO | — | — | — | tile-swap standing effect |
 | C-HHW-parade-05 | 「[触发结算]后此卡放入弃牌堆」 | PROTO | — | — | — | OPEN-HHW-触发结算 |
 | C-HHW-athletic-01 | 「放置于自己场上并放置3个奇迹水晶」 | TIMEOUT/OOM this pass | `athletic_place_three_crystals_iff` | FAILED 40.5s (intern unwind cliff) | — | re-run with a frozen card-name world |
-| C-HHW-athletic-02 | 「每回合结束时失去一个，为0时置入弃牌堆」 | P / F? | `athletic_turn_end_decay_iff`, `athletic_empty_discards` | pending | body may only `set_fate(Graveyard)` without unplace → LESS | — |
+| C-HHW-athletic-02 | 「每回合结束时失去一个，为0时置入弃牌堆」 | P / F? | `athletic_turn_end_decay_iff`, `athletic_empty_discards` | pending | body may only `set_dest(Graveyard)` without unplace → LESS | — |
 | C-HHW-athletic-03 | 「每次掷骰获得一次资金，起始为700…下限100」 | P (spec) | (spec only this pass) | — | host `gain_fire` ignores cap (n/a here) | — |
 | C-HHW-athletic-04 | 「重骰…直至结果至少为10」 | P (spec) | (spec only) | — | inclusive floor ruling | — |
 | C-HHW-supply-01 | 「[反击] 经过CiRCLE…放置一个奇迹水晶」 | **B** | — | BLOCKED-HOST (`tile_at`) | — | — |
@@ -202,7 +202,7 @@ blocked-by `trig_move_roll`. Listed BLOCKED-HOST and left alone per the brief.)
 2. **C-HHW-kaoru-02** (TEST-FINDINGS §6, pre-registered): the press spends the
    7 火罐 and answers the nearest-player pick, but places **0** [怪盗标记].
 3. **C-HHW-athletic-02** (candidate, harness `athletic_empty_discards`): the
-   crystals-changed hook only `set_fate(Graveyard)` + log; if it does not
+   crystals-changed hook only `set_dest(Graveyard)` + log; if it does not
    unplace / discard the card, 「为0时置入弃牌堆」 is LESS.
 4. **C-HHW-misaki-skill-01** (candidate): book 「上限2」; host `gain_fire` has
    no cap clamp and the body calls `gain_fire(2)` directly — a pre-fire of 1
@@ -210,7 +210,7 @@ blocked-by `trig_move_roll`. Listed BLOCKED-HOST and left alone per the brief.)
 5. **Host `place_card_on` arg layout** (host-model note, not a card body bug):
    `Op::place_card_on` is invoked as `[player, tile, cp, cl, ptr, len]` but
    `host.rs` reads the card name from `(a1, a2) = (tile, cp)`. This can make
-   `C-HHW-kkr-02` land on `Fate::Field` instead of CiRCLE in the model. The
+   `C-HHW-kkr-02` land on `Dest::Field` instead of CiRCLE in the model. The
    harness covers both outcomes and pins the weaker “a PlaceCard happens”.
 
 ## What was tried for BLOCKED / OOM

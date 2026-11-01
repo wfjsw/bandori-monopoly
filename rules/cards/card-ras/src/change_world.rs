@@ -66,7 +66,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("change_world_ask")),
         &spots,
     )?;
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("change_world_note")));
     ctx::log(
         player_id,
@@ -148,7 +148,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
         return Ok(());
     }
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("change_world_discarded")).player_id("who", player_id),

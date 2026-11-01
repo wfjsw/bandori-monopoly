@@ -17,6 +17,12 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
 
+/// One-shot claim for the stop body: the raise uid that already answered this
+/// copy. A fixed-key seat latch holding the last raise uid: one key,
+/// overwritten in place, shared by every copy so two stand-ins answer one
+/// pass once.
+const CLAIM: &str = "hagumi.claimed";
+
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
@@ -102,7 +108,7 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     // below is the stop body. Place the stand-in *before* the mark so `self_uid()`
     // is its instance and the mark dies with it.
     if !ctx::is_placed() {
-        ctx::set_fate(ctx::Fate::Field);
+        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, ID, &Msg::new(key!("hagumi_marks_note")));
     }
     // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- one row per
@@ -127,39 +133,62 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
 
 /// Residual guard for [`hook`]: one of this player's 育美标记 is on the tile.
 fn has_mark_here(player_id: i32) -> bool {
-    ctx::count_marks(trigger::tile(), &mark_filter(player_id)) > 0
+    // A spent-out copy is admitted too (no mark anywhere): the body's trailing
+    // cleanup is the only thing left for it, and the guard runs per copy -- a
+    // second stand-in would otherwise be refused by the first one's removal and
+    // stay on the field forever.
+    ctx::count_marks(trigger::tile(), &mark_filter(player_id)) > 0 || !any_marks(player_id)
 }
 
 /// Applicability is the entry's condition + `has_mark_here`.
 fn hook(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
-    if !ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("hagumi_marks_stop_title")),
-        &Msg::new(key!("hagumi_marks_stop_ask")).tile("tile", t),
-    )? {
-        return Ok(());
+    // One ask/gain/removal per raise: a pass dispatches one job per placed
+    // stand-in, so each job first claims the raise on its own prop. The claim
+    // is written **before** the ask -- a pause replays the whole action from its
+    // saved pre-action state and writes it again.
+    if ctx::state::get(player_id, CLAIM) != trigger::uid() {
+        ctx::state::set(player_id, CLAIM, trigger::uid());
+        // 规则书（1）: 「可在那格强制停下并获得2000资金」
+        if !ctx::ask_yes(
+            player_id,
+            &Msg::new(key!("hagumi_marks_stop_title")),
+            &Msg::new(key!("hagumi_marks_stop_ask")).tile("tile", t),
+        )? {
+            return Ok(());
+        }
+        // 规则书（1）: 「[强制停下]」 -- behind `abnormal::Stop`: a guarded or
+        // unstoppable mover is not stopped, and the mark is not spent.
+        // TODO(规则书)（可在那格强制停下并获得2000资金）: the book attaches the 2000
+        // and the removal to the pass unconditionally -- a refused gate here skips
+        // both, and the sheet carries no such carve-out.
+        if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
+            return Ok(());
+        }
+        // Only a mid-walk tile can be stopped (a teleport's remaining is 0, so it
+        // arrives here for the gain/removal only).
+        if trigger::move_remaining() > 0 {
+            // The walk settles at the stop tile.
+            ctx::plan::set_stop_at(t);
+        }
+        // 规则书（1）: 「获得2000资金，然后移除该标记」 -- the gain lands first, then
+        // one mark is spent (`bump_mark`: 「该标记」 is one mark, not every row that
+        // happens to share the tile).
+        ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
+        ctx::bump_mark(t, &mark_filter(player_id), -1);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("hagumi_marks_stop_done"))
+                .player_id("who", player_id)
+                .tile("tile", t),
+        );
     }
-    // TODO(规则书)（可在那格强制停下并获得2000资金）:
-    if !ctx::gate(trigger::player_id(), bandori_std::kind::abnormal::Stop) {
-        return Ok(());
-    }
-    if trigger::move_remaining() > 0 {
-        ctx::plan::set_stop_at(t);
-    }
-    ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
-    ctx::bump_mark(t, &mark_filter(player_id), -1);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("hagumi_marks_stop_done"))
-            .player_id("who", player_id)
-            .tile("tile", t),
-    );
-    // TODO(规则书)（你经过育美标记时可在那格强制停下并获得2000资金）: the cleanup files only the answering
-    // copy -- should a second stand-in of this card sit on the field, it stays
-    // behind inert (there is no per-instance fate write).
+    // Stand-in cleanup: when the owner has no marks left the attachment is
+    // spent (the effect just goes quiet; the field-card stand-in files itself
+    // away). Outside the claim, so every stand-in files itself.
+    // `set_dest` applies to the drive's own copy at `commit_after`.
     if !any_marks(player_id) {
-        ctx::set_fate(ctx::Fate::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard);
     }
     // TODO(规则书)（1）[judgement]: Not in the rulebook text, so held.
     Ok(())

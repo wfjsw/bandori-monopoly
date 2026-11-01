@@ -17,7 +17,7 @@ pub const HANEOKA: CardDef = CardDef::new(
         On::Play("", Some(cant_play), haneoka),
         //
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
-        // the interactive `ask_yes` + `set_fate` + `set_pay_amount(0)` offer sits
+        // the interactive `ask_yes` + `set_dest` + `set_pay_amount(0)` offer sits
         // immediately before the pure `PaySplitChoose` filter stage.
         On::Action(Action::PaySplitChooseBefore("actor == owner && card.placed && value > 0", None, pay_choose)),
     ],
@@ -97,7 +97,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         // 规则书 (sheet 2026-10-06): 「至少为20，则将此卡放置在自己场上」;
         // the PaySplitChoose hook below offers 「在后续任何时刻可将其置入弃牌堆并
         // 抵消一次任意付款」.
-        ctx::set_fate(ctx::Fate::Field);
+        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(
             player_id,
             ID,
@@ -124,7 +124,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     trigger::set_pay_amount(0);
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("haneoka_cancelled"))

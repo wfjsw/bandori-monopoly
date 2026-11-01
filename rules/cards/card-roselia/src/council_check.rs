@@ -70,7 +70,7 @@ fn near(player_id: i32) -> Vec<i32> {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    ctx::add_to_fate(player_id, "R:[衍生] 觉悟", ctx::Fate::DeckRandom);
+    ctx::add_to_dest(player_id, "R:[衍生] 觉悟", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("council_check_added"))
@@ -109,7 +109,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if paid < amount {
         return Ok(());
     }
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(
         player_id,
         tile,
@@ -204,7 +204,7 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     let paid = ctx::slot(player_id, SLOT_PAID);
     let got = ctx::slot(player_id, SLOT_GOT);
     let expect = ctx::slot(player_id, SLOT_EXPECT);
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书[反击]: 「若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金」
     if got < expect && paid > 0 {
         ctx::gain(

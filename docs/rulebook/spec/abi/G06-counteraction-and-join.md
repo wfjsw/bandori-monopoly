@@ -700,8 +700,9 @@ carries `RANGE_CARD` where the event's effect is an interval.
 
 ### 5.7 Kani model
 
-* `sys_kani` / `kani_host::Op` gains one op per import (README band 371-390;
-  340 is the current maximum and G02/G04 take 341-370 ahead of this group).
+* `sys_kani` / `kani_host::Op` gains one op per import (README band 380-399;
+  379 is the maximum once the earlier `Op` groups have landed — 380-399 is this
+  group's band).
   `native_shims` mirrors them with the `ruleset_*` names. `host.rs` registers
   them next to `join_redirect_target` (`host.rs:5567`).
 * `rules/kani/src/host.rs` stubs: `join::open` = no-op that sets `opened`,

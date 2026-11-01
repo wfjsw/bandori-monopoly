@@ -68,7 +68,7 @@ const PROP_STEP: &str = "tomorrows_door_step";
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // The card stays in play.
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     // 规则书（2）: 「将此卡放置在“流星堂”上」 -- bound to `ROUTE[0]`; the route
     // cursor is the per-card `Mem["step"]` (an instance prop, so copies do not
     // share it).

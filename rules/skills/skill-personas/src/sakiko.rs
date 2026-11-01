@@ -202,12 +202,12 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「每回合开始时自动打出一张抽牌堆顶端的牌」 -- the play takes the card
     // out of the pile (as the hand path does before resolving) and leaves it on its
-    // own `Fate`; `ctx::play_card` only reports that `Fate` back to the caller.
+    // own `Dest`; `ctx::play_card` only reports that `Dest` back to the caller.
     ctx::take_card(player_id, top.as_str(), CardPile::Deck);
-    let fate = ctx::play_card(top.as_str(), player_id)?;
-    match fate {
-        ctx::Fate::Field | ctx::Fate::Banished => {}
-        fate => ctx::add_to_fate(player_id, top.as_str(), fate),
+    let dest = ctx::play_card(top.as_str(), player_id)?;
+    match dest {
+        ctx::Dest::Field | ctx::Dest::Banished => {}
+        dest => ctx::add_to_dest(player_id, top.as_str(), dest),
     }
     Ok(())
 }

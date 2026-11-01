@@ -96,7 +96,7 @@ fn poorest(player_id: i32) -> bool {
 
 fn aya_longing(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "PP:[丸山彩]憧憬的前方",
@@ -120,7 +120,7 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
     )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
     if ctx::take_card(player_id, id.as_str(), ctx::CardPile::Graveyard) {
-        ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::Hand);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
         ctx::log(
             player_id,
             &Msg::new(key!("aya_longing_back"))

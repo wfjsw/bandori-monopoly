@@ -24,7 +24,7 @@ pub fn half_speed_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> b
         match e {
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card,
             } if *p == player && *card == this_card => place += 1,
             Effect::AddCounter { .. } => {}
@@ -65,12 +65,12 @@ pub fn half_speed_02_decay_post_ok(pre_crystals: i32, post_crystals: i32) -> boo
 }
 
 /// Empty-at-zero entry: the card leaves the field to the discard.
-/// Host `set_fate(Graveyard)` + place semantics produce `PlaceCard { fate: 0 }`
-/// only when the engine re-places; under Kani `set_fate` alone writes `fate`
+/// Host `set_dest(Graveyard)` + place semantics produce `PlaceCard { dest: 0 }`
+/// only when the engine re-places; under Kani `set_dest` alone writes `dest`
 /// and the body only logs. The determined half is: the body's only effect is
-/// none (log-only) and `fate` is set to Graveyard (0). We pin the fate write.
-pub fn half_speed_02_empty_dest_is_graveyard(fate: i32) -> bool {
-    fate == 0
+/// none (log-only) and `dest` is set to Graveyard (0). We pin the dest write.
+pub fn half_speed_02_empty_dest_is_graveyard(dest: i32) -> bool {
+    dest == 0
 }
 
 // ===========================================================================
@@ -241,7 +241,7 @@ pub fn colors_05_fire_log_ok(effects: &[Effect], player: i32, need: i32) -> bool
 }
 
 /// C-AG-colors-06: roll = 5 ⇒ one discard card moves to the hand.
-/// `pick_from_discard` takes the card (TakeFromPile) then `add_to_fate`.
+/// `pick_from_discard` takes the card (TakeFromPile) then `add_to_dest`.
 pub fn colors_06_log_ok(effects: &[Effect], player: i32, picked: u8) -> bool {
     effects.len() == 2
         && matches!(
@@ -262,7 +262,7 @@ pub fn colors_06_log_ok(effects: &[Effect], player: i32, picked: u8) -> bool {
 }
 
 /// C-AG-colors-03: roll = 2 ⇒ one discard card moves to the draw-pile top.
-/// The take is logged; `add_to_fate` is a pile write (no log entry).
+/// The take is logged; `add_to_dest` is a pile write (no log entry).
 pub fn colors_03_log_ok(effects: &[Effect], player: i32, picked: u8) -> bool {
     effects.len() == 1
         && matches!(
@@ -308,7 +308,7 @@ pub fn soul_01_log_ok(effects: &[Effect], player: i32, this_card: u8, k: i32) ->
         effects[0],
         Effect::PlaceCard {
             player: p,
-            fate: 2,
+            dest: 2,
             card
         } if p == player && card == this_card
     ) && effects[1..=k as usize]
@@ -401,10 +401,10 @@ pub fn soul_03_log_ok(effects: &[Effect], owner: i32, crystal_key: u16) -> bool 
 // 「（3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。」
 // ===========================================================================
 
-/// The empty-crystal entry only sets fate = Graveyard (0) and logs. Under the
-/// Kani host `set_fate` writes `World::fate` and pushes no effect.
-pub fn soul_04_dest_is_graveyard(fate: i32) -> bool {
-    fate == 0
+/// The empty-crystal entry only sets dest = Graveyard (0) and logs. Under the
+/// Kani host `set_dest` writes `World::dest` and pushes no effect.
+pub fn soul_04_dest_is_graveyard(dest: i32) -> bool {
+    dest == 0
 }
 
 pub fn soul_04_log_empty(effects: &[Effect]) -> bool {
@@ -491,7 +491,7 @@ pub fn one_of_us_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> bo
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card
             } if p == player && card == this_card
         )

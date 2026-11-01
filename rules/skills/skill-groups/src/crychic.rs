@@ -140,7 +140,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         crate::spend_crystals(player_id, x)?;
     }
     // 规则书（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
-    // 「移除」 is the out-of-game keyword (`apply_fate`'s Banished = "just
+    // 「移除」 is the out-of-game keyword (`apply_dest`'s Banished = "just
     // gone"), so the cards leave the game rather than land in a discard pile.
     // 「此卡」 is the band skill instance itself (`skill:CRYCHIC:美好的往日幻影`),
     // whose id does not start with `CRYCHIC:` -- it was skipped by the old
@@ -166,7 +166,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         // The field copy (3) places: unplace it into the draw pile below.
         if shout_at(player_id, c) {
             if ctx::unplace_at(uid) >= 0 {
-                ctx::add_to_fate(player_id, SHOUT, ctx::Fate::DeckRandom);
+                ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
             }
             continue;
         }
@@ -177,7 +177,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     for c in ctx::cards_in(player_id, CardPile::Hand) {
         if shout_at(player_id, c) {
             ctx::take_card(player_id, c.as_str(), CardPile::Hand);
-            ctx::add_to_fate(player_id, SHOUT, ctx::Fate::DeckRandom);
+            ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
             continue;
         }
         if c.as_str().starts_with("CRYCHIC:") {
@@ -189,7 +189,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             if shout_at(player_id, c) {
                 if pile != CardPile::Deck {
                     ctx::take_card(player_id, c.as_str(), pile);
-                    ctx::add_to_fate(player_id, SHOUT, ctx::Fate::DeckRandom);
+                    ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
                 }
                 continue;
             }
@@ -212,10 +212,10 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("crychic_which")),
     )?;
     while ctx::deck_count(player_id) < 10 {
-        ctx::add_to_fate(
+        ctx::add_to_dest(
             player_id,
             if mygo { "MyGO" } else { "Ave Mujica" },
-            ctx::Fate::DeckTop,
+            ctx::Dest::DeckTop,
         );
     }
     ctx::shuffle_into_deck(player_id, false, true);

@@ -149,7 +149,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if !ctx::target_tile(b) {
         return Ok(());
     }
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "AG:ONE OF US",

@@ -73,7 +73,7 @@ fn watch_flips(player_id: i32) -> card_sdk::Asked {
 }
 
 fn nyamu_card(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "Mujica:（喵梦）", &Msg::new(key!("nyamu_note")));
     ctx::log(
         player_id,

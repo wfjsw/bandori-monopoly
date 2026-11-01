@@ -18,7 +18,7 @@ Pure contracts were also spot-checked via
 | gap | effect on proofs |
 |---|---|
 | `Op::add_to_deck` / `Op::to_discard` push **no** `Effect` (no variant exists) | pile halves checked on post-state |
-| `Op::set_fate` writes `World::fate` only | fate checked on post-state |
+| `Op::set_dest` writes `World::dest` only | dest checked on post-state |
 | `Op::play_doubled` stub returns `0`; `ctx::n(0, v)` then doubles | clauses whose printed amount is `ctx::n(0, …)` are BLOCKED-HOST |
 | `Op::target` / `targeted_count` / `designations` / `cancel_designation` return `0` | [指定] pipeline is PROTOCOL-LEVEL |
 | `Op::give_extra_turn` / plan setters / `run_planned_move` / `card_buy` are stubs | move / buy / extra-turn halves are PROTOCOL-LEVEL |

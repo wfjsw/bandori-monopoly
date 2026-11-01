@@ -55,7 +55,7 @@ crate::host_subset!(heart_rain_dispatch {
 /// GAP: `arm_turn_key` is still inlined in `host::dispatch` — see
 /// [`dice_cast_dispatch`].
 crate::host_subset!(dice_cast_subset {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     state_get => arm_state_get,
     state_set => arm_state_set,
     place_card_at => arm_place_card_at,
@@ -72,7 +72,7 @@ fn dice_cast_dispatch(op: card_sdk::kani_host::Op, a: card_sdk::kani_host::Args)
 
 /// `Mujica:燃尽前的线香花火` play — place + 2 crystals.
 crate::host_subset!(sparkler_play_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     add_counter_self => arm_add_counter_self,
     log | effect => arm_log,
@@ -80,7 +80,7 @@ crate::host_subset!(sparkler_play_dispatch {
 
 /// `Mujica:燃尽前的线香花火` `on_crystals_changed` — discard + 2 stun.
 crate::host_subset!(sparkler_changed_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     apply_abnormal => arm_apply_abnormal,
     log | effect => arm_log,
 });
@@ -107,7 +107,7 @@ crate::host_subset!(doll_garden_subset {
 
 /// `Mujica:（喵梦）` play — place on own field.
 crate::host_subset!(nyamu_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -116,7 +116,7 @@ crate::host_subset!(nyamu_dispatch {
 crate::host_subset!(umiri_dispatch {
     player_count => arm_player_count,
     player_out => arm_player_out,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     state_set => arm_state_set,
     group_skills => arm_band_skills,
@@ -612,10 +612,10 @@ fn sparkler_last_crystal_iff_at(user: i32) {
         spec::sparkler_last_crystal_effects(effects, user),
         "C-MUJICA-花火-03: GiveStun(user, 2)"
     );
-    let fate = world::with_world(|ww| ww.fate);
+    let dest = world::with_world(|ww| ww.dest);
     crate::kassert!(
-        spec::sparkler_last_crystal_fate(fate),
-        "C-MUJICA-花火-03: fate becomes Graveyard"
+        spec::sparkler_last_crystal_fate(dest),
+        "C-MUJICA-花火-03: dest becomes Graveyard"
     );
     crate::kassert!(
         post.stun[user as usize] == condition.stun[user as usize] + 2,
@@ -947,7 +947,7 @@ pub fn saki_move_dest_is_three_tiles() {
     kani::assume((0..60).contains(&from));
     let dir: i32 = kani::any();
     kani::assume(dir == 1 || dir == -1);
-    let fate = spec::saki_move_fate(from, dir, 60);
+    let dest = spec::saki_move_fate(from, dir, 60);
     kani::cover!(dir == 1, "clockwise 3");
     kani::cover!(dir == -1, "counter-clockwise 3");
     crate::kassert!(
@@ -960,8 +960,8 @@ pub fn saki_move_dest_is_three_tiles() {
         (((from - 3) % 60) + 60) % 60
     };
     crate::kassert!(
-        fate == expected,
-        "C-MUJICA-祥移动-01: fate is from±3 mod 60"
+        dest == expected,
+        "C-MUJICA-祥移动-01: dest is from±3 mod 60"
     );
 }
 
@@ -975,7 +975,7 @@ pub fn saki_move_dest_mutant_is_detected() {
     let dir = 1i32;
     crate::kassert!(
         spec::saki_move_fate(from, dir, 60) != spec::saki_move_dest_mutant(from, dir, 60),
-        "mutant: 3-tile fate ≠ 4-tile fate"
+        "mutant: 3-tile dest ≠ 4-tile dest"
     );
 }
 

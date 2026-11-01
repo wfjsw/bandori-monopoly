@@ -45,13 +45,23 @@ pub trait CondView {
     /// Move kind (`move.kind`), `-1` = none (binds CEL `null`).
     fn move_kind(&self) -> i64;
     fn move_remaining(&self) -> i64;
+    /// `t.Move.Main` (`move.is_main_move`).
     fn move_main(&self) -> bool;
     /// `move.by_skill` -- the move was shaped or started by a skill.
     fn move_by_skill(&self) -> bool;
+    /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward; `1` when the
+    /// window has no move (matches the guest's `trigger::move_dir()`).
     fn move_dir(&self) -> i64;
+    /// `move.tag(name)` -- the move's per-card tag counter
+    /// (`t.Move.Tags`, `trigger::move_tag(name)`); missing name = 0.
     fn move_tag_named(&self, name: &str) -> i64;
     /// Eager table for `move.tag(name)` (window-scope, not per-candidate).
     fn move_tag_table(&self) -> Vec<(String, i64)>;
+    /// The cards whose bodies are currently resolving (`resolving('id')`);
+    /// absent = nothing resolving.
+    fn resolving_table(&self) -> Vec<(String, i64)> {
+        Vec::new()
+    }
     fn roll_source(&self) -> i64;
     fn abnormal(&self) -> bool;
     fn turn_player(&self) -> i64;
@@ -68,6 +78,10 @@ pub trait CondView {
     /// [`CondView::card_id`] -- comparable to `card.id` and to a card-id
     /// literal (`id_of("…")`). `0` when the trigger carries no card.
     fn trigger_card(&self) -> i64;
+    /// The trigger's card is a `skill:` card (`card.is_skill`).
+    fn trigger_card_is_skill(&self) -> bool {
+        false
+    }
     /// The trigger's counter / message name hash (`counter_name`), same
     /// encoding as [`crate::id_of`] -- `Trigger.name` on a `CounterChanged`
     /// hook (the counter name) or an `On::Message` entry (the message name).

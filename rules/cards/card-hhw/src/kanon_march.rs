@@ -60,7 +60,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // The play's origin decides the branch: a hand (or forced) play places the
     // [场] card, a press on the placed copy (`use_skill`) is the jump.
     if ctx::play_from_hand() || !ctx::is_placed() {
-        ctx::set_fate(ctx::Fate::Field);
+        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(
             player_id,
             "HHW:（花音）Wacha Mocha 啪嗒进行曲",
@@ -139,7 +139,7 @@ fn jump(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("kanon_march_jump")).tile("tile", pick),
     );
     // 规则书: 「然后此卡置入弃牌堆」
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

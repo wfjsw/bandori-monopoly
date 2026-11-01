@@ -118,7 +118,7 @@ fn shield_play(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
     };
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(target, "TEST:shield", &Msg::new(key!("shield_note")));
     Ok(())
 }
@@ -184,7 +184,7 @@ fn dice_mover(player_id: i32) -> card_sdk::Asked {
 }
 
 fn crystal_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:named-counter",
@@ -211,7 +211,7 @@ fn crystal_changed_guard(player_id: i32) -> bool {
 }
 
 fn crystal_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     // Which write emptied it: a removal, or a write that landed on none.
     let reason = if trigger::value() < 0 {
         key!("named-counter-empty")
@@ -222,15 +222,15 @@ fn crystal_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Places itself and leaves **immediately** -- `send_to_fate` rather than
-/// `set_fate` -- so the rest of the effect runs against a card that is already
+/// Places itself and leaves **immediately** -- `send_to_dest` rather than
+/// `set_dest` -- so the rest of the effect runs against a card that is already
 /// gone. Logs `is_placed` right after, which is the whole distinction.
 const DEST_NOW: CardDef = CardDef::new("TEST:fate_now", &[On::Play("", None, fate_now)]);
 
 fn fate_now(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:fate_now", &Msg::new(key!("fate_note")));
-    ctx::send_to_fate(ctx::Fate::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("fate_now_left")).i("placed", ctx::is_placed() as i64),
@@ -240,13 +240,13 @@ fn fate_now(player_id: i32) -> card_sdk::Asked {
 
 /// Places itself and names **another** player's discard -- 「将此卡放入[使用者]
 /// 弃卡区」 when [使用者] is not the one holding it.
-const DEST_TO: CardDef = CardDef::new("TEST:fate_to", &[On::Play("", None, fate_to)]);
+const DEST_TO: CardDef = CardDef::new("TEST:dest_to", &[On::Play("", None, dest_to)]);
 
-fn fate_to(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
-    ctx::place_card(player_id, "TEST:fate_to", &Msg::new(key!("fate_note")));
+fn dest_to(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:dest_to", &Msg::new(key!("fate_note")));
     if let Some(&user) = ctx::others(player_id).first() {
-        ctx::set_transfer_to_fate(user, ctx::Fate::Graveyard);
+        ctx::set_transfer_to_dest(user, ctx::Dest::Graveyard);
     }
     Ok(())
 }
@@ -313,7 +313,7 @@ fn guard_play(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
     };
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(target, "TEST:guard", &Msg::new(key!("guard_note")));
     Ok(())
 }
@@ -495,7 +495,7 @@ const PAY_ADD_ANY: CardDef = CardDef::new(
 );
 
 fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:payAddAny",
@@ -645,7 +645,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
 );
 
 fn fire_roll_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:fireRoll",
@@ -749,7 +749,7 @@ const PRE_HOOK: CardDef = CardDef::new(
 );
 
 fn pre_hook_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:preHook", &Msg::new(key!("pre_hook_note")));
     Ok(())
 }
@@ -782,7 +782,7 @@ const PRE_GATE: CardDef = CardDef::new(
 );
 
 fn pre_gate_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:preGate", &Msg::new(key!("pre_gate_note")));
     Ok(())
 }
@@ -803,7 +803,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
 );
 
 fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:preRollPlan",
@@ -833,7 +833,7 @@ const PRE_ATEMD: CardDef = CardDef::new(
 );
 
 fn pre_at_end_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:preAtEnd",
@@ -875,7 +875,7 @@ const PASS_TELE: CardDef = CardDef::new(
 );
 
 fn pass_tele_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:pass_tele",
@@ -926,7 +926,7 @@ const TILE_HOOK: CardDef = CardDef::new(
 );
 
 fn tile_hook_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:tileHook",
@@ -991,7 +991,7 @@ const PASS_FLASH: CardDef = CardDef::new(
 );
 
 fn pass_flash_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:pass_flash",
@@ -1032,7 +1032,7 @@ const PASS_BEFORE_FLASH: CardDef = CardDef::new(
 );
 
 fn pass_before_flash_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:pass_before_flash",
@@ -1132,7 +1132,7 @@ const DECK_ONCE: CardDef = CardDef::new(
 );
 
 fn deck_once(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:deckOnce",
@@ -1153,7 +1153,7 @@ const CLOCK_HOOK: CardDef = CardDef::new(
 );
 
 fn clock_hook_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:clockHook",
@@ -1304,7 +1304,7 @@ const SILENT_PAY: CardDef = CardDef::new(
 );
 
 fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:silentPair",
@@ -1314,7 +1314,7 @@ fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn silent_nest_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:silentNest",
@@ -1324,7 +1324,7 @@ fn silent_nest_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn silent_pay_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:silentPay",
@@ -1378,7 +1378,7 @@ const SILENT_QUIET: CardDef = CardDef::new(
 );
 
 fn silent_quiet_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:silentQuiet",
@@ -1432,7 +1432,7 @@ const QUIET_RAISE: CardDef = CardDef::new(
 );
 
 fn quiet_counter_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:quietCounter",
@@ -1451,7 +1451,7 @@ fn quiet_counter_body(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn quiet_raise_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:quietRaise",
@@ -1478,7 +1478,7 @@ const SILENT_ASK: CardDef = CardDef::new(
 );
 
 fn silent_ask_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:silentAsk",
@@ -1575,7 +1575,7 @@ const FLASH_FOLD_NEVER: CardDef = CardDef::new(
 );
 
 fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:flashFoldAlways",
@@ -1585,7 +1585,7 @@ fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn flash_fold_never_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:flashFoldNever",
@@ -1624,7 +1624,7 @@ const FLASH_HEADER_IDS: CardDef = CardDef::new(
 );
 
 fn flash_header_ids_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:flashHeaderIds",
@@ -1768,7 +1768,7 @@ const CUSTOM_FILTER: CardDef = CardDef::new(
 );
 
 fn custom_filter_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:customFilter",
@@ -1996,7 +1996,7 @@ const TRAP_DECLARE: CardDef = CardDef::new(
 );
 
 fn trap_declare_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
         player_id,
         "TEST:trap_declare",
@@ -2074,7 +2074,7 @@ const NAMED_OPEN: CardDef = CardDef::new(
 );
 
 fn named_open_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:named_open", &Msg::new(key!("named_note")));
     Ok(())
 }
@@ -2095,7 +2095,7 @@ const NAMED_SHUT: CardDef = CardDef::new(
 );
 
 fn named_shut_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "TEST:named_shut", &Msg::new(key!("named_note")));
     Ok(())
 }

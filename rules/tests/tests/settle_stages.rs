@@ -286,7 +286,7 @@ fn m4_kaoru_thief_force_stop_stops_on_the_marked_player() {
     assert_eq!(
         t.pos(0),
         10,
-        "stops on the marked player's tile, not the rolled fate 12: pos={}",
+        "stops on the marked player's tile, not the rolled dest 12: pos={}",
         t.pos(0)
     );
 }

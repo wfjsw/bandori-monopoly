@@ -7,7 +7,7 @@
 //!
 //! A divergence is a FINDING — report it, do not paper over it.
 
-use rules_cond::vocab::Value as IrValue;
+use rules_cond::vocab::Value as FillVal;
 use rules_cond::{compile, CandidateCtx, WindowCtx};
 use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId};
 use rules_cond_ir::eval::values_cmp;
@@ -28,27 +28,27 @@ struct Fixture {
     ir: IrCtx,
 }
 
-fn boundary() -> [IrValue; 6] {
+fn boundary() -> [FillVal; 6] {
     [
-        IrValue::Int(i64::MIN),
-        IrValue::Int(-1),
-        IrValue::Int(0),
-        IrValue::Int(1),
-        IrValue::Int(i64::MAX),
-        IrValue::Null,
+        FillVal::Int(i64::MIN),
+        FillVal::Int(-1),
+        FillVal::Int(0),
+        FillVal::Int(1),
+        FillVal::Int(i64::MAX),
+        FillVal::Null,
     ]
 }
 
 /// Boundary values for a `VarType::Str` scalar: a few spellings plus the empty
 /// one. The IR stores `id_of(spelling)`; CEL compares the string.
-fn str_boundary() -> [IrValue; 6] {
+fn str_boundary() -> [FillVal; 6] {
     [
-        IrValue::Str(String::new()),
-        IrValue::Str("pay".to_string()),
-        IrValue::Str("turnStart".to_string()),
-        IrValue::Str("r:bandori:21".to_string()),
-        IrValue::Str("diceRollResult".to_string()),
-        IrValue::Str("k0".to_string()),
+        FillVal::Str(String::new()),
+        FillVal::Str("pay".to_string()),
+        FillVal::Str("turnStart".to_string()),
+        FillVal::Str("r:bandori:21".to_string()),
+        FillVal::Str("diceRollResult".to_string()),
+        FillVal::Str("k0".to_string()),
     ]
 }
 
@@ -74,21 +74,21 @@ fn fixture_empty() -> Fixture {
 }
 
 /// Fill a scalar into both sides, honouring OptInt/Bool/Str typing.
-/// `Str` scalars (`kind`) carry the **spelling** in `IrValue::Str`; the IR
+/// `Str` scalars (`kind`) carry the **spelling** in `FillVal::Str`; the IR
 /// stores `id_of(spelling)` and the CEL snapshot stores the string.
-fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: IrValue) {
+fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
     let raw = match &v {
-        IrValue::Int(i) => *i,
-        IrValue::Bool(b) => *b as i64,
-        IrValue::Str(s) => rules_cond_ir::ctx::id_of(s),
-        IrValue::Null => -1,
+        FillVal::Int(i) => *i,
+        FillVal::Bool(b) => *b as i64,
+        FillVal::Str(s) => rules_cond_ir::ctx::id_of(s),
+        FillVal::Null => -1,
     };
-    f.ir.set_scalar_ty(id, ty, raw, matches!(v, IrValue::Null));
+    f.ir.set_scalar_ty(id, ty, raw, matches!(v, FillVal::Null));
     // Mirror into the cel snapshots by flat name.
     match id {
         VarId::Kind => {
             f.win.kind = match &v {
-                IrValue::Str(s) => s.clone(),
+                FillVal::Str(s) => s.clone(),
                 _ => String::new(),
             }
         }
@@ -205,21 +205,21 @@ fn two_op_exprs(op: &str) -> Vec<String> {
 #[test]
 fn diff_operators_boundary_grid() {
     let mut f = fixture_empty();
-    set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(i64::MIN));
-    set_scalar(&mut f, VarId::Target, VarType::Int, IrValue::Int(-1));
-    set_scalar(&mut f, VarId::Value, VarType::Int, IrValue::Int(1));
-    set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, IrValue::Null);
+    set_scalar(&mut f, VarId::Actor, VarType::Int, FillVal::Int(i64::MIN));
+    set_scalar(&mut f, VarId::Target, VarType::Int, FillVal::Int(-1));
+    set_scalar(&mut f, VarId::Value, VarType::Int, FillVal::Int(1));
+    set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, FillVal::Null);
     set_scalar(
         &mut f,
         VarId::CardPlaced,
         VarType::Bool,
-        IrValue::Bool(true),
+        FillVal::Bool(true),
     );
     set_scalar(
         &mut f,
         VarId::PayIsRent,
         VarType::Bool,
-        IrValue::Bool(false),
+        FillVal::Bool(false),
     );
 
     // Also sweep the vars over the boundary grid in a second pass.
@@ -308,7 +308,7 @@ fn diff_operators_boundary_grid() {
 #[test]
 fn diff_every_scalar_over_boundary() {
     for (idx, (_id, flat, ty)) in VARS.iter().enumerate() {
-        let vals: Vec<IrValue> = if *ty == VarType::Str {
+        let vals: Vec<FillVal> = if *ty == VarType::Str {
             str_boundary().to_vec()
         } else {
             boundary().to_vec()
@@ -316,17 +316,17 @@ fn diff_every_scalar_over_boundary() {
         for v in vals {
             let mut f = fixture_empty();
             // Give the partner vars some non-default values so comparisons bite.
-            set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(1));
-            set_scalar(&mut f, VarId::Value, VarType::Int, IrValue::Int(1));
-            set_scalar(&mut f, VarId::Target, VarType::Int, IrValue::Int(1));
-            set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
+            set_scalar(&mut f, VarId::Actor, VarType::Int, FillVal::Int(1));
+            set_scalar(&mut f, VarId::Value, VarType::Int, FillVal::Int(1));
+            set_scalar(&mut f, VarId::Target, VarType::Int, FillVal::Int(1));
+            set_scalar(&mut f, VarId::Owner, VarType::Int, FillVal::Int(0));
             set_scalar(
                 &mut f,
                 VarId::CardPlaced,
                 VarType::Bool,
-                IrValue::Bool(true),
+                FillVal::Bool(true),
             );
-            set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, IrValue::Int(3));
+            set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, FillVal::Int(3));
             set_scalar(&mut f, id_at(idx).unwrap(), *ty, v);
             // String scalars only compare as strings; the int grid below is
             // for Int/Bool/OptInt.
@@ -412,8 +412,8 @@ fn diff_state_function() {
             ..rules_cond::PlayerSnap::default()
         },
     ];
-    set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
-    set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(1));
+    set_scalar(&mut f, VarId::Owner, VarType::Int, FillVal::Int(0));
+    set_scalar(&mut f, VarId::Actor, VarType::Int, FillVal::Int(1));
 
     for src in [
         "state(actor,'stay') > 0 && state(actor,'unstoppable') == 0",
@@ -558,39 +558,39 @@ fn diff_all_inventory_guards() {
         }
         // Default fixture.
         let mut f = fixture_empty();
-        set_scalar(&mut f, VarId::Actor, VarType::Int, IrValue::Int(0));
-        set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
-        set_scalar(&mut f, VarId::Value, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f, VarId::Target, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f, VarId::By, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f, VarId::TurnPlayer, VarType::Int, IrValue::Int(0));
-        set_scalar(&mut f, VarId::TurnKey, VarType::Int, IrValue::Int(7));
+        set_scalar(&mut f, VarId::Actor, VarType::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::Owner, VarType::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::Value, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::Target, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::By, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::TurnPlayer, VarType::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::TurnKey, VarType::Int, FillVal::Int(7));
         set_scalar(
             &mut f,
             VarId::Kind,
             VarType::Str,
-            IrValue::Str("pay".to_string()),
+            FillVal::Str("pay".to_string()),
         );
-        set_scalar(&mut f, VarId::CardId, VarType::Int, IrValue::Int(42));
-        set_scalar(&mut f, VarId::TriggerCard, VarType::Int, IrValue::Int(42));
+        set_scalar(&mut f, VarId::CardId, VarType::Int, FillVal::Int(42));
+        set_scalar(&mut f, VarId::TriggerCard, VarType::Int, FillVal::Int(42));
         set_scalar(
             &mut f,
             VarId::CardPlaced,
             VarType::Bool,
-            IrValue::Bool(true),
+            FillVal::Bool(true),
         );
-        set_scalar(&mut f, VarId::MoveMain, VarType::Bool, IrValue::Bool(true));
-        set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, IrValue::Int(3));
-        set_scalar(&mut f, VarId::MoveKind, VarType::OptInt, IrValue::Int(0));
-        set_scalar(&mut f, VarId::PayIsRent, VarType::Bool, IrValue::Bool(true));
-        set_scalar(&mut f, VarId::TileId, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f, VarId::TileOwner, VarType::Int, IrValue::Int(0));
-        set_scalar(&mut f, VarId::TileHouses, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f, VarId::OwnerPos, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f, VarId::OwnerOut, VarType::Int, IrValue::Int(0));
-        set_scalar(&mut f, VarId::OwnerMoney, VarType::Int, IrValue::Int(500));
-        set_scalar(&mut f, VarId::OwnerHand, VarType::Int, IrValue::Int(2));
-        set_scalar(&mut f, VarId::PlanFixedRoll, VarType::OptInt, IrValue::Null);
+        set_scalar(&mut f, VarId::MoveMain, VarType::Bool, FillVal::Bool(true));
+        set_scalar(&mut f, VarId::MoveRoll, VarType::OptInt, FillVal::Int(3));
+        set_scalar(&mut f, VarId::MoveKind, VarType::OptInt, FillVal::Int(0));
+        set_scalar(&mut f, VarId::PayIsRent, VarType::Bool, FillVal::Bool(true));
+        set_scalar(&mut f, VarId::TileId, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::TileOwner, VarType::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::TileHouses, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::OwnerPos, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f, VarId::OwnerOut, VarType::Int, FillVal::Int(0));
+        set_scalar(&mut f, VarId::OwnerMoney, VarType::Int, FillVal::Int(500));
+        set_scalar(&mut f, VarId::OwnerHand, VarType::Int, FillVal::Int(2));
+        set_scalar(&mut f, VarId::PlanFixedRoll, VarType::OptInt, FillVal::Null);
         // Sugar `state(p, key)` rows (shared list in the content tables).
         common::set_sugar_state(&mut f.win.players, &mut f.ir, 0, 1, 0, 0, 0, 0);
         common::set_sugar_state(&mut f.win.players, &mut f.ir, 1, 1, 0, 0, 0, 0);
@@ -617,15 +617,15 @@ fn diff_all_inventory_guards() {
 
         // A second fixture that flips several fields — more coverage per guard.
         let mut f2 = f.clone();
-        set_scalar(&mut f2, VarId::Actor, VarType::Int, IrValue::Int(1));
-        set_scalar(&mut f2, VarId::Value, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f2, VarId::Actor, VarType::Int, FillVal::Int(1));
+        set_scalar(&mut f2, VarId::Value, VarType::Int, FillVal::Int(0));
         set_scalar(
             &mut f2,
             VarId::CardPlaced,
             VarType::Bool,
-            IrValue::Bool(false),
+            FillVal::Bool(false),
         );
-        set_scalar(&mut f2, VarId::MoveRoll, VarType::OptInt, IrValue::Null);
+        set_scalar(&mut f2, VarId::MoveRoll, VarType::OptInt, FillVal::Null);
         assert_agree(src, &f2);
         agree += 1;
     }
@@ -722,32 +722,32 @@ fn diff_random_expression_trees() {
             &mut f,
             VarId::Actor,
             VarType::Int,
-            IrValue::Int(rng.below(4) as i64 - 1),
+            FillVal::Int(rng.below(4) as i64 - 1),
         );
         set_scalar(
             &mut f,
             VarId::Target,
             VarType::Int,
-            IrValue::Int(rng.below(4) as i64 - 1),
+            FillVal::Int(rng.below(4) as i64 - 1),
         );
         set_scalar(
             &mut f,
             VarId::Value,
             VarType::Int,
-            IrValue::Int(rng.next() as i64),
+            FillVal::Int(rng.next() as i64),
         );
-        set_scalar(&mut f, VarId::Owner, VarType::Int, IrValue::Int(0));
+        set_scalar(&mut f, VarId::Owner, VarType::Int, FillVal::Int(0));
         set_scalar(
             &mut f,
             VarId::Kind,
             VarType::Str,
-            IrValue::Str(format!("k{}", rng.below(96))),
+            FillVal::Str(format!("k{}", rng.below(96))),
         );
         set_scalar(
             &mut f,
             VarId::CardPlaced,
             VarType::Bool,
-            IrValue::Bool(rng.below(2) == 0),
+            FillVal::Bool(rng.below(2) == 0),
         );
         let roll = rng.below(3);
         set_scalar(
@@ -755,9 +755,9 @@ fn diff_random_expression_trees() {
             VarId::MoveRoll,
             VarType::OptInt,
             if roll == 0 {
-                IrValue::Null
+                FillVal::Null
             } else {
-                IrValue::Int(roll as i64)
+                FillVal::Int(roll as i64)
             },
         );
         assert_agree(&expr, &f);

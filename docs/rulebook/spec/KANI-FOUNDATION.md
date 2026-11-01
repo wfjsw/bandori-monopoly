@@ -80,9 +80,9 @@ and `/tmp` snapshots from the foundation pass; the **coverage table**
 |---:|---|---:|---|
 | 1 | `log` | 589 | narration counter — **not** part of the effect frame |
 | 2 | `trigger` | 246 | `trigger::*` module (pay / move / deal getters+setters) |
-| 3 | `Fate` | 161 | enum, not an op |
+| 3 | `Dest` | 161 | enum, not an op |
 | 4 | `plan` | 153 | `plan::*` move-plan structure (mostly PROTOCOL stubs) |
-| 5 | `set_fate` | 144 | |
+| 5 | `set_dest` | 144 | |
 | 6 | `player_pos` | 106 | |
 | 7 | `set_slot` | 90 | keyed state sugar |
 | 8 | `player_out` | 88 | |
@@ -119,7 +119,7 @@ and `/tmp` snapshots from the foundation pass; the **coverage table**
 | 39 | `teleport_to` | 29 | |
 | 40 | `money_of` | 27 | → `Op::money` |
 
-**Types (not ops):** `Fate`, `CardPile`, `DeckPos`, `TriggerKind`, `PromptKind`.
+**Types (not ops):** `Dest`, `CardPile`, `DeckPos`, `TriggerKind`, `PromptKind`.
 Constants (`state::TURN_END`, `state::VALUE`, …) are arguments.
 
 ### Modeled vs unmodeled
@@ -423,7 +423,7 @@ World
             fans_pos / fans_neg           // P✽P粉丝(正)/(反) views
   piles     hand / deck / discard : [u16; MAX_CARDS] + _n   // interned ids
   field     field: [FieldCard; MAX_FIELD]  // uid, card, player, tile, crystals, props
-            fate / last_uid / next_uid
+            dest / last_uid / next_uid
   tiles     tiles: [TileState; 60]         // owner / houses / mortgaged / props
   marks     marks: [Mark; MAX_MARKS]       // tile, key, src_card, instance, n
   events    events: [u16; MAX_EVENTS]

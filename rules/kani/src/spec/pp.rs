@@ -123,7 +123,7 @@ pub fn chisato_mask_01_money_ok(effects: &[Effect], user: i32, total: i32) -> bo
     for e in effects {
         match e {
             Effect::PlaceCard {
-                player: p, fate: 2, ..
+                player: p, dest: 2, ..
             } if *p == user => saw_place = true,
             Effect::PayTo { from, to, n } if *to == user && *from != user => sum += *n,
             Effect::PayMoney { player: p, n } if *p != user => sum += *n,
@@ -363,7 +363,7 @@ pub fn ranger_05_draw(count: i32) -> i32 {
 // 「[手]：将此卡放置在[使用者]的[场地]并将1张“共鸣”加入卡组，然后抽1张牌。」
 // ===========================================================================
 
-/// Effects: PlaceCard(Field) + Draw(1). `add_to_fate` is silent in the
+/// Effects: PlaceCard(Field) + Draw(1). `add_to_dest` is silent in the
 /// effect log (host does not record it); post-state covers that half.
 /// SetState from the 持续 stacks stamp (`set_slot`) is bookkeeping, not a
 /// clause effect — ignored (class B: the exact-match originally rejected it).
@@ -373,7 +373,7 @@ pub fn no_expect_02_effects_ok(effects: &[Effect], player: i32) -> bool {
     for e in effects {
         match e {
             Effect::PlaceCard {
-                player: p, fate: 2, ..
+                player: p, dest: 2, ..
             } if *p == player => place += 1,
             Effect::Draw {
                 player: p, n: 1, ..
@@ -416,7 +416,7 @@ pub fn first_accident_01_effects_ok(effects: &[Effect], player: i32) -> bool {
     for e in effects {
         match e {
             Effect::PlaceCard {
-                player: p, fate: 2, ..
+                player: p, dest: 2, ..
             } if *p == player => place += 1,
             Effect::Draw {
                 player: p, n: 1, ..

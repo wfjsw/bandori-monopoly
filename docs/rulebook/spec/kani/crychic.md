@@ -55,7 +55,7 @@ Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
 | C-CRYCHIC-debut-02 | 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」 | PROVEN (needs re-time) | `debut_02_turn_end_iff`, `debut_02_mutant_is_detected` | see log | `GiveStun{1}` + `add_group_pool(+1)`. triage3 batch 15: host `arm_add_band_crystals` was reading the name handle as the delta (class C) | — |
 | C-CRYCHIC-karaoke-01 | 「进行至多5次掷骰，并选择其中一个结果…」 | PROTOCOL-LEVEL | — | — | dice loop + walk-as-main-move | — |
 | C-CRYCHIC-ifonly-01 | 「移除…奇迹水晶，获得2000+500*X资金」 | PROVEN (needs re-time) | `ifonly_01_cashout_iff`, `ifonly_01_mutant_is_detected` | see log | `GainMoney{2000+500X}` + `PlaceCard` field; drain via `add_group_pool(-x)`. Same class C arm bug as debut-02 (batch 15) | — |
-| C-CRYCHIC-ifonly-02 | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | PROVEN (needs re-time) | `ifonly_02_discard_at_seven_iff` | central FAILED `outside_subset` | body is `ctx::send_to_fate(Graveyard)` (not `set_fate`). batch 15: host `arm_send_to_fate` commits the instance to the fate pile (was a player-teleport stub); subset declares `send_to_fate` | — |
+| C-CRYCHIC-ifonly-02 | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | PROVEN (needs re-time) | `ifonly_02_discard_at_seven_iff` | central FAILED `outside_subset` | body is `ctx::send_to_dest(Graveyard)` (not `set_dest`). batch 15: host `arm_send_to_dest` commits the instance to the dest pile (was a player-teleport stub); subset declares `send_to_dest` | — |
 | C-CRYCHIC-human-01 | 「从1-20间选择并声明X…掷骰小于等于X…添加一个奇迹水晶」 | mixed | — | — | placement + X write-down is `ask_number` + `set_slot`/props; roll hook needs move-roll | — |
 | C-CRYCHIC-human-02 | 「回合开始时…两个或以上奇迹水晶…移除…+（20-X）」 | PROTOCOL-LEVEL | — | — | turn-start consume + move-modifier latch | [异常移动效果] set is G-STATUS's clause |
 | C-CRYCHIC-grab-01 | 「（1）获得一层[停留]」 | PROVEN (stay) / BLOCKED-HOST (PASSER value) | `grab_01_stay_iff`, `grab_01_mutant_is_detected` | see log | `GiveStay{1}` exact; `state::set(PASSER,-1)` value host-dropped | — |
@@ -124,11 +124,11 @@ that the wrong spec disagrees.
 * **PROTOCOL-LEVEL** — [反击] windows, multi-turn deferrals, walk/settle
   pipelines, band transform. Cite KANI.md §6. Leaf bodies that are single
   entries (waive, gain, give_stay/stun, cash-out) are still proven.
-* **ifonly-02** — body is `ctx::send_to_fate(Graveyard)` (applies the fate
-  now). The Kani host's `Op::send_to_fate` was a player-teleport stub and the
+* **ifonly-02** — body is `ctx::send_to_dest(Graveyard)` (applies the dest
+  now). The Kani host's `Op::send_to_dest` was a player-teleport stub and the
   per-harness subset did not declare the op (central `outside_subset`).
-  Fixed in triage3 batch 15: `arm_send_to_fate` commits the instance to the
-  fate pile (same world-state shape as `arm_set_fate`).
+  Fixed in triage3 batch 15: `arm_send_to_dest` commits the instance to the
+  dest pile (same world-state shape as `arm_set_fate`).
 
 ## Harness verdict log
 
@@ -149,7 +149,7 @@ worktree still has the old grep — read the log).
 | crychic | debut_01_play_logs_nothing | written, verdict pending | | |
 | crychic | ifonly_01_cashout_iff | central FAILED (class C band-pool arm); batch 15 fix, re-time queued | | |
 | crychic | ifonly_01_mutant_is_detected | written, verdict pending | | |
-| crychic | ifonly_02_discard_at_seven_iff | central FAILED `outside_subset`; batch 15 `arm_send_to_fate`, re-time queued | | |
+| crychic | ifonly_02_discard_at_seven_iff | central FAILED `outside_subset`; batch 15 `arm_send_to_dest`, re-time queued | | |
 | crychic | soyoreturn_01_branch2_iff | central TIMEOUT class E; batch 15 pick pinned to branch 2, re-time queued | | |
 | skills_crychic | tomoriskill_02_spend_iff | written, verdict pending | | |
 | skills_crychic | tomoriskill_02_mutant_is_detected | written, verdict pending | | |
@@ -170,11 +170,11 @@ verdicts land as slots free; coordinator can re-run
 
 1. **C-CRYCHIC-ifonly-02 — RECLASSIFIED (triage3).** Was recorded LESS;
    it is a **class C host** gap, not a book/body discrepancy. Book
-   「此卡立即置入弃牌堆」; body `ctx::send_to_fate(Fate::Graveyard)` applies
-   the fate immediately (engine `apply_fate`). The Kani host's
-   `Op::send_to_fate` used to teleport the player to tile `w.fate`.
-   Fixed in batch 15: `arm_send_to_fate` unplaces the running instance into
-   the fate pile (world state, no in-run `UnplaceCard` effect).
+   「此卡立即置入弃牌堆」; body `ctx::send_to_dest(Dest::Graveyard)` applies
+   the dest immediately (engine `apply_dest`). The Kani host's
+   `Op::send_to_dest` used to teleport the player to tile `w.dest`.
+   Fixed in batch 15: `arm_send_to_dest` unplaces the running instance into
+   the dest pile (world state, no in-run `UnplaceCard` effect).
 2. **C-CRYCHIC-band-01b LESS** — book 「任何时刻拥有手牌数大于等于6时…无法从
    手中打出任何牌」; `skill-bands/src/crychic.rs` has a TODO and no play-gate
    body. Unit test `crychic_band_blocks_play_at_six` stays red (engine accepts

@@ -277,7 +277,7 @@ fn a_buy_price_modifier_is_reflected() {
             cx: &mut game_core::engine::PlayCtx,
             player_id: usize,
             card: &str,
-        ) -> game_core::engine::Flow<game_core::engine::Fate> {
+        ) -> game_core::engine::Flow<game_core::engine::Dest> {
             StubRules.play(cx, player_id, card)
         }
         fn event(

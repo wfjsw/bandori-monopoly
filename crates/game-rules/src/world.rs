@@ -72,6 +72,12 @@ pub struct Trigger {
     /// The counter name on a `CounterChanged` raise, or the message name on
     /// an `On::Message` dispatch.
     pub name: Option<String>,
+    /// Unique per raise; shared by every job it dispatches. `0` outside a
+    /// raise and on a hand-built trigger.
+    pub uid: i32,
+    /// The instance/row this raise is about (`-1` = none). Never restamped
+    /// per hook job -- the job's own instance is `self_uid()`.
+    pub instance: i32,
     /// A `BuyGate` refusal's reason key.
     pub reason: Option<String>,
     /// 真奈 join: the seat self-targeted effects of counters answering **this
@@ -161,6 +167,8 @@ impl Default for Trigger {
             cards: Vec::new(),
             card: None,
             name: None,
+            uid: 0,
+            instance: -1,
             reason: None,
             join_redirect: None,
             join_used: false,
@@ -193,6 +201,8 @@ impl Trigger {
             cards: Vec::new(),
             card: None,
             name: None,
+            uid: 0,
+            instance: -1,
             reason: None,
             join_redirect: None,
             join_used: false,
@@ -459,10 +469,10 @@ pub trait CardWorld: Clone + 'static {
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;
-    /// Put one copy of `card` into `player_id`'s pile at `fate` (wire [`Fate`] code
+    /// Put one copy of `card` into `player_id`'s pile at `dest` (wire [`Dest`] code
     /// -- 0 graveyard, 1 hand, 2 field, 3 banished, 4 deck top, 5 deck bottom,
-    /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_fate`].
-    fn add_to_fate(&mut self, player_id: i32, card: &str, fate: i32);
+    /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_dest`].
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32);
     /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
     /// anywhere; returns whether it was there.
     fn take_card(&mut self, player_id: i32, card: &str, src: crate::CardPile) -> bool;
@@ -501,18 +511,18 @@ pub trait CardWorld: Clone + 'static {
     /// `tile: -1` is [`Self::place_card`]. Returns the new instance's uid.
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32;
     /// Where this card goes when its effect finishes.
-    fn set_fate(&mut self, fate: i32);
-    /// [`Self::set_fate`] aimed at another player's pile: `to` is whose
+    fn set_dest(&mut self, dest: i32);
+    /// [`Self::set_dest`] aimed at another player's pile: `to` is whose
     /// discard/hand/deck it lands in, for 「将此卡放入[使用者]弃卡区」 when
     /// [使用者] is not the one holding it.
-    fn set_transfer_to_fate(&mut self, to: i32, fate: i32);
-    /// Move the running instance to `fate` **now** rather than when its effect
+    fn set_transfer_to_dest(&mut self, to: i32, dest: i32);
+    /// Move the running instance to `dest` **now** rather than when its effect
     /// finishes -- for a card that must be gone before the rest of the effect
     /// runs (a move or a settle follows). Lands in its own owner's pile;
     /// returns the owner it left, or `None` when it was not in play.
-    fn send_to_fate(&mut self, fate: i32) -> Option<i32>;
-    /// [`Self::send_to_fate`] aimed at another player's pile: `to` is whose.
-    fn transfer_to_fate(&mut self, to: i32, fate: i32) -> Option<i32>;
+    fn send_to_dest(&mut self, dest: i32) -> Option<i32>;
+    /// [`Self::send_to_dest`] aimed at another player's pile: `to` is whose.
+    fn transfer_to_dest(&mut self, to: i32, dest: i32) -> Option<i32>;
     /// Take the *running* instance off the field; returns the owner it left
     /// (or -1). No locator: the instance is the one the run was dispatched for.
     fn unplace_card(&mut self) -> i32;
@@ -694,6 +704,17 @@ pub trait CardWorld: Clone + 'static {
     fn add_counter_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
         let _ = (uid, name, n, max);
         0
+    }
+    /// The instance's stored maximum for counter `name`; `0` = uncapped.
+    fn counter_max_at(&self, uid: i32, name: &str) -> i32 {
+        let _ = (uid, name);
+        0
+    }
+    /// Store the maximum for counter `name` (`0` clears); returns the stored
+    /// value.
+    fn set_counter_max_at(&mut self, uid: i32, name: &str, max: i32) -> i32 {
+        let _ = (uid, name);
+        max
     }
     /// On-card named counter of a placed card (first copy).
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
@@ -1058,6 +1079,16 @@ pub trait CardWorld: Clone + 'static {
 
     // ---------------------------------------------------------- trigger
     fn trigger(&self) -> Trigger;
+    /// Card bodies currently running, innermost last: `(card id, raise uid)`.
+    /// Empty on a world that has no stack.
+    fn resolving(&self) -> Vec<(String, i32)> {
+        Vec::new()
+    }
+    /// The card whose entry is running (`""` when none) -- the frame's key
+    /// next to [`Self::self_uid`].
+    fn current_card(&self) -> &str {
+        ""
+    }
     fn set_trigger_move_roll(&mut self, roll: i32);
     fn set_trigger_value(&mut self, value: i32);
     /// Redirect the payee of a pending pay (`PayCtx.to`); -1 = the bank.
@@ -1120,18 +1151,18 @@ pub trait CardWorld: Clone + 'static {
     /// only -- the pull-under is the rules-layer kernel's job. The name is data.
     fn add_marker_max(&mut self, player: i32, name: &str, n: i32) -> i32;
     /// Make `id` the running card for a nested `play_card`: a **fresh** instance
-    /// a fresh instance, with a fresh `Fate`. The uid goes to -1 rather than being
+    /// a fresh instance, with a fresh `Dest`. The uid goes to -1 rather than being
     /// inherited -- otherwise the inner run would read the *outer* instance's
     /// named counters under its own name, which is not what "the inner card runs as
     /// itself" means. Returns what to hand back to [`Self::leave_card`]:
-    /// `(card, fate, fate_to, uid)`.
+    /// `(card, dest, dest_to, uid)`.
     fn enter_card(&mut self, _id: &str) -> (String, i32, Option<i32>, i32) {
         (String::new(), 0, None, -1)
     }
     /// Restore the outer card after a nested `play_card`; returns the inner
-    /// card's `Fate`. (The inner card's transfer target is not carried out --
-    /// only the fate -- so a nested card that names another player's pile
-    /// should use [`Self::transfer_to_fate`] to land there itself.)
+    /// card's `Dest`. (The inner card's transfer target is not carried out --
+    /// only the dest -- so a nested card that names another player's pile
+    /// should use [`Self::transfer_to_dest`] to land there itself.)
     fn leave_card(&mut self, _saved: (String, i32, Option<i32>, i32)) -> i32 {
         0
     }

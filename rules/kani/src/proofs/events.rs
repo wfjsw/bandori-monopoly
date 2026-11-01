@@ -538,7 +538,7 @@ pub fn pico_swap_mutant_is_detected() {
         "mutant cascade would move seat 2 onto seat 0's NEW square (20) while seat 0 left it"
     );
     // Stronger pin: seat 2 must be on 10, not 20.
-    crate::kassert!(post.pos[2] == 10, "latched fate for the last ring member");
+    crate::kassert!(post.pos[2] == 10, "latched dest for the last ring member");
 }
 
 // ===========================================================================
@@ -546,7 +546,7 @@ pub fn pico_swap_mutant_is_detected() {
 // 「直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除
 // 此事件！」
 //
-// Activation (Play): keep (fate=Field). Scheduling 「下个回合结束」 is
+// Activation (Play): keep (dest=Field). Scheduling 「下个回合结束」 is
 // PROTOCOL-LEVEL (`schedule_turn_end` stub). Dice-halve hook is
 // BLOCKED-HOST(`trig_move_roll`). Expiry tick (AtEnd): `EventExpire`.
 // ===========================================================================
@@ -565,14 +565,14 @@ pub fn moca_01_activation_keeps_the_card() {
         0,
     ));
     let post = world::snapshot();
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
 
     crate::kassert!(
-        spec::events::moca_activation_dest_is_field(fate),
-        "E-moca-01 activation: 「放置于场地中央」 keeps the card (fate=Field)"
+        spec::events::moca_activation_dest_is_field(dest),
+        "E-moca-01 activation: 「放置于场地中央」 keeps the card (dest=Field)"
     );
     // No money / pos / hand movement on activation.
     crate::kassert!(
@@ -695,10 +695,10 @@ pub fn aao_01_activation_keeps_the_card() {
         0,
     ));
     let post = world::snapshot();
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     crate::kassert!(
-        spec::events::aao_activation_dest_is_field(fate),
-        "E-aao-01 activation: keep (fate=Field)"
+        spec::events::aao_activation_dest_is_field(dest),
+        "E-aao-01 activation: keep (dest=Field)"
     );
     crate::kassert!(
         arr4_eq(post.money, condition.money) && arr4_eq(post.pos, condition.pos),
@@ -744,12 +744,12 @@ pub fn aao_02_hand_veto_is_armed() {
         crate::card_id!("event:A！A！O！"),
         0,
     ));
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
     crate::kassert!(
-        spec::events::aao_hand_veto_armed(fate, effects),
+        spec::events::aao_hand_veto_armed(dest, effects),
         "E-aao-02: book says 「不能使用卡牌的[手]效果」 while up — body arms no veto"
     );
 }
@@ -1038,21 +1038,21 @@ pub fn never_ends_01_teleport_and_exile() {
     let players: [i32; 4] = [0, 1, 2, 3];
     let living = &players[..n];
 
-    // Reconstruct the shared fate from the first Teleport (X = 1d4 face).
-    let fate = eff_first_teleport_tile(effects).unwrap_or(-1);
+    // Reconstruct the shared dest from the first Teleport (X = 1d4 face).
+    let dest = eff_first_teleport_tile(effects).unwrap_or(-1);
     crate::kassert!(
-        fate == RING_TILES[0]
-            || fate == RING_TILES[1]
-            || fate == RING_TILES[2]
-            || fate == RING_TILES[3],
-        "E-never-ends-01: fate is RiNG 1..4 (board 8/16/36/53)"
+        dest == RING_TILES[0]
+            || dest == RING_TILES[1]
+            || dest == RING_TILES[2]
+            || dest == RING_TILES[3],
+        "E-never-ends-01: dest is RiNG 1..4 (board 8/16/36/53)"
     );
-    kani::cover!(fate == 8, "RiNG 1");
-    kani::cover!(fate == 16, "RiNG 2");
-    kani::cover!(fate == 36, "RiNG 3");
-    kani::cover!(fate == 53, "RiNG 4");
+    kani::cover!(dest == 8, "RiNG 1");
+    kani::cover!(dest == 16, "RiNG 2");
+    kani::cover!(dest == 36, "RiNG 3");
+    kani::cover!(dest == 53, "RiNG 4");
     crate::kassert!(
-        spec::events::never_ends_01_ok(effects, living, fate),
+        spec::events::never_ends_01_ok(effects, living, dest),
         "E-never-ends-01: teleport to the rolled RiNG and 1 [除外] each"
     );
 }
@@ -1338,7 +1338,7 @@ pub fn marina_box_02_mutant_always_pays() {
 // ===========================================================================
 // Active-event activation / expiry pairs
 //
-// Activation = `keep()` (fate = Field) plus any modeled side effects.
+// Activation = `keep()` (dest = Field) plus any modeled side effects.
 // Expiry = the body's `AtEnd` / `TurnStartBefore` / `Event` entry →
 // `Effect::EventExpire`. Scheduling of 「下回合」 is PROTOCOL
 // (`schedule_turn_end` stub). `set_self_prop` is a no-op — bodies that count
@@ -1354,14 +1354,14 @@ fn assert_activation_keep(idx: usize) {
         world::snapshot()
     };
     invoke::unwrap_done(invoke::event_play_idx(idx, 0));
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
     let id = crate::generated::IDS[idx];
     crate::kassert!(
-        spec::events::permanent_keep(fate),
-        "{id}: 「放置于场地中央」 keeps the card (fate=Field)"
+        spec::events::permanent_keep(dest),
+        "{id}: 「放置于场地中央」 keeps the card (dest=Field)"
     );
     let _ = condition;
     let _ = effects;
@@ -1559,8 +1559,8 @@ pub fn heat_head_01_activation_phase_up() {
         world::reset_world(w);
     }
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
-    let fate = world::with_world(|w| w.fate);
-    crate::kassert!(fate == 2, "E-heat-head: keep (fate=Field)");
+    let dest = world::with_world(|w| w.dest);
+    crate::kassert!(dest == 2, "E-heat-head: keep (dest=Field)");
     // `ctx::set_crystals` writes the **field-instance** counter (`Op::
     // set_counter_self` → `field_crystals(last_uid)`), not a player key.
     // Reading `key_get(0, "crystals")` was a harness bug (class B) — it
@@ -1627,10 +1627,10 @@ pub fn fix_note_01_activation_keeps() {
         world::reset_world(w);
     }
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:修复公告"), 0));
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     crate::kassert!(
-        spec::events::fix_note_01_keep(fate),
-        "E-fix-note-01: keep (fate=Field). Discount half is PROTOCOL-LEVEL(set_build_discount)"
+        spec::events::fix_note_01_keep(dest),
+        "E-fix-note-01: keep (dest=Field). Discount half is PROTOCOL-LEVEL(set_build_discount)"
     );
 }
 
@@ -1639,7 +1639,7 @@ pub fn fix_note_01_activation_keeps() {
 // On:: 0=Play. event_banish is a PROTOCOL stub; the 3 asks are determined.
 
 // Class E: `ask_choice` + `Vec<Msg>` fold (String ABI) dominate the SSA cost.
-// This half only needs fate=Field; pick-count lives in
+// This half only needs dest=Field; pick-count lives in
 // `end_it_all_01_three_picks_counted`. Dropped the unused `picks` scan.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
@@ -1653,10 +1653,10 @@ pub fn end_it_all_01_three_picks_and_keep() {
         crate::card_id!("event:让我来结束一切"),
         0,
     ));
-    let fate = world::with_world(|w| w.fate);
+    let dest = world::with_world(|w| w.dest);
     crate::kassert!(
-        spec::events::permanent_keep(fate),
-        "E-end-it-all-01: permanent keep (fate=Field, no expiry)"
+        spec::events::permanent_keep(dest),
+        "E-end-it-all-01: permanent keep (dest=Field, no expiry)"
     );
 }
 
@@ -1681,8 +1681,8 @@ pub fn end_it_all_01_three_picks_counted() {
         spec::events::end_it_all_01_picked_three(after),
         "E-end-it-all-01: exactly 3 non-derived picks"
     );
-    let fate = world::with_world(|w| w.fate);
-    crate::kassert!(fate == 2, "permanent keep");
+    let dest = world::with_world(|w| w.dest);
+    crate::kassert!(dest == 2, "permanent keep");
     // Banish is a PROTOCOL stub — no effect log. PROTOCOL-LEVEL on the
     // 「移除」 half; the pick-count and keep are proven.
     let logbuf = effects_of();
@@ -1722,8 +1722,8 @@ pub fn embers_01_places_copies() {
         crate::card_id!("event:火种燃尽之后会怎么样呢？"),
         0,
     ));
-    let fate = world::with_world(|w| w.fate);
-    crate::kassert!(fate == 2, "E-embers: keep");
+    let dest = world::with_world(|w| w.dest);
+    crate::kassert!(dest == 2, "E-embers: keep");
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -2023,7 +2023,7 @@ pub fn school_time_01_exile_leg() {
     let exiles_ok = spec::events::exile_one_each(effects, living);
     crate::kassert!(
         exiles_ok,
-        "E-school-time-01: one [除外] layer per player (fate = school / 周边学区)"
+        "E-school-time-01: one [除外] layer per player (dest = school / 周边学区)"
     );
     kani::cover!(n_log == n as usize * 2, "teleport + exile per player");
 }
@@ -2032,7 +2032,7 @@ pub fn school_time_01_exile_leg() {
 // E-kizuna-01 — Kizuna Music (X=0 when decks hold no song cards)
 // 「触发此卡的玩家投掷X+1d20并所有玩家依次[传送]到投掷结果mod60所对应的
 // 格子并获得1层[除外]，X为所有玩家卡组里卡名为歌名的卡数量的总数」
-// OPEN-kizuna-song. Fate is `roll mod 60` (modeled); X=0 with empty decks.
+// OPEN-kizuna-song. Dest is `roll mod 60` (modeled); X=0 with empty decks.
 // ===========================================================================
 
 #[kani::proof]
@@ -2054,13 +2054,13 @@ pub fn kizuna_01_teleport_and_exile() {
     let players: [i32; 4] = [0, 1, 2, 3];
     let living = &players[..n as usize];
 
-    // Reconstruct fate from the first Teleport (face = X+1d20 with X=0 ⇒ 1..20).
-    let fate = eff_first_teleport_tile(effects);
-    crate::kassert!(fate.is_some(), "E-kizuna: every player teleports");
-    let fate = fate.unwrap_or(-1);
-    kani::cover!(fate >= 1 && fate <= 20, "X=0, face 1..20");
+    // Reconstruct dest from the first Teleport (face = X+1d20 with X=0 ⇒ 1..20).
+    let dest = eff_first_teleport_tile(effects);
+    crate::kassert!(dest.is_some(), "E-kizuna: every player teleports");
+    let dest = dest.unwrap_or(-1);
+    kani::cover!(dest >= 1 && dest <= 20, "X=0, face 1..20");
     crate::kassert!(
-        spec::events::kizuna_01_ok(effects, living, fate),
+        spec::events::kizuna_01_ok(effects, living, dest),
         "E-kizuna-01: teleport to face%60 and one [除外] each (X=0, OPEN-kizuna-song)"
     );
 }
@@ -2085,8 +2085,8 @@ pub fn circle_rebuild_01_activation_five_crystals() {
         crate::card_id!("event:协助CiRCLE重建"),
         0,
     ));
-    let fate = world::with_world(|w| w.fate);
-    crate::kassert!(fate == 2, "E-circle-rebuild-01: keep");
+    let dest = world::with_world(|w| w.dest);
+    crate::kassert!(dest == 2, "E-circle-rebuild-01: keep");
     // Field-instance crystals (see heat_head_01) — not a player key.
     let n = world::with_world(|w| w.field_crystals(w.last_uid));
     crate::kassert!(
@@ -2327,9 +2327,9 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-asukayama-02           BLOCKED-HOST(neighbor returns a tile, not a seat) + partial
 //                          (non-drawer GiveExile leg); stun/noHand split NOT proven
 // E-asukayama-03           PROTOCOL-LEVEL (status tick)
-// E-school-time-01/02      PROVEN (exile leg); fate = school / 周边学区 (17)
+// E-school-time-01/02      PROVEN (exile leg); dest = school / 周边学区 (17)
 // E-tears-01/02            PROVEN
-// E-kizuna-01              PROVEN (X=0, fate=face%60; OPEN-kizuna-song)
+// E-kizuna-01              PROVEN (X=0, dest=face%60; OPEN-kizuna-song)
 // E-chart-rush-01          PROVEN (fire spent; spend_charge has no log)
 // E-chart-rush-02          PROVEN (purses + OR legs; OPEN-chart-rush-or/tie)
 // E-fix-note-01            PROTOCOL-LEVEL (set_build_discount stub) + keep PROVEN

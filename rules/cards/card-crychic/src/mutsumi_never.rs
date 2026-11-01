@@ -89,20 +89,20 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
     }
     // TODO(规则书)（然后弃一张卡）: 规则书（2）:
     // 「消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。」 -- the cell prints no
-    // fate for the played card. (2) prints no [移除] for the played card -- we banish
+    // dest for the played card. (2) prints no [移除] for the played card -- we banish
     // it, which logs an unprinted 「被 [移除]」.
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     Ok(())
 }
 
 /// 规则书（3） -- remove this card, shuffle everything back, draw 2 from CiRCLE.
 fn branch_shuffle(player_id: i32) -> card_sdk::Asked {
     // 规则书（3）: 「此卡[移除]」
-    ctx::set_fate(ctx::Fate::Banished);
-    ctx::add_to_fate(
+    ctx::set_dest(ctx::Dest::Banished);
+    ctx::add_to_dest(
         player_id,
         "Mujica:（睦/mortis）表演的本能",
-        ctx::Fate::DeckRandom,
+        ctx::Dest::DeckRandom,
     );
     ctx::sweep_to_deck(player_id); // 规则书（3）: 「将手牌与弃牌堆全部放入抽牌堆并洗切」
     ctx::log(

@@ -64,7 +64,7 @@ pub enum Op {
     offer_buy = 48,
     offer_force_buy = 49,
     offer_build = 50,
-    add_to_fate = 51,
+    add_to_dest = 51,
     // 52/53 freed (was add_to_deck / add_to_deck_at)
     take_card = 54,
     cards_in = 55,
@@ -77,10 +77,10 @@ pub enum Op {
     discard_from_hand = 62,
     shuffle_into_deck = 63,
     place_card_at = 64,
-    set_fate = 65,
-    set_transfer_to_fate = 66,
-    send_to_fate = 67,
-    transfer_to_fate = 68,
+    set_dest = 65,
+    set_transfer_to_dest = 66,
+    send_to_dest = 67,
+    transfer_to_dest = 68,
     rent_unit_mult = 69,
     add_rent_unit_bonus = 70,
     teleport_to = 71,
@@ -368,6 +368,13 @@ pub enum Op {
     // v100: mark refs -- resolve / drop one row by its stable uid.
     mark_tile = 339,
     remove_mark = 340,
+    // v105: raise identity, resolution frame and per-instance counter cap.
+    trig_uid = 341,
+    trig_instance = 342,
+    body_enter = 343,
+    body_leave = 344,
+    counter_max_at = 345,
+    set_counter_max_at = 346,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

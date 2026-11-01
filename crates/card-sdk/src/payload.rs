@@ -147,7 +147,7 @@ pub fn drive_flag(player_id: i32, body: *const ()) {
 }
 
 /// `fn(i32, P) -> P` typed payload rewrite: snapshot, call (pure), apply delta.
-/// Shared by every `payload(Ty)` / `gate` kind -- including downstream custom
+/// Shared by every `payload(Type)` / `gate` kind -- including downstream custom
 /// payloads that impl [`FilterPayload`].
 pub fn drive_payload<P: FilterPayload>(player_id: i32, body: *const ()) {
     // SAFETY: `body` was packed by `kinds::filter_payload::<P>` from a

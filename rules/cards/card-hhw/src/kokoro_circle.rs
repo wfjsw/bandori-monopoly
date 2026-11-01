@@ -42,7 +42,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // 10000 cannot be paid -- we keep the card spent and place nothing.
         return Ok(());
     }
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::log(
         player_id,
         &Msg::new(key!("kokoro_circle_placed")).player_id("who", player_id),

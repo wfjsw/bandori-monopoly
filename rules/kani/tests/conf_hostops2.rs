@@ -310,7 +310,7 @@ fn place_card_on_reads_name_from_cp_cl() {
     let uid = rules_kani::host::dispatch(Op::place_card_on, [0, 0, h.0, h.1, 0, 0]);
     assert!(uid >= 0, "place_card_on returns a uid");
     let tile = kworld::with_world(|w| w.field[0].tile);
-    assert_eq!(tile, 0, "lands on the given tile (CiRCLE), not fate");
+    assert_eq!(tile, 0, "lands on the given tile (CiRCLE), not dest");
 }
 
 /// Generated card-id table matches RULESET flatten order.

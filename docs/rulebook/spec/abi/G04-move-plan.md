@@ -24,7 +24,7 @@ Closed slugs and their review rows:
 | 11 | `misaki-teleport` | high | 291, 293, 295, 1183, 1184 |
 | 12 | `misaki-planned-start` | medium | 1007 |
 | 13 | `misaki-effective-steps` | medium | 1182 |
-| 14 | `fate-forced-hop` | high | 200 |
+| 14 | `dest-forced-hop` | high | 200 |
 | 15 | `plan-set-forced` | medium | 431, 1286 |
 | 16 | `dg-plan-reset` | medium | 1095 |
 | 17 | `lisa-bond-nested-teleport-window` | medium | 693 |
@@ -263,7 +263,7 @@ endpoint the move will actually take. **Root fix:** carry `next_steps` into
 the plan frame before the windows and expose `move.effective`
 (`trigger::move_effective_steps`) (R4).
 
-**14. `fate-forced-hop` — CRYCHIC:一起演奏音乐的命运共同体, row 200**
+**14. `dest-forced-hop` — CRYCHIC:一起演奏音乐的命运共同体, row 200**
 (`rules/cards/card-crychic/src/fate_together.rs`)
 
 > 「每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。」
@@ -366,7 +366,7 @@ Each new import is added at every layer, or the build fails:
 2. `crates/card-sdk/src/ctx/sys.rs` — `extern` under the
    `wasm32`/`native-rules` attribute pair, link name `ruleset_*`.
 3. `crates/card-sdk/src/ctx/sys_kani.rs` — `kani_host::call_*` stub.
-4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 351-370; this group uses 351-364).
+4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 360-379; this group uses 360-373).
 5. `rules/kani/src/host.rs` — arm (stub or model) and every affected card
    proof's `host_subset!`.
 6. `crates/game-rules/src/hostfns.rs` — `HostCtx` implementation.
@@ -534,20 +534,20 @@ main move's staging. `leave_plan_command` only drops the scope;
 
 | id | raw import | wrapper | signature (wire) | lifetime | kind |
 |---|---|---|---|---|---|
-| 351 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
-| 352 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
-| 353 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
-| 354 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
-| 355 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
-| 356 | `ruleset_move_teleport_to` | `plan::teleport_to() -> i32` | `() -> i32` | read | new |
-| 357 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
-| 358 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
-| 359 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
-| 360 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
-| 361 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
-| 362 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
-| 363 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
-| 364 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 360 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
+| 361 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
+| 362 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
+| 363 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
+| 364 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
+| 365 | `ruleset_move_teleport_to` | `plan::teleport_to() -> i32` | `() -> i32` | read | new |
+| 366 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
+| 367 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
+| 368 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
+| 369 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
+| 370 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
+| 371 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
+| 372 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 373 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
 
 Extended, wire-compatible:
 
@@ -925,7 +925,7 @@ used by `scale_settle_payment` and every other settle reader.
 - Every card proof that reaches a new import adds it to its `host_subset!`
   (`rules/kani/src/proofs/{ag,crychic,hhw,mujica,roselia,morfonica,sumimi}.rs`);
   `rules/kani/build.rs` allowlists the names.
-- `arm_card_move`'s old constant-1 is replaced so the fate/misaki proofs can
+- `arm_card_move`'s old constant-1 is replaced so the dest/misaki proofs can
   distinguish refused from ran.
 
 ---
@@ -954,7 +954,7 @@ if ctx::state::get(player_id, PASSER) == NEVER {
         ctx::run_planned_move(player_id);
     }
 }
-ctx::set_fate(ctx::Fate::Graveyard);
+ctx::set_dest(ctx::Dest::Graveyard);
 ```
 
 The four candidates were computed from the axis rays; the tile pick remains a
@@ -1103,18 +1103,22 @@ skill teleports; remove the TODO.
 ```rust
 pub const ABI_VERSION: i32 = 108;   // was 107 (fourth group)
 /// v108: **command-scoped move plans and walk control**. The turn plan is a
-/// staging buffer; every move runs on a frame owned by its command
-/// (`World::begin_plan` / `end_plan`) and is dropped when the command ends. New
-/// imports: `ruleset_set_forced` (351), `ruleset_set_main_as` (352),
-/// `ruleset_void_walk` (353), `ruleset_clear_steps` (354),
-/// `ruleset_add_extra_steps` (355), `ruleset_move_teleport_to` (356),
-/// `ruleset_move_pay_factor` (357), `ruleset_move_rent_factor` (358),
-/// `ruleset_move_effective_steps` (359), `ruleset_move_forced` (360),
-/// `ruleset_trig_move_rolled` (361), `ruleset_trig_move_effective_steps` (362),
-/// `ruleset_tile_axis_nearest` (363), `ruleset_tile_axis_farthest` (364).
-/// `set_parity` canonicalizes `2` to `0` (even). The trigger move payload gains
-/// `rolled` and `effective`, surfaced as `move.rolled` / `move.effective`.
-/// SAVE_VERSION / RECORD_VERSION unchanged.
+///    staging buffer; every move runs on a frame owned by its command
+///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
+///    New imports: `ruleset_set_forced` (360), `ruleset_set_main_as` (361),
+///    `ruleset_void_walk` (362), `ruleset_clear_steps` (363),
+///    `ruleset_add_extra_steps` (364), `ruleset_move_teleport_to` (365),
+///    `ruleset_move_pay_factor` (366), `ruleset_move_rent_factor` (367),
+///    `ruleset_move_effective_steps` (368), `ruleset_move_forced` (369),
+///    `ruleset_trig_move_rolled` (370),
+///    `ruleset_trig_move_effective_steps` (371),
+///    `ruleset_tile_axis_nearest` (372), `ruleset_tile_axis_farthest` (373).
+///    `MoveCtx.forced` is the `Forced` flag --
+///    a forced move of the turn player is still the main move when
+///    `main_as` is set -- no longer "never the main move". `set_parity`
+///    canonicalizes `2` to `0` (even). The trigger move payload gains
+///    `rolled` and `effective`, surfaced as `move.rolled` / `move.effective`.
+///    SAVE_VERSION / RECORD_VERSION unchanged.
 ```
 
 The bump is a wire break on two counts: a new import set (the module-load
@@ -1160,7 +1164,7 @@ One per slug, in the file named beside it:
 | 11 | misaki-teleport | `g04_misaki_teleport_is_main_move_voids_the_rolled_walk` | `hhw.rs` |
 | 12 | misaki-planned-start | `g04_misaki_span_uses_the_planned_start` | `hhw.rs` |
 | 13 | misaki-effective-steps | `g04_misaki_span_uses_next_steps` | `hhw.rs` |
-| 14 | fate-forced-hop | `g04_fate_hop_does_not_consume_or_require_the_main_move` | `crychic.rs` |
+| 14 | dest-forced-hop | `g04_fate_hop_does_not_consume_or_require_the_main_move` | `crychic.rs` |
 | 15 | plan-set-forced | `g04_forced_walk_of_the_turn_player_is_main_only_with_main_as` | `mujica.rs` |
 | 16 | dg-plan-reset | `g04_doll_garden_victims_do_not_leak_shape` | `mujica.rs` |
 | 17 | lisa-bond | `g04_lisa_bond_opens_after_a_nested_skill_teleport` | `roselia.rs` |

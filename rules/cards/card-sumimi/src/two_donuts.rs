@@ -78,7 +78,7 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_BY, -1);
     // Place as the live-effect carrier so the `PassTile` / `SettleAfter` hooks
     // below run (see the module doc).
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("two_donuts_note")));
     ctx::log(
         player_id,
@@ -210,7 +210,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         }
     }
     // The stand-in leaves the field for the discard.
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

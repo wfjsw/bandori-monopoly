@@ -89,8 +89,8 @@ Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
 |---|---|---|---|---|---|---|
 | C-PPP-bang-dream-01 | 为团卡添加一个[奇迹水晶] | **PROVEN** | `bang_dream_01_crystal_iff`, `bang_dream_01_mutant_plus_2` | iff SUCCESSFUL 352.7 s; mutant pending | — | — |
 | C-PPP-bang-dream-02 | [传送]至任意拥有的格子且可选择盖房 | **PROVEN** (teleport leg) / PROTOCOL (optional house) | `bang_dream_02_teleport_owned_iff`, `…_mutant_extra_money` | iff SUCCESSFUL; mutant TIMEOUT | optional house is `card_offer_build` PROTOCOL stub | — |
-| C-PPP-popipa-01 | 获得1000…Pipopa入牌堆…抽一张…[移除] | PROVEN* | `popipa_01_iff`, `popipa_01_mutant_money_off_by_100` | written, verdict pending | deck insert has no typed Effect arm; banish is `w.fate` | — |
-| C-PPP-pipopa-01 | 获得1000…Popipapapipopa放置场上…[移除] | PROVEN* | `pipopa_01_iff`, `pipopa_01_mutant_money_2000` | triage3: FAILED was **C** `PlaceCard.fate` leaked `w.fate` (Banished) instead of Field; fixed, re-time pending | — | — |
+| C-PPP-popipa-01 | 获得1000…Pipopa入牌堆…抽一张…[移除] | PROVEN* | `popipa_01_iff`, `popipa_01_mutant_money_off_by_100` | written, verdict pending | deck insert has no typed Effect arm; banish is `w.dest` | — |
+| C-PPP-pipopa-01 | 获得1000…Popipapapipopa放置场上…[移除] | PROVEN* | `pipopa_01_iff`, `pipopa_01_mutant_money_2000` | triage3: FAILED was **C** `PlaceCard.dest` leaked `w.dest` (Banished) instead of Field; fixed, re-time pending | — | — |
 | C-PPP-returns-01 | 加入初始卡组则卡组卡数添加8 | setup-only | — | — | not an observed transition (deck construction) | — |
 | C-PPP-returns-02 | 游戏开始时放置到[场地]并获得团卡 | PROTOCOL-LEVEL | — | — | game-start place + borrow prompt | — |
 | C-PPP-returns-c1 | 无效 Poppin' Party 团卡（4）效果 | PROTOCOL-LEVEL | — | — | continuous negation | — |
@@ -116,7 +116,7 @@ Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
 | C-PPP-signpost-01 | 主要移动设为移动60格并不触发结算 | PROTOCOL-LEVEL | — | — | `plan::set_steps` / `run_planned_move` stubs | OPEN-结算定义 |
 | C-PPP-signpost-02 | 回合结束时[失去]1000资金 | PROVEN* | `signpost_02_lose_1000_at_end_iff`, `…_mutant_lose_500` | written, verdict pending | host `pay` clamps money at 0 | — |
 | C-PPP-caught-01 | 移动到前方一名玩家的格子…可选择盖房 | PROTOCOL-LEVEL | — | — | `run_planned_move` | — |
-| C-PPP-far-away-01 | [传送]至绝对距离最远的玩家并[结算] | PROTOCOL-LEVEL | pure fate-is-farthest spec | written | `run_planned_move` + settle | — |
+| C-PPP-far-away-01 | [传送]至绝对距离最远的玩家并[结算] | PROTOCOL-LEVEL | pure dest-is-farthest spec | written | `run_planned_move` + settle | — |
 | C-PPP-far-away-02 | 可给最远的可盖房格子加盖 | PROTOCOL-LEVEL | — | — | optional house after settle | — |
 | C-PPP-maze-01 | 位于流星堂前后5格内时可打出 | **PROVEN** (predicate) / BLOCKED-HOST (body gate) | `maze_01_distance_predicate` | SUCCESSFUL | body gate uses `tile_named('流星堂')` = −1 | — |
 | C-PPP-maze-02 | 投掷1d10从流星堂移动… | PROTOCOL-LEVEL | — | — | walk | OPEN-强制停下 |

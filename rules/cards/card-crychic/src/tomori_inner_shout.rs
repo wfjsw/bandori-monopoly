@@ -53,12 +53,16 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"高松灯（CRYCHIC）"#)]));
 
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（你可重置一次“想要成为人类”所声明的X）: The player-scoped slot `want_human_x` is the
-    // stand-in for that card's X, but it outlives the instance (nothing clears it
-    // when the card leaves), so the live-instance check below is what stands in for
-    // "the card is placed"; 0 means "no X was ever written down".
-    let old = ctx::slot(player_id, SLOT_X);
-    let mut reset = old > 0 && want_human_placed(player_id);
+    // 规则书（1）: 「打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得
+    // 两个X差值*120的资金。」 X is a prop of the target card's instance, so the
+    // instance is resolved by id and read cross-instance; 0 means "no X was ever
+    // written down". The first (lowest-uid) copy stands in when two are placed.
+    let target = ctx::field_instances(player_id)
+        .into_iter()
+        .find(|(_, c)| c.as_str() == "CRYCHIC:想要成为人类")
+        .map(|(u, _)| u);
+    let old = target.map_or(0, |u| ctx::prop_at(u, SLOT_X));
+    let mut reset = old > 0 && target.is_some();
     if reset {
         reset = ctx::ask_yes(
             player_id,
@@ -78,7 +82,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         )?;
         // 规则书（1）: 「重置一次“想要成为人类”所声明的X（不影响水晶）」 -- only the
         // written X moves; the card's crystal counter is left alone.
-        ctx::set_slot(player_id, SLOT_X, x);
+        ctx::set_prop_at(target.unwrap(), SLOT_X, x);
         ctx::log(
             player_id,
             &Msg::new(key!("tomori_inner_shout_changed"))
@@ -123,7 +127,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
             } else {
                 first
             };
-            ctx::set_fate(ctx::Fate::Field);
+            ctx::set_dest(ctx::Dest::Field);
             ctx::place_card_on(
                 player_id,
                 tile,
@@ -167,14 +171,6 @@ fn clear_latch(_player_id: i32) -> card_sdk::Asked {
 
 fn half(_player_id: i32) -> bool {
     ctx::is_placed() && ctx::slot(ctx::trigger::player_id(), &half_key()) > 0
-}
-
-/// Is a 「想要成为人类」 instance on this player's field? The X slot is
-/// player-scoped and never cleared, so on its own it does not prove placement.
-fn want_human_placed(player_id: i32) -> bool {
-    ctx::field_instances(player_id)
-        .iter()
-        .any(|(_, c)| c.as_str() == "CRYCHIC:想要成为人类")
 }
 
 fn on_pay(_player_id: i32, value: i32) -> i32 {

@@ -84,7 +84,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if ctx::is_placed() {
         return use_die(player_id);
     }
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(
         player_id,
@@ -107,7 +107,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// places the card but records nothing; the unchosen die is never handed over.
 fn counter_fire(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
-        ctx::set_fate(ctx::Fate::Field);
+        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
         ctx::log(
             player_id,

@@ -33,9 +33,9 @@ pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, gre
 
 fn great(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「1. [移除]此卡」
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     // 规则书[手]: 「2. 将一张“PERFECT“加入抽卡区并洗切」
-    ctx::add_to_fate(player_id, "通用:[衍生]PERFECT", ctx::Fate::DeckRandom);
+    ctx::add_to_dest(player_id, "通用:[衍生]PERFECT", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("great_added")).player_id("who", player_id),

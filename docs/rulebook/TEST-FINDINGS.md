@@ -1136,7 +1136,7 @@ Fixed and un-ignored (green):
   `light_removed_when_crystals_run_out`). New `TriggerKind::FirePaying` (78)
   raised inside `ctx::spend_fire` before the pots move; a hook that substitutes
   cancels the link. 不再迷茫 (2) hooks it and burns one crystal; (3) sweeps at
-  0 via `CounterChanged` (`Fate::Banished`). The 诗超绊 (2)/(3) gate no longer
+  0 via `CounterChanged` (`Dest::Banished`). The 诗超绊 (2)/(3) gate no longer
   requires `fire >= cost` (a crystal can stand in).
 * **DRAW-01 / Maya drew** (`g28_maya_look_at_top_still_counts_as_a_draw`). A
   `DrewBefore` replacement's `add_to_hand` now pushes to `draw_log`, so the
@@ -1225,7 +1225,7 @@ or A/B items that need a wider surface than this batch:
 * **MOVE-01 (2026-10-10, test drive / arrangement):** `m12a_yukina_forced_stop`
   / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` un-ignored.
   Engine `set_stop_at` landing was already correct. m12 declined the `ask_yes`
-  offer; m15 used `place_raw` (tile:-1). m12b asserts 37 (the rolled fate).
+  offer; m15 used `place_raw` (tile:-1). m12b asserts 37 (the rolled dest).
 * **TILE-04 / TILE-05 (2026-10-10, test window / arrangement):**
   `t12_student_council_check` / `t24_parking_space` un-ignored. t12 played a
   SettleBefore [反击] as a free [手] (silent no-op) and declined the allowNone

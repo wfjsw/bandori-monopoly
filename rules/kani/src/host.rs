@@ -545,7 +545,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- cards / piles ----
         Op::draw => arm_draw(a),
         Op::draw_event => 0,
-        Op::add_to_fate => arm_add_to_fate(a),
+        Op::add_to_dest => arm_add_to_dest(a),
         Op::take_card => arm_take_card(a),
         Op::cards_in => arm_cards_in(a),
         Op::to_discard => arm_to_discard(a),
@@ -571,10 +571,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::shuffle_into_deck => arm_shuffle_into_deck(a),
         Op::place_card_at => arm_place_card_at(a),
         Op::place_card_on => arm_place_card_on(a),
-        Op::set_fate => arm_set_fate(a),
-        Op::set_transfer_to_fate => 0,
-        Op::send_to_fate => arm_send_to_fate(a),
-        Op::transfer_to_fate => 0,
+        Op::set_dest => arm_set_fate(a),
+        Op::set_transfer_to_dest => 0,
+        Op::send_to_dest => arm_send_to_dest(a),
+        Op::transfer_to_dest => 0,
         Op::teleport_to => arm_teleport_to(a),
         Op::unplace_card | Op::unplace_at | Op::unplace_card_named => arm_unplace_card(a),
         Op::is_placed => arm_is_placed(a),
@@ -917,6 +917,15 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_name => arm_trig_name(a),
         Op::trig_step => 0,
         Op::trig_by_card => 0,
+        // Raise identity + resolution frame + per-instance cap are stubbed
+        // until the model grows them (`trig_uid` 0 = "no identity",
+        // `trig_instance` -1 = "none", `body_enter` 1 = "run the body").
+        Op::trig_uid => 0,
+        Op::trig_instance => -1,
+        Op::body_enter => 1,
+        Op::body_leave => 0,
+        Op::counter_max_at => 0,
+        Op::set_counter_max_at => 0,
         Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
         Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
         // ---- move payload (hostfns 1830–1880; sentinels when no move) ----
@@ -1305,9 +1314,9 @@ pub fn arm_add_house(a: Args) -> i64 {
     }
 }
 
-/// `add_to_fate(player, ptr, len, fate)` — pile by the wire `Fate` code.
+/// `add_to_dest(player, ptr, len, dest)` — pile by the wire `Dest` code.
 /// Field / Banished are not piles (`place_card` / "gone"); no-op here.
-pub fn arm_add_to_fate(a: Args) -> i64 {
+pub fn arm_add_to_dest(a: Args) -> i64 {
     let [a0, a1, a2, a3, ..] = a;
     match a3 {
         0 => arm_to_discard([a0, a1, a2, 0, 0, 0]),
@@ -2175,12 +2184,12 @@ pub fn arm_place_card(a: Args) -> i64 {
     let slot = card_slot(a1, a2);
     world::with_world_mut(|w| {
         // `place_card` puts the **new** instance on the owner's field. The
-        // running card's fate (`w.fate`, set by `set_fate`) is a different
+        // running card's dest (`w.dest`, set by `set_dest`) is a different
         // thing — it is where the *running* instance goes when the effect
-        // finishes. The PlaceCard effect's `fate` is the Fate code of the
-        // **placed** card = Field (2). (pipopa: `set_fate(Banished)` for
+        // finishes. The PlaceCard effect's `dest` is the Dest code of the
+        // **placed** card = Field (2). (pipopa: `set_dest(Banished)` for
         // 「此卡[移除]」 then `place_card` a Popipapapipopa — the old arm
-        // leaked `w.fate=3` into PlaceCard.fate.)
+        // leaked `w.dest=3` into PlaceCard.dest.)
         let uid = w.next_uid;
         w.next_uid += 1;
         w.last_uid = uid;
@@ -2201,7 +2210,7 @@ pub fn arm_place_card(a: Args) -> i64 {
         }
         w.push(Effect::PlaceCard {
             player: a0,
-            fate: 2,
+            dest: 2,
             card: slot,
         });
         uid as i64
@@ -2212,8 +2221,8 @@ pub fn arm_place_card_at(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
-        // Same fate/fate split as `arm_place_card`: PlaceCard.fate is
-        // Field (2) for the placed instance, not `w.fate`.
+        // Same dest/dest split as `arm_place_card`: PlaceCard.dest is
+        // Field (2) for the placed instance, not `w.dest`.
         let id = card_u16(a1, a2);
         let slot = card_slot(a1, a2);
         world::with_world_mut(|w| {
@@ -2237,7 +2246,7 @@ pub fn arm_place_card_at(a: Args) -> i64 {
             }
             w.push(Effect::PlaceCard {
                 player: a0,
-                fate: 2,
+                dest: 2,
                 card: slot,
             });
             uid as i64
@@ -2250,7 +2259,7 @@ pub fn arm_place_card_on(a: Args) -> i64 {
     {
         // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
         // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
-        // read the name from (a1, a2) = (tile, cp) and used `fate`.
+        // read the name from (a1, a2) = (tile, cp) and used `dest`.
         let tile = a1;
         let id = card_u16(a2, a3);
         let slot = card_slot(a2, a3);
@@ -2274,7 +2283,7 @@ pub fn arm_place_card_on(a: Args) -> i64 {
             }
             w.push(Effect::PlaceCard {
                 player: a0,
-                fate: tile,
+                dest: tile,
                 card: slot,
             });
             uid as i64
@@ -2540,12 +2549,12 @@ pub fn arm_set_fate(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
         world::with_world_mut(|w| {
-            w.fate = a0;
-            // Field-effect fate: the real engine defers to `apply_fate` at
+            w.dest = a0;
+            // Field-effect dest: the real engine defers to `apply_dest` at
             // the run's commit (unplace-and-send the running instance).
-            // A play from hand names the *hand card's* fate instead and is
+            // A play from hand names the *hand card's* dest instead and is
             // applied by the play pipeline, so only apply here when the
-            // instance is live on the field. `Fate::Field` (2) = stay.
+            // instance is live on the field. `Dest::Field` (2) = stay.
             //
             // The commit is **not** an in-run effect (specs such as
             // `again_02_effects_ok` / `starry_06_effects_ok` pin "exactly
@@ -2568,15 +2577,15 @@ pub fn arm_set_fate(a: Args) -> i64 {
     }
 }
 
-/// `Op::send_to_fate` — apply the running instance's fate **now**
-/// (`ctx::send_to_fate`), not at the run commit. Same pile routing as
+/// `Op::send_to_dest` — apply the running instance's dest **now**
+/// (`ctx::send_to_dest`), not at the run commit. Same pile routing as
 /// [`arm_set_fate`]; returns the owner the card left, or -1 when it was
-/// not in play. The old inline arm mistook `w.fate` for a tile and
+/// not in play. The old inline arm mistook `w.dest` for a tile and
 /// teleported the player there (class C host-model defect).
-pub fn arm_send_to_fate(a: Args) -> i64 {
+pub fn arm_send_to_dest(a: Args) -> i64 {
     let [a0, ..] = a;
     world::with_world_mut(|w| {
-        w.fate = a0;
+        w.dest = a0;
         let uid = w.last_uid;
         let owner = w.field_by_uid(uid).map(|c| c.player).unwrap_or(-1);
         if a0 != 2 {

@@ -45,8 +45,8 @@ use std::borrow::Cow;
 /// `turnEnd` call at this turn's end or at the end of a player's next turn),
 /// `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
 /// `turn_main_steps`, marker-cap move, `card_replayable`. `play_card` now returns
-/// the inner card's `Fate`, and the inner card runs as itself (its own id and
-/// `Fate`, no longer the outer card's). v21: `CardDef` standardized like triggers
+/// the inner card's `Dest`, and the inner card runs as itself (its own id and
+/// `Dest`, no longer the outer card's). v21: `CardDef` standardized like triggers
 /// -- `id` + a table of `On` entry points (`Play(gate, effect)`,
 /// `Counteract(kinds, guard, effect)`, `Hook(kinds, effect)`, `AtEnd`). The
 /// manifest lists each entry with its trigger kinds, so the host dispatches only
@@ -733,7 +733,19 @@ use std::borrow::Cow;
 ///    the play, matching `COUNTERACT_MOVE_EXTENSION`'s two-step before
 ///    declaration. SAVE_VERSION / RECORD_VERSION unchanged.
 /// ```
-pub const ABI_VERSION: i32 = 104;
+pub const ABI_VERSION: i32 = 105;
+/// v105: **per-instance identity and state**. Raises carry a unique `uid`
+///    (`ruleset_trig_uid`) and a subject instance (`ruleset_trig_instance`);
+///    every card body opens a resolution frame (`ruleset_body_enter` /
+///    `ruleset_body_leave`) that the host pins to the body's raise, readable
+///    as the `resolving('id')` predicate; `counterChanged` / `markChanged`
+///    name their instance;
+///    a per-instance counter maximum is stored (`ruleset_counter_max_at` /
+///    `ruleset_set_counter_max_at`) and `add_counter_at` clamps at it; a
+///    `counter_max.*` placement prop fills that store. New hook kinds
+///    `cardFired` (111) and `markChanged` (112); `card.*` condition reads
+///    answer for the running uid.
+///    SAVE_VERSION / RECORD_VERSION unchanged.
 /// v104: **turn snapshot carries money and the board arrays**. The
 ///    `ruleset_turn_snap` payload is the postcard struct
 ///    `(pos, state, money, owners, houses, mortgaged)` (was `(pos, state)`):
@@ -786,14 +798,14 @@ pub const ABI_VERSION: i32 = 104;
 ///    field `FLAGS = 4`. `ruleset_slot` / `ruleset_set_slot` /
 ///    `ruleset_inc_slot` / `ruleset_state_set_flags` are gone.
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
-/// v99: **named-card pile movers collapse onto `Fate`**. `add_to_hand` /
+/// v99: **named-card pile movers collapse onto `Dest`**. `add_to_hand` /
 ///      `add_to_deck` / `add_to_deck_at` (`DeckPos`) die; the one
-///      `add_to_fate(player_id, card, fate)` speaks the same wire `Fate`
-///      codes as `send_to_fate` / `transfer_to_fate` (0 graveyard, 1 hand,
+///      `add_to_dest(player_id, card, dest)` speaks the same wire `Dest`
+///      codes as `send_to_dest` / `transfer_to_dest` (0 graveyard, 1 hand,
 ///      4/5/6 deck top / bottom / shuffle -- default shuffle). `Field` /
 ///      `Banished` are not piles and trap. `take_card`'s args reorder to
 ///      card-before-zone `take_card(player_id, card, src)`; `take_from_hand`
-///      is `take_card(..., CardPile::Hand)`. Hostcalls: `ruleset_add_to_fate`
+///      is `take_card(..., CardPile::Hand)`. Hostcalls: `ruleset_add_to_dest`
 ///      replaces the three adds; `ruleset_take_card` is
 ///      `(player_id, ptr, len, src)`. SAVE_VERSION / RECORD_VERSION unchanged.
 
@@ -1203,6 +1215,13 @@ pub mod prop {
     /// The rent lookup (`pay_rent` / `rent_of` / `ctx::rent_houses_of`) reads
     /// it; `ctx::houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
+    /// Reserved prefix of a **per-instance counter maximum** prop:
+    /// `("counter_max.crystals", 2)` declares a ceiling of 2 for the
+    /// `crystals` counter. A `counter_max.<name>` placement prop is split out
+    /// of the props at placement and seeds `FieldCard.counter_max`; every
+    /// other prop key still lands in `props`. `add_counter_at` /
+    /// `add_counter` / `add_crystals` clamp at the stored maximum. `0` clears.
+    pub const COUNTER_MAX_PREFIX: &str = "counter_max.";
 
     // ---------------------------------------------------------- tile data
     // Stamped onto a board-owned tile rule instance at bind time (from
@@ -2013,6 +2032,15 @@ impl ActionKind {
     /// the running figure.
     pub const PaySplitMulBefore: Self = Self(TriggerKind::PaySplitMulBefore);
 
+    /// Action. A card body entered its resolution frame (hook-only, no
+    /// counteraction window). Same payload as [`TriggerKind::CardFired`].
+    /// `card.is_skill` narrows it to skill bodies.
+    pub const CardFired: Self = Self(TriggerKind::CardFired);
+
+    /// Action. A mark row changed (hook-only, no counteraction window). Same
+    /// payload as [`TriggerKind::MarkChanged`].
+    pub const MarkChanged: Self = Self(TriggerKind::MarkChanged);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self {
         Self(TriggerKind::engine(id))
@@ -2602,6 +2630,25 @@ impl TriggerKind {
 
     /// `targetableGate`
     pub const TargetableGate: Self = Self::engine(109);
+
+    // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
+    // ruleset-declared "fansFlip"); the next free **engine** pair is 111/112.
+
+    /// `cardFired` -- a card's body entered its resolution frame: every
+    /// body, a play, a hook or a counteraction alike. Hook-only: no
+    /// counteraction window opens. Payload: the card id on `card`, the body's
+    /// seat on `by_card`, `instance = -1`; `uid` is the fire's raise id, so
+    /// one fire is one claim. A listener after skills only pre-filters on
+    /// `card.is_skill`. A hook's *own* body does not re-announce (a fire is
+    /// announced once, not once per level).
+    pub const CardFired: Self = Self::engine(111);
+
+    /// `markChanged` -- a mark row was added, bumped or removed. Hook-only.
+    /// Payload: `player_id` = row owner, `tile`, `name` = mark kind,
+    /// `value` = effective signed delta, `instance` = the mark's creating
+    /// instance (`-1` when it has none). The subject instance is stamped even
+    /// when it is already unplaced, so its own hook can still resync/discard.
+    pub const MarkChanged: Self = Self::engine(112);
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {

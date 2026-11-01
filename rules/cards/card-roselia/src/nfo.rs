@@ -26,7 +26,7 @@ pub const NFO: CardDef = CardDef::new(
         On::Play("", None, play),
         // TODO(规则书): 规则书: 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74 Pattern A/D: pure
         // amount shave on Filter(PaySplitAt); the card is used up by a paired Action
-        // (Filter cannot `set_fate`). The unplace rides PayAfter (always raised, so a
+        // (Filter cannot `set_dest`). The unplace rides PayAfter (always raised, so a
         // shave-to-0 still uses the card up). PayAfter fires for cancelled / zeroed
         // payments too and carries no "PaySplitAt ran" bit, and a Filter cannot latch
         // one (`state::set` is refuse_if_filter'd) -- so the unplace cannot tell
@@ -165,7 +165,7 @@ fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
         }
         // 规则书: 「若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」
         3 => {
-            ctx::set_fate(ctx::Fate::Field);
+            ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nfo_note")));
             ctx::log(
                 player_id,
@@ -243,19 +243,19 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .card("card", id.as_str()),
     );
-    let fate = ctx::play_card(id.as_str(), player_id)?;
-    apply_fate(player_id, id.as_str(), fate);
+    let dest = ctx::play_card(id.as_str(), player_id)?;
+    apply_dest(player_id, id.as_str(), dest);
     Ok(())
 }
 
 /// `Field` / `Banished` need nothing here: the inner card already placed itself,
 /// or is simply out of the game.
-fn apply_fate(player_id: i32, id: &str, fate: ctx::Fate) {
-    match fate {
-        ctx::Fate::Graveyard => ctx::to_discard(player_id, id),
-        ctx::Fate::Field | ctx::Fate::Banished => {}
-        ctx::Fate::Hand | ctx::Fate::DeckTop | ctx::Fate::DeckBottom | ctx::Fate::DeckRandom => {
-            ctx::add_to_fate(player_id, id, fate)
+fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
+    match dest {
+        ctx::Dest::Graveyard => ctx::to_discard(player_id, id),
+        ctx::Dest::Field | ctx::Dest::Banished => {}
+        ctx::Dest::Hand | ctx::Dest::DeckTop | ctx::Dest::DeckBottom | ctx::Dest::DeckRandom => {
+            ctx::add_to_dest(player_id, id, dest)
         }
     }
 }
@@ -283,9 +283,9 @@ fn pay_shave(player_id: i32, value: i32) -> i32 {
 }
 
 /// Action half of [`pay_shave`]: 「并将此卡置入弃牌堆」 -- the card is used up.
-/// Rides PayAfter (Filter cannot `set_fate`); see the TODO on the entry.
+/// Rides PayAfter (Filter cannot `set_dest`); see the TODO on the entry.
 fn pay_unplace(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     let _ = player_id;
     Ok(())
 }

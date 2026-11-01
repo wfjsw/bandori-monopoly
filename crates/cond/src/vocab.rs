@@ -305,7 +305,7 @@ pub const VOCAB: &[Name] = &[
         get_str: NO_GET_STR,
         func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
-        doc: "this turn's fixed is_main_move-move roll; `null` when unset",
+        doc: "this turn's fixed main-move roll; `null` when unset",
     },
     Name {
         cel: "trigger_card",
@@ -437,7 +437,7 @@ pub const VOCAB: &[Name] = &[
         get_str: NO_GET_STR,
         func: NO_FUNC,
         lower_as: crate::ext::LowerAs::Direct,
-        doc: "was this the turn's is_main_move move",
+        doc: "was this the turn's main move",
     },
     Name {
         cel: "move.by_skill",
@@ -682,6 +682,28 @@ pub const VOCAB: &[Name] = &[
         doc: "move.tag('name') -> the move's tag counter; missing = 0",
     },
     Name {
+        cel: "resolving",
+        aliases: &[],
+        flat: "resolving",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Type::Bool,
+        get: NO_GET,
+        get_str: NO_GET_STR,
+        // A predicate, like `card_is`: the table is the resolving cards'
+        // `id_of` hashes and the member answers membership.
+        func: FuncKind::IntHas {
+            var: "_resolving",
+            fill: |v| {
+                v.resolving_table()
+                    .into_iter()
+                    .map(|(c, _)| crate::id_of(&c))
+                    .collect()
+            },
+        },
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "resolving('card:id') -> that card's body is running",
+    },
+    Name {
         cel: "card_counter",
         aliases: &["card.counter"],
         flat: "card_counter",
@@ -718,6 +740,18 @@ pub const VOCAB: &[Name] = &[
         },
         lower_as: crate::ext::LowerAs::Direct,
         doc: "counter_is('name') -> this window's `Trigger.name` is that counter / message",
+    },
+    Name {
+        cel: "card.is_skill",
+        aliases: &[],
+        flat: "card_is_skill",
+        scope: Scope::Window,
+        ty: Type::Bool,
+        get: |v| v.trigger_card_is_skill() as i64,
+        get_str: NO_GET_STR,
+        func: NO_FUNC,
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "the trigger's card is a skill -- narrows `cardFired` to skills",
     },
     Name {
         cel: "card_is",

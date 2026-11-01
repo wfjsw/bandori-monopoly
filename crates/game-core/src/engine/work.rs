@@ -99,8 +99,8 @@ impl WorkItem for ContinueSettleWork {
     }
 }
 
-/// Apply a card's post-drive fate (discard / hand / ...) once a resumed drive
-/// returns its fate. STACK-01: the fate used to sit on the Rust stack after
+/// Apply a card's post-drive dest (discard / hand / ...) once a resumed drive
+/// returns its dest. STACK-01: the dest used to sit on the Rust stack after
 /// `drive` returned; a suspension must run it from the work stack instead.
 pub struct AfterDriveFateWork {
     pub f: Box<dyn FnOnce(&mut PlayCtx) -> Flow<()>>,
@@ -192,9 +192,9 @@ impl<'a> PlayCtx<'a> {
         }
     }
 
-    /// Store / take the fate a resumed drive returned (card fate).
-    pub fn set_drive_fate(&mut self, fate: i32) {
-        self.last_drive_fate = Some(fate);
+    /// Store / take the dest a resumed drive returned (card dest).
+    pub fn set_drive_dest(&mut self, dest: i32) {
+        self.last_drive_fate = Some(dest);
     }
     pub fn take_drive_fate(&mut self) -> Option<i32> {
         self.last_drive_fate.take()

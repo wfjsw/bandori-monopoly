@@ -141,7 +141,7 @@ PROTOCOL-LEVEL, never a silent zero.
 |---|---|---|---|---|---|---|
 | C-RAS-lock-01 | 「抽取游戏开始的2手牌前…放置在自身场上」 | PROTOCOL-LEVEL | — | — | opening-deal replacement is engine setup | — |
 | C-RAS-lock-02 | 「游戏开始时[传送]到"东京外"获得3层[除外]」 | BLOCKED-HOST | — | — | `tile_named("东京外")` unmodeled; game-start teleport is setup | — |
-| C-RAS-lock-03 | 「主要移动[经过]了"Bandori车站"则…终点改为"旭汤澡堂"…[移除]」 | BLOCKED-HOST | — | — | `tile_named` for both tiles; `send_to_fate` / move-plan | — |
+| C-RAS-lock-03 | 「主要移动[经过]了"Bandori车站"则…终点改为"旭汤澡堂"…[移除]」 | BLOCKED-HOST | — | — | `tile_named` for both tiles; `send_to_dest` / move-plan | — |
 
 ### RAS:（MASKING）CRUSH ON THE DRUM!!! — 2 clauses
 

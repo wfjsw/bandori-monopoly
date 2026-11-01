@@ -71,7 +71,7 @@ crate::host_subset!(vocalist_dispatch {
 crate::host_subset!(grab_dispatch {
     apply_abnormal => arm_apply_abnormal,
     state_set => arm_state_set,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -93,18 +93,18 @@ crate::host_subset!(forever_play_dispatch {
     group_pool => arm_band_crystals,
     add_group_pool => arm_add_band_crystals,
     gain | gain_typed | gain_fixed => arm_gain,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
 
-/// `CRYCHIC:如果能一直持续下去...` on_drew — fate to graveyard + narration.
-/// Book 「立即置入弃牌堆」 is `ctx::send_to_fate(Graveyard)` (applies now);
+/// `CRYCHIC:如果能一直持续下去...` on_drew — dest to graveyard + narration.
+/// Book 「立即置入弃牌堆」 is `ctx::send_to_dest(Graveyard)` (applies now);
 /// the host commits the instance to the discard pile as world state
-/// (no `UnplaceCard` effect — same shape as `set_fate`'s deferred commit).
+/// (no `UnplaceCard` effect — same shape as `set_dest`'s deferred commit).
 crate::host_subset!(forever_on_drew_dispatch {
-    set_fate => arm_set_fate,
-    send_to_fate => arm_send_to_fate,
+    set_dest => arm_set_fate,
+    send_to_dest => arm_send_to_dest,
     log | effect => arm_log,
 });
 
@@ -588,9 +588,9 @@ pub fn ifonly_01_mutant_is_detected() {
 // The hook condition `card.placed && owner.hand >= 7` is the entry's CEL.
 // The body is driven directly (ppcost). Seat-symmetric.
 //
-// Book 「此卡立即置入弃牌堆」 is `ctx::send_to_fate(Graveyard)`: the host
+// Book 「此卡立即置入弃牌堆」 is `ctx::send_to_dest(Graveyard)`: the host
 // commits the instance to the discard pile as world state (same deferred
-// shape as `set_fate` — no in-run `UnplaceCard` effect).
+// shape as `set_dest` — no in-run `UnplaceCard` effect).
 // ===========================================================================
 
 /// Shared leaf at a **concrete** user seat.
@@ -626,7 +626,7 @@ fn ifonly_02_iff_at(user: i32) {
 
     // Book: 「此卡立即置入弃牌堆」 — the instance leaves the field and lands
     // in the owner's discard. Observed as a field-count drop + discard gain
-    // (host `send_to_fate` commits world state, not an in-run effect).
+    // (host `send_to_dest` commits world state, not an in-run effect).
     let unplaced = field1 < field0 && discard1 > discard0;
     crate::kassert!(
         unplaced,

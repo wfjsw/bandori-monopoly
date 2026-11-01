@@ -129,7 +129,7 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
     // handler stamps this instance as the mark's provenance, and 「此卡在格子上添加的[CP点]」
     // (the spread filter) reads it.
     if !ctx::is_placed() {
-        ctx::set_fate(ctx::Fate::Field);
+        ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, ID, &Msg::new(key!("clear_cp_note")));
     }
     // 规则书[手]: 「添加1个[CP点]」 -- a **tile** [CP点], through a cross-card
@@ -277,7 +277,7 @@ fn on_cp_empty(player_id: i32) -> card_sdk::Asked {
     //   the book never sends the card off the field when its on-card count hits 0 --
     //   the 2026-10-07 ruling does, and we graveyard it here.
     // 「the card goes to its owner's discard pile (弃牌区) immediately」
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("clear_cp_empty")).player_id("who", player_id),

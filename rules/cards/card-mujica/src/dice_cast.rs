@@ -72,7 +72,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 fn cast(player_id: i32) {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     // Place at most once per turn (see `PLACED`). `is_placed` is uid-based and
     // reads false on a hand play, so it cannot be the once-guard here.
     if ctx::slot(player_id, PLACED) == ctx::turn_key() {
@@ -102,7 +102,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     if ctx::slot(player_id, PLACED) == ctx::turn_key() {
         ctx::set_slot(player_id, PLACED, 0);
     }
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("dice_cast_ended")).player_id("who", player_id),

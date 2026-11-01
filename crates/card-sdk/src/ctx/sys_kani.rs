@@ -229,8 +229,8 @@ pub fn offer_build(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::offer_build, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn add_to_fate(player_id: i32, ptr: i32, len: i32, fate: i32) {
-    kani_host::call_unit(Op::add_to_fate, [player_id, ptr, len, fate, 0, 0]);
+pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32) {
+    kani_host::call_unit(Op::add_to_dest, [player_id, ptr, len, dest, 0, 0]);
 }
 
 pub fn take_card(player_id: i32, ptr: i32, len: i32, src: i32) -> i32 {
@@ -277,20 +277,20 @@ pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i3
     kani_host::call_i32(Op::place_card_at, [player_id, cp, cl, ptr, len, 0])
 }
 
-pub fn set_fate(fate: i32) {
-    kani_host::call_unit(Op::set_fate, [fate, 0, 0, 0, 0, 0]);
+pub fn set_dest(dest: i32) {
+    kani_host::call_unit(Op::set_dest, [dest, 0, 0, 0, 0, 0]);
 }
 
-pub fn set_transfer_to_fate(to: i32, fate: i32) {
-    kani_host::call_unit(Op::set_transfer_to_fate, [to, fate, 0, 0, 0, 0]);
+pub fn set_transfer_to_dest(to: i32, dest: i32) {
+    kani_host::call_unit(Op::set_transfer_to_dest, [to, dest, 0, 0, 0, 0]);
 }
 
-pub fn send_to_fate(fate: i32) -> i32 {
-    kani_host::call_i32(Op::send_to_fate, [fate, 0, 0, 0, 0, 0])
+pub fn send_to_dest(dest: i32) -> i32 {
+    kani_host::call_i32(Op::send_to_dest, [dest, 0, 0, 0, 0, 0])
 }
 
-pub fn transfer_to_fate(to: i32, fate: i32) -> i32 {
-    kani_host::call_i32(Op::transfer_to_fate, [to, fate, 0, 0, 0, 0])
+pub fn transfer_to_dest(to: i32, dest: i32) -> i32 {
+    kani_host::call_i32(Op::transfer_to_dest, [to, dest, 0, 0, 0, 0])
 }
 
 pub fn rent_unit_mult() -> i32 {
@@ -764,6 +764,30 @@ pub fn trig_value() -> i32 {
 
 pub fn trig_name(p: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::trig_name, [p, n, 0, 0, 0, 0])
+}
+
+pub fn trig_uid() -> i32 {
+    kani_host::call_i32(Op::trig_uid, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_instance() -> i32 {
+    kani_host::call_i32(Op::trig_instance, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn body_enter(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::body_enter, [p, n, 0, 0, 0, 0])
+}
+
+pub fn body_leave() {
+    kani_host::call_unit(Op::body_leave, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn counter_max_at(uid: i32, np: i32, nl: i32) -> i32 {
+    kani_host::call_i32(Op::counter_max_at, [uid, np, nl, 0, 0, 0])
+}
+
+pub fn set_counter_max_at(uid: i32, np: i32, nl: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::set_counter_max_at, [uid, np, nl, max, 0, 0])
 }
 
 pub fn trig_step() -> i32 {

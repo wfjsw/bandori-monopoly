@@ -157,7 +157,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         // (3) 「将此卡放置在场上并放置x个奇迹水晶」 -- placed with x crystals
         // on it; (4) is its exhaustion.
         2 => {
-            ctx::set_fate(ctx::Fate::Field);
+            ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
             ctx::add_crystals(x, 0)?;
             ctx::log(
@@ -202,7 +202,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("nanami_effort_exhausted")).player_id("who", player_id),

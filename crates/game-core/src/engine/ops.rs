@@ -12,7 +12,7 @@ use crate::msg::Msg;
 use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
 use super::world::World;
-use crate::engine::world::Extreme;
+use crate::engine::world::{Extreme, MarkLog};
 
 impl World {
     // ------------------------------------------- move shaping
@@ -1246,6 +1246,7 @@ impl World {
             props,
             group_skill,
             extra: false,
+            counter_max: BTreeMap::new(),
             note,
         };
         if player_id == crate::state::BOARD_OWNER {
@@ -1508,7 +1509,7 @@ impl World {
 
     /// Take the instance at `uid` off the field; returns the **player index**
     /// it left (or -1 when there was no such instance -- including a board-owned
-    /// tile rule, which goes nowhere on removal). Fate routing
+    /// tile rule, which goes nowhere on removal). Dest routing
     /// (`to_discard` and kin) keys on the player index, not the room member id.
     ///
     /// An **event rule** instance leaving the field is the event expiring
@@ -1956,6 +1957,15 @@ impl World {
                     && m.src == src
             }) {
                 m.count += count;
+                self.mark_log.push(MarkLog {
+                    uid: m.uid,
+                    tile: m.tile,
+                    kind: m.kind.clone(),
+                    instance: m.instance.unwrap_or(-1),
+                    owner: m.owner,
+                    delta: count,
+                    card: Some(m.card.clone()).filter(|c| !c.is_empty()),
+                });
                 return m.uid;
             }
         }
@@ -1963,6 +1973,7 @@ impl World {
             .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
+        let log_card = Some(card.clone()).filter(|c| !c.is_empty());
         let uid = self.next_mark_uid();
         self.st.marks.push(TileMark {
             uid,
@@ -1977,6 +1988,15 @@ impl World {
             partner: None,
             note,
         });
+        self.mark_log.push(MarkLog {
+            uid,
+            tile,
+            kind: kind.to_string(),
+            instance: instance.unwrap_or(-1),
+            owner,
+            delta: count,
+            card: log_card,
+        });
         uid
     }
 
@@ -1989,6 +2009,13 @@ impl World {
         let uid = self.st.next_mark_uid.max(floor);
         self.st.next_mark_uid = uid.saturating_add(1);
         uid
+    }
+
+    /// Allocate the next raise uid. Monotonic and never-reuse for the lifetime
+    /// of the match; saved, so a replayed action re-issues the same ids.
+    pub fn next_trigger_uid(&mut self) -> i32 {
+        self.st.trigger_uid = self.st.trigger_uid.saturating_add(1);
+        self.st.trigger_uid
     }
 
     /// The marked tile of the row at `uid`, or -1 when no such row (the handle
@@ -2010,9 +2037,12 @@ impl World {
         if uid < 0 {
             return false;
         }
-        let before = self.st.marks.len();
+        let Some(m) = self.st.marks.iter().find(|m| m.uid == uid).cloned() else {
+            return false;
+        };
         self.st.marks.retain(|m| m.uid != uid);
-        self.st.marks.len() != before
+        self.log_mark_row(&m, -m.count);
+        true
     }
 
     /// Partner tile (`TileMark::partner`) of the first matching mark on `tile`,
@@ -2078,6 +2108,15 @@ impl World {
         let uid_a = self.next_mark_uid();
         let uid_b = self.next_mark_uid();
         for (uid, tile, partner) in [(uid_a, a, b), (uid_b, b, a)] {
+            self.mark_log.push(MarkLog {
+                uid,
+                tile,
+                kind: kind.to_string(),
+                instance: instance.unwrap_or(-1),
+                owner,
+                delta: count,
+                card: Some(card.clone()).filter(|c| !c.is_empty()),
+            });
             self.st.marks.push(TileMark {
                 uid,
                 tile,
@@ -2106,22 +2145,37 @@ impl World {
         else {
             return 0;
         };
+        let was = m.count;
         m.count = (m.count + delta).max(0);
         let now = m.count;
         let uid = m.uid;
+        let row = (now != was).then(|| m.clone());
         if now == 0 {
             self.st.marks.retain(|m| m.uid != uid);
+        }
+        if let Some(row) = row {
+            self.log_mark_row(&row, now - was);
         }
         now
     }
 
     /// Drop every matching mark on `tile`; returns how many rows were removed.
     pub fn remove_marks(&mut self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
-        let before = self.st.marks.len();
+        let gone: Vec<TileMark> = self
+            .st
+            .marks
+            .iter()
+            .filter(|m| m.tile == tile && filter.matches(m))
+            .cloned()
+            .collect();
+        for m in &gone {
+            self.log_mark_row(m, -m.count);
+        }
+        let n = gone.len() as i32;
         self.st
             .marks
             .retain(|m| !(m.tile == tile && filter.matches(m)));
-        (before - self.st.marks.len()) as i32
+        n
     }
 
     /// Destroy every counter unit owned by the instance at `uid` -- tile marks
@@ -2132,10 +2186,34 @@ impl World {
         if uid < 0 {
             return;
         }
+        let gone: Vec<TileMark> = self
+            .st
+            .marks
+            .iter()
+            .filter(|m| m.instance == Some(uid))
+            .cloned()
+            .collect();
+        for m in &gone {
+            self.log_mark_row(m, -m.count);
+        }
         self.st.marks.retain(|m| m.instance != Some(uid));
         for p in self.st.players.iter_mut() {
             p.tokens.retain(|t| t.instance != Some(uid));
         }
+    }
+
+    /// Record one mark mutation for the commit's `markChanged` drain. `delta`
+    /// is the effective signed change (a removal is negative).
+    pub(crate) fn log_mark_row(&mut self, m: &TileMark, delta: i32) {
+        self.mark_log.push(MarkLog {
+            uid: m.uid,
+            tile: m.tile,
+            kind: m.kind.clone(),
+            instance: m.instance.unwrap_or(-1),
+            owner: m.owner,
+            delta,
+            card: Some(m.card.clone()).filter(|c| !c.is_empty()),
+        });
     }
 
     // ------------------------------------------------- named card counters
@@ -2158,10 +2236,14 @@ impl World {
         let Some(f) = self.field_by_uid_mut(uid) else {
             return 0;
         };
+        let cap = f.counter_max.get(name).copied().unwrap_or(0);
         let slot = f.counters.entry(name.to_string()).or_insert(0);
         *slot = (*slot + n).max(0);
         if max > 0 {
             *slot = (*slot).min(max);
+        }
+        if cap > 0 {
+            *slot = (*slot).min(cap);
         }
         let now = *slot;
         // Event instances mirror their named counter count into the public
@@ -2179,6 +2261,28 @@ impl World {
             }
         }
         now
+    }
+
+    /// Stored per-instance ceiling of `name` at `uid` (`0` = uncapped).
+    pub fn counter_max_at(&self, uid: i32, name: &str) -> i32 {
+        self.field_by_uid(uid)
+            .and_then(|f| f.counter_max.get(name).copied())
+            .unwrap_or(0)
+    }
+
+    /// Set (`max > 0`) or clear (`0`) the instance's ceiling for `name`.
+    /// Returns the stored value, or `0` when the uid is dead.
+    pub fn set_counter_max_at(&mut self, uid: i32, name: &str, max: i32) -> i32 {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return 0;
+        };
+        if max > 0 {
+            f.counter_max.insert(name.to_string(), max);
+            max
+        } else {
+            f.counter_max.remove(name);
+            0
+        }
     }
 
     /// Set the on-card count of `name` on the instance at `uid`.

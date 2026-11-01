@@ -7,8 +7,8 @@ Worktree `/home/monopoly/web/.claude/worktrees/card-rulebook-review`, branch
 Baseline: the tree's `ABI_VERSION 104` (G06's turn-snapshot entry is already on
 disk, so the constant reads 104 before G03/G06 land their own entries). Sibling
 drafts G03/G06 are written against the same base; §8 fixes the landing order and
-the renumbering rule. In the README order (G03, G08, G02, G04, G06, G11) this
-doc's own line is **106 → 107** — see §8.
+the renumbering rule. In the README landing order this doc's own line is
+**114 → 115** — see §8.
 
 Closed slugs and their review rows (`CARD-REVIEW-2026-10-27.md` line ids). The
 review rows are holistic ids; the authoritative sheet line in
@@ -139,13 +139,13 @@ Invariants (each gets a §9 test or Kani obligation):
   cards from the deck top into the frame, top-first. They are readable
   (`cards_in(Inspect)`) and takeable (`take_card(.., Inspect)`); a card is
   never in the frame and in a pile at once, so filing it anywhere is
-  take + `add_to_fate`.
+  take + `add_to_dest`.
 * **I2 No refill while open.** While any frame has `owner == p`, the pile
-  writes that today refill eagerly (`to_discard`, `add_to_fate(Graveyard)`,
+  writes that today refill eagerly (`to_discard`, `add_to_dest(Graveyard)`,
   `take_card(Deck)`, `discard_from_hand`) do **not** refill. `draw` still does:
   a draw during a look must find cards.
 * **I3 One release per card.** A held card leaves by `take_card(Inspect)`
-  followed by exactly one fate (`add_to_fate` / `place_card` / `to_discard`
+  followed by exactly one dest (`add_to_dest` / `place_card` / `to_discard`
   once it is out). `inspect_end` releases whatever is left in the frame, in order
   (top restored) or shuffled, per its `shuffle` flag; it returns the count.
   Exactly one release applies — `take_card` returning `false` for a card no
@@ -157,7 +157,7 @@ Invariants (each gets a §9 test or Kani obligation):
   and logged.
 * **I5 Order.** Frame order is deck order, top-first. `inspect_end(shuffle =
   false)` restores the original prefix exactly; `shuffle = true` returns the
-  leftovers shuffled (`Fate::DeckRandom` semantics) and is only for clauses
+  leftovers shuffled (`Dest::DeckRandom` semantics) and is only for clauses
   that say 「洗回卡组」.
 * **I6 Reveal is output.** `reveal_card` / `reveal_pile` publish card ids to
   every seat through an event and a state overlay and mutate no pile. A public
@@ -195,12 +195,12 @@ pub enum CardPile {
 }
 ```
 
-`CardPile::from_i32` gains `4`. `add_to_fate` does **not** take an
-`Inspect` fate (the many 4/5/6 codes are `Fate`'s); a body that wants a held
+`CardPile::from_i32` gains `4`. `add_to_dest` does **not** take an
+`Inspect` dest (the many 4/5/6 codes are `Dest`'s); a body that wants a held
 card moved takes it first. `take_card(Inspect)` returns `false` for a card not
 held; on success it removes the frame entry. `to_discard` keeps its current
 hand-then-push behaviour unchanged, so a held card is discarded as
-`take_card(Inspect)` + `add_to_fate(Graveyard)` — which also routes the
+`take_card(Inspect)` + `add_to_dest(Graveyard)` — which also routes the
 `discarded` raise and the refill guard through one place.
 
 ### 4.2 Imports (new; `ruleset_*`)
@@ -296,7 +296,7 @@ pub fn inspect_begin(
 
 /// Close `player_id`'s own innermost frame (the caller as **looker**, whatever
 /// seat owns the deck). Leftovers go back to the deck **top in their original
-/// order**; `shuffle` sends them back shuffled instead (`Fate::DeckRandom`).
+/// order**; `shuffle` sends them back shuffled instead (`Dest::DeckRandom`).
 /// Returns the count returned.
 pub fn inspect_end(player_id: i32, shuffle: bool) -> i32;
 
@@ -409,7 +409,7 @@ fn refill_after_write(&mut self, i: usize) -> bool {
 }
 ```
 
-Call sites: `World::to_discard` (`ops.rs:1055`), `HostCtx::add_to_fate`'s
+Call sites: `World::to_discard` (`ops.rs:1055`), `HostCtx::add_to_dest`'s
 Graveyard branch (`wasm_rules.rs:1052-1054`), `HostCtx::take_card`'s Deck branch
 (`wasm_rules.rs:1105-1110`), `HostCtx::discard_from_hand`
 (`wasm_rules.rs:2061-2063`). `play::refill_draw_pile` and
@@ -417,8 +417,8 @@ Graveyard branch (`wasm_rules.rs:1052-1054`), `HostCtx::take_card`'s Deck branch
 look still refills and still raises `reshuffled`.
 
 `World::to_discard` is unchanged: a held card is filed with `take_card(Inspect)`
-+ `add_to_fate(Graveyard)`, so nothing can be double-filed and the `discarded`
-raise keeps its single producer. (The Graveyard branch of `add_to_fate` is one
++ `add_to_dest(Graveyard)`, so nothing can be double-filed and the `discarded`
+raise keeps its single producer. (The Graveyard branch of `add_to_dest` is one
 of the guarded refill sites.)
 
 ### 5.4 `inspect_end`
@@ -510,10 +510,10 @@ ctx::inspect_begin(player_id, player_id, 2, false)?;
 let top: Vec<NameId> = ctx::cards_in(player_id, CardPile::Inspect);
 // … the same asks over `top` …
 ctx::take_card(player_id, id.as_str(), CardPile::Inspect);
-ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::Graveyard);   // no refill
+ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Graveyard);   // no refill
 // keepers:
 ctx::take_card(player_id, id.as_str(), CardPile::Inspect);
-ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::DeckTop);
+ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
 ctx::inspect_end(player_id, false);             // nothing left normally
 ```
 
@@ -530,7 +530,7 @@ ctx::inspect_begin(player_id, player_id, n, true)?;   // public whole-deck look
 // … rival picks one from cards_in(Hand) (unchanged) …
 // the two picks read cards_in(Inspect) and release with
 ctx::take_card(player_id, id, CardPile::Inspect);
-ctx::add_to_fate(player_id, id, ctx::Fate::Hand);
+ctx::add_to_dest(player_id, id, ctx::Dest::Hand);
 ctx::inspect_end(player_id, false);                   // leftovers back in order
 // … then shuffle_into_deck as today
 ```
@@ -569,7 +569,7 @@ fn seen(player_id: i32) -> card_sdk::Asked {
 }
 ```
 
-No `set_fate` (not a hand play). The [持续]（2） press and `can_swap` stay.
+No `set_dest` (not a hand play). The [持续]（2） press and `can_swap` stay.
 
 **3. `infinite_possibility.rs` clause (1)** (B core; card half A)
 
@@ -582,7 +582,7 @@ snapshot plus post-prompt `take_card(Deck)` into `inspect_begin` /
 `take_card(Inspect)`; maya's tail becomes `inspect_end(player, true)`
 (「剩余观看的牌洗回卡组」), ako's per-card release either places
 (`take_card(Inspect)` + `place_card`) or discards (`take_card(Inspect)` +
-`add_to_fate(Graveyard)`), then `inspect_end(false)` for anything left. Both are private looks and reveal
+`add_to_dest(Graveyard)`), then `inspect_end(false)` for anything left. Both are private looks and reveal
 nothing.
 
 ---
@@ -648,7 +648,7 @@ the wasm cannot load on an older host), `CardPile` gains a wire code, and
 `take_card` / the refill sites change semantics around the frame. No existing
 signature or kind id moves. `ManifestOn` is unchanged; the kind pins
 (`kind_table_pin.rs`, `kinds.rs` `KINDS`, `on_parse.rs`) and the CEL listener
-list get 132/133 (G08 through G09 take 114-130 ahead of this group, G10 131).
+list get 132/133 (the earlier groups take 111-131 ahead of this group).
 
 ---
 
@@ -700,7 +700,7 @@ parses as an Action entry).
 
 ## 10. Alternatives
 
-1. **A `defer_refill` boolean on `take_card` / `to_discard` / `add_to_fate`.**
+1. **A `defer_refill` boolean on `take_card` / `to_discard` / `add_to_dest`.**
    Smallest possible change, but every looker must thread the flag through
    every call, a missed call silently restores the bug, and the looked cards
    still have no identity to show. Rejected; the frame is the state the flag
@@ -737,7 +737,7 @@ parses as an Action entry).
    offering that card. Confirm.
 4. **Does a flipped backstage card become a `discarded` trigger immediately
    (at commit) or after the 1000 gain?** The design drops it with
-   `take_card(Inspect)` + `add_to_fate(Graveyard)`, so it never passes through
+   `take_card(Inspect)` + `add_to_dest(Graveyard)`, so it never passes through
    the hand and cannot consume a same-named hand copy; the gain is logged per
    card in between. Cards listening to `Discarded` (RAS 游击演出, MyGO (3)) see
    it in arrival order. Confirm this is intended for 「翻入弃牌堆」.

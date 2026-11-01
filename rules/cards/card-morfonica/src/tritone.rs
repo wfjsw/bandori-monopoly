@@ -55,7 +55,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 amount,
                 &Msg::new(key!("tritone_reason")).n("money", amount as i64),
             )?;
-            ctx::set_fate(ctx::Fate::Field);
+            ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(
                 player_id,
                 "Mor:迷茫之蝶们的三全音",
@@ -84,7 +84,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             let owed = ctx::counter(OWED);
-            ctx::set_fate(ctx::Fate::Graveyard);
+            ctx::set_dest(ctx::Dest::Graveyard);
             if owed > 0 {
                 // TODO(规则书)（弃置此卡并支付由此卡获得的资金）: the book names no
                 // payee -- we pay the bank (OPEN-三全音收款人).

@@ -333,8 +333,8 @@ pub const BANG_CLAUSES: &[Clause] = &[Clause::new(
 fn bang_dream_contract() {
     forall(6, 0xC0FFEE_0003, |rng: &mut Rng, _i| {
         let mut t = Table::vanilla(2);
-        let fate = [HILL, SPACE, YAMABUKI][rng.pick_idx(3)];
-        t.own(0, &[fate, RYUSEIDO]);
+        let dest = [HILL, SPACE, YAMABUKI][rng.pick_idx(3)];
+        t.own(0, &[dest, RYUSEIDO]);
         t.set_pos(0, CIRCLE);
         with_band(&mut t);
         let crystals0 = t.crystals(0, BAND).unwrap_or(0);
@@ -343,7 +343,7 @@ fn bang_dream_contract() {
         let condition = t.snapshot_world();
         t.observe(BANG_CLAUSES);
         t.play(0, BANG).map_err(|e| format!("play rejected: {e}"))?;
-        answer_pick_tile(&mut t, 0, fate)?;
+        answer_pick_tile(&mut t, 0, dest)?;
         skip_all(&mut t);
 
         let crystals1 = t.crystals(0, BAND).unwrap_or(0);
@@ -356,8 +356,8 @@ fn bang_dream_contract() {
                     .collect::<Vec<_>>()
             ));
         }
-        if t.pos(0) != fate {
-            return Err(format!("pos {}, expected owned tile {fate}", t.pos(0)));
+        if t.pos(0) != dest {
+            return Err(format!("pos {}, expected owned tile {dest}", t.pos(0)));
         }
         frame(
             &condition,
@@ -531,7 +531,7 @@ pub fn c_ppp_caught_01(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     let from = step.condition.st.players[who].pos as usize;
-    let fate = step.post.st.players[who].pos as usize;
+    let dest = step.post.st.players[who].pos as usize;
     // 「你前方一名玩家」 -- strictly clockwise-ahead of the pre-move seat.
     let ahead = (0..step.condition.st.players.len())
         .filter(|&i| i != who)
@@ -541,9 +541,9 @@ pub fn c_ppp_caught_01(step: &Step<'_>) -> Result<(), String> {
             off != 0
         })
         .collect::<Vec<_>>();
-    if !ahead.contains(&fate) {
+    if !ahead.contains(&dest) {
         return Err(format!(
-            "mover {from} landed on {fate}, not a strictly-ahead player's tile {ahead:?}"
+            "mover {from} landed on {dest}, not a strictly-ahead player's tile {ahead:?}"
         ));
     }
     Ok(())
@@ -674,7 +674,7 @@ fn star_beat_option_1() {
             t.set_money(i, *m);
         }
         let f = monies.iter().filter(|m| money_has_5(**m)).count() as i32;
-        let fate = ((45 * (f + 1)) % 60) as usize;
+        let dest = ((45 * (f + 1)) % 60) as usize;
         t.set_pos(0, CIRCLE);
         t.give(0, &[STAR_BEAT]);
 
@@ -692,9 +692,9 @@ fn star_beat_option_1() {
                 "stickers {stickers0} -> {stickers1}, expected +2 (C-PPP-star-beat-03)"
             ));
         }
-        if t.pos(0) != fate {
+        if t.pos(0) != dest {
             return Err(format!(
-                "pos {}, expected (45×({f}+1)) mod 60 = {fate} (C-PPP-star-beat-03)",
+                "pos {}, expected (45×({f}+1)) mod 60 = {dest} (C-PPP-star-beat-03)",
                 t.pos(0)
             ));
         }
@@ -1052,18 +1052,18 @@ fn chocolate_move_1_to_4() {
         let me = rng.range(0, 50) as usize;
         t.set_pos(0, me);
         let want = rng.range(1, 4) as usize;
-        let fate = forward(me, want);
+        let dest = forward(me, want);
         t.give(0, &[CHOCO]);
 
         let condition = t.snapshot_world();
         t.play(0, CHOCO)
             .map_err(|e| format!("play rejected: {e}"))?;
-        answer_pick_tile(&mut t, 0, fate)?;
+        answer_pick_tile(&mut t, 0, dest)?;
         skip_all(&mut t);
 
-        if t.pos(0) != fate {
+        if t.pos(0) != dest {
             return Err(format!(
-                "pos {}, expected distance-{want} tile {fate} (C-PPP-chocolate-01)",
+                "pos {}, expected distance-{want} tile {dest} (C-PPP-chocolate-01)",
                 t.pos(0)
             ));
         }
@@ -1204,14 +1204,14 @@ fn kasumi_skill_teleports_to_own() {
         let mut t = Table::new(&["户山香澄", "美竹兰"]);
         t.clean();
         t.begin_turn(0);
-        let fate = [HILL, SPACE, YAMABUKI][rng.pick_idx(3)];
-        t.own(0, &[fate]);
+        let dest = [HILL, SPACE, YAMABUKI][rng.pick_idx(3)];
+        t.own(0, &[dest]);
         t.set_pos(0, CIRCLE);
         t.set_fire(0, 1, 1);
         let sid = t.skill_id(0, "非凡之星");
         let fire0 = t.charge(0);
         t.skill(0, &sid).map_err(|e| format!("skill press: {e}"))?;
-        answer_pick_tile(&mut t, 0, fate)?;
+        answer_pick_tile(&mut t, 0, dest)?;
         skip_all(&mut t);
 
         if t.charge(0) != fire0 - 1 {
@@ -1221,9 +1221,9 @@ fn kasumi_skill_teleports_to_own() {
                 fire0 - 1
             ));
         }
-        if t.pos(0) != fate {
+        if t.pos(0) != dest {
             return Err(format!(
-                "pos {}, expected owned tile {fate} (C-PPP-kasumi-skill-02)",
+                "pos {}, expected owned tile {dest} (C-PPP-kasumi-skill-02)",
                 t.pos(0)
             ));
         }
@@ -1267,19 +1267,19 @@ fn rimi_skill_teleports_to_farthest_agent() {
         }
         // 「[传送]至任意与你绝对距离最远的地产商」 -- the destination must be
         // an `agent` tile at maximum absolute distance.
-        let fate = t.pos(0);
+        let dest = t.pos(0);
         let tiles = &rules_spec::data().tiles;
-        let is_agent = tiles[fate].kind.as_str() == "agent";
+        let is_agent = tiles[dest].kind.as_str() == "agent";
         if !is_agent {
             return Err(format!(
-                "landed on {fate} ({}), not a 地产商 (C-PPP-rimi-skill-02)",
-                tiles[fate].name
+                "landed on {dest} ({}), not a 地产商 (C-PPP-rimi-skill-02)",
+                tiles[dest].name
             ));
         }
-        if abs_dist(me, fate) != abs_dist(me, far_agent) {
+        if abs_dist(me, dest) != abs_dist(me, far_agent) {
             return Err(format!(
-                "landed on {fate} at distance {}, farthest agent is {far_agent}                  at {} (C-PPP-rimi-skill-02)",
-                abs_dist(me, fate),
+                "landed on {dest} at distance {}, farthest agent is {far_agent}                  at {} (C-PPP-rimi-skill-02)",
+                abs_dist(me, dest),
                 abs_dist(me, far_agent)
             ));
         }
@@ -2088,7 +2088,7 @@ pub fn verify_bang_dream(
     post: &World,
     events: &[MatchEvent],
     who: usize,
-    fate: usize,
+    dest: usize,
 ) -> Result<(), String> {
     let band = |w: &World| {
         w.st.players[who]
@@ -2102,15 +2102,15 @@ pub fn verify_bang_dream(
     if b != a + 1 {
         return Err(format!("band crystals {a} -> {b}, expected +1"));
     }
-    if post.st.players[who].pos as usize != fate {
+    if post.st.players[who].pos as usize != dest {
         return Err(format!(
-            "pos {}, expected owned fate {fate}",
+            "pos {}, expected owned dest {dest}",
             post.st.players[who].pos
         ));
     }
-    // The fate must have been owned in condition (the [传送] target).
-    if condition.st.owners.get(fate).copied().unwrap_or(-1) != who as i32 {
-        return Err("fate was not owned by the user in condition".into());
+    // The dest must have been owned in condition (the [传送] target).
+    if condition.st.owners.get(dest).copied().unwrap_or(-1) != who as i32 {
+        return Err("dest was not owned by the user in condition".into());
     }
     for (i, p) in post.st.players.iter().enumerate() {
         if i != who && p.money != condition.st.players[i].money {
@@ -2121,27 +2121,27 @@ pub fn verify_bang_dream(
     Ok(())
 }
 
-fn verify_bang_wrap(fate: usize) -> impl Fn(&World, &World, &[MatchEvent]) -> Result<(), String> {
-    move |condition, post, events| verify_bang_dream(condition, post, events, 0, fate)
+fn verify_bang_wrap(dest: usize) -> impl Fn(&World, &World, &[MatchEvent]) -> Result<(), String> {
+    move |condition, post, events| verify_bang_dream(condition, post, events, 0, dest)
 }
 
 #[test]
 fn bang_dream_verifier_rejects_mutants() {
     let mut t = Table::vanilla(2);
-    let fate = HILL;
-    t.own(0, &[fate]);
+    let dest = HILL;
+    t.own(0, &[dest]);
     t.set_pos(0, CIRCLE);
     with_band(&mut t);
     t.give(0, &[BANG]);
     let condition = t.snapshot_world();
     let mark = t.mark();
     t.play(0, BANG).unwrap();
-    answer_pick_tile(&mut t, 0, fate).unwrap();
+    answer_pick_tile(&mut t, 0, dest).unwrap();
     skip_all(&mut t);
     let post = t.snapshot_world();
     let events = t.events_since(mark);
-    verify_bang_dream(&condition, &post, &events, 0, fate).expect("genuine Bang Dream! post");
-    let v = verify_bang_wrap(fate);
+    verify_bang_dream(&condition, &post, &events, 0, dest).expect("genuine Bang Dream! post");
+    let v = verify_bang_wrap(dest);
 
     expect_reject("LESS crystal", &condition, &post, &events, &v, |w| {
         if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
@@ -2376,15 +2376,15 @@ pub fn verify_star_beat_03(
     who: usize,
     f: i32,
 ) -> Result<(), String> {
-    let fate = ((45 * (f + 1)) % 60) as usize;
+    let dest = ((45 * (f + 1)) % 60) as usize;
     let st = |w: &World| w.st.players[who].token(STICKER);
     let (a, b) = (st(condition), st(post));
     if b != a + 2 {
         return Err(format!("stickers {a} -> {b}, expected +2"));
     }
-    if post.st.players[who].pos as usize != fate {
+    if post.st.players[who].pos as usize != dest {
         return Err(format!(
-            "pos {}, expected (45×({f}+1)) mod 60 = {fate}",
+            "pos {}, expected (45×({f}+1)) mod 60 = {dest}",
             post.st.players[who].pos
         ));
     }
@@ -2400,7 +2400,7 @@ pub fn verify_star_beat_03(
 #[test]
 fn star_beat_03_verifier_rejects_mutants() {
     let mut t = Table::vanilla(2);
-    // Exactly one money containing 5 -> F = 1, fate = (45*2) mod 60 = 30.
+    // Exactly one money containing 5 -> F = 1, dest = (45*2) mod 60 = 30.
     t.set_money(0, 1500);
     t.set_money(1, 2000);
     let f = 1;
@@ -2670,9 +2670,9 @@ fn bang_dream_without_land_is_refused() {
     if r.is_ok() {
         // If the play is accepted it must not have teleported to a tile the
         // user does not own.
-        let fate = post.st.players[0].pos as usize;
-        if condition.st.owners.get(fate).copied().unwrap_or(-1) != 0 {
-            panic!("teleported to unowned {fate} (C-PPP-bang-dream-02 does more)");
+        let dest = post.st.players[0].pos as usize;
+        if condition.st.owners.get(dest).copied().unwrap_or(-1) != 0 {
+            panic!("teleported to unowned {dest} (C-PPP-bang-dream-02 does more)");
         }
     }
 }

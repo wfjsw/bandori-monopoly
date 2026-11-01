@@ -57,7 +57,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if !on_own_lh(player_id) {
         return Ok(());
     }
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(player_id, pos, ID, &Msg::new(key!("studio_storm_note")));
     ctx::log(
         player_id,
@@ -114,7 +114,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     }
     // The text order puts the discard before the 收费, so the card is gone first
     // either way.
-    ctx::send_to_fate(ctx::Fate::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("studio_storm_fired"))

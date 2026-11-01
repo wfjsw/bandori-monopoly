@@ -46,7 +46,7 @@ const SLOT_PASSED: &str = "saaya_sky_passed";
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::tile_named("山吹面包房");
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     // A pass from a previous time on the field must not fire again.
     ctx::set_slot(player_id, SLOT_PASSED, 0);
     // 规则书（1）: 「将此卡放置在山吹面包房」 -- bound to that tile; the hop in

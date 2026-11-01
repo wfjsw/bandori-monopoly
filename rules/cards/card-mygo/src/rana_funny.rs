@@ -33,7 +33,7 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
 const ID: &str = "MyGO:（乐奈）有趣的女人";
 
 fn rana_funny(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     // 规则书: 「将此卡置于当前格子上」 -- bound to where the player is.
     ctx::place_card_on(
         player_id,
@@ -121,7 +121,7 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
             .tile("tile", tile),
     );
     // 规则书: 「如果强制停下则此卡洗入弃牌堆」 -- the discard half of the trap.
-    ctx::set_transfer_to_fate(owner, ctx::Fate::Graveyard);
+    ctx::set_transfer_to_dest(owner, ctx::Dest::Graveyard);
     Ok(())
 }
 

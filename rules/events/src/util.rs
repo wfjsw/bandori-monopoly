@@ -45,7 +45,7 @@ pub fn rule_id(id: &str) -> String {
 ///
 /// 规则书: 「将此卡放置于场地中央」 -- staying is what that means mechanically.
 pub fn keep() {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
 }
 
 /// 「放入事件弃牌」 -- expire the active event `id` into the discard.

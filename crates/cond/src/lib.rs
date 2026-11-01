@@ -74,7 +74,7 @@ pub fn id_of(name: &str) -> i64 {
 
 /// Why a condition failed to compile. Fail-closed at build: an unparsable or
 /// rejected condition is a `build-ruleset` error (G2 maps this to
-/// `RuleError::BadCondition`), never "treat as true" — the clauses it carries would
+/// `RuleError::BadPre`), never "treat as true" — the clauses it carries would
 /// otherwise be gone from the guard too.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CondError {

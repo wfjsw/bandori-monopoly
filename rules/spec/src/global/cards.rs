@@ -319,7 +319,7 @@ pub fn g_cards_02(step: &Step<'_>) -> Result<(), String> {
 ///   and not on the field.
 /// * **Frame:** n/a (read of that card's zone).
 /// * **Rulings & OPEN:** a negated play still leaves the hand (the engine
-///   files it to the discard as `Fate::Graveyard`); the book's 「使用后」
+///   files it to the discard as `Dest::Graveyard`); the book's 「使用后」
 ///   covers any use that left the hand. [持续] cards are the contrapositive:
 ///   they stay on the 场地 / tile (G-CARDS-03 covers only the non-[持续]
 ///   half; the continuous half is a scenario test).
@@ -579,7 +579,7 @@ pub fn g_cards_06(step: &Step<'_>) -> Result<(), String> {
         if tagged(step.data, &ev.card, "限") {
             // Accepted. Nothing global to assert beyond "the played copy left
             // the hand" (the play activation means the engine believed X
-            // held). A body that Fate::Hand's it back is a card override.
+            // held). A body that Dest::Hand's it back is a card override.
             let who = step.player_of_act();
             let (pre_hand, _, _) = counts(step.condition, who, &ev.card);
             let (post_hand, post_discard, post_field) = counts(step.post, who, &ev.card);

@@ -348,7 +348,7 @@ pub fn lower_with_src(src: &str, v: &ext::Vocab) -> Result<OwnedProgram, CondErr
 pub fn inventory_guards(root: &std::path::Path) -> Vec<String> {
     let mut out = Vec::new();
     collect_dir(root, &mut out);
-    out.push("actor == owner".to_string()); // `condition::MINE`
+    out.push("actor == owner".to_string()); // `pre::MINE`
     out.sort();
     out.dedup();
     out
@@ -469,8 +469,8 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
         // Comments are not registrations. A `// ... On::Message("place")` note
         // otherwise lands its quoted word in the inventory as a fake guard.
         let text = strip_rust_comments(&text);
-        // Phase 3 typed DSL: `On::Filter(Filter::Name(condition, …))` /
-        // `On::Action(Action::Name(condition, …))` (and ruleset `Filters::` /
+        // Phase 3 typed DSL: `On::Filter(Filter::Name(pre, …))` /
+        // `On::Action(Action::Name(pre, …))` (and ruleset `Filters::` /
         // `Actions::` namespaces). Retired `On::FilterFlag` / `On::FilterValue`
         // are not recognized.
         for kind in [
@@ -504,13 +504,13 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
     }
 }
 
-/// After `On::Kind(`, the `condition` argument.
+/// After `On::Kind(`, the `pre` argument.
 ///
 /// `On::Filter` / `On::Action` take one nested ctor
-/// (`Ns::Name(condition, …)` / `Ns::Name(condition, guard, body)`); `condition` is ctor
+/// (`Ns::Name(pre, …)` / `Ns::Name(pre, guard, body)`); `pre` is ctor
 /// arg 1 inside the inner parentheses. The namespace is whatever the ruleset
 /// named it (`Filter`/`Action` engine, `Filters`/`Actions`/… downstream).
-/// `On::Schedule(id, condition, …)` takes a leading id slug; `condition` is the second
+/// `On::Schedule(id, pre, …)` takes a leading id slug; `pre` is the second
 /// top-level argument. Everything else keeps the flat first-arg shape (no
 /// `&[kinds]` slice since the multi-kind lists are gone).
 fn on_pre_string(after: &str, nested: bool, skip_id: bool) -> Option<String> {
@@ -521,10 +521,10 @@ fn on_pre_string(after: &str, nested: bool, skip_id: bool) -> Option<String> {
         return pre_string(first);
     }
     if skip_id {
-        // `On::Schedule(id, condition, …)` -- skip the leading id slug.
+        // `On::Schedule(id, pre, …)` -- skip the leading id slug.
         return nth_top_arg(after, 1).and_then(|s| pre_string(s.as_str()));
     }
-    // Flat: skip an optional `&[...]` leftover, then first string / `condition::MINE`.
+    // Flat: skip an optional `&[...]` leftover, then first string / `pre::MINE`.
     pre_string(after)
 }
 
@@ -658,7 +658,7 @@ fn first_top_arg(inner: &str) -> Option<&str> {
     }
 }
 
-/// The `condition` argument: a string literal, `condition::MINE`, or a known guard const.
+/// The `pre` argument: a string literal, `pre::MINE`, or a known guard const.
 /// Only the first argument is read — a later `key!("…")` / `name` is not a
 /// guard.
 fn pre_string(s: &str) -> Option<String> {
@@ -695,14 +695,14 @@ fn pre_string(s: &str) -> Option<String> {
         .strip_prefix(',')
         .map(|r| r.trim_start())
         .unwrap_or(rest.trim_start());
-    // `condition::MINE` sugar (any path prefix: `condition::MINE`, `card_sdk::condition::MINE`).
+    // `pre::MINE` sugar (any path prefix: `pre::MINE`, `card_sdk::pre::MINE`).
     // Known guard-const path references (content `guards::OWN_START` paths)
     // — resolve through the installed extension.
     let path_end = rest
         .find(|c: char| !(c.is_ascii_alphanumeric() || c == ':' || c == '_'))
         .unwrap_or(rest.len());
     let path = &rest[..path_end];
-    if path == "condition::MINE" || path.ends_with("::condition::MINE") {
+    if path == "pre::MINE" || path.ends_with("::pre::MINE") {
         return Some("actor == owner".to_string());
     }
     if let Some(lit) = ext::ext()

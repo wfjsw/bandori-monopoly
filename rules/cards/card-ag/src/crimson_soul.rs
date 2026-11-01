@@ -204,7 +204,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（3）: 「将此卡放入[使用者]弃卡区」
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     // `value == 0`: a write that landed on the already-zero count
     // 「没有奇迹水晶」; `value < 0`: the last crystal spent 「奇迹水晶用完了」.
     let reason = if trigger::value() < 0 {

@@ -35,6 +35,36 @@ fn roll_then_end(t: &mut Table, who: usize) {
     drain(t);
 }
 
+/// Borrowed `tile:circle` instances attached to `group` (the black_suits
+/// stand-in's borrowed rule).
+fn borrowed_on(t: &Table, group: usize) -> usize {
+    let w = t.m.world();
+    w.field_instances(game_core::state::BOARD_OWNER)
+        .into_iter()
+        .filter(|(u, id)| id == "tile:circle" && w.tile_at(*u) == group as i32)
+        .count()
+}
+
+/// Play `HHW:黑衣人的补给` off p0's CiRCLE pass; leaves the crystal and the
+/// borrowed `tile:circle` on 弦卷集团.
+fn park_black_crystal(t: &mut Table, group: usize) {
+    let ci = tile("CiRCLE");
+    let n = data().tiles.len();
+    t.give(0, &["HHW:黑衣人的补给"]);
+    t.set_pos(0, (ci + n - 2) % n);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    assert!(
+        t.counteract_offered("HHW:黑衣人的补给"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "HHW:黑衣人的补给").unwrap();
+    drain(t);
+    assert_eq!(t.marks_on(group).len(), 1, "crystal parked");
+    assert_eq!(borrowed_on(t, group), 1, "the tile borrowed CiRCLE");
+}
+
 // ================================================================ cards
 
 // 规则书（1）: 「投掷2次4d20并将一个育美标记放置到投掷结果之一的格子上…
@@ -139,6 +169,50 @@ fn hagumi_mark_stops_the_walk_and_settles_there() {
         format!("{:?}", rent.msg.args.get("tile")),
         format!("Some({:?})", game_core::msg::Arg::Tile(51)),
         "the settle is on the stop tile"
+    );
+}
+
+// 规则书（1）: 「你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记」
+// -- one reward and one mark per pass, however many stand-ins are on the field.
+#[test]
+fn hagumi_one_reward_per_mark_with_two_standins() {
+    let mut t = vanilla2();
+    let a = t.place_raw(0, "HHW:（育美）");
+    let _b = t.place_raw(0, "HHW:（育美）");
+    t.m.world_mut().place_mark(
+        a,
+        "cards:card-hhw.hagumi_marks_mark",
+        "",
+        51,
+        0,
+        a,
+        1,
+        Default::default(),
+        true,
+    );
+    t.set_pos(0, 48);
+    t.dice(&[4]);
+    let before = t.money(0);
+    t.roll(0).unwrap();
+    assert!(
+        t.prompt_refers("hagumi_marks_stop"),
+        "one stop ask: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 51, "the stop holds: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.money(0),
+        before + 2000,
+        "one 2000 reward; events {:?}",
+        t.recent_keys(12)
+    );
+    assert!(t.marks_on(51).is_empty(), "one mark spent");
+    assert!(
+        !t.on_field(0, "HHW:（育美）"),
+        "every stand-in files itself: {:?}",
+        t.field_ids(0)
     );
 }
 
@@ -524,6 +598,101 @@ fn black_clothes_supply_removes_a_crystal_after_passing_the_group_tile() {
             .iter()
             .all(|m| m.kind != "cards:card-hhw.black_suits_crystal"),
         "no stray crystals elsewhere"
+    );
+}
+
+// 规则书: 「该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果」 -- the borrow
+// is keyed on the crystal's presence, so a clear that this card did not make (an
+// external bump, a bankrupt owner's purge) must drop the borrowed rule too.
+#[test]
+fn black_suits_borrow_tracks_crystals_from_any_path() {
+    let group = tile("弦卷集团");
+    // (a) An external bump on the crystal row, made in p0's 运营 phase (cards are
+    // only playable there, and a card body is what commits and raises the row).
+    let mut t = vanilla2();
+    park_black_crystal(&mut t, group);
+    t.end(0).unwrap();
+    drain(&mut t);
+    roll_then_end(&mut t, 1);
+    t.begin_turn(0);
+    drain(&mut t);
+    {
+        let w = t.m.world_mut();
+        let f = game_core::state::MarkFilter {
+            kind: "cards:card-hhw.black_suits_crystal",
+            ..game_core::state::MarkFilter::ANY
+        };
+        w.bump_mark(group as i32, &f, -1);
+    }
+    t.give_play(0, "R:[衍生] 压").unwrap();
+    drain(&mut t);
+    assert_eq!(t.marks_on(group).len(), 0, "crystal cleared");
+    assert_eq!(
+        borrowed_on(&t, group),
+        0,
+        "the borrowed CiRCLE went with the crystal"
+    );
+
+    // (b) A bankruptcy purge destroys the owner's crystal out from under the
+    // stand-in (which is unplaced before the raise commits).
+    let mut t = vanilla2();
+    park_black_crystal(&mut t, group);
+    let mall = tile("购物中心");
+    t.own(1, &[mall]);
+    t.set_houses(mall, 5);
+    t.end(0).unwrap();
+    drain(&mut t);
+    roll_then_end(&mut t, 1);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_money(0, 0);
+    t.set_pos(0, (mall + data().tiles.len() - 1) % data().tiles.len());
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert!(t.p(0).bankrupt, "p0 is out: {:?}", t.recent_keys(12));
+    assert!(
+        t.marks_on(group).is_empty(),
+        "the purge took the crystal: {:?}",
+        t.marks_on(group)
+    );
+    assert_eq!(
+        borrowed_on(&t, group),
+        0,
+        "the borrowed CiRCLE is gone after the purge"
+    );
+}
+
+// 规则书: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- one crystal per
+// pass, however many copies of the stand-in are on the field.
+#[test]
+fn black_suits_one_crystal_per_pass_with_two_copies() {
+    let group = tile("弦卷集团");
+    let mut t = vanilla2();
+    let a = t.place_raw(0, "HHW:黑衣人的补给");
+    let _b = t.place_raw(0, "HHW:黑衣人的补给");
+    // Two crystals, both bound to copy `a`.
+    t.m.world_mut().place_mark(
+        a,
+        "cards:card-hhw.black_suits_crystal",
+        "",
+        group as i32,
+        0,
+        a,
+        2,
+        Default::default(),
+        true,
+    );
+    t.set_pos(0, (group + data().tiles.len() - 2) % data().tiles.len());
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let left: i32 = t.marks_on(group).iter().map(|m| m.count).sum();
+    assert_eq!(
+        left,
+        1,
+        "one of the two crystals removed on one pass; events {:?}",
+        t.recent_keys(12)
     );
 }
 

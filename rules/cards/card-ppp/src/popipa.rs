@@ -26,11 +26,11 @@ pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play("", None, popi
 
 fn popipa(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「然后此卡[移除]」
-    ctx::set_fate(ctx::Fate::Banished);
+    ctx::set_dest(ctx::Dest::Banished);
     // 规则书: 「获得1000资金」
     ctx::gain(player_id, 1000, &Msg::new(key!("popipa_reason")))?;
     // 规则书: 「并将一张“Pipopa”加入抽牌堆」
-    ctx::add_to_fate(player_id, "PPP:[衍生]Pipopa", ctx::Fate::DeckRandom);
+    ctx::add_to_dest(player_id, "PPP:[衍生]Pipopa", ctx::Dest::DeckRandom);
     ctx::log(
         player_id,
         &Msg::new(key!("popipa_added")).player_id("who", player_id),

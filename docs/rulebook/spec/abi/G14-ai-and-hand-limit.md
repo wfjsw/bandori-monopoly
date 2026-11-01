@@ -534,8 +534,8 @@ The play body, the untargetable filter, the turn-start end path and the `*_kani`
 
 ## 8. Versioning
 
-`ABI_VERSION` 116 → **117** (last group; next after current if the order holds; if G06
-`counteraction-and-join` lands first, this becomes 106 — one bump per delivery).
+`ABI_VERSION` 116 → **117** (last group in the README order; if the order ever
+changes, take the number the table then leaves free — one bump per delivery).
 Entry inserted immediately **below** the `pub const ABI_VERSION` line for
 newest-first order (`abi.rs:846`, where v104 already sits; the older entries
 live in the fenced list below the constant), matching the `/// vNNN:` style:
@@ -555,7 +555,7 @@ live in the fenced list below the constant), matching the `/// vNNN:` style:
 ///    hidden reads. SAVE_VERSION / RECORD_VERSION unchanged.
 ```
 
-The ABI bump is for the **import arity**, not for the prop: a v104 module
+The ABI bump is for the **import arity**, not for the prop: a v116 module
 calling two-arg `ruleset_draw` would misread the stack on a v117 host.
 
 Manifest line text (both prop modules, identical):
@@ -615,7 +615,7 @@ Existing suites that must stay green:
   existing unused `nnm_02_effects_ok` expects one `Draw` of `n = x`, which
   never matched the engine -- the new spec replaces it). The `before_turn_end`
   schedule stays protocol-level: `schedule_turn_end` is `arm_stub_zero`.
-  `unwrap_done` shows the body returned; frame: hand +x, fate and money
+  `unwrap_done` shows the body returned; frame: hand +x, dest and money
   unchanged.
 * `nnm_02_mutant_plain_draw_is_detected` — the same shape over `Effect::Draw`
   fails once the card uses the flagged draw (a variant + count mismatch).

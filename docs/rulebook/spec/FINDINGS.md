@@ -76,7 +76,7 @@ counted under the first tag; the dual is named in the row.)
 
 | clause ID | unit | class | what the book says | what the implementation does | evidence | status |
 |---|---|---|---|---|---|---|
-| C-CRYCHIC-ifonly-02 | crychic | LESS | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | Body only `set_fate(Graveyard)` + narration; never unplaces the card into discard. | Kani `ifonly_02_discard_at_seven_iff` (FAILS/LESS, verdict pending) | CANDIDATE |
+| C-CRYCHIC-ifonly-02 | crychic | LESS | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | Body only `set_dest(Graveyard)` + narration; never unplaces the card into discard. | Kani `ifonly_02_discard_at_seven_iff` (FAILS/LESS, verdict pending) | CANDIDATE |
 | C-CRYCHIC-band-01b | crychic | MORE | 「手牌数大于等于6时…无法从手中打出任何牌」 | No play-gate body (TODO in `skill-bands/src/crychic.rs`); engine accepts plays at hand 6 and runs the body. | `crychic_band_blocks_play_at_six` | REGRESSION-ONLY |
 | C-CRYCHIC-band-03 | crychic | LESS | 「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶（上限10）」 | Logic is book-correct when `SEEN==4`, but SEEN only tracks draws (non-draw 4→5 missed) and host `state_set` value drop means live games never see 4. | `crychic_band_crystal_on_four_to_five` | REGRESSION-ONLY |
 
@@ -170,7 +170,7 @@ counted under the first tag; the dual is named in the row.)
 
 | clause ID | unit | note |
 |---|---|---|
-| C-HHW-athletic-02 | hhw | 「每回合结束时失去一个，为0时置入弃牌堆」 — body may only `set_fate(Graveyard)` without unplace → expected LESS. Kani class P / F?. |
+| C-HHW-athletic-02 | hhw | 「每回合结束时失去一个，为0时置入弃牌堆」 — body may only `set_dest(Graveyard)` without unplace → expected LESS. Kani class P / F?. |
 | C-HHW-misaki-skill-01 | hhw | 「经过弦卷集团…获得2火罐（上限2）」 — host `gain_fire` may lack a cap clamp → expected MORE. |
 | C-MOR-rainbow-01 | mor | HOSTOPS-ROUND2 re-run `rainbow_01_half_iff` FAILED: spec wants `amount/2` but card is `CeilTo(amount/2, 10)`. Rounding question (see OPEN-QUESTIONS). Not folded into mor.md Summary. |
 | C-MUJICA-海铃-05 | mujica | Taken band skills are detached, not 「置入弃牌堆」. Recorded shortfall; `umiri_takes_holders_band_skill` notes the TODO. |

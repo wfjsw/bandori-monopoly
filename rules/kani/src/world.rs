@@ -354,7 +354,7 @@ pub enum Effect {
     },
     PlaceCard {
         player: i32,
-        fate: i32,
+        dest: i32,
         card: u8,
     },
     TakeFromPile {
@@ -726,8 +726,8 @@ pub struct World {
     pub field: [FieldCard; MAX_FIELD],
     pub field_n: u8,
     pub next_uid: i32,
-    /// Pending `place_card` destination (`ctx::set_fate`).
-    pub fate: i32,
+    /// Pending `place_card` destination (`ctx::set_dest`).
+    pub dest: i32,
     pub last_uid: i32,
     /// Crystals of the running instance when it has no `field[]` slot
     /// (events: heat_head phase, circle_rebuild's 5 miracle crystals).
@@ -876,7 +876,7 @@ impl World {
             field: [FieldCard::EMPTY; MAX_FIELD],
             field_n: 0,
             next_uid: 1,
-            fate: 0,
+            dest: 0,
             last_uid: 1,
             self_crystals: 0,
             tiles: [TileState::new(); 60],
@@ -1123,7 +1123,7 @@ impl World {
     }
 
     /// Swap-remove the field instance `uid`; returns its card id when present.
-    /// Used by the host's unplace / deferred-fate (`set_fate`) commit.
+    /// Used by the host's unplace / deferred-dest (`set_dest`) commit.
     pub fn remove_field(&mut self, uid: i32) -> Option<u16> {
         let mut i = 0usize;
         while i < self.field_n as usize {

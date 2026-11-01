@@ -112,7 +112,7 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // hook's own `exile > 0` guard stops it once the exile ticks away, and the
     // `TurnStart` retire above takes the stand-in off the field at that point
     // (the exile ends in `turnStartBefore`, exactly one layer at a time).
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "MyGO:无路矢", &Msg::new(key!("no_road_log")));
     ctx::set_slot(player_id, "noRoad.who", who);
     // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- the lasting [指定] while
@@ -150,11 +150,11 @@ fn retire_guard(player_id: i32) -> bool {
 
 /// 规则书: 「[除外]期间」 -- the exile is over: drop the stand-in (its
 /// designation mark dies with the instance) and the stale partner. The card
-/// files to its owner's discard: the sheet names no other fate, so the default
+/// files to its owner's discard: the sheet names no other dest, so the default
 /// applies (`unplace_self` alone would banish it).
 fn retire(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "noRoad.who", -1);
-    ctx::send_to_fate(ctx::Fate::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

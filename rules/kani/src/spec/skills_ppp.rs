@@ -274,8 +274,8 @@ pub fn rimi_02_fire_after(pre_fire: i32) -> i32 {
 }
 
 /// Destination must be a 地产商 (agent) at maximum absolute distance.
-pub fn rimi_02_dest_ok(at: i32, fate: i32, is_agent: bool, best: i32) -> bool {
-    is_agent && rimi_02_abs_dist(at, fate) == best && best >= 0
+pub fn rimi_02_dest_ok(at: i32, dest: i32, is_agent: bool, best: i32) -> bool {
+    is_agent && rimi_02_abs_dist(at, dest) == best && best >= 0
 }
 
 // ===========================================================================

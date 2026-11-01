@@ -53,6 +53,8 @@
   "anim.chainKind.actGate": "Action gate",
   "anim.chainKind.onBoardGate": "On-board gate",
   "anim.chainKind.targetableGate": "Targetable gate",
+  "anim.chainKind.cardFired": "Card fired",
+  "anim.chainKind.markChanged": "Mark changed",
   "anim.chainKind.bankruptBefore": "Before bankruptcy",
   "anim.chainKind.bankruptResolved": "Bankruptcy resolved",
   "anim.chainKind.beforeOut": "Before out",

@@ -51,7 +51,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // t.index : -1`: out / exile / `ImmuneAll` / `Untargetable` / the `target` [反击]
     // window all fail the designation, and a `redirect` hook may move the hit.
     let hit = ctx::target(who);
-    // The played card itself keeps the default `Fate::Graveyard` --
+    // The played card itself keeps the default `Dest::Graveyard` --
     // 「当你发动该效果后，此卡进入弃牌堆」.
     if let Some(who) = hit {
         ctx::place_card_at(

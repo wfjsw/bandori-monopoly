@@ -42,7 +42,7 @@ crate::host_subset!(rinne_rain_dispatch {
 /// `MyGO:哪怕这旅程没有终点` play — place on current tile + 4 crystals.
 /// `place_card_on` (NOT `place_card_at`: name at `(a2,a3)`, tile at `a1`).
 crate::host_subset!(endless_journey_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_on => arm_place_card_on,
     player_pos => arm_player_pos,
     set_counter_self => arm_set_counter_self,
@@ -57,7 +57,7 @@ crate::host_subset!(haneoka_dispatch {
     mortgaged_of => arm_mortgaged_of,
     add_house => arm_add_house,
     draw => arm_draw,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -68,7 +68,7 @@ crate::host_subset!(haneoka_dispatch {
 /// walk is one agent — the stay leg is PROTOCOL-adjacent (`rainday_02`).
 /// Not a silent-zero: a real face of 1 on the 1d10.
 crate::host_subset!(that_day_rain_dispatch {
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     set_counter_self => arm_set_counter_self,
     roll => arm_roll_face_one,
@@ -184,7 +184,7 @@ crate::host_subset!(tomori_no_longer_dispatch {
     raise_after => arm_raise_after,
     skip_main_move => arm_stub_zero,
     log_as => arm_log,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     cards_in => arm_cards_in,
     discard_from_hand => arm_discard_from_hand,
@@ -316,8 +316,8 @@ pub fn rinpuu_01_mutant_two_layers() {
 // C-MYGO-journey-01
 // 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」
 // `MyGO:哪怕这旅程没有终点` On::Play.
-// Seat-symmetric. Host note: `place_card_on` logs `PlaceCard { fate }` with
-// `fate` = the landing **tile index** (not `Fate::Field`); `set_crystals(4)`
+// Seat-symmetric. Host note: `place_card_on` logs `PlaceCard { dest }` with
+// `dest` = the landing **tile index** (not `Dest::Field`); `set_crystals(4)`
 // is `set_counter_self` and logs one `AddCounter { n: 4 }` on the instance.
 // ===========================================================================
 

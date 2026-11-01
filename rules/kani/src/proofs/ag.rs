@@ -78,13 +78,13 @@ crate::host_subset!(ag_dispatch {
     pay_to => arm_pay_to,
     draw => arm_draw,
     // piles
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     cards_in => arm_cards_in,
     hand_size => arm_hand_size,
-    // field / fate
-    set_fate => arm_set_fate,
+    // field / dest
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     // counters (奇迹水晶 on the instance)
     counter_self => arm_counter_self,
@@ -683,7 +683,7 @@ pub fn colors_06_pick_to_hand() {
                 if effects.len() == 2 {
                     crate::kassert!(
                         spec::ag::colors_06_log_ok(effects, player, *card),
-                        "C-AG-colors-06: take + add_to_fate(Hand)"
+                        "C-AG-colors-06: take + add_to_dest(Hand)"
                     );
                 } else {
                     crate::kassert!(
@@ -1061,7 +1061,7 @@ fn one_of_us_01_place_iff_at(user: i32) {
             e,
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 ..
             } if *p == player
         )

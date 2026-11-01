@@ -42,7 +42,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let discard = ctx::cards_in(player_id, CardPile::Graveyard);
         for id in discard.iter().rev() {
             ctx::take_card(player_id, id.as_str(), CardPile::Graveyard);
-            ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::DeckBottom);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom);
         }
         ctx::log(
             player_id,
@@ -105,11 +105,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let top_i = pick.min(1);
         let under = keep[1 - top_i];
         let over = keep[top_i];
-        ctx::add_to_fate(player_id, under.as_str(), ctx::Fate::DeckTop);
-        ctx::add_to_fate(player_id, over.as_str(), ctx::Fate::DeckTop);
+        ctx::add_to_dest(player_id, under.as_str(), ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, over.as_str(), ctx::Dest::DeckTop);
     } else {
         for id in keep {
-            ctx::add_to_fate(player_id, id.as_str(), ctx::Fate::DeckTop);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
         }
     }
     Ok(())

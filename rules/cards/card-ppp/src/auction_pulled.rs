@@ -48,7 +48,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if !ctx::take_card(player_id, ID, CardPile::Hand) {
                 return Ok(());
             }
-            ctx::set_fate(ctx::Fate::Field);
+            ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("auction_pulled_note")));
             // TODO(ABI)（此卡拥有者火罐上限加1）: no leave-field hook point -- the cap is written on the
             // seat row and never reverted when this card leaves play.

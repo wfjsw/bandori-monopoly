@@ -37,7 +37,7 @@ pub const J11: CardDef = CardDef::new(
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("j11_note")));
     ctx::set_crystals(2);
     ctx::log(
@@ -49,7 +49,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 fn charge(player_id: i32) {
     // 规则书: 「可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕」
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     rules_status::stun::add(player_id, 1);
     let here = ctx::player_pos(player_id);
     for p in ctx::others(player_id) {
@@ -155,7 +155,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「为0时置入弃牌堆」
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("j11_decayed")).player_id("who", player_id),

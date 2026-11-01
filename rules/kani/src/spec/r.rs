@@ -66,7 +66,7 @@ pub fn resolve_gain_amount() -> i32 {
 }
 
 /// Play body: exactly `GainMoney { player, 1000 }`. Zone motion of the played
-/// copy is the engine play pipeline (`Fate::Banished` is the body's return).
+/// copy is the engine play pipeline (`Dest::Banished` is the body's return).
 pub fn resolve_play_log_ok(effects: &[Effect], player: i32) -> bool {
     only_gain_money(effects, player, resolve_gain_amount())
 }
@@ -268,7 +268,7 @@ pub fn fire_bird_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card: c
             } if p == player && c == card
         )
@@ -290,7 +290,7 @@ pub fn fire_bird_place_log_ok_mutant(effects: &[Effect], player: i32, card: u8) 
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card: c
             } if p == player && c == card
         )
@@ -331,14 +331,14 @@ pub fn fire_bird_burn_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // 「（1）将此卡放置于自身场上」
 // ===========================================================================
 
-/// Exactly one PlaceCard on the user's field (Fate::Field = 2).
+/// Exactly one PlaceCard on the user's field (Dest::Field = 2).
 pub fn ringing_bloom_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
     effects.len() == 1
         && matches!(
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card: c
             } if p == player && c == card
         )
@@ -541,7 +541,7 @@ pub fn student_council_add_resolve_ok(
 }
 
 /// The insert is unconditional on the optional placement branch (r.md ruling).
-/// Body-local observable: `add_to_fate` of one `R:[衍生] 觉悟` (silent write
+/// Body-local observable: `add_to_dest` of one `R:[衍生] 觉悟` (silent write
 /// under the current host — no effect-log entry).
 pub fn student_council_add_resolve_delta(pre_deck_n: i32, post_deck_n: i32) -> bool {
     post_deck_n == pre_deck_n + 1

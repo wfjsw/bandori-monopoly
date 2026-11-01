@@ -321,9 +321,9 @@ mod abi {
         pub fn offer_build(player_id: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_add_to_fate"
+            link_name = "ruleset_add_to_dest"
         )]
-        pub fn add_to_fate(player_id: i32, ptr: i32, len: i32, fate: i32);
+        pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_take_card"
@@ -382,24 +382,24 @@ mod abi {
         pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_set_fate"
+            link_name = "ruleset_set_dest"
         )]
-        pub fn set_fate(fate: i32);
+        pub fn set_dest(dest: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_set_transfer_to_fate"
+            link_name = "ruleset_set_transfer_to_dest"
         )]
-        pub fn set_transfer_to_fate(to: i32, fate: i32);
+        pub fn set_transfer_to_dest(to: i32, dest: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_send_to_fate"
+            link_name = "ruleset_send_to_dest"
         )]
-        pub fn send_to_fate(fate: i32) -> i32;
+        pub fn send_to_dest(dest: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_transfer_to_fate"
+            link_name = "ruleset_transfer_to_dest"
         )]
-        pub fn transfer_to_fate(to: i32, fate: i32) -> i32;
+        pub fn transfer_to_dest(to: i32, dest: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_rent_unit_mult"
@@ -980,6 +980,45 @@ mod abi {
             link_name = "ruleset_trig_name"
         )]
         pub fn trig_name(p: i32, n: i32) -> i32;
+        // v105: raise identity (hook reads only). `uid` is the raise's unique
+        // id (0 outside a raise); `instance` is the subject instance/row
+        // (-1 = none). Neither is restamped per hook job.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_uid"
+        )]
+        pub fn trig_uid() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_instance"
+        )]
+        pub fn trig_instance() -> i32;
+        // v105: resolution frame. `body_enter` reports 1 (run the body), 0
+        // (the fire was cancelled) or the pause sentinel (the fire asked).
+        // The frame is the host's: it stays up past `body_leave` and dies
+        // with the raise that carried the body.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_body_enter"
+        )]
+        pub fn body_enter(p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_body_leave"
+        )]
+        pub fn body_leave();
+        // v105: per-instance counter maximum. `0` = uncapped; the setter
+        // clears on `0` and returns the stored value.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_counter_max_at"
+        )]
+        pub fn counter_max_at(uid: i32, p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_counter_max_at"
+        )]
+        pub fn set_counter_max_at(uid: i32, p: i32, n: i32, max: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_step"

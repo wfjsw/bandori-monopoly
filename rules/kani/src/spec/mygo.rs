@@ -69,14 +69,14 @@ pub fn rinpuu_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // and `set_crystals` logs one `AddCounter`.
 // ===========================================================================
 
-/// Fate::Field discriminant (`card_sdk::ctx::Fate::Field`). `place_card_at`
-/// logs this as `PlaceCard { fate }`; `place_card_on` instead logs the landing
+/// Dest::Field discriminant (`card_sdk::ctx::Dest::Field`). `place_card_at`
+/// logs this as `PlaceCard { dest }`; `place_card_on` instead logs the landing
 /// **tile index** (see `journey_01_log_ok`).
 pub const DEST_FIELD: i32 = 2;
 
 /// Exact effect log of the play body: `PlaceCard` on the current tile then
-/// `AddCounter(4)`. Host note: `place_card_on` logs `PlaceCard { fate }` with
-/// `fate` = the landing tile index (not `Fate::Field`); `set_crystals(4)` is
+/// `AddCounter(4)`. Host note: `place_card_on` logs `PlaceCard { dest }` with
+/// `dest` = the landing tile index (not `Dest::Field`); `set_crystals(4)` is
 /// `set_counter_self`, which logs one `AddCounter { n: 4 }` on the instance.
 /// Narration is not the frame.
 pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8, tile: i32) -> bool {
@@ -85,9 +85,9 @@ pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8, tile: i32) -
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate,
+                dest,
                 card: c
-            } if p == player && fate == tile && c == card
+            } if p == player && dest == tile && c == card
         )
         && matches!(
             effects[1],
@@ -125,7 +125,7 @@ pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8, tile:
 //  至少为20，则将此卡放置在自己场上…若小于10，此卡放入弃牌堆且视为此卡未生效」
 // Card: `MyGO:羽丘的不可思议女孩` On::Play (gated on own tile).
 // Thresholds inclusive (sheet 2026-10-06). `add_house` is free (no money).
-// The `<10` branch's 「放入弃牌堆」 is the play pipeline's default fate, not a
+// The `<10` branch's 「放入弃牌堆」 is the play pipeline's default dest, not a
 // body effect — the body only `ctx::log`s the rolled face there (narration is
 // not an Effect).
 // ===========================================================================
@@ -159,8 +159,8 @@ pub fn haneoka_effects_ok(effects: &[Effect], player: i32, tile: i32, r: i32, ca
         if i >= effects.len() {
             return false;
         }
-        if !matches!(effects[i], Effect::PlaceCard { player: p, fate, card: c }
-            if p == player && fate == DEST_FIELD && c == card)
+        if !matches!(effects[i], Effect::PlaceCard { player: p, dest, card: c }
+            if p == player && dest == DEST_FIELD && c == card)
         {
             return false;
         }
@@ -205,9 +205,9 @@ pub fn rainday_01_place_ok(effects: &[Effect], player: i32, card: u8) -> bool {
             *e,
             Effect::PlaceCard {
                 player: p,
-                fate,
+                dest,
                 card: c
-            } if p == player && fate == DEST_FIELD && c == card
+            } if p == player && dest == DEST_FIELD && c == card
         )
     })
 }
@@ -387,9 +387,9 @@ pub fn tomori_card_02_empty_hand_log_ok(effects: &[Effect], player: i32, card: u
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                fate,
+                dest,
                 card: c
-            } if p == player && fate == DEST_FIELD && c == card
+            } if p == player && dest == DEST_FIELD && c == card
         )
         && matches!(
             effects[2],
@@ -409,9 +409,9 @@ pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, 
             effects[1],
             Effect::PlaceCard {
                 player: p,
-                fate,
+                dest,
                 card: c
-            } if p == player && fate == DEST_FIELD && c == card
+            } if p == player && dest == DEST_FIELD && c == card
         )
         && matches!(
             effects[2],

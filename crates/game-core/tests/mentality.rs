@@ -8,7 +8,7 @@ mod common;
 use common::data_arc as data;
 use common::Pump;
 use game_core::engine::{
-    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Fate, Flow, Match,
+    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Dest, Flow, Match,
     PlayCtx, StubRules, Trigger, BUILD_RESERVE, BUY_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
     FORCE_BUY_RESERVE, REDEEM_RESERVE,
 };
@@ -197,7 +197,7 @@ struct PromptRules {
 }
 
 impl game_core::engine::CardRules for PromptRules {
-    fn play(&self, cx: &mut PlayCtx, player_id: usize, _card: &str) -> Flow<Fate> {
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, _card: &str) -> Flow<Dest> {
         let ask = Ask::choice(
             vec![player_id],
             Msg::new("ask.mulligan.title"),
@@ -212,7 +212,7 @@ impl game_core::engine::CardRules for PromptRules {
         );
         let r = cx.ask(ask)?;
         *self.play_pick.lock().unwrap() = Some(r.of(player_id));
-        Ok(Fate::Graveyard)
+        Ok(Dest::Graveyard)
     }
 
     fn event(&self, _cx: &mut PlayCtx, _player_id: usize, _id: &str) -> Flow<bool> {

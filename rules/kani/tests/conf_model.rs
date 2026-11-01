@@ -113,7 +113,7 @@ pub struct ConfWorld {
     pub state_flags: BTreeMap<(i32, String), u8>,
     /// Held / tokens.
     pub held: BTreeMap<(i32, String), i32>,
-    pub fate: i32,
+    pub dest: i32,
     pub trig_value: i32,
     pub trig_target: i32,
     pub trig_cancelled: bool,
@@ -167,7 +167,7 @@ impl ConfWorld {
             state: BTreeMap::new(),
             state_flags: BTreeMap::new(),
             held: BTreeMap::new(),
-            fate: 0,
+            dest: 0,
             trig_value: 0,
             trig_target: -1,
             trig_cancelled: false,
@@ -495,16 +495,16 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("draw {player_id} {n}"));
         n
     }
-    fn add_to_fate(&mut self, player_id: i32, card: &str, fate: i32) {
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
         let p = player_id.max(0) as usize % 4;
-        match fate {
+        match dest {
             0 => {
                 self.discards[p].push(card.to_string());
                 self.events.push(format!("to_discard {player_id} {card}"));
             }
             1 => {
                 self.hands[p].push(card.to_string());
-                self.events.push(format!("add_to_fate {player_id} {card}"));
+                self.events.push(format!("add_to_dest {player_id} {card}"));
             }
             4 | 5 | 6 => {
                 self.decks[p].push(card.to_string());
@@ -592,20 +592,20 @@ impl CardWorld for ConfWorld {
         self.next_uid += 1;
         uid
     }
-    fn set_fate(&mut self, fate: i32) {
-        self.fate = fate;
+    fn set_dest(&mut self, dest: i32) {
+        self.dest = dest;
     }
-    fn set_transfer_to_fate(&mut self, _to: i32, fate: i32) {
-        self.fate = fate;
+    fn set_transfer_to_dest(&mut self, _to: i32, dest: i32) {
+        self.dest = dest;
     }
-    fn send_to_fate(&mut self, fate: i32) -> Option<i32> {
+    fn send_to_dest(&mut self, dest: i32) -> Option<i32> {
         let p = self.turn_player.max(0) as usize % 4;
-        self.pos[p] = fate;
-        self.events.push(format!("send_to_fate {fate}"));
+        self.pos[p] = dest;
+        self.events.push(format!("send_to_dest {dest}"));
         Some(1)
     }
-    fn transfer_to_fate(&mut self, _to: i32, fate: i32) -> Option<i32> {
-        self.send_to_fate(fate)
+    fn transfer_to_dest(&mut self, _to: i32, dest: i32) -> Option<i32> {
+        self.send_to_dest(dest)
     }
     fn rent_unit_mult(&self) -> i32 {
         10
@@ -1067,7 +1067,7 @@ pub struct Snap {
     pub tiles_owner: Vec<i32>,
     pub tiles_houses: Vec<i32>,
     pub tiles_mortgaged: Vec<bool>,
-    pub fate: i32,
+    pub dest: i32,
     pub trig_value: i32,
     pub trig_target: i32,
     /// Normalized effect lines: `gain p n`, `pay p n`, `teleport p t`, ...
@@ -1085,7 +1085,7 @@ fn snap_real(w: &ConfWorld) -> Snap {
         tiles_owner: w.tiles_owner.to_vec(),
         tiles_houses: w.tiles_houses.to_vec(),
         tiles_mortgaged: w.tiles_mortgaged.to_vec(),
-        fate: w.fate,
+        dest: w.dest,
         trig_value: w.trig_value,
         trig_target: w.trig_target,
         effects: w.events.clone(),
@@ -1108,7 +1108,7 @@ fn snap_model() -> Snap {
             tiles_owner: w.tiles.iter().map(|t| t.owner).collect(),
             tiles_houses: w.tiles.iter().map(|t| t.houses).collect(),
             tiles_mortgaged: w.tiles.iter().map(|t| t.mortgaged).collect(),
-            fate: w.fate,
+            dest: w.dest,
             trig_value: w.pay_amount,
             trig_target: w.trig_target,
             effects,
@@ -1158,8 +1158,8 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
     if real.tiles_mortgaged != model.tiles_mortgaged {
         diffs.push("tiles_mortgaged diverged".into());
     }
-    if real.fate != model.fate {
-        diffs.push(format!("fate real={} model={}", real.fate, model.fate));
+    if real.dest != model.dest {
+        diffs.push(format!("dest real={} model={}", real.dest, model.dest));
     }
     if real.trig_value != model.trig_value {
         diffs.push(format!(
@@ -1517,17 +1517,17 @@ fn op_add_to_dest_take_card_cards_in_hand_size_match() {
     // (bitset + pile hybrid) is exercised on an empty-start hand.
     let (cp, cl) = intern_str("R:[衍生] 压");
     diff_op_seq(
-        "add_to_fate+take_card+cards_in",
+        "add_to_dest+take_card+cards_in",
         &[],
         |c| {
-            game_rules::hostfns::add_to_fate(c, 0, cp, cl, 1).unwrap();
+            game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1).unwrap();
             let ok = game_rules::hostfns::take_card(c, 0, cp, cl, 0).unwrap();
             let (buf, cap) = card_sdk::native::reserve(64);
             let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
             ok as i64
         },
         || {
-            rules_kani::host::dispatch(Op::add_to_fate, [0, cp, cl, 1, 0, 0]);
+            rules_kani::host::dispatch(Op::add_to_dest, [0, cp, cl, 1, 0, 0]);
             let ok = rules_kani::host::dispatch(Op::take_card, [0, cp, cl, 0, 0, 0]);
             let (buf, cap) = card_sdk::native::reserve(64);
             rules_kani::host::dispatch(Op::cards_in, [0, 0, buf, cap, 0, 0]);
@@ -1601,14 +1601,14 @@ fn op_set_dest_place_card_at_match() {
     let (cp, cl) = intern_str("PP:[衍生]共鸣");
     let (mp, ml) = intern_msg("conf.place");
     diff_op_seq(
-        "set_fate+place_card_at",
+        "set_dest+place_card_at",
         &[],
         |c| {
-            game_rules::hostfns::set_fate(c, 12).unwrap();
+            game_rules::hostfns::set_dest(c, 12).unwrap();
             game_rules::hostfns::place_card_at(c, 0, cp, cl, mp, ml).unwrap() as i64
         },
         || {
-            rules_kani::host::dispatch(Op::set_fate, [12, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::set_dest, [12, 0, 0, 0, 0, 0]);
             rules_kani::host::dispatch(Op::place_card_at, [0, cp, cl, mp, ml, 0])
         },
     );
@@ -1784,7 +1784,7 @@ fn card_band_pp_conforms() {
 #[test]
 fn card_band_ppp_conforms() {
     let _g = model_lock();
-    // `PPP:[衍生]Pipopa` -- set_fate + gain + place_card.
+    // `PPP:[衍生]Pipopa` -- set_dest + gain + place_card.
     diff_card("ppp", "PPP:[衍生]Pipopa", &[], run_play);
 }
 

@@ -40,7 +40,7 @@ crate::host_subset!(ppp_dispatch {
     pay => arm_pay,
     pay_to => arm_pay_to,
     draw => arm_draw,
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     cards_in => arm_cards_in,
@@ -50,7 +50,7 @@ crate::host_subset!(ppp_dispatch {
     shuffle_into_deck => arm_shuffle_into_deck,
     place_card_at => arm_place_card,
     place_card_on => arm_place_card_on,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     teleport_to => arm_teleport_to,
     is_placed => arm_is_placed,
     self_tile => arm_self_tile,
@@ -164,7 +164,7 @@ fn effects_of(logbuf: &[Effect; MAX_LOG], log_n: usize) -> &[Effect] {
     &logbuf[..log_n]
 }
 
-/// IFF: exactly GainMoney(1000) then Draw(1); deck +1 Pipopa; fate Banished.
+/// IFF: exactly GainMoney(1000) then Draw(1); deck +1 Pipopa; dest Banished.
 /// Shared iff body at a concrete seat (ppcost). `user` ∈ {0, 1}.
 fn popipa_01_iff_at(user: i32) {
     let user = user;
@@ -187,7 +187,7 @@ fn popipa_01_iff_at(user: i32) {
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
-    let fate = world::with_world(|ww| ww.fate);
+    let dest = world::with_world(|ww| ww.dest);
     let deck_pipopa =
         world::with_world(|ww| spec::ppp::deck_count_named(ww, spec::ppp::CARD_PIPOPA));
     let hand_n = world::with_world(|ww| ww.hand_n as i32);
@@ -204,9 +204,9 @@ fn popipa_01_iff_at(user: i32) {
             post.money[player as usize],
             deck_pipopa,
             hand_n,
-            fate
+            dest
         ),
-        "popipa: money+1000, deck+1 Pipopa, hand+1, fate Banished"
+        "popipa: money+1000, deck+1 Pipopa, hand+1, dest Banished"
     );
     crate::kassert!(
         spec::ppp::frame_others_money(&condition, &post, player),
@@ -278,7 +278,7 @@ fn pipopa_01_iff_at(user: i32) {
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
-    let fate = world::with_world(|ww| ww.fate);
+    let dest = world::with_world(|ww| ww.dest);
     let field_has_new = world::with_world(|ww| ww.field_n > pre_field_n);
 
     crate::kassert!(
@@ -286,8 +286,8 @@ fn pipopa_01_iff_at(user: i32) {
         "pipopa: log must be exactly GainMoney(1000), PlaceCard(Popipapapipopa, Field)"
     );
     crate::kassert!(
-        spec::ppp::pipopa_post_ok(pre_money, post.money[player as usize], fate, field_has_new),
-        "pipopa: money+1000, field+1, fate Banished"
+        spec::ppp::pipopa_post_ok(pre_money, post.money[player as usize], dest, field_has_new),
+        "pipopa: money+1000, field+1, dest Banished"
     );
 }
 /// C-… iff at seat 0 (`n_players = 2`).
@@ -1125,14 +1125,14 @@ fn wait_aoki_01_place_on_field_iff_at(user: i32) {
     invoke::unwrap_done(card_ppp::arisa_wait::arisa_wait_kani(user));
 
     let (logbuf, log_n) = log_slice();
-    let fate = world::with_world(|ww| ww.fate);
+    let dest = world::with_world(|ww| ww.dest);
     let field_n = world::with_world(|ww| ww.field_n);
     crate::kassert!(
         spec::ppp::wait_aoki_01_effects_ok(effects_of(&logbuf, log_n), player, PPP_SLOT),
         "wait-aoki-01: log must be exactly PlaceCard(self, Field)"
     );
     crate::kassert!(
-        fate == spec::ppp::DEST_FIELD && field_n as i32 == pre_field_n as i32 + 1,
+        dest == spec::ppp::DEST_FIELD && field_n as i32 == pre_field_n as i32 + 1,
         "wait-aoki-01: card sits on the user's field"
     );
 }
@@ -1203,7 +1203,7 @@ fn random_star_01_place_and_deck_bottom_iff_at(user: i32) {
     invoke::unwrap_done(card_ppp::random_star::random_star_kani(user));
 
     let (logbuf, log_n) = log_slice();
-    let fate = world::with_world(|ww| ww.fate);
+    let dest = world::with_world(|ww| ww.dest);
     let field_n = world::with_world(|ww| ww.field_n);
     let deck_n = world::with_world(|ww| ww.deck_n as i32);
     let last = world::with_world(|ww| {
@@ -1223,7 +1223,7 @@ fn random_star_01_place_and_deck_bottom_iff_at(user: i32) {
         "random-star-01: log must be exactly PlaceCard(self, Field)"
     );
     crate::kassert!(
-        fate == spec::ppp::DEST_FIELD && field_n as i32 == pre_field_n as i32 + 1,
+        dest == spec::ppp::DEST_FIELD && field_n as i32 == pre_field_n as i32 + 1,
         "random-star-01: card sits on the owner's field"
     );
     crate::kassert!(

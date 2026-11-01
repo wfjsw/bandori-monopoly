@@ -36,11 +36,11 @@ crate::host_subset!(skills_ppp_dispatch {
     gain_marker => arm_gain_marker,
     spend_marker => arm_spend_marker,
     draw => arm_draw,
-    add_to_fate => arm_add_to_fate,
+    add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     place_card_at => arm_place_card,
-    set_fate => arm_set_fate,
+    set_dest => arm_set_fate,
     teleport_to => arm_teleport_to,
     player_count => arm_player_count,
     player_out => arm_player_out,
@@ -812,22 +812,22 @@ pub fn rimi_skill_02_wrong_class_is_reachable() {
     );
     crate::kassert!(
         !spec::rimi_02_dest_ok(at, 6, is_agent(6), best_agent),
-        "星空齿科 is a property, not a 地产商 — must not be a legal fate"
+        "星空齿科 is a property, not a 地产商 — must not be a legal dest"
     );
     crate::kassert!(
         spec::rimi_02_dest_ok(at, 59, is_agent(59), best_agent),
-        "高级住宅区 (59) is a legal farthest-agent fate"
+        "高级住宅区 (59) is a legal farthest-agent dest"
     );
 }
 
-/// MUTANT: fate may be any tile. Companion rejects a non-agent fate.
+/// MUTANT: dest may be any tile. Companion rejects a non-agent dest.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
 #[kani::unwind(8)]
 pub fn rimi_skill_02_mutant_any_tile_reachable() {
     crate::kassert!(
         !spec::rimi_02_dest_ok(30, 0, false, 30),
-        "mutant companion: non-agent fate is illegal"
+        "mutant companion: non-agent dest is illegal"
     );
 }
 

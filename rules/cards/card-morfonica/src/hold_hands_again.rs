@@ -65,7 +65,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[反击]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("hold_hands_again_note")));
     ctx::log(
         player_id,
@@ -80,7 +80,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// before the `pay` [反击] window), so this is a field effect, not a [反击].
 ///
 /// Split (ABI v74): the Filter returns 0 (「取消此次资金变动」) and logs; the
-/// `set_fate(Graveyard)` half is `pay_after` on `PayAfter`.
+/// `set_dest(Graveyard)` half is `pay_after` on `PayAfter`.
 fn pay_at(player_id: i32, _value: i32) -> i32 {
     // 规则书[持续]: 「取消此次资金变动」
     ctx::log(
@@ -94,7 +94,7 @@ fn pay_at(player_id: i32, _value: i32) -> i32 {
 /// `payAfter`, so it also runs when `paySplitAt` never did (the Filter half did
 /// not log): see the TODO on the `PayAfter` registration.
 fn pay_after(_player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

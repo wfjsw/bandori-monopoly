@@ -215,8 +215,8 @@ fn a_card_whose_named_counters_run_out_leaves_the_field() {
 
 #[test]
 fn an_immediate_dest_move_lands_before_the_rest_of_the_run() {
-    // TEST:fate_now places itself and `send_to_fate`s straight out, then logs
-    // `is_placed`. `set_fate` would still have it on the field there.
+    // TEST:fate_now places itself and `send_to_dest`s straight out, then logs
+    // `is_placed`. `set_dest` would still have it on the field there.
     let mut m = match_with_rules("TEST:fate_now", rules_with_fixtures());
     m.act(1, &play("TEST:fate_now")).expect("play");
     let st = m.state();
@@ -235,20 +235,20 @@ fn an_immediate_dest_move_lands_before_the_rest_of_the_run() {
 
 #[test]
 fn a_transferred_dest_lands_in_the_named_players_pile() {
-    // TEST:fate_to names the *other* player's discard -- 「将此卡放入[使用者]
+    // TEST:dest_to names the *other* player's discard -- 「将此卡放入[使用者]
     // 弃卡区」 when the user is not the holder.
-    let mut m = match_with_rules("TEST:fate_to", rules_with_fixtures());
-    m.act(1, &play("TEST:fate_to")).expect("play");
+    let mut m = match_with_rules("TEST:dest_to", rules_with_fixtures());
+    m.act(1, &play("TEST:dest_to")).expect("play");
     let st = m.state();
     let me = st.players.iter().find(|p| p.member == 1).expect("human");
     let user = st.players.iter().find(|p| p.member == 2).expect("the user");
     assert!(
-        me.discard.iter().all(|c| c != "TEST:fate_to"),
+        me.discard.iter().all(|c| c != "TEST:dest_to"),
         "not the holder's discard: {:?}",
         me.discard
     );
     assert!(
-        user.discard.iter().any(|c| c == "TEST:fate_to"),
+        user.discard.iter().any(|c| c == "TEST:dest_to"),
         "the user's discard: {:?}",
         user.discard
     );

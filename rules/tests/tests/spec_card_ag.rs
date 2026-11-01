@@ -466,7 +466,7 @@ fn childhood_teleports_to_nth_shop_tile() {
             _ => vec![YAMABUKI, GALAXY_RAMEN, KITAZAWA],
         };
         t.own(0, &owned);
-        let fate = owned[n as usize - 1];
+        let dest = owned[n as usize - 1];
         t.set_money(0, 10_000 + rng.range(0, 5) * 100);
         t.dice(&[n]);
         t.give(0, &["AG:商店街的青梅竹马"]);
@@ -476,9 +476,9 @@ fn childhood_teleports_to_nth_shop_tile() {
             .map_err(|e| format!("play rejected: {e}"))?;
         skip_all(&mut t);
 
-        if t.pos(0) != fate {
+        if t.pos(0) != dest {
             return Err(format!(
-                "C-AG-childhood-01: pos {}, expected {fate} (1d6={n}, owned {owned:?})",
+                "C-AG-childhood-01: pos {}, expected {dest} (1d6={n}, owned {owned:?})",
                 t.pos(0)
             ));
         }

@@ -99,7 +99,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // is the condition; no residual guard (`tile_named` is -1 when unknown and
     // `tile.id == -1` is false).
     let group = group_tile();
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(
         player_id,
         group,
@@ -152,7 +152,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_decayed")).player_id("who", player_id),
@@ -220,7 +220,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if card_t < 0 || at < 0 || card_t == group {
         return Ok(());
     }
-    let fate = if at == card_t {
+    let dest = if at == card_t {
         group
     } else if at == group {
         card_t
@@ -233,13 +233,13 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // argument is the field instance's holder, so it stays the log seat only.
     // 规则书（3）: 「任何玩家在此卡放置的格子上[触发结算]后」
     ctx::plan::set_tag(TAG_REDIRECT, 1);
-    ctx::settle_tile_at(trigger::player_id(), fate, true);
+    ctx::settle_tile_at(trigger::player_id(), dest, true);
     ctx::plan::set_tag(TAG_REDIRECT, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_swapped"))
             .tile("a", at)
-            .tile("b", fate),
+            .tile("b", dest),
     );
     Ok(())
 }
@@ -294,7 +294,7 @@ fn on_resolved(owner: i32) -> card_sdk::Asked {
     };
     let at = trigger::tile();
     if card_t >= 0 && card_t == at {
-        ctx::set_fate(ctx::Fate::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard);
         ctx::log(
             owner,
             &Msg::new(key!("smile_parade_swap_discard")).tile("tile", card_t),

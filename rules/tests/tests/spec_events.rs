@@ -1508,10 +1508,10 @@ fn kizuna_teleports_all_to_roll_mod_60() {
         // Empty decks: X = 0, so the roll is just 1d20. Landing face 1 then 11.
         t.set_draw(0, &["通用:GREAT"]);
         draw_event_quiet(&mut t, 0, "Kizuna Music", &[11]);
-        let fate = 11 % 60;
-        if t.pos(0) != fate || t.pos(1) != fate {
+        let dest = 11 % 60;
+        if t.pos(0) != dest || t.pos(1) != dest {
             return Err(format!(
-                "E-kizuna-01: positions ({},{}), expected ({fate},{fate})",
+                "E-kizuna-01: positions ({},{}), expected ({dest},{dest})",
                 t.pos(0),
                 t.pos(1)
             ));

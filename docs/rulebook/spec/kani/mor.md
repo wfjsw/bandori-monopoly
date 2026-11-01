@@ -35,8 +35,8 @@ verdict is CBMC's `VERIFICATION:- …` line.
    false.
 7. `move_dir` / `settle_tile_at` / `fixed_roll` / `trig_card_is` are protocol
    stubs returning 0.
-8. `World::new().fate` starts at 0 = `Fate::Graveyard` (need a non-zero
-   sentinel for fate assertions).
+8. `World::new().dest` starts at 0 = `Dest::Graveyard` (need a non-zero
+   sentinel for dest assertions).
 
 ---
 
@@ -47,7 +47,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-light-01 | 「当你在"月之森女子学院"格子前后20格之内，可以从手牌中打出此卡」 | PROTOCOL-LEVEL | — | — | move-plan gate; `tile_named("月之森")` = -1 under Kani | OPEN-移动起点 |
 | C-MOR-light-02 | 「此次移动以"月之森女子学院"为起点（不触发起点地块效果）」 | PROTOCOL-LEVEL | — | — | `plan::set_start` scheduling | OPEN-移动起点 |
 | C-MOR-again-01 | 「[反击]当…前一名玩家[消耗]或[支付]大于0资金后…并[消耗]等量资金」 | PROTOCOL-LEVEL | — | — | [反击] window (KANI.md §6) | — |
-| C-MOR-again-02 | 「[持续]：[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 | PROVEN | `again_02_cancel_iff`, `again_02_mutant_is_detected` | (pending) | SetPayAmount(0) + fate=Graveyard | OPEN-取消范围 |
+| C-MOR-again-02 | 「[持续]：[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 | PROVEN | `again_02_cancel_iff`, `again_02_mutant_is_detected` | (pending) | SetPayAmount(0) + dest=Graveyard | OPEN-取消范围 |
 | C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | PROVEN | `courage_01_pay_iff`, `courage_01_pay_user1_iff`, `courage_01_mutant_is_detected` | **SUCCESSFUL 497/511/589 s at 1800 s timeout** (pay/user1/mutant) | the amount is pinned (harness sets `World::forced_roll`; `courage_01_amount` asserts the exact figure); `tile_price`/`buy_price` are 0-based and house-aware. All three run past the 420 s runner default — give them a per-harness timeout of at least 900 s | — |
 | C-MOR-courage-02 | 「若为地产商地块，获得1000资金」 | PROVEN | `courage_02_agent_iff`, `courage_02_agent_user1_iff`, `courage_02_property_iff` | **SUCCESSFUL 387/341/321 s at 1800 s timeout** (agent/user1/property) | `forced_roll` pins the agent face and the neighbouring property face; agent ⇒ exactly GainMoney 1000, property ⇒ empty log, no money | — |
 | C-MOR-courage-03 | unowned tile ⇒ nobody pays | PROVEN | `courage_03_unowned_iff`, `courage_03_empty_when_no_agent_misfire` | (pending) | empty-effect limb + money frame | — |
@@ -60,7 +60,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-wing-01 | 「传送到移动方向20格后（不触发结算）」 | BLOCKED-HOST | `wing_01_teleport_iff_blocked_host`, `wing_01_dir_stub_gap` | (pending) | `Op::move_dir` stub = 0 | OPEN-移动方向 |
 | C-MOR-wing-02 | 「立刻进行移动掷骰」 | PROTOCOL-LEVEL | — | — | `run_planned_move` scheduling stub | — |
 | C-MOR-starry-01 | 「支付X次1000…放置X个[奇迹水晶]」 | PROVEN | `starry_01_place_iff`, `starry_01_mutant_is_detected` | (pending) | X symbolic 1..=5 | OPEN-X, OPEN-场地中央 |
-| C-MOR-starry-02 | 「此卡没有[奇迹水晶]时加入弃牌堆」 | PROVEN (fate write) | folded into `starry_06_payout_iff` | (pending) | discard commit = `set_fate(Graveyard)`; not an effect | — |
+| C-MOR-starry-02 | 「此卡没有[奇迹水晶]时加入弃牌堆」 | PROVEN (dest write) | folded into `starry_06_payout_iff` | (pending) | discard commit = `set_dest(Graveyard)`; not an effect | — |
 | C-MOR-starry-03 | 「可以放弃第一次的结果重骰一次」 | BLOCKED-HOST | — | — | DiceRollAfter arm needs unmodeled `trig_move_main` | OPEN-重骰次数 |
 | C-MOR-starry-04 | 「当其他角色的移动掷骰结果是偶数时…」 | BLOCKED-HOST | — | — | same DiceRollAfter arm (`trig_move_main`, `trig_move_roll`) | — |
 | C-MOR-starry-05 | 「经过CiRCLE时…移除一个[奇迹水晶]」 | PROVEN | `starry_05_circle_iff`, `starry_05_noop` | **SUCCESSFUL 306/299 s** (batch-12 B: `trig_tile=0`) | PassTile arm; `trig_tile=0` = CiRCLE (0-based `tile_slot`) | — |
@@ -73,7 +73,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-nnm-02 | 「抽x张卡…回合结束后将手牌弃置到五张」 | BLOCKED-HOST | — (spec ready) | — | hand-play unreachable without `held_names` | — |
 | C-MOR-nnm-03 | 「获得x次经过CiRCLE时的资金奖励」 | PROVEN (formula) | `nnm_03_amount_iff`, `nnm_03_mutant_is_detected` | **SUCCESSFUL 0.3/0.6 s** (batch-12 B) | body raises `PassRewardAffected`; Morfonica listener scales 1000/1500/2000 (CRYSTAL-04). Stale `x*2000` model retired | — |
 | C-MOR-nnm-04 | 「放置x个奇迹水晶…视为发动你的（2）技能」 | BLOCKED-HOST | — (spec ready) | — | `placed_cards` is a count, not a name list | OPEN-借用技能 |
-| C-MOR-nnm-05 | 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 | PROVEN (fate write) | `nnm_05_empty_discard_iff`, `nnm_05_press_empty_is_noop`, `nnm_05_atend_leaves_field_card` | **SUCCESSFUL 160/142 s** (batch-12 B) | (4) is CounterChanged (`on_crystals_changed` → `set_fate(Graveyard)`); empty-press is a correct no-op | — |
+| C-MOR-nnm-05 | 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 | PROVEN (dest write) | `nnm_05_empty_discard_iff`, `nnm_05_press_empty_is_noop`, `nnm_05_atend_leaves_field_card` | **SUCCESSFUL 160/142 s** (batch-12 B) | (4) is CounterChanged (`on_crystals_changed` → `set_dest(Graveyard)`); empty-press is a correct no-op | — |
 | C-MOR-rui-demon-01 | 「向全场玩家支付100…之后全场玩家向你支付300」 | PROVEN | `rui_demon_01_iff`, `rui_demon_01_mutant_is_detected` | **SUCCESSFUL 629/612 s** (class B post_ok legs swapped) | 100 leg face-value (immunity is pipeline) | — |
 | C-MOR-rui-demon-02 | 「每当你的技能被触发后，立即将x设置为5」 | PROVEN candidate | `rui_demon_02_x_set_to_5` | (pending) | X ends at 5 | — |
 | C-MOR-toko-swap-01 | 「交换…支付差价…免费赎回」 | PROVEN (no-pair) + BLOCKED-HOST (swap) | `toko_no_pair_noop`, `toko_swap_iff_blocked_host` | (pending) | index split wrecks pair enumeration; `buy_price` ignores houses | 「颜色」 = group |
@@ -210,11 +210,11 @@ None in this unit's batch-12 rows. Previously listed LESS (nnm-05) and WRONG
 (nnm-03) were **class B proof-model bugs**, not book/body gaps:
 
 1. **nnm-05** — 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」 is a state clause
-   on CounterChanged (`on_crystals_changed` → `set_fate(Graveyard)`), same
+   on CounterChanged (`on_crystals_changed` → `set_dest(Graveyard)`), same
    shape as starry-02. The old iff drove the Play press with *already* empty
    crystals (a correct no-op) and claimed the body had no hook. The hook has
    been registered since before the central pass. `arm_set_fate` commits the
-   fate write as world state.
+   dest write as world state.
 2. **nnm-03** — sheet 2026-10-06 G7 wants x × the live CiRCLE money reward.
    CRYSTAL-04 fixed the body to raise `PassRewardAffected` per reward;
    Morfonica's `on_circle` rewrites to 1000/1500/2000 and cancels the default

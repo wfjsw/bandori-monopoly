@@ -40,7 +40,7 @@ const ID: &str = "RAS:EXIST";
 const PROP_USED: &str = "exist.used";
 
 fn exist(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
     // 规则书: 「直到自己的下一回合开始…你的下回合开始时将其翻入弃牌堆」 -- one
     // turn start away (the `⌛1` face marker is the static `TURNS_LEFT` prop).
@@ -83,11 +83,11 @@ fn turn_start_guard(player_id: i32) -> bool {
 }
 
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // `send_to_fate` files it **now**: the flip precedes the draw in the text, and a
-    // deferred fate would leave the card on the field while the draw reshuffles the
+    // `send_to_dest` files it **now**: the flip precedes the draw in the text, and a
+    // deferred dest would leave the card on the field while the draw reshuffles the
     // (empty) deck without it.
     let used = ctx::prop(PROP_USED);
-    ctx::send_to_fate(ctx::Fate::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     // The flag is written by [`mark_used`] on the `effect` declaration, not by the
     // (pure) `redirect` hook.
     if used == 0 {

@@ -54,7 +54,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     trigger::set_cancelled(); // void the targeting that opened this window
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("centrifugal_note")));
     ctx::log(
         player_id,
@@ -72,7 +72,7 @@ fn immune_all(_player_id: i32, mut g: GateValue) -> GateValue {
 
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && card.placed` is the condition.
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("centrifugal_end")).player_id("who", player_id),

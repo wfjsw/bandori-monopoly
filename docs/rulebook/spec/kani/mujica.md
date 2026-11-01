@@ -45,13 +45,13 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-欢迎-03 | 「[反击] 当有其他玩家切换状态时…」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-花火-01 | 「放置于场上并放置2个奇迹水晶」 | PROVEN | `sparkler_places_two_crystals_iff`, `sparkler_crystal_count_mutant_is_detected` | see run table | — | — |
 | C-MUJICA-花火-02 | 「回合结束后自动移除一个…并…额外回合」 | BLOCKED-HOST / OPEN | `sparkler_burn` (partial) | — | `give_extra_turn` is a silent stub (no Effect); crystal removal is recordable | OPEN-花火额外回合 |
-| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun + fate) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_fate(Graveyard)`. Spec fate encoding fixed in triage3 batch 15 (`Fate::Graveyard = 0`, not 1). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
+| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun + dest) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_dest(Graveyard)`. Spec dest encoding fixed in triage3 batch 15 (`Dest::Graveyard = 0`, not 1). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
 | C-MUJICA-祥移动-01 | 「强制一名玩家…移动3格并[触发结算]」 | PROTOCOL-LEVEL | — | — | `run_planned_move` stub; walk not simulated | OPEN-触发结算 |
 | C-MUJICA-祥移动-02 | 「（可在掷骰前…代替主要移动）」 | PROTOCOL-LEVEL | — | — | `main_moved` | — |
 | C-MUJICA-祥移动-03 | 「支付价格减半」 | PROTOCOL-LEVEL | — | — | settle chain; `plan::set_pay_factor` stub | OPEN-取整 |
 | C-MUJICA-骰子-01 | 「将此卡放置于自身场上」 | PROVEN | `dice_cast_places_on_own_field_iff`, `dice_cast_mutant_extra_money_is_detected` | see run table | — | — |
 | C-MUJICA-骰子-02 | 「无法从手牌中使用[反击]」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
-| C-MUJICA-骰子-03 | 「回合结束后放入弃牌堆」 | PROTOCOL-LEVEL | — | — | turn-end unplace scheduling (`set_fate` only) | — |
+| C-MUJICA-骰子-03 | 「回合结束后放入弃牌堆」 | PROTOCOL-LEVEL | — | — | turn-end unplace scheduling (`set_dest` only) | — |
 | C-MUJICA-骰子-04 | 「（此卡可以被反击）」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-黑色生日-01 | 「资金不多于1000…支付你800」 | PROVEN | `black_bday_low_pays_800_iff`, `black_bday_low_mutant_is_detected`, `black_bday_low_mutant_panics` | see run table | — | — |
 | C-MUJICA-黑色生日-02 | 「严格在1000以上…两次200」 | PROVEN | `black_bday_high_pays_400_iff` | see run table | — | — |

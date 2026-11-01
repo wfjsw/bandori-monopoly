@@ -476,7 +476,7 @@ fn fever_leaves_to_the_users_discard_pile() {
 
 /// `place_card` returns that uid precisely because `ctx::set_prop` (self) writes
 /// the play run's instance, which is not what （2）'s `turn_start` runs as -- a
-/// write there is lost and 「放入[使用者]弃卡区」 silently degrades to `set_fate`'s
+/// write there is lost and 「放入[使用者]弃卡区」 silently degrades to `set_dest`'s
 /// own-owner pile. That degradation is invisible whenever owner == user (the
 /// normal case: 「将此卡放置在[使用者]的[场地]」), so pin the placement itself rather than the
 /// discard.

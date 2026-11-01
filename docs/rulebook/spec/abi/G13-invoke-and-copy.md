@@ -192,14 +192,14 @@ Invariants the implementation must hold (each gets a test or a Kani obligation,
   residual guard and play gate are *not* evaluated; a caller that must know
   first asks `ctx::query_guard` (which now seeds the same frame). `On::Filter`
   (a value fold) is not invocable.
-* **I6 Fate.** The import returns the inner body's `Fate`; moving the card is
+* **I6 Dest.** The import returns the inner body's `Dest`; moving the card is
   the caller's job (the `play_card` contract, `ctx.rs:2490-2497`). The engine
   never silently unplaces the target.
 * **I7 Determinism.** No import asks a player. Prompts inside the body pause the
   invocation through the existing sentinel; the ids are literals in the caller's
   body, so a replay re-derives the same call.
 * **I8 Totality.** The import exists in wasm, native and Kani; the Kani arm
-  records the call (card id, entry id, `paid`) and returns a symbolic `Fate`.
+  records the call (card id, entry id, `paid`) and returns a symbolic `Dest`.
 
 ---
 
@@ -254,7 +254,7 @@ pub fn invoke_frame(out_ptr: i32, cap: i32) -> i32;
 // `op_invoke_frame([i32; 6])`
 ```
 
-`invoke_entry` returns the inner `Fate` code, or `EXIT_NEED_INPUT`; six `i32`s,
+`invoke_entry` returns the inner `Dest` code, or `EXIT_NEED_INPUT`; six `i32`s,
 the native `[i32; 6]` maximum already in use. `invoke_frame` returns the
 postcard byte count (`out_ptr = 0` asks for the size only, the `group_skills`
 shape).
@@ -268,17 +268,17 @@ signature moves (§8).
 ```rust
 /// Run one named entry of `id` nested, as `player_id`, with its field instance
 /// bound. Body only -- ask `query_guard` first when the gate matters.
-pub fn invoke_entry(player_id: i32, id: &str, entry_id: &str) -> Result<Fate, Prompt> {
+pub fn invoke_entry(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
     invoke_entry_flags(player_id, id, entry_id, 0)
 }
 
 /// `invoke_entry` for an entry whose cost the caller has already paid:
 /// the body sees `ctx::invoke_paid()` and must not collect it again.
-pub fn invoke_entry_paid(player_id: i32, id: &str, entry_id: &str) -> Result<Fate, Prompt> {
+pub fn invoke_entry_paid(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
     invoke_entry_flags(player_id, id, entry_id, crate::abi::invoke::COST_PAID)
 }
 
-fn invoke_entry_flags(player_id: i32, id: &str, entry_id: &str, flags: i32) -> Result<Fate, Prompt>;
+fn invoke_entry_flags(player_id: i32, id: &str, entry_id: &str, flags: i32) -> Result<Dest, Prompt>;
 
 /// The innermost invocation frame, if this body is running inside one.
 pub fn invoke() -> Option<InvokeFrame>;
@@ -342,7 +342,7 @@ guards now see the real instance.
 
 ### 4.7 What does *not* move
 
-`ctx::play_card` (card play with a returned `Fate`), `ctx::invoke_skill` (press
+`ctx::play_card` (card play with a returned `Dest`), `ctx::invoke_skill` (press
 by `entry::PRESS`), `ruleset_send` and the declare/`declared_arg` machinery are
 untouched. `declare` is per-entry and unrelated to invocation: an invoke runs
 `OP_RUN` only, so a body with `declare` gets `T::default()` from
@@ -371,7 +371,7 @@ entry_id, flags)`:
    `OP_DECLARE`, no `cardUsed` raise;
 8. restore world/answers/asked/host_request, `leave_invoke(saved)`,
    `set_play_from_hand(was)`;
-9. `Ok(fate)`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`, other errors trap.
+9. `Ok(dest)`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`, other errors trap.
 
 `play_card` passes `entry::PRESS` and keeps its "card play" doc; `invoke_skill`
 passes `entry::PRESS`.
@@ -382,9 +382,9 @@ passes `entry::PRESS`.
 
 ```rust
 /// Open a nested invocation of `id` with the target instance `uid` (or -1).
-/// Saves the caller's card, fate, uid and trigger card payload.
+/// Saves the caller's card, dest, uid and trigger card payload.
 fn enter_invoke(&mut self, id: &str, uid: i32) -> InvokeSaved;
-/// Restore the caller's frame; returns the inner body's Fate.
+/// Restore the caller's frame; returns the inner body's Dest.
 fn leave_invoke(&mut self, saved: InvokeSaved) -> i32;
 ```
 
@@ -417,7 +417,7 @@ A raise is **not** added: an invocation is already committed on the caller's
 line, and a second counteraction window would let a [反击] negate a body whose
 cost was paid three effects ago.
 
-### 5.4 Limits, fate and traps
+### 5.4 Limits, dest and traps
 
 * `MAX_NESTING` and the shared fuel budget are reused verbatim; the nested
   guest and the outer run share one budget (`call_entry` already does,
@@ -426,7 +426,7 @@ cost was paid three effects ago.
   (I5); it does not validate that anything was paid.
 * A trap inside the invoked body aborts the whole play (the play already
   committed); the no-op entry path returns `DEST_UNSET`.
-* `Fate`: returned only. A placed target that wants to leave uses
+* `Dest`: returned only. A placed target that wants to leave uses
   `ctx::unplace_at(ctx::self_uid())` in its own body (the band (2) sweep
   already does, `skill-groups/src/crychic.rs:196`).
 
@@ -440,7 +440,7 @@ pub fn arm_invoke_entry(a: Args) -> i64 {
         w.invoke_n += 1;
         w.last_invoke = (name_id(a[1], a[2]), name_id(a[3], a[4]), a[5] & 1);
     });
-    // symbolic fate: DEST_UNSET, Graveyard or Field, the three a borrowed body uses
+    // symbolic dest: DEST_UNSET, Graveyard or Field, the three a borrowed body uses
     world::with_world(|w| w.fate_hint) as i64   // a `fate_hint` field on the model
 }
 ```
@@ -547,12 +547,12 @@ fn before_settle(player_id: i32) -> Asked {
     let mover = ctx::trigger::player_id();
     // (3) is the owner's own landing near another (cost 1, *their* tile);
     // (2) is someone else's landing near the owner (cost 4, the owner's tile).
-    let (cost, fate) = if mover == player_id {
+    let (cost, dest) = if mover == player_id {
         (1, nearest_other_tile(player_id))
     } else {
         (4, ctx::player_pos(player_id))
     };
-    if fate < 0 { return Ok(()); }
+    if dest < 0 { return Ok(()); }
     if !ctx::invoke_paid() {                            // a borrower may have paid
         if !ask_yes(…) { return Ok(()); }
         if !fire::spend(player_id, cost, …)? { return Ok(()); }
@@ -573,10 +573,10 @@ fn after_offer_applies(player_id: i32) -> bool {
 fn before_settle_effect(player_id: i32) -> Asked {
     let mover = ctx::trigger::player_id();
     state::set(mover, OFFERED, 0);                      // one shot
-    let fate = if mover == player_id { nearest_other_tile(player_id) }
+    let dest = if mover == player_id { nearest_other_tile(player_id) }
                else { ctx::player_pos(player_id) };
-    if fate < 0 { return Ok(()); }
-    ctx::teleport_to(mover, fate);
+    if dest < 0 { return Ok(()); }
+    ctx::teleport_to(mover, dest);
     state::set(mover, ACTED, 1);
     if mover != player_id {                            // the (2) arm, not cost == 4
         let n = ctx::roll(mover, 1, 20, RollPurpose::Effect, roll_source::SKILL)?;
@@ -696,7 +696,7 @@ Black-box tests use the existing `Table` harness and `t.option` / `answer_q`.
 | 1 | `crychic.rs::mutsumi_never_cash_out_is_zero_on_a_shortfall` — 1 crystal: all spent, no money |
 | ABI | `crates/game-rules/tests/card_activation.rs::invoke_binds_the_target_and_restores_the_outer_frame` — test card A invokes test card B; B reads `self_uid` = B's uid, A's `self_uid` is restored after |
 | ABI | `card_activation.rs::invoke_seeds_and_restores_the_trigger_card` / `::invoke_unknown_entry_is_a_noop` / `::invoke_unknown_card_traps` / `::invoke_filter_entry_traps` |
-| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Fate` and log as the PRESS slug |
+| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Dest` and log as the PRESS slug |
 | 2 | `crychic.rs::tomori_shout_pull_runs_the_borrowed_second_body` — the poem's own `tomori_moved` log appears (proves the body, not the copy), mover teleported to the controller's tile |
 | 2 | `crychic.rs::tomori_shout_pull_rolls_once_and_leans_on_six_or_less` — forced face 6 ⇒ `stay` 1 plus a scheduled settle; face 7 ⇒ none |
 | 2 | `crychic.rs::tomori_shout_delayed_settle_pays_half_at_the_movers_next_turn_end` — the settle runs on the mover's next turn end (not the controller's), at half, and then clears |

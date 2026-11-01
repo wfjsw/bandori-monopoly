@@ -258,12 +258,12 @@ obligation, §9):
 
 | id | wire | class | filter | hook-only | meaning |
 |---:|---|---|---|---|---|
-| 123 | `diceRollCast` | Action | no | yes | one cast is on the table, raw. Payload: the roll, value = raw face, source. |
-| 124 | `diceRollSettled` | Action | no | yes | the terminal cast finished settling. Payload: the roll, `value` = settled face, `rerolled`, `chosen`, `unused` (`-1` when none), purpose. |
-| 125 | `diceRollAdd` | Filter (value) | yes | yes | the additive pass. Reads + writes the running face; payload reader sees purpose / rerolled. |
+| 122 | `diceRollCast` | Action | no | yes | one cast is on the table, raw. Payload: the roll, value = raw face, source. |
+| 123 | `diceRollSettled` | Action | no | yes | the terminal cast finished settling. Payload: the roll, `value` = settled face, `rerolled`, `chosen`, `unused` (`-1` when none), purpose. |
+| 124 | `diceRollAdd` | Filter (value) | yes | yes | the additive pass. Reads + writes the running face; payload reader sees purpose / rerolled. |
 
-110 (`paySplitMulBefore`) is the current maximum; 123..=125 are this group's
-README band (111-122 go to earlier-landing groups). Retired
+110 (`paySplitMulBefore`) is the current maximum; 122..=124 are this group's
+README band (111-121 go to earlier-landing groups). Retired
 ids (16-20, 22, 94, 104) stay untouched. `diceRollValue` (102) is **redefined
 in place** as the final-settlement (multiplicative) stage; its numeric id and
 wire name do not move.
@@ -690,7 +690,7 @@ the trigger, `is_main_move = false`, and the card still drives the walk with
 * **Replay.** A recast replays as the same RNG draw. The transaction's
   `casts` vector is rebuilt by the re-run; only the answers (`roll_choose`
   index, `ask_tile_pick` index) come from the log. Archived engine bundles are
-  unaffected: kinds 123-125 are additive, and 102 keeps its id and wire name, but its **stage changes** from the value
+  unaffected: kinds 122-124 are additive, and 102 keeps its id and wire name, but its **stage changes** from the value
 point to the settlement point -- a listener registered on it sees a different
 face and timing. That is the reason this group bumps the version at all.
 
@@ -703,10 +703,10 @@ immediately below the constant and above the newest note:
 ```
 /// v109: **roll transaction + settlement stages**. A roll is a `RollCtx`
 ///    carrying roller / purpose / source / every cast; every cast runs
-///    `diceRollCast` -> `diceRollAdd` (new filter 125, the additive pass) ->
+///    `diceRollCast` -> `diceRollAdd` (new filter 124, the additive pass) ->
 ///    `diceRollValue` (now the final-settlement pass, id/wire unchanged) ->
 ///    `diceRollAfter` -> `diceRollResult` -> `diceRollSettled` (new Action
-///    124). `diceRollCast` is new Action 123. `ruleset_roll` joins an open
+///    123). `diceRollCast` is new Action 122. `ruleset_roll` joins an open
 ///    Move transaction instead of always casting standalone; `ruleset_roll_direct`
 ///    gains the `source` arg. New imports `roll_recast`, `roll_choose`,
 ///    `roll_current`, `roll_face`, `roll_unused`, `roll_rerolled`,
@@ -743,7 +743,7 @@ slots.
 | 13 | `ras.rs::please_choose_opt1_plays_a_targeting_card_at_the_counteractor` |
 | 14 | `mujica.rs::doll_garden_victim_roll_takes_the_victim_modifiers` — no_expectation shaves the victim's roll; a victim's `DiceRollAfter` hook runs |
 
-ABI-level: `crates/game-rules/tests/kind_table_pin.rs` (123-125),
+ABI-level: `crates/game-rules/tests/kind_table_pin.rs` (122-124),
 `crates/game-rules/tests/live_match.rs` (ladder order: Cast → Add → Value → After
 → Result → Settled; `roll_source` on Result; `unused` on Settled),
 `rules/tests/tests/split_hook_entries.rs` (no_expectation now `DiceRollAdd`),

@@ -87,7 +87,7 @@ pub fn tae_sound_post_ok(post: &Snapshot, player: i32, shop: i32, pre_fire: i32)
 // ===========================================================================
 
 /// Spec for the play body when the discard is non-empty at condition:
-/// 1. place this card on the user's field (fate = Field);
+/// 1. place this card on the user's field (dest = Field);
 /// 2. move exactly one pre-existing discard card into hand.
 /// Prompt: any pick among the distinct discard cards is legal; the chosen
 /// one is the one that moves.
@@ -101,12 +101,12 @@ pub fn aya_haruka_01_effects_ok(
     if effects.len() != 3 {
         return false;
     }
-    // 1. PlaceCard on Field (fate 2 = Fate::Field)
+    // 1. PlaceCard on Field (dest 2 = Dest::Field)
     if !matches!(
         effects[0],
         Effect::PlaceCard {
             player: p,
-            fate: 2,
+            dest: 2,
             card
         } if p == player && card == this_card
     ) {
@@ -144,7 +144,7 @@ pub fn aya_haruka_01_empty_discard_ok(effects: &[Effect], player: i32, this_card
             effects[0],
             Effect::PlaceCard {
                 player: p,
-                fate: 2,
+                dest: 2,
                 card
             } if p == player && card == this_card
         )

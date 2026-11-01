@@ -47,7 +47,7 @@ pub const MIRACLE: CardDef = CardDef::new(
 const ID: &str = "MyGO:难以复刻的奇迹";
 
 fn miracle(player_id: i32) -> card_sdk::Asked {
-    ctx::set_fate(ctx::Fate::Field);
+    ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("miracle_note")));
     // A fresh copy starts with an empty [经过] mask -- the slot is player-scoped
     // and would otherwise carry a previous copy's bits.
@@ -166,7 +166,7 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
         }
     }
     // "上面还有奇迹水晶：视为没有生效" : "完成了")`.
-    ctx::set_fate(ctx::Fate::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard);
     if left {
         // TODO(规则书)[judgement] （3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- we only log
         // `miracle_wasted`; the card is not actually marked 未生效.
