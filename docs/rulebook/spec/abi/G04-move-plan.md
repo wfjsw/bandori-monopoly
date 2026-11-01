@@ -93,10 +93,10 @@ under it:
 | R3 | The draft assumed a bare turn plan with manual exits. Master now has the 2026-10-30 interim patch: `steps_fresh` / `stop_at_fresh` / `pay_fresh` / `reverse_fresh` / `resolve_fresh`, `drop_stale_plan_shape`, `drop_plan_fresh`, `play_drove_move` and `drop_spent_plan_shape` (`move_ctx.rs:176-196`, `play.rs:2116-2216`). | The frames **replace** the marks in the same landing; a frame and a fresh mark doing the same job is a bug farm. §4.1/§4.2 say which functions are deleted. |
 | R4 | The draft's `pay_factor` story predates G02. It had no `next_move_pay_factor`, no `move_open`, and treated the plan factor as a simple field. | The plan factor is the `ThisMove` slot of G02 §5.5 (`move_open` true while a frame is live); the frame seed folds `next_move_pay_factor` and resets it; the move tail's existing clear moves into `end_plan`. G04 adds the getter only. |
 | R5 | `TriggerMove` was quoted at `rules.rs:52-78` without `is_main_move`; the draft put the payload chapter before checking the current payload. | `TriggerMove` carries `is_main_move` through the bridge (`wasm_rules.rs:7783-7796`). The payload chapter adds `rolled` / `effective` beside it, and `bridge_trigger` mirrors both. |
-| R6 | The draft described `forced` as host-only and `is_main_move` as derived nowhere. | `forced` and `is_main_move` are already `MoveCtx` fields and `run_planned_move` computes `is_main_move = is_turn && !plan.forced` (`play.rs:904`). The missing half is the guest setter and the `main_as` split. |
-| R7 | Item 1 cited `TileData` as `data.rs:83-93`, correct, but the board data was assumed to be where coordinates belong without checking the record. `display.json` is documented as carrying `cell` but does not. | `cell` goes on `TileData` / `board.json` with `skip_serializing_if` (§3.7); the record already carries `MatchSetup::board: Option<Vec<TileData>>` (`record.rs:369`). |
+| R6 | The draft described `forced` as host-only and `is_main_move` as derived nowhere. | `forced` and `is_main_move` are already `MoveCtx` fields and `run_planned_move` computes `is_main_move = is_turn && !plan.forced` (`play.rs:904`). The missing half is the guest setter and the `main_override` split. |
+| R7 | Item 1 cited `TileData` as `data.rs:83-93`, correct, but the board data was assumed to be where coordinates belong without checking the record. `display.json` is documented as carrying a `cell` but does not. | `grid_cell` goes on `TileData` / `board.json` with `skip_serializing_if` (§3.6); the record already carries `MatchSetup::board: Option<Vec<TileData>>` (`record.rs:369`). |
 | R8 | The Op band was `360-373` from the pre-amendment table. The 2026-10-31 recount (G01 341–346, G08 349–368) and G02's landing (369–377) moved G04 to **378–397**. | G04 uses **378–391** and leaves 392–397 free. |
-| R9 | §6 said `RECORD_VERSION` stays 3. Master is **4** (`record.rs:48`). | Stays 4. Inline `cell` on the recorded board is serde-skipped when absent. |
+| R9 | §6 said `RECORD_VERSION` stays 3. Master is **4** (`record.rs:48`). | Stays 4. Inline `grid_cell` on the recorded board is serde-skipped when absent. |
 | R10 | The host arm was to "return the inner value", but the gate is called **before** `run_planned_move` in a host copy and returns that verdict, so no frame is live for a Play-time call. | §4.3 splits it: the gate keeps its call site and returns 0 on refusal; the refusal cleanup writes through `plan_mut()` (frame when the call sits inside a move, staging otherwise) and clears `teleport_to`, `void_walk` and resets `kind`. The allow path returns the run's bool. |
 | R11 | `next_steps` lived in `hidden[i]` and was taken at the roll; the draft had the replacement teleport read the raw face, so a buffed misaki endpoint was still wrong. | `next_steps` is copied into the frame from `hidden[i]` at the Main seed, before any window, and `m.roll` is clamped to `effective_steps()`; the slot is consumed there. |
 | R12 | `plan_scope` was four flat fields (one `staging_before`, one `plan_before`, one `window_before`). A body raised from inside another body (a card played from a hook) overwrote the outer snapshot. | `plan_scope` carries a stack of `PlanCommand` and a move counter; windows have their own stack (§3.3). |
@@ -108,8 +108,8 @@ under it:
 | R18 | `teleport_as` was a single self-scoping shape; a main teleport needs a Main frame, or a refused teleport restores the wrong plan. | `teleport_as` gains the frame kind from its existing `is_main_move` argument (§4.2). |
 | R19 | The draft's Kani `arm_card_move` model echoed constant 1 and did not model the slot. | `arm_card_move` models `replacement_taken`; every new op joins the model or the zero group (§4.10). |
 | R20 | The draft cited `sakiko_lead` as the follower item but the card's write is now `multiply_pay_factor(500, NextMove)` (G02), so the old prose about `set_pay_factor(500)` was stale. | §5.4 says no body change and cites the landed G02 call. |
-
 | R21 | The draft's per-slug "rows" column was a guess: nearly every number named a neighbour card (item 1 cited rows of 商店街的救世主 and 不要背负期待; item 11 cited 海铃 and 睦). | Every row re-resolved against `card-review-2026-10-27.csv`; the table is now keyed by the BACKLOG's consolidated slugs and §5.12 disposes of every row the items do not name. |
+| R22 | Several new identifiers were abbreviated: `main_as`, `plan_teleport_to`, `StartWhy`/`Why`, `PlanKind::Main`/`Side`, `axis_nearest`, `TileData.cell`, `tail_only_depth`, and `cur`/`dir`/`n` parameters. | Spelled out to `main_override`, `planned_teleport`, `StartReason`/`Reason`, `MainMove`/`SideMove`, `nearest_tile_on_axis`/`farthest_tile_on_axis`, `grid_cell`, `in_teleport_tail`, `current`/`direction`/`tile_count`. The `ruleset_trig_*` / `ruleset_move_*` / `ctx::plan::*` prefixes and `pay_factor` keep their existing spelling because they match landed imports. |
 
 The review made no change to the item list or severities.
 
@@ -196,7 +196,7 @@ private `CELLS` + `farthest` in `happy_lucky.rs:28-117`, fixed to 60 tiles;
 start with nobody passed (`PASSER == NEVER`), offer the nearest tile on each of
 the four axes, teleport-and-settle there as the main move, and retire the card.
 **Root fix:** board geometry in the board data plus nearest/farthest axis
-queries (§3.7), then the card branch (§5.1).
+queries (§3.6), then the card branch (§5.1).
 
 **2. `pure-wings-stale-steps` — Mor:纯真振翅, consolidated `plan-shape-scope`**
 (`rules/cards/card-morfonica/src/pure_wings.rs`, cards.json:53)
@@ -325,7 +325,7 @@ and walks the face. `run_planned_move` then takes the `main_moved` early return
 (`play.rs:905-918`), logs `main_move_used` and clears `teleport_to`, so there is
 no teleport at all. Expected: the rolled walk is voided and replaced by the
 teleport, settling there as the same main move. **Root fix:** a `void_walk`
-handoff consumed at the roll site plus `main_as` (R3 + R4).
+handoff consumed at the roll site plus `main_override` (R3 + R4).
 
 **12. `misaki-planned-start` — HHW:（美咲）, consolidated `trigger-walk-payload`**
 
@@ -375,7 +375,7 @@ Today `forced` is unreachable from the guest, so no walk carries the marker,
 and a caster who already moved is refused when they pick themselves though the
 book makes that walk their main move. The 「视为其主要移动」 clause has no
 counterpart at all. Expected: the victims are forced moves; the self-pick is
-the caster's main move. **Root fix:** `plan::set_forced` + `plan::set_main_as`
+the caster's main move. **Root fix:** `plan::set_forced` + `plan::set_main_override`
 (R3) — one per clause.
 
 **16. `dg-plan-reset` — Mujica:人偶的箱庭, consolidated `plan-shape-scope`**
@@ -420,7 +420,7 @@ move: it runs even when the main slot is latched and does not itself consume the
 slot. Therefore
 
 ```
-is_main_move = is_turn && (!forced || main_as)
+is_main_move = is_turn && (!forced || main_override)
 ```
 
 Only `is_main_move` moves latch `main_moved`, drive the stage machine and
@@ -440,7 +440,7 @@ before or during `moveBefore` reach the walk; clearing is explicit
 nearest tile ahead of that parity; skipped tiles are not passed or settled.
 
 **I7 — Replacement is a void, not a second move.** A mid-roll teleport marked
-`main_as` voids the pending walk (`void_walk`) and runs immediately, from inside
+`main_override` voids the pending walk (`void_walk`) and runs immediately, from inside
 the window, as the same move with one tail; the roll site only skips its own
 walk.
 
@@ -521,10 +521,10 @@ pub move_roll_windows: Vec<usize>,
 /// The main move's stored override, copied from `hidden[i]` at the seed.
 pub next_steps: Option<i32>,
 /// This move is main even though it is forced (「视为你的主要移动」).
-pub main_as: bool,
+pub main_override: bool,
 /// This teleport replaces the pending walk instead of following it.
 pub void_walk: bool,
-/// A die produced this walk's length.
+/// A die was cast for this walk.
 pub rolled: bool,
 ```
 
@@ -537,29 +537,29 @@ same code:
 
 ```rust
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PlanKind { #[default] Main, Side }
+pub enum PlanKind { #[default] MainMove, SideMove }
 /// Every field a plan can shape. The seed/restore match is exhaustive over it.
-pub enum PlanField { Steps, Reverse, Parity, Kind, TeleportTo, Start, StartWhy,
+pub enum PlanField { Steps, Reverse, Parity, Kind, TeleportTo, Start, StartReason,
                      StopAt, SettleTile, SettleRedirect, Resolve, PayFactor,
                      RentFactor, Followers,
-                     ExtraSteps, NextSteps, MinRoll, Signed, Base, Dice,
+                     ExtraSteps, NextSteps, MinimumRoll, Signed, Base, Dice,
                      MoreSteps, NoBuy, CanBuild, BuildAnywhere,
-                     SettleAsAgent, Tags, BySkill, Forced, MainAs, VoidWalk,
-                     Rolled, Why, Roller, Cancelled }
-pub enum PlanLifetime { Turn, NextMain, Command }
+                     SettleAsAgent, Tags, BySkill, Forced, MainOverride, VoidWalk,
+                     Rolled, Reason, Roller, Cancelled }
+pub enum PlanLifetime { Turn, NextMainMove, Command }
 pub fn lifetime_of(f: PlanField) -> PlanLifetime;
-/// `Turn` or `NextMain` -- a staging field, not one move's shape.
+/// `Turn` or `NextMainMove` -- a staging field, not one move's shape.
 pub fn is_staging(f: PlanField) -> bool;
-pub fn is_main_move(is_turn: bool, forced: bool, main_as: bool) -> bool;
+pub fn is_main_move(is_turn_player: bool, forced: bool, main_override: bool) -> bool;
 /// True iff a `run_planned_move` call replaces a walk instead of starting a move.
-pub fn replacement_taken(window: Option<usize>, owner: usize, main_as: bool,
+pub fn replacement_taken(window: Option<usize>, owner: usize, main_override: bool,
                          void_walk: bool, teleport: bool) -> bool;
 /// True iff the roll site still walks.
 pub fn walk_runs(teleport: bool, cancelled: bool, void_walk: bool) -> bool;
-pub fn effective_steps(steps: Option<i32>, next: Option<i32>, roll: i32) -> i32;
-pub fn next_parity_tile(cur: i32, dir: i32, parity: i32, n: i32) -> i32;
-pub fn axis_nearest(cells: &[Option<[i32; 2]>], tile: usize, axis: i32) -> Option<usize>;
-pub fn axis_farthest(cells: &[Option<[i32; 2]>], tile: usize, axis: i32) -> Option<usize>;
+pub fn effective_steps(steps: Option<i32>, override_steps: Option<i32>, roll: i32) -> i32;
+pub fn next_parity_tile(current: i32, direction: i32, parity: i32, tile_count: i32) -> i32;
+pub fn nearest_tile_on_axis(grid_cells: &[Option<[i32; 2]>], tile: usize, axis: i32) -> Option<usize>;
+pub fn farthest_tile_on_axis(grid_cells: &[Option<[i32; 2]>], tile: usize, axis: i32) -> Option<usize>;
 ```
 
 `is_staging` is the machine-checked form of the lifetime rule. With frames the
@@ -587,22 +587,22 @@ nesting is `plan_scope.commands.len()`.
 - It takes the innermost `PlanCommand`, or `None` for an engine step.
 - `saved` is the command's `staging_before`, or the current staging clone when
   there is no command.
-- `kind` is `Main` iff `is_main_move` was computed true.
+- `kind` is `MainMove` iff `is_main_move` was computed true.
 - At frame depth 0 an **allocation** (`seed`) is built by the caller:
-  - Main — the whole current plan target (a command's writes are staging and
+  - `MainMove` — the whole current plan target (a command's writes are staging and
     shape its own main move).
-  - Side — `MoveCtx::staging_seed(plan_before, staging, target)`: for every
+  - `SideMove` — `MoveCtx::staging_seed(plan_before, staging, target)`: for every
     `Command` field the value the command changed relative to `plan_before`,
-    and for every `Turn`/`NextMain` field the staging value (those stay for the
+    and for every `Turn`/`NextMainMove` field the staging value (those stay for the
     next main). `staging_seed` iterates `PlanField` and consults
     `is_staging`, so a new field cannot be forgotten. With no command scope (an
     inline host rule) the seed is the whole staging.
-- At frame depth > 0 the frame is `Side` and `saved` is unused; the seed is the
+- At frame depth > 0 the frame is `SideMove` and `saved` is unused; the seed is the
   delta from the innermost command's `plan_before` to the current frame, or the
   whole current frame when there is no command.
 - Every depth-0 seed folds `next_move_pay_factor` into `pay_factor` and resets
   the slot to 1000 (G02 §5.5). A nested seed does not fold it again.
-- A `Main` seed takes `hidden[owner].next_steps` into `next_steps` and clears
+- A `MainMove` seed takes `hidden[owner].next_steps` into `next_steps` and clears
   the hidden slot.
 - `move_open` is set true while any frame is live.
 
@@ -610,9 +610,9 @@ nesting is `plan_scope.commands.len()`.
 
 | frame | condition | `turn.plan` after pop |
 |---|---|---|
-| Side, frame depth 0 | — | `saved` |
-| Main, frame depth 0 | ran | `Default` |
-| Main, frame depth 0 | refused | `saved` |
+| `SideMove`, frame depth 0 | — | `saved` |
+| `MainMove`, frame depth 0 | ran | `Default` |
+| `MainMove`, frame depth 0 | refused | `saved` |
 | any, frame depth > 0 | — | unchanged (the nested frame is discarded) |
 
 Restoring at the *pop* (not at command end) is what lets one command contain
@@ -664,19 +664,19 @@ post-move replay write lands on staging and the command's leave drops it.
 | id | raw import | wrapper | signature (wire) | lifetime | kind |
 |---|---|---|---|---|---|
 | 378 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
-| 379 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
+| 379 | `ruleset_set_main_override` | `plan::set_main_override(bool)` | `(on: i32)` | command | new |
 | 380 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
 | 381 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
 | 382 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
-| 383 | `ruleset_move_teleport_to` | `plan::plan_teleport_to() -> i32` | `() -> i32` | read | new |
+| 383 | `ruleset_move_planned_teleport` | `plan::planned_teleport() -> i32` | `() -> i32` | read | new |
 | 384 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
 | 385 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
 | 386 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
 | 387 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
 | 388 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
 | 389 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
-| 390 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
-| 391 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 390 | `ruleset_nearest_tile_on_axis` | `nearest_tile_on_axis(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 391 | `ruleset_farthest_tile_on_axis` | `farthest_tile_on_axis(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
 
 `trigger::move_from()` already exists (`ctx.rs:3338`, import
 `ruleset_trig_move_from`) and is not re-added.
@@ -701,14 +701,14 @@ pub mod axis {
 Semantics of the new writes:
 
 - `set_forced(on)` — writes `plan.forced`. A forced move of the turn player is
-  not the main move unless `set_main_as(true)`.
-- `set_main_as(on)` — writes `plan.main_as`. `is_main_move` is then
-  `is_turn && (!forced || main_as)`. In a move's own roll window, a
-  `run_planned_move` with `main_as` and `void_walk` replaces the pending walk in
+  not the main move unless `set_main_override(true)`.
+- `set_main_override(on)` — writes `plan.main_override`. `is_main_move` is then
+  `is_turn && (!forced || main_override)`. In a move's own roll window, a
+  `run_planned_move` with `main_override` and `void_walk` replaces the pending walk in
   place (§4.4).
-- `void_walk()` — writes `plan.void_walk`. With `main_as`, inside the move's own
+- `void_walk()` — writes `plan.void_walk`. With `main_override`, inside the move's own
   roll window, it makes the next `run_planned_move` replace the pending walk
-  with the planned teleport immediately (§4.4). Without `main_as`, or outside
+  with the planned teleport immediately (§4.4). Without `main_override`, or outside
   the window, the roll site just suppresses the walk: staged at Play it
   suppresses the next main's walk (pair it with a `teleport_to` when a teleport
   main is meant). A no-op for a teleport command.
@@ -719,7 +719,7 @@ Semantics of the new writes:
 
 Getters:
 
-- `plan_teleport_to()` — the planned destination, `-1` when none.
+- `planned_teleport()` — the planned destination, `-1` when none.
 - `move_pay_factor()` — the **plan half** only, milli (`1000` = ×1). The
   composed scoped value is G02's `ctx::plan::pay_factor()`; callers never add
   the two.
@@ -732,8 +732,8 @@ Getters:
   when no move.
 
 Axis codes: `abi::axis` `0` = up, `1` = down, `2` = left, `3` = right (the
-`happy_lucky.rs` 1..4 order minus one). `tile_axis_nearest(t, axis)` is the
-closest tile strictly along that ray from `t`, or `-1`; `tile_axis_farthest`
+`happy_lucky.rs` 1..4 order minus one). `nearest_tile_on_axis(t, axis)` is the
+closest tile strictly along that ray from `t`, or `-1`; `farthest_tile_on_axis`
 is the farthest one, or `-1`. Both exclude `t` itself and are board-only.
 
 ### 3.4 Trigger payload
@@ -752,8 +752,7 @@ pub effective: i32,
 `fn effective_steps(&self) -> i32 { self.steps.unwrap_or(self.roll) }` (the
 frame's `next_steps` is already mirrored into `roll`), and
 `move_plan::effective_steps` stays the pure form for the Kani proof. `with_move`
-(`rules.rs:397-416`) stamps `rolled: m.rolled` and `effective:
-m.effective_steps()`; `bridge_trigger` rebuilds the `TriggerMove` from the
+(`rules.rs:397-416`) stamps `rolled: m.rolled` and `effective: m.effective_steps()`; `bridge_trigger` rebuilds the `TriggerMove` from the
 trigger (`wasm_rules.rs:7789-7796`) and carries both through. The guest `abi::Trigger`
 payload and its accessors gain the pair. Cond gains `move.rolled` (Bool) and
 `move.effective` (Int) in `cond/src/view.rs`, `cond/src/view_impl.rs`,
@@ -777,7 +776,7 @@ through the live frame. `HostCtx::move_plan` returns `self.plan().clone()`.
 
 The new setters are ordinary plan-write handlers in `hostfns.rs`, so
 `Run::stamp_skill_source` (`wasm_rules.rs:393-402`) tags them like the existing
-ones; `set_forced`/`set_main_as`/`void_walk`/`clear_steps`/`add_extra_steps`
+ones; `set_forced`/`set_main_override`/`void_walk`/`clear_steps`/`add_extra_steps`
 need no special case. A refused `Move` clears the tag (§4.2).
 
 ### 3.6 Board geometry (data)
@@ -785,12 +784,12 @@ need no special case. A refused `Move` clears the tag (§4.2).
 `TileData` gains:
 
 ```rust
-/// Board cell `[col, row]` for axis queries. `None` on boards without a grid.
+/// Board grid cell `[column, row]` for axis queries. `None` on boards without a grid.
 #[serde(default, skip_serializing_if = "Option::is_none")]
-pub cell: Option<[i32; 2]>,
+pub grid_cell: Option<[i32; 2]>,
 ```
 
-`data/board.json` rows carry `cell` from the drawn board's `pathXY` fold (the
+`data/board.json` rows carry `grid_cell` from the drawn board's `pathXY` fold (the
 existing `CELLS` table and `Ring.tsx`'s `FOLD` are the same 60 pairs and agree;
 the board file is the authority, the client fold is its renderer). The
 `skip_serializing_if` keeps a coordinate-less board byte-identical in a record,
@@ -800,13 +799,13 @@ so old records and old board copies are unchanged.
 
 ```rust
 /// Built once at load from the tile rows; index-aligned with `tiles`.
-cells: Vec<Option<[i32; 2]>>,
-pub fn tile_axis_nearest(&self, tile: i32, axis: i32) -> i32;
-pub fn tile_axis_farthest(&self, tile: i32, axis: i32) -> i32;
+grid_cells: Vec<Option<[i32; 2]>>,
+pub fn nearest_tile_on_axis(&self, tile: i32, axis: i32) -> i32;
+pub fn farthest_tile_on_axis(&self, tile: i32, axis: i32) -> i32;
 ```
 
-The cache keeps the query allocation-free, so `axis_nearest` /
-`axis_farthest` take a plain `&[Option<[i32; 2]>]`.
+The cache keeps the query allocation-free, so `nearest_tile_on_axis` /
+`farthest_tile_on_axis` take a plain `&[Option<[i32; 2]>]`.
 
 Both return `-1` when coordinates are absent, the axis invalid, or no tile lies
 on the ray. They are pure and board-only; `happy_lucky`'s private table is
@@ -832,8 +831,7 @@ deleted once the data is filled.
 
 `drive_inner_body` / `drive_inner_body_from` (`wasm_rules.rs:3184, 3198`) wrap
 the guest call with `cx.enter_plan_command(resumed)` / `leave_plan_command()`
-(the resume arm of `apply`, `wasm_rules.rs:2840-2884`, is the only `resumed:
-true` caller). Entering snapshots the command; leaving drops it and, at the
+(the resume arm of `apply`, `wasm_rules.rs:2840-2884`, is the only `resumed: true` caller). Entering snapshots the command; leaving drops it and, at the
 outermost level, applies I2. A pause keeps `commands` in the saved world and the
 resumed body does not take a new snapshot: the replayed body rewrites the same
 values the first pass wrote.
@@ -860,7 +858,7 @@ frame from `m`. The "shared plan" readers (`scale_settle_payment`,
 
 1. Refuse if `main_moved` (unchanged); the one-shot start is already staging
    and the command leaves it there.
-2. `begin_plan(i, Main, seed)` — before `diceRollBefore`. The seed is the
+2. `begin_plan(i, MainMove, seed)` — before `diceRollBefore`. The seed is the
    current staging clone.
 3. Stamp `m.from = m.start.map_or(pos, |t| t.0)` and `m.to = m.from`.
 4. If the frame carries `next_steps`, seed `m.roll` with it *before* the
@@ -879,18 +877,18 @@ frame from `m`. The "shared plan" readers (`scale_settle_payment`,
 
 ```
 let forced = plan.forced;
-let main_as = plan.main_as;
-let is_main_move = move_plan::is_main_move(is_turn, forced, main_as);
+let main_override = plan.main_override;
+let is_main_move = move_plan::is_main_move(is_turn, forced, main_override);
 let owner = self.plan_stack.last().map_or(i, |f| f.owner);
 let replace = move_plan::replacement_taken(w.move_roll_windows.last().copied(),
-                                          owner, main_as, plan.void_walk,
+                                          owner, main_override, plan.void_walk,
                                           plan.teleport_to.is_some());
 if is_main_move && main_moved && !replace { refuse; return false }
 if is_main_move && !main_moved { main_moved = true }
 if replace { return self.replace_main_move(i, plan) }   // §4.4
 ```
 
-Otherwise it opens a frame (`Main` for `is_main_move`, `Side` otherwise)
+Otherwise it opens a frame (`MainMove` for `is_main_move`, `SideMove` otherwise)
 through `begin_plan`, stamps `from`, and runs the shared body: the
 `diceRollBefore` stage is the turn move's alone, the rest (a `rollPlan` cast
 when there is no step count, the ladder, the walk, the tail) is common.
@@ -933,7 +931,7 @@ not a plan field, and no frame clears or restores it. `void_walk` is narrower �
 it skips one move's walk, not the move phase.
 
 `teleport_as` opens a frame of its own kind when no frame is live
-(`plan_stack` empty): `Main` when its `is_main_move` argument is set, `Side`
+(`plan_stack` empty): `MainMove` when its `is_main_move` argument is set, `SideMove`
 otherwise, seeded by `staging_seed` from the innermost command, and pops after.
 When a
 frame is live the nearest caller owns one (`replace_main_move` §4.4, follower
@@ -974,7 +972,7 @@ non-empty" to "copy when changed": the `is_some()` guards on `teleport_to`,
 `steps` and `start` and the `>= 0` guards on `parity` and `settle_tile` all go,
 so a window can *clear* a field (`teleport_to`, `steps`, `parity`) as well as
 set it. `start` copies `start_reason` with it in either direction. Add
-`main_as` and `void_walk`.
+`main_override` and `void_walk`.
 
 Clearing is what makes the fold usable both ways: a `void_walk` written in
 `diceRollBefore` and then withdrawn (a gate refusal) is folded back as `false`,
@@ -1008,9 +1006,16 @@ Then:
   records no walk and no `lastWalk`.
 - Otherwise the call condition below walks `m`.
 
-The call site is `if !self.out(i) &&
-move_plan::walk_runs(m.teleport_to.is_some(), m.cancelled, m.void_walk) {
-self.walk(&mut m)? }`, so a set `void_walk`, a set `teleport_to`, a
+The call site is:
+
+```rust
+if !self.out(i) && move_plan::walk_runs(m.teleport_to.is_some(), m.cancelled,
+                                        m.void_walk) {
+    self.walk(&mut m)?;
+}
+```
+
+so a set `void_walk`, a set `teleport_to`, a
 cancellation and an out mover each skip the walk exactly once (a staged void
 with no target is the third branch); the ordinary pre-roll teleport never
 reaches this point (its branch returns before it).
@@ -1023,12 +1028,11 @@ window sees the same endpoint the walk would have used and the post-raise
 
 A `run_planned_move` issued from a move's own roll window
 (`move_roll_windows.last() == Some(player)`, the frame owner is `player`, the
-passed plan has `main_as && void_walk && teleport_to.is_some()`) does not open a
-second move: `fn replace_main_move(&mut self, i: usize, plan: Move) ->
-Flow<bool>`. The check runs **before** the `main_moved` refusal, because the
+passed plan has `main_override && void_walk && teleport_to.is_some()`) does not open a
+second move: `fn replace_main_move(&mut self, i: usize, plan: Move) -> Flow<bool>`. The check runs **before** the `main_moved` refusal, because the
 outer main already latched it.
 
-1. `begin_plan(i, Side, staging_seed(command.plan_before, staging, target))`.
+1. `begin_plan(i, SideMove, staging_seed(command.plan_before, staging, target))`.
    The command's delta already carries the teleport writes, so no seed is built
    for them; `teleport_as` then sees a live frame and does not add its own. The
    `by_skill` from the passed plan is written to the frame.
@@ -1054,7 +1058,8 @@ roll normally instead of taking the void branch with no teleport.
 
 `walk_inner_depth` (`play.rs:1812`):
 
-- `next` becomes `next_parity_tile(cur, m.dir(), m.parity, n)`.
+- `next` becomes `next_parity_tile(cur, m.dir(), m.parity, n)` (the loop's
+  existing `cur`/`n` locals).
 - At the top of every iteration, sync `m.extra_steps = self.plan().extra_steps`.
   `planned` and `remaining` then follow it.
 - `rolled` stays as the roll branch set it; a `steps` walk never entered it.
@@ -1067,9 +1072,9 @@ roll normally instead of taking the void branch with no teleport.
   `start`.
 
 ```rust
-/// The next tile in `dir`: the immediate neighbour when `parity < 0`, else
+/// The next tile in `direction`: the immediate neighbour when `parity < 0`, else
 /// the nearest tile whose index parity matches.
-fn next_parity_tile(cur: i32, dir: i32, parity: i32, n: i32) -> i32
+fn next_parity_tile(current: i32, direction: i32, parity: i32, tile_count: i32) -> i32
 ```
 
 The step loop's plan reads (`stop_at`, `settles`) keep working through
@@ -1104,8 +1109,8 @@ direct plan writes. It runs for card-driven main moves too.
 fn teleport_tail_only(&mut self, i: usize, from: i32, to: i32) -> Flow<()>
 ```
 
-The tail runs under a Side frame seeded from the plan (as §4.6), so a
-`moveAfter` counter's writes die with the nested jump. A `tail_only_depth`
+The tail runs under a `SideMove` frame seeded from the plan (as §4.6), so a
+`moveAfter` counter's writes die with the nested jump. An `in_teleport_tail`
 guard (one bool) prevents re-entering `teleport_tail_only` from a tail hook.
 `lisa_bond` needs no change: its existing `MoveAfter` /
 `move.kind == Teleport && move.by_skill` filter starts matching.
@@ -1114,9 +1119,9 @@ guard (one bool) prevents re-entering `teleport_tail_only` from a tail hook.
 
 `ops.rs` gains the two query wrappers over `GameData`, `hostfns.rs` the
 `HostCtx` methods, and `happy_lucky`'s private table is deleted once the data is
-filled. `GameData::tile_axis_*` scan the `cells` cache along the axis and pick
+filled. `GameData::nearest/farthest_tile_on_axis` scan the `grid_cells` cache along the axis and pick
 the minimal/maximal offset; only strict ray members qualify, and the whole
-answer is `-1` when the cache is empty (a board without `cell`).
+answer is `-1` when the cache is empty (a board without `grid_cell`).
 
 ### 4.9 Host pauses and the guest copy
 
@@ -1139,17 +1144,23 @@ exactly like the guest body's replay. `World::plan()` is used by
 - `arm_card_move` is today a constant `1` (`rules/kani/src/host.rs:1482-1486`,
   wired at `:868`) and `Op::teleport_as` a bare position write with no
   `main_moved` flag (`:842-850`). Both change:
-  - the kani world gains `main_moved`, `forced`, `main_as`, `void_walk`,
+  - the kani world gains `main_moved`, `forced`, `main_override`, `void_walk`,
     `teleport` and `window`;
-  - `arm_card_move` answers
-    `if is_main_move && main_moved && !(window && main_as && void_walk && teleport)
-    { 0 } else { 1 }` (the pure `replacement_taken`, inlined), and a `1` answer
-    with `is_main_move` latches `main_moved`;
+  - `arm_card_move` answers:
+
+    ```rust
+    if is_main_move && main_moved
+        && !(window && main_override && void_walk && teleport)
+    { 0 } else { 1 }
+    ```
+
+    (the pure `replacement_taken`, inlined), and a `1` answer with
+    `is_main_move` latches `main_moved`;
   - `teleport_as` sets `main_moved` when its `is_main_move` argument is set.
-- Plan setters (`set_forced`, `set_main_as`, `void_walk`, `clear_steps`,
+- Plan setters (`set_forced`, `set_main_override`, `void_walk`, `clear_steps`,
   `add_extra_steps`) join the protocol stub arm (`host.rs:1036-1072`);
   `clear_steps` also writes the model's `steps`; getters join the zero-return
-  group. `trig_move_rolled`/`_effective` read the snap. `tile_axis_*` return
+  group. `trig_move_rolled`/`_effective` read the snap. `nearest/farthest_tile_on_axis` return
   `-1` unless the model board is enabled.
 - The new names are appended after `rent_quote` (`kani_host.rs:388`, Op ids
   378-391) and to `ARRAY_OPS` beside it (`rules/kani/build.rs:317`).
@@ -1183,7 +1194,7 @@ fn on_turn_start(player_id: i32) -> card_sdk::Asked {
         let mut tiles = Vec::new();
         use card_sdk::abi::axis;
         for a in [axis::UP, axis::DOWN, axis::LEFT, axis::RIGHT] {
-            let t = ctx::tile_axis_nearest(pos, a);
+            let t = ctx::nearest_tile_on_axis(pos, a);
             if t >= 0 { tiles.push(t); }
         }
         if !tiles.is_empty() {
@@ -1240,8 +1251,8 @@ default. The `MoveKind` import moves in with the other imports.
 
 ### 5.3 `charity_show` (items 5-6)
 
-Before: condition `… && move.kind != Teleport && move.is_main_move && tile.id
->= 0` (`charity_show.rs:38`); body keeps a running absolute count in
+Before: condition `… && move.kind != Teleport && move.is_main_move && tile.id >= 0`
+(`charity_show.rs:38`); body keeps a running absolute count in
 `PROP_EXTRA` and writes it through `set_extra_steps` (`:139-147`).
 
 After: condition `… && move.kind != Teleport && move.rolled && tile.id >= 0`;
@@ -1272,11 +1283,11 @@ Add before the existing plan block:
 
 ```rust
 ctx::plan::set_forced(true);
-ctx::plan::set_main_as(hit == player_id);
+ctx::plan::set_main_override(hit == player_id);
 ```
 
 Rewrite the comment at `:49-51` (it says `forced` is event-only), remove the
-shape-leak TODO. Targeting yourself keeps `main_as` true and consumes the
+shape-leak TODO. Targeting yourself keeps `main_override` true and consumes the
 slot; targeting someone else never touches it. `set_pay_factor`
 may become `multiply_pay_factor(500, ThisMove)` for composition consistency
 (G02 owns the semantics; the half is otherwise identical).
@@ -1293,7 +1304,7 @@ trigger::set_cancelled();                       // the link only
 ctx::plan::set_kind(MoveKind::Teleport);
 ctx::plan::set_teleport_to(to);
 ctx::plan::set_settles(true);
-ctx::plan::set_main_as(true);
+ctx::plan::set_main_override(true);
 ctx::plan::void_walk();
 let _ran = ctx::run_planned_move(player_id);    // replaces the walk now
 ```
@@ -1330,27 +1341,27 @@ The bool now means "ran", so a spent main move is not a false hit.
 
 ```rust
 ctx::plan::set_forced(true);
-ctx::plan::set_main_as(counter_user == player_id);  // 「选择了使用者自己」
+ctx::plan::set_main_override(counter_user == player_id);  // 「选择了使用者自己」
 ```
 
 `doll_garden` sets `set_forced(true)` before every victim walk (never
-`main_as`; a victim is not the turn player) and `set_forced(true)` +
-`set_main_as(true)` before both sum walks — the zero-sum branch (`:96-100`) and
+`main_override`; a victim is not the turn player) and `set_forced(true)` +
+`set_main_override(true)` before both sum walks — the zero-sum branch (`:96-100`) and
 the real one (`:114-116`), since both are 「视为你本回合的主要移动」. Each
 victim runs on its own side frame; the sum walk is a Main frame seeded from the
 clean staging, so the victims' shape cannot leak into it. Remove both TODOs.
 
 ### 5.10 `lisa_bond` (item 17)
 
-No body change. The existing `MoveAfter` / `move.kind == Teleport &&
-move.by_skill` filter starts matching nested skill teleports; remove the TODO.
+No body change. The existing `MoveAfter` / `move.kind == Teleport && move.by_skill`
+filter starts matching nested skill teleports; remove the TODO.
 
 ### 5.11 `happy_lucky` (geometry)
 
-No rule change: `CELLS` / `cell` / `farthest` are deleted and the 60-tile guard
+No rule change: `CELLS` / `cell` / `farthest` helpers are deleted and the 60-tile guard
 goes (the query answers `-1` on any board). The card's `num = r % 4` is 1/2/3/0
 for 上/下/左/右; the axis code is `(num + 3) % 4` (0..3 = up/down/left/right), so
-the call becomes `ctx::tile_axis_farthest(p, (num + 3) % 4)` and keeps its
+the call becomes `ctx::farthest_tile_on_axis(p, (num + 3) % 4)` and keeps its
 `far >= 0` fallback to the current tile.
 
 ### 5.12 Remaining group rows
@@ -1409,9 +1420,9 @@ small card fixes; every one is closed in the same batch.
 - **SAVE_VERSION stays 13** (G02 landed it; this group adds no further bump).
   The new save fields are additive and defaulted.
 - The record stores actions, prompts and engine stamps, not plan internals; the
-  frame is reconstructed by replaying commands. `TileData.cell` is
+  frame is reconstructed by replaying commands. `TileData.grid_cell` is
   `skip_serializing_if` and absent from every existing record; a board row
-  written with a cell replays on the archived bundle of the build that wrote
+  written with a grid cell replays on the archived bundle of the build that wrote
   it. **RECORD_VERSION stays 4.**
 - Host pauses serialize the stack and scope (§4.9), so a pause inside a move
   resumes with the same frame. A save taken mid-move round-trips the frame; the
@@ -1432,17 +1443,17 @@ pub const ABI_VERSION: i32 = 108;   // was 107 (fifth group in the landing order
 /// v108: **command-scoped move plans and walk control**. The turn plan is a
 ///    staging buffer; every move runs on a frame owned by its command
 ///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
-///    New imports: `ruleset_set_forced` (378), `ruleset_set_main_as` (379),
+///    New imports: `ruleset_set_forced` (378), `ruleset_set_main_override` (379),
 ///    `ruleset_void_walk` (380), `ruleset_clear_steps` (381),
-///    `ruleset_add_extra_steps` (382), `ruleset_move_teleport_to` (383),
+///    `ruleset_add_extra_steps` (382), `ruleset_move_planned_teleport` (383),
 ///    `ruleset_move_pay_factor` (384), `ruleset_move_rent_factor` (385),
 ///    `ruleset_move_effective_steps` (386), `ruleset_move_forced` (387),
 ///    `ruleset_trig_move_rolled` (388),
 ///    `ruleset_trig_move_effective_steps` (389),
-///    `ruleset_tile_axis_nearest` (390), `ruleset_tile_axis_farthest` (391).
+///    `ruleset_nearest_tile_on_axis` (390), `ruleset_farthest_tile_on_axis` (391).
 ///    `MoveCtx.forced` is the `Forced` flag -- a forced move of the turn player
-///    is still the main move when `main_as` is set -- no longer "never the main
-///    move". `set_parity` canonicalizes `2` to `0` (even). The trigger move
+///    is still the main move when `main_override` is set -- no longer "never the
+///    main move". `set_parity` canonicalizes `2` to `0` (even). The trigger move
 ///    payload gains `rolled` and `effective`, surfaced as `move.rolled` /
 ///    `move.effective`. SAVE_VERSION / RECORD_VERSION unchanged.
 ```
@@ -1463,7 +1474,7 @@ Every card wasm and the Kani host rebuild together.
 | `g04_refused_main_keeps_staging` | a refused card main move leaves a staged teleport/factor intact |
 | `g04_main_consumes_staging` | a Main move latches the slot and clears staging |
 | `g04_forced_never_refused` | a forced move of the turn player runs with the slot spent and does not consume it |
-| `g04_main_as_consumes_when_free` | a forced `main_as` move latches a free slot |
+| `g04_main_override_consumes_when_free` | a forced `main_override` move latches a free slot |
 | `g04_void_walk_replaces_the_walk` | the walk's pass events do not raise; the teleport tail does |
 | `g04_replacement_settles_before_the_body_resumes` | the teleport's settle and tail precede the body's `pay` |
 | `g04_gate_refusal_restores_the_walk` | a refused replacement walks the roll with `kind = Walk` and no teleport |
@@ -1495,7 +1506,7 @@ replacement's body resuming after the settle, a window write on a
 | 12 | misaki-planned-start | `g04_misaki_span_uses_the_planned_start` | `hhw.rs` |
 | 13 | misaki-effective-steps | `g04_misaki_span_uses_next_steps` | `hhw.rs` |
 | 14 | dest-forced-hop | `g04_fate_hop_does_not_consume_or_require_the_main_move` | `crychic.rs` |
-| 15 | plan-set-forced | `g04_forced_walk_of_the_turn_player_is_main_only_with_main_as` | `mujica.rs` |
+| 15 | plan-set-forced | `g04_forced_walk_of_the_turn_player_is_main_only_with_main_override` | `mujica.rs` |
 | 16 | dg-plan-reset | `g04_doll_garden_victims_do_not_leak_shape` | `mujica.rs` |
 | 17 | lisa-bond | `g04_lisa_bond_opens_after_a_nested_skill_teleport` | `roselia.rs` |
 
@@ -1523,10 +1534,10 @@ functions in `game-kinds`, each an iff proof with a cover and a mutant:
 - `move_plan::parity_step_never_returns_start` — for `n > 1` the step moves.
 - `move_plan::parity_step_stays_in_range` — result in `0..n`.
 - `move_plan::effective_steps_order` — `steps` > `next_steps` > `roll`.
-- `move_plan::axis_nearest_is_on_ray` / `axis_nearest_is_nearest` — same
+- `move_plan::nearest_tile_on_axis_is_on_ray` / `nearest_tile_on_axis_is_nearest` — same
   column/row, minimal distance, never the start.
 - `move_plan::replacement_taken_exactly` — `replacement_taken` iff
-  `window == Some(owner) && main_as && void_walk && teleport`.
+  `window == Some(owner) && main_override && void_walk && teleport`.
 - `move_plan::walk_runs_exactly` — `walk_runs` iff no teleport target, not
   cancelled and not `void_walk` (so a replacement and a pre-roll teleport both
   skip the walk exactly once).
@@ -1536,15 +1547,14 @@ Per item: 1 → axis proofs; 5 → `MoveSnap.rolled` through `arm_card_move`;
 proof; 13 → `effective_steps_order`; 14/15 → `arm_card_move`; 16 → the seal
 proofs.
 
-`arm_card_move` proof: `refused iff is_main_move && main_moved &&
-!replacement_taken`.
+`arm_card_move` proof: `refused iff is_main_move && main_moved && !replacement_taken`.
 
 ## 9. Alternatives
 
 **A1 — Field lifetimes on the sticky plan, no frames.** Classify each
-`MoveCtx` field as Turn / NextMain / Command and reset Command fields after
+`MoveCtx` field as Turn / NextMainMove / Command and reset Command fields after
 every move. Simple to state, but `pay_factor` is both Command (saki) and
-NextMain (sakiko), `teleport_to` is both NextMain (kanon) and Command (misaki),
+NextMainMove (sakiko), `teleport_to` is both NextMainMove (kanon) and Command (misaki),
 and the split needs exceptions per writer. The frame encodes the intent once;
 the field list does not. This is the shipped patch in miniature: it is what
 `steps_fresh` and kin are, and it already misses nine fields.
@@ -1588,12 +1598,12 @@ teleport uses the immediate replacement, at the cost of the nested call rules in
 5. **Follower replay on a teleport main move.** Followers carry `kind` and
    `teleport_to`, so they teleport. Confirm this is intended (sakiko plus a
    teleport main is plausible).
-6. **`main_as` outside a roll window.** A forced move of the turn player marked
-   `main_as` outside any window still takes the slot check: it runs when the
+6. **`main_override` outside a roll window.** A forced move of the turn player marked
+   `main_override` outside any window still takes the slot check: it runs when the
    slot is free and is refused when spent. Is that the right reading of
-   「代替主要移动」, or should a forced `main_as` move always run?
-7. **Grid source.** The board file carries `cell`; the client's `FOLD` stays
-   its renderer. Should the client read `cell` from the data instead of keeping
+   「代替主要移动」, or should a forced `main_override` move always run?
+7. **Grid source.** The board file carries `grid_cell`; the client's `FOLD` stays
+   its renderer. Should the client read `grid_cell` from the data instead of keeping
    a second copy? (No rule depends on the answer.)
 8. **Detour's `0` vs Himari's `2`.** `set_parity` canonicalizes both, but a
    card-side migration to `0` for even is cheap; do it in the batch.
@@ -1602,8 +1612,8 @@ teleport uses the immediate replacement, at the cost of the nested call rules in
    a settle without the host's skill prefix would not open lisa's window; is
    that the right scope for 「使用技能进行传送」?
 10. **Forced move of a non-turn player and `set_forced`.** Both set the flag on
-    a plan that is already `Side`; confirm the card list has no case that also
-    needs `main_as` for an off-turn player.
+    a plan that is already `SideMove`; confirm the card list has no case that also
+    needs `main_override` for an off-turn player.
 
 ## 11. Reconciliation with other groups
 
@@ -1620,7 +1630,7 @@ teleport uses the immediate replacement, at the cost of the nested call rules in
 - **G07.** The target window reads `trigger::move_from()` /
   `move_effective_steps()` for range and span.
 - **G12.** `cant_move_code_for_activation` reads the blocked predicate this
-  group's `main_as`/`forced` split leaves orthogonal; the immunity gate keeps
+  group's `main_override`/`forced` split leaves orthogonal; the immunity gate keeps
   its ordering against the move activation.
 - **G10.** Settle facts are orthogonal; the replacement's one settle raises the
   ordinary stages under G10's outcome flags.
