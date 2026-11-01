@@ -159,7 +159,7 @@ Design: `docs/rulebook/spec/abi/G05-placed-card-press.md`
 
 Design: `docs/rulebook/spec/abi/G06-counteraction-and-join.md`
 
-- **join-window-report** (medium, rows 844,845,942,1090,1094,1312,1510) — No nested per-seat join window or joiner report; chosen designations unreadable; `rules/cards/card-general/src/net_error.rs`
+- **join-window-report** (medium, rows 844,845,942,1090,1094,1312,1510) — No nested per-seat join window or joiner report; chosen designations unreadable (rain does not declare `DESIGNATES`, the user's designation bypasses `ctx::target` and the pick loop breaks on refusal; net_error has no `Effect` arm); `rules/cards/card-general/src/net_error.rs`, `rules/cards/card-general/src/rain.rs`
 - **extreme-range-event-counter** (medium, rows 158,980,982,990) — Extreme counter admits every card play and has no event-chain scoping; `rules/cards/card-ag/src/tsugumi_can.rs`
 - **counter-link-move-face** (medium, rows 838) — A counter link loses the move face, so repaint cannot answer a chain; `rules/cards/card-ras/src/repaint.rs`
 - **counteraction-history** (high, rows 426,1060) — No per-turn counteraction history (who countered whom); `rules/cards/card-mujica/src/cant_look_away.rs`
