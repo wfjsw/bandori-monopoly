@@ -55,6 +55,8 @@
   "starry_night_note": "（场地中央）奇迹水晶 {{n}}：移动掷骰可以重骰一次；移除一个就获得 1,000",
   "starry_night_placed": "{{who}} 支付 {{n}} 次 1,000，把「蝴蝶飞舞的星月夜」放到场地中央",
   "starry_night_remove": "蝴蝶飞舞的星月夜：移除一个奇迹水晶",
+  "starry_night_keep_new": "用新结果 {{roll}}",
+  "starry_night_keep_old": "保留原来的 {{roll}}",
   "starry_night_reroll_ask": "掷出了 {{roll}}：要放弃这次结果重骰一次吗？",
   "starry_night_reroll_title": "蝴蝶飞舞的星月夜",
   "starry_night_rerolled": "重骰：{{from}} → {{to}}（{{who}}）",

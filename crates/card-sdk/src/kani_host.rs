@@ -386,6 +386,21 @@ pub enum Op {
     settle_outcome = 375,
     paid_in_settle_by = 376,
     rent_quote = 377,
+    // v109: roll transactions (design G03).
+    roll_recast = 398,
+    roll_move = 399,
+    roll_pick = 400,
+    roll_current = 401,
+    roll_face = 402,
+    roll_unused_face = 403,
+    roll_rerolled = 404,
+    rolls_by_player = 405,
+    trigger_roll = 406,
+    // The settle answers (both halves of 「是否触发结算」).
+    set_move_settle_answer = 407,
+    move_settle_answer = 408,
+    set_turn_end_settle_answer = 409,
+    turn_end_settle_answer = 410,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

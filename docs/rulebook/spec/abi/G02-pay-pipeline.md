@@ -1341,6 +1341,11 @@ therefore takes **369–377**, and every later group shifts ten: G04 **378–397
 G06 **398–417**, G05+G13 **418–427**, G07 **428–437**. The README table carries
 the corrected rows (§12).
 
+**2026-10-31 amendment (G03 review).** G03 sits between G04 and G06 and
+reserves **398–406**, so from G06 on the numbers shift another nine: G06
+**407–426**, G05+G13 **427–436**, G07 **437–446**. The G02 Op range itself
+(369–377, now landed) does not move.
+
 Why a break even though old imports keep their names: the host checks the
 module export for **exact** equality (`host.rs:3207-3213`) including arity, and
 a stale card wasm has neither the new import names nor the new kind ids nor the

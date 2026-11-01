@@ -275,3 +275,4 @@ fn native_rules_loads_the_shipped_table() {
         "content hash for the record stamp"
     );
 }
+

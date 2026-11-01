@@ -1627,10 +1627,10 @@ mod tests {
             assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
             assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
         }
-        // Count pin: the docs name 33 filter kinds (the 10 gates, the
+        // Count pin: the docs name 34 filter kinds (the 10 gates, the
         // modifier stages, the rent / settle stages). Adding one means the
         // docs table moves too.
-        assert_eq!(Filter::KINDS.len(), 33, "Filter::KINDS row count");
+        assert_eq!(Filter::KINDS.len(), 34, "Filter::KINDS row count");
     }
 
     /// Pin the typed sides against `TriggerKind::is_filter()` (the single

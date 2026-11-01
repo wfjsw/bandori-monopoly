@@ -637,6 +637,7 @@ filter_kinds! {
     TurnBaseTime => value;
     PlayGate => gate;
     DiceRollValue => payload(crate::payload::RollValue);
+    DiceRollAdd => payload(crate::payload::RollValue);
     OnBoardGate => gate;
     TargetableGate => gate;
 }
@@ -686,6 +687,8 @@ action_kinds! {
     PassTile;
     PayAfter;
     DiceRollAfter;
+    DiceRollCast;
+    DiceRollSettled;
     CardPlayed;
     Targeted;
     TurnEndBefore;
@@ -740,7 +743,7 @@ mod tests {
 
     #[test]
     fn filter_kinds_registry_matches_table() {
-        assert_eq!(Filter::KINDS.len(), 33);
+        assert_eq!(Filter::KINDS.len(), 34);
         assert!(Filter::KINDS.iter().all(|k| k.is_filter));
         for k in Filter::KINDS {
             assert_eq!(k.kind.is_filter(), true, "{}", k.name);
@@ -759,11 +762,19 @@ mod tests {
         assert_eq!(choose.shape, FilterShape::Flag);
         let gate = Filter::KINDS.iter().find(|k| k.name == "ActGate").unwrap();
         assert_eq!(gate.shape, FilterShape::Gate);
+        let roll_add = Filter::KINDS
+            .iter()
+            .find(|k| k.name == "DiceRollAdd")
+            .unwrap();
+        assert_eq!(roll_add.wire, "diceRollAdd");
+        assert_eq!(roll_add.shape, FilterShape::Payload);
     }
 
     #[test]
     fn action_kinds_registry_matches_table() {
-        assert!(!Action::KINDS.is_empty());
+        // 73 before `diceRollCast` / `diceRollSettled` (G03, ABI v109), plus
+        // G01's `cardFired` / `markChanged` (ABI v105) = 76.
+        assert_eq!(Action::KINDS.len(), 76);
         assert!(Action::KINDS.iter().all(|k| !k.is_filter));
         for k in Action::KINDS {
             assert!(!k.kind.is_filter(), "{}", k.name);

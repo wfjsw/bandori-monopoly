@@ -588,6 +588,15 @@ pub enum HostRequest {
         source: i32,
         window: bool,
     },
+    /// `ctx::roll_recast` -- cast one more die on an open roll transaction
+    /// (a reroll) and raise its `diceRollBefore` (and `diceRollResult` on a
+    /// move transaction). Answers the new raw face; the enclosing commit
+    /// settles it.
+    RollRecast { roll_id: i32, source: i32 },
+    /// `ctx::roll_move` -- a standalone move roll for `player_id` (Doll
+    /// Garden's victim): its own transaction and the whole Move ladder.
+    /// Answers the settled face.
+    RollMove { player_id: i32, source: i32 },
     /// A card handed a deed over (tomoe_savior's 「从该玩家处收购该地契」) and
     /// is announcing the acquisition: the engine raises the `bought` hook chain
     /// over the field (`TriggerKind::Bought`), with `by_card` = the run's own
@@ -813,7 +822,7 @@ pub(crate) struct Inner {
     sha256: String,
     /// Bitset of every trigger kind any card declares, so `counteract` can skip the
     /// whole bridge when nothing in the set listens. Engine ids and ruleset ids
-    /// each get their own `u128` word (ids fit in `0..128`).
+    /// each get their own word; the engine half is [`ENGINE_KIND_BITS`] wide.
     declared: KindMask,
     /// Cached counteraction index (BOT-RESEARCH.md #1 / GUARDS.md G3): per-card
     /// bitmask of trigger kinds its `On::Counteract` entries answer. The offer
@@ -832,14 +841,17 @@ pub(crate) struct Inner {
     gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
 }
 
-/// Two-namespace kind mask. Engine ids use `1u128 << id` in `engine` (and a
-/// kind outside `0..128` is a load error -- never silently dropped). Ruleset
-/// kinds are opaque tokens: an insertion-ordered set of [`TriggerKind`]s, no
-/// id-as-bit and no range check.
+/// How many engine kind ids the mask can hold.
+pub const ENGINE_KIND_BITS: i32 = 256;
+
+/// Two-namespace kind mask. Engine ids are bit positions in `engine` (and a
+/// kind outside `0..ENGINE_KIND_BITS` is a load error -- never silently
+/// dropped). Ruleset kinds are opaque tokens: an insertion-ordered set of
+/// [`TriggerKind`]s, no id-as-bit and no range check.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KindMask {
-    /// [`card_sdk::abi::KindNs::Engine`] ids.
-    pub engine: u128,
+    /// [`card_sdk::abi::KindNs::Engine`] ids, one bit each.
+    pub engine: [u128; (ENGINE_KIND_BITS / 128) as usize],
     /// [`card_sdk::abi::KindNs::Ruleset`] kinds, insertion order, de-duplicated.
     ruleset: Vec<crate::TriggerKind>,
 }
@@ -851,14 +863,14 @@ impl KindMask {
         use card_sdk::abi::KindNs;
         match k.ns {
             KindNs::Engine => {
-                if !(0..128).contains(&k.id) {
+                if !(0..ENGINE_KIND_BITS).contains(&k.id) {
                     return Err(format!(
-                        "trigger kind {} (id {}) outside 0..128 mask range",
+                        "trigger kind {} (id {}) outside 0..{ENGINE_KIND_BITS} mask range",
                         k.spelling(),
                         k.id
                     ));
                 }
-                self.engine |= 1u128 << k.id;
+                self.engine[(k.id / 128) as usize] |= 1u128 << (k.id % 128);
             }
             KindNs::Ruleset(_) => {
                 if !self.ruleset.contains(&k) {
@@ -873,7 +885,10 @@ impl KindMask {
     pub fn contains(&self, k: crate::TriggerKind) -> bool {
         use card_sdk::abi::KindNs;
         match k.ns {
-            KindNs::Engine => (0..128).contains(&k.id) && (self.engine & (1u128 << k.id)) != 0,
+            KindNs::Engine => {
+                (0..ENGINE_KIND_BITS).contains(&k.id)
+                    && (self.engine[(k.id / 128) as usize] & (1u128 << (k.id % 128))) != 0
+            }
             KindNs::Ruleset(_) => self.ruleset.contains(&k),
         }
     }
@@ -1948,7 +1963,7 @@ impl Ruleset {
                     crate::condition::fill_window(world),
                 ));
             }
-            let (arg, after_admit) = match self.entry_admitted(
+            let admitted = self.entry_admitted(
                 world,
                 card,
                 entry,
@@ -1957,7 +1972,8 @@ impl Ruleset {
                 &cand,
                 answers,
                 next_answer,
-            )? {
+            )?;
+            let (arg, after_admit) = match admitted {
                 // A guard / declare prompt is still applicability: the body
                 // has not run and `on_body` has not fired, so `announced`
                 // keeps whatever earlier entries set.
@@ -3514,8 +3530,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "roll_direct",
-        |mut c: C<W>, player_id: i32, count: i32, sides: i32, purpose: i32| -> Result<i32, Error> {
-            hostfns::roll_direct(&mut c, player_id, count, sides, purpose)
+        |mut c: C<W>,
+         player_id: i32,
+         count: i32,
+         sides: i32,
+         purpose: i32,
+         source: i32|
+         -> Result<i32, Error> {
+            hostfns::roll_direct(&mut c, player_id, count, sides, purpose, source)
                 .map_err(HostError::into_err)
         },
     )?;
@@ -4091,6 +4113,94 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "turn_rolls",
         |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::turn_rolls(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_recast",
+        |mut c: C<W>, roll_id: i32, source: i32| -> Result<i32, Error> {
+            hostfns::roll_recast(&mut c, roll_id, source).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_move",
+        |mut c: C<W>, player_id: i32, source: i32| -> Result<i32, Error> {
+            hostfns::roll_move(&mut c, player_id, source).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_pick",
+        |mut c: C<W>, roll_id: i32, index: i32| -> Result<(), Error> {
+            hostfns::roll_pick(&mut c, roll_id, index).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "roll_current", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::roll_current(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "roll_face",
+        |mut c: C<W>, roll_id: i32, index: i32| -> Result<i32, Error> {
+            hostfns::roll_face(&mut c, roll_id, index).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_unused_face",
+        |mut c: C<W>, roll_id: i32| -> Result<i32, Error> {
+            hostfns::roll_unused_face(&mut c, roll_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "roll_rerolled",
+        |mut c: C<W>, roll_id: i32| -> Result<i32, Error> {
+            hostfns::roll_rerolled(&mut c, roll_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "rolls_by_player",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::rolls_by_player(&mut c, player_id, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_roll",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::trigger_roll(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_move_settle_answer",
+        |mut c: C<W>, player_id: i32, answer: i32| -> Result<(), Error> {
+            hostfns::set_move_settle_answer(&mut c, player_id, answer).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_settle_answer",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::move_settle_answer(&mut c, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_turn_end_settle_answer",
+        |mut c: C<W>, player_id: i32, answer: i32| -> Result<(), Error> {
+            hostfns::set_turn_end_settle_answer(&mut c, player_id, answer)
+                .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "turn_end_settle_answer",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::turn_end_settle_answer(&mut c, player_id).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5469,8 +5579,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_fixed_roll",
-        |mut c: C<W>, n: i32| -> Result<(), Error> {
-            hostfns::set_fixed_roll(&mut c, n).map_err(HostError::into_err)
+        |mut c: C<W>, n: i32, source: i32| -> Result<(), Error> {
+            hostfns::set_fixed_roll(&mut c, n, source).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(m, "fixed_roll", |mut c: C<W>| -> Result<i32, Error> {

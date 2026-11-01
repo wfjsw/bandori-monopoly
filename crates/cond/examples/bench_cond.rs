@@ -51,6 +51,9 @@ fn window() -> WindowCtx {
             by_skill: false,
         },
         roll_source: 0,
+        roll_purpose: 1,
+        roll_rerolled: false,
+        roll_unused_face: -1,
         abnormal: false,
         chain: vec![
             ChainLink {

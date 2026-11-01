@@ -113,6 +113,15 @@ impl CondView for SnapshotView<'_> {
     fn roll_source(&self) -> i64 {
         self.win.roll_source
     }
+    fn roll_purpose(&self) -> i64 {
+        self.win.roll_purpose
+    }
+    fn roll_rerolled(&self) -> bool {
+        self.win.roll_rerolled
+    }
+    fn roll_unused_face(&self) -> i64 {
+        self.win.roll_unused_face
+    }
     fn abnormal(&self) -> bool {
         self.win.abnormal
     }

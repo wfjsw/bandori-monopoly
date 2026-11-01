@@ -9,7 +9,7 @@
 use super::cx::{Ask, Flow, Halt, PlayCtx};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
-use super::rules::{raise, Dest, Fold, Trigger, TriggerBuy, TriggerPay};
+use super::rules::{raise, Dest, Fold, RollSource, Trigger, TriggerBuy, TriggerPay};
 use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
@@ -94,7 +94,7 @@ fn apply_milli_factor(amount: i32, milli: i64, modified: &mut bool) -> i32 {
 /// and any further terms ride `extra` (`+1d4`, `+2`). Empty tables are `0d0`,
 /// the roll of nothing. This is what keeps 松原花音's second 「移动掷骰」
 /// reading 「掷 1d20 = 5」 instead of the old hardcoded 「掷 0d0 = 5」.
-fn plan_dice_msg(player_id: i32, plan: &Move, total: i32) -> Msg {
+pub(crate) fn plan_dice_msg(player_id: i32, plan: &Move, total: i32) -> Msg {
     let mut terms = plan.base.iter().chain(plan.dice.iter());
     let (count, sides) = match terms.next() {
         Some(t) => (t.dice.count, t.dice.sides.max(0)),
@@ -664,6 +664,10 @@ impl PlayCtx<'_> {
             extra,
             ..Default::default()
         };
+        // A preview cast (`ctx::roll` with a move purpose outside a move) is
+        // kept for the whole turn so its id stays addressable; the turn's
+        // rolls are over, so drop them with it.
+        self.w.open_rolls.clear();
         self.w.signals.push(Signal::TurnBegan);
         let text = Msg::new(if extra { "log.turn_extra" } else { "log.turn" })
             .i("round", self.w.st.round)
@@ -793,6 +797,16 @@ impl PlayCtx<'_> {
             self.w.gate_open(self.rules, super::Gate::Act, i),
             self.w.gate_open(self.rules, super::Gate::Move, i),
         );
+        // 「（或无法移动的回合结束时）」: a turn that cannot take its main move
+        // withholds the landing settle (the move goes nowhere) and moves it to
+        // the turn end. Stamp **before** the act-gate return -- [晕眩] closes
+        // both gates, and the act skip never reaches the move branch below.
+        // The stamp is the default only: an answer the card gave when the
+        // blocking effect landed keeps it (G03 §4.7).
+        use super::world::SettleAnswer;
+        if (!act || !mv) && self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
+            self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
+        }
         if !act {
             self.w.log(
                 "status",
@@ -854,6 +868,26 @@ impl PlayCtx<'_> {
     /// End of turn: status effects wear off, next turn queued.
     pub(crate) fn end_turn(&mut self, i: usize) -> Flow<()> {
         self.w.st.step = stage::END;
+        // A blocked main move's withheld settle (G03 §4.7). The blocked branch
+        // stamped `Settle` by default and a card could only decline with
+        // `Skip`; run the ordinary landing settle at the seat's own tile (the
+        // walk went nowhere) before the turn-end raises -- the full stage
+        // path (`settleBefore` -> `settle` -> `settleBody` -> the tile rule ->
+        // `settleAfter` -> `tileResolved`), not the built-in fallback.
+        if !self.out(i)
+            && self.playing()
+            && self.w.blocked_settle_answer(i) == super::world::SettleAnswer::Settle
+        {
+            let at = self.w.st.players[i].pos;
+            let mut m = Move::default();
+            m.player_id = i;
+            m.from = at;
+            m.to = at;
+            m.settles = true;
+            self.after_walk(&mut m)?;
+        }
+        self.w
+            .set_blocked_settle_answer(i, super::world::SettleAnswer::Unanswered);
         // End-phase sequence: `turnEndBefore` (also the `before_turn_end`
         // callbacks) -> status wear-off -> `turnEnd` -> `turnEndAfter` (also
         // the `at_turn_end` callbacks) -> `endTurnAfter`.
@@ -989,7 +1023,7 @@ impl PlayCtx<'_> {
     /// `can_build`, `no_buy`) across a host-routine pause; the rest of the
     /// shape (`settles`, `steps`, `kind`, `teleport_to`, …) is not carried and
     /// must be seeded here.
-    fn seed_turn_plan(&mut self, plan: &Move) {
+    pub(crate) fn seed_turn_plan(&mut self, plan: &Move) {
         // `settle_redirect` is engine-set on `card_settle_move` only; never let
         // a plan seed carry a sticky `true`.
         let mut p = plan.clone();
@@ -1024,8 +1058,9 @@ impl PlayCtx<'_> {
             self.w.turn.plan.by_skill = false;
         } else {
             if plan.steps.is_none() {
-                // No fixed step count: roll it now, with the same raise points.
-                raise!(self, "diceRollPlan", i, @m plan)?;
+                // No fixed step count: roll it now, with the same ladder.
+                let draft = self.open_move_roll(i, RollSource::Card);
+                self.raise_roll("diceRollPlan", draft, Some(&plan), -1)?;
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
                 // (same branch `main_move` takes for the turn's main move).
@@ -1034,25 +1069,15 @@ impl PlayCtx<'_> {
                     let settles = plan.settles;
                     let reason = plan.reason.clone();
                     self.w.turn.plan.teleport_to = None;
+                    self.abandon_roll(draft);
                     self.w.turn.plan.by_skill = plan.by_skill;
                     self.teleport_as(i, to, settles, reason, is_main_move)?;
                     self.w.turn.plan.by_skill = false;
                 } else {
-                    plan.roll = match self.w.turn.fixed_roll {
-                        Some(n) => n,
-                        None => self.roll_tables(&plan),
-                    };
-                    // v79: DiceRollValue is the pure roll-reshape stage;
-                    // DiceRollAfter is the Action event; DiceRollResult is the
-                    // [反击] reroll window (unchanged).
-                    let t = raise!(self, "diceRollValue", i, @m plan, value = plan.roll)?;
-                    plan.roll = t.value.max(0);
-                    let t = raise!(self, "diceRollAfter", i, @m plan, value = plan.roll)?;
-                    if t.value != plan.roll {
-                        plan.roll = t.value.max(0);
-                    }
-                    let t = raise!(self, "diceRollResult", i, @m plan, value = plan.roll)?;
-                    plan.roll = t.value.max(0);
+                    // Read, not take -- same one-shot reasoning as `main_move`.
+                    let fixed = self.w.turn.fixed_roll;
+                    plan.roll = self.run_move_roll(draft, &plan, fixed, false)?;
+                    self.w.turn.fixed_roll = None;
                     // The stored count applies to the next **main** move only
                     // (`main_move` takes it too); a side / forced card walk must
                     // leave it pending.
@@ -1551,6 +1576,13 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
+        // Taking the main move lifts the 「无法移动」 premise: a withheld
+        // turn-end settle (stamped at a blocked turn start, or by a card) is
+        // no longer owed -- the move settles where it lands instead.
+        self.w.set_blocked_settle_answer(
+            i,
+            super::world::SettleAnswer::Unanswered,
+        );
         // The activation running this move drove it (see `drop_spent_plan_shape`).
         self.w.turn.play_drove_move = true;
         // Drop what an earlier move in this turn left behind (`drop_stale_plan_shape`);
@@ -1574,28 +1606,24 @@ impl PlayCtx<'_> {
         m.stopped = false;
         m.cancelled = false;
         if !self.out(i) {
-            // `roll` (condition) -- before the d20 is cast. `value = -1` is the
-            // sentinel meaning "no roll yet": the bridge would otherwise
-            // derive `move_roll` from `value` and let roll-counteracting cards
-            // (which match `DiceRollBefore | DiceRollResult`) run before any dice exist.
-            raise!(self, "diceRollBefore", i, @m m, value = -1)?;
-            if self.out(i) || !self.playing() {
-                self.w.st.step = stage::END;
-                return Ok(());
-            }
-        }
-        if !self.out(i) {
             // `rollPlan` -- every placed card's `On::RollPlan` shapes the move
-            // before the dice (DiceRollPlan -> roll -> DiceRollValue ->
-            // DiceRollAfter -> the diceRollResult counteraction window).
+            // before the dice (DiceRollPlan -> cast -> diceRollCast ->
+            // diceRollBefore -> diceRollAdd -> [diceRollValue -> diceRollAfter
+            // -> the diceRollResult counteraction window] -> the settlement ->
+            // diceRollSettled).
             //
-            // The card bodies shape `TurnCtx::plan` (that is what the `World`
-            // plan ops write), so the walk has to take the move back afterwards.
-            // Seed first so a body that only reads sees the fresh move.
+            // The transaction opens first: a plan rewrite (`teleport_to`) below
+            // drops it without casting, and the plan hooks see the
+            // transaction's payload. The card bodies shape `TurnCtx::plan`
+            // (that is what the `World` plan ops write), so the walk has to
+            // take the move back afterwards. Seed first so a body that only
+            // reads sees the fresh move.
+            let draft = self.open_move_roll(roller, RollSource::Unattributed);
             self.seed_turn_plan(&m);
-            raise!(self, "diceRollPlan", i, @m m)?;
+            self.raise_roll("diceRollPlan", draft, Some(&m), -1)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {
+                self.abandon_roll(draft);
                 self.w.st.step = stage::END;
                 return Ok(());
             }
@@ -1616,30 +1644,30 @@ impl PlayCtx<'_> {
                 let settles = m.settles;
                 let reason = m.reason.clone();
                 self.w.turn.plan.teleport_to = None;
+                // The rolled main move keeps its 「触发结算前」 window even
+                // though it is rewritten into a teleport: it was raised on
+                // every main move before the ladder existed (`value = -1` = no
+                // face yet), and value-independent Before bodies / residual
+                // guards rely on it.
+                let view = self.roll_move_view(draft, i);
+                self.raise_roll("diceRollBefore", draft, Some(&view), -1)?;
+                self.abandon_roll(draft);
                 // `m.is_main_move` is true here (the turn's main move); pass it so the
                 // raise payload's `move.is_main_move` discriminates. A `moveBefore`
                 // counteraction can cancel it; the followers below must not
                 // execute a move that never happened.
                 m.cancelled = !self.teleport_as(i, to, settles, reason, m.is_main_move)?;
             } else {
-                // A stored fixed face ([`super::world::TurnCtx`]'s `fixed_roll`)
-                // replaces the roll, otherwise sum the `base` + `dice` tables
-                // (default 1d20; `sides == 0` is a flat `count`).
-                m.roll = match self.w.turn.fixed_roll {
-                    Some(n) => n,
-                    None => self.roll_tables(&m),
-                };
-                // v79: DiceRollValue is the pure roll-reshape stage;
-                // DiceRollAfter is the Action event; DiceRollResult is the
-                // [反击] reroll window (unchanged).
-                let t = raise!(self, "diceRollValue", i, @m m, value = m.roll)?;
-                m.roll = t.value.max(0);
-                let t = raise!(self, "diceRollAfter", i, @m m, value = m.roll)?;
-                if t.value != m.roll {
-                    m.roll = t.value.max(0);
-                }
-                let t = raise!(self, "diceRollResult", i, @m m, value = m.roll)?;
-                m.roll = t.value.max(0);
+                // The whole cast ladder: a stored fixed face
+                // ([`super::world::TurnCtx`]'s `fixed_roll`) replaces the
+                // throw, otherwise the cast sums the `base` + `dice` tables
+                // (default 1d20; `sides == 0` is a flat `count`). The pin is
+                // read, not taken, so the ladder's windows still see it
+                // (`ctx::fixed_roll()` guards); it is dropped after the ladder
+                // so a later move this turn throws its own dice.
+                let fixed = self.w.turn.fixed_roll;
+                m.roll = self.run_move_roll(draft, &m, fixed, false)?;
+                self.w.turn.fixed_roll = None;
                 // A stored step count (`next_steps`) overrides the roll for this
                 // one main move.
                 if let Some(steps) = self.w.hidden[i].next_steps.take() {
@@ -1683,6 +1711,16 @@ impl PlayCtx<'_> {
                     m.roll = 0;
                     m.steps = Some(0);
                     m.settles = false;
+                    // 「（或无法移动的回合结束时）」: the withheld landing settle
+                    // moves to the turn end unless a card says otherwise. The
+                    // cast above already ran normally, and `diceRollSettled`
+                    // already fired -- only the tile settle is withheld
+                    // (G03 §4.7). The stamp is the default only: a card that
+                    // answered `Skip` before the cast keeps it.
+                    use super::world::SettleAnswer;
+                    if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
+                        self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
+                    }
                 }
                 // A `diceRollAfter` / `diceRollResult` hook may have changed the
                 // destination on the plan (saaya_sky's floor 「移动到下一个可购买
@@ -1781,7 +1819,7 @@ impl PlayCtx<'_> {
     /// Each term is `count`d`sides`, or a flat `count` when `sides <= 0` (see
     /// [`crate::engine::move_ctx::Roll`]). This is what makes a Play body's
     /// 「掷骰变为3d20」 (`set_base_dice(3, 20)`) actually roll three dice.
-    fn roll_tables(&mut self, m: &Move) -> i32 {
+    pub(crate) fn roll_tables(&mut self, m: &Move) -> i32 {
         let extreme = self.w.turn.extreme;
         let mut total = 0;
         for t in m.base.iter().chain(m.dice.iter()) {
@@ -2116,7 +2154,33 @@ impl PlayCtx<'_> {
         self.w.st.players[i].state_set("resolveOverride", 0);
     }
 
-    /// Consume a `teleport_to` a hook wrote on the *plan*
+    /// 「选择自己的本次移动…是否触发结算」 -- write the one-shot
+    /// `resolveOverride` slot [`Self::take_resolve_override`] consumes. An
+    /// `Unanswered` write leaves the slot alone.
+    pub fn set_move_settle_answer(&mut self, i: usize, a: super::world::SettleAnswer) {
+        if let Some(slot) = a.slot() {
+            self.w.st.players[i].state_set("resolveOverride", slot);
+        }
+    }
+
+    /// The armed move-settle answer (`Unanswered` when the slot is empty).
+    pub fn move_settle_answer(&self, i: usize) -> super::world::SettleAnswer {
+        super::world::SettleAnswer::from_i32(self.w.st.players[i].state_get("resolveOverride"))
+    }
+
+    /// 「（或无法移动的回合结束时）」 -- the turn-end half for `i`. `i` is the
+    /// blocked seat, not necessarily the turn player. Read and cleared by
+    /// [`Self::end_turn`].
+    pub fn set_turn_end_settle_answer(&mut self, i: usize, a: super::world::SettleAnswer) {
+        self.w.set_blocked_settle_answer(i, a);
+    }
+
+    /// `i`'s turn-end settle answer, `Unanswered` by default.
+    pub fn turn_end_settle_answer(&self, i: usize) -> super::world::SettleAnswer {
+        self.w.blocked_settle_answer(i)
+    }
+
+    /// Consume a `teleport_to` a hook wrote on the *plan*.
     /// (`plan::set_teleport_to`) instead of calling `ctx::teleport_to`.
     ///
     /// The two write shapes are the same relocation -- `ctx::teleport_to` is a
@@ -5860,7 +5924,7 @@ impl PlayCtx<'_> {
     /// Build-and-raise a [`Trigger`], returning it as [`Self::counteract`] left it so
     /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
-    fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
+    pub(crate) fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
         self.counteract(&mut t)?;
         Ok(t)
     }

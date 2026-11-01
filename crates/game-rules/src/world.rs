@@ -63,6 +63,9 @@ pub struct Trigger {
     pub buy: Option<TriggerBuy>,
     /// Where a `diceRollBefore` / `diceRollResult` face came from.
     pub roll_source: game_core::engine::rules::RollSource,
+    /// The roll transaction this trigger belongs to (v109). `None` on every
+    /// non-roll trigger.
+    pub roll: Option<TriggerRoll>,
     /// How a counter invalidated this link -- see [`game_core::engine::rules::Negation`].
     pub negation: game_core::engine::rules::Negation,
     /// Recipients a counter spared from settlement.
@@ -102,6 +105,20 @@ pub struct Trigger {
     pub outcome: Option<game_core::engine::SettleOutcome>,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_skill: bool,
+}
+
+/// The roll transaction a roll trigger belongs to (v109, design G03 §5.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerRoll {
+    pub id: i32,
+    pub purpose: i32,
+    pub source: i32,
+    pub rerolled: bool,
+    pub chosen_index: i32,
+    pub unused_face: i32,
+    /// `(value, source)` per cast, in cast order.
+    pub casts: Vec<(i32, i32)>,
+    pub final_face: Option<i32>,
 }
 
 /// The move that caused a trigger.
@@ -182,6 +199,7 @@ impl Default for Trigger {
             pay: None,
             buy: None,
             roll_source: Default::default(),
+            roll: None,
             negation: Default::default(),
             spared: Vec::new(),
             seq: 0,
@@ -243,6 +261,7 @@ impl Trigger {
             pay: None,
             buy: None,
             roll_source: game_core::engine::rules::RollSource::Unattributed,
+            roll: None,
             negation: game_core::engine::rules::Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -329,6 +348,42 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Sum the planned move's dice tables into one face.
     fn do_move_roll(&mut self, _player_id: i32) -> i32 {
+        0
+    }
+    /// The innermost open roll transaction id, `-1` when none.
+    fn open_roll_id(&self) -> i32 {
+        -1
+    }
+    /// A roll transaction by id.
+    fn roll_transaction(&self, _id: i32) -> Option<&game_core::engine::roll::RollTransaction> {
+        None
+    }
+    /// Choose a cast of a roll transaction (clamped).
+    fn roll_pick(&mut self, _id: i32, _index: i32) {}
+    /// The face a pick did not take, `-1` when none.
+    fn roll_unused_face(&self, _id: i32) -> i32 {
+        -1
+    }
+    /// More than one cast on the transaction?
+    fn roll_rerolled(&self, _id: i32) -> bool {
+        false
+    }
+    /// Every face `player_id` has cast this turn.
+    fn rolls_by_player(&self, _player_id: i32) -> Vec<i32> {
+        Vec::new()
+    }
+    /// Arm the current move's 「是否触发结算」 answer (1 = settle, 2 = skip).
+    fn set_move_settle_answer(&mut self, _player_id: i32, _answer: i32) {}
+    /// The armed move answer (0 = unanswered).
+    fn move_settle_answer(&self, _player_id: i32) -> i32 {
+        0
+    }
+    /// Arm the turn-end half of `player_id`'s answer. The seat is explicit:
+    /// the blocking effect usually lands on someone else's turn, and the
+    /// answer must reach the blocked seat's own turn end.
+    fn set_turn_end_settle_answer(&mut self, _player_id: i32, _answer: i32) {}
+    /// `player_id`'s armed turn-end answer (0 = unanswered).
+    fn turn_end_settle_answer(&self, _player_id: i32) -> i32 {
         0
     }
     /// Log line (a localizable message from the card).
@@ -1217,7 +1272,7 @@ pub trait CardWorld: Clone + 'static {
     /// `player_id`'s money cannot drop this turn.
     fn set_no_money_loss(&mut self, _player: i32) {}
     /// This turn's main-move roll (a fixed face, not a dice table).
-    fn set_fixed_roll(&mut self, _n: i32) {}
+    fn set_fixed_roll(&mut self, _n: i32, _source: i32) {}
     /// The fixed main-move roll, or -1 when none is set.
     fn fixed_roll(&self) -> i32 {
         -1

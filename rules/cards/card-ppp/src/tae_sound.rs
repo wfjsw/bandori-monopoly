@@ -3,7 +3,7 @@
 //! > （多惠）寻找更好的声音：
 //! >  传送到“江户川乐器店”并获得一个[火罐]
 //!
-//! bare 传送 -- `teleport_to` is a position write with `resolve: false` (no 结算
+//! bare 传送 -- `teleport_to` is a position write with `settles: false` (no 结算
 //! on arrival) -- then +1 [火罐].
 
 use bandori_std::ctx;

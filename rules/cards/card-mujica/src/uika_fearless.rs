@@ -5,6 +5,7 @@
 //!
 //! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 
+use card_sdk::abi::roll_source;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -55,7 +56,7 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
             6,
         )?;
         let n = n.max(1);
-        ctx::set_fixed_roll(n);
+        ctx::set_fixed_roll(n, roll_source::CARD);
         ctx::log(
             player_id,
             &Msg::new(key!("uika_fearless_fixed"))
