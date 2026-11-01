@@ -154,6 +154,12 @@ pub struct WindowCtx {
     pub mv: MoveSnap,
     /// Where a roll came from (`-1` = none). Binds `roll_source`.
     pub roll_source: i64,
+    /// The roll's purpose (`0` = effect, `1` = move). Binds `roll_purpose`.
+    pub roll_purpose: i64,
+    /// Has the transaction more than one cast? Binds `roll_rerolled`.
+    pub roll_rerolled: bool,
+    /// The face a pick did not take (`-1` = none). Binds `roll_unused_face`.
+    pub roll_unused_face: i64,
     pub abnormal: bool,
     /// Flat effect-link list (same data the `effect::*` imports read).
     pub chain: Vec<ChainLink>,
@@ -219,6 +225,9 @@ impl Default for WindowCtx {
             settle_outcome: -1,
             mv: MoveSnap::default(),
             roll_source: 0,
+            roll_purpose: -1,
+            roll_rerolled: false,
+            roll_unused_face: -1,
             abnormal: false,
             chain: Vec::new(),
             turn_player: 0,

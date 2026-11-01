@@ -479,7 +479,8 @@ impl NamedVal {
 /// scan unrolled 8× per `get`/`set` and was the pp-unit unwind cliff
 /// (144 + 80 unrolls in `same_dream_01`).
 ///
-/// Presence is a `u32` bitset over `intern::SLOTS` (64) buckets.
+/// Presence is a bitset of one `u64` word per 64 slots; a single `u64` word
+/// overflows at slot 64 in the debug build.
 /// `NameId::INVALID` / out-of-range ids never alias a live key: `get_opt`
 /// is `None`, `set` is a documented no-op.
 /// Extra (key, value) slots for derived ids (`key + 0x2000/0x4000/0x8000`
@@ -522,7 +523,7 @@ impl NameMap {
             }
             return None;
         }
-        // Derived MIN/MAX/EXPIRES ids — tiny linear table (≤ MAX_EXTRA).
+        // Past the presence word — tiny linear table (≤ MAX_EXTRA).
         let mut e = 0usize;
         while e < MAX_EXTRA {
             if e < self.extra_n as usize && self.extra[e].0 == key {
@@ -671,6 +672,58 @@ impl Mark {
 }
 
 // ---------------------------------------------------------------------------
+// Roll transactions (v109 model)
+// ---------------------------------------------------------------------------
+
+/// One cast in the model.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct RollCastM {
+    pub value: i32,
+    pub source: i32,
+}
+
+impl RollCastM {
+    pub const EMPTY: RollCastM = RollCastM {
+        value: 0,
+        source: 0,
+    };
+}
+
+/// A model roll transaction (bounded: 4 casts, two live transactions).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct RollTx {
+    pub id: i32,
+    pub roller: i32,
+    pub purpose: i32,
+    pub source: i32,
+    pub has_result: bool,
+    pub open: bool,
+    pub settling: bool,
+    pub casts: [RollCastM; 4],
+    pub n: u8,
+    pub chosen: u8,
+    pub unused: i32,
+    pub final_face: i32,
+}
+
+impl RollTx {
+    pub const EMPTY: RollTx = RollTx {
+        id: -1,
+        roller: 0,
+        purpose: 0,
+        source: 0,
+        has_result: false,
+        open: false,
+        settling: false,
+        casts: [RollCastM::EMPTY; 4],
+        n: 0,
+        chosen: 0,
+        unused: -1,
+        final_face: -1,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // World
 // ---------------------------------------------------------------------------
 
@@ -813,6 +866,19 @@ pub struct World {
     pub counter_name: i32,
     /// Move-plan fixed roll (`-1` = null) — `ir_fill` `plan_fixed_roll`.
     pub plan_fixed_roll: i32,
+    /// Open roll transactions, depth 2 (design G03 §5.9).
+    pub rolls: [RollTx; 2],
+    pub roll_depth: u8,
+    pub next_roll_id: i32,
+    /// `(roller, value)` per cast this turn, bounded.
+    pub roll_hist: [(i32, i32); 8],
+    pub roll_hist_n: u8,
+    /// The roll transaction of the pending trigger (`Trigger.roll`).
+    pub trig_roll: Option<RollTx>,
+    /// Armed 「是否触发结算」 answers per seat (0 = unanswered, 1 = settle,
+    /// 2 = skip).
+    pub move_answer: [i32; MAX_PLAYERS],
+    pub turn_answer: [i32; MAX_PLAYERS],
     /// Bands currently blocked from skills (`ir_fill` `BlockedBands`).
     /// Non-zero entries are band name ids.
     pub blocked_bands: [i32; 4],
@@ -948,6 +1014,14 @@ impl World {
             trig_card: 0,
             counter_name: 0,
             plan_fixed_roll: -1,
+            rolls: [RollTx::EMPTY; 2],
+            roll_depth: 0,
+            next_roll_id: 1,
+            roll_hist: [(0, 0); 8],
+            roll_hist_n: 0,
+            trig_roll: None,
+            move_answer: [0; MAX_PLAYERS],
+            turn_answer: [0; MAX_PLAYERS],
             blocked_bands: [0; 4],
             blocked_bands_n: 0,
             msg_name: 0,

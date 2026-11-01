@@ -11,15 +11,34 @@
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, TriggerKind};
 use card_sdk::{it, CardText};
-use card_sdk::{key, Action, CardDef, Msg, On};
+use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
         On::Play("", None, want_human),
         On::Action(Action::TurnStart("actor == owner && card.placed", None, counteract)),
-        On::Action(Action::DiceRollAfter("actor == owner && card.placed", None, counteract)),
         On::Action(Action::TurnEnd("actor == owner && card.placed", None, counteract)),
+        // 规则书（1）: every one of your move casts is checked, rerolls included.
+        On::Action(Action::DiceRollCast(
+            "actor == owner && card.placed && roll_purpose == 1",
+            None,
+            on_cast,
+        )),
+        // 规则书（2）: the armed boost rides the Add stage, so a reroll re-folds
+        // it instead of losing the already-applied `set_move_roll`.
+        On::Filter(Filter::DiceRollAdd(
+            "actor == owner && card.placed && roll_purpose == 1",
+            Some(boost_armed),
+            boost_add,
+        )),
+        // 规则书（2）: consume the one-shot boost and snapshot the abnormal
+        // counter once the result is final (still before the movement itself).
+        On::Action(Action::DiceRollSettled(
+            "actor == owner && card.placed && roll_purpose == 1",
+            None,
+            on_settled,
+        )),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要成为人类"#)
@@ -63,8 +82,9 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", x as i64),
     );
-    // (1) and (2)'s boost are handled in `counteract`, which the hook dispatch
-    // runs at `rollAfter` / `turnStart` / `turnEnd`.
+    // (1) runs per cast (`on_cast`); (2)'s boost rides `boost_add` and is
+    // consumed at settlement (`on_settled`); the arming and the abnormal
+    // payoff run in `counteract` at `turnStart` / `turnEnd`.
     Ok(())
 }
 
@@ -72,48 +92,65 @@ const SLOT_BOOST: &str = "want_human_boost";
 
 const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 
-/// Runs through the hook dispatch, so this is a field effect, not a [反击].
-/// `actor == owner && card.placed` is the condition; the arms branch on kind.
+/// The `DiceRollCast` window. Every cast of one of your move rolls is checked
+/// -- a reroll lands as another Cast, not a later `DiceRollAfter`.
+///
+/// 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
+/// 为此卡添加一个奇迹水晶。」 (was 「小于X」).
+fn on_cast(player_id: i32) -> card_sdk::Asked {
+    let roll = trigger::value();
+    let x = ctx::prop(SLOT_X);
+    if x > 0 && roll <= x {
+        ctx::add_crystals(1, 0)?;
+        ctx::log(
+            player_id,
+            &Msg::new(key!("want_human_crystal"))
+                .player_id("who", player_id)
+                .i("n", roll as i64),
+        );
+    }
+    Ok(())
+}
+
+/// Residual guard for [`boost_add`]: a boost is armed (the prop holds the
+/// boost + 1, so `armed - 1` may be 0).
+fn boost_armed(_player_id: i32) -> bool {
+    ctx::prop(SLOT_BOOST) > 0
+}
+
+/// 规则书（2）: the boost armed last turn start lands on this roll. A pure Add
+/// body so every settle re-folds it after a reroll.
+fn boost_add(player_id: i32, v: RollValue) -> RollValue {
+    let boost = (ctx::prop(SLOT_BOOST) - 1).max(0);
+    RollValue { value: v.value + boost, ..v }
+}
+
+/// 规则书（2）: consume the armed boost and snapshot the abnormal counter so
+/// 「若该次移动过程中受到异常移动效果影响」 can be checked at turn end. The
+/// result is final here, so a reroll can no longer replace the face the boost
+/// was logged against.
+fn on_settled(player_id: i32) -> card_sdk::Asked {
+    let armed = ctx::prop(SLOT_BOOST);
+    if armed <= 0 {
+        return Ok(());
+    }
+    let boost = armed - 1;
+    ctx::set_prop(SLOT_BOOST, 0);
+    ctx::set_prop(SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("want_human_boost"))
+            .player_id("who", player_id)
+            .i("n", boost as i64),
+    );
+    Ok(())
+}
+
+/// `TurnStart` / `TurnEnd`. Runs through the hook dispatch, so this is a field
+/// effect, not a [反击]. `actor == owner && card.placed` is the pre; the arms
+/// branch on kind.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        // 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
-        // 为此卡添加一个奇迹水晶。」 (was 「小于X」).
-        TriggerKind::DiceRollAfter => {
-            let roll = trigger::value();
-            let x = ctx::prop(SLOT_X);
-            // TODO(规则书)（每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶）: a
-            //   重骰后的出目也要检查 -- the check runs only at diceRollAfter, the
-            //   reroll lands later at diceRollResult.
-            if x > 0 && roll <= x {
-                ctx::add_crystals(1, 0)?;
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("want_human_crystal"))
-                        .player_id("who", player_id)
-                        .i("n", roll as i64),
-                );
-            }
-            // 规则书（2）: the boost armed last turn start lands on this roll
-            // (the slot holds the total + 1, so `armed - 1` may be 0).
-            let armed = ctx::prop(SLOT_BOOST);
-            if armed > 0 {
-                let boost = armed - 1;
-                ctx::set_prop(SLOT_BOOST, 0);
-                // 规则书（2）: snapshot the abnormal counter so 「若该次移动过程中受到
-                // 异常移动效果影响」 can be checked at turn end (`Mem["abBefore"]`).
-                ctx::set_prop(SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
-                // TODO(规则书)（使你下次的移动掷骰结果额外增加20-X）: a rerolled
-                //   结果也要带上 +N -- this runs at diceRollAfter, before the
-                //   diceRollResult reroll window, and the reroll replaces the face.
-                trigger::set_move_roll(roll + boost);
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("want_human_boost"))
-                        .player_id("who", player_id)
-                        .i("n", boost as i64),
-                );
-            }
-        }
         // 规则书（2）: 「若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部
         // 奇迹水晶并使你下次的移动掷骰结果额外增加20-X。」
         TriggerKind::TurnStart => {
@@ -174,4 +211,22 @@ pub fn want_human_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_cast_kani(player_id: i32) -> card_sdk::Asked {
+    on_cast(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn boost_add_kani(player_id: i32, v: card_sdk::RollValue) -> card_sdk::RollValue {
+    boost_add(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settled_kani(player_id: i32) -> card_sdk::Asked {
+    on_settled(player_id)
 }

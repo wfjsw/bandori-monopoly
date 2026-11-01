@@ -134,6 +134,7 @@ pub fn router(
         .route("/api/rooms/{id}/nonce", post(api::nonce))
         .route("/api/rooms/{id}/leave", post(api::leave))
         .route("/api/rooms/{id}/state", get(api::room_state))
+        .route("/api/rooms/{id}/events", get(api::events))
         .route("/api/rooms/{id}/act", post(api::act))
         .route("/api/rooms/{id}/anim-done", post(api::anim_done))
         .route("/api/rooms/{id}/order-ready", post(api::order_ready))

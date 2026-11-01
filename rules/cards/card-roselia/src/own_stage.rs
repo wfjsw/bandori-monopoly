@@ -60,22 +60,22 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         Msg::new(key!("own_stage_no_settle")).player_id("who", player_id)
     };
     ctx::log(player_id, &reason);
-    // TODO(规则书)（或无法移动的回合结束时）: the turn-end half is only written to a slot
-    // (`stageEnd`) and no reader consumes it -- nothing settles at the end of a
-    // movement-locked turn. (The move half is read by `PlayCtx::take_resolve_override`.)
-    match abnormal_kind() {
-        Some(bandori_std::kind::abnormal::Stay) | Some(bandori_std::kind::abnormal::Stun) => {
-            // TODO(规则书)（或无法移动的回合结束时）: the turn-end half applies only
-            //   when the move is actually blocked -- the kind alone is the branch, so
-            //   a [停留] walked through under 「不可阻挡」 still lands here.
-            ctx::set_slot(player_id, "stageEnd", if yes { 1 } else { 2 });
-        }
-        // 1 : 0)` for every other abnormal. The slot is one-shot: the engine consumes it
-        // into the move and clears it (`take_resolve_override`), so 1 = settle and 2 =
-        // pin off (0 would be indistinguishable from unset).
-        _ => {
-            ctx::set_slot(player_id, "resolveOverride", if yes { 1 } else { 2 });
-        }
+    // 规则书[反击]: 「选择自己的本次移动（或无法移动的回合结束时）是否触发结算」
+    // -- the old port branched on the abnormal kind (`stay`/`stun` → `stageEnd`,
+    // else the per-player settle override). Both answers are engine state now
+    // (G03 §5.8): the move half is consumed into the move, the turn-end half by
+    // the settle runner before `turnEndBefore`.
+    use card_sdk::abi::SettleAnswer::{Settle, Skip};
+    if matches!(
+        abnormal_kind(),
+        Some(bandori_std::kind::abnormal::Stay) | Some(bandori_std::kind::abnormal::Stun)
+    ) {
+        // TODO(规则书)（或无法移动的回合结束时）: the turn-end half applies only
+        //   when the move is actually blocked -- the kind alone is the branch, so
+        //   a [停留] walked through under 「不可阻挡」 still lands here.
+        ctx::set_turn_end_settle_answer(player_id, if yes { Settle } else { Skip });
+    } else {
+        ctx::set_move_settle_answer(player_id, if yes { Settle } else { Skip });
     }
     Ok(())
 }

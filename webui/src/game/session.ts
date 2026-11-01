@@ -324,6 +324,16 @@ export abstract class GameSession {
   protected events = new Set<EventCb>();
   protected others = new Set<() => void>();
 
+  /**
+   * Every event the session can still supply, oldest first -- the log's
+   * mount-time history seed. The state window and the live stream carry only
+   * a tail (the engine keeps `EVENT_KEEP` events); each kind widens this to
+   * the engine's own history where it has one.
+   */
+  async historyEvents(): Promise<MatchEvent[]> {
+    return this.view?.state.events ?? [];
+  }
+
   /** Subscribe to state, events and room/connection changes. Returns unsubscribe. */
   subscribe(onView: ViewCb, onEvent?: EventCb, onOther?: () => void): () => void {
     this.views.add(onView);
@@ -873,6 +883,12 @@ export class SoloSession extends GameSession {
     return this.engine.act(this.you, cmd);
   }
 
+  /** The engine's retained events (it keeps a tail, not the whole match). */
+  async historyEvents(): Promise<MatchEvent[]> {
+    if (this.closed) return super.historyEvents();
+    return this.engine.events(0).catch(() => super.historyEvents());
+  }
+
   /** Skip the character pick with a random one and preset decks. */
   quickStart(): void {
     void this.engine.quickStart();
@@ -1054,6 +1070,15 @@ export class OnlineSession extends GameSession {
     if (this.readOnly) return { k: "err.not_a_player" };
     const r = await api.act(this.id, cmd);
     return r.ok ? null : (r.error ?? { k: "err.unknown_act" });
+  }
+
+  /**
+   * The server's retained events (its engine keeps a tail). Seats and
+   * spectators alike come through the same session; the log is public.
+   */
+  async historyEvents(): Promise<MatchEvent[]> {
+    const r = await api.events(this.id, 0);
+    return r.ok && r.data ? r.data : super.historyEvents();
   }
 
   /**

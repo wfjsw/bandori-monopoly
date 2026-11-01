@@ -308,6 +308,7 @@ Putting a real IdP in front is future work.
 | POST | `/api/rooms/{id}/nonce` | `{nonce}` (32 bytes hex) | `RoomInfo` -- this human's entropy contribution; a missing nonce is simply absent |
 | POST | `/api/rooms/{id}/leave` | | `{ok}` |
 | GET  | `/api/rooms/{id}/state` | | `{room, you, match}` |
+| GET  | `/api/rooms/{id}/events?since=N` | | `MatchEvent[]` after `N`, oldest first -- the log's history seed; the engine keeps a tail, so `0` is "as far back as it still has" (seats and spectators) |
 | POST | `/api/rooms/{id}/act` | `NetMessage` | `{ok}` |
 | GET  | `/api/rooms/{id}/record` | | the last finished match's `.bdrec` (see below) |
 | GET  | `/api/rooms/{id}/stream` | | SSE |

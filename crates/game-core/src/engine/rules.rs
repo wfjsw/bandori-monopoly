@@ -77,6 +77,31 @@ pub struct TriggerMove {
     pub settle_redirect: bool,
 }
 
+/// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
+/// every other trigger.
+///
+/// The guest sees this as `abi::RollPayload`; the two crates cannot share a
+/// type, so keep the fields aligned.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TriggerRoll {
+    /// The transaction id.
+    pub id: i32,
+    /// `0` = effect roll, `1` = move roll.
+    pub purpose: i32,
+    /// The highest-ranked [`RollSource`] seen on the transaction.
+    pub source: RollSource,
+    /// More than one cast exists.
+    pub rerolled: bool,
+    /// Index into `casts` of the face that will settle.
+    pub chosen_index: i32,
+    /// The face the latest pick did not take; `-1` when none.
+    pub unused_face: i32,
+    /// Every cast so far, `(value, source)`.
+    pub casts: Vec<(i32, i32)>,
+    /// The settled face at `diceRollSettled`; `None` before it.
+    pub final_face: Option<i32>,
+}
+
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
 /// the amount rides the trigger's `value` and the payee its `target`, but
 /// whether the payment is rent is a pay-only fact.
@@ -164,7 +189,9 @@ impl TriggerPay {
 /// `card_sdk::abi::roll_source`'s wire codes; the guest ABI still sees the `i32`.
 /// The engine never branches on a game name -- code `1` is the marker-funded
 /// roll that rules-layer clauses match by wire code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]
@@ -185,6 +212,18 @@ impl RollSource {
             RollSource::Charge => 1,
             RollSource::Card => 2,
             RollSource::Skill => 3,
+        }
+    }
+
+    /// Precedence rank (higher wins). The wire codes are not in rank order:
+    /// a charge-funded recast outranks a skill, which outranks a card, which
+    /// outranks an unattributed roll.
+    pub const fn rank(self) -> i32 {
+        match self {
+            RollSource::Unattributed => 0,
+            RollSource::Card => 1,
+            RollSource::Skill => 2,
+            RollSource::Charge => 3,
         }
     }
 
@@ -237,6 +276,61 @@ pub struct Effect {
     pub value: i32,
 }
 
+/// How the responders of one amount stage combine their rewrites (MONEY-01).
+///
+/// The rulebook lists 支付增加/减少 (stage 2) and 支付减半/翻倍 (stage 4) as
+/// *one window each* and gives no order between two responders. The engine
+/// therefore composes within a stage instead of applying one responder after
+/// the other:
+///
+/// * [`Fold::Add`] -- every responder is shown the stage **input** and its
+///   `write - input` deltas are summed.
+/// * [`Fold::Mul`] -- every responder is shown the stage **input** and its
+///   factors (`write / input`) are multiplied (milli precision).
+///
+/// Both folds are commutative, so declaration order cannot change the figure.
+/// A single modifier still lands exactly as before; the one end-of-calc
+/// `ceil10` sees the composed figure.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Fold {
+    /// Each responder overwrites the running value (stages that are not
+    /// amount modifiers, and the writable `*Before` prompts).
+    #[default]
+    Replace,
+    /// Fixed-value stage: deltas sum.
+    Add,
+    /// Scale stage: factors multiply.
+    Mul,
+}
+
+impl Fold {
+    pub fn is_fold(self) -> bool {
+        self != Fold::Replace
+    }
+}
+
+/// Apply one responder's write `v` to a fold stage (MONEY-01). Shared by the
+/// engine trigger and the host's payload mirror.
+pub fn fold_apply(fold: Fold, input: i32, value: &mut i32, millis: &mut i64, v: i32) {
+    match fold {
+        Fold::Replace => *value = v,
+        Fold::Add => {
+            let delta = v.saturating_sub(input);
+            *value = value.saturating_add(delta);
+        }
+        Fold::Mul => {
+            if input == 0 {
+                *value = v;
+                return;
+            }
+            let factor = (i64::from(v) * 1_000_000) / i64::from(input);
+            *millis = millis.saturating_mul(factor).saturating_div(1_000_000);
+            *value = (i64::from(input).saturating_mul(*millis) / 1_000_000)
+                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+        }
+    }
+}
+
 /// One link in a chain (Yu-Gi-Oh's `ChainLink`), and the engine's counteraction trigger.
 ///
 /// The kind name itself encodes condition/post (`"settleBefore"` vs `"settle"`,
@@ -253,6 +347,15 @@ pub struct Trigger {
     pub tile: i32,
     pub card: Option<String>,
     pub value: i32,
+    /// How this stage composes its responders' rewrites ([`Fold`]).
+    pub fold: Fold,
+    /// The stage input: what every responder reads as `value` while `fold` is
+    /// set. Unused on [`Fold::Replace`].
+    pub fold_input: i32,
+    /// The running product of a [`Fold::Mul`] stage, in millionths (1_000_000
+    /// = ×1). Kept off `value` so the multiplication does not round at every
+    /// responder; `value` is recomputed from it after each write.
+    pub fold_milli: i64,
     /// The turn step (0/1/2/3) active when this trigger raised. Stamped by
     /// `PlayCtx::counteract`, not by the raise site. Only meaningful for kinds that
     /// aren't step-specific (e.g. `mortgage` can raise during both step 1
@@ -277,9 +380,11 @@ pub struct Trigger {
     /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on
     /// every other kind.
     pub buy: Option<TriggerBuy>,
-    /// Where a `diceRollBefore` / `diceRollResult` face came from. [`RollSource::Unattributed`]
+    /// Where the roll's face came from. [`RollSource::Unattributed`]
     /// on every non-roll trigger.
     pub roll_source: RollSource,
+    /// The roll a `DiceRoll*` trigger belongs to. `None` on every other kind.
+    pub roll: Option<TriggerRoll>,
     /// How a counter invalidated this link. The effect body is skipped when this
     /// is not [`Negation::None`]; the Before/After hooks still run.
     pub negation: Negation,
@@ -332,6 +437,9 @@ impl Trigger {
             tile: -1,
             card: None,
             value: 0,
+            fold: Fold::Replace,
+            fold_input: 0,
+            fold_milli: 1_000_000,
             step: 0,
             by_card: None,
             is_main_move: false,
@@ -339,6 +447,7 @@ impl Trigger {
             pay: None,
             buy: None,
             roll_source: RollSource::Unattributed,
+            roll: None,
             negation: Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -353,6 +462,38 @@ impl Trigger {
             outcome: None,
             charge_skill: false,
         }
+    }
+
+    /// The figure a responder reads as `value`: the stage input on a fold
+    /// stage, the running figure otherwise.
+    pub fn shown_value(&self) -> i32 {
+        if self.fold.is_fold() {
+            self.fold_input
+        } else {
+            self.value
+        }
+    }
+
+    /// Open this stage as an amount fold: pin the input every responder sees
+    /// and reset the multiplier accumulator.
+    pub fn begin_fold(&mut self, fold: Fold) {
+        self.fold = fold;
+        self.fold_input = self.value;
+        self.fold_milli = 1_000_000;
+    }
+
+    /// A responder wrote `v`. Plain stages overwrite; an [`Fold::Add`] stage
+    /// adds the delta to the running sum; a [`Fold::Mul`] stage multiplies the
+    /// running product by `v / input` (millionths) and recomputes the figure.
+    /// This is what makes a stage commutative (MONEY-01).
+    pub fn fold_write(&mut self, v: i32) {
+        fold_apply(
+            self.fold,
+            self.fold_input,
+            &mut self.value,
+            &mut self.fold_milli,
+            v,
+        );
     }
 
     /// Did a counter negate this link at all?
@@ -388,6 +529,22 @@ impl Trigger {
     /// or when a counter spared this one recipient.
     pub fn settles_for(&self, seat: i32) -> bool {
         self.negation == Negation::None && !self.spared.contains(&seat)
+    }
+
+    /// Attach the roll transaction payload.
+    pub(crate) fn with_roll(&mut self, r: &super::roll::RollTransaction) -> &mut Self {
+        self.roll = Some(TriggerRoll {
+            id: r.id,
+            purpose: r.purpose,
+            source: r.source,
+            rerolled: r.casts.len() > 1,
+            chosen_index: r.chosen_index as i32,
+            unused_face: r.unused_face,
+            casts: r.casts.iter().map(|c| (c.raw, c.source.as_i32())).collect(),
+            final_face: r.final_face,
+        });
+        self.roll_source = r.source;
+        self
     }
 
     /// Copy the move context onto this trigger.
@@ -481,6 +638,28 @@ macro_rules! raise {
     };
     (@set $t:ident, $field:ident = $value:expr, $($rest:tt)+) => {
         $t.$field = $value;
+        raise!(@set $t, $($rest)+);
+    };
+    // `@f add` / `@f mul` open an amount fold on the value written so far --
+    // write it after the `value = ...` override it should fold.
+    (@set $t:ident, @f add) => {
+        $t.begin_fold(Fold::Add);
+    };
+    (@set $t:ident, @f add,) => {
+        $t.begin_fold(Fold::Add);
+    };
+    (@set $t:ident, @f add, $($rest:tt)+) => {
+        $t.begin_fold(Fold::Add);
+        raise!(@set $t, $($rest)+);
+    };
+    (@set $t:ident, @f mul) => {
+        $t.begin_fold(Fold::Mul);
+    };
+    (@set $t:ident, @f mul,) => {
+        $t.begin_fold(Fold::Mul);
+    };
+    (@set $t:ident, @f mul, $($rest:tt)+) => {
+        $t.begin_fold(Fold::Mul);
         raise!(@set $t, $($rest)+);
     };
 }

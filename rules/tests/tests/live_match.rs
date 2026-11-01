@@ -265,10 +265,12 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
     m.act(1, &play("HHW:（育美）"))
         .expect("play should start the effect");
 
-    // The module blocked on its roll-option prompt; answer with the first option.
+    // The module blocked on its roll-option prompt; answer with the first
+    // option. The options are tiles and the answer is an option **index**
+    // (G03 §4.6: `ask_tile_pick` is a `PromptKind::Tile` prompt).
     let st = m.state();
     assert_eq!(
-        st.prompt.kind, "choice",
+        st.prompt.kind, "tile",
         "the module's prompt offers one option per roll: {:?}",
         st.prompt
     );

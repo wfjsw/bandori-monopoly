@@ -16,10 +16,11 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
         On::Play("", None, play),
-        // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
-        // deleted (a no-op prefetch); the `value` param is the face being
-        // halved (effect), not applicability.
-        On::Filter(Filter::DiceRollValue("", None, halve)),
+        // 「场上所有移动掷骰/2」 -- every seat's move face while the event is
+        // up. `always` deleted (a no-op prefetch); the `value` param is the
+        // face being halved (effect), not applicability. G03 R9: a halving
+        // stays on the final DiceRollValue pass, gated to move rolls.
+        On::Filter(Filter::DiceRollValue("roll_purpose == 1", None, halve)),
         On::Schedule("expire", "", None, expire),
     ],
 )

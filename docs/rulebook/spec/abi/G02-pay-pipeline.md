@@ -145,7 +145,9 @@ ctx::plan::set_pay_factor(500);
 halves stay 0.5 instead of 0.25, and the factor is still there for the owner's
 own later landing.
 
-Root cause **R2** (absolute, turn-scoped factors, no multiply, no read).
+Root cause **R2** (absolute, turn-scoped factors, no multiply, no read). Since
+G02 lands, the write is scoped and composes, so the two halves give 0.25 and
+the owner's later landing is not scaled by this move's factor.
 
 ### 2.4 `kokoro-pay-buy` (medium; row 305)
 
@@ -531,7 +533,12 @@ Testable invariants:
 - **I4 (factor scope).** `pay_factor()` returns the product of every factor
   scope live at this instant (4.5). A factor write outlives exactly its scope:
   next move, this move, next settle or this settle; the engine clears each at
-  the scope end.
+  the scope end. Two live writes of one scope **multiply** rather than
+  overwrite (MONEY-01 / C-Q1), and a factor is one contributor to the one
+  product of the chain: the rent and the settle each carry the row-2 / row-4
+  stages of their own (`rentAdd` / `rentMul`, `settleAdd` / `settleMul`) ahead
+  of the payment's, and within a stage every writer's delta / factor composes
+  from the stage input, so declaration order cannot matter.
 - **I5 (spend).** Every 消耗 money movement raises `spendBefore` with the full
   cost before any money moves. The link folds `t.value` exactly like the pay
   `*Before` stages; a cancel leaves the written value in place (a responder that
@@ -731,11 +738,14 @@ the skipped stages after all).
 ```rust
 pub fn multiply_pay_factor(milli: i32, scope: PayFactorScope);   // load-bearing
 pub fn pay_factor() -> i32;                                 // milli, scoped product
-pub fn set_pay_factor(milli: i32);                          // absolute, Auto scope
+pub fn set_pay_factor(milli: i32);                          // compose, Auto scope
+pub fn set_rent_factor(milli: i32);                         // compose, settle or move
 // `set_pay_factor` keeps its name and arity; its meaning widens from "the
 // turn plan" to Auto's scoped target. In a settle it now writes the settle
 // scope, where before it always wrote the plan -- a caller inside a settle
-// that means the plan says so with `multiply_pay_factor`/scope=ThisMove.
+// that means the plan says so with `multiply_pay_factor`/scope=ThisMove. It
+// also **composes** now (MONEY-01, ABI v108): two live halves are a quarter,
+// and a STACK-01 re-run of one body composes once.
 // Regression test: `g02_settle_set_factor_does_not_leak_to_the_move`.
 ```
 
@@ -1330,6 +1340,11 @@ review dropped two with the `Actions` kind) and G05 takes the vacated
 therefore takes **369–377**, and every later group shifts ten: G04 **378–397**,
 G06 **398–417**, G05+G13 **418–427**, G07 **428–437**. The README table carries
 the corrected rows (§12).
+
+**2026-10-31 amendment (G03 review).** G03 sits between G04 and G06 and
+reserves **398–406**, so from G06 on the numbers shift another nine: G06
+**407–426**, G05+G13 **427–436**, G07 **437–446**. The G02 Op range itself
+(369–377, now landed) does not move.
 
 Why a break even though old imports keep their names: the host checks the
 module export for **exact** equality (`host.rs:3207-3213`) including arity, and

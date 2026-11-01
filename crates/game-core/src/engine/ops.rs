@@ -135,28 +135,20 @@ impl World {
     pub fn set_settle_tile(&mut self, tile: i32) {
         self.turn.plan.settle_tile = tile;
     }
-    /// Set a pay factor absolutely (milli; `500` = ×0.5). The `Auto` scope of
-    /// [`ctx::plan::set_pay_factor`](crate::engine::PlayCtx): the innermost live
-    /// scope -- `thisSettle` in a settle, else `thisMove` in a move, else
-    /// `nextMove`.
-    pub fn set_pay_factor(&mut self, milli: i32) {
-        let milli = milli.max(0);
-        if self.turn.settle_open > 0 {
-            self.turn.settle_pay_factor = self.turn.settle_base * f64::from(milli) / 1000.0;
-        } else if self.turn.move_open {
-            self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
-        } else {
-            self.turn.next_move_pay_factor = milli;
-        }
-    }
-
-    /// Compose a pay factor into `scope` (milli). An unopened `this` scope
-    /// falls forward to its next instance; the milli buffers saturate.
+    /// Compose a pay factor into `scope` (milli; `500` = ×0.5). Live factors
+    /// **multiply** (规则书 支付阶段 4): 0.5 × 0.5 is a quarter and the order
+    /// they were written in cannot matter. An unopened `this` scope falls
+    /// forward to its next instance; the milli buffers saturate.
+    ///
+    /// A re-executed body (STACK-01 answer replay) makes the same write again;
+    /// the caller drops the replay's copy before calling (`Run::factor_write_key`).
     pub fn multiply_pay_factor(&mut self, milli: i32, scope: PayFactorScope) {
         let milli = milli.max(0);
         match self.resolve_scope(scope) {
             PayFactorScope::ThisMove => {
                 self.turn.plan.pay_factor *= f64::from(milli) / 1000.0;
+                self.turn.plan.pay_fresh = true;
+                self.turn.plan.rent_fresh = true;
             }
             PayFactorScope::ThisSettle => {
                 self.turn.settle_pay_factor *= f64::from(milli) / 1000.0;
@@ -172,7 +164,16 @@ impl World {
                 self.turn.next_settle_pay_factor =
                     Self::milli_product(self.turn.next_settle_pay_factor, milli);
             }
+            PayFactorScope::Auto => unreachable!("resolve_scope covers Auto"),
         }
+    }
+
+    /// Set a pay factor absolutely (milli; `500` = ×0.5). The `Auto` scope: the
+    /// innermost live scope -- `thisSettle` in a settle, else `thisMove` in a
+    /// move, else `nextMove`. It **composes** where a factor is already live
+    /// (MONEY-01): 「支付减半」 twice is a quarter, not a half.
+    pub fn set_pay_factor(&mut self, milli: i32) {
+        self.multiply_pay_factor(milli, PayFactorScope::Auto);
     }
 
     /// The scoped pay-factor product in milli: the move plan × the open
@@ -191,17 +192,46 @@ impl World {
         ((i64::from(a) * i64::from(b.max(0))) / 1000).clamp(0, i64::from(i32::MAX)) as i32
     }
 
+    /// Record a factor write's `(writer, ordinal)` identity; `false` when this
+    /// exact contribution already landed (a re-executed body's replay).
+    pub fn note_factor(&mut self, exec: u32, writer: &str, ordinal: u32) -> bool {
+        let key = (exec, writer.to_string(), ordinal);
+        if self.turn.factor_applied.contains(&key) {
+            return false;
+        }
+        self.turn.factor_applied.push(key);
+        true
+    }
+
     /// An unopened `this` scope falls forward to its next instance.
     fn resolve_scope(&self, scope: PayFactorScope) -> PayFactorScope {
         match scope {
+            PayFactorScope::Auto => {
+                if self.turn.settle_open > 0 {
+                    PayFactorScope::ThisSettle
+                } else if self.turn.move_open {
+                    PayFactorScope::ThisMove
+                } else {
+                    PayFactorScope::NextMove
+                }
+            }
             PayFactorScope::ThisMove if !self.turn.move_open => PayFactorScope::NextMove,
             PayFactorScope::ThisSettle if self.turn.settle_open == 0 => PayFactorScope::NextSettle,
             s => s,
         }
     }
-    /// Scale rent paid for this walk, same units.
+
+    /// Scale rent paid for this walk, milli-units and the same composition rule
+    /// as [`Self::set_pay_factor`] -- 「地租减半」 twice is a quarter.
     pub fn set_rent_factor(&mut self, milli: i32) {
-        self.turn.plan.rent_factor = f64::from(milli) / 1000.0;
+        let milli = f64::from(milli.max(0)) / 1000.0;
+        if self.turn.settle_open > 0 {
+            self.turn.settle_rent_factor *= milli;
+        } else {
+            // No rent exists before a move: fall forward to the move plan.
+            self.turn.plan.rent_factor *= milli;
+            self.turn.plan.rent_fresh = true;
+        }
     }
     /// May build away from the landing (not just on it).
     pub fn set_can_build(&mut self, on: bool) {

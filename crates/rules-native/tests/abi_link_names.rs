@@ -130,18 +130,61 @@ fn every_sys_import_has_a_native_symbol() {
     let block = sys_block();
     let block = block.as_str();
 
+    // The shim is named by the `link_name` attribute, which need not match the
+    // Rust fn name (`msg_arg0` links as `ruleset_msg_a`). Test 1 guards that the
+    // attribute is there at all.
+    let shim_of = |name: &str, attr: &str| -> String {
+        match attr.find("link_name = \"") {
+            Some(p) => {
+                let rest = &attr[p + "link_name = \"".len()..];
+                rest[..rest.find('"').unwrap_or(rest.len())].to_string()
+            }
+            None => format!("ruleset_{name}"),
+        }
+    };
     let mut missing: Vec<String> = vec![];
+    let mut attr = String::new();
+    let mut in_attr = false;
+    let mut prev: Option<String> = None;
     for line in block.lines() {
         let trimmed = line.trim_start();
+        if in_attr {
+            attr.push(' ');
+            attr.push_str(trimmed);
+            if trimmed.contains(")]") || trimmed.ends_with(']') {
+                in_attr = false;
+                prev = Some(attr.clone());
+                attr.clear();
+            }
+            continue;
+        }
+        if trimmed.starts_with("#[cfg_attr") {
+            attr.push_str(trimmed);
+            if trimmed.contains(")]") || trimmed.ends_with(']') {
+                prev = Some(attr.clone());
+                attr.clear();
+            } else {
+                in_attr = true;
+            }
+            continue;
+        }
+        if trimmed.is_empty() || trimmed.starts_with("//") {
+            continue;
+        }
         if let Some(rest) = trimmed.strip_prefix("pub fn ") {
             let name: String = rest
                 .chars()
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
                 .collect();
-            let needle = format!("fn ruleset_{name}(");
+            let needle = format!("fn {}(", shim_of(&name, prev.as_deref().unwrap_or("")));
             if !syms.contains(&needle) {
                 missing.push(name);
             }
+            prev = None;
+            continue;
+        }
+        if !trimmed.starts_with("#[") {
+            prev = None;
         }
     }
 

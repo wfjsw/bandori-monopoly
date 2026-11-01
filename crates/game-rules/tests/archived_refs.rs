@@ -37,10 +37,34 @@ fn ref_records() -> Vec<PathBuf> {
     out
 }
 
+/// Every stamped id that resolves to a stored bundle: `aliases` keys and
+/// `rebuilt.byte_id` (the loader's walk, `docs/REPLAY.md`).
+fn alias_map() -> std::collections::HashMap<String, String> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../archive/engine/index.json");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let index: serde_json::Value = serde_json::from_str(&text).expect("index parses");
+    let mut out = std::collections::HashMap::new();
+    for b in index["bundles"].as_array().into_iter().flatten() {
+        let Some(id) = b["id"].as_str() else { continue };
+        if let Some(map) = b["aliases"].as_object() {
+            for (from, to) in map {
+                if let Some(to) = to.as_str() {
+                    out.insert(from.clone(), to.to_string());
+                }
+            }
+        }
+        if let Some(byte_id) = b["rebuilt"]["byte_id"].as_str() {
+            out.insert(byte_id.to_string(), id.to_string());
+        }
+    }
+    out
+}
+
 #[test]
 fn every_reference_record_still_parses_and_names_its_bundle() {
     let refs = ref_records();
     assert!(!refs.is_empty(), "no reference records found");
+    let aliases = alias_map();
     for path in refs {
         let bytes = std::fs::read(&path).expect("ref readable");
         let name = path.file_name().unwrap().to_string_lossy().to_string();
@@ -49,12 +73,18 @@ fn every_reference_record_still_parses_and_names_its_bundle() {
         // changed at v3).
         let file = decode_record(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
         // The record names the bundle that wrote it -- what the loader routes
-        // on (`docs/REPLAY.md` §9). The file name IS that id.
+        // on (`docs/REPLAY.md` §9). The file name IS that id, or it resolves
+        // to the file through the index's `aliases` / `rebuilt.byte_id`
+        // (exactly the loader's walk, `webui/src/game/engineBundle.ts`): a
+        // re-sealed ref keeps its old stamp.
         let want = name.trim_end_matches(".bdrec");
+        let resolves = aliases
+            .get(&file.header.engine.bundle)
+            .is_some_and(|to| to == want);
         // An empty bundle is "unknown, never wrong" (a host that could not see
         // the glue identity sealed it); anything else must be the file name.
         assert!(
-            file.header.engine.bundle == want || file.header.engine.bundle.is_empty(),
+            file.header.engine.bundle == want || file.header.engine.bundle.is_empty() || resolves,
             "{name}: bundle id {:?} != {want}",
             file.header.engine.bundle
         );

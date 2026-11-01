@@ -62,12 +62,21 @@ after the walk:            passPlayer  (重叠, one per other player)
 after_walk:
   if resolve:              settleBefore                            (14)
                            settle        (declaration + [反击] window) (15 opening)
+                           settleAdd / settleMul (支付阶段 2 / 4 on the
+                                          settle's price; one raise each,
+                                          stored for every leg -- MONEY-01)
                            settleBody    (chain link: field replace
                                           + tile rule instances)    (15 body)
                            settleAfter                             (16's 「结算后」 half)
                            tileResolved  (terminal, also on cancel)
   always:                  moveResolved                            (16's 「主要移动阶段后」 half)
 ```
+
+`settleBefore` is raised by the walk only: a card-driven settle
+(`ctx::settle_tile_at`) starts at `settle`, so a `SettleBefore` [反击] is never
+offered on one -- answer `settle` there instead. A settle cancelled at
+`settle` skips the body, `settleAdd` / `settleMul` and `settleAfter`, and keeps
+the work stack balanced (the stack entry is popped at the terminal).
 
 `settle_tile_at` (`play.rs:1323-1360`) threads one `at` through the whole pipeline.
 `settle` cancel → no body, no `settleAfter`, but `tileResolved` still fires

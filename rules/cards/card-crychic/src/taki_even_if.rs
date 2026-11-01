@@ -6,7 +6,7 @@
 //! until the face is new this turn.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{roll_source, ChainKind};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -31,14 +31,25 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    let Some(before) = trigger::move_roll() else {
+    let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
-    // TODO(规则书)（本回合内你骰出过的所有骰点）: 只该是「你」骰出的骰点 -- `turn_rolls`
-    // 是本回合所有玩家的效果骰，别人骰出的点也会挡你的重骰。
-    let mut seen: alloc::vec::Vec<i32> = ctx::turn_rolls().into_iter().map(|r| r.abs()).collect();
-    seen.push(before.abs());
-    let mut x = ctx::do_move_roll(player_id)?;
+    // 规则书[反击]: 「进行一次重骰」 -- a recast on the move's transaction, so the
+    // new face inherits the shared producer (and a forced extreme).
+    // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- the per-roller cast
+    // history minus the current face itself. The history already holds the
+    // face (cast time), and the body replays over the same history after each
+    // prompt, so comparing against the raw list would always match.
+    fn others(player_id: i32, x: i32) -> alloc::vec::Vec<i32> {
+        let mut seen: alloc::vec::Vec<i32> =
+            ctx::rolls_by_player(player_id).into_iter().map(|r| r.abs()).collect();
+        let x = x.abs();
+        if let Some(pos) = seen.iter().rposition(|&v| v == x) {
+            seen.remove(pos);
+        }
+        seen
+    }
+    let mut x = ctx::roll_recast(trigger::roll_id(), roll_source::CARD)?;
     ctx::log(
         player_id,
         &Msg::new(key!("taki_reroll"))
@@ -48,7 +59,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」
     // -- keep offering the reroll while the face repeats one rolled this turn.
     let mut guard = 0;
-    while seen.contains(&x.abs()) {
+    while others(player_id, x).contains(&x.abs()) {
         let again = ctx::ask_yes(
             player_id,
             &Msg::new(key!("taki_again_title")),
@@ -57,9 +68,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         if !again {
             break;
         }
-        seen.push(x.abs());
-        // Same shape as the first reroll: the move plan's whole dice table.
-        x = ctx::do_move_roll(player_id)?;
+        // Same shape as the first reroll: another cast.
+        x = ctx::roll_recast(trigger::roll_id(), roll_source::CARD)?;
         ctx::log(
             player_id,
             &Msg::new(key!("taki_reroll"))

@@ -823,6 +823,14 @@ pub fn fill_from_world(
         w.trig_roll_source as i64
     };
     c.set_scalar(VarId::RollSource, roll_source);
+    // The roll payload's window fields (0 / false / -1 without a payload).
+    let (roll_purpose, roll_rerolled, roll_unused) = match w.trig_roll {
+        Some(t) => (t.purpose as i64, (t.n > 1) as i64, t.unused as i64),
+        None => (0, 0, -1),
+    };
+    c.set_scalar(VarId::RollPurpose, roll_purpose);
+    c.set_scalar(VarId::RollRerolled, roll_rerolled);
+    c.set_scalar(VarId::RollUnusedFace, roll_unused);
     c.set_scalar(VarId::Abnormal, ov.abnormal as i64);
     c.set_scalar(VarId::TurnPlayer, w.turn_player as i64);
     c.set_scalar(VarId::TurnKey, w.turn_key as i64);
@@ -1303,6 +1311,14 @@ pub fn fill_for_guard(
             w.trig_roll_source as i64
         }
     );
+    // The roll payload's window fields (0 / false / -1 without a payload).
+    let (roll_purpose, roll_rerolled, roll_unused) = match w.trig_roll {
+        Some(t) => (t.purpose as i64, (t.n > 1) as i64, t.unused as i64),
+        None => (0, 0, -1),
+    };
+    set_if!(VarId::RollPurpose, roll_purpose);
+    set_if!(VarId::RollRerolled, roll_rerolled);
+    set_if!(VarId::RollUnusedFace, roll_unused);
     set_if!(VarId::Abnormal, ov.abnormal as i64);
     set_if!(VarId::TurnPlayer, w.turn_player as i64);
     set_if!(VarId::TurnKey, w.turn_key as i64);

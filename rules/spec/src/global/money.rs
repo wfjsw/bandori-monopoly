@@ -1146,11 +1146,28 @@ pub fn g_money_12(step: &Step<'_>) -> Result<(), String> {
 /// * **Effect:** the settled amount is `scale(B ± A)`, **not**
 ///   `scale(B) ± A`.
 /// * **Frame:** the ledger (G-MONEY-04) owns who moved.
-/// * **Rulings & OPEN:** the table's stage names are the book's; the engine
-///   raises them as `paySplitAdd` (row 2) then `paySplitMul` (row 4). 丸山彩（2） /
+/// * **Rulings & OPEN:** the table's names are the book's; the engine raises
+///   them as `paySplitAdd` (row 2) then `paySplitMul` (row 4). 丸山彩（2） /
 ///   白鹭千圣（2） say 「分摊前」, which is the pre-split figure the row-2
 ///   window rewrites. OPEN-支付阶段7 (where row 7 sits) does not change this
 ///   order.
+///
+///   **Within a stage (MONEY-01 / C-Q1, ruled 2026-10-31):** the sheet gives
+///   each stage as *one* window, so two responders of one stage compose
+///   instead of overwriting each other: every row-2 responder is shown the
+///   stage input and its `write − input` deltas are **summed**; every row-4
+///   responder is shown the stage input and its `write / input` factors are
+///   **multiplied**. Both folds are commutative, so declaration order cannot
+///   change the figure -- two 1.5× are 2.25×, two 0.5× are 0.25×, and a
+///   「+100」 beside a 「×0.5」 is `(B + 100) / 2` whoever resolved first. The
+///   one 「向上取整10」 still happens once, after every stage.
+///
+///   **Across stages:** the 收费 (rent) figure has its own row-2 / row-4
+///   stages (`rentAdd` / `rentMul`) which run before the payment's, and a
+///   settle's price has one window each (`settleAdd` / `settleMul`) composed
+///   once per settle and folded into every leg of it. So `rent → settle →
+///   pay` is the stage order, and every factor of the whole chain is one
+///   product of the figure.
 /// * **Executable:** scenario `pay_stages_add_before_halve` in
 ///   `rules/tests/tests/spec_g_money.rs` (a per-act clause cannot see the declared
 ///   figure once standing effects have scaled it). [`g_money_13`] only

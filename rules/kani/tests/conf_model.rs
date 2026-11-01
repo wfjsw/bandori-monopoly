@@ -681,6 +681,12 @@ impl CardWorld for ConfWorld {
         game_core::state::StateVar::default()
     }
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
+        // The `stay` column is seeded by `base_conf` without a map entry, so
+        // it stays authoritative for that key (the model's `key_get` mirrors
+        // `w.stay` the same way).
+        if key == "stay" {
+            return self.stay[player_id.max(0) as usize % 4];
+        }
         *self.state.get(&(player_id, key.to_string())).unwrap_or(&0)
     }
     fn state_min(&self, _: i32, _: &str) -> i32 {
@@ -706,6 +712,12 @@ impl CardWorld for ConfWorld {
             value
         };
         self.state.insert((player_id, key.to_string()), value);
+        // [停留] lives in the generic keyed state, but the snapshot compares
+        // the `stay` column; the model mirrors the same key into `w.stay`
+        // (`arm_state_set`), so the map alone would desync the two sides.
+        if key == "stay" {
+            self.stay[player_id.max(0) as usize % 4] = value;
+        }
         self.events
             .push(format!("set_slot {player_id} {key} {value}"));
         let p = player_id.max(0) as usize % 4;
@@ -721,6 +733,17 @@ impl CardWorld for ConfWorld {
         value
     }
     fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
+        if key == "stay" {
+            // The column is the base value (see `state_get`); the model's
+            // `arm_state_add` raises a `GiveStay` effect on every add, so the
+            // event line keeps the effect-count comparison honest.
+            let p = player_id.max(0) as usize % 4;
+            let value = self.stay[p].saturating_add(delta).max(0);
+            self.stay[p] = value;
+            self.state.insert((player_id, key.to_string()), value);
+            self.events.push(format!("give_stay {player_id} {delta}"));
+            return value;
+        }
         let floor = self
             .state_flags
             .get(&(player_id, key.to_string()))
@@ -988,14 +1011,8 @@ impl CardWorld for ConfWorld {
         self.plan_pay_factor.saturating_mul(self.settle_pay_factor)
     }
     fn set_pay_factor(&mut self, milli: i32) {
-        let milli = milli.max(0);
-        if self.settle_open > 0 {
-            self.settle_pay_factor = milli;
-        } else if self.move_open {
-            self.plan_pay_factor = milli;
-        } else {
-            self.next_move_pay_factor = milli;
-        }
+        // The `Auto` scope composes where a factor is live (MONEY-01).
+        self.multiply_pay_factor(milli, 4);
     }
     fn multiply_pay_factor(&mut self, milli: i32, scope: i32) {
         let milli = milli.max(0);
@@ -1006,6 +1023,13 @@ impl CardWorld for ConfWorld {
             game_core::engine::PayFactorScope::ThisSettle if self.settle_open == 0 => {
                 game_core::engine::PayFactorScope::NextSettle
             }
+            game_core::engine::PayFactorScope::Auto if self.settle_open > 0 => {
+                game_core::engine::PayFactorScope::ThisSettle
+            }
+            game_core::engine::PayFactorScope::Auto if self.move_open => {
+                game_core::engine::PayFactorScope::ThisMove
+            }
+            game_core::engine::PayFactorScope::Auto => game_core::engine::PayFactorScope::NextMove,
             s => s,
         };
         match scope {
@@ -1021,6 +1045,7 @@ impl CardWorld for ConfWorld {
             game_core::engine::PayFactorScope::NextSettle => {
                 self.next_settle_pay_factor = self.next_settle_pay_factor.saturating_mul(milli)
             }
+            game_core::engine::PayFactorScope::Auto => unreachable!(),
         }
     }
     fn gains_this_turn(&self, _player: i32) -> i32 {
@@ -1249,6 +1274,22 @@ impl InlineHost for ConfInline {
                 Some(1)
             }
             HostRequest::Gate { .. } => Some(1),
+            // Raw money rides no pipeline; let the hostfn's own
+            // `adjust_money_raw` fallback (`gain`/`pay` on the world) run.
+            HostRequest::AdjustMoney { .. } => None,
+            // The shared mid-value dice formula (`d` / the model's
+            // `roll_dice`): an effect roll is `count` mid faces, a move roll
+            // its 2d6 plan sum.
+            HostRequest::Roll {
+                count,
+                sides,
+                purpose,
+                ..
+            } => Some(if purpose == 1 {
+                7
+            } else {
+                (0..count.max(0)).map(|_| (sides.max(1) + 1) / 2).sum()
+            }),
             HostRequest::Marker { .. } => Some(1),
             HostRequest::Draw { player_id: _, n } => Some(n),
             HostRequest::Target {

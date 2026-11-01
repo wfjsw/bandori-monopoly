@@ -593,7 +593,10 @@ fn g_move_10_overlap_at_the_end_tile() {
     // (b) 0-step move on a shared tile (行动阶段 13 「移动(移动0格)时触发[重叠]」).
     let mut t = at(10);
     t.set_pos(1, 10);
-    t.m.world_mut().turn.fixed_roll = Some(0);
+    t.m.world_mut().turn.fixed_roll = Some(game_core::engine::FixedFace {
+            value: 0,
+            source: game_core::engine::rules::RollSource::Unattributed,
+        });
     let mark = t.mark();
     t.roll(0).unwrap();
     drain(&mut t);

@@ -476,15 +476,22 @@ impl SettleOutcome {
 }
 
 /// One open [触发结算] on [`PlayCtx::settle_stack`]. The tile and payer are the
-/// frame's; `base` is the product of the *outer* settle factors (the world's
-/// `settle_pay_factor` at push time) so the entry's own `thisSettle` write
-/// composes on top without re-reading the stack. `outcome` starts
+/// frame's; the `base*` figures are the *outer* settle figures at push time so
+/// the entry's own settle-scoped writes compose on top without re-reading the
+/// stack. `outcome` starts
 /// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
 #[derive(Debug, Clone, Copy)]
 pub struct SettleEntry {
     pub player: usize,
     pub tile: usize,
+    /// Outer pay product / rent product and the outer `settleAdd` /
+    /// `settleRentAdd` sums at push time. The entry's own settle-scoped writes
+    /// compose on top, and a nested settle restores the outer figures on its
+    /// way out by copying these back.
     pub base: f64,
+    pub base_rent: f64,
+    pub base_add: i32,
+    pub base_rent_add: i32,
     pub outcome: SettleOutcome,
 }
 
@@ -514,8 +521,16 @@ pub struct PlayCtx<'a> {
     /// so a suspended settle never inflates the depth. Non-empty is 「结算中」
     /// for the payments the settle carries -- RAS:游击演出's
     /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally -- and the
-    /// innermost entry stamps every raise with its tile and outcome. Transient.
+    /// innermost entry stamps every raise with its tile and outcome. The entry
+    /// also carries the settle's 支付价格 base and addend: the `settleAdd` /
+    /// `settleMul` stages raise once per settle, so every payment it carries
+    /// folds the same addend / factor, and a nested settle restores the
+    /// outer's figures on its way out. Transient.
     pub(crate) settle_stack: Vec<SettleEntry>,
+    /// The execution id [`Self::reset_factor_ledger`] handed this drive. Held
+    /// on the context (a resume keeps it) and drawn from the world's
+    /// `factor_gen`, so parallel fresh contexts cannot collide. Transient.
+    pub(crate) ledger_exec: u32,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -894,9 +909,20 @@ impl<'a> PlayCtx<'a> {
         // at the request, not left stale from an earlier move.
         t.plan.settles = f.plan.settles;
         t.plan.pay_factor = f.plan.pay_factor;
+        if std::env::var_os("STAGE_DBG").is_some() {
+            eprintln!(
+                "ADOPT rent_factor {} -> {} pay {} -> {}",
+                t.plan.rent_factor, f.plan.rent_factor, t.plan.pay_factor, f.plan.pay_factor
+            );
+        }
         t.plan.rent_factor = f.plan.rent_factor;
+        // The factor ledger crosses: the host routine runs against the live
+        // world, and the re-run of this body must not compose its prefix's
+        // writes a second time.
+        t.factor_applied = f.factor_applied.clone();
+        t.factor_gen = f.factor_gen;
         // The one-shot scopes are read by the *next* settle / move a routine
-        // starts (`card_settle_at`, `move`), which runs after the body returns.
+        // starts (`settle_tile_at`, `move`), which runs after the body returns.
         // A `NextSettle` / `NextMove` write made in the body lives on its copy
         // and has to cross like the plan knobs, or the factor is dropped at the
         // pause boundary.
@@ -1077,6 +1103,20 @@ impl<'a> PlayCtx<'a> {
         self.rules
     }
 
+    /// Forget the factor ledger -- a new body execution starts from zero, so
+    /// the same card firing again this turn is not mistaken for the re-run of
+    /// its last firing.
+    pub fn reset_factor_ledger(&mut self) {
+        self.w.turn.factor_ordinal = 0;
+        self.w.turn.factor_gen = self.w.turn.factor_gen.wrapping_add(1);
+        self.ledger_exec = self.w.turn.factor_gen;
+    }
+
+    /// The execution id factor writes of the running drive are keyed by.
+    pub fn ledger_exec(&self) -> u32 {
+        self.ledger_exec
+    }
+
     /// How many settles are open right now (the [`PlayCtx::settle_stack`] depth).
     pub fn settle_open(&self) -> u32 {
         self.settle_stack.len() as u32
@@ -1104,6 +1144,7 @@ impl<'a> PlayCtx<'a> {
             money_depth: 0,
             reentrant_hooks: Vec::new(),
             settle_stack: Vec::new(),
+            ledger_exec: 0,
             state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,

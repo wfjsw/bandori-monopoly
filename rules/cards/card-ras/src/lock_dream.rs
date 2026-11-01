@@ -24,7 +24,7 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         On::Action(Action::PassTile("actor == owner && move.is_main_move && tile.id == tile_named('Bandori车站')", None, pass_tile)).silent(),
         On::Action(Action::SettleBefore("actor == owner && slot('lock_dream_tag') != 0", None, settle_before)),
         // One-shot latch drop: a main move that passed but never settled
-        // (`resolve: false`) must not reroute the owner's next settle.
+        // (`settles: false`) must not reroute the owner's next settle.
         On::Action(Action::MoveResolved("actor == owner && move.is_main_move", None, clear_tag)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()

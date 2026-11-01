@@ -690,10 +690,11 @@ fn misaki_may_counteract_with_zero_fire() {
                          // A rival standing 2 tiles ahead of P0.
     t.set_pos(0, 10);
     t.set_pos(1, 12);
-    t.give_play(0, "TEST:fireRoll").unwrap();
+    // G03 keys the clause on `roll_source`: the fixture card recasts with the
+    // CHARGE source at the roll's After, so the Result window carries it.
+    t.give_play(0, "TEST:fireRecast").unwrap();
     skip_all(&mut t);
-    // A plain roll now looks like a fire-pot roll (the fixture tags `fireRoll`).
-    t.dice(&[3]);
+    t.dice(&[3, 4]);
     t.roll(0).unwrap();
     // The counteraction window must offer 美咲 even though the pot is empty.
     assert!(

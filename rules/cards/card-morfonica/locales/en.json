@@ -55,6 +55,8 @@
   "starry_night_note": "(Field center) Miracle Crystals {{n}}: may reroll a move die once; removing one gains 1,000",
   "starry_night_placed": "{{who}} paid {{n}} lots of 1,000 and put Starry Night in the field center",
   "starry_night_remove": "Starry Night: removed one Miracle Crystal",
+  "starry_night_keep_new": "Keep the new {{roll}}",
+  "starry_night_keep_old": "Keep the original {{roll}}",
   "starry_night_reroll_ask": "Rolled {{roll}}: give up this result and reroll once?",
   "starry_night_reroll_title": "Starry Night of Fluttering Butterflies",
   "starry_night_rerolled": "Rerolled: {{from}} → {{to}} ({{who}})",

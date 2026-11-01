@@ -30,7 +30,10 @@ pub const SUMIMI: CardDef = CardDef::new(
         On::Action(Action::PayAfter("card.placed", None, after_pay)).silent(),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
-        On::Filter(Filter::PaySplitMul(
+        // A **fixed** increase (「额外提高100资金」), so it rides the add stage
+        // (支付阶段 2) and sums with sibling adds instead of being multiplied
+        // in as a factor (enemy of MONEY-01's order freedom).
+        On::Filter(Filter::PaySplitAdd(
             "target == owner && card.placed",
             None,
             bend,
@@ -57,20 +60,21 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金」.
-fn bend(player_id: i32, value: i32) -> i32 {
+fn bend(player_id: i32, mut v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
     let n = ctx::crystals();
     if n <= 0 {
-        return value;
+        return v;
     }
     // 「向其他人收费」 -- this player is the payee of another seat's payment.
     if ctx::trigger::target() != player_id {
-        return value;
+        return v;
     }
     let from = ctx::trigger::player_id();
     if from < 0 || from == player_id {
-        return value;
+        return v;
     }
-    value + n * 100
+    v.value += n * 100;
+    v
 }
 
 /// （1）「你的回合结束时为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶」.
@@ -128,7 +132,7 @@ pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn bend_kani(player_id: i32, value: i32) -> i32 {
+pub fn bend_kani(player_id: i32, value: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
     bend(player_id, value)
 }
 

@@ -231,21 +231,28 @@ pub fn count_owned_kind(data: &GameData, w: &World, player: usize, kind: &str) -
 /// The persistent tile half of `Play::scale_settle_payment`: `RENT_FACTOR` /
 /// `PAY_FACTOR` milli-units on the tile's rule instance (`0` = no scale).
 /// The plan's turn-scoped factors are *not* included -- those shape one
-/// settle, not a standing tile quote. **Single source** for
-/// `scale_settle_payment`'s tile branch and the tile quotes.
+/// settle, not a standing tile quote. **Single source** for the money
+/// pipeline's tile contribution and the tile quotes.
 pub fn tile_money_scale(w: &World, t: usize, rent: bool) -> f64 {
-    let mut f = 1.0f64;
+    tile_money_milli(w, t, rent) as f64 / 1_000_000.0
+}
+
+/// The same tile half in millionths (1_000_000 = ×1), the unit the money
+/// pipeline's mul phase folds in. A prop the tile does not carry reads `0`,
+/// which means 「not written」 (×1) rather than ×0.
+pub fn tile_money_milli(w: &World, t: usize, rent: bool) -> i64 {
+    let mut milli = 1_000_000i64;
     if rent {
         let r = w.tile_prop(t as i32, crate::state::prop::RENT_FACTOR);
         if r > 0 {
-            f *= f64::from(r) / 1000.0;
+            milli = milli.saturating_mul(i64::from(r) * 1000) / 1_000_000;
         }
     }
     let p = w.tile_prop(t as i32, crate::state::prop::PAY_FACTOR);
     if p > 0 {
-        f *= f64::from(p) / 1000.0;
+        milli = milli.saturating_mul(i64::from(p) * 1000) / 1_000_000;
     }
-    f
+    milli
 }
 
 /// The base a quote starts from, before the `BuyAdd` / `BuyMul` / `BuySet`

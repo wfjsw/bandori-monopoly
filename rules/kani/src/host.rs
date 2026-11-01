@@ -335,6 +335,19 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- dice / log ----
         Op::roll => arm_roll(a),
         Op::roll_direct => arm_roll(a),
+        Op::roll_recast => arm_roll_recast(a),
+        Op::roll_move => arm_roll_move(a),
+        Op::roll_pick => arm_roll_pick(a),
+        Op::roll_current => arm_roll_current(a),
+        Op::roll_face => arm_roll_face(a),
+        Op::roll_unused_face => arm_roll_unused_face(a),
+        Op::roll_rerolled => arm_roll_rerolled(a),
+        Op::rolls_by_player => arm_rolls_by_player(a),
+        Op::trigger_roll => arm_trigger_roll(a),
+        Op::set_move_settle_answer => arm_set_move_settle_answer(a),
+        Op::move_settle_answer => arm_move_settle_answer(a),
+        Op::set_turn_end_settle_answer => arm_set_turn_end_settle_answer(a),
+        Op::turn_end_settle_answer => arm_turn_end_settle_answer(a),
         Op::log | Op::effect => arm_log(a),
 
         // ---- tiles (static data from board.json + runtime state) ----
@@ -1739,6 +1752,268 @@ pub fn arm_do_move_roll(a: Args) -> i64 {
     roll_dice(2, 6) as i64
 }
 
+/// Precedence rank of a `roll_source` code (`RollSource::rank`).
+fn source_rank(code: i32) -> i32 {
+    match code {
+        1 => 3, // Charge
+        3 => 2, // Skill
+        2 => 1, // Card
+        _ => 0, // Unattributed
+    }
+}
+
+/// Push one symbolic cast onto the transaction at `id`, returning its face.
+fn roll_cast(w: &mut world::World, id: i32, source: i32) -> Option<i32> {
+    let mut i = 0usize;
+    while i < w.roll_depth as usize {
+        if w.rolls[i].open && w.rolls[i].id == id {
+            let t = &mut w.rolls[i];
+            // Codes are not in rank order (charge 1 outranks skill 3 outranks
+            // card 2): mirror `RollSource::rank`, as `cast` does.
+            if source_rank(source) > source_rank(t.source) {
+                t.source = source;
+            }
+            if (t.n as usize) >= 4 {
+                return None;
+            }
+            let v = roll_dice(1, 20);
+            t.casts[t.n as usize] = world::RollCastM {
+                value: v,
+                source: t.source,
+            };
+            t.n += 1;
+            t.chosen = t.n - 1;
+            t.unused = -1;
+            let n = w.roll_hist_n as usize;
+            if n < 8 {
+                w.roll_hist[n] = (t.roller, v);
+                w.roll_hist_n += 1;
+            }
+            return Some(v);
+        }
+        i += 1;
+    }
+    None
+}
+
+/// `ctx::roll_recast` -- one more cast on an open transaction.
+pub fn arm_roll_recast(a: Args) -> i64 {
+    let [id, source, ..] = a;
+    world::with_world_mut(|w| roll_cast(w, id, source).unwrap_or(0) as i64)
+}
+
+/// `ctx::roll_move` -- a top-level victim move transaction, symbolic face.
+pub fn arm_roll_move(a: Args) -> i64 {
+    let [player_id, source, ..] = a;
+    world::with_world_mut(|w| {
+        let d = if w.roll_depth < 2 { w.roll_depth } else { 1 };
+        let id = w.next_roll_id;
+        w.next_roll_id += 1;
+        let v = roll_dice(1, 20);
+        let mut t = world::RollTx::EMPTY;
+        t.id = id;
+        t.roller = player_id;
+        t.purpose = 1;
+        t.source = source;
+        t.has_result = true;
+        t.open = true;
+        t.casts[0] = world::RollCastM { value: v, source };
+        t.n = 1;
+        w.rolls[d as usize] = t;
+        if w.roll_depth < 2 {
+            w.roll_depth += 1;
+        }
+        let n = w.roll_hist_n as usize;
+        if n < 8 {
+            w.roll_hist[n] = (player_id, v);
+            w.roll_hist_n += 1;
+        }
+        v as i64
+    })
+}
+
+/// `ctx::roll_pick` -- clamp, record the other face of the pair as unused.
+pub fn arm_roll_pick(a: Args) -> i64 {
+    let [id, index, ..] = a;
+    world::with_world_mut(|w| {
+        let mut i = 0usize;
+        while i < w.roll_depth as usize {
+            if w.rolls[i].open && w.rolls[i].id == id {
+                let t = &mut w.rolls[i];
+                if t.n == 0 {
+                    return 0;
+                }
+                let idx = index.max(0) as usize;
+                let idx = if idx >= t.n as usize { t.n as usize - 1 } else { idx };
+                let old = t.chosen as usize;
+                if idx != old {
+                    t.unused = t.casts[old].value;
+                    t.chosen = idx as u8;
+                }
+                return 0;
+            }
+            i += 1;
+        }
+        0
+    })
+}
+
+/// `ctx::roll_current` -- the innermost open transaction id.
+pub fn arm_roll_current(_a: Args) -> i64 {
+    world::with_world(|w| {
+        if w.roll_depth == 0 {
+            -1
+        } else {
+            w.rolls[w.roll_depth as usize - 1].id as i64
+        }
+    })
+}
+
+pub fn arm_roll_face(a: Args) -> i64 {
+    let [id, index, ..] = a;
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.roll_depth as usize {
+            if w.rolls[i].open && w.rolls[i].id == id {
+                let t = &w.rolls[i];
+                if (index.max(0) as usize) < t.n as usize {
+                    return t.casts[index.max(0) as usize].value as i64;
+                }
+                return -1;
+            }
+            i += 1;
+        }
+        -1
+    })
+}
+
+pub fn arm_roll_unused_face(a: Args) -> i64 {
+    let [id, ..] = a;
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.roll_depth as usize {
+            if w.rolls[i].open && w.rolls[i].id == id {
+                return w.rolls[i].unused as i64;
+            }
+            i += 1;
+        }
+        -1
+    })
+}
+
+pub fn arm_roll_rerolled(a: Args) -> i64 {
+    let [id, ..] = a;
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.roll_depth as usize {
+            if w.rolls[i].open && w.rolls[i].id == id {
+                return (w.rolls[i].n > 1) as i64;
+            }
+            i += 1;
+        }
+        0
+    })
+}
+
+pub fn arm_rolls_by_player(a: Args) -> i64 {
+    let [player_id, buf, cap, ..] = a;
+    let mut rolls: Vec<i32> = Vec::new();
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.roll_hist_n as usize {
+            if w.roll_hist[i].0 == player_id {
+                rolls.push(w.roll_hist[i].1);
+            }
+            i += 1;
+        }
+    });
+    let bytes = postcard::to_allocvec(&rolls).unwrap_or_default();
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
+}
+
+pub fn arm_trigger_roll(a: Args) -> i64 {
+    let [buf, cap, ..] = a;
+    let payload = world::with_world(|w| {
+        w.trig_roll.map(|t| {
+            let mut casts: Vec<card_sdk::abi::TriggerCast> = Vec::new();
+            let mut i = 0usize;
+            while i < t.n as usize {
+                casts.push(card_sdk::abi::TriggerCast {
+                    value: t.casts[i].value,
+                    source: t.casts[i].source,
+                });
+                i += 1;
+            }
+            card_sdk::abi::RollPayload {
+                id: t.id,
+                purpose: t.purpose,
+                source: t.source,
+                rerolled: t.n > 1,
+                chosen_index: t.chosen as i32,
+                unused_face: t.unused,
+                casts,
+                final_face: (t.final_face >= 0).then_some(t.final_face),
+            }
+        })
+    });
+    let bytes = postcard::to_allocvec(&payload).unwrap_or_default();
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
+}
+
+pub fn arm_set_move_settle_answer(a: Args) -> i64 {
+    let [player, answer, ..] = a;
+    world::with_world_mut(|w| {
+        if player >= 0 && (player as usize) < MAX_PLAYERS {
+            w.move_answer[player as usize] = answer;
+        }
+    });
+    0
+}
+
+pub fn arm_move_settle_answer(a: Args) -> i64 {
+    let [player, ..] = a;
+    world::with_world(|w| {
+        w.move_answer
+            .get(player.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }) as i64
+}
+
+pub fn arm_set_turn_end_settle_answer(a: Args) -> i64 {
+    let [player, answer, ..] = a;
+    world::with_world_mut(|w| {
+        if player >= 0 && (player as usize) < MAX_PLAYERS {
+            w.turn_answer[player as usize] = answer;
+        }
+    });
+    0
+}
+
+pub fn arm_turn_end_settle_answer(a: Args) -> i64 {
+    let [player, ..] = a;
+    world::with_world(|w| {
+        w.turn_answer
+            .get(player.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }) as i64
+}
+
 pub fn arm_draw(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     {
@@ -3121,6 +3396,22 @@ pub fn arm_take_card(a: Args) -> i64 {
 
 pub fn arm_target(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
+    // Tile targeting (`ctx::target_tile` sends player = -1): the real side's
+    // inline Target answers the tile itself when one is named, so a -1 here
+    // made every tile designation fail closed on the model side.
+    if a0 < 0 && a1 >= 0 {
+        let tile = a1;
+        return world::with_world_mut(|w| {
+            if tile as usize >= 60 {
+                return -1;
+            }
+            let owner = w.tiles[tile as usize].owner;
+            if owner >= 0 && (owner as usize) < w.n_players as usize {
+                w.targeted_count[owner as usize] = w.targeted_count[owner as usize].saturating_add(1);
+            }
+            tile as i64
+        });
+    }
     {
         // Tile targeting (`target(-1, tile, 0)`, ctx::target_tile): the tile
         // itself is the answer. Mirrors `InlineHost::apply`'s `Target` arm.
@@ -3501,11 +3792,12 @@ pub fn arm_multiply_pay_factor(a: Args) -> i64 {
 
 pub fn arm_set_pay_factor(a: Args) -> i64 {
     let milli = a[0].max(0);
+    // The `Auto` scope composes where a factor is live (MONEY-01).
     world::with_world_mut(|w| match resolve_scope(w, 0) {
-        1 => w.plan_pay_factor = milli,
-        2 => w.next_settle_pay_factor = milli,
-        3 => w.settle_pay_factor = milli,
-        _ => w.next_move_pay_factor = milli,
+        1 => w.plan_pay_factor = w.plan_pay_factor.saturating_mul(milli),
+        2 => w.next_settle_pay_factor = w.next_settle_pay_factor.saturating_mul(milli),
+        3 => w.settle_pay_factor = w.settle_pay_factor.saturating_mul(milli),
+        _ => w.next_move_pay_factor = w.next_move_pay_factor.saturating_mul(milli),
     });
     0
 }

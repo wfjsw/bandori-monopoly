@@ -7,8 +7,8 @@ pub fn roll(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -
     kani_host::call_i32(Op::roll, [player_id, count, sides, purpose, source, 0])
 }
 
-pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32) -> i32 {
-    kani_host::call_i32(Op::roll_direct, [player_id, count, sides, purpose, 0, 0])
+pub fn roll_direct(player_id: i32, count: i32, sides: i32, purpose: i32, source: i32) -> i32 {
+    kani_host::call_i32(Op::roll_direct, [player_id, count, sides, purpose, source, 0])
 }
 
 pub fn log(player_id: i32, ptr: i32, len: i32) {
@@ -1204,8 +1204,8 @@ pub fn set_no_money_loss(player_id: i32) {
     kani_host::call_unit(Op::set_no_money_loss, [player_id, 0, 0, 0, 0, 0]);
 }
 
-pub fn set_fixed_roll(n: i32) {
-    kani_host::call_unit(Op::set_fixed_roll, [n, 0, 0, 0, 0, 0]);
+pub fn set_fixed_roll(n: i32, source: i32) {
+    kani_host::call_unit(Op::set_fixed_roll, [n, source, 0, 0, 0, 0]);
 }
 
 pub fn fixed_roll() -> i32 {
@@ -1381,6 +1381,61 @@ pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32 {
 
 // `do_move_roll` is `roll_direct(..., RollPurpose::Move)` in `ctx`; the old
 // dedicated import is gone (v102).
+
+pub fn roll_recast(roll_id: i32, source: i32) -> i32 {
+    kani_host::call_i32(Op::roll_recast, [roll_id, source, 0, 0, 0, 0])
+}
+
+pub fn roll_move(player_id: i32, source: i32) -> i32 {
+    kani_host::call_i32(Op::roll_move, [player_id, source, 0, 0, 0, 0])
+}
+
+pub fn roll_pick(roll_id: i32, index: i32) {
+    kani_host::call_unit(Op::roll_pick, [roll_id, index, 0, 0, 0, 0]);
+}
+
+pub fn roll_current() -> i32 {
+    kani_host::call_i32(Op::roll_current, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn roll_face(roll_id: i32, index: i32) -> i32 {
+    kani_host::call_i32(Op::roll_face, [roll_id, index, 0, 0, 0, 0])
+}
+
+pub fn roll_unused_face(roll_id: i32) -> i32 {
+    kani_host::call_i32(Op::roll_unused_face, [roll_id, 0, 0, 0, 0, 0])
+}
+
+pub fn roll_rerolled(roll_id: i32) -> i32 {
+    kani_host::call_i32(Op::roll_rerolled, [roll_id, 0, 0, 0, 0, 0])
+}
+
+pub fn rolls_by_player(player_id: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::rolls_by_player, [player_id, buf, cap, 0, 0, 0])
+}
+
+pub fn trigger_roll(buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::trigger_roll, [buf, cap, 0, 0, 0, 0])
+}
+
+pub fn set_move_settle_answer(player_id: i32, answer: i32) {
+    kani_host::call_unit(Op::set_move_settle_answer, [player_id, answer, 0, 0, 0, 0]);
+}
+
+pub fn move_settle_answer(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::move_settle_answer, [player_id, 0, 0, 0, 0, 0])
+}
+
+pub fn set_turn_end_settle_answer(player_id: i32, answer: i32) {
+    kani_host::call_unit(
+        Op::set_turn_end_settle_answer,
+        [player_id, answer, 0, 0, 0, 0],
+    );
+}
+
+pub fn turn_end_settle_answer(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::turn_end_settle_answer, [player_id, 0, 0, 0, 0, 0])
+}
 
 pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::placed_cards, [player_id, buf, cap, 0, 0, 0])

@@ -3,7 +3,7 @@
 //! 结算前」) -- any of the user's rolls, not only the main move roll.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ChainKind, RollPurpose};
+use card_sdk::abi::{roll_source, ChainKind, RollPurpose};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -44,7 +44,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 「固定」 vs additive ruling is open, BACKLOG MOVE-02); `starry_night` /
     // `eve` refuse over a fixed face.
     let before = trigger::move_roll().unwrap_or_else(|| trigger::value().max(0));
-    let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect)?;
+    let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect, roll_source::CARD)?;
     trigger::set_move_roll(before + n);
     ctx::log(
         player_id,

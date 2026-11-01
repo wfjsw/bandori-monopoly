@@ -78,16 +78,152 @@ pub fn roll_direct<C: HostCtx>(
     count: i32,
     sides: i32,
     purpose: i32,
+    source: i32,
 ) -> Result<i32, HostError> {
     let req = HostRequest::Roll {
         player_id,
         count,
         sides,
         purpose,
-        source: 0,
+        source,
         window: false,
     };
     crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// `ctx::set_move_settle_answer` -- arm `player_id`'s 「是否触发结算」 answer.
+/// The seat is explicit: on a cross-player forced move the trigger's
+/// `player_id` is the declarer, while the answer belongs to the mover.
+pub fn set_move_settle_answer<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    answer: i32,
+) -> Result<(), HostError> {
+    c.st_mut()
+        .w()
+        .set_move_settle_answer(player_id.max(0), answer);
+    Ok(())
+}
+
+pub fn move_settle_answer<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().move_settle_answer(player_id.max(0)))
+}
+
+/// `ctx::set_turn_end_settle_answer` -- the turn-end half for `player_id`.
+pub fn set_turn_end_settle_answer<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    answer: i32,
+) -> Result<(), HostError> {
+    c.st_mut()
+        .w()
+        .set_turn_end_settle_answer(player_id.max(0), answer);
+    Ok(())
+}
+
+pub fn turn_end_settle_answer<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().turn_end_settle_answer(player_id.max(0)))
+}
+
+/// Encode `v` with postcard into the guest buffer and answer its length (the
+/// `turn_rolls` / `field_instances` shape).
+fn write_postcard<T: serde::Serialize, C: HostCtx>(
+    c: &mut C,
+    v: &T,
+    buf: i32,
+    cap: i32,
+    what: &str,
+) -> Result<i32, HostError> {
+    let bytes =
+        postcard::to_allocvec(v).map_err(|e| HostError::trap(format!("{what} encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// `ctx::roll_recast` -- one more cast on an open roll transaction, with the
+/// transaction's `diceRollBefore` (and `diceRollResult` on a move). Answers the
+/// new raw face; the enclosing commit settles the chosen cast.
+pub fn roll_recast<C: HostCtx>(c: &mut C, roll_id: i32, source: i32) -> Result<i32, HostError> {
+    let req = HostRequest::RollRecast { roll_id, source };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// `ctx::roll_move` -- a standalone move roll for `player_id` (Doll Garden's
+/// victim): its own transaction, the whole Move ladder, the settled face.
+pub fn roll_move<C: HostCtx>(c: &mut C, player_id: i32, source: i32) -> Result<i32, HostError> {
+    let req = HostRequest::RollMove { player_id, source };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// `ctx::roll_pick` -- choose a cast; clamped to the cast range.
+pub fn roll_pick<C: HostCtx>(c: &mut C, roll_id: i32, index: i32) -> Result<(), HostError> {
+    c.st_mut().w().roll_pick(roll_id, index);
+    Ok(())
+}
+
+/// `ctx::roll_current` -- the innermost open transaction id, `-1` when none.
+pub fn roll_current<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().open_roll_id())
+}
+
+/// `ctx::roll_face` -- cast `index`'s face, `-1` out of range.
+pub fn roll_face<C: HostCtx>(c: &mut C, roll_id: i32, index: i32) -> Result<i32, HostError> {
+    // The settled face: what the player sees offered, not the raw throw.
+    Ok(c.st()
+        .wr()
+        .roll_transaction(roll_id)
+        .and_then(|r| r.casts.get(index.max(0) as usize))
+        .map(|c| c.settled.unwrap_or(c.raw))
+        .unwrap_or(-1))
+}
+
+/// `ctx::roll_unused_face` -- the face a pick did not take, `-1` when none.
+pub fn roll_unused_face<C: HostCtx>(c: &mut C, roll_id: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().roll_unused_face(roll_id))
+}
+
+/// `ctx::roll_rerolled` -- has the transaction more than one cast?
+pub fn roll_rerolled<C: HostCtx>(c: &mut C, roll_id: i32) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .roll_transaction(roll_id)
+        .map(|r| (r.casts.len() > 1) as i32)
+        .unwrap_or(0))
+}
+
+/// `ctx::rolls_by_player` -- every face the player has cast this turn.
+pub fn rolls_by_player<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let rolls = c.st().wr().rolls_by_player(player_id.max(0));
+    write_postcard(c, &rolls, buf, cap, "rolls_by_player")
+}
+
+/// The `Trigger.roll` payload (postcard `Option<RollPayload>`), `&[]` outside a
+/// roll trigger.
+pub fn trigger_roll<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let payload = c.st().wr().trigger().roll.as_ref().map(|r| {
+        card_sdk::abi::RollPayload {
+            id: r.id,
+            purpose: r.purpose,
+            source: r.source,
+            rerolled: r.rerolled,
+            chosen_index: r.chosen_index,
+            unused_face: r.unused_face,
+            casts: r
+                .casts
+                .iter()
+                .map(|&(value, source)| card_sdk::abi::TriggerCast { value, source })
+                .collect(),
+            final_face: r.final_face,
+        }
+    });
+    write_postcard(c, &payload, buf, cap, "trigger_roll")
 }
 
 pub fn log<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostError> {
@@ -2522,7 +2658,9 @@ pub fn trig_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 }
 
 pub fn trig_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok(c.st().wr().trigger().value)
+    // A fold stage shows every responder the stage input, not the running
+    // composition (MONEY-01).
+    Ok(c.st().wr().trigger().shown_value())
 }
 
 pub fn trig_step<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
@@ -3133,8 +3271,8 @@ pub fn set_no_money_loss<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), Ho
     Ok(())
 }
 
-pub fn set_fixed_roll<C: HostCtx>(c: &mut C, n: i32) -> Result<(), HostError> {
-    c.st_mut().w().set_fixed_roll(n);
+pub fn set_fixed_roll<C: HostCtx>(c: &mut C, n: i32, source: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_fixed_roll(n, source);
     Ok(())
 }
 
