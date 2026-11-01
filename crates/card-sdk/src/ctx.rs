@@ -1061,7 +1061,7 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
 
 /// Distinct card ids in `pile`, first-seen order. A pile can hold several
 /// copies of one card; when the player is picking a *title*, list each id
-/// once (C# `Distinct()`).
+/// once.
 pub fn distinct_cards_in(player_id: i32, pile: CardPile) -> Vec<NameId> {
     // Concrete cap (see `owned_tiles`): the mixed push/realloc growth is
     // capped at `cards_in`'s own 8 anyway.
@@ -1351,6 +1351,24 @@ pub fn add_counter(name: &str, n: i32, max: i32) -> Result<i32, Prompt> {
 pub fn set_counter(name: &str, n: i32) -> i32 {
     let (p, l) = s(name);
     unsafe { sys::set_counter_self(p, l, n) }
+}
+
+/// The hard per-instance maximum stored for the counter `name` on `uid` (`0` =
+/// uncapped / absent). `add_counter*` clamps at it in addition to the
+/// call-local `max`; the static form is a `counter_max.<name>` placement prop
+/// ([`crate::abi::prop::COUNTER_MAX_PREFIX`]).
+#[cfg_attr(kani, inline(always))]
+pub fn counter_max_at(uid: i32, name: &str) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::counter_max_at(uid, p, l) }
+}
+
+/// Write the per-instance maximum of the counter `name` on `uid`; `0` clears
+/// it. Returns the stored value. The key is removed with the instance.
+#[cfg_attr(kani, inline(always))]
+pub fn set_counter_max_at(uid: i32, name: &str, max: i32) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::set_counter_max_at(uid, p, l, max) }
 }
 
 /// On-card named counter of the instance at `uid`.
@@ -1669,6 +1687,26 @@ pub fn move_units(
 ) -> i32 {
     let (p, l) = s(name);
     unsafe { sys::move_units(p, l, from_tile, from_player, to_tile, to_player, n) }
+}
+
+/// Announce the body about to run as `card` (the one dispatcher `rt::on` calls;
+/// card code does not). `1` runs the body, `0` skips it (the body's
+/// `cardFired` raise was cancelled), and the pause sentinel
+/// [`crate::abi::EXIT_NEED_INPUT`] halts the body too -- the raise asked a
+/// question, and the replayed action re-enters.
+///
+/// The frame itself is the host's: the host pushes it before the drive, and
+/// the raise that carried the body truncates it afterwards (the hooks a body
+/// raises are walked *after* it returns, so the guest cannot time the pop).
+pub fn body_enter(card: &str) -> i32 {
+    let (p, l) = s(card);
+    unsafe { sys::body_enter(p, l) }
+}
+
+/// Close the body's scope. Called after every [`body_enter`] that ran or
+/// parked; the frame outlives it (see there), so today this is a no-op.
+pub fn body_leave() {
+    unsafe { sys::body_leave() }
 }
 
 /// The uid of the running instance (`FieldCard::uid`). Provenance default for
@@ -3189,6 +3227,22 @@ pub mod trigger {
     /// message name on a `Message` entry. Empty otherwise.
     pub fn name() -> String {
         read_str(|b, c| unsafe { sys::trig_name(b, c) })
+    }
+
+    /// `t.Uid` -- the raise's unique id, shared by every job the raise
+    /// dispatches and stable across a replay of the same action. `0` outside a
+    /// raise and on a hand-built test trigger. A hook keys one-shot claims on
+    /// it (`ctx::prop(CLAIM) != trigger::uid()`).
+    pub fn uid() -> i32 {
+        unsafe { sys::trig_uid() }
+    }
+
+    /// `t.Instance` -- the instance/row this raise is **about**: the changed
+    /// instance on `counterChanged`, the mark's creating instance on
+    /// `markChanged`, `-1` otherwise. Never restamped per hook job, so copy A
+    /// can ignore a raise about copy B (`trigger::instance() != ctx::self_uid()`).
+    pub fn instance() -> i32 {
+        unsafe { sys::trig_instance() }
     }
 
     /// `t.Step` -- the turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.

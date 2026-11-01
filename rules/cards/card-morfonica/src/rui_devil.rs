@@ -1,4 +1,4 @@
-//! `Mor:（Rui）正论恶魔` -- C# `CardRuiDevil`: pay 100 to every other player,
+//! `Mor:（Rui）正论恶魔`: pay 100 to every other player,
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（Rui）正论恶魔`）:
 //! > （Rui）正论恶魔：向全场玩家支付100资金（该数值不可被任何效果影响），之后全场玩家向你支付300资金（可被影响）。在此卡结算过程中，每当你的技能被触发后，立即将x设置为5
@@ -7,9 +7,27 @@
 //! 被触发，将x设置为5」) -- every skill fire during the resolution, immediately.
 
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
-pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play("", None, rui_devil)]).meta(&card_sdk::meta::CardMeta::new()
+pub const RUI_DEVIL: CardDef = CardDef::new(
+    "Mor:（Rui）正论恶魔",
+    &[
+        On::Play("", None, rui_devil),
+        // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」.
+        // `cardFired` covers every body, so `card.is_skill` is the
+        // 「技能」 precondition; `resolving(…)` keeps the fire inside this
+        // card's resolution; `by == owner` says 「你的技能」 -- the fire's cause
+        // is a skill of this card's user (`actor` cannot: on a payment it is
+        // the payer, and the 300 leg pays *to* the user). `owner` /
+        // `self_uid()` cannot scope the frame either -- this card never places
+        // itself.
+        On::Action(Action::CardFired(
+            "resolving('Mor:（Rui）正论恶魔') && card.is_skill && by == owner",
+            None,
+            on_skill,
+        )),
+    ],
+).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"正论恶魔"#)
         .raw_name(r#"（Rui）正论恶魔"#)
         .tags(&[])
@@ -31,26 +49,33 @@ fn rui_devil(player_id: i32) -> card_sdk::Asked {
         ctx::PayCommand::new(player_id, o, 100, &why)
             .fixed()
             .send()?;
-        // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」 -- the skill
-        // fires on each payment leg during the resolution; override X now.
-        ctx::set_slot(player_id, X, 5);
     }
     for &o in &others {
         if !ctx::player_out(o) {
             // 规则书: 「之后全场玩家向你支付300资金（可被影响）」
             ctx::transfer(o, player_id, 300, &why)?;
-            ctx::set_slot(player_id, X, 5);
         }
     }
-    // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」.
-    // TODO(ABI) skill-fire signal: nothing reports whether a skill fired while
-    //   this body ran, so every X write (and the log below) is unconditional --
-    //   a non-八潮瑠唯 seat, an immune payee or the trailing write still set X=5.
+    // 规则书: 「在此卡结算过程中，每当你的技能被触发后，立即将x设置为5」 -- the
+    // write rides `on_skill`, once per fire and none without one.
+    //
+    // The hook raises at the skill's body *entry*, so the skill's own effect
+    // still runs after it and may move X again (「正论暴击」 misses add 1). The
+    // book's 「立即」 is after the trigger, so the fire's write has the last
+    // word: a fire during this resolution re-writes 5 here, once, at the end.
+    if ctx::slot(player_id, FIRED) > 0 {
+        ctx::set_slot(player_id, FIRED, 0);
+        ctx::set_slot(player_id, X, 5);
+    }
+    Ok(())
+}
+
+/// 规则书: 「每当你的技能被触发后，立即将x设置为5」 -- one write per fire, and a
+/// flag so the body's end can re-assert it over the skill's own effect.
+pub fn on_skill(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, X, 5);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("rui_devil_crit")).card("card", "Mor:（Rui）正论恶魔"),
-    );
+    ctx::set_slot(player_id, FIRED, 1);
+    ctx::log(player_id, &Msg::new(key!("rui_devil_crit")));
     Ok(())
 }
 
@@ -64,3 +89,6 @@ fn rui_devil(player_id: i32) -> card_sdk::Asked {
 pub fn rui_devil_kani(player_id: i32) -> card_sdk::Asked {
     rui_devil(player_id)
 }
+
+/// One fire happened during this resolution (cleared by the body's tail).
+const FIRED: &str = "rui_devil.fired";

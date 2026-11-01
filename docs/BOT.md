@@ -441,9 +441,25 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   * **Auction answers (2026-10-28).** The prompt's `worth` is a ceiling, not a
     bid: `policy::act_for` passes when the seat is already the top bidder
     (`err.already_top_bid`) or cannot reach the minimum raise (`err.bid_min`),
-    and otherwise bids from that minimum by its own `bid_step`. A refused
-    auction answer holds the whole table on the prompt, because nobody marks
-    an answer the engine turned down.
+    and otherwise bids from that minimum by its own `bid_step`. The minimum
+    still moves between the frame a seat decides from and its `act` (another
+    seat bids first), so a refusal there is a race, not a verdict: the driver
+    re-arms the answer and retries once from the frame the engine has now
+    (`botDrive.ts` `recordAnswer` / `retryFresh`, 2026-10-31). Without that a
+    refused bid is recorded as answered and -- Solo having no prompt clock --
+    parks the whole table on the prompt.
+  * **A bid is not an answer either (2026-10-31).** A bid leaves the seat
+    pending; only a pass marks its slot. The driver therefore records the bid
+    an answer left live and re-arms the seat when the live bid moves past it,
+    so an outbid seat decides again instead of going quiet with the engine
+    still counting it open (`botDrive.ts` `needsAnswer`; pinned end-to-end by
+    `bot-core/tests/auction_drive.rs`).
+  * **Auto mode can leave the bid to the player (2026-10-31).** 托管 answers
+    auctions like every other surface unless the global `autoBid` setting is
+    off (Settings → 托管参与竞拍). Off, the autopilot skips auction prompts
+    (`botDrive.ts` `autopilotAnswers`), the board still opens the sheet
+    (`Board.tsx`) with its controls live over the input lock (`Prompt.tsx`),
+    and the seat waits for the player; every other surface stays automatic.
   * **Trivial decisions (2026-10-08).**
     [`action::trivial_decision`] skips the search when the root has exactly
     one legal action (it is forced) or when no candidate moves money,

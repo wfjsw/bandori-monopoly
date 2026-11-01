@@ -1047,6 +1047,18 @@ impl ChargeSource {
     }
 }
 
+/// v105: **per-instance identity and state**. Raises carry a unique `uid`
+///    (`ruleset_trig_uid`) and a subject instance (`ruleset_trig_instance`);
+///    every card body opens a resolution frame (`ruleset_body_enter` /
+///    `ruleset_body_leave`) that the host pins to the body's raise, readable
+///    as the `resolving('id')` predicate; `counterChanged` / `markChanged`
+///    name their instance;
+///    a per-instance counter maximum is stored (`ruleset_counter_max_at` /
+///    `ruleset_set_counter_max_at`) and `add_counter_at` clamps at it; a
+///    `counter_max.*` placement prop fills that store. New hook kinds
+///    `cardFired` (111) and `markChanged` (112); `card.*` condition reads
+///    answer for the running uid.
+///    SAVE_VERSION / RECORD_VERSION unchanged.
 /// v104: **turn snapshot carries money and the board arrays**. The
 ///    `ruleset_turn_snap` payload is the postcard struct
 ///    `(pos, state, money, owners, houses, mortgaged)` (was `(pos, state)`):
@@ -1516,6 +1528,13 @@ pub mod prop {
     /// The rent lookup (`pay_rent` / `rent_of` / `ctx::rent_houses_of`) reads
     /// it; `ctx::houses_of` remains real.
     pub const RENT_HOUSES: &str = "rentHouses";
+    /// Reserved prefix of a **per-instance counter maximum** prop:
+    /// `("counter_max.crystals", 2)` declares a ceiling of 2 for the
+    /// `crystals` counter. A `counter_max.<name>` placement prop is split out
+    /// of the props at placement and seeds `FieldCard.counter_max`; every
+    /// other prop key still lands in `props`. `add_counter_at` /
+    /// `add_counter` / `add_crystals` clamp at the stored maximum. `0` clears.
+    pub const COUNTER_MAX_PREFIX: &str = "counter_max.";
 
     // ---------------------------------------------------------- tile data
     // Stamped onto a board-owned tile rule instance at bind time (from
@@ -2327,6 +2346,15 @@ impl ActionKind {
     /// the running figure.
     pub const PaySplitMulBefore: Self = Self(TriggerKind::PaySplitMulBefore);
 
+    /// Action. A card body entered its resolution frame (hook-only, no
+    /// counteraction window). Same payload as [`TriggerKind::CardFired`].
+    /// `card.is_skill` narrows it to skill bodies.
+    pub const CardFired: Self = Self(TriggerKind::CardFired);
+
+    /// Action. A mark row changed (hook-only, no counteraction window). Same
+    /// payload as [`TriggerKind::MarkChanged`].
+    pub const MarkChanged: Self = Self(TriggerKind::MarkChanged);
+
     /// Action / Counteraction window. Before a raw 消耗 debit (redeem, auction,
     /// `lose_raw`) at the full cost. Payload: player_id = the spender,
     /// tile = the tile involved (-1), value = the cost, by_card. Reduce it
@@ -2928,6 +2956,25 @@ impl TriggerKind {
 
     /// `targetableGate`
     pub const TargetableGate: Self = Self::engine(109);
+
+    // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
+    // ruleset-declared "fansFlip"); the next free **engine** pair is 111/112.
+
+    /// `cardFired` -- a card's body entered its resolution frame: every
+    /// body, a play, a hook or a counteraction alike. Hook-only: no
+    /// counteraction window opens. Payload: the card id on `card`, the body's
+    /// seat on `by_card`, `instance = -1`; `uid` is the fire's raise id, so
+    /// one fire is one claim. A listener after skills only pre-filters on
+    /// `card.is_skill`. A hook's *own* body does not re-announce (a fire is
+    /// announced once, not once per level).
+    pub const CardFired: Self = Self::engine(111);
+
+    /// `markChanged` -- a mark row was added, bumped or removed. Hook-only.
+    /// Payload: `player_id` = row owner, `tile`, `name` = mark kind,
+    /// `value` = effective signed delta, `instance` = the mark's creating
+    /// instance (`-1` when it has none). The subject instance is stamped even
+    /// when it is already unplaced, so its own hook can still resync/discard.
+    pub const MarkChanged: Self = Self::engine(112);
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {

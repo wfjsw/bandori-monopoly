@@ -670,6 +670,22 @@ impl EventTail {
     }
 }
 
+/// One mark mutation, replayed as a `markChanged` raise at commit.
+///
+/// `card` is the row's provenance captured at mutation time, because the
+/// creating instance may already be gone by the drain (`unplace_at` removes
+/// before the commit).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkLog {
+    pub uid: i32,
+    pub tile: i32,
+    pub kind: String,
+    pub instance: i32,
+    pub owner: i32,
+    pub delta: i32,
+    pub card: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub st: MatchState,
@@ -744,6 +760,11 @@ pub struct World {
     /// serialized, not compared.
     #[serde(skip)]
     pub walk_flush: WalkFlush,
+    /// Mark mutations of the current run, drained by `commit_after` into
+    /// `markChanged` raises. Transient: a save at a routine boundary has no
+    /// live run and the action replays from its pre-action state.
+    #[serde(skip)]
+    pub mark_log: Vec<MarkLog>,
     /// When set, `log` does not push an event (the caller posts write-through).
     #[serde(skip)]
     pub skip_log: bool,
@@ -855,6 +876,7 @@ impl World {
             gains: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             walk_flush: WalkFlush::default(),
+            mark_log: Vec::new(),
             skip_log: false,
             stub: MatchEvent::default(),
             flash: SharedFlash::default(),

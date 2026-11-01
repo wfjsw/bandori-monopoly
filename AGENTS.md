@@ -12,6 +12,10 @@ remove another worktree unless the user requests it.
 Report the branch and worktree path when delivering the work. Run the checks
 appropriate to the change from that worktree.
 
+Skip the Kani proofs and the fuzz targets in the default check pass — they are
+opt-in only. Run them when the task is itself about proofs or fuzzing, or when
+the user asks for them.
+
 Offload (only) complex implementations to subagents, with comprehensive 
 instructions, guidance, and in-progress assistance. The main agent should 
 periodically check on the subagent's progress. After subagent completed, 

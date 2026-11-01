@@ -298,6 +298,14 @@ const ARRAY_OPS: &[&str] = &[
     "adjust_money",
     "card_prop",
     "raise_after",
+    // v105: raise identity, resolution frame, per-instance counter cap.
+    "trig_uid",
+    "trig_instance",
+    "body_enter",
+    "body_leave",
+    "counter_max_at",
+    "set_counter_max_at",
+    // v107 (G02): payment commands, pay-window kind/shape writes and readers.
     "pay_command",
     "trig_set_pay_kind",
     "trig_set_pay_shape",

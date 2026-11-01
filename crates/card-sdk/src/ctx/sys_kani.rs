@@ -767,6 +767,30 @@ pub fn trig_name(p: i32, n: i32) -> i32 {
     kani_host::call_i32(Op::trig_name, [p, n, 0, 0, 0, 0])
 }
 
+pub fn trig_uid() -> i32 {
+    kani_host::call_i32(Op::trig_uid, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_instance() -> i32 {
+    kani_host::call_i32(Op::trig_instance, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn body_enter(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::body_enter, [p, n, 0, 0, 0, 0])
+}
+
+pub fn body_leave() {
+    kani_host::call_unit(Op::body_leave, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn counter_max_at(uid: i32, np: i32, nl: i32) -> i32 {
+    kani_host::call_i32(Op::counter_max_at, [uid, np, nl, 0, 0, 0])
+}
+
+pub fn set_counter_max_at(uid: i32, np: i32, nl: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::set_counter_max_at, [uid, np, nl, max, 0, 0])
+}
+
 pub fn trig_step() -> i32 {
     kani_host::call_i32(Op::trig_step, [0, 0, 0, 0, 0, 0])
 }

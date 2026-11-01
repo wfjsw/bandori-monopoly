@@ -181,6 +181,31 @@ fn want_to_be_human_crystal_on_low_roll() {
     assert!(c >= 1, "crystal added for low roll (3 ≤ X): {c}");
 }
 
+#[test]
+fn want_human_x_is_per_instance_and_dies_with_it() {
+    // 规则书（1）: 「将其写下」 -- X belongs to the card instance (C# `Mem`), so two
+    // copies keep separate values and a value dies with its instance.
+    let mut t = Table::vanilla(2);
+    let a = t.place_raw(0, "CRYCHIC:想要成为人类");
+    let b = t.place_raw(0, "CRYCHIC:想要成为人类");
+    t.m.world_mut().set_prop_at(a, "want_human_x", 20);
+    t.m.world_mut().set_prop_at(b, "want_human_x", 1);
+    // A roll of 3 is ≤ a's X (20) but > b's (1).
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.m.world().counter_at(a, "crystals"),
+        1,
+        "a banked a crystal"
+    );
+    assert_eq!(t.m.world().counter_at(b, "crystals"), 0, "b did not");
+    // The value dies with the instance: `a`'s X is gone, `b` keeps its own.
+    t.m.world_mut().unplace_at(a);
+    assert_eq!(t.m.world().prop_at(a, "want_human_x"), 0, "a's X is gone");
+    assert_eq!(t.m.world().prop_at(b, "want_human_x"), 1, "b's X stays");
+}
+
 // -- CRYCHIC:春日影 ----------------------------------------------------
 
 #[test]

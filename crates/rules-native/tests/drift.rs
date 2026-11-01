@@ -63,6 +63,32 @@ struct Run {
     events: Vec<MatchEvent>,
 }
 
+/// One policy command for a machine-driven seat, mirroring the harness in
+/// `game-core/tests/common`: production drives bots over the human interface,
+/// and `Match::tick` never acts for them.
+fn bot_msg(m: &Match, member: i32) -> Option<game_core::net::NetMessage> {
+    let st = m.state();
+    let me = st.player_of(member);
+    let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+    if !asked && (st.phase != "play" || st.busy || st.vote.id > 0 || st.turn != me) {
+        return None;
+    }
+    bot_core::policy::act_for(m, member)
+}
+
+/// Let every seat on the engine's drive list take one policy command.
+fn act_drive(m: &mut Match) -> bool {
+    let members = m.state().drive;
+    let mut any = false;
+    for member in members {
+        let Some(msg) = bot_msg(m, member) else { continue };
+        if m.act(member, &msg).is_ok() {
+            any = true;
+        }
+    }
+    any
+}
+
 fn play(data: &Arc<GameData>, rules: Arc<dyn CardRules>, seed: u64, max_rounds: i32) -> Run {
     let mut m = Match::new(
         data.clone(),
@@ -79,6 +105,7 @@ fn play(data: &Arc<GameData>, rules: Arc<dyn CardRules>, seed: u64, max_rounds: 
     let mut last_event = 0i32;
     while !m.ended() {
         m.tick(0.25);
+        act_drive(&mut m);
         for e in m.events_since(last_event) {
             last_event = e.id;
             events.push(e);

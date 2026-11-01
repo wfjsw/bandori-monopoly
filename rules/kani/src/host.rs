@@ -917,6 +917,15 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_name => arm_trig_name(a),
         Op::trig_step => 0,
         Op::trig_by_card => 0,
+        // Raise identity + resolution frame + per-instance cap are stubbed
+        // until the model grows them (`trig_uid` 0 = "no identity",
+        // `trig_instance` -1 = "none", `body_enter` 1 = "run the body").
+        Op::trig_uid => 0,
+        Op::trig_instance => -1,
+        Op::body_enter => 1,
+        Op::body_leave => 0,
+        Op::counter_max_at => 0,
+        Op::set_counter_max_at => 0,
         Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
         Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
         // ---- move payload (hostfns 1830–1880; sentinels when no move) ----

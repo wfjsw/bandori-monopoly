@@ -7,8 +7,8 @@ Worktree `/home/monopoly/web/.claude/worktrees/card-rulebook-review`, branch
 Baseline: the tree's `ABI_VERSION 104` (G06's turn-snapshot entry is already on
 disk, so the constant reads 104 before G03/G06 land their own entries). Sibling
 drafts G03/G06 are written against the same base; §8 fixes the landing order and
-the renumbering rule. In the README order (G03, G08, G02, G04, G06, G11) this
-doc's own line is **106 → 107** — see §8.
+the renumbering rule. In the README landing order this doc's own line is
+**114 → 115** — see §8.
 
 Closed slugs and their review rows (`CARD-REVIEW-2026-10-27.md` line ids). The
 review rows are holistic ids; the authoritative sheet line in
@@ -658,7 +658,7 @@ the wasm cannot load on an older host), `CardPile` gains a wire code, and
 `take_card` / the refill sites change semantics around the frame. No existing
 signature or kind id moves. `ManifestOn` is unchanged; the kind pins
 (`kind_table_pin.rs`, `kinds.rs` `KINDS`, `on_parse.rs`) and the CEL listener
-list get 132/133 (G08 through G09 take 114-130 ahead of this group, G10 131).
+list get 132/133 (the earlier groups take 111-131 ahead of this group).
 
 ---
 

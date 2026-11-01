@@ -19,8 +19,8 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 const ID: &str = "Mujica:（海铃）";
 
 /// C# `Card.User` stand-in: the player that played the card (the card may sit on
-/// another player's field). Stored 1-based at the placement player so 0 reads as
-/// "unset".
+/// another player's field). An on-card counter of the instance, stored 1-based
+/// so 0 reads as "unset".
 const USER_KEY: &str = "umiri_user";
 
 pub const UMIRI_CARD: CardDef = CardDef::new(
@@ -29,11 +29,11 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         On::Play("", Some(cant_play), umiri_card),
         // 规则书（1）: 「轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上」
         // -- the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Action(Action::TurnStart("card.placed && actor == slot('umiri_user') - 1", None, turn_start)),
+        On::Action(Action::TurnStart("card.placed && card.counter('umiri_user') - 1 == actor", None, turn_start)),
         // 规则书（3）: 「当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。」
         // -- the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
-        On::Action(Action::TurnEnd("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1", None, turn_end)),
+        On::Action(Action::TurnEnd("card.placed && card.counter('umiri_user') - 1 == actor && owner == card.counter('umiri_user') - 1", None, turn_end)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")
@@ -75,12 +75,10 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置于在此卡使用者下一名行动的玩家场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(next, ID, &Msg::new(key!("umiri_note")));
-    // TODO(ABI): the user rides one per-holder state key, so two copies on the same
-    //   holder would overwrite each other and both `slot('umiri_user')` pre gates would
-    //   read the last writer. Per-instance state exists (`set_prop`) but a pre cannot
-    //   read props (`card.prop` is not in the condition vocabulary); unreachable today
-    //   because a match can hold only one copy.
-    ctx::set_slot(next, USER_KEY, player_id + 1);
+    // The user is an on-card counter of the instance just placed (1-based, so 0
+    // reads as "unset"), so two copies keep separate users and the value dies
+    // with its instance.
+    ctx::set_counter(USER_KEY, player_id + 1);
     ctx::log(
         player_id,
         &Msg::new(key!("umiri_placed"))
@@ -128,15 +126,18 @@ fn take_bands(holder: i32, user: i32) {
 /// user). Runs through the Fx hook dispatch at `turnStart`, so this is a field
 /// effect, not a [反击].
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // The `card.placed && actor == slot('umiri_user') - 1` pre owns the gate.
-    let user = ctx::slot(player_id, USER_KEY) - 1;
+    // The `card.placed && card.counter('umiri_user') - 1 == actor` pre owns the gate.
+    // `card.counter` answers for the running instance, so two copies read their
+    // own users.
+    let user = ctx::counter(USER_KEY) - 1;
     // 规则书（1）: 「轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。」
     // C# `int num = NextOf(Player); if (num == User) Player = User; else Player = num`.
     let dest = next_of(player_id);
     ctx::unplace_self();
-    ctx::set_slot(player_id, USER_KEY, 0);
     ctx::place_card(dest, ID, &Msg::new(key!("umiri_note")));
-    ctx::set_slot(dest, USER_KEY, user + 1);
+    // Re-set the user on the new instance (`place_card` made it current and
+    // dropped the old instance's counters with it).
+    ctx::set_counter(USER_KEY, user + 1);
     // 规则书（2）: 「使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡」
     // -- `Take()` on whatever field the card now sits on, the user's own included
     // (C# `CardUmiriCard.TurnStart`). The same-id refusal makes the return-to-user
@@ -164,10 +165,10 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
 /// card is back on the user's field at the user's turn end, discard it and
 /// draw 1. Runs through the Fx hook dispatch at `turnEnd`, so this is a field
 /// effect, not a [反击].
-fn turn_end(player_id: i32) -> card_sdk::Asked {
-    // The `card.placed && actor == slot('umiri_user') - 1 &&
-    // owner == slot('umiri_user') - 1` pre owns the gate.
-    let user = ctx::slot(player_id, USER_KEY) - 1;
+fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    // The `card.placed && card.counter('umiri_user') - 1 == actor &&
+    // owner == card.counter('umiri_user') - 1` pre owns the gate.
+    let user = ctx::counter(USER_KEY) - 1;
     // 规则书（3）: 「当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。」
     // C# `End`: `H.Unplace(this, "discard", "回到了使用者的场上")` +
     // `H.DrawR(User, 1, ...)`; `Detach` -> `Drop` of the taken band cards.
@@ -195,7 +196,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     //   before the draw -- `set_dest` only records the fate and the instance enters the
     //   discard after the body, so the draw (which can reshuffle that discard) runs first
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::set_slot(player_id, USER_KEY, 0);
+    ctx::set_counter(USER_KEY, 0);
     ctx::draw(user, 1)?;
     ctx::log(user, &Msg::new(key!("umiri_ended")).player_id("who", user));
     Ok(())

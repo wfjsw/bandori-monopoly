@@ -16,6 +16,7 @@ import { useHotkeys } from "../../hooks/dom";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
+import { autoBids } from "../../game/autoBid";
 import { InspectCard, showCard, TagChip } from "../../ui/Card";
 import { previewFrom, previewHide, stickCard } from "../../ui/CardPreview";
 import { bandColor } from "../../ui/Character";
@@ -87,8 +88,12 @@ const PromptTimer = memo(function PromptTimer({ sess }: { sess: GameSession }) {
 
 const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () => void }) {
   const { view } = useMatchView(sess);
-  const auto = useAutoplay(sess); // 托管: answers are read-only
+  const held = useAutoplay(sess); // 托管 / replay: the seat is machine-held
   const p = view?.state.prompt;
+  // An auction left to the player (`autoBid` off) stays live while 托管 answers
+  // everything else: the autopilot keeps its hands off, so the sheet must not.
+  const leftToMe = held && !sess.readOnly && p?.kind === "auction" && !autoBids();
+  const auto = held && !leftToMe; // answers are read-only here
   // Keep one modal mounted through Returns' setup sequence. The player sees
   // one checklist and one confirmation, while the session advances its asks.
   const returnsGroup = useRef(returnsPickNumber(p) !== null).current;
@@ -120,7 +125,9 @@ const Prompt = memo(function Prompt({ sess, id, close }: { sess: GameSession; id
   const answerRef = useRef<Answer>(() => Promise.resolve(false));
   const answer = useCallback<Answer>((extra) => answerRef.current(extra), []);
   if (!showing || !view || !p) return null;
-  answerRef.current = (extra) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
+  // `held` is the input lock still being on -- the auction left to the player
+  // answers over it.
+  answerRef.current = (extra) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }, held));
 
   // One layout rule for every prompt that shows cards: a panel that is just a
   // row of card faces (the hand), or more than one related-card detail, stacks

@@ -628,6 +628,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
 /// cloning the world. Nothing here mutates.
 pub trait SnapSrc {
     fn trigger(&self) -> Trigger;
+    /// Card ids currently resolving, innermost last. Empty by default so a
+    /// fixture world needs no change.
+    fn resolving(&self) -> Vec<String> {
+        Vec::new()
+    }
     fn tile_named(&self, name: &str) -> i32;
     /// Board tile count (ids are `0..tile_count`).
     fn tile_count(&self) -> i32;
@@ -683,6 +688,15 @@ pub trait SnapSrc {
     }
     fn counter_names_at(&self, _uid: i32) -> Vec<String> {
         Vec::new()
+    }
+    /// On-card counter of the instance at `uid` (an instance read the
+    /// name-keyed `card_counter` cannot express for a second copy).
+    fn counter_at(&self, _uid: i32, _name: &str) -> i32 {
+        0
+    }
+    /// The instance's tile, or -1 when unplaced / unknown.
+    fn tile_at(&self, _uid: i32) -> i32 {
+        -1
     }
     fn hand_size(&self, player_id: i32) -> i32;
     fn player_pos(&self, player_id: i32) -> i32;
@@ -747,6 +761,25 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn trigger(&self) -> Trigger {
         CardWorld::trigger(self)
+    }
+    #[inline]
+    fn resolving(&self) -> Vec<String> {
+        CardWorld::resolving(self)
+            .into_iter()
+            .map(|(c, _)| c)
+            .collect()
+    }
+    #[inline]
+    fn counter_names_at(&self, uid: i32) -> Vec<String> {
+        CardWorld::counter_names_at(self, uid)
+    }
+    #[inline]
+    fn counter_at(&self, uid: i32, name: &str) -> i32 {
+        CardWorld::counter_at(self, uid, name)
+    }
+    #[inline]
+    fn tile_at(&self, uid: i32) -> i32 {
+        CardWorld::tile_at(self, uid)
     }
     #[inline]
     fn tile_named(&self, name: &str) -> i32 {
@@ -1404,6 +1437,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             Some(card) if !card.is_empty() => id_of(card),
             _ => 0,
         },
+        trigger_card_is_skill: t
+            .card
+            .as_deref()
+            .is_some_and(|c| c.starts_with("skill:")),
         name: t.name.clone().unwrap_or_default(),
         players,
         tile_ids,
@@ -1416,6 +1453,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .map(|t| world.tile_owner(t) as i64)
             .collect(),
         plan_fixed_roll: (world.fixed_roll() >= 0).then(|| world.fixed_roll() as i64),
+        resolving: world.resolving().into_iter().map(|c| (c, 1)).collect(),
     }
 }
 
@@ -1493,6 +1531,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         turn_key: world.turn_key() as i64,
         // No trigger: no card. `trigger_card == card.id` is false here.
         trigger_card: 0,
+        trigger_card_is_skill: false,
         // No trigger: no counter / message name either.
         name: String::new(),
         players,
@@ -1506,6 +1545,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             .map(|t| world.tile_owner(t) as i64)
             .collect(),
         plan_fixed_roll: (world.fixed_roll() >= 0).then(|| world.fixed_roll() as i64),
+        resolving: world.resolving().into_iter().map(|c| (c, 1)).collect(),
     }
 }
 
@@ -1627,6 +1667,38 @@ pub fn fill_candidate<S: SnapSrc>(world: &S, owner: i32, card: &str, placed: boo
         ..CandidateCtx::default()
     };
     fill_candidate_extras(world, owner, &mut cand, true);
+    cand
+}
+
+/// `fill_candidate`, but every `card.*` instance read resolves through `uid`
+/// instead of the first copy of `card`. Used where the candidate **is** the
+/// running card (its own `pre`), so two copies of one id answer separately.
+pub fn fill_candidate_uid<S: SnapSrc>(
+    world: &S,
+    owner: i32,
+    card: &str,
+    uid: i32,
+    placed: bool,
+) -> CandidateCtx {
+    let mut cand = fill_candidate(world, owner, card, placed);
+    if uid < 0 {
+        return cand;
+    }
+    cand.uid = uid as i64;
+    cand.card_counters = world
+        .counter_names_at(uid)
+        .into_iter()
+        .map(|n| {
+            let v = world.counter_at(uid, &n) as i64;
+            (n, v)
+        })
+        .collect();
+    if placed {
+        let t = world.tile_at(uid);
+        // `tile_at` answers `-1` for unplaced / unknown, which is a valid
+        // `card_tile` (with the owner), not `None`.
+        cand.card_tile = Some(t as i64);
+    }
     cand
 }
 

@@ -163,6 +163,9 @@ pub struct WindowCtx {
     /// The trigger's card id hash (`trigger_card`), same encoding as
     /// [`CandidateCtx::card_id`]. `0` when the trigger carries no card.
     pub trigger_card: i64,
+    /// The trigger's card is a `skill:` card (`card.is_skill`) -- the
+    /// precondition a `cardFired` listener uses to hear skills only.
+    pub trigger_card_is_skill: bool,
     /// `Trigger.name` -- the counter name on a `CounterChanged` hook, or the
     /// message name on an `On::Message` entry. Empty otherwise. Binds
     /// `counter_name` (a hash) / `counter_is('…')`.
@@ -186,6 +189,9 @@ pub struct WindowCtx {
     /// This turn's fixed main-move roll (`plan.fixed_roll`, the guest's
     /// `ctx::fixed_roll()`); `None` = unset (binds CEL `null`).
     pub plan_fixed_roll: Option<i64>,
+    /// Card bodies currently resolving (`resolving('id') -> 1`); a name table
+    /// like `_move_tags`, innermost last.
+    pub resolving: Vec<(String, i64)>,
 }
 
 impl Default for WindowCtx {
@@ -218,6 +224,7 @@ impl Default for WindowCtx {
             turn_player: 0,
             turn_key: 0,
             trigger_card: 0,
+            trigger_card_is_skill: false,
             name: String::new(),
             players: Vec::new(),
             tile_ids: BTreeMap::new(),
@@ -227,6 +234,7 @@ impl Default for WindowCtx {
             tile_count: 0,
             tile_owners: Vec::new(),
             plan_fixed_roll: None,
+            resolving: Vec::new(),
         }
     }
 }
@@ -267,6 +275,10 @@ pub struct CandidateCtx {
     pub owner_tiles: i64,
     /// `card.*`
     pub card_id: i64,
+    /// The instance these `card.*` fields were read from, or `-1`. When set,
+    /// `card.counter` / `card.tile` / `card.placed` answer for that instance
+    /// instead of the first copy of `card_id`.
+    pub uid: i64,
     pub card_placed: bool,
     /// `card.counter('name')` lookup -- the candidate instance's named
     /// counters (host maps well-known wire names onto dedicated card fields;

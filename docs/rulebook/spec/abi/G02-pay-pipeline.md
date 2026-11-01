@@ -1325,12 +1325,13 @@ source slot; new `ActionKind::SpendBefore = 122`; new `pay_kind` / `pay_shape`
 `PayKind::Loss`, `PayShape`, `PayFactorScope`, `SettleOutcome`,
 `ChargeSource`; `SAVE_VERSION` and `RECORD_VERSION` unchanged.
 
-**Kani `Op` band.** Base is 340. G01's eight new imports take **341–348** and
-G08's twenty take **349–368** — neither was counted in the 2026-10-27 table,
-which only filled Op numbers for G02 onward. This group therefore takes
-**369–377**, and every later group shifts ten: G04 **378–397**, G06
-**398–417**, G05+G13 **418–427**, G07 **428–437**. The README table carries the
-corrected rows (§12).
+**Kani `Op` band.** Base is 340. G01's six new imports take **341–346** (its
+review dropped two with the `Actions` kind) and G05 takes the vacated
+**347–348**; G08's twenty take **349–368** — none was counted in the
+2026-10-27 table, which only filled Op numbers for G02 onward. This group
+therefore takes **369–377**, and every later group shifts ten: G04 **378–397**,
+G06 **398–417**, G05+G13 **418–427**, G07 **428–437**. The README table carries
+the corrected rows (§12).
 
 Why a break even though old imports keep their names: the host checks the
 module export for **exact** equality (`host.rs:3207-3213`) including arity, and

@@ -709,6 +709,8 @@ action_kinds! {
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
+    CardFired;
+    MarkChanged;
     SpendBefore;
 }
 

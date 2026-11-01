@@ -24,13 +24,13 @@ the whole table.
 | group | `ABI_VERSION` | `SAVE_VERSION` | engine kinds | Kani `Op` |
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
-| G01 | 104→105 | 12 | 111–113 | 341–348 |
-| G08 | 105→106 | 12→13 | 114–121 | 349–368 |
+| G01 | 104→105 | 12 | 111–112 | 341–346 |
+| G08 | 105→106 | 12→13 | 113–120 | 349–368 |
 | G02 | 106→107 | 13 | 122 | 369–377 |
 | G04 | 107→108 | 13 | — | 378–397 |
 | G03 | 108→109 | 13→14 | 123–125 | — |
 | G06 | 109→110 | 14→15 | — | 398–417 |
-| G05 + G13 | 110→111 | 15→16 | — | 418–427 |
+| G05 + G13 | 110→111 | 15→16 | — | 347–348, 418–427 |
 | G07 | 111→112 | 16 | — | 428–437 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
@@ -41,11 +41,17 @@ the whole table.
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
 
-**2026-10-31 amendment.** The first table filled Op numbers only from G02
+**2026-10-31 amendment.** The original table filled Op numbers only from G02
 onward and gave G01/G08 no Op row at all, although G01's revised draft imports
-eight functions and G08's imports twenty. Recounted from base 340 in landing
-order: G01 takes 341–348, G08 349–368, and every group from G02 on shifts ten.
-`SAVE_VERSION` stays at the value G08 landed (13) — the base column above
+functions and G08's imports twenty. G01's review then dropped its `Actions`
+offer kind in favour of G05's press surface, and a second review split two
+concerns out of G01 — `real_id` to G05 and `created_by` to G08 — because they
+are offer/skin and zone lifecycle, not identity. G01 keeps six ops (341–346)
+and its two kinds (111–112); the vacated ids sit with their new groups
+(G05 347–348, G08 349) so no later band moves for them. Recounted from base
+340 in landing order, G08's twenty imports take 349–368 and every group from
+G02 on shifts ten; kind 121 stays free, which costs nothing. `SAVE_VERSION`
+stays at the value G08 landed (13) — the base column above
 records the *pre-landing* value each document was written against, which is
 why G15/G01 say 12.
 
@@ -70,7 +76,9 @@ Couplings a reviewer must keep in one head:
 
 - **G05 ↔ G13** share `invoke_entry` and the press-entry resolution; G05 adopts
   G13's import verbatim.
-- **G01 ↔ G08** share instance uid and the per-instance store.
+- **G01 ↔ G08** share instance uid and the per-instance store; G08 also
+  carries the creator edge (`created_by`) that G01's borrowed-row hooks rely
+  on.
 - **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
   settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
   `paid`/`body_replaced` facts on top (G02 §12).
@@ -83,14 +91,14 @@ Couplings a reviewer must keep in one head:
 
 | group | title | items | doc |
 |---|---|---|---|
-| G01 | Instance identity and per-instance store | 3 | [G01](G01-instance-identity-and-state.md) |
+| G01 | Instance identity and per-instance store | 10 | [G01](G01-instance-identity-and-state.md) |
 | G02 | Pay pipeline payload, stages and raw-money windows | 7 | [G02](G02-pay-pipeline.md) |
 | G03 | Roll pipeline stages and prompt option actions | 5 | [G03](G03-roll-and-prompts.md) |
 | G04 | Move plan, walk sync and forced moves | 7 | [G04](G04-move-plan.md) |
-| G05 | Press surface for placed cards | 1 | [G05](G05-placed-card-press.md) |
+| G05 | Press surface for placed cards | 2 | [G05](G05-placed-card-press.md) |
 | G06 | Counteraction, join and negation windows | 6 | [G06](G06-counteraction-and-join.md) |
 | G07 | Targeting pipeline and distance | 2 | [G07](G07-targeting-and-distance.md) |
-| G08 | Zone and attachment lifecycle | 10 | [G08](G08-zone-lifecycle.md) |
+| G08 | Zone and attachment lifecycle | 11 | [G08](G08-zone-lifecycle.md) |
 | G09 | Tile, build, pass and house-removal hooks | 6 | [G09](G09-tile-build-pass.md) |
 | G10 | Effect outcome, cause and settle facts | 5 | [G10](G10-effect-outcome.md) |
 | G11 | Information and deck inspection | 3 | [G11](G11-information-and-deck.md) |

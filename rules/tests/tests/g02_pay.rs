@@ -181,8 +181,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
 // still doubles.
 #[test]
 fn g02_rui_fixed_leg_ignores_pay_modifiers() {
-    // (a) the crit hits the 100 leg: a fixed leg stays 100 (the hit's voided
-    // loss is not folded in), and the 300-back leg is missed here.
+    // (a) every leg is hit (X=20 and the card's fire hook re-writes 5 at each
+    // leg): the fixed 100 leg still pays 100 -- the hit's voided loss is not
+    // folded in -- while the plain 300-back leg doubles.
     let mut t = Table::new(&["八潮瑠唯", "高松灯"]);
     t.strip_skills();
     t.clean();
@@ -195,28 +196,28 @@ fn g02_rui_fixed_leg_ignores_pay_modifiers() {
     assert_eq!(t.state(0, X), 5, "the card overrides X after each leg");
     assert_eq!(
         t.money(0),
-        10_000 - 100 + 300,
+        10_000 - 100 + 600,
         "the 100 stayed 100 (not voided by the hit): keys {:?}",
         t.recent_keys(8)
     );
-    assert_eq!(t.money(1), 10_000 + 100 - 300);
+    assert_eq!(t.money(1), 10_000 + 100 - 600);
 
-    // (b) the crit hits the 300-back leg: it doubles even though the 100 leg is
-    // missed. (The skill's own X write lands between the legs; X=1 makes the
-    // first leg miss on a 2 and the second hit on a 1.)
+    // (b) only the 300-back leg is hit: the crit doubles it even though the
+    // 100 leg was missed. (The first die 6 exceeds the hook's X=5, the second
+    // die 1 is under the re-written 5.) The missed fixed leg still paid 100.
     let mut t = Table::new(&["八潮瑠唯", "高松灯"]);
     t.strip_skills();
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, CRIT);
     t.set_state(0, X, 1);
-    t.dice(&[2, 2, 1, 1]);
+    t.dice(&[6, 1, 1, 1]);
     t.give_play(0, RUI_DEVIL).unwrap();
     drain(&mut t);
     assert_eq!(t.money(0), 10_000 - 100 + 600, "the 300 doubled: {:?}", t.recent_keys(8));
     assert_eq!(t.money(1), 10_000 + 100 - 600);
 
-    // (b) crit misses every leg: the plain 100 / 300.
+    // (c) crit misses every leg: the plain 100 / 300.
     let mut t = Table::new(&["八潮瑠唯", "高松灯"]);
     t.strip_skills();
     t.clean();
