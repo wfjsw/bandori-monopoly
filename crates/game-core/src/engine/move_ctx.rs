@@ -163,6 +163,9 @@ pub struct MoveCtx {
     pub pay_factor: f64,
     /// Scale rent paid for this walk, same units.
     pub rent_factor: f64,
+    // A suspended body is re-executed from its start on the resume (STACK-01)
+    // and would compose its factor twice; `TurnCtx::factor_applied` keeps the
+    // writes that already landed so the replay's copy is skipped.
     /// Settle on another player's behalf.
     pub settle_as_agent: bool,
     /// This settle was initiated by a card (`settle_tile_at`), not by the
@@ -187,6 +190,10 @@ pub struct MoveCtx {
     pub stop_at_fresh: bool,
     #[serde(default)]
     pub pay_fresh: bool,
+    /// The same scope for `rent_factor`, kept apart from `pay_fresh` so a body
+    /// that writes both fingers multiplies each on its own (MONEY-01).
+    #[serde(default)]
+    pub rent_fresh: bool,
     /// Same one-shot scope for the walk's *direction* (`reverse`) and whether
     /// it settles (`settles`): a 「向反方向移动」 / 「不[结算]」 move must not
     /// send the next one backwards or silence its settle.
@@ -273,6 +280,7 @@ impl Default for MoveCtx {
             steps_fresh: false,
             stop_at_fresh: false,
             pay_fresh: false,
+            rent_fresh: false,
             reverse_fresh: false,
             resolve_fresh: false,
             can_build: true,

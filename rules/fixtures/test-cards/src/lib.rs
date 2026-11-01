@@ -566,6 +566,97 @@ fn pay_add_any(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     PayAddValue { value: out, ..v }
 }
 
+/// `MONEY-01` -- the rent figure's own 「收费」 stages. `rentAdd` is the fixed
+/// step (支付阶段 2) and `rentMul` the scale step (支付阶段 4): both sit before
+/// the payment's stages, so a rent-shaped charge composes with them instead of
+/// being rewritten by a payment-side body.
+const RENT_ADD_100: CardDef = CardDef::new(
+    "TEST:rentAdd100",
+    &[On::Filter(Filter::RentAdd("card.placed", None, add_100))],
+);
+
+const RENT_MUL_HALF: CardDef = CardDef::new(
+    "TEST:rentMulHalf",
+    &[On::Filter(Filter::RentMul("card.placed", None, half))],
+);
+
+/// The settle's one `settleAdd` / `settleMul` window (`MONEY-01`): what the
+/// settle costs at 支付阶段 2 / 4, composed once for every leg of the settle.
+const SETTLE_ADD_100: CardDef = CardDef::new(
+    "TEST:settleAdd100",
+    &[On::Filter(Filter::SettleAdd("card.placed", None, add_100))],
+);
+
+/// A second `settleAdd` responder: two of them on one stage must **sum**.
+const SETTLE_ADD_50: CardDef = CardDef::new(
+    "TEST:settleAdd50",
+    &[On::Filter(Filter::SettleAdd("card.placed", None, add_50))],
+);
+
+const SETTLE_MUL_HALF: CardDef = CardDef::new(
+    "TEST:settleMulHalf",
+    &[On::Filter(Filter::SettleMul("card.placed", None, half))],
+);
+
+/// MONEY-01 idempotence probe: arm a 支付减半 and then settle a tile whose
+/// settle has to prompt, so the drive suspends and its prefix re-runs on the
+/// resume. The 减半 must land **once**.
+const FACTOR_SUSPEND: CardDef = CardDef::new(
+    "TEST:factorSusp",
+    &[On::Play("", None, factor_susp)],
+);
+
+fn factor_susp(player_id: i32) -> card_sdk::Asked {
+    // The nested settles below happen after this body returns, so the halves
+    // ride the turn plan's 「地租」 factor, which the settles' own move clones
+    // carry.
+    ctx::plan::set_rent_factor(500);
+    // A prompt of its own: the body is re-executed from the start when the
+    // drive resumes, replaying the `set_rent_factor` above. The 减半 must land
+    // once.
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("settle_ask_title")),
+        &Msg::new(key!("settle_ask_text")),
+    )?;
+    // 购物中心 -- the test owns it for the other seat. Two settles: the second
+    // one pays after the resume, where a doubled factor would show.
+    ctx::settle_tile_at(1 - player_id, 1, true);
+    ctx::settle_tile_at(1 - player_id, 1, true);
+    Ok(())
+}
+
+/// A `SettleBody` hook that always asks -- a prompt purely to suspend the
+/// arming body's drive mid-settle (MONEY-01 re-run probe).
+const SETTLE_ASK: CardDef = CardDef::new(
+    "TEST:settleAsk",
+    &[On::Action(Action::SettleBody("actor == 1", None, settle_ask))],
+);
+
+fn settle_ask(player_id: i32) -> card_sdk::Asked {
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("settle_ask_title")),
+        &Msg::new(key!("settle_ask_text")),
+    )?;
+    Ok(())
+}
+
+/// +50 on the stage input.
+fn add_50(_player_id: i32, value: i32) -> i32 {
+    value + 50
+}
+
+/// +100 on the stage input.
+fn add_100(_player_id: i32, value: i32) -> i32 {
+    value + 100
+}
+
+/// ÷2, rounded up (the rounding every halving body uses).
+fn half(_player_id: i32, value: i32) -> i32 {
+    value / 2 + value % 2
+}
+
 /// A 「不[触发结算]」 **teleport move** (`SETTLE-STAGES.md` §6 M6a / ruling R2):
 /// `plan::set_kind(Teleport)` + `set_settles(false)` + `run_planned_move`, so the move
 /// goes through `teleport_as` and must still raise `passTile` + `passPlayer` at
@@ -686,9 +777,9 @@ fn marker_spend(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Tags every move plan `fireRoll` at `rollPlan`, so a plain `roll` looks like
-/// a 「使用火罐进行移动掷骰」. HHW:（美咲）'s `can_counteract` keys on
-/// `move_tag("fireRoll")` and never reads the pot -- the 0-fire regression.
+/// Tags every move plan `fireRoll` at `rollPlan`. G03 moved the 「使用火罐进行
+/// 移动掷骰」 key onto `roll_source` (`TEST:fireRecast` supplies that), so the
+/// tag is now only a marker a test can assert on.
 const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
@@ -1300,7 +1391,10 @@ fn settle_tail(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("tail_before")));
     // Settle a *different* tile so this is a 1-level nest (the tail must run
     // exactly once). Tile 0 has no settleTail instance.
-    ctx::settle_tile_at(player_id, 0, true);
+    // The nested settle is by the *other* seat: a counteract condition sees
+    // the move's tile, not the nested settle's, so `actor` is what tells the
+    // inner settle apart from the outer one.
+    ctx::settle_tile_at(1 - player_id, 0, true);
     ctx::log(player_id, &Msg::new(key!("tail_after")));
     Ok(())
 }
@@ -1320,6 +1414,30 @@ fn settle_sib(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::log(player_id, &Msg::new(key!("sib_once")));
+    Ok(())
+}
+
+/// A `Settle` [反击] that cancels the settle outright. Only offered for the
+/// *other* seat's settle (`actor == 1`; the tail nests for the other player),
+/// so the outer settle of the same turn is left alone. Answers `Settle`, not
+/// `SettleBefore` -- the latter is only raised by a real walk, never by a
+/// card-driven `settle_tile_at`. A settle cancelled at its declaration never
+/// raises `settleAdd` / `settleMul`; the outer settle's stored 支付价格 shaping
+/// must survive it.
+const SETTLE_CANCEL: CardDef = CardDef::new(
+    "TEST:settleCancel",
+    &[On::Counteract(
+        &[ChainKind::Settle],
+        "actor == 1",
+        None,
+        settle_cancel,
+    )],
+)
+.props(&[(card_sdk::abi::prop::COUNTERACT_FROM_FIELD, 1)]);
+
+fn settle_cancel(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("cancel_at")).i("tile", ctx::trigger::tile() as i64));
+    ctx::trigger::set_cancelled();
     Ok(())
 }
 
@@ -2297,73 +2415,17 @@ fn fire_reroll(player_id: i32) -> card_sdk::Asked {
 }
 
 card_sdk::ruleset!(&[
-    RELAY,
-    RECURSE,
-    ECHO,
-    LISTER,
-    STUNNER,
-    STUN_SELF_MOVER,
-    GUARD,
-    AIMER,
-    SHIELD,
-    MOVER,
-    DICE_MOVER,
-    COUNTER,
-    PROBE,
-    DENY,
-    CRYSTAL,
-    DEST_NOW,
-    DEST_TO,
-    TOTAL_CUT,
-    DEAD_PAY,
-    SELF_CHARGE,
-    PAY_ADD_ANY,
-    TELE_NOSOLVE,
-    PAY_OVERCUT,
-    XFER_1000,
-    GAIN_1000,
-    LOSE_1000,
-    MARKER_DENY,
-    MARKER_SPEND,
-    CHARGE_ROLL,
-    PRE_REJECT,
-    PRE_ACCEPT,
-    PRE_PLAY,
-    PRE_HOOK,
-    PRE_GATE,
-    PRE_ROLLPLAN,
-    PRE_ATEMD,
-    PRE_SETTLE,
-    SPLIT_12K,
-    SHAPE_LATE,
-    LOSE_RAW,
-    SPEND_FIRE,
-    PASS_TELE,
-    TILE_HOOK,
-    DENY_PLAY,
-    PASS_FLASH,
-    PASS_BEFORE_FLASH,
-    PING,
-    PING_REJECT,
-    ROLL_THEN_PAY,
-    DECK_ONCE,
-    CLOCK_HOOK,
-    READ_HOST_READ,
-    SETTLE_NEST,
-    SETTLE_TAIL,
-    SETTLE_SIB,
-    SILENT_PAIR,
-    SILENT_NEST,
-    SILENT_PAY,
-    SILENT_QUIET,
-    SILENT_ASK,
-    QUIET_COUNTER,
-    QUIET_RAISE,
-    FLASH_ALWAYS,
-    FLASH_NEVER,
-    FLASH_ALWAYS_QUIET,
-    FLASH_FOLD_ALWAYS,
-    FLASH_FOLD_NEVER,
+    RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, DICE_MOVER, COUNTER, PROBE, DENY,
+    CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
+    RENT_ADD_100, RENT_MUL_HALF, SETTLE_ADD_100, SETTLE_ADD_50, SETTLE_MUL_HALF, FACTOR_SUSPEND, SETTLE_ASK,
+    PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
+    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
+    SPLIT_12K, SHAPE_LATE, LOSE_RAW, SPEND_FIRE,
+    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
+    ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB, SETTLE_CANCEL,
+    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
+    QUIET_COUNTER, QUIET_RAISE,
+    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
     FLASH_HEADER_IDS,
     FLASH_THEN_ASK,
     FLASH_TWO_ASKS,

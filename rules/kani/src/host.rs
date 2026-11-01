@@ -3792,11 +3792,12 @@ pub fn arm_multiply_pay_factor(a: Args) -> i64 {
 
 pub fn arm_set_pay_factor(a: Args) -> i64 {
     let milli = a[0].max(0);
+    // The `Auto` scope composes where a factor is live (MONEY-01).
     world::with_world_mut(|w| match resolve_scope(w, 0) {
-        1 => w.plan_pay_factor = milli,
-        2 => w.next_settle_pay_factor = milli,
-        3 => w.settle_pay_factor = milli,
-        _ => w.next_move_pay_factor = milli,
+        1 => w.plan_pay_factor = w.plan_pay_factor.saturating_mul(milli),
+        2 => w.next_settle_pay_factor = w.next_settle_pay_factor.saturating_mul(milli),
+        3 => w.settle_pay_factor = w.settle_pay_factor.saturating_mul(milli),
+        _ => w.next_move_pay_factor = w.next_move_pay_factor.saturating_mul(milli),
     });
     0
 }

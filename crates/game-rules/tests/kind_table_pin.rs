@@ -171,6 +171,12 @@ fn typed_engine_consts_have_table_rows() {
         (123, "DiceRollCast"),
         (124, "DiceRollSettled"),
         (125, "DiceRollAdd"),
+        (126, "RentAdd"),
+        (127, "RentMul"),
+        (128, "SettleAdd"),
+        (129, "SettleMul"),
+        (130, "SettleRentAdd"),
+        (131, "SettleRentMul"),
     ];
     for (id, name) in named {
         let row =
@@ -190,9 +196,9 @@ fn typed_engine_consts_have_table_rows() {
 /// Kind ids are allocated by the ABI README groups and never reused. The
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
 #[test]
-fn kind_id_ceiling_is_125() {
+fn kind_id_ceiling_is_131() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 125, "highest engine kind id");
+    assert_eq!(max, 131, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the
@@ -225,6 +231,10 @@ fn filter_payload_shape_mapping() {
         ("PayCombinedAdd", FilterShape::Value),
         ("PayCombinedMul", FilterShape::Value),
         ("PayCombinedCancel", FilterShape::Flag),
+        ("RentAdd", FilterShape::Value),
+        ("RentMul", FilterShape::Value),
+        ("SettleAdd", FilterShape::Value),
+        ("SettleMul", FilterShape::Value),
         ("ActGate", FilterShape::Gate),
         ("PayGate", FilterShape::Gate),
         ("MoveGate", FilterShape::Gate),
@@ -236,6 +246,8 @@ fn filter_payload_shape_mapping() {
         ("DiceRollAdd", FilterShape::Payload),
         ("OnBoardGate", FilterShape::Gate),
         ("TargetableGate", FilterShape::Gate),
+        ("SettleRentAdd", FilterShape::Value),
+        ("SettleRentMul", FilterShape::Value),
     ];
     assert_eq!(expect.len(), Filter::KINDS.len(), "shape table size");
     for k in Filter::KINDS {

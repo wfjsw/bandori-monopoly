@@ -1011,14 +1011,8 @@ impl CardWorld for ConfWorld {
         self.plan_pay_factor.saturating_mul(self.settle_pay_factor)
     }
     fn set_pay_factor(&mut self, milli: i32) {
-        let milli = milli.max(0);
-        if self.settle_open > 0 {
-            self.settle_pay_factor = milli;
-        } else if self.move_open {
-            self.plan_pay_factor = milli;
-        } else {
-            self.next_move_pay_factor = milli;
-        }
+        // The `Auto` scope composes where a factor is live (MONEY-01).
+        self.multiply_pay_factor(milli, 4);
     }
     fn multiply_pay_factor(&mut self, milli: i32, scope: i32) {
         let milli = milli.max(0);
@@ -1029,6 +1023,13 @@ impl CardWorld for ConfWorld {
             game_core::engine::PayFactorScope::ThisSettle if self.settle_open == 0 => {
                 game_core::engine::PayFactorScope::NextSettle
             }
+            game_core::engine::PayFactorScope::Auto if self.settle_open > 0 => {
+                game_core::engine::PayFactorScope::ThisSettle
+            }
+            game_core::engine::PayFactorScope::Auto if self.move_open => {
+                game_core::engine::PayFactorScope::ThisMove
+            }
+            game_core::engine::PayFactorScope::Auto => game_core::engine::PayFactorScope::NextMove,
             s => s,
         };
         match scope {
@@ -1044,6 +1045,7 @@ impl CardWorld for ConfWorld {
             game_core::engine::PayFactorScope::NextSettle => {
                 self.next_settle_pay_factor = self.next_settle_pay_factor.saturating_mul(milli)
             }
+            game_core::engine::PayFactorScope::Auto => unreachable!(),
         }
     }
     fn gains_this_turn(&self, _player: i32) -> i32 {

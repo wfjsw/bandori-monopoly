@@ -3028,13 +3028,17 @@ pub mod plan {
         unsafe { sys::set_settle_tile(n) }
     }
 
-    /// Money paid on this walk, in milli-units (500 = x0.5).
+    /// Money paid on the innermost live scope, in milli-units (500 = x0.5): the
+    /// open settle, else the move in flight, else the next move. A second live
+    /// write multiplies into the first (MONEY-01), and a repeated write of one
+    /// body (STACK-01 re-run) composes once.
     pub fn set_pay_factor(n: i32) {
         unsafe { sys::set_pay_factor(n) }
     }
 
     /// Compose a pay factor into `scope` (milli). An unopened `this` scope
-    /// falls forward to its next instance.
+    /// falls forward to its next instance. A repeated write of one body
+    /// (STACK-01 re-run) composes once -- see `Run::factor_write_key`.
     pub fn multiply_pay_factor(milli: i32, scope: crate::abi::PayFactorScope) {
         unsafe { sys::multiply_pay_factor(milli, scope.as_i32()) }
     }
@@ -3046,7 +3050,9 @@ pub mod plan {
         unsafe { sys::pay_factor() }
     }
 
-    /// Rent paid on this walk, in milli-units (500 = x0.5).
+    /// Rent paid on the open settle (or the move in flight), in milli-units
+    /// (500 = x0.5). A second live write multiplies into the first (MONEY-01),
+    /// and a repeated write of one body (STACK-01 re-run) composes once.
     pub fn set_rent_factor(n: i32) {
         unsafe { sys::set_rent_factor(n) }
     }

@@ -822,7 +822,7 @@ pub(crate) struct Inner {
     sha256: String,
     /// Bitset of every trigger kind any card declares, so `counteract` can skip the
     /// whole bridge when nothing in the set listens. Engine ids and ruleset ids
-    /// each get their own `u128` word (ids fit in `0..128`).
+    /// each get their own word; the engine half is [`ENGINE_KIND_BITS`] wide.
     declared: KindMask,
     /// Cached counteraction index (BOT-RESEARCH.md #1 / GUARDS.md G3): per-card
     /// bitmask of trigger kinds its `On::Counteract` entries answer. The offer
@@ -841,14 +841,17 @@ pub(crate) struct Inner {
     gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
 }
 
-/// Two-namespace kind mask. Engine ids use `1u128 << id` in `engine` (and a
-/// kind outside `0..128` is a load error -- never silently dropped). Ruleset
-/// kinds are opaque tokens: an insertion-ordered set of [`TriggerKind`]s, no
-/// id-as-bit and no range check.
+/// How many engine kind ids the mask can hold.
+pub const ENGINE_KIND_BITS: i32 = 256;
+
+/// Two-namespace kind mask. Engine ids are bit positions in `engine` (and a
+/// kind outside `0..ENGINE_KIND_BITS` is a load error -- never silently
+/// dropped). Ruleset kinds are opaque tokens: an insertion-ordered set of
+/// [`TriggerKind`]s, no id-as-bit and no range check.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KindMask {
-    /// [`card_sdk::abi::KindNs::Engine`] ids.
-    pub engine: u128,
+    /// [`card_sdk::abi::KindNs::Engine`] ids, one bit each.
+    pub engine: [u128; (ENGINE_KIND_BITS / 128) as usize],
     /// [`card_sdk::abi::KindNs::Ruleset`] kinds, insertion order, de-duplicated.
     ruleset: Vec<crate::TriggerKind>,
 }
@@ -860,14 +863,14 @@ impl KindMask {
         use card_sdk::abi::KindNs;
         match k.ns {
             KindNs::Engine => {
-                if !(0..128).contains(&k.id) {
+                if !(0..ENGINE_KIND_BITS).contains(&k.id) {
                     return Err(format!(
-                        "trigger kind {} (id {}) outside 0..128 mask range",
+                        "trigger kind {} (id {}) outside 0..{ENGINE_KIND_BITS} mask range",
                         k.spelling(),
                         k.id
                     ));
                 }
-                self.engine |= 1u128 << k.id;
+                self.engine[(k.id / 128) as usize] |= 1u128 << (k.id % 128);
             }
             KindNs::Ruleset(_) => {
                 if !self.ruleset.contains(&k) {
@@ -882,7 +885,10 @@ impl KindMask {
     pub fn contains(&self, k: crate::TriggerKind) -> bool {
         use card_sdk::abi::KindNs;
         match k.ns {
-            KindNs::Engine => (0..128).contains(&k.id) && (self.engine & (1u128 << k.id)) != 0,
+            KindNs::Engine => {
+                (0..ENGINE_KIND_BITS).contains(&k.id)
+                    && (self.engine[(k.id / 128) as usize] & (1u128 << (k.id % 128))) != 0
+            }
             KindNs::Ruleset(_) => self.ruleset.contains(&k),
         }
     }

@@ -348,6 +348,12 @@ final-settlement (multiplicative) pass.
 `diceRollCast` and `diceRollSettled` are hook-only: they are observations, not
 counter windows. `diceRollBefore`/`diceRollResult` stay the only chain windows.
 
+126 (`rentAdd`) through 131 (`settleRentMul`) landed with MONEY-01 (the rent /
+settle stage folds); 131 is the current maximum. Retired ids (16-20, 22, 94,
+104) stay untouched. `diceRollValue` (102) is **redefined in place** as the
+final-settlement (multiplicative) stage; its numeric id and wire name do not
+move.
+
 Naming rules (each word carries one meaning, none collides with G02/G04, and
 nothing is abbreviated):
 

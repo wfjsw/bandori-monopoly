@@ -1,11 +1,11 @@
-//! Coverage-gap cases G01–G07 (money pipeline), `docs/rulebook/CROSS-TESTS.md`
+//! Coverage-gap cases G01–G12 (money pipeline), `docs/rulebook/CROSS-TESTS.md`
 //! §6 G1. Black-box: expectations from the sheet extracts
 //! (`target/scratch/rb/*.md`) and `data/rules.txt`.
 
 mod common;
 
 use common::*;
-use game_core::msg::Arg;
+use game_core::msg::{Arg, Msg};
 
 /// Inert filler for draw piles / hands (never auto-plays).
 const FILL: &str = "R:[衍生] 觉悟";
@@ -113,8 +113,12 @@ fn counteract_cancelling(t: &mut Table, who: usize, card: &str, cancel: i32) {
 // lands on P1's tile") cannot put both multipliers on one rent -- Fire bird
 // scales the *holder's* tiles. The landing direction is swapped: P1 lands on
 // P0's tile, so Fire bird (1.5x charge) and Ave Mujica (1.5x 收取) both hit it.
-// RULING: the order of two multipliers on one amount. Assert R * 1.5 * 1.5.
-#[ignore = "RULING: order of two multipliers on one rent (Fire bird 1.5x x Ave Mujica 1.5x)"]
+// RULING (MONEY-01 / C-Q1, 2026-10-31): both multipliers are factors of the one
+// 支付减半/翻倍 stage, which folds every live writer as a **product** in a fixed
+// stage -- there is no order to pick, so the outcome is the same whichever card
+// came down first. Assert the product, once rounded
+// (`round10(R * 1.5 * 1.5)`), and Ave's 「对应的其他玩家收支不变」: the payer
+// nets `round10(R * 1.5)`, the bank funds the difference.
 #[test]
 fn g01_fire_bird_times_ave_mujica_on_one_rent() {
     let mut t = Table::new(&["三角初华", "仓田真白"]);
@@ -129,17 +133,20 @@ fn g01_fire_bird_times_ave_mujica_on_one_rent() {
     let tile = tile("弦卷豪宅");
     let rent = data().tiles[tile].rent[0];
     t.set_owner(tile, Some(0));
-    // P1 lands on P0's tile: two multipliers on one rent.
-    t.set_pos(1, (tile + 59) % 60);
-    t.dice(&[1]);
+    // P1 lands on P0's tile: two multipliers on one rent. 真白 rolls 2d20
+    // **backwards**, so two 1s walking back from two tiles past the tile is a
+    // deterministic landing without the plan's randomness.
+    t.set_pos(1, (tile + 2) % 60);
+    t.dice(&[1, 1]);
     t.roll(1).unwrap();
     drain(&mut t);
-    let charged = rent * 3 / 2;
-    let received = charged * 3 / 2;
+    assert_eq!(t.pos(1), tile, "P1 landed on the rent tile");
+    let charged = ceil10(rent * 3 / 2);
+    let received = ceil10(rent * 9 / 4);
     assert_eq!(
         t.money(1),
         10_000 - charged,
-        "P1 pays the once-scaled 1.5*{rent}"
+        "P1 pays the once-scaled 1.5*{rent} (Ave does not touch its side)"
     );
     assert_eq!(t.money(0), 10_000 + received, "P0 receives 1.5*1.5*{rent}");
 }
@@ -403,4 +410,191 @@ fn g07_exist_redirect_then_negated_designation() {
         "EXIST draws 1 because it redirected nothing: {:?}",
         t.hand(2)
     );
+}
+
+// =====================================================================
+// G08. rent-side stages: rentAdd composes with rentMul and a payment-side
+//      mul, one product, one round at the very end
+// =====================================================================
+
+// 规则书: 「收费」 is part of the settle figure (支付阶段 2 增加, 4 减半/翻倍).
+// The rent figure therefore has its own add/mul stages, which run *before* the
+// payment's stages; a rent-side factor and a payment-side factor are factors of
+// one product (MONEY-01), not two rewrites of one another.
+#[test]
+fn g08_rent_stages_compose_with_the_payment_stage() {
+    // 真白 (P0) rolls 2d20 **backwards**, so two 1s are a deterministic walk of
+    // 2 that 摩卡 halves to 1 -- see the start position below. 初华 (P1) only
+    // owns the tile, so her turn-start skill stays quiet.
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    // Owner-side: +100 on the rent, then two halvings of it.
+    t.place_raw(1, "TEST:rentAdd100");
+    t.place_raw(1, "TEST:rentMulHalf");
+    t.place_raw(1, "TEST:rentMulHalf");
+    // Payer-side: 摩卡 halves the payment itself.
+    t.place_raw(0, "AG:（摩卡）0.5倍速");
+    t.set_crystals(0, "AG:（摩卡）0.5倍速", 3);
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    // 2 backwards, halved by 摩卡 to 1.
+    t.set_pos(0, (tile + 1) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), tile, "P0 landed on the rent tile");
+    // (rent + 100) / 2 / 2 / 2, one round at the end.
+    let expected = ceil10((rent + 100) / 8);
+    assert_eq!(t.money(0), 10_000 - expected, "(R+100)/8 for R = {rent}");
+    assert_eq!(t.money(1), 10_000 + expected, "the payee receives it");
+}
+
+// =====================================================================
+// G09. settle stages: the settle's one add window feeds every leg of it
+// =====================================================================
+
+// 规则书: 支付阶段 2 「支付增加/减少(固定值)」 is a window of the **settle**, so a
+// settle-scoped add reaches the rent leg the same way a payment-side add does,
+// and the settle's scale composes with it as one product.
+#[test]
+fn g09_settle_stages_shape_every_leg_of_the_settle() {
+    // Same deterministic backwards walk (2 steps, nothing halving it).
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(1, "TEST:settleAdd100");
+    t.place_raw(1, "TEST:settleMulHalf");
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), tile, "P0 landed on the rent tile");
+    let expected = ceil10((rent + 100) / 2);
+    assert_eq!(t.money(0), 10_000 - expected, "(R+100)/2 for R = {rent}");
+    assert_eq!(t.money(1), 10_000 + expected, "the payee receives it");
+}
+
+// =====================================================================
+// G10. a nested settle that never reaches its scale raise
+// =====================================================================
+
+// The stored 支付价格 shaping (`Cx::settle_pay`) belongs to the settle that
+// pushed it. A settle cancelled at its declaration skips the `settleAdd` /
+// `settleMul` raise but still reaches the terminal `tileResolved` -- it must
+// not pop the outer settle's scale on the way out.
+#[test]
+fn g10_cancelled_nested_settle_keeps_the_outer_scale() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    // TEST:settleTail (tile 5, the landing) nests a settle on tile 0, where
+    // TEST:settleCancel cancels it outright.
+    t.place_raw(0, "TEST:settleTail");
+    // Placed on tile 0 itself (with `place_card_on`): a counteract condition's
+    // `tile` is the trigger's tile, and a nested settle inherits the *move's*
+    // landing -- so the fixture is keyed on `actor`, not on the tile.
+    let props = game_core::engine::CardRules::card_props(&*rules(), "TEST:settleCancel");
+    t.m.world_mut()
+        .place_card_on(&data(), 0, 0, "TEST:settleCancel", Msg::default(), props);
+    t.place_raw(1, "TEST:settleMulHalf");
+    let tile = 5usize;
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    let mut cancelled = false;
+    while t.prompt().is_some() {
+        if t.counteract_offered("TEST:settleCancel") {
+            t.counteract(0, "TEST:settleCancel").unwrap();
+            cancelled = true;
+        } else {
+            t.decline();
+        }
+    }
+    if !cancelled {
+        panic!(
+            "no cancel window: pos={} keys={:?}",
+            t.pos(0),
+            t.recent_keys(25)
+        );
+    }
+    let expected = ceil10(rent / 2);
+    assert_eq!(t.money(0), 10_000 - expected, "the outer half survives");
+    assert_eq!(t.money(1), 10_000 + expected, "the payee receives it");
+}
+
+// =====================================================================
+// G11. two responders of one add stage sum
+// =====================================================================
+
+// The stage payload also mirrors the figure onto the move face
+// (`t.Move.Roll`), and the counteraction write-back used to prefer that mirror
+// over `value` -- dropping every responder but the last. The figure the engine
+// reads back must always be the **folded** one.
+#[test]
+fn g11_two_settle_add_responders_sum() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(1, "TEST:settleAdd100");
+    t.place_raw(1, "TEST:settleAdd50");
+    let tile = tile("弦卷豪宅");
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(1));
+    t.set_pos(0, (tile + 2) % 60);
+    t.dice(&[1, 1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), tile, "P0 landed on the rent tile");
+    let expected = ceil10(rent + 150);
+    assert_eq!(t.money(0), 10_000 - expected, "(R+100+50) for R = {rent}");
+    assert_eq!(t.money(1), 10_000 + expected, "the payee receives it");
+}
+
+// =====================================================================
+// G12. a plan-factor write survives a suspended drive
+// =====================================================================
+
+// A nested settle that prompts re-runs the arming body's prefix on its resume
+// (STACK-01 answer replay), so `plan::set_pay_factor` must land **once** per
+// write: the second run of the same contribution is not a second halving.
+#[test]
+fn g12_factor_write_survives_a_suspended_drive() {
+    let mut t = Table::new(&["仓田真白", "三角初华"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &["TEST:factorSusp"]);
+    let tile = 1usize; // 购物中心 -- the fixture's nested settle target
+    let rent = data().tiles[tile].rent[0];
+    t.set_owner(tile, Some(0));
+    t.play(0, "TEST:factorSusp").unwrap();
+    // The body's own ask: answering it resumes the drive, which re-runs the
+    // body's prefix.
+    let mut prompts = 0;
+    while t.prompt().is_some() {
+        t.answer_one(1).unwrap();
+        prompts += 1;
+    }
+    assert!(
+        prompts >= 1,
+        "expected the suspended ask, got {prompts} prompts"
+    );
+    let expected = 2 * ceil10(rent / 2);
+    assert_eq!(
+        t.money(1),
+        10_000 - expected,
+        "both settles halved once, rent {rent}"
+    );
+    assert_eq!(t.money(0), 10_000 + expected, "the payee receives it");
 }

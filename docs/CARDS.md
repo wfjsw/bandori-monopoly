@@ -261,10 +261,12 @@ immediately before the pure filter stage:
 The engine kind table in `crates/game-kinds` (`ENGINE_KINDS`) is the **single
 declaration source of truth** for ids, spellings, and `is_filter`. The typed
 mirror is `Filter::KINDS` / `Action::KINDS` in `crates/card-sdk/src/kinds.rs`.
-Today (28 filter kinds):
+Today (34 filter kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
   `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
+* the rent / settle figures' own stages (v105, hook-only) -- `RentAdd`,
+  `RentMul`, `SettleAdd`, `SettleMul` (`docs/ENGINE.md` "the stage folds")
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
 * roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v75), `DiceRollAdd` (v109)
@@ -318,12 +320,25 @@ happened.
 
 ### Host application order
 
-The host raises the pipeline stages in rulebook order and folds each stage's
-return before the next raise, within a stage in placement order:
+The host raises the pipeline stages in rulebook order. Within one stage the
+answers are **folded** -- adds sum, muls multiply, both from the stage input
+(MONEY-01), so placement order inside a stage cannot change the figure. The
+remaining stages are **last-writer**: the `*Before` interactive prompts, the
+single-value stages `payCombinedCancel` (cancel flag; a non-cancelling answer
+still rewrites the figure), `paySplitChoose` (cancel flag), `paySplitAt`, and
+the `pay` settlement hook after them. A body on one of those writes the whole
+figure it wants, not a delta.
 
-* pay: `effect` declaration → `payCombinedAddBefore` (Action) → `payCombinedAdd` →
-  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMulBefore` (Action) →
-  `paySplitMul` → `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+* pay: `effect` declaration → `rentAdd` (rent leg) → `settleAdd` (settle leg) →
+  `payCombinedAddBefore` (Action) → `payCombinedAdd` → `paySplitAdd` →
+  `rentMul` (rent leg) → `settleRentMul` (rent leg of a settle) →
+  `settleMul` (settle leg) → `payCombinedMul` →
+  `payCombinedCancel` → `paySplitMulBefore` (Action) → `paySplitMul` →
+  `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+* settle: `settleAdd` → `settleMul` (and their 「地租」 twins `settleRentAdd` /
+  `settleRentMul`), raised **once** per settle and applied to every leg of it
+  (the settle's `TurnCtx::settle_pay_add` / `settle_pay_factor`, restored from
+  the stack entry when the settle ends)
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
 * roll: `DiceRollPlan` (once per move) → dice + `diceRollCast` → `diceRollBefore` → `DiceRollAdd` → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` (move rolls only, [反击] reroll window) → `diceRollSettled`.
   `DiceRollAfter`/`diceRollResult` are the only Actions that may still roll and

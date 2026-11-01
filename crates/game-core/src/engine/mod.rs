@@ -1199,7 +1199,8 @@ impl Match {
     pub fn world_mut(&mut self) -> &mut World {
         assert!(
             self.pending.is_none(),
-            "world_mut while a routine is pending"
+            "world_mut while a routine is pending: {:?}",
+            self.pending.as_ref().map(|p| &p.routine)
         );
         self.changed = true;
         self.seq += 1;

@@ -38,7 +38,15 @@ pub struct Trigger {
     pub target: i32,
     /// The tile this trigger is about (settled on, passed, mortgaged, ...).
     pub tile: i32,
+    /// The amount (`t.Pay.amount` on pay triggers). On a fold stage this is
+    /// the **composed** figure and `fold_input` is what bodies read.
     pub value: i32,
+    /// How this stage composes its responders' writes (MONEY-01).
+    pub fold: game_core::engine::rules::Fold,
+    /// The stage input, read as `value` by every responder while `fold` is set.
+    pub fold_input: i32,
+    /// Running [`game_core::engine::rules::Fold::Mul`] product in millionths.
+    pub fold_milli: i64,
     /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active
     /// when this trigger ran.
     pub step: i32,
@@ -181,6 +189,9 @@ impl Default for Trigger {
             target: 0,
             tile: 0,
             value: 0,
+            fold: game_core::engine::rules::Fold::Replace,
+            fold_input: 0,
+            fold_milli: 1_000_000,
             step: 0,
             by_card: None,
             is_main_move: false,
@@ -210,6 +221,27 @@ impl Default for Trigger {
 }
 
 impl Trigger {
+    /// The figure a responder reads as `value` (the stage input on a fold
+    /// stage).
+    pub fn shown_value(&self) -> i32 {
+        if self.fold.is_fold() {
+            self.fold_input
+        } else {
+            self.value
+        }
+    }
+
+    /// A responder wrote `v`; compose it into the stage (MONEY-01).
+    pub fn fold_write(&mut self, v: i32) {
+        game_core::engine::rules::fold_apply(
+            self.fold,
+            self.fold_input,
+            &mut self.value,
+            &mut self.fold_milli,
+            v,
+        );
+    }
+
     /// A trigger with the given kind and actor, everything else at its default
     /// (no move / pay / buy payload, `target = player_id`, `tile = -1`).
     pub fn new(kind: crate::TriggerKind, player_id: i32) -> Self {
@@ -219,6 +251,9 @@ impl Trigger {
             target: player_id,
             tile: -1,
             value: 0,
+            fold: game_core::engine::rules::Fold::Replace,
+            fold_input: 0,
+            fold_milli: 1_000_000,
             step: 0,
             by_card: None,
             is_main_move: false,

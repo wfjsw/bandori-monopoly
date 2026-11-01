@@ -2658,7 +2658,9 @@ pub fn trig_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 }
 
 pub fn trig_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok(c.st().wr().trigger().value)
+    // A fold stage shows every responder the stage input, not the running
+    // composition (MONEY-01).
+    Ok(c.st().wr().trigger().shown_value())
 }
 
 pub fn trig_step<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {

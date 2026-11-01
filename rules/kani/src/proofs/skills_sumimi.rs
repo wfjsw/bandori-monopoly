@@ -127,7 +127,14 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
 
     // DIRECT body call (ppcost). ABI v75 pure Filter: the body RETURNS the
     // folded amount; the host folds it into the running figure.
-    let folded = skill_groups::sumimi::bend_kani(owner, pre_amount);
+    let folded = skill_groups::sumimi::bend_kani(
+        owner,
+        card_sdk::PayAddValue {
+            value: pre_amount,
+            payee: None,
+        },
+    )
+    .value;
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -175,7 +182,14 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     let pre_amount: i32 = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
     band_02_world(owner, 3, pre_amount);
-    let folded = skill_groups::sumimi::bend_kani(owner, pre_amount);
+    let folded = skill_groups::sumimi::bend_kani(
+        owner,
+        card_sdk::PayAddValue {
+            value: pre_amount,
+            payee: None,
+        },
+    )
+    .value;
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
     kani::cover!(folded != wrong, "disagreement live");
     crate::kassert!(

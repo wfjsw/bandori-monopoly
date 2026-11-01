@@ -14,8 +14,9 @@
 //!
 //! 「从[收取]与[支付]的资金改为1.5倍（只对自己结算，对应的其他玩家收支不变）」
 //! is a bend on *this* player's side of a transfer only -- the other party's
-//! figure is untouched. That is a per-party bend, which `PaySplitMul` carries as the
-//! amount seen from one side.
+//! figure is untouched. That is a per-party bend, which `PaySplitMul` carries as
+//! the amount seen from one side; the mul stage folds every writer as a factor
+//! (MONEY-01), and [`after_bend`] claws the one-sided half back.
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
@@ -39,11 +40,12 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
             None,
             at_turn_start,
         )),
-        // Latch the PaySplitMul input for the PayAfter one-sided fixup. Rides
-        // `PaySplitMulBefore` (v96) so the stored figure is the one the bend
-        // Filter is about to see -- after any `PaySplitAdd` rewrite, before
-        // `PaySplitMul`; see `latch_orig`.
-        On::Action(Action::PaySplitMulBefore(
+        // Latch the composed figure for the PayAfter one-sided fixup. Rides
+        // `PaySplitChooseBefore`, the last pre-round stage after every mul:
+        // with the mul stage folding as a product (MONEY-01) no single mul body
+        // can see the composed figure, so the clawback latches it here; see
+        // `latch_orig`.
+        On::Action(Action::PaySplitChooseBefore(
             "slot('skillState') == 2 && card.placed",
             None,
             latch_orig,
@@ -54,7 +56,8 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
             bend,
         )),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
-        // figure, so the counterpart's side is restored here.
+        // figure, so the counterpart's side is restored here (inverse of this
+        // body's own factor, see `after_bend`).
         On::Action(Action::PayAfter(
             "slot('skillState') == 2 && card.placed",
             None,
@@ -129,12 +132,11 @@ fn on_state(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Latch the **PaySplitMul input** for [`after_bend`] -- the figure the bend
-/// Filter is about to see. Rides `ActionKind::PaySplitMulBefore` (v96), the
-/// writable stage immediately before the pure `PaySplitMul` fold, so a sibling
-/// `PaySplitAdd` rewrite is already composed into `value`. That is exactly the
-/// figure the old in-Filter latch saw; the clawback delta is therefore against
-/// the post-Add amount, not the declared one.
+/// Latch the **composed figure** for [`after_bend`] -- the amount the payment
+/// will settle at before the one money round. Rides
+/// `ActionKind::PaySplitChooseBefore`, which follows the whole mul phase, so
+/// every other writer's factor (and every add) is already composed into
+/// `value`; the clawback has to undo only *this* card's 1.5×.
 fn latch_orig(player_id: i32) -> card_sdk::Asked {
     let value = ctx::trigger::value();
     if value <= 0 {
@@ -171,31 +173,54 @@ fn bend(player_id: i32, value: i32) -> i32 {
     (value * 3 + 1) / 2
 }
 
-/// The counterpart's figure stays the printed amount (`PaySplitMul` rewrites one
-/// shared transfer). Claw the 0.5× delta back to / from the bank so only this
-/// player's side moved.
+/// The counterpart's figure stays the amount without this 1.5× (`PaySplitMul`
+/// rewrites one shared transfer). Claw the one-sided delta back to / from the
+/// bank so only this player's side moved.
+///
+/// `moved` is the settled figure -- the latched amount times every factor,
+/// already through the one money round. The counterpart's counterfactual is
+/// the latched amount undoing **this** card's factor, `latched / 1.5` (rounded
+/// up, the same convention the bend rounds by) through that same round. Every
+/// other factor therefore survives on the counterpart's side, and the delta is
+/// carried by the bank.
 fn after_bend(player_id: i32) -> card_sdk::Asked {
-    let orig = state::get(player_id, ORIG);
-    if orig <= 0 {
+    let latched = state::get(player_id, ORIG);
+    if latched <= 0 {
         return Ok(());
     }
     state::set(player_id, ORIG, 0);
     let moved = ctx::trigger::value();
-    if moved == orig {
+    if moved <= 0 {
         return Ok(());
     }
     let from = ctx::trigger::player_id();
     let to = ctx::trigger::target();
-    let delta = (moved - orig).abs();
-    if delta <= 0 {
+    // What the counterpart would have moved without this body: `latched`
+    // undoing the body's 1.5× (ceil, like the bend), then the one money round
+    // the payment would have taken anyway (`play.rs` ceil10).
+    let base = ((latched * 2 + 2) / 3 + 9) / 10 * 10;
+    let delta = moved - base;
+    if delta == 0 {
         return Ok(());
     }
+    // The counterpart moves `base` either way: a later factor can leave the
+    // composed figure *below* the counterfactual (the bend is one factor of a
+    // product), and then the counterpart has moved less than it should and
+    // gets the difference back. Either direction is bank-carried.
     if from == player_id && to >= 0 {
-        // I paid `moved`; the counterpart should net `orig`.
-        ctx::pay(to, delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+        // I paid `moved`; the counterpart should net `base`.
+        if delta > 0 {
+            ctx::pay(to, delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+        } else {
+            ctx::gain(to, -delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+        }
     } else if to == player_id && from >= 0 {
-        // I received `moved`; the counterpart should have paid `orig`.
-        ctx::gain(from, delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+        // I received `moved`; the counterpart should have paid `base`.
+        if delta > 0 {
+            ctx::gain(from, delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+        } else {
+            ctx::pay(from, -delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+        }
     }
     Ok(())
 }

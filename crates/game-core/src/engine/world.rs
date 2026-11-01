@@ -285,6 +285,10 @@ pub struct TurnCtx {
     /// entry when it is pushed, then reset.
     #[serde(default = "milli_one")]
     pub next_settle_pay_factor: i32,
+    /// Fixed pay addend for the **next** settle, moved in and reset the same
+    /// way.
+    #[serde(default)]
+    pub next_settle_pay_add: i32,
     /// A move is in flight (walk / teleport through its tail). The `thisMove`
     /// factor scope is open while this holds.
     #[serde(default)]
@@ -304,6 +308,36 @@ pub struct TurnCtx {
     /// recomposes from here instead of dividing.
     #[serde(default = "one")]
     pub settle_base: f64,
+    /// The same pair for the settle's 「地租」 scale (`rentMul` composes here;
+    /// [`Self::settle_rent_base`] is the outer product).
+    #[serde(default = "one")]
+    pub settle_rent_factor: f64,
+    #[serde(default = "one")]
+    pub settle_rent_base: f64,
+    /// The `settleAdd` / `rentAdd` sums of every open settle (规则书 支付阶段 2:
+    /// live fixed-value adjustments sum). Each leg of a settle carries the same
+    /// addend; the innermost entry keeps the outer sums in `base_add` /
+    /// `base_rent_add` and restores them on its way out.
+    #[serde(default)]
+    pub settle_pay_add: i32,
+    #[serde(default)]
+    pub settle_rent_add: i32,
+    /// The factor writes that already landed this body execution, as
+    /// `(execution, writer, ordinal)` keys. A suspended body is re-executed from its start
+    /// on the resume (STACK-01), replaying the prefix; the set makes the
+    /// replay's write land on its own earlier contribution instead of
+    /// composing it in twice. Reset by the drive, one execution at a time.
+    #[serde(default)]
+    pub factor_applied: Vec<(u32, String, u32)>,
+    /// The running ordinal `Run::factor_write_key` hands out. Part of the same
+    /// per-execution transport as [`Self::factor_applied`].
+    #[serde(default)]
+    pub factor_ordinal: u32,
+    /// The last execution id the factor ledger handed out. World-scoped, so
+    /// two firings of the same card stay apart even though each drive builds a
+    /// fresh context (a context-local counter restarts at 1 and would collide).
+    #[serde(default)]
+    pub factor_gen: u32,
     /// Where each player stood when the turn started. 「在场地地块开始
     /// 回合时」 is a question about that square, not the one a mid-turn walk has
     /// since reached.
@@ -378,10 +412,18 @@ impl Default for TurnCtx {
             paid_in_settle_by: Vec::new(),
             next_move_pay_factor: milli_one(),
             next_settle_pay_factor: milli_one(),
+            next_settle_pay_add: 0,
             move_open: false,
             settle_open: 0,
             settle_pay_factor: one(),
             settle_base: one(),
+            settle_rent_factor: one(),
+            settle_rent_base: one(),
+            settle_pay_add: 0,
+            settle_rent_add: 0,
+            factor_applied: Vec::new(),
+            factor_ordinal: 0,
+            factor_gen: 0,
             turn_start_pos: Vec::new(),
             turn_snapshot: Vec::new(),
             turn_rolls: Vec::new(),

@@ -280,6 +280,23 @@ build cost; the buy figure (price + houses) that the force-buy doubles.
   the older gloss in the table's 例 column (秘密与青春的虹彩 is now
   （1）减半 / （2）1.5倍, not cancel / double). OPEN-支付阶段7 (where row 7
   sits) does not change this order.
+
+  **Within a stage (MONEY-01 / C-Q1, ruled 2026-10-31):** the sheet gives
+  each stage as *one* window, so two responders of one stage compose
+  instead of overwriting each other: every row-2 responder is shown the
+  stage input and its `write − input` deltas are **summed**; every row-4
+  responder is shown the stage input and its `write / input` factors are
+  **multiplied**. Both folds are commutative, so declaration order cannot
+  change the figure -- two 1.5× are 2.25×, two 0.5× are 0.25×, and a
+  「+100」 beside a 「×0.5」 is `(B + 100) / 2` whoever resolved first. The
+  one 「向上取整10」 still happens once, after every stage.
+
+  **Across stages:** the 收费 (rent) figure has its own row-2 / row-4 stages
+  (`rentAdd` / `rentMul`) which run before the payment's, and a settle's
+  price has one window each (`settleAdd` / `settleMul`) composed once per
+  settle and folded into every leg of it. So `rent → settle → pay` is the
+  stage order, and every factor of the whole chain is one product of the
+  figure.
 * **Executable:** `g_money_13` (the chain identity on half-charge markers).
   Scenarios: `pay_stages_add_before_halve`,
   `pay_stages_fixed_add_on_receive`. The add-before-scale order itself cannot
