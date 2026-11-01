@@ -5,20 +5,17 @@
 //! > （1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。
 //! > （2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。
 //!
-//! this card in play when another player's card hits you; a placed action later
+//! this card in play when another player's card hits you; a placed offer later
 //! discards it to move as many tiles as your hand size.
 
 use bandori_std::ctx;
-use card_sdk::abi::ChainKind;
-use card_sdk::{it, CardText};
+use card_sdk::abi::{roll_source, ChainKind};
+use card_sdk::{it, Action, Activation, CardText, Declared};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        // TODO(ABI): a placed plain-card instance is not offered as a pressable
-        // skill -- the view lists only `skill:*` ids, so (2) has no client entry.
-        On::Play("", Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
             // 规则书（1）: 「当你被其他人的卡的效果影响时」 -- another card's
@@ -26,6 +23,15 @@ pub const EVEN_LOST: CardDef = CardDef::new(
             "by != owner && by >= 0 && effect.hits(owner)",
             None,
             counteract).counter_reason(key!("even_lost_when")),
+        // 规则书（2）: 「主要阶段中」 -- the plan pass is exactly where the
+        // movement phase opens, before the dice; the question is the declare,
+        // so a 不发动 leaves no flash and no log.
+        On::Action(Action::DiceRollPlan(
+            "card.placed && actor == owner && move.is_main_move",
+            Some(can_use),
+            unused_body, // replaced by `declare_arg`
+        ))
+        .declare_arg(ask_use, use_it),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"即使迷茫着"#)
@@ -37,6 +43,11 @@ pub const EVEN_LOST: CardDef = CardDef::new(
         ]))
         // sheet cell I2
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
+
+/// Constructor placeholder: `.declare_arg` replaces the body (docs/ACTIVATION.md §2).
+const fn unused_body(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
@@ -52,28 +63,50 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn can_go(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed() {
-        return Some(Msg::new(key!("even_lost_not_placed")));
+fn can_use(player_id: i32) -> bool {
+    // 「主要阶段中」 is the anchor; what can still shut the move is the movement
+    // gate ([停留] / [晕眩] / [除外]), and another offer's claim. The gate is
+    // spelled with the same three status hosts the engine's own clamp uses
+    // (`stay.rs` / `stun.rs` / `exile.rs`; `unstoppable` exempts stay only,
+    // rules.txt 51).
+    if ctx::plan::is_claimed() || ctx::fixed_roll().is_some() {
+        return false;
     }
-    // 规则书（2）: 「使你的此次主要移动格数为你当前手牌张数」 -- it replaces the
-    // main move, so the press also needs one still available (`run_planned_move` is a
-    // silent no-op once the main move is spent).
-    rules_status::move_blocked(player_id)
+    if ctx::hand_size(player_id) <= 0 {
+        return false;
+    }
+    rules_status::stun::get(player_id) == 0
+        && (rules_status::stay::get(player_id) == 0
+            || rules_status::unstoppable::get(player_id) > 0)
+        && rules_status::exile::get(player_id) == 0
 }
 
-fn go(player_id: i32) -> card_sdk::Asked {
-    // 规则书（2）: 「主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要
-    // 移动格数为你当前手牌张数」 -- discard first: the move below settles, so the
-    // card must be gone before it runs.
-    ctx::send_to_dest(ctx::Dest::Graveyard);
-    ctx::plan::set_steps(ctx::hand_size(player_id));
-    ctx::plan::set_settles(true);
-    ctx::run_planned_move(player_id);
-    ctx::log(
+/// 「你可将此卡置入弃牌堆并进入移动阶段」 -- the question is the declare, so a
+/// 不发动 leaves no flash and no log. The face is taken here and carried as
+/// the arg: nothing between the answer and the body changes the hand.
+fn ask_use(player_id: i32) -> Declared<i32> {
+    let n = ctx::hand_size(player_id);
+    if ctx::ask_yes(
         player_id,
-        &Msg::new(key!("even_lost_go")).i("n", ctx::hand_size(player_id) as i64),
-    );
+        &Msg::new(key!("even_lost_title")),
+        &Msg::new(key!("even_lost_ask")).i("n", n as i64),
+    )? {
+        Ok(Activation::Arg(n))
+    } else {
+        Ok(Activation::Decline)
+    }
+}
+
+fn use_it(player_id: i32, n: i32) -> card_sdk::Asked {
+    ctx::plan::claim();
+    // 「将此卡置入弃牌堆」 -- this instance, through the run's bound uid.
+    ctx::set_dest(ctx::Dest::Graveyard);
+    // 「使你的此次主要移动格数为你当前手牌张数」 -- the face *is* the hand size
+    // (no die is thrown), and the step count is pinned to it so a 掷骰值
+    // modifier cannot change the printed 格数.
+    ctx::set_fixed_roll(n, roll_source::CARD);
+    ctx::plan::set_steps(n);
+    ctx::log(player_id, &Msg::new(key!("even_lost_go")).i("n", n as i64));
     Ok(())
 }
 
@@ -85,7 +118,7 @@ fn go(player_id: i32) -> card_sdk::Asked {
 #[cfg(kani)]
 #[inline(always)]
 pub fn go_kani(player_id: i32) -> card_sdk::Asked {
-    go(player_id)
+    use_it(player_id, ctx::hand_size(player_id))
 }
 
 #[cfg(kani)]

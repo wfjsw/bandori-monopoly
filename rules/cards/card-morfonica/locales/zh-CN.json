@@ -15,6 +15,8 @@
   "mashiro_pay_half": "（小白）：{{who}} 再失去 {{n}}",
   "mashiro_pay_rewritten": "（小白）：{{to}} 支付给 {{who}} 的 {{money}} 改为失去，对方再失去 {{half}}",
   "mashiro_pay_when": "你将要向其他玩家支付",
+  "nanami_effort_ask_text": "移除1个奇迹水晶，发动你的（2）技能？",
+  "nanami_effort_ask_title": "稍微努力了一下",
   "nanami_effort_discard_down": "{{who}} 把手牌弃置到 5 张",
   "nanami_effort_effect_1": "抽那么多张，回合结束后弃置到5张",
   "nanami_effort_effect_2": "每枚获得 2,000",

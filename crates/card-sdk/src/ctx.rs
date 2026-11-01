@@ -2923,6 +2923,94 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
+/// Run one named entry of `id` nested, as `player_id`, with its field instance
+/// bound. Body only -- ask [`query_guard`] first when the gate matters. The
+/// invoke frame seeds `trigger::card` / `trigger::cards` with the invoked card
+/// instead of raising a counteraction category.
+#[cfg_attr(kani, inline(always))]
+pub fn invoke_entry(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
+    invoke_entry_flags(player_id, id, entry_id, 0)
+}
+
+/// [`invoke_entry`] for an entry whose cost the caller has already paid: the
+/// body sees [`invoke_paid`] and must not collect it again.
+#[cfg_attr(kani, inline(always))]
+pub fn invoke_entry_paid(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
+    invoke_entry_flags(player_id, id, entry_id, crate::abi::invoke::COST_PAID)
+}
+
+fn invoke_entry_flags(
+    player_id: i32,
+    id: &str,
+    entry_id: &str,
+    flags: i32,
+) -> Result<Dest, Prompt> {
+    let (p, l) = s(id);
+    let (ep, el) = s(entry_id);
+    let v = asked(unsafe { sys::invoke_entry(player_id, p, l, ep, el, flags) })?;
+    Ok(Dest::from_i32(v))
+}
+
+/// The innermost invocation frame, if this body is running inside one.
+#[cfg(kani)]
+#[cfg_attr(kani, inline(always))]
+pub fn invoke() -> Option<crate::abi::InvokeFrame> {
+    // Under `cfg(kani)` the host writes a fixed 24-byte LE record
+    // `[card, entry, by, by_instance, instance, paid, depth]` (two interning
+    // `u16`s, then five `i32`s) -- the `field_instances` convention, no
+    // postcard and no `String`.
+    const RECORD: i32 = 24;
+    if unsafe { sys::invoke_frame(0, 0) } != RECORD {
+        return None;
+    }
+    let (p, scratch) = out_buf(RECORD as usize);
+    if unsafe { sys::invoke_frame(p, RECORD) } != RECORD {
+        return None;
+    }
+    let buf = out_read(p, RECORD, scratch);
+    // `.get` (not `buf[i]`): no slice-index panic path for CBMC to explore.
+    let byte = |i: usize| buf.get(i).copied().unwrap_or(0);
+    let u16_at = |i: usize| u16::from_le_bytes([byte(i), byte(i + 1)]);
+    let i32_at = |i: usize| i32::from_le_bytes([byte(i), byte(i + 1), byte(i + 2), byte(i + 3)]);
+    Some(crate::abi::InvokeFrame {
+        card: crate::intern::NameId(u16_at(0)),
+        entry: crate::intern::NameId(u16_at(2)),
+        by: i32_at(4),
+        by_instance: i32_at(8),
+        instance: i32_at(12),
+        paid: i32_at(16) != 0,
+        depth: i32_at(20),
+    })
+}
+
+/// See the `cfg(kani)` variant above; this decodes postcard `InvokeFrame`.
+#[cfg(not(kani))]
+pub fn invoke() -> Option<crate::abi::InvokeFrame> {
+    let n = unsafe { sys::invoke_frame(0, 0) };
+    if n <= 0 {
+        return None;
+    }
+    let (p, scratch) = out_buf(n as usize);
+    if unsafe { sys::invoke_frame(p, n) } != n {
+        return None;
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).ok()
+}
+
+/// `invoke().is_some_and(|f| f.paid)` -- sugar, not a second import. A read,
+/// not a decision.
+pub fn invoke_paid() -> bool {
+    invoke().is_some_and(|f| f.paid)
+}
+
+/// Run a skill's press entry for `player_id` -- sugar over
+/// [`invoke_entry`] on [`entry::PRESS`], the card's first Play.
+#[cfg_attr(kani, inline(always))]
+pub fn invoke_skill(player_id: i32, id: &str) -> Result<Dest, Prompt> {
+    invoke_entry(player_id, id, crate::abi::entry::PRESS)
+}
+
 /// Reserved entry ids -- see [`query_guard`]. Re-exported from
 /// [`crate::abi::entry`] so the guest and the host share one spelling.
 pub use crate::abi::entry;
@@ -2989,6 +3077,17 @@ pub mod plan {
     /// The planned length; keeps the sign of a reverse walk.
     pub fn set_steps(n: i32) {
         unsafe { sys::set_steps(n) }
+    }
+
+    /// A card has claimed this move's plan at the pre-dice pass; later offers
+    /// at the same pass stand down. One-shot, cleared with the move.
+    pub fn claim() {
+        unsafe { sys::plan_claim() }
+    }
+
+    /// Has any card claimed this move? (`false` outside a move.)
+    pub fn is_claimed() -> bool {
+        unsafe { sys::plan_claimed() != 0 }
     }
 
     /// 「上一名玩家代替进行此次投掷」 (幻觉来了) -- attribute the planned roll to
@@ -4346,6 +4445,53 @@ pub fn tile_at(uid: i32) -> Option<i32> {
 /// Move the instance at `uid` to `tile` (-1 = back with its owner).
 pub fn set_tile_at(uid: i32, tile: i32) -> bool {
     unsafe { sys::set_tile_at(uid, tile) != 0 }
+}
+
+/// The card whose **printed surface** the instance at `uid` runs -- the
+/// stand-in an effective-card marker names, else the row's own card. `None`
+/// when `uid` is not in play. Not the same as the instance's own card: a body
+/// that must name the current copy reads [`field_instances`] instead.
+#[cfg(kani)]
+pub fn effective_card_at(uid: i32) -> Option<NameId> {
+    // Under `cfg(kani)` the host writes the interned id as LE `u16` (the
+    // `field_instances` convention: no UTF-8 scan).
+    let n = unsafe { sys::effective_card_at(uid, 0, 0) };
+    if n <= 0 {
+        return None;
+    }
+    let (p, scratch) = out_buf(n as usize);
+    if unsafe { sys::effective_card_at(uid, p, n) } != n {
+        return None;
+    }
+    let buf = out_read(p, n, scratch);
+    let id = u16::from_le_bytes([
+        buf.first().copied().unwrap_or(0),
+        buf.get(1).copied().unwrap_or(0),
+    ]);
+    Some(crate::intern::NameId(id))
+}
+
+/// See the `cfg(kani)` variant above; this decodes UTF-8 bytes.
+#[cfg(not(kani))]
+pub fn effective_card_at(uid: i32) -> Option<NameId> {
+    let n = unsafe { sys::effective_card_at(uid, 0, 0) };
+    if n <= 0 {
+        return None;
+    }
+    let (p, scratch) = out_buf(n as usize);
+    if unsafe { sys::effective_card_at(uid, p, n) } != n {
+        return None;
+    }
+    let buf = out_read(p, n, scratch);
+    core::str::from_utf8(&buf[..n as usize])
+        .ok()
+        .map(crate::intern::intern)
+}
+
+/// Name another card's surface for this instance; `""` clears. Returns
+/// whether the instance is on the field.
+pub fn set_effective_card_at(uid: i32, card: &str) -> bool {
+    unsafe { sys::set_effective_card_at(uid, card.as_ptr() as i32, card.len() as i32) != 0 }
 }
 
 /// Is the instance at `uid` face-down?

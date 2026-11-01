@@ -3,7 +3,7 @@
 //! Test-only cards for the host's cross-module tests.
 
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::abi::{roll_source, ActionKind, ChainKind, FilterKind, RollPurpose};
+use card_sdk::abi::{roll_source, ActionKind, ChainKind, FilterKind, RollPurpose, TriggerKind};
 use card_sdk::serde;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On, PayAddValue, PlanValue, RollValue};
 
@@ -2414,6 +2414,176 @@ fn fire_reroll(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// G05: a clause a player may take at the plan pass
+// ---------------------------------------------------------------------------
+
+/// An offer raised **before the dice** at the dual `DiceRollPlan` kind. The
+/// offer is the entry's `declare_arg`, so declining runs no body and leaves no
+/// flash and no log. Accepting claims the move (`plan::claim`) and pins three
+/// steps, which a second copy's guard reads to stand itself down.
+const PLAN_OFFER: CardDef = CardDef::new(
+    "TEST:planOffer",
+    &[
+        On::Play("", None, plan_offer_place),
+        On::Action(Action::DiceRollPlan(
+            "card.placed",
+            Some(plan_offer_can),
+            plan_offer_unused,
+        ))
+        .declare_arg(plan_offer_ask, plan_offer_body),
+    ],
+);
+
+fn plan_offer_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:planOffer",
+        &Msg::new(key!("plan_offer_note")),
+    );
+    Ok(())
+}
+
+/// Another offer's claim on this move stands this one down without asking.
+fn plan_offer_can(_player_id: i32) -> bool {
+    !ctx::plan::is_claimed()
+}
+
+/// The constructor's body slot; `.declare_arg` replaces it.
+const fn plan_offer_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+fn plan_offer_ask(player_id: i32) -> card_sdk::Declared {
+    if ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("plan_offer_title")),
+        &Msg::new(key!("plan_offer_ask")),
+    )? {
+        Ok(card_sdk::Activation::Arg(7))
+    } else {
+        Ok(card_sdk::Activation::Decline)
+    }
+}
+
+fn plan_offer_body(player_id: i32, arg: i32) -> card_sdk::Asked {
+    ctx::plan::claim();
+    ctx::plan::set_steps(3);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("plan_offer_body")).i("arg", arg as i64),
+    );
+    Ok(())
+}
+
+/// Declines from the collector with no prompt at all: its body logs, so the
+/// presence of `plan_decline_body` is proof the body ran.
+const PLAN_DECLINE: CardDef = CardDef::new(
+    "TEST:planDecline",
+    &[
+        On::Play("", None, plan_decline_place),
+        On::Action(Action::DiceRollPlan("card.placed", None, plan_decline_unused))
+            .declare_arg(plan_decline_ask, plan_decline_body),
+    ],
+);
+
+fn plan_decline_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:planDecline",
+        &Msg::new(key!("plan_decline_note")),
+    );
+    Ok(())
+}
+
+const fn plan_decline_unused(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+const fn plan_decline_ask(_player_id: i32) -> card_sdk::Declared {
+    Ok(card_sdk::Activation::Decline)
+}
+
+fn plan_decline_body(player_id: i32, _arg: i32) -> card_sdk::Asked {
+    ctx::plan::set_steps(5);
+    ctx::log(player_id, &Msg::new(key!("plan_decline_body")));
+    Ok(())
+}
+
+/// An action listing the dual kind, spelled raw (`ActionKind(TriggerKind)`):
+/// the typed constructors only accept the action side. Proves the loader
+/// admits it on an `On::Action` entry.
+const DUAL_ACTION: CardDef = CardDef::new(
+    "TEST:dualAction",
+    &[On::Action(card_sdk::kinds::action(
+        ActionKind(TriggerKind::DiceRollPlan),
+        "",
+        None,
+        dual_action_body,
+    ))],
+);
+
+const fn dual_action_body(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Invocation (G05 §6.1 adopts G13's surface)
+// ---------------------------------------------------------------------------
+
+/// The invoked target: a `PRESS` Play and a named `"two"` action entry, both
+/// logging what the **invocation frame** says -- `by_instance` is the caller's
+/// instance, which is G05's only addition to G13's frame.
+const INVOKED: CardDef = CardDef::new(
+    "TEST:invoked",
+    &[
+        On::Play("", None, invoked_body),
+        On::Action(Action::TurnEnd("", None, invoked_body)).id("two"),
+    ],
+);
+
+fn invoked_body(player_id: i32) -> card_sdk::Asked {
+    let by = ctx::invoke().map_or(-1, |f| f.by_instance);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("invoked_frame"))
+            .i("by", by as i64)
+            .i("paid", ctx::invoke_paid() as i64),
+    );
+    Ok(())
+}
+
+/// Invokes `TEST:invoked`'s `"two"` while it is itself placed, then again from a
+/// hand play -- the caller binding must be its instance first and `-1` after.
+const INVOKER: CardDef = CardDef::new(
+    "TEST:invoker",
+    &[
+        On::Play("", None, invoker_play),
+        On::Action(Action::TurnEnd("", None, invoker_body)),
+    ],
+);
+
+fn invoker_play(player_id: i32) -> card_sdk::Asked {
+    // Before the placement the run has no instance: `by_instance` is `-1`
+    // (G13 §4.1, the hand-play case).
+    ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:invoker",
+        &Msg::new(key!("invoker_note")),
+    );
+    Ok(())
+}
+
+fn invoker_body(player_id: i32) -> card_sdk::Asked {
+    // A placed card's hook: `by_instance` is this instance.
+    ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, DICE_MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -2450,5 +2620,10 @@ card_sdk::ruleset!(&[
     QUERY,
     ROLL_TRACE,
     FIRE_RECAST,
-    FIRE_REROLL
+    FIRE_REROLL,
+    PLAN_OFFER,
+    PLAN_DECLINE,
+    DUAL_ACTION,
+    INVOKED,
+    INVOKER
 ]);

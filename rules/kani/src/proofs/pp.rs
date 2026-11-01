@@ -46,6 +46,7 @@ fn place_band_skill(owner: i32) -> i32 {
                 immune: false,
                 crystals: 0,
                 props: world::NameMap::new(),
+                effective_card: u16::MAX,
             };
             w.field_n += 1;
         }
@@ -1086,6 +1087,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
             immune: false,
             crystals: condition,
             props: world::NameMap::new(),
+            effective_card: u16::MAX,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1123,6 +1125,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
             immune: false,
             crystals: condition,
             props: world::NameMap::new(),
+            effective_card: u16::MAX,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1166,6 +1169,7 @@ pub fn guide_04_turn_end_crystal_iff() {
             immune: false,
             crystals: condition,
             props: world::NameMap::new(),
+            effective_card: u16::MAX,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1213,6 +1217,7 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
             immune: false,
             crystals: condition,
             props: world::NameMap::new(),
+            effective_card: u16::MAX,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1345,6 +1350,7 @@ fn ranger_01_05_steps_by_count_iff_at(others: i32) {
                 immune: false,
                 crystals: 0,
                 props: world::NameMap::new(),
+                effective_card: u16::MAX,
             };
             ww.field_n += 1;
         });
@@ -1543,6 +1549,7 @@ pub fn shine_again_01_rescue_iff() {
             immune: true,
             crystals: 0,
             props: world::NameMap::new(),
+            effective_card: u16::MAX,
         };
         ww.field_n = 1;
     });

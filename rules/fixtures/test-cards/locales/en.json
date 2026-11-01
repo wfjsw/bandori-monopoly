@@ -87,5 +87,13 @@
   "roll_trace": "roll stage {{kind}}: face {{face}}, purpose {{purpose}}, source {{source}}, rerolled {{rerolled}}, unused {{unused}}, casts {{casts}}",
   "fire_recast_note": "fire recast probe",
   "fire_keep_old": "keep the old face",
-  "fire_keep_new": "keep the new face"
+  "fire_keep_new": "keep the new face",
+  "plan_offer_note": "plan-offer placed",
+  "plan_offer_title": "TEST:planOffer",
+  "plan_offer_ask": "Take the plan offer?",
+  "plan_offer_body": "plan-offer body ran with arg {{arg}}",
+  "plan_decline_note": "plan-decline placed",
+  "plan_decline_body": "plan-decline body ran",
+  "invoker_note": "invoker placed",
+  "invoked_frame": "invoked: by_instance {{by}}, paid {{paid}}"
 }

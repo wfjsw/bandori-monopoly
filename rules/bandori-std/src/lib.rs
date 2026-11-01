@@ -354,9 +354,7 @@ pub fn add_group_skill(player_id: i32, id: &str, extra: bool) -> i32 {
 
 /// Run a skill rule's press entry for `player_id`.
 pub fn invoke_skill(player_id: i32, id: &str) -> Result<card_sdk::ctx::Dest, Prompt> {
-    let (p, l) = raw::s(id);
-    let v = raw::asked(unsafe { raw::sys::invoke_skill(player_id, p, l) })?;
-    Ok(card_sdk::ctx::Dest::from_i32(v))
+    card_sdk::ctx::invoke_skill(player_id, id)
 }
 
 /// Is `player_id` playing character `name`?

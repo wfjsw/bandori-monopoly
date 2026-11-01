@@ -232,8 +232,12 @@ pub trait HostOps {
     fn op_group_skills(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_add_group_skill`
     fn op_add_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
-    /// `ruleset_invoke_skill`
+    /// `ruleset_invoke_skill` (v111 host alias for the card's PRESS entry)
     fn op_invoke_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_invoke_entry` (player, card_p, card_l, entry_p, entry_l, flags)
+    fn op_invoke_entry(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_invoke_frame` (out_ptr, cap)
+    fn op_invoke_frame(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_raise_bought`
     fn op_raise_bought(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_raise`
@@ -317,6 +321,15 @@ pub trait HostOps {
     fn op_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_counter_max_at` -- write the maximum (0 clears).
     fn op_set_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_effective_card_at` -- the surface card's bytes (size probe at
+    /// `buf == 0`).
+    fn op_effective_card_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_effective_card_at` -- write the surface card (empty clears).
+    fn op_set_effective_card_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_plan_claim` -- claim the move at the pre-dice pass.
+    fn op_plan_claim(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_plan_claimed` -- 1 when some card claimed the move.
+    fn op_plan_claimed(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_pay_is_rent`
     fn op_trig_pay_is_rent(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_move_kind`
@@ -1144,6 +1157,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_invoke_skill(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::invoke_skill(self, a[0], a[1], a[2])? as i64)
     }
+    fn op_invoke_entry(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        let card = crate::hostfns::guest_str(self, a[1], a[2])?;
+        let entry = crate::hostfns::guest_str(self, a[3], a[4])?;
+        Ok(crate::hostfns::invoke_entry(self, a[0], &card, &entry, a[5])? as i64)
+    }
+    fn op_invoke_frame(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::invoke_frame(self, a[0], a[1])? as i64)
+    }
     fn op_raise_bought(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::raise_bought(self, a[0], a[1])? as i64)
     }
@@ -1288,6 +1309,19 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_set_counter_max_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::set_counter_max_at(self, a[0], a[1], a[2], a[3])? as i64)
+    }
+    fn op_effective_card_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::effective_card_at(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_set_effective_card_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::set_effective_card_at(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_plan_claim(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::plan_claim(self)?;
+        Ok(0)
+    }
+    fn op_plan_claimed(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::plan_claimed(self)? as i64)
     }
     fn op_trig_pay_is_rent(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trig_pay_is_rent(self)? as i64)
@@ -3068,6 +3102,31 @@ pub unsafe extern "C-unwind" fn ruleset_invoke_skill(player_id: i32, p: i32, n: 
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_invoke_entry(
+    player_id: i32,
+    card_p: i32,
+    card_n: i32,
+    entry_p: i32,
+    entry_n: i32,
+    flags: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_invoke_entry([player_id, card_p, card_n, entry_p, entry_n, flags]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_invoke_frame(out_ptr: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_invoke_frame([out_ptr, cap, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_raise_bought(player_id: i32, tile: i32) -> i32 {
     with_host(|h| match h.op_raise_bought([player_id, tile, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3458,6 +3517,38 @@ pub unsafe extern "C-unwind" fn ruleset_set_counter_max_at(
     max: i32,
 ) -> i32 {
     with_host(|h| match h.op_set_counter_max_at([uid, p, n, max, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_effective_card_at(uid: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_effective_card_at([uid, buf, cap, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_effective_card_at(uid: i32, p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_set_effective_card_at([uid, p, n, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_plan_claim() -> i32 {
+    with_host(|h| match h.op_plan_claim([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_plan_claimed() -> i32 {
+    with_host(|h| match h.op_plan_claimed([0; 6]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

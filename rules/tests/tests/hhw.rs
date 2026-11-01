@@ -783,16 +783,22 @@ fn wacha_mocha_plays_from_hand_to_field() {
 }
 
 #[test]
-fn wacha_mocha_press_refused_below_nine_markers() {
-    // 「若此卡上有至少9个水母标记」 -- below 9 the jump branch is not available.
+fn wacha_mocha_jump_not_offered_below_nine_markers() {
+    // 「若此卡上有至少9个水母标记」 -- below 9 the offer's guard refuses, so the
+    // plan pass asks nothing and the die decides.
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
     set_held(&mut t, 0, "水母标记", 8);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
     assert!(
-        t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").is_err(),
-        "press below 9 markers is refused"
+        t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"),
+        "no jump below 9 markers: {:?}",
+        t.field_ids(0)
     );
 }
 
@@ -801,14 +807,14 @@ fn wacha_mocha_jump_at_nine_markers() {
     // Sheet 2026-10-06 新卡组卡 F13:
     // 「主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆
     // 或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。」
-    // The jump branch of the merged Play entry (`ctx::is_placed()` true).
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
     set_held(&mut t, 0, "水母标记", 9);
-    t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
-    // 「传送到#4水族馆或者 #30弦卷豪宅」 -- a tile pick between the two.
+    t.roll(0).unwrap();
+    // 「传送到#4水族馆或者 #30弦卷豪宅」 -- the offer *is* the tile pick between
+    // the two: declining it is the prompt's own no-option.
     let p = t.expect_prompt();
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
     let aquarium = tile("水族馆");
@@ -837,15 +843,15 @@ fn wacha_mocha_jump_at_nine_markers() {
 
 #[test]
 fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
-    // 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动」 -- the jump runs the
-    // teleport now (`ctx::run_planned_move`), and that teleport is the turn's main move:
-    // no dice are cast and the piece lands on the pick, not `pos + roll`.
+    // 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动」 -- the accepted plan
+    // *is* the move: no dice are cast and the piece lands on the pick, not
+    // `pos + roll`.
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
     set_held(&mut t, 0, "水母标记", 9);
-    t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
+    t.roll(0).unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
     let aquarium = tile("水族馆");
@@ -868,6 +874,51 @@ fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
         "the jump consumed the is_main_move move: keys={:?}",
         t.recent_keys(15)
     );
+}
+
+#[test]
+fn wacha_mocha_hand_play_places_and_offers_nothing() {
+    // 「[场]」 is the placement and only that: playing it from hand places it and
+    // asks nothing at the play itself.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &["HHW:（花音）Wacha Mocha 啪嗒进行曲"]);
+    t.play(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
+    assert!(
+        t.prompt().is_none(),
+        "the placement asks nothing: {}",
+        t.dump_prompt()
+    );
+    assert!(t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"));
+}
+
+#[test]
+fn wacha_mocha_jump_declined_is_silent() {
+    // A declined offer leaves no flash, no log, no mark and no card change.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_held(&mut t, 0, "水母标记", 9);
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    assert_eq!(t.expect_prompt().kind, "tile", "{}", t.dump_prompt());
+    t.decline();
+    drain(&mut t);
+    let flashed: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "HHW:（花音）Wacha Mocha 啪嗒进行曲")
+        .collect();
+    assert!(flashed.is_empty(), "no flash for a decline: {flashed:?}");
+    assert!(
+        !t.keys_since(mark).iter().any(|k| k.contains("kanon_march")),
+        "no log line either: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"));
+    assert_eq!(t.token(0, "水母标记"), 9, "the pool is untouched");
 }
 
 #[test]

@@ -27,6 +27,7 @@
   "first_live_note": "不能使用 P✽P 角色的（2）技能",
   "hina_sound_as": "「{{card}}」当作「{{sub}}」打出",
   "hina_sound_ask": "当作哪张专属卡打出？",
+  "hina_sound_swap_ask": "把效果改变成哪张专属卡的？",
   "hina_sound_title": "会发出怎样的声音呢？",
   "infinite_possibility_full": "「可能性为∞」的奇迹水晶满了：换成乐队卡上的 1 个",
   "infinite_possibility_not_placed": "此卡不在场上。",

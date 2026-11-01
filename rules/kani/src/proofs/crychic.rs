@@ -608,6 +608,7 @@ fn ifonly_02_iff_at(user: i32) {
             immune: false,
             crystals: 0,
             props: world::NameMap::new(),
+            effective_card: u16::MAX,
         };
         w.next_uid = 8;
         w.last_uid = 7;

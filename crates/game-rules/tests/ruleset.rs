@@ -47,6 +47,20 @@ fn ruleset_hash_is_independent_of_load_order() {
     assert_eq!(fwd.build().unwrap().sha256(), rev.build().unwrap().sha256());
 }
 
+/// ABI v111: the dual `DiceRollPlan` kind is a filter kind an `Action` entry
+/// may list, so the loader admits the manifest. (The refusal of a
+/// filter-*only* kind on an Action is `host::gate_tests`' unit case -- a
+/// refusing card compiles into the fixture module and would break every other
+/// fixture load.)
+#[test]
+fn action_at_the_dual_kind_loads() {
+    let r = load(&["cards", "fixtures"]);
+    assert!(
+        r.card("TEST:dualAction").is_some(),
+        "the dual kind loads on an Action entry"
+    );
+}
+
 #[test]
 fn duplicate_card_ids_are_rejected() {
     let m = &modules("cards")[0];

@@ -532,25 +532,39 @@ fn nnm_discard_marks_draw_x() {
     assert!(t.hand(0).len() <= 5);
 }
 
+/// 规则书 (3): 「你可以移除一个奇迹水晶视为发动你的（2）技能」 -- the offer is
+/// asked before the crystal leaves, and a yes spends it and runs the skill.
+/// 规则书 (4): 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the last crystal also
+/// discards the card, which is how this test sees the crystal really went.
 #[test]
 fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
-    // 规则书 (3): 「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或
-    // 轮数限制」 -- the placed-press branch of the merged Play entry.
-    // 规则书 (4): 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the last crystal
-    // also discards the card, so the field lookup is gone afterwards. Assert
-    // the discard (the spent-crystal consequence) rather than a residual 0.
     let mut t = Table::new(&["广町七深", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
     t.place_raw(0, "Mor:（NNM）稍微努力了一下");
-    t.set_crystals(0, "Mor:（NNM）稍微努力了一下", 1);
-    // The press is gated on a mark being in hand (the skill's (3) body spends one).
+    // The Play's mark check (`cant_play`) wants a 角色标记 in hand.
     add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    // (2) pays a pot, so the offer needs one to exist before it is asked.
+    t.set_fire(0, 1, 3);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
-    decline_all(&mut t);
+    t.answer_one(0).unwrap(); // x = 1 mark
+    t.answer_one(2).unwrap(); // effect (3): place
     assert!(
-        !t.on_field(0, "Mor:（NNM）稍微努力了一下"),
-        "last crystal spent → (4) discards the card; field={:?}",
+        t.prompt().is_some(),
+        "the crystal is offered: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap(); // 发动
+    decline_all(&mut t);
+    // (3) placed a second copy; the pressed one spent its only crystal and (4)
+    // discarded it.
+    assert_eq!(
+        t.field_ids(0)
+            .iter()
+            .filter(|c| c.as_str() == "Mor:（NNM）稍微努力了一下")
+            .count(),
+        1,
+        "the emptied copy left the field: {:?}",
         t.field_ids(0)
     );
     assert!(
@@ -564,9 +578,73 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     );
 }
 
+/// «你可以»: the question comes before the crystal leaves, so a 不发动 keeps
+/// it (and the card).
 #[test]
-fn nnm_placed_press_refused_without_a_crystal() {
-    // 「移除一个奇迹水晶」 -- no crystal, no press.
+fn nnm_third_prompt_declined_keeps_the_crystal() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.set_fire(0, 1, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // 不发动
+    decline_all(&mut t);
+    assert_eq!(
+        t.crystals(0, "Mor:（NNM）稍微努力了一下"),
+        Some(1),
+        "the crystal (3) just added is not burned by a decline"
+    );
+    assert!(
+        t.on_field(0, "Mor:（NNM）稍微努力了一下"),
+        "the card stays placed"
+    );
+}
+
+/// No pot → (2) could not pay, so the offer is skipped with no prompt at all.
+#[test]
+fn nnm_third_without_pot_skips_the_prompt() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.set_fire(0, 0, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(
+        t.prompt().is_none(),
+        "no pot, no question: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(t.crystals(0, "Mor:（NNM）稍微努力了一下"), Some(1));
+}
+
+/// Only the 角色标记 gate the Play; a crystal is not needed to press.
+#[test]
+fn nnm_placed_press_needs_no_crystal() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    assert!(
+        t.prompt().is_some(),
+        "(3) re-places with its own crystals: {}",
+        t.dump_prompt()
+    );
+}
+
+/// 「弃置手中x枚角色标记」 -- a play without one is refused
+/// (`nanami_effort_no_tok`).
+#[test]
+fn nnm_refused_without_character_marks_with_skill() {
     let mut t = Table::new(&["广町七深", "户山香澄"]);
     t.clean();
     t.begin_turn(0);

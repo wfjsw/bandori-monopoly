@@ -18,6 +18,9 @@ use crate::host::{
 use crate::world::CardWorld;
 use crate::{AbKind, Msg};
 
+/// `-1`: the entry ran but named no destination (the `wasm_rules` sentinel).
+const DEST_UNSET: i32 = -1;
+
 /// Decode a guest `Msg` (ABI v5: every text parameter is a `postcard` `Msg`).
 pub fn guest_msg<C: HostCtx>(c: &mut C, ptr: i32, len: i32) -> Result<Msg, HostError> {
     let bytes = c.read_guest(ptr, len)?;
@@ -1528,6 +1531,8 @@ pub fn add_group_skill<C: HostCtx>(
     Ok(c.st_mut().w().add_group_skill(player_id, &id, extra != 0))
 }
 
+/// `ruleset_invoke_skill` -- the v111 host alias: the card's press entry
+/// (`entry::PRESS`), cost not pre-paid.
 pub fn invoke_skill<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -1535,22 +1540,86 @@ pub fn invoke_skill<C: HostCtx>(
     n: i32,
 ) -> Result<i32, HostError> {
     let id = guest_str(c, p, n)?;
+    invoke_inner(c, player_id, &id, abi::entry::PRESS, 0)
+}
+
+/// `ruleset_invoke_entry` -- run one named entry of a card `G13` §5.1.
+pub fn invoke_entry<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    card: &str,
+    entry: &str,
+    flags: i32,
+) -> Result<i32, HostError> {
+    invoke_inner(c, player_id, card, entry, flags)
+}
+
+/// The one invocation core. `entry_id` is either the reserved
+/// [`abi::entry::PRESS`] (the card's first Play) or a declared entry id; the
+/// gate is **not** evaluated -- this runs the body only (G13 I5).
+fn invoke_inner<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    id: &str,
+    entry_id: &str,
+    flags: i32,
+) -> Result<i32, HostError> {
     let rules = c
         .st()
         .rules
         .clone()
-        .ok_or_else(|| HostError::trap("invoke_skill unavailable here"))?;
+        .ok_or_else(|| HostError::trap("invoke_entry unavailable here"))?;
     let card = rules
-        .by_id(&id)
-        .ok_or_else(|| HostError::trap(format!("invoke_skill: unknown skill {id:?}")))?;
+        .by_id(id)
+        .ok_or_else(|| HostError::trap(format!("invoke_entry: unknown card {id:?}")))?;
     if c.st().depth >= MAX_NESTING {
         return Err(HostError::trap(format!(
-            "invoke_skill nested deeper than {MAX_NESTING}"
+            "invoke_entry nested deeper than {MAX_NESTING}"
         )));
     }
-    let fuel = c.fuel()?;
+    let info = rules
+        .card(card)
+        .ok_or_else(|| HostError::trap(format!("invoke_entry: unknown card {id:?}")))?;
+    // PRESS is a resolver, not a name: it means the card's first Play. An
+    // unknown or unnamed entry is a declared no-op (`DEST_UNSET`), never a
+    // trap -- a card may simply not offer the clause.
+    let entry = if entry_id == abi::entry::PRESS {
+        info.play_entry_preferring_gated()
+    } else {
+        info.entry_by_id(entry_id)
+    };
+    let Some(entry) = entry else {
+        return Ok(DEST_UNSET);
+    };
+    let on = &info.on[entry as usize];
+    let kind = OnKind::from_i32(on.kind);
+    // Activation-shaped bodies only. A Filter is a value fold, a Counteract
+    // reads the answered link and a Message reads its payload; neither runs
+    // from an invocation.
+    if !matches!(
+        kind,
+        Some(OnKind::Play) | Some(OnKind::Action) | Some(OnKind::Settle) | Some(OnKind::Schedule)
+    ) {
+        return Err(HostError::trap(format!(
+            "invoke_entry: {id:?} entry {entry_id:?} is {kind:?}, not invocable"
+        )));
+    }
+    // The frame names the resolved entry, never the alias spelling.
+    let entry_name = on.id.clone().unwrap_or_default();
+    let by_instance = c.st().wr().self_uid();
+    let depth = c.st().depth as i32;
+    // The target instance on the invoking seat's field; `-1` when the card is
+    // not placed there. The marked-instance rule applies: a stand-in answers
+    // for its effective card.
+    let instance = c
+        .st()
+        .wr()
+        .field_instances(player_id)
+        .into_iter()
+        .find(|(uid, _)| c.st().wr().effective_card_at(*uid).as_deref() == Some(id))
+        .map_or(-1, |(uid, _)| uid);
     let st = c.st_mut();
-    let saved = st.w().enter_card(&id);
+    let saved = st.w().enter_invoke(id, instance);
     let was_from_hand = st.w().play_from_hand();
     st.w().set_play_from_hand(false);
     let mut nested = HostState::new(
@@ -1560,25 +1629,24 @@ pub fn invoke_skill<C: HostCtx>(
         st.depth + 1,
     );
     nested.next_answer = st.next_answer;
-    let entry = match rules.card(card).and_then(|ci| ci.entry(OnKind::Play, None)) {
-        Some(e) => e,
-        None => {
-            let st = c.st_mut();
-            st.world = nested.world;
-            if let Some(w) = st.world.as_mut() {
-                w.set_play_from_hand(was_from_hand);
-            }
-            st.answers = nested.answers;
-            st.next_answer = nested.next_answer;
-            let dest = st.w().leave_card(saved);
-            c.set_fuel(fuel)?;
-            return Ok(dest);
-        }
-    };
+    // The nested store carries the caller's stack so its body can read this
+    // frame; the caller takes the stack back and pops it on return.
+    nested.invoke_frames = std::mem::take(&mut st.invoke_frames);
+    nested.invoke_frames.push(crate::host::InvokeFrameRecord {
+        card: id.to_string(),
+        entry: entry_name,
+        by: player_id,
+        by_instance,
+        instance,
+        paid: flags & abi::invoke::COST_PAID != 0,
+        depth,
+    });
     let (res, inner, left) =
         c.call_entry(nested, card, entry, export::OP_RUN, player_id, &[], false);
     let st = c.st_mut();
     st.world = inner.world;
+    st.invoke_frames = inner.invoke_frames;
+    st.invoke_frames.pop();
     if let Some(w) = st.world.as_mut() {
         w.set_play_from_hand(was_from_hand);
     }
@@ -1590,13 +1658,37 @@ pub fn invoke_skill<C: HostCtx>(
     if inner.host_request.is_some() {
         st.host_request = inner.host_request;
     }
-    let dest = st.w().leave_card(saved);
+    let dest = st.w().leave_invoke(saved);
     c.set_fuel(left)?;
     match res {
         Ok(_) => Ok(dest),
         Err(e) if e.needs_input() => Ok(abi::EXIT_NEED_INPUT),
         Err(e) => Err(e),
     }
+}
+
+/// `ruleset_invoke_frame` -- the innermost open frame as postcard; 0 when the
+/// body is not inside an invocation. `out_ptr == 0` (with `cap == 0`, as the
+/// guest probes) asks for the size only.
+pub fn invoke_frame<C: HostCtx>(c: &mut C, out_ptr: i32, cap: i32) -> Result<i32, HostError> {
+    let Some(frame) = c.st().invoke_frames.last() else {
+        return Ok(0);
+    };
+    let wire = (
+        frame.card.as_str(),
+        frame.entry.as_str(),
+        frame.by,
+        frame.by_instance,
+        frame.instance,
+        frame.paid,
+        frame.depth,
+    );
+    let bytes = postcard::to_allocvec(&wire)
+        .map_err(|e| HostError::trap(format!("invoke_frame encode: {e}")))?;
+    if out_ptr != 0 && bytes.len() as i32 <= cap {
+        c.write_guest(out_ptr, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
 pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostError> {
@@ -2751,6 +2843,35 @@ pub fn set_counter_max_at<C: HostCtx>(
     Ok(c.st_mut().w().set_counter_max_at(uid, &name, max))
 }
 
+/// The card whose printed surface the instance runs (raw bytes; `buf == 0`
+/// asks for the length only, 0 = unmarked). Not the row's own card name.
+pub fn effective_card_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let id = c.st().wr().effective_card_at(uid).unwrap_or_default();
+    let bytes = id.as_bytes();
+    let n = bytes.len() as i32;
+    if buf != 0 && n <= cap {
+        c.write_guest(buf, bytes)?;
+    }
+    Ok(n)
+}
+
+/// Name another card's surface for this instance (`""` clears); 1 set, 0 when
+/// the instance is not in play.
+pub fn set_effective_card_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostError> {
+    let id = guest_str(c, p, n)?;
+    Ok(c.st_mut().w().set_effective_card_at(uid, &id) as i32)
+}
+
 pub fn trig_pay_is_rent<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st()
         .wr()
@@ -3316,6 +3437,17 @@ pub fn set_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
 pub fn set_reverse<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
     c.st_mut().w().set_reverse(v != 0);
     Ok(())
+}
+
+/// `ruleset_plan_claim` -- a card claimed the move at the pre-dice pass.
+pub fn plan_claim<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
+    c.st_mut().w().set_plan_claimed();
+    Ok(())
+}
+
+/// `ruleset_plan_claimed` -- has any card claimed this move (1 / 0)?
+pub fn plan_claimed<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().plan_claimed() as i32)
 }
 
 pub fn set_signed<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {

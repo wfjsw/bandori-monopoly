@@ -87,5 +87,13 @@
   "roll_trace": "掷骰阶段 {{kind}}：出目 {{face}}，目的 {{purpose}}，来源 {{source}}，重投 {{rerolled}}，未选 {{unused}}，次数 {{casts}}",
   "fire_recast_note": "火罐重投试探",
   "fire_keep_old": "保留旧出目",
-  "fire_keep_new": "保留新出目"
+  "fire_keep_new": "保留新出目",
+  "plan_offer_note": "放置 plan-offer",
+  "plan_offer_title": "TEST:planOffer",
+  "plan_offer_ask": "接受这次移动方案的提议？",
+  "plan_offer_body": "plan-offer 效果执行，参数 {{arg}}",
+  "plan_decline_note": "放置 plan-decline",
+  "plan_decline_body": "plan-decline 效果执行",
+  "invoker_note": "放置 invoker",
+  "invoked_frame": "被发动：调用实例 {{by}}，已付费 {{paid}}"
 }

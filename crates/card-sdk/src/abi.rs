@@ -7,6 +7,8 @@ use alloc::{borrow::Cow, boxed::Box, format, string::String, string::ToString, v
 #[cfg(not(target_arch = "wasm32"))]
 use std::borrow::Cow;
 
+use crate::intern::NameId;
+
 /// ```text Increment on any change to imports, exports, or their semantics. v2:
 /// `play_card` (cross-module card calls); one module per card. v6: full
 /// `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`. v7:
@@ -759,7 +761,25 @@ use std::borrow::Cow;
 ///    `settleAdd` / `settleMul` / `settleRentAdd` / `settleRentMul` (filters
 ///    128-131). The six kinds renumber around G03's `diceRoll*` Actions,
 ///    which claimed 123-125.
-pub const ABI_VERSION: i32 = 110;
+pub const ABI_VERSION: i32 = 111;
+/// v111: **offers from placed cards**. A clause a player may take on a placed
+///    card is an `On::Action` hook whose **`declare`** asks at the event the
+///    clause names, so declining it runs no body and leaves no flash and no
+///    log (`On::declare_arg`; `Activation::Decline`); the movement offers
+///    declare at the plan pass, which gains its action side
+///    (`ActionKind::DiceRollPlan` / `Action::DiceRollPlan`, engine kind 67,
+///    dual with `FilterKind::DiceRollPlan`). `TURN.plan.claimed` and
+///    `plan_claim` / `plan_claimed` let one accepted offer take a move and
+///    stand the others down. New imports `effective_card_at` /
+///    `set_effective_card_at`
+///    name the card a stand-in's instance runs (dispatch, play and
+///    invocation resolve it). Shared with G13: `invoke_entry` /
+///    `invoke_frame`, guest `ctx::invoke_entry` / `invoke_entry_paid` /
+///    `invoke`; the guest declaration of `invoke_skill` collapses onto them
+///    (`ruleset_invoke_skill` stays a host alias; `invoke_skill` is sugar over
+///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
+///    **SAVE_VERSION 15 -> 16** (`FieldCard.effective_card`,
+///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -1160,6 +1180,68 @@ pub mod entry {
     /// A card may not declare this id (`On::id`; `build-ruleset` rejects it),
     /// so the word cannot be squatted.
     pub const PRESS: &str = "press";
+}
+
+/// Invocation flags for `ruleset_invoke_entry` (`ctx::invoke_entry_paid`).
+pub mod invoke {
+    /// The caller already paid the entry's activation cost; the body must not
+    /// collect it again. Read with `ctx::invoke_paid()`.
+    pub const COST_PAID: i32 = 1;
+}
+
+/// `(card, entry, by, by_instance, instance, paid, depth)` -- the innermost
+/// invocation frame (`ctx::invoke`), postcard on the out-buffer. `entry` is the
+/// **resolved** entry id (`""` when that entry is unnamed, e.g. a `play_card`
+/// into a bare `On::Play`) -- never an alias spelling. `by` / `by_instance` are
+/// the invoking player and the invoking card instance (`-1` when the caller was
+/// not a placed card, i.e. a hand play); `instance` is the target instance
+/// (`-1` when the target is not placed). The host frame stores `String`s; the
+/// guest interns them on decode like `group_skills`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InvokeFrame {
+    pub card: NameId,
+    pub entry: NameId,
+    pub by: i32,
+    pub by_instance: i32,
+    pub instance: i32,
+    pub paid: bool,
+    pub depth: i32,
+}
+
+// The wire is `(String, String, i32, i32, i32, bool, i32)`: the interned ids
+// are guest-side only, so the frames borrow two `&str` out of the buffer and
+// intern on decode (the `decode_uid_name_list` shape -- no `String` clone).
+impl serde::Serialize for InvokeFrame {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(
+            &(
+                self.card.as_str(),
+                self.entry.as_str(),
+                self.by,
+                self.by_instance,
+                self.instance,
+                self.paid,
+                self.depth,
+            ),
+            s,
+        )
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for InvokeFrame {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let (card, entry, by, by_instance, instance, paid, depth) =
+            <(&'de str, &'de str, i32, i32, i32, bool, i32) as serde::Deserialize>::deserialize(d)?;
+        Ok(Self {
+            card: crate::intern::intern(card),
+            entry: crate::intern::intern(entry),
+            by,
+            by_instance,
+            instance,
+            paid,
+            depth,
+        })
+    }
 }
 
 /// Guest exports.
@@ -2383,6 +2465,16 @@ impl ActionKind {
     /// with `set_pay_amount`; a cancel does not zero it (I5).
     pub const SpendBefore: Self = Self(TriggerKind::SpendBefore);
 
+    /// Action. The move's plan pass (行动阶段 8, before the dice are rolled) --
+    /// the **declaring** side of [`FilterKind::DiceRollPlan`], same engine id
+    /// 67 (dual: see [`Self::is_dual_action_filter`]). The entry's `declare`
+    /// (`On::declare_arg`) asks before
+    /// anything is announced, so a declined offer leaves no flash and no log;
+    /// the body acts on the declared arg and rewrites the plan through
+    /// `ctx::plan::*`. A filter body folds `PlanValue` instead. Both run,
+    /// actions first (`host::CardInfo::hook_entries`).
+    pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan);
+
     /// Engine-namespace kind. Same id as [`TriggerKind::engine`].
     pub const fn engine(id: i32) -> Self {
         Self(TriggerKind::engine(id))
@@ -2413,6 +2505,16 @@ impl ActionKind {
     /// `Self(k)` still reports the wire fact.
     pub const fn is_filter(self) -> bool {
         self.as_trigger().is_filter()
+    }
+
+    /// Is this the **dual** kind -- declared as a filter (a pure `PlanValue`
+    /// fold) and usable as an action (a body that may ask / declare) over the
+    /// same engine id? `true` only for [`Self::DiceRollPlan`], whose plan pass
+    /// is the only point before the dice and must be able to wait for a
+    /// player. A `Filter` entry may still use it; an `Action` entry may list it
+    /// only through this test (`Ruleset::build`).
+    pub const fn is_dual_action_filter(self) -> bool {
+        self.0.id == TriggerKind::DiceRollPlan.id
     }
 }
 
@@ -3100,6 +3202,13 @@ impl TriggerKind {
         game_kinds::is_filter(self.id)
     }
 
+    /// v111: is this the **dual** kind (a filter kind an `Action` entry may
+    /// also list)? See [`ActionKind::is_dual_action_filter`]; `false` for a
+    /// ruleset kind.
+    pub const fn is_dual_action_filter(self) -> bool {
+        matches!(self.ns, KindNs::Engine) && self.id == Self::DiceRollPlan.id
+    }
+
     /// The trigger-kind wire spelling.
     ///
     /// Engine kinds keep their camelCase spelling from the `game_kinds` table;
@@ -3293,7 +3402,10 @@ pub enum OnKind {
     /// `.counter_reason(key)` builder. The host calls it **automatically** for
     /// every placed card (placement order per player) whenever the kind is
     /// raised -- no window. May emit effects; does not modify the triggering
-    /// value. Kinds must be non-filter (`TriggerKind::is_filter() == false`).
+    /// value. Kinds must be non-filter (`TriggerKind::is_filter() == false`)
+    /// -- or **dual** (v111, [`ActionKind::is_dual_action_filter`]: the one
+    /// kind that is also a filter kind, because the declaring side of a
+    /// before-the-dice offer belongs to the same plan pass).
     Action = 3,
     // 4 was `AtEnd`, folded into `On::Action(Action::AtEnd(…))` in v76.
     // Wire id 4 is retired -- never reuse.
@@ -3375,7 +3487,32 @@ impl OnKind {
 
 #[cfg(test)]
 mod tests {
-    use super::{KindNs, TriggerKind};
+    use super::{InvokeFrame, KindNs, TriggerKind};
+
+    /// v111 wire pin: the frame is `(String, String, i32, i32, i32, bool,
+    /// i32)` on the wire -- the host stores `String`s and the guest interns
+    /// both names on decode. If this drifts, `ctx::invoke()` decodes garbage
+    /// instead of failing.
+    #[test]
+    fn invoke_frame_wire_is_two_names_then_ints() {
+        crate::intern::reset();
+        let frame = InvokeFrame {
+            card: crate::intern::intern("card:a"),
+            entry: crate::intern::intern("2"),
+            by: 1,
+            by_instance: 7,
+            instance: 9,
+            paid: true,
+            depth: 2,
+        };
+        let bytes = postcard::to_allocvec(&frame).unwrap();
+        let wire = postcard::to_allocvec(&("card:a", "2", 1i32, 7i32, 9i32, true, 2i32)).unwrap();
+        assert_eq!(bytes, wire);
+        let got: InvokeFrame = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(got, frame);
+        assert!(got.card == "card:a");
+        assert!(got.entry == "2");
+    }
 
     /// ABI v85: wire id 18 (`skillTeleport`) is retired forever. Do not reuse
     /// the id or the spelling; listeners discriminate with `MoveAfter` + cond

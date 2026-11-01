@@ -142,6 +142,9 @@ pub enum Op {
     persona_skill = 129,
     group_skills = 130,
     add_group_skill = 131,
+    /// Model alias of [`Self::invoke_entry`] with `entry::PRESS`: the host
+    /// import `ruleset_invoke_skill` still exists (`HostOps`), and this is the
+    /// op id it keeps.
     invoke_skill = 132,
     raise_bought = 133,
     raise = 134,
@@ -375,6 +378,14 @@ pub enum Op {
     body_leave = 344,
     counter_max_at = 345,
     set_counter_max_at = 346,
+    // v111 (G05): the card a stand-in's instance runs, and the per-move offer
+    // claim (`G05-placed-card-press` §5, §6.2).
+    effective_card_at = 347,
+    set_effective_card_at = 348,
+    plan_claimed = 349,
+    /// The write half of the pair. G05 names 349 for the reader only; the
+    /// claim takes the next free slot, and G08 shifts its band to 351.
+    plan_claim = 350,
     // v107 (G02): payment commands, pay-window kind/shape writes, scoped
     // factors and the settle / quote readers (`G02-pay-pipeline` §5.9).
     pay_command = 369,
@@ -401,6 +412,9 @@ pub enum Op {
     move_settle_answer = 408,
     set_turn_end_settle_answer = 409,
     turn_end_settle_answer = 410,
+    // v111 (G05/G13 invocation surface). 431-440 is this group's README band.
+    invoke_entry = 431,
+    invoke_frame = 432,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

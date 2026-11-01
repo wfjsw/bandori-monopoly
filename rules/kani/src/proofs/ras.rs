@@ -50,7 +50,7 @@ crate::host_subset!(pareo_dispatch {
     count_held | count_held_name => arm_count_held,
     log | effect => arm_log,
     group_skill | persona_skill => arm_band_skill,
-    invoke_skill => arm_invoke_skill,
+    invoke_entry => arm_invoke_entry,
     owned_count => arm_owned_count,
     owned_at => arm_owned_at,
     houses_of => arm_houses_of,

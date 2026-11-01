@@ -220,6 +220,11 @@ pub struct MoveCtx {
     // -- counteractions ------------------------------------------------------------
     /// A counteraction cancelled the movement.
     pub cancelled: bool,
+    /// A card has claimed this move at the pre-dice pass; later offers at the
+    /// same pass stand down. One-shot, cleared with the move
+    /// (`drop_stale_plan_shape` / `drop_plan_fresh`).
+    #[serde(default)]
+    pub claimed: bool,
     /// Card-owned per-move state, keyed by name. The engine never reads it --
     /// it is scratch space for the card that armed the effect (e.g. a charge-roll
     /// counter the card tracks itself).
@@ -288,6 +293,7 @@ impl Default for MoveCtx {
             more_steps: 0,
             no_buy: false,
             cancelled: false,
+            claimed: false,
             tags: Vec::new(),
             followers: Vec::new(),
         }

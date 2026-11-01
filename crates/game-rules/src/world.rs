@@ -313,6 +313,33 @@ impl Trigger {
     }
 }
 
+/// The caller frame saved by [`CardWorld::enter_invoke`] and restored by
+/// [`CardWorld::leave_invoke`] on every exit path (including a trap-free
+/// no-op): the caller's card, its dest and dest target, the caller instance,
+/// and the trigger card payload the invocation replaced.
+pub struct InvokeSaved {
+    pub(crate) card: String,
+    pub(crate) dest: i32,
+    pub(crate) dest_to: Option<i32>,
+    /// The **caller's** `current_uid` (`-1` for a hand card).
+    pub(crate) instance: i32,
+    pub(crate) trigger_card: Option<String>,
+    pub(crate) trigger_cards: Vec<String>,
+}
+
+impl Default for InvokeSaved {
+    fn default() -> Self {
+        Self {
+            card: String::new(),
+            dest: 0,
+            dest_to: None,
+            instance: -1,
+            trigger_card: None,
+            trigger_cards: Vec::new(),
+        }
+    }
+}
+
 pub trait CardWorld: Clone + 'static {
     // ---------------------------------------------------------- dice & log
     /// Sum of `count` d`sides` from the match RNG; also records a `"dice"`
@@ -1302,6 +1329,19 @@ pub trait CardWorld: Clone + 'static {
     fn leave_card(&mut self, _saved: (String, i32, Option<i32>, i32)) -> i32 {
         0
     }
+    /// Open a nested **invocation** of `id` with the target instance
+    /// `instance` (or -1). This is [`Self::enter_card`] plus two facts the
+    /// invoked body runs on: `current_uid` becomes the target instance and the
+    /// trigger card payload is replaced by the invoked card (restored by
+    /// [`Self::leave_invoke`]). Returns the caller frame.
+    fn enter_invoke(&mut self, _id: &str, _instance: i32) -> InvokeSaved {
+        InvokeSaved::default()
+    }
+    /// Restore the caller's frame after a nested invocation; returns the inner
+    /// body's `Dest` (moving the target is the caller's job, I6).
+    fn leave_invoke(&mut self, _saved: InvokeSaved) -> i32 {
+        0
+    }
 
     /// Whether `player_id` is mid-abnormal-move this turn.
     fn abnormal_count(&self, _player: i32) -> i32 {
@@ -1366,6 +1406,23 @@ pub trait CardWorld: Clone + 'static {
     //   - `no_build` -- folded into `can_build = false`; one flag is enough.
     /// The planned length; keeps the sign of a reverse walk.
     fn set_steps(&mut self, _v: i32) {}
+    /// A card has claimed the move at the pre-dice pass; later offers at the
+    /// same pass stand down. One-shot -- the engine clears it with the move.
+    fn set_plan_claimed(&mut self) {}
+    /// Has any card claimed this move? `false` outside a move.
+    fn plan_claimed(&self) -> bool {
+        false
+    }
+    /// The card whose printed surface the instance at `uid` runs (its own card
+    /// when unmarked); `None` when it is not in play.
+    fn effective_card_at(&self, _uid: i32) -> Option<String> {
+        None
+    }
+    /// Name another card's surface for this instance; `""` clears. `false`
+    /// when `uid` is not in play.
+    fn set_effective_card_at(&mut self, _uid: i32, _card: &str) -> bool {
+        false
+    }
     /// 「上一名玩家代替进行此次投掷」 (幻觉来了) -- attribute the roll to another
     /// seat. Shown on the log line as 「by」; the move still belongs to the
     /// original player (and 「影响投掷的效果服从于原本进行投掷的玩家」).

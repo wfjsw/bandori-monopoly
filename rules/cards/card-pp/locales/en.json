@@ -27,6 +27,7 @@
   "first_live_note": "the owner cannot use any Pastel✽Palettes (2) skill",
   "hina_sound_as": "“{{card}}” is played as “{{sub}}”",
   "hina_sound_ask": "Which exclusive card should this stand in for?",
+  "hina_sound_swap_ask": "Which exclusive card's effect should it change to?",
   "hina_sound_title": "What Kind of Sound Will It Make?",
   "infinite_possibility_full": "“Infinite Possibility” crystals are full: traded for 1 band crystal",
   "infinite_possibility_not_placed": "This card is not in play.",

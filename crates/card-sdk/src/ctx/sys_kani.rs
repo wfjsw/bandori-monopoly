@@ -601,8 +601,22 @@ pub fn add_group_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32 {
     kani_host::call_i32(Op::add_group_skill, [player_id, p, n, extra, 0, 0])
 }
 
-pub fn invoke_skill(player_id: i32, p: i32, n: i32) -> i32 {
-    kani_host::call_i32(Op::invoke_skill, [player_id, p, n, 0, 0, 0])
+pub fn invoke_entry(
+    player_id: i32,
+    card_p: i32,
+    card_n: i32,
+    entry_p: i32,
+    entry_n: i32,
+    flags: i32,
+) -> i32 {
+    kani_host::call_i32(
+        Op::invoke_entry,
+        [player_id, card_p, card_n, entry_p, entry_n, flags],
+    )
+}
+
+pub fn invoke_frame(out_ptr: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::invoke_frame, [out_ptr, cap, 0, 0, 0, 0])
 }
 
 pub fn raise_bought(player_id: i32, tile: i32) -> i32 {
@@ -792,6 +806,14 @@ pub fn counter_max_at(uid: i32, np: i32, nl: i32) -> i32 {
 
 pub fn set_counter_max_at(uid: i32, np: i32, nl: i32, max: i32) -> i32 {
     kani_host::call_i32(Op::set_counter_max_at, [uid, np, nl, max, 0, 0])
+}
+
+pub fn effective_card_at(uid: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::effective_card_at, [uid, buf, cap, 0, 0, 0])
+}
+
+pub fn set_effective_card_at(uid: i32, np: i32, nl: i32) -> i32 {
+    kani_host::call_i32(Op::set_effective_card_at, [uid, np, nl, 0, 0, 0])
 }
 
 pub fn trig_step() -> i32 {
@@ -1007,6 +1029,14 @@ pub fn set_roller(player_id: i32) {
 
 pub fn set_steps(n: i32) {
     kani_host::call_unit(Op::set_steps, [n, 0, 0, 0, 0, 0]);
+}
+
+pub fn plan_claim() {
+    kani_host::call_unit(Op::plan_claim, [0; 6]);
+}
+
+pub fn plan_claimed() -> i32 {
+    kani_host::call_i32(Op::plan_claimed, [0; 6])
 }
 
 pub fn set_reverse(on: i32) {

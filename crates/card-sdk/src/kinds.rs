@@ -503,14 +503,14 @@ macro_rules! action_kinds {
     (
         on $ns_ty:ident;
         ns KindNs::Engine;
-        $($name:ident ;)*
+        $($name:ident $(@ $dual:ident)? ;)*
     ) => {
         $crate::action_kinds!(@ns $ns_ty; $($name ;) *);
         $crate::action_kinds!(@engine_entries $ns_ty; $($name ;) *);
         impl $ns_ty {
             /// Every declared kind, in table order.
             pub const KINDS: &'static [$crate::kinds::KindInfo] = &[
-                $($crate::action_kinds!(@info_engine $name)),*
+                $($crate::action_kinds!(@info_engine $name $(@ $dual)?)),*
             ];
         }
     };
@@ -585,6 +585,18 @@ macro_rules! action_kinds {
             kind: $crate::abi::TriggerKind::$name,
             is_filter: false,
             shape: $crate::kinds::FilterShape::Value,
+        }
+    };
+    // A dual kind shares its engine id with a filter kind: the table describes
+    // the filter side (matching `filter_kinds!`, including its `payload`
+    // shape), and the loader lets an `Action` entry list it.
+    (@info_engine $name:ident @ $dual:ident) => {
+        $crate::kinds::KindInfo {
+            name: stringify!($name),
+            wire: game_kinds::wire($crate::abi::TriggerKind::$name.id),
+            kind: $crate::abi::TriggerKind::$name,
+            is_filter: true,
+            shape: $crate::kinds::FilterShape::Payload,
         }
     };
     (@info_ruleset $key:expr; $name:ident @ $id:expr) => {{
@@ -721,6 +733,7 @@ action_kinds! {
     CardFired;
     MarkChanged;
     SpendBefore;
+    DiceRollPlan @ dual;
 }
 
 #[cfg(test)]
@@ -773,11 +786,18 @@ mod tests {
     #[test]
     fn action_kinds_registry_matches_table() {
         // 73 before `diceRollCast` / `diceRollSettled` (G03, ABI v109), plus
-        // G01's `cardFired` / `markChanged` (ABI v105) = 76.
-        assert_eq!(Action::KINDS.len(), 76);
-        assert!(Action::KINDS.iter().all(|k| !k.is_filter));
+        // G01's `cardFired` / `markChanged` (ABI v105) = 76, plus G05's dual
+        // `diceRollPlan` (ABI v111) = 77.
+        assert_eq!(Action::KINDS.len(), 77);
+        // A dual kind is filter-shaped but still an action entry.
+        assert!(Action::KINDS.iter().all(|k| !k.is_filter
+            || k.kind.is_dual_action_filter()));
         for k in Action::KINDS {
-            assert!(!k.kind.is_filter(), "{}", k.name);
+            assert!(
+                !k.kind.is_filter() || k.kind.is_dual_action_filter(),
+                "{}",
+                k.name
+            );
         }
     }
 

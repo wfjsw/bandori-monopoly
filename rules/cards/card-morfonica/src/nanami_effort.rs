@@ -15,7 +15,7 @@
 //! x character tokens for one of three effects.
 
 use bandori_std::ctx::{self, trigger, CardPile};
-use card_sdk::abi::{ActionKind, TriggerKind, REWARD_MONEY};
+use card_sdk::abi::REWARD_MONEY;
 use card_sdk::ctx::NameId;
 use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -31,11 +31,10 @@ const TOKEN_PREFIX: &str = "角色标记:";
 pub const NANAMI_EFFORT: CardDef = CardDef::new(
     "Mor:（NNM）稍微努力了一下",
     &[
-        // One Play entry for both contexts (the engine dispatches only the
-        // first): the hand body (spend x 角色标记, pick one of (1)/(2)/(3)),
-        // or the placed (3) press (spend 1 crystal to fire the owner's (2)
-        // skill). The gate admits whenever either branch is available.
-        On::Play("", Some(cant_play), play),
+        // The Play is the hand placement; (3)'s 「你可以移除一个奇迹水晶」 is a
+        // sub-choice of the body that just placed the card -- not an entry of
+        // its own, and not a press surface.
+        On::Play("", Some(cant_play), nanami_effort),
         On::Schedule("discard_down_to_five", "", None, discard_down_to_five),
         // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the same CounterChanged
         // shape as R:Fire bird (identity check in the residual, not the condition).
@@ -59,39 +58,17 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // sheet cell G7
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 
-/// Combined gate: from hand the x-标记 body needs at least one 「角色标记:*」;
-/// once placed the (3) press needs a crystal and a bound owner skill.
+/// The x-标记 body needs at least one 「角色标记:*」; everything (3) later needs
+/// is checked inline, where it is asked.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed() {
-        let names = ctx::held_names(player_id, TOKEN_PREFIX);
-        let total: i32 = names
-            .iter()
-            .map(|n| ctx::held_count(player_id, n.as_str()))
-            .sum();
-        if total > 0 {
-            return None;
-        }
-        return Some(Msg::new(key!("nanami_effort_no_tok")));
+    let names = ctx::held_names(player_id, TOKEN_PREFIX);
+    if names
+        .iter()
+        .any(|n| ctx::held_count(player_id, n.as_str()) > 0)
+    {
+        return None;
     }
-    if ctx::crystals() < 1 {
-        return Some(Msg::new(key!("nanami_effort_no_crystal")));
-    }
-    if owner_skill(player_id).is_none() {
-        return Some(Msg::new(key!("nanami_effort_no_skill")));
-    }
-    // The press runs the skill's (3) body, which spends a mark -- without one the
-    // crystal would be burned for nothing.
-    if ctx::held_names(player_id, TOKEN_PREFIX).is_empty() {
-        return Some(Msg::new(key!("nanami_effort_no_mark")));
-    }
-    None
-}
-
-fn play(player_id: i32) -> card_sdk::Asked {
-    if ctx::is_placed() {
-        return use_skill(player_id);
-    }
-    nanami_effort(player_id)
+    Some(Msg::new(key!("nanami_effort_no_tok")))
 }
 
 fn nanami_effort(player_id: i32) -> card_sdk::Asked {
@@ -164,13 +141,37 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
                 player_id,
                 &Msg::new(key!("nanami_effort_placed")).i("n", x as i64),
             );
+            // 规则书（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能」 -- asked,
+            // not assumed, and asked before the crystal goes so a misoffer cannot
+            // burn it. The owner's skill is the `skill:<character>:<name>` field
+            // card `bind_skills` placed; (2) is its `On::Action(CardUsed)` entry,
+            // addressed by its declared id.
+            let Some(id) = owner_skill(player_id) else {
+                return Ok(());
+            };
+            // (2) pays a pot inside its body, so a pot must exist before the
+            // question is asked; without one the answer would be a dead end.
+            if bandori_std::fire::total(player_id) < 1 {
+                return Ok(());
+            }
+            if ctx::ask_yes(
+                player_id,
+                &Msg::new(key!("nanami_effort_ask_title")),
+                &Msg::new(key!("nanami_effort_ask_text")),
+            )? {
+                ctx::add_crystals(-1, 0)?;
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("nanami_effort_skill")).card("card", id.as_str()),
+                );
+                // 「视为发动你的（2）技能，此次技能不受数量或轮数限制」 -- `invoke_entry`
+                // runs the body only, so the skill's own count/CD gate is never
+                // consulted and the waiver is structural.
+                ctx::invoke_entry(player_id, id.as_str(), "2")?;
+            }
         }
         _ => {}
     }
-    // 规则书（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数
-    // 限制」 -- a press. The owner's skill is the `skill:<character>:<name>` field
-    // card `bind_skills` placed, so `placed_cards` finds it and `play_card` runs
-    // its `On::Play` entry.
     Ok(())
 }
 
@@ -253,34 +254,11 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能」 -- the placed-press branch.
+/// The bound owner skill (`skill:<character>:<name>`), which (3) invokes.
 fn owner_skill(player_id: i32) -> Option<NameId> {
     ctx::placed_cards(player_id)
         .into_iter()
         .find(|c| c.as_str().starts_with("skill:"))
-}
-
-fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() < 1 {
-        return Ok(());
-    }
-    let Some(id) = owner_skill(player_id) else {
-        return Ok(());
-    };
-    ctx::add_crystals(-1, 0)?;
-    // 「此次技能不受数量或轮数限制」 -- a plain `play_card` runs the skill's body,
-    // not its gate; nothing here counts a use.
-    // TODO(规则书)（此次技能不受数量或轮数限制）: the book waives the skill's count/CD
-    //   here -- nothing is waived.
-    ctx::log(
-        player_id,
-        &Msg::new(key!("nanami_effort_skill")).card("card", id.as_str()),
-    );
-    // TODO(规则书)（你可以移除一个奇迹水晶视为发动你的）: the book runs the persona
-    //   skill's (2) (pay a pot, gain a mark) -- `play_card` runs its (3) body, which
-    //   spends a mark instead.
-    ctx::play_card(id.as_str(), player_id)?;
-    Ok(())
 }
 
 //
@@ -291,7 +269,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
 #[cfg(kani)]
 #[inline(always)]
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
-    play(player_id)
+    nanami_effort(player_id)
 }
 
 #[cfg(kani)]

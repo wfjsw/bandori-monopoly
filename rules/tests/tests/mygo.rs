@@ -88,14 +88,36 @@ fn confused_counter_not_for_own_card() {
     assert!(!t.on_field(0, "MyGO:即使迷茫着"), "{:?}", t.field_ids(0));
 }
 
+/// 规则书（2）: 「主要阶段中，你可将此卡置入弃牌堆并进入移动阶段」 -- the offer
+/// is raised at the plan pass, before any die.
 #[test]
-fn confused_持续_moves_by_hand_count() {
-    // 规则书: 「（2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，
-    //          使你的此次主要移动格数为你当前手牌张数。」
+fn even_lost_offered_before_the_dice() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, "MyGO:即使迷茫着");
     t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 觉悟", "R:曲奇时间"]);
-    t.skill(0, "MyGO:即使迷茫着").unwrap();
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    assert!(
+        t.prompt().is_some(),
+        "the offered clause asks before the dice: {}",
+        t.dump_prompt()
+    );
+    assert!(
+        !t.keys_since(mark).iter().any(|k| k.contains("dice")),
+        "nothing has been cast yet: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+/// 「你可将此卡置入弃牌堆…使你的此次主要移动格数为你当前手牌张数」 -- a yes
+/// discards the card and pins this move's steps to the hand size.
+#[test]
+fn even_lost_yes_discards_and_pins_the_hand_size() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 觉悟", "R:曲奇时间"]);
+    t.roll(0).unwrap();
+    t.answer_one(0).unwrap(); // 发动
     rest(&mut t);
     drain(&mut t);
     assert!(!t.on_field(0, "MyGO:即使迷茫着"), "{:?}", t.field_ids(0));
@@ -105,6 +127,115 @@ fn confused_持续_moves_by_hand_count() {
         t.draw_pile(0)
     );
     assert_eq!(t.pos(0), 3, "3 hand cards -> 3 steps");
+}
+
+/// The face *is* the hand size: no die is thrown for the move.
+#[test]
+fn even_lost_no_die_is_thrown() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 觉悟", "R:曲奇时间"]);
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    t.answer_one(0).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    assert!(
+        !t.keys_since(mark).iter().any(|k| k.contains("dice")),
+        "the printed 格数 replaces the throw: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+/// A 不发动 leaves the card placed and lets the ordinary roll stand.
+#[test]
+fn even_lost_declined_rolls_normally() {
+    let mut t = Table::vanilla(2);
+    t.dice(&[1]);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 觉悟", "R:曲奇时间"]);
+    t.roll(0).unwrap();
+    t.answer_one(1).unwrap(); // 不发动
+    rest(&mut t);
+    drain(&mut t);
+    assert!(
+        t.on_field(0, "MyGO:即使迷茫着"),
+        "the card stays placed: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(t.pos(0), 1, "the die's own face was walked");
+}
+
+/// [停留] closes the move, so the offer stands down (rules.txt 47).
+#[test]
+fn even_lost_not_offered_while_stayed() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压"]);
+    t.m.world_mut().st.players[0].state_set("stay", 1);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert!(
+        t.on_field(0, "MyGO:即使迷茫着"),
+        "not offered while [停留] holds the move: {:?}",
+        t.field_ids(0)
+    );
+}
+
+/// An empty hand is a zero-step move the card would be spent for nothing.
+#[test]
+fn even_lost_empty_hand_not_offered() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &[]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "MyGO:即使迷茫着"), "{:?}", t.field_ids(0));
+}
+
+/// One accepted copy claims the move: the second copy is not asked.
+#[test]
+fn even_lost_second_copy_after_a_claim_not_offered() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 觉悟", "R:曲奇时间"]);
+    t.roll(0).unwrap();
+    t.answer_one(0).unwrap(); // 发动
+    rest(&mut t);
+    drain(&mut t);
+    assert_eq!(
+        t.field_ids(0)
+            .iter()
+            .filter(|c| c.as_str() == "MyGO:即使迷茫着")
+            .count(),
+        1,
+        "only the answering copy was discarded: {:?}",
+        t.field_ids(0)
+    );
+}
+
+/// A declined declare says nothing and flashes nothing.
+#[test]
+fn even_lost_declined_is_silent() {
+    let mut t = Table::vanilla(2);
+    t.dice(&[1]);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压"]);
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    t.answer_one(1).unwrap(); // 不发动
+    let flashed: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "MyGO:即使迷茫着")
+        .collect();
+    assert!(flashed.is_empty(), "no flash for a decline: {flashed:?}");
+    assert!(
+        !t.keys_since(mark).iter().any(|k| k.contains("even_lost")),
+        "no log line either: {:?}",
+        t.keys_since(mark)
+    );
 }
 
 // ---------------------------------------------------------------- MyGO:（灯）不再迷茫

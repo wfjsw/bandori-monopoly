@@ -56,11 +56,14 @@ pub const NANAMI: CardDef = CardDef::new(
         // no mark of that kind yet. The CD is a dynamic per-skill state key
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
+        // The declared id is what 稍微努力了一下 (3) invokes for 「你的（2）技能」 --
+        // `entry::PRESS` would be this skill's first Play, which is (3).
         On::Action(Action::CardUsed(
             "actor != owner && trigger_card != 0 && charge(owner) >= 1",
             Some(on_skill_applies),
             on_skill,
-        )),
+        ))
+        .id("2"),
         On::Action(Action::TurnEnd(card_sdk::condition::MINE, None, tick)).quiet_when_empty(),
     ],
 )

@@ -135,6 +135,9 @@ const ARRAY_OPS: &[&str] = &[
     "group_skills",
     "add_group_skill",
     "invoke_skill",
+    // v111 (G13): named-entry invocation and its frame read.
+    "invoke_entry",
+    "invoke_frame",
     "raise_bought",
     "raise",
     "gain_marker",
@@ -318,6 +321,11 @@ const ARRAY_OPS: &[&str] = &[
     "body_leave",
     "counter_max_at",
     "set_counter_max_at",
+    // v111 (G05): effective-card marker and the per-move offer claim.
+    "effective_card_at",
+    "set_effective_card_at",
+    "plan_claim",
+    "plan_claimed",
     // v107 (G02): payment commands, pay-window kind/shape writes and readers.
     "pay_command",
     "trig_set_pay_kind",

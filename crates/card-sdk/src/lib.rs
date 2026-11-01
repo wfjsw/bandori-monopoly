@@ -1624,8 +1624,11 @@ mod tests {
             assert!(k.kind.is_filter(), "Filter::{} must be is_filter", k.name);
         }
         for k in Action::KINDS {
-            assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
-            assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
+            // A dual kind (`DiceRollPlan`) is a filter kind an action entry
+            // may also list; everything else on this side is action-only.
+            let dual = k.kind.is_dual_action_filter();
+            assert_eq!(k.is_filter, dual, "Action::{} KindInfo.is_filter", k.name);
+            assert_eq!(k.kind.is_filter(), dual, "Action::{} is_filter", k.name);
         }
         // Count pin: the docs name 34 filter kinds (the 10 gates, the
         // modifier stages, the rent / settle stages). Adding one means the
@@ -1663,10 +1666,16 @@ mod tests {
             );
         }
         for k in Action::KINDS {
-            assert!(!k.is_filter, "Action::{} KindInfo.is_filter", k.name);
-            assert!(
-                !k.kind.is_filter(),
-                "Action::{} must be !is_filter()",
+            assert_eq!(
+                k.is_filter,
+                k.kind.is_dual_action_filter(),
+                "Action::{} KindInfo.is_filter",
+                k.name
+            );
+            assert_eq!(
+                k.kind.is_filter(),
+                k.kind.is_dual_action_filter(),
+                "Action::{} is_filter",
                 k.name
             );
             // `None`'s wire name is "" (unset); every other const has one.
@@ -1702,7 +1711,14 @@ mod tests {
             assert!(k.kind.is_filter(), "Filter::{} must be is_filter", k.name);
         }
         for k in Action::KINDS {
-            assert!(!k.kind.is_filter(), "Action::{} must be !is_filter", k.name);
+            // Dual kinds (`DiceRollPlan`) are filter kinds by id, and the
+            // loader admits them on an Action entry anyway.
+            assert_eq!(
+                k.kind.is_filter(),
+                k.kind.is_dual_action_filter(),
+                "Action::{} is_filter",
+                k.name
+            );
         }
     }
 

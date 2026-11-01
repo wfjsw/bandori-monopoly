@@ -1149,6 +1149,122 @@ fn guide_cash_in_fires_when_turn_end_crosses_5() {
     );
 }
 
+// ============================================================ PP:[冰川日菜]会发出怎样的声音呢？
+
+const HINA_SOUND: &str = "PP:[冰川日菜]会发出怎样的声音呢？";
+/// The first substitute offered, and a second one used by the swap ask.
+const SUB_A: &str = "PP:[丸山彩]憧憬的前方";
+const SUB_B: &str = "PP:[白鹭千圣]微笑的铁假面";
+
+/// Play the stand-in and answer the substitute pick with [`SUB_A`].
+fn play_hina_sound(t: &mut Table) {
+    t.give(0, &["PP:[衍生]共鸣"]);
+    t.give(0, &[HINA_SOUND]);
+    t.play(0, HINA_SOUND).unwrap();
+    // The [特]（1) substitute pick; `SUBS` order puts SUB_A first.
+    let p = t.expect_prompt();
+    let k = p
+        .items
+        .iter()
+        .position(|s| s == SUB_A)
+        .unwrap_or_else(|| panic!("SUB_A not offered: {}", t.dump_prompt()));
+    t.answer_one(k as i32).unwrap();
+}
+
+/// Answer the [共鸣] offer with yes.
+fn accept_resonance(t: &mut Table) {
+    let p = t.expect_prompt();
+    assert!(
+        p.title.key().contains("resonance"),
+        "expected the [共鸣] offer: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap();
+}
+
+/// 规则书（2）: 「[共鸣]本卡在[场地]时改变本卡代替的专属卡效果」 -- the
+/// substitute instance is marked with the stand-in's surface, and the crystals
+/// it carried travel with the change.
+#[test]
+fn hina_swap_marks_the_substitute_instance() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "冰川日菜");
+    play_hina_sound(&mut t);
+    t.set_crystals(0, SUB_A, 3);
+    accept_resonance(&mut t);
+    // The changed effect re-picks the substitute, excluding the current one.
+    let p = t.expect_prompt();
+    let k = p
+        .items
+        .iter()
+        .position(|s| s == SUB_B)
+        .unwrap_or_else(|| panic!("SUB_B not offered: {}", t.dump_prompt()));
+    t.answer_one(k as i32).unwrap();
+    drain(&mut t);
+    let field = t.field(0);
+    let marked = field
+        .iter()
+        .find(|f| f.card == SUB_B)
+        .unwrap_or_else(|| panic!("SUB_B not placed: {:?}", t.field_ids(0)));
+    assert_eq!(
+        marked.effective_card.as_deref(),
+        Some(HINA_SOUND),
+        "the substitute runs the stand-in's surface"
+    );
+    assert_eq!(
+        t.crystals(0, SUB_B),
+        Some(3),
+        "the crystals travel with the change"
+    );
+    assert!(!t.hand(0).contains(&"PP:[衍生]共鸣".to_string()), "fuel spent");
+}
+
+/// A 不发动 costs nothing: no marker, the substitute keeps its own effect, and
+/// the stand-in still banishes itself.
+#[test]
+fn hina_swap_declined_leaves_no_marker() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "冰川日菜");
+    play_hina_sound(&mut t);
+    let p = t.expect_prompt();
+    assert!(p.title.key().contains("resonance"), "{}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // 不发动
+    drain(&mut t);
+    let sub = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == SUB_A)
+        .expect("the substitute stays");
+    assert_eq!(sub.effective_card, None, "no marker without the fuel");
+    assert!(
+        t.hand(0).contains(&"PP:[衍生]共鸣".to_string()),
+        "the fuel is still in hand"
+    );
+}
+
+/// 「本卡」 is the stand-in: it is banished once its substitute lands, never the
+/// substitute.
+#[test]
+fn hina_banish_files_the_stand_in() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "冰川日菜");
+    play_hina_sound(&mut t);
+    drain(&mut t);
+    assert!(!t.on_field(0, HINA_SOUND), "{:?}", t.field_ids(0));
+    assert!(t.on_field(0, SUB_A), "the substitute stays: {:?}", t.field_ids(0));
+    assert!(
+        !t.hand(0).contains(&HINA_SOUND.to_string()),
+        "the stand-in left the hand"
+    );
+    assert!(
+        !t.discard(0).contains(&HINA_SOUND.to_string())
+            && !t.draw_pile(0).contains(&HINA_SOUND.to_string()),
+        "banished, not discarded: discard={:?} draw={:?}",
+        t.discard(0),
+        t.draw_pile(0)
+    );
+}
+
 // ============================================================ exclusive: 若宫伊芙
 
 /// 规则书: 「将此卡放置在[使用者]场上并投掷12d4，获得投掷结果*60的资金。」

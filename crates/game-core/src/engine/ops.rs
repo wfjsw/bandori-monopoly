@@ -1340,6 +1340,7 @@ impl World {
             extra: false,
             counter_max: BTreeMap::new(),
             note,
+            effective_card: None,
         };
         if player_id == crate::state::BOARD_OWNER {
             self.st.board_field.push(inst);
@@ -1376,6 +1377,29 @@ impl World {
             .iter()
             .position(|s| s.field.iter().any(|f| f.uid == uid))
             .map_or(-1, |i| i as i32)
+    }
+
+    /// The card whose **printed surface** the instance at `uid` runs: the
+    /// stand-in its effective-card marker names, else the row's own card.
+    /// `None` when `uid` is not in play. Counters, props and dest stay the
+    /// instance's either way.
+    pub fn effective_card_at(&self, uid: i32) -> Option<String> {
+        let f = self.field_by_uid(uid)?;
+        Some(f.effective_card.clone().unwrap_or_else(|| f.card.clone()))
+    }
+
+    /// Write the effective-card marker (`""` clears). `false` when `uid` is
+    /// not in play. Dies with the instance.
+    pub fn set_effective_card_at(&mut self, uid: i32, card: &str) -> bool {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return false;
+        };
+        f.effective_card = if card.is_empty() {
+            None
+        } else {
+            Some(card.to_string())
+        };
+        true
     }
 
     /// Re-attribute the instance at `uid` to the player who owns the card.

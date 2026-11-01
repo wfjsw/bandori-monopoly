@@ -472,3 +472,51 @@ fn query_guard_sees_slugs_and_press() {
         t.recent_keys(40)
     );
 }
+
+// ---------------------------------------------------------------------------
+// Invocation frame (G05 §6.1 -- the caller binding on G13's surface)
+// ---------------------------------------------------------------------------
+
+/// `by_instance` of the last `invoked_frame` line (the invoked body logs it).
+fn frame_by(t: &Table) -> Option<i32> {
+    t.m.world()
+        .recent
+        .iter()
+        .filter(|e| e.msg.key().contains("invoked_frame"))
+        .filter_map(|e| match e.msg.args.get("by") {
+            Some(game_core::msg::Arg::Integer(v)) => Some(*v),
+            _ => None,
+        })
+        .next_back()
+}
+
+/// The frame's `by_instance` is the **caller's** instance: an invocation from a
+/// placed card names the instance whose hook ran.
+#[test]
+fn invoke_frame_by_instance_is_the_caller_instance() {
+    let mut t = Table::vanilla(2);
+    let uid = t.place_raw(0, "TEST:invoker");
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        frame_by(&t),
+        Some(uid),
+        "the caller's instance is bound in the frame: {:?}",
+        t.recent_keys(40)
+    );
+}
+
+/// From a hand play there is no instance, so the frame says `-1` -- and the
+/// invocation is not an activation cost here (`paid` stays 0).
+#[test]
+fn invoke_from_plain_card_and_skill() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "TEST:invoker").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        frame_by(&t),
+        Some(-1),
+        "a hand play has no caller instance: {:?}",
+        t.recent_keys(40)
+    );
+}

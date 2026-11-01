@@ -53,6 +53,13 @@ pub const MAX_CARDS: usize = 8;
 pub const MAX_KEYS: usize = 8;
 /// Field card instances (uid + card id + props).
 pub const MAX_FIELD: usize = 8;
+/// Open invocation frames (the nested guest cannot run under Kani, so the host
+/// records the call facts instead -- `G13` §5.5). `MAX_NESTING` is 8.
+pub const MAX_INVOKE: usize = 8;
+
+/// One recorded invocation frame: `(card, entry, by, by_instance, instance,
+/// paid, depth)`.
+pub type InvokeRecord = (NameId, NameId, i32, i32, i32, bool, i32);
 /// Tile marks.
 pub const MAX_MARKS: usize = 16;
 /// Active event ids.
@@ -610,6 +617,9 @@ pub struct FieldCard {
     pub immune: bool,
     pub crystals: i32,
     pub props: NameMap,
+    /// The card whose printed surface this instance runs (`u16::MAX` = its
+    /// own). Dies with the instance, like the row.
+    pub effective_card: u16,
 }
 
 impl FieldCard {
@@ -622,6 +632,7 @@ impl FieldCard {
         immune: false,
         crystals: 0,
         props: NameMap::new(),
+        effective_card: u16::MAX,
     };
 }
 
@@ -780,6 +791,16 @@ pub struct World {
     /// Pending `place_card` destination (`ctx::set_dest`).
     pub dest: i32,
     pub last_uid: i32,
+    /// A card claimed the move at the pre-dice pass.
+    pub plan_claimed: bool,
+    /// Open invocation frames, innermost last; `invoke_n` counts the pushes
+    /// (so it is also the nesting depth). The nested guest does not run, so
+    /// `arm_invoke_entry` records instead (`G13` §5.5).
+    pub invoke_n: u32,
+    pub invoke_stack: [InvokeRecord; MAX_INVOKE],
+    /// The last `arm_invoke_entry` fact for proof readers:
+    /// `(card, entry, paid, by_instance)`.
+    pub last_invoke: (NameId, NameId, bool, i32),
     /// Crystals of the running instance when it has no `field[]` slot
     /// (events: heat_head phase, circle_rebuild's 5 miracle crystals).
     pub self_crystals: i32,
@@ -970,6 +991,10 @@ impl World {
             next_uid: 1,
             dest: 0,
             last_uid: 1,
+            plan_claimed: false,
+            invoke_n: 0,
+            invoke_stack: [(NameId::INVALID, NameId::INVALID, -1, -1, -1, false, 0); MAX_INVOKE],
+            last_invoke: (NameId::INVALID, NameId::INVALID, false, -1),
             self_crystals: 0,
             tiles: [TileState::new(); 60],
             marks: [Mark::EMPTY; MAX_MARKS],

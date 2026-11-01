@@ -198,6 +198,20 @@ fn every_sys_import_has_a_native_symbol() {
     );
 }
 
+/// v111 pins the two invocation imports by their exact link names: the generic
+/// scans above would catch a missing attribute, but not a rename that keeps
+/// the pair inconsistent with the host registration.
+#[test]
+fn invoke_imports_are_pinned() {
+    let block = sys_block();
+    for sym in ["ruleset_invoke_entry", "ruleset_invoke_frame"] {
+        assert!(
+            block.contains(&format!("link_name = \"{sym}\"")),
+            "crates/card-sdk/src/ctx/sys.rs must declare `{sym}` (G13 §4.2)"
+        );
+    }
+}
+
 /// The wasm32-linked monolith (`bot-glue` + `native-rules`) must not emit a
 /// `ruleset` **import** module: the same `link_name` renames resolve to
 /// `native_shims` inside the one module. This test pins the cfg seam that

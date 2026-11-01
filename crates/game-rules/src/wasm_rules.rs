@@ -696,12 +696,18 @@ impl Run {
     /// not in play. Clears `current_uid`, so a later deferred dest finds no
     /// instance to move.
     fn move_now(&mut self, to: Option<i32>, dest: i32) -> Option<i32> {
+        // The **row's own** card leaves; `current_card` may be a stand-in the
+        // instance is marked with (the `effective_card` dies with the row).
+        let own = self
+            .world
+            .field_by_uid(self.current_uid)
+            .map(|f| f.card.clone());
         let left = self.unplace_card();
         if left < 0 {
             return None;
         }
         let who = to.unwrap_or(left);
-        let card = self.current_card.clone();
+        let card = own.unwrap_or_else(|| self.current_card.clone());
         if dest == DEST_GRAVEYARD {
             self.to_discard(who, &card);
         } else if dest == 1 {
@@ -2532,6 +2538,33 @@ impl CardWorld for Run {
         self.dest_to = saved.2;
         std::mem::replace(&mut self.dest, saved.1)
     }
+    fn enter_invoke(&mut self, id: &str, instance: i32) -> crate::world::InvokeSaved {
+        let (card, dest, dest_to, caller_uid) = self.enter_card(id);
+        // 「该角色」 / 「该技能」 inside the invoked body is the *invoked* card:
+        // the frame replaces the trigger payload instead of raising a second
+        // counteraction category (G13 I4).
+        let trigger_card = std::mem::replace(&mut self.trigger.card, Some(id.to_string()));
+        let trigger_cards = std::mem::replace(&mut self.trigger.cards, vec![id.to_string()]);
+        // `enter_card` voided the uid; the target's own instance is what the
+        // body's self-addressed reads must answer for (I2).
+        self.current_uid = instance;
+        crate::world::InvokeSaved {
+            card,
+            dest,
+            dest_to,
+            instance: caller_uid,
+            trigger_card,
+            trigger_cards,
+        }
+    }
+    fn leave_invoke(&mut self, saved: crate::world::InvokeSaved) -> i32 {
+        self.current_card = saved.card;
+        self.current_uid = saved.instance;
+        self.dest_to = saved.dest_to;
+        self.trigger.card = saved.trigger_card;
+        self.trigger.cards = saved.trigger_cards;
+        std::mem::replace(&mut self.dest, saved.dest)
+    }
     // movement shaping ---------------------------------------------------------
     fn set_steps(&mut self, v: i32) {
         self.stamp_skill_source();
@@ -2553,6 +2586,18 @@ impl CardWorld for Run {
         if self.world.move_total() != was {
             self.outcome_plan("log.outcome.plan_steps", -1, v, "");
         }
+    }
+    fn set_plan_claimed(&mut self) {
+        self.world.turn.plan.claimed = true;
+    }
+    fn plan_claimed(&self) -> bool {
+        self.world.turn.plan.claimed
+    }
+    fn effective_card_at(&self, uid: i32) -> Option<String> {
+        self.world.effective_card_at(uid)
+    }
+    fn set_effective_card_at(&mut self, uid: i32, card: &str) -> bool {
+        self.world.set_effective_card_at(uid, card)
     }
     fn set_roller(&mut self, v: Option<game_kinds::Seat>) {
         self.stamp_skill_source();
@@ -5506,19 +5551,21 @@ impl<M: CardModules> RulesBridge<M> {
                             if world.out(player_id) {
                                 continue;
                             }
-                            for (uid, id) in world.field_instances(player_id as i32) {
+                            for (uid, raw) in world.field_instances(player_id as i32) {
                                 // A hook cannot re-trigger on its own money movement
                                 // (the termination argument for nested money).
                                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                                     continue;
                                 }
+                                // A marked instance runs its effective card's surface.
+                                let id = world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
                                 let Some(idx) = self.ruleset.card(&id) else {
                                     continue;
                                 };
                                 // 「场上所有背面朝上的卡无法产生效果」 -- a face-down
                                 // card on the field is inert, so its hooks must not run.
                                 if self.ruleset.cards()[idx as usize].hooks(kind)
-                                    && !world.card_face_down(player_id as i32, &id)
+                                    && !world.card_face_down(player_id as i32, &raw)
                                 {
                                     self.drive_hook(
                                         cx,
@@ -5545,7 +5592,7 @@ impl<M: CardModules> RulesBridge<M> {
                         if t.instance >= 0 && !drove.contains(&t.instance) {
                             let row = world
                                 .field_by_uid(t.instance)
-                                .map(|f| (f.card.clone(), f.owner));
+                                .map(|f| (f.effective_card.clone().unwrap_or_else(|| f.card.clone()), f.owner));
                             let id = row.as_ref().map(|r| r.0.clone()).or_else(|| t.card.clone());
                             // The body's seat is the row's holder, not the
                             // trigger's player: for a gate the trigger player
@@ -5846,15 +5893,18 @@ impl<M: CardModules> RulesBridge<M> {
             if world.out(player_id) {
                 continue;
             }
-            for (uid, id) in world.field_instances(player_id as i32) {
+            for (uid, raw) in world.field_instances(player_id as i32) {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                     continue;
                 }
+                // A marked instance runs its effective card's surface; the
+                // face-down mark stays on the row's own card.
+                let id = world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
                 let Some(idx) = self.ruleset.card(&id) else {
                     continue;
                 };
                 if self.ruleset.cards()[idx as usize].hooks(kind)
-                    && !world.card_face_down(player_id as i32, &id)
+                    && !world.card_face_down(player_id as i32, &raw)
                 {
                     jobs.push(HookJob {
                         call: Call::Hook {
@@ -5894,7 +5944,7 @@ impl<M: CardModules> RulesBridge<M> {
         if t.instance >= 0 {
             let row = world
                 .field_by_uid(t.instance)
-                .map(|f| (f.card.clone(), f.owner));
+                .map(|f| (f.effective_card.clone().unwrap_or_else(|| f.card.clone()), f.owner));
             let id = row.as_ref().map(|r| r.0.clone()).or(t.card.clone());
             // The row's holder, not the trigger's player (see the walk above).
             let seat = row.as_ref().map_or(t.player_id, |r| r.1);
@@ -5952,15 +6002,16 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             }
         }
-        for (uid, id) in board {
+        for (uid, raw) in board {
             if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                 continue;
             }
+            let id = world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
             let Some(idx) = self.ruleset.card(&id) else {
                 continue;
             };
             if self.ruleset.cards()[idx as usize].hooks(kind)
-                && !world.card_face_down(game_core::state::BOARD_OWNER, &id)
+                && !world.card_face_down(game_core::state::BOARD_OWNER, &raw)
             {
                 jobs.push(HookJob {
                     call: Call::Hook {
@@ -6478,6 +6529,13 @@ impl<M: CardModules> RulesBridge<M> {
             eprintln!("DEST uid={} card={} dest={}", uid, card, dest);
         }
         let mut w = cx.world_copy();
+        // `card` is the run's current surface, i.e. the stand-in when the
+        // instance is marked. What leaves the field is the **row's own** card
+        // (`effective_card` dies with the instance), so file that.
+        let filed = w
+            .field_by_uid(uid)
+            .map(|f| f.card.clone())
+            .unwrap_or_else(|| card.to_string());
         let left = w.unplace_at(uid);
         if left < 0 {
             // Not in play -- the run may have moved it already.
@@ -6487,10 +6545,10 @@ impl<M: CardModules> RulesBridge<M> {
         let who = to.unwrap_or(left);
         let mut refilled = false;
         if dest == DEST_GRAVEYARD {
-            refilled = w.to_discard(who, card);
+            refilled = w.to_discard(who, &filed);
         } else if dest == 1 {
             // Back to the hand (手牌).
-            w.add_to_hand(who, card);
+            w.add_to_hand(who, &filed);
         }
         // Banished (「banish」) is just "gone" -- it left above and goes nowhere.
         cx.swap_world(w);
@@ -6498,12 +6556,9 @@ impl<M: CardModules> RulesBridge<M> {
             self.raise_core(cx, "reshuffled", who, |_| {})?;
         }
         if dest == DEST_GRAVEYARD {
-            self.raise_core(cx, "discarded", who, |t| t.card = Some(card.to_string()))?;
+            self.raise_core(cx, "discarded", who, |t| t.card = Some(filed.clone()))?;
         } else if dest != 1 {
-            cx.log(
-                left,
-                Msg::new("log.card_removed").card("card", card.to_string()),
-            );
+            cx.log(left, Msg::new("log.card_removed").card("card", filed));
         }
         Ok(())
     }
@@ -7286,7 +7341,9 @@ impl<M: CardModules> RulesBridge<M> {
         let field = cx.world().field_instances(seat as i32);
         let face_down_ok = self.face_down_counter_ok(cx, seat);
         field.iter().any(|(uid, id)| {
-            let Some(idx) = self.ruleset.card(id) else {
+            // A marked instance offers its effective card's counteraction.
+            let eff = cx.world().effective_card_at(*uid).unwrap_or_else(|| id.clone());
+            let Some(idx) = self.ruleset.card(&eff) else {
                 return false;
             };
             let offered = if cx.world().is_face_down_at(*uid) {
@@ -7453,9 +7510,11 @@ impl<M: CardModules> RulesBridge<M> {
         }
         if !cx.world().out(s) {
             let face_down_ok = self.face_down_counter_ok(cx, s);
-            for (field_pos, (uid, id)) in
+            for (field_pos, (uid, raw)) in
                 cx.world().field_instances(s as i32).into_iter().enumerate()
             {
+                // A marked instance offers its effective card's counteraction.
+                let id = cx.world().effective_card_at(uid).unwrap_or(raw);
                 let Some(idx) = self.ruleset.card(&id) else {
                     continue;
                 };
@@ -9458,6 +9517,7 @@ impl<M: CardModules> RulesBridge<M> {
                 let group = source_group(world, uid);
                 // Q5: (group, source = player-major placement, decl = 0).
                 let key = effect_order_key(group, (p as u32) << 16 | n as u32, 0);
+                let id = world.effective_card_at(uid).unwrap_or(id);
                 push(key, (uid, p as i32, id), &mut keyed);
             }
         }
@@ -9467,6 +9527,7 @@ impl<M: CardModules> RulesBridge<M> {
             .enumerate()
         {
             let key = effect_order_key(LookupGroup::Board, n as u32, 0);
+            let id = world.effective_card_at(uid).unwrap_or(id);
             push(key, (uid, game_core::state::BOARD_OWNER, id), &mut keyed);
         }
         for (n, l) in world.turn.lingering.iter().enumerate() {
@@ -9891,12 +9952,14 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         }
         // Bind the instance when the card is already on the field (a skill
         // press), so `is_placed` / its named counters answer for it and not for a void
-        // `current_uid = -1`. A read of the live world -- no copy.
+        // `current_uid = -1`. A read of the live world -- no copy. A marked
+        // instance answers for its **effective** card too, so playing into it
+        // asks that surface's Play gate.
         let uid = cx
             .world()
             .field_instances(player_id as i32)
             .into_iter()
-            .find(|(_, id)| id == card)
+            .find(|(uid, _)| cx.world().effective_card_at(*uid).as_deref() == Some(card))
             .map_or(-1, |(uid, _)| uid);
         let run = Run {
             world: cx.share_world(),
@@ -10208,12 +10271,14 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         };
         // A skill press (`use_skill`) runs a *placed* card's play entry: bind
         // the instance so `is_placed` / its named counters read it and not a void
-        // `current_uid = -1`. A hand play has no instance yet (uid -1).
+        // `current_uid = -1`. A hand play has no instance yet (uid -1). A marked
+        // instance answers for its **effective** card: playing the stand-in on
+        // it runs that surface and keeps the row bound.
         let uid = cx
             .world()
             .field_instances(player_id as i32)
             .into_iter()
-            .find(|(_, id)| id == card)
+            .find(|(uid, _)| cx.world().effective_card_at(*uid).as_deref() == Some(card))
             .map_or(-1, |(uid, _)| uid);
         let mut trigger = Trigger {
             kind: TriggerKind::None,

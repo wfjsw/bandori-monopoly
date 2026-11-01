@@ -1172,6 +1172,11 @@ pub struct FieldCard {
     /// cannot overfill a 「上限N」 card. `0` or absent = uncapped.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub counter_max: BTreeMap<String, i32>,
+    /// The card whose printed surface this instance runs (`None` = its own).
+    /// Written by a stand-in, dies with the instance. The row's own `card`
+    /// still names the copy, its counters and where it is filed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_card: Option<String>,
     pub note: Msg,
 }
 
@@ -1190,6 +1195,7 @@ impl Default for FieldCard {
             group_skill: false,
             extra: false,
             counter_max: BTreeMap::new(),
+            effective_card: None,
             note: Msg::default(),
         }
     }

@@ -2218,6 +2218,8 @@ impl PlayCtx<'_> {
     /// move land on the running `Move`; [`Self::drop_plan_fresh`] clears the
     /// marks at the move's tail so they cannot leak either.
     fn drop_stale_plan_shape(&mut self) {
+        // A claim belongs to the move that raised it; a new move starts open.
+        self.w.turn.plan.claimed = false;
         // A `nextMove` factor is for exactly this move: fold it in and start
         // the slot clean for the following one.
         let next = std::mem::take(&mut self.w.turn.next_move_pay_factor);
@@ -2262,6 +2264,8 @@ impl PlayCtx<'_> {
     /// drops it).
     fn drop_plan_fresh(&mut self) {
         let p = &mut self.w.turn.plan;
+        // The claim is exactly the move whose pass raised it.
+        p.claimed = false;
         p.steps_fresh = false;
         p.stop_at_fresh = false;
         p.pay_fresh = false;

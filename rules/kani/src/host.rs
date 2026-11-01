@@ -886,6 +886,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::group_skill | Op::persona_skill => arm_band_skill(a),
         Op::group_skills => arm_band_skills(a),
         Op::add_group_skill => arm_add_band_skill(a),
+        Op::invoke_entry => arm_invoke_entry(a),
+        Op::invoke_frame => arm_invoke_frame(a),
         Op::invoke_skill => arm_invoke_skill(a),
 
         // ---- events ----
@@ -939,6 +941,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::body_leave => 0,
         Op::counter_max_at => 0,
         Op::set_counter_max_at => 0,
+        // ---- effective card + offer claim (G05 §5, §6.2) ----
+        Op::effective_card_at => arm_effective_card_at(a),
+        Op::set_effective_card_at => arm_set_effective_card_at(a),
+        Op::plan_claimed => world::with_world(|w| w.plan_claimed as i64),
+        Op::plan_claim => world::with_world_mut(|w| {
+            w.plan_claimed = true;
+            0
+        }),
         Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
         Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
         // ---- move payload (hostfns 1830–1880; sentinels when no move) ----
@@ -2233,14 +2243,150 @@ pub fn arm_inc_slot(a: Args) -> i64 {
     arm_state_add(a)
 }
 
+/// `invoke_entry` -- the nested guest does not run under Kani, so record the
+/// call facts (`G13` §5.5) and answer a symbolic `Dest`. `by_instance` is the
+/// running uid; `instance` is the target's own field slot, if any.
+pub fn arm_invoke_entry(a: Args) -> i64 {
+    let [player, card_p, card_n, entry_p, entry_n, flags] = a;
+    let card = name_id(card_p, card_n);
+    let entry = name_id(entry_p, entry_n);
+    let paid = flags & 1 != 0;
+    world::with_world_mut(|w| {
+        let by_instance = w.last_uid;
+        let instance = w
+            .field
+            .iter()
+            .find(|f| f.player == player && (f.card == card.0 || f.effective_card == card.0))
+            .map_or(-1, |f| f.uid);
+        let depth = w.invoke_n as i32;
+        if (w.invoke_n as usize) < world::MAX_INVOKE {
+            w.invoke_stack[w.invoke_n as usize] =
+                (card, entry, player, by_instance, instance, paid, depth);
+        }
+        w.invoke_n = w.invoke_n.saturating_add(1);
+        w.last_invoke = (card, entry, paid, by_instance);
+    });
+    #[cfg(kani)]
+    {
+        // A borrowed body lands on Graveyard or Field; an entry that names no
+        // destination answers `DEST_UNSET` (-1).
+        let d: i32 = kani::any();
+        kani::assume(d == -1 || d == 0 || d == 2);
+        d as i64
+    }
+    #[cfg(not(kani))]
+    {
+        0
+    }
+}
+
+/// `invoke_skill` -- the `HostOps` alias of [`arm_invoke_entry`] with the
+/// reserved `entry::PRESS` and no flags.
 pub fn arm_invoke_skill(a: Args) -> i64 {
-    let _ = a;
-    0
+    let [player, p, n, ..] = a;
+    let entry = intern::encode_handle(intern::intern(card_sdk::abi::entry::PRESS));
+    arm_invoke_entry([player, p, n, entry, 0, 0])
+}
+
+/// `invoke_frame` -- the innermost recorded frame, LE pair record
+/// `[card, entry, by, by_instance, instance, paid, depth]` (24 bytes).
+pub fn arm_invoke_frame(a: Args) -> i64 {
+    let [buf, cap, ..] = a;
+    if world::with_world(|w| w.invoke_n) == 0 {
+        return 0;
+    }
+    const RECORD: usize = 24;
+    if buf == 0 {
+        return RECORD as i64;
+    }
+    if cap < RECORD as i32 {
+        return -1;
+    }
+    let frame = world::with_world(|w| {
+        let i = (w.invoke_n as usize - 1).min(world::MAX_INVOKE - 1);
+        w.invoke_stack[i]
+    });
+    let (card, entry, by, by_instance, instance, paid, depth) = frame;
+    let mut encoded = [0u8; RECORD];
+    let cb = card.0.to_le_bytes();
+    let eb = entry.0.to_le_bytes();
+    encoded[0] = cb[0];
+    encoded[1] = cb[1];
+    encoded[2] = eb[0];
+    encoded[3] = eb[1];
+    // Constant offsets (the `arm_field_instances` shape): no dynamic index for
+    // CBMC to prove.
+    let bb = by.to_le_bytes();
+    encoded[4] = bb[0];
+    encoded[5] = bb[1];
+    encoded[6] = bb[2];
+    encoded[7] = bb[3];
+    let ib = by_instance.to_le_bytes();
+    encoded[8] = ib[0];
+    encoded[9] = ib[1];
+    encoded[10] = ib[2];
+    encoded[11] = ib[3];
+    let nb = instance.to_le_bytes();
+    encoded[12] = nb[0];
+    encoded[13] = nb[1];
+    encoded[14] = nb[2];
+    encoded[15] = nb[3];
+    let pb = (paid as i32).to_le_bytes();
+    encoded[16] = pb[0];
+    encoded[17] = pb[1];
+    encoded[18] = pb[2];
+    encoded[19] = pb[3];
+    let db = depth.to_le_bytes();
+    encoded[20] = db[0];
+    encoded[21] = db[1];
+    encoded[22] = db[2];
+    encoded[23] = db[3];
+    card_sdk::native::write(buf, &encoded);
+    RECORD as i64
 }
 
 pub fn arm_is_placed(a: Args) -> i64 {
     let _ = a;
-    world::with_world(|w| (w.field_n > 0) as i64)
+    // Instance-bound: the *running* uid must have a slot. `field_n > 0` was
+    // wrong with a second copy -- or any other card -- on the field.
+    world::with_world(|w| {
+        (w.last_uid != 0 && w.field.iter().any(|f| f.uid == w.last_uid)) as i64
+    })
+}
+
+/// `effective_card_at` -- LE `u16` id of the surface card (2 bytes), 0 when
+/// the instance is not in play; `buf == 0` is the size probe.
+pub fn arm_effective_card_at(a: Args) -> i64 {
+    let [a0, buf, cap, ..] = a;
+    let id = world::with_world(|w| {
+        w.field
+            .iter()
+            .find(|f| f.uid == a0)
+            .map(|f| f.effective_card)
+    });
+    let Some(id) = id else { return 0 };
+    if buf == 0 {
+        return 2;
+    }
+    if cap < 2 {
+        return -1;
+    }
+    card_sdk::native::write(buf, &id.to_le_bytes());
+    2
+}
+
+/// `set_effective_card_at` -- `INVALID` clears; 0 when the uid has no slot.
+pub fn arm_set_effective_card_at(a: Args) -> i64 {
+    let [a0, p, n, ..] = a;
+    let id = name_id(p, n);
+    world::with_world_mut(|w| {
+        if let Some(f) = w.field.iter_mut().find(|f| f.uid == a0) {
+            f.effective_card = if id.is_valid() { id.0 } else { u16::MAX };
+            1
+        } else {
+            0
+        }
+    })
 }
 
 pub fn arm_rent_of(a: Args) -> i64 {
@@ -2491,6 +2637,7 @@ pub fn arm_place_card(a: Args) -> i64 {
                 immune: false,
                 crystals: 0,
                 props: world::NameMap::new(),
+                effective_card: u16::MAX,
             };
             w.field_n += 1;
         }
@@ -2527,6 +2674,7 @@ pub fn arm_place_card_at(a: Args) -> i64 {
                     immune: false,
                     crystals: 0,
                     props: world::NameMap::new(),
+                    effective_card: u16::MAX,
                 };
                 w.field_n += 1;
             }
@@ -2564,6 +2712,7 @@ pub fn arm_place_card_on(a: Args) -> i64 {
                     immune: false,
                     crystals: 0,
                     props: world::NameMap::new(),
+                    effective_card: u16::MAX,
                 };
                 w.field_n += 1;
             }
@@ -2612,7 +2761,14 @@ pub fn arm_placed_cards(a: Args) -> i64 {
         let mut i = 0usize;
         while i < w.field_n as usize {
             if w.field[i].player == a0 {
-                let name = intern::resolve_str(intern::NameId(w.field[i].card));
+                // Dispatch resolution: a marked instance answers with the
+                // stand-in's surface, never the row's own card.
+                let card = if w.field[i].effective_card == u16::MAX {
+                    w.field[i].card
+                } else {
+                    w.field[i].effective_card
+                };
+                let name = intern::resolve_str(intern::NameId(card));
                 v.push(name.to_string());
             }
             i += 1;

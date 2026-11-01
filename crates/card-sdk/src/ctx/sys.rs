@@ -859,11 +859,6 @@ mod abi {
         pub fn add_group_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_invoke_skill"
-        )]
-        pub fn invoke_skill(player_id: i32, p: i32, n: i32) -> i32;
-        #[cfg_attr(
-            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_raise_bought"
         )]
         pub fn raise_bought(player_id: i32, tile: i32) -> i32;
@@ -1100,6 +1095,18 @@ mod abi {
             link_name = "ruleset_set_counter_max_at"
         )]
         pub fn set_counter_max_at(uid: i32, p: i32, n: i32, max: i32) -> i32;
+        // v111: the card whose printed surface this instance runs (raw bytes;
+        // `buf == 0` is a size probe). The setter clears on an empty string.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_effective_card_at"
+        )]
+        pub fn effective_card_at(uid: i32, buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_effective_card_at"
+        )]
+        pub fn set_effective_card_at(uid: i32, p: i32, n: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_step"
@@ -1342,6 +1349,26 @@ mod abi {
             link_name = "ruleset_play_card"
         )]
         pub fn play_card(id_ptr: i32, id_len: i32, player_id: i32) -> i32;
+        // v111: run one named entry nested (`flags` bit 0 =
+        // `abi::invoke::COST_PAID`); the frame import reads the innermost open
+        // frame as postcard `InvokeFrame` (`(0, 0)` = size probe).
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_invoke_entry"
+        )]
+        pub fn invoke_entry(
+            player_id: i32,
+            card_p: i32,
+            card_n: i32,
+            entry_p: i32,
+            entry_n: i32,
+            flags: i32,
+        ) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_invoke_frame"
+        )]
+        pub fn invoke_frame(out_ptr: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_run_planned_move"
@@ -1372,6 +1399,16 @@ mod abi {
             link_name = "ruleset_set_steps"
         )]
         pub fn set_steps(n: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_plan_claim"
+        )]
+        pub fn plan_claim();
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_plan_claimed"
+        )]
+        pub fn plan_claimed() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_reverse"

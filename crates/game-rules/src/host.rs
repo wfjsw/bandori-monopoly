@@ -1054,7 +1054,11 @@ impl RulesetBuilder {
             for (ei, o) in c.on.iter().enumerate() {
                 let ok = OnKind::from_i32(o.kind);
                 // ABI v73: kind/variant agreement -- a Filter may only list
-                // filter kinds and an Action only non-filter kinds.
+                // filter kinds and an Action only non-filter kinds. ABI v111
+                // relaxes one direction: a **dual** kind (ABI v111
+                // `DiceRollPlan`, `is_dual_action_filter`) is a filter kind an
+                // Action entry may also declare, so an Action may list any
+                // engine kind that is not filter-*only*.
                 // Ruleset kinds are exempt: `is_filter` answers false for them,
                 // so the host treats OnKind as authoritative (a later phase
                 // emits a registration table).
@@ -1062,7 +1066,12 @@ impl RulesetBuilder {
                     let want_filter = ok == Some(OnKind::Filter);
                     for s in &o.triggers {
                         let tk = crate::TriggerKind::from_str(s);
-                        if tk.ns == card_sdk::abi::KindNs::Engine && tk.is_filter() != want_filter {
+                        let wrong = if want_filter {
+                            !tk.is_filter()
+                        } else {
+                            tk.is_filter() && !tk.is_dual_action_filter()
+                        };
+                        if tk.ns == card_sdk::abi::KindNs::Engine && wrong {
                             return Err(RuleError::Load(format!(
                                 "{} entry {ei}: {} lists trigger {} which is filter={} (see TriggerKind::is_filter)",
                                 c.id,
@@ -2970,6 +2979,24 @@ pub struct HostState<W, R = DefaultRules> {
     /// store limiter.
     #[cfg(feature = "sandbox")]
     pub limits: be::StoreLimits,
+    /// Open invocation frames, innermost last (`G13` §5.2). A nested run gets
+    /// the caller's stack, pushes its own frame and pops it on return; the
+    /// stack is transient (a pause re-derives it on the resume), so it is not
+    /// saved.
+    pub invoke_frames: Vec<InvokeFrameRecord>,
+}
+
+/// One open invocation frame as the host stores it (`ruleset_invoke_frame`).
+/// Strings here; the guest interns both names on decode. `entry` is the
+/// **resolved** entry's declared id (`""` when unnamed), never the alias.
+pub struct InvokeFrameRecord {
+    pub card: String,
+    pub entry: String,
+    pub by: i32,
+    pub by_instance: i32,
+    pub instance: i32,
+    pub paid: bool,
+    pub depth: i32,
 }
 
 #[cfg(feature = "sandbox")]
@@ -2992,6 +3019,7 @@ fn new_store<W>(engine: &Engine, state: HostState<W>) -> Store<HostState<W>> {
 impl<W, R: RulesHandle> HostState<W, R> {
     pub fn new(rules: R, world: W, answers: Vec<i32>, depth: u32) -> Self {
         Self {
+            invoke_frames: Vec::new(),
             rules: Some(rules),
             world: Some(world),
             answers,
@@ -3893,6 +3921,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "effective_card_at",
+        |mut c: C<W>, uid: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::effective_card_at(&mut c, uid, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_effective_card_at",
+        |mut c: C<W>, uid: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::set_effective_card_at(&mut c, uid, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "set_counter_max_at",
         |mut c: C<W>, uid: i32, p: i32, n: i32, max: i32| -> Result<i32, Error> {
             hostfns::set_counter_max_at(&mut c, uid, p, n, max).map_err(HostError::into_err)
@@ -4702,6 +4744,33 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::add_group_skill(&mut c, player_id, p, n, extra).map_err(HostError::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "invoke_entry",
+        |mut c: C<W>,
+         player_id: i32,
+         card_p: i32,
+         card_n: i32,
+         entry_p: i32,
+         entry_n: i32,
+         flags: i32|
+         -> Result<i32, Error> {
+            let card = hostfns::guest_str(&mut c, card_p, card_n).map_err(HostError::into_err)?;
+            let entry =
+                hostfns::guest_str(&mut c, entry_p, entry_n).map_err(HostError::into_err)?;
+            hostfns::invoke_entry(&mut c, player_id, &card, &entry, flags)
+                .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "invoke_frame",
+        |mut c: C<W>, out_ptr: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::invoke_frame(&mut c, out_ptr, cap).map_err(HostError::into_err)
+        },
+    )?;
+    // v111 alias: a pre-v111 wasm still imports this. It is exactly
+    // `invoke_entry(…, entry::PRESS, 0)`.
     l.func_wrap(
         m,
         "invoke_skill",
@@ -5606,6 +5675,12 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "set_steps", |mut c: C<W>, v: i32| -> Result<(), Error> {
         hostfns::set_steps(&mut c, v).map_err(HostError::into_err)
     })?;
+    l.func_wrap(m, "plan_claim", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::plan_claim(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "plan_claimed", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::plan_claimed(&mut c).map_err(HostError::into_err)
+    })?;
     l.func_wrap(
         m,
         "set_reverse",
@@ -5857,6 +5932,7 @@ impl HostState<NullWorld> {
             msg_reply: 0,
             #[cfg(feature = "sandbox")]
             limits: store_limits(),
+            invoke_frames: Vec::new(),
         }
     }
 }
@@ -6216,6 +6292,37 @@ mod gate_tests {
             presentation: Default::default(),
             flash: Default::default(),
         }
+    }
+
+    fn action(kind: crate::TriggerKind) -> ManifestOn {
+        ManifestOn {
+            kind: OnKind::Action as i32,
+            triggers: vec![kind.spelling().into_owned()],
+            condition: None,
+            has_guard: false,
+            has_declare: false,
+            id: None,
+            messages: vec![],
+            label: None,
+            presentation: Default::default(),
+            flash: Default::default(),
+        }
+    }
+
+    /// Kind/variant agreement holds one way only. A dual kind (ABI v111
+    /// `DiceRollPlan`) is a filter kind an `Action` entry may also list, so the
+    /// Action side admits it; a filter-*only* kind still fails.
+    #[test]
+    fn action_may_list_a_dual_kind_but_not_a_filter_kind() {
+        let mut bad = Ruleset::builder();
+        bad.cards.push(card(vec![action(crate::TriggerKind::SettleMul)]));
+        assert!(
+            matches!(bad.build(), Err(RuleError::Load(ref m)) if m.contains("filter=")),
+            "a filter-only kind on an Action is refused"
+        );
+        let mut ok = Ruleset::builder();
+        ok.cards.push(card(vec![action(crate::TriggerKind::DiceRollPlan)]));
+        ok.build().expect("the dual kind is admitted on an Action");
     }
 
     /// A capability gate must be CEL-only: a residual guard or a missing

@@ -15,6 +15,8 @@
   "mashiro_pay_half": "(Mashiro): {{who}} also loses {{n}}",
   "mashiro_pay_rewritten": "(Mashiro): the {{money}} {{to}} was paying {{who}} becomes a loss, and they lose {{half}} more",
   "mashiro_pay_when": "when you are about to pay another player",
+  "nanami_effort_ask_text": "Remove 1 Miracle Crystal to use your (2) skill?",
+  "nanami_effort_ask_title": "Nanami, trying a little",
   "nanami_effort_discard_down": "{{who}} discarded their hand down to 5 cards",
   "nanami_effort_effect_1": "Draw that many; discard down to 5 at turn end",
   "nanami_effort_effect_2": "Gain 2,000 each",
