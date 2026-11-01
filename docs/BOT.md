@@ -1026,6 +1026,15 @@ per-counteract entry is the card's own spec (0 = hold it back); a card with no
 entry takes `counteract_propensity_milli`. Chaos is **not** parameterised: it
 keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE` as literals.
 
+**Placed-card presses (G05).** The viewer list carries one action per clause of
+each field instance (`SkillAction.instance` / `.entry`). `skills[id]` keys on the
+*card id* and applies to every clause of that card. A plain card (an id with no
+`skill:` prefix) has no book entry by default, so its press would read as
+"never"; a non-`skill:` id therefore defaults to the neutral weight and is
+pressed **once per turn**, de-duplicated by `TurnCtx.pressed` (`"<instance>:<entry>"`,
+also broadcast as `MatchState.pressed`). `skill:` ids keep the "never" default.
+Two copies of one card are two instances and are pressed independently.
+
 The `[pass-reward]` card roll is not a book param either (web 托管 only, user
 ruling 2026-10-28): at or below 8 000 money the standard bot takes the 2 000
 print, the card odds then rise superlinearly (`t²`) to certain at 80 000, and

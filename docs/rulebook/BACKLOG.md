@@ -153,7 +153,7 @@ Design: `docs/rulebook/spec/abi/G04-move-plan.md`
 
 Design: `docs/rulebook/spec/abi/G05-placed-card-press.md`
 
-- **press-surface-placed-card** (high, rows 380,487,488,490,955,967,974,1521,1555) — Placed non-skill cards and field actions are on no press surface; `rules/cards/card-hhw/src/kanon_march.rs`
+- **press-surface-placed-card** (high, rows 607,608,619,620,621,798,801,930,931,932,936,972,1614; the filed 380,487,488,490,955,967,974,1521,1555 are mis-filed — see G05 §0) — Placed non-skill cards and field actions are on no press surface; `crates/game-core/src/engine/mod.rs:1416`
 
 ## G06 — Counteraction, join and negation windows
 

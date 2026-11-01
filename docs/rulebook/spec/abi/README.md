@@ -45,8 +45,9 @@ suites after each landing.
 onward and gave G01/G08 no Op row at all, although G01's revised draft imports
 functions and G08's imports twenty. G01's review then dropped its `Actions`
 offer kind in favour of G05's press surface, and a second review split two
-concerns out of G01 — `real_id` to G05 and `created_by` to G08 — because they
-are offer/skin and zone lifecycle, not identity. G01 keeps six ops (341–346)
+concerns out of G01 — `effective_card` (then spelt `real_id`) to G05 and
+`created_by` to G08 — because they are offer/skin and zone lifecycle, not
+identity. G01 keeps six ops (341–346)
 and its two kinds (111–112); the vacated ids sit with their new groups
 (G05 347–348, G08 349) so no later band moves for them. Recounted from base
 340 in landing order, G08's twenty imports take 349–368 and every group from
@@ -105,7 +106,7 @@ Couplings a reviewer must keep in one head:
 | G02 | Pay pipeline payload, stages and raw-money windows | 7 | [G02](G02-pay-pipeline.md) |
 | G03 | Roll pipeline stages and prompt option actions | 5 | [G03](G03-roll-and-prompts.md) |
 | G04 | Move plan, walk sync and forced moves | 7 | [G04](G04-move-plan.md) |
-| G05 | Press surface for placed cards | 2 | [G05](G05-placed-card-press.md) |
+| G05 | Press surface for placed cards | 5 (1 shared with G13) | [G05](G05-placed-card-press.md) |
 | G06 | Counteraction, join and negation windows | 6 | [G06](G06-counteraction-and-join.md) |
 | G07 | Targeting pipeline and distance | 2 | [G07](G07-targeting-and-distance.md) |
 | G08 | Zone and attachment lifecycle | 11 | [G08](G08-zone-lifecycle.md) |
@@ -176,7 +177,7 @@ map (consolidated → slugs the document names):
 | `effect-move-forced-path` | `sakiko-followers-card-move`, `misaki-teleport`, `dest-forced-hop`, `plan-set-forced` |
 | `trigger-walk-payload` | `detour-parity-unused`, `misaki-planned-start`, `misaki-fire-roll-signal` |
 | `nested-teleport-tail` | `lisa-bond-nested-teleport-window` |
-| `press-surface-placed-card` | `kanon-press-surface-abi`, `even-lost-not-pressable`, `placed-card-press-surface`, `hina-clause-2-swap-missing` |
+| `press-surface-placed-card` | `nanami-press-invokes-clause-3` (shared with G13), `kanon-press-surface-abi`, `even-lost-not-pressable`, `placed-card-press-surface`, `hina-clause-2-swap-missing` — the consolidated row's nine rows are mis-filed; G05 §0 gives the true rows |
 | `join-window-report` | `net-error-join-draw-ownership`, `net-error-join-used-getter`, `mana-nested-window`, `mana-joiner-count`, `rain-designates-prop` |
 | `extreme-range-event-counter` | `extreme-range-filter-missing`, `event-effects-not-counterable` |
 | `counter-link-move-face` | `repaint-counter-link-roll` |

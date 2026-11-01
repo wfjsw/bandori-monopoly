@@ -36,17 +36,17 @@ and are identified by their triage row id.
 
 | # | draft said | why it was wrong | revision |
 |---|---|---|---|
-| R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Press(id, …)`, `NetMessage.{uid,entry}`, `act = "press"`, `SkillAction.{uid,entry,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §6.5. | Drop the offer half entirely. G01 ships the `real_id` store and accessors; G05 ships every offer wire. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
-| R2 | uid is stamped only in `Match::counteract` (`play.rs:5226`) and `cardFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
+| R1 | `ActionKind::Actions` (kind 113), `entry::ACTION`, `act = "action"`, `SkillAction.act`, `NetMessage.value` | G05's press surface (landed after G01) already defines the placed-card offer: `On::Press(id, …)`, `NetMessage.{instance,entry}`, `act = "press"`, `SkillAction.{instance,entry,label}`. G01's `Actions` is a second offer channel for the same cards, and its only consumer (hina) is explicitly G05's press in G05 §9.5. | Drop the offer half entirely. G01 ships no offer wire; the effective-card store and accessors are G05 §6.2. Kinds go 111–112, not 111–113. Hina's card edit lands with G05. |
+| R2 | uid is stamped only in `Match::counteract` (`play.rs:5918`) and `cardFired` is raised at body entry in `drive_inner_body_from` | `Run::raise_core` calls `Ruleset::counteract` directly, not `Match::counteract`, so bridge raises would keep uid 0. And `ctx::invoke_skill` / `ctx::play_card` (and G05/G13's `invoke_entry`) run a body through `call_entry` in the **guest** and never reach the host drive, so neither the signal nor a resolving frame would exist for them. | Stamp in `Ruleset::counteract`, the one choke both paths cross (§5.1). Raise the signal at the guest body entry (`body_enter`), which all three paths cross, and keep the frames host-side, pinned to the raise that carried the body (§5.4). |
 | R3 | hook jobs are enumerated from fields only | A `markChanged` caused by destruction names an instance that is **already unplaced** by the time the raise commits (`unplace_at` removes before `commit_after`), so the field walk misses the very instance whose hook must resync/discard. | `collect_hook_jobs` also adds a job for the raise's subject instance (alive or dead) and one per resolving frame (§5.3). |
 | R4 | umiri's fix reads `card.counter('umiri_user')` in a pre | `fill_candidate` resolves `card.*` by `(player, card id)` — the **first** copy — so two copies read one counter and item 9 stays broken. | `CandidateCtx` gains the running `uid`; `card.counter` / `card.tile` / `card.placed` resolve through it when set (§5.5). |
 | R5 | the G01 README allocation gives no Kani `Op` ids | G01 adds six imports; each needs an `Op` and an arm (`sys_kani`, `kani_host`, `host.rs` are exhaustive). Without ids the Kani build cannot compile. | Take 341–346 and shift the later groups' bands (README table updated with this file). |
 | R6 | claims for "one per raise" ride per-raise player slots (`ctx::slot(player, "black.pass.<uid>")`) | A per-raise key is never cleaned; every pass/mark trigger adds a permanent state key. | Claim on **one fixed-key seat latch** holding the raise uid (`state::get(player, CLAIM) != trigger::uid()`): one key per card, overwritten in place, shared by every copy so two copies answer one raise once (§6.3, §6.4, §6.7). |
 | R7 | `remove_from_game` drains the mark log "at its end" | `remove_from_game` returns `Vec<usize>`, not `Flow`, and its two callers do not propagate a raise. | It returns `Flow<Vec<usize>>`; both callers `?` (§5.3). |
-| R8 | `counterMax`, `createdBy` (created_by), `real_id` stamping | hina's substitute would be destroyed with hina's own instance when hina is banished (`:85`) — `created_by` alone kills the stand-in. | Lifecycle (`created_by` + `set_created_by_at`) moves to G08 and the substitute marker (`real_id`) to G05; the cap stays here (R11). |
+| R8 | `counterMax`, `createdBy` (created_by), `effectiveCard` stamping | hina's substitute would be destroyed with hina's own instance when hina is banished (`:85`) — `created_by` alone kills the stand-in. | Lifecycle (`created_by` + `set_created_by_at`) moves to G08 and the substitute marker (`effective_card`, formerly `real_id`) to G05; the cap stays here (R11). |
 | R9 | cited line numbers from the 2026-10-28 base | Master moved (landing-log, walk-pace, detour `linger`, sparkler props). Every reference is re-read below; item 6 is already fixed on master. | References updated; §6.6 records the landed fix. |
 | R10 | "RECORD_VERSION stays 3" | It is **4** (`record.rs:48`). | Corrected (§7). |
-| R11 | one group carried three unrelated concerns | `real_id` is offer/skin (G05 already enumerates presses and resolves an effective card) and `created_by` is zone lifecycle (G08 owns the zone writer, attachments and destruction). Keeping them here made G01 report on three subsystems at once and coupled its landing to two others. | G01 keeps only identity and its three stores: raise uid, subject instance, counter cap. `real_id` moves to G05 §4.4, `created_by` to G08 §4.9; their `Op` ids 347–349 stay with those groups in place. |
+| R11 | one group carried three unrelated concerns | `effective_card` is offer/skin (G05 already enumerates presses and resolves an effective card) and `created_by` is zone lifecycle (G08 owns the zone writer, attachments and destruction). Keeping them here made G01 report on three subsystems at once and coupled its landing to two others. | G01 keeps only identity and its three stores: raise uid, subject instance, counter cap. `effective_card` (then spelled `real_id`) moves to G05 §6.2, `created_by` to G08 §4.9; their `Op` ids 347–349 stay with those groups in place. |
 
 All line references below are against `a0403648`.
 
@@ -71,7 +71,7 @@ The skill that fires here is `skill:八潮瑠唯:正论暴击`
 (`rules/skills/skill-personas/src/rui.rs`), and **`On::Action(Pay)`** — a
 post-settlement hook body dispatched by `collect_hook_jobs`
 (`crates/game-rules/src/wasm_rules.rs:5292`) from the money pipeline, not by
-`use_skill`. `use_skill` raises `cardUsed` (`crates/game-core/src/engine/play.rs:979-990`)
+`use_skill`. `use_skill` raises `cardUsed` (`crates/game-core/src/engine/play.rs:1168-1176`)
 only on a press, so hook-driven skill bodies have no fire signal at all. The
 card also cannot ask "did this fire happen during *my* resolution": `Run` has
 one `current_card` (`wasm_rules.rs:222-228`) which a nested `play_card`
@@ -189,17 +189,16 @@ at `:78-82` says per-instance state exists (`set_prop`) "but a pre cannot read
 props" — and, as R4 notes, `card.counter` cannot distinguish the two copies
 either.
 
-### 2.10 `hina-clause-2-swap-missing` — rows 487, 488, 490, 1555
+### 2.10 `hina-clause-2-swap-missing` — rows 930, 931, 932, 936, 972
 
 > （2）[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。
 
-`rules/cards/card-pp/src/hina_sound.rs` has two TODOs (`:86-89`, `:90-95`):
-there is no RealId marking on the placed substitute and no surface to offer
-the swap. The card marks nothing after `ctx::play_card` (`:81`) and leaves play
-(`:85`, `Banished`), so no later code can find the substitute. The offer
-surface today only enumerates `skill:*` field instances with an `On::Play`
-(`crates/game-core/src/engine/mod.rs:1398-1425`); a non-skill card cannot be
-pressed.
+`rules/cards/card-pp/src/hina_sound.rs` has no marker on the placed substitute
+and no surface to offer the swap. The card marks nothing after
+`ctx::play_card` (`:71`) and leaves play (`:73`, `Banished`), so no later code
+can find the substitute. The offer surface today only enumerates `skill:*` field
+instances with an `On::Play` (`crates/game-core/src/engine/mod.rs:1416`); a
+non-skill card cannot be pressed.
 
 `[共鸣]` is the derived fuel card `PP:[衍生]共鸣`, spent by
 `resonance::try_resonance` (`rules/cards/card-pp/src/resonance.rs:44-75`); the
@@ -207,8 +206,8 @@ gate spelling used elsewhere is `ctx::hand_count(player, "PP:[衍生]共鸣") > 
 (`see_you_tomorrow.rs:51`).
 
 **Where it went.** Both halves are offer-and-skin concerns, not identity:
-the substitute marker (`real_id`) and hina's two marker writes are G05 §4.4,
-and the lifetime edge that keeps the stand-in alive (`created_by`,
+the substitute marker (`effective_card`) and hina's two marker writes are G05
+§6.2/§9.5, and the lifetime edge that keeps the stand-in alive (`created_by`,
 `set_created_by_at`) is G08 §4.9. G01 supplies only the plumbing they read
 (`trigger::uid()`, the instance uid).
 
@@ -352,7 +351,7 @@ pub const MarkChanged: Self = Self::engine(112);  // wire "markChanged", hook-on
 
 - `Action::CardFired(pre, guard, body)`,
   `Action::MarkChanged(pre, guard, body)` — added to the `action_kinds!` engine
-  table (`kinds.rs:638`), one `EngineKind` row each in
+  table (`crates/card-sdk/src/kinds.rs:638`), one `EngineKind` row each in
   `crates/game-kinds/src/lib.rs` with `hook_only: true`,
   `is_filter: false`, plus `from_wire` arms. Both are hook-only so no
   counteraction window opens.
@@ -375,13 +374,13 @@ resolving('card:id') -> 0 | 1
 
 `Scope::Func { arity: 1, cand: false }`, `Fx::StrInt` over a new
 `WindowCtx.resolving: Vec<i64>` table (ids, `id_of` encoding; same shape as
-`_move_tags`). `fill_window` (`cond_pre.rs:1228`) fills it from the world's
+`_move_tags`). `fill_window` (`condition.rs:1325`) fills it from the world's
 resolution stack; `SnapSrc` gains `fn resolving(&self) -> Vec<String>` with an
 empty default so fixture worlds compile. Used by `rui_devil`'s pre (§6.1) —
 it must sit in the **window**, not the candidate, because the resolving card is
 not the trigger's card.
 
-### 4.5 Candidate identity — `crates/cond/src/ctx.rs`, `cond_pre.rs`
+### 4.5 Candidate identity — `crates/cond/src/ctx.rs`, `crates/game-rules/src/condition.rs`
 
 `CandidateCtx` gains `pub uid: i64` (`-1` = no instance). A new
 `fill_candidate_uid(world, owner, card, uid)` fills `card_placed`,
@@ -393,9 +392,9 @@ running card (`host.rs:1590`, `:1882`, `:2042`, `:2098`) pass
 
 ### 4.6 Client / view wire
 
-**None.** G01 lands no client field of its own; G05's `SkillAction.uid` is the
-carrier once it lands. `real_id` never reaches the client directly (G05's
-effective-card resolution reads it host-side).
+**None.** G01 lands no client field of its own; G05's `SkillAction.instance` is
+the carrier once it lands. `effective_card` never reaches the client directly
+(G05's effective-card resolution reads it host-side).
 
 ### 4.7 ManifestOn changes
 
@@ -422,11 +421,11 @@ No signature is removed and no existing byte layout changes.
 ### 5.1 Raise identity (`uid`)
 
 - `MatchState.trigger_uid: i32` — `#[serde(default)]`, monotone, never reused.
-  It is the analogue of `next_mark_uid` (`state.rs:196`), including the floor
+  It is the analogue of `next_mark_uid` (`ops.rs:2099`), including the floor
   at the largest uid in a restored world (`ops.rs:1980-1984` shape).
 - The **single** assignment point is `Ruleset::counteract`
-  (`wasm_rules.rs:9506`), the one function both `Match::counteract`
-  (`play.rs:5226`) and `Run::raise_core` (`wasm_rules.rs:5862-5875`) reach:
+  (`wasm_rules.rs:10309`), the one function both `Match::counteract`
+  (`play.rs:5918`) and `Run::raise_core` (`wasm_rules.rs:5862-5875`) reach:
   `if t.uid == 0 { t.uid = cx.world_mut().next_trigger_uid(); }`. A trigger
   built directly by a test keeps `0` and reads as "no identity"; a resumed
   half-trigger keeps the value it was born with.
@@ -469,7 +468,7 @@ No signature is removed and no existing byte layout changes.
   resolving pass runs last: a frame and a dead subject for the same uid are
   the same job, and a body that is also on the field or the board is driven
   once rather than hearing its own raise twice.
-- `remove_from_game` (`play.rs:4451`) becomes `Flow<Vec<usize>>` and drains
+- `remove_from_game` (`play.rs:5107`) becomes `Flow<Vec<usize>>` and drains
   the log after its clears, so a purge's removals are raised even when no
   further run commits. Both call sites (`:4402`, `:4436`) propagate with `?`.
   Its field is cleared *before* `destroy_instance_units` (`:4488-4497`), which
@@ -533,7 +532,7 @@ No signature is removed and no existing byte layout changes.
   on the field or the board hears its own raise once.
 - The guard for a cancelled fire is the existing `is_cancelled()` read on the
   raised trigger, exactly as `use_skill` treats a cancelled `cardUsed`
-  (`play.rs:1026-1036`).
+  (`play.rs:1181-1183`).
 - One raise per body entry, not per ask pass: the raise is outside the
   learn/commit `loop` (`wasm_rules.rs:3157`), so the commit pass re-runs guest
   writes but does not re-raise.
@@ -881,7 +880,7 @@ to pin claim stability.
 `kani_host::Op` gains six append-only ids in the README band 341–346:
 `trig_uid = 341`, `trig_instance = 342`, `body_enter = 343`,
 `body_leave = 344`, `counter_max_at = 345`, `set_counter_max_at = 346`.
-347–349 stay free; G05 (`real_id_at` / `set_real_id_at`) and G08
+347–349 stay free; G05 (`effective_card_at` / `set_effective_card_at`) and G08
 (`set_created_by_at`) take them from their own docs without a renumber.
 Every new `Op` also lands in `hostops_smoke.rs`, `sys_kani.rs`,
 `native_shims.rs` and the `host.rs` dispatch.
@@ -978,7 +977,7 @@ names and ids.
    the chain depth bounds it, and the claim spell makes a per-copy listener
    idempotent. The contract "listener writes must be idempotent per raise" is
    a ruling the doc assumes.
-5. **(G05)** `real_id` scope: the marker does not change the card id, so
+5. **(G05)** `effective_card` scope: the marker does not change the card id, so
    counters, props and `dest` stay the instance's. Confirm that a marked
    substitute should also keep its own `On::Play` for a non-press re-fire.
 6. **(G05)** Hina clause (2) frequency — once per turn, once per resolution, or
@@ -986,8 +985,8 @@ names and ids.
 7. **(G05)** Hina's inner play refusal: if the newly played substitute refuses
    and stays in hand, the host instance is already unplaced and the crystals
    are lost. Re-place and refund, or treat it as legal?
-8. **(G05)** `real_id` on a card that is itself a stand-in for two ids — is a
-   chain ever needed? Not ruled; one level assumed.
+8. **(G05)** `effective_card` on a card that is itself a stand-in for two ids —
+   is a chain ever needed? Not ruled; one level assumed.
 9. **`trigger::uid()` on synthetic triggers.** A test-built trigger has `0`.
    A claim keyed on `0` matches every synthetic raise in the test. Confirm
    that is acceptable, or reserve `0` as "no identity" and skip claiming.

@@ -541,8 +541,9 @@ literals.
 **`chaos`** is legal but maximally disruptive and effect-heavy: it plays a card
 at every legal opportunity (no odds roll, no per-turn cap beyond the engine's
 own; the rule's `ai_play` heuristic is ignored, only `cant_play` counts), presses
-character and band skills whenever they are usable (at most once each per turn,
-so a no-op skill cannot park it), and picks uniformly among the non-default
+every enabled skill and placed-card clause whenever it is usable (at most once
+per `(instance, entry)` per turn via `turn.pressed`, so a no-op press cannot park
+it), and picks uniformly among the non-default
 prompt options -- a tile prompt gets a random target, never 「无」 while one
 exists. An offered [反击] is the one gate left: it declares on only
 **`CHAOS_COUNTER_CHANCE = 0.3`** of the offers it gets (a random offered card)

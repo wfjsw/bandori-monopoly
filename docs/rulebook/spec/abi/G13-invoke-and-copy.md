@@ -72,11 +72,11 @@ The `entry::PRESS` slug from v98 can *probe* an entry, but there is no way to
 
 **(b) The invoked skill loses its instance.** `play_card` and `invoke_skill`
 call `enter_card`, which replaces `current_uid` with `-1` and never re-binds
-(`hostfns.rs:2723-2726`, `:1360-1362`; `wasm_rules.rs:2343-2351`). Every
+(`hostfns.rs:1553`, `:3062`; `wasm_rules.rs:2520-2528`). Every
 self-addressed read inside the invoked body therefore answers 0 / false:
 `ctx::crystals()` (`bandori-std/src/lib.rs:213-215` → `counter` →
-`counter_at(current_uid, …)`, `wasm_rules.rs:1318`), `ctx::is_placed()`
-(`:1315`), `ctx::self_uid()`, `ctx::prop_at(self_uid(), …)`, the instance pools,
+`counter_at(current_uid, …)`, `wasm_rules.rs:1458`), `ctx::is_placed()`
+(`:1409`), `ctx::self_uid()`, `ctx::prop_at(self_uid(), …)`, the instance pools,
 and the `CounterChanged` raise against the instance.
 
 Consequences in the tree:
@@ -133,10 +133,10 @@ a settle, and never runs the skill's own code — so every future fix to 诗超�
 The existing implementation also shows *why* a bare "call the skill" is not
 enough: the skill's body asks and spends **4** fire, while 内心的呐喊 (3) says
 **1**; and the skill's own delay uses `state::set(player_id, DUE, 1)` +
-`On::Action(Action::TurnEnd("actor == owner" …))` (`tomori.rs:191`,
-`:59-62`), i.e. a **placed** instance's hook — the borrowed skill is not placed,
+`On::Action(Action::TurnEnd("actor == owner" …))` (`tomori.rs:190`,
+`:57-61`), i.e. a **placed** instance's hook — the borrowed skill is not placed,
 so the hook never dispatches. The delay must be expressible by the caller of
-the borrowed body (existing `ctx::at_next_turn_end`, `ctx.rs:2929-2934`).
+the borrowed body (existing `ctx::at_next_turn_end`, `ctx.rs:3375`).
 
 Expected: the borrowed (2) **body** runs — teleport, latch, 1d20, ≤6 ⇒ [停留] and
 a settle owed at the mover's next turn end, half price — under the inner
@@ -173,12 +173,13 @@ Invariants the implementation must hold (each gets a test or a Kani obligation,
 §9):
 
 * **I1 Named entry.** Every invocation resolves an **entry id**: either the
-  reserved `entry::PRESS` (`abi.rs:996-1008`) or a slug the target card
+  reserved `entry::PRESS` (`abi.rs:1153-1162`) or a slug the target card
   declared (`On::….id("2")`, `card-sdk/src/lib.rs:1185-1199`). Never "the first
   `On::Play`". Unknown card traps; unresolvable entry is a no-op.
 * **I2 Instance.** Before the body runs, `current_uid` is the target's field
   instance on the invoking player, or `-1` when the target is not placed. The
-  frame records the **caller's** instance as `by_uid` and restores it on return.
+  frame records the **caller's** instance as `by_instance` and restores it on
+  return.
   `self_uid()` inside the body is the target instance, never the caller's, and
   never inherited.
 * **I3 Frame.** Frames nest (`MAX_NESTING`, `host.rs:94`) and pause through the
@@ -193,7 +194,7 @@ Invariants the implementation must hold (each gets a test or a Kani obligation,
   first asks `ctx::query_guard` (which now seeds the same frame). `On::Filter`
   (a value fold) is not invocable.
 * **I6 Dest.** The import returns the inner body's `Dest`; moving the card is
-  the caller's job (the `play_card` contract, `ctx.rs:2490-2497`). The engine
+  the caller's job (the `play_card` contract, `ctx.rs:2917-2920`). The engine
   never silently unplaces the target.
 * **I7 Determinism.** No import asks a player. Prompts inside the body pause the
   invocation through the existing sentinel; the ids are literals in the caller's
@@ -215,11 +216,12 @@ pub mod invoke {
     pub const COST_PAID: i32 = 1;
 }
 
-/// `(card, entry, by, by_uid, uid, paid, depth)` -- the innermost invocation
-/// frame (`ctx::invoke`), postcard on the out-buffer. `entry` is the id (the
-/// reserved `entry::PRESS` when the caller used `invoke_skill` / `play_card`).
-/// `by` / `by_uid` are the invoking player and the invoking card instance
-/// (`-1` when the caller was not a placed card); `uid` is the target instance
+/// `(card, entry, by, by_instance, instance, paid, depth)` -- the innermost
+/// invocation frame (`ctx::invoke`), postcard on the out-buffer. `entry` is the
+/// **resolved** entry id (`""` when that entry is unnamed, e.g. a `play_card`
+/// into a bare `On::Play`) — never an alias spelling. `by` / `by_instance` are
+/// the invoking player and the invoking card instance (`-1` when the caller was
+/// not a placed card, i.e. a hand play); `instance` is the target instance
 /// (`-1` when the target is not placed). The host frame stores `String`s; the
 /// guest interns them on decode like `group_skills`
 /// (`bandori-std/src/lib.rs:311-327`).
@@ -227,8 +229,8 @@ pub struct InvokeFrame {
     pub card: NameId,
     pub entry: NameId,
     pub by: i32,
-    pub by_uid: i32,
-    pub uid: i32,
+    pub by_instance: i32,
+    pub instance: i32,
     pub paid: bool,
     pub depth: i32,
 }
@@ -260,8 +262,11 @@ postcard byte count (`out_ptr = 0` asks for the size only, the `group_skills`
 shape).
 
 `ruleset_invoke_skill` and `ruleset_play_card` are **kept** and become thin
-host-side calls into the same core with `entry::PRESS` and `flags = 0`; no
-signature moves (§8).
+host-side calls into the same core with `flags = 0`; no signature moves (§8).
+They do **not** share an entry resolver: `invoke_skill` passes `entry::PRESS`,
+`play_card` passes its Play-first pick (`entry(OnKind::Play, None)`), because
+`ctx::play_card` on a card that has both a Play and a press means "play this
+card" (G05 §6.1).
 
 ### 4.3 Guest wrappers (`card-sdk/src/ctx.rs`, next to `play_card` / `query_guard`)
 
@@ -288,23 +293,25 @@ pub fn invoke_paid() -> bool;
 ```
 
 `ctx::invoke_paid()` is a read, not a decision. `ctx::invoke()` is what a
-logged invocation names (`by_uid`), and what future entries will branch on.
+logged invocation names (`by_instance`), and what future entries will branch on.
 
 ### 4.4 Entry addressing
 
-* `entry::PRESS` (`abi.rs:996-1008`) is unchanged and keeps resolving through
-  `play_entry_preferring_gated()` (`host.rs:186-190`) — "whatever the engine
-  would press". `ctx::invoke_skill` is therefore exactly
-  `invoke_entry(…, entry::PRESS)`.
+* `entry::PRESS` (`abi.rs:1153-1162`) keeps its spelling, and resolves
+  **press-entry-first with an `On::Play` fallback** (G05 §6.1): the card's first
+  `On::Press`, else its first `On::Play`. That is "whatever the engine would
+  press" for both a migrated card and an unmigrated skill.
+  `ctx::invoke_skill` is therefore exactly `invoke_entry(…, entry::PRESS)`.
+  `ctx::play_card` is not: it picks a Play first.
 * Clause slugs are declared by the target: 广町七深's (2) becomes
   `On::Action(Action::CardUsed(…), …).id("2").label("（2）")`; 诗超绊's (2)
   offer becomes `.id("2")` and its effect half `.id("2-effect")`. `"2"` is a
-  valid slug (`is_entry_slug`, `host.rs:3045`); labels stay display text.
-* `entry::PRESS` remains reserved (`host.rs:1072-1080`); the press entry *may*
+  valid slug (`is_entry_slug`, `host.rs:3108`); labels stay display text.
+* `entry::PRESS` remains reserved (`host.rs:1098-1109`); the press entry *may*
   also carry `.id("2")` where the sheet numbers it, because a clause id is
   identity and `PRESS` is a resolver, not a name.
-* Resolution: `PRESS` → `play_entry_preferring_gated()`; any other id →
-  `entry_by_id` (`host.rs:162-170`). Card unknown ⇒ trap
+* Resolution: `PRESS` → first press entry, else `play_entry_preferring_gated()`;
+  any other id → `entry_by_id` (`host.rs:162-170`). Card unknown ⇒ trap
   (`invoke_entry: unknown card {id:?}`); entry unknown/unnamed ⇒ **no-op**
   returning `DEST_UNSET`, matching today's "no `On::Play` entry" path.
 
@@ -312,7 +319,8 @@ logged invocation names (`by_uid`), and what future entries will branch on.
 
 | kind | invocable | why |
 |---|---|---|
-| `Play` | yes | the press; the existing path |
+| `Play` | yes | a hand play; the existing path |
+| `Press` | yes | a placed clause (G05); the same body shape |
 | `Action` | yes | (2) clauses are reaction-shaped; the body is `fn(i32) -> Asked` |
 | `Settle` / `Schedule` | yes | same body shape |
 | `Filter` | no | a pure value fold (`i32 -> i32`), not an activation; trap |
@@ -326,7 +334,8 @@ caller's; only `card` / `cards` are seeded (I4).
 
 `query_guard` already resolves by the same ids and clones the world
 (`hostfns.rs:2804-2824`, `:2868-2902`). It gains the same frame seeding: look up
-the target's instance and `enter_invoke(id, uid)` instead of `enter_card(id)`.
+the target's instance and `enter_invoke(id, instance)` instead of
+`enter_card(id)`.
 This is required, not cosmetic: a gate shaped as a reaction residual
 (`on_skill_applies` reads `trigger::cards()`, `nanami.rs:79-84`) is
 otherwise always false under a press and the probe is useless.
@@ -334,7 +343,7 @@ otherwise always false under a press and the probe is useless.
 The CEL scope needs the same fact. `fill_window_ambient` fills
 `actor = player_id` and `trigger_card = 0` (`condition.rs:1393-1422`), and a
 reaction-shaped condition such as `"actor != owner && trigger_card != 0 && …"`
-(`nanami.rs:62-65`) therefore refuses. After the scope is built,
+(`nanami.rs:58-62`) therefore refuses. After the scope is built,
 `query_guard_entry` overwrites `scope.trigger_card = card` (and keeps
 `actor = player_id`) so the probe asks the question the invoke would answer. No
 wire change; PRESS probes become *more* accurate because `is_placed()`-shaped
@@ -355,46 +364,47 @@ That is documented on the entry wrapper.
 
 ### 5.1 One core
 
-`hostfns::invoke_skill` (`:1338-1399`), `hostfns::play_card` (`:2700-2767`) and
+`hostfns::invoke_skill` (`:1531-1600`), `hostfns::play_card` (`:3045-3109`) and
 the new `hostfns::invoke_entry` become one `invoke_inner(c, player_id, id,
 entry_id, flags)`:
 
 1. `guest_str` the id and the entry id; `rules.by_id` (trap on unknown);
 2. `depth >= MAX_NESTING` ⇒ trap `invoke_entry nested deeper than 8`;
 3. resolve the entry (4.4) and check the kind (4.5);
-4. `let uid = st.w().field_instances(player_id).iter().find(|(_, c)| c == id)`
+4. `let instance = st.w().field_instances(player_id).iter().find(|(_, c)| c == id)`
    — the same lookup the press paths already do (`wasm_rules.rs:9392-9397`,
    `:9090-9100`);
 5. take fuel/answers, `HostState::new(…, depth + 1)`, `next_answer` carried;
-6. `enter_invoke(&id, uid)` (5.2), `play_from_hand(false)` saved/cleared;
+6. `enter_invoke(&id, instance)` (5.2), `play_from_hand(false)` saved/cleared;
 7. `call_entry(…, OP_RUN, player_id, &[], false)`; **no** `OP_GUARD`, **no**
    `OP_DECLARE`, no `cardUsed` raise;
 8. restore world/answers/asked/host_request, `leave_invoke(saved)`,
    `set_play_from_hand(was)`;
 9. `Ok(dest)`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`, other errors trap.
 
-`play_card` passes `entry::PRESS` and keeps its "card play" doc; `invoke_skill`
-passes `entry::PRESS`.
+`invoke_skill` passes `entry::PRESS`; `play_card` resolves a Play first (G05
+§6.1) and keeps its "card play" doc.
 
 ### 5.2 The frame (`wasm_rules.rs`; `CardWorld` default in `world.rs:1132-1141`)
 
 `enter_card` / `leave_card` are generalised to:
 
 ```rust
-/// Open a nested invocation of `id` with the target instance `uid` (or -1).
-/// Saves the caller's card, dest, uid and trigger card payload.
-fn enter_invoke(&mut self, id: &str, uid: i32) -> InvokeSaved;
+/// Open a nested invocation of `id` with the target instance `instance` (or -1).
+/// Saves the caller's card, dest, instance and trigger card payload.
+fn enter_invoke(&mut self, id: &str, instance: i32) -> InvokeSaved;
 /// Restore the caller's frame; returns the inner body's Dest.
 fn leave_invoke(&mut self, saved: InvokeSaved) -> i32;
 ```
 
-`enter_invoke` is `enter_card` plus `self.current_uid = uid` and
+`enter_invoke` is `enter_card` plus `self.current_uid = instance` and
 `self.trigger.card/cards` saved + replaced with `id` (single: `card = Some(id)`,
-`cards = vec![id]`). `leave_invoke` restores both and `current_uid = saved.uid`.
+`cards = vec![id]`). `leave_invoke` restores both and
+`current_uid = saved.instance`.
 `Run.invoke_stack: Vec<InvokeFrame>` (not saved, §7) is pushed/popped here;
 `ctx::invoke()` and `invoke_paid()` read its top through one `invoke_frame`
 output-buffer import, and `self_uid()` keeps reading `current_uid` as today
-(`wasm_rules.rs:1379-1382`).
+(`wasm_rules.rs:1479`).
 
 `enter_card` / `leave_card` stay **as they are** (clear uid, no seeding) so
 `send` and the event paths do not change; `enter_invoke` reuses their
@@ -406,7 +416,7 @@ design.
 ### 5.3 Trigger
 
 `CoreTrigger` already carries `card` / `cards`; the raised `cardUsed` press sets
-both (`play.rs:983-988`), so a *normal* press inside the invoked body's view is
+both (`play.rs:1168-1176`), so a *normal* press inside the invoked body's view is
 already "the skill in use". A borrowed invocation reproduces that fact without a
 raise: the frame seeds it. `ctx::trigger::*` in the invoked body therefore reads
 the caller's actor / tile / value (needed by 诗超绊 (2): the mover is
@@ -428,7 +438,7 @@ cost was paid three effects ago.
   committed); the no-op entry path returns `DEST_UNSET`.
 * `Dest`: returned only. A placed target that wants to leave uses
   `ctx::unplace_at(ctx::self_uid())` in its own body (the band (2) sweep
-  already does, `skill-groups/src/crychic.rs:196`).
+  already does, `skill-groups/src/crychic.rs:168`).
 
 ### 5.5 Kani model (`rules/kani/src/host.rs`, `crates/card-sdk/src/kani_host.rs`)
 
@@ -445,7 +455,8 @@ pub fn arm_invoke_entry(a: Args) -> i64 {
 }
 ```
 
-`invoke_skill` / `play_card` map to the same arm (they are PRESS/0). `invoke_paid`
+`invoke_skill` and `play_card` both map to this arm: the recorded shape is the
+same, and only the entry argument differs (PRESS versus a resolved Play). `invoke_paid`
 is a cheap `last_invoke.2 == 1` where a proof needs it. Both are added to
 `rules/kani/build.rs`'s allowlist (`:124` region) and to each group's `host_subset!`
 table that uses them. A proof-only reader `last_invoke()` exposes
@@ -453,15 +464,23 @@ table that uses them. A proof-only reader `last_invoke()` exposes
 
 ### 5.6 Probing and the gate
 
-Nanami's gate becomes "a crystal, a persona skill, and its (2) admits":
-`ctx::query_guard(player_id, skill, "2")`. Because the query seeds the frame
-(4.6), `on_skill_applies` sees `trigger_cards = [skill]` and the pot precondition
-`charge(owner) >= 1`, so the probe answers (almost) exactly "would the (2) body
-do anything". One gap stays: the condition gates on **pots**, while `fire::spend` can
-substitute a 不再迷茫 crystal, so a 0-pot owner with a crystal is refused before
-the substitution window (open question 8). The press then invokes **unpaid**:
-the (2)'s own pot cost is part of the clause and is still collected by the
-body's ask.
+**The (2) condition does not survive a self-press, so `query_guard` cannot be
+the press gate.** The condition is
+`actor != owner && trigger_card != 0 && charge(owner) >= 1`
+(`nanami.rs:58-62`) and `query_guard_entry` fills its candidate with
+`fill_candidate(world, player_id, id, false)`
+(`hostfns.rs:3210`), which sets `owner = player_id`. On the owner's own press
+`actor == owner`, so `actor != owner` is false and the probe answers `false` for
+exactly the case it is asked about. (The remaining terms — a trigger card and a
+pot — are true whenever a pot exists, so the probe is not "nearly right"; it is
+always wrong.)
+
+Nanami's press gate therefore tests its own costs directly, in the card
+(G05 §9.1): a crystal on the instance, `bandori_std::fire::total(player_id) >= 1`,
+and an owned persona skill. The body then invokes **unpaid** — the (2)'s pot cost
+is part of the clause and is collected by its own ask. `fire::total` includes
+temporary pots because `fire::spend` draws them first, so a temporary pot alone
+must admit. The 不再迷茫 substitution is not modelled (G05 open question 1).
 
 ---
 
@@ -479,9 +498,9 @@ are G05's to finish.
 // before: cant_play (:77-84)
 if owner_skill(player_id).is_none() { …no_skill }
 if ctx::held_names(player_id, TOKEN_PREFIX).is_empty() { …no_mark }
-// after: the (2) needs a pot, not a mark
+// after: the (2) needs a pot, not a mark -- own costs only, no query_guard
 let Some(skill) = ctx::persona_skill(player_id) else { …no_skill };
-if !ctx::query_guard(player_id, &skill, "2") { …no_pot_or_cd }
+if bandori_std::fire::total(player_id) < 1 { …no_pot }
 
 // before: use_skill (:259-287)
 fn owner_skill(p) -> Option<NameId> { ctx::placed_cards(p).find(starts_with("skill:")) }
@@ -604,7 +623,7 @@ effect body, gated by the `OFFERED` latch (cleared on entry) or by
 makes the existing `half` filter correct as written: its body receives the payer
 and reads `state::get(player_id, DUE) > 0` (`tomori.rs:74-78`). The
 `TurnEnd` entry and its `actor == owner` condition go away; a schedule fires on the
-mover's next turn end (already skip-safe, `ctx.rs:2929-2934`), which is what
+mover's next turn end (already skip-safe, `ctx.rs:3375`), which is what
 「自己的下回合结束时」 means, and it survives the card not being placed — the
 borrowed case. `due_settle` clears `DUE` first, then settles.
 
@@ -669,8 +688,9 @@ Insert below the current head note (the `v111` block, inside G05's note):
 ///    entry of `card` nested with its field instance bound as `current_uid`
 ///    and the invoked card seeded as the skill in use (`trigger.card` /
 ///    `trigger.cards`), both restored on return. `ruleset_invoke_skill` /
-///    `ruleset_play_card` are the `entry::PRESS` wrappers over the same core;
-///    signatures unchanged. `flags` bit 0 = `invoke::COST_PAID`
+///    `ruleset_play_card` are wrappers over the same core -- PRESS and
+///    Play-first respectively (G05 §6.1); signatures unchanged.
+///    `flags` bit 0 = `invoke::COST_PAID`
 ///    (`ctx::invoke_paid`). Guest surface `ctx::invoke_entry` /
 ///    `ctx::invoke_entry_paid` / `ctx::invoke`; `ctx::query_guard` seeds and
 ///    binds the same frame. Play / Action / Settle / Schedule entries are
@@ -689,14 +709,15 @@ Black-box tests use the existing `Table` harness and `t.option` / `answer_q`.
 
 | item | test |
 |---|---|
-| 1 | `crychic.rs::nanami_effort_press_runs_the_owners_second_skill` — 1 fire, persona skill of 七深 bound; after the press: 1 pot spent, one `角色标记:skill:广町七深:…` gained, the `nanami_mark` log present, no `nanami_which` (the (3) pick) prompt |
-| 1 | `crychic.rs::nanami_effort_press_keeps_the_crystal_cost_and_one_crystal_only` — starting 2 crystals, 1 removed |
-| 1 | `crychic.rs::nanami_effort_press_refuses_without_a_pot` — 0 fire, no crystal substitute → `nanami_effort_no_skill`/gate refusal before the crystal is spent |
+| 1 | `morfonica.rs::nanami_press_invokes_skill_two` (G05 §12) — 1 fire, persona skill of 七深 bound; after the press: 1 pot spent, one `角色标记:skill:广町七深:…` gained, the `nanami_mark` log present, no `nanami_which` (the (3) pick) prompt; the invoked frame is pushed and popped |
+| 1 | `morfonica.rs::nanami_press_spends_one_crystal_only` — starting 2 crystals, 1 removed |
+| 1 | `morfonica.rs::nanami_press_without_pot_refused` — 0 fire, no crystal substitute → `nanami_effort_no_pot`/gate refusal before the crystal is spent |
 | 1 | `crychic.rs::mutsumi_never_cash_out_reads_the_band_instance` — 5 crystals: after (2) the band card is gone, money `+2*500` (not the pre-spend 5), band crystals 0 (no `Sumimi:#L11` placed, so the substitution order is not involved) |
 | 1 | `crychic.rs::mutsumi_never_cash_out_is_zero_on_a_shortfall` — 1 crystal: all spent, no money |
 | ABI | `crates/game-rules/tests/card_activation.rs::invoke_binds_the_target_and_restores_the_outer_frame` — test card A invokes test card B; B reads `self_uid` = B's uid, A's `self_uid` is restored after |
 | ABI | `card_activation.rs::invoke_seeds_and_restores_the_trigger_card` / `::invoke_unknown_entry_is_a_noop` / `::invoke_unknown_card_traps` / `::invoke_filter_entry_traps` |
-| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Dest` and log as the PRESS slug |
+| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Dest` and log as the PRESS slug (both now go through `invoke_entry`) |
+| ABI | `card_activation.rs::play_card_still_picks_the_play_entry` — a card with both a Play and a press: `ctx::play_card` runs the Play, `ctx::invoke_skill` runs the press |
 | 2 | `crychic.rs::tomori_shout_pull_runs_the_borrowed_second_body` — the poem's own `tomori_moved` log appears (proves the body, not the copy), mover teleported to the controller's tile |
 | 2 | `crychic.rs::tomori_shout_pull_rolls_once_and_leans_on_six_or_less` — forced face 6 ⇒ `stay` 1 plus a scheduled settle; face 7 ⇒ none |
 | 2 | `crychic.rs::tomori_shout_delayed_settle_pays_half_at_the_movers_next_turn_end` — the settle runs on the mover's next turn end (not the controller's), at half, and then clears |
@@ -769,8 +790,10 @@ facts rather than running the nested guest):
    silent. Add a build-time or test-time scan that every literal passed to
    `invoke_entry` resolves on its target.
 5. **`play_card` unification.** Should `ctx::play_card` be documented as
-   `invoke_entry(PRESS)` (and eventually folded), or stay a separate concept
-   because it is for hand/pile cards? It now shares the core either way.
+   `invoke_entry(PLAY, …)` (and eventually folded), or stay a separate concept
+   because it is for hand/pile cards? It now shares the core either way, but it
+   does **not** pick PRESS: on a card with both a Play and a press, a play means
+   the Play (G05 §6.1).
 6. **`COST_PAID` validation.** The flag trusts the caller. Should the engine
    compare a declared card-authored cost prop against what was paid, or is
    trust plus one test per site sufficient?
