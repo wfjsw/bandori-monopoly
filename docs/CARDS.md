@@ -232,6 +232,10 @@ mutating call: `gain` / `draw` / `place_card` / `place_self_to_field` /
 `plan::set_tag` / `add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
 log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
 Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
+The relative writers `state::add` / `state::set_max` / `state::set_expires` are
+deliberately unguarded: the body re-runs from the restored world and the last
+pass commits, so a relative write settles at one application (EXIST's
+`exist.used` latch rides this).
 
 A Filter body that would have rolled dice reads `RollValue.recorded_roll`
 (v78: the host pre-rolls into the recorded RNG stream so replay stays
@@ -741,7 +745,7 @@ are `tile_in` classes.
 | skills & band attachments (ABI v35) | No `skillUsed`: that is the player's own press (`use_skill`).) |
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
 | prompts | `ask_yes`, `ask_choice`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |
-| nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` ( `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
+| nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` ( `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, move_from, move_rolled, move_effective_steps, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
 | field cards | `place_card`, `place_card_at`, `place_self_to_field` (「将此卡放置在场上」: `set_dest(Dest::Field)` + `place_card`, for a play body that stays in play; else `place_card` / `place_card_at` and name the card's own `Dest`), `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
 | cross-card messages (ABI v51) | `send(Target, name, &Message)`, `On::Message(names, condition, guard, body)`, `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text, reply}` -- see 「Cross-card messages」 |

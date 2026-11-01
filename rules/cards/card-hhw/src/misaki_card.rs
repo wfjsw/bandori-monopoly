@@ -17,16 +17,12 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         &[ChainKind::DiceRollResult],
         // 规则书[反击]: 「触发结算前可打出此卡」 -- the window is the
         // `diceRollResult` timing, after the roll and before the settle.
-        // 「使用火罐进行移动掷骰后」 -- the [火罐] roll is meant to be card-owned
-        // state: the fire reroll is meant to tag it (`plan::set_tag("fireRoll", 1)`)
-        // and readers ask `move.tag`.
+        // 规则书: 「使用火罐进行移动掷骰后」 -- the fire-pot reroll is a charge
+        // roll, so `roll_source` is `CHARGE`.
         // 规则书: 「位于你的移动起点与预定移动终点之间」 -- `between(owner) > 0`
-        // (there must be a rival to teleport to).
-        // TODO(规则书)（使用火罐进行移动掷骰后）: the book conditions on the fire-pot
-        //   roll -- no shipped producer tags the move `fireRoll` (only the
-        //   `TEST:fireRoll` fixture does) and `roll_source` never reaches this
-        //   trigger, so this condition reads 0 in every real game.
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
+        // (there must be a rival to teleport to). The whole condition is
+        // `actor == owner && roll_source == 1 && between(owner) > 0`.
+        "actor == owner && roll_source == 1 && between(owner) > 0",
         None,
         counteract).counter_reason(key!("misaki_card_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -38,28 +34,28 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 
 fn between(player_id: i32) -> Vec<i32> {
-    let Some(roll) = trigger::move_roll() else {
-        return Vec::new();
-    };
-    let roll = roll.abs();
-    // TODO(ABI)（位于你的移动起点与预定移动终点之间）: the span origin is the
-    //   current tile, but a `plan::set_start` override (your_light / detour / …)
-    //   only lands when the walk starts, after this window, and the trigger
-    //   carries no start -- candidates then wrap around the wrong origin.
-    let start = ctx::player_pos(player_id);
+    // 规则书: 「位于你的移动起点与预定移动终点之间」 -- the length is the move's
+    // effective length (a start override already folded in) and the origin is
+    // the move's own `from` tile.
+    let roll = trigger::move_effective_steps().abs();
+    let start = trigger::move_from();
     let n = ctx::tile_count();
     let backward = trigger::move_dir() < 0;
-    ctx::others(player_id)
-        .into_iter()
-        .filter(|&p| {
-            let fwd = ctx::tile_forward(start, ctx::player_pos(p));
-            let d = if backward { (n - fwd) % n } else { fwd };
-            // TODO(规则书)（预定移动终点）: 「之间」 may exclude the planned end --
-            //   we include `d == roll` (the start, d == 0, is excluded), so the
-            //   two ends are treated asymmetrically.
-            (1..=roll).contains(&d)
-        })
-        .collect()
+    // Concrete capacity, no `collect`: the filter's size hint is symbolic and
+    // Kani 0.68 then frees a `Vec` whose layout does not match (the same
+    // reason `ctx::others` sizes itself concretely).
+    let mut list = Vec::with_capacity(4);
+    for p in ctx::others(player_id) {
+        let fwd = ctx::tile_forward(start, ctx::player_pos(p));
+        let d = if backward { (n - fwd) % n } else { fwd };
+        // TODO(规则书)（预定移动终点）: 「之间」 may exclude the planned end --
+        //   we include `d == roll` (the start, d == 0, is excluded), so the
+        //   two ends are treated asymmetrically.
+        if (1..=roll).contains(&d) {
+            list.push(p);
+        }
+    }
+    list
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -78,24 +74,24 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[反击]: 「传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算」
     let to = ctx::player_pos(who);
-    // TODO(规则书)（并触发结算（视为你的主要移动） ）: the book makes the teleport the move -- the
-    // rolled walk is voided, the piece goes to the chosen tile and settles there; we
-    // neither cancel the walk nor teleport (below).
+    // 规则书: 「并触发结算（视为你的主要移动）」 -- the teleport replaces the
+    // rolled walk: cancel the in-flight walk (`set_cancelled`, the link only),
+    // arm the teleport as the main move, and run it now.
     trigger::set_cancelled();
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(to);
     ctx::plan::set_settles(true);
-    // TODO(规则书)（视为你的主要移动）: `run_planned_move` runs as a *main* move while the turn's main
-    // move already latched `main_moved` before this mid-roll window, so the engine
-    // refuses it and drops `teleport_to`: the teleport never happens.
-    ctx::run_planned_move(player_id);
+    ctx::plan::set_main_override(true);
+    ctx::plan::void_walk();
+    let ran = ctx::run_planned_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("misaki_card_moved"))
             .player_id("who", player_id)
-            // The refused `run_planned_move` can leave the piece elsewhere: log where it
-            // actually is, not the chosen destination.
-            .tile("tile", ctx::player_pos(player_id)),
+            // A ran teleport has already settled, so the chosen destination is the
+            // stable fact; a refused one re-arms the outer walk, so log where the
+            // piece still is.
+            .tile("tile", if ran { to } else { ctx::player_pos(player_id) }),
     );
     if ctx::player_out(player_id) {
         return Ok(());

@@ -24,49 +24,77 @@ impl World {
 
     /// The walk's length; keeps the sign of the current roll.
     pub fn set_steps(&mut self, n: i32) {
-        self.turn.plan.set_steps(n);
+        self.plan_mut().set_steps(n);
     }
     /// Walk backwards (direction becomes -1).
     pub fn set_reverse(&mut self, on: bool) {
-        self.turn.plan.reverse = on;
+        self.plan_mut().reverse = on;
     }
     /// A negative roll walks backwards instead of clamping.
     pub fn set_signed(&mut self, on: bool) {
-        self.turn.plan.signed = on;
+        self.plan_mut().signed = on;
     }
     /// Force the walk to stop here; `None` clears.
     pub fn set_stop_at(&mut self, tile: Option<game_kinds::Tile>) {
-        self.turn.plan.stop_at = tile;
+        self.plan_mut().stop_at = tile;
     }
-    /// Restrict the walk to odd/even tiles; `-1` either.
+    /// Restrict the walk to odd/even tiles: `-1` either, `0` even, `1` odd.
+    /// `2` is canonicalized to `0`; anything else is clamped to `-1`, so the
+    /// save path sees one encoding.
     pub fn set_parity(&mut self, n: i32) {
-        self.turn.plan.parity = n;
+        self.plan_mut().parity = match n {
+            0 | 2 => 0,
+            1 => 1,
+            _ => -1,
+        };
     }
     /// Settle at the [move end] (「到达终点后是否settle」). Clear it to skip
     /// settle entirely; the player still moves.
     pub fn set_settles(&mut self, on: bool) {
-        self.turn.plan.settles = on;
+        self.plan_mut().settles = on;
     }
     /// How the move gets there: 0 = walk the path, 1 = teleport.
     pub fn set_kind(&mut self, kind: i32) {
         if let Some(k) = super::move_ctx::MoveKind::from_i32(kind) {
-            self.turn.plan.kind = k;
+            self.plan_mut().kind = k;
         }
     }
     /// The walk cannot buy where it lands.
     pub fn set_no_buy(&mut self, on: bool) {
-        self.turn.plan.no_buy = on;
+        self.plan_mut().no_buy = on;
     }
     /// The walk cannot build where it lands.
 
     /// Clamp the final face up to this after the counteractions. `None` = no
     /// floor.
     pub fn set_min_roll(&mut self, n: Option<i32>) {
-        self.turn.plan.min_roll = n;
+        self.plan_mut().min_roll = n;
     }
     /// Extra steps added to the walk (it grows as it runs).
     pub fn set_extra_steps(&mut self, n: i32) {
-        self.turn.plan.extra_steps = n;
+        self.plan_mut().extra_steps = n;
+    }
+    /// Add to the walk's extra steps (signed), composing with other writers.
+    pub fn add_extra_steps(&mut self, n: i32) {
+        let p = self.plan_mut();
+        p.extra_steps = p.extra_steps.saturating_add(n);
+    }
+    /// Drop a fixed step count so the next move rolls (`plan::clear_steps`).
+    pub fn clear_steps(&mut self) {
+        self.plan_mut().steps = None;
+    }
+    /// A forced move: distinct from the turn's main move unless
+    /// [`Self::set_main_override`] is also set.
+    pub fn set_forced(&mut self, on: bool) {
+        self.plan_mut().forced = on;
+    }
+    /// 「视为主要移动」 -- keep a forced move of the turn player the main move.
+    pub fn set_main_override(&mut self, on: bool) {
+        self.plan_mut().main_override = on;
+    }
+    /// This teleport replaces the pending walk instead of following it.
+    pub fn void_walk(&mut self) {
+        self.plan_mut().void_walk = true;
     }
 
     /// Passing the start square pays nothing on this walk.
@@ -74,15 +102,17 @@ impl World {
     /// The tile the walk begins on instead of where the player stands
     /// (`None` = the player's own tile). `reason` names the effect on the log line.
     pub fn set_start(&mut self, tile: Option<game_kinds::Tile>, reason: &str) {
-        self.turn.plan.start = tile;
-        self.turn.plan.start_reason = reason.to_string();
+        let p = self.plan_mut();
+        p.start = tile;
+        p.start_reason = reason.to_string();
     }
     /// The movement is a teleport to this tile (`None` = a walk / clear).
     /// `run_planned_move` branches on this.
     pub fn set_teleport_to(&mut self, tile: Option<game_kinds::Tile>) {
-        self.turn.plan.teleport_to = tile;
+        let p = self.plan_mut();
+        p.teleport_to = tile;
         // Naming a destination makes it a teleport.
-        self.turn.plan.kind = if tile.is_some() {
+        p.kind = if tile.is_some() {
             super::move_ctx::MoveKind::Teleport
         } else {
             super::move_ctx::MoveKind::Walk
@@ -96,11 +126,10 @@ impl World {
         // card played after `set_fixed_roll` (e.g. STAR BEAT's `set_base_dice` +
         // `run_planned_move`) gets its own dice instead of the pinned face.
         self.turn.fixed_roll = None;
-        self.turn.plan.base.clear();
+        let p = self.plan_mut();
+        p.base.clear();
         if count > 0 && sides >= 0 {
-            self.turn
-                .plan
-                .base
+            p.base
                 .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
     }
@@ -108,8 +137,7 @@ impl World {
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, reason: &str) {
         if count > 0 && sides >= 0 {
-            self.turn
-                .plan
+            self.plan_mut()
                 .base
                 .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
@@ -118,14 +146,18 @@ impl World {
     /// names the whole face (「骰点就是1d10」) means *exactly* that face, not
     /// 1d10 plus whatever else is stacked on.
     pub fn clear_dice(&mut self) {
-        self.turn.plan.dice.clear();
+        self.plan_mut().dice.clear();
     }
     /// Extra dice added to the roll (summed into the face). A flat add
     /// is a `0`-sided term: `add_extra_dice(n, 0, reason)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, reason: &str) {
         if count > 0 && sides >= 0 {
-            self.turn
-                .plan
+            // The write is a plan write, so it must land on the live frame
+            // (`plan_mut`) -- a dice hook (`DiceRollPlan`) runs inside the
+            // roll's own plan frame, and staging there is discarded when the
+            // frame ends (`G04-move-plan.md` §3.2). `clear_dice` and
+            // `set_base_dice` already go through `plan_mut`.
+            self.plan_mut()
                 .dice
                 .push(crate::engine::move_ctx::Roll::new(count, sides, reason));
         }
@@ -133,7 +165,7 @@ impl World {
 
     /// Settle here instead of the landing; -1 clears.
     pub fn set_settle_tile(&mut self, tile: i32) {
-        self.turn.plan.settle_tile = tile;
+        self.plan_mut().settle_tile = tile;
     }
     /// Set a pay factor absolutely (milli; `500` = ×0.5). The `Auto` scope of
     /// [`ctx::plan::set_pay_factor`](crate::engine::PlayCtx): the innermost live
@@ -143,8 +175,17 @@ impl World {
         let milli = milli.max(0);
         if self.turn.settle_open > 0 {
             self.turn.settle_pay_factor = self.turn.settle_base * f64::from(milli) / 1000.0;
-        } else if self.turn.move_open {
-            self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
+        } else if self.turn.move_open
+            || self
+                .turn
+                .plan_scope
+                .commands
+                .last()
+                .is_some_and(|c| self.turn.plan_scope.moves > c.moves_at_entry)
+        {
+            // An open move, or a command replaying after its own move: the
+            // write belongs to that move (staging is dropped at command end).
+            self.plan_mut().pay_factor = f64::from(milli) / 1000.0;
         } else {
             self.turn.next_move_pay_factor = milli;
         }
@@ -156,7 +197,7 @@ impl World {
         let milli = milli.max(0);
         match self.resolve_scope(scope) {
             PayFactorScope::ThisMove => {
-                self.turn.plan.pay_factor *= f64::from(milli) / 1000.0;
+                self.plan_mut().pay_factor *= f64::from(milli) / 1000.0;
             }
             PayFactorScope::ThisSettle => {
                 self.turn.settle_pay_factor *= f64::from(milli) / 1000.0;
@@ -180,7 +221,7 @@ impl World {
     /// not in it (they need the pending payment).
     pub fn pay_factor(&self) -> i32 {
         Self::milli_product(
-            (self.turn.plan.pay_factor * 1000.0) as i32,
+            (self.plan().pay_factor * 1000.0) as i32,
             (self.turn.settle_pay_factor * 1000.0) as i32,
         )
     }
@@ -193,7 +234,21 @@ impl World {
 
     /// An unopened `this` scope falls forward to its next instance.
     fn resolve_scope(&self, scope: PayFactorScope) -> PayFactorScope {
+        // A command whose body is replaying *after* a move it already ran has
+        // no open frame; its 「此次移动」 write belongs to the command's own
+        // (already seeded) move, so it lands on staging and the command's end
+        // drops it. Falling forward to `nextMove` instead would re-arm the
+        // factor for the next main move (G04 item 10).
+        let command_already_moved = self
+            .turn
+            .plan_scope
+            .commands
+            .last()
+            .is_some_and(|c| self.turn.plan_scope.moves > c.moves_at_entry);
         match scope {
+            PayFactorScope::ThisMove if !self.turn.move_open && command_already_moved => {
+                PayFactorScope::ThisMove
+            }
             PayFactorScope::ThisMove if !self.turn.move_open => PayFactorScope::NextMove,
             PayFactorScope::ThisSettle if self.turn.settle_open == 0 => PayFactorScope::NextSettle,
             s => s,
@@ -201,88 +256,121 @@ impl World {
     }
     /// Scale rent paid for this walk, same units.
     pub fn set_rent_factor(&mut self, milli: i32) {
-        self.turn.plan.rent_factor = f64::from(milli) / 1000.0;
+        self.plan_mut().rent_factor = f64::from(milli) / 1000.0;
     }
     /// May build away from the landing (not just on it).
     pub fn set_can_build(&mut self, on: bool) {
-        self.turn.plan.can_build = on;
+        self.plan_mut().can_build = on;
     }
     /// `ctx::plan::set_no_build` (HOST-08): folded into `can_build = !on` --
     /// one flag is enough (`world.rs`).
     pub fn set_no_build(&mut self, on: bool) {
-        self.turn.plan.can_build = !on;
+        self.plan_mut().can_build = !on;
     }
     /// `ctx::plan::set_build_anywhere` (HOST-08): this move may build away
     /// from the landing.
     pub fn set_build_anywhere(&mut self, on: bool) {
-        self.turn.plan.build_anywhere = on;
+        self.plan_mut().build_anywhere = on;
     }
     /// Settle on another player's behalf.
     pub fn set_settle_as_agent(&mut self, on: bool) {
-        self.turn.plan.settle_as_agent = on;
+        self.plan_mut().settle_as_agent = on;
     }
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record a follower of the
     /// move being planned. After the mover settles, the engine replays this
     /// move's result for each follower in the order recorded.
     pub fn plan_add_follower(&mut self, player_id: i32) {
-        if player_id >= 0 && !self.turn.plan.followers.contains(&player_id) {
-            self.turn.plan.followers.push(player_id);
+        let p = self.plan_mut();
+        if player_id >= 0 && !p.followers.contains(&player_id) {
+            p.followers.push(player_id);
         }
     }
     /// A queued second walk, in steps.
     pub fn set_more_steps(&mut self, n: i32) {
-        self.turn.plan.more_steps = n;
+        self.plan_mut().more_steps = n;
     }
     /// Card-owned per-move state (resource-roll counters etc.).
     pub fn set_tag(&mut self, key: &str, value: i32) {
-        self.turn.plan.set_tag(key, value);
+        self.plan_mut().set_tag(key, value);
     }
     pub fn move_tag(&self, key: &str) -> i32 {
-        self.turn.plan.tag(key)
+        self.plan().tag(key)
     }
 
     // getters the cards read back off the same move plan
     /// Did the walk stop before its full length? The walk loop sets it.
     pub fn move_stopped(&self) -> bool {
-        self.turn.plan.stopped
+        self.plan().stopped
     }
 
     /// Where the walk is forced to stop, or -1.
     pub fn move_stop_at(&self) -> Option<game_kinds::Tile> {
-        self.turn.plan.stop_at
+        self.plan().stop_at
     }
     /// -1 either, 0 even, 1 odd.
     pub fn move_parity(&self) -> i32 {
-        self.turn.plan.parity
+        self.plan().parity
     }
     /// Does the planned move settle at its [move end]?
     pub fn move_settles(&self) -> bool {
-        self.turn.plan.settles
+        self.plan().settles
     }
     /// How the move gets there: 0 = walk, 1 = teleport.
     pub fn move_kind(&self) -> i32 {
-        match self.turn.plan.kind {
+        match self.plan().kind {
             super::move_ctx::MoveKind::Walk => 0,
             super::move_ctx::MoveKind::Teleport => 1,
         }
     }
     /// The planned length; [`crate::state::MovePlan::landing`] is where it ends.
     pub fn move_steps(&self) -> i32 {
-        self.turn.plan.roll
+        self.plan().roll
     }
     /// How far along the walk is: steps left, and the path
     /// length (the walk's length, not the face that was rolled -- a
     /// shortened walk differs).
     pub fn move_remaining(&self) -> i32 {
-        self.turn.plan.remaining
+        self.plan().remaining
     }
     /// The walk's full length (not the rolled face).
     pub fn move_total(&self) -> i32 {
-        self.turn.plan.total
+        self.plan().total
     }
     /// +1 forwards, -1 backwards.
     pub fn move_dir(&self) -> i32 {
-        self.turn.plan.dir()
+        self.plan().dir()
+    }
+    /// The planned teleport destination, -1 when none.
+    pub fn planned_teleport(&self) -> i32 {
+        self.plan().teleport_to.map_or(-1, |t| t.0)
+    }
+    /// The **plan half** of the pay factor, in milli (the composed value is
+    /// [`Self::pay_factor`]).
+    pub fn move_pay_factor(&self) -> i32 {
+        (self.plan().pay_factor * 1000.0) as i32
+    }
+    /// The move's rent factor, in milli.
+    pub fn rent_factor(&self) -> i32 {
+        (self.plan().rent_factor * 1000.0) as i32
+    }
+    /// The length this move will take (a fixed count, else the override, else
+    /// the face).
+    pub fn effective_steps(&self) -> i32 {
+        self.plan().effective_steps()
+    }
+    /// Is this a forced move?
+    pub fn move_forced(&self) -> bool {
+        self.plan().forced
+    }
+
+    /// The closest tile strictly along `axis` from `tile`, or -1. Board-only.
+    pub fn nearest_tile_on_axis(&self, data: &GameData, tile: i32, axis: i32) -> i32 {
+        data.nearest_tile_on_axis(tile, axis)
+    }
+
+    /// The farthest tile strictly along `axis` from `tile`, or -1. Board-only.
+    pub fn farthest_tile_on_axis(&self, data: &GameData, tile: i32, axis: i32) -> i32 {
+        data.farthest_tile_on_axis(tile, axis)
     }
 
     // ------------------------------------------------------------ queries
@@ -563,7 +651,7 @@ impl World {
     /// Honours [`TurnCtx::extreme`]: a forced extreme settles the whole table at
     /// its theoretical max or min instead of rolling it.
     pub fn do_move_roll(&mut self, _player_id: i32) -> i32 {
-        let plan = self.turn.plan.clone();
+        let plan = self.plan().clone();
         if self.turn.extreme != Extreme::Plain {
             let mut lo = 0;
             let mut hi = 0;

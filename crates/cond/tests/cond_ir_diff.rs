@@ -129,6 +129,8 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::MoveMain => f.win.mv.is_main_move = raw != 0,
         VarId::MoveDir => f.win.mv.dir = raw,
         VarId::MoveBySkill => f.win.mv.by_skill = raw != 0,
+        VarId::MoveRolled => f.win.mv.rolled = raw != 0,
+        VarId::MoveEffective => f.win.mv.effective = raw,
         VarId::EffectCount => {
             // `effect_count` binds `win.chain.len()`. Grow/shrink the list and
             // keep the IR scalar in step (the raw boundary value is not a

@@ -5623,6 +5623,80 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "add_extra_steps",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::add_extra_steps(&mut c, v).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "clear_steps", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::clear_steps(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "set_forced",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_forced(&mut c, v).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_main_override",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_main_override(&mut c, v).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "void_walk", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::void_walk(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "move_planned_teleport",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_planned_teleport(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "move_pay_factor", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_pay_factor(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "move_rent_factor", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_rent_factor(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "move_effective_steps",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_effective_steps(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "move_forced", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::move_forced(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "trig_move_rolled", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_move_rolled(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "trig_move_effective_steps",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_effective_steps(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "nearest_tile_on_axis",
+        |mut c: C<W>, tile: i32, axis: i32| -> Result<i32, Error> {
+            hostfns::nearest_tile_on_axis(&mut c, tile, axis).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "farthest_tile_on_axis",
+        |mut c: C<W>, tile: i32, axis: i32| -> Result<i32, Error> {
+            hostfns::farthest_tile_on_axis(&mut c, tile, axis).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "set_settle_tile",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_settle_tile(&mut c, v).map_err(HostError::into_err)
@@ -5729,7 +5803,9 @@ impl HostState<NullWorld> {
     fn without_rules() -> Self {
         Self {
             rules: None,
-            world: Some(NullWorld),
+            world: Some(NullWorld {
+                plan: game_core::engine::MoveCtx::default(),
+            }),
             answers: vec![],
             next_answer: 0,
             options: vec![],
@@ -5754,7 +5830,9 @@ impl HostState<NullWorld> {
 /// World used only while reading module metadata.
 #[derive(Clone)]
 #[cfg(feature = "sandbox")]
-struct NullWorld;
+struct NullWorld {
+    plan: game_core::engine::MoveCtx,
+}
 
 #[cfg(feature = "sandbox")]
 impl CardWorld for NullWorld {
@@ -6072,6 +6150,9 @@ impl CardWorld for NullWorld {
     fn set_persona(&mut self, _: i32, _: &str) {}
     fn in_group(&self, _: i32, _: &str) -> i32 {
         0
+    }
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx {
+        &mut self.plan
     }
 }
 

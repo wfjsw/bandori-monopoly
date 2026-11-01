@@ -71,6 +71,8 @@ pub struct TestWorld {
     /// Field instances as `(card id, tile)`; `-2` = not placed. Backs
     /// `field_instances` / `tile_at` so `card_tile` resolves.
     pub field: Vec<(String, i32)>,
+    /// The live move plan (`plan_mut`); the stub keeps one bare staging plan.
+    pub plan: game_core::engine::MoveCtx,
 }
 
 impl TestWorld {
@@ -89,6 +91,7 @@ impl TestWorld {
             targeted: vec![],
             fixed_roll: None,
             field: vec![],
+            plan: game_core::engine::MoveCtx::default(),
         }
     }
     pub fn d(&mut self, sides: i32) -> i32 {
@@ -480,5 +483,8 @@ impl CardWorld for TestWorld {
             .get(uid.max(0) as usize)
             .map(|(_, t)| *t)
             .unwrap_or(-2)
+    }
+    fn plan_mut(&mut self) -> &mut game_core::engine::MoveCtx {
+        &mut self.plan
     }
 }

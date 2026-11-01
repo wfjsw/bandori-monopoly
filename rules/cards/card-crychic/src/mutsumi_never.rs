@@ -75,8 +75,8 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
         ctx::invoke_skill(player_id, &skill)?;
     }
     let hand = ctx::cards_in(player_id, ctx::CardPile::Hand);
-    // TODO(规则书)（然后弃一张卡）: the discard is unconditional -- we skip it when
-    //   the hand is empty.
+    // 规则书（2）: 「然后弃一张卡」 -- with no card to discard the step is spent and
+    // the skip is logged.
     if !hand.is_empty() {
         let ids: Vec<&str> = hand.iter().map(|c| c.as_str()).collect();
         let pick = ctx::ask_card(
@@ -86,6 +86,11 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
             &ids,
         )?;
         ctx::discard_from_hand(player_id, ids[pick.min(ids.len() - 1)]);
+    } else {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("log.discard_skipped")).player_id("who", player_id),
+        );
     }
     // TODO(规则书)（然后弃一张卡）: 规则书（2）:
     // 「消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。」 -- the cell prints no

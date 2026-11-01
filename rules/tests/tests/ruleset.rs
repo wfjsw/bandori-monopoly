@@ -170,6 +170,8 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
             roll: Some(12),
             by_skill: false,
             settle_redirect: false,
+            rolled: true,
+            effective: 12,
         }),
         ..Default::default()
     };

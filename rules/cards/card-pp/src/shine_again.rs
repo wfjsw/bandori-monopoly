@@ -101,6 +101,27 @@ fn unrecorded_owned_colors(player_id: i32) -> Vec<i32> {
     out
 }
 
+/// Every colour the board carries that this card has not recorded -- the (2)
+/// pool, which is not restricted to colours the owner holds a deed in.
+fn unrecorded_colors() -> Vec<i32> {
+    let recorded = ctx::prop(PROP_COLORS);
+    let mut out: Vec<i32> = Vec::new();
+    for t in 0..ctx::tile_count() {
+        if !ctx::is_buyable(t) {
+            continue;
+        }
+        let g = ctx::tile_group(t);
+        if g < 0 || g >= 31 || out.contains(&g) {
+            continue;
+        }
+        if recorded & (1 << g) != 0 {
+            continue;
+        }
+        out.push(g);
+    }
+    out
+}
+
 /// Residual guard for [`pay_choose`]: an unrecorded owned colour exists.
 /// Derived scan (owned groups minus the recorded bitset).
 fn has_unrecorded_color(player_id: i32) -> bool {
@@ -164,7 +185,9 @@ fn can_record(player_id: i32) -> Option<Msg> {
     if !ctx::is_placed() {
         return Some(Msg::new(key!("shine_again_not_placed")));
     }
-    if unrecorded_owned_colors(player_id).is_empty() {
+    // 规则书[持续]（2）: 「记录一个此卡未记录的颜色」 -- any colour, not only an
+    // owned one.
+    if unrecorded_colors().is_empty() {
         return Some(Msg::new(key!("shine_again_no_colour")));
     }
     None
@@ -186,7 +209,8 @@ fn record(player_id: i32) -> card_sdk::Asked {
     }
     // The pool first: the 共鸣 is the cost of the record, so it must not be paid
     // when there is nothing left to record.
-    let pool = unrecorded_owned_colors(player_id);
+    // 规则书[持续]（2）: 「记录一个此卡未记录的颜色」 -- any unrecorded colour.
+    let pool = unrecorded_colors();
     if pool.is_empty() {
         return Ok(());
     }

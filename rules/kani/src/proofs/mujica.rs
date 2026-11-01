@@ -103,6 +103,11 @@ crate::host_subset!(doll_garden_subset {
     set_steps | set_settles => arm_stub_zero,
     run_planned_move => arm_card_move,
     log | effect => arm_log,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// `Mujica:（喵梦）` play — place on own field.

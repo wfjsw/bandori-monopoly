@@ -425,6 +425,17 @@ because `moveAfter` now precedes `settleBefore`, a move-end effect that relocate
 must do so *before* `settleBefore` opens — otherwise the two windows disagree
 about which tile is being settled.
 
+G04 changes no stage order. Two notes:
+
+- A skill teleport nested inside a settle (a `settleBefore` relocation) raises
+  its own `moveAfter` / `moveResolved` tail under a side plan frame, so
+  「使用技能进行传送后」 counters open there. The tail re-entry guard keeps a
+  tail-raised teleport from recursing into itself.
+- A [?]/[奇] parity walk steps to the **nearest** tile ahead whose parity
+  matches, read per step from the move's frame; the parity and the extra-step
+  count are re-read at every step, so a mid-walk raise lengthens the current
+  walk instead of the next one.
+
 ## 8. Rulebook first — where the spec conflicts
 
 | spec claim | 规则书 | verdict |

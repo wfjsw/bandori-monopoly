@@ -84,5 +84,7 @@
   "want_human_drained": "想要成为人类：清空奇迹水晶，下次移动掷骰 +{{n}}",
   "want_human_note": "「想要成为人类」置于场上",
   "want_human_title": "想要成为人类",
-  "want_to_grab_note": "想要抓住... 的效果：{{who}} 获得一层[停留]"
+  "want_to_grab_ask": "选择正上、正下、正左或正右直线上距离最近的格子",
+  "want_to_grab_note": "想要抓住... 的效果：{{who}} 获得一层[停留]",
+  "want_to_grab_title": "想要抓住..."
 }

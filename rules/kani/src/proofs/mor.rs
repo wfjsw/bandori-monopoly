@@ -494,6 +494,11 @@ crate::host_subset!(garden_dispatch {
     set_teleport_to => arm_stub_zero,
     state_add => arm_state_add,
     state_set => arm_state_set,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 fn garden_world(user: i32) {
@@ -1967,6 +1972,11 @@ crate::host_subset!(wing_dispatch {
     set_settles => arm_stub_zero,
     run_planned_move => arm_card_move,
     log | effect => arm_log,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 fn wing_world(user: i32) -> i32 {

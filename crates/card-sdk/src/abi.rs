@@ -759,7 +759,31 @@ use std::borrow::Cow;
 ///
 ///    SAVE_VERSION / RECORD_VERSION unchanged (the new save fields are
 ///    `#[serde(default)]`).
-pub const ABI_VERSION: i32 = 107;
+/// v108: **command-scoped move plans and walk control**. The turn plan is a
+///    staging buffer; every move runs on a frame owned by its command
+///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
+///    New imports: `ruleset_set_forced` (378), `ruleset_set_main_override` (379),
+///    `ruleset_void_walk` (380), `ruleset_clear_steps` (381),
+///    `ruleset_add_extra_steps` (382), `ruleset_move_planned_teleport` (383),
+///    `ruleset_move_pay_factor` (384), `ruleset_move_rent_factor` (385),
+///    `ruleset_move_effective_steps` (386), `ruleset_move_forced` (387),
+///    `ruleset_trig_move_rolled` (388),
+///    `ruleset_trig_move_effective_steps` (389),
+///    `ruleset_nearest_tile_on_axis` (390), `ruleset_farthest_tile_on_axis` (391).
+///    `MoveCtx.forced` is the `Forced` flag -- a forced move of the turn player
+///    is still the main move when `main_override` is set -- no longer "never the
+///    main move". `set_parity` canonicalizes `2` to `0` (even). The trigger move
+///    payload gains `rolled` and `effective`, surfaced as `move.rolled` /
+///    `move.effective`. SAVE_VERSION / RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 108;
+
+/// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
+pub mod axis {
+    pub const UP: i32 = 0;
+    pub const DOWN: i32 = 1;
+    pub const LEFT: i32 = 2;
+    pub const RIGHT: i32 = 3;
+}
 
 // v107 wire code tables. Unknown values fall back (`Normal` / `Card`); an
 // unknown flag bit is ignored by the host decoder.

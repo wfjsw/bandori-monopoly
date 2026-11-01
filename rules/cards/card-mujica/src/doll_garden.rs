@@ -74,7 +74,9 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         //   `DiceRollAfter` hooks.
         let r = ctx::roll(p, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
         sum += r;
-        // The MoveCtx shape maps onto `ctx::plan::*`.
+        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- an effect
+        // walk on the victim's own side frame, never the main move.
+        ctx::plan::set_forced(true);
         ctx::plan::set_steps(r);
         ctx::plan::set_settles(false);
         ctx::run_planned_move(p);
@@ -92,8 +94,9 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id),
         );
         // 规则书: 「视为你本回合的主要移动」 -- the sum walk is the main move even
-        // when the sum is 0: run a 0-step walk so the main move is consumed and
-        // the shared plan stops carrying the last victim's steps / `resolve`.
+        // when the sum is 0: run a 0-step walk so the main move is consumed.
+        ctx::plan::set_forced(true);
+        ctx::plan::set_main_override(true);
         ctx::plan::set_steps(0);
         ctx::plan::set_settles(true);
         ctx::run_planned_move(player_id);
@@ -106,11 +109,11 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", sum as i64),
     );
-    // TODO(ABI)（强制移动）: TODO(ABI)（fresh MoveCtx）: Steps/Resolve map onto
-    // `ctx::plan::*`; `forced` has no setter. no guest `plan::set_forced`, so
-    // rules.txt 51's 「可选择…是否生效」 opt-out is unavailable (STA-02). the shared turn
-    // plan is never reset -- a stale `stop_at` / `pay_factor` / `reverse` from an
-    // earlier walk leaks in.
+    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。」
+    // A forced move that is the main move; the Main frame seeds from the clean
+    // staging, so no victim shape leaks in.
+    ctx::plan::set_forced(true);
+    ctx::plan::set_main_override(true);
     ctx::plan::set_steps(sum);
     ctx::plan::set_settles(true);
     ctx::run_planned_move(player_id);

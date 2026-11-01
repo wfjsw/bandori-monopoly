@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use game_kinds::move_plan::{is_staging, PlanField};
 use game_kinds::{Dice, Seat, Tile};
 
 use crate::msg::Msg;
@@ -15,6 +16,9 @@ use crate::state::MovePlan;
 // (`card-sdk`) and the host. Re-exported here so engine call sites keep their
 // path.
 pub use game_kinds::MoveKind;
+// `PlanKind` likewise: the guest names the shape of a frame, the engine stores
+// it.
+pub use game_kinds::move_plan::PlanKind;
 
 // Settling is not its own axis beside [`MoveKind`]: the kind already says
 // *where* resolution happens -- a walk resolves the route it travels and its
@@ -88,8 +92,14 @@ pub struct MoveCtx {
     pub is_main_move: bool,
     /// An event-driven forced move (「移动X」 / 「移动1d20」): not a main move, so
     /// it goes through even when the turn's main move is already spent
-    /// (`docs/EVENTS.md`). Set by the host when the running rule is `event:*`.
+    /// (`docs/EVENTS.md`). Set by the host when the running rule is `event:*`
+    /// or by a card (`plan::set_forced`).
     pub forced: bool,
+    /// This forced move is main anyway (「视为你的主要移动」): `plan::
+    /// set_main_override`. [`is_main_move`](game_kinds::move_plan::is_main_move)
+    /// reads it.
+    #[serde(default)]
+    pub main_override: bool,
     /// The move was shaped or started by a rule whose card id starts with
     /// `skill:` (generic source tag; cond reads `move.by_skill`).
     #[serde(default)]
@@ -104,6 +114,11 @@ pub struct MoveCtx {
     /// The teleport's destination. `None` = a teleport with no named
     /// destination derives it from the roll.
     pub teleport_to: Option<Tile>,
+    /// This teleport replaces the pending walk instead of following it
+    /// (`plan::void_walk`). With `main_override`, inside a move's own roll
+    /// window, the next `run_planned_move` replaces the walk in place.
+    #[serde(default)]
+    pub void_walk: bool,
     /// Does the move settle where it lands (`settleBefore` -> `settle` -> `land`
     /// -> `settleAfter`)? Clear it to prevent settle at all -- the player still
     /// moves. 其他规则注意事项 1.2: 「是否settle」 gates **only** the settle
@@ -122,6 +137,11 @@ pub struct MoveCtx {
     pub dice: Vec<Roll>,
     /// The face the walk uses, after the counteractions have rewritten it.
     pub roll: i32,
+    /// A die was cast for this walk (a `steps` walk and a teleport are `false`;
+    /// a `next_steps` override still casts, so it stays `true`). The charity
+    /// condition and `trigger::move_rolled` read it.
+    #[serde(default)]
+    pub rolled: bool,
     /// Floor applied to the final face (only when the roll is unsigned).
     /// `None` = no floor.
     pub min_roll: Option<i32>,
@@ -131,6 +151,10 @@ pub struct MoveCtx {
     // -- the walk ------------------------------------------------------------
     /// Planned length. `None` before the roll (the roll sets it).
     pub steps: Option<i32>,
+    /// The main move's stored override, copied from `hidden[i]` at a Main
+    /// frame seed and never a guest write; the staging plan leaves it `None`.
+    #[serde(default)]
+    pub next_steps: Option<i32>,
     /// Steps added mid-walk (extends the walk as it runs).
     pub extra_steps: i32,
     pub from: i32,
@@ -173,27 +197,6 @@ pub struct MoveCtx {
     /// `card_sdk::ctx::trigger::is_settle_redirect()`.
     #[serde(default)]
     pub settle_redirect: bool,
-    /// Per-move scope marks, never read by the walk itself. The plan is never
-    /// reset between moves in a turn, so a value written for an *earlier*
-    /// move stays on it and reshapes the next one; the corresponding
-    /// `plan::set_*` write raises these, and the next move's entry consumes
-    /// them ([`crate::engine::play`]'s `drop_stale_plan_shape`). `steps` and
-    /// the two payment factors are per-move by definition; a leftover
-    /// `stop_at` would halt an unrelated later walk, unexplained (the
-    /// `log.outcome.plan_stop` line belongs to the move that wrote it).
-    #[serde(default)]
-    pub steps_fresh: bool,
-    #[serde(default)]
-    pub stop_at_fresh: bool,
-    #[serde(default)]
-    pub pay_fresh: bool,
-    /// Same one-shot scope for the walk's *direction* (`reverse`) and whether
-    /// it settles (`settles`): a 「向反方向移动」 / 「不[结算]」 move must not
-    /// send the next one backwards or silence its settle.
-    #[serde(default)]
-    pub reverse_fresh: bool,
-    #[serde(default)]
-    pub resolve_fresh: bool,
     /// Whether this move can build on the tile it lands on. `false` is the
     /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
     /// one flag, not two.
@@ -225,6 +228,38 @@ pub struct MoveCtx {
     pub followers: Vec<i32>,
 }
 
+/// One live plan frame: the plan a move runs on, the staging it restores, and
+/// who owns it. Pushed by `World::begin_plan`, popped by `World::end_plan`
+/// (`spec/abi/G04-move-plan.md` §3.2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlanFrame {
+    pub plan: MoveCtx,
+    /// The staging plan at the command's entry; the restore target of a side
+    /// or refused frame.
+    pub saved: MoveCtx,
+    pub kind: PlanKind,
+    pub owner: usize,
+}
+
+/// One activation body's plan scope.
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlanScope {
+    pub commands: Vec<PlanCommand>,
+    pub moves: u32,
+    /// The frame contents when the current roll window opened, innermost last.
+    #[serde(default)]
+    pub window_before: Vec<MoveCtx>,
+}
+
+/// The snapshot a command scope takes at its entry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlanCommand {
+    pub staging_before: MoveCtx,
+    /// The plan target when the body entered (a frame clone, or staging).
+    pub plan_before: MoveCtx,
+    pub moves_at_entry: u32,
+}
+
 impl Default for MoveCtx {
     /// `Option` / `bool` defaults are correct for every sentinel field. The
     /// remaining non-default bits: `settles = true`, `base = 1d20`,
@@ -235,10 +270,12 @@ impl Default for MoveCtx {
             roller: None,
             is_main_move: false,
             forced: false,
+            main_override: false,
             by_skill: false,
             reason: None,
             kind: MoveKind::Walk,
             teleport_to: None,
+            void_walk: false,
             settles: true,
             base: vec![Roll {
                 dice: Dice {
@@ -249,9 +286,11 @@ impl Default for MoveCtx {
             }],
             dice: Vec::new(),
             roll: 0,
+            rolled: false,
             min_roll: None,
             signed: false,
             steps: None,
+            next_steps: None,
             extra_steps: 0,
             from: 0,
             to: 0,
@@ -270,11 +309,6 @@ impl Default for MoveCtx {
             rent_factor: 1.0,
             settle_as_agent: false,
             settle_redirect: false,
-            steps_fresh: false,
-            stop_at_fresh: false,
-            pay_fresh: false,
-            reverse_fresh: false,
-            resolve_fresh: false,
             can_build: true,
             build_anywhere: false,
             more_steps: 0,
@@ -284,6 +318,68 @@ impl Default for MoveCtx {
             followers: Vec::new(),
         }
     }
+}
+
+/// Generate the per-field copy / compare pair over [`PlanField`]. The match is
+/// exhaustive, so a new `PlanField` variant is a compile error here.
+macro_rules! plan_field_ops {
+    ($($variant:ident.$field:ident),* $(,)?) => {
+        fn assign(dst: &mut MoveCtx, src: &MoveCtx, f: PlanField) {
+            match f {
+                $(PlanField::$variant => dst.$field = src.$field.clone()),*
+            }
+        }
+        fn same(a: &MoveCtx, b: &MoveCtx, f: PlanField) -> bool {
+            match f {
+                $(PlanField::$variant => a.$field == b.$field),*
+            }
+        }
+    };
+}
+
+plan_field_ops! {
+    Steps.steps,
+    Reverse.reverse,
+    Parity.parity,
+    Kind.kind,
+    TeleportTo.teleport_to,
+    Start.start,
+    StartReason.start_reason,
+    StopAt.stop_at,
+    SettleTile.settle_tile,
+    SettleRedirect.settle_redirect,
+    Resolve.settles,
+    PayFactor.pay_factor,
+    RentFactor.rent_factor,
+    Followers.followers,
+    ExtraSteps.extra_steps,
+    NextSteps.next_steps,
+    MinimumRoll.min_roll,
+    Signed.signed,
+    Base.base,
+    Dice.dice,
+    MoreSteps.more_steps,
+    NoBuy.no_buy,
+    CanBuild.can_build,
+    BuildAnywhere.build_anywhere,
+    SettleAsAgent.settle_as_agent,
+    Tags.tags,
+    BySkill.by_skill,
+    Forced.forced,
+    MainOverride.main_override,
+    VoidWalk.void_walk,
+    Rolled.rolled,
+    Reason.reason,
+    Roller.roller,
+    Cancelled.cancelled,
+    IsMainMove.is_main_move,
+    From.from,
+    To.to,
+    Path.path,
+    Total.total,
+    Remaining.remaining,
+    PassedPlayers.passed_players,
+    Stopped.stopped,
 }
 
 impl MoveCtx {
@@ -304,6 +400,34 @@ impl MoveCtx {
         let n = n.max(0);
         self.steps = Some(n);
         self.roll = if self.roll < 0 { -n } else { n };
+    }
+
+    /// The length this move actually takes: a fixed count, else the face (the
+    /// frame mirrors `next_steps` into `roll`).
+    pub fn effective_steps(&self) -> i32 {
+        self.steps.unwrap_or(self.roll)
+    }
+
+    /// Build the seed of a side frame: every `Command` field the command
+    /// changed relative to `plan_before`, and every `Turn` / `NextMainMove`
+    /// field from `staging` (those stay for the next main). Iterates
+    /// [`PlanField`] and consults [`is_staging`], so a new field cannot be
+    /// forgotten.
+    ///
+    /// A field the caller itself changed (relative to `plan_before`) always
+    /// keeps the caller's value. `target` is the body's captured plan -- the
+    /// copy its plan writes land on while it is paused -- and the live
+    /// `staging` does not see those, so letting `staging` win would drop a
+    /// teleport / steps / kind the body set right before the call
+    /// (`G04-move-plan.md` §3.2).
+    pub fn staging_seed(plan_before: &MoveCtx, staging: &MoveCtx, target: &MoveCtx) -> MoveCtx {
+        let mut seed = target.clone();
+        for &f in PlanField::ALL {
+            if same(plan_before, target, f) && (is_staging(f) || !same(plan_before, staging, f)) {
+                assign(&mut seed, staging, f);
+            }
+        }
+        seed
     }
 
     /// +1 forwards, -1 backwards.
@@ -360,8 +484,111 @@ impl MoveCtx {
 
 #[cfg(test)]
 mod tests {
-    use super::MoveCtx;
+    use super::{MoveCtx, PlanKind};
+    use crate::engine::world::World;
+    use crate::rng::Rng;
+    use crate::state::MatchState;
     use game_kinds::Tile;
+
+    /// A bare two-seat world: enough for the frame stack and the staging
+    /// buffer, with no board or match flow.
+    fn bare_world() -> World {
+        World::new(MatchState::default(), 2, Rng::new(1))
+    }
+
+    /// G04 §3.2: a side command that drove a move restores the staging it found
+    /// (its `steps` / `reverse` / `pay_factor` are gone at command end), while
+    /// the move itself ran on the command's shape.
+    #[test]
+    fn g04_side_move_restores_staging() {
+        let mut w = bare_world();
+        w.enter_plan_command(false);
+        w.plan_mut().set_steps(5);
+        w.plan_mut().reverse = true;
+        w.plan_mut().pay_factor = 0.5;
+        let target = w.plan().clone();
+        w.begin_plan(0, PlanKind::SideMove, target);
+        w.turn.plan_scope.moves += 1;
+        // The move sees the command's shape...
+        assert_eq!(w.plan().steps, Some(5));
+        assert!(w.plan().reverse);
+        assert_eq!(w.plan().pay_factor, 0.5);
+        w.end_plan(true);
+        w.leave_plan_command();
+        // ...and the command's writes are gone with it.
+        assert!(w.turn.plan.steps.is_none(), "steps restored");
+        assert!(!w.turn.plan.reverse, "reverse restored");
+        assert_eq!(w.turn.plan.pay_factor, 1.0, "factor restored");
+        assert!(w.turn.plan_stack.is_empty());
+        assert!(w.turn.plan_scope.commands.is_empty());
+    }
+
+    /// G04 §3.2 restore table: a Main frame that ran consumes the staging (the
+    /// next move starts clean) and latches nothing back.
+    #[test]
+    fn g04_main_consumes_staging() {
+        let mut w = bare_world();
+        w.turn.plan.set_steps(3);
+        w.set_teleport_to(Some(Tile(4)));
+        let target = w.turn.plan.clone();
+        w.begin_plan(0, PlanKind::MainMove, target);
+        assert_eq!(w.plan().steps, Some(3), "the Main seed takes the staging");
+        w.end_plan(true);
+        assert_eq!(
+            w.turn.plan,
+            MoveCtx::default(),
+            "a ran Main move empties staging"
+        );
+        assert!(w.turn.plan_stack.is_empty());
+    }
+
+    /// G04 R12: a body raised inside a body pushes its own `PlanCommand`; the
+    /// nested leave touches nothing and the outer snapshot survives intact.
+    #[test]
+    fn g04_nested_frames_restore_in_order() {
+        let mut w = bare_world();
+        w.enter_plan_command(false);
+        w.plan_mut().set_steps(2);
+        let target = w.plan().clone();
+        w.begin_plan(0, PlanKind::SideMove, target);
+        w.turn.plan_scope.moves += 1;
+        w.plan_mut().reverse = true;
+        let outer = w.turn.plan_scope.commands.last().unwrap().clone();
+
+        // A nested body opens its own command and frame.
+        w.enter_plan_command(false);
+        assert_eq!(w.turn.plan_scope.commands.len(), 2);
+        let nested = w.plan().clone();
+        w.begin_plan(0, PlanKind::SideMove, nested);
+        assert_eq!(
+            w.turn.plan_scope.commands.last().unwrap().plan_before.steps,
+            Some(2),
+            "the nested snapshot is the outer frame's shape"
+        );
+        assert!(w.plan().reverse, "the nested seed carries the outer frame");
+        w.plan_mut().set_steps(9);
+        w.plan_mut().pay_factor = 0.25;
+        w.end_plan(true);
+        w.leave_plan_command();
+
+        // The nested frame and command are gone; the outer snapshot is intact.
+        assert_eq!(w.turn.plan_scope.commands.len(), 1);
+        assert_eq!(
+            *w.turn.plan_scope.commands.last().unwrap(),
+            outer,
+            "the outer snapshot is not overwritten"
+        );
+        assert_eq!(w.plan().steps, Some(2), "outer frame shape untouched");
+        assert!(w.plan().reverse);
+        assert_eq!(w.plan().pay_factor, 1.0);
+
+        // The outer command ends: its (single) move drop restores staging.
+        w.end_plan(true);
+        w.leave_plan_command();
+        assert!(w.turn.plan.steps.is_none());
+        assert!(w.turn.plan_stack.is_empty());
+        assert!(w.turn.plan_scope.commands.is_empty());
+    }
 
     /// HOST-08: `set_no_build` folds into `can_build = !on`; `build_anywhere`
     /// is its own plan flag (landing-only when false).

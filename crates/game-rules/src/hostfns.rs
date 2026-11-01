@@ -2130,6 +2130,17 @@ pub fn run_planned_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, Ho
         if let Some(&ok) = st.answers.get(st.next_answer) {
             let answer = st.next_answer;
             st.w().after_host(answer);
+            // A refused run (the abnormal gate answered 0) must re-arm the
+            // outer walk. The settled answer is replayed through this arm, so
+            // the body has just re-written every plan field *after* the gate
+            // call that `wasm_rules`' refusal cleanup cleared on the first
+            // pass; clear the teleport half again here so the caller's walk
+            // takes the roll (`spec/abi/G04-move-plan.md` §4.4, R16).
+            if ok == 0 {
+                let w = st.w();
+                w.set_teleport_to(None);
+                w.clear_void_walk();
+            }
             st.next_answer += 1;
             return Ok(ok);
         }
@@ -3318,6 +3329,71 @@ pub fn set_min_roll<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
 pub fn set_extra_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
     c.st_mut().w().set_extra_steps(v);
     Ok(())
+}
+
+pub fn add_extra_steps<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
+    c.st_mut().w().add_extra_steps(v);
+    Ok(())
+}
+
+pub fn clear_steps<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
+    c.st_mut().w().clear_steps();
+    Ok(())
+}
+
+pub fn set_forced<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_forced(v != 0);
+    Ok(())
+}
+
+pub fn set_main_override<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_main_override(v != 0);
+    Ok(())
+}
+
+pub fn void_walk<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
+    c.st_mut().w().void_walk();
+    Ok(())
+}
+
+pub fn move_planned_teleport<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().move_planned_teleport())
+}
+
+pub fn move_pay_factor<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().move_pay_factor())
+}
+
+pub fn move_rent_factor<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().move_rent_factor())
+}
+
+pub fn move_effective_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().move_effective_steps())
+}
+
+pub fn move_forced<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().move_forced() as i32)
+}
+
+pub fn trig_move_rolled<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trig_move_rolled() as i32)
+}
+
+pub fn trig_move_effective_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trig_move_effective_steps())
+}
+
+pub fn nearest_tile_on_axis<C: HostCtx>(c: &mut C, tile: i32, axis: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().nearest_tile_on_axis(tile, axis))
+}
+
+pub fn farthest_tile_on_axis<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    axis: i32,
+) -> Result<i32, HostError> {
+    Ok(c.st().wr().farthest_tile_on_axis(tile, axis))
 }
 
 pub fn move_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32) -> Result<i32, HostError> {

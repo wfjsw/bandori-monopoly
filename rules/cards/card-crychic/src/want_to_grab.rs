@@ -8,11 +8,11 @@
 //!
 //! > （3）你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。
 //!
-//! grab / jump effects are the GrabFx hooks: `PassPlayer` / `SettleBefore` /
-//! `TurnStart` are hook kinds now; the walk body is expressible with
-//! `run_planned_move`, and the card stays in play (`Dest::Field`) so those hooks
-//! attach; only the grid-nearest teleport (「视为你的主要移动」) is still held
-//! (see the TODO on `on_turn_start`).
+//! `PassPlayer` / `SettleBefore` / `TurnStart` are hook kinds; both moves run
+//! through `run_planned_move`, and the card stays in play (`Dest::Field`) so
+//! those hooks attach.
+
+use alloc::vec::Vec;
 
 use bandori_std::ctx;
 use bandori_std::ctx::{plan, trigger};
@@ -110,10 +110,37 @@ fn grab(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书（2）: 「你的下回合开始前」 -- at the owner's turn start the window
-/// closes and the card leaves play (with it the two hooks above).
+/// 规则书（2）（3）: 「你的下回合开始前」 -- at the owner's turn start the window
+/// closes and the card leaves play (with it the two hooks above). If nobody
+/// passed, (3) fires first: a teleport to the nearest tile on any axis,
+/// counted as the main move.
 fn on_turn_start(player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）
+    // 规则书（3）: 「若没有玩家经过你」 -- `FIRED` means the grab already spent the
+    // window. 规则书（3）: 「立即选择并[传送]至一个与自身所在格…直线距离最近的格子」
+    if ctx::state::get(player_id, PASSER) == NEVER {
+        let pos = ctx::player_pos(player_id);
+        let mut tiles = Vec::new();
+        use card_sdk::abi::axis;
+        for a in [axis::UP, axis::DOWN, axis::LEFT, axis::RIGHT] {
+            let t = ctx::nearest_tile_on_axis(pos, a);
+            if t >= 0 {
+                tiles.push(t);
+            }
+        }
+        if !tiles.is_empty() {
+            let to = ctx::ask_tile(
+                player_id,
+                &Msg::new(key!("want_to_grab_title")),
+                &Msg::new(key!("want_to_grab_ask")),
+                &tiles,
+            )?;
+            // 规则书（3）: 「…并[触发结算]，视为你的主要移动」 -- the teleport arm
+            // derives `kind`, and being a main move it latches the slot.
+            plan::set_teleport_to(to);
+            plan::set_settles(true);
+            ctx::run_planned_move(player_id);
+        }
+    }
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::state::set(player_id, PASSER, NEVER);
     Ok(())

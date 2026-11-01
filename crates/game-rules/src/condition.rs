@@ -195,6 +195,15 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             .map(|m| m.by_skill)
             .unwrap_or(false)
     }
+    fn move_rolled(&self) -> bool {
+        self.trigger.mv.as_ref().map(|m| m.rolled).unwrap_or(false)
+    }
+    fn move_effective(&self) -> i64 {
+        self.trigger.mv.as_ref().map(|m| m.effective).unwrap_or(0) as i64
+    }
+    fn move_from(&self) -> i64 {
+        self.trigger.mv.as_ref().map(|m| m.from).unwrap_or(-1) as i64
+    }
     fn move_dir(&self) -> i64 {
         self.trigger
             .mv
@@ -598,7 +607,14 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             return 0;
         }
         let roll = roll.abs();
-        let start = self.pos(p);
+        // G04 item 12: the span's origin is the move's actual start (a
+        // `set_start` override stamped before the windows), not the pre-plan
+        // position.
+        let start = if self.move_from() >= 0 {
+            self.move_from()
+        } else {
+            self.pos(p)
+        };
         let n = self.src.tile_count() as i64;
         if n <= 0 || start < 0 {
             return 0;
@@ -1379,6 +1395,9 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .map(|m| m.tags.iter().map(|(k, v)| (k.clone(), *v as i64)).collect())
             .unwrap_or_default(),
         by_skill: t.mv.as_ref().map(|m| m.by_skill).unwrap_or(false),
+        rolled: t.mv.as_ref().map(|m| m.rolled).unwrap_or(false),
+        effective: t.mv.as_ref().map(|m| m.effective).unwrap_or(0) as i64,
+        from: t.mv.as_ref().map(|m| m.from).unwrap_or(-1) as i64,
     };
 
     let tile = TileSnap {

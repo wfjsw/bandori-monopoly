@@ -465,6 +465,34 @@ pub trait HostOps {
     fn op_set_min_roll(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_extra_steps`
     fn op_set_extra_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_add_extra_steps`
+    fn op_add_extra_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_clear_steps`
+    fn op_clear_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_forced`
+    fn op_set_forced(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_main_override`
+    fn op_set_main_override(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_void_walk`
+    fn op_void_walk(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_move_planned_teleport`
+    fn op_move_planned_teleport(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_move_pay_factor`
+    fn op_move_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_move_rent_factor`
+    fn op_move_rent_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_move_effective_steps`
+    fn op_move_effective_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_move_forced`
+    fn op_move_forced(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_move_rolled`
+    fn op_trig_move_rolled(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_move_effective_steps`
+    fn op_trig_move_effective_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_nearest_tile_on_axis`
+    fn op_nearest_tile_on_axis(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_farthest_tile_on_axis`
+    fn op_farthest_tile_on_axis(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_more_steps`
     fn op_set_more_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_tag`
@@ -1517,6 +1545,53 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_set_extra_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::set_extra_steps(self, a[0])?;
         Ok(0)
+    }
+    fn op_add_extra_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::add_extra_steps(self, a[0])?;
+        Ok(0)
+    }
+    fn op_clear_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::clear_steps(self)?;
+        Ok(0)
+    }
+    fn op_set_forced(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::set_forced(self, a[0])?;
+        Ok(0)
+    }
+    fn op_set_main_override(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::set_main_override(self, a[0])?;
+        Ok(0)
+    }
+    fn op_void_walk(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::void_walk(self)?;
+        Ok(0)
+    }
+    fn op_move_planned_teleport(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::move_planned_teleport(self)? as i64)
+    }
+    fn op_move_pay_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::move_pay_factor(self)? as i64)
+    }
+    fn op_move_rent_factor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::move_rent_factor(self)? as i64)
+    }
+    fn op_move_effective_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::move_effective_steps(self)? as i64)
+    }
+    fn op_move_forced(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::move_forced(self)? as i64)
+    }
+    fn op_trig_move_rolled(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_move_rolled(self)? as i64)
+    }
+    fn op_trig_move_effective_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_move_effective_steps(self)? as i64)
+    }
+    fn op_nearest_tile_on_axis(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::nearest_tile_on_axis(self, a[0], a[1])? as i64)
+    }
+    fn op_farthest_tile_on_axis(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::farthest_tile_on_axis(self, a[0], a[1])? as i64)
     }
     fn op_set_more_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::set_more_steps(self, a[0])?;
@@ -3865,10 +3940,12 @@ pub unsafe extern "C-unwind" fn ruleset_set_pay_factor(n: i32) {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_multiply_pay_factor(milli: i32, scope: i32) {
-    with_host(|h| match h.op_multiply_pay_factor([milli, scope, 0, 0, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_multiply_pay_factor([milli, scope, 0, 0, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -4003,6 +4080,122 @@ pub unsafe extern "C-unwind" fn ruleset_set_extra_steps(n: i32) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_add_extra_steps(n: i32) {
+    with_host(|h| match h.op_add_extra_steps([n, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_clear_steps() {
+    with_host(|h| match h.op_clear_steps([0; 6]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_forced(on: i32) {
+    with_host(|h| match h.op_set_forced([on, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_main_override(on: i32) {
+    with_host(|h| match h.op_set_main_override([on, 0, 0, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_void_walk() {
+    with_host(|h| match h.op_void_walk([0; 6]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_move_planned_teleport() -> i32 {
+    with_host(|h| match h.op_move_planned_teleport([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_move_pay_factor() -> i32 {
+    with_host(|h| match h.op_move_pay_factor([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_move_rent_factor() -> i32 {
+    with_host(|h| match h.op_move_rent_factor([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_move_effective_steps() -> i32 {
+    with_host(|h| match h.op_move_effective_steps([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_move_forced() -> i32 {
+    with_host(|h| match h.op_move_forced([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_move_rolled() -> i32 {
+    with_host(|h| match h.op_trig_move_rolled([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_move_effective_steps() -> i32 {
+    with_host(|h| match h.op_trig_move_effective_steps([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_nearest_tile_on_axis(tile: i32, axis: i32) -> i32 {
+    with_host(
+        |h| match h.op_nearest_tile_on_axis([tile, axis, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_farthest_tile_on_axis(tile: i32, axis: i32) -> i32 {
+    with_host(
+        |h| match h.op_farthest_tile_on_axis([tile, axis, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -4389,6 +4582,37 @@ pub unsafe extern "C-unwind" fn ruleset_apply_redeem(
     )
 }
 
+/// `sys::commit_mortgage` keeps the same body under its own name
+/// (`abi_link_names` pins one `ruleset_<sys fn>` per import).
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_commit_mortgage(
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_commit_mortgage([player_id, tile, amount, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+/// `sys::commit_redeem`, same as [`ruleset_commit_mortgage`].
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_commit_redeem(
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_commit_redeem([player_id, tile, amount, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_pay_buy(
     player_id: i32,
@@ -4573,6 +4797,15 @@ pub unsafe extern "C-unwind" fn ruleset_turn_rolls(buf: i32, cap: i32) -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_turn_snap(player_id: i32, buf: i32) -> i32 {
+    with_host(|h| match h.op_turn_snapshot([player_id, buf, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+/// `sys::turn_snapshot` -- the same body as [`ruleset_turn_snap`].
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_turn_snapshot(player_id: i32, buf: i32) -> i32 {
     with_host(|h| match h.op_turn_snapshot([player_id, buf, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
@@ -5088,6 +5321,30 @@ pub unsafe extern "C-unwind" fn ruleset_msg_b() -> i32 {
 }
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_msg_c() -> i32 {
+    with_host(|h| match h.op_msg_c() {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+/// `sys::msg_arg0` -- the same body as [`ruleset_msg_a`].
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_msg_arg0() -> i32 {
+    with_host(|h| match h.op_msg_a() {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+/// `sys::msg_arg1` -- the same body as [`ruleset_msg_b`].
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_msg_arg1() -> i32 {
+    with_host(|h| match h.op_msg_b() {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+/// `sys::msg_arg2` -- the same body as [`ruleset_msg_c`].
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_msg_arg2() -> i32 {
     with_host(|h| match h.op_msg_c() {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),

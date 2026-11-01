@@ -227,8 +227,8 @@ impl Msg {
     pub fn new(key: &str) -> Self {
         let _ = key;
         Self {
-            k: 0,
-            a: [0; MAX_INLINE_ARGS],
+            key: 0,
+            args: [0; MAX_INLINE_ARGS],
             n: 0,
         }
     }

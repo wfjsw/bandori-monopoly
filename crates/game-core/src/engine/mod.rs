@@ -533,6 +533,7 @@ impl Match {
             Some(board) => {
                 let mut d = (*data).clone();
                 d.tiles = board.clone();
+                d.rebuild_grid_cells();
                 Arc::new(d)
             }
             None => data,
@@ -586,6 +587,7 @@ impl Match {
     pub fn set_board(&mut self, board: Vec<crate::data::TileData>) {
         let mut d = (*self.data).clone();
         d.tiles = board.clone();
+        d.rebuild_grid_cells();
         self.data = Arc::new(d);
         self.world.board = Some(board);
     }

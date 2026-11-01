@@ -5,6 +5,7 @@
 //!
 //! 3 tiles in a chosen direction, settling at half price.
 
+use card_sdk::abi::PayFactorScope;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -46,21 +47,22 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("saki_move_backward")),
         ],
     )? == 0;
-    // The shape maps onto `ctx::plan::*` except `Forced`: Rust `forced` means
-    // event-driven and stays false here (only `event:` cards set it), so a
-    // self-targeted play still runs as the main move.
+    // 规则书: 「强制一名玩家…」 -- a forced move; 「（可在掷骰前选择自己以代替主要
+    // 移动）」 makes only the self-target the main move.
+    ctx::plan::set_forced(true);
+    ctx::plan::set_main_override(hit == player_id);
     ctx::plan::set_steps(3);
     ctx::plan::set_reverse(!forward);
     ctx::plan::set_settles(true);
-    ctx::plan::set_pay_factor(500);
+    ctx::plan::multiply_pay_factor(500, PayFactorScope::ThisMove);
     ctx::log(
         player_id,
         &Msg::new(key!("saki_move_ordered"))
             .player_id("who", hit)
             .i("n", 3),
     );
-    // TODO(规则书)（强制一名玩家向你选择的方向移动3格并[触发结算]）: 这 3 格/方向/半价只属于被强制的这一次行走 -- 这些形状写在共享的
-    // turn.plan 上没有复位，目标不是自己时，随后自己的主要移动也会走 3 格（无视骰点）、按同一方向并半价结算
+    // 规则书: 「强制一名玩家向你选择的方向移动3格并[触发结算]」 -- the frame carries
+    // this shape only; a turn main move that follows seeds from the clean staging.
     ctx::run_planned_move(hit);
     Ok(())
 }

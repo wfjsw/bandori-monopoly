@@ -16,23 +16,27 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     // G4: kind is the category (DiceRollBefore | DiceRollResult); actor ==
     // owner + a face under 6 is the condition. Residual guard deleted.
     &[On::Counteract(
-        // DiceRollBefore = a card-driven roll (the face rides `value`);
-        // DiceRollResult = the move roll.
+        // 规则书: 「【反击】当你的一次掷骰小于6时」 -- `DiceRollBefore` is a
+        // card-driven roll, `DiceRollResult` the move roll; both carry the face
+        // on `move.roll`.
         &[ChainKind::DiceRollBefore, ChainKind::DiceRollResult],
-        // 规则书: 「【反击】当你的一次掷骰小于6时」
-        // TODO(规则书)（当你的一次掷骰小于6时）: 「一次掷骰」 covers any of the user's
-        //   rolls -- `roll_direct` raises no [反击] window, so a direct roll can
-        //   never be raised here.
-        "actor == owner && ((move.roll != null && move.roll < 6) || (move.roll == null && value >= 0 && value < 6))",
+        // TODO(规则书): 「一次掷骰」 covers any of the user's rolls --
+        //   `roll_direct` raises no [反击] window, so a direct roll can never be
+        //   raised here.
+        "actor == owner && move.roll != null && move.roll < 6",
         None,
-        counteract).counter_reason(key!("himari_plus_one_when"))],
+        counteract,
+    )
+    .counter_reason(key!("himari_plus_one_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"如果并非没问题"#)
         .raw_name(r#"（绯玛丽）如果并非没问题"#)
         .tags(&[r#"反击"#])
-        .text(CardText::para(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#))
+        .text(CardText::para(
+            r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#,
+        ))
         // sheet cell C15
         .fields(&[("group", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]),
 );

@@ -1432,6 +1432,76 @@ mod abi {
         pub fn set_extra_steps(n: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_add_extra_steps"
+        )]
+        pub fn add_extra_steps(n: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_clear_steps"
+        )]
+        pub fn clear_steps();
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_forced"
+        )]
+        pub fn set_forced(on: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_main_override"
+        )]
+        pub fn set_main_override(on: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_void_walk"
+        )]
+        pub fn void_walk();
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_move_planned_teleport"
+        )]
+        pub fn move_planned_teleport() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_move_pay_factor"
+        )]
+        pub fn move_pay_factor() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_move_rent_factor"
+        )]
+        pub fn move_rent_factor() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_move_effective_steps"
+        )]
+        pub fn move_effective_steps() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_move_forced"
+        )]
+        pub fn move_forced() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_move_rolled"
+        )]
+        pub fn trig_move_rolled() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_move_effective_steps"
+        )]
+        pub fn trig_move_effective_steps() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_nearest_tile_on_axis"
+        )]
+        pub fn nearest_tile_on_axis(tile: i32, axis: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_farthest_tile_on_axis"
+        )]
+        pub fn farthest_tile_on_axis(tile: i32, axis: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_more_steps"
         )]
         pub fn set_more_steps(n: i32);

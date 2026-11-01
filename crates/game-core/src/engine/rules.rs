@@ -75,6 +75,11 @@ pub struct TriggerMove {
     /// Was this settle initiated by a card (`settle_tile_at`), not by the
     /// player's own move landing? Mirrors [`super::move_ctx::MoveCtx::settle_redirect`].
     pub settle_redirect: bool,
+    /// A die was cast for this walk (a `steps` walk and a teleport are `false`;
+    /// a `next_steps` override still casts, so it stays `true`).
+    pub rolled: bool,
+    /// The length the move will actually take.
+    pub effective: i32,
 }
 
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
@@ -410,6 +415,8 @@ impl Trigger {
             roll: None,
             by_skill: m.by_skill,
             settle_redirect: m.settle_redirect,
+            rolled: m.rolled,
+            effective: m.effective_steps(),
         });
         self.is_main_move = m.is_main_move;
         self

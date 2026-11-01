@@ -43,6 +43,11 @@ crate::host_subset!(skills_hhw_dispatch {
     trig_set_pay_amount => arm_trig_set_pay_amount,
     add_counter_self => arm_add_counter_self,
     counter_self => arm_counter_self,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// Install sparse 2-seat world + subset (concrete owner seat).

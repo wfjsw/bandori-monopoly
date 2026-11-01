@@ -80,6 +80,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         1,
         max,
     )?;
+    // 规则书: 「转移的房屋与目标格子中，至少一方数量为1」 -- every target takes one
+    // house and the moved count equals the target count, so the two sides are
+    // always equal and only `k == 1` satisfies the clause.
     let k = k.clamp(1, max);
     // Pick `k` distinct targets (one house each).
     let mut picked: Vec<i32> = Vec::new();

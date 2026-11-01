@@ -43,6 +43,11 @@ crate::host_subset!(skills_ag_dispatch {
     count_marks_f => arm_count_marks_f,
     place_mark => arm_place_mark,
     set_reverse | set_steps | set_settles => arm_protocol_stub,
+    // v108 plan flags / walk control / geometry readers (G04).
+    set_forced | set_main_override | void_walk | clear_steps | add_extra_steps => arm_stub_zero,
+    move_planned_teleport | move_pay_factor | move_rent_factor | move_effective_steps
+        | move_forced | trig_move_rolled | trig_move_effective_steps => arm_stub_zero,
+    nearest_tile_on_axis | farthest_tile_on_axis => arm_stub_neg,
 });
 
 /// Install sparse 2-seat world + subset. Callers keep concrete seats.
