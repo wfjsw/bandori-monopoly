@@ -428,7 +428,9 @@ fn a_fire_recast_carries_the_source_and_the_unused_face() {
         assert_eq!(int_arg(r, "source"), 1, "the Result source is CHARGE");
     }
     let settled = rows.last().unwrap();
-    assert_eq!(int_arg(settled, "unused"), 5, "the unpicked face");
+    // The unpicked face is the **settled** one (rollTrace's Add 5 -> 6 then
+    // Value 6 -> 12): that is the face the pick prompt offered.
+    assert_eq!(int_arg(settled, "unused"), 12, "the unpicked face");
     assert_eq!(int_arg(settled, "rerolled"), 1, "more than one cast");
     assert_eq!(int_arg(settled, "casts"), 2);
 }

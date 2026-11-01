@@ -1352,23 +1352,26 @@ pub fn rolls_by_player(player_id: i32, buf: i32, cap: i32) -> i32 {
 }
 
 pub fn trigger_roll(buf: i32, cap: i32) -> i32 {
-    kani_host::call_i32(Op::trigger_roll, [buf, cap, 0, 0, 0])
+    kani_host::call_i32(Op::trigger_roll, [buf, cap, 0, 0, 0, 0])
 }
 
-pub fn set_move_settle_answer(answer: i32) {
-    kani_host::call_unit(Op::set_move_settle_answer, [answer, 0, 0, 0, 0, 0]);
+pub fn set_move_settle_answer(player_id: i32, answer: i32) {
+    kani_host::call_unit(Op::set_move_settle_answer, [player_id, answer, 0, 0, 0, 0]);
 }
 
-pub fn move_settle_answer() -> i32 {
-    kani_host::call_i32(Op::move_settle_answer, [0, 0, 0, 0, 0, 0])
+pub fn move_settle_answer(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::move_settle_answer, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn set_turn_end_settle_answer(answer: i32) {
-    kani_host::call_unit(Op::set_turn_end_settle_answer, [answer, 0, 0, 0, 0, 0]);
+pub fn set_turn_end_settle_answer(player_id: i32, answer: i32) {
+    kani_host::call_unit(
+        Op::set_turn_end_settle_answer,
+        [player_id, answer, 0, 0, 0, 0],
+    );
 }
 
-pub fn turn_end_settle_answer() -> i32 {
-    kani_host::call_i32(Op::turn_end_settle_answer, [0, 0, 0, 0, 0, 0])
+pub fn turn_end_settle_answer(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::turn_end_settle_answer, [player_id, 0, 0, 0, 0, 0])
 }
 
 pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32 {

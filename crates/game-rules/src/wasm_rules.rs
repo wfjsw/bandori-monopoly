@@ -715,7 +715,8 @@ impl CardWorld for Run {
     }
     // The settle answers are plain world writes postcard-carried by the
     // commit pass with every other player-state write (the move half rides
-    // `state_set("resolveOverride")`; the turn-end half is a `TurnCtx` field).
+    // `state_set("resolveOverride")`; the turn-end half is the world's
+    // per-seat `blocked_settle`).
     fn set_move_settle_answer(&mut self, player_id: i32, answer: i32) {
         // An `Unanswered` write leaves the armed slot alone (`Match`'s
         // setter semantics).
@@ -734,12 +735,17 @@ impl CardWorld for Run {
         .slot()
         .unwrap_or(0)
     }
-    fn set_turn_end_settle_answer(&mut self, answer: i32) {
-        self.world.turn.blocked_settle_answer =
-            game_core::engine::SettleAnswer::from_i32(answer);
+    fn set_turn_end_settle_answer(&mut self, player_id: i32, answer: i32) {
+        self.world.set_blocked_settle_answer(
+            player_id.max(0) as usize,
+            game_core::engine::SettleAnswer::from_i32(answer),
+        );
     }
-    fn turn_end_settle_answer(&self) -> i32 {
-        self.world.turn.blocked_settle_answer.slot().unwrap_or(0)
+    fn turn_end_settle_answer(&self, player_id: i32) -> i32 {
+        self.world
+            .blocked_settle_answer(player_id.max(0) as usize)
+            .slot()
+            .unwrap_or(0)
     }
     fn after_host(&mut self, answer: usize) {
         if let Some(checkpoint) = self.pile_checkpoints.get(&answer) {

@@ -574,3 +574,68 @@ fn g03_own_stage_no_skips_the_blocked_settle() {
     drain(&mut t);
     assert_eq!(t.money(0), 10_000, "no settle at all");
 }
+
+
+/// 「或无法移动的回合结束时」 across seats: the answer is given in the
+/// **applying** turn (the rain's target here), and must survive into the
+/// blocked seat's own turn -- the engine may not read it on the declarer.
+#[test]
+fn g03_own_stage_cross_seat_skip_survives_the_turn() {
+    let mut t = fresh(&["户山香澄", "lock"]);
+    t.give(0, &[RAIN]);
+    t.give(1, &[OWN_STAGE]);
+    t.own(1, &[10]);
+    t.set_pos(1, 10);
+    t.dice(&[1, 1]);
+    t.play(0, RAIN).unwrap();
+    t.answer(0, 0).unwrap(); // the extra target: P1
+    play_counter(&mut t, 1, OWN_STAGE);
+    t.answer_one(1).unwrap(); // no
+    drain(&mut t);
+    assert_eq!(t.state(1, "stay"), 1, "the [停留] landed on P1");
+    t.end(0).unwrap();
+    drain(&mut t);
+    for _ in 0..20 {
+        if t.turn() == 1 {
+            break;
+        }
+        let cur = t.turn();
+        t.m.world_mut().st.skip_move = true;
+        t.end(cur).unwrap();
+        drain(&mut t);
+    }
+    assert_eq!(t.turn(), 1);
+    assert_eq!(t.pos(1), 10, "the blocked turn could not move");
+    t.end(1).unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(1), 10_000, "P1's own answer suppressed the settle");
+}
+
+/// A [眩晕] closes both gates, so the turn auto-skips before any main move:
+/// the default must already be stamped at the turn start (the old post-ladder
+/// immobile stamp never ran for it).
+#[test]
+fn g03_own_stage_stun_turn_end_settles() {
+    let mut t = Table::new(&["户山香澄", "lock"]);
+    t.strip_skills();
+    t.clean();
+    // 江户川乐器店's tile rule draws a card -- unlike a rent, the draw does
+    // not pass the pay gate the stun also closes.
+    let edogawa = tile("江户川乐器店");
+    t.set_pos(0, edogawa);
+    t.set_state(0, "stun", 1);
+    // One deck card: clean emptied both piles and the tile rule draws.
+    t.m.world_mut().hidden[0].deck.push("PP:不要背负期待".into());
+    let before = t.hand(0).len();
+    let mark = t.mark();
+    t.begin_turn(0);
+    // The stun closes the act gate, so the turn auto-skips straight to its end.
+    drain(&mut t);
+    assert_eq!(t.pos(0), edogawa, "no move happened");
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k == "log.land_draw"),
+        "the stunned turn's end settle ran the tile rule: {keys:?}"
+    );
+    assert_eq!(t.hand(0).len(), before + 1, "the settle drew a card");
+}

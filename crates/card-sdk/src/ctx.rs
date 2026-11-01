@@ -1136,29 +1136,31 @@ pub fn event_banish(id: &str) {
     unsafe { sys::event_banish(p, l) }
 }
 
-/// 「本次移动…是否触发结算」 -- arm the answer for the **current move**. The
-/// engine consumes it once; `Unanswered` leaves it alone.
-pub fn set_move_settle_answer(answer: crate::abi::SettleAnswer) {
-    unsafe { sys::set_move_settle_answer(answer as i32) }
+/// 「本次移动…是否触发结算」 -- arm `player_id`'s answer for its **current
+/// move**. The engine consumes it once; `Unanswered` leaves it alone.
+pub fn set_move_settle_answer(player_id: i32, answer: crate::abi::SettleAnswer) {
+    unsafe { sys::set_move_settle_answer(player_id, answer as i32) }
 }
 
-/// The armed answer for the current move.
-pub fn move_settle_answer() -> crate::abi::SettleAnswer {
-    match unsafe { sys::move_settle_answer() } {
+/// The armed answer for `player_id`'s current move.
+pub fn move_settle_answer(player_id: i32) -> crate::abi::SettleAnswer {
+    match unsafe { sys::move_settle_answer(player_id) } {
         1 => crate::abi::SettleAnswer::Settle,
         2 => crate::abi::SettleAnswer::Skip,
         _ => crate::abi::SettleAnswer::Unanswered,
     }
 }
 
-/// 「（或无法移动的回合结束时）」 -- the turn-end half of the same answer.
-pub fn set_turn_end_settle_answer(answer: crate::abi::SettleAnswer) {
-    unsafe { sys::set_turn_end_settle_answer(answer as i32) }
+/// 「（或无法移动的回合结束时）」 -- the turn-end half for `player_id`. The
+/// answer belongs to that seat across turns (the blocking effect usually lands
+/// on someone else's turn).
+pub fn set_turn_end_settle_answer(player_id: i32, answer: crate::abi::SettleAnswer) {
+    unsafe { sys::set_turn_end_settle_answer(player_id, answer as i32) }
 }
 
-/// The armed turn-end answer.
-pub fn turn_end_settle_answer() -> crate::abi::SettleAnswer {
-    match unsafe { sys::turn_end_settle_answer() } {
+/// `player_id`'s armed turn-end answer.
+pub fn turn_end_settle_answer(player_id: i32) -> crate::abi::SettleAnswer {
+    match unsafe { sys::turn_end_settle_answer(player_id) } {
         1 => crate::abi::SettleAnswer::Settle,
         2 => crate::abi::SettleAnswer::Skip,
         _ => crate::abi::SettleAnswer::Unanswered,
@@ -1231,7 +1233,9 @@ pub fn roll_pick(roll: i32, index: i32) {
 
 /// The result of [`roll_reroll`].
 pub struct RerollOutcome {
-    /// The index that will settle (the pick).
+    /// The **absolute** cast index that will settle (the prompt's option
+    /// mapped onto the transaction's casts -- the offered pair is the last
+    /// two casts, not casts 0/1).
     pub chosen_index: i32,
     /// The face the pick left behind.
     pub unused_face: Option<i32>,
@@ -1257,9 +1261,15 @@ pub fn roll_reroll(
     };
     roll_recast(roll, source)?;
     let pick = ask_pick(player_id, title, text, &[keep_old.clone(), keep_new.clone()])?;
-    roll_pick(roll, pick as i32);
+    // The prompt's options are the pair the recast left as the last two casts
+    // (old = n-2, new = n-1); `roll_pick` wants an absolute cast index, so a
+    // transaction that already carries earlier casts (taki's rerolls, layer's
+    // fire-pot rerolls) must not pass the option index straight through.
+    let n = roll_faces(roll).len().max(1);
+    let chosen = if pick == 1 { n - 1 } else { n.saturating_sub(2) };
+    roll_pick(roll, chosen as i32);
     Ok(RerollOutcome {
-        chosen_index: pick as i32,
+        chosen_index: chosen as i32,
         unused_face: roll_unused_face(roll),
     })
 }

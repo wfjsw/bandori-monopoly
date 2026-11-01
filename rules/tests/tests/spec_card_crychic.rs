@@ -200,8 +200,20 @@ fn crychic_debut_turn_end_stun_and_crystal() {
         t.clean();
         t.begin_turn(0);
         drain(&mut t);
-        let band_id = t.skill_id(0, "CRYCHIC");
-        let pre_crystals = t.crystals(0, &band_id).unwrap_or(0);
+        // Count across the seat's band-skill instances, not a captured id:
+        // the blocked-turn settle at the CiRCLE start tile draws a card before
+        // the turn-end hooks, and with both piles empty by then
+        // 「美好的往日幻影」(2) runs in field order ahead of this card's
+        // scheduled body, banishing itself and placing a MyGO / Ave Mujica
+        // skill -- the crystal legitimately lands on the successor.
+        let crystal_total = |t: &Table| -> i32 {
+            t.field(0)
+                .iter()
+                .filter(|f| f.group_skill)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+                .sum()
+        };
+        let pre_crystals = crystal_total(&t);
         t.give(0, &[DEBUT]);
         t.observe(&[Clause::new(
             "C-CRYCHIC-debut-02",
@@ -224,7 +236,7 @@ fn crychic_debut_turn_end_stun_and_crystal() {
                 "C-CRYCHIC-debut-02: stun {stun}, expected >=1 (「获得一层眩晕」)"
             ));
         }
-        let post = t.crystals(0, &band_id).unwrap_or(0);
+        let post = crystal_total(&t);
         if post != pre_crystals + 1 {
             return Err(format!(
                 "C-CRYCHIC-debut-02: band crystals {pre_crystals} -> {post}, expected +1"

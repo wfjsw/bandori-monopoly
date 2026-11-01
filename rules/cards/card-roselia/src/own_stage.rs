@@ -78,9 +78,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // TODO(规则书)（或无法移动的回合结束时）: the turn-end half applies only
         //   when the move is actually blocked -- the kind alone is the branch, so
         //   a [停留] walked through under 「不可阻挡」 still lands here.
-        ctx::set_turn_end_settle_answer(if yes { Settle } else { Skip });
+        ctx::set_turn_end_settle_answer(player_id, if yes { Settle } else { Skip });
     } else {
-        ctx::set_move_settle_answer(if yes { Settle } else { Skip });
+        ctx::set_move_settle_answer(player_id, if yes { Settle } else { Skip });
     }
     Ok(())
 }

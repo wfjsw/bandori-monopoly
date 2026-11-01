@@ -27,7 +27,7 @@
 //! across `self.raise`.
 
 use super::cx::{Cx, Flow};
-use super::play::Move;
+use super::play::{plan_dice_msg, Move};
 use super::rules::{RollSource, Trigger};
 use super::world::{FixedFace, RollHistoryEntry, World};
 use serde::{Deserialize, Serialize};
@@ -181,9 +181,12 @@ impl World {
     /// The synthesized move view of a transaction, for a trigger raised
     /// outside a live move frame (a join recast or a preview): a walk that does
     /// not resolve -- the transaction's caller owns the walk and the settle.
+    /// The dice come from the shared turn plan (the move this transaction
+    /// rides); a bare default would throw a plain d20 and drop every plan
+    /// table (1d4 extras, forced 2d20, ...).
     pub fn roll_move_view(&self, id: i32, fallback_roller: usize) -> Move {
         let roller = self.roll_by_id(id).map(|r| r.roller).unwrap_or(fallback_roller);
-        let mut m = Move::default();
+        let mut m = self.turn.plan.clone();
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
         m.main = self.roll_by_id(id).map(|r| r.main).unwrap_or(false);
@@ -212,10 +215,12 @@ impl World {
         let idx = (index.max(0) as usize).min(n - 1);
         // I5: the keep point is the cast of the latest pair the pick did not
         // take, so it is recorded even when the pick re-keeps the face that
-        // was already chosen. A single cast has nothing unchosen.
+        // was already chosen. A single cast has nothing unchosen. The recorded
+        // face is the settled one -- that is what the player saw offered.
         if n >= 2 {
             let other = if idx == n - 1 { n - 2 } else { n - 1 };
-            r.unused_face = r.casts[other].raw;
+            let c = &r.casts[other];
+            r.unused_face = c.settled.unwrap_or(c.raw);
         }
         if idx == r.chosen_index {
             return;
@@ -336,14 +341,39 @@ impl Cx<'_> {
     // ---- stages --------------------------------------------------------
 
     /// Throw one face and log it. Returns the raw face.
-    fn cast(&mut self, id: i32, m: Option<&Move>, source: RollSource) -> Flow<i32> {
+    fn cast(
+        &mut self,
+        id: i32,
+        m: Option<&Move>,
+        source: RollSource,
+        log_dice: bool,
+    ) -> Flow<i32> {
         let Some(r) = self.roll_by_id(id) else {
             return Ok(0);
         };
         let (purpose, roller) = (r.purpose, r.roller);
+        let view;
+        let m = match m {
+            Some(m) => Some(m),
+            None if purpose == PURPOSE_MOVE => {
+                view = self.roll_move_view(id, roller);
+                Some(&view)
+            }
+            None => None,
+        };
         let value = if purpose == PURPOSE_MOVE {
-            let m = m.expect("a move roll carries its move");
-            self.roll_tables(m)
+            let m = m.expect("filled above");
+            let value = self.roll_tables(m);
+            // A card-driven cast logs one `"dice"` line naming the plan's
+            // dice (all rolls animate; 松原花音's second 「移动掷骰」 reads
+            // 「掷 1d20 = 5」, never a bare `0d0`). The engine's own main /
+            // card_move casts stay silent, as on master -- the walk's
+            // `log.roll` line follows them.
+            if log_dice {
+                let text = plan_dice_msg(roller as i32, m, value);
+                self.w.log("dice", roller as i32, text).value = value;
+            }
+            value
         } else {
             let (count, sides) = (r.count, r.sides);
             self.card_roll(roller, count, sides)
@@ -448,8 +478,12 @@ impl Cx<'_> {
         Ok(t.value.max(0))
     }
 
-    /// Raise `diceRollSettled`, re-fold a listener write, and finish.
+    /// Fold a stale cast, raise `diceRollSettled`, re-fold a listener write,
+    /// and finish. The fold comes **before** the raise: a join cast from
+    /// `do_move_roll` writes its own raw face back, so a settle keyed on
+    /// `dirty` alone would hand the window an unfiltered face (§5.2).
     fn commit_roll(&mut self, id: i32, m: Option<&Move>) -> Flow<i32> {
+        self.settle_cast(id, m)?;
         let face = match self.roll_by_id(id) {
             Some(r) => r.face(),
             None => return Ok(0),
@@ -465,6 +499,10 @@ impl Cx<'_> {
         }
         if self.roll_by_id(id).map(|r| r.dirty).unwrap_or(false) {
             self.settle_cast(id, m)?;
+            let face = self.roll_by_id(id).map(|r| r.face()).unwrap_or(0);
+            if let Some(r) = self.tx_mut(id) {
+                r.final_face = Some(face);
+            }
         }
         let Some(mut r) = self.drop_roll(id) else {
             return Ok(t.value.max(0));
@@ -485,6 +523,7 @@ impl Cx<'_> {
         id: i32,
         m: &Move,
         fixed: Option<FixedFace>,
+        log_dice: bool,
     ) -> Flow<i32> {
         if let Some(r) = self.tx_mut(id) {
             r.main = m.main;
@@ -494,7 +533,7 @@ impl Cx<'_> {
             self.cast_fixed(id, f);
         } else {
             let source = self.roll_by_id(id).map(|r| r.source).unwrap_or_default();
-            self.cast(id, Some(m), source)?;
+            self.cast(id, Some(m), source, log_dice)?;
         }
         if let Some(r) = self.tx_mut(id) {
             r.stage = RollStage::Before;
@@ -543,7 +582,7 @@ impl Cx<'_> {
         r.has_result_window = false;
         self.w.open_rolls.push(r);
 
-        self.cast(id, None, source)?;
+        self.cast(id, None, source, false)?;
         if let Some(r) = self.tx_mut(id) {
             r.stage = RollStage::Before;
         }
@@ -572,7 +611,7 @@ impl Cx<'_> {
         r.main = m.main;
         self.w.open_rolls.push(r);
 
-        self.cast(id, Some(m), source)?;
+        self.cast(id, Some(m), source, true)?;
         if let Some(r) = self.tx_mut(id) {
             r.stage = RollStage::Before;
         }
@@ -603,18 +642,37 @@ impl Cx<'_> {
     ) -> Flow<i32> {
         let id = self.open_move_roll(roller, source);
         self.raise_roll("diceRollPlan", id, Some(m), -1)?;
-        self.run_move_roll(id, m, None)
+        self.run_move_roll(id, m, None, true)
     }
 
     /// A standalone victim move roll (`ruleset_roll_move`). The caller names
     /// only the seat, so the view is a plain non-main walk that never
     /// resolves -- the card drives the walk itself with the returned face.
+    ///
+    /// The plan raise runs against the victim's view of the shared plan (the
+    /// plan hooks are how a forced move picks up the plan's dice), and the
+    /// shared plan is restored afterwards so the victim's writes do not leak
+    /// into the turn player's next move.
     pub fn run_standalone_roll(&mut self, roller: usize, source: RollSource) -> Flow<i32> {
-        let mut m = Move::default();
+        let saved = self.w.turn.plan.clone();
+        let mut m = saved.clone();
         m.player_id = roller;
         m.roller = Some(game_kinds::Seat(roller as i32));
+        m.main = false;
         m.resolve = false;
-        self.roll_move(roller, &m, source)
+        self.seed_turn_plan(&m);
+        let id = self.open_move_roll(roller, source);
+        self.raise_roll("diceRollPlan", id, Some(&m), -1)?;
+        // A plan body may have rewritten the dice for this move: take the
+        // shared plan back for the cast.
+        let mut m = self.w.turn.plan.clone();
+        m.player_id = roller;
+        m.roller = Some(game_kinds::Seat(roller as i32));
+        m.main = false;
+        m.resolve = false;
+        let face = self.run_move_roll(id, &m, None, true)?;
+        self.w.turn.plan = saved;
+        Ok(face)
     }
 
     /// A recast on an open transaction (a reroll). Raises its own
@@ -630,7 +688,8 @@ impl Cx<'_> {
             return Ok(0);
         };
         let windowed = roll.has_result_window;
-        let face = self.cast(id, m, source)?;
+        let purpose = roll.purpose;
+        let face = self.cast(id, m, source, purpose == PURPOSE_MOVE)?;
         if let Some(r) = self.tx_mut(id) {
             r.stage = RollStage::Before;
         }
@@ -683,7 +742,7 @@ impl Cx<'_> {
         if purpose == PURPOSE_MOVE {
             if let Some(id) = (self.open_move_roll_id() >= 0).then(|| self.open_move_roll_id()) {
                 let view = self.roll_move_view(id, roller);
-                return self.cast(id, Some(&view), source);
+                return self.cast(id, Some(&view), source, true);
             }
         }
         let id = self.next_roll_id();
@@ -694,9 +753,9 @@ impl Cx<'_> {
         self.w.open_rolls.push(r);
         let face = if purpose == PURPOSE_MOVE {
             let view = self.roll_move_view(id, roller);
-            self.cast(id, Some(&view), source)?
+            self.cast(id, Some(&view), source, true)?
         } else {
-            self.cast(id, None, source)?
+            self.cast(id, None, source, false)?
         };
         self.drop_roll(id);
         Ok(face)

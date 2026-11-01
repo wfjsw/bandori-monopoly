@@ -1678,18 +1678,18 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::trigger_roll(self, a[0], a[1])? as i64)
     }
     fn op_set_move_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::set_move_settle_answer(self, a[0])?;
+        crate::hostfns::set_move_settle_answer(self, a[0], a[1])?;
         Ok(0)
     }
-    fn op_move_settle_answer(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::move_settle_answer(self)? as i64)
+    fn op_move_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::move_settle_answer(self, a[0])? as i64)
     }
     fn op_set_turn_end_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        crate::hostfns::set_turn_end_settle_answer(self, a[0])?;
+        crate::hostfns::set_turn_end_settle_answer(self, a[0], a[1])?;
         Ok(0)
     }
-    fn op_turn_end_settle_answer(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::turn_end_settle_answer(self)? as i64)
+    fn op_turn_end_settle_answer(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::turn_end_settle_answer(self, a[0])? as i64)
     }
     fn op_turn_snap(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::turn_snap(self, a[0], a[1])? as i64)
@@ -4473,32 +4473,32 @@ pub unsafe extern "C-unwind" fn ruleset_trigger_roll(buf: i32, cap: i32) -> i32 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_move_settle_answer(answer: i32) {
-    with_host(|h| match h.op_set_move_settle_answer([answer, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_set_move_settle_answer(player_id: i32, answer: i32) {
+    with_host(|h| match h.op_set_move_settle_answer([player_id, answer, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_move_settle_answer() -> i32 {
-    with_host(|h| match h.op_move_settle_answer([0, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_move_settle_answer(player_id: i32) -> i32 {
+    with_host(|h| match h.op_move_settle_answer([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_turn_end_settle_answer(answer: i32) {
-    with_host(|h| match h.op_set_turn_end_settle_answer([answer, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_set_turn_end_settle_answer(player_id: i32, answer: i32) {
+    with_host(|h| match h.op_set_turn_end_settle_answer([player_id, answer, 0, 0, 0, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_turn_end_settle_answer() -> i32 {
-    with_host(|h| match h.op_turn_end_settle_answer([0, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_turn_end_settle_answer(player_id: i32) -> i32 {
+    with_host(|h| match h.op_turn_end_settle_answer([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

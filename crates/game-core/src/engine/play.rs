@@ -80,7 +80,7 @@ fn ceil10_money(x: i32) -> i32 {
 /// and any further terms ride `extra` (`+1d4`, `+2`). Empty tables are `0d0`,
 /// the roll of nothing. This is what keeps 松原花音's second 「移动掷骰」
 /// reading 「掷 1d20 = 5」 instead of the old hardcoded 「掷 0d0 = 5」.
-fn plan_dice_msg(player_id: i32, plan: &Move, total: i32) -> Msg {
+pub(crate) fn plan_dice_msg(player_id: i32, plan: &Move, total: i32) -> Msg {
     let mut terms = plan.base.iter().chain(plan.dice.iter());
     let (count, sides) = match terms.next() {
         Some(t) => (t.dice.count, t.dice.sides.max(0)),
@@ -679,6 +679,16 @@ impl Cx<'_> {
             self.w.gate_open(self.rules, super::Gate::Act, i),
             self.w.gate_open(self.rules, super::Gate::Move, i),
         );
+        // 「（或无法移动的回合结束时）」: a turn that cannot take its main move
+        // withholds the landing settle (the move goes nowhere) and moves it to
+        // the turn end. Stamp **before** the act-gate return -- [晕眩] closes
+        // both gates, and the act skip never reaches the move branch below.
+        // The stamp is the default only: an answer the card gave when the
+        // blocking effect landed keeps it (G03 §4.7).
+        use super::world::SettleAnswer;
+        if (!act || !mv) && self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
+            self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
+        }
         if !act {
             self.w.log(
                 "status",
@@ -691,14 +701,6 @@ impl Cx<'_> {
         }
         if !mv {
             self.w.st.skip_move = true;
-            // 「（或无法移动的回合结束时）」: a blocked turn withholds its landing
-            // settle (the move goes nowhere) and moves it to the turn end. The
-            // stamp is the default only -- a card that answered `Skip` when the
-            // blocking effect landed keeps it (G03 §4.7).
-            use super::world::SettleAnswer;
-            if self.w.turn.blocked_settle_answer == SettleAnswer::Unanswered {
-                self.w.turn.blocked_settle_answer = SettleAnswer::Settle;
-            }
             self.w.log(
                 "status",
                 i as i32,
@@ -751,14 +753,23 @@ impl Cx<'_> {
         // A blocked main move's withheld settle (G03 §4.7). The blocked branch
         // stamped `Settle` by default and a card could only decline with
         // `Skip`; run the ordinary landing settle at the seat's own tile (the
-        // walk went nowhere) before the turn-end raises.
+        // walk went nowhere) before the turn-end raises -- the full stage
+        // path (`settleBefore` -> `settle` -> `settleBody` -> the tile rule ->
+        // `settleAfter` -> `tileResolved`), not the built-in fallback.
         if !self.out(i)
             && self.playing()
-            && self.w.turn.blocked_settle_answer == super::world::SettleAnswer::Settle
+            && self.w.blocked_settle_answer(i) == super::world::SettleAnswer::Settle
         {
-            self.land(i, false)?;
+            let at = self.w.st.players[i].pos;
+            let mut m = Move::default();
+            m.player_id = i;
+            m.from = at;
+            m.to = at;
+            m.resolve = true;
+            self.after_walk(&mut m)?;
         }
-        self.w.turn.blocked_settle_answer = super::world::SettleAnswer::Unanswered;
+        self.w
+            .set_blocked_settle_answer(i, super::world::SettleAnswer::Unanswered);
         // End-phase sequence: `turnEndBefore` (also the `before_turn_end`
         // callbacks) -> status wear-off -> `turnEnd` -> `turnEndAfter` (also
         // the `at_turn_end` callbacks) -> `endTurnAfter`.
@@ -894,7 +905,7 @@ impl Cx<'_> {
     /// `can_build`, `no_buy`) across a host-routine pause; the rest of the
     /// shape (`resolve`, `steps`, `kind`, `teleport_to`, …) is not carried and
     /// must be seeded here.
-    fn seed_turn_plan(&mut self, plan: &Move) {
+    pub(crate) fn seed_turn_plan(&mut self, plan: &Move) {
         // `settle_redirect` is engine-set on `card_settle_move` only; never let
         // a plan seed carry a sticky `true`.
         let mut p = plan.clone();
@@ -945,8 +956,10 @@ impl Cx<'_> {
                     self.teleport_as(i, to, resolve, why, as_main)?;
                     self.w.turn.plan.by_skill = false;
                 } else {
-                    let fixed = self.w.turn.fixed_roll.take();
-                    plan.roll = self.run_move_roll(draft, &plan, fixed)?;
+                    // Read, not take -- same one-shot reasoning as `main_move`.
+                    let fixed = self.w.turn.fixed_roll;
+                    plan.roll = self.run_move_roll(draft, &plan, fixed, false)?;
+                    self.w.turn.fixed_roll = None;
                     // The stored count applies to the next **main** move only
                     // (`main_move` takes it too); a side / forced card walk must
                     // leave it pending.
@@ -1430,6 +1443,13 @@ impl Cx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
+        // Taking the main move lifts the 「无法移动」 premise: a withheld
+        // turn-end settle (stamped at a blocked turn start, or by a card) is
+        // no longer owed -- the move settles where it lands instead.
+        self.w.set_blocked_settle_answer(
+            i,
+            super::world::SettleAnswer::Unanswered,
+        );
         // The activation running this move drove it (see `drop_spent_plan_shape`).
         self.w.turn.play_drove_move = true;
         // Drop what an earlier move in this turn left behind (`drop_stale_plan_shape`);
@@ -1491,6 +1511,12 @@ impl Cx<'_> {
                 let resolve = m.resolve;
                 let why = m.why.clone();
                 self.w.turn.plan.teleport_to = None;
+                // The rolled main move keeps its 「触发结算前」 window even
+                // though it is rewritten into a teleport: master raised it on
+                // every main move (`value = -1` = no face yet), and
+                // value-independent Before bodies / residual guards rely on it.
+                let view = self.roll_move_view(draft, i);
+                self.raise_roll("diceRollBefore", draft, Some(&view), -1)?;
                 self.abandon_roll(draft);
                 // `m.main` is true here (the turn's main move); pass it so the
                 // raise payload's `move.main` discriminates. A `moveBefore`
@@ -1501,10 +1527,13 @@ impl Cx<'_> {
                 // The whole cast ladder: a stored fixed face
                 // ([`super::world::TurnCtx`]'s `fixed_roll`) replaces the
                 // throw, otherwise the cast sums the `base` + `dice` tables
-                // (default 1d20; `sides == 0` is a flat `count`). The fixed
-                // face is consumed by this move.
-                let fixed = self.w.turn.fixed_roll.take();
-                m.roll = self.run_move_roll(draft, &m, fixed)?;
+                // (default 1d20; `sides == 0` is a flat `count`). The pin is
+                // read, not taken, so the ladder's windows still see it
+                // (`ctx::fixed_roll()` guards); it is dropped after the ladder
+                // so a later move this turn throws its own dice.
+                let fixed = self.w.turn.fixed_roll;
+                m.roll = self.run_move_roll(draft, &m, fixed, false)?;
+                self.w.turn.fixed_roll = None;
                 // A stored step count (`next_steps`) overrides the roll for this
                 // one main move.
                 if let Some(steps) = self.w.hidden[i].next_steps.take() {
@@ -1555,8 +1584,8 @@ impl Cx<'_> {
                     // (G03 §4.7). The stamp is the default only: a card that
                     // answered `Skip` before the cast keeps it.
                     use super::world::SettleAnswer;
-                    if self.w.turn.blocked_settle_answer == SettleAnswer::Unanswered {
-                        self.w.turn.blocked_settle_answer = SettleAnswer::Settle;
+                    if self.w.blocked_settle_answer(i) == SettleAnswer::Unanswered {
+                        self.w.set_blocked_settle_answer(i, SettleAnswer::Settle);
                     }
                 }
                 // A `diceRollAfter` / `diceRollResult` hook may have changed the
@@ -1988,15 +2017,16 @@ impl Cx<'_> {
         super::world::SettleAnswer::from_i32(self.w.st.players[i].state_get("resolveOverride"))
     }
 
-    /// 「（或无法移动的回合结束时）」 -- the turn-end half. Read and cleared by
+    /// 「（或无法移动的回合结束时）」 -- the turn-end half for `i`. `i` is the
+    /// blocked seat, not necessarily the turn player. Read and cleared by
     /// [`Self::end_turn`].
-    pub fn set_turn_end_settle_answer(&mut self, a: super::world::SettleAnswer) {
-        self.w.turn.blocked_settle_answer = a;
+    pub fn set_turn_end_settle_answer(&mut self, i: usize, a: super::world::SettleAnswer) {
+        self.w.set_blocked_settle_answer(i, a);
     }
 
-    /// The turn-end settle answer, `Unanswered` by default.
-    pub fn turn_end_settle_answer(&self) -> super::world::SettleAnswer {
-        self.w.turn.blocked_settle_answer
+    /// `i`'s turn-end settle answer, `Unanswered` by default.
+    pub fn turn_end_settle_answer(&self, i: usize) -> super::world::SettleAnswer {
+        self.w.blocked_settle_answer(i)
     }
 
     /// Consume a `teleport_to` a hook wrote on the *plan*.

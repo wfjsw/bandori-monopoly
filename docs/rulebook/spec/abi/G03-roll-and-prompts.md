@@ -57,6 +57,7 @@ from the groups landing before this one. What the draft got wrong:
 | R25 | Names were abbreviated and mixed units: `RollTx`, `trig_roll`, `roll_log` beside the message log, `chosen` (an index) next to `unused` (a face), `Settle`/`Done` as two terminal stages, two settle-answer shapes, and a parallel `RollSource` enum duplicating the existing `roll_source` module. | §4.1's naming rules; `RollTransaction`, `trigger_roll`, `roll_history`, `chosen_index`/`unused_face`, `Settling`/`Settled`, one `SettleAnswer`, `roll_source::rank(code)`, one `set_fixed_roll(value, source)`, `roll_pick` beside `ask_pick`, `TileOption`. The BACKLOG slugs keep their spelling. |
 | R26 | R16's turn-end stamp sat in the roll-dispatch `immobile` branch, but the roll gate (`why_not_act "roll"`) refuses a blocked main move, so that branch never runs for the very turn it is about. Also (finding) `roll_pick` kept the recast's own cast as the chosen one and returned early without `dirty`, so a kept rerolled face skipped its Add/Value fold. | The stamp moves to `turn_start` (fallback: the `immobile` branch), both guarded by `Unanswered` so a card's `Skip` survives (§4.7). `roll_recast` folds Add/Value on its new cast before the Result raise (§5.2). |
 | R27 | The review's Op count (R17) missed §4.7's four `set`/`get` settle-answer imports, which the code must carry. | The band is thirteen, not nine: G03 takes 398-410 and G06 onwards shifts thirteen (§8, README). |
+| R28 | The turn-end answer was one `TurnCtx` slot, but the card answers while the **blocking effect** lands, in the turn *before* the blocked one; `TurnCtx` is rebuilt at every turn start, so the answer died before its turn. The two settle answers were also indistinguishable on the wire in a multi-seat game (both host imports took no seat). | The turn-end answer becomes a world-level per-seat slot (`World.blocked_settle`, SAVE'd, surviving turns); all four imports take the answering `player_id`. `own_stage` passes its own seat. |
 
 ## 1. Items
 
@@ -571,31 +572,35 @@ same cap as `ask_pick` (`ctx.rs:2198`), because Hagumi's option count is
 pub enum SettleAnswer { #[default] Unanswered, Settle, Skip }
 
 /// 「本次移动…是否触发结算」 -- the answering seat's current move.
-pub fn set_move_settle_answer(answer: SettleAnswer);
-pub fn move_settle_answer() -> SettleAnswer;
+pub fn set_move_settle_answer(player_id: i32, answer: SettleAnswer);
+pub fn move_settle_answer(player_id: i32) -> SettleAnswer;
 
 /// 「（或无法移动的回合结束时）」 -- the answering seat's blocked turn.
-pub fn set_turn_end_settle_answer(answer: SettleAnswer);
-pub fn turn_end_settle_answer() -> SettleAnswer;
+pub fn set_turn_end_settle_answer(player_id: i32, answer: SettleAnswer);
+pub fn turn_end_settle_answer(player_id: i32) -> SettleAnswer;
 ```
 
-The move half writes the existing `resolveOverride` slot (`Settle` → `1`,
-`Skip` → `0`; `Unanswered` leaves the slot alone), which
-`take_resolve_override` already consumes; nothing new is checked. The turn-end
-half writes `TurnCtx.blocked_settle_answer: SettleAnswer`
-(`#[serde(default)]`, `Unanswered` by default).
+Both halves are keyed by the answering seat, so a card passes its own
+`player_id`; the imports never guess a seat from the trigger.
 
-`blocked_settle_answer` is engine-stamped **at turn start** (`turn_start`,
-inside the `!mv` branch): the roll gate (`why_not_act "roll"`) already refuses
-a blocked main move, so that move never casts and the old post-ladder
-`immobile` stamp never ran for it. The roll-dispatch `immobile` branch keeps
-the same stamp as a fallback (a join / card-driven roll that is refused
-mid-walk). Both stamps only fire while the slot is `Unanswered`: a card that
-answered `Skip` when the blocking effect landed keeps it, which is what makes
-「无法移动的回合结束时」 a settling turn end only when the card said
-nothing. Leaving the card unplayed therefore settles at turn end. `Skip`
-withholds it. It is cleared after the turn-end runner and rebuilt with the
-turn.
+The move half writes the existing `resolveOverride` player state (`Settle` →
+`1`, `Skip` → `0`; `Unanswered` leaves the slot alone), which
+`take_resolve_override` already consumes; nothing new is checked. The turn-end
+half writes `World.blocked_settle: Vec<SettleAnswer>` (`#[serde(default)]`,
+one `Unanswered` per seat, SAVE'd): the card answers while the blocking effect
+lands, i.e. in the turn **before** the blocked one, so the slot outlives
+`TurnCtx`.
+
+`blocked_settle[seat]` is engine-stamped **at that seat's turn start**
+(`turn_start`, inside the `!mv` branch): the roll gate (`why_not_act "roll"`)
+already refuses a blocked main move, so that move never casts and the old
+post-ladder `immobile` stamp never ran for it. The roll-dispatch `immobile`
+branch keeps the same stamp as a fallback (a join / card-driven roll that is
+refused mid-walk). Both stamps only fire while the slot is `Unanswered`: a
+card that answered `Skip` when the blocking effect landed keeps it, which is
+what makes 「无法移动的回合结束时」 a settling turn end only when the card
+said nothing. Leaving the card unplayed therefore settles at turn end. `Skip`
+withholds it. The seat's slot is cleared after that seat's turn-end runner.
 
 ## 5. Engine wiring
 
@@ -772,37 +777,51 @@ cannot shape the plan.
 
 ### 5.8 The turn-end settle runner
 
-`end_turn` (`play.rs:737`) already raises `endTurnBefore`; the runner goes
-immediately before `turnEndBefore` (`:742`) and only for a live seat whose
-`blocked_settle_answer == Settle`, then clears it:
+The runner goes at the top of `end_turn` (`play.rs:751`) -- i.e. after the
+caller's `endTurnBefore` raise, immediately before `turnEndBefore` -- and only
+for a live seat whose `blocked_settle[i]` is `Settle`, then clears it:
 
 ```
-if blocked_settle_answer == Settle && !out { settle_here(); }  // its own tile
-blocked_settle_answer = Unanswered;
+if blocked_settle[i] == Settle && !out { settle_here(); }  // its own tile
+blocked_settle[i] = Unanswered;
 ```
 
-`settle_here` is the ordinary landing settle with `resolve = true`, so its
-stages, `tileResolved`, G10's outcome facts and the `[停留]` clauses all run as
-for any settle; the mover is already at its tile (the blocked branch zeroed the
-walk), so nothing moves. `turnEndBefore`/`turnEnd` body order is unchanged.
+`settle_here` is the ordinary landing settle -- a zero-distance `Move` with
+`resolve = true` fed to `after_walk`, so its stages, `tileResolved`, G10's
+outcome facts and the `[停留]` clauses all run as for any settle; the mover is
+already at its tile (the blocked branch zeroed the walk), so nothing moves.
+`turnEndBefore`/`turnEnd` body order is unchanged.
+
+**Composition.** 「额外进行一次结算」 (`轮符雨` and kin) is an *additional*
+settle op scheduled for `turnEnd`, not a replacement of the withheld landing
+settle: when the card was played on the blocked turn itself, the turn end
+settles **twice**, once for each clause, and each runs the full settle path
+(the deferred one first, then the scheduled op at `turnEnd`). The quarter-rent
+「本次结算」 modifier of the remote settle does not carry into either of
+them.
 
 ### 5.9 Kani model
 
 `rules/kani/src/host.rs` gains a bounded transaction model: a roll stack of
 depth 2, at most 4 casts, symbolic faces from the same producers, symbolic
-answers.
+answers (one array per answer half, indexed by seat).
 
 ```
-roll_recast   => raise the source if higher; push a symbolic cast; raise
-                 Before/Result when `has_result_window`; return its face
+roll_recast   => raise the source if higher by `roll_source::rank`; push a
+                 symbolic cast; raise Before/Result when `has_result_window`;
+                 return its face
 roll_move     => open a top-level Move tx, symbolic face, return settled
 roll_pick   => chosen_index = index.clamp(0, casts.len()-1); unused_face = other of the pair
-roll_face     => casts.get(i).copied().unwrap_or(-1)
+roll_face     => the cast's settled face, else raw; -1 out of range
 roll_unused_face   => unused_face
 roll_rerolled => casts.len() > 1
 roll_current  => innermost open id or -1
 rolls_by_player      => the model log filtered by roller, postcard-encoded
 trigger_roll     => postcard Option<RollPayload> from the model trigger
+set_move_settle_answer / set_turn_end_settle_answer
+                     => write the seat's answer array entry
+move_settle_answer / turn_end_settle_answer
+                     => the seat's entry (0 unanswered)
 ```
 
 Every op is appended to `rules/kani/build.rs` (the import allowlist) and to the
@@ -954,9 +973,9 @@ fold and only the faces are used.
 ```rust
 use card_sdk::abi::SettleAnswer::{Settle, Skip};
 if matches!(abnormal_kind(), Some(Stay) | Some(Stun)) {
-    ctx::set_turn_end_settle_answer(if yes { Settle } else { Skip });
+    ctx::set_turn_end_settle_answer(player_id, if yes { Settle } else { Skip });
 } else {
-    ctx::set_move_settle_answer(if yes { Settle } else { Skip });
+    ctx::set_move_settle_answer(player_id, if yes { Settle } else { Skip });
 }
 ```
 
@@ -979,8 +998,9 @@ only `set_base_dice`'s own clearing remains card-side.
 
 * **SAVE_VERSION 13 → 14.** The roll stack is save-visible: a body can pause on
   a prompt with a transaction open, and the save must restore `open_rolls` (casts,
-  chosen_index, unused_face, source, stage), `next_roll_id`, `roll_history` and `fixed_roll`'s
-  new source. Loading stays exact-version. Every field is `#[serde(default)]`
+  chosen_index, unused_face, source, stage), `next_roll_id`, `roll_history`,
+  `fixed_roll`'s new source and `World.blocked_settle`. Loading stays
+  exact-version. Every field is `#[serde(default)]`
   for shape tolerance; `turn_rolls` still round-trips. A wrapper treats
   `roll_current() == None` as "open fresh", which is also what a resumed body
   with a dropped stack needs.
@@ -1054,14 +1074,17 @@ that remain open are `#[ignore]` with the row id in the reason.
 | 12 | `g03_layer_keep_banks_the_unchosen_face` | fire reroll, pick old ⇒ `unused_face` is the new face, one die banked, `use_die` offers it |
 | 13 | `g03_please_choose_opt1_offers_only_with_a_targeting_card` | option (1) absent with an empty hand; the pick plays via ABI-04 |
 | 14 | `g03_doll_garden_victim_roll_takes_the_victim_view` / `g03_doll_garden_victim_is_not_the_main_move` | no expectation shaves the victim's roll; the cast entry pays while the main-only After reroll does not run |
-| 15 | `g03_own_stage_no_suppresses_the_landing_settle` / `…_yes_on_a_blocked_stay_settles_at_turn_end` / `…_no_skips` / `…_default_settles` | exactly one settle overall, and only where the answer says (yes ⇒ at `end_turn`, no ⇒ nowhere, default ⇒ at the landing) |
+| 15 | `g03_own_stage_no_suppresses_the_landing_settle` / `…_yes_on_a_blocked_stay_settles_at_turn_end` / `…_no_skips` / `…_default_settles` / `…_cross_seat_skip_survives_the_turn` / `…_stun_turn_end_settles` | exactly one settle overall, and only where the answer says (yes ⇒ at `end_turn`, no ⇒ nowhere, default ⇒ at the landing); a cross-seat answer survives into the blocked seat's turn; a stunned turn (both gates closed) settles at its end |
 
-Engine-level: `crates/game-rules/tests/kind_table_pin.rs` (123-125),
+Engine-level: `rules/tests/tests/gap_move.rs` (the deferred settle and 轮符雨's 「额外」 settle both run at one turn end), `crates/game-rules/tests/kind_table_pin.rs` (123-125),
 `crates/game-rules/tests/live_match.rs` (order Cast → Before → Add → Value →
 After → Result → Settled; `roll_source` on Result; `unused_face` on Settled),
 `rules/tests/tests/split_hook_entries.rs` (no expectation on Add),
 `rules/kani/tests/on_parse.rs`, and a prompt test that `ask_tile_index` keeps
 duplicate tiles and answers an index.
+
+Review regressions pinning the 2026-11-01 review findings one file each:
+`rules/tests/tests/g03_review_*.rs` and `rules/kani/tests/g03_review_pick_model.rs`.
 
 **Kani obligations** (proofs in `rules/kani/src/proofs/*.rs`, specs from the
 quotes only; protocol-level where the ladder is engine-side):

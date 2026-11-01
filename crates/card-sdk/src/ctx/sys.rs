@@ -95,22 +95,22 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_move_settle_answer"
         )]
-        pub fn set_move_settle_answer(answer: i32);
+        pub fn set_move_settle_answer(player_id: i32, answer: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_move_settle_answer"
         )]
-        pub fn move_settle_answer() -> i32;
+        pub fn move_settle_answer(player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_turn_end_settle_answer"
         )]
-        pub fn set_turn_end_settle_answer(answer: i32);
+        pub fn set_turn_end_settle_answer(player_id: i32, answer: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_turn_end_settle_answer"
         )]
-        pub fn turn_end_settle_answer() -> i32;
+        pub fn turn_end_settle_answer(player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_log"

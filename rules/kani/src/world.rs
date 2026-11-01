@@ -864,9 +864,10 @@ pub struct World {
     pub roll_hist_n: u8,
     /// The roll transaction of the pending trigger (`Trigger.roll`).
     pub trig_roll: Option<RollTx>,
-    /// Armed 「是否触发结算」 answers (0 = unanswered, 1 = settle, 2 = skip).
-    pub move_answer: i32,
-    pub turn_answer: i32,
+    /// Armed 「是否触发结算」 answers per seat (0 = unanswered, 1 = settle,
+    /// 2 = skip).
+    pub move_answer: [i32; MAX_PLAYERS],
+    pub turn_answer: [i32; MAX_PLAYERS],
     /// Bands currently blocked from skills (`ir_fill` `BlockedBands`).
     /// Non-zero entries are band name ids.
     pub blocked_bands: [i32; 4],
@@ -993,8 +994,8 @@ impl World {
             roll_hist: [(0, 0); 8],
             roll_hist_n: 0,
             trig_roll: None,
-            move_answer: 0,
-            turn_answer: 0,
+            move_answer: [0; MAX_PLAYERS],
+            turn_answer: [0; MAX_PLAYERS],
             blocked_bands: [0; 4],
             blocked_bands_n: 0,
             msg_name: 0,

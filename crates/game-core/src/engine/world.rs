@@ -280,11 +280,6 @@ pub struct TurnCtx {
     /// roll window opens. Cleared with the turn.
     #[serde(default)]
     pub roll_history: Vec<RollHistoryEntry>,
-    /// 选择自己的舞台's turn-end half: whether a **blocked** turn settles at
-    /// its end. Engine-stamped to `Settle` when the move gate holds the mover;
-    /// `Unanswered` when the mover was not blocked.
-    #[serde(default)]
-    pub blocked_settle_answer: SettleAnswer,
     /// 「下次盖房时减免N（可溢出），盖房后减少1层」. A layered cut on the build
     /// cost; each build pops one layer.
     #[serde(default)]
@@ -342,7 +337,6 @@ impl Default for TurnCtx {
             turn_snap: Vec::new(),
             turn_rolls: Vec::new(),
             roll_history: Vec::new(),
-            blocked_settle_answer: SettleAnswer::Unanswered,
             build_discount: 0,
             build_discount_layers: 0,
             build_cost_pct: full_build_cost(),
@@ -698,6 +692,12 @@ pub struct World {
     /// which was the single hottest cost in a bot match.
     pub recent: EventTail,
     pub turn: TurnCtx,
+    /// Per-seat withheld turn-end settle answer (G03 §4.7). It lives here, not
+    /// on [`TurnCtx`], because the answer is given during the turn that applied
+    /// the blocking effect -- possibly another player's -- and must survive
+    /// into the blocked seat's own turn.
+    #[serde(default)]
+    pub blocked_settle: Vec<SettleAnswer>,
     pub extra_turns: Vec<usize>,
     pub out_count: i32,
     pub event_deck: Vec<String>,
@@ -836,6 +836,24 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    /// The withheld turn-end settle answer for `player` (`Unanswered` when
+    /// never stamped; a save predating the field has a short vector).
+    pub fn blocked_settle_answer(&self, player: usize) -> SettleAnswer {
+        self.blocked_settle
+            .get(player)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// Arm / clear `player`'s withheld turn-end settle answer.
+    pub fn set_blocked_settle_answer(&mut self, player: usize, a: SettleAnswer) {
+        if self.blocked_settle.len() <= player {
+            self.blocked_settle
+                .resize(player + 1, SettleAnswer::Unanswered);
+        }
+        self.blocked_settle[player] = a;
+    }
+
     /// Has the turn end this `end` asks for already happened? 结束 with the
     /// next turn queued, or the same seat's **extra turn** already open -- a
     /// late duplicate lands on that 开始 (the queued turn kept the seat, and
@@ -860,6 +878,7 @@ impl World {
             next_event: 1,
             recent: EventTail::default(),
             turn: TurnCtx::default(),
+            blocked_settle: vec![SettleAnswer::Unanswered; players],
             extra_turns: vec![],
             out_count: 0,
             event_deck: vec![],

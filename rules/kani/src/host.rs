@@ -1732,13 +1732,25 @@ pub fn arm_do_move_roll(a: Args) -> i64 {
     roll_dice(2, 6) as i64
 }
 
+/// Precedence rank of a `roll_source` code (`RollSource::rank`).
+fn source_rank(code: i32) -> i32 {
+    match code {
+        1 => 3, // Charge
+        3 => 2, // Skill
+        2 => 1, // Card
+        _ => 0, // Unattributed
+    }
+}
+
 /// Push one symbolic cast onto the transaction at `id`, returning its face.
 fn roll_cast(w: &mut world::World, id: i32, source: i32) -> Option<i32> {
     let mut i = 0usize;
     while i < w.roll_depth as usize {
         if w.rolls[i].open && w.rolls[i].id == id {
             let t = &mut w.rolls[i];
-            if source > t.source {
+            // Codes are not in rank order (charge 1 outranks skill 3 outranks
+            // card 2): mirror `RollSource::rank`, as `cast` does.
+            if source_rank(source) > source_rank(t.source) {
                 t.source = source;
             }
             if (t.n as usize) >= 4 {
@@ -1943,23 +1955,43 @@ pub fn arm_trigger_roll(a: Args) -> i64 {
 }
 
 pub fn arm_set_move_settle_answer(a: Args) -> i64 {
-    let [answer, ..] = a;
-    world::with_world_mut(|w| w.move_answer = answer);
+    let [player, answer, ..] = a;
+    world::with_world_mut(|w| {
+        if player >= 0 && (player as usize) < MAX_PLAYERS {
+            w.move_answer[player as usize] = answer;
+        }
+    });
     0
 }
 
-pub fn arm_move_settle_answer(_a: Args) -> i64 {
-    world::with_world(|w| w.move_answer) as i64
+pub fn arm_move_settle_answer(a: Args) -> i64 {
+    let [player, ..] = a;
+    world::with_world(|w| {
+        w.move_answer
+            .get(player.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }) as i64
 }
 
 pub fn arm_set_turn_end_settle_answer(a: Args) -> i64 {
-    let [answer, ..] = a;
-    world::with_world_mut(|w| w.turn_answer = answer);
+    let [player, answer, ..] = a;
+    world::with_world_mut(|w| {
+        if player >= 0 && (player as usize) < MAX_PLAYERS {
+            w.turn_answer[player as usize] = answer;
+        }
+    });
     0
 }
 
-pub fn arm_turn_end_settle_answer(_a: Args) -> i64 {
-    world::with_world(|w| w.turn_answer) as i64
+pub fn arm_turn_end_settle_answer(a: Args) -> i64 {
+    let [player, ..] = a;
+    world::with_world(|w| {
+        w.turn_answer
+            .get(player.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }) as i64
 }
 
 pub fn arm_draw(a: Args) -> i64 {

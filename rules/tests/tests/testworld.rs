@@ -73,8 +73,8 @@ pub struct TestWorld {
     pub field: Vec<(String, i32)>,
     /// Per-seat 「是否触发结算」 answer (`resolveOverride`; 0 = unanswered).
     pub move_settle: Vec<i32>,
-    /// The turn-end half (0 = unanswered).
-    pub turn_end_settle: i32,
+    /// The turn-end half, per seat (0 = unanswered).
+    pub turn_end_settle: Vec<i32>,
 }
 
 impl TestWorld {
@@ -94,7 +94,7 @@ impl TestWorld {
             fixed_roll: None,
             field: vec![],
             move_settle: vec![],
-            turn_end_settle: 0,
+            turn_end_settle: vec![],
         }
     }
     pub fn d(&mut self, sides: i32) -> i32 {
@@ -159,11 +159,18 @@ impl CardWorld for TestWorld {
             .copied()
             .unwrap_or(0)
     }
-    fn set_turn_end_settle_answer(&mut self, answer: i32) {
-        self.turn_end_settle = answer;
+    fn set_turn_end_settle_answer(&mut self, player_id: i32, answer: i32) {
+        let i = player_id.max(0) as usize;
+        if self.turn_end_settle.len() <= i {
+            self.turn_end_settle.resize(i + 1, 0);
+        }
+        self.turn_end_settle[i] = answer;
     }
-    fn turn_end_settle_answer(&self) -> i32 {
+    fn turn_end_settle_answer(&self, player_id: i32) -> i32 {
         self.turn_end_settle
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
     }
 
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {

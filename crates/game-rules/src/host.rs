@@ -4060,25 +4060,30 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_move_settle_answer",
-        |mut c: C<W>, answer: i32| -> Result<(), Error> {
-            hostfns::set_move_settle_answer(&mut c, answer).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, answer: i32| -> Result<(), Error> {
+            hostfns::set_move_settle_answer(&mut c, player_id, answer).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "move_settle_answer", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::move_settle_answer(&mut c).map_err(HostErr::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "move_settle_answer",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::move_settle_answer(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_turn_end_settle_answer",
-        |mut c: C<W>, answer: i32| -> Result<(), Error> {
-            hostfns::set_turn_end_settle_answer(&mut c, answer).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, answer: i32| -> Result<(), Error> {
+            hostfns::set_turn_end_settle_answer(&mut c, player_id, answer)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "turn_end_settle_answer",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::turn_end_settle_answer(&mut c).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::turn_end_settle_answer(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

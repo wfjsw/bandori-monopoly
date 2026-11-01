@@ -318,10 +318,12 @@ pub trait CardWorld: Clone + 'static {
     fn move_settle_answer(&self, _player_id: i32) -> i32 {
         0
     }
-    /// Arm the turn-end half of the answer.
-    fn set_turn_end_settle_answer(&mut self, _answer: i32) {}
-    /// The armed turn-end answer (0 = unanswered).
-    fn turn_end_settle_answer(&self) -> i32 {
+    /// Arm the turn-end half of `player_id`'s answer. The seat is explicit:
+    /// the blocking effect usually lands on someone else's turn, and the
+    /// answer must reach the blocked seat's own turn end.
+    fn set_turn_end_settle_answer(&mut self, _player_id: i32, _answer: i32) {}
+    /// `player_id`'s armed turn-end answer (0 = unanswered).
+    fn turn_end_settle_answer(&self, _player_id: i32) -> i32 {
         0
     }
     /// Log line (a localizable message from the card).

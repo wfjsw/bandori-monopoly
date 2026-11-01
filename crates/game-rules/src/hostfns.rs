@@ -87,27 +87,38 @@ pub fn roll_direct<C: HostCtx>(
     crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
-/// `ctx::set_move_settle_answer` -- arm the current move's 「是否触发结算」
-/// answer (the answering seat is the trigger's player).
-pub fn set_move_settle_answer<C: HostCtx>(c: &mut C, answer: i32) -> Result<(), HostErr> {
-    let who = c.st().wr().trigger().player_id.max(0);
-    c.st_mut().w().set_move_settle_answer(who, answer);
+/// `ctx::set_move_settle_answer` -- arm `player_id`'s 「是否触发结算」 answer.
+/// The seat is explicit: on a cross-player forced move the trigger's
+/// `player_id` is the declarer, while the answer belongs to the mover.
+pub fn set_move_settle_answer<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    answer: i32,
+) -> Result<(), HostErr> {
+    c.st_mut()
+        .w()
+        .set_move_settle_answer(player_id.max(0), answer);
     Ok(())
 }
 
-pub fn move_settle_answer<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    let who = c.st().wr().trigger().player_id.max(0);
-    Ok(c.st().wr().move_settle_answer(who))
+pub fn move_settle_answer<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+    Ok(c.st().wr().move_settle_answer(player_id.max(0)))
 }
 
-/// `ctx::set_turn_end_settle_answer` -- the turn-end half.
-pub fn set_turn_end_settle_answer<C: HostCtx>(c: &mut C, answer: i32) -> Result<(), HostErr> {
-    c.st_mut().w().set_turn_end_settle_answer(answer);
+/// `ctx::set_turn_end_settle_answer` -- the turn-end half for `player_id`.
+pub fn set_turn_end_settle_answer<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    answer: i32,
+) -> Result<(), HostErr> {
+    c.st_mut()
+        .w()
+        .set_turn_end_settle_answer(player_id.max(0), answer);
     Ok(())
 }
 
-pub fn turn_end_settle_answer<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().turn_end_settle_answer())
+pub fn turn_end_settle_answer<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+    Ok(c.st().wr().turn_end_settle_answer(player_id.max(0)))
 }
 
 /// Encode `v` with postcard into the guest buffer and answer its length (the
@@ -155,11 +166,12 @@ pub fn roll_current<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 /// `ctx::roll_face` -- cast `index`'s face, `-1` out of range.
 pub fn roll_face<C: HostCtx>(c: &mut C, roll_id: i32, index: i32) -> Result<i32, HostErr> {
+    // The settled face: what the player sees offered, not the raw throw.
     Ok(c.st()
         .wr()
         .roll_transaction(roll_id)
         .and_then(|r| r.casts.get(index.max(0) as usize))
-        .map(|c| c.raw)
+        .map(|c| c.settled.unwrap_or(c.raw))
         .unwrap_or(-1))
 }
 
