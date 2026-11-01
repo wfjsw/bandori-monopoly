@@ -25,7 +25,7 @@ use std::time::Duration;
 use redis::Commands;
 
 use super::{
-    CrossState, PubMsg, RecMeta, RoomRecord, SessionRecord, StoreError, StoredRecord,
+    CrossState, PublishedMessage, RecordMeta, RoomRecord, SessionRecord, StoreError, StoredRecord,
     RECORD_TTL_SECS,
 };
 use crate::state::Session;
@@ -37,7 +37,7 @@ const NS_MATCH: &str = "bm:m:";
 const NS_RECORD: &str = "bm:rec:";
 /// The match's input log, one JSON line per entry.
 const NS_RECLOG: &str = "bm:reclog:";
-/// The record-log bookkeeping ([`RecMeta`]), under the match lock.
+/// The record-log bookkeeping ([`RecordMeta`]), under the match lock.
 const NS_RECMETA: &str = "bm:recmeta:";
 /// Cross-process locks (`room:{id}`, `match:{room}`, `tick:{room}`, ...).
 const NS_LOCK: &str = "bm:lock:";
@@ -318,7 +318,7 @@ impl CrossState for Store {
             .map(|_| ())
     }
 
-    fn subscribe(&self, channel: &str) -> Result<mpsc::Receiver<PubMsg>, StoreError> {
+    fn subscribe(&self, channel: &str) -> Result<mpsc::Receiver<PublishedMessage>, StoreError> {
         let (tx, rx) = mpsc::channel();
         // Reconnect off the original client (a subscribed connection is no
         // good for commands, so this is a second one).
@@ -404,7 +404,7 @@ impl CrossState for Store {
         })
     }
 
-    fn rec_meta_get(&self, room: &str) -> Result<Option<RecMeta>, StoreError> {
+    fn record_meta_get(&self, room: &str) -> Result<Option<RecordMeta>, StoreError> {
         let v: Option<String> = self.call(|c| c.get(format!("{NS_RECMETA}{room}")))?;
         match v {
             None => Ok(None),
@@ -412,7 +412,7 @@ impl CrossState for Store {
         }
     }
 
-    fn rec_meta_put(&self, room: &str, meta: &RecMeta) -> Result<(), StoreError> {
+    fn rec_meta_put(&self, room: &str, meta: &RecordMeta) -> Result<(), StoreError> {
         let v = json(meta)?;
         self.call(|c| c.set::<_, _, ()>(format!("{NS_RECMETA}{room}"), v))
             .map(|_| ())
@@ -431,7 +431,7 @@ impl CrossState for Store {
 fn pump_sub(
     conn: &mut redis::Connection,
     channel: &str,
-    tx: &mpsc::Sender<PubMsg>,
+    tx: &mpsc::Sender<PublishedMessage>,
 ) -> Result<bool, StoreError> {
     let mut ps = conn.as_pubsub();
     // A bounded read lets the loop notice a torn connection promptly; a
@@ -444,7 +444,7 @@ fn pump_sub(
             Ok(msg) => {
                 let payload = msg.get_payload::<String>().unwrap_or_default();
                 if tx
-                    .send(PubMsg {
+                    .send(PublishedMessage {
                         channel: msg.get_channel_name().to_string(),
                         payload,
                     })

@@ -19,7 +19,7 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 * **Quote:** 「玩家在运营阶段可在非执行任何效果的时候进入移动阶段。移动阶段中需进行1次[主要移动]。基础[主要移动]为**投掷1d20**，在地图上顺时针移动投掷结果数量的格子，到达[移动终点]后需进行[结算]。[主要移动]和所需[结算]完成后进入结束阶段。」 / 「一回合只能触发一次［主要移动］效果,多次触发［主要移动］时无效」
 * **Trigger:** an observed input that is a `roll` command, or any input that
   touches the `turn.main_moved` latch.
-* **Condition:** `pre.turn.main_moved` is already true in the same turn.
+* **Condition:** `condition.turn.main_moved` is already true in the same turn.
 * **Effect:** the latch does not reset mid-turn, and a second `roll` command
   does not move the player (the engine must refuse it / no-op it).
 * **Frame:** n/a (read of the turn latch and `pos`).
@@ -93,8 +93,8 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 * **Quote:** 「每回合的阶段顺序从头到尾为：开始阶段，运营阶段，移动阶段，结束阶段。」
 * **Trigger:** any observed transition that stays inside one turn (no `turn`-typed
   boundary event in the window).
-* **Condition:** `pre.st.turn == post.st.turn >= 0`.
-* **Effect:** `post.st.step >= pre.st.step` -- the stage never runs backwards
+* **Condition:** `condition.st.turn == post.st.turn >= 0`.
+* **Effect:** `post.st.step >= condition.st.step` -- the stage never runs backwards
   inside a turn. (Skips jump forward: 晕眩 开始 → 结束.)
 * **Frame:** n/a.
 * **Rulings & OPEN:** OPEN-回合流程 -- the 回合流程 table rows 1-3 are corrupt;
@@ -133,10 +133,10 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 * **Quote:** 「该效果生效时无法重复获得该效果，玩家的每回合开始前移除一层。」 /
   「| 1 | 回合开始前 | … | 负面效果：移除一层[除外] |」
 * **Trigger:** a window in which player `i`'s turn begins (`log.turn` /
-  `log.turn_extra` for `i`) and `pre` exile of `i` is already > 0.
+  `log.turn_extra` for `i`) and `condition` exile of `i` is already > 0.
 * **Condition:** no card activation in the window that could layer more [除外]
   on top of the tick (those windows are skipped).
-* **Effect:** `post` exile of `i` is exactly `pre - 1`.
+* **Effect:** `post` exile of `i` is exactly `condition - 1`.
 * **Frame:** n/a.
 * **Rulings & OPEN:** The tick is 「回合开始前」 -- before the turn's own 开始阶段
   effects. If the layer was the last one, the return [传送]
@@ -153,9 +153,9 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
   「[晕眩]：…重复受到该效果时可叠加，玩家的每回合结束时移除一层。」 /
   「| 18 | 结束阶段 | 结束阶段 | 负面效果：移除一层[眩晕]/[停留] |」
 * **Trigger:** a window in which player `i`'s turn ended.
-* **Condition:** the layer was already > 0 in `pre`, and no card activation in
+* **Condition:** the layer was already > 0 in `condition`, and no card activation in
   the window (a hook may layer a fresh status on top of the tick).
-* **Effect:** each of [停留] / [晕眩] is exactly `pre - 1`.
+* **Effect:** each of [停留] / [晕眩] is exactly `condition - 1`.
 * **Frame:** n/a.
 * **Rulings & OPEN:** The tick is 「每回合结束时」 -- 行动阶段 row 18, before
   row 19 (结束阶段后). `stunStart` (「本回合获得的晕眩」) ticks at the *next*
@@ -205,7 +205,7 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 * **Source:** `rulebook-doc.md:132`
 * **Quote:** 「玩家在运营阶段可在非执行任何效果的时候进入移动阶段。」
 * **Trigger:** an observed `roll` command (the input that enters 移动阶段).
-* **Condition:** an effect is executing -- `pre.st.busy` (a routine is pending)
+* **Condition:** an effect is executing -- `condition.st.busy` (a routine is pending)
   or a prompt is open (`pre_prompt_open`).
 * **Effect:** the `roll` does not run (no move, no `main_moved`).
 * **Frame:** n/a.

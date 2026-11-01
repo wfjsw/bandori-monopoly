@@ -24,7 +24,7 @@ Closed slugs and their review rows:
 | 11 | `misaki-teleport` | high | 291, 293, 295, 1183, 1184 |
 | 12 | `misaki-planned-start` | medium | 1007 |
 | 13 | `misaki-effective-steps` | medium | 1182 |
-| 14 | `fate-forced-hop` | high | 200 |
+| 14 | `dest-forced-hop` | high | 200 |
 | 15 | `plan-set-forced` | medium | 431, 1286 |
 | 16 | `dg-plan-reset` | medium | 1095 |
 | 17 | `lisa-bond-nested-teleport-window` | medium | 693 |
@@ -53,18 +53,18 @@ created once per turn and reset only at `next_turn`. Every move — the main
 move, a card's own move, a forced move, a nested move inside a settle — reads
 and writes that one object. The tree works around this:
 
-- `card_move` swaps the plan out only when `move_depth > 0`
+- `run_planned_move` swaps the plan out only when `move_depth > 0`
   (`play.rs:829-835`), so nested moves restore, but a *top-level* card move
   leaves its shape on the turn plan.
 - The walk re-reads only a hand-picked subset of the plan each step
-  (`resolve`, `stop_at`: `play.rs:1811-1817`), not `parity`, `steps`,
+  (`settles`, `stop_at`: `play.rs:1811-1817`), not `parity`, `steps`,
   `extra_steps`, or `reverse`.
 - One-shot fields (`teleport_to`, `start`, `by_skill`) are cleared by hand at
   every exit (`play.rs:804-806, 938-940`), and a refusal path that forgets one
   shapes an unrelated later move.
 - `forced` exists on `MoveCtx` (`move_ctx.rs:89-92`) but only the
   `event:*` host writes it (`wasm_rules.rs:3794`); a guest cannot.
-- The roll window clones the move and pulls back only `roll`/`resolve`
+- The roll window clones the move and pulls back only `roll`/`settles`
   (`play.rs:1349-1478`), so plan writes made in `diceRollResult` (detour,
   misaki) are lost.
 - The walk derives its next tile from the direction alone
@@ -118,7 +118,7 @@ nearest/farthest axis queries (§3.5), then the card branch.
 
 > 「立刻进行移动掷骰」
 
-The card clears the teleport destination and calls `card_move`, expecting a
+The card clears the teleport destination and calls `run_planned_move`, expecting a
 fresh roll. `card_move_seeded` rolls only when `plan.steps.is_none()`
 (`play.rs:876`), and `set_steps` clamps to `Some(0)` on `-1` so there is no
 way back to `None` (`move_ctx.rs:277-282`). An earlier card's step count
@@ -128,7 +128,7 @@ default is the post-teleport state (R1 + R2).
 
 *Fixed (2026-10-30)*: a per-move value an earlier move left is dropped at the
 next move's entry (`drop_stale_plan_shape`: `steps`, `stop_at`, `reverse`,
-`resolve`, and the payment factors), so the roll branch runs again. A
+`settles`, and the payment factors), so the roll branch runs again. A
 `plan::set_*` write raises a per-field fresh mark, which the entry consumes
 and which keeps a value written for *this* move; an activation body that drove
 a move also drops its own trailing replay writes when it ends (an activation
@@ -160,7 +160,7 @@ default + `plan_pay_factor`/`plan_rent_factor` getters (R1).
 
 > 「你若进行掷骰移动」
 
-The `PassTile` pre gates on `move.main` (`charity_show.rs:48`). A roll-less
+The `PassTile` condition gates on `move.is_main_move` (`charity_show.rs:48`). A roll-less
 card main walk (尽力后的收获, 迷宫标) fires it, and a forced dice move (an
 event walk) does not; `TriggerMove` has no dice provenance. Expected: gate on
 "a die was rolled for this walk". **Root fix:** a `rolled` discriminator on the
@@ -174,7 +174,7 @@ move payload and CEL (`move.rolled`), set from how the walk got its steps
 `ctx::plan::set_extra_steps` writes only `TurnCtx::plan.extra_steps`; the
 running walk is a separate `Move` and never re-reads that field, so the +2 is
 a no-op on the move that earned it. The card keeps a running prop and
-overwrites `uika_imprisoned`'s value because `set_extra_steps` assigns.
+overwrites `uika`'s value because `set_extra_steps` assigns.
 Expected: +2 extends the walk it is earned on and composes. **Root fix:** the
 walk syncs `extra_steps` from the plan each step; `plan::add_extra_steps`
 composes (R5).
@@ -185,11 +185,11 @@ composes (R5).
 > 「使你的下次主要移动结果对那些玩家一起执行」
 
 `plan.followers` is taken and replayed only in `main_move`
-(`play.rs:1516-1536`). A main move produced by a card (`card_move`,
+(`play.rs:1516-1536`). A main move produced by a card (`run_planned_move`,
 「视为你的主要移动」) never replays them (`sakiko_lead.rs:62-64`). Expected:
 the recorded followers walk whenever the next main move runs, however it runs.
 **Root fix:** the replay moves into the shared move tail used by every
-`as_main` move (R6).
+`is_main_move` move (R6).
 
 **8. `detour-false-move-blocked-gate` — AG:回家的路上绕个道, row 225 —
 DEMOTE TO A**
@@ -209,7 +209,7 @@ The abnormal-gate opt-out (STA-02, `rules.txt` 51) is a separate backlog item.
 > 「视为使用一次初始Afterglow角色的（2）效果」
 
 `detour.rs:214-226` writes `plan::set_parity(1/0)`, and
-`rules/skills/skill-personas/src/himari_step.rs:74-75` writes 1/2; the walk
+`rules/skills/skill-personas/src/himari.rs:74-75` writes 1/2; the walk
 loop derives `next` from `m.dir()` alone (`play.rs:1753`) and never reads
 `m.parity`. The book's 「仅在单/双数格上进行」 lands only on the chosen
 parity. Expected: each step goes to the nearest tile of the requested parity.
@@ -221,8 +221,8 @@ parity. Expected: each step goes to the nearest tile of the requested parity.
 
 > 「强制一名玩家向你选择的方向移动3格并[触发结算]（可在掷骰前选择自己以代替主要移动），触发结算时进行的支付价格减半」
 
-`set_steps(3)` / `set_reverse` / `set_resolve` / `set_pay_factor(500)` write the
-shared turn plan (`saki_move.rs:61-66`); `card_move` seeds it and never
+`set_steps(3)` / `set_reverse` / `set_settles` / `set_pay_factor(500)` write the
+shared turn plan (`saki_move.rs:61-66`); `run_planned_move` seeds it and never
 restores it (`play.rs:853-860`). Targeting another player makes the caster's
 own later main move walk 3 tiles in the card's direction, ignoring the dice,
 and settle at half price. Expected: the shape is scoped to the forced walk.
@@ -235,7 +235,7 @@ R2).
 > 「消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动）」
 
 `trigger::set_cancelled()` only negates the trigger link; the roll site reads
-`t.value` and walks the face. `card_move` then takes the `main_moved` early
+`t.value` and walks the face. `run_planned_move` then takes the `main_moved` early
 return, logs `main_move_used` and clears `teleport_to` (`play.rs:795-808`), so
 there is no teleport at all. Expected: the rolled walk is voided and replaced
 by the teleport, settling there as the same main move. **Root fix:** a
@@ -263,16 +263,16 @@ endpoint the move will actually take. **Root fix:** carry `next_steps` into
 the plan frame before the windows and expose `move.effective`
 (`trigger::move_effective_steps`) (R4).
 
-**14. `fate-forced-hop` — CRYCHIC:一起演奏音乐的命运共同体, row 200**
+**14. `dest-forced-hop` — CRYCHIC:一起演奏音乐的命运共同体, row 200**
 (`rules/cards/card-crychic/src/fate_together.rs`)
 
 > 「每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。」
 
-The hop calls `card_move` (`fate_together.rs:111-125`), which treats it as the
+The hop calls `run_planned_move` (`fate_together.rs:111-125`), which treats it as the
 main move: refused once the main move is spent, consumed otherwise. Its bool is
 the abnormal-gate answer, not whether the move ran, so a spent main move still
 reads as a hit. Expected: an effect move that is never the main move and never
-refused by the slot. **Root fix:** `plan::set_forced` and `card_move` returning
+refused by the slot. **Root fix:** `plan::set_forced` and `run_planned_move` returning
 "the move ran" (R3).
 
 **15. `plan-set-forced` — Mujica:无法将视线移开 / Mujica:人偶的箱庭, rows 431, 1286**
@@ -283,12 +283,7 @@ refused by the slot. **Root fix:** `plan::set_forced` and `card_move` returning
 
 > 「你强制移动其他玩家本次移动掷骰数之和。」
 
-C# builds `MoveCtx { …, Forced = true }`; `MoveCtx.forced` exists but only the
-event host writes it, so the flag is dropped and a forced walk of the turn
-player takes (or is refused by) the main-move path. Expected: a guest-forced
-move that runs regardless of the slot, and — for the C# `MainMoveAs` cards —
-still the main move when the walked player is the turn player. **Root fix:**
-`plan::set_forced` + `plan::set_main_as` (R3).
+**Root fix:** `plan::set_forced` + `plan::set_main_as` (R3).
 
 **16. `dg-plan-reset` — Mujica:人偶的箱庭, row 1095**
 
@@ -296,7 +291,7 @@ still the main move when the walked player is the turn player. **Root fix:**
 
 Every victim walks with the shared plan (`doll_garden.rs:86-94`), so a stale
 `stop_at`, `pay_factor`, or `reverse` from an earlier walk leaks in; each
-victim's `resolve = false` also leaks to the next victim and the summoner's
+victim's `settles = false` also leaks to the next victim and the summoner's
 sum move. Expected: each forced walk starts clean. **Root fix:** every card
 move gets its own frame; the prior command's shape is restored (R1).
 
@@ -324,16 +319,14 @@ move's shape is restored when the move ends. A command that stages for the next
 main keeps its writes, because a write outside a move (or after one returned)
 lands on the staging plan, not on the move frame.
 
-**I3 — Forcedness is orthogonal to mainness.** `forced` marks an effect-forced
-move: it runs even when the main slot is latched and does not itself consume
-the slot. `main_as` says "when the walked player is the turn player, this
-forced move is that player's main move" (C# `MainMoveAs`). Therefore
+**I3 — Forcedness is orthogonal to mainness.** `forced` marks an effect-forced move: it runs even
+when the main slot is latched and does not itself consume the slot. Therefore
 
 ```
-as_main = is_turn && (!forced || main_as)
+is_main_move = is_turn && (!forced || main_as)
 ```
 
-Only `as_main` moves latch `main_moved`, drive the stage machine, and replay
+Only `is_main_move` moves latch `main_moved`, drive the stage machine, and replay
 followers.
 
 **I4 — Provenance is first-class.** `rolled` is true exactly when the walk's
@@ -355,7 +348,7 @@ inside the window, as the same move with one tail; the roll site only skips
 its own walk.
 
 **I8 — The tail is shared.** Every completed move raises
-`moveAfter`/`moveResolved`; every `as_main` move replays its followers in the
+`moveAfter`/`moveResolved`; every `is_main_move` move replays its followers in the
 recorded order after the mover settles.
 
 **I9 — Geometry is data.** Axis nearest/farthest read board coordinates from
@@ -373,7 +366,7 @@ Each new import is added at every layer, or the build fails:
 2. `crates/card-sdk/src/ctx/sys.rs` — `extern` under the
    `wasm32`/`native-rules` attribute pair, link name `ruleset_*`.
 3. `crates/card-sdk/src/ctx/sys_kani.rs` — `kani_host::call_*` stub.
-4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 351-370; this group uses 351-364).
+4. `crates/card-sdk/src/kani_host.rs` — `Op` variants (README band 378-397; this group uses 378-391).
 5. `rules/kani/src/host.rs` — arm (stub or model) and every affected card
    proof's `host_subset!`.
 6. `crates/game-rules/src/hostfns.rs` — `HostCtx` implementation.
@@ -448,7 +441,7 @@ pub struct PlanScope {
 
 ```rust
 pub next_steps: Option<i32>, // the main move's stored override (frame seed)
-pub main_as: bool,           // C# MainMoveAs: forced self walk = main
+pub main_as: bool
 pub void_walk: bool,         // this teleport replaces the pending walk
 pub rolled: bool,            // a die produced this walk's length
 ```
@@ -472,8 +465,8 @@ pub enum PlanLifetime { Turn, NextMain, Command }
 pub fn lifetime_of(f: PlanField) -> PlanLifetime;
 /// `Turn` or `NextMain` -- a staging field, not one move's shape.
 pub fn is_staging(f: PlanField) -> bool;
-pub fn as_main(is_turn: bool, forced: bool, main_as: bool) -> bool;
-/// True iff a `card_move` call replaces a walk instead of starting a move.
+pub fn is_main_move(is_turn: bool, forced: bool, main_as: bool) -> bool;
+/// True iff a `run_planned_move` call replaces a walk instead of starting a move.
 pub fn replacement_taken(window: Option<usize>, owner: usize, main_as: bool,
                          void_walk: bool, teleport: bool) -> bool;
 /// True iff the roll site still walks.
@@ -486,7 +479,7 @@ pub fn axis_farthest(cells: &[Option<[i32; 2]>], tile: usize, axis: i32) -> Opti
 
 `is_staging` is the machine-checked form of the lifetime rule: a staging
 write of a `Turn` or `NextMain` field survives a side move untouched, while an
-`as_main` move consumes it (the staging plan becomes `Default`); `Command`
+`is_main_move` move consumes it (the staging plan becomes `Default`); `Command`
 fields belong to whichever move wrote them and never outlive it.
 
 `World` accessors, replacing the 101 direct `turn.plan` accesses:
@@ -494,7 +487,7 @@ fields belong to whichever move wrote them and never outlive it.
 ```rust
 pub fn plan(&self) -> &MoveCtx;              // top frame, else turn.plan
 pub fn plan_mut(&mut self) -> &mut MoveCtx;  // top frame, else turn.plan
-pub fn begin_plan(&mut self, owner: usize, as_main: bool, seed: MoveCtx);
+pub fn begin_plan(&mut self, owner: usize, is_main_move: bool, seed: MoveCtx);
 pub fn end_plan(&mut self, ran: bool);
 pub fn enter_plan_command(&mut self);
 pub fn leave_plan_command(&mut self);
@@ -507,7 +500,7 @@ Play body is depth 0 until it starts a move); the body nesting is
 
 `begin_plan` seeds the frame:
 
-- `as_main`, depth 0 — `seed` is the guest-supplied plan (the whole staging
+- `is_main_move`, depth 0 — `seed` is the guest-supplied plan (the whole staging
   state, already including the body's writes). `saved` is the command's
   `staging_before`; staging becomes `Default` only when the move starts.
 - side, depth 0 — `seed` is `MoveCtx::staging_seed(plan_before, plan target)`:
@@ -541,20 +534,20 @@ main move's staging. `leave_plan_command` only drops the scope;
 
 | id | raw import | wrapper | signature (wire) | lifetime | kind |
 |---|---|---|---|---|---|
-| 351 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
-| 352 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
-| 353 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
-| 354 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
-| 355 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
-| 356 | `ruleset_move_teleport_to` | `plan::teleport_to() -> i32` | `() -> i32` | read | new |
-| 357 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
-| 358 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
-| 359 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
-| 360 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
-| 361 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
-| 362 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
-| 363 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
-| 364 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 360 | `ruleset_set_forced` | `plan::set_forced(bool)` | `(on: i32)` | command | new |
+| 361 | `ruleset_set_main_as` | `plan::set_main_as(bool)` | `(on: i32)` | command | new |
+| 362 | `ruleset_void_walk` | `plan::void_walk()` | `()` | command | new |
+| 363 | `ruleset_clear_steps` | `plan::clear_steps()` | `()` | command | new |
+| 364 | `ruleset_add_extra_steps` | `plan::add_extra_steps(i32)` | `(n: i32)` | command | new |
+| 365 | `ruleset_move_teleport_to` | `plan::teleport_to() -> i32` | `() -> i32` | read | new |
+| 366 | `ruleset_move_pay_factor` | `plan::move_pay_factor() -> i32` | `() -> i32` (milli) | read | new |
+| 367 | `ruleset_move_rent_factor` | `plan::rent_factor() -> i32` | `() -> i32` (milli) | read | new |
+| 368 | `ruleset_move_effective_steps` | `plan::effective_steps() -> i32` | `() -> i32` | read | new |
+| 369 | `ruleset_move_forced` | `plan::forced() -> bool` | `() -> i32` (0/1) | read | new |
+| 370 | `ruleset_trig_move_rolled` | `trigger::move_rolled() -> bool` | `() -> i32` (0/1) | read | new |
+| 371 | `ruleset_trig_move_effective_steps` | `trigger::move_effective_steps() -> i32` | `() -> i32` | read | new |
+| 372 | `ruleset_tile_axis_nearest` | `tile_axis_nearest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
+| 373 | `ruleset_tile_axis_farthest` | `tile_axis_farthest(tile, axis) -> i32` | `(tile: i32, axis: i32) -> i32` | pure | new |
 
 Extended, wire-compatible:
 
@@ -578,16 +571,16 @@ Semantics of the new writes:
 
 - `set_forced(on)` — writes `plan.forced`. A forced move of the turn player is
   not the main move unless `set_main_as(true)`.
-- `set_main_as(on)` — writes `plan.main_as`; `as_main = is_turn && (!forced ||
-  main_as)`. In a move's own roll window for the same player, a `card_move`
+- `set_main_as(on)` — writes `plan.main_as`; `is_main_move = is_turn && (!forced ||
+  main_as)`. In a move's own roll window for the same player, a `run_planned_move`
   with `main_as` and `void_walk` replaces the pending walk in place (§4.3).
 - `void_walk()` — writes `plan.void_walk`. With `main_as`, inside the move's
-  own roll window, it makes the next `card_move` replace the pending walk with
+  own roll window, it makes the next `run_planned_move` replace the pending walk with
   the planned teleport immediately (§4.3). Without `main_as`, or outside the
   window, the roll site just suppresses the walk: if `void_walk` is staged at
   Play it suppresses the next main's walk (pair it with a `teleport_to` when a
   teleport main is meant). A no-op for a teleport command.
-- `clear_steps()` — `steps = None`; the next `card_move` rolls. The roll keeps
+- `clear_steps()` — `steps = None`; the next `run_planned_move` rolls. The roll keeps
   its sign.
 - `add_extra_steps(n)` — `plan.extra_steps += n` (signed), composing with
   other writers. `set_extra_steps` remains the absolute form.
@@ -625,7 +618,7 @@ pub effective: i32,
 accessors gain the pair. Cond gains `move.rolled` (Bool) and `move.effective`
 (Int) in `cond/src/view.rs`, `cond/src/view_impl.rs`, `cond/src/vocab.rs`, and
 `cond-ir/src/vars.rs` (`MoveRolled`, `MoveEffective`). `move.rolled` is the
-charity pre; `move.effective` is the misaki span length.
+charity condition; `move.effective` is the misaki span length.
 
 `rolled` is set true in the roll branch, just before the dice windows; a
 fixed-step walk never enters that branch and leaves it false, and the
@@ -698,7 +691,7 @@ round-trip keep `turn.plan` directly.
 2. `begin_plan(i, true, self.w.turn.plan.clone())` — before `diceRollBefore`.
 3. Stamp `m.from = m.start.map_or(pos, |t| t.0)` and `m.to = m.from`.
 4. Take `hidden[i].next_steps` into the frame (`next_steps`) and mirror it
-   into `m` when as_main, before the windows.
+   into `m` when is_main_move, before the windows.
 5. Run the roll ladder and `rollPlan`; the window delta is folded into `m`
    after the last raise (§4.3), as `moveBefore` is folded when the walk
    starts.
@@ -706,21 +699,21 @@ round-trip keep `turn.plan` directly.
    its tail, so only the completion remains.
 7. `end_plan(m.started)`.
 
-`card_move` (`play.rs:789`) recomputes the slot policy:
+`run_planned_move` (`play.rs:789`) recomputes the slot policy:
 
 ```
 let forced = plan.forced;
 let main_as = plan.main_as;
-let as_main = is_turn && (!forced || main_as);
+let is_main_move = is_turn && (!forced || main_as);
 let frame_owner = self.plan_frame().map_or(i, |f| f.owner);
 let replace = replacement_taken(w.move_roll_windows.last().copied(), frame_owner, main_as,
                                 plan.void_walk, plan.teleport_to.is_some());
-if as_main && main_moved && !replace { refuse; return false }
-if as_main && !main_moved { main_moved = true }
+if is_main_move && main_moved && !replace { refuse; return false }
+if is_main_move && !main_moved { main_moved = true }
 if replace { return self.replace_main_move(i, plan) }   // §4.3
 ```
 
-Otherwise it opens a frame (Main for `as_main`, Side otherwise) through
+Otherwise it opens a frame (Main for `is_main_move`, Side otherwise) through
 `begin_plan`, stamps `from` as above, and runs the shared body — the
 `diceRollBefore` stage is the turn move's alone, the rest (`diceRollPlan` when
 there is no step count, the ladder, walk, tail) is common. `end_plan` seals
@@ -728,7 +721,7 @@ it.
 The return value is **"the move ran"**: false on the slot refusal, false on
 the abnormal-gate refusal from the host, false on a start-time cancellation,
 true otherwise. `HostRequest::Move` (`wasm_rules.rs:3785-3817`) returns the
-inner `card_move` value when the gate allows the move and `0` when it refuses,
+inner `run_planned_move` value when the gate allows the move and `0` when it refuses,
 instead of always echoing the gate verdict.
 
 `seed_turn_plan` and the `move_depth > 0` `mem::replace` workaround go away.
@@ -747,16 +740,16 @@ the jump; when a frame is live the nearest caller owns one (`replace_main_move`
 §4.3, follower replay §4.5, the main/side move frame) and `teleport_as` uses it.
 `card_teleport` becomes:
 
-- `move_depth == 0` — `teleport_as(…, resolve: false, main: false)` (which
+- `move_depth == 0` — `teleport_as(…, settles: false, is_main_move: false)` (which
   scopes itself).
 - `move_depth > 0` and `by_skill` — position write, then `teleport_tail_only`
   (§4.6).
 - `move_depth > 0`, not `by_skill` — the existing bare write.
 
 `HostRequest::TeleportAs` likewise relies on that self-scoping when it is
-top-level, and writes its temporary `resolve` through `plan_mut()`.
+top-level, and writes its temporary `settles` through `plan_mut()`.
 
-`card_settle_at` (`play.rs:1027`) is the third top-level move entry: it opens a
+`settle_tile_at` (`play.rs:1027`) is the third top-level move entry: it opens a
 Side frame from the plan clone `card_settle_move` built, runs the settle move,
 and pops, so a nested settle's counter writes do not shape the outer move.
 `settle_redirect` stays engine-set on the moved clone.
@@ -770,6 +763,13 @@ move with its own roll inside a counter window therefore gets its own snapshot
 instead of clobbering the outer one. The fold is
 `fold_plan_delta(&mut m, window_before.last().unwrap(), &frame)` before the
 pop. This is what makes a detour counter and a misaki teleport land.
+
+G03 (after this group) keeps both raises inside this snapshot and adds none
+outside it: the main move raises `diceRollBefore` *after* casting, a reroll
+re-raises `diceRollBefore`+`diceRollResult` inside the same snapshot, and a
+preview roll (no open move, e.g. 去唱卡拉ok吧's candidates) has no frame to
+fold into. G03 item 7 (`detour-plan-writes-lost`) is therefore this group's,
+not G03's.
 
 `fold_plan_delta` (`play.rs:108-180`) changes from "copy when changed and
 non-empty" to "copy when changed", so `steps`, `start`, `stop_at`,
@@ -787,7 +787,7 @@ Then:
   itself comes from the fold) and set `m.rolled = false`. The call condition
   below skips the walk. A cancelled replacement has no tail either.
 - Else if `m.teleport_to.is_some()`: a bare window write (no `void_walk`); run
-  `teleport_as(i, to, m.resolve, m.why.clone(), m.main)` here, set
+  `teleport_as(i, to, m.settles, m.why.clone(), m.main)` here, set
   `m.kind = Teleport`, `m.rolled = false`, `m.total = 1`, `m.remaining = 0`,
   `m.path = [to]` and `m.cancelled = !ran` (`m.to` comes from the player after
   the call). The tail is teleport_as's; the body does not wait on it.
@@ -803,18 +803,18 @@ m.void_walk) { self.walk(&mut m)? }`, so a set `void_walk`, a set
 (and a staged void with no target is the third branch); the ordinary pre-roll
 teleport never reaches this point (its branch returns before it).
 
-**Replacement call.** A `card_move` issued from a move's own roll window
+**Replacement call.** A `run_planned_move` issued from a move's own roll window
 (`move_roll_windows.last() == Some(player)`, the frame owner is `player`, the passed
 plan has `main_as && void_walk && teleport_to.is_some()`) does not open a
 second move: `fn replace_main_move(&mut self, i: usize, plan: Move) -> Flow<bool>`.
-The check runs in `card_move` **before** the `main_moved` refusal, because the
+The check runs in `run_planned_move` **before** the `main_moved` refusal, because the
 outer main already latched it:
 
 1. `begin_plan(i, false, seed)` — a Side frame seeded from the calling
    command's delta (so it inherits the teleport writes the body just made),
    with `by_skill` taken from the passed plan. `teleport_as` then sees a live
    frame and does not add its own.
-2. `let ran = teleport_as(i, to, plan.resolve, plan.why.clone(), true)`.
+2. `let ran = teleport_as(i, to, plan.settles, plan.reason.clone(), true)`.
    `to` is the captured `plan.teleport_to`; `landing` for the write-back is
    `st.players[i].pos` afterwards (a `moveBefore` counter may retarget it).
    `teleport_as` opens no frame of its
@@ -836,7 +836,7 @@ first), its existing cleanup must write through `plan_mut()` — a frame is live
 void branch with no teleport. The slot-refusal early return (which runs before
 any frame opens) clears the same three fields through `plan_mut()`.
 
-`next_steps` is consumed from `hidden[i]` at `begin_plan` for `as_main` and
+`next_steps` is consumed from `hidden[i]` at `begin_plan` for `is_main_move` and
 mirrored into `m`, not applied after the window; `m.roll` is then clamped to
 `m.effective_steps()` so a teleport in the window sees the same endpoint the
 walk would have used.
@@ -870,7 +870,7 @@ walks and `teleport_as_depth` for teleports. After the movement completes and
 before the completion bookkeeping:
 
 ```rust
-if as_main && !m.cancelled { self.replay_followers(&m)?; }
+if is_main_move && !m.cancelled { self.replay_followers(&m)?; }
 ```
 
 `replay_followers` is the block currently at `play.rs:1516-1536`, moved with
@@ -919,7 +919,7 @@ used by `scale_settle_payment` and every other settle reader.
   `effective`; `NONE` uses `rolled: false, effective: 0`.
 - The kani world gains `main_moved`, `forced`, `main_as`, `void_walk`,
   `teleport` and `window` for the `arm_card_move` policy:
-  `if as_main && main_moved && !(window && main_as && void_walk && teleport)
+  `if is_main_move && main_moved && !(window && main_as && void_walk && teleport)
   { 0 } else { 1 }` (the pure `replacement_taken`, inlined).
 - Plan setters (`set_forced`, `set_main_as`, `void_walk`, `clear_steps`,
   `add_extra_steps`) join the protocol stub group (`host.rs:1022-1072`);
@@ -932,7 +932,7 @@ used by `scale_settle_payment` and every other settle reader.
 - Every card proof that reaches a new import adds it to its `host_subset!`
   (`rules/kani/src/proofs/{ag,crychic,hhw,mujica,roselia,morfonica,sumimi}.rs`);
   `rules/kani/build.rs` allowlists the names.
-- `arm_card_move`'s old constant-1 is replaced so the fate/misaki proofs can
+- `arm_card_move`'s old constant-1 is replaced so the dest/misaki proofs can
   distinguish refused from ran.
 
 ---
@@ -957,8 +957,8 @@ if ctx::state::get(player_id, PASSER) == NEVER {
         let to = ctx::ask_tile(player_id, &title, &text, &tiles)?;
         ctx::plan::set_kind(MoveKind::Teleport);
         ctx::plan::set_teleport_to(to);
-        ctx::plan::set_resolve(true);
-        ctx::card_move(player_id);
+        ctx::plan::set_settles(true);
+        ctx::run_planned_move(player_id);
     }
 }
 ctx::set_dest(ctx::Dest::Graveyard);
@@ -978,9 +978,9 @@ ctx::teleport_to(player_id, to);          // the jump (no tail frame)
 ctx::plan::clear_steps();                 // roll from the destination
 ctx::plan::set_kind(MoveKind::Walk);
 ctx::plan::set_teleport_to(-1);
-ctx::plan::set_resolve(true);
+ctx::plan::set_settles(true);
 if ctx::plan::move_pay_factor() != 1000 { /* log the inherited factor, optional */ }
-ctx::card_move(player_id);
+ctx::run_planned_move(player_id);
 ```
 
 `dir()` needs no change: the frame's staging was clean at begin; the card's
@@ -988,17 +988,17 @@ own `set_*` writes are the only delta.
 
 ### 5.3 `charity_show` (items 5-6)
 
-Before: pre `… && move.main && tile.id >= 0`; body tracks an absolute prop.
+Before: condition `… && move.is_main_move && tile.id >= 0`; body tracks an absolute prop.
 
-After: pre `… && move.kind != Teleport && move.rolled && tile.id >= 0`; body
+After: condition `… && move.kind != Teleport && move.rolled && tile.id >= 0`; body
 calls `ctx::plan::add_extra_steps(2)` and keeps only the first-pass marker.
-`move.main` is removed from the pre.
+`move.is_main_move` is removed from the condition.
 
 ### 5.4 `sakiko_lead` (item 7)
 
 No body change. Remove the TODO. The replay now happens in the shared tail
 for a card-driven main move; `set_pay_factor(500)` staged at Play still
-reaches it because the as_main frame seeds from the whole staging plan.
+reaches it because the is_main_move frame seeds from the whole staging plan.
 
 ### 5.5 `detour` (items 8-9)
 
@@ -1025,7 +1025,7 @@ consumes the slot; targeting someone else never touches the slot.
 
 ### 5.7 `misaki_card` (items 11-13)
 
-Before: `trigger::set_cancelled()`, plan teleport writes, `card_move` (refused).
+Before: `trigger::set_cancelled()`, plan teleport writes, `run_planned_move` (refused).
 
 After:
 
@@ -1033,22 +1033,22 @@ After:
 trigger::set_cancelled();                       // the link only
 ctx::plan::set_kind(MoveKind::Teleport);
 ctx::plan::set_teleport_to(to);
-ctx::plan::set_resolve(true);
+ctx::plan::set_settles(true);
 ctx::plan::set_main_as(true);
 ctx::plan::void_walk();
-let ran = ctx::card_move(player_id);            // replaces the walk now
+let ran = ctx::run_planned_move(player_id);            // replaces the walk now
 ```
 
 `between()` uses `trigger::move_from()` (item 12) and
 `trigger::move_effective_steps().abs()` (item 13). The teleport has already
-settled when `card_move` returns, so the log names `to` rather than
+settled when `run_planned_move` returns, so the log names `to` rather than
 `player_pos` (the settle itself may move the player again; the chosen
 destination is the stable fact). `ran` guards the fire-pot payout/log (if the
 abnormal gate refused, nothing moved).
 
 ### 5.8 `fate_together` (item 14)
 
-Before: `if !ctx::card_move(player_id) { hit = 0 }` with `card_move` mistakenly
+Before: `if !ctx::run_planned_move(player_id) { hit = 0 }` with `run_planned_move` mistakenly
 main.
 
 After:
@@ -1056,23 +1056,23 @@ After:
 ```rust
 ctx::plan::set_forced(true);   // an effect move, never the main move
 ctx::plan::set_steps(i);
-ctx::plan::set_resolve(false);
-if !ctx::card_move(player_id) { hit = 0; return; }
+ctx::plan::set_settles(false);
+if !ctx::run_planned_move(player_id) { hit = 0; return; }
 ```
 
 The bool now means "ran", so a spent main move is not a false hit.
 
 ### 5.9 `cant_look_away` / `doll_garden` (items 15-16)
 
-Both set the forced pair immediately before each `card_move` (inside the
+Both set the forced pair immediately before each `run_planned_move` (inside the
 victim loop and before the sum walk):
 
 ```rust
 ctx::plan::set_forced(true);
-ctx::plan::set_main_as(true);       // C# MainMoveAs
+ctx::plan::set_main_as(true)
 ```
 
-`doll_garden` runs every victim through `card_move`, each on its own side
+`doll_garden` runs every victim through `run_planned_move`, each on its own side
 frame; the final sum walk is a main frame seeded from the clean staging, so
 the victims' shape cannot leak into it. Remove both TODOs.
 
@@ -1112,15 +1112,15 @@ pub const ABI_VERSION: i32 = 108;   // was 107 (fourth group)
 /// v108: **command-scoped move plans and walk control**. The turn plan is a
 ///    staging buffer; every move runs on a frame owned by its command
 ///    (`World::begin_plan` / `end_plan`) and is dropped when the command ends.
-///    New imports: `ruleset_set_forced` (351), `ruleset_set_main_as` (352),
-///    `ruleset_void_walk` (353), `ruleset_clear_steps` (354),
-///    `ruleset_add_extra_steps` (355), `ruleset_move_teleport_to` (356),
-///    `ruleset_move_pay_factor` (357), `ruleset_move_rent_factor` (358),
-///    `ruleset_move_effective_steps` (359), `ruleset_move_forced` (360),
-///    `ruleset_trig_move_rolled` (361),
-///    `ruleset_trig_move_effective_steps` (362),
-///    `ruleset_tile_axis_nearest` (363), `ruleset_tile_axis_farthest` (364).
-///    `MoveCtx.forced` is the C# `Forced` flag --
+///    New imports: `ruleset_set_forced` (360), `ruleset_set_main_as` (361),
+///    `ruleset_void_walk` (362), `ruleset_clear_steps` (363),
+///    `ruleset_add_extra_steps` (364), `ruleset_move_teleport_to` (365),
+///    `ruleset_move_pay_factor` (366), `ruleset_move_rent_factor` (367),
+///    `ruleset_move_effective_steps` (368), `ruleset_move_forced` (369),
+///    `ruleset_trig_move_rolled` (370),
+///    `ruleset_trig_move_effective_steps` (371),
+///    `ruleset_tile_axis_nearest` (372), `ruleset_tile_axis_farthest` (373).
+///    `MoveCtx.forced` is the `Forced` flag --
 ///    a forced move of the turn player is still the main move when
 ///    `main_as` is set -- no longer "never the main move". `set_parity`
 ///    canonicalizes `2` to `0` (even). The trigger move payload gains
@@ -1142,7 +1142,7 @@ payload. Every card wasm and the kani host rebuild together.
 |---|---|
 | `g04_side_move_restores_staging` | a side command's `steps`/`reverse`/`pay_factor` are gone at command end |
 | `g04_refused_main_keeps_staging` | a refused card main move leaves a staged teleport/factor intact |
-| `g04_main_consumes_staging` | an as_main move latches the slot and clears staging |
+| `g04_main_consumes_staging` | an is_main_move move latches the slot and clears staging |
 | `g04_forced_never_refused` | a forced move of the turn player runs with the slot spent and does not consume it |
 | `g04_main_as_consumes_when_free` | a forced `main_as` move latches a free slot |
 | `g04_void_walk_replaces_the_walk` | the walk's pass events do not raise; the teleport tail does |
@@ -1168,10 +1168,10 @@ One per slug, in the file named beside it:
 | 8 | detour gate | `g04_detour_counter_opens_after_the_main_move_latched` | `ag.rs` |
 | 9 | detour-parity | `g04_detour_parity_lands_on_odd_or_even_tiles` | `ag.rs` |
 | 10 | saki leak | `g04_saki_move_does_not_shape_the_caster_main_move` | `mujica.rs` |
-| 11 | misaki-teleport | `g04_misaki_teleport_as_main_voids_the_rolled_walk` | `hhw.rs` |
+| 11 | misaki-teleport | `g04_misaki_teleport_is_main_move_voids_the_rolled_walk` | `hhw.rs` |
 | 12 | misaki-planned-start | `g04_misaki_span_uses_the_planned_start` | `hhw.rs` |
 | 13 | misaki-effective-steps | `g04_misaki_span_uses_next_steps` | `hhw.rs` |
-| 14 | fate-forced-hop | `g04_fate_hop_does_not_consume_or_require_the_main_move` | `crychic.rs` |
+| 14 | dest-forced-hop | `g04_fate_hop_does_not_consume_or_require_the_main_move` | `crychic.rs` |
 | 15 | plan-set-forced | `g04_forced_walk_of_the_turn_player_is_main_only_with_main_as` | `mujica.rs` |
 | 16 | dg-plan-reset | `g04_doll_garden_victims_do_not_leak_shape` | `mujica.rs` |
 | 17 | lisa-bond | `g04_lisa_bond_opens_after_a_nested_skill_teleport` | `roselia.rs` |
@@ -1186,13 +1186,13 @@ functions in `game-kinds`, each an iff proof with a cover and a mutant:
 
 - `move_plan::command_fields_are_never_staging` — exhaustive over `PlanField`:
   `is_staging` is false for every `Command` field.
-- `move_plan::main_frame_keeps_turn_fields` — an as_main frame seeded from
+- `move_plan::main_frame_keeps_turn_fields` — an is_main_move frame seeded from
   staging carries `base`/`dice`/`min_roll`/`signed`.
 - `move_plan::side_seal_drops_command_fields` — after a side command's seal,
   staging no longer carries `steps`/`reverse`/`parity`/`stop_at`.
 - `move_plan::side_seal_keeps_next_main_fields` — staging
   `teleport_to`/`start`/`pay_factor`/`followers` survive a side command.
-- `move_plan::main_seal_consumes_next_main_fields` — an as_main move leaves a
+- `move_plan::main_seal_consumes_next_main_fields` — an is_main_move move leaves a
   default staging plan.
 - `move_plan::parity_step_is_nearest_qualifying_tile` — `next_parity_tile` is
   the smallest `d ≥ 1` with the requested parity.
@@ -1212,7 +1212,7 @@ Per item: 1 → axis proofs; 5 → `MoveSnap.rolled` through `arm_card_move`;
 proof; 13 → `effective_steps_order`; 14/15 → `arm_card_move`; 16 → the seal
 proofs.
 
-`arm_card_move` proof: `refused iff as_main && main_moved && !replacement_taken`.
+`arm_card_move` proof: `refused iff is_main_move && main_moved && !replacement_taken`.
 
 ## 9. Alternatives
 
@@ -1229,7 +1229,7 @@ scoping. Gives up the entire class fix (a forgetful card re-leaks) and every
 card pays boilerplate; it also cannot express "the staging teleport belongs to
 the next main" when a side move intervenes.
 
-**A3 — Fresh `MoveCtx` for every `card_move`, ignore staging.** Kills leaks
+**A3 — Fresh `MoveCtx` for every `run_planned_move`, ignore staging.** Kills leaks
 outright but loses Play-time shaping (`change_world` dice, detour base dice,
 kanon teleport) unless a second, explicit next-main channel is added, and every
 body that pre-shapes its own move is rewritten to pass a full move.
@@ -1246,7 +1246,7 @@ of the nested call rules in §4.3.
 ## 10. Open questions
 
 1. **Turn-start gate for (1).** If the [停留] layer this card just granted is
-   still present at the owner's next turn start, `card_move`'s main move may
+   still present at the owner's next turn start, `run_planned_move`'s main move may
    be blocked. Does (1)'s teleport still happen? The book does not say.
 2. **Parity pass events.** Does a parity walk "pass" the skipped tiles? We
    choose no (only landings pass). A reading of 「仅在…上进行」 as continuous
@@ -1254,7 +1254,7 @@ of the nested call rules in §4.3.
 3. **Parity vs `stop_at`/`settle_tile`.** A stop tile of the other parity is
    unreachable while parity is set. Should the walk stop there anyway?
 4. **`next_steps` on a card main move.** Today only `main_move` consumes it.
-   This design consumes it for every `as_main` move; confirm that a
+   This design consumes it for every `is_main_move` move; confirm that a
    card-driven main move (「视为主要移动」) counts for a `next_steps` buff.
 5. **Follower replay on a teleport main move.** Followers carry `kind` and
    `teleport_to`, so they teleport. Confirm this is intended (sakiko plus a

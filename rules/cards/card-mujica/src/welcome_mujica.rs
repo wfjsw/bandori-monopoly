@@ -1,9 +1,8 @@
-//! `Mujica:欢迎来到ave mujica的世界` -- C# `CardWelcomeMujica` (MatchHost.cs:5436-5496):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:欢迎来到ave mujica的世界`）:
 //! > 欢迎来到ave mujica的世界：
 //! >  选择以下效果其一发动：
-//! >  
+//! >
 //! > （1）转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）；
 //! > （2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态
 //!
@@ -38,8 +37,7 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「（1）转换任意一名玩家的状态」 -- 「任意一名玩家」 includes the
-    // user. The C# only listed others; the book does not.
+    // 规则书（1）: 「（1）转换任意一名玩家的状态」 -- 「任意一名玩家」 includes the user.
     let mut candidates = alloc::vec::Vec::new();
     candidates.push(player_id);
     candidates.extend(ctx::others(player_id));
@@ -52,17 +50,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("welcome_mujica_ask")),
         &candidates,
     )?;
-    // C# `H.PickTarget` = `AskSeat` + `H.Target` (MatchHost.cs:18036-18057):
-    // a pick of another seat runs the full targeting pipeline (out / exile /
-    // ImmuneAll / _targeted / Untargetable / redirect / `target` [反击] window)
-    // and lands on the player actually hit (`Some(hit)`, redirect may move it);
-    // None = the designation failed and the play folds. A pick of the user's own
-    // seat (the routine case -- it heads the list) runs only the out / cancel /
-    // gate checks and `redirect`; once the target is still the user it stops.
-    // TODO(ABI): the self-target tail is skipped -- `target_player` answers at
-    //   `p == by` right after `redirect`, before Untargetable / `_targeted` / the
-    //   `target` window / ImmuneAll, so only an EXIST-style redirect can re-name
-    //   the pick; the rest of the pipeline never sees it.
+    // TODO(ABI): A pick of the user's own seat (the routine case -- it heads the
+    // list) runs only the out / cancel / gate checks and `redirect`; once the target
+    // is still the user it stops. the self-target tail is skipped -- `target_player`
+    // answers at `p == by` right after `redirect`, before Untargetable / `_targeted`
+    // / the `target` window / ImmuneAll, so only an EXIST-style redirect can re-name
+    // the pick; the rest of the pipeline never sees it.
     let Some(hit) = ctx::target(who) else {
         return Ok(());
     };
@@ -96,30 +89,23 @@ fn switch_state(player_id: i32, hit: i32) -> card_sdk::Asked {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书（2）[反击]: 「你与所有本回合切换了状态的玩家同时切换一次状态」
-    // C# lists `p == c.Seat || H.V(p, "switchedRound") == H.TurnKey`, then
-    // `H.SwitchState` on each.
     let mut targets = alloc::vec::Vec::new();
     targets.push(player_id);
     let key = ctx::turn_key();
     for p in ctx::others(player_id) {
-        // C# `H.V(p, "switchedRound") == H.TurnKey`. The host stamps this flag
-        // on every skill-state 1↔2 toggle (`note_state_toggle`), including
-        // character skills that never wrote it themselves.
-        // 规则书（2）: 「所有本回合切换了状态的玩家」 -- the stamp is what resolves
-        // the clause; it is the per-turn key, so last turn's toggles do not count.
+        // The host stamps this flag on every skill-state 1↔2 toggle
+        // (`note_state_toggle`), including character skills that never wrote it
+        // themselves. 规则书（2）: 「所有本回合切换了状态的玩家」 -- the stamp is what resolves the clause;
+        // it is the per-turn key, so last turn's toggles do not count.
         if ctx::slot(p, "switchedRound") == key {
             targets.push(p);
         }
     }
-    // 规则书（2）: `H.SwitchState` on each -- the same skill-state toggle the
-    // play half runs; `switch_state` logs the hit itself. The host stamps
-    // `switchedRound` on each real toggle and suppresses further `state` windows
-    // from this re-toggle (`Cx::state_raise_depth`), so the counter cannot
-    // ping-pong.
-    // TODO(规则书)（你与所有本回合切换了状态的玩家同时切换一次状态）: (2) carries no
-    //   「不存在状态2」 parenthetical -- we reuse (1)'s gate via `switch_state`, so a
-    //   状态0 seat in `targets` (always the user) is a no-op (CH-08)
+    // TODO(规则书)（你与所有本回合切换了状态的玩家同时切换一次状态）: The host stamps `switchedRound` on each
+    // real toggle and suppresses further `state` windows from this re-toggle
+    // (`PlayCtx::state_raise_depth`), so the counter cannot ping-pong. (2) carries no
+    // 「不存在状态2」 parenthetical -- we reuse (1)'s gate via `switch_state`, so a 状态0
+    // seat in `targets` (always the user) is a no-op (CH-08)
     for &t in &targets {
         switch_state(player_id, t)?;
     }

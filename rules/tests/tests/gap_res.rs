@@ -222,7 +222,7 @@ fn g28_maya_look_at_top_still_counts_as_a_draw() {
     t.play(0, "通用:10次招募（1回限定）").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        let k = if t.prompt_refers("maya_dawn") {
+        let k = if t.prompt_refers("maya") {
             0 // Y=1, then the first look-at-top card
         } else {
             p.fallback

@@ -67,14 +67,14 @@ fn drain_recording(t: &mut Table, card: &str) -> bool {
 }
 
 /// Assert `card` is not offered on the open (or absent) prompt, then drain.
-fn assert_not_offered(t: &mut Table, card: &str, why: &str) {
-    assert!(!t.counteract_offered(card), "{why}: {}", t.dump_prompt());
+fn assert_not_offered(t: &mut Table, card: &str, reason: &str) {
+    assert!(!t.counteract_offered(card), "{reason}: {}", t.dump_prompt());
     drain(t);
 }
 
 /// Assert `card` **is** offered on the open prompt, declare it as `who`, drain.
-fn assert_offered_and_play(t: &mut Table, who: usize, card: &str, why: &str) {
-    assert!(t.counteract_offered(card), "{why}: {}", t.dump_prompt());
+fn assert_offered_and_play(t: &mut Table, who: usize, card: &str, reason: &str) {
+    assert!(t.counteract_offered(card), "{reason}: {}", t.dump_prompt());
     t.counteract(who, card).unwrap();
     drain(t);
 }

@@ -66,7 +66,7 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-chisato-mask-02 | reshuffle → others pay 500 | OPEN | — | — | | OPEN-分摊 |
 | C-PP-chisato-mask-03 | [共鸣] others pay 1500 | OPEN | — | — | | OPEN-分摊, OPEN-共鸣 |
 | C-PP-eve-bushido-01 | place + 12d4 × 60 money | PROVEN* | `eve_bushido_01_gain_iff` | triage3: FAILED was **C** `roll_dice` count `min(8)` rewrote 12d4→8d4; fixed (`min(100)`), re-time pending | — | — |
-| C-PP-eve-bushido-04 | +1 crystal per draw, cap 3 | PROVEN* (pre<3) / BLOCKED-HOST (cap) | `eve_bushido_04_crystal_per_draw_iff`, `eve_bushido_04_noop_when_zero_draw` | triage3: FAILED was **B** wrong crystal storage (player key vs `field_crystals`); fixed, re-time pending | host `add_counter_self` ignores `max` (no cap-3 clamp) | — |
+| C-PP-eve-bushido-04 | +1 crystal per draw, cap 3 | PROVEN* (condition<3) / BLOCKED-HOST (cap) | `eve_bushido_04_crystal_per_draw_iff`, `eve_bushido_04_noop_when_zero_draw` | triage3: FAILED was **B** wrong crystal storage (player key vs `field_crystals`); fixed, re-time pending | host `add_counter_self` ignores `max` (no cap-3 clamp) | — |
 | C-PP-eve-bushido-05 | settle-before duel 1d6 vs 3d4 | PROTOCOL-LEVEL | `eve_bushido_05_payment_formula` (pure) | pending | multi-roll duel + [共鸣] window | OPEN-共鸣 |
 | C-PP-der-echo-01 | discard as [共鸣] cost, band +2 | OPEN | — | — | | OPEN-共鸣 |
 | C-PP-seeyou-01 | gate `up <= down` | PROVEN* | `seeyou_01_gate_iff` | pending | — | — |
@@ -103,14 +103,14 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-together-01 | X = 5 (+ ceil half gap) | PROVEN* | `together_01_x_formula_iff`, `together_01_mutant_is_detected` | triage3: mutant FAILED was **B** `min(X,down)` collapsed body+mutant; assume `down>=7`, re-time pending | — | — |
 | C-PP-together-02 | [共鸣] X-=5, draw 1 | OPEN | `together_02_*` (spec) | — | | OPEN-共鸣 |
 | C-PP-dream-ahead-00 | game-start auto place, hand -1 | PROTOCOL-LEVEL | — | — | game-start deal scheduling | — |
-| C-PP-dream-ahead-01 | crystal per draw, cap 5, overflow X | PROVEN* (pre<5) | `dream_ahead_01_crystal_per_draw_iff` | triage3: TIMEOUT was **E** (overflow-X else branch live); concrete `pre=0`, re-time pending | host `add_counter` ignores `max` (cap-5) | — |
+| C-PP-dream-ahead-01 | crystal per draw, cap 5, overflow X | PROVEN* (condition<5) | `dream_ahead_01_crystal_per_draw_iff` | triage3: TIMEOUT was **E** (overflow-X else branch live); concrete `condition=0`, re-time pending | host `add_counter` ignores `max` (cap-5) | — |
 | C-PP-dream-ahead-02 | no build, hand limit -1 | PROVEN* (continuous prop) | — | prop on CardDef | — | — |
 | C-PP-dream-ahead-03 | extra rent owned×X + MIN(X×30,300) | PROVEN (formula) | `dream_ahead_03_formula` | SUCCESSFUL 3.6s | settle context is PROTOCOL | — |
 | C-PP-dream-ahead-04 | [共鸣][反击] turn-end buy | OPEN | — | — | [可购买格子] set undefined | OPEN-共鸣 |
 | C-PP-guide-01 | band +3, place, owned/3 crystals | PROVEN* | `guide_01_band_and_crystals_iff`, `guide_01_mutant_is_detected` | triage3: iff FAILED was **B** wrong crystal storage (mutant was vacuous); fixed, re-time pending | | OPEN-div |
 | C-PP-guide-02 | mark from deck colours | OPEN | — | — | mark vocabulary unprinted | OPEN-mark |
 | C-PP-guide-03 | hand limit -1 | PROVEN* (CardDef prop) | — | — | — | — |
-| C-PP-guide-04 | +1 crystal at turn end | PROVEN* (pre<5) | `guide_04_turn_end_crystal_iff` | triage3: FAILED was **B** wrong crystal storage; fixed, re-time pending | cash-in at ≥5 is OPEN-mark | — |
+| C-PP-guide-04 | +1 crystal at turn end | PROVEN* (condition<5) | `guide_04_turn_end_crystal_iff` | triage3: FAILED was **B** wrong crystal storage; fixed, re-time pending | cash-in at ≥5 is OPEN-mark | — |
 | C-PP-guide-05 | ≥5 crystals: apply marks → discard | OPEN | — | — | | OPEN-mark |
 
 \*PROVEN* = harness written; verdict pending the machine-wide CBMC slot.
@@ -121,16 +121,16 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-PP-aya-with-01 | start +5 positive fans | PROVEN* | `aya_with_01_five_fans_iff`, `aya_with_01_mutant_is_detected` | triage3: VACUOUS was **C** `guard_needs` band_is seat-arg (no seat rows filled); fixed, re-time pending | grant-(2) half needs a non-PP seat (not fully asserted) | — |
+| C-PP-aya-with-01 | start +5 positive fans | PROVEN* | `aya_01_five_fans_iff`, `aya_01_mutant_is_detected` | triage3: VACUOUS was **C** `guard_needs` band_is seat-arg (no seat rows filled); fixed, re-time pending | grant-(2) half needs a non-PP seat (not fully asserted) | — |
 | C-PP-hina-lottery-01 | same shared (1) | PROVEN* (same shape as aya-with-01) | — | — | — | — |
 | C-PP-chisato-frank-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
 | C-PP-maya-dawn-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
 | C-PP-eve-unify-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
-| C-PP-aya-with-02 | pay discount Y×100 + fan-side flip | PROVEN* | `aya_with_02_pay_discount_iff`, `aya_with_02_mutant_is_detected` | triage3: TIMEOUT **E** (`ask_number` → Msg → memchr cliff) | — | — |
-| C-PP-hina-lottery-02 | turn-start 1d4 borrow (2) | PROVEN* (map) / FAILS (body) | `hina_lottery_02_borrow_map` | pending | regression: `skill.hinaLottery.borrowed` stays -1 (borrow never lands) | — |
-| C-PP-chisato-frank-02 | receive +Y×100 | PROVEN* (formula) | `chisato_frank_02_formula` | pending | — | — |
-| C-PP-maya-dawn-02 | draw → watch Y+1, pick 1 | PROVEN* (formula) | `maya_dawn_02_watch_formula` | pending | prompt/pick body is expensive | — |
-| C-PP-eve-unify-02 | +Yd4 on any roll | BLOCKED-HOST | `eve_unify_02_extra_dice_formula` (pure) | pending | `trig_move_roll` unmodeled (KANI-COVERAGE) | — |
+| C-PP-aya-with-02 | pay discount Y×100 + fan-side flip | PROVEN* | `aya_02_pay_discount_iff`, `aya_02_mutant_is_detected` | triage3: TIMEOUT **E** (`ask_number` → Msg → memchr cliff) | — | — |
+| C-PP-hina-lottery-02 | turn-start 1d4 borrow (2) | PROVEN* (map) / FAILS (body) | `hina_02_borrow_map` | pending | regression: `skill.hinaLottery.borrowed` stays -1 (borrow never lands) | — |
+| C-PP-chisato-frank-02 | receive +Y×100 | PROVEN* (formula) | `chisato_02_formula` | pending | — | — |
+| C-PP-maya-dawn-02 | draw → watch Y+1, pick 1 | PROVEN* (formula) | `maya_02_watch_formula` | pending | prompt/pick body is expensive | — |
+| C-PP-eve-unify-02 | +Yd4 on any roll | BLOCKED-HOST | `eve_02_extra_dice_formula` (pure) | pending | `trig_move_roll` unmodeled (KANI-COVERAGE) | — |
 
 ---
 
@@ -194,7 +194,7 @@ the rest stay OPEN in this table.
   `try_resonance` returns false before any prompt (OPEN-共鸣 branches not
   entered).
 * `n_players ∈ 2..=4`; money `0..=10_000`; fans `0..=20`.
-* Crystal-cap clauses: `pre < cap` so the unmodeled `max` clamp does not bind.
+* Crystal-cap clauses: `condition < cap` so the unmodeled `max` clamp does not bind.
 
 ## Runner notes
 

@@ -1,4 +1,3 @@
-//! `Sumimi:现在她是Sumimi的小初啦` -- C# `CardNowSumimi` (MatchHost.cs:11220-11248):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:现在她是Sumimi的小初啦`）:
 //! > 现在她是Sumimi的小初啦：
@@ -38,13 +37,10 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         // sheet cell L5
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
-/// C# `TileData.kind == "ring"` -- `ctx::is_deed` (ABI v9) reads the board's
-/// `TileKind::Ring` directly.
 fn is_deed(t: i32) -> bool {
     ctx::is_deed(t)
 }
 
-/// C# `CardNowSumimi.Tag` = `H.PriceTag(H.State.seats[seat].pos)`.
 // TODO(规则书)（[收费标价]）: 「收费标价」 is an open term (OPEN-收费标价: the
 //   purchase price or the charge); we read the current rent (RiNG: its 基础乘数).
 //   A non-buyable tile (地产商 / CiRCLE / café / 江户川 / 流星堂) has no rent row
@@ -54,8 +50,6 @@ fn price_tag(player_id: i32) -> i32 {
     if t < 0 || !ctx::is_buyable(t) {
         return 0;
     }
-    // 规则书: 「（RiNG则为其基础乘数）」 -- C# `H.PriceTag` returns
-    // `H.RingMultiplier` for `kind == "ring"` tiles and the rent table otherwise.
     if is_deed(t) {
         return ctx::ring_multiplier();
     }
@@ -65,32 +59,22 @@ fn price_tag(player_id: i32) -> i32 {
 
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当…失去资金的总额即将超过你所在格子的[收费标价]时打出此卡」
-    // The payment shape is the pre; the price-tag comparison is the residual.
+    // The payment shape is the condition; the price-tag comparison is the residual.
     // A 0 tag (a non-buyable tile) still lets any positive payment through.
     let tag = price_tag(player_id);
-    // TODO(规则书)[judgement][反击]（失去资金的总额即将超过）: C# keeps
-    //   `H._lostSinceTurn[player_id]` (money lost since this player's turn
-    //   started) and fires on `lost <= Tag && lost + amount > Tag`; the clause
-    //   under-specifies, see the note above it. The trigger half is ready
-    //   (`trigger::value()` is `t.Pay.amount`), but the lost-since-turn
-    //   accumulator is engine state -- a `PayAfter` hook could feed a slot, and
-    //   this [反击] card is in hand so it never sees that hook. The guard here is
-    //   `amount > Tag` alone: it drops both the running total and the 「即将超过」
-    //   window, so it also fires once the total has already crossed the tag.
-    // `!t.Pay.cancel` is only half covered: a payment an earlier counteraction
-    // already shaved to 0 reads `value() == 0`, but a `set_cancelled` link keeps
-    // its declared amount and still opens this window (see the TODO on the pre).
+    // TODO(规则书)[judgement] The guard here is `amount > Tag` alone: it drops both the
+    // running total and the 「即将超过」 window, so it also fires once the total has
+    // already crossed the tag.
     trigger::value() > tag
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书[反击]: 「获得相当于你所在格子[收费标价]数额的资金」 -- C# `H.GainR(c.Seat, Tag(c.Seat), CardName)`.
     let tag = price_tag(player_id);
     if tag > 0 {
         ctx::gain(
             player_id,
             tag,
-            &Msg::new(key!("now_sumimi_why")).n("n", tag as i64),
+            &Msg::new(key!("now_sumimi_reason")).n("n", tag as i64),
         )?;
     }
     Ok(())

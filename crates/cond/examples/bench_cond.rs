@@ -32,16 +32,28 @@ fn window() -> WindowCtx {
         step: 4,
         by: 1,
         pay_is_rent: false,
+        pay_kind: 1,
+        pay_is_fixed: 0,
+        pay_total_stage: true,
+        charge_is_skill: false,
+        settle_tile: -1,
+        settle_owner: -1,
+        settle_houses: 0,
+        settle_mortgaged: false,
+        settle_outcome: -1,
         mv: MoveSnap {
             roll: Some(5),
             kind: Some(rules_cond::mv::Walk),
             remaining: 5,
-            main: true,
+            is_main_move: true,
             dir: 1,
             tags: Vec::new(),
             by_skill: false,
         },
         roll_source: 0,
+        roll_purpose: 1,
+        roll_rerolled: false,
+        roll_unused_face: -1,
         abnormal: false,
         chain: vec![
             ChainLink {
@@ -78,6 +90,8 @@ fn window() -> WindowCtx {
         tile_count: 12,
         tile_owners: vec![0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
         plan_fixed_roll: None,
+        resolving: Vec::new(),
+        trigger_card_is_skill: false,
     }
 }
 
@@ -87,7 +101,7 @@ fn candidate(owner: i64) -> CandidateCtx {
         owner_money: 500 + owner * 100,
         card_id: 42,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
-        tok_names: [("水母标记".to_string(), 1)].into_iter().collect(),
+        held_names: [("水母标记".to_string(), 1)].into_iter().collect(),
         ..CandidateCtx::default()
     }
 }

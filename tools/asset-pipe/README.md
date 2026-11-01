@@ -42,10 +42,6 @@ Flags: `--only img,audio,fonts,text,live2d,data`, `--force`, `--jobs N`, `--prob
 }
 ```
 
-Lookup rules the client must follow (they mirror the C#):
-
-* Resources keys are **lower-case** (Unity stores them that way; `Resources.Load` is
-  case-insensitive). Lower-case the C# path before looking it up.
 * Character art is keyed by `art` if present, else `cnId` (`CharacterData.cs:34-38`).
 * Newer characters have no `sdHappy` / `namePlate`, and 4 bands have no logo, in the
   original data too. The UI needs the same fallbacks as the Unity UI.

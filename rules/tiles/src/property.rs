@@ -22,12 +22,12 @@
 //! - 「每块地有标注的等级上限」 -- the cap is the tile's rent-table length
 //!   (`rent.len() - 1`; `prop::BUILD_MAX` is the same figure under its prop
 //!   name, `crates/game-core/src/state.rs`). The refusals live in the engine's
-//!   build gate (`crates/game-core/src/engine/ops.rs` `why_not_build_on`: no
+//!   build gate (`crates/game-core/src/engine/ops.rs` `cant_build_on`: no
 //!   upgrade row, a stamped `BUILD_MAX = 0`, or `houses >= rent.len() - 1`).
 //!   This body only offers; it does not re-check the cap. See [`crate::ring`]
 //!   for the `buildMax = 0` RiNG case (「所有RiNG不可升级」).
 //! - 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」 -- enforced by
-//!   the pay pipeline's optional-funding arm (`Cx::offer_mortgage_funds`'s
+//!   the pay pipeline's optional-funding arm (`PlayCtx::offer_mortgage_funds`'s
 //!   `exclude`, `crates/game-core/src/engine/play.rs`), not by a flag here and
 //!   not by the `mortgage` body: the deed being built on is never offered in
 //!   the raise-funds prompt. [`crate::deed`] restates it beside the rest of the
@@ -62,26 +62,18 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
     // not deferred to the end phase.
     let owner = ctx::tile_owner(at);
     if owner < 0 {
-        // 规则书: 「可选择[消耗]…获得格子地契和拥有权」 -- `H.OfferBuy`.
         ctx::offer_buy(player_id, at)?;
     } else if owner != player_id {
         if ctx::mortgaged_of(at) {
-            // 规则书: 「如果格子地契已抵押则可选择[支付]拥有格子的玩家购买格子地契
-            // 和建造已有房子的资金总价的两倍，从该玩家处强行购买该格地契，获得的
-            // 地契仍为抵押状态。」 -- `H.OfferForceBuy`. 「此次购买的价格不受任何
-            // 资金变动效果影响，收款方无论处于何种状态都可正常收款」 is that
-            // routine's (it moves money directly, outside the pay pipeline).
+            // 「此次购买的价格不受任何 资金变动效果影响，收款方无论处于何种状态都可正常收款」 is that routine's (it moves money
+            // directly, outside the pay pipeline).
             ctx::offer_force_buy(player_id, at)?;
         } else {
-            // 规则书: 「如果格子地契未抵押则[支付]拥有格子的玩家格子地契所标记的
-            // 现等级地租。」 -- `H.PayRent`, the rent table at the current level.
             ctx::pay_rent(player_id, at, false)?;
         }
     } else {
-        // 规则书: 「如果格子地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行
-        // 升级建造」 -- `H.OfferBuild`. 「如果格子地契已抵押则无效果」 is the
-        // build gate's. 「每块地有标注的等级上限」 is checked in that same gate
-        // (see the module doc); this body only offers.
+        // 「如果格子地契已抵押则无效果」 is the build gate's. 「每块地有标注的等级上限」 is checked in that same
+        // gate (see the module doc); this body only offers.
         let _ = ctx::prop(prop::BUILD_MAX);
         ctx::offer_build(player_id, at)?;
     }
@@ -167,7 +159,7 @@ pub(crate) fn buy(player_id: i32) -> card_sdk::Asked {
         );
     }
     ctx::log(player_id, &text);
-    // `bought` (Fx) -- the owner is set. `buyAfter` -- the deed has changed hands.
+    // `bought` (hook) -- the owner is set. `buyAfter` -- the deed has changed hands.
     ctx::raise(player_id, TriggerKind::Bought, price)?;
     ctx::raise(player_id, TriggerKind::BuyAfter, price)?;
     Ok(())
@@ -223,7 +215,7 @@ pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
 /// 规则书 基础规则 5: 「运营阶段及需[支付]或[消耗]资金且资金不足时可以选择
 /// 抵押拥有的地契，抵押后[获得]地契购买价格50%的资金」.
 ///
-/// The body owns eligibility and the payout; `ctx::apply_mortgage` is the
+/// The body owns eligibility and the payout; `ctx::commit_mortgage` is the
 /// mechanism (flag write + direct money move -- 「不受任何效果影响」).
 /// `trigger.value` is the reason: 0 = player act (needs 运营阶段), 1 =
 /// raise-funds (mid-payment, short of funds), 2 = optional funding prompt
@@ -255,12 +247,12 @@ pub(crate) fn mortgage(player_id: i32) -> card_sdk::Asked {
     if amount <= 0 {
         return Ok(());
     }
-    ctx::apply_mortgage(player_id, at, amount);
+    ctx::commit_mortgage(player_id, at, amount);
     Ok(())
 }
 
 /// 规则书 基础规则 6: 「运营阶段可赎回拥有的地契，赎回后[消耗]地契购买价格
-/// 60%的资金」. Money is 「不受任何效果影响」 -- `ctx::apply_redeem` moves it
+/// 60%的资金」. Money is 「不受任何效果影响」 -- `ctx::commit_redeem` moves it
 /// directly.
 pub(crate) fn redeem(player_id: i32) -> card_sdk::Asked {
     let at = ctx::self_tile().unwrap_or(-1);
@@ -278,7 +270,7 @@ pub(crate) fn redeem(player_id: i32) -> card_sdk::Asked {
     if ctx::money_of(player_id) < cost {
         return Ok(());
     }
-    ctx::apply_redeem(player_id, at, cost);
+    ctx::commit_redeem(player_id, at, cost);
     Ok(())
 }
 

@@ -27,10 +27,10 @@ fn args_empty(a: &Arc<BTreeMap<String, Arg>>) -> bool {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Msg {
     /// i18next key, e.g. `log.roll`, `err.not_your_turn`.
-    #[serde(default)]
-    pub k: Arc<str>,
-    #[serde(default, skip_serializing_if = "args_empty")]
-    pub a: Arc<BTreeMap<String, Arg>>,
+    #[serde(rename = "k", default)]
+    pub key: Arc<str>,
+    #[serde(rename = "a", default, skip_serializing_if = "args_empty")]
+    pub args: Arc<BTreeMap<String, Arg>>,
 }
 
 /// A message argument. The client turns each into text before interpolation.
@@ -50,9 +50,11 @@ pub enum Arg {
     /// A group name (data key) -> its display name.
     Group(String),
     /// A number shown with thousands separators (money, prices).
-    N(i64),
+    #[serde(rename = "n")]
+    Number(i64),
     /// A plain integer (counts, dice).
-    I(i64),
+    #[serde(rename = "i")]
+    Integer(i64),
     /// Verbatim text (player-entered names and the like). Never used for UI copy.
     Text(String),
     /// A nested message (reasons, optional clauses).
@@ -64,27 +66,27 @@ pub enum Arg {
 impl Msg {
     pub fn new(key: impl AsRef<str>) -> Self {
         Self {
-            k: Arc::from(key.as_ref()),
-            a: Arc::default(),
+            key: Arc::from(key.as_ref()),
+            args: Arc::default(),
         }
     }
 
     /// Insert one argument in place (for bridges that build a message field by
     /// field). Prefer the builder methods, which chain.
     pub fn set_arg(&mut self, name: impl Into<String>, v: Arg) {
-        Arc::make_mut(&mut self.a).insert(name.into(), v);
+        Arc::make_mut(&mut self.args).insert(name.into(), v);
     }
 
     pub fn key(&self) -> &str {
-        &self.k
+        &self.key
     }
 
     pub fn is_empty(&self) -> bool {
-        self.k.is_empty()
+        self.key.is_empty()
     }
 
     pub fn arg(mut self, name: &str, v: Arg) -> Self {
-        Arc::make_mut(&mut self.a).insert(name.into(), v);
+        Arc::make_mut(&mut self.args).insert(name.into(), v);
         self
     }
 
@@ -112,12 +114,12 @@ impl Msg {
 
     /// Money / price (thousands separators).
     pub fn n(self, name: &str, v: impl Into<i64>) -> Self {
-        self.arg(name, Arg::N(v.into()))
+        self.arg(name, Arg::Number(v.into()))
     }
 
     /// Count / dice value.
     pub fn i(self, name: &str, v: impl Into<i64>) -> Self {
-        self.arg(name, Arg::I(v.into()))
+        self.arg(name, Arg::Integer(v.into()))
     }
 
     pub fn text(self, name: &str, v: impl Into<String>) -> Self {
@@ -150,10 +152,10 @@ impl From<&str> for Msg {
 /// Debug rendering for logs and test failures: `key{a=..}`. Not shown to players.
 impl fmt::Display for Msg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.k)?;
-        if !self.a.is_empty() {
+        f.write_str(&self.key)?;
+        if !self.args.is_empty() {
             f.write_str("{")?;
-            for (i, (k, v)) in self.a.iter().enumerate() {
+            for (i, (k, v)) in self.args.iter().enumerate() {
                 if i > 0 {
                     f.write_str(",")?;
                 }
@@ -176,7 +178,7 @@ impl fmt::Display for ArgDebug<'_> {
             Arg::Persona(c) => write!(f, "persona:{c}"),
             Arg::Event(e) => write!(f, "event:{e}"),
             Arg::Group(b) => write!(f, "group:{b}"),
-            Arg::N(n) | Arg::I(n) => write!(f, "{n}"),
+            Arg::Number(n) | Arg::Integer(n) => write!(f, "{n}"),
             Arg::Text(t) => write!(f, "{t:?}"),
             Arg::Msg(m) => write!(f, "({m})"),
             Arg::List(l) => {
@@ -204,17 +206,17 @@ mod tests {
         let m = Msg::new("log.roll")
             .player_id("who", 2)
             .i("n", 6)
-            .opt("why", None);
+            .opt("reason", None);
         let j = serde_json::to_string(&m).unwrap();
         assert_eq!(
             j,
-            r#"{"k":"log.roll","a":{"n":{"i":6},"who":{"playerId":2},"why":{"msg":{"k":"blank"}}}}"#
+            r#"{"k":"log.roll","a":{"n":{"i":6},"reason":{"msg":{"k":"blank"}},"who":{"playerId":2}}}"#
         );
         assert_eq!(serde_json::from_str::<Msg>(&j).unwrap(), m);
         assert_eq!(
             serde_json::to_string(&Msg::new("err.x")).unwrap(),
             r#"{"k":"err.x"}"#
         );
-        assert_eq!(m.to_string(), "log.roll{n=6,who=playerId:2,why=(blank)}");
+        assert_eq!(m.to_string(), "log.roll{n=6,reason=(blank),who=playerId:2}");
     }
 }

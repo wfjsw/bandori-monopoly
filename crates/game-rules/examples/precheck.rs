@@ -6,7 +6,7 @@
 //! split. Flags guards that still reject on the trigger **kind** -- the
 //! category filter owns that (GUARDS.md "distinct layers" ruling). Also
 //! reports parse errors / unknown vars / float literals (already fail-closed
-//! at `RulesetBuilder::build`, so a bad `pre` is a hard error here too).
+//! at `RulesetBuilder::build`, so a bad `condition` is a hard error here too).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,7 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("dist/cards"));
 
-    // ---- 1. load the ruleset (build fails closed on a bad `pre`) ----
+    // ---- 1. load the ruleset (build fails closed on a bad `condition`) ----
     let mut b = Ruleset::builder();
     let index: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(cards_dir.join("index.json"))
@@ -39,7 +39,9 @@ fn main() {
         b.add(&bytes)
             .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
     }
-    let rules = b.build().expect("ruleset build (a bad `pre` is an error)");
+    let rules = b
+        .build()
+        .expect("ruleset build (a bad `condition` is an error)");
     let cards = rules.cards();
 
     // ---- 2. per-entry condition / guard split ----
@@ -62,8 +64,8 @@ fn main() {
             }
             entries += 1;
             *kinds.entry(name.clone()).or_default() += 1;
-            let pre = o.pre.as_deref().unwrap_or("");
-            if !pre.is_empty() {
+            let condition = o.condition.as_deref().unwrap_or("");
+            if !condition.is_empty() {
                 with_pre += 1;
             }
             if o.has_guard {
@@ -73,8 +75,8 @@ fn main() {
             }
             if std::env::var("PRECHECK_VERBOSE").is_ok() {
                 println!(
-                    "{:40} {name:10} triggers={:?} pre={:?} guard={}",
-                    c.id, o.triggers, pre, o.has_guard
+                    "{:40} {name:10} triggers={:?} condition={:?} guard={}",
+                    c.id, o.triggers, condition, o.has_guard
                 );
             }
         }

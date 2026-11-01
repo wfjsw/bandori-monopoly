@@ -29,7 +29,7 @@ not a gap.
 | `BaseResolvableEffect` / `BaseEffectSource` / `ActiveEffectRegistry` / `SourceId` | `FieldCard.uid` + ruleset manifest + `CardRules` trait. |
 | `GameEventContext` / `GameEventPayload` / `ReactionWindowStack` (`WindowId`/`EventId`/`ParentEventId`) | `Trigger` (incl. `seq`/`answers`, `rules.rs:119-123`) + the deterministic snapshot-replay prompt log (`cx.rs`). No window-identity revision checks: replay makes a stale answer structurally unreachable. |
 | Mirror `Command`/`TargetRpc`, `PlayerReactionHandler`, `GameUIManager`, Unity scene/presentation | Browser client + `MatchPrompt` / `Ask` protocol; the server validates acts (`mod.rs`). |
-| Coroutine-suspended nested controllers, `WaitingForBankruptcy` stack entries, LIFO `MoneyChangeEntry` operation stack with saved stages | Straight-line Rust over `Cx` with `Halt` re-run from snapshot; nesting is ordinary Rust recursion (`money_depth`). |
+| Coroutine-suspended nested controllers, `WaitingForBankruptcy` stack entries, LIFO `MoneyChangeEntry` operation stack with saved stages | Straight-line Rust over `PlayCtx` with `Halt` re-run from snapshot; nesting is ordinary Rust recursion (`money_depth`). |
 | `GetRoundRobinPlayerOrderStartingAt`, neutral responder appended to the ring | Our ring is the 2026-10-07 ruling (below); there is no neutral responder seat. |
 | Prompt-revision counters, `OptionId` route tables | Answer-log position identifies a prompt (`cx.rs`); revision/OptionId are protocol details of their netcode. |
 | Their tile taxonomy (Ring / Developer / Circle / Circle Cafe / Instrument Store / Meteor Hall) and `DefaultTileResolutionFunctionLibrary` | Our board is `property / ring / agent / circle / edogawa / cafe / ryuseido` (`docs/TILES.md`, `rules/tiles`). |
@@ -38,7 +38,7 @@ not a gap.
 
 ## 1. Payment Pipeline (`PAYMENT_PIPELINE.md`)
 
-Our one pipeline: `Cx::money` / `money_inner` (`crates/game-core/src/engine/play.rs:2652-2895`).
+Our one pipeline: `PlayCtx::money` / `money_inner` (`crates/game-core/src/engine/play.rs:2652-2895`).
 Print (`from = None`), delete (`to = None`) and pay-player (both `Some`) all go
 through it (`Pay`, `play.rs:34-78`). Stage order is pinned by
 `money::gain_runs_the_modifier_stages` (`rules/tests/tests/money.rs:34`)
@@ -48,7 +48,7 @@ and `gap_money::g02_*` (`rules/tests/tests/gap_money.rs:159`).
 
 | # | Requirement (spec) | Where in our engine | Class | Notes |
 |---|---|---|---|---|
-| P1 | Root caller or effect requests Print / Delete / PlayerPayPlayer | `Pay::new` + `Cx::money`; card path `HostRequest::Pay` (`game-rules/src/wasm_rules.rs:1971-2022`) | MATCHES | One entry point for all three directions. |
+| P1 | Root caller or effect requests Print / Delete / PlayerPayPlayer | `Pay::new` + `PlayCtx::money`; card path `HostRequest::Pay` (`game-rules/src/wasm_rules.rs:1971-2022`) | MATCHES | One entry point for all three directions. |
 | P2 | Validate endpoints before opening events; reject invalid silently | `money_inner` early-outs: `amount <= 0`, `from == to`, dead endpoints (`play.rs:2672-2677`) | MATCHES (with gaps P14/P15) | |
 | P3 | Command-wide pre-split: AddDiff → MultDiff → Cancel, composing | `effect` ([反击] window, `play.rs:2736-2771`) → `paySplitAdd` → `paySplitMulBefore` → `paySplitMul` → `paySplitChoose` → `paySplitAt` (`play.rs:2774-2804`) | DIFFERS | See P3a. Rulebook 支付阶段 (rulebook-doc.md:227-235) is 1 计算前 / 2 计算时(±) / 3 计算后 / 4 支付前(×) / 5 支付时(取消/改目标) / 6 支付后 / 7 资金变动. |
 | P3a | Cancel runs *after* Add and Mult | our `effect` (cancel-capable) runs *before* `paySplitAdd`/`paySplitMul`; a second cancel-capable point is `pay` after the modifiers | DIFFERS | Already recorded: `docs/rulebook/TEST-FINDINGS.md:189-192` (「One `effect` raise carries window 5's cancel/retarget power at window 1's position」). Card-facing order pinned by `gap_money::g01`(ignored)/`g02`. |
@@ -186,7 +186,7 @@ Rulebook evidence it *should* enter: 支付阶段 7's example says
 「该技能对有角色破产后的地契拍卖支出不生效」 — i.e. auction spend is a 资金变动
 that skills would otherwise see, excluded per-skill. Test:
 `rulebook::auction_spend_fires_pay_after` — a payAfter listener on the winner
-sees the bid. Fix sketch: route the bid through `Cx::money` with
+sees the bid. Fix sketch: route the bid through `PlayCtx::money` with
 `kind: "auction"` and a `FORCE_FIXED`-style opt-out only for the price-stages.
 
 **B6 (minor).** K11 missing `bankruptcyAfter`; K15 stale `assets`; K16 no
@@ -257,7 +257,7 @@ adapters, lookup-group cursor, neutral responder.
 
 ## 4. Tile Resolution Pipeline (`TILE_RESOLUTION_PIPELINE.md`)
 
-Our path: `settle` → `settle_at` (`play.rs:1297-1333`) → `CardRules::settle_tile`
+Our path: `settle` → `settle_tile_at` (`play.rs:1297-1333`) → `CardRules::settle_tile`
 → tile rule instances on `board_field` (`docs/TILES.md`, `rules/tiles/src/*`) with
 `land_at_built_in` (`play.rs:1521-…`) as the built-in fallback. Purchase surface
 in `engine/play/purchase.rs`.
@@ -269,15 +269,15 @@ in `engine/play/purchase.rs`.
 | T1b | Default function runs exactly once, before special effects | `land_at_built_in` / the tile's own rule instance runs once inside `settleBody`; a card may *replace* the body (`settleBody` cancel) or stack beside it | DIFFERS (vs spec) / MATCHES (vs rulebook) | Spec's "default always first, then special window" forbids body-replacement. 规则书 L6 「技能和卡的效果优先于规则书中的所有规则」 favours our replaceable body. Pinned: `general` settle-body cases, `ras` `hey_kids_*` (SettleBody link). |
 | T1c | Separate ActivateSpecial round-robin (one effect at a time, children) | Body instances run in instance order; each is its own effect link (counterable); children are recursion | MATCHES (effect) | |
 | T1d | `AfterTileResolution` then terminal `TileResolved` | `settleAfter` only — no terminal event | MISSING (minor) | 规则书 行动阶段 16 is 「主要移动阶段后」, not a tile terminal. Q6. |
-| T2 | Fresh-position read before every lifecycle stage; relocation never re-runs the default | `after_walk` raises `settleBefore` against live `pos` (`play.rs:1289`), then `settle()` **re-reads** `pos` (`play.rs:1298`) and `settle_at` threads that one `at` through `settle` / `settleBody` / default / `settleAfter` (`play.rs:1306-1331`) | DIFFERS | Two behaviours: a `settleBefore` relocation **does** change which tile settles (the re-read is after it); a relocation inside `settle`/`settleBody` does **not** — the originally landed tile finishes, and the default runs exactly once per `settle_at`. Spec rereads before every stage and would settle the new tile. Our "settle the tile you landed on" matches 行动阶段 15 「触发地块/落点效果」. AMBIGUOUS — Q7. |
-| T3 | Root request requires empty stack and no open counteraction window; effect-owned request requires parent + callback | `settle_at(i, at, m)` is callable from a card body (`card_settle_at`, `play.rs:604-612`, and the `ctx::settle_*` primitives); nesting is recursion | MATCHES (effect) | No explicit stack to be non-empty. Card-play nesting is capped at `MAX_NESTING = 8` (`game-rules/src/host.rs:53`). |
+| T2 | Fresh-position read before every lifecycle stage; relocation never re-runs the default | `after_walk` raises `settleBefore` against live `pos` (`play.rs:1289`), then `settle()` **re-reads** `pos` (`play.rs:1298`) and `settle_tile_at` threads that one `at` through `settle` / `settleBody` / default / `settleAfter` (`play.rs:1306-1331`) | DIFFERS | Two behaviours: a `settleBefore` relocation **does** change which tile settles (the re-read is after it); a relocation inside `settle`/`settleBody` does **not** — the originally landed tile finishes, and the default runs exactly once per `settle_tile_at`. Spec rereads before every stage and would settle the new tile. Our "settle the tile you landed on" matches 行动阶段 15 「触发地块/落点效果」. AMBIGUOUS — Q7. |
+| T3 | Root request requires empty stack and no open counteraction window; effect-owned request requires parent + callback | `settle_tile_at(i, at, m)` is callable from a card body (`settle_tile_at`, `play.rs:604-612`, and the `ctx::settle_*` primitives); nesting is recursion | MATCHES (effect) | No explicit stack to be non-empty. Card-play nesting is capped at `MAX_NESTING = 8` (`game-rules/src/host.rs:53`). |
 | T4 | Child tile resolutions complete before the parent effect resumes; never replaced/cancelled | Recursion returns before parent continues | MATCHES | |
 | T5 | Every counteraction window and child op completes before the stage advances; no concurrent siblings | Linear routines | MATCHES | |
-| T6 | Tile resolution is phase-independent and never changes `TurnPhaseType` | `settle_at` does not write `st.step` | MATCHES | |
+| T6 | Tile resolution is phase-independent and never changes `TurnPhaseType` | `settle_tile_at` does not write `st.step` | MATCHES | |
 | T7 | General Property branch: purchase / development / acquisition / rent | `land_at_built_in` four-way (unowned / own / other / mortgaged) via `offer_buy` / `offer_build` / `pay_rent` / `offer_force_buy` (`play.rs:1521+`, `1792-2092`); `tile:property` body quotes 规则书 L100-106 | MATCHES | Tests: `rulebook::s07-s12`. |
 | T8 | Other tile types explicitly unavailable until defined | All of our six kinds are implemented (`rules/tiles`) | N/A | Their taxonomy ≠ ours (§0). |
 | T9 | Rent: unmortgaged → pay current-level rent; mortgaged → optional double-value force-buy | `pay_rent` (`play.rs:1792-1890`), `offer_force_buy` (`play.rs:1933-…`) | MATCHES | 规则书 L105-106; `rulebook::s10/s11`. Force-buy is a direct transfer (L92/L106 「不受任何资金变动效果影响，收款方无论处于何种状态都可正常收款」) — matches; the over-strict "no card may ever touch it" is `TODO(规则书)` ruling 12. |
-| T10 | Development (build) on own unmortgaged land, level cap, cannot fund by mortgaging the deed being upgraded | `offer_build` + `why_not_build_on` (`play.rs:2092+`) | MATCHES | `rulebook::s08/s09`. |
+| T10 | Development (build) on own unmortgaged land, level cap, cannot fund by mortgaging the deed being upgraded | `offer_build` + `cant_build_on` (`play.rs:2092+`) | MATCHES | `rulebook::s08/s09`. |
 | T11 | Agent: all same-colour owned by others → forced half-charge sweep front-to-back (ceil 10); else optional single settle | `tile:agent`'s body (`rules/tiles/src/agent.rs`); `Play::agent_landing` is the built-in fallback | MATCHES | 规则书 L107; `rulebook::s12_agent_half_charge_rounds_up_to_ten`, `s12b`. 「同色」 widening is open (ruling 5). |
 | T12 | Pass vs land: [经过] fires per path step, never for the start tile; CiRCLE reward only when 移动起点 ≠ CiRCLE | Walk raises `passBefore` → `passTile` → `pass` per step (`play.rs:1091-1137`); `tile:circle`'s **Pass entry** (`rules/tiles/src/circle.rs`) → `circle::settle_reward`; landing settle is the separate `On::Settle` entry; start-tile / exile checks are the Pass entry's residual guard | MATCHES | 规则书 L86/L95/L96; `rulebook::t05_pass_fires_per_step_and_never_for_the_start`. A walk that both passes over and ends on CiRCLE earns the pass reward **and** the landing draw — two independent effects, as L95+L96 read together. |
 | T13 | Settle-body replace vs settle cancel are distinct gestures | `settle` cancel skips body+after; `settleBody` cancel skips body only (`play.rs:1305-1333`) | MATCHES | `docs/TILES.md`; `ras::hey_kids_*`. |
@@ -430,7 +430,7 @@ New hook kinds `payCombinedAdd` / `payCombinedMul` / `payCombinedCancel` (Trigge
 84/85/86) run **command-wide on the total** before any 「[分摊]」 divides it --
 the spec's `PreSplitAddDiff` / `PreSplitMultDiff` / `PreSplitCancel`, renamed
 after our per-share `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`. Order is
-add -> mul -> cancel, composing. `Cx::pay_total` / `ctx::pay_total` expose the
+add -> mul -> cancel, composing. `PlayCtx::pay_total` / `ctx::pay_total` expose the
 stage on its own; `ctx::split_pay` / `ctx::pay_leg` drive a 「[分摊]」 command
 (total stage once, then one `money()` per share with `Pay::total_stage = false`).
 For a single-pair payment the command total *is* the amount, so the same three
@@ -453,9 +453,9 @@ own per-leg rounding is unchanged.
 * Tests: `money::pre_split_modifier_shapes_the_total_not_each_leg`.
 * Files: `crates/card-sdk/src/abi.rs`, `crates/card-sdk/src/ctx.rs`,
   `crates/game-core/src/engine/play.rs`, `crates/game-rules/src/host.rs`,
-  `rules/skills/skill-characters/src/aya_with.rs`,
-  `rules/skills/skill-characters/src/chisato_frank.rs`,
-  `rules/skills/skill-characters/src/numazu_maid.rs`,
+  `rules/skills/skill-characters/src/aya.rs`,
+  `rules/skills/skill-characters/src/chisato.rs`,
+  `rules/skills/skill-characters/src/pareo.rs`,
   `rules/cards/card-pp/src/chisato_mask.rs`, `rules/cards/card-roselia/src/nfo.rs`,
   `rules/events/src/front_or_back.rs`, `rules/skills/skill-bands/src/poppin.rs`.
 

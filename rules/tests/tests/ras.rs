@@ -1620,7 +1620,7 @@ fn band_skill_accept_makes_the_next_main_move_a_teleport() {
     drain(&mut t);
     assert!(
         t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
-        "the main move is the teleport to a livehouse, not a walk: was {before} pos={} keys={:?}",
+        "the is_main_move move is the teleport to a livehouse, not a walk: was {before} pos={} keys={:?}",
         t.pos(0),
         t.recent_keys(15)
     );
@@ -1687,14 +1687,15 @@ fn guerrilla_special_offers_to_mark_a_deed_as_livehouse() {
 
 /// The shared table for the `paid_in_settle` cases: every buildable livehouse
 /// is owned (the [特]'s later clauses hold), the card is armed in the discard,
-/// and P0 owns the settle target (tile 11) plus 购物中心. `extra` is the card
-/// the caller plays afterwards (given up front, so the post-discard hand is at
-/// the limit and the play gate is open).
+/// P0 owns only 购物中心, and P1 owns the settle target (tile 11) so a P0 move
+/// there is a payment *by the card's owner*. `extra` is the card the caller
+/// plays afterwards (given up front, so the post-discard hand is at the limit
+/// and the play gate is open).
 fn guerrilla_tally_table(extra: &str) -> Table {
     let mut t = Table::vanilla(3);
-    t.own(1, &[DUB, BUDOKAN, SPACE, LH_GALAXY]);
+    t.own(1, &[DUB, BUDOKAN, SPACE, LH_GALAXY, 11]);
     t.own(2, &[RING1, 16, RING3, RING4]);
-    t.own(0, &[SHOPPING, 11]);
+    t.own(0, &[SHOPPING]);
     t.set_money(0, 20_000);
     t.set_money(1, 20_000);
     t.set_discard(0, &[]);
@@ -1722,32 +1723,46 @@ fn guerrilla_tally_table(extra: &str) -> Table {
 /// 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- a settle-caused
 /// payment counts even when it is **not** rent: 梦在前方's settle tax is a
 /// `PayKind::Card` transfer to the deed's owner. The rent alone (60, halved by
-/// 祥，移动's pay factor) stays under 1000, so only the tax can cross it.
+/// 祥，移动's pay factor) stays under 1000, so only the tax can cross it. The
+/// card owner (P0) is the payer -- `paid_in_settle_by` is per seat (G02 2.13),
+/// so the tax is paid to P1 and P0's own figure is what the [特] reads.
 #[test]
 fn guerrilla_tally_counts_non_rent_settle_payment() {
     let mut t = guerrilla_tally_table("Mujica:祥，移动");
-    t.place_raw(0, "PP:梦在前方，结彩当下");
-    t.set_state(0, "dream_ahead_x", 1_700); // fans 1 × 1700 + 300 = 2000; halved = 1000
-    t.set_state(0, "ppFansUp", 1);
-    t.set_pos(1, 8);
+    // P1's field card taxes any non-owner settling on P1's tile 11.
+    t.place_raw(1, "PP:梦在前方，结彩当下");
+    t.set_state(1, "dream_ahead_x", 1_700); // fans 1 × 1700 + 300 = 2000; halved = 1000
+    t.set_state(1, "ppFansUp", 1);
+    t.set_pos(1, 0);
     t.play(0, "Mujica:祥，移动").unwrap();
     let k = t.option("PlayerId(1)").expect("player pick");
     t.answer(0, k).unwrap();
     let k = t.option("saki_move_forward").expect("direction pick");
     t.answer(0, k).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(1), 11, "P1 settled on P0's deed");
+    // P0 walks from 8 onto P1's deed 11.
+    t.set_pos(0, 8);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 11, "P0 settled on P1's deed");
     assert!(
-        t.m.world().turn.paid_in_settle >= 1_000,
-        "the non-rent settle tax counts: {}",
-        t.m.world().turn.paid_in_settle
+        t.m.world()
+            .turn
+            .paid_in_settle_by
+            .first()
+            .copied()
+            .unwrap_or(0)
+            >= 1_000,
+        "the non-rent settle tax counts for its payer: {:?}",
+        t.m.world().turn.paid_in_settle_by
     );
     t.m.world_mut().st.skip_move = true;
     t.end(0).unwrap();
     assert!(
         t.prompt().is_some() || t.on_field(0, "RAS:游击演出"),
-        "turn-end [特] window; paid_in_settle={} prompt={}",
-        t.m.world().turn.paid_in_settle,
+        "turn-end [特] window; paid_in_settle_by={:?} prompt={}",
+        t.m.world().turn.paid_in_settle_by,
         t.dump_prompt()
     );
 }
@@ -1823,8 +1838,6 @@ fn interaction_exist_does_not_absorb_budokan() {
 
 #[test]
 fn interaction_repaint_vs_yolo() {
-    // AG:Y.O.L.O (adds 1d4 to the mover's roll) chained with RAS:Repaint
-    // (cuts the move by the counterer's path tiles).
     let mut t = Table::vanilla(3);
     t.own(0, &[EDOGAWA_PARK]);
     t.set_pos(1, 5);
@@ -1832,9 +1845,8 @@ fn interaction_repaint_vs_yolo() {
     t.give(0, &["RAS:Repaint"]);
     t.begin_turn(1);
     drain(&mut t);
-    t.dice(&[6, 2]); // base 6, Y.O.L.O adds 1d4 -> clamped: 2 on a d4
+    t.dice(&[6, 2]);
     t.roll(1).unwrap();
-    // Y.O.L.O is a [手] played before the roll settles -- see if a window opens.
     if t.counteract_offered("AG:Y.O.L.O") {
         t.counteract(1, "AG:Y.O.L.O").unwrap();
         drain(&mut t);
@@ -1903,7 +1915,7 @@ fn nagisa_fingertip_is_offered_as_a_counter_on_a_fire_pot_roll() {
         }
         let d = t.dump_prompt();
         // Skill (2) reroll window: accept it so the fire-pot roll happens.
-        if !used_fire && d.contains("raise_effort_again") {
+        if !used_fire && d.contains("layer_again") {
             // Skill (2) 「进行任意掷骰后，可选择使用一个[火罐]再投一次骰子」.
             let k = t.option("ask.yes").unwrap_or(0);
             let _ = t.answer(0, k);

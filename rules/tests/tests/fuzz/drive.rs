@@ -133,7 +133,7 @@ fn cards_in_events(events: &[MatchEvent]) -> Vec<String> {
         if !e.card.is_empty() {
             out.insert(e.card.clone());
         }
-        if let Some(c) = e.msg.a.get("card") {
+        if let Some(c) = e.msg.args.get("card") {
             if let game_core::msg::Arg::Card(s) = c {
                 out.insert(s.clone());
             }
@@ -559,10 +559,7 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
             // `charge` (`bandori_std::fire::KEY`), not `fire`. The live cap
             // rides `Counter.max`; I2 says value <= max whenever max > 0.
             if c.name == "charge" && c.max > 0 && c.value > c.max {
-                return Err(format!(
-                    "fire {} > cap {} on P{i}",
-                    c.value, c.max
-                ));
+                return Err(format!("fire {} > cap {} on P{i}", c.value, c.max));
             }
         }
     }

@@ -630,6 +630,42 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: false,
         hook_only: true,
     },
+    EngineKind {
+        id: 111,
+        wire: "cardFired",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 112,
+        wire: "markChanged",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 122,
+        wire: "spendBefore",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 123,
+        wire: "diceRollCast",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 124,
+        wire: "diceRollSettled",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 125,
+        wire: "diceRollAdd",
+        is_filter: true,
+        hook_only: true,
+    },
 ];
 
 /// The table row for `id`, or `None` when the id is retired / unknown.
@@ -759,6 +795,12 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "onBoardGate" => Some(108),
         "targetableGate" => Some(109),
         "paySplitMulBefore" => Some(110),
+        "cardFired" => Some(111),
+        "markChanged" => Some(112),
+        "spendBefore" => Some(122),
+        "diceRollCast" => Some(123),
+        "diceRollSettled" => Some(124),
+        "diceRollAdd" => Some(125),
         _ => None,
     };
     #[cfg(not(kani))]
@@ -812,12 +854,12 @@ mod tests {
     fn filter_and_hook_sets() {
         const FILTERS: &[i32] = &[
             52, 55, 56, 57, 67, 68, 69, 70, 71, 79, 80, 81, 82, 83, 84, 85, 86, 95, 96, 97, 98, 99,
-            100, 101, 102, 108, 109,
+            100, 101, 102, 108, 109, 125,
         ];
         const HOOKS: &[i32] = &[
             45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68,
             69, 70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106,
-            110,
+            110, 111, 112, 123, 124, 125,
         ];
         for r in ENGINE_KINDS {
             assert_eq!(
@@ -828,7 +870,7 @@ mod tests {
             );
             assert_eq!(r.hook_only, HOOKS.contains(&r.id), "hook_only id {}", r.id);
         }
-        assert_eq!(FILTERS.len(), 27);
-        assert_eq!(HOOKS.len(), 43);
+        assert_eq!(FILTERS.len(), 28);
+        assert_eq!(HOOKS.len(), 48);
     }
 }

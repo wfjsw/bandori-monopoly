@@ -2,7 +2,7 @@
 //!
 //! Per clause an author writes **four** proofs (see `docs/rulebook/spec/KANI-FOUNDATION.md`):
 //!
-//! 1. **iff** — post == spec(pre) AND effect log == exactly the specified
+//! 1. **iff** — post == spec(condition) AND effect log == exactly the specified
 //!    effects AND frame unchanged;
 //! 2. **no-op** — when the trigger/condition is false, the log is empty and
 //!    the frame is unchanged;
@@ -48,7 +48,7 @@
 //! let admitted = guard!(id, &ctx);
 //! if admitted {
 //!     // run the unmodified card body
-//!     // assert post == spec(pre) ∧ effect log exact ∧ frame unchanged
+//!     // assert post == spec(condition) ∧ effect log exact ∧ frame unchanged
 //! } else {
 //!     // assert the world is untouched (no-op)
 //! }
@@ -112,13 +112,13 @@ macro_rules! unit_mod {
 /// Frame assertion: every listed snapshot field is unchanged.
 ///
 /// ```ignore
-/// assert_frame!(pre, post, money, pos, fire);
+/// assert_frame!(condition, post, money, pos, fire);
 /// ```
 #[macro_export]
 macro_rules! assert_frame {
-    ($pre:expr, $post:expr, $($field:ident),+ $(,)?) => {
+    ($condition:expr, $post:expr, $($field:ident),+ $(,)?) => {
         $(
-            assert!($pre.$field == $post.$field, concat!("frame: ", stringify!($field)));
+            assert!($condition.$field == $post.$field, concat!("frame: ", stringify!($field)));
         )+
     };
 }

@@ -1,14 +1,9 @@
-//! `AG:Y.O.L.O` -- C# `CardYolo` (MatchHost.cs:956-987).
-//!
-//! 规则书（docs/rulebook/cards.json, id `AG:Y.O.L.O`）:
-//! > Y.O.L.O：
-//! >  你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字
 //!
 //! Sheet 2026-10-06 新卡组卡 C3: 「你的**任意**掷骰结算前」 (was 「你的掷骰
 //! 结算前」) -- any of the user's rolls, not only the main move roll.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ChainKind, RollPurpose};
+use card_sdk::abi::{roll_source, ChainKind, RollPurpose};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -47,9 +42,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（使结果增加1d4结果的数字）: the cell does not say whether a face
     // another effect already fixed still takes the +1d4 -- we add anyway (the
     // 「固定」 vs additive ruling is open, BACKLOG MOVE-02); `starry_night` /
-    // `eve_unify` refuse over a fixed face.
+    // `eve` refuse over a fixed face.
     let before = trigger::move_roll().unwrap_or_else(|| trigger::value().max(0));
-    let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect)?;
+    let n = ctx::roll_direct(player_id, 1, 4, RollPurpose::Effect, roll_source::CARD)?;
     trigger::set_move_roll(before + n);
     ctx::log(
         player_id,

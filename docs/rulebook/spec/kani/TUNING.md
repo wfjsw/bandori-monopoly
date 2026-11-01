@@ -116,7 +116,7 @@ on those unrolls, not stuck in a single 60-tile scan.
 
 | harness | before (sound) | after | verdict | notes |
 |---|---|---|---|---|
-| `money_shave::aya_haruka_02_shave_iff` | **>50 min**, stuck in `intern_bytes` (unsound history: 85 s) | **TIMEOUT 900 s** at unwind 64 | TIMEOUT | model loops are at 0–8 unrolls; remaining cost is `intern::fnv1a`/`bytes_eq` from `ctx::tok` (144+127 unrolls) + 14 card-body `memcmp`s (need unwind ≥ 64). See §6 |
+| `money_shave::aya_haruka_02_shave_iff` | **>50 min**, stuck in `intern_bytes` (unsound history: 85 s) | **TIMEOUT 900 s** at unwind 64 | TIMEOUT | model loops are at 0–8 unrolls; remaining cost is `intern::fnv1a`/`bytes_eq` from `ctx::held_count` (144+127 unrolls) + 14 card-body `memcmp`s (need unwind ≥ 64). See §6 |
 | `wrong_guard::wrong_guard_too_loose_is_caught` | attr unwind 6 (cheap) | **SUCCESSFUL 16.9 s** | SUCCESSFUL | under 5 min |
 | `wrong_guard::real_guard_matches_clause_iff` | attr unwind 6 | **SUCCESSFUL 14.9 s** | SUCCESSFUL | **2/2 covers SATISFIED** (not vacuous) |
 | `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) / attr 80 | _not re-timed_ | — | |
@@ -131,7 +131,7 @@ on those unrolls, not stuck in a single 60-tile scan.
 loops that made it infeasible (`intern_bytes` table scan, 60-tile fills,
 `id_of` over CJK literals, the unbounded `0..player_count()` Range) are
 fixed — the profile above shows them at 0–8 unrolls. What is left is
-(a) `intern::fnv1a` + `bytes_eq` from the card body's `ctx::tok` lookups
+(a) `intern::fnv1a` + `bytes_eq` from the card body's `ctx::held_count` lookups
 (144 + 127 unrolls at the 900 s cut) and (b) 14 `memcmp`s inside unmodified
 card bodies (the builtin loop needs `unwind ≥ 64`; `a == b` in `bytes_eq`
 was measured to trip *"Not unwinding memcmp at 32"*). Those are **card-body
@@ -164,7 +164,7 @@ as harnesses are re-timed.
 
 | cliff | who | why | fix that is left |
 |---|---|---|---|
-| `intern::bytes_eq` / `fnv1a` from `ctx::tok` / `ctx::intern` | every body that names a token / key (`shave_x`'s two `tok` calls) | each lookup still hashes and may byte-compare; 8 probes × 8-iter walks | pre-intern the four pilot names as `const NameId`s, or a `cfg(kani)` interned-str facade in card bodies |
+| `intern::bytes_eq` / `fnv1a` from `ctx::held_count` / `ctx::intern` | every body that names a token / key (`shave_x`'s two `tok` calls) | each lookup still hashes and may byte-compare; 8 probes × 8-iter walks | pre-intern the four pilot names as `const NameId`s, or a `cfg(kani)` interned-str facade in card bodies |
 | `memcmp` (14×) in **unmodified card bodies** | `String` / `slice` compares inside `aya_longing` etc. | heap `String` length stays symbolic | `cfg(kani)` interned-str facade in card bodies (see `HOSTOPS-ROUND2.md` follow-up) |
 | `aya_haruka_01_prompt_all_picks`, `riot_02_03_cycle` | `ids.contains(&c)` | `Vec<String>` + `memcmp` unrolls to 30+ | same facade; **not a model-loop problem** |
 | `fill_geometry_bins` (60 × seats × radius) | guards using `players_on` / `owned_within` / `on_path` | full board walk | `fill_for_guard` skips it unless the IR calls those `FnId`s |
@@ -254,11 +254,11 @@ in behaviour). All changes are `cfg(kani)`-gated or live in `rules-kani`.
 | piece | what |
 |---|---|
 | `card-sdk/src/intern.rs` | `fnv1a` / `bytes_eq` / probe / insert are **zero-loop** under `cfg(kani)` (64-way `macro_rules!` steps, `.get` not `[i]` — no `slice_index_fail` panic paths). `intern_by_hash(h, s)` takes a precomputed FNV so an inlined `s()` constant-folds a literal's hash. Production (`cfg(not(kani))`) keeps master's 8×8 loops byte-for-byte. |
-| `card-sdk/src/ctx.rs` `s()` | under `cfg(kani)` returns `(INTERN_TAG \| NameId, len)` — the handle *is* the intern id. No arena `Vec`, no host re-hash. `#[cfg_attr(kani, inline(always))]` on every `&str` wrapper so a card body's `ctx::tok(p, "literal")` constant-folds the hash through the chain. |
+| `card-sdk/src/ctx.rs` `s()` | under `cfg(kani)` returns `(INTERN_TAG \| NameId, len)` — the handle *is* the intern id. No arena `Vec`, no host re-hash. `#[cfg_attr(kani, inline(always))]` on every `&str` wrapper so a card body's `ctx::held_count(p, "literal")` constant-folds the hash through the chain. |
 | `card-sdk/src/native.rs` `read` | tagged handles resolve from the intern table (static bytes). Untagged handles stay arena out-buffers. |
 | `rules/kani/src/host.rs` | `name_id` decodes the tag (O(1)). `Known` pre-interns pilot names at `install()`; `key == intern::intern(TOK_PP_POS)` becomes `key == known().tok_pp_pos` (`u16` compare). `card_slot` / `card_u16` / `card_slot_of_id` are NameId compares. |
 | `rules/kani/src/world.rs` | `sync_views` / `rent_houses` cache `NameId`s once per proof. `card_slot_of_bytes` zero-loop. |
-| `rules/kani/src/invoke.rs` | `hook_idx` / `hook_kind_matches` parse `"PaySplitAdd"` / `"Hook"` to `HookKind` / `KindTag` and compare integers — kills the 14 `memcmp`s of short ASCII tags. |
+| `rules/kani/src/invoke.rs` | `hook_index` / `hook_kind_matches` parse `"PaySplitAdd"` / `"Hook"` to `HookKind` / `KindTag` and compare integers — kills the 14 `memcmp`s of short ASCII tags. |
 | `rules/kani/src/board.rs` | `bytes_eq` zero-loop (same bits as the old 8×8 walk). |
 
 Card bodies still see `Vec<String>` / `String`. `ctx::cards_in` already
@@ -272,7 +272,7 @@ with the NameId ABI, `ids.contains(&c)` and `take_card(..., &id)` are
 |---|---|
 | `fnv1a` 144 unrolls, `bytes_eq` 127, `intern_bytes` 15 (900 s profile of `aya_haruka_02_shave_iff`) | **0** unwind (zero-loop); hash of a literal constant-folds through `inline(always)` |
 | `intern::intern(CONST)` on every `count_held` / `set_held` / `crystals` check | pre-interned `Known` ids — `u16` compare |
-| 14 `memcmp`s of `"PaySplitAdd"` etc. in `invoke::hook_idx` | integer `KindTag` / `HookKind` match |
+| 14 `memcmp`s of `"PaySplitAdd"` etc. in `invoke::hook_index` | integer `KindTag` / `HookKind` match |
 | `copy_from_slice` `len_mismatch_fail` panic paths in intern insert | zero-loop `.get` byte copy |
 | host `name_eq` 8×8 byte walk over CJK | `NameId` compare for the four pilots; `.get` walk otherwise |
 
@@ -298,7 +298,7 @@ string cliff is gone; the proof is now model-bound.
 
 ### Per-card body trampolines (batch 3)
 
-`invoke::entry_idx` under `cfg(kani)` dispatches through `call_body_idx` →
+`invoke::entry_index` under `cfg(kani)` dispatches through `call_body_idx` →
 `call_card_N`, generated at build time by `rules/kani/build.rs`
 (`gen_body_dispatch`) into `$OUT_DIR/body_dispatch_fn.rs` (never committed).
 A shared `body_of(on)(player)` `code*` site made CBMC expand an IF-chain over
@@ -428,7 +428,7 @@ Every `#[kani::proof]` gets `#[kani::use_stub_set(crate::kani_stubs::LIB_COST[_N
 | `--no-unwinding-checks` | unsound (vacuous proofs); never used. |
 | `-Z stubbing` on production bodies | not allowed (card bodies stay unmodified). |
 
-### Profile delta — `skills_pp::aya_with_02_pay_discount_iff` (TIMEOUT 1800 s central)
+### Profile delta — `skills_pp::aya_02_pay_discount_iff` (TIMEOUT 1800 s central)
 
 | metric | central (no stubs) | + kani-bump + LIB_COST | + NOFMT (panic_fmt + format) |
 |---|---|---|---|
@@ -451,7 +451,7 @@ per-row verdict table.
 
 | stub | what the real function does | why the replacement is equivalent | what it is NOT allowed to change |
 |---|---|---|---|
-| `memchr` / `memchr_naive` / `memchr_aligned` | first index of byte `n` in `text`, or `None` | pure search. Stub is a 128-step `.get` scan; same `Option<usize>` for every haystack of length ≤ 128. **Model bound:** every `format!` key / panic snippet / `split('\n')` piece in this corpus is ≤ 128 bytes (`skill.tsugushi.rec:3` = 20; panic texts ~50). Longer haystacks are a **loud** `kani::assert(false)` — never a silent wrong index. | result value |
+| `memchr` / `memchr_naive` / `memchr_aligned` | first index of byte `n` in `text`, or `None` | pure search. Stub is a 128-step `.get` scan; same `Option<usize>` for every haystack of length ≤ 128. **Model bound:** every `format!` key / panic snippet / `split('\n')` piece in this corpus is ≤ 128 bytes (`skill.tsukushi.rec:3` = 20; panic texts ~50). Longer haystacks are a **loud** `kani::assert(false)` — never a silent wrong index. | result value |
 | `slice_index_fail(start,end,len)` | formats "index out of bounds: …" then panics (`-> !`) | reachable OOB is a loud fail either way. Stub: `kani::assert(false)` + diverge. Only the fmt/memchr of the *message* is dropped. | reachability of the OOB |
 | `handle_alloc_error(layout)` | formats the layout then aborts (`-> !`) | reachable OOM is a loud fail either way. Stub: `kani::assert(false)` + diverge. | reachability of OOM |
 | `capacity_overflow` / `handle_error` | panics / dispatches to the two above (`-> !`) | same: loud fail either way. `handle_error`'s `match` is the cost; the arms are already stubbed. | reachability of grow failure |

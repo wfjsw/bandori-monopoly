@@ -51,13 +51,11 @@ pub use compile::compile;
 #[cfg(feature = "compile")]
 pub use compile::compile_with;
 pub use compile::Cond;
-pub use ext::{
-    ext, install_ext, vocab, AlreadyInstalled, CondExt, LowerAs, Vocab, EMPTY_EXT,
-};
 pub use ctx::{
     fill_named_layers, CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx,
 };
 pub use eval::{EvalError, WindowScope};
+pub use ext::{ext, install_ext, vocab, AlreadyInstalled, CondExt, LowerAs, Vocab, EMPTY_EXT};
 pub use kinds::{ident_known, int_constants, mv, str_constants, trig};
 
 /// Stable int id for a string identity (card id, content name, wire kind).

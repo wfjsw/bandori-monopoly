@@ -209,7 +209,7 @@ assert the clause (or the reason it is not).
 | `skill:高松灯（CRYCHIC）:跌跌撞撞...#2` | any time in your turn: spend 1 fire to clear 1 [停留] | **unc** | — |
 | `skill:高松灯（CRYCHIC）:跌跌撞撞...#3` | move roll <= 6: gain 1 [停留] and settle at turn end | **ok** | tomori_skill_low_roll_gives_stay |
 | `skill:椎名立希（CRYCHIC）:克服劣等感#1` | if your move roll < another's last move roll (<=20) and you have not used a skill this turn, next turn you may re-roll once pre-move and keep either | **unc** | riki_skill_bound is binding-only |
-| `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#1` | pass CiRCLE: +1 fire (init 1, cap 2) | **ok** | saki_crychic_skill_fire_cap |
+| `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#1` | pass CiRCLE: +1 fire (init 1, cap 2) | **ok** | sakiko_crychic_skill_fire_cap |
 | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#2` | other's main-move end, before settle, if within ±5: they may pay 300 to step 1 toward you | **unc** | — |
 | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#3` | your main-move end: spend 1 fire to step 1 toward a player within ±5 | **unc** | — |
 | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？#4` | if band is Ave Mujica: within 5 of a player = state 2, but only shuffling adds band crystals | **unc** | — |
@@ -893,7 +893,7 @@ assert the clause (or the reason it is not).
 **`roll.dice`**
 
 - `dice-set` — change which dice are rolled. Reps: `HHW:运动的天赋#3`, `RAS:（MASKING）CRUSH ON THE DRUM!!!#2`, `skill:佐藤益木:与燃烧的红色一起驰骋#2`.
-- `dice-result` — change the numeric result. Reps: `AG:Y.O.L.O#2`, `AG:（绯玛丽）如果并非没问题#2`, `PP:不要背负期待#3`.
+- `dice-result` — change the numeric result.
 - `dice-reroll` — abandon and re-roll. Reps: `Mor:蝴蝶飞舞的星月夜#2`, `CRYCHIC:（立希）即便比不上...#2`, `skill:和奏瑞依:一次又一次竭尽全力#2`.
 - `dice-fix` — replace the roll with a fixed formula. Reps: `skill:白金燐子:即使1cm也要前进#2`, `skill:若叶睦（CRYCHIC）:精致的人偶#2`, `Mujica:（初华）我，无畏悲伤#2`.
 
@@ -1121,7 +1121,8 @@ duplicated here.
 - **money.pipeline multiply x multiply** — Fire bird 1.5x vs HHW band double-pay vs 摩卡 half-pay vs Ave Mujica 1.5x. RULING: multiply order is unstated. t11_fire_bird_plus_hhw_double is already `RULING: order of Fire bird 1.5x and HHW band (1) doubling`. Suggest: flat-add, then each multiply in play order (field cards oldest first, then band, then character), then clamp-floor. Record as a Q.
 - **money.pipeline flat-add x multiply** — FEVER! +X vs a 1.5x rent multiplier (Fire bird). RULING: does FEVER!'s +X land before or after the rent multiplier? l03_rent_through_every_modifier picks one order; the sheet does not.
 - **money.pipeline cancel-one x split-share** — 网络链接异常 drops one designation of 登上武道馆 (a split pay). RULING: after dropping one target, does X recompute from the remaining alive-others? Sheet says X is set before the [指定]; assert the old X.
-- **roll.dice dice-result x dice-result** — Y.O.L.O +1d4 vs 不要背负期待 -2 vs Eve's +Yd4. RULING: stack order of additive dice modifiers. inter_yolo_pushes_haneoka_over_20 (CROSS-AGENT) is waiting on this.
+RULING: stack order of additive dice modifiers. inter_yolo_pushes_haneoka_over_20 (CROSS-AGENT) is
+waiting on this.
 - **path.move pass x end-rewrite** — a pass effect that rewrites the end (LOCK) while a later pass effect would also fire. rule 86 covers it, but only if the rewrite is processed per-tile. m17 covers LOCK alone; the pair with a second rewriter is missing.
 - **counteract.window answer-counter x join-window** — who may still join a round after a counter-to-a-counter has been declared. RULING: the sheet's 「所有玩家同意所有对一个时点的[反击]已发动后可对新的时点」 does not say whether a late joiner may enter the closed round. c13 is the closest.
 - **turn.boundary extra-turn x until-turn** — an effect 'until your next turn start' while extra turns are granted. RULING: does the window close on the first turn start after, or after the whole extra-turn cascade? l07 picks one.
@@ -1197,7 +1198,8 @@ Bias the generator at these surfaces / pairs, in this order:
 
 * `money.pipeline`: every generator seed should build a rent event and stack at least two of {flat-add, multiply, clamp-floor, replace-loss} on it. The multiply x multiply and multiply x clamp-floor pairs are the least settled (see the RULING list).
 * `money.pipeline` `cancel-one` against `split-share`: the multi-target pay is the single most common money event and the ABI cannot express the drop-one case yet. Fuzzing will keep rediscovering it; treat it as a known hole until `TODO(ABI)` lands.
-* `roll.dice`: stack {dice-set, dice-result, dice-fix} on one move roll. Y.O.L.O x Eve x 不要背负期待 x 白金燐子 is the 4-way. The order question is open (inter_yolo_pushes_haneoka_over_20 is waiting on a ruling).
+* `roll.dice`: stack {dice-set, dice-result, dice-fix} on one move roll. The order question is open
+  (inter_yolo_pushes_haneoka_over_20 is waiting on a ruling).
 * `path.move`: a walk that hits {pass, forced-stop, end-rewrite} in one path. Rule 86 says recompute the path; the pair forced-stop x end-rewrite is now `gap_move::g11_forced_stop_beats_lock_end_rewrite` (`RULING`, see [TEST-FINDINGS.md](TEST-FINDINGS.md) §6).
 * `counteract.window`: nest 3+ deep with a `shut-window` in the middle (骰子已经掷下) and a `join-window` (真奈). The close-the-round semantics are under-specified.
 * `status`: stay gained mid-move, plus `unstoppable` and `clear-status`. `rain_stay_blocks_this_turn_move` is currently a DISCREPANCY and also an ambiguity (ileuxali checks only at branch selection).
@@ -1247,7 +1249,6 @@ Notes on the encoding:
   36/13, `cross_tiles.rs` 30/11, `cross_status.rs` 10/2,
   `cross_long.rs` 8/4.
 
-
 ## Fuzz coverage
 
 Interaction fuzzer + metamorphic checks (`rules/tests/tests/fuzz_interactions.rs`,
@@ -1273,7 +1274,6 @@ Default is CI-cheap and lands in the 1-2 minute band.
 ids are named by the same turn's event log (played, declared in a counteract
 window, or named by a trigger). Sample:
 
-* `AG:Y.O.L.O` x `skill:凑友希那:来练习吧`
 * `AG:回家的路上绕个道` x `HHW:爱心义演`
 * `AG:回家的路上绕个道` x `MyGO:若能再次交汇`
 * `AG:回家的路上绕个道` x `RAS:狂乱Hey Kids!!`
@@ -1349,7 +1349,7 @@ run stays green.
 
 5. ~~**`money_depth_departs_from_sheet`**~~ **Fixed (2026-10-06).**
    Nested money opens its [反击] windows at every depth (the sheet has no
-   depth limit). The termination argument is `Cx::reentrant_hooks` (a hook
+   depth limit). The termination argument is `PlayCtx::reentrant_hooks` (a hook
    cannot re-trigger on its own money movement). `MAX_MONEY_DEPTH = 32` is
    a safety cap that **panics** loudly. See
    [ENGINE.md](../ENGINE.md) "Money pipeline depth".
@@ -1530,7 +1530,7 @@ A write is not a rule write when it is one of:
   `event_discard`, `event_removed`, `st.event_active`;
 * turn bookkeeping that grows because the harness acted: `turn.played`,
   `turn.player`, `turn.main_moved`, `turn.main_steps`, `turn.turn_rolls`,
-  `turn.turn_snap`, `turn.turn_start_pos`, `next_turn_pending`;
+  `turn.turn_snapshot`, `turn.turn_start_pos`, `next_turn_pending`;
 * engine status ticks: a `stay` / `stun` / `stunStart` / `exile` item losing
   one layer to the turn-boundary tick (value drops, `expires` flips to
   `Some(TurnEnd)` / `Some(TurnStart)`) -- `snap::is_engine_tick`;
@@ -1583,7 +1583,7 @@ override the rulebook (特别注意 3), so a card bending a clause is not a hit.
 | `G:获得#1` | 「[获得]X」 prints money | **ok** | `play.rs` `money` `gain` |
 | `G:消耗#1` | 「[消耗]X」 deletes money | **ok** | `play.rs` `money` `lose` |
 | `G:支付#1` | 「A[支付]BX」 moves X from A to B | **ok** | `play.rs` `money`; `money` |
-| `G:结算#1` | settle runs every effect on the tile | **ok** | `settle_at` → `settle_tile` → tile rule instances |
+| `G:结算#1` | settle runs every effect on the tile | **ok** | `settle_tile_at` → `settle_tile` → tile rule instances |
 | `G:破产#1` | cannot pay (incl. mortgage) → liquidate, funds to the creditor | **ok** | `play.rs` `raise_funds`/`bankrupt`; `rulebook::b01` |
 | `G:存活#1` | not bankrupt and not left | **ok** | `World::out` |
 | `G:地产商#1` | one agent per colour | **ok** | `tile:agent`; board `group` (TODO on 「同色」) |
@@ -1604,12 +1604,12 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | clause | meaning | status | evidence / tests |
 |---|---|---|---|
 | `M:主要移动#1` | the move phase's move | **ok** | `play.rs` `main_move`; `rulebook::gf07` |
-| `M:结算#1` | execute the tile's effects | **ok** | `settle_at` |
+| `M:结算#1` | execute the tile's effects | **ok** | `settle_tile_at` |
 | `M:移动起点#1` | the tile before the move | **ok** | `MoveCtx.from` |
 | `M:移动终点#1` | the tile after the move | **ok** | `MoveCtx.to` |
 | `M:路径#1` | excludes the start, includes the end; same start/end includes it | **diff** | walk excludes the start and includes the end (`rulebook::t05`); a same-tile teleport now fires [经过] then [重叠] then [结算] at the target (`B41`, `t06b`); a 0-move fires [重叠] only (`E14`, `t06c`) -- TODO(规则书) whether [经过] also fires there |
 | `M:经过#1` | fire when X is on the path | **ok** | `passBefore`/`passTile`/`pass` per step |
-| `M:强制移动#1` | a forced move | **ok** | `card_move` / `MoveCtx` |
+| `M:强制移动#1` | a forced move | **ok** | `run_planned_move` / `MoveCtx` |
 | `M:强制停下#1` | a forced stop (doc's definition is truncated) | **ok** | `MoveCtx.stop_at` / `plan::set_stop_at` |
 | `M:传送#1` | path is just the end | **ok** | `play.rs` `teleport`; `rulebook::t04` |
 | `M:无法移动#1` | main move ends in place and does not settle; non-teleports cancelled | **ok** | `st.skip_move`; `rulebook::m04` |
@@ -1669,7 +1669,7 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | `S:结算#2.1` | the event is public, not in hand, immediate | **ok** | `draw_event` |
 | `S:结算#2.2` | event to the event discard; reshuffle when empty | **ok** | `setup_event_deck` / `draw_event` |
 | `S:结算#3` | ownerless: may pay price+houses, gain the deed (bold) | **ok** | `offer_buy`/`buy_price`; `rulebook::s06` |
-| `S:结算#5.1` | own, unmortgaged: may pay the build cost to upgrade (bold); level cap; cannot fund by mortgaging that deed | **ok** | `build`/`why_not_build_on` (`buildMax`, RiNG cap 0); the mortgage exclusion is emergent (a mortgaged deed refuses the build); `rulebook::s08`/`s09` |
+| `S:结算#5.1` | own, unmortgaged: may pay the build cost to upgrade (bold); level cap; cannot fund by mortgaging that deed | **ok** | `build`/`cant_build_on` (`buildMax`, RiNG cap 0); the mortgage exclusion is emergent (a mortgaged deed refuses the build); `rulebook::s08`/`s09` |
 | `S:结算#5.2` | own, mortgaged: no effect | **ok** | `property.rs` own branch; `rulebook::s07` |
 | `S:结算#6.1` | other's, unmortgaged: pay the current-level rent (bold) | **ok** | `pay_rent` rent table; `game-core play/tests::rent_follows_the_rent_table` |
 | `S:结算#6.2` | other's, mortgaged: 2×(price+houses) force-buy, stays mortgaged (bold, red); price and payee unaffected | **ok** | `offer_force_buy` moves money directly; `rulebook::s10`/`s11`, `game-core play/tests::mortgaged_land_can_be_force_bought_at_double` |
@@ -1701,7 +1701,7 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | 5.3 赎回地契 | **ok** | `redeem` command |
 | 6 进入移动阶段 | **ok** | `stage::MOVE` |
 | 7 执行[主要移动] | **ok** | `main_move` |
-| 8 执行[结算] | **ok** | `settle_at` |
+| 8 执行[结算] | **ok** | `settle_tile_at` |
 | 9/10/11 回合结束前/时/后 | **ok** | `endTurnBefore`/`turnEndBefore`, `tick_state(TurnEnd)`+`turnEnd`, `turnEndAfter`/`endTurnAfter` |
 
 ### 时点流程 -- 行动阶段 (19)

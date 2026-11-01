@@ -65,7 +65,7 @@ fn turn_ended(step: &Step<'_>) -> bool {
 /// Exile layers of player `i`.
 fn exile(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
     let p = if step_pre {
-        step.pre.st.players.get(i)
+        step.condition.st.players.get(i)
     } else {
         step.post.st.players.get(i)
     };
@@ -77,16 +77,16 @@ fn exile(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
 /// turn-start layer tick does not peel (G-STATUS-07 ruling 2026-10-18).
 fn exile_hold(step_pre: bool, step: &Step<'_>, i: usize) -> i32 {
     let p = if step_pre {
-        step.pre.st.players.get(i)
+        step.condition.st.players.get(i)
     } else {
         step.post.st.players.get(i)
     };
     p.map(|p| p.state_get("exileHold")).unwrap_or(0)
 }
 
-fn stay_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
-    let p = if pre {
-        step.pre.st.players.get(i)
+fn stay_of(condition: bool, step: &Step<'_>, i: usize) -> i32 {
+    let p = if condition {
+        step.condition.st.players.get(i)
     } else {
         step.post.st.players.get(i)
     };
@@ -94,9 +94,9 @@ fn stay_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
         .unwrap_or(0)
 }
 
-fn stun_of(pre: bool, step: &Step<'_>, i: usize) -> i32 {
-    let p = if pre {
-        step.pre.st.players.get(i)
+fn stun_of(condition: bool, step: &Step<'_>, i: usize) -> i32 {
+    let p = if condition {
+        step.condition.st.players.get(i)
     } else {
         step.post.st.players.get(i)
     };
@@ -122,7 +122,7 @@ fn has_card_events(step: &Step<'_>) -> bool {
 /// * **Trigger:** an observed input that is a `roll` command (the player
 ///   pressing the main-move button), or any input that touches the
 ///   `turn.main_moved` latch.
-/// * **Condition:** `pre.turn.main_moved` is already true in the same turn
+/// * **Condition:** `condition.turn.main_moved` is already true in the same turn
 ///   (the main move already happened).
 /// * **Effect:** a second `roll` command does not move the player (the engine
 ///   must refuse it / no-op it). The latch may clear at a turn boundary --
@@ -143,8 +143,8 @@ const G_FLOW_01: Clause = Clause::new(
 
 /// Executable form of [`G-FLOW-01`].
 pub fn g_flow_01(step: &Step<'_>) -> Result<(), String> {
-    let pre_moved = step.pre.turn.main_moved;
-    let pre_turn = step.pre.st.turn;
+    let pre_moved = step.condition.turn.main_moved;
+    let pre_turn = step.condition.st.turn;
 
     // A second [主要移动] attempt is the player pressing `roll` again while
     // the latch is already set. The engine must refuse it: `pos` does not
@@ -158,8 +158,14 @@ pub fn g_flow_01(step: &Step<'_>) -> Result<(), String> {
     // not [主要移动] and are out of scope.)
     let is_roll_cmd = is_act(step, "diceRollBefore");
     if is_roll_cmd && pre_moved {
-        let seat = step.pre.turn.player_id;
-        let pos_before = step.pre.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
+        let seat = step.condition.turn.player_id;
+        let pos_before = step
+            .condition
+            .st
+            .players
+            .get(seat)
+            .map(|p| p.pos)
+            .unwrap_or(-1);
         let pos_after = step.post.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
         if pos_before != pos_after {
             return Err(format!(
@@ -170,8 +176,14 @@ pub fn g_flow_01(step: &Step<'_>) -> Result<(), String> {
     // 「多次触发［主要移动］时无效」 -- a card that re-spends the move logs
     // `log.main_move_used` and must not have walked.
     if has_key(step, "log.main_move_used") {
-        let seat = step.pre.turn.player_id;
-        let pos_before = step.pre.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
+        let seat = step.condition.turn.player_id;
+        let pos_before = step
+            .condition
+            .st
+            .players
+            .get(seat)
+            .map(|p| p.pos)
+            .unwrap_or(-1);
         let pos_after = step.post.st.players.get(seat).map(|p| p.pos).unwrap_or(-1);
         if pos_before != pos_after {
             return Err(format!(
@@ -215,31 +227,31 @@ pub fn g_flow_02(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     // The gate is about the actor's own turn in 运营 with the move still owed.
-    if step.pre.st.turn != who as i32 {
+    if step.condition.st.turn != who as i32 {
         return Ok(());
     }
     // 「[主要移动]和所需[结算]完成后进入结束阶段」 -- `end` during the move
     // or its settle is also illegal.
-    if step.pre.st.step == stage::MOVE {
+    if step.condition.st.step == stage::MOVE {
         return Err(format!(
             "player {who} ended the turn during 移动阶段 (settle still owed)"
         ));
     }
-    if step.pre.st.step != stage::OPS {
+    if step.condition.st.step != stage::OPS {
         return Ok(());
     }
-    if step.pre.st.skip_move || step.pre.turn.main_moved {
+    if step.condition.st.skip_move || step.condition.turn.main_moved {
         return Ok(());
     }
     // Refused `end` is a pure no-op: the turn does not advance.
-    let accepted = step.post.st.turn != step.pre.st.turn
-        || step.post.st.step != step.pre.st.step
+    let accepted = step.post.st.turn != step.condition.st.turn
+        || step.post.st.step != step.condition.st.step
         || turn_ended(step);
     if accepted {
         return Err(format!(
             "player {who} ended the turn at 运营 without the required [主要移动] \
              (main_moved={}, skip_move={})",
-            step.pre.turn.main_moved, step.pre.st.skip_move
+            step.condition.turn.main_moved, step.condition.st.skip_move
         ));
     }
     Ok(())
@@ -363,7 +375,7 @@ pub fn g_flow_04(step: &Step<'_>) -> Result<(), String> {
                 return Err(format!("mulligan of player {who} drew {n}, book says 2"));
             }
             let before = step
-                .pre
+                .condition
                 .st
                 .players
                 .get(who)
@@ -409,8 +421,8 @@ pub fn g_flow_04(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「每回合的阶段顺序从头到尾为：开始阶段，运营阶段，移动阶段，结束阶段。」
 /// * **Trigger:** any observed transition that stays inside one turn (no
 ///   `turn`-typed boundary event in the window).
-/// * **Condition:** `pre.st.turn == post.st.turn >= 0`.
-/// * **Effect:** `post.st.step >= pre.st.step` -- the stage never runs
+/// * **Condition:** `condition.st.turn == post.st.turn >= 0`.
+/// * **Effect:** `post.st.step >= condition.st.step` -- the stage never runs
 ///   backwards inside a turn. (Skips jump forward: 晕眩 开始 → 结束.)
 /// * **Frame:** n/a.
 /// * **Rulings & OPEN:** OPEN-回合流程 -- the 回合流程 table rows 1-3 are
@@ -433,14 +445,14 @@ pub fn g_flow_05(step: &Step<'_>) -> Result<(), String> {
     if turn_began(step).is_some() {
         return Ok(());
     }
-    if step.pre.st.turn < 0 || step.pre.st.turn != step.post.st.turn {
+    if step.condition.st.turn < 0 || step.condition.st.turn != step.post.st.turn {
         return Ok(());
     }
-    let (a, b) = (step.pre.st.step, step.post.st.step);
+    let (a, b) = (step.condition.st.step, step.post.st.step);
     if b < a {
         return Err(format!(
             "stage ran backwards inside turn {}: {} -> {} (book order 开始,运营,移动,结束)",
-            step.pre.st.turn, a, b
+            step.condition.st.turn, a, b
         ));
     }
     Ok(())
@@ -496,12 +508,12 @@ pub fn g_flow_06(step: &Step<'_>) -> Result<(), String> {
         ));
     };
     // 「下一位玩家的回合」 -- the next [存活] seat in action order, not just
-    // any turn. `pre.st.turn` is the seat that just ended.
+    // any turn. `condition.st.turn` is the seat that just ended.
     let n = step.post.st.players.len();
     if n == 0 {
         return Ok(());
     }
-    let from = step.pre.st.turn;
+    let from = step.condition.st.turn;
     if from < 0 {
         return Ok(());
     }
@@ -537,10 +549,10 @@ pub fn g_flow_06(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:98` / 行动阶段 row 1
 /// * **Quote:** 「玩家的每回合开始前移除一层。」 / 「负面效果：移除一层[除外]」
 /// * **Trigger:** a window in which player `i`'s turn begins (`log.turn` /
-///   `log.turn_extra` for `i`) and `pre` exile of `i` is already > 0.
+///   `log.turn_extra` for `i`) and `condition` exile of `i` is already > 0.
 /// * **Condition:** no card activation in the window that could layer more
 ///   [除外] on top of the tick (those windows are skipped -- a hook may add).
-/// * **Effect:** `post` exile of `i` is exactly `pre - 1`.
+/// * **Effect:** `post` exile of `i` is exactly `condition - 1`.
 /// * **Frame:** n/a.
 /// * **Rulings & OPEN:** The tick is 「回合开始前」 -- before the turn's own
 ///   开始阶段 effects. If the layer was the last one, the return [传送]
@@ -601,10 +613,10 @@ pub fn g_flow_07(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:96-97` / 行动阶段 row 18
 /// * **Quote:** 「玩家的每回合结束时移除一层。」（[停留] / [晕眩]）/ 「负面效果：移除一层[眩晕]/[停留]」
 /// * **Trigger:** a window in which player `i`'s turn ended.
-/// * **Condition:** the layer was already > 0 in `pre`, and no card
+/// * **Condition:** the layer was already > 0 in `condition`, and no card
 ///   activation in the window (a hook may layer a fresh status on top of the
 ///   tick -- those windows are skipped).
-/// * **Effect:** each of [停留] / [晕眩] is exactly `pre - 1`.
+/// * **Effect:** each of [停留] / [晕眩] is exactly `condition - 1`.
 /// * **Frame:** n/a.
 /// * **Rulings & OPEN:** The tick is 「每回合结束时」 -- 行动阶段 row 18,
 ///   before row 19 (结束阶段后). `stunStart` (「本回合获得的晕眩」) ticks at
@@ -626,8 +638,8 @@ pub fn g_flow_08(step: &Step<'_>) -> Result<(), String> {
     // auto-skip in the window (stun / exile skip calls `end_turn` for that
     // seat). A seat whose turn merely *began* has not worn off yet.
     let mut seats: Vec<usize> = vec![];
-    if step.pre.st.turn >= 0 {
-        seats.push(step.pre.st.turn as usize);
+    if step.condition.st.turn >= 0 {
+        seats.push(step.condition.st.turn as usize);
     }
     if is_act(step, "end") {
         seats.push(step.player_of_act());
@@ -761,7 +773,7 @@ pub fn g_flow_10(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:132`
 /// * **Quote:** 「玩家在运营阶段可在非执行任何效果的时候进入移动阶段。」
 /// * **Trigger:** an observed `roll` command (the input that enters 移动阶段).
-/// * **Condition:** an effect is executing -- `pre.st.busy` (a routine is
+/// * **Condition:** an effect is executing -- `condition.st.busy` (a routine is
 ///   pending) or a prompt is open (`pre_prompt_open`).
 /// * **Effect:** the `roll` does not run (no move, no `main_moved`).
 /// * **Frame:** n/a.
@@ -781,20 +793,26 @@ pub fn g_flow_11(step: &Step<'_>) -> Result<(), String> {
     if !is_act(step, "diceRollBefore") {
         return Ok(());
     }
-    let busy = step.pre.st.busy || step.pre_prompt_open;
+    let busy = step.condition.st.busy || step.pre_prompt_open;
     if !busy {
         return Ok(());
     }
     // The roll must not have run. Compare the actor's own pos (the turn
     // player may differ if a non-turn seat sent the command).
     let who = step.player_of_act();
-    let pos_before = step.pre.st.players.get(who).map(|p| p.pos).unwrap_or(-1);
+    let pos_before = step
+        .condition
+        .st
+        .players
+        .get(who)
+        .map(|p| p.pos)
+        .unwrap_or(-1);
     let pos_after = step.post.st.players.get(who).map(|p| p.pos).unwrap_or(-1);
     if pos_before != pos_after || step.post.turn.main_moved {
         return Err(format!(
             "roll entered 移动阶段 while an effect was executing \
              (busy={}, prompt={}; pos {pos_before} -> {pos_after}, main_moved={})",
-            step.pre.st.busy, step.pre_prompt_open, step.post.turn.main_moved
+            step.condition.st.busy, step.pre_prompt_open, step.post.turn.main_moved
         ));
     }
     Ok(())
@@ -878,7 +896,7 @@ pub fn g_flow_13(step: &Step<'_>) -> Result<(), String> {
     let key = spec_kit::event_key(e);
     // `rolls` is a list of `log.part.player_roll` messages, one per seat, in
     // the final (high-to-low) seat order.
-    let Some(Arg::List(rolls)) = e.msg.a.get("rolls") else {
+    let Some(Arg::List(rolls)) = e.msg.args.get("rolls") else {
         return Err(format!("{key}: missing rolls list"));
     };
     let mut faces: Vec<i64> = Vec::new();
@@ -981,7 +999,7 @@ const G_FLOW_15: Clause = Clause::new(
 
 /// Executable form of [`G-FLOW-15`].
 pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
-    if step.pre.st.mode != game_core::MatchMode::Ranked as i32 {
+    if step.condition.st.mode != game_core::MatchMode::Ranked as i32 {
         return Ok(());
     }
     // Ban-phase turn order: after a ban the engine walks the turn index down.
@@ -992,7 +1010,7 @@ pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
         // 「禁用角色的顺数为行动顺序从后到前」 -- the turn index counts down.
         // The last ban opens the pick phase (turn becomes 0), so only pin the
         // walk while the ban phase is still open.
-        let pre_turn = step.pre.st.turn;
+        let pre_turn = step.condition.st.turn;
         let post_turn = step.post.st.turn;
         if step.post.st.phase == "ban" && pre_turn >= 0 && post_turn >= 0 && post_turn >= pre_turn {
             return Err(format!(
@@ -1002,7 +1020,7 @@ pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
         // The banner is the seat whose turn it is (the engine enforces this);
         // after a successful ban, ban_done is set at most once.
         let done_before = step
-            .pre
+            .condition
             .st
             .players
             .get(who)
@@ -1030,7 +1048,7 @@ pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
             StepAct::Act { msg, .. } => msg.persona.clone(),
             _ => String::new(),
         };
-        if !c.is_empty() && step.pre.st.bans.contains(&c) {
+        if !c.is_empty() && step.condition.st.bans.contains(&c) {
             return Err(format!("picked banned character {c:?}"));
         }
     }
@@ -1070,7 +1088,7 @@ pub fn g_flow_16(step: &Step<'_>) -> Result<(), String> {
     // 「选择角色的顺序为行动顺序从前到后」 -- the turn index counts up.
     // The last pick opens the deck phase (turn becomes -1), so only pin the
     // walk while the pick phase is still open.
-    let pre_turn = step.pre.st.turn;
+    let pre_turn = step.condition.st.turn;
     let post_turn = step.post.st.turn;
     if step.post.st.phase == "pick" && pre_turn >= 0 && post_turn >= 0 && post_turn <= pre_turn {
         return Err(format!(
@@ -1222,8 +1240,14 @@ pub fn g_flow_18(step: &Step<'_>) -> Result<(), String> {
     if step.post.st.mode == game_core::MatchMode::Ranked as i32 {
         if seen.iter().any(|(r, _)| *r == 1) {
             // Every seat has finished ban (possibly a skip) before the first pick.
-            let unbanned = step.pre.st.players.iter().filter(|p| !p.ban_done).count();
-            // `pre` of a pick act is mid-pick-phase: bans are done. A window
+            let unbanned = step
+                .condition
+                .st
+                .players
+                .iter()
+                .filter(|p| !p.ban_done)
+                .count();
+            // `condition` of a pick act is mid-pick-phase: bans are done. A window
             // that contains a pick while some seat has not ban_done would mean
             // ban was skipped.
             if unbanned > 0 && !seen.iter().any(|(r, _)| *r == 0) {

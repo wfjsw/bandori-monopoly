@@ -4,8 +4,8 @@
 //! > 全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情没有明说则移动到周边学区）。
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::all_players;
 

@@ -1,7 +1,5 @@
-// Event playback (BoardDemoController.PlayEvents): events are queued and
-// played one by one -- dice roll, token walk, banners, card reveals -- like
-// the original. While the queue runs, tokens follow the animation instead of
-// the state; when it drains everything reconciles with the state.
+// While the queue runs, tokens follow the animation instead of the state; when
+// it drains everything reconciles with the state.
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { sfx } from "../../core/audio";
@@ -472,9 +470,9 @@ export class Animator {
     } else if (KIND_KEY[kind]) {
       caption = tr(KIND_KEY[kind], { who: e.playerId >= 0 ? this.player(e.playerId) : tr("board.cardNeutral") });
     } else if (e.msg?.k === "log.effect_applied") {
-      const why = e.msg.a?.why as { msg?: Msg } | undefined;
-      const whyText = why && typeof why === "object" && "msg" in why ? fmtMsg(why.msg, this.names()) : "";
-      caption = whyText || tr("board.cardEffect", { card: cardTitle(e.card) });
+      const reason = e.msg.a?.reason as { msg?: Msg } | undefined;
+      const reasonText = reason && typeof reason === "object" && "msg" in reason ? fmtMsg(reason.msg, this.names()) : "";
+      caption = reasonText || tr("board.cardEffect", { card: cardTitle(e.card) });
     } else {
       caption = tr("board.cardEffect", { card: cardTitle(e.card) });
     }
@@ -920,6 +918,8 @@ export class Animator {
         await this.cardFlash(e, fast);
         break;
       case "chain": await this.chainLink(e, fast); break;
+      // "settles" since the rename; "resolve" is the archived-record spelling.
+      case "settles":
       case "resolve": await this.chainResolve(e); break;
       case "flash":
         // Proactive "look here" cue (`ctx::flash_card` / `flash_tile`): the

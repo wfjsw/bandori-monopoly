@@ -27,7 +27,7 @@ pub struct MovePlan {
     /// `MoveCtx` is gone by then.
     pub can_build: bool,
     /// Whether this move may build away from the landing
-    /// (`MoveCtx::build_anywhere`, HOST-08). Was: lifts `why_not_build`'s
+    /// (`MoveCtx::build_anywhere`, HOST-08). Was: lifts `guard_build`'s
     /// landing-only check. Skipped when `false` so saves (and ckpt_equiv
     /// turn hashes) remain byte-identical to the pre-HOST-08 shape.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -146,7 +146,7 @@ pub struct MatchState {
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
     /// Would `act {act:"diceRollBefore"}` be accepted
-    /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
+    /// (`cant_act`'s roll branch: the live `skip_move` latch, the
     /// `main_moved` flag, and the roller).
     pub can_roll_here: bool,
     /// The same for `act {act:"end"}` (the end branch:
@@ -156,7 +156,7 @@ pub struct MatchState {
     /// mid-turn layer grants -- a bot trusting it sent `end` into
     /// `err.roll_first`). True as well once the end is already queued: a
     /// duplicate `end` is accepted there and folds into the phase
-    /// (`Cx::end_already_queued`), prompts and hand overflow included.
+    /// (`PlayCtx::end_already_queued`), prompts and hand overflow included.
     pub can_end_here: bool,
     /// How many hand cards / skills the turn has already played
     /// (`world.turn.played.len()`) -- what the standard policy's
@@ -196,6 +196,13 @@ pub struct MatchState {
     /// save can never hand out a uid that collides with a row already present.
     #[serde(default)]
     pub next_mark_uid: i32,
+    /// Next [`Trigger::uid`] to hand out. Monotonic and saved, so a replayed
+    /// action (which re-runs from the saved pre-action state) issues the same
+    /// ids in the same order and a uid-keyed claim holds across the replay.
+    /// `#[serde(default)]`; restored with the save, so a replay re-issues the
+    /// same sequence.
+    #[serde(default)]
+    pub trigger_uid: i32,
     pub players: Vec<MatchPlayer>,
     /// The **neutral board owner**'s field ([`BOARD_OWNER`]): one rule instance
     /// per board tile, placed at match start by `bind_tiles` the way
@@ -266,6 +273,7 @@ impl Default for MatchState {
             clock_paused: false,
             next_card_uid: 1,
             next_mark_uid: 0,
+            trigger_uid: 0,
             players: vec![],
             board_field: vec![],
             bans: vec![],
@@ -505,7 +513,7 @@ pub mod prop {
     pub const PAY_FACTOR: &str = "payFactor";
     /// 「owner不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
-    /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
+    /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `cant_build_on`
     /// refuses a build whose house cost is `>=` this. On a board-owned instance;
     /// `0` disables. Mirrors `card_sdk::abi::prop::NO_BUILD_ABOVE`.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
@@ -1158,6 +1166,12 @@ pub struct FieldCard {
     /// only the persona).
     #[serde(default)]
     pub extra: bool,
+    /// A hard per-counter ceiling on this instance (`name -> max`, `max > 0`).
+    /// Filled from `counter_max.<name>` placement props; `add_counter_at`
+    /// clamps here in addition to its call-local `max`, so an external add
+    /// cannot overfill a 「上限N」 card. `0` or absent = uncapped.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counter_max: BTreeMap<String, i32>,
     pub note: Msg,
 }
 
@@ -1175,6 +1189,7 @@ impl Default for FieldCard {
             props: BTreeMap::new(),
             group_skill: false,
             extra: false,
+            counter_max: BTreeMap::new(),
             note: Msg::default(),
         }
     }
@@ -1357,7 +1372,7 @@ impl MarkFilter<'_> {
     }
 }
 
-/// One pressable skill in a viewer's list (`Match::view_extra`'s `skills`).
+/// One pressable skill in a viewer's list (`Match::view_extras`'s `skills`).
 /// View-only -- not part of saved state. `id` is the rule id
 /// (`skill:<owner>:<name>`); the client resolves name / body from it
 /// (`cardTitle` / `cardText`). `enabled` / `reason` come from the same gate

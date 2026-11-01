@@ -173,7 +173,7 @@ test("on your turn in 运营 it suggests roll", () => {
 
 test("a spent main move turns 运营 into end, not a refused roll", () => {
   // A card move ran the main move this turn: the engine refuses `roll`
-  // (`err.roll_main_used`) and only `end` gets through (`why_not_act`).
+  // (`err.roll_main_used`) and only `end` gets through (`cant_act`).
   // Re-sending the refused roll stalls the seat for good.
   const v = view({ state: state({ canRollHere: false, canEndHere: true }) });
   assert.deepEqual(plan(v, ctx(), "bot"), [{ act: "end" }]);

@@ -23,7 +23,8 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     &[On::Action(Action::Card(
         "actor == owner && hand(owner) >= 1",
         Some(is_general_card),
-        on_played))],
+        on_played,
+    ))],
 );
 
 /// Residual guard for [`on_played`]: the played card is a 通用 one (a card's

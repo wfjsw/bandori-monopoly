@@ -1,4 +1,3 @@
-//! `PP:TITLE IDOL` -- C# `CardTitleIdol` (MatchHost.cs:7610-7628): +2 band
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:TITLE IDOL`）:
 //! > TITLE IDOL：
@@ -10,10 +9,10 @@
 //! crystals, then +1 (or +2 with [共鸣]) on every non-immune field card whose
 //! text mentions 「奇迹水晶」.
 
-use bandori_std::ctx;
 use bandori_std::counter;
+use bandori_std::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText, para, sec, steps};
+use card_sdk::{para, sec, steps, CardText};
 
 pub const TITLE_IDOL: CardDef =
     CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)])
@@ -48,13 +47,9 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
     } else {
         1
     };
-    // 规则书[手]2: 「为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]」 --
-    // every placed card whose text mentions 「奇迹水晶」 and which is not immune
-    // (「不受任何效果影响」; C# `H.PlacedOf(i)` + `p.Immune`). The sheet states no
-    // state condition, so face-down cards are included -- the C# `p.FaceDown` skip
-    // is gone. The Pastel✽Palettes band card's text contains 「奇迹水晶」 (「团卡的
-    // 效果也包含奇迹水晶」), so it is in this loop too -- clause 1's +2 and clause
-    // 2's +n are two separate adds to the same pool.
+    // The Pastel✽Palettes band card's text contains 「奇迹水晶」 (「团卡的 效果也包含奇迹水晶」), so it
+    // is in this loop too -- clause 1's +2 and clause 2's +n are two separate adds
+    // to the same pool.
     for (uid, c) in ctx::field_instances(player_id) {
         if ctx::is_immune_at(uid) {
             continue;

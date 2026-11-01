@@ -69,8 +69,13 @@ fn setup(players: i32) -> (Arc<GameData>, World) {
 
 type Run = (World, Option<MatchPrompt>);
 
-fn run(d: &GameData, w: &World, answers: &[Answered], f: impl FnOnce(&mut Cx) -> Flow<()>) -> Run {
-    let mut cx = Cx::new(w.clone(), d, &StubRules, answers);
+fn run(
+    d: &GameData,
+    w: &World,
+    answers: &[Answered],
+    f: impl FnOnce(&mut PlayCtx) -> Flow<()>,
+) -> Run {
+    let mut cx = PlayCtx::new(w.clone(), d, &StubRules, answers);
     match f(&mut cx) {
         Ok(()) | Err(Halt(HaltKind::Ended)) => (cx.into_world(), None),
         Err(Halt(HaltKind::Ask(a))) => (cx.into_world(), Some(a.view)),
@@ -269,15 +274,15 @@ fn walk_lands_without_a_builtin_pass_reward() {
     let (d, mut w) = setup(2);
     let n = d.tiles.len() as i32;
     w.st.players[0].pos = n - 2;
-    w.turn.plan.resolve = false;
-    let walk = |cx: &mut Cx| {
+    w.turn.plan.settles = false;
+    let walk = |cx: &mut PlayCtx| {
         let mut m = Move::new(0);
         m.roll = 5;
-        m.resolve = false;
+        m.settles = false;
         cx.walk(&mut m)
     };
     let (w2, p) = run(&d, &w, &[], walk);
-    // StubRules pays no pass reward; `resolve = false` skips the settle.
+    // StubRules pays no pass reward; `settles = false` skips the settle.
     assert!(p.is_none(), "no built-in pass-reward prompt");
     assert_eq!(w2.st.players[0].pos, 3);
     assert_eq!(w2.st.players[0].money, 10_000);

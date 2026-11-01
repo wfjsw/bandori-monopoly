@@ -242,7 +242,7 @@ fn settle_loop_stuck() {
 /// Nested money movements open their [反击] windows at every depth. The
 /// rulebook (「[支付]时可以打出」) has no depth limit. The termination argument
 /// is that a hook cannot re-trigger on its own movement
-/// (`Cx::reentrant_hooks`); `MAX_MONEY_DEPTH = 32` is a safety cap that traps
+/// (`PlayCtx::reentrant_hooks`); `MAX_MONEY_DEPTH = 32` is a safety cap that traps
 /// loudly (panics) rather than settling silently. See `docs/ENGINE.md`.
 ///
 /// The probe runs a nested chain; the assertion is that it completes without

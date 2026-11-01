@@ -3,7 +3,7 @@
 //! ## Indexed path (Kani / proofs) — no string scan
 //!
 //! `card_id!("…")` resolves an id to a stable `usize` at **compile time**
-//! (`generated/card_ids.rs`). `play_idx` / `entry_idx` / `hook_idx` /
+//! (`generated/card_ids.rs`). `play_idx` / `entry_index` / `hook_index` /
 //! `hook_only_idx` / `counteract_idx` index `RULESET` with integer arithmetic
 //! only. **This is the path proofs must use.** The old `find` string scan over
 //! ~285 CJK ids is a CBMC unwinding / OOM cliff (see `KANI.md` §5).
@@ -267,7 +267,7 @@ fn fail_no_kind(kind: &str) -> ! {
 /// `inline(always)` so a `card_id!(…)` constant folds the match to one
 /// arm and only that trampoline stays reachable.
 #[inline(always)]
-pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
+pub fn entry_index(idx: usize, entry_index: usize, player: i32) -> Asked {
     #[cfg(kani)]
     {
         return call_body_idx(idx, entry_index, player);
@@ -289,7 +289,7 @@ pub fn play_idx(idx: usize, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
         if matches!(on, On::PlayBody(..)) {
-            return entry_idx(idx, i, player);
+            return entry_index(idx, i, player);
         }
     }
     fail_no_kind("Play")
@@ -348,7 +348,7 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 ///
 /// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
 /// integers first so the `On` dispatch is enum compares, not `memcmp`.
-pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
+pub fn hook_index(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
     let card = by_idx(idx);
     let ktag = kind_tag(kind);
     for (i, on) in card.on.iter().enumerate() {
@@ -377,7 +377,7 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             _ => false,
         };
         if hit {
-            return entry_idx(idx, i, player);
+            return entry_index(idx, i, player);
         }
     }
     fail_no_kind(kind)
@@ -513,13 +513,13 @@ fn kind_tag(kind: &str) -> KindTag {
 
 /// First `On::Counteract` of card `idx`.
 pub fn counteract_idx(idx: usize, player: i32) -> Asked {
-    hook_idx(idx, "Counteract", "", player)
+    hook_index(idx, "Counteract", "", player)
 }
 
 /// First `On::Action` of card `idx`, optionally filtered by hook-kind name.
 #[inline(always)]
 pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
-    hook_idx(idx, "Action", hook_name, player)
+    hook_index(idx, "Action", hook_name, player)
 }
 
 /// First `On::Action` of card `idx` matching `want`. **Integer-only** — no
@@ -531,7 +531,7 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i
     for (i, on) in card.on.iter().enumerate() {
         if let On::Action(e) = on {
             if e.kind == want {
-                return entry_idx(idx, i, player);
+                return entry_index(idx, i, player);
             }
         }
     }
@@ -663,7 +663,7 @@ pub fn event_play_idx(idx: usize, player: i32) -> Asked {
 // ---------------------------------------------------------------------------
 
 /// Call entry `entry_index` of `id`.
-pub fn entry(id: &str, entry_index: usize, player: i32) -> Asked {
+pub fn entry(id: &str, nth: usize, player: i32) -> Asked {
     let idx = find_idx(id).unwrap_or_else(|| {
         #[cfg(kani)]
         kani::assert(false, "unknown card/skill/event id");
@@ -672,7 +672,7 @@ pub fn entry(id: &str, entry_index: usize, player: i32) -> Asked {
         #[allow(unreachable_code)]
         0
     });
-    entry_idx(idx, entry_index, player)
+    entry_index(idx, nth, player)
 }
 
 /// First `On::Play` of `id`.
@@ -688,7 +688,7 @@ pub fn play(id: &str, player: i32) -> Asked {
     play_idx(idx, player)
 }
 
-/// First hook/counteract/gate/settle/message entry of `id`. See [`hook_idx`].
+/// First hook/counteract/gate/settle/message entry of `id`. See [`hook_index`].
 pub fn hook(id: &str, kind: &str, hook_name: &str, player: i32) -> Asked {
     let idx = find_idx(id).unwrap_or_else(|| {
         #[cfg(kani)]
@@ -698,7 +698,7 @@ pub fn hook(id: &str, kind: &str, hook_name: &str, player: i32) -> Asked {
         #[allow(unreachable_code)]
         0
     });
-    hook_idx(idx, kind, hook_name, player)
+    hook_index(idx, kind, hook_name, player)
 }
 
 /// First `On::Counteract` of `id`.

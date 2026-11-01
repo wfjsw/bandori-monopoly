@@ -34,6 +34,7 @@ const C: CardDef = CardDef::new("t", &[
     On::Filter(Filter::PaySplitChoose("", None, choose_body)),
     On::Filter(Filter::ActGate("", None, gate_body)),
     On::Filter(Filter::DiceRollPlan("", None, plan_body)),
+    On::Filter(Filter::DiceRollAdd("", None, add_body)),
     On::Filter(Filter::DiceRollValue("", None, roll_body)),
     On::Filter(Filter::BuyAssign("", None, deal_body)),
     On::Filter(Filter::PaySplitAdd("", None, payadd_body)),
@@ -58,6 +59,7 @@ fn parse_on_bodies_one_per_shape() {
             ("Filter", "PaySplitChoose", BodyShape::Flag),
             ("Filter", "ActGate", BodyShape::Gate),
             ("Filter", "DiceRollPlan", BodyShape::Plan),
+            ("Filter", "DiceRollAdd", BodyShape::Roll),
             ("Filter", "DiceRollValue", BodyShape::Roll),
             ("Filter", "BuyAssign", BodyShape::Deal),
             ("Filter", "PaySplitAdd", BodyShape::PayAdd),
@@ -75,6 +77,7 @@ fn parse_on_bodies_one_per_shape() {
             "choose_body",
             "gate_body",
             "plan_body",
+            "add_body",
             "roll_body",
             "deal_body",
             "payadd_body",
@@ -203,6 +206,7 @@ fn count_on_spellings(src: &str) -> usize {
                 | "Buy"
                 | "Build"
                 | "Message"
+                | "Schedule"
         ) {
             n += 1;
         }
@@ -323,7 +327,7 @@ fn every_registration_names_a_declared_kind() {
             "Action::KINDS has `{name}` but the action_kinds! table parse missed it"
         );
     }
-    assert_eq!(sdk_filter.len(), 27, "Filter::KINDS row count");
+    assert_eq!(sdk_filter.len(), 28, "Filter::KINDS row count");
 
     for f in &files {
         let Ok(src) = std::fs::read_to_string(f) else {
@@ -380,8 +384,8 @@ fn kind_shapes_cover_all_payload_families() {
 fn pre_string_reads_inner_ctor_arg() {
     let shapes = shapes();
     let _ = &shapes;
-    // Filter: pre is ctor arg 1 of the inner call.
-    let after = r#"Filter::DiceRollPlan(pre::MINE, None, on_plan)),"#;
+    // Filter: condition is ctor arg 1 of the inner call.
+    let after = r#"Filter::DiceRollPlan(condition::MINE, None, on_plan)),"#;
     assert_eq!(on_pre_string(after).as_deref(), Some("actor == owner"));
 
     let after = r#"Action::PassTile("card.placed && actor == owner", None, on_pass)),"#;

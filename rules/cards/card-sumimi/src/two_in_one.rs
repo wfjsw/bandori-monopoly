@@ -1,4 +1,3 @@
-//! `Sumimi:Sumimi是二人一体的` -- C# `CardTwoInOne` (MatchHost.cs:11249-11312):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sumimi是二人一体的`）:
 //! > Sumimi是二人一体的：
@@ -51,7 +50,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书（2）: the [反击] is the same swap as the play effect (C# `Counteract` -> `Swap`).
     swap(player_id);
     Ok(())
 }
@@ -62,13 +60,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 const A: (&str, &str) = ("三角初华（Sumimi）", "skill:三角初华（Sumimi）:成为偶像");
 const B: (&str, &str) = ("纯田真奈", "skill:纯田真奈:甜甜圈爱好者");
 
-/// C# `CardTwoInOne.Swap` -- flip 三角初华（Sumimi） <-> 纯田真奈, re-declare
-/// fire from the new face's `CardDef`.
 fn swap(player_id: i32) {
-    // 规则书（1）: 「将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」 --
-    // `H.ReplaceSkill` is the old skill rule coming off the field and the new
-    // one going on, and 「初始火罐数」 is the new face's `CardDef` declaration
-    // being written (swap **re-declares**; never carry-over -- MARKERS.md §4.6).
     let (from, to) = if ctx::persona_is(player_id, A.0) {
         (A, B)
     } else {

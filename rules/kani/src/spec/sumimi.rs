@@ -200,7 +200,7 @@ pub fn twoinone_fire_effects_ok(effects: &[Effect], player: i32, fire_key: u16, 
 // 「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。」
 // ===========================================================================
 
-/// Post pay-amount the clause demands: `pre + crystals * 100`.
+/// Post pay-amount the clause demands: `condition + crystals * 100`.
 pub fn band_rent_bonus_amount(pre_amount: i32, crystals: i32) -> i32 {
     pre_amount + crystals * 100
 }

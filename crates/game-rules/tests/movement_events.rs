@@ -127,7 +127,10 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
     let mut t = Table::vanilla(2);
     t.set_pos(0, 58);
     t.set_pos(1, 20);
-    t.m.world_mut().turn.fixed_roll = Some(64);
+    t.m.world_mut().turn.fixed_roll = Some(game_core::engine::FixedFace {
+            value: 64,
+            source: game_core::engine::rules::RollSource::Unattributed,
+        });
     let mark = t.mark();
     t.roll(0).unwrap();
     assert_eq!(t.expect_prompt().title.key(), "ask.pass_reward.title");

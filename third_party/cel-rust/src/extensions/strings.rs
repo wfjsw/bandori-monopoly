@@ -1,6 +1,3 @@
-//! The strings extension library: member functions on `string` (and
-//! `list(string).join`), and `strings.quote`, following cel-go's
-//! `ext.Strings()`.
 //!
 //! Indices are in code points, not bytes, as in the rest of CEL.
 

@@ -96,7 +96,7 @@ Book (glossary 14, `docs/rulebook/rulebook-doc.md:99`) — what that state means
 
 > \[不可阻挡\]：处于该状态时无视已存在的\[停留\]，\[晕眩\]效果也不会获得新的层数；无法获得新的\[除外\]层数。\[停留\]，\[晕眩\]，\[除外\]在适当时机依旧掉层。处于该状态时可选择受到的\[传送\]，\[强制移动\]，\[强制停下\]效果是否生效。
 
-`Cx::abnormal_gate` (`crates/game-rules/src/wasm_rules.rs:5537-5635`) computes
+`PlayCtx::abnormal_gate` (`crates/game-rules/src/wasm_rules.rs:5537-5635`) computes
 the movement flag and **never reads it**:
 
 ```rust
@@ -163,11 +163,9 @@ Book (`PP:再次闪耀` [特]):
 
 > 此卡不受除拥有此卡的玩家以外的玩家的效果影响。
 
-C# `Card.Immune` + the clause's owner carve-out. The engine stores one bool,
-`FieldCard.immune` (`state.rs:1108-1110`); the readers are
-`is_immune_at(uid)` (`ctx.rs:3845`) / `card_immune(player, card)` (`:3529`) and
-carry **no causer**. `shine_again.rs:86-94` has to set the plain
-「不受任何效果影响」 flag and TODO the difference:
+The engine stores one bool, `FieldCard.immune` (`state.rs:1108-1110`); the readers are
+`is_immune_at(uid)` (`ctx.rs:3845`) / `card_immune(player, card)` (`:3529`) and carry **no causer**.
+`shine_again.rs:86-94` has to set the plain 「不受任何效果影响」 flag and TODO the difference:
 
 ```rust
 ctx::set_self_immune(true);
@@ -185,12 +183,10 @@ Book (`RAS:（MASKING）CRUSH ON THE DRUM!!!` [特]):
 > \[特\]：
 > 打出此卡的回合任何\[使用者\]使用的卡包含添加骰效果的卡不受任何其他效果影响。
 
-C# sets `H._turnCtx.DiceCardsImmune = true` and the play flow skips
-`Counteract` for any `def.AddsDice` card. Nothing of this exists:
-`crush_drum.rs:55-64` only adds Xd20 to the plan and TODOs the clause; there is
-no turn flag, no `AddsDice` on the play payload, and the `card` counteraction
-window (`play.rs:4814-4821`) opens for every hand play. `OPEN-questions`
-`OPEN-crush-immune` records the scope question.
+Nothing of this exists: `crush_drum.rs:55-64` only adds Xd20 to the plan and TODOs the clause; there
+is no turn flag, no `AddsDice` on the play payload, and the `card` counteraction window
+(`play.rs:4814-4821`) opens for every hand play. `OPEN-questions` `OPEN-crush-immune` records the
+scope question.
 
 ---
 
@@ -455,8 +451,8 @@ blocked; forced/stop/reverse are blocked exactly when the move clamp applies.
 ### 5.3 Activation stamp
 
 * `play_from_hand` (4814): `let mut t = Trigger::new("card", i); t.activation = self.w.turn.played.len() as i32 + 1; …` — the ordinal is the play count, pushed once per play (`play.rs:4817-4819`, turn player only) and never re-pushed on a pass, so it is stable across the window's passes and differs per play. Off-turn plays share the current length with the last on-turn play; Q4 asks whether that needs its own counter.
-* `HostRequest::Move` handler (3785): `let mut plan = plan; plan.activation = trigger.activation;` before `cx.card_move`.
-* `play.rs::card_move` (789-817): when `as_main` sets `main_moved`, also `self.w.turn.move_activation = plan.activation;`.
+* `HostRequest::Move` handler (3785): `let mut plan = plan; plan.activation = trigger.activation;` before `cx.run_planned_move`.
+* `play.rs::run_planned_move` (789-817): when `as_main` sets `main_moved`, also `self.w.turn.move_activation = plan.activation;`.
 * `main_move` (1370-1381) and `card_move_seeded`: `m.abnormal_start = self.w.turn.abnormal.get(i)…`.
 * `Trigger::with_move` (`rules.rs:357`) gains a `now: i32` parameter and sets
   `mv.abnormal = now > m.abnormal_start`. The `raise!` macro (`rules.rs:398-414`)
@@ -470,7 +466,7 @@ blocked; forced/stop/reverse are blocked exactly when the move clamp applies.
 `set_self_immune_except_owner` writes `current_uid`'s field; placement reads
 the prop (`ops.rs:1229`). Migrate the effect-touch consumers to the causer
 read: `title_idol.rs:59`, `crystal_swap.rs:112` (its `slots()` takes the
-acting player). `mumei_streamer.rs:162` keeps `is_immune_at` — there it is a
+acting player). `nyamu.rs:162` keeps `is_immune_at` — there it is a
 bookkeeping marker for cards the skill flipped, not an effect touch.
 
 No change to the seat-wide `immune()` gate (`wasm_rules.rs:5635`): a
@@ -521,7 +517,7 @@ let activation = trigger::activation();
 let station = ctx::tile_named(STATION);
 …
 if station >= 0 && ctx::cant_move_code_for_activation(player_id, activation) == 0 {
-    plan::set_kind(MoveKind::Teleport); …; ctx::card_move(player_id);
+    plan::set_kind(MoveKind::Teleport); …; ctx::run_planned_move(player_id);
 }
 ```
 
@@ -630,7 +626,7 @@ implementation: G01 proposes 111-113 and G09 111-115; G12 uses **107**.
 | 1 | `g12_tsugu_stay_still_blocks_the_teleport` | [停留] turn: no teleport, effects still land |
 | 1 | `g12_tsukushi_garden_move_arm_is_activation_stable` | replay via the settle ask does not double-move |
 | 2 | `g12_unstoppable_refuses_a_received_teleport` | `ctx::gate` false; position unchanged; no `abnormal` entry, no `ABNORMAL_HIT` |
-| 2 | `g12_unstoppable_does_not_refuse_the_owners_own_move` | 里美-style self `card_move` walks (m13 stays green) |
+| 2 | `g12_unstoppable_does_not_refuse_the_owners_own_move` | 里美-style self `run_planned_move` walks (m13 stays green) |
 | 2 | `g12_unstoppable_still_takes_a_stay_layer` | the stay counter rises; the move gate stays open (m30 stays green) |
 | 2 | `g12_own_stage_branches_on_blocked_not_kind` | stay under [不可阻挡] → `resolveOverride`; stay without → `stageEnd` |
 | 2 | `g12_own_stage_turn_end_half_on_a_skipped_turn` | skip latch, non-stay abnormal → `stageEnd` |
@@ -660,7 +656,7 @@ Existing to keep green: `general::tsugu_effects_land_when_the_move_is_spent`,
   `resolveOverride` iff false, for every non-exile kind.
 * `want_human_02_span_iff`: `SLOT_AB_HIT` iff `trigger::move_abnormal()`.
 * `tsugu_02_only_the_move_arm_gated`: `cant_move_code_for_activation == 0`
-  calls `card_move`; `2` / `3` skip it; the draw and gain run in all three.
+  calls `run_planned_move`; `2` / `3` skip it; the draw and gain run in all three.
 * `crush_02_sets_immunity`: after the play `dice_immune()` holds.
 * invariant: with `StubRules` no gate opinion → `Gate::Abnormal` open; the
   `blocked` computation is false for kind 4 always.
@@ -706,12 +702,10 @@ Existing to keep green: `general::tsugu_effects_land_when_the_move_is_spent`,
    stun/exile layers and only 「无视」s existing stay; this design lets a stay
    layer land (it does not hold the move while the status is up). Confirm —
    the group text's "no layer added" may intend stay too.
-3. **Dice-immunity scope.** C# skips `Counteract` for the whole play; the sheet
-   says 「不受任何其他效果影响」. Does it also cover the owner's own
-   counteractions on that play, and `twoCards`? This design skips the `card`
-   window for every responder and keeps `twoCards`.
+3. Does it also cover the owner's own counteractions on that play, and `twoCards`? This design skips
+  the `card` window for every responder and keeps `twoCards`.
 4. **`activation` ordinal lifetime.** It resets per turn (`turn.played`). A
-   counteraction card that outlives the turn and calls `card_move` gets `0`
+   counteraction card that outlives the turn and calls `run_planned_move` gets `0`
    (outside an activation) — acceptable today; confirm no card needs a
    cross-turn activation view.
 5. **Blocked-ness on non-move turns.** The design counts the turn player's

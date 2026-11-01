@@ -1,4 +1,3 @@
-//! `Mujica:人偶的箱庭` -- C# `CardDollGarden` (MatchHost.cs:5929-5980): every other
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:人偶的箱庭`）:
 //! > 人偶的箱庭：
@@ -24,19 +23,13 @@ pub const DOLL_GARDEN: CardDef = CardDef::new(
         // sheet cell J12
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
-/// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「视为你本回合的主要移动」 -- the forced walk is the main move, so
-    // the C# `H.MoveWhyNot` gate applies (own turn, main move still available,
-    // turn's move not skipped).
     rules_status::move_blocked(player_id)
 }
 
 fn doll_garden(player_id: i32) -> card_sdk::Asked {
     let mut sum = 0;
     for p in ctx::others(player_id) {
-        // 规则书: 「X为该玩家正常移动到你所在格子所需的移动数」 -- C#
-        // `H.Forward(p.pos, i.pos)`.
         let x = ctx::tile_forward(ctx::player_pos(p), ctx::player_pos(player_id));
         // 规则书: 「无法移动的玩家只能选择向你支付」 -- the generic [无法移动]
         // gate (`stun` counts `stunStart` too: `MatchPlayer::stunned()` =
@@ -49,7 +42,7 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             )
             && !rules_status::exile::blocks_move(rules_status::exile::get(p));
         if can_move {
-            let pick = ctx::ask_pick(
+            let pick = ctx::ask_choice(
                 p,
                 &Msg::new(key!("doll_garden_ask_title")),
                 &Msg::new(key!("doll_garden_ask_text"))
@@ -65,33 +58,26 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             )?;
             if pick == 1 {
                 // 规则书: 「向你支付X*20资金」
-                ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")))?;
+                ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_reason")))?;
                 continue;
             }
         } else {
-            // 规则书: 「无法移动的玩家只能选择向你支付」 -- no prompt, straight to
-            // the payment (C# leaves `num2 = 1` and pays).
-            // TODO(规则书)（「无法移动的玩家只能选择向你支付」）: a [晕眩]/[除外] victim is
-            //   also 「无法收付款」 (rules.txt 49/50) -- the pay gate refuses it
-            //   (`log.blocked_pay`) and they wind up paying 0.
-            ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")))?;
+            // TODO(规则书)（「无法移动的玩家只能选择向你支付」）: a [晕眩]/[除外] victim is also 「无法收付款」 (rules.txt
+            // 49/50) -- the pay gate refuses it (`log.blocked_pay`) and they wind up paying
+            // 0.
+            ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_reason")))?;
             continue;
         }
-        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
-        // TODO(ABI)（移动掷骰）: no per-roller movement-dice reader -- this generic
-        //   Effect roll misses the victim's move-dice modifiers and the
-        //   `DiceRollAfter` hooks.
-        let r = ctx::roll(p, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
+        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- a move
+        // roll of the victim's own (non-main, so the walk stays card-driven
+        // below); its Plan writes cannot fold outside a move frame and only the
+        // face is used.
+        let r = ctx::roll_move(p, roll_source::CARD)?.max(0);
         sum += r;
-        // C# `H.Walk(p, r, resolve: false, ...)` (MatchHost.cs:5965) builds
-        // `MoveCtx { Steps = r, Resolve = false }` -- a walk without settling.
         // The MoveCtx shape maps onto `ctx::plan::*`.
         ctx::plan::set_steps(r);
-        ctx::plan::set_resolve(false);
-        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- run the
-        // shaped walk now (C# `H.Walk`, MatchHost.cs:23072-23088, through the
-        // move plan).
-        ctx::card_move(p);
+        ctx::plan::set_settles(false);
+        ctx::run_planned_move(p);
         ctx::log(
             player_id,
             &Msg::new(key!("doll_garden_walked"))
@@ -100,7 +86,7 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         );
     }
     if sum <= 0 {
-        // C# `H.Log("text", i, "没有人移动：... 不移动（人偶的箱庭）")`.
+        // 不移动（人偶的箱庭）")`.
         ctx::log(
             player_id,
             &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id),
@@ -109,8 +95,8 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         // when the sum is 0: run a 0-step walk so the main move is consumed and
         // the shared plan stops carrying the last victim's steps / `resolve`.
         ctx::plan::set_steps(0);
-        ctx::plan::set_resolve(true);
-        ctx::card_move(player_id);
+        ctx::plan::set_settles(true);
+        ctx::run_planned_move(player_id);
         return Ok(());
     }
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。」
@@ -120,22 +106,14 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", sum as i64),
     );
-    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- C# `H.CardMove(c, new
-    // MoveCtx { Steps = sum, Forced = true })` (MatchHost.cs:5973-5977) builds
-    // `MoveCtx { Steps = sum, Resolve = true, Forced = true }`. Steps/Resolve
-    // map onto `ctx::plan::*`; `forced` has no setter.
-    // TODO(ABI)（强制移动）: no guest `plan::set_forced`, so rules.txt 51's
-    //   「可选择…是否生效」 opt-out is unavailable (STA-02).
-    // TODO(ABI)（fresh MoveCtx）: the shared turn plan is never reset -- a stale
-    //   `stop_at` / `pay_factor` / `reverse` from an earlier walk leaks in.
+    // TODO(ABI)（强制移动）: TODO(ABI)（fresh MoveCtx）: Steps/Resolve map onto
+    // `ctx::plan::*`; `forced` has no setter. no guest `plan::set_forced`, so
+    // rules.txt 51's 「可选择…是否生效」 opt-out is unavailable (STA-02). the shared turn
+    // plan is never reset -- a stale `stop_at` / `pay_factor` / `reverse` from an
+    // earlier walk leaks in.
     ctx::plan::set_steps(sum);
-    ctx::plan::set_resolve(true);
-    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- run the shaped walk now
-    // (C# `H.CardMove`, MatchHost.cs:18073-18080, through the move plan).
-    ctx::card_move(player_id);
-    // 规则书: 「视为你本回合的主要移动」 -- `H.CardMove` runs `MainMoveAs`
-    // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
-    // player; that is exactly `card_move`'s bookkeeping.
+    ctx::plan::set_settles(true);
+    ctx::run_planned_move(player_id);
     Ok(())
 }
 

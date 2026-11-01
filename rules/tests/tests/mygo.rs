@@ -315,7 +315,7 @@ fn rain_stay_blocks_this_turn_move() {
         assert_eq!(
             t.pos(0),
             0,
-            "[停留] must prevent the main move; moved to {}",
+            "[停留] must prevent the is_main_move move; moved to {}",
             t.pos(0)
         );
     }
@@ -1079,7 +1079,11 @@ fn journey_drains_when_move_exceeds_six() {
     drain(&mut t);
     t.end(0).unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:哪怕这旅程没有终点"), 3, "one drained");
-    assert_eq!(t.turns_left(0, "MyGO:哪怕这旅程没有终点"), 3, "marker ticks");
+    assert_eq!(
+        t.turns_left(0, "MyGO:哪怕这旅程没有终点"),
+        3,
+        "marker ticks"
+    );
 }
 
 #[test]
@@ -1096,7 +1100,7 @@ fn journey_no_drain_when_move_is_six_or_less() {
     assert_eq!(
         t.turns_left(0, "MyGO:哪怕这旅程没有终点"),
         4,
-        "a short main move does not tick the marker"
+        "a short is_main_move move does not tick the marker"
     );
 }
 
@@ -1207,7 +1211,7 @@ fn tomori_teleport_settles_at_the_destination() {
             break;
         }
         let p = t.expect_prompt();
-        if t.prompt_refers("tomori") || p.title.key().contains("tomori_poem") {
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori") {
             let _ = t.answer_one(0); // accept the 诗超绊 press
             pressed = true;
         } else if p.title.key().contains("ask.buy") {
@@ -1251,7 +1255,7 @@ fn tomori_self_teleport_settles_at_the_destination() {
             break;
         }
         let p = t.expect_prompt();
-        if t.prompt_refers("tomori") || p.title.key().contains("tomori_poem") {
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori") {
             let _ = t.answer_one(0); // accept the 诗超绊 press (cost 1)
             pressed = true;
         } else if p.title.key().contains("ask.buy") {
@@ -1340,7 +1344,7 @@ fn soyo_recolour_expires_at_next_turn_start() {
             break;
         }
         let p = t.expect_prompt();
-        if format!("{:?}", p.title).contains("soyo_clear") {
+        if format!("{:?}", p.title).contains("soyo") {
             let _ = t.answer_one(0);
         } else {
             t.decline();
@@ -1723,17 +1727,11 @@ fn inter_haneoka_ineffective_feeds_band_crystal() {
 }
 #[test]
 fn inter_yolo_pushes_haneoka_over_20() {
-    // AG:Y.O.L.O 「掷骰结算前打出此卡，使结果增加1d4结果的数字」 -- a 1d20 of 20
-    // plus 1d4 becomes >20, the only way to reach 羽丘的不可思议女孩's 「大于20」
-    // branch (a plain d20 tops out at 20).
     let mut t = Table::vanilla(2);
     t.own(0, &[7]);
     t.set_pos(0, 7);
     t.set_draw(0, &["R:[衍生] 压"]);
     t.give(0, &["MyGO:羽丘的不可思议女孩", "AG:Y.O.L.O"]);
-    // The card's own d20 = 20 and Y.O.L.O's d4 = 3 -> 23 > 20.
-    // Y.O.L.O is counteract-only (no `On::Play`): it answers the card's
-    // 「掷骰结算前」 window, it is not a free hand play.
     t.dice(&[20, 3]);
     t.play(0, "MyGO:羽丘的不可思议女孩").unwrap();
     assert!(

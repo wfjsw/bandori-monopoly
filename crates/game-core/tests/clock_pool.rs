@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use game_core::clock::ClockSettings;
-use game_core::engine::{Ask, CardRules, Cx, Dest, Flow, Match, StubRules};
+use game_core::engine::{Ask, CardRules, Dest, Flow, Match, PlayCtx, StubRules};
 use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
@@ -161,7 +161,7 @@ impl CardRules for PromptRules {
         Some("stub")
     }
 
-    fn play(&self, cx: &mut Cx, player_id: usize, _card: &str) -> Flow<Dest> {
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, _card: &str) -> Flow<Dest> {
         let mut ask = Ask::choice(
             vec![player_id],
             Msg::new("ask.mulligan.title"),
@@ -175,7 +175,7 @@ impl CardRules for PromptRules {
         Ok(Dest::Graveyard)
     }
 
-    fn event(&self, _cx: &mut Cx, _player_id: usize, _id: &str) -> Flow<bool> {
+    fn event(&self, _cx: &mut PlayCtx, _player_id: usize, _id: &str) -> Flow<bool> {
         Ok(false)
     }
 }

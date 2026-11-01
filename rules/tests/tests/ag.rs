@@ -68,16 +68,11 @@ fn declaration_offered_against_targeting_card() {
     assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
 }
 
-// =====================================================================
-// AG:Y.O.L.O
-// =====================================================================
-
 // 规则书: 「你的掷骰结算前打出此卡，使结果增加1d4结果的数字」
 #[test]
 fn yolo_offered_on_a_non_move_roll() {
-    // Sheet 2026-10-06 新卡组卡 C3: 「你的任意掷骰结算前」 -- ANY of your rolls,
-    // not only the move roll (was 「你的掷骰结算前」). 热气球演出 rolls
-    // 4x3d20mod60 as a hand effect; Y.O.L.O must be offered on it.
+    // Sheet 2026-10-06 新卡组卡 C3: 「你的任意掷骰结算前」 -- ANY of your rolls, not only the move
+    // roll (was 「你的掷骰结算前」).
     let mut t = Table::vanilla(2);
     t.give(0, &["AG:Y.O.L.O", "HHW:热气球演出"]);
     t.dice(&[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1]); // 4x3d20 + YOLO's 1d4
@@ -570,7 +565,7 @@ fn detour_counter_arms_the_next_roll_as_a_lingering_instance() {
     skip_all(&mut t);
     // The fixture cleared `resolve` for its own walk; the main move settles as
     // usual.
-    t.m.world_mut().turn.plan.resolve = true;
+    t.m.world_mut().turn.plan.settles = true;
     t.m.world_mut().turn.plan.resolve_fresh = true;
     let from = t.pos(0);
     let mark = t.mark();
@@ -599,7 +594,7 @@ fn detour_counter_arms_the_next_roll_as_a_lingering_instance() {
         .events_since(mark)
         .into_iter()
         .find(|e| e.msg.key() == "log.roll")
-        .expect("the main move logs its roll");
+        .expect("the is_main_move move logs its roll");
     assert_eq!(int_arg(&roll.msg, "n"), Some(4), "the loaded face is cast");
     // The picked reverse plan sends those 4 steps backwards.
     assert_eq!(t.pos(0), (from + 56) % 60, "walked the 1d6 backwards");
@@ -1054,7 +1049,7 @@ fn band_free_house_on_shop_street_buy() {
 }
 
 // HOST-06: 「自动免费在上面加盖一栋房子」 only when the house lands. A
-// refused `card_build` (`why_not_build_on` -- here 梦在前方's 「[拥有者]不可
+// refused `card_build` (`cant_build_on` -- here 梦在前方's 「[拥有者]不可
 // 盖房」) must not log the free house, and must not pretend one was added.
 // Before HOST-06 the guest's `card_build -> bool` was a constant `true`, so
 // the log fired anyway.
@@ -1063,7 +1058,7 @@ fn band_free_house_skipped_when_build_refused() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, "skill:Afterglow:商店街的宠儿");
     // 梦在前方 stamps `prop::NO_BUILD` on its owner's field -- the same
-    // veto the build step reads (`why_not_build_on`).
+    // veto the build step reads (`cant_build_on`).
     t.place_raw(0, "PP:梦在前方，结彩当下");
     t.set_pos(0, FUJIMI - 1);
     t.dice(&[1]);

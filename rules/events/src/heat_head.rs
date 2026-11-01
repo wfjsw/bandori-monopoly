@@ -5,7 +5,7 @@
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{ActionKind, Dice, FilterKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Filter, Msg, On, PlanValue, RollValue};
 
 use crate::util::{expire, keep, roll};
@@ -25,9 +25,10 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
         On::Filter(Filter::DiceRollPlan("", None, add_die)),
-        // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
-        // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
-        On::Filter(Filter::DiceRollValue("", None, sub_die_filter)),
+        // v79: `sub_die` is a pure Filter using the host-supplied
+        // `recorded_roll` (a peeked 1d6 from the RNG stream clone). G03 R9: it
+        // is additive, so DiceRollAdd -- the subtraction lands before any half.
+        On::Filter(Filter::DiceRollAdd("roll_purpose == 1", None, sub_die_filter)),
         On::Schedule("phase_end", "", None, phase_end),
     ],
 )
@@ -70,9 +71,8 @@ fn add_die(_player_id: i32, mut v: PlanValue) -> PlanValue {
 /// `add_extra_dice(-1, 6)` term -- the dice pool has no negative-die op. The
 /// sheet says 减少1d6 (a d6 less), not 少投1d6; if the intent is dropping a die
 /// from a pool that has one, this body is short.
-// Body is a pure DiceRollValue FilterValue (v79); the old Action-at-
-// DiceRollAfter shape is gone. See docs/CARDS.md for the one documented
-// exception that still allows an Action at DiceRollAfter to write the face.
+// Body is a pure additive Filter (v79, moved to DiceRollAdd by G03 R9); the
+// old Action-at-DiceRollAfter shape is gone.
 fn sub_die_filter(_player_id: i32, v: RollValue) -> RollValue {
     if ctx::crystals() != PHASE_DOWN {
         return v;

@@ -86,16 +86,14 @@ the full gate and, on success, `ctx::place_card_at(hit, ID, …)`
 (`lisa_bond.rs:63-68`). The exemption half is inert. Grep over `crates/` and
 `rules/` finds 「距离最近」 only in this file; no skill consults the placed
 instance. The only live 「距离最近」 user is 今井莉莎's own skill 2
-(「传送到距离你正向距离最近的角色所在的格子」, `lisa_goddess.rs:71-90`), and it
+(「传送到距离你正向距离最近的角色所在的格子」, `lisa.rs:71-90`), and it
 computes the nearest with an inline loop (`:74-87`) that cannot see the card.
 The TODO is at `lisa_bond.rs:76-78`; recorded as BACKLOG ABI-10
 (`docs/rulebook/BACKLOG.md:827-836`).
 
-The blocker is that the placed instance cannot even say **who** granted it: `World::place_card` sets `owner = user = player_id`
-(`ops.rs:1230-1242`), i.e. both fields are the *designated* player. C#'s
-`PlaceCard(owner = r.index, user = c.Seat)` keeps the caster in `user`; the
-Rust port drops it. No player decision is missing — only a durable grantor
-fact and a query the skill can call.
+The blocker is that the placed instance cannot even say **who** granted it: `World::place_card` sets
+`owner = user = player_id` (`ops.rs:1230-1242`), i.e. both fields are the *designated* player. No
+player decision is missing — only a durable grantor fact and a query the skill can call.
 
 ---
 
@@ -389,9 +387,9 @@ per-play cache — the set changes only on placement/removal.
 
 ### 4.6 Kani model
 
-* `kani_host::Op` gains two append-only ids: `nearest = 401`,
-  `nearest_exempt = 402` (340 is the current maximum; 401-410 is this group's
-  README band).
+* `kani_host::Op` gains two append-only ids: `nearest = 441`,
+  `nearest_exempt = 442` (G03 takes 341-410 ahead of this group; 441-450 is
+  this group's README band).
 * `sys_kani.rs` + `native_shims.rs` (`ruleset_nearest`,
   `ruleset_nearest_exempt`) + `host.rs` registration mirror the two imports.
 * `rules/kani/src/host.rs`:
@@ -472,7 +470,7 @@ destroyed, ends it. A refused target gate places nothing and grants nothing.
 
 ### 5.5 `skill:今井莉莎:慈爱女神` (2)
 
-**Before** (`lisa_goddess.rs:74-89`): inline `tile_forward` loop, first strictly
+**Before** (`lisa.rs:74-89`): inline `tile_forward` loop, first strictly
 smaller distance wins, no waiver. **After:**
 
 ```rust
@@ -483,8 +481,8 @@ let to = match candidates.len() {
     1 => ctx::player_pos(candidates[0]),
     _ => ctx::player_pos(ctx::ask_player(
         player_id,
-        &Msg::new(key!("lisa_goddess_title")),
-        &Msg::new(key!("lisa_goddess_ask")),
+        &Msg::new(key!("lisa_title")),
+        &Msg::new(key!("lisa_ask")),
         &candidates,
     )?),
 };
@@ -492,7 +490,7 @@ let to = match candidates.len() {
 
 The ask only appears when the waiver (or a tie) makes the set non-singleton, so
 the no-waiver path is unchanged. `nearest` (raw) stays available for the four
-non-skill 「最近」 loops (`my_own_problem.rs:44-59`, `kaoru_prince.rs:127-137`,
+non-skill 「最近」 loops (`my_own_problem.rs:44-59`, `kaoru.rs:127-137`,
 `nfo.rs:81-98`, `surprise_duel.rs:65-84`); migrating them is optional (§10).
 
 ---
@@ -521,7 +519,7 @@ non-skill 「最近」 loops (`my_own_problem.rs:44-59`, `kaoru_prince.rs:127-13
 ## 7. Versioning
 
 `ABI_VERSION` 111 → **112** (ninth group in landing order). 104 is already taken in the working tree by the
-in-flight `turn_snap` change (`abi.rs:845`); if another group in the batch
+in-flight `turn_snapshot` change (`abi.rs:845`); if another group in the batch
 lands 105 first, renumber to the next free integer — the entry text is the
 contract. Entry inserted immediately below the constant, above the newest note (the tree keeps notes newest-first):
 
@@ -560,7 +558,7 @@ contract. Entry inserted immediately below the constant, above the newest note (
 | 1c | `g07_welcome_self_target_skips_immunity` | under 离心力's shield the self toggle still lands (own source) |
 | 1c | `g07_welcome_self_target_can_be_cancelled` | `cancel_designation(user)` in the window cancels the self designation |
 | 1c | `g07_rain_self_designation_uses_the_pipeline` | the 雨 self pick raises the window and is not counted until an opponent answers |
-| 2 | `g07_nearest_forward_matches_the_legacy_loop` | a fixture board: `nearest(Forward)` == the pre-change `lisa_goddess` loop result, seat order |
+| 2 | `g07_nearest_forward_matches_the_legacy_loop` | a fixture board: `nearest(Forward)` == the pre-change `lisa` loop result, seat order |
 | 2 | `g07_nearest_forward_excludes_co_located` / `g07_nearest_absolute_includes_co_located` | the two metrics' boundary |
 | 2 | `g07_nearest_absolute_returns_all_ties` | two seats at the same minimal distance are both returned |
 | 2 | `g07_lisa_bond_grants_the_waiver` | place, then `nearest_skill_targets(Forward)` of the placer contains the designated co-located seat |
@@ -670,5 +668,5 @@ nearest-plus-waiver. Rejected.
    a waiver or a tie.
 8. **Exiled seats.** `others` includes exiled (not out) seats; a waiver holder
    who is exiled still counts as a candidate. Intended?
-9. **Other nearest loops.** Should `my_own_problem`, `kaoru_prince`, `nfo`,
+9. **Other nearest loops.** Should `my_own_problem`, `kaoru`, `nfo`,
    `surprise_duel` migrate to `ctx::nearest` in the same batch, or after?

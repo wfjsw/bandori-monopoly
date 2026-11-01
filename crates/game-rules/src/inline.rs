@@ -21,12 +21,12 @@
 
 use std::cell::RefCell;
 
-use crate::host::{HostCtx, HostErr, HostRequest, Prompt};
+use crate::host::{HostCtx, HostError, HostRequest, Prompt};
 use crate::world::CardWorld;
 
 /// What a drive installs around one guest call so its asks and host requests
 /// can be answered inline. Implemented by `wasm_rules`'s drive over the
-/// engine's `Cx`; the thread-local stack is what `hostfns` reaches through the
+/// engine's `PlayCtx`; the thread-local stack is what `hostfns` reaches through the
 /// wasm / native boundary.
 ///
 /// The run's world is type-erased (`&mut dyn Any`, always a [`crate::Run`] --
@@ -40,7 +40,7 @@ pub trait InlineHost {
     fn answer(&mut self, run: &mut dyn std::any::Any, p: Prompt) -> Option<i32>;
 
     /// Apply a host request mid-run. The implementer runs the engine routine
-    /// against `run`'s world (swapped into its `Cx`), so guest writes and host
+    /// against `run`'s world (swapped into its `PlayCtx`), so guest writes and host
     /// effects accumulate in program order on one world and the body never
     /// replays. `Some(v)` is the guest's answer (`paid.moved()`, the gate's
     /// 0/1, ...); `None` pauses -- including when a nested prompt the provider
@@ -119,16 +119,16 @@ pub fn with_no_inline<T>(f: impl FnOnce() -> T) -> T {
 
 /// Take the guest's world out of `c` for the duration of `f`, then put it
 /// back. The world inside is what the inline host swaps into the engine's
-/// `Cx`; `HostState` cannot hold it while `f` runs (aliasing).
+/// `PlayCtx`; `HostState` cannot hold it while `f` runs (aliasing).
 fn with_run<C: HostCtx, T>(
     c: &mut C,
     f: impl FnOnce(&mut dyn std::any::Any) -> T,
-) -> Result<T, HostErr> {
+) -> Result<T, HostError> {
     let mut run = {
         let st = c.st_mut();
         st.world
             .take()
-            .ok_or_else(|| HostErr::trap("inline host with no world"))?
+            .ok_or_else(|| HostError::trap("inline host with no world"))?
     };
     let v = f(&mut run);
     let st = c.st_mut();
@@ -139,14 +139,17 @@ fn with_run<C: HostCtx, T>(
 /// Answer `p` inline. `Ok(Some(v))` = the guest continues with `v` (recorded
 /// on the run's answer log so a nested `play_card` cursor remains aligned);
 /// `Ok(None)` = no inline host, or it declined -- the caller pauses as today.
-pub fn prompt_or_inline<C: HostCtx>(c: &mut C, p: Prompt) -> Result<Option<i32>, HostErr> {
+pub fn prompt_or_inline<C: HostCtx>(c: &mut C, p: Prompt) -> Result<Option<i32>, HostError> {
     let Some(h) = top() else { return Ok(None) };
     let v = with_run(c, |run| unsafe { &mut *h }.answer(run, p))?;
     record(c, v)
 }
 
 /// Apply `req` inline. Same result shape as [`prompt_or_inline`].
-pub fn request_or_inline<C: HostCtx>(c: &mut C, req: HostRequest) -> Result<Option<i32>, HostErr> {
+pub fn request_or_inline<C: HostCtx>(
+    c: &mut C,
+    req: HostRequest,
+) -> Result<Option<i32>, HostError> {
     let Some(h) = top() else { return Ok(None) };
     let v = with_run(c, |run| unsafe { &mut *h }.apply(run, req))?;
     record(c, v)
@@ -154,7 +157,7 @@ pub fn request_or_inline<C: HostCtx>(c: &mut C, req: HostRequest) -> Result<Opti
 
 /// Push an inline answer onto the run's answer log and advance the cursor --
 /// the same bookkeeping a replayed pause does, so nesting shares one log.
-fn record<C: HostCtx>(c: &mut C, v: Option<i32>) -> Result<Option<i32>, HostErr> {
+fn record<C: HostCtx>(c: &mut C, v: Option<i32>) -> Result<Option<i32>, HostError> {
     if let Some(v) = v {
         let st = c.st_mut();
         st.answers.push(v);
@@ -173,7 +176,7 @@ pub enum Pause {
     /// Return `card_sdk::abi::EXIT_NEED_INPUT`; the guest wrapper hands the
     /// card `Err(Prompt)`.
     Sentinel,
-    /// Trap with `HostErr::NeedInput`; the guest stack tears down.
+    /// Trap with `HostError::NeedInput`; the guest stack tears down.
     Trap,
 }
 
@@ -184,7 +187,7 @@ pub fn request_or_pause<C: HostCtx>(
     c: &mut C,
     req: HostRequest,
     pause: Pause,
-) -> Result<i32, HostErr> {
+) -> Result<i32, HostError> {
     {
         let st = c.st_mut();
         if let Some(&x) = st.answers.get(st.next_answer) {
@@ -201,14 +204,14 @@ pub fn request_or_pause<C: HostCtx>(
     st.host_request = Some(req);
     match pause {
         Pause::Sentinel => Ok(card_sdk::abi::EXIT_NEED_INPUT),
-        Pause::Trap => Err(HostErr::NeedInput),
+        Pause::Trap => Err(HostError::NeedInput),
     }
 }
 
 /// The shared pause point for a player prompt: consume a logged answer, else
 /// answer inline, else park `p` on `asked` and return the sentinel (every
 /// `ask_*` pauses that way -- `ctx::ask_*` turns it into `Err(Prompt)`).
-pub fn prompt_or_pause<C: HostCtx>(c: &mut C, p: Prompt) -> Result<i32, HostErr> {
+pub fn prompt_or_pause<C: HostCtx>(c: &mut C, p: Prompt) -> Result<i32, HostError> {
     {
         let st = c.st_mut();
         if let Some(&x) = st.answers.get(st.next_answer) {

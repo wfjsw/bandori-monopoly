@@ -1793,6 +1793,10 @@ impl Replayer {
     /// Advance the background keyframe pass by at most `budget` inputs.
     /// Keyframes are `save()` blobs about every 4 turn boundaries or 20 s of
     /// game time.
+    ///
+    /// The pass runs on its own copy of the replay: `status()` and `view()`
+    /// keep describing this one, which `index()` never moves. A caller that
+    /// wants the pass position on screen seeks to `IndexStatus::tick`.
     pub fn index(&mut self, budget: usize) -> IndexStatus {
         if self.idx.is_none() {
             let mut fresh = match Self::from_body(

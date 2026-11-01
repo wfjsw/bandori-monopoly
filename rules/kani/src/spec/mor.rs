@@ -82,7 +82,7 @@ pub fn rui_demon_01_effects_ok(
 /// User: -100 per other (floored) then +300 per other (saturating).
 pub fn rui_demon_01_post_ok(
     post: &Snapshot,
-    pre: &Snapshot,
+    condition: &Snapshot,
     player: i32,
     n_players: i32,
     out: &[bool; MAX_PLAYERS],
@@ -94,14 +94,14 @@ pub fn rui_demon_01_post_ok(
             continue;
         }
         // Other: receives 100, then pays 300 (floored).
-        let m0 = pre.money[q];
+        let m0 = condition.money[q];
         let want_other = (m0.saturating_add(100) - 300).max(0);
         if post.money[q] != want_other {
             return false;
         }
     }
     // User: pays 100 per other (floored), then receives 300 per other.
-    let mut m = pre.money[p];
+    let mut m = condition.money[p];
     for q in 0..n_players {
         let q = q as usize;
         if (q as i32) == player || out[q] {
@@ -163,10 +163,10 @@ pub fn xiaobai_01_effects_ok(effects: &[Effect], payee: i32, amount: i32) -> boo
 /// Post: payee money decreased by `amount/2` (floored at 0); the counteruser's
 /// money is untouched by this body (the original payment rewrite is the
 /// engine's pending-pay leg, not this body).
-pub fn xiaobai_01_post_ok(post: &Snapshot, pre: &Snapshot, payee: i32, amount: i32) -> bool {
+pub fn xiaobai_01_post_ok(post: &Snapshot, condition: &Snapshot, payee: i32, amount: i32) -> bool {
     let half = amount / 2;
     let p = payee as usize;
-    post.money[p] == (pre.money[p] - half).max(0)
+    post.money[p] == (condition.money[p] - half).max(0)
 }
 
 /// MUTANT: demands the full amount, not the half.
@@ -261,8 +261,8 @@ pub fn garden_01_first_effect_ok(effects: &[Effect], player: i32) -> bool {
 /// Full play post (clauses 01–03, Kani-expressible legs): money +100, then
 /// the user is at `tile_steps_ahead(chosen, 1)`. The settle choice is a prompt;
 /// a skip must not move money from the landing.
-pub fn garden_gain_post_ok(post: &Snapshot, pre: &Snapshot, player: i32) -> bool {
-    post.money[player as usize] == pre.money[player as usize] + 100
+pub fn garden_gain_post_ok(post: &Snapshot, condition: &Snapshot, player: i32) -> bool {
+    post.money[player as usize] == condition.money[player as usize] + 100
 }
 
 // ===========================================================================
@@ -454,8 +454,8 @@ pub fn noble_02_mark_ok(effects: &[Effect], tile: i32) -> bool {
 // ===========================================================================
 
 /// Unowned / self-owned / owner-out: no money moves; effect log empty.
-pub fn courage_03_post_ok(post: &Snapshot, pre: &Snapshot) -> bool {
-    crate::world::arr4_eq(post.money, pre.money)
+pub fn courage_03_post_ok(post: &Snapshot, condition: &Snapshot) -> bool {
+    crate::world::arr4_eq(post.money, condition.money)
 }
 
 // ===========================================================================
@@ -480,8 +480,7 @@ pub fn toko_no_pair_ok(effects: &[Effect]) -> bool {
 // 「场地中央」 is not a board slot; the card is a field card of the user.
 // ===========================================================================
 
-/// X ∈ 1..=5 (engine offer; OPEN-X). The C# cash pre-cap is gone -- `ctx::pay`
-/// takes the shortfall path -- so cash on hand no longer narrows the range.
+/// X ∈ 1..=5 (engine offer; OPEN-X).
 pub fn starry_01_x_in_range(x: i32, _money: i32) -> bool {
     (1..=5).contains(&x)
 }
@@ -512,9 +511,9 @@ pub fn starry_01_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 }
 
 /// Post money: the pay floors at 0.
-pub fn starry_01_post_ok(post: &Snapshot, pre: &Snapshot, player: i32, x: i32) -> bool {
+pub fn starry_01_post_ok(post: &Snapshot, condition: &Snapshot, player: i32, x: i32) -> bool {
     let p = player as usize;
-    post.money[p] == (pre.money[p] - 1000 * x).max(0)
+    post.money[p] == (condition.money[p] - 1000 * x).max(0)
 }
 
 /// MUTANT of the pay amount: off-by-one high.
@@ -619,11 +618,11 @@ pub fn nnm_05_wants_discard(dest: i32) -> bool {
 /// nnm-05 companion: the Play press with already-empty crystals is a no-op —
 /// no `UnplaceCard` and dest unchanged. Exhaustion is a CounterChanged clause,
 /// not an inline check at the press site.
-pub fn nnm_05_press_empty_noop(effects: &[Effect], dest: i32, pre_dest: i32) -> bool {
+pub fn nnm_05_press_empty_noop(effects: &[Effect], dest: i32, pre_fate: i32) -> bool {
     !effects
         .iter()
         .any(|e| matches!(e, Effect::UnplaceCard { .. }))
-        && dest == pre_dest
+        && dest == pre_fate
 }
 
 // ===========================================================================
@@ -735,7 +734,7 @@ pub fn noble_02_not_yours_ok(effects: &[Effect]) -> bool {
 }
 
 /// noble-02, tile is yours: only the mark leg (forced settle is
-/// OPEN-触发结算 / a `card_settle_at` protocol stub).
+/// OPEN-触发结算 / a `settle_tile_at` protocol stub).
 pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::PlaceMark { tile: t, .. } if t == tile)
 }
@@ -776,7 +775,7 @@ pub fn again_02_cancel_ok_mutant(cancelled: i32) -> bool {
 // ===========================================================================
 
 /// Destination = `pos + 20·dir` on the 60-tile ring.
-pub fn wing_01_dest(pos: i32, dir: i32) -> i32 {
+pub fn wing_01_fate(pos: i32, dir: i32) -> i32 {
     (pos + 20 * dir).rem_euclid(60)
 }
 

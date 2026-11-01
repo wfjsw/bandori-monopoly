@@ -7,17 +7,13 @@
 //! > （3）乐队技能为Ave Mujica时，任意时刻手牌大于等于3时进入状态2，严格小于3时
 //! > 进入状态1，但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶。
 //!
-//! （2） 「那名玩家上一次的移动掷骰结果」 is the turn-roll history (`_turnCtx.Rolls`)
-//! read for that player's last face -- which the history carries as a flat list,
-//! so the read is "the last roll recorded while they were the mover".
-//!
 //! （3） is the two-state mechanic the Ave Mujica band skill also uses; the state
 //! axis is `skillState`, and 「只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」
 //! carves a class of crystal gains the engine does not tag.
 
 use bandori_std::ctx::{self, state};
 use bandori_std::state_key;
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{roll_source, ActionKind};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 /// The named other player, or -1.
@@ -31,10 +27,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, at_start)),
         On::Action(Action::DeckAtGameStart("", None, at_start)),
-        On::Action(Action::Pass(
-            bandori_std::guards::OWN_START,
-            None,
-            on_pass)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
         On::Action(Action::DiceRollAfter("", Some(other), latch)).silent(),
     ],
 )
@@ -60,7 +53,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
-    let pick = ctx::ask_pick(
+    let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("mutsumi_crychic_title")),
         &Msg::new(key!("mutsumi_crychic_ask")),
@@ -112,10 +105,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if face < 0 {
         return Ok(());
     }
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
         return Ok(());
     }
-    ctx::set_fixed_roll(face);
+    ctx::set_fixed_roll(face, roll_source::SKILL);
     ctx::log(
         player_id,
         &Msg::new(key!("mutsumi_crychic_fixed")).i("n", face as i64),

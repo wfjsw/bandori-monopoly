@@ -1,4 +1,3 @@
-//! `Mor:秘密与青春的虹彩` -- C# `CardSecretRainbow` (MatchHost.cs:5178-5220): halve a
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:秘密与青春的虹彩`）:
 //! > 秘密与青春的虹彩：[反击]
@@ -20,15 +19,12 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
     "Mor:秘密与青春的虹彩",
     &[On::Counteract(
         &[ChainKind::Effect],
-        // TODO(规则书)（此次支付金额减半）: the 减半/翻倍 is the 支付阶段 4
-        //   「支付前」 stage -- we answer the earlier `effect` window, which the
-        //   engine raises before paySplitAdd/paySplitMul (PIPELINE-AUDIT P3a).
-        // 规则书[反击]: 「支付」 -- a player-to-player payment of a positive
-        // amount. A print (game -> player, `actor == -1`) is a [获得], not a
-        // 「支付」, and must not open this window; nor may the causer's own
-        // `abnormal` (`actor` = the causer). `value > 0` also covers C#
-        // `!t.Pay.cancel` -- a payment an earlier counteraction already
-        // reduced to 0 reads as `value() == 0`. A self-payment stays in: you
+        // TODO(规则书)（此次支付金额减半）: the 减半/翻倍 is the 支付阶段 4 「支付前」 stage -- we answer the
+        // earlier `effect` window, which the engine raises before
+        // paySplitAdd/paySplitMul (PIPELINE-AUDIT P3a). 规则书[反击]: 「支付」 -- a
+        // player-to-player payment of a positive amount. A print (game -> player, `actor
+        // == -1`) is a [获得], not a 「支付」, and must not open this window; nor may the
+        // causer's own `abnormal` (`actor` = the causer). A self-payment stays in: you
         // are your own 同级生, and the engine keeps the window open for it.
         "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0",
         Some(can_counteract),
@@ -155,7 +151,7 @@ fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「当你向学妹或同级生支付时」
     // 规则书[反击]（2）: 「当学姐或同级生向你支付的时候」
     // The payment's shape (a positive `Pay` naming a payer and a payee) is the
-    // pre; the grade-direction comparison is the residual.
+    // condition; the grade-direction comparison is the residual.
     let Some(my) = grade_of(player_id) else {
         return false;
     };

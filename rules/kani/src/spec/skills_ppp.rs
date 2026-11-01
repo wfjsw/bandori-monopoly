@@ -10,7 +10,7 @@
 //! text determines and record `OPEN-<ID>`.
 //!
 //! Spec shape: one pure function per clause over
-//! `(pre, effect_log, post) -> bool` (or `*_x` / `*_amount` / `*_log_ok` /
+//! `(condition, effect_log, post) -> bool` (or `*_x` / `*_amount` / `*_log_ok` /
 //! `*_post_ok` pieces). Frame = the effect log; narration is not the frame.
 
 use crate::world::{Effect, Snapshot, MAX_PLAYERS};
@@ -62,18 +62,18 @@ pub fn kasumi_01_applies(owner: i32, settler: i32, tile: i32) -> bool {
 }
 
 /// Fire after a legal +1 under cap 1 (initial 0).
-pub fn kasumi_01_fire_after(pre: i32) -> i32 {
-    if pre >= 1 {
-        pre
+pub fn kasumi_01_fire_after(condition: i32) -> i32 {
+    if condition >= 1 {
+        condition
     } else {
-        pre + 1
+        condition + 1
     }
 }
 
 /// Exactly one `GainFire(+1)` when the pot has room; empty when at cap.
-pub fn kasumi_01_log_ok(effects: &[Effect], player: i32, pre: i32) -> bool {
-    let after = kasumi_01_fire_after(pre);
-    if after == pre {
+pub fn kasumi_01_log_ok(effects: &[Effect], player: i32, condition: i32) -> bool {
+    let after = kasumi_01_fire_after(condition);
+    if after == condition {
         return effects.is_empty();
     }
     effects.len() == 1
@@ -194,11 +194,11 @@ pub fn megumi_02_negated(trig_cancelled: bool) -> bool {
 //      (`data/board.json` `group`), not only the Live House tile itself.
 // ===========================================================================
 
-pub fn rimi_01_fire_after(pre: i32) -> i32 {
-    if pre >= 3 {
-        pre
+pub fn rimi_01_fire_after(condition: i32) -> i32 {
+    if condition >= 3 {
+        condition
     } else {
-        pre + 1
+        condition + 1
     }
 }
 
@@ -206,8 +206,8 @@ pub fn rimi_01_fire_after(pre: i32) -> i32 {
 /// clears the latch (`state::set(PASSED, 0)`) which pushes a `SetState`
 /// bookkeeping effect — ignore it (class B: the exact-match originally
 /// rejected it).
-pub fn rimi_01_log_ok(effects: &[Effect], player: i32, pre: i32) -> bool {
-    let after = rimi_01_fire_after(pre);
+pub fn rimi_01_log_ok(effects: &[Effect], player: i32, condition: i32) -> bool {
+    let after = rimi_01_fire_after(condition);
     let mut gain = 0;
     let mut other = 0;
     for e in effects {
@@ -217,7 +217,7 @@ pub fn rimi_01_log_ok(effects: &[Effect], player: i32, pre: i32) -> bool {
             _ => other += 1,
         }
     }
-    if after == pre {
+    if after == condition {
         return other == 0 && gain == 0;
     }
     other == 0 && gain == 1
@@ -344,17 +344,17 @@ pub fn aoki_01_applies(actor: i32, owner: i32, tile: i32) -> bool {
     actor != owner && tile == TILE_RYUSEIDO
 }
 
-pub fn aoki_01_fire_after(pre: i32) -> i32 {
-    if pre >= 2 {
-        pre
+pub fn aoki_01_fire_after(condition: i32) -> i32 {
+    if condition >= 2 {
+        condition
     } else {
-        pre + 1
+        condition + 1
     }
 }
 
-pub fn aoki_01_log_ok(effects: &[Effect], player: i32, pre: i32) -> bool {
-    let after = aoki_01_fire_after(pre);
-    if after == pre {
+pub fn aoki_01_log_ok(effects: &[Effect], player: i32, condition: i32) -> bool {
+    let after = aoki_01_fire_after(condition);
+    if after == condition {
         return effects.is_empty();
     }
     effects.len() == 1
@@ -584,10 +584,10 @@ pub fn band_04_build_forbidden(is_main_move_settle: bool) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Frame: other players' money untouched.
-pub fn frame_others_money(pre: &Snapshot, post: &Snapshot, me: i32) -> bool {
+pub fn frame_others_money(condition: &Snapshot, post: &Snapshot, me: i32) -> bool {
     let mut p = 0;
     while p < MAX_PLAYERS {
-        if p as i32 != me && pre.money[p] != post.money[p] {
+        if p as i32 != me && condition.money[p] != post.money[p] {
             return false;
         }
         p += 1;
@@ -596,10 +596,10 @@ pub fn frame_others_money(pre: &Snapshot, post: &Snapshot, me: i32) -> bool {
 }
 
 /// Frame: other players' fire untouched.
-pub fn frame_others_fire(pre: &Snapshot, post: &Snapshot, me: i32) -> bool {
+pub fn frame_others_fire(condition: &Snapshot, post: &Snapshot, me: i32) -> bool {
     let mut p = 0;
     while p < MAX_PLAYERS {
-        if p as i32 != me && pre.charge[p] != post.charge[p] {
+        if p as i32 != me && condition.charge[p] != post.charge[p] {
             return false;
         }
         p += 1;

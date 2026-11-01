@@ -4,8 +4,8 @@
 //! fill it from a synthetic view. Every function goes through one narrow
 //! accessor family so a proof can model it without the `cel` crate.
 
-use crate::vars::{VarId, VarTy, SCALAR_COUNT, VARS};
-use crate::Val;
+use crate::vars::{VarId, VarType, SCALAR_COUNT, VARS};
+use crate::Value;
 
 /// Vocabulary functions (after `effect.has` → `chain_has` rewrite).
 /// Order is stable; the discriminant is the IR `Call` payload.
@@ -191,9 +191,9 @@ impl IrCtx {
     /// negative reads back as `Null` (matching `vocab::opt`). `Str` stores the
     /// `id_of(spelling)` hash the caller already computed (the IR has no
     /// string pool).
-    pub fn set_scalar_ty(&mut self, id: VarId, ty: VarTy, v: i64, is_null: bool) {
+    pub fn set_scalar_ty(&mut self, id: VarId, ty: VarType, v: i64, is_null: bool) {
         let raw = match (ty, is_null) {
-            (VarTy::Bool, _) => {
+            (VarType::Bool, _) => {
                 if v != 0 {
                     1
                 } else {
@@ -201,36 +201,36 @@ impl IrCtx {
                 }
             }
             // A null OptInt is stored as any negative (`-1` by convention).
-            (VarTy::OptInt, true) => -1,
+            (VarType::OptInt, true) => -1,
             // Str: v is already `id_of(spelling)`.
-            (VarTy::Str, _) | (_, _) => v,
+            (VarType::Str, _) | (_, _) => v,
         };
         self.set_scalar(id, raw);
     }
 
-    pub fn scalar_val(&self, idx: u16) -> Val {
+    pub fn scalar_val(&self, idx: u16) -> Value {
         let (id, ty) = match VARS.get(idx as usize) {
             Some((id, _, ty)) => (*id, *ty),
-            None => return Val::Err,
+            None => return Value::Err,
         };
         // `id` is the VarId at this index; the table is kept in discriminant
         // order by `ir_vars_match_vocab`.
         let _ = id;
         let raw = self.scalars[idx as usize];
         match ty {
-            VarTy::Int => Val::Int(raw),
+            VarType::Int => Value::Int(raw),
             // Str scalars carry `id_of(spelling)`; arithmetic on them is `Err`
             // (CEL types `kind` as a string).
-            VarTy::Str => Val::Str(raw),
-            VarTy::Bool => Val::Bool(raw != 0),
+            VarType::Str => Value::Str(raw),
+            VarType::Bool => Value::Bool(raw != 0),
             // Host rule (`vocab::opt`): **any negative** binds CEL `null`, not
             // just `-1`. Confirmed by the differential tests against the real
             // evaluator — see COND-SINGLE-SOURCE.md findings.
-            VarTy::OptInt => {
+            VarType::OptInt => {
                 if raw < 0 {
-                    Val::Null
+                    Value::Null
                 } else {
-                    Val::Int(raw)
+                    Value::Int(raw)
                 }
             }
         }
@@ -730,7 +730,7 @@ pub fn repeated_digits(x: i64) -> bool {
     false
 }
 
-/// Wrap-around neighbour — must match `Fx::Neighbor` in `rules-cond`.
+/// Wrap-around neighbour — must match `FuncKind::Neighbor` in `rules-cond`.
 pub fn neighbor(p: i64, delta: i64, n_seats: i64) -> i64 {
     if n_seats <= 0 {
         return -1;

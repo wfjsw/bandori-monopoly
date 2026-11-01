@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use game_core::data::{GameData, Roster};
-use game_core::engine::{CardRules, Cx, Dest, Flow, Match, StubRules, Trigger, World};
+use game_core::engine::{CardRules, Dest, Flow, Match, PlayCtx, StubRules, Trigger, World};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
@@ -41,7 +41,7 @@ struct EntryCounts {
 /// halt/replay re-runs). Example-local: no engine change needed for this one.
 struct CountingRules {
     inner: WasmRules,
-    c: Arc<EntryCounts>,
+    counts: Arc<EntryCounts>,
 }
 
 impl CardRules for CountingRules {
@@ -51,7 +51,7 @@ impl CardRules for CountingRules {
     fn normal(&self, card: &str) -> bool {
         self.inner.normal(card)
     }
-    fn cant_play(&self, cx: &Cx, player: usize, card: &str) -> Option<game_core::msg::Msg> {
+    fn cant_play(&self, cx: &PlayCtx, player: usize, card: &str) -> Option<game_core::msg::Msg> {
         self.inner.cant_play(cx, player, card)
     }
     fn card_props(&self, card: &str) -> BTreeMap<String, i32> {
@@ -63,46 +63,52 @@ impl CardRules for CountingRules {
     fn has_rule(&self, id: &str) -> bool {
         self.inner.has_rule(id)
     }
-    fn settle_tile(&self, cx: &mut Cx, player: usize, tile: usize, main: bool) -> Flow<()> {
-        self.c.settle.fetch_add(1, Ordering::Relaxed);
+    fn settle_tile(
+        &self,
+        cx: &mut PlayCtx,
+        player: usize,
+        tile: usize,
+        is_main_move: bool,
+    ) -> Flow<()> {
+        self.counts.settle.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
-        let r = self.inner.settle_tile(cx, player, tile, main);
-        self.c
+        let r = self.inner.settle_tile(cx, player, tile, is_main_move);
+        self.counts
             .entry_ns
             .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
-    fn ai_play(&self, cx: &Cx, player: usize, card: &str) -> bool {
+    fn ai_play(&self, cx: &PlayCtx, player: usize, card: &str) -> bool {
         self.inner.ai_play(cx, player, card)
     }
-    fn play(&self, cx: &mut Cx, player: usize, card: &str) -> Flow<Dest> {
-        self.c.play.fetch_add(1, Ordering::Relaxed);
+    fn play(&self, cx: &mut PlayCtx, player: usize, card: &str) -> Flow<Dest> {
+        self.counts.play.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.play(cx, player, card);
-        self.c
+        self.counts
             .entry_ns
             .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
-    fn event(&self, cx: &mut Cx, player: usize, id: &str) -> Flow<bool> {
-        self.c.event.fetch_add(1, Ordering::Relaxed);
+    fn event(&self, cx: &mut PlayCtx, player: usize, id: &str) -> Flow<bool> {
+        self.counts.event.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.event(cx, player, id);
-        self.c
+        self.counts
             .entry_ns
             .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
-    fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
-        self.c.counteract.fetch_add(1, Ordering::Relaxed);
+    fn counteract(&self, cx: &mut PlayCtx, t: &mut Trigger) -> Flow<()> {
+        self.counts.counteract.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
         let r = self.inner.counteract(cx, t);
-        self.c
+        self.counts
             .entry_ns
             .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         r
     }
-    fn hand_note(&self, cx: &Cx, player: usize, card: &str) -> game_core::msg::Msg {
+    fn hand_note(&self, cx: &PlayCtx, player: usize, card: &str) -> game_core::msg::Msg {
         self.inner.hand_note(cx, player, card)
     }
 }
@@ -364,7 +370,7 @@ fn main() {
     let counts = Arc::new(EntryCounts::default());
     let counting: Arc<dyn CardRules> = Arc::new(CountingRules {
         inner: WasmRules::new(wasm.ruleset().clone(), data.clone()),
-        c: counts.clone(),
+        counts: counts.clone(),
     });
     let stub: Arc<dyn CardRules> = Arc::new(StubRules);
     let mem = members(players, mentality);

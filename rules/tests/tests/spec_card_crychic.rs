@@ -82,7 +82,7 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
     // gain in the window together with a crystal gain on a band skill card.
     let who = step.player_of_act();
     let pre_stun = step
-        .pre
+        .condition
         .st
         .players
         .get(who)
@@ -99,7 +99,7 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
         return Ok(()); // not the debut turn-end
     }
     let pre_crystals: i32 = step
-        .pre
+        .condition
         .st
         .players
         .get(who)
@@ -145,7 +145,7 @@ fn crychic_debut_blocks_rent_decrease() {
         t.give(0, &[DEBUT]);
         let money0 = t.money(0);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-CRYCHIC-debut-01",
             "roster#CRYCHIC:初演大成功",
@@ -169,7 +169,7 @@ fn crychic_debut_blocks_rent_decrease() {
         // not fall (checked above). `turn.no_money_loss` / `scheduled` are
         // this card's own latches (the printed 「资金不会下降」 window).
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -200,8 +200,20 @@ fn crychic_debut_turn_end_stun_and_crystal() {
         t.clean();
         t.begin_turn(0);
         drain(&mut t);
-        let band_id = t.skill_id(0, "CRYCHIC");
-        let pre_crystals = t.crystals(0, &band_id).unwrap_or(0);
+        // Count across the seat's band-skill instances, not a captured id:
+        // the blocked-turn settle at the CiRCLE start tile draws a card before
+        // the turn-end hooks, and with both piles empty by then
+        // 「美好的往日幻影」(2) runs in field order ahead of this card's
+        // scheduled body, banishing itself and placing a MyGO / Ave Mujica
+        // skill -- the crystal legitimately lands on the successor.
+        let crystal_total = |t: &Table| -> i32 {
+            t.field(0)
+                .iter()
+                .filter(|f| f.group_skill)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+                .sum()
+        };
+        let pre_crystals = crystal_total(&t);
         t.give(0, &[DEBUT]);
         t.observe(&[Clause::new(
             "C-CRYCHIC-debut-02",
@@ -224,7 +236,7 @@ fn crychic_debut_turn_end_stun_and_crystal() {
                 "C-CRYCHIC-debut-02: stun {stun}, expected >=1 (「获得一层眩晕」)"
             ));
         }
-        let post = t.crystals(0, &band_id).unwrap_or(0);
+        let post = crystal_total(&t);
         if post != pre_crystals + 1 {
             return Err(format!(
                 "C-CRYCHIC-debut-02: band crystals {pre_crystals} -> {post}, expected +1"
@@ -271,7 +283,7 @@ fn crychic_ifonly_cashs_out_band_crystals() {
         let money0 = t.money(0);
         t.set_hand(0, &["R:[衍生] 压"]);
         t.give(0, &[IF_ONLY]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
 
         t.observe(&[Clause::new(
             "C-CRYCHIC-ifonly-01",
@@ -296,7 +308,7 @@ fn crychic_ifonly_cashs_out_band_crystals() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -511,8 +523,8 @@ pub fn c_crychic_grab_stay(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre = step
-        .pre
+    let condition = step
+        .condition
         .st
         .players
         .get(who)
@@ -525,9 +537,9 @@ pub fn c_crychic_grab_stay(step: &Step<'_>) -> Result<(), String> {
         .get(who)
         .map(|p| p.state_get("stay"))
         .unwrap_or(0);
-    if post != pre + 1 {
+    if post != condition + 1 {
         return Err(format!(
-            "C-CRYCHIC-grab-01: stay {pre} -> {post}, expected +1 (「获得一层[停留]」)"
+            "C-CRYCHIC-grab-01: stay {condition} -> {post}, expected +1 (「获得一层[停留]」)"
         ));
     }
     Ok(())
@@ -640,7 +652,7 @@ fn crychic_soyoreturn_hand_gains_500() {
         let money0 = 8_000 + rng.range(0, 40) * 100;
         t.set_money(0, money0);
         t.give(0, &[SOYO_RETURN]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-CRYCHIC-soyoreturn-02",
             "roster#CRYCHIC:（soyo）回到曾经",
@@ -656,7 +668,7 @@ fn crychic_soyoreturn_hand_gains_500() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", "hand:P0", "draw:P0", "discard:P0"],
         )

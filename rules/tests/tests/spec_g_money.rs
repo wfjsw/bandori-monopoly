@@ -82,7 +82,7 @@ fn pay_conserves_between_the_named_pair() {
         t.set_money(0, money0);
         t.set_money(1, money1);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
         drain(&mut t);
@@ -97,7 +97,7 @@ fn pay_conserves_between_the_named_pair() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -211,7 +211,7 @@ fn mortgage_pays_exactly_half_the_price() {
         t.set_money(0, money);
         t.set_money(1, 8_000);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         until_turn(&mut t, 0);
         t.mortgage(0, land).unwrap();
@@ -233,7 +233,7 @@ fn mortgage_pays_exactly_half_the_price() {
             return Err("G-MONEY-05: deed is not mortgaged after the mortgage".into());
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -258,7 +258,7 @@ fn redeem_costs_exactly_sixty_percent() {
         t.set_money(0, money);
         t.set_money(1, 8_000);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         until_turn(&mut t, 0);
         t.redeem(0, land).unwrap();
@@ -279,7 +279,7 @@ fn redeem_costs_exactly_sixty_percent() {
             return Err("G-MONEY-06: deed is still mortgaged after the redeem".into());
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -309,7 +309,7 @@ fn force_buy_is_double_price_plus_houses_and_stays_mortgaged() {
         t.set_money(0, money);
         t.set_money(1, 1_000);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
         let p = t.expect_prompt();
@@ -340,7 +340,7 @@ fn force_buy_is_double_price_plus_houses_and_stays_mortgaged() {
             return Err("G-MONEY-07: 「获得的地契仍为抵押状态」 -- deed is free".into());
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -420,7 +420,7 @@ fn rent_is_the_marked_rate_at_the_current_level() {
         t.set_money(0, money);
         t.set_money(1, 2_000);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
         drain(&mut t);
@@ -434,7 +434,7 @@ fn rent_is_the_marked_rate_at_the_current_level() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -539,7 +539,7 @@ fn buy_costs_price_plus_houses() {
         t.set_money(0, 20_000);
         t.set_money(1, 5_000);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
         // G-SETTLE-06/07: the settle of an unowned buyable IS the optional buy.
@@ -566,7 +566,7 @@ fn buy_costs_price_plus_houses() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -595,7 +595,7 @@ fn build_costs_the_marked_house_fee() {
         t.set_houses(land, start_houses);
         t.set_money(0, 20_000);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
         // G-SETTLE-06/07: the settle of an own un-mortgaged buyable IS the optional build.
@@ -616,7 +616,7 @@ fn build_costs_the_marked_house_fee() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &["money:P0", &format!("houses:T{land}"), "pos:P0", "roll:P0"],
         )

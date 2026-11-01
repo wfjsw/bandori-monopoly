@@ -35,7 +35,7 @@ fn event_names(e: &MatchEvent, rule: &str) -> bool {
     if e.card == rule {
         return true;
     }
-    for v in e.msg.a.values() {
+    for v in e.msg.args.values() {
         match v {
             game_core::msg::Arg::Card(c) if c == rule => return true,
             game_core::msg::Arg::Text(s)

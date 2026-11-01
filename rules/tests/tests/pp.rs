@@ -464,7 +464,7 @@ fn expect_face_zero_shave_does_not_settle() {
 }
 
 /// 规则书: 「如果为0则此次移动不[结算]」 -- standing *on* a foreign rent tile
-/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.resolve`
+/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.settles`
 /// before the walk so a 0-step move honours the clear (the mid-step sync only
 /// runs when at least one step is taken).
 #[test]
@@ -1213,9 +1213,10 @@ fn aya_skill_2_discount_and_flip() {
 }
 
 /// 规则书: 若宫伊芙（2）「投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」
-/// Two-part timing (DiceRollBefore Action + DiceRollPlan Filter): the ask
-/// fires before any die lands, the fan flips happen at ask time, and Yd4 is
-/// part of the same roll's face (not a post-hoc patch).
+/// One DiceRollBefore Action body: the window is named for the settlement,
+/// not the throw, so the d20 has already landed when the ask opens -- the
+/// fan flips happen at answer time and the Yd4 is thrown into the same
+/// roll's face by the skill body (a face write from the window).
 #[test]
 fn eve_skill_2_adds_yd4() {
     let mut t = Table::vanilla(2);
@@ -1226,7 +1227,8 @@ fn eve_skill_2_adds_yd4() {
     t.dice(&[2, 1, 1, 1]);
     let mark = t.mark();
     t.roll(0).unwrap();
-    // The ask is at DiceRollBefore: prompt open, no die consumed, fans intact.
+    // The ask is at DiceRollBefore: prompt open, the d20 (2) already landed,
+    // the Yd4 not yet, fans intact.
     {
         let p = t.expect_prompt();
         assert!(
@@ -1239,8 +1241,8 @@ fn eve_skill_2_adds_yd4() {
         );
         assert_eq!(
             t.dice_left(),
-            4,
-            "DiceRollBefore: no die has landed yet: {}",
+            3,
+            "DiceRollBefore runs after the cast: only the d20 landed: {}",
             t.dump_prompt()
         );
         assert_eq!(fans(&t, 0), (3, 0), "fans flip only after the Y answer");
@@ -1260,16 +1262,22 @@ fn eve_skill_2_adds_yd4() {
     }
     assert_eq!(fans(&t, 0), (1, 2), "Y=2 flipped");
     assert_eq!(t.pos(0), 4, "roll 2 + 2d4(1+1) -- Yd4 is part of the face");
-    assert_eq!(t.state(0, "evePendingY"), 0, "stash cleared after the roll");
-    // Ask/log precede the roll line in the trace.
+    // The cast lands first; the eve actions land inside the window, before
+    // the settlement line.
     let keys = t.keys_since(mark);
-    let eve = keys.iter().position(|k| k.contains("eve_unify"));
-    let rolled = keys
+    let eve = keys
         .iter()
-        .position(|k| k.contains("log.roll") || k.contains("log.dice") || k.contains("roll"));
-    if let (Some(e), Some(r)) = (eve, rolled) {
-        assert!(e < r, "eve ask/log before the roll line: {keys:?}");
+        .position(|k| k.contains("eve"))
+        .unwrap_or_else(|| panic!("eve log missing: {keys:?}"));
+    let cast = keys.iter().position(|k| k.contains("log.dice"));
+    let settled = keys
+        .iter()
+        .position(|k| k.contains("log.roll"))
+        .unwrap_or_else(|| panic!("settlement line missing: {keys:?}"));
+    if let Some(c) = cast {
+        assert!(c < eve, "the cast precedes the eve window body: {keys:?}");
     }
+    assert!(eve < settled, "eve log before the settlement: {keys:?}");
 }
 
 /// 规则书: 「为此次投掷结果增加Yd4」 is this roll only -- the next roll must
@@ -1617,7 +1625,7 @@ fn jennifer_owner_flip_clause2_crystal() {
 /// character, so the grantee running 丸山彩's (2) is the rulebook text, not a
 /// mis-dispatch (AYA-GRANT-01 settled).
 #[test]
-fn aya_with_grants_ayaa_2_to_non_pp_players() {
+fn aya_grants_ayaa_2_to_non_pp_players() {
     let mut t = Table::new(&["丸山彩", "户山香澄", "白鹭千圣"]);
     t.clean();
     t.begin_turn(0);
@@ -1969,7 +1977,7 @@ fn accident_blocks_pp_skill_2() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        assert!(!p.title.key().contains("aya_with"), "{}", t.dump_prompt());
+        assert!(!p.title.key().contains("aya"), "{}", t.dump_prompt());
         t.decline();
     }
     assert_eq!(fans(&t, 0), (3, 0), "skill (2) never used");

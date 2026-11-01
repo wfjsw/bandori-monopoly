@@ -184,7 +184,7 @@ pub fn change_the_world_frame(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     frame(
-        step.pre,
+        step.condition,
         step.post,
         &[
             &format!("hand:P{who}"),
@@ -540,7 +540,7 @@ pub fn c_ras_riot_cycle(step: &Step<'_>) -> Result<(), String> {
     }
     // Every player's hand size after the cycle equals the size that was
     // cycled (the counter card itself already left the holder's hand).
-    for i in 0..step.pre.st.players.len() {
+    for i in 0..step.condition.st.players.len() {
         let pre_h = step.pre_hand_len(i);
         let post_h = step.post_hand_len(i);
         // The countered play may have consumed the user's card before the
@@ -549,7 +549,7 @@ pub fn c_ras_riot_cycle(step: &Step<'_>) -> Result<(), String> {
         let who = step.player_of_act();
         let expect = if i == who { pre_h.max(post_h) } else { pre_h };
         let _ = expect;
-        // Size-only pin: the post hand must not be the untouched pre hand
+        // Size-only pin: the post hand must not be the untouched condition hand
         // when the player actually held cards (they were discarded).
         if pre_h > 0 && post_h == 0 && i != who {
             return Err(format!(

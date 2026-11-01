@@ -42,7 +42,7 @@ crate::host_subset!(rinne_rain_dispatch {
 /// `MyGO:哪怕这旅程没有终点` play — place on current tile + 4 crystals.
 /// `place_card_on` (NOT `place_card_at`: name at `(a2,a3)`, tile at `a1`).
 crate::host_subset!(endless_journey_dispatch {
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_on => arm_place_card_on,
     player_pos => arm_player_pos,
     set_counter_self => arm_set_counter_self,
@@ -57,7 +57,7 @@ crate::host_subset!(haneoka_dispatch {
     mortgaged_of => arm_mortgaged_of,
     add_house => arm_add_house,
     draw => arm_draw,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     log | effect => arm_log,
 });
@@ -68,7 +68,7 @@ crate::host_subset!(haneoka_dispatch {
 /// walk is one agent — the stay leg is PROTOCOL-adjacent (`rainday_02`).
 /// Not a silent-zero: a real face of 1 on the 1d10.
 crate::host_subset!(that_day_rain_dispatch {
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     set_counter_self => arm_set_counter_self,
     roll => arm_roll_face_one,
@@ -184,7 +184,7 @@ crate::host_subset!(tomori_no_longer_dispatch {
     raise_after => arm_raise_after,
     skip_main_move => arm_stub_zero,
     log_as => arm_log,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     cards_in => arm_cards_in,
     discard_from_hand => arm_discard_from_hand,
@@ -231,7 +231,7 @@ fn effects_of() -> ([Effect; world::MAX_LOG], usize) {
 fn rinpuu_01_give_stay_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2_user(rinne_rain_dispatch, user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // DIRECT body call (ppcost): one body in CBMC's call graph.
     invoke::unwrap_done(card_mygo::rinne_rain::rinne_rain_kani(user));
     kani::cover!(true, "body returned");
@@ -244,12 +244,15 @@ fn rinpuu_01_give_stay_iff_at(user: i32) {
         "C-MYGO-rinpuu-01: effect log must be exactly one GiveStay(user, 1)"
     );
     crate::kassert!(
-        spec::rinpuu_01_post_ok(&pre, &post, user),
-        "C-MYGO-rinpuu-01: post must be pre + 1 stay on the user, frame unchanged"
+        spec::rinpuu_01_post_ok(&condition, &post, user),
+        "C-MYGO-rinpuu-01: post must be condition + 1 stay on the user, frame unchanged"
     );
 
-    kani::cover!(pre.stay[user as usize] == 0, "pre stay was 0");
-    kani::cover!(pre.stay[user as usize] > 0, "pre stay was nonzero");
+    kani::cover!(condition.stay[user as usize] == 0, "condition stay was 0");
+    kani::cover!(
+        condition.stay[user as usize] > 0,
+        "condition stay was nonzero"
+    );
 }
 
 /// Iff at seat 0.
@@ -305,7 +308,7 @@ pub fn rinpuu_01_mutant_two_layers() {
 
 // ===========================================================================
 // C-MYGO-rinpuu-02 is PROTOCOL-LEVEL: 「并在回合结束时额外进行一次[触发结算]」
-// is engine scheduling (`On::Schedule` + `card_settle_at`, a protocol stub).
+// is engine scheduling (`On::Schedule` + `settle_tile_at`, a protocol stub).
 // Documented here so the unit table can cite a harness name.
 // ===========================================================================
 
@@ -322,8 +325,8 @@ pub fn rinpuu_01_mutant_two_layers() {
 fn journey_01_place_four_crystals_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     sparse2_user(endless_journey_dispatch, user);
-    let pre = world::snapshot();
-    let tile = pre.pos[user as usize];
+    let condition = world::snapshot();
+    let tile = condition.pos[user as usize];
     invoke::unwrap_done(card_mygo::endless_journey::endless_journey_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -346,17 +349,20 @@ fn journey_01_place_four_crystals_iff_at(user: i32) {
         "C-MYGO-journey-01: exactly one field instance"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
     crate::kassert!(
-        world::arr8b_eq(post.hand, pre.hand),
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
+    crate::kassert!(post.stay == condition.stay, "frame: stay unchanged");
+    crate::kassert!(
+        world::arr8b_eq(post.hand, condition.hand),
         "frame: hand unchanged (play body does not draw)"
     );
 
-    kani::cover!(pre.stay[user as usize] == 0, "clean pre");
+    kani::cover!(condition.stay[user as usize] == 0, "clean condition");
 }
 
 /// Iff at seat 0.
@@ -419,8 +425,8 @@ fn haneoka_world(user: i32) {
 fn haneoka_thresholds_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     haneoka_world(user);
-    let pre = world::snapshot();
-    let pos = pre.pos[user as usize];
+    let condition = world::snapshot();
+    let pos = condition.pos[user as usize];
     let pre_houses = world::with_world(|w| w.tiles[pos as usize].houses);
     invoke::unwrap_done(card_mygo::haneoka::haneoka_kani(user));
     kani::cover!(true, "body returned");
@@ -471,7 +477,7 @@ fn haneoka_thresholds_iff_at(user: i32) {
             "C-MYGO-haneoka-02: exactly one free house"
         );
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "C-MYGO-haneoka-02: 免费 — money unchanged"
         );
     } else {
@@ -480,12 +486,15 @@ fn haneoka_thresholds_iff_at(user: i32) {
             "C-MYGO-haneoka-05: no house on r<10"
         );
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "frame: money unchanged"
         );
     }
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
+    crate::kassert!(post.stay == condition.stay, "frame: stay unchanged");
 }
 
 /// Thresholds iff at seat 0.
@@ -550,7 +559,7 @@ fn rainday_01_place_five_crystals_iff_at(user: i32) {
         w.pos[user as usize] = if agent_tile >= 0 { agent_tile } else { 0 };
         w.pos[1 - user as usize] = 0;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mygo::that_day_rain::that_day_rain_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -567,10 +576,13 @@ fn rainday_01_place_five_crystals_iff_at(user: i32) {
         "C-MYGO-rainday-01: card must hold exactly 5 crystals"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
 
     let mut stayed = false;
     let mut i = 0usize;
@@ -697,7 +709,7 @@ fn kinds_sum(kinds: &[i32; MAX_PLAYERS]) -> i32 {
 fn hitoshizuku_money_iff_at(user: i32, heavy: bool) {
     debug_assert!(user == 0 || user == 1);
     hitoshizuku_world(user, heavy);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -726,7 +738,7 @@ fn hitoshizuku_money_iff_at(user: i32, heavy: bool) {
         }
         crate::kassert!(!money, "C-MYGO-hitoshizuku: no clear ⇒ no money");
     } else {
-        let book_ok = spec::hitoshizuku_money_ok(effects, user, &kinds, pre.n_players);
+        let book_ok = spec::hitoshizuku_money_ok(effects, user, &kinds, condition.n_players);
         crate::kassert!(
             book_ok,
             "C-MYGO-hitoshizuku-02: book wants 1000 per type per affected player"
@@ -750,7 +762,10 @@ fn hitoshizuku_money_iff_at(user: i32, heavy: bool) {
         );
         p += 1;
     }
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
 }
 
 /// Book-spec iff at seat 0.
@@ -786,9 +801,9 @@ fn hitoshizuku_body_global_pay_observed_at(user: i32) {
     let uneven = global_kinds > 0 && kinds[0] != kinds[1];
     kani::cover!(uneven, "uneven kinds (mutant distinguishable)");
     if uneven {
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         let body_global =
-            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, pre.n_players);
+            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, condition.n_players);
         crate::kassert!(
             !body_global,
             "mutant: body must not charge 1000 * global kinds when per-player kinds differ"
@@ -846,7 +861,7 @@ pub fn hitoshizuku_no_clear_is_noop() {
 // ===========================================================================
 // C-MYGO-tomori-card-01/02
 // `MyGO:（灯）不再迷茫` On::Play.
-// Seat-symmetric. Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the
+// Seat-symmetric. Isolation: empty hand at condition (X=0 ⇒ crystals=1) so the
 // `cards_in` String loop is a no-op. lockedStay is a slot write (no Effect);
 // set_crystals(1) is `set_counter_self` and logs one AddCounter.
 // ===========================================================================
@@ -862,7 +877,7 @@ fn tomori_world(user: i32) {
 fn tomori_card_02_empty_hand_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     tomori_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_mygo::tomori_no_longer::tomori_no_longer_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -884,16 +899,19 @@ fn tomori_card_02_empty_hand_iff_at(user: i32) {
         "C-MYGO-tomori-card-01: lockedStay marks the 2 layers"
     );
     crate::kassert!(
-        post.stay[user as usize] == pre.stay[user as usize].saturating_add(2),
+        post.stay[user as usize] == condition.stay[user as usize].saturating_add(2),
         "C-MYGO-tomori-card-01: exactly 2 stay layers"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     crate::kassert!(
-        world::arr8b_eq(post.hand, pre.hand),
+        world::arr4_eq(post.pos, condition.pos),
+        "frame: pos unchanged"
+    );
+    crate::kassert!(
+        world::arr8b_eq(post.hand, condition.hand),
         "frame: hand unchanged (empty)"
     );
 }

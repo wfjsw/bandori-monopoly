@@ -91,7 +91,7 @@ pub fn card_10draw_frame(step: &Step<'_>) -> Result<(), String> {
         format!("state:P{who}:gacha10_used"),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 /// The clause set a unit-owned card test would arm on `Table::observe`.
@@ -123,7 +123,7 @@ fn ten_draw_contract() {
         t.set_draw(0, &["通用:GREAT", "通用:安可", "通用:尽力后的收获"]);
         t.give(0, &[CARD]);
 
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         // Arm the clauses *after* arranging -- the arranged state is not a
         // transition.
         t.observe(CLAUSES);
@@ -154,7 +154,7 @@ fn ten_draw_contract() {
 
         // Frame: nothing else moved.
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",

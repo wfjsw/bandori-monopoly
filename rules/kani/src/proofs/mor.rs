@@ -1,7 +1,7 @@
 //! Unit `mor`: clause proofs.
 //!
 //! Per clause (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
+//! 1. iff proof (post == spec(condition) and effect log exactly and frame);
 //! 2. no-op proof when the trigger/condition is false;
 //! 3. kani::cover! each branch;
 //! 4. MUTANT (reachable-disagreement companion preferred).
@@ -105,7 +105,7 @@ fn set_self_crystals(v: i32) {
 fn rui_demon_01_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     rui_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // DIRECT body call (ppcost): one body in CBMC's call graph.
     invoke::unwrap_done(card_morfonica::rui_devil::rui_devil_kani(user));
     kani::cover!(true, "body returned");
@@ -114,8 +114,8 @@ fn rui_demon_01_iff_at(user: i32) {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    let out = pre.out;
-    let n = pre.n_players;
+    let out = condition.out;
+    let n = condition.n_players;
     let n_others = (0..n).filter(|&p| p != user && !out[p as usize]).count();
     kani::cover!(n_others == 1, "one other living seat");
 
@@ -124,15 +124,15 @@ fn rui_demon_01_iff_at(user: i32) {
         "C-MOR-rui-demon-01: effect log must be 100-out + X=5 per other, then 300-in + X=5 (trailing X=5 optional)"
     );
     crate::kassert!(
-        spec::rui_demon_01_post_ok(&post, &pre, user, n, &out),
+        spec::rui_demon_01_post_ok(&post, &condition, user, n, &out),
         "C-MOR-rui-demon-01: post money must match the face-value legs (floored/saturated)"
     );
     // Frame: no positions / fire / stay / piles from the money legs.
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-    crate::kassert!(post.stay == pre.stay, "frame: stay");
-    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
-    crate::kassert!(post.discard == pre.discard, "frame: discard");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+    crate::kassert!(post.stay == condition.stay, "frame: stay");
+    crate::kassert!(world::arr8b_eq(post.hand, condition.hand), "frame: hand");
+    crate::kassert!(post.discard == condition.discard, "frame: discard");
 }
 
 /// C-MOR-rui-demon-01/02 iff at seat 0 (`n_players = 2`).
@@ -160,13 +160,14 @@ pub fn rui_demon_01_mutant_is_detected() {
     let user = 0i32;
     // Pin the other seat living so the mutant predicate is reachable.
     kani::assume(!world::with_world(|w| w.out[1]));
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::rui_devil::rui_devil_kani(user));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let mutant = spec::rui_demon_01_effects_ok_mutant(&effects, user, pre.n_players, &pre.out);
+    let mutant =
+        spec::rui_demon_01_effects_ok_mutant(&effects, user, condition.n_players, &condition.out);
     kani::cover!(!mutant, "mutant disagrees with the card");
     crate::kassert!(!mutant, "mutant: card must not match the 200-leg spec");
 }
@@ -227,7 +228,7 @@ fn xiaobai_world(user: i32) -> (i32, i32) {
 /// the payee lose `amount / 2`. Exactly one effect: `PayMoney(payee, half)`.
 fn xiaobai_01_iff_at(user: i32) {
     let (payee, amount) = xiaobai_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::mashiro_pay::counteract_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -243,7 +244,7 @@ fn xiaobai_01_iff_at(user: i32) {
         "C-MOR-xiaobai-01: exactly PayMoney(payee, amount/2)"
     );
     crate::kassert!(
-        spec::xiaobai_01_post_ok(&post, &pre, payee, amount),
+        spec::xiaobai_01_post_ok(&post, &condition, payee, amount),
         "C-MOR-xiaobai-01: payee loses amount/2"
     );
     // The rewrite lands on the pending trigger target.
@@ -254,11 +255,11 @@ fn xiaobai_01_iff_at(user: i32) {
     );
     // Frame: the counteruser's money is untouched by this body.
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize],
+        post.money[user as usize] == condition.money[user as usize],
         "frame: counteruser money"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
 }
 
 #[kani::proof]
@@ -342,14 +343,14 @@ fn rainbow_01_half_iff_at(user: i32) {
     let amount = rainbow_world(user, true);
     let fold = spec::rainbow_01_fold(amount);
     let final_amt = spec::rainbow_01_amount(amount);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::secret_rainbow::counteract_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let _ = &pre;
+    let _ = &condition;
 
     kani::cover!(amount % 2 == 0, "even amount");
     kani::cover!(amount % 10 == 0, "multiple of 10");
@@ -367,7 +368,7 @@ fn rainbow_01_half_iff_at(user: i32) {
         spec::round10(post.pay_amount) == final_amt,
         "C-MOR-rainbow-01: final = round10(fold of add/mul)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 #[kani::proof]
@@ -389,14 +390,14 @@ fn rainbow_02_boost_iff_at(user: i32) {
     let amount = rainbow_world(user, false);
     let fold = spec::rainbow_02_fold(amount);
     let final_amt = spec::rainbow_02_amount(amount);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::secret_rainbow::counteract_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let _ = &pre;
+    let _ = &condition;
 
     kani::cover!(amount == 140, "doc example 140 → fold 210 → final 210");
     kani::cover!(amount % 2 == 1, "odd amount");
@@ -414,7 +415,7 @@ fn rainbow_02_boost_iff_at(user: i32) {
         spec::round10(post.pay_amount) == final_amt,
         "C-MOR-rainbow-02: final = round10(fold of add/mul)"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 #[kani::proof]
@@ -487,8 +488,8 @@ crate::host_subset!(garden_dispatch {
     log | effect => arm_log,
     ask => arm_ask,
     set_steps => arm_stub_zero,
-    set_resolve => arm_stub_zero,
-    card_move => arm_card_move,
+    set_settles => arm_stub_zero,
+    run_planned_move => arm_card_move,
     set_kind => arm_stub_zero,
     set_teleport_to => arm_stub_zero,
     state_add => arm_state_add,
@@ -507,11 +508,11 @@ fn garden_world(user: i32) {
 }
 
 /// IFF (gain leg): first effect is `GainMoney(player, 100)` and post money is
-/// pre + 100 (the later legs of the body do not touch money except settle,
+/// condition + 100 (the later legs of the body do not touch money except settle,
 /// which is a prompt the symbolic answers may take — we only pin the gain).
 fn garden_01_gain_iff_at(user: i32) {
     garden_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // The play prompts (settle choice). `symbolic_answers` makes `ask_yes`
     // return a symbolic bool without an engine pause.
     invoke::unwrap_done(card_morfonica::tsukushi_garden::tsukushi_garden_kani(user));
@@ -528,11 +529,11 @@ fn garden_01_gain_iff_at(user: i32) {
     // The gain always lands; later legs must not undo it. Post money is at
     // least the gain (settle/rent is OPEN-触发结算 and may move more).
     crate::kassert!(
-        post.money[user as usize] >= pre.money[user as usize] + 100,
+        post.money[user as usize] >= condition.money[user as usize] + 100,
         "C-MOR-garden-01: user gains 100 (at least)"
     );
     kani::cover!(
-        post.money[user as usize] == pre.money[user as usize] + 100,
+        post.money[user as usize] == condition.money[user as usize] + 100,
         "exactly +100"
     );
 }
@@ -651,7 +652,7 @@ fn courage_world_owned(user: i32) {
 /// limb (it legitimately takes the 1000-gain arm, courage-02).
 fn courage_03_unowned_iff_at(user: i32) {
     courage_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -670,7 +671,7 @@ fn courage_03_unowned_iff_at(user: i32) {
     // courage-02.
     if effects.is_empty() {
         crate::kassert!(
-            spec::courage_03_post_ok(&post, &pre),
+            spec::courage_03_post_ok(&post, &condition),
             "C-MOR-courage-03: unowned tile must move no money"
         );
     }
@@ -698,7 +699,7 @@ pub fn courage_03_unowned_user1_iff() {
 pub fn courage_03_empty_when_no_agent_misfire() {
     let user = 0i32;
     courage_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -707,11 +708,11 @@ pub fn courage_03_empty_when_no_agent_misfire() {
     if log_n == 0 {
         crate::kassert!(spec::courage_03_effects_ok(&ebuf[..0]), "empty log");
         crate::kassert!(
-            spec::courage_03_post_ok(&post, &pre),
+            spec::courage_03_post_ok(&post, &condition),
             "C-MOR-courage-03: frame money unchanged on the empty branch"
         );
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
     }
 }
 
@@ -724,7 +725,7 @@ fn courage_01_pay_iff_at(user: i32) {
         w.forced_roll = PROPERTY_FACE;
         w.tiles[PROPERTY_SLOT].houses = PROPERTY_HOUSES;
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -741,12 +742,12 @@ fn courage_01_pay_iff_at(user: i32) {
         "C-MOR-courage-01: exactly one PayTo(owner → user, land + house_total/2)"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + amount
-            || pre.money[user as usize] > i32::MAX - amount,
+        post.money[user as usize] == condition.money[user as usize] + amount
+            || condition.money[user as usize] > i32::MAX - amount,
         "C-MOR-courage-01: user is paid the book amount"
     );
     crate::kassert!(
-        post.money[owner as usize] == (pre.money[owner as usize] - amount).max(0),
+        post.money[owner as usize] == (condition.money[owner as usize] - amount).max(0),
         "C-MOR-courage-01: owner pays the book amount (floor 0)"
     );
 }
@@ -770,7 +771,7 @@ pub fn courage_01_pay_user1_iff() {
 fn courage_02_agent_iff_at(user: i32) {
     courage_world(user);
     world::with_world_mut(|w| w.forced_roll = AGENT_FACE);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -783,8 +784,8 @@ fn courage_02_agent_iff_at(user: i32) {
         "C-MOR-courage-02: agent tile ⇒ exactly GainMoney(user, 1000)"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + 1000
-            || pre.money[user as usize] > i32::MAX - 1000,
+        post.money[user as usize] == condition.money[user as usize] + 1000
+            || condition.money[user as usize] > i32::MAX - 1000,
         "C-MOR-courage-02: user gains 1000 on the agent arm"
     );
 }
@@ -794,7 +795,7 @@ fn courage_02_agent_iff_at(user: i32) {
 fn courage_02_property_iff_at(user: i32) {
     courage_world(user);
     world::with_world_mut(|w| w.forced_roll = PROPERTY_FACE);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::courage_wings::courage_wings_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -806,7 +807,7 @@ fn courage_02_property_iff_at(user: i32) {
         "C-MOR-courage-02: property tile must not take the agent arm"
     );
     crate::kassert!(
-        spec::courage_03_post_ok(&post, &pre),
+        spec::courage_03_post_ok(&post, &condition),
         "C-MOR-courage-02: unowned property moves no money"
     );
 }
@@ -881,7 +882,7 @@ crate::host_subset!(toko_dispatch {
     buy_price => arm_buy_price,
     set_owner => arm_set_owner,
     set_mortgaged => arm_set_mortgaged,
-    apply_redeem => arm_apply_redeem,
+    commit_redeem => arm_apply_redeem,
     tile_in => arm_tile_in,
     count_marks_f => arm_count_marks_f,
     pay_to => arm_pay_to,
@@ -897,7 +898,7 @@ fn toko_world(user: i32) {
 /// IFF (no-pair): the body produces no effects.
 fn toko_no_pair_noop_at(user: i32) {
     toko_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::toko_swap::toko_swap_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -909,8 +910,8 @@ fn toko_no_pair_noop_at(user: i32) {
         spec::toko_no_pair_ok(effects),
         "C-MOR-toko-swap-01: no swappable pair ⇒ no effects"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -1002,7 +1003,7 @@ crate::host_subset!(starry_play_dispatch {
     opt_int | opt_str | opt_tile => arm_opt,
     ask => arm_ask,
     pay => arm_pay,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     add_counter_self => arm_add_counter_self,
     log | effect => arm_log,
@@ -1015,7 +1016,7 @@ fn starry_play_world(user: i32) {
 /// IFF: PayMoney(1000·X) + PlaceCard(Field) + AddCounter(X), money floored.
 fn starry_01_place_iff_at(user: i32) {
     starry_play_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::starry_night::starry_night_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1035,7 +1036,7 @@ fn starry_01_place_iff_at(user: i32) {
     kani::cover!(x >= 2 && x <= 4, "X ∈ 2..=4");
 
     crate::kassert!(
-        spec::starry_01_x_in_range(x, pre.money[user as usize]),
+        spec::starry_01_x_in_range(x, condition.money[user as usize]),
         "C-MOR-starry-01: X must be in the engine's 1..=max offer (OPEN-X)"
     );
     crate::kassert!(
@@ -1043,11 +1044,11 @@ fn starry_01_place_iff_at(user: i32) {
         "C-MOR-starry-01: PayMoney(1000X) + PlaceCard + AddCounter(X)"
     );
     crate::kassert!(
-        spec::starry_01_post_ok(&post, &pre, user, x),
+        spec::starry_01_post_ok(&post, &condition, user, x),
         "C-MOR-starry-01: user pays 1000·X (floored at 0)"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
 }
 
 #[kani::proof]
@@ -1108,7 +1109,7 @@ crate::host_subset!(starry_changed_dispatch {
     trig_value => arm_trig_value,
     gain | gain_typed | gain_fixed => arm_gain,
     counter_self => arm_counter_self,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     log | effect => arm_log,
 });
 
@@ -1129,7 +1130,7 @@ fn starry_06_payout_iff_at(user: i32) {
     let after: i32 = kani::any();
     kani::assume(after >= 0 && after <= 3);
     starry_changed_world(user, after, -removed);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::starry_night::on_crystals_changed_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1154,9 +1155,9 @@ fn starry_06_payout_iff_at(user: i32) {
         );
     }
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + 1000 * removed
-            || pre.money[user as usize] > i32::MAX - 1000 * removed,
-        "C-MOR-starry-06: post money = pre + 1000·removed"
+        post.money[user as usize] == condition.money[user as usize] + 1000 * removed
+            || condition.money[user as usize] > i32::MAX - 1000 * removed,
+        "C-MOR-starry-06: post money = condition + 1000·removed"
     );
 }
 
@@ -1244,14 +1245,14 @@ fn starry_05_circle_iff_at(user: i32) {
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 1 && crystals <= 5);
     starry_pass_world(user, crystals);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::starry_night::hook_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    let _ = &pre;
+    let _ = &condition;
 
     kani::cover!(crystals == 1, "last crystal");
     kani::cover!(crystals > 1, "not the last crystal");
@@ -1265,7 +1266,7 @@ fn starry_05_circle_iff_at(user: i32) {
         after == crystals - 1,
         "C-MOR-starry-05: crystal count drops by 1"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 #[kani::proof]
@@ -1289,19 +1290,19 @@ fn starry_05_noop_at(user: i32) {
     starry_pass_world(user, crystals);
     // Flip the trigger to a non-circle tile (board index 2 is a property).
     world::with_world_mut(|w| w.trig_tile = 2);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::starry_night::hook_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
-    let _ = &pre;
+    let _ = &condition;
 
     crate::kassert!(
         log_n == 0,
         "C-MOR-starry-05: non-CiRCLE pass must not remove a crystal"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
     let after = self_crystals();
     crate::kassert!(after == crystals, "C-MOR-starry-05: crystals unchanged");
 }
@@ -1328,7 +1329,7 @@ pub fn starry_05_noop_user1() {
 // 「（3）将此卡放置在场上并放置x个奇迹水晶…」
 // 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」
 //
-// BLOCKED-HOST: `Op::tok_names` returns 0 (empty name list) so the hand-play
+// BLOCKED-HOST: `Op::held_names` returns 0 (empty name list) so the hand-play
 // path always refuses; `Op::placed_cards` returns a raw count (not a name
 // list) so the (3) press cannot find a bound skill. The multi-branch pick is
 // OPEN-多分支选择 (engine runs the first Play only).
@@ -1338,7 +1339,7 @@ pub fn starry_05_noop_user1() {
 // shape as starry-02 / AG half-speed. The play press with *already* empty
 // crystals is a no-op (it does not itself discard) — that is correct, not a
 // LESS: exhaustion is observed on the count *change*. The iff below drives
-// the hook and pins the dest write; `arm_set_dest` commits it as world state
+// the hook and pins the dest write; `arm_set_fate` commits it as world state
 // (field slot drops, discard pile gains the card).
 // Seat-symmetric.
 // ===========================================================================
@@ -1352,7 +1353,7 @@ crate::host_subset!(nnm_play_dispatch {
     add_counter_self => arm_add_counter_self,
     log | effect => arm_log,
     play_card => arm_protocol_stub,
-    tok_names => arm_tok_names,
+    held_names => arm_tok_names,
     count_held | count_held_name => arm_count_held,
     opt_int | opt_str | opt_tile => arm_opt,
     ask => arm_ask,
@@ -1363,7 +1364,7 @@ crate::host_subset!(nnm_play_dispatch {
     schedule_turn_end => arm_stub_zero,
     raise => arm_raise,
     gain | gain_typed | gain_fixed => arm_gain,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
 });
 
@@ -1384,7 +1385,7 @@ fn nnm_world(user: i32, crystals: i32) {
 
 /// IFF C-MOR-nnm-05: the CounterChanged hook (「当奇迹水晶耗尽时」) requests
 /// `dest = Graveyard`. Book: 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」.
-/// Body: `on_crystals_changed` → `set_dest(Dest::Graveyard)`; `arm_set_dest`
+/// Body: `on_crystals_changed` → `set_dest(Dest::Graveyard)`; `arm_set_fate`
 /// commits it as world state (field slot drops, discard pile gains the card).
 /// Driven directly (the CEL residual `trigger::card_is` is unmodeled under
 /// Kani — same style as starry-02/06).
@@ -1423,8 +1424,8 @@ pub fn nnm_05_empty_discard_user1_iff() {
 /// observed on the CounterChanged *change*), not a LESS.
 fn nnm_05_press_empty_is_noop_at(user: i32) {
     nnm_world(user, 0);
-    let pre_dest = 2i32; // sentinel Field; the press must leave it alone
-    let pre = world::snapshot();
+    let pre_fate = 2i32; // sentinel Field; the press must leave it alone
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::nanami_effort::play_kani(user));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1433,15 +1434,15 @@ fn nnm_05_press_empty_is_noop_at(user: i32) {
     let dest = world::with_world(|w| w.dest);
 
     kani::cover!(
-        spec::nnm_05_press_empty_noop(effects, dest, pre_dest),
+        spec::nnm_05_press_empty_noop(effects, dest, pre_fate),
         "empty press is a no-op"
     );
     crate::kassert!(
-        spec::nnm_05_press_empty_noop(effects, dest, pre_dest),
+        spec::nnm_05_press_empty_noop(effects, dest, pre_fate),
         "C-MOR-nnm-05: Play press with 0 crystals is a no-op (no dest write)"
     );
     let post = world::snapshot();
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 #[kani::proof]
@@ -1501,7 +1502,7 @@ pub fn nnm_05_atend_leaves_field_card() {
 /// 1000/1500/2000, else the 专有名词 11 default 2000). The body raises
 /// `PassRewardAffected` per reward; a listener (Morfonica `on_circle`) may
 /// replace the amount and cancel the default. Spec-only (hand-play is
-/// BLOCKED-HOST on `tok_names`); `reward` is the live figure the reward step
+/// BLOCKED-HOST on `held_names`); `reward` is the live figure the reward step
 /// yields, so book == body.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
@@ -1571,7 +1572,7 @@ crate::host_subset!(tritone_dispatch {
     add_counter_self => arm_add_counter_self,
     set_counter_self => arm_set_counter_self,
     counter_self => arm_counter_self,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
     state_set => arm_state_set,
     state_get => arm_state_get,
@@ -1593,7 +1594,7 @@ fn tritone_01_gain_place_iff_at(user: i32) {
     let amount: i32 = kani::any();
     kani::assume(amount >= 1 && amount <= 5_000);
     tritone_counteract_world(user, amount);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::tritone::counteract_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1615,8 +1616,8 @@ fn tritone_01_gain_place_iff_at(user: i32) {
         "C-MOR-tritone-01: card is placed with 3 crystals"
     );
     crate::kassert!(
-        post.money[user as usize] == pre.money[user as usize] + amount
-            || pre.money[user as usize] > i32::MAX - amount,
+        post.money[user as usize] == condition.money[user as usize] + amount
+            || condition.money[user as usize] > i32::MAX - amount,
         "C-MOR-tritone-01: user gains the lost amount"
     );
 }
@@ -1651,7 +1652,7 @@ fn tritone_02_tick_iff_at(user: i32) {
         w.field_n = 1;
         w.dest = 2; // sentinel (Field): not Graveyard
     });
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::tritone::counteract_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1673,7 +1674,7 @@ fn tritone_02_tick_iff_at(user: i32) {
     );
     if pre_crystals == 1 {
         crate::kassert!(
-            post.money[user as usize] == (pre.money[user as usize] - owed).max(0),
+            post.money[user as usize] == (condition.money[user as usize] - owed).max(0),
             "C-MOR-tritone-02: owner pays back the loan (OPEN-三全音收款人: bank)"
         );
         let dest = world::with_world(|w| w.dest);
@@ -1683,7 +1684,7 @@ fn tritone_02_tick_iff_at(user: i32) {
         );
     } else {
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "frame: money on a decay-only tick"
         );
         let dest = world::with_world(|w| w.dest);
@@ -1734,7 +1735,7 @@ pub fn tritone_02_mutant_is_detected() {
 // ===========================================================================
 // C-MOR-noble-02  `Mor:高贵的微蓝`
 // 「如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记…」
-// OPEN-触发结算: the forced settle (`card_settle_at`) is a protocol stub
+// OPEN-触发结算: the forced settle (`settle_tile_at`) is a protocol stub
 // returning 0; only the mark leg is pinned. The body is invoked directly
 // (the `cant_play` price gate is a residual, not in this subset).
 // Seat-symmetric on the standing player.
@@ -1745,7 +1746,7 @@ crate::host_subset!(noble_dispatch {
     player_pos => arm_player_pos,
     tile_owner => arm_tile_owner,
     log | effect => arm_log,
-    card_settle_at => arm_protocol_stub,
+    settle_tile_at => arm_protocol_stub,
     place_mark => arm_place_mark,
     self_uid => arm_self_uid,
 });
@@ -1767,7 +1768,7 @@ fn noble_world(user: i32, owned: bool) -> i32 {
 /// The forced settle (1) is OPEN-触发结算 / PROTOCOL-LEVEL and is not pinned.
 fn noble_02_mark_iff_at(user: i32) {
     let pos = noble_world(user, true);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1784,10 +1785,10 @@ fn noble_02_mark_iff_at(user: i32) {
         "C-MOR-noble-02: mark lands on the tile (OPEN-触发结算 not pinned)"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money (settle is a stub)"
     );
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -1807,7 +1808,7 @@ pub fn noble_02_mark_user1_iff() {
 /// NO-OP (not yours): no effects.
 fn noble_02_not_yours_noop_at(user: i32) {
     let _pos = noble_world(user, false);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::noble_blue::noble_blue_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1819,8 +1820,8 @@ fn noble_02_not_yours_noop_at(user: i32) {
         spec::noble_02_not_yours_ok(effects),
         "C-MOR-noble-02: tile not yours ⇒ no effects"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -1866,7 +1867,7 @@ pub fn noble_02_mutant_is_detected() {
 /// `Mor:再次牵起手来` PaySplitAt hook body ops.
 crate::host_subset!(hold_hands_dispatch {
     trig_set_pay_amount => arm_trig_set_pay_amount,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     log | effect => arm_log,
 });
 
@@ -1883,7 +1884,7 @@ fn again_02_cancel_iff_at(user: i32) {
     let pay_amount: i32 = kani::any();
     kani::assume(pay_amount >= 1 && pay_amount <= 5_000);
     again_02_world(user, pay_amount);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // ABI v75 pure Filter (PayAt): 「取消此次资金变动」 -- the body RETURNS 0
     // and the host folds that into the running amount. Stage moved out of
     // `set_pay_amount` / `set_dest` (the old combined Action wrote both).
@@ -1910,7 +1911,7 @@ fn again_02_cancel_iff_at(user: i32) {
         "C-MOR-again-02: card is sent to the discard (dest = Graveyard)"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money (cancel only)"
     );
 }
@@ -1950,7 +1951,7 @@ pub fn again_02_mutant_is_detected() {
 // stub returning 0, so `tile_steps_ahead(player, 20·0)` is the current tile.
 // The harness pins the book destination (`pos + 20·dir`) and is expected to
 // fail whenever dir ≠ 0 would be the real planned direction. wing-02 (the
-// follow-on roll via `card_move`) is PROTOCOL-LEVEL scheduling. Seat-symmetric.
+// follow-on roll via `run_planned_move`) is PROTOCOL-LEVEL scheduling. Seat-symmetric.
 // ===========================================================================
 
 /// `Mor:纯真振翅` play body ops.
@@ -1963,8 +1964,8 @@ crate::host_subset!(wing_dispatch {
     player_out => arm_player_out,
     set_kind => arm_stub_zero,
     set_teleport_to => arm_stub_zero,
-    set_resolve => arm_stub_zero,
-    card_move => arm_card_move,
+    set_settles => arm_stub_zero,
+    run_planned_move => arm_card_move,
     log | effect => arm_log,
 });
 
@@ -1982,7 +1983,7 @@ fn wing_world(user: i32) -> i32 {
 /// book formula with `dir` recovered from the host's own `tile_steps_ahead`.
 fn wing_01_teleport_iff_at(user: i32) {
     let pos = wing_world(user);
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_morfonica::pure_wings::pure_wings_kani(user));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
@@ -1993,7 +1994,7 @@ fn wing_01_teleport_iff_at(user: i32) {
     // The body calls `tile_steps_ahead(player, 20 * plan::dir())` then
     // `teleport_to`. Under the stub, dir = 0 ⇒ dest = pos.
     let dir = 0i32; // Op::move_dir stub
-    let want = spec::wing_01_dest(pos, dir);
+    let want = spec::wing_01_fate(pos, dir);
     kani::cover!(want == pos, "stub dir=0 lands on the current tile");
     kani::cover!(want != pos, "would move (dir ≠ 0)");
 
@@ -2006,7 +2007,7 @@ fn wing_01_teleport_iff_at(user: i32) {
         "C-MOR-wing-01: user lands on the teleport destination"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money (no settle)"
     );
 }
@@ -2034,8 +2035,8 @@ pub fn wing_01_teleport_user1_iff_blocked_host() {
 pub fn wing_01_dir_stub_gap() {
     let pos: i32 = kani::any();
     kani::assume(pos >= 0 && pos < 60);
-    let book = spec::wing_01_dest(pos, 1); // forward
-    let stub = spec::wing_01_dest(pos, 0); // Op::move_dir stub
+    let book = spec::wing_01_fate(pos, 1); // forward
+    let stub = spec::wing_01_fate(pos, 0); // Op::move_dir stub
     kani::cover!(
         book != stub,
         "book forward ≠ stub (BLOCKED-HOST on Op::move_dir)"

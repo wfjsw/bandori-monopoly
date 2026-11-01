@@ -1,4 +1,3 @@
-//! `Mor:（筑紫）迷茫的庭园` -- C# `CardTsukushiGarden` (MatchHost.cs:5261-5306): roll
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:（筑紫）迷茫的庭园`）:
 //! > （筑紫）迷茫的庭园：获得100资金。投掷1d6并根据结果传送到行动条上对应玩家前一格并视为主要移动（选中自己则前进一格，若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家），可以选择是否触发结算。直到下个你的回合开始时，你无法被异常移动
@@ -27,12 +26,7 @@ pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
 const MOVED: &str = "tsukushi_garden_moved";
 
 fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「获得100资金」 -- C# `H.GainR(i, 100, CardName)`.
-    ctx::gain(player_id, 100, &Msg::new(key!("tsukushi_garden_why")))?;
-    // 规则书: 「投掷1d6并根据结果传送到行动条上对应玩家前一格」
-    // 「若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家」
-    // -- C# `list` is the still-in players in index order,
-    // `who = list[(num - 1) % list.Count]`.
+    ctx::gain(player_id, 100, &Msg::new(key!("tsukushi_garden_reason")))?;
     let mut list: [i32; 10] = [0; 10];
     let mut count = 0;
     let n_players = ctx::player_count();
@@ -80,37 +74,27 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
                 .i("roll", r as i64),
         );
     }
-    // 规则书: 「并视为主要移动」 -- C# `H.CardMove(c, new MoveCtx { ... })`.
-    // 「可以选择是否触发结算」 is asked *after* the move (the choice is about
-    // the tile actually entered), so the move runs `Resolve = false` here and
-    // the settle below is applied to the landed tile.
-    // TODO(规则书)（并视为主要移动）: the book prints no play gate, so the card
-    // stays playable and 「获得100资金」/the protection land even with the main
-    // move spent or [停留] latched; only this move arm reads the gate.
-    // Whether it should be gated at all is the same open question as
-    // LOY-TSUGU-01.
-    // The guard must not be re-read on a replay: the body re-runs with the move
-    // already applied, so `move_blocked` would answer "already moved" and skip
-    // the settle prompt (LOY-TSUGU-01). The landed position or the `MOVED`
-    // marker says this play already moved; only a first run consults the gate.
+    // TODO(规则书)（并视为主要移动）: })`. 「可以选择是否触发结算」 is asked *after* the move (the choice is
+    // about the tile actually entered), so the move runs `Resolve = false` here and
+    // the settle below is applied to the landed tile. the book prints no play gate,
+    // so the card stays playable and 「获得100资金」/the protection land even with the
+    // main move spent or [停留] latched; only this move arm reads the gate. Whether it
+    // should be gated at all is the same open question as LOY-TSUGU-01. The guard
+    // must not be re-read on a replay: the body re-runs with the move already
+    // applied, so `move_blocked` would answer "already moved" and skip the settle
+    // prompt (LOY-TSUGU-01). The landed position or the `MOVED` marker says this
+    // play already moved; only a first run consults the gate.
     let moved_here = ctx::player_pos(player_id) == to || ctx::slot(player_id, MOVED) == to + 1;
     if moved_here || rules_status::move_blocked(player_id).is_none() {
         ctx::set_slot(player_id, MOVED, to + 1);
         if who == player_id {
-            // 规则书: 「选中自己则前进一格」 -- C# `new MoveCtx { Steps = 1 }`.
             ctx::plan::set_steps(1);
         } else {
-            // 规则书: 「传送到行动条上对应玩家前一格」 -- C# `new MoveCtx {
-            //   TeleportTo = to }`.
             ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
             ctx::plan::set_teleport_to(to);
         }
-        ctx::plan::set_resolve(false);
-        ctx::card_move(player_id);
-        // 规则书: 「可以选择是否触发结算」 -- C# `H.AskYes(..., "这次移动要 [结算]
-        //   吗？", default yes when the tile is buyable and unowned-or-yours)`;
-        //   the generic `ctx::ask_yes` has no default parameter, so its
-        //   fallback is always No.
+        ctx::plan::set_settles(false);
+        ctx::run_planned_move(player_id);
         let settle = ctx::ask_yes(
             player_id,
             &Msg::new(key!("tsukushi_garden_settle_title")),
@@ -123,7 +107,7 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
                 player_id,
                 &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to),
             );
-            ctx::card_settle_at(player_id, to, true);
+            ctx::settle_tile_at(player_id, to, true);
         }
     }
     if ctx::player_out(player_id) {

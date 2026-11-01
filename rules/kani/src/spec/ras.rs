@@ -2,7 +2,7 @@
 //!
 //! Sources: `docs/rulebook/spec/cards/ras.md` + `docs/rulebook/cards.json`.
 //! Never derived from engine behaviour. Each function is one clause's
-//! Trigger / Condition / Effect / Frame as a predicate on pre + log + post.
+//! Trigger / Condition / Effect / Frame as a predicate on condition + log + post.
 //!
 //! OPEN items are named in the module docs of each clause group and recorded
 //! in `docs/rulebook/spec/kani/ras.md`. Prove only what the text determines.
@@ -16,7 +16,7 @@ use crate::world::{Effect, Snapshot, MAX_PLAYERS};
 //
 // Clause 03 only: the money half. The teleport half (01/02) needs
 // `Op::tile_named` for the six destination names and the move-plan
-// (`plan::set_teleport_to` / `set_resolve` / `card_move`) — see the unit
+// (`plan::set_teleport_to` / `set_settles` / `run_planned_move`) — see the unit
 // table (BLOCKED-HOST / PROTOCOL-LEVEL).
 // OPEN-unstoppable-mod: face 6 is `6 mod 6 = 0` but the body says 「结果1-6」;
 // this spec uses the printed 1-6 branches.
@@ -76,7 +76,7 @@ pub fn riot_draw_count(hand_len: i32, is_holder: bool) -> i32 {
 
 /// Effect log of the cycle, in body order: every living player's hand is
 /// discarded (player order, hand order), then every living player draws
-/// `h` (player order), then the holder draws 1 extra. `hands[p]` is the pre
+/// `h` (player order), then the holder draws 1 extra. `hands[p]` is the condition
 /// hand of player `p` as a list of card slots in `cards_in` order; `out[p]`
 /// marks players already out.
 pub fn riot_cycle_log_ok(
@@ -143,8 +143,10 @@ pub fn riot_cycle_log_ok(
 }
 
 /// Frame: money / positions / fire untouched by the cycle itself.
-pub fn riot_cycle_frame_ok(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr4_eq(pre.money, post.money) && pre.pos == post.pos && pre.charge == post.charge
+pub fn riot_cycle_frame_ok(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr4_eq(condition.money, post.money)
+        && condition.pos == post.pos
+        && condition.charge == post.charge
 }
 
 /// Mutant: the holder draws one *fewer* (no 「你额外抽1张卡」).
@@ -161,12 +163,12 @@ pub fn riot_draw_count_mutant(hand_len: i32, is_holder: bool) -> i32 {
 // house-removal offer is declined / has no eligible tile, and the holder is
 // not 鳰原令王那 (so 「视为你的房屋总数增加」 has no listener).
 // The printed cap 「上限3」 lives on the 鳰原令王那 skill text and on
-// `ctx::add_tok(..., max=3)`; the body *requests* +2 and names max 3.
+// `ctx::add_held_by_name(..., max=3)`; the body *requests* +2 and names max 3.
 // OPEN: the card text itself does not print a cap.
 // ===========================================================================
 
 /// Marks gained by the card's request: always 2, subject to the host's max
-/// clamp (max=3 named by the body). Sub-cap region (`pre <= 1`) the grant is
+/// clamp (max=3 named by the body). Sub-cap region (`condition <= 1`) the grant is
 /// exactly 2.
 pub fn pareo_01_mark_delta() -> i32 {
     2
@@ -182,12 +184,12 @@ pub fn pareo_01_log_ok(effects: &[Effect], player: i32, pareo_key: u16) -> bool 
 }
 
 /// Frame for the mark half: nothing but the mark moved.
-pub fn pareo_01_frame_ok(pre: &Snapshot, post: &Snapshot) -> bool {
-    crate::world::arr4_eq(pre.money, post.money)
-        && pre.pos == post.pos
-        && pre.charge == post.charge
-        && crate::world::arr8b_eq(pre.hand, post.hand)
-        && crate::world::arr8b_eq(pre.discard, post.discard)
+pub fn pareo_01_frame_ok(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr4_eq(condition.money, post.money)
+        && condition.pos == post.pos
+        && condition.charge == post.charge
+        && crate::world::arr8b_eq(condition.hand, post.hand)
+        && crate::world::arr8b_eq(condition.discard, post.discard)
 }
 
 /// Mutant: +3 marks instead of +2.

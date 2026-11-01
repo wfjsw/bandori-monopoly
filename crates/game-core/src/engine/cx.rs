@@ -1,7 +1,7 @@
 //! Routine context, flow control, and prompts.
 //!
-//! A routine is ordinary straight-line code over a [`Cx`]. When it needs a player
-//! decision it calls [`Cx::ask`]. If the answer is already in this routine's answer
+//! A routine is ordinary straight-line code over a [`PlayCtx`]. When it needs a player
+//! decision it calls [`PlayCtx::ask`]. If the answer is already in this routine's answer
 //! log, `ask` returns it; otherwise it halts the routine with [`Halt::Ask`]. The host
 //! then shows the prompt, collects the answer, and re-runs the routine from the same
 //! snapshot with the longer log -- deterministic replay instead of coroutines.
@@ -34,8 +34,8 @@ pub enum HaltKind {
     Ended,
     /// A nested host routine (a `[触发结算]` a card triggered) must run before
     /// this call returns. The caller's continuation is on
-    /// [`Cx::work_stack`](super::work::WorkItem); the outermost
-    /// [`Cx::drain_work`] pump runs the nested work then the resume.
+    /// [`PlayCtx::work_stack`](super::work::WorkItem); the outermost
+    /// [`PlayCtx::drain_work`] pump runs the nested work then the resume.
     /// STACK-01: this is how the settle cycle remains on the heap, not the Rust stack.
     Suspended,
 }
@@ -60,7 +60,7 @@ pub type Flow<T> = Result<T, Halt>;
 
 /// Sentinel in [`Ask::ai`] for "no precomputed answer -- fill it in when the
 /// prompt is raised, from the seat's [`crate::state::BotMentality`]". Never
-/// survives into a saved [`Ask`]: [`Cx::ask`] replaces every entry.
+/// survives into a saved [`Ask`]: [`PlayCtx::ask`] replaces every entry.
 pub const AI_UNSET: i32 = i32::MIN;
 
 /// A prompt plus everything the host needs to answer it without the routine:
@@ -108,7 +108,7 @@ impl Ask {
     }
 
     /// `Choice`: pick one of `options`. The AI answer is left [`AI_UNSET`];
-    /// [`Cx::ask`] fills it per seat (standard: the fallback; chaos: a random
+    /// [`PlayCtx::ask`] fills it per seat (standard: the fallback; chaos: a random
     /// non-default option) unless [`Self::with_ai`] overrides it.
     pub fn choice(
         players: Vec<usize>,
@@ -238,19 +238,19 @@ pub struct Answered {
     pub bidder: i32,
 }
 
-/// What a routine gets back from [`Cx::ask`].
+/// What a routine gets back from [`PlayCtx::ask`].
 #[derive(Debug, Clone)]
 pub struct Reply {
     pub players: Vec<i32>,
     pub fallback: i32,
-    pub a: Answered,
+    pub answered: Answered,
 }
 
 /// The card id a prompt option declares (`Arg::Card` on the option's label).
 /// Used by the counteraction offer, whose options are `ask.counteract.play` messages
 /// naming the card each would declare.
 fn option_card(m: &Msg) -> Option<String> {
-    m.a.get("card").and_then(|a| match a {
+    m.args.get("card").and_then(|a| match a {
         crate::msg::Arg::Card(id) => Some(id.clone()),
         _ => None,
     })
@@ -260,14 +260,16 @@ impl Reply {
     /// This seat's recorded answer, or the prompt's fallback.
     pub fn of(&self, player_id: usize) -> i32 {
         match self.players.iter().position(|&s| s == player_id as i32) {
-            Some(i) if self.a.answers.get(i).is_some_and(|&v| v >= 0) => self.a.answers[i],
+            Some(i) if self.answered.answers.get(i).is_some_and(|&v| v >= 0) => {
+                self.answered.answers[i]
+            }
             _ => self.fallback,
         }
     }
 }
 
-/// Simulation-mode answer source (`docs/BOT.md` §3.2). Installed on a [`Cx`];
-/// every [`Cx::ask`] whose replay-log entry is missing calls it instead of
+/// Simulation-mode answer source (`docs/BOT.md` §3.2). Installed on a [`PlayCtx`];
+/// every [`PlayCtx::ask`] whose replay-log entry is missing calls it instead of
 /// halting the routine.
 ///
 /// The live match never installs one (the halt/replay model is what recordings
@@ -276,7 +278,7 @@ impl Reply {
 /// routine runs once per simulation instead of once per prompt.
 pub trait AnswerProvider {
     /// Answer `ask` inline. `ask.ai` / `ask.ai_picked` / `ask.worth` are
-    /// already filled in ([`Cx::fill_ai`]), so the default answer is the seat
+    /// already filled in ([`PlayCtx::fill_ai`]), so the default answer is the seat
     /// heuristic -- exactly what the engine's bot schedule would have applied.
     ///
     /// Returning `None` keeps the default halt path (the host shows the prompt
@@ -397,7 +399,7 @@ pub fn heuristic_answer_with(
 /// One-shot the auction's bid loop: each seat still in raises the minimum once
 /// (the standard bot's `min + 100` middle of its `+0..=+200` nudge) while that
 /// remains under its ceiling, and passes otherwise. The last bidder wins at the
-/// bid it made -- the shape `auction_tile` reads (`r.a.bidder` / `r.a.bid`).
+/// bid it made -- the shape `auction_tile` reads (`r.args.bidder` / `r.args.bid`).
 fn heuristic_auction(
     ask: &Ask,
     params: &dyn Fn(usize) -> crate::strategy::StrategyParams,
@@ -434,9 +436,61 @@ fn heuristic_auction(
     }
 }
 
+/// The terminal outcome of a [触发结算], written as the frame passes its last
+/// terminal stage. Distinguishes "the settle played out" from a cancel and from
+/// the payer leaving, so a reader after the fact (council's refund, the
+/// `settle.outcome` pre field) can tell them apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettleOutcome {
+    /// The settle ran to `tileResolved` with no earlier terminal outcome.
+    #[default]
+    Settled,
+    /// Cancelled at `settle` or `settleBody`.
+    Cancelled,
+    /// The payer left the board (`out`) at `settle` or `settleAfter`.
+    PayerOut,
+    /// The match stopped playing before `tileResolved`.
+    Aborted,
+}
+
+impl SettleOutcome {
+    /// Decode the guest / CEL encoding; an unknown code is `Settled`.
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => SettleOutcome::Cancelled,
+            2 => SettleOutcome::PayerOut,
+            3 => SettleOutcome::Aborted,
+            _ => SettleOutcome::Settled,
+        }
+    }
+
+    /// The guest / CEL encoding.
+    pub const fn as_i32(self) -> i32 {
+        match self {
+            SettleOutcome::Settled => 0,
+            SettleOutcome::Cancelled => 1,
+            SettleOutcome::PayerOut => 2,
+            SettleOutcome::Aborted => 3,
+        }
+    }
+}
+
+/// One open [触发结算] on [`PlayCtx::settle_stack`]. The tile and payer are the
+/// frame's; `base` is the product of the *outer* settle factors (the world's
+/// `settle_pay_factor` at push time) so the entry's own `thisSettle` write
+/// composes on top without re-reading the stack. `outcome` starts
+/// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
+#[derive(Debug, Clone, Copy)]
+pub struct SettleEntry {
+    pub player: usize,
+    pub tile: usize,
+    pub base: f64,
+    pub outcome: SettleOutcome,
+}
+
 /// Routine context: the world being mutated, read-only game data, card rules, and
 /// the replay cursor.
-pub struct Cx<'a> {
+pub struct PlayCtx<'a> {
     pub(crate) w: crate::engine::world::SharedWorld,
     pub(crate) data: &'a GameData,
     pub(crate) rules: &'a dyn CardRules,
@@ -455,11 +509,13 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
-    /// How many [触发结算]s are open right now (nested settles included; a
-    /// settle that suspends keeps its count until it resumes and finishes).
-    /// Non-zero is 「结算中」 for the payments it carries -- RAS:游击演出's
-    /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally. Transient.
-    pub(crate) settle_open: u32,
+    /// The open [触发结算]s, innermost last. An entry is pushed **once** per
+    /// frame (at its first step, not on every resume) and popped on completion,
+    /// so a suspended settle never inflates the depth. Non-empty is 「结算中」
+    /// for the payments the settle carries -- RAS:游击演出's
+    /// 「本回合的[结算]向其他玩家支付了至少1000资金」 tally -- and the
+    /// innermost entry stamps every raise with its tile and outcome. Transient.
+    pub(crate) settle_stack: Vec<SettleEntry>,
     /// Nested `state` [反击] settlement depth. A counter's own skill-state
     /// toggles must not open another window (ping-pong). Transient.
     pub state_raise_depth: u32,
@@ -490,7 +546,7 @@ pub struct Cx<'a> {
     /// Explicit work stack for nested host routines (STACK-01). See
     /// [`crate::engine::work`]. Transient (not serialized).
     pub(crate) work_stack: Vec<Box<dyn crate::engine::work::WorkItem>>,
-    /// True while [`Self::drain_work`] is pumping. A nested `card_settle_at`
+    /// True while [`Self::drain_work`] is pumping. A nested `settle_tile_at`
     /// suspends instead of recursing.
     pub(crate) draining_work: bool,
     /// Index in [`Self::work_stack`] where the current suspension group starts.
@@ -502,9 +558,9 @@ pub struct Cx<'a> {
     /// here; the re-entered `CardRules::counteract` adopts them instead of
     /// re-collecting from a world the nested settle already changed.
     pub(crate) counteract_resume: Option<Box<dyn std::any::Any + Send>>,
-    /// Dest a just-resumed drive returned (STACK-01). The card-fate work
+    /// Dest a just-resumed drive returned (STACK-01). The card-dest work
     /// item reads it after the resume completes.
-    pub(crate) last_drive_dest: Option<i32>,
+    pub(crate) last_drive_fate: Option<i32>,
     /// STACK-01: skip this many `drive` calls on the next counteract
     /// walk (they already completed before a nested-settle suspend).
     pub(crate) drive_skip: u32,
@@ -536,13 +592,13 @@ impl PlayMemo {
             .find(|((p, c), _)| *p == player && c == card)
             .map(|(_, v)| v)
     }
-    fn insert(&mut self, player: usize, card: &str, why: Option<Msg>) {
+    fn insert(&mut self, player: usize, card: &str, reason: Option<Msg>) {
         if let Some(slot) = self
             .entries
             .iter_mut()
             .find(|((p, c), _)| *p == player && c == card)
         {
-            slot.1 = why;
+            slot.1 = reason;
             return;
         }
         // Cap the memo: a scan that runs away must not grow without bound
@@ -550,7 +606,7 @@ impl PlayMemo {
         if self.entries.len() >= 64 {
             self.entries.clear();
         }
-        self.entries.push(((player, card.to_string()), why));
+        self.entries.push(((player, card.to_string()), reason));
     }
     fn clear_exclusive(&mut self) {
         self.exclusive.clear();
@@ -579,7 +635,7 @@ impl PlayMemo {
 
 /// The guest's pending player-state **clears**, overlaid on the live world
 /// while a host routine runs, and **not persisted**:
-/// [`Cx::restore_guests_to`] drops the overlay, keeping only the routine's own
+/// [`PlayCtx::restore_guests_to`] drops the overlay, keeping only the routine's own
 /// effects, and the replay re-applies the guest writes deterministically from
 /// the top of the body.
 ///
@@ -587,7 +643,7 @@ impl PlayMemo {
 /// 壱雫空 zeroing a layer and then paying) must be visible to `can_pay` without
 /// the clear landing twice -- the body replays from the top, so a *persisted*
 /// clear would be re-applied on top of itself and an additive write would
-/// double-count. Only decreases cross; see [`Cx::overlay_guest_state`].
+/// double-count. Only decreases cross; see [`PlayCtx::overlay_guest_state`].
 #[derive(Debug, Default)]
 pub struct GuestOverlay {
     /// `(player, key, base, wrote)` for each state item the guest decreased.
@@ -600,13 +656,13 @@ pub struct GuestOverlay {
     )>,
 }
 
-impl<'a> Cx<'a> {
+impl<'a> PlayCtx<'a> {
     /// Press a skill button: run the rule's `On::Play` entry under its own id.
     ///
     /// A skill is a card rule -- it just lives on the player's field rather than
     /// in a hand -- so the card's play entry answers for it. Nothing moves: there
     /// is no hand card to spend and no destination to resolve, unlike playing a
-    /// card. The gate is not re-checked here; `why_not_act` has already asked the
+    /// card. The gate is not re-checked here; `cant_act` has already asked the
     /// rule's `cant_play` and refused the press if it named a reason, which is
     /// the same shape as every other turn action.
     /// A copy of the replayable world (a rules host runs against one).
@@ -836,15 +892,18 @@ impl<'a> Cx<'a> {
         // gates the settle stages. A 「不[触发结算]」 body clears it *before*
         // the `teleport_to` request (纯真振翅), so it must be on the live plan
         // at the request, not left stale from an earlier move.
-        t.plan.resolve = f.plan.resolve;
+        t.plan.settles = f.plan.settles;
         t.plan.pay_factor = f.plan.pay_factor;
         t.plan.rent_factor = f.plan.rent_factor;
+        // The one-shot scopes are read by the *next* settle / move a routine
+        // starts (`card_settle_at`, `move`), which runs after the body returns.
+        // A `NextSettle` / `NextMove` write made in the body lives on its copy
+        // and has to cross like the plan knobs, or the factor is dropped at the
+        // pause boundary.
+        t.next_settle_pay_factor = f.next_settle_pay_factor;
+        t.next_move_pay_factor = f.next_move_pay_factor;
         t.plan.can_build = f.plan.can_build;
         t.plan.no_buy = f.plan.no_buy;
-        // Card-owned per-move tags are read by the routine's own raise payloads
-        // (`t.Move.Tags`), so they cross with the knobs too -- 笑容大游行 tags
-        // the move of its nested `card_settle_at` so the redirect does not
-        // swap back.
         t.plan.tags = f.plan.tags.clone();
         // A card body may latch a decision across the pauses its host routines
         // cause -- e.g. 黑色生日 freezing 「每名你以外的资金不多于1000的玩家」 at
@@ -1018,6 +1077,16 @@ impl<'a> Cx<'a> {
         self.rules
     }
 
+    /// How many settles are open right now (the [`PlayCtx::settle_stack`] depth).
+    pub fn settle_open(&self) -> u32 {
+        self.settle_stack.len() as u32
+    }
+
+    /// The innermost open settle's tile, `-1` when none is open.
+    pub fn settle_tile(&self) -> i32 {
+        self.settle_stack.last().map_or(-1, |s| s.tile as i32)
+    }
+
     pub fn new(
         w: World,
         data: &'a GameData,
@@ -1034,7 +1103,7 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
-            settle_open: 0,
+            settle_stack: Vec::new(),
             state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,
@@ -1045,7 +1114,7 @@ impl<'a> Cx<'a> {
             draining_work: false,
             suspend_base: 0,
             counteract_resume: None,
-            last_drive_dest: None,
+            last_drive_fate: None,
             drive_skip: 0,
             settle_ops: 0,
         }
@@ -1080,11 +1149,11 @@ impl<'a> Cx<'a> {
         }
         #[cfg(feature = "bot-cost")]
         crate::engine::bot_cost::CANT_PLAY_CALLS.fetch_add(1, Relaxed);
-        let why = self.rules.cant_play(self, player, card);
+        let reason = self.rules.cant_play(self, player, card);
         self.play_memo
             .borrow_mut()
-            .insert(player, card, why.clone());
-        why
+            .insert(player, card, reason.clone());
+        reason
     }
 
     /// The `ExclusiveUse` gate with the per-world memo (same stamp rule as
@@ -1151,7 +1220,7 @@ impl<'a> Cx<'a> {
             return Ok(Reply {
                 players: ask.view.players,
                 fallback: ask.view.fallback,
-                a: a.clone(),
+                answered: a.clone(),
             });
         }
         if let Some(p) = self.provider.as_mut() {
@@ -1161,7 +1230,7 @@ impl<'a> Cx<'a> {
                 return Ok(Reply {
                     players: ask.view.players,
                     fallback: ask.view.fallback,
-                    a,
+                    answered: a,
                 });
             }
         }
@@ -1440,7 +1509,10 @@ impl<'a> Cx<'a> {
             .player_id("who", player_id)
             .i("count", count)
             .i("sides", sides)
-            .opt("what", what.map(|w| Msg::new("log.part.why").msg("why", w)))
+            .opt(
+                "what",
+                what.map(|w| Msg::new("log.part.reason").msg("reason", w)),
+            )
             .i("sum", sum)
             .opt("detail", detail);
         self.w.log("dice", player_id, text).value = sum;

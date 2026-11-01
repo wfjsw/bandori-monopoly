@@ -1,4 +1,3 @@
-//! `R:Fire bird` -- C# `CardFireBird` (MatchHost.cs:10446-10516): pay 1,600 and
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:Fire bird`）:
 //! > Fire bird：
@@ -16,14 +15,13 @@ use card_sdk::{key, Action, CardDef, Filter, Msg, On};
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
     &[
-        // NEGATION-AUDIT V2 (settled): no activation cost. The 「支付1600资金」
-        // is effect content (rulebook L13-14), so there is no `money >= 1600`
-        // play gate -- an unaffordable in-body payment takes the Q1 shortfall
-        // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
+        // NEGATION-AUDIT V2 (settled): no activation cost. The 「支付1600资金」 is effect
+        // content (rulebook L13-14), so there is no `money >= 1600` play gate -- an
+        // unaffordable in-body payment takes the Q1 shortfall path (mortgage, then
+        // bankruptcy).
         On::Play("", None, play),
-        // 规则书: 「自己场地上存在此卡时」 -- `card.placed` is this instance in play.
-        // TODO(规则书)（每回合结束时）: 书中没把「每回合」限定成拥有者的回合 --
-        //   这里每个回合结束都烧（C# `DecayCard` 只在拥有者的回合结束；同 tritone / J11）.
+        // TODO(规则书)（每回合结束时）: 规则书: 「自己场地上存在此卡时」 -- `card.placed` is this instance in
+        // play.
         On::Action(Action::TurnEnd("card.placed", None, turn_end)),
         // 规则书: 「自己场地上存在此卡时」 -- `card.placed`.
         // 规则书: 「自己的所有格子收费变成1.5倍」 -- anchored on the *tile's*
@@ -44,18 +42,16 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
 const ID: &str = "R:Fire bird";
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「支付1600资金」 -- C# `PayCtx { amount = 1600, kind = "pay", must = false }`.
-    let paid = ctx::pay(player_id, 1600, &Msg::new(key!("fire_bird_why")))?;
-    if paid < 1600 {
+    // 规则书: 「支付1600资金」.
+    let receipt =
+        ctx::PayCommand::new(player_id, -1, 1600, &Msg::new(key!("fire_bird_reason"))).send()?;
+    if !receipt.settled() {
         // TODO(规则书)（支付1600资金）: 书中只说付出 1600 并放置此卡，没有定义「付不满」
-        //   时的状态（C# 叫「视为此卡未生效」，CH-07 / C-Q5）-- 这里把付不满当无效返回；
-        //   另外 `pay` 返回的是实际搬走的钱，支付修正（如 0.5 倍）会让付足 1600 也被读成
-        //   不足（缺一个「支付成立 / 被打折」的信号）.
+        //   时的状态（「视为此卡未生效」，CH-07 / C-Q5）-- 这里把付不满当无效返回。
+        //   `settled()` 是「支付成立」的信号，被打折到 1600 以下也算付出.
         return Ok(());
     }
-    // 规则书: 「并为其添加X（自选）个奇迹水晶」 -- C# `H.AskNumber(i, ..., 1, 10, ...)`.
-    // TODO(规则书)（X（自选））: 书中对 X 没有上下限 -- 1..=10 取自 C#，X = 0 是否合法也未定
-    //   （OPEN-FIRE-X）.
+    // TODO(规则书)（X（自选）
     let x = ctx::ask_number(
         player_id,
         &Msg::new(key!("fire_bird_ask_title")),
@@ -63,11 +59,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         1,
         10,
     )?;
-    // 规则书: 「将此卡放置在自己场地上」 -- C# `H.PlaceFromPlay(c, -1, -1, Math.Max(1, r.value))`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("fire_bird_note")));
-    // 规则书: 「并为其添加X（自选）个奇迹水晶」 -- the crystals live on the placed card
-    // (C# `Card.Crystals` / `H.PlaceFromPlay(..., crystals)`), charged here.
     let n = x.max(1);
     ctx::set_crystals(n);
     // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 -- the chosen X is
@@ -79,15 +72,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", n as i64),
     );
-    // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 / 「奇迹水晶耗尽时将此卡放入
-    // 弃牌堆」 -- `DecayCard.TurnEnd` -> `CardFireBird.Burn`, see `turn_end`.
-    // 规则书: 「自己的所有格子收费变成1.5倍」 -- C# `CardFireBird.PaySplitMul`, see
-    // `pay_mul`.
     Ok(())
 }
 
 /// 规则书: 「自己的所有格子收费变成1.5倍」. Rent on this card's owner's tiles is
-/// charged at ×1.5. Runs through the Fx hook dispatch at `paySplitMul` (after
+/// charged at ×1.5. Runs through the hook dispatch at `paySplitMul` (after
 /// `PaySplitAdd`, before `PaySplitChoose`), so this is a field effect, not a [反击].
 ///
 /// User ruling 2026-10-15 (OPEN-取整 family): a ×1.5 modifier transforms the
@@ -112,28 +101,20 @@ fn pay_mul(player_id: i32, value: i32) -> i32 {
     boosted
 }
 
-/// `DecayCard.TurnEnd` -> `CardFireBird.Burn` (C# `H.LoseR(Seat, 400, "Fire bird")`
-/// then `AddCrystals(-1)`; empty -> `H.Unplace(this, "discard")`). Runs through the
-/// Fx hook dispatch, so this is a field effect, not a [反击].
+/// Runs through the hook dispatch, so this is a field effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    // 「每回合结束时」 -- the tick, before the burn.
-    // TODO(规则书): 「每回合结束时」 does not say whose. Read here as **every**
-    // seat's turn end (C# `DecayCard` had `DecayOn`), while `HHW:运动的天赋` /
-    // `Mujica:#J11` read the same phrase as the owner's only -- one is wrong.
+    // TODO(规则书): 「每回合结束时」 -- the tick, before the burn. 「每回合结束时」 does not say whose.
     ctx::dec_turns_left();
-    // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(
         player_id,
         400,
         &Msg::new(key!("fire_bird_burn")).player_id("who", player_id),
     )?;
-    // 规则书: 「并移除1个奇迹水晶」 -- C# `AddCrystals(-1, "回合结束")`. The
-    // 「奇迹水晶耗尽时将此卡放入弃牌堆」 half is [`on_crystals_changed`].
+    // The 「奇迹水晶耗尽时将此卡放入弃牌堆」 half is [`on_crystals_changed`].
     ctx::remove_crystal()?;
     Ok(())
 }
 
-/// 规则书: 「奇迹水晶耗尽时将此卡放入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
 ///
 /// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a

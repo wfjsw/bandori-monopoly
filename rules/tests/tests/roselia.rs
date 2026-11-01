@@ -566,7 +566,7 @@ fn rinko_skill_2_fixes_the_move_roll_to_x_times_six() {
     // the X prompt (ask_number 1..=2) -- option 1 is X = 2
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("rinko_1cm") {
+        if d.contains("rinko") {
             let _ = t.answer_one(1);
         } else {
             t.decline();
@@ -582,7 +582,7 @@ fn rinko_skill_2_fixes_the_move_roll_to_x_times_six() {
 fn rinko_skill_2_prompt_is_offered_before_the_move_roll() {
     // 规则书: 「你可以在移动掷骰前消耗X个火罐」 -- the press is available
     // before the roll. `can_use` gates on holding ≥1 pot; pressing it opens
-    // the X prompt (i18n key `rinko_1cm_*`) while the roll has not happened.
+    // the X prompt (i18n key `rinko_*`) while the roll has not happened.
     let mut t = Table::new(&["白金燐子", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
@@ -596,7 +596,7 @@ fn rinko_skill_2_prompt_is_offered_before_the_move_roll() {
     let mut saw = false;
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("rinko_1cm") {
+        if d.contains("rinko") {
             saw = true;
         }
         t.decline();
@@ -675,7 +675,7 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
     t.begin_turn(0);
     drain(&mut t);
     t.give(0, &[LISA_LINK]);
-    // Keep a non-empty draw pile so the played copy's graveyard fate cannot be
+    // Keep a non-empty draw pile so the played copy's graveyard dest cannot be
     // undone by the empty-deck refill reshuffling it back into the deck.
     t.set_draw(0, &["通用:安可"]);
     t.set_pos(0, 0);
@@ -724,7 +724,7 @@ fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
         t.field_ids(1)
     );
     // 「当你发动该效果后，此卡进入弃牌堆」 -- the played copy takes the default
-    // graveyard fate; the field copy above is the `place_card_at` instance.
+    // graveyard dest; the field copy above is the `place_card_at` instance.
     assert!(
         t.discard(0).contains(&LISA_LINK.to_string()),
         "the played copy was discarded: {:?}",
@@ -882,7 +882,7 @@ fn interaction_nfo_stay_blocks_next_turns_move() {
 #[test]
 fn interaction_yukina_stop_pot_vs_a_passing_player() {
     // 凑友希那 (3): 「当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算。」
-    // The offer is `kokoro_practice_force_*` (i18n keys, not the resolved
+    // The offer is `yukina_force_*` (i18n keys, not the resolved
     // Chinese text) -- match the key, the same way `settle_stages::m4_kokoro_force_stop_stops_a_passer` does.
     let mut t = Table::new(&["凑友希那", "户山香澄"]);
     t.begin_turn(0);
@@ -900,7 +900,7 @@ fn interaction_yukina_stop_pot_vs_a_passing_player() {
     let mut offered = false;
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("kokoro_practice_force") {
+        if d.contains("yukina_force") {
             offered = true;
             let _ = t.answer_one(0); // yes, stop
         } else {

@@ -87,7 +87,7 @@ pub struct FilterEntry {
     /// See [`crate::PlayEntry::id`].
     pub id: &'static str,
     pub kind: FilterKind,
-    pub pre: &'static str,
+    pub condition: &'static str,
     pub guard: Option<fn(i32) -> bool>,
     /// Monomorphized driver; casts `body` back to `fn(i32, P) -> P`.
     pub drive: fn(i32, *const ()),
@@ -120,7 +120,7 @@ pub struct ActionEntry {
     /// See [`crate::PlayEntry::id`].
     pub id: &'static str,
     pub kind: ActionKind,
-    pub pre: &'static str,
+    pub condition: &'static str,
     /// The 「…时」 clause the counteraction prompt shows (locale key; `None` =
     /// no clause).
     pub counter_reason: Option<crate::MsgKey>,
@@ -152,7 +152,7 @@ impl ActionEntry {
     /// `None` (the default) = no clause.
     ///
     /// ```ignore
-    /// On::Action(Action::TurnEnd("", None, tick).counter_reason(key!("why")))
+    /// On::Action(Action::TurnEnd("", None, tick).counter_reason(key!("reason")))
     /// ```
     pub const fn counter_reason(mut self, reason: crate::MsgKey) -> Self {
         self.counter_reason = Some(reason);
@@ -164,14 +164,14 @@ impl ActionEntry {
 #[inline]
 pub const fn filter_value(
     kind: FilterKind,
-    pre: &'static str,
+    condition: &'static str,
     guard: Option<fn(i32) -> bool>,
     body: fn(i32, i32) -> i32,
 ) -> FilterEntry {
     FilterEntry {
         id: "",
         kind,
-        pre,
+        condition,
         guard,
         drive: drive_value,
         body: body as *const (),
@@ -187,14 +187,14 @@ pub const fn filter_value(
 #[inline]
 pub const fn filter_flag(
     kind: FilterKind,
-    pre: &'static str,
+    condition: &'static str,
     guard: Option<fn(i32) -> bool>,
     body: fn(i32, i32) -> bool,
 ) -> FilterEntry {
     FilterEntry {
         id: "",
         kind,
-        pre,
+        condition,
         guard,
         drive: drive_flag,
         body: body as *const (),
@@ -210,7 +210,7 @@ pub const fn filter_flag(
 #[inline]
 pub const fn filter_payload<P: FilterPayload>(
     kind: FilterKind,
-    pre: &'static str,
+    condition: &'static str,
     guard: Option<fn(i32) -> bool>,
     shape: FilterShape,
     drive: fn(i32, *const ()),
@@ -219,7 +219,7 @@ pub const fn filter_payload<P: FilterPayload>(
     FilterEntry {
         id: "",
         kind,
-        pre,
+        condition,
         guard,
         drive,
         body: body as *const (),
@@ -236,14 +236,14 @@ pub const fn filter_payload<P: FilterPayload>(
 #[inline]
 pub const fn action(
     kind: ActionKind,
-    pre: &'static str,
+    condition: &'static str,
     guard: Option<fn(i32) -> bool>,
     body: fn(i32) -> Asked,
 ) -> ActionEntry {
     ActionEntry {
         id: "",
         kind,
-        pre,
+        condition,
         counter_reason: None,
         guard,
         body: body as *const (),
@@ -311,33 +311,33 @@ macro_rules! filter_kinds {
     (@ctor_engine $name:ident => value) => {
         /// Registration constructor. Body is `fn(i32, i32) -> i32`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, i32) -> i32,
         ) -> $crate::kinds::FilterEntry {
-            $crate::kinds::filter_value($crate::abi::FilterKind::$name, pre, guard, body)
+            $crate::kinds::filter_value($crate::abi::FilterKind::$name, condition, guard, body)
         }
     };
     (@ctor_engine $name:ident => flag) => {
         /// Registration constructor. Body is `fn(i32, i32) -> bool`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, i32) -> bool,
         ) -> $crate::kinds::FilterEntry {
-            $crate::kinds::filter_flag($crate::abi::FilterKind::$name, pre, guard, body)
+            $crate::kinds::filter_flag($crate::abi::FilterKind::$name, condition, guard, body)
         }
     };
     (@ctor_engine $name:ident => gate) => {
         /// Registration constructor. Body is `fn(i32, GateValue) -> GateValue`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, $crate::payload::GateValue) -> $crate::payload::GateValue,
         ) -> $crate::kinds::FilterEntry {
             $crate::kinds::filter_payload::<$crate::payload::GateValue>(
                 $crate::abi::FilterKind::$name,
-                pre,
+                condition,
                 guard,
                 $crate::kinds::FilterShape::Gate,
                 $crate::payload::drive_payload::<$crate::payload::GateValue>,
@@ -348,13 +348,13 @@ macro_rules! filter_kinds {
     (@ctor_engine $name:ident => payload ( $ty:ty )) => {
         /// Registration constructor. Body is `fn(i32, $ty) -> $ty`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, $ty) -> $ty,
         ) -> $crate::kinds::FilterEntry {
             $crate::kinds::filter_payload::<$ty>(
                 $crate::abi::FilterKind::$name,
-                pre,
+                condition,
                 guard,
                 $crate::kinds::FilterShape::Payload,
                 $crate::payload::drive_payload::<$ty>,
@@ -374,13 +374,13 @@ macro_rules! filter_kinds {
     (@ctor_ruleset $key:expr; $name:ident @ $id:expr => value) => {
         /// Registration constructor. Body is `fn(i32, i32) -> i32`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, i32) -> i32,
         ) -> $crate::kinds::FilterEntry {
             $crate::kinds::filter_value(
                 $crate::abi::FilterKind::ruleset($key, $id),
-                pre,
+                condition,
                 guard,
                 body,
             )
@@ -389,13 +389,13 @@ macro_rules! filter_kinds {
     (@ctor_ruleset $key:expr; $name:ident @ $id:expr => flag) => {
         /// Registration constructor. Body is `fn(i32, i32) -> bool`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, i32) -> bool,
         ) -> $crate::kinds::FilterEntry {
             $crate::kinds::filter_flag(
                 $crate::abi::FilterKind::ruleset($key, $id),
-                pre,
+                condition,
                 guard,
                 body,
             )
@@ -404,13 +404,13 @@ macro_rules! filter_kinds {
     (@ctor_ruleset $key:expr; $name:ident @ $id:expr => gate) => {
         /// Registration constructor. Body is `fn(i32, GateValue) -> GateValue`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, $crate::payload::GateValue) -> $crate::payload::GateValue,
         ) -> $crate::kinds::FilterEntry {
             $crate::kinds::filter_payload::<$crate::payload::GateValue>(
                 $crate::abi::FilterKind::ruleset($key, $id),
-                pre,
+                condition,
                 guard,
                 $crate::kinds::FilterShape::Gate,
                 $crate::payload::drive_payload::<$crate::payload::GateValue>,
@@ -421,13 +421,13 @@ macro_rules! filter_kinds {
     (@ctor_ruleset $key:expr; $name:ident @ $id:expr => payload ( $ty:ty )) => {
         /// Registration constructor. Body is `fn(i32, $ty) -> $ty`.
         pub const fn $name(
-            pre: &'static str,
+            condition: &'static str,
             guard: Option<fn(i32) -> bool>,
             body: fn(i32, $ty) -> $ty,
         ) -> $crate::kinds::FilterEntry {
             $crate::kinds::filter_payload::<$ty>(
                 $crate::abi::FilterKind::ruleset($key, $id),
-                pre,
+                condition,
                 guard,
                 $crate::kinds::FilterShape::Payload,
                 $crate::payload::drive_payload::<$ty>,
@@ -542,13 +542,13 @@ macro_rules! action_kinds {
                 /// Attach the 「…时」 clause with
                 /// [`$crate::kinds::ActionEntry::counter_reason`].
                 pub const fn $name(
-                    pre: &'static str,
+                    condition: &'static str,
                     guard: Option<fn(i32) -> bool>,
                     body: fn(i32) -> $crate::Asked,
                 ) -> $crate::kinds::ActionEntry {
                     $crate::kinds::action(
                         $crate::abi::ActionKind::$name,
-                        pre,
+                        condition,
                         guard,
                         body,
                     )
@@ -564,13 +564,13 @@ macro_rules! action_kinds {
                 /// Attach the 「…时」 clause with
                 /// [`$crate::kinds::ActionEntry::counter_reason`].
                 pub const fn $name(
-                    pre: &'static str,
+                    condition: &'static str,
                     guard: Option<fn(i32) -> bool>,
                     body: fn(i32) -> $crate::Asked,
                 ) -> $crate::kinds::ActionEntry {
                     $crate::kinds::action(
                         $crate::abi::ActionKind::ruleset($key, $id),
-                        pre,
+                        condition,
                         guard,
                         body,
                     )
@@ -631,6 +631,7 @@ filter_kinds! {
     TurnBaseTime => value;
     PlayGate => gate;
     DiceRollValue => payload(crate::payload::RollValue);
+    DiceRollAdd => payload(crate::payload::RollValue);
     OnBoardGate => gate;
     TargetableGate => gate;
 }
@@ -680,6 +681,8 @@ action_kinds! {
     PassTile;
     PayAfter;
     DiceRollAfter;
+    DiceRollCast;
+    DiceRollSettled;
     CardPlayed;
     Targeted;
     TurnEndBefore;
@@ -709,6 +712,9 @@ action_kinds! {
     PaySplitChooseBefore;
     PayCombinedAddBefore;
     PaySplitMulBefore;
+    CardFired;
+    MarkChanged;
+    SpendBefore;
 }
 
 #[cfg(test)]
@@ -731,7 +737,7 @@ mod tests {
 
     #[test]
     fn filter_kinds_registry_matches_table() {
-        assert_eq!(Filter::KINDS.len(), 27);
+        assert_eq!(Filter::KINDS.len(), 28);
         assert!(Filter::KINDS.iter().all(|k| k.is_filter));
         for k in Filter::KINDS {
             assert_eq!(k.kind.is_filter(), true, "{}", k.name);
@@ -750,11 +756,19 @@ mod tests {
         assert_eq!(choose.shape, FilterShape::Flag);
         let gate = Filter::KINDS.iter().find(|k| k.name == "ActGate").unwrap();
         assert_eq!(gate.shape, FilterShape::Gate);
+        let roll_add = Filter::KINDS
+            .iter()
+            .find(|k| k.name == "DiceRollAdd")
+            .unwrap();
+        assert_eq!(roll_add.wire, "diceRollAdd");
+        assert_eq!(roll_add.shape, FilterShape::Payload);
     }
 
     #[test]
     fn action_kinds_registry_matches_table() {
-        assert!(!Action::KINDS.is_empty());
+        // 73 before `diceRollCast` / `diceRollSettled` (G03, ABI v109), plus
+        // G01's `cardFired` / `markChanged` (ABI v105) = 76.
+        assert_eq!(Action::KINDS.len(), 76);
         assert!(Action::KINDS.iter().all(|k| !k.is_filter));
         for k in Action::KINDS {
             assert!(!k.kind.is_filter(), "{}", k.name);
@@ -780,9 +794,9 @@ mod tests {
         fn act(_p: i32) -> Asked {
             Ok(())
         }
-        let a = Action::TurnStart(crate::pre::MINE, None, act).counter_reason("turn");
+        let a = Action::TurnStart(crate::condition::MINE, None, act).counter_reason("turn");
         assert_eq!(a.kind, ActionKind::TurnStart);
-        assert_eq!(a.pre, "actor == owner");
+        assert_eq!(a.condition, "actor == owner");
         assert_eq!(a.counter_reason, Some("turn"));
     }
 

@@ -37,7 +37,7 @@ pub const HHW: CardDef = CardDef::new(
         )),
         // （2） a recorded player's rent collection, with a crystal to spend.
         // The collect is the trigger's `target`, not `actor` (the payer), so no
-        // `pre::MINE` -- the payer may be anyone, the body filters on `target`.
+        // `condition::MINE` -- the payer may be anyone, the body filters on `target`.
         On::Action(Action::PayAfter(
             "card.placed",
             Some(after_pay_applies),
@@ -45,7 +45,7 @@ pub const HHW: CardDef = CardDef::new(
         )),
         // （3） a recorded amount to spend down.
         On::Action(Action::BuildBefore(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             Some(has_saved),
             before_build,
         )),

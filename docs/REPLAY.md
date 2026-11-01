@@ -126,13 +126,17 @@ endpoint policy, and the deviations below.
     keeps showing the pending target while the engine catches up under it.
     A target past the index head is reached by driving the index pass toward
     it -- the pass is what simulates the stretch, and its keyframes serve
-    later jumps. Feedback frames come from the index head the pass has
-    already simulated (no seek, so no restore), and are paced three ways: at
-    most one per 400 ms, only once the head has advanced a twelfth of the
-    record, and only while the pass is keeping up (under 1.5 ms a tick). The
-    chunk itself is time-budgeted (~120 ms of simulation) so the call rate
-    does not starve the pointer, whether the engine is a debug build or a
-    release one. The target's own frame always renders.
+    later jumps. The pass advances a private copy of the replay, so a
+    feedback frame is a seek up to the head it has reached: the board steps
+    forward under the pointer instead of standing still until the target. A
+    frame is paced by its own measured cost (at most about half the wall
+    clock, never sooner than 400 ms) and, on a long jump, only once the head
+    has covered a twelfth of the record, so the jump gets coarse frames
+    rather than a strobe. The chunk itself is time-budgeted (30 ms of
+    simulation, steered by the last chunk's duration) so the call rate does
+    not starve the pointer, whether the engine is a debug build or a release
+    one. The chunk never runs past the pointer, so reaching it is the last
+    frame, with no second simulation behind it.
   * Entry points: home menu 「回放 / Replays」 (list, open file, drag and drop);
     the post-match Results 「下载回放」 / 「观看回放」; and the Room scene's
     "download last replay".
@@ -312,7 +316,7 @@ design — all of them forced by something the design already says:
   still `STEP`. `Replayer` has always read `header.step`.
 * **`RecordHeader.gaps`** (new, `#[serde(default)]`) marks a record where
   something was actually lost -- a store write failed, or a process died
-  between the blob put and its log append (the `RecMeta.dirty` flag). The open
+  between the blob put and its log append (the `RecordMeta.dirty` flag). The open
   tick run itself is persisted under the match lock, so a clean handover
   between processes (or a restart) loses nothing. §1's "mark the record
   unverifiable" needed somewhere to put the flag.
@@ -766,8 +770,8 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
   (`docs/GUARDS.md` §8.2): the real built ruleset (modules + the
   `conds-*.bin` precompiled guard conditions) loads into the real browser glue
   through the same `loadRulesetInto` sequence the page uses, with zero load
-  errors; a card with a `pre` evaluates; a card with a `pre` and no blob fails
-  loudly (`BadPre`) rather than treating the condition as true. Needs
+  errors; a card with a `condition` evaluates; a card with a `condition` and no blob fails
+  loudly (`BadCondition`) rather than treating the condition as true. Needs
   `tools/build-ruleset.mjs` + `tools/build-glue.mjs` first. Without this, the
   silent failure mode is a solo match running on `StubRules` while a record
   sealed elsewhere names a ruleset the player never actually played.
@@ -775,7 +779,7 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
 * `cargo test -p game-core --test bundle_id` -- the recipe known vector and
   the serde default for pre-bundle records.
 * `cargo test -p game-rules --test pre_conditions` -- the shipped `conds-*.bin`
-  is exactly the host compile of every `pre` (`shipped_precompiled_blobs_match_host_compile`),
+  is exactly the host compile of every `condition` (`shipped_precompiled_blobs_match_host_compile`),
   and a mismatched / stale blob is a build error.
 * `crates/game-core/tests/record.rs` / `record_codec.rs` stay green.
 
@@ -1066,7 +1070,7 @@ therefore **4**, and a replay must not put such a seat back on the engine:
 Both are hash-exact against the way the record was written; the gate is the
 format, never a guess about the body.
 
-**One v3 caveat.** `Cx::use_skill` now records the press in `turn.played`
+**One v3 caveat.** `PlayCtx::use_skill` now records the press in `turn.played`
 (before, only `Match::ai_step` did, so a client-driven seat could not de-dup
 its own skill and re-pressed it every tick). An old v3 record with a skill
 press replays on its **archived bundle** unchanged, but replaying it on a

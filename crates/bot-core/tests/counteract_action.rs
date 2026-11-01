@@ -137,9 +137,9 @@ fn movement_extensions_keep_distinct_indices_despite_shared_source_metadata() {
     assert_eq!(
         acts,
         vec![
-            Action::Offer { index: 0 },
-            Action::Offer { index: 1 },
-            Action::Offer { index: 2 }
+            Action::Answer { index: 0 },
+            Action::Answer { index: 1 },
+            Action::Answer { index: 2 }
         ]
     );
     for (i, a) in acts.iter().enumerate() {

@@ -84,9 +84,9 @@ pub struct MoveSnap {
     /// [`crate::kinds::mv`] value; `None` when the window has no move.
     pub kind: Option<i64>,
     pub remaining: i64,
-    /// `t.Move.Main` -- was this the turn's main move (`move.main`)? `false`
+    /// Was this the turn's main move (`move.is_main_move`)? `false`
     /// when the window has no move.
-    pub main: bool,
+    pub is_main_move: bool,
     /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward. `1` when the
     /// window has no move (the trigger default, matching the guest).
     pub dir: i64,
@@ -102,7 +102,7 @@ impl Default for MoveSnap {
             roll: None,
             kind: None,
             remaining: 0,
-            main: false,
+            is_main_move: false,
             // Matches `Trigger::new`'s `move_dir: 1` -- forward when no move
             // caused the window (the guest's `trigger::move_dir()` reads 1).
             dir: 1,
@@ -115,7 +115,7 @@ impl Default for MoveSnap {
 /// Built **once per trigger / chain window** (the `declare_one` / `run_hook`
 /// call) and reused by every candidate probe in that window. This is where
 /// the savings of G1 live: 48 900 counteract probes share ~250 windows.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowCtx {
     /// Trigger / chain kind wire **spelling** of this window (see
@@ -132,9 +132,34 @@ pub struct WindowCtx {
     /// `by_card` owner seat (`-1` = none).
     pub by: i64,
     pub pay_is_rent: bool,
+    /// The pending payment's wire kind (`pay_kind`), `-1` = no payment.
+    pub pay_kind: i64,
+    /// 1 = the pending payment's shape is `Fixed` (`pay_is_fixed`).
+    pub pay_is_fixed: i64,
+    /// Is the pending payment a command total (`pay_total_stage`); neutral
+    /// `true` without a payment, so a non-pay guard fails closed.
+    pub pay_total_stage: bool,
+    /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
+    pub charge_is_skill: bool,
+    /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
+    pub settle_tile: i64,
+    /// `settle.owner` -- `-1` = no settle / unowned.
+    pub settle_owner: i64,
+    /// `settle.houses`.
+    pub settle_houses: i64,
+    /// `settle.mortgaged`.
+    pub settle_mortgaged: bool,
+    /// `settle.outcome` -- `-1` = not finished / no settle.
+    pub settle_outcome: i64,
     pub mv: MoveSnap,
     /// Where a roll came from (`-1` = none). Binds `roll_source`.
     pub roll_source: i64,
+    /// The roll's purpose (`0` = effect, `1` = move). Binds `roll_purpose`.
+    pub roll_purpose: i64,
+    /// Has the transaction more than one cast? Binds `roll_rerolled`.
+    pub roll_rerolled: bool,
+    /// The face a pick did not take (`-1` = none). Binds `roll_unused_face`.
+    pub roll_unused_face: i64,
     pub abnormal: bool,
     /// Flat effect-link list (same data the `effect::*` imports read).
     pub chain: Vec<ChainLink>,
@@ -144,6 +169,9 @@ pub struct WindowCtx {
     /// The trigger's card id hash (`trigger_card`), same encoding as
     /// [`CandidateCtx::card_id`]. `0` when the trigger carries no card.
     pub trigger_card: i64,
+    /// The trigger's card is a `skill:` card (`card.is_skill`) -- the
+    /// precondition a `cardFired` listener uses to hear skills only.
+    pub trigger_card_is_skill: bool,
     /// `Trigger.name` -- the counter name on a `CounterChanged` hook, or the
     /// message name on an `On::Message` entry. Empty otherwise. Binds
     /// `counter_name` (a hash) / `counter_is('…')`.
@@ -167,6 +195,57 @@ pub struct WindowCtx {
     /// This turn's fixed main-move roll (`plan.fixed_roll`, the guest's
     /// `ctx::fixed_roll()`); `None` = unset (binds CEL `null`).
     pub plan_fixed_roll: Option<i64>,
+    /// Card bodies currently resolving (`resolving('id') -> 1`); a name table
+    /// like `_move_tags`, innermost last.
+    pub resolving: Vec<(String, i64)>,
+}
+
+impl Default for WindowCtx {
+    fn default() -> Self {
+        Self {
+            kind: String::new(),
+            actor: -1,
+            target: -1,
+            tile: TileSnap::default(),
+            value: 0,
+            step: 0,
+            by: -1,
+            pay_is_rent: false,
+            // The sentinels are the GUARDS §4.2 window defaults: a guard on a
+            // pay-only name rejects outside a pay, and one on a settle name
+            // outside a settle, instead of failing the build.
+            pay_kind: -1,
+            pay_is_fixed: 0,
+            pay_total_stage: true,
+            charge_is_skill: false,
+            settle_tile: -1,
+            settle_owner: -1,
+            settle_houses: 0,
+            settle_mortgaged: false,
+            settle_outcome: -1,
+            mv: MoveSnap::default(),
+            roll_source: 0,
+            roll_purpose: -1,
+            roll_rerolled: false,
+            roll_unused_face: -1,
+            abnormal: false,
+            chain: Vec::new(),
+            turn_player: 0,
+            turn_key: 0,
+            trigger_card: 0,
+            trigger_card_is_skill: false,
+            name: String::new(),
+            players: Vec::new(),
+            tile_ids: BTreeMap::new(),
+            tile_kinds: Vec::new(),
+            tile_attrs: BTreeMap::new(),
+            tile_classes: Vec::new(),
+            tile_count: 0,
+            tile_owners: Vec::new(),
+            plan_fixed_roll: None,
+            resolving: Vec::new(),
+        }
+    }
 }
 
 impl WindowCtx {
@@ -205,6 +284,10 @@ pub struct CandidateCtx {
     pub owner_tiles: i64,
     /// `card.*`
     pub card_id: i64,
+    /// The instance these `card.*` fields were read from, or `-1`. When set,
+    /// `card.counter` / `card.tile` / `card.placed` answer for that instance
+    /// instead of the first copy of `card_id`.
+    pub uid: i64,
     pub card_placed: bool,
     /// `card.counter('name')` lookup -- the candidate instance's named
     /// counters (host maps well-known wire names onto dedicated card fields;
@@ -219,7 +302,7 @@ pub struct CandidateCtx {
     pub slots: BTreeMap<String, i64>,
     /// `tok('name')` lookup -- the owner's named token counters, the same
     /// data `ctx::tok(player_id, name)` reads. Missing name = `0`.
-    pub tok_names: BTreeMap<String, i64>,
+    pub held_names: BTreeMap<String, i64>,
     /// Set keys the host publishes behind `cand_has(key, member)`
     /// (`CondView::cand_set`).
     pub blocked_groups: Vec<i64>,
@@ -234,8 +317,8 @@ impl CandidateCtx {
         self.card_counters.get(name).copied().unwrap_or(0)
     }
 
-    pub fn tok_named(&self, name: &str) -> i64 {
-        self.tok_names.get(name).copied().unwrap_or(0)
+    pub fn held_named(&self, name: &str) -> i64 {
+        self.held_names.get(name).copied().unwrap_or(0)
     }
 
     pub fn blocked(&self, group: i64) -> bool {

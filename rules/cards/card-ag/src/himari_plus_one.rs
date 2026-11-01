@@ -1,4 +1,3 @@
-//! `AG:（绯玛丽）如果并非没问题` -- C# `CardHimariPlusOne` (MatchHost.cs:1792-1816).
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（绯玛丽）如果并非没问题`）:
 //! > （绯玛丽）如果并非没问题：【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1

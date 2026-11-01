@@ -53,7 +53,7 @@ impl Observed {
 /// elision) without changing the frame partition.
 ///
 
-/// * `pre` is a clone of [`Match::world`] taken **before** the input. `World`
+/// * `condition` is a clone of [`Match::world`] taken **before** the input. `World`
 ///   clones share the event tail by refcount, so this is cheap.
 /// * The event mark is the newest event id before the input; the window is
 ///   everything logged after it. Read per-act: the tail is capped at
@@ -76,7 +76,7 @@ pub fn observe(
     // Pre-image and event mark. `world()` is read-only and legal even with a
     // prompt pending or a routine halted mid-effect. The live prompt lives on
     // the host, not in `World`, so capture it alongside.
-    let pre = m.world().clone();
+    let condition = m.world().clone();
     let mark = m.world().recent.back().map_or(0, |e| e.id);
     let pre_prompt_open = m.state().prompt.id != 0;
 
@@ -95,7 +95,7 @@ pub fn observe(
     let data = m.data();
     let post_prompt_open = m.state().prompt.id != 0;
     let step = Step {
-        pre: &pre,
+        condition: &condition,
         post,
         events: &events,
         act: &act,

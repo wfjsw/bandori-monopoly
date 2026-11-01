@@ -19,11 +19,11 @@ calling generic mechanism primitives: `ctx::raise` (filter fold for `BuyGate`
 / `BuyAssign` gates and payloads -- typed `Filter::` kinds since ABI 94, not
 the old `FilterFlag` / `FilterValue` bags -- action chain for `buyBefore` / `bought` /
 `buyAfter` / `buildBefore` / `houseAdded` / `buildAfter`), `ctx::pay_buy` /
-`ctx::pay_build` through `Cx::money` (so paySplitAdd/paySplitMul/payCombined and
+`ctx::pay_build` through `PlayCtx::money` (so paySplitAdd/paySplitMul/payCombined and
 allow_mortgage funding prompts behave identically), `ctx::assign_deed`
 (`purchase::assign_deed`) and `ctx::log`. All acquisitions route through
 `CardRules::deed_buy` / `deed_build`; `StubRules` keeps the engine's standing
-`Cx::buy` / `Cx::build` as the default. Force-buy money remains a direct
+`PlayCtx::buy` / `PlayCtx::build` as the default. Force-buy money remains a direct
 transfer outside effects (规则书 其他规则 6).
 
 What follows is the **historical** 2026-10-07 design record (P0–P5). Where it
@@ -34,12 +34,12 @@ is superseded by the 2026-10-16 note above.
   `BuyAdd` → `BuyMul` → `BuySet` in **pure guard mode** against a world copy
   (the `cant_play` shape — no mutation, no prompt) only when a hooking instance
   exists; the commit re-quotes, so quote == charge. Gates (`buyable_here`,
-  `why_not_act "buy"`), the view (`st.buy_price`), the AI (`ai_wants_buy` /
+  `cant_act "buy"`), the view (`st.buy_price`), the AI (`ai_wants_buy` /
   `ai_agent_choice`) and the autopilot all read that quote.
 * The three cards that used the `TurnCtx` flags are ported — see §Card
   migrations. `buy_discount` / `free_buy` / `raze_on_buy` and their `set_*`
   APIs, `st.tile_colors` and `key::EXTRA_COLOR` are **deleted** (ABI 41).
-* The colour skills (朝日六花 / Roselia (1) / 游击演出 / soyo_clear / （soyo）
+* The colour skills (朝日六花 / Roselia (1) / 游击演出 / soyo / （soyo）
   混合的颜色) write the `colorFor:<p>` / `ANY_COLOR` tile props.
 * Dealer buy/build options are not filtered by current cash. After selecting
   one, a short player can mortgage deeds to cover the final payment amount,
@@ -62,7 +62,7 @@ how ownership is assigned — are handled by the `rules/` crates.
   6. `raze_on_buy`;
   7. `bought` → `buyAfter`.
 * **Gates and AI read the base price, not the price actually charged.** That
-  covers `buyable_here`, `can_buy_here`, `why_not_act "buy"`, `ai_wants_buy`
+  covers `buyable_here`, `can_buy_here`, `cant_act "buy"`, `ai_wants_buy`
   and `ai_agent_choice`. A player who can afford only the discounted price is
   refused (`err.buy_poor`).
 * **Agent:** the `tile:agent` body's 同色 set (`ctx::is_color`) reads the
@@ -74,7 +74,7 @@ how ownership is assigned — are handled by the `rules/` crates.
 * **Auction:** moves money directly, clears the mortgage, and raises only
   `bought`.
 * **Dead gates:**
-  * `plan.no_buy` (rana_parking) is never read.
+  * `plan.no_buy` (rana) is never read.
   * Poppin's `lock_hill` cancels `buyBefore`, but `buy()` ignores the
     cancellation, and the lock never covers force-buy.
 * **Unwritten view field:** `st.buy_price` is always -1, so `autopilot.ts`
@@ -167,10 +167,10 @@ StubRules and the sim run.
 | Roselia band (1)/(2) | `BuyMul` ½ (live-house / first non-LH); `Bought` one-shot unchanged | **done** |
 | 迷宫般的仓库 | linger + `BuySet` 0 + `BuyAssign` houses 0 | **done** |
 | Poppin (3) hill lock | `BuyGate`, every kind, Force included | **done** |
-| rana_parking | native gate reads `plan.no_buy` for Land | **done** |
+| rana | native gate reads `plan.no_buy` for Land | **done** |
 | 学生会的检查 noBuild | a linger instance carrying `prop::NO_BUILD` | **done** |
 | （soyo）混合的颜色 | tile prop `ANY_COLOR` | **done** |
-| 朝日六花 / Roselia (1) / 游击演出 / soyo_clear | tile prop `colorFor:<p>`; remove `st.tile_colors` and `key::EXTRA_COLOR` | **done** |
+| 朝日六花 / Roselia (1) / 游击演出 / soyo | tile prop `colorFor:<p>`; remove `st.tile_colors` and `key::EXTRA_COLOR` | **done** |
 | 巴 收购 | `ctx::acquire` | **done** |
 | Afterglow / chuchu / asahi | `Bought`, unchanged | unchanged |
 
@@ -195,7 +195,7 @@ StubRules and the sim run.
 * **P1 — property buy.**
   * quote → commit;
   * honour the `buyBefore` cancel;
-  * the `why_not_act` gate;
+  * the `cant_act` gate;
   * the `st.buy_price` write;
   * `MatchPrompt.price`;
   * tile props in `property.rs` / `ring.rs`;

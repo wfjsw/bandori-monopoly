@@ -11,10 +11,9 @@ external spec says "reaction" — translate. Never say "reaction" for our engine
 
 Reference data (external project, **not** a spec for us):
 `target/scratch/specs/TILE_RESOLUTION_PIPELINE.md`,
-`EFFECT_ACTIVATION_RESOLUTION_RESPONSIBILITY.md`,
-`PLAYER_MOVEMENT_LOGIC.md`, `PLAYER_MOVEMENT_RESPONSIBILITY.md`.
-Ground truth: `data/rules.txt` and the 规则书 timing tables in
-`docs/rulebook/rulebook-doc.md` (时点流程 / 行动阶段). C# is not a spec.
+`EFFECT_ACTIVATION_RESOLUTION_RESPONSIBILITY.md`, `PLAYER_MOVEMENT_LOGIC.md`,
+`PLAYER_MOVEMENT_RESPONSIBILITY.md`. Ground truth: `data/rules.txt` and the 规则书 timing tables in
+`docs/rulebook/rulebook-doc.md` (时点流程 / 行动阶段).
 
 ---
 
@@ -51,10 +50,9 @@ Two more book facts that decide the model:
 
 > **STACK-01 (2026-10-10):** the stages below are unchanged, but they now run
 > as a **work-stack state machine** (`step_settle` / `engine/work.rs`) so a
-> nested `card_settle_at` suspends and resumes instead of recursing. Order is
+> nested `settle_tile_at` suspends and resumes instead of recursing. Order is
 > the old synchronous nest (the nested settle finishes before the outer
 > settle's next stage). See `docs/ENGINE.md` "Settle work stack".
-
 
 ```
 walk, per step:            passBefore → passTile → pass          (行动阶段 12)
@@ -71,7 +69,7 @@ after_walk:
   always:                  moveResolved                            (16's 「主要移动阶段后」 half)
 ```
 
-`settle_at` (`play.rs:1323-1360`) threads one `at` through the whole pipeline.
+`settle_tile_at` (`play.rs:1323-1360`) threads one `at` through the whole pipeline.
 `settle` cancel → no body, no `settleAfter`, but `tileResolved` still fires
 (complete-as-nothing). `settleBody` cancel → skip the body only, `settleAfter`
 still runs. There is **no `moveAfter`** kind; `moveResolved` fires *after* the
@@ -97,16 +95,16 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 
 | rule | quote (规则书 timing words) | wired | text names | flag |
 | --- | --- | --- | --- | --- |
-| `skill:高松灯:诗超绊` （2）（3） | 「当其他玩家的[移动终点]位于您前后5格内时…在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子」/「在[触发结算]前将自己[传送]至那名玩家所在的格子」 | `HookKind::SettleBefore` `tomori_poem.rs:36` | 14 「[触发结算]前」 (condition anchored on 「[移动终点]」) | OK |
-| `skill:丰川祥子（CRYCHIC）` （2）（3） | 「其他人的主要移动结束时，[触发结算]前若在你的前后5格内…」/「你的主要移动结束时，[触发结算]前…」 | `HookKind::SettleBefore` `saki_crychic.rs:30` | 14, but the anchor is 13 「主要移动结束时」 | OK* |
+| `skill:高松灯:诗超绊` （2）（3） | 「当其他玩家的[移动终点]位于您前后5格内时…在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子」/「在[触发结算]前将自己[传送]至那名玩家所在的格子」 | `HookKind::SettleBefore` `tomori.rs:36` | 14 「[触发结算]前」 (condition anchored on 「[移动终点]」) | OK |
+| `skill:丰川祥子（CRYCHIC）` （2）（3） | 「其他人的主要移动结束时，[触发结算]前若在你的前后5格内…」/「你的主要移动结束时，[触发结算]前…」 | `HookKind::SettleBefore` `sakiko_crychic.rs:30` | 14, but the anchor is 13 「主要移动结束时」 | OK* |
 | `RAS:（LOCK）追逐梦想的步伐` （2） | 「…则在触发结算前将行动终点改为"旭汤澡堂"」 | `HookKind::SettleBefore` `lock_dream.rs:28` | 14 | OK |
 | `PP:[若宫伊芙]属于我的武士道！` （2） | 「[结算]前如果此卡上有[奇迹水晶]且…」 | `HookKind::SettleBefore` `eve_bushido.rs:28` | 14 | OK |
 | `skill:学生会的检查` (council_check) [反击] | 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」 | `ChainKind::SettleBefore` `council_check.rs:20` | 14 (condition 「移动结束后」 = 13) | OK |
 | `CRYCHIC:想要抓住...` （2） | 「当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]」 | `HookKind::SettleBefore` `want_to_grab.rs:30` (+ `PassPlayer` `:29`) | 14 window is right; the trigger 「经过你」 is 12, not 13 | PASS |
 | `CRYCHIC:我的问题呢` (my_own_problem) （1） | 「主要移动结束时，[触发结算]前打出此卡，使自己额外远离…一格」 | `ChainKind::SettleBefore` `my_own_problem.rs:19` | 14 (anchor 13) | OK |
-| `CRYCHIC:春日影` （2） | 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 (C# `settleBefore` branch) | `ChainKind::SettleBefore` `haruhikage.rs:25` | generic [反击] at the settle's pre-window | OK |
-| `skill:三角初华:Imprisoned XII` 状态2 | 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 | `HookKind::SettleBefore` `uika_imprisoned.rs:43` | 14 | OK |
-| `skill:要乐奈:投币式停车场的猫` （2） | 「在space上结算时，若space已属于其他玩家，免除付款并抽1张卡；若自己为space的拥有者，则可选择**将该次结算改为**在space格子上添加一个"抹茶芭菲"」 | `HookKind::SettleBefore` `rana_parking.rs:35` | 15 「[结算]时」 + a **body replace** (「将该次结算改为」) | **BODY/AT** |
+| `CRYCHIC:春日影` （2） | 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 | `ChainKind::SettleBefore` `haruhikage.rs:25` | generic [反击] at the settle's pre-window | OK |
+| `skill:三角初华:Imprisoned XII` 状态2 | 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 | `HookKind::SettleBefore` `uika.rs:43` | 14 | OK |
+| `skill:要乐奈:投币式停车场的猫` （2） | 「在space上结算时，若space已属于其他玩家，免除付款并抽1张卡；若自己为space的拥有者，则可选择**将该次结算改为**在space格子上添加一个"抹茶芭菲"」 | `HookKind::SettleBefore` `rana.rs:35` | 15 「[结算]时」 + a **body replace** (「将该次结算改为」) | **BODY/AT** |
 | `event:火种燃尽之后会怎么样呢？` | 「**触发结算时**，格子上每有一张此卡的复制品，那名玩家失去10资金」 | `HookKind::SettleBefore` `embers.rs:27` | 15 「触发结算时」 | **AT** |
 | `Sumimi:儿时玩伴的鼓励` | 「可在移动掷骰前打出此卡…并在**移动后**获得一个火罐」 | `HookKind::{SettleBefore,SettleAfter,Teleported}` `childhood_cheer.rs:22-27` | 13 「移动后」 | **MOVE** |
 | `skill:Poppin' Party:星之鼓动` | （2）「无法获取[CiRCLE奖励]」（4）「不能通过[主要移动]的[结算]盖房」 | `HookKind::SettleBefore` `poppin.rs:32` | （4）is a body/build-gate fact; （2）is a standing veto (arm on state change) | partly BODY |
@@ -116,9 +114,9 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 | rule | quote | wired | text names | flag |
 | --- | --- | --- | --- | --- |
 | `skill:RAISE A SUILEN` （2） | 「因该技能以外的效果在livehouse格子**[触发结算]时**」 | `HookKind::Settle` `ras.rs:28` | 15 | OK |
-| `skill:户山香澄:非凡之星` （1） | 「其他玩家"星之鼓动山丘"上**[结算]时**获得一个[火罐]」 | `HookKind::Settle` `extraordinary_star.rs:44` | 15 | OK |
-| `skill:三角初华:Imprisoned XII` 状态1 | 「未在任何[回忆地块]…**触发结算**」 (latch) | `HookKind::Settle` `uika_imprisoned.rs:41` | 15 | OK |
-| `skill:长崎素世:通透的颜色` （2） | 「使自己本回合的**[移动终点]**对你视为对应颜色的地产商格子」 | `HookKind::Settle` `soyo_clear.rs:39` | 14 「[移动终点]」 (armed at 掷骰后); applied as a body colour | OK-ish |
+| `skill:户山香澄:非凡之星` （1） | 「其他玩家"星之鼓动山丘"上**[结算]时**获得一个[火罐]」 | `HookKind::Settle` `kasumi.rs:44` | 15 | OK |
+| `skill:三角初华:Imprisoned XII` 状态1 | 「未在任何[回忆地块]…**触发结算**」 (latch) | `HookKind::Settle` `uika.rs:41` | 15 | OK |
+| `skill:长崎素世:通透的颜色` （2） | 「使自己本回合的**[移动终点]**对你视为对应颜色的地产商格子」 | `HookKind::Settle` `soyo.rs:39` | 14 「[移动终点]」 (armed at 掷骰后); applied as a body colour | OK-ish |
 | `RAS:PLEASE CHOOSE` [反击] | 「当有玩家在livehouse格子上**结算时**，使对方选择…」（2）「立即传送至对方所在格子（**不触发结算**但视为可触发乐队技能）」 | `ChainKind::Settle` `please_choose.rs:17` | 15 | OK |
 
 ### 3.3 `settleBody` (the settle's effect list / body-replace gesture)
@@ -155,7 +153,7 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 | `RAS:练习室里的风暴` （2） | 「[使用者]以外的玩家在距此卡所在格子X个格子处**[结算]时**将此卡放入弃牌堆且对那个玩家进行一次…收费」 | `HookKind::SettleAfter` `studio_storm.rs:21` | 15 「[结算]时」 (a remote settle-shaped charge) | **AT** |
 | `HHW:黑衣人的补给` | 「该格上拥有奇迹水晶时，该格**获得"CiRCLE"格子的全部效果**」 (landing draw 1) | `HookKind::SettleAfter` `black_suits.rs:17` | this *is* the tile's [结算] (「获得CiRCLE格子的全部效果」) | **BODY** |
 | `HHW:（kkr）前往笑容集结的地方！` | 「若其他玩家在该格**[触发结算]**则向所有者支付6000资金，**视为格子的收款**」 | `HookKind::SettleAfter` `kokoro_circle.rs:18` | 15; 「视为格子的收款」 = a settle-body entry (`docs/TILES.md` already says so) | **BODY** |
-| `skill:凑友希那:来练习吧` （3） | 「**移动终点**为任意"RiNG"时，获得一个火罐」 | `HookKind::SettleAfter` `kokoro_practice.rs:40` | 13/14 「移动终点」, not 「结算后」 | **MOVE** |
+| `skill:凑友希那:来练习吧` （3） | 「**移动终点**为任意"RiNG"时，获得一个火罐」 | `HookKind::SettleAfter` `yukina.rs:40` | 13/14 「移动终点」, not 「结算后」 | **MOVE** |
 | `skill:学生会的检查` (council_check) | 「因此卡强制停下的玩家的**结算地租价格为原价格一半**」 (the settleAfter entry clears the mark) | `HookKind::SettleAfter` `council_check.rs:23` | the rent half is a pay-stage scale; the after entry is clean-up | OK-ish |
 | `Sumimi:儿时玩伴的鼓励` | 「**移动后**获得一个火罐」 | `HookKind::SettleAfter` `childhood_cheer.rs:22-27` | 13 | **MOVE** |
 
@@ -163,15 +161,15 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 
 | rule | quote | wired | text names | flag |
 | --- | --- | --- | --- | --- |
-| `skill:濑田薰:梦幻的王子殿下` （1） | 「每次**[经过]或被[经过]**时…」 | `HookKind::PassPlayer` `kaoru_prince.rs:34` | 12 「[经过]」 (both directions) | **PASS** |
-| `skill:冰川纱夜:踏上荆棘之路的觉悟` （1） | 「每次**被别的玩家[经过]**时获得1个[火罐]」 | `HookKind::PassPlayer` `sayo_thorns.rs:32` | 12 「被[经过]」 | **PASS** |
-| `skill:丰川祥子:请把你们的人生交给我` 状态1 | 「**经过其他玩家**时，可将其所有层数的停留，眩晕转移至自己身上」 | `HookKind::PassPlayer` `sakiko_life.rs:35` | 12 「经过其他玩家」 | **PASS** |
-| `skill:凑友希那:来练习吧` （3） | 「当其他玩家**移动[经过]您**时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算」 | `HookKind::PassPlayer` `kokoro_practice.rs:39` | 12; body guards `move_remaining() <= 0 → return`, which is **always** true at `passPlayer` (it fires at move end) — so this never fires today | **PASS** (latent bug) |
+| `skill:濑田薰:梦幻的王子殿下` （1） | 「每次**[经过]或被[经过]**时…」 | `HookKind::PassPlayer` `kaoru.rs:34` | 12 「[经过]」 (both directions) | **PASS** |
+| `skill:冰川纱夜:踏上荆棘之路的觉悟` （1） | 「每次**被别的玩家[经过]**时获得1个[火罐]」 | `HookKind::PassPlayer` `sayo.rs:32` | 12 「被[经过]」 | **PASS** |
+| `skill:丰川祥子:请把你们的人生交给我` 状态1 | 「**经过其他玩家**时，可将其所有层数的停留，眩晕转移至自己身上」 | `HookKind::PassPlayer` `sakiko.rs:35` | 12 「经过其他玩家」 | **PASS** |
+| `skill:凑友希那:来练习吧` （3） | 「当其他玩家**移动[经过]您**时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算」 | `HookKind::PassPlayer` `yukina.rs:39` | 12; body guards `move_remaining() <= 0 → return`, which is **always** true at `passPlayer` (it fires at move end) — so this never fires today | **PASS** (latent bug) |
 | `AG:刻入天穹傲岸的烈光` [反击] | 「当你**经过一名角色**时，你可以打出此卡…」 | `ChainKind::PassTile` `proud_light.rs:24` | 12 「经过一名角色」 | **PASS** |
 | `MyGO:难以复刻的奇迹` （2） | 「当你**[经过]场上的所有玩家各一次**…」 | `HookKind::PassPlayer` `miracle.rs:24` | 12 | **PASS** |
 | `CRYCHIC:想要抓住...` （2） | 「当第一位其他玩家**经过你**…」 | `HookKind::PassPlayer` `want_to_grab.rs:29` | 12 | **PASS** |
-| `skill:要乐奈:投币式停车场的猫` （3） | 「你与其他玩家**重合**时，获得其800资金」 | `HookKind::PassPlayer` `rana_parking.rs:36` | 13 「[重叠]」/「重合」 | OK |
-| `skill:三角初华` 状态2 | 「主动移动**经过任何玩家**都将向其收取200资金」 | `HookKind::PassPlayer` `uika_imprisoned.rs:42` | 12 「经过任何玩家」 | **PASS** |
+| `skill:要乐奈:投币式停车场的猫` （3） | 「你与其他玩家**重合**时，获得其800资金」 | `HookKind::PassPlayer` `rana.rs:36` | 13 「[重叠]」/「重合」 | OK |
+| `skill:三角初华` 状态2 | 「主动移动**经过任何玩家**都将向其收取200资金」 | `HookKind::PassPlayer` `uika.rs:42` | 12 「经过任何玩家」 | **PASS** |
 | `HHW:怪盗` (kaoru_thief), `MyGO:奇迹` etc. | 「[重叠]」/「移动终点触发[重叠]」 shaped clauses | `HookKind::PassPlayer` | 13 | OK |
 
 ### 3.7 Terminals
@@ -187,14 +185,14 @@ Texts that want them and are not wired: `AG:one_of_us` 「先在地契原主人�
 ## 4. Mismatch classes
 
 Status per class: **M1 done** (moveAfter; childhood_cheer single hook,
-kokoro_practice (3) on moveAfter; saki_crychic / my_own_problem stay on
+yukina (3) on moveAfter; sakiko_crychic / my_own_problem stay on
 settleBefore reading `move_is_main` as the move-end fact). **M2 done**
 (settleBody + `trigger::cancelled()`; embers, endless_journey (2),
 dream_ahead (3), tomorrows_door (3), studio_storm (2), mark:cp). **M3 done**
 (black_suits attaches a `tile:circle` instance; kokoro_circle on settleBody;
-rana_parking (2) split per R4). **M4 done** (off `passPlayer` onto `passTile` /
-`ChainKind::PassTile`: kaoru_prince (1), sayo_thorns (1), sakiko_life 状态1,
-proud_light, miracle (2), uika_imprisoned 状态2, kokoro_practice (3);
+rana (2) split per R4). **M4 done** (off `passPlayer` onto `passTile` /
+`ChainKind::PassTile`: kaoru (1), sayo (1), sakiko 状态1,
+proud_light, miracle (2), uika 状态2, yukina (3);
 plus **kaoru_thief** 「经过该玩家时使自己强制停下」, a missed case found by the
 2026-10-21 wave 3 clause check and re-homed the same day -- it was still on
 `passPlayer`, so `move.remaining > 0` made the mid-walk stop inert (W3-KAORU-01).
@@ -263,13 +261,13 @@ on an end-tile 重叠 that its text never names. `skill:凑友希那` （3） is
 sharp case: its body even guards `move_remaining() <= 0 → return`, which is
 always true at `passPlayer`, so the force-stop never fires.
 
-Affected: `kaoru_prince` （1）, `sayo_thorns` （1）, `sakiko_life` 状态1,
-`kokoro_practice` （3）, `proud_light` [反击], `miracle` （2）,
-`want_to_grab` （2）, `uika_imprisoned` 状态2, and `kaoru_thief`
+Affected: `kaoru` （1）, `sayo` （1）, `sakiko` 状态1,
+`yukina` （3）, `proud_light` [反击], `miracle` （2）,
+`want_to_grab` （2）, `uika` 状态2, and `kaoru_thief`
 「经过该玩家时使自己强制停下」 (missed in the original sweep; found by the
 2026-10-21 wave 3 clause check and re-homed the same day -- same sharp shape as
 凑友希那, the body's `move.remaining > 0` was always false at `passPlayer`).
-Correct on `passPlayer`: `rana_parking` （3） 「重合」, and the genuine 重叠
+Correct on `passPlayer`: `rana` （3） 「重合」, and the genuine 重叠
 clauses (「移动终点触发[重叠]」 shaped).
 
 ### M5 — `settleAfter` vs the terminal (`tileResolved`)
@@ -298,7 +296,7 @@ fights the 规则书.
 | `ActivateSpecialResolution` | a post-default window where "special tile behaviour is NOT the default" and effects respond one at a time | **this split is wrong for us.** The 规则书 names special-tile behaviour *as* the tile's [结算] (「CiRCLE的[结算]是：抽取一张手卡」). It is a body entry beside the property default, not a post-default responder ring. |
 | `EffectReactionController` (round-robin, one effect at a time) | the responder ring | this is the **[反击] ring** we already run per chain link (其他规则注意事项 3: from the next player in action order). It is not a second, special-only window. The settle's body list runs in instance order — the book does not order multiple effects on one tile beyond L6. |
 | `AfterTileResolution` / `TileResolved` | after window / terminal | our `settleAfter` / `tileResolved`. Keep both; keep the split from `moveResolved`. |
-| "position re-read before each stage; relocation never re-runs the default" | fresh snapshots | adopt the *re-read*, but not "never re-runs": see Q7 below. The default body still runs exactly once per `settle_at`. |
+| "position re-read before each stage; relocation never re-runs the default" | fresh snapshots | adopt the *re-read*, but not "never re-runs": see Q7 below. The default body still runs exactly once per `settle_tile_at`. |
 
 **Answer to "does some of these effects belong to other hooks?"** — yes, in
 three directions: (1) move-end effects (M1) belong on a move-end point that
@@ -320,7 +318,7 @@ controller split are not ours.
 | 「不触发结算」 | eligibility gate: skip tile resolution entirely; `PlayerLandedOnTile` still fires | `m.resolve == false` skips `settleBefore`/`settle`/… but still raises `passPlayer` + `moveResolved`; a no-settle **teleport** skips `passTile`/`passPlayer` too | the walk side is right (1.2 「是否[结算]」 gates only the settle); the teleport side is wrong — see M6a. |
 | arrival vs settle | `PlayerLandedOnTile` fires even when tile resolution is prohibited | the last step's `passTile` is the arrival; no separate landed point | fine — `passTile` + `moveAfter` cover it. Do not add a third. |
 | pass-through (经过) | one `PlayerPassedTile` per entered tile, carrying prev/dest indexes + remaining spaces (0 = destination pass; teleport carries 0) | `passBefore` → `passTile` → `pass` per step; `m.remaining` distinguishes intermediate vs destination | equivalent. Keep our three (they are 12's three phrases: declaration / step / the generic 「[经过]」). |
-| teleport vs walk | teleport: `PlayerTeleported` → dest `PlayerPassedTile` (remaining 0) → `PlayerLandedOnTile` — **pass and landing always fire** | `teleported` is raised **after** the settle (C# 24390) for a settling teleport, and alone for a no-settle one; B41 「依次触发[经过],[重叠],和[结算]」 names the order as 经过→重叠→结算 and does not name `teleported` | keep our `teleported` placement (C#-carried, no book conflict), but **M6a**: a 「不[触发结算]」 teleport must still fire `passTile` + `passPlayer` at the destination. `move_ctx.rs:101-103`'s "a teleport with this clear resolves nothing" over-reads 「是否[结算]」. |
+| teleport vs walk | teleport: `PlayerTeleported` → dest `PlayerPassedTile` (remaining 0) → `PlayerLandedOnTile` — **pass and landing always fire** | `teleported` is raised **after** the settle for a settling teleport, and alone for a no-settle one; B41 「依次触发[经过],[重叠],和[结算]」 names the order as 经过→重叠→结算 and does not name `teleported` | `move_ctx.rs:101-103`'s "a teleport with this clear resolves nothing" over-reads 「是否[结算]」. |
 | zero-step move | raises pass + landed | raises `passPlayer` only (0-move); `passTile` is a `TODO(规则书)` at `play.rs:1063-1069` | E14 names only 重叠 for the 0-move. Keep ours; the spec's extra landed event is not needed. |
 | redirects / relocation | LIFO relocation stack, same-player **replacement** (newest same-player op stops the older) | effects just write `pos` / the plan; no stack | not required by the book. Adopt only if a card needs nested move replacement. |
 | mid-settle relocation | re-read position before every lifecycle stage; "later relocation does not rerun default" | `settle` re-reads `pos` (so a `settleBefore` relocation redirects); later stages keep the original `at` | see Q7 below — we go further than both. |
@@ -415,7 +413,7 @@ standing after that). Test: `settle_stages::q7_settle_before_relocation_settles_
   as `MAX_NESTING = 8`) and skip tiles already visited in this settle chain.
 * `settle` / `settleBody` relocation → the originally named tile finishes
   (「落点效果」, 行动阶段 15). The default body runs exactly once per
-  `settle_at` — the spec's "never re-runs the default" holds *here*.
+  `settle_tile_at` — the spec's "never re-runs the default" holds *here*.
 * `settleAfter` / `tileResolved` relocation → nothing re-runs; the resolve
   already happened.
 * A relocation inside a no-settle move's tail only moves `moveAfter` /
@@ -455,12 +453,11 @@ about which tile is being settled.
   player's: is 「免除付款」 a pay-stage cancel (so a 「支付减半」 etc. never
   sees it) or a body replace (「将本次结算改为…」 for the owner branch only)?
   The text uses 「免除付款」 for one branch and 「将该次结算改为」 for the other —
-  **Ruled (user 2026-10-07):** 「免除付款」 is a payment-stage cancel (`payCombinedCancel`); 「将该次结算改为」 is a settleBody replace. Implemented in `rana_parking.rs`.
-* **R5 — `want_to_grab` 「当第一位其他玩家经过你」**: 经过 (passTile, first
-  passer mid-move) or 重叠 (passPlayer)? **Pending.** Left as-is with a
-  `TODO(规则书) R5` marker. The C# GrabFx used PassPlayer. The force-move is 「在那名玩家[触发结算]前」, which only exists if
-  that move settles — so a mid-move 经过 reading is the one that can force-stop
-  before the settle.
+  **Ruled (user 2026-10-07):** 「免除付款」 is a payment-stage cancel (`payCombinedCancel`); 「将该次结算改为」 is a settleBody replace. Implemented in `rana.rs`.
+* **R5 — `want_to_grab` 「当第一位其他玩家经过你」**: 经过 (passTile, first passer mid-move) or 重叠 (passPlayer)?
+  **Pending.** Left as-is with a `TODO(规则书) R5` marker. The force-move is 「在那名玩家[触发结算]前」, which only
+  exists if that move settles — so a mid-move 经过 reading is the one that can force-stop before the
+  settle.
 
 ---
 
@@ -468,7 +465,7 @@ about which tile is being settled.
 
 | what | where |
 | --- | --- |
-| the settle pipeline | `crates/game-core/src/engine/play.rs` `after_walk` (Q7 loop) / `settle` / `settle_at` |
+| the settle pipeline | `crates/game-core/src/engine/play.rs` `after_walk` (Q7 loop) / `settle` / `settle_tile_at` |
 | the walk / teleport | `play.rs` `walk` / `teleport_as` / `move_after` / `move_resolved`; `move_ctx.rs` (`MoveCtx::resolve`) |
 | kind lists | `crates/card-sdk/src/abi.rs` `TriggerKind` / `ChainKind` / `HookKind` / `OnKind::Settle` |
 | tile bodies | `rules/tiles/src/*`, `docs/TILES.md` |

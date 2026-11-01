@@ -27,7 +27,7 @@ use crate::world::{self, Effect, MAX_LOG};
 // Per-body host-op subsets (outside → loud FAIL).
 //
 // Ops listed are what the unmodified body reaches (aliases folded:
-// `add_tok`→add_held, `set_crystals`/`decay`→set/add_counter_self,
+// `add_held_by_name`→add_held, `set_crystals`/`decay`→set/add_counter_self,
 // `ask_*`→ask, `place_card`→place_card_at, `is_deed`→tile_is).
 // Dead-path ops under the harness isolation are listed too, so an isolation
 // break surfaces as a spec failure rather than an undeclared-op panic.
@@ -35,7 +35,7 @@ use crate::world::{self, Effect, MAX_LOG};
 
 /// `R:[衍生] 觉悟` play — `set_dest` + `gain`.
 crate::host_subset!(resolve_dispatch {
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     gain | gain_typed | gain_fixed => arm_gain,
 });
 
@@ -76,7 +76,7 @@ crate::host_subset!(ako_dark_dispatch {
 crate::host_subset!(fire_bird_play_dispatch {
     pay => arm_pay,
     ask => arm_ask,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     set_counter_self => arm_set_counter_self,
     log | effect => arm_log,
@@ -107,11 +107,11 @@ crate::host_subset!(nfo_play_dispatch {
     players_on_count => arm_players_on_count,
     players_on_at => arm_players_on_at,
     tile_forward | dist => arm_dist,
-    set_steps | set_resolve => arm_protocol_stub,
-    card_move => arm_card_move,
+    set_steps | set_settles => arm_protocol_stub,
+    run_planned_move => arm_card_move,
     tile_steps_ahead => arm_tile_steps_ahead,
     pay_total | pay_leg => arm_pay_to,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     cards_in => arm_cards_in,
     query_guard | declared_arg | play_card => arm_protocol_stub,
@@ -152,14 +152,14 @@ crate::host_subset!(council_dispatch {
     rent_of => arm_rent_of,
     ask => arm_ask,
     pay => arm_pay,
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_on => arm_place_card_on,
     state_set => arm_state_set,
 });
 
 /// `R:（燐子）Ringing Bloom` play — place + (2) house-count override.
 crate::host_subset!(ringing_bloom_dispatch {
-    set_dest => arm_set_dest,
+    set_dest => arm_set_fate,
     place_card_at => arm_place_card,
     log | effect => arm_log,
     owned_count => arm_owned_count,
@@ -213,7 +213,7 @@ fn resolve_play_iff_at(user: i32) {
     host::install_backend(resolve_dispatch);
     sparse_r_world(user);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_roselia::resolve::resolve_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -225,7 +225,7 @@ fn resolve_play_iff_at(user: i32) {
         "C-R-觉悟-01: exactly GainMoney 1000"
     );
     crate::kassert!(
-        spec::resolve_play_post_ok(&pre, &post, user),
+        spec::resolve_play_post_ok(&condition, &post, user),
         "C-R-觉悟-01: only the user's money moves, +1000"
     );
 }
@@ -304,7 +304,7 @@ fn cookie_pay_iff_at(user: i32) {
     });
     let x = spec::cookie_x(n as i32);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     // Gate: discard non-empty (the book's condition). The `cant_play` gate is
     // covered by the non-empty discard assumption; we call the play body.
     invoke::unwrap_done(card_roselia::cookie_time::play_kani(user));
@@ -320,7 +320,7 @@ fn cookie_pay_iff_at(user: i32) {
         "C-R-曲奇时间-02: exactly GainMoney 500*X"
     );
     crate::kassert!(
-        spec::cookie_pay_post_ok(&pre, &post, user, x),
+        spec::cookie_pay_post_ok(&condition, &post, user, x),
         "C-R-曲奇时间-02: money +500*X only"
     );
 }
@@ -372,7 +372,7 @@ fn sprechchor_pay_iff_at(user: i32) {
     host::install_backend(sprechchor_dispatch);
     sparse_r_world(user);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_roselia::sprechchor::sprechchor_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -399,7 +399,7 @@ fn sprechchor_pay_iff_at(user: i32) {
         "C-R-Sprechchor-02: gain is exactly 1000+X*120"
     );
     crate::kassert!(
-        spec::sprechchor_post_ok(&pre, &post, user, x),
+        spec::sprechchor_post_ok(&condition, &post, user, x),
         "C-R-Sprechchor-02: only the user's money moves"
     );
 }
@@ -467,7 +467,7 @@ fn ako_dark_offhand_iff_at(user: i32) {
         w.field_n = 1;
     });
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let pre_stun = world::with_world(|w| w.key_get(user, stun_key()));
     invoke::unwrap_done(card_roselia::ako_dark::counteract_kani(user));
     let post = world::snapshot();
@@ -485,7 +485,7 @@ fn ako_dark_offhand_iff_at(user: i32) {
         "C-R-黑暗大魔姬亚子-02: +1 stun layer (state key)"
     );
     crate::kassert!(
-        spec::ako_dark_post_ok(&pre, &post, user),
+        spec::ako_dark_post_ok(&condition, &post, user),
         "C-R-黑暗大魔姬亚子-02: pay zeroed, money unchanged"
     );
 }
@@ -548,7 +548,7 @@ fn fire_bird_place_iff_at(user: i32) {
         }
     });
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_roselia::fire_bird::play_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -561,7 +561,7 @@ fn fire_bird_place_iff_at(user: i32) {
         "C-R-Fire bird-01: PayMoney 1600 + PlaceCard"
     );
     crate::kassert!(
-        spec::fire_bird_place_post_ok(&pre, &post, user),
+        spec::fire_bird_place_post_ok(&condition, &post, user),
         "C-R-Fire bird-01: money -1600"
     );
 }
@@ -620,7 +620,7 @@ fn fire_bird_burn_iff_at(user: i32) {
         w.key_set(user, crate::intern::intern("crystals"), 1);
     });
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_roselia::fire_bird::turn_end_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -632,7 +632,7 @@ fn fire_bird_burn_iff_at(user: i32) {
         "C-R-Fire bird-02: PayMoney 400 (+ crystal decay)"
     );
     crate::kassert!(
-        spec::only_player_money_delta(&pre, &post, user, -spec::fire_bird_burn_pay(), 1),
+        spec::only_player_money_delta(&condition, &post, user, -spec::fire_bird_burn_pay(), 1),
         "C-R-Fire bird-02: money -400"
     );
 }
@@ -682,7 +682,7 @@ fn nfo_face1_iff_at(user: i32) {
     host::install_backend(nfo_play_dispatch);
     sparse_r_world(user);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_roselia::nfo::play_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -699,7 +699,7 @@ fn nfo_face1_iff_at(user: i32) {
             "C-R-NFO-03: exactly GainMoney 1500"
         );
         crate::kassert!(
-            spec::only_player_money_delta(&pre, &post, user, spec::nfo_face1_gain(), 1),
+            spec::only_player_money_delta(&condition, &post, user, spec::nfo_face1_gain(), 1),
             "C-R-NFO-03: money +1500 only"
         );
     }
@@ -748,7 +748,7 @@ fn nfo_stay_iff_at(user: i32) {
     host::install_backend(nfo_at_end_dispatch);
     sparse_r_world(user);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     invoke::unwrap_done(card_roselia::nfo::at_end_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -759,7 +759,7 @@ fn nfo_stay_iff_at(user: i32) {
         "C-R-NFO-02: exactly GiveStay{1}"
     );
     crate::kassert!(
-        post.stay[user as usize] == pre.stay[user as usize] + 1,
+        post.stay[user as usize] == condition.stay[user as usize] + 1,
         "C-R-NFO-02: +1 [停留]"
     );
 }
@@ -812,7 +812,7 @@ fn student_council_add_resolve_iff_at(user: i32) {
     // Isolation: no owned tiles (sparse world leaves `owner = -1`).
     world::with_world_mut(|w| w.deck_n = 0);
 
-    let pre = world::snapshot();
+    let condition = world::snapshot();
     let pre_deck_n = world::with_world(|w| w.deck_n as i32);
     invoke::unwrap_done(card_roselia::council_check::counteract_kani(user));
     let post = world::snapshot();
@@ -823,7 +823,7 @@ fn student_council_add_resolve_iff_at(user: i32) {
         spec::student_council_add_resolve_delta(pre_deck_n, post_deck_n),
         "C-R-学生会的检查-02: deck gains exactly one 觉悟"
     );
-    let _ = pre;
+    let _ = condition;
     let _ = post;
     // No effect-log entry: `add_to_dest` is a silent pile write.
     let (logbuf, log_n) = log_slice();

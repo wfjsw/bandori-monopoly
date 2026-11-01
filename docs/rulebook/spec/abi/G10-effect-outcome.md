@@ -64,12 +64,12 @@ makes clause (1) wrong:
   `draw_event` leaves `tile` at `-1`, so the station is not on the trigger.
 
 The station matters for a second card: the persona skill
-`rules/skills/skill-personas/src/arisa_bonsai.rs:27` hooks
+`rules/skills/skill-personas/src/arisa.rs:27` hooks
 `On::Action(Action::Event("actor != owner && tile.id == tile_named('流星堂')", …))`
 for 「每次有其他玩家在"流星堂"抽取事件时获得一个[火罐]」. With `tile = -1`
 on every `event` raise that hook can never match, and bonsai's own clause (2)
 does not even draw an event (it calls `ctx::draw`, a **hand** draw,
-`arisa_bonsai.rs:62`). `draw_event_as(player, tile)` repairs both: it is
+`arisa.rs:62`). `draw_event_as(player, tile)` repairs both: it is
 the primitive for “an event drawn as X at tile Y”.
 
 ### 1.2 `settle-outcome-flags` (rows 792, 1428, 1449)
@@ -176,7 +176,7 @@ Book (`Sumimi:Sumimi不会解散哦`):
 > 若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果
 
 Current (`rules/cards/card-sumimi/src/no_breakup.rs`): the teleport settles
-and consumes the main move, but nothing rolls the world back. `ctx::turn_snap`
+and consumes the main move, but nothing rolls the world back. `ctx::turn_snapshot`
 (v104) exists, but it is captured at the player's **turn start**, so it is
 stale for a play made during the turn: it would revert every move and every
 settle since the turn began, not just this card's. What is needed is a
@@ -261,8 +261,9 @@ pub by_card_id: Option<i32>,
 /// `effect` / `target` only, and only when the rename landed (I-4).
 pub redirected_from: Option<i32>,
 /// The settle this trigger belongs to, on `settleBody` / `settleAfter` /
-/// `tileResolved` only.
-pub settle: Option<SettleFacts>,
+/// `tileResolved` only. Not `settle`: that word names G02's pre-variable
+/// namespace (`settle.tile`, G02 §4.7), which reads the trigger's stamp.
+pub settle_facts: Option<SettleFacts>,
 ```
 
 ```rust
@@ -275,6 +276,7 @@ pub struct SettleFacts {
     pub owner: i32,
     /// The settle ended before any body: the `settle` link was negated, or
     /// the mover was already out. No `settleBody`, no `settleAfter`.
+    /// Derived from G02's `SettleEntry.outcome` (`Cancelled`).
     pub cancelled: bool,
     /// The `settleBody` link was negated — the body was replaced.
     pub body_replaced: bool,
@@ -436,7 +438,7 @@ pub world_snaps: std::collections::BTreeMap<i32, WorldSnap>,
 
 // Pending (the save's torn-routine slot), `#[serde(default)]`
 pub host_journal: Vec<HostJournalEntry>,
-// Cx, transient, a copy of the pending stack while a pass runs
+// PlayCtx, transient, a copy of the pending stack while a pass runs
 pub host_journal: Vec<HostJournalEntry>,
 pub journal_resume: bool,
 // HostState, transient per pass
@@ -484,29 +486,27 @@ must derive `Debug` and `PartialEq` too or the containers stop compiling.
 
 ### 5.1 Stage reporting (`play.rs`)
 
-* `SettleFrame` gains `facts_idx: usize` (`usize::MAX` on `new`) and the
-  `Cx` gains `settle_facts: Vec<SettleFacts>` (transient, beside
-  `settle_open`).
-* `step_settle` at entry: if `frame.facts_idx == usize::MAX` push
-  `SettleFacts { at: frame.at, owner: frame.owner, ..Default::default() }` and
-  store the index. This also fixes
-  `settle_open`, which currently increments on **every** resume of the same
-  frame (`play.rs:2142`) and only leaks upward: gate the increment on the
-  same first-entry condition, decrement on completion.
-* `RaiseSettle`: in the `self.out(i) || t.is_cancelled()` terminal branch,
-  set `facts.cancelled` (both reasons mean no body).
-* `RaiseSettleBody`: `if si.is_cancelled()` — set `facts.body_replaced`.
-* Pop the facts entry when the frame reaches `Done`, and drop
-  `frame.facts_idx`.
-* In `money_inner` (`play.rs:3346`), after the balances are written
-  (play.rs:3833-3841) and before the `paid` raise: with `facts` the innermost
-  entry (none open → skip), if `p.kind == PayKind::Rent && loss > 0 &&
-  facts.owner >= 0 && p.tile == Some(facts.at) &&
-  p.to == Some(facts.owner as usize)`, set `paid` and add `loss` to
-  `paid_value`. A payment cancelled or reduced to 0 never reaches it.
-* `RaiseSettleAfter` / `RaiseTileResolved`: copy
-  `self.settle_facts[frame.facts_idx]` into `t.settle` for the raise.
-  `settleBody` carries `t.settle` with `paid = false`, `body_replaced =
+* G02 (which lands before this group) already replaced the `settle_open`
+  counter with `PlayCtx.settle_stack: Vec<SettleEntry>`, pushed once per frame and
+  popped on completion, and gave the entry its terminal `outcome`. This group
+  does **not** re-fix the counter; it extends that entry.
+* `SettleEntry` gains `paid: bool` and `paid_value: i32`; `SettleFacts` is a
+  snapshot of the entry, `at`/`owner` read from `entry.tile`/`entry.player`
+  (which is why both fields are redundant on the entry and are not stored
+  twice). `cancelled` is `entry.outcome == Cancelled` — no second bool.
+* `RaiseSettleBody`: `if si.is_cancelled()` — set a new
+  `entry.body_replaced: bool`.
+* In `money_inner`, after the balances are written (play.rs:4045-4054) and
+  before the `paid` raise: with the innermost entry (none open → skip), if
+  `p.rent && loss > 0 && entry.player >= 0 && p.settle_tile == entry.tile as i32 &&
+  p.to == Some(entry.player)`, set `paid` and add `loss` to `paid_value`. The
+  test uses G02's `p.settle_tile` payload field, not the payment's own
+  `p.tile`. A payment cancelled or reduced to 0 never reaches it.
+* `RaiseSettleAfter` / `RaiseTileResolved`: build `t.settle_facts` from the frame's
+  entry (`SettleFacts { at: entry.tile, owner: entry.player as i32,
+  cancelled: entry.outcome == Cancelled, body_replaced: entry.body_replaced,
+  paid: entry.paid, paid_value: entry.paid_value }`).
+  `settleBody` carries the same snapshot with `paid = false`, `body_replaced =
   false` (facts so far).
 * The bits are readable through the bitset import; `paid_value` in the same
   call.
@@ -577,7 +577,7 @@ pub struct HostJournalEntry {
     /// The seat the request was issued for.
     pub player: i32,
     /// Exact world before the request.
-    pub pre: Box<World>,
+    pub condition: Box<World>,
     /// The guest state the body had already cleared when it called (the same
     /// `GuestOverlay` the live `NeedHost` boundary pushes).
     pub guest: GuestOverlay,
@@ -592,7 +592,7 @@ pub struct HostJournalEntry {
   the live caller passes `call.player_id()`, the replay passes the entry's
   `player`), plus the `guest` overlay. At entry of **every** `HostRequest`
   (they are all effectful by construction; plain reads are separate imports)
-  push an entry with `slot = st.next_answer`, `pre = Box::new(cx.world_copy())`,
+  push an entry with `slot = st.next_answer`, `condition = Box::new(cx.world_copy())`,
   `nested = slot..slot` onto `cx.host_journal`. On normal return insert the
   answer at `slot` (the caller saves `st.next_answer` before the call instead
   of pushing at the end) and pop the entry.
@@ -604,7 +604,7 @@ pub struct HostJournalEntry {
 * On `Err(Halt::Ask)` inside the request, leave the entry in place and set
   `nested.end = answers.len()`. `Pending` gains
   `#[serde(default)] host_journal: Vec<HostJournalEntry>`; the Ask arm moves
-  the Cx stack into it and clears the Cx. `Pending.snapshot` stays the
+  the PlayCtx stack into it and clears the PlayCtx. `Pending.snapshot` stays the
   **routine** snapshot: the body re-runs from the top, so engine direct
   writes that precede the request (the event-deck pop, `wait`s) are undone
   and replayed exactly once.
@@ -630,9 +630,9 @@ pub struct HostJournalEntry {
 * An **unmarked** slot with an answer is the ordinary re-encounter after an
   earlier pass: the wrapper compares the fresh request with the one kept for
   the slot (`last`). Equal → return the answer. Different → the body
-  recomputed its arguments from the post-request world; restore `pre`,
+  recomputed its arguments from the post-request world; restore `condition`,
   overlay, apply, and continue the loop, replacing the prior answer (and the
-  prior application's effects, which `pre` undoes). A per-pass cap of 4
+  prior application's effects, which `condition` undoes). A per-pass cap of 4
   applies per slot bounds a pathological recompute; hitting it keeps the
   last application.
 * If a later prompt aborts the body again, the next re-run re-encounters a
@@ -647,7 +647,7 @@ pub struct HostJournalEntry {
 * `last` keeps a completed entry only for the passes that may re-encounter
   it; it is cleared when the drive returns.
 
-`pre` stores a whole `World`; cloning is refcount-cheap for the event tail
+`condition` stores a whole `World`; cloning is refcount-cheap for the event tail
 and bounded by the effectful-request count in one body.
 
 ### 5.4 World checkpoint (`world.rs`, `play.rs`)
@@ -666,11 +666,11 @@ pub struct PlayerSnap { pub pos: i32, pub state: Vec<(String, i32)>, pub money: 
 
 * `world_snap(key)`: insert-if-absent; snapshot `players[*].pos`,
   `players[*].state` (the `state` map with values, the same projection
-  `TurnSnap` uses), `players[*].money`, `st.owners`, `st.houses`,
+  `TurnSnapshot` uses), `players[*].money`, `st.owners`, `st.houses`,
   `st.mortgaged`.
 * `world_restore(key)`: write them back, absolute (idempotent). Positions are
   written directly, not via `teleport_as`, so no abnormal gate and no move
-  bookkeeping (a revert is not a move). `turn_start_pos` / `turn_snap` are
+  bookkeeping (a revert is not a move). `turn_start_pos` / `turn_snapshot` are
   untouched.
 * `world_snap_drop(key)`.
 * All three run as `HostRequest`s (§4.5), so the snapshot/restore lands on
@@ -726,7 +726,7 @@ After:
 
 ```rust
 On::Play("", None, arisa_wait),
-// （2）「事件触发时…」 -- placement and count are one pre (applicability).
+// （2）「事件触发时…」 -- placement and count are one condition (applicability).
 On::Action(Action::Event("card.placed && card.counter('crystals') >= 3", None, defer)),
 // （1）「任何非因为此卡导致的事件结算时…」
 On::Action(Action::EventAfter("card.placed", Some(foreign), event_after)),
@@ -786,8 +786,8 @@ doing what `settle_after` does: unplace to graveyard, refund `SLOT_PAID`
 
 No change to the body: the engine replays the torn `Move` before the resumed
 pass, so the ownership read at line 59 already sees the deed the nested
-settle bought. It answers the roll's livehouse face, the fresh `card_move`
-carries a different plan, and the journal re-applies the move from `pre`
+settle bought. It answers the roll's livehouse face, the fresh `run_planned_move`
+carries a different plan, and the journal re-applies the move from `condition`
 (§5.3), so the player ends on the rolled tile. Delete the `TODO(ABI) HOST-01`
 comment at lines 56-58; the read and everything else stay where they are.
 
@@ -807,7 +807,7 @@ with `fn landed_redirect(_: i32) -> bool { ctx::trigger::redirected() }`.
 ### 6.6 `no_breakup`
 
 At the play's start, before the ask:
-`ctx::world_snap();` (key = self uid). After `card_move`, at
+`ctx::world_snap();` (key = self uid). After `run_planned_move`, at
 `tileResolved`, if `!repeated_digits(money_of(owner)) && !player_out(owner)`:
 `ctx::world_restore();`. Then `ctx::world_snap_drop();` on both branches.
 The restore is the 「回到原处并取消所有受到的效果」 half.
@@ -825,8 +825,8 @@ The restore is the 「回到原处并取消所有受到的效果」 half.
 * **RECORD_VERSION stays 3.** `Answered` is unchanged; the new fields ride
   world/pending state. A record replays through its archived engine bundle,
   so an older engine never sees v114 keys.
-* `Cx.settle_facts`, `Trigger.*` are transient (the routine re-derives them
-  on a re-run, exactly like `settle_open`).
+* The `SettleFacts` snapshot and `Trigger.*` are transient (both are
+  re-derived from the settle entry on a re-run, exactly like `settle_open`).
 * A save inside a settle re-runs the routine; the settle work stack
   (`ContinueSettleWork`) is not saved today either, so nothing new is lost.
 * Replay determinism: the deferral queue is world state, so a replayed turn
@@ -849,7 +849,7 @@ pub const ABI_VERSION: i32 = 114;   // was 113 (eleventh group)
 ///    `draw_event_as(player, tile)` attributes an event draw to another
 ///    seat and tile (`HostRequest::DrawEventAt`). `Trigger.by_card_id` /
 ///    `trig_by_card_id` add the causing **instance** beside `by_card`'s
-///    seat. `Trigger.settle` / `trig_settle_facts` (bitset) /
+///    seat. `Trigger.settle_facts` / `trig_settle_facts` (bitset) /
 ///    `trig_settle_paid_value` publish a settle's `cancelled` /
 ///    `body_replaced` / `paid` outcome to `settleAfter` / `tileResolved`.
 ///    `Trigger.redirected_from` / `trig_redirected_from` name the seat a
@@ -894,7 +894,7 @@ disjoint and only the number moves in the ordinary case.
 | 3 | `g10_ownership_read_sees_the_deed_bought_by_the_move` | agent-tile offer buys a livehouse → the commit pass's read sees it and the face-mapped destination wins |
 | 3 | `g10_journal_survives_nested_prompt` | one nested prompt → the world ends as if the move ran once, the deed and the settle exist once |
 | 3 | `g10_journal_answers_do_not_shift` | a body prompt after the torn request gets its own answer |
-| 3 | `g10_recomputed_request_reapplies_from_pre` | the second pass computes a different destination → the move re-applies from `pre` and the first application's effects are gone |
+| 3 | `g10_recomputed_request_reapplies_from_pre` | the second pass computes a different destination → the move re-applies from `condition` and the first application's effects are gone |
 | 3 | `g10_unchanged_request_is_not_double_applied` | the second pass computes the same request → one move, one settle, one payment |
 | 4 | `g10_exist_latch_needs_a_landed_redirect` | opponent's single-target effect redirected → latched, no draw at turn start |
 | 4 | `g10_exist_latch_ignores_a_plain_rent_payment` | rent to the owner → not latched, draws |
@@ -922,7 +922,7 @@ Regression/adjacent: `effect_log_cards::be_strongest_*`,
 | `g10_release_due_iff` | a record releases at a turn start ⇔ due owner and strictly later key, or owner out |
 | `g10_snap_restore_iff` | `restore(snap(w))` equals `w` on the six families; restore twice equals once |
 | `g10_journal_answer_layout` | after replay, every in-flight entry's answer sits at its own slot and no nested answer is orphaned |
-| `g10_journal_apply_once` | an equal re-encounter applies zero more times; a changed one restores `pre` before applying |
+| `g10_journal_apply_once` | an equal re-encounter applies zero more times; a changed one restores `condition` before applying |
 
 Each new op also gets a `hostops_smoke` presence proof so an unmodeled op
 cannot answer silently.
@@ -931,10 +931,8 @@ cannot answer silently.
 
 ## 10. Alternatives
 
-1. **Event deferral as a guest-held card (`IEventDefer` exactly as C#).**
-   The card keeps a tuple and the engine calls `Resolved` on it. Rejected:
-   the record must outlive the card (a save, a leave), so it belongs in the
-   world; a guest-held record cannot be released after the instance is gone.
+1. Rejected: the record must outlive the card (a save, a leave), so it belongs in the world; a
+  guest-held record cannot be released after the instance is gone.
 2. **Event deferral as a new `On::Schedule` entry.** `On::Schedule` already
    has an id and a due-turn mode. Rejected: a schedule is *card-owned
    future work* with the card as the owner; an event is an event-deck unit
@@ -955,7 +953,7 @@ cannot answer silently.
    `refuse_if_filter` lifted for `set_prop`. Rejected in G06-adjacent work:
    Filter bodies are pure by contract, and the latch wants to run on the
    settled declaration, not on the proposal.
-7. **World snapshot as a second `turn_snap` variant.** Reuse the turn-start
+7. **World snapshot as a second `turn_snapshot` variant.** Reuse the turn-start
    arrays. Rejected: turn-start arrays are stale mid-turn, and a second
    capture point on the player would collide with cards that already restore
    from it (`ran_as_usual`).
@@ -980,16 +978,11 @@ cannot answer silently.
    link cannot undo the rename. The fact mirrors the rename (influence
    happened). Is that the intended ruling, or should a cancelled redirect
    restore the declared seat?
-4. **Deferral when the arisa card leaves.** V1 resolves the event anyway and
-   skips the callback (no extra draw). Alternatives: resolve immediately on
-   leave, or drop the event back to the discard. The C# `Card.Detach` note
-   suggests retirement.
+4. **Deferral when the arisa card leaves.** V1 resolves the event anyway and skips the callback (no
+  extra draw). Alternatives: resolve immediately on leave, or drop the event back to the discard.
 5. **Deferral when the owner leaves.** V1 releases at the first turn start
    after the leave, without the callback. Confirm.
-6. **`no_breakup` and the main-move latch.** The C# snapshot does not
-   include the move bookkeeping; a reverted teleport keeps the main move
-   consumed. Confirm the book's 「视为你的主要移动」 stays consumed after
-   「取消所有受到的效果」.
+6. Confirm the book's 「视为你的主要移动」 stays consumed after 「取消所有受到的效果」.
 7. **`no_breakup` and cards played during the settle.** The six-family
    snapshot leaves hand/deck/marks/field untouched. Is 「取消所有受到的
    效果」 confined to the six families, or must a card that got played during

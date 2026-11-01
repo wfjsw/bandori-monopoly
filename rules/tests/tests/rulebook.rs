@@ -494,7 +494,7 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
 
 // 规则书 基础[结算] 5.1: 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」.
 // The pay pipeline's optional-funding arm excludes the deed being upgraded
-// (`Cx::offer_mortgage_funds`'s `exclude`), and a mortgaged deed refuses the
+// (`PlayCtx::offer_mortgage_funds`'s `exclude`), and a mortgaged deed refuses the
 // build outright (「如果格子地契已抵押则无效果」).
 #[test]
 fn s09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
@@ -684,7 +684,7 @@ fn s12d_agent_build_only_in_own_group() {
     // Every build option's tile is in the agent's group.
     for (i, o) in p.options.iter().enumerate() {
         if o.key() == "ask.agent.build" {
-            let tile_arg = o.a.get("tile").and_then(|a| match a {
+            let tile_arg = o.args.get("tile").and_then(|a| match a {
                 game_core::msg::Arg::Tile(x) => Some(*x as usize),
                 _ => None,
             });
@@ -790,7 +790,10 @@ fn t02_stay_skips_the_main_move() {
     add_stay(&mut t, 0, 1);
     t.begin_turn(0);
     assert_eq!(t.step(), OPS, "reached 运营 with the move skipped");
-    assert!(t.m.world().st.skip_move, "the main move is marked skipped");
+    assert!(
+        t.m.world().st.skip_move,
+        "the is_main_move move is marked skipped"
+    );
     t.end(0).unwrap();
     drain(&mut t);
     assert_eq!(
@@ -978,7 +981,7 @@ fn t07_only_one_main_move_per_turn() {
     assert_eq!(t.pos(0), 13);
     // A second roll in the same turn is refused (the move is spent).
     let r = t.roll(0);
-    assert!(r.is_err(), "the second main move is refused: {r:?}");
+    assert!(r.is_err(), "the second is_main_move move is refused: {r:?}");
     assert_eq!(t.pos(0), 13, "no further movement");
 }
 

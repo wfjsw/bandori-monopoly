@@ -80,9 +80,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -425,7 +425,7 @@ fn g14_amekomi_replaces_a_started_backward_walk() {
     assert_eq!(
         t.pos(0),
         cafe,
-        "the teleport is the main move: pos = {}",
+        "the teleport is the is_main_move move: pos = {}",
         t.pos(0)
     );
     assert_eq!(t.dice_left(), 0, "every loaded face was rolled");
@@ -553,8 +553,10 @@ fn g17_quarter_rent_remote_settle_then_full_extra_settle() {
         "the remote settle pays R/4 = {quarter} (R = {rent})"
     );
     // On P1's turn, 轮符雨 adds a stay and a turn-end extra settle. P1 cannot
-    // move (stay), so the extra settle is of P0's tile at the FULL rent --
-    // 立希's 「本次结算」 quarter modifier does not carry over.
+    // move (stay), so G03 defers the withheld landing settle to the turn end
+    // (one settle of P0's tile at the FULL rent -- 立希's 「本次结算」 quarter
+    // modifier does not carry over); 轮符雨's 「额外进行一次结算」 is additive
+    // on top of it, so the turn end settles twice.
     until_turn(&mut t, 1);
     t.give(1, &["MyGO:轮符雨"]);
     t.play(1, "MyGO:轮符雨").unwrap();
@@ -563,7 +565,7 @@ fn g17_quarter_rent_remote_settle_then_full_extra_settle() {
     pass(&mut t, 1);
     assert_eq!(
         t.money(1),
-        10_000 - quarter - rent,
-        "the extra settle pays the full rent {rent}"
+        10_000 - quarter - 2 * rent,
+        "the deferred settle and the extra settle both pay the full rent {rent}"
     );
 }

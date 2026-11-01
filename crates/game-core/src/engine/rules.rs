@@ -6,7 +6,7 @@
 //! [`StubRules`] gives every card and event no effect, which leaves a complete,
 //! playable game of plain Monopoly.
 
-use super::cx::{Cx, Flow};
+use super::cx::{Flow, PlayCtx};
 use crate::msg::Msg;
 
 /// Where a played card goes afterwards.
@@ -54,7 +54,7 @@ pub struct TriggerMove {
     pub kind: super::move_ctx::MoveKind,
     /// Does the move settle where it lands? `false` = a card effect prevented
     /// settle entirely (the move still happens).
-    pub resolve: bool,
+    pub settles: bool,
     /// Free-form per-card counters on the move (a marker-funded roll is card-owned
     /// state, tagged by whoever armed it).
     pub tags: Vec<(String, i32)>,
@@ -72,9 +72,34 @@ pub struct TriggerMove {
     /// The move was shaped or started by a rule whose card id starts with
     /// `skill:` (cond `move.by_skill`).
     pub by_skill: bool,
-    /// Was this settle initiated by a card (`card_settle_at`), not by the
+    /// Was this settle initiated by a card (`settle_tile_at`), not by the
     /// player's own move landing? Mirrors [`super::move_ctx::MoveCtx::settle_redirect`].
     pub settle_redirect: bool,
+}
+
+/// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
+/// every other trigger.
+///
+/// The guest sees this as `abi::RollPayload`; the two crates cannot share a
+/// type, so keep the fields aligned.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TriggerRoll {
+    /// The transaction id.
+    pub id: i32,
+    /// `0` = effect roll, `1` = move roll.
+    pub purpose: i32,
+    /// The highest-ranked [`RollSource`] seen on the transaction.
+    pub source: RollSource,
+    /// More than one cast exists.
+    pub rerolled: bool,
+    /// Index into `casts` of the face that will settle.
+    pub chosen_index: i32,
+    /// The face the latest pick did not take; `-1` when none.
+    pub unused_face: i32,
+    /// Every cast so far, `(value, source)`.
+    pub casts: Vec<(i32, i32)>,
+    /// The settled face at `diceRollSettled`; `None` before it.
+    pub final_face: Option<i32>,
 }
 
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
@@ -82,9 +107,17 @@ pub struct TriggerMove {
 /// whether the payment is rent is a pay-only fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TriggerPay {
+    /// The in-flight kind; `set_pay_kind` rewrites it (last writer wins).
+    pub kind: super::play::PayKind,
+    /// The in-flight shape; `set_pay_shape` rewrites it before the first share.
+    pub shape: super::play::PayShape,
     /// Is this payment rent, as against a buy, a build, or a forced loss?
-    /// Always `false` on a card-driven payment.
+    /// The declared [`Pay::rent`](super::play::Pay::rent) flag, not
+    /// `kind == Rent`: a rent redirected to `Loss` still reads as rent.
     pub is_rent: bool,
+    /// Is this payment a command **total**, as against a 「[分摊]」 leg? A
+    /// command that has already staged is also `false` (a reverse child).
+    pub total_stage: bool,
 }
 
 /// Where a purchase's money goes. Lives in `game-kinds` -- one definition
@@ -137,8 +170,18 @@ impl TriggerBuy {
 }
 
 impl TriggerPay {
-    pub fn new(is_rent: bool) -> Self {
-        Self { is_rent }
+    pub fn new(
+        kind: super::play::PayKind,
+        is_rent: bool,
+        total_stage: bool,
+        shape: super::play::PayShape,
+    ) -> Self {
+        Self {
+            kind,
+            shape,
+            is_rent,
+            total_stage,
+        }
     }
 }
 
@@ -146,7 +189,9 @@ impl TriggerPay {
 /// `card_sdk::abi::roll_source`'s wire codes; the guest ABI still sees the `i32`.
 /// The engine never branches on a game name -- code `1` is the marker-funded
 /// roll that rules-layer clauses match by wire code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]
@@ -167,6 +212,18 @@ impl RollSource {
             RollSource::Charge => 1,
             RollSource::Card => 2,
             RollSource::Skill => 3,
+        }
+    }
+
+    /// Precedence rank (higher wins). The wire codes are not in rank order:
+    /// a charge-funded recast outranks a skill, which outranks a card, which
+    /// outranks an unattributed roll.
+    pub const fn rank(self) -> i32 {
+        match self {
+            RollSource::Unattributed => 0,
+            RollSource::Card => 1,
+            RollSource::Skill => 2,
+            RollSource::Charge => 3,
         }
     }
 
@@ -221,7 +278,7 @@ pub struct Effect {
 
 /// One link in a chain (Yu-Gi-Oh's `ChainLink`), and the engine's counteraction trigger.
 ///
-/// The kind name itself encodes pre/post (`"settleBefore"` vs `"settle"`,
+/// The kind name itself encodes condition/post (`"settleBefore"` vs `"settle"`,
 /// `"buyBefore"` vs `"buyAfter"`), so there is no separate `when` field.
 ///
 /// A link is either the **effect declaration** (L1, `seq == 1`, `answers == 0`)
@@ -233,11 +290,10 @@ pub struct Trigger {
     pub player_id: i32,
     pub target: i32,
     pub tile: i32,
-    /// The card this trigger is about (`t.Card`), or `None`.
     pub card: Option<String>,
     pub value: i32,
     /// The turn step (0/1/2/3) active when this trigger raised. Stamped by
-    /// `Cx::counteract`, not by the raise site. Only meaningful for kinds that
+    /// `PlayCtx::counteract`, not by the raise site. Only meaningful for kinds that
     /// aren't step-specific (e.g. `mortgage` can raise during both step 1
     /// and step 3).
     pub step: i32,
@@ -252,7 +308,7 @@ pub struct Trigger {
     /// be "the main move's settle" without carrying a move payload at all --
     /// the tile `On::Settle` body needs the flag (a main landing only
     /// announces; the offers come at the end step) and has no `mv`.
-    pub main: bool,
+    pub is_main_move: bool,
     /// The move that caused this trigger, when one did. `None` = no move.
     pub mv: Option<TriggerMove>,
     /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
@@ -260,9 +316,11 @@ pub struct Trigger {
     /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on
     /// every other kind.
     pub buy: Option<TriggerBuy>,
-    /// Where a `diceRollBefore` / `diceRollResult` face came from. [`RollSource::Unattributed`]
+    /// Where the roll's face came from. [`RollSource::Unattributed`]
     /// on every non-roll trigger.
     pub roll_source: RollSource,
+    /// The roll a `DiceRoll*` trigger belongs to. `None` on every other kind.
+    pub roll: Option<TriggerRoll>,
     /// How a counter invalidated this link. The effect body is skipped when this
     /// is not [`Negation::None`]; the Before/After hooks still run.
     pub negation: Negation,
@@ -286,6 +344,24 @@ pub struct Trigger {
     /// The counter name on a `CounterChanged` hook, or the message name on a
     /// `Message` entry. `None` otherwise.
     pub name: Option<String>,
+    /// Unique per raise, stamped once in `Ruleset::counteract` and shared by
+    /// every job the raise dispatches. `0` outside a raise and on a trigger a
+    /// test built by hand (the allocator only fills a `0`). A listener keys
+    /// one-shot claims on it.
+    pub uid: i32,
+    /// The field instance or row this raise is *about*, or `-1`. Set on
+    /// `counterChanged` (the changed instance) and `markChanged` (the mark's
+    /// creating instance); never restamped per hook job -- the job's own
+    /// instance is `self_uid()`.
+    pub instance: i32,
+    /// The tile of the innermost open settle, or `-1` when none is open. Not a
+    /// pay-only fact -- `settleBody` / `settleAfter` / `tileResolved` carry it
+    /// with no `pay` payload, and `settleAfter` raises after the entry popped.
+    pub settle_tile: i32,
+    /// The settle's terminal outcome, only on `tileResolved`.
+    pub outcome: Option<super::cx::SettleOutcome>,
+    /// The `ChargePaying` window came from a skill cost (`raise_from(Skill)`).
+    pub charge_skill: bool,
 }
 
 impl Trigger {
@@ -299,11 +375,12 @@ impl Trigger {
             value: 0,
             step: 0,
             by_card: None,
-            main: false,
+            is_main_move: false,
             mv: None,
             pay: None,
             buy: None,
             roll_source: RollSource::Unattributed,
+            roll: None,
             negation: Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -312,6 +389,11 @@ impl Trigger {
             cards: Vec::new(),
             reason: None,
             name: None,
+            uid: 0,
+            instance: -1,
+            settle_tile: -1,
+            outcome: None,
+            charge_skill: false,
         }
     }
 
@@ -350,14 +432,30 @@ impl Trigger {
         self.negation == Negation::None && !self.spared.contains(&seat)
     }
 
+    /// Attach the roll transaction payload.
+    pub(crate) fn with_roll(&mut self, r: &super::roll::RollTransaction) -> &mut Self {
+        self.roll = Some(TriggerRoll {
+            id: r.id,
+            purpose: r.purpose,
+            source: r.source,
+            rerolled: r.casts.len() > 1,
+            chosen_index: r.chosen_index as i32,
+            unused_face: r.unused_face,
+            casts: r.casts.iter().map(|c| (c.raw, c.source.as_i32())).collect(),
+            final_face: r.final_face,
+        });
+        self.roll_source = r.source;
+        self
+    }
+
     /// Copy the move context onto this trigger.
     ///
-    /// Also stamps [`Trigger::main`] from the move, so a raise that carries a
+    /// Also stamps [`Trigger::is_main_move`] from the move, so a raise that carries a
     /// move and one that does not agree on "was this the turn's main move".
     pub(crate) fn with_move(&mut self, m: &super::play::Move) -> &mut Self {
         self.mv = Some(TriggerMove {
             kind: m.kind,
-            resolve: m.resolve,
+            settles: m.settles,
             tags: m.tags.clone(),
             dir: if m.reverse {
                 Dir::Backward
@@ -371,13 +469,13 @@ impl Trigger {
             by_skill: m.by_skill,
             settle_redirect: m.settle_redirect,
         });
-        self.main = m.main;
+        self.is_main_move = m.is_main_move;
         self
     }
 }
 
 /// Raise a counteraction trigger: build a [`Trigger`], apply the optional field
-/// overrides, and run it through `Cx::raise` (which stamps `step` centrally and
+/// overrides, and run it through `PlayCtx::raise` (which stamps `step` centrally and
 /// delegates to the card rules). Every raise site should go through this so the
 /// shape of a trigger remains uniform.
 ///
@@ -520,7 +618,7 @@ pub trait CardRules: Send + Sync {
     }
 
     /// Extra card-specific reason it can't be played right now.
-    fn cant_play(&self, _cx: &Cx, _player: usize, _card: &str) -> Option<Msg> {
+    fn cant_play(&self, _cx: &PlayCtx, _player: usize, _card: &str) -> Option<Msg> {
         None
     }
 
@@ -533,7 +631,7 @@ pub trait CardRules: Send + Sync {
     /// Default: no collector, empty arg. `WasmRules` runs the entry's `OP_DECLARE`.
     fn declare_activation(
         &self,
-        _cx: &mut Cx,
+        _cx: &mut PlayCtx,
         _player: usize,
         _card: &str,
     ) -> Flow<Option<Vec<u8>>> {
@@ -611,39 +709,45 @@ pub trait CardRules: Send + Sync {
     /// log for a non-deed. `WasmRules` overrides this to run the tile's
     /// **rule instances** (`docs/TILES.md`) and falls back to this default for
     /// a tile with none.
-    fn settle_tile(&self, cx: &mut Cx, player_id: usize, tile: usize, main: bool) -> Flow<()> {
-        cx.land_at_built_in(player_id, tile, main)
+    fn settle_tile(
+        &self,
+        cx: &mut PlayCtx,
+        player_id: usize,
+        tile: usize,
+        is_main_move: bool,
+    ) -> Flow<()> {
+        cx.land_at_built_in(player_id, tile, is_main_move)
     }
 
     /// Would a bot play it now?
-    fn ai_play(&self, _cx: &Cx, _player: usize, _card: &str) -> bool {
+    fn ai_play(&self, _cx: &PlayCtx, _player: usize, _card: &str) -> bool {
         true
     }
 
     /// The effect. Returns where the card goes afterwards.
-    fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest>;
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, card: &str) -> Flow<Dest>;
 
     /// Resolve a drawn event card. Returns `true` if the event remains in play
     /// (otherwise it is discarded).
-    fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool>;
+    fn event(&self, cx: &mut PlayCtx, player_id: usize, id: &str) -> Flow<bool>;
 
     /// counteraction window on `t`; may raise prompts.
     ///
     /// `t` is mutable: a counteraction may rewrite the move face (`t.value` /
     /// `t.mv.roll`) and the engine then uses the new face.
-    fn counteract(&self, _cx: &mut Cx, _t: &mut Trigger) -> Flow<()> {
+    fn counteract(&self, _cx: &mut PlayCtx, _t: &mut Trigger) -> Flow<()> {
         Ok(())
     }
 
     /// Short note shown on a card in hand (`HandNotesOf`).
-    fn hand_note(&self, _cx: &Cx, _player: usize, _card: &str) -> Msg {
+    fn hand_note(&self, _cx: &PlayCtx, _player: usize, _card: &str) -> Msg {
         Msg::default()
     }
 
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
     /// charged for each tile in `q.tiles`, and may they buy it at all?
     ///
-    /// Takes the world by reference rather than a [`Cx`] so the view's
+    /// Takes the world by reference rather than a [`PlayCtx`] so the view's
     /// A quote can be asked without cloning the world. The default is
     /// the plain rulebook formula -- [`super::play::purchase::quote_native`] --
     /// which is what `StubRules` and the sim run. `WasmRules` overrides it to
@@ -679,7 +783,7 @@ pub trait CardRules: Send + Sync {
     /// instance's props (`docs/TILES.md`).
     fn deed_mortgage(
         &self,
-        cx: &mut super::Cx,
+        cx: &mut super::PlayCtx,
         player: usize,
         tile: usize,
         _reason: i32,
@@ -692,7 +796,12 @@ pub trait CardRules: Send + Sync {
     /// not a hook: [`super::play::purchase::redeem_cost`] is the rulebook
     /// figure, and a retuned figure belongs on the tile rule instance's props
     /// (`docs/TILES.md`).
-    fn deed_redeem(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
+    fn deed_redeem(
+        &self,
+        cx: &mut super::PlayCtx,
+        player: usize,
+        tile: usize,
+    ) -> super::Flow<bool> {
         super::play::purchase::standalone_redeem(cx, player, tile)
     }
 
@@ -703,7 +812,7 @@ pub trait CardRules: Send + Sync {
     /// (StubRules).
     fn deed_buy(
         &self,
-        cx: &mut super::Cx,
+        cx: &mut super::PlayCtx,
         player: usize,
         tile: usize,
         kind: super::play::purchase::BuyKind,
@@ -714,7 +823,7 @@ pub trait CardRules: Send + Sync {
 
     /// Run the tile rule's build body (`On::Build`) for `tile`.
     /// The default is the engine's standing build (StubRules).
-    fn deed_build(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
+    fn deed_build(&self, cx: &mut super::PlayCtx, player: usize, tile: usize) -> super::Flow<bool> {
         super::play::purchase::standalone_build(cx, player, tile)
     }
 }
@@ -760,7 +869,7 @@ pub struct ExclusiveAsk<'a> {
 pub struct StubRules;
 
 impl CardRules for StubRules {
-    fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
+    fn play(&self, cx: &mut PlayCtx, player_id: usize, card: &str) -> Flow<Dest> {
         // No module body runs and no effect activates -- a stub play remains
         // silent apart from the "not ported" note. (`WasmRules` announces its
         // bodies at `drive_inner_body`; the sim's counts therefore see no new
@@ -772,7 +881,7 @@ impl CardRules for StubRules {
         Ok(Dest::Graveyard)
     }
 
-    fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool> {
+    fn event(&self, cx: &mut PlayCtx, player_id: usize, id: &str) -> Flow<bool> {
         cx.log(
             player_id as i32,
             Msg::new("log.event_not_ported").event("event", id),

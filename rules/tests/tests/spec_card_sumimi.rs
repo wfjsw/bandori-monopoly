@@ -87,16 +87,16 @@ pub fn c_sumimi_idolband_reset(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre = step.pre_money(who);
+    let condition = step.pre_money(who);
     let post = step.post_money(who);
-    if pre < 3000 && post != 3000 {
+    if condition < 3000 && post != 3000 {
         return Err(format!(
-            "money {pre} -> {post}, expected reset to 3000 ([兼顾偶像与乐队])"
+            "money {condition} -> {post}, expected reset to 3000 ([兼顾偶像与乐队])"
         ));
     }
-    if pre >= 3000 && post != pre {
+    if condition >= 3000 && post != condition {
         return Err(format!(
-            "money {pre} -> {post}, expected no effect at >=3000"
+            "money {condition} -> {post}, expected no effect at >=3000"
         ));
     }
     Ok(())
@@ -124,7 +124,7 @@ pub fn c_sumimi_idolband_frame(step: &Step<'_>) -> Result<(), String> {
     .into_iter()
     .collect();
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-    frame(step.pre, step.post, &allowed)
+    frame(step.condition, step.post, &allowed)
 }
 
 pub const IDOL_BAND_CLAUSES: &[Clause] = &[
@@ -150,7 +150,7 @@ fn idolband_resets_money_to_3000() {
         let money = rng.range(0, 29) * 100; // 0..=2900
         t.set_money(0, money);
         t.give(0, &[IDOL_BAND]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(IDOL_BAND_CLAUSES);
         t.play(0, IDOL_BAND)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -158,7 +158,7 @@ fn idolband_resets_money_to_3000() {
             return Err(format!("money {} -> {}, expected 3000", money, t.money(0)));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -232,10 +232,10 @@ pub fn c_sumimi_nobreakup_gate(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre = step.pre_money(who);
-    if !digits_all_distinct(pre) {
+    let condition = step.pre_money(who);
+    if !digits_all_distinct(condition) {
         return Err(format!(
-            "played with money {pre} (digits not all distinct): 「资金不含有相同数字」"
+            "played with money {condition} (digits not all distinct): 「资金不含有相同数字」"
         ));
     }
     Ok(())
@@ -296,12 +296,16 @@ pub fn c_sumimi_twoinone_character(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre_ch = step.pre.st.players[who].persona.clone();
+    let pre_ch = step.condition.st.players[who].persona.clone();
     let post_ch = step.post.st.players[who].persona.clone();
     let expect_ch = match pre_ch.as_str() {
         "纯田真奈" => "三角初华（Sumimi）",
         "三角初华（Sumimi）" => "纯田真奈",
-        other => return Err(format!("pre character {other:?} is not a Sumimi character")),
+        other => {
+            return Err(format!(
+                "condition character {other:?} is not a Sumimi character"
+            ))
+        }
     };
     if post_ch != expect_ch {
         return Err(format!(
@@ -321,13 +325,17 @@ pub fn c_sumimi_twoinone_fire(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre_ch = step.pre.st.players[who].persona.clone();
+    let pre_ch = step.condition.st.players[who].persona.clone();
     // The swap targets the other Sumimi character; its 初始火罐数 is what
     // must land (真奈 1 / 初华 2).
     let expect_fire = match pre_ch.as_str() {
         "纯田真奈" => 2,
         "三角初华（Sumimi）" => 1,
-        other => return Err(format!("pre character {other:?} is not a Sumimi character")),
+        other => {
+            return Err(format!(
+                "condition character {other:?} is not a Sumimi character"
+            ))
+        }
     };
     let post_fire = step
         .post
@@ -461,8 +469,8 @@ pub fn c_sumimi_twodonuts_exile(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre = step
-        .pre
+    let condition = step
+        .condition
         .st
         .players
         .get(who)
@@ -475,8 +483,10 @@ pub fn c_sumimi_twodonuts_exile(step: &Step<'_>) -> Result<(), String> {
         .get(who)
         .map(|p| p.state_get("exile"))
         .unwrap_or(0);
-    if post <= pre {
-        return Err(format!("exile {pre} -> {post}, expected a [除外] gain"));
+    if post <= condition {
+        return Err(format!(
+            "exile {condition} -> {post}, expected a [除外] gain"
+        ));
     }
     let hold = step
         .post
@@ -580,12 +590,12 @@ pub fn c_sumimi_sweetescape_gate(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pos = step.pre.st.players[who].pos as usize;
-    let n = step.pre.st.owners.len().max(1);
+    let pos = step.condition.st.players[who].pos as usize;
+    let n = step.condition.st.owners.len().max(1);
     let mut sum = 0i64;
     for d in [1i32, 2, -1, -2] {
         let idx = (pos as i64 + d as i64).rem_euclid(n as i64) as usize;
-        let houses = step.pre.st.houses.get(idx).copied().unwrap_or(0);
+        let houses = step.condition.st.houses.get(idx).copied().unwrap_or(0);
         sum += tile_rent_at(idx, houses) as i64;
     }
     if sum < 2000 {
@@ -889,7 +899,7 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     // The skill asks yes/no; take yes.
     let mut offered = false;
     while let Some(p) = t.prompt() {
-        if p.kind == "choice" && p.title.key().contains("mana_donut") {
+        if p.kind == "choice" && p.title.key().contains("mana") {
             offered = true;
             let who = t.asked()[0];
             t.answer(who, 0).expect("yes");
@@ -899,10 +909,7 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     }
     drain(&mut t);
     if !offered {
-        panic!(
-            "no mana_donut offer on passing 购物中心: {}",
-            t.dump_prompt()
-        );
+        panic!("no mana offer on passing 购物中心: {}", t.dump_prompt());
     }
     if t.charge(0) != 0 {
         panic!("fire {}, expected 0 after 「消耗一个火罐」", t.charge(0));
@@ -932,9 +939,9 @@ fn hina_pot_placement_keeps_cap() {
     t.begin_turn(0);
     drain(&mut t);
     t.set_fire(0, 1, 2);
-    let main = tile("主要街道");
+    let is_main_move = tile("主要街道");
     // `TileData::color` was renamed `area` in the player-meta split.
-    let colour = rules_spec::data().tiles[main].area.clone();
+    let colour = rules_spec::data().tiles[is_main_move].area.clone();
     let target = rules_spec::data()
         .tiles
         .iter()

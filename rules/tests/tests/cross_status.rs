@@ -40,9 +40,9 @@ fn answer_player(t: &mut Table, who: usize, target: i32) {
     let k = p
         .options
         .iter()
-        .position(|o| match o.a.get("who") {
+        .position(|o| match o.args.get("who") {
             Some(Arg::PlayerId(v)) => *v == target,
-            Some(Arg::I(v)) | Some(Arg::N(v)) => *v == target as i64,
+            Some(Arg::Integer(v)) | Some(Arg::Number(v)) => *v == target as i64,
             _ => false,
         })
         .unwrap_or_else(|| panic!("player {target} not offered: {}", t.dump_prompt()));
@@ -289,9 +289,9 @@ fn s08_sakiko_absorbs_statuses() {
     loop {
         let Some(_) = t.prompt() else { break };
         let dump = t.dump_prompt();
-        // The absorb ask_yes (`sakiko_life_take`); YesNo option labels are
+        // The absorb ask_yes (`sakiko_take`); YesNo option labels are
         // `ask.yes` / `ask.no` (prompt_to_ask), so match the message key.
-        if dump.contains("sakiko_life_take") {
+        if dump.contains("sakiko_take") {
             let k = t.option("ask.yes").unwrap_or(0);
             t.answer(0, k).unwrap();
         } else {

@@ -1,5 +1,5 @@
 {
-  "black_birthday_why": "黑色生日",
+  "black_birthday_reason": "黑色生日",
   "cant_look_away_backward": "向后",
   "cant_look_away_dir_ask": "往哪个方向？",
   "cant_look_away_dir_title": "无法将视线移开",
@@ -26,9 +26,9 @@
   "doll_garden_pay": "向 {{user}} 支付 {{money}}",
   "doll_garden_sum": "人偶的箱庭 的效果：{{who}} 强制移动其他人的掷骰之和 {{n}} 格",
   "doll_garden_walked": "{{who}} 移动掷骰 {{n}} 并移动（不结算）",
-  "doll_garden_why": "人偶的箱庭",
+  "doll_garden_reason": "人偶的箱庭",
   "heart_rain_fallback": "没有让任何人获得 [停留]：{{who}} 获得 1 层 [晕眩] 和 1,000",
-  "heart_rain_why": "心の雨",
+  "heart_rain_reason": "心の雨",
   "j11_ask_pay": "即将支付 {{money}}：是否弃置 #J11，使自己与1格内的玩家[眩晕]并取消这次支付？",
   "j11_ask_targeted": "被其他卡指定了：是否弃置 #J11，使自己与1格内的玩家[眩晕]？",
   "j11_decayed": "「#J11」的奇迹水晶用尽，置入弃牌堆",

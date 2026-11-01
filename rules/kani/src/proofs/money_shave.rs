@@ -148,7 +148,7 @@ pub fn aya_haruka_02_shave_iff() {
         return;
     }
 
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -160,8 +160,11 @@ pub fn aya_haruka_02_shave_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    let x = spec::aya_haruka_02_x(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
-    let poorest = spec::is_poorest(&pre.money, &pre.out, pre.n_players, owner);
+    let x = spec::aya_haruka_02_x(
+        condition.fans_pos[owner as usize],
+        condition.fans_neg[owner as usize],
+    );
+    let poorest = spec::is_poorest(&condition.money, &condition.out, condition.n_players, owner);
     kani::cover!(poorest, "owner is poorest (shave applies)");
     kani::cover!(!poorest, "owner is not poorest (no-op)");
 
@@ -187,23 +190,26 @@ pub fn aya_haruka_02_shave_iff() {
     }
 
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged at rewrite time"
     );
     crate::kassert!(
-        world::arr4_eq(post.pos, pre.pos),
+        world::arr4_eq(post.pos, condition.pos),
         "frame: positions unchanged"
     );
     crate::kassert!(
-        world::arr4_eq(post.charge, pre.charge),
+        world::arr4_eq(post.charge, condition.charge),
         "frame: fire unchanged"
     );
-    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
+    crate::kassert!(post.stay == condition.stay, "frame: stay unchanged");
     crate::kassert!(
-        world::arr8b_eq(post.hand, pre.hand),
+        world::arr8b_eq(post.hand, condition.hand),
         "frame: hand unchanged"
     );
-    crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");
+    crate::kassert!(
+        post.discard == condition.discard,
+        "frame: discard unchanged"
+    );
 }
 
 /// SPLIT of `aya_haruka_02_shave_iff` (poorest half). Same clause, narrower
@@ -230,7 +236,7 @@ pub fn aya_haruka_02_shave_poorest() {
     // the IR agrees). No `fill_pay_add` / `guard!` here — that circuit is the
     // split's remaining cliff after the Msg/memcmp/by_idx cuts.
     kani::assume(w.trig_value > 0);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -239,7 +245,10 @@ pub fn aya_haruka_02_shave_poorest() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let x = spec::aya_haruka_02_x(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
+    let x = spec::aya_haruka_02_x(
+        condition.fans_pos[owner as usize],
+        condition.fans_neg[owner as usize],
+    );
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
     crate::kassert!(
         post.pay_amount == expected,
@@ -250,7 +259,7 @@ pub fn aya_haruka_02_shave_poorest() {
         "C-PP-aya-haruka-02: effect log must be exactly the pay-amount rewrite"
     );
     crate::kassert!(
-        world::arr4_eq(post.money, pre.money),
+        world::arr4_eq(post.money, condition.money),
         "frame: money unchanged at rewrite time"
     );
 }
@@ -270,7 +279,7 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
     let owner = w.trig_player;
     let pre_amount = w.pay_amount;
     kani::assume(w.trig_value > 0);
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
@@ -286,7 +295,7 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
         post.pay_amount == pre_amount,
         "C-PP-aya-haruka-02: non-poorest owner must not touch the amount"
     );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
 }
 
 /// MUTANT: the reference wants X+1. The card does X. Kani must report FAIL.
@@ -307,14 +316,16 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
             kani::assume(w.out[p] || w.money[p] >= w.money[owner as usize]);
         }
     }
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };
     run_shave_filter(owner, pre_amount);
     let post = world::snapshot();
-    let x =
-        spec::aya_haruka_02_x_mutant(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
+    let x = spec::aya_haruka_02_x_mutant(
+        condition.fans_pos[owner as usize],
+        condition.fans_neg[owner as usize],
+    );
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
     crate::kassert!(post.pay_amount == expected);
 }
@@ -330,7 +341,7 @@ pub fn aya_haruka_02_mutant_is_detected() {
     let pre_amount = w.pay_amount;
     kani::assume(w.trig_player == owner);
     kani::assume(pre_amount >= 200);
-    // Stay off the 0 floor: `max(pre - X, 0)` and `max(pre - (X+1), 0)`
+    // Stay off the 0 floor: `max(condition - X, 0)` and `max(condition - (X+1), 0)`
     // coincide when the shave bottoms out, so the off-by-one is only
     // observable while some amount survives even the mutant's X+1.
     let xm = spec::aya_haruka_02_x_mutant(w.fans_pos[owner as usize], w.fans_neg[owner as usize]);
@@ -340,7 +351,7 @@ pub fn aya_haruka_02_mutant_is_detected() {
             kani::assume(w.out[p] || w.money[p] >= w.money[owner as usize]);
         }
     }
-    let pre = {
+    let condition = {
         world::reset_world(w);
         world::snapshot()
     };

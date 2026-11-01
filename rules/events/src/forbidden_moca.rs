@@ -5,7 +5,7 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{ActionKind, FilterKind};
-use card_sdk::{CardText};
+use card_sdk::CardText;
 use card_sdk::{Action, CardDef, Filter, Msg, On, RollValue};
 
 use crate::util::{expire_removed, keep};
@@ -16,10 +16,11 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
         On::Play("", None, play),
-        // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
-        // deleted (a no-op prefetch); the `value` param is the face being
-        // halved (effect), not applicability.
-        On::Filter(Filter::DiceRollValue("", None, halve)),
+        // 「场上所有移动掷骰/2」 -- every seat's move face while the event is
+        // up. `always` deleted (a no-op prefetch); the `value` param is the
+        // face being halved (effect), not applicability. G03 R9: a halving
+        // stays on the final DiceRollValue pass, gated to move rolls.
+        On::Filter(Filter::DiceRollValue("roll_purpose == 1", None, halve)),
         On::Schedule("expire", "", None, expire),
     ],
 )
@@ -28,7 +29,9 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Forbidden Moca"#)
-        .text(CardText::para(r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#))
+        .text(CardText::para(
+            r#"直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！"#,
+        ))
         // sheet cell A20
         .derived(false),
 );

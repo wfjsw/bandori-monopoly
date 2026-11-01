@@ -1,4 +1,3 @@
-//! `MyGO:（乐奈）有趣的女人` -- C# `CardRanaFunny` (MatchHost.cs:6792-6854):
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（乐奈）有趣的女人`）:
 //! > （乐奈）有趣的女人：
@@ -8,7 +7,7 @@
 //! grow a miracle crystal on it, and at 5+ the next foreign passer is trapped.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ActionKind;
+use card_sdk::abi::{ActionKind, PayFactorScope};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -34,11 +33,8 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
 const ID: &str = "MyGO:（乐奈）有趣的女人";
 
 fn rana_funny(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「将此卡置于当前格子上」 -- C# `H.PlaceFromPlay(c, c.Seat, pos)`.
     ctx::set_dest(ctx::Dest::Field);
-    // 规则书: 「将此卡置于当前格子上」 -- bound to where the player is. The
-    // `PassTile` hook still filters on the slot below; a `card_tile()` read would
-    // let it use `Card.Tile` directly, which is the smaller follow-up.
+    // 规则书: 「将此卡置于当前格子上」 -- bound to where the player is.
     ctx::place_card_on(
         player_id,
         ctx::player_pos(player_id),
@@ -55,19 +51,15 @@ fn rana_funny(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardRanaFunny.PassTile` -- a passer who does not settle here grows a
-/// miracle crystal on the card; at 5+ crystals a foreign passer is trapped.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && card.tile == tile.id` is the pre.
+    // `card.placed && card.tile == tile.id` is the condition.
     let tile = ctx::self_tile().unwrap_or(-1);
     let who = trigger::player_id();
     // 「未在其上[触发结算]」: a landing settle on this tile excludes the crystal
     // (the qualifier is on this clause only).
-    let settles_here = trigger::move_remaining() <= 0 && trigger::move_resolve();
-    // 规则书: 「当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个“抹茶芭菲”
-    // 或强制停下并[触发结算]」 -- C# `Crystals >= 5 && m.Seat != User` branches
-    // into `Trap` instead of growing a crystal. The trap sentence carries no
-    // 「未在其上[触发结算]」, so a settling landing is trapped as well.
+    let settles_here = trigger::move_remaining() <= 0 && trigger::move_settles();
+    // The trap sentence carries no 「未在其上[触发结算]」, so a settling landing is trapped as
+    // well.
     if ctx::crystals() >= 5 && who != player_id {
         trap(player_id, who, tile)?;
     }
@@ -85,8 +77,6 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardRanaFunny.Trap` -- the 5+ crystal trap on a foreign passer: lose a
-/// 抹茶芭菲 or be forced to stop here and settle at half pay.
 fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     // 规则书: 「选择失去一个“抹茶芭菲”或强制停下并[触发结算]」 -- the choice is
     // the book's; with no 抹茶芭菲 the loss branch is a clamped no-op, so the ask
@@ -97,36 +87,31 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
         &Msg::new(key!("rana_funny_trap_ask")).card("card", ID),
     )?;
     if lose {
-        // 规则书: 「失去一个“抹茶芭菲”」 -- C# `H.AddTok(who, "抹茶芭菲", -1)`
-        // (default `max = int.MaxValue`).
-        ctx::add_tok(who, "抹茶芭菲", -1, i32::MAX)?;
+        ctx::add_held_by_name(who, "抹茶芭菲", -1, i32::MAX)?;
         ctx::log(
             owner,
             &Msg::new(key!("rana_funny_parfait")).player_id("who", who),
         );
         return Ok(());
     }
-    // 规则书: 「强制停下并[触发结算]」 -- a [强制停下] is an abnormal movement
-    // effect; it passes the C# `H.WithCard(User, H.AbnormalGate(a))` gate so
-    // [反击] cards (安可) get their window. `ctx::gate` returns false when the
-    // effect is guarded, the mover is immune, or they are [不可阻挡].
+    // `ctx::gate` returns false when the effect is guarded, the mover is immune, or
+    // they are [不可阻挡].
     if !ctx::gate(who, bandori_std::kind::abnormal::Stop) {
         return Ok(());
     }
     // 规则书: 「由此卡效果导致[触发结算]时需支付资金减半」 -- the pay factor is
-    // milli-units (500 = x0.5).
-    // TODO(规则书)（由此卡效果导致[触发结算]时需支付资金减半）: 与已生效的减半
-    //   应叠乘 -- `set_pay_factor` 是赋值，会把此前的倍率覆盖回 0.5。
-    ctx::plan::set_pay_factor(500);
+    // milli-units (500 = x0.5), `mul` so it composes with a halving already in
+    // force; `NextSettle` is consumed by the forced settle below.
+    ctx::plan::multiply_pay_factor(500, PayFactorScope::NextSettle);
     if trigger::move_remaining() > 0 {
         // Mid-walk: stop on this tile -- the walk settles here.
         ctx::plan::set_stop_at(tile);
-        ctx::plan::set_resolve(true);
-    } else if !trigger::move_resolve() {
+        ctx::plan::set_settles(true);
+    } else if !trigger::move_settles() {
         // Already standing here and the move would not settle (a landing
         // already at the end, or a 「不[触发结算]」 teleport): the forced settle
         // is this card's own.
-        ctx::card_settle_at(who, tile, false);
+        ctx::settle_tile_at(who, tile, false);
     }
     ctx::log(
         owner,

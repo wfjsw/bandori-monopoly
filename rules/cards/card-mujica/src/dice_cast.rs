@@ -1,4 +1,3 @@
-//! `Mujica:骰子已经掷下` -- C# `CardDiceCast` (MatchHost.cs:5581-5653): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:骰子已经掷下`）:
 //! > 骰子已经掷下：
@@ -27,22 +26,14 @@ pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
         On::Play("", Some(cant_play), play),
-        // 规则书: 「（此卡可以被反击）」 -- the play window stays open for counters
-        // before `cast` sets the lock (the lock is armed in the body).
-        // TODO(规则书)（「（此卡可以被反击）」）: the cell never says the card is itself
-        //   usable as a [反击] -- the counter-use mode is C#-sourced.
-        // TODO(规则书)[judgement]: the clause under-specifies the shape -- the
-        //   engine must still let other [反击]s answer this card's own play
-        //   window (C# plays the declared counteractions in reverse before
-        //   `Cast` sets the lock). Open as C-Q31 / CH-09.
+        // TODO(规则书)（「（此卡可以被反击） TODO(规则书)[judgement]: 规则书: 「（此卡可以被反击）」 -- the play window
+        // stays open for counters before `cast` sets the lock (the lock is armed in the
+        // body). Open as C-Q31 / CH-09.
         On::Counteract(
             &[ChainKind::Card],
             "actor != owner && slot('noCounteractTurn') != turn_key",
             None,
             counteract).counter_reason(key!("dice_cast_when")),
-        // C# `CardDiceCast.TurnEndAfter` -- off the field when the turn in which
-        // it was placed ends (ABI v23 `TurnEndAfter`, matching the C#
-        // `Fx.TurnEndAfter` dispatch).
         // 规则书: 「回合结束后放入弃牌堆」 -- 回合, not only the owner's turn.
         On::Action(Action::TurnEndAfter("card.placed", None, turn_end)),
     ],
@@ -55,7 +46,6 @@ pub const DICE_CAST: CardDef = CardDef::new(
         // sheet cell J6
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
-/// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.
 fn cant_play(player_id: i32) -> Option<Msg> {
     if ctx::slot(player_id, PLACED) == ctx::turn_key() {
         return Some(Msg::new(key!("x_in_play")));
@@ -82,7 +72,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 fn cast(player_id: i32) {
-    // 规则书: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     // Place at most once per turn (see `PLACED`). `is_placed` is uid-based and
     // reads false on a hand play, so it cannot be the once-guard here.
@@ -104,21 +93,15 @@ fn cast(player_id: i32) {
     );
 }
 
-/// C# `CardDiceCast.TurnEndAfter` (MatchHost.cs:5629-5645) -- clear the
-/// no-counteract latch and drop the card into the discard pile at the end of
-/// the turn it was placed in while it is in play. Runs through the Fx hook
-/// dispatch at
-/// `turnEndAfter` (ABI v23 `TriggerKind::TurnEndAfter`), so this is a field
-/// effect, not a [反击].
+/// Runs through the hook dispatch at `turnEndAfter` (ABI v23
+/// `TriggerKind::TurnEndAfter`), so this is a field effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    // C# `if (H._noCounteractTurn == Player) H._noCounteractTurn = -1`.
     if ctx::slot(player_id, state_key::NO_COUNTERACT_TURN) == ctx::turn_key() {
         ctx::set_slot(player_id, state_key::NO_COUNTERACT_TURN, 0);
     }
     if ctx::slot(player_id, PLACED) == ctx::turn_key() {
         ctx::set_slot(player_id, PLACED, 0);
     }
-    // 规则书: 「回合结束后放入弃牌堆」 -- C# `H.Unplace(this, "discard", "回合结束")`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,

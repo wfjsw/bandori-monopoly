@@ -2,7 +2,7 @@
 //!
 //! Specs live in [`crate::spec::skills_mor`] (book quotes there). This file
 //! drives the **unmodified** skill bodies via the cfg(kani) `NAME_kani`
-//! wrappers against an in-place symbolic world and asserts post == spec(pre),
+//! wrappers against an in-place symbolic world and asserts post == spec(condition),
 //! effect log exactly, frame.
 //!
 //! **ppcost pattern (TRIAGE-LOG `ppcost` FLOOR bisect).** A symbolic player
@@ -192,7 +192,7 @@ mod band {
         let value = world::with_world(|w| w.pay_amount);
         let target = world::with_world(|w| w.trig_target);
 
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         // DIRECT body call (ppcost): one body in CBMC's call graph.
         invoke::unwrap_done(skill_groups::morfonica::after_pay_kani(user));
         kani::cover!(true, "body returned");
@@ -218,10 +218,10 @@ mod band {
         }
 
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-        crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+        crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+        crate::kassert!(post.pay_amount == condition.pay_amount, "frame: pay_amount");
     }
 
     /// C-MOR-band-01 iff at seat 0 (`n_players = 2`).
@@ -326,7 +326,7 @@ mod band {
         let value = world::with_world(|w| w.pay_amount);
         let taken = world::with_world(|w| w.key_get(user, intern::intern(KEY_TAKEN)));
 
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         invoke::unwrap_done(skill_groups::morfonica::on_circle_kani(user));
         kani::cover!(true, "body returned");
 
@@ -359,9 +359,9 @@ mod band {
         }
 
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
-        crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
+        crate::kassert!(post.pay_amount == condition.pay_amount, "frame: pay_amount");
     }
 
     /// C-MOR-band-02 iff at seat 0 (`n_players = 2`).
@@ -521,14 +521,14 @@ mod pass_fire {
             return;
         }
 
-        let pre = world::snapshot();
+        let condition = world::snapshot();
         invoke::unwrap_done(body(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
         let effects = &ebuf[..log_n];
-        let pre_fire = pre.charge[user as usize];
+        let pre_fire = condition.charge[user as usize];
         let post = world::snapshot();
         let post_fire = post.charge[user as usize];
 
@@ -558,9 +558,9 @@ mod pass_fire {
             );
         }
 
-        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+        crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(post.pay_amount == condition.pay_amount, "frame: pay_amount");
     }
 
     /// C-MOR-touko-01 IFF at seat 0 (`n_players = 2`).
@@ -572,7 +572,7 @@ mod pass_fire {
             0,
             spec::TOUKO_01_FIRE_MAX,
             "C-MOR-touko-01",
-            skill_personas::kiritani_zenith::on_pass_kani,
+            skill_personas::toko::on_pass_kani,
         );
     }
 
@@ -585,7 +585,7 @@ mod pass_fire {
             1,
             spec::TOUKO_01_FIRE_MAX,
             "C-MOR-touko-01",
-            skill_personas::kiritani_zenith::on_pass_kani,
+            skill_personas::toko::on_pass_kani,
         );
     }
 
@@ -598,7 +598,7 @@ mod pass_fire {
             0,
             spec::NANAMI_01_FIRE_MAX,
             "C-MOR-nanami-01",
-            skill_personas::nanami_ordinary::on_pass_kani,
+            skill_personas::nanami::on_pass_kani,
         );
     }
 
@@ -611,7 +611,7 @@ mod pass_fire {
             1,
             spec::NANAMI_01_FIRE_MAX,
             "C-MOR-nanami-01",
-            skill_personas::nanami_ordinary::on_pass_kani,
+            skill_personas::nanami::on_pass_kani,
         );
     }
 
@@ -649,7 +649,7 @@ mod pass_fire {
             w.charge_max[user as usize] = spec::TOUKO_01_FIRE_MAX;
             w.charge[user as usize] = 0;
         });
-        invoke::unwrap_done(skill_personas::kiritani_zenith::on_pass_kani(user));
+        invoke::unwrap_done(skill_personas::toko::on_pass_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -674,7 +674,7 @@ pub use pass_fire::*;
 // ===========================================================================
 
 #[cfg(feature = "skills-personas")]
-mod yuri_crit {
+mod rui {
     use super::effects_of;
     use crate::host;
     use crate::intern;
@@ -734,7 +734,7 @@ mod yuri_crit {
         debug_assert!(user == 0 || user == 1);
         yuri_world(user);
 
-        // Host residual (the CEL pre is empty — always admits).
+        // Host residual (the CEL condition is empty — always admits).
         let residual = yuri_residual(user);
         kani::cover!(residual, "on either side of the move");
         kani::cover!(!residual, "not involved");
@@ -744,8 +744,8 @@ mod yuri_crit {
 
         let amount = world::with_world(|w| w.pay_amount);
         let x = world::with_world(|w| w.key_get(user, intern::intern(KEY_YURI_X)));
-        let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
+        let condition = world::snapshot();
+        invoke::unwrap_done(skill_personas::rui::on_pay_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -788,11 +788,11 @@ mod yuri_crit {
 
         let post = world::snapshot();
         crate::kassert!(
-            world::arr4_eq(post.money, pre.money),
+            world::arr4_eq(post.money, condition.money),
             "frame: money at rewrite time"
         );
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
     }
 
     /// C-MOR-rui-crit-02 iff at seat 0 (`n_players = 2`).
@@ -826,8 +826,8 @@ mod yuri_crit {
         });
         let key = intern::intern(KEY_YURI_X);
         let pre_x = world::with_world(|w| w.key_get(user, key));
-        let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
+        let condition = world::snapshot();
+        invoke::unwrap_done(skill_personas::rui::on_pay_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -835,7 +835,7 @@ mod yuri_crit {
         let post_x = world::with_world(|ww| ww.key_get(user, key));
         crate::kassert!(post_x == pre_x, "X unchanged");
         let post = world::snapshot();
-        crate::kassert!(post.pay_amount == pre.pay_amount, "amount unchanged");
+        crate::kassert!(post.pay_amount == condition.pay_amount, "amount unchanged");
     }
 
     /// MUTANT companion: a strict `n < x` threshold must be distinguishable at
@@ -858,7 +858,7 @@ mod yuri_crit {
             w.pay_amount = 100;
             w.trig_target = user;
         });
-        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::rui::on_pay_kani(user));
         kani::cover!(true, "body returned");
         let x_after = world::with_world(|ww| ww.key_get(user, key));
         // Post X is 0 (book hit, inclusive at n == 1) or 2 (miss).
@@ -891,7 +891,7 @@ mod yuri_crit {
 }
 
 #[cfg(feature = "skills-personas")]
-pub use yuri_crit::*;
+pub use rui::*;
 
 // ===========================================================================
 // C-MOR-tsukushi-01  `skill:二叶筑紫:交给班长吧` (1)
@@ -962,8 +962,8 @@ mod tsukushi_on_gain {
             return;
         }
 
-        let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::on_gain_kani(owner));
+        let condition = world::snapshot();
+        invoke::unwrap_done(skill_personas::tsukushi::on_gain_kani(owner));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -991,8 +991,8 @@ mod tsukushi_on_gain {
         }
 
         let post = world::snapshot();
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
     }
 
     /// C-MOR-tsukushi-01 iff at owner seat 0 (`n_players = 2`).
@@ -1024,7 +1024,7 @@ mod tsukushi_on_gain {
             w.out[1] = false;
         });
         let amount = world::with_world(|w| w.pay_amount);
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::on_gain_kani(owner));
+        invoke::unwrap_done(skill_personas::tsukushi::on_gain_kani(owner));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -1062,7 +1062,7 @@ mod tsukushi_cash {
     use crate::spec::skills_mor as spec;
     use crate::world::{self, Effect, MAX_PLAYERS};
 
-    const KEY_TSUKU_RATE: &str = "skill.tsugushi.rate";
+    const KEY_TSUKU_RATE: &str = "skill.tsukushi.rate";
     const TOK_X_UP: &str = "X";
     const TOK_X_DOWN: &str = "X标记(反)";
 
@@ -1161,8 +1161,8 @@ mod tsukushi_cash {
         let want_gain = spec::tsukushi_03_gain(n_marks, pre_rate);
         let want_rate_after = spec::tsukushi_03_rate_after(pre_rate);
 
-        let pre = world::snapshot();
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::cash_kani(user));
+        let condition = world::snapshot();
+        invoke::unwrap_done(skill_personas::tsukushi::cash_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1192,8 +1192,8 @@ mod tsukushi_cash {
             let d = world::with_world(|ww| ww.key_get(h, down));
             crate::kassert!(u == 0 && d == 0, "X marks removed");
         }
-        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.charge, condition.charge), "frame: fire");
         let _ = log_n;
     }
 
@@ -1239,7 +1239,7 @@ mod tsukushi_cash {
             w.key_set(user, rk, 200); // at floor: book stays 200, mutant → 0
         });
         let pre_rate = 200;
-        invoke::unwrap_done(skill_personas::tsugushi_monitor::cash_kani(user));
+        invoke::unwrap_done(skill_personas::tsukushi::cash_kani(user));
         kani::cover!(true, "body returned");
         let post_rate = world::with_world(|ww| ww.key_get(user, rk));
         let book = spec::tsukushi_03_rate_after(pre_rate);

@@ -71,6 +71,10 @@ pub struct TestWorld {
     /// Field instances as `(card id, tile)`; `-2` = not placed. Backs
     /// `field_instances` / `tile_at` so `card_tile` resolves.
     pub field: Vec<(String, i32)>,
+    /// Per-seat 「是否触发结算」 answer (`resolveOverride`; 0 = unanswered).
+    pub move_settle: Vec<i32>,
+    /// The turn-end half, per seat (0 = unanswered).
+    pub turn_end_settle: Vec<i32>,
 }
 
 impl TestWorld {
@@ -89,6 +93,8 @@ impl TestWorld {
             targeted: vec![],
             fixed_roll: None,
             field: vec![],
+            move_settle: vec![],
+            turn_end_settle: vec![],
         }
     }
     pub fn d(&mut self, sides: i32) -> i32 {
@@ -139,6 +145,32 @@ impl CardWorld for TestWorld {
     fn state_set_flags(&mut self, _: i32, _: &str, _: u8) {}
     fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {
         Vec::new()
+    }
+    fn set_move_settle_answer(&mut self, player_id: i32, answer: i32) {
+        let i = player_id.max(0) as usize;
+        if self.move_settle.len() <= i {
+            self.move_settle.resize(i + 1, 0);
+        }
+        self.move_settle[i] = answer;
+    }
+    fn move_settle_answer(&self, player_id: i32) -> i32 {
+        self.move_settle
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }
+    fn set_turn_end_settle_answer(&mut self, player_id: i32, answer: i32) {
+        let i = player_id.max(0) as usize;
+        if self.turn_end_settle.len() <= i {
+            self.turn_end_settle.resize(i + 1, 0);
+        }
+        self.turn_end_settle[i] = answer;
+    }
+    fn turn_end_settle_answer(&self, player_id: i32) -> i32 {
+        self.turn_end_settle
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
     }
 
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
@@ -273,11 +305,11 @@ impl CardWorld for TestWorld {
     fn remove_marks(&mut self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0
     }
-    fn tok(&self, _: i32, _: &str) -> i32 {
+    fn held_count(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn set_tok(&mut self, _: i32, _: &str, _: i32, _: i32) {}
-    fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
+    fn set_held(&mut self, _: i32, _: &str, _: i32, _: i32) {}
+    fn add_held_by_name(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {

@@ -16,7 +16,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::{
-    CrossState, PubMsg, RecMeta, RoomRecord, SessionRecord, StoreError, StoredRecord,
+    CrossState, PublishedMessage, RecordMeta, RoomRecord, SessionRecord, StoreError, StoredRecord,
     RECORD_TTL_SECS,
 };
 use crate::state::Session;
@@ -49,15 +49,15 @@ struct Inner {
     records: Mutex<HashMap<String, (u64, StoredRecord)>>,
     /// `room -> record log lines`, for the match in progress.
     logs: Mutex<HashMap<String, Vec<String>>>,
-    /// `room -> record-log bookkeeping` ([`RecMeta`]), under the match lock.
-    rec_meta: Mutex<HashMap<String, RecMeta>>,
+    /// `room -> record-log bookkeeping` ([`RecordMeta`]), under the match lock.
+    rec_meta: Mutex<HashMap<String, RecordMeta>>,
     /// `key -> (owner, expiry)`: the cross-process locks.
     locks: Mutex<HashMap<String, Ttl>>,
     /// `room|member|stream -> expiry`: the presence keys.
     presence: Mutex<HashMap<String, Ttl>>,
     /// Live pub/sub subscribers. Disconnected receivers are dropped on the
     /// next publish.
-    subs: Mutex<HashMap<String, Vec<mpsc::Sender<PubMsg>>>>,
+    subs: Mutex<HashMap<String, Vec<mpsc::Sender<PublishedMessage>>>>,
     used: Mutex<u64>,
 }
 
@@ -274,7 +274,7 @@ impl CrossState for Store {
         let mut subs = lock(&self.inner.subs)?;
         if let Some(list) = subs.get_mut(channel) {
             list.retain(|tx| {
-                tx.send(PubMsg {
+                tx.send(PublishedMessage {
                     channel: channel.to_string(),
                     payload: msg.to_string(),
                 })
@@ -284,7 +284,7 @@ impl CrossState for Store {
         Ok(())
     }
 
-    fn subscribe(&self, channel: &str) -> Result<mpsc::Receiver<PubMsg>, StoreError> {
+    fn subscribe(&self, channel: &str) -> Result<mpsc::Receiver<PublishedMessage>, StoreError> {
         let (tx, rx) = mpsc::channel();
         lock(&self.inner.subs)?
             .entry(channel.to_string())
@@ -331,11 +331,11 @@ impl CrossState for Store {
             .count() as u32)
     }
 
-    fn rec_meta_get(&self, room: &str) -> Result<Option<RecMeta>, StoreError> {
+    fn record_meta_get(&self, room: &str) -> Result<Option<RecordMeta>, StoreError> {
         Ok(lock(&self.inner.rec_meta)?.get(room).cloned())
     }
 
-    fn rec_meta_put(&self, room: &str, meta: &RecMeta) -> Result<(), StoreError> {
+    fn rec_meta_put(&self, room: &str, meta: &RecordMeta) -> Result<(), StoreError> {
         lock(&self.inner.rec_meta)?.insert(room.to_string(), meta.clone());
         Ok(())
     }

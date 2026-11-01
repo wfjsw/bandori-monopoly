@@ -2,7 +2,7 @@
 //!
 //! This is the remaining trusted base of the single-source design: the
 //! lowering from engine world → condition context fields. Production fills
-//! the same fields via `game_rules::cond_pre::{fill_window, fill_candidate}`;
+//! the same fields via `game_rules::condition::{fill_window, fill_candidate}`;
 //! the differential tests pin the *evaluator*, and this module pins the
 //! *binding*.
 //!
@@ -96,8 +96,8 @@
 //!   `conf_fill_diff`-style per-program filling.
 
 use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId, NAMED_CAP};
-use rules_cond_ir::vars::{VarId, VarTy, VARS};
-use rules_cond_ir::Val;
+use rules_cond_ir::vars::{VarId, VarType, VARS};
+use rules_cond_ir::Value;
 
 use crate::board;
 use crate::intern::{self, NameId};
@@ -769,7 +769,7 @@ pub fn fill_from_world(
                 let i = outer * 8 + k;
                 if i < VARS.len() {
                     let (id, _, ty) = VARS[i];
-                    if ty == VarTy::OptInt {
+                    if ty == VarType::OptInt {
                         c.set_scalar(id, -1);
                     }
                 }
@@ -796,12 +796,41 @@ pub fn fill_from_world(
         w.trig_pay_is_rent
     };
     c.set_scalar(VarId::PayIsRent, pay_is_rent as i64);
+    // G02 pay shape / kind, matching `fill_window`'s derivations (an absent
+    // payment is kind -1, not fixed, and a total stage).
+    c.set_scalar(VarId::PayKind, w.trig_pay_kind as i64);
+    c.set_scalar(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
+    c.set_scalar(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
+    c.set_scalar(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
+    let settle = w.trig_settle_tile;
+    c.set_scalar(VarId::SettleTile, settle as i64);
+    c.set_scalar(VarId::SettleOutcome, w.trig_settle_outcome as i64);
+    if settle >= 0 && (settle as usize) < 60 {
+        c.set_scalar(VarId::SettleOwner, w.tiles[settle as usize].owner as i64);
+        c.set_scalar(VarId::SettleHouses, w.tiles[settle as usize].houses as i64);
+        c.set_scalar(
+            VarId::SettleMortgaged,
+            w.tiles[settle as usize].mortgaged as i64,
+        );
+    } else {
+        c.set_scalar(VarId::SettleOwner, -1);
+        c.set_scalar(VarId::SettleHouses, 0);
+        c.set_scalar(VarId::SettleMortgaged, 0);
+    }
     let roll_source = if ov.roll_source >= 0 {
         ov.roll_source
     } else {
         w.trig_roll_source as i64
     };
     c.set_scalar(VarId::RollSource, roll_source);
+    // The roll payload's window fields (0 / false / -1 without a payload).
+    let (roll_purpose, roll_rerolled, roll_unused) = match w.trig_roll {
+        Some(t) => (t.purpose as i64, (t.n > 1) as i64, t.unused as i64),
+        None => (0, 0, -1),
+    };
+    c.set_scalar(VarId::RollPurpose, roll_purpose);
+    c.set_scalar(VarId::RollRerolled, roll_rerolled);
+    c.set_scalar(VarId::RollUnusedFace, roll_unused);
     c.set_scalar(VarId::Abnormal, ov.abnormal as i64);
     c.set_scalar(VarId::TurnPlayer, w.turn_player as i64);
     c.set_scalar(VarId::TurnKey, w.turn_key as i64);
@@ -1213,7 +1242,7 @@ pub fn fill_for_guard(
                             let vi = vo * 8 + vk;
                             if vi < VARS.len() {
                                 let (vid, _, ty) = VARS[vi];
-                                if (vid as u16) == id && ty == VarTy::OptInt {
+                                if (vid as u16) == id && ty == VarType::OptInt {
                                     c.set_scalar(vid, -1);
                                 }
                             }
@@ -1250,6 +1279,30 @@ pub fn fill_for_guard(
         VarId::PayIsRent,
         (ov.pay_is_rent || w.trig_pay_is_rent) as i64
     );
+    set_if!(VarId::PayKind, w.trig_pay_kind as i64);
+    set_if!(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
+    set_if!(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
+    set_if!(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
+    let settle = w.trig_settle_tile;
+    set_if!(VarId::SettleTile, settle as i64);
+    set_if!(VarId::SettleOutcome, w.trig_settle_outcome as i64);
+    if needs.needs_var(VarId::SettleOwner)
+        || needs.needs_var(VarId::SettleHouses)
+        || needs.needs_var(VarId::SettleMortgaged)
+    {
+        if settle >= 0 && (settle as usize) < 60 {
+            set_if!(VarId::SettleOwner, w.tiles[settle as usize].owner as i64);
+            set_if!(VarId::SettleHouses, w.tiles[settle as usize].houses as i64);
+            set_if!(
+                VarId::SettleMortgaged,
+                w.tiles[settle as usize].mortgaged as i64
+            );
+        } else {
+            set_if!(VarId::SettleOwner, -1);
+            set_if!(VarId::SettleHouses, 0);
+            set_if!(VarId::SettleMortgaged, 0);
+        }
+    }
     set_if!(
         VarId::RollSource,
         if ov.roll_source >= 0 {
@@ -1258,6 +1311,14 @@ pub fn fill_for_guard(
             w.trig_roll_source as i64
         }
     );
+    // The roll payload's window fields (0 / false / -1 without a payload).
+    let (roll_purpose, roll_rerolled, roll_unused) = match w.trig_roll {
+        Some(t) => (t.purpose as i64, (t.n > 1) as i64, t.unused as i64),
+        None => (0, 0, -1),
+    };
+    set_if!(VarId::RollPurpose, roll_purpose);
+    set_if!(VarId::RollRerolled, roll_rerolled);
+    set_if!(VarId::RollUnusedFace, roll_unused);
     set_if!(VarId::Abnormal, ov.abnormal as i64);
     set_if!(VarId::TurnPlayer, w.turn_player as i64);
     set_if!(VarId::TurnKey, w.turn_key as i64);
@@ -1587,7 +1648,7 @@ pub fn eval_bool(p: &rules_cond_ir::Program, c: &IrCtx) -> bool {
 }
 
 /// Value-level helper for the proofs.
-pub fn eval_val(p: &rules_cond_ir::Program, c: &IrCtx) -> Val {
+pub fn eval_val(p: &rules_cond_ir::Program, c: &IrCtx) -> Value {
     p.eval(c)
 }
 

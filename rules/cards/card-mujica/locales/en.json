@@ -1,5 +1,5 @@
 {
-  "black_birthday_why": "Black Birthday",
+  "black_birthday_reason": "Black Birthday",
   "cant_look_away_backward": "Backward",
   "cant_look_away_dir_ask": "Which direction?",
   "cant_look_away_dir_title": "Can't Look Away",
@@ -26,9 +26,9 @@
   "doll_garden_pay": "Pay {{money}} to {{user}}",
   "doll_garden_sum": "Doll's Garden's effect: {{who}} force-moves the sum of everyone's rolls, {{n}} tile(s)",
   "doll_garden_walked": "{{who}} move-rolled {{n}} and moved (no settle)",
-  "doll_garden_why": "Doll's Garden",
+  "doll_garden_reason": "Doll's Garden",
   "heart_rain_fallback": "Nobody gained [Stay]: {{who}} takes 1 layer of [Stun] and 1,000",
-  "heart_rain_why": "Heart Rain",
+  "heart_rain_reason": "Heart Rain",
   "j11_ask_pay": "About to pay {{money}}: discard #J11 to [Stun] yourself and everyone within 1 tile, cancelling the payment?",
   "j11_ask_targeted": "Targeted by another card: discard #J11 to [Stun] yourself and everyone within 1 tile?",
   "j11_decayed": "\"#J11\" ran out of miracle crystals and went to the discard pile",

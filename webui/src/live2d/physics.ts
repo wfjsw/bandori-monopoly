@@ -1,11 +1,9 @@
 // Cubism 2 hair / clothes physics.
 //
-// Ported from the shipped runtime (`Live2DUnity.dll`): `PhysicsHair` (the
-// two-point spring chain) and `live2d.framework.L2DPhysics` (the `physics.json`
-// loader and per-frame driver). The integration is copied step for step --
-// including the p2 velocity being recomputed from the position delta after the
-// length constraint, and the "first call only seeds the clock" warm-up. Time is
-// passed in explicitly so the sim is a pure function of (state, time).
+// The integration is copied step for step -- including the p2 velocity being
+// recomputed from the position delta after the length constraint, and the "first
+// call only seeds the clock" warm-up. Time is passed in explicitly so the sim is
+// a pure function of (state, time).
 
 import type { ParamTarget } from "./motion";
 
@@ -66,7 +64,7 @@ export function parsePhysics(text: string): PhysicsHairSpec[] {
   }));
 }
 
-/** `PhysicsHair.PhysicsPoint`. */
+/** */
 class PhysicsPoint {
   mass = 1;
   x = 0;
@@ -210,7 +208,7 @@ export class PhysicsHair {
     this.lastTime = time;
   }
 
-  /** `PhysicsHair._3000_3000_3000`: one spring step of `dt` seconds. */
+  /** */
   private integrate(dt: number): void {
     const { p1, p2 } = this;
     const inv = 1 / dt;
@@ -254,8 +252,6 @@ export class PhysicsHair {
 }
 
 /**
- * `live2d.framework.L2DPhysics`: a bag of `PhysicsHair` driven off one clock
- * (`updateParam` passes `now - startTimeMSec` to each hair).
  */
 export class L2DPhysics {
   readonly physicsList: PhysicsHair[];

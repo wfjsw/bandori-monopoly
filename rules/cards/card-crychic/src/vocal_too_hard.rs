@@ -1,4 +1,3 @@
-//! `CRYCHIC:主唱太拼命了` -- C# `CardVocalTooHard` (MatchHost.cs:3120-3145): [反击]
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:主唱太拼命了`）:
 //! > 主唱太拼命了：
@@ -16,12 +15,17 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     &[On::Counteract(
         &[ChainKind::Effect],
         // 规则书: 「[反击] 一次性向其他玩家支付至少5000资金时」 -- a payment to
-        // another player (`target != owner`; the bank is `target < 0`).
-        // TODO(规则书)（一次性向其他玩家支付至少5000资金时）: 「一次性」是一笔转账，
-        //   不含[分摊]的份额 -- 分摊腿 (`total_stage = false`) 也会开出此窗。
+        // another player (`target != owner`; the bank is `target < 0`), and
+        // 「一次性」 excludes a [分摊] share (`pay_total_stage`).
         // TODO(规则书)（支付至少5000资金）: 门槛应是实际支付额 -- the `effect`
         //   窗的 `value` 是修正前的宣告额 (CROSS-TESTS C20)。
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value >= 5000",
+        // TODO(ABI)（一次性…支付）: a 「[分摊]」 command raises the `effect` window
+        //   only on its legs, never on the command total (`pay_total_stages`
+        //   runs the `payCombined*` stages alone), so with `pay_total_stage`
+        //   this counter never answers a split total at all -- it is dead for
+        //   exactly the payments 「一次性」 is meant to keep. Needs an
+        //   `effect`-shaped window on `payTotalBefore` (G02 spec 2.20).
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && pay_total_stage && value >= 5000",
         None,
         counteract,
     )

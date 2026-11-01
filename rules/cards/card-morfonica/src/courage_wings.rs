@@ -1,4 +1,3 @@
-//! `Mor:勇气展翅高飞之时` -- C# `CardCourageWings` (MatchHost.cs:4779-4803).
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:勇气展翅高飞之时`）:
 //! > 勇气展翅高飞之时：
@@ -7,8 +6,8 @@
 
 use bandori_std::ctx;
 use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::{CardText};
 
 pub const COURAGE_WINGS: CardDef =
     CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", None, courage_wings)]).meta(&card_sdk::meta::CardMeta::new()
@@ -36,7 +35,6 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半」
     let owner = ctx::tile_owner(tile);
     if owner < 0 || owner == player_id || ctx::player_out(owner) {
-        // C#: 掷到了 …：没有别的主人，没有效果
         ctx::log(
             player_id,
             &Msg::new(key!("courage_wings_none")).tile("tile", tile),
@@ -54,7 +52,7 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
         owner,
         player_id,
         amount,
-        &Msg::new(key!("courage_wings_why")),
+        &Msg::new(key!("courage_wings_reason")),
     )?;
     Ok(())
 }

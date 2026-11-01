@@ -215,7 +215,7 @@ pub const KIND_CONSTS: &[(&str, &str)] = &[
     ("FansFlip", "r:bandori:107"),
 ];
 
-/// Source-scanner expansions for Rust const refs in `pre` position.
+/// Source-scanner expansions for Rust const refs in `condition` position.
 /// Literals are [`crate::guards`]; call sites stay on those consts.
 pub const GUARD_CONSTS: &[(&str, &str)] = &[
     (
@@ -267,14 +267,14 @@ mod typed {
 
     use rules_cond::ext::{CondExt, LowerAs};
     use rules_cond::view::CondView;
-    use rules_cond::vocab::{Fx, Getter, Name, Scope, StrGetter, Ty};
+    use rules_cond::vocab::{FuncKind, Getter, Name, Scope, StrGetter, Type};
     use rules_cond_ir::ctx::FnId;
 
     use super::{LowerShape, Sugar, GUARD_CONSTS, KIND_CONSTS, SUGAR};
 
     const NO_GET: Getter = |_| 0;
     const NO_GET_STR: StrGetter = |_| Cow::Borrowed("");
-    const NO_FX: Fx = Fx::Neighbor;
+    const NO_FUNC: FuncKind = FuncKind::Neighbor;
 
     /// Single-element `LowerAs::{Call,CallEq}.bake` slot.
     ///
@@ -337,7 +337,7 @@ mod typed {
     }
 
     fn sugar_name(s: &Sugar) -> Name {
-        let ty = if s.is_bool { Ty::Bool } else { Ty::Int };
+        let ty = if s.is_bool { Type::Bool } else { Type::Int };
         let scope = if s.is_func {
             Scope::Func {
                 arity: s.arity,
@@ -365,22 +365,22 @@ mod typed {
             },
         };
         let get: Getter = if s.is_func { NO_GET } else { owner_get(s.flat) };
-        let fx = if !s.is_func {
-            NO_FX
+        let func = if !s.is_func {
+            NO_FUNC
         } else if s.is_bool && s.arity == 2 {
-            Fx::SeatIntIs {
+            FuncKind::SeatIntIs {
                 var: intern_var(s.flat),
                 field: seat_int_is_field(s.flat),
             }
         } else if s.is_bool && s.cand {
-            Fx::IntHas {
+            FuncKind::IntHas {
                 var: intern_var(s.flat),
                 fill: |v: &dyn CondView| v.cand_set("blocked"),
             }
         } else if s.is_bool {
-            NO_FX
+            NO_FUNC
         } else {
-            Fx::SeatInt {
+            FuncKind::SeatInt {
                 var: intern_var(s.flat),
                 field: seat_int_field(s.flat),
             }
@@ -393,7 +393,7 @@ mod typed {
             ty,
             get,
             get_str: NO_GET_STR,
-            fx,
+            func,
             lower_as,
             doc: s.doc,
         }

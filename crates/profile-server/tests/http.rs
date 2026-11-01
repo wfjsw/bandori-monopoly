@@ -44,7 +44,10 @@ async fn sign_in_is_stable_by_name() {
         let c = profile_token::verify(SECRET, t).unwrap();
         assert_eq!(c.name, "灯");
     }
-    assert_eq!(profile_token::verify(SECRET, &t1).unwrap().sub, profile_token::verify(SECRET, &t2).unwrap().sub);
+    assert_eq!(
+        profile_token::verify(SECRET, &t1).unwrap().sub,
+        profile_token::verify(SECRET, &t2).unwrap().sub
+    );
 }
 
 #[tokio::test]
@@ -97,7 +100,9 @@ async fn an_upload_id_traverses_to_the_data_root_but_no_further() {
         secret: SECRET.to_vec(),
         started: profile_server::now(),
     });
-    app.store.ensure_account("Owner", "", "", profile_server::now()).unwrap();
+    app.store
+        .ensure_account("Owner", "", "", profile_server::now())
+        .unwrap();
     // `uploads/..` needs `uploads/` to exist for path resolution.
     std::fs::create_dir_all(dir.join("uploads")).unwrap();
 
@@ -166,7 +171,14 @@ async fn server_directory_add_list_remove() {
     let id = v["id"].as_str().unwrap().to_string();
     assert_eq!(v["url"], "http://127.0.0.1:8080", "trailing slash trimmed");
 
-    let list: Value = http.get(format!("{base}/api/servers")).send().await.unwrap().json().await.unwrap();
+    let list: Value = http
+        .get(format!("{base}/api/servers"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(list.as_array().unwrap().len(), 1);
 
     // Anonymous writes are refused; reads stay public.
@@ -177,12 +189,28 @@ async fn server_directory_add_list_remove() {
         .await
         .unwrap();
     assert_eq!(anon.status(), 401);
-    let anon = http.delete(format!("{base}/api/servers/{id}")).send().await.unwrap();
+    let anon = http
+        .delete(format!("{base}/api/servers/{id}"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(anon.status(), 401);
 
-    let r = http.delete(format!("{base}/api/servers/{id}")).bearer_auth(&token).send().await.unwrap();
+    let r = http
+        .delete(format!("{base}/api/servers/{id}"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(r.status(), 200);
-    let list: Value = http.get(format!("{base}/api/servers")).send().await.unwrap().json().await.unwrap();
+    let list: Value = http
+        .get(format!("{base}/api/servers"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert!(list.as_array().unwrap().is_empty());
 }
 
@@ -238,7 +266,9 @@ async fn upload_round_trips_and_only_the_owner_removes_it() {
     let other = sign_in(&base, "Other").await;
 
     let r = http
-        .post(format!("{base}/api/uploads?name=../Build%201.wasm&kind=ruleset"))
+        .post(format!(
+            "{base}/api/uploads?name=../Build%201.wasm&kind=ruleset"
+        ))
         .bearer_auth(&owner)
         .body(b"\0asm\x01\0\0\0".to_vec())
         .send()
@@ -251,24 +281,53 @@ async fn upload_round_trips_and_only_the_owner_removes_it() {
     assert_eq!(v["size"], 8);
     assert_eq!(v["sha256"].as_str().unwrap().len(), 64);
 
-    let bytes = http.get(format!("{base}{}", v["url"].as_str().unwrap())).send().await.unwrap();
+    let bytes = http
+        .get(format!("{base}{}", v["url"].as_str().unwrap()))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(bytes.status(), 200);
     assert_eq!(bytes.bytes().await.unwrap().as_ref(), b"\0asm\x01\0\0\0");
 
-    let list: Value = http.get(format!("{base}/api/uploads")).send().await.unwrap().json().await.unwrap();
+    let list: Value = http
+        .get(format!("{base}/api/uploads"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(list.as_array().unwrap().len(), 1);
 
-    let r = http.delete(format!("{base}/api/uploads/{id}")).bearer_auth(&other).send().await.unwrap();
+    let r = http
+        .delete(format!("{base}/api/uploads/{id}"))
+        .bearer_auth(&other)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(r.status(), 404, "not the owner");
-    let r = http.delete(format!("{base}/api/uploads/{id}")).bearer_auth(&owner).send().await.unwrap();
+    let r = http
+        .delete(format!("{base}/api/uploads/{id}"))
+        .bearer_auth(&owner)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(r.status(), 200);
 
-    let gone = http.get(format!("{base}/uploads/{id}/Build1.wasm")).send().await.unwrap();
+    let gone = http
+        .get(format!("{base}/uploads/{id}/Build1.wasm"))
+        .send()
+        .await
+        .unwrap();
     assert_eq!(gone.status(), 404);
 }
 
 fn tempdir() -> std::path::PathBuf {
-    let p = std::env::temp_dir().join(format!("bm-profile-{}-{}", std::process::id(), profile_server::random_secret()));
+    let p = std::env::temp_dir().join(format!(
+        "bm-profile-{}-{}",
+        std::process::id(),
+        profile_server::random_secret()
+    ));
     std::fs::create_dir_all(&p).unwrap();
     p
 }

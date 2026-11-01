@@ -16,11 +16,18 @@ use game_rules::WasmRules;
 fn check() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     let data = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), rules_native::roster())
-            .expect("game data"),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            rules_native::roster(),
+        )
+        .expect("game data"),
     );
     let cards = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/cards");
-    let rules = Arc::new(WasmRules::load_dir(data.clone(), &cards).expect("cards").expect("built")) as Arc<dyn CardRules>;
+    let rules = Arc::new(
+        WasmRules::load_dir(data.clone(), &cards)
+            .expect("cards")
+            .expect("built"),
+    ) as Arc<dyn CardRules>;
     let bytes = std::fs::read(std::env::var("FILE").unwrap()).unwrap();
     let rec = decode_record(&bytes).expect("decode");
     let mut rp = Replayer::new(data, rules, &rec, true).expect("open");

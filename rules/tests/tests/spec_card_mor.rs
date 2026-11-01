@@ -40,7 +40,7 @@ fn give_hand_mark(t: &mut Table, who: usize, needle: &str) {
     let id = t.skill_id(who, needle);
     let name = format!("角色标记:{id}");
     t.m.world_mut()
-        .set_tok(who as i32, &name, 1, i32::MAX, i32::MAX);
+        .set_held(who as i32, &name, 1, i32::MAX, i32::MAX);
 }
 
 /// Absorb every open prompt with its fallback (setup only -- a contract
@@ -119,7 +119,7 @@ pub fn c_mor_light_start(step: &Step<'_>) -> Result<(), String> {
         .iter()
         .position(|t| t.name == TSUKINOMORI)
         .ok_or("no tile 月之森女子学院")?;
-    let pre_pos = step.pre.st.players[who].pos as usize;
+    let pre_pos = step.condition.st.players[who].pos as usize;
     if pre_pos == tsuki {
         return Ok(());
     }
@@ -151,7 +151,7 @@ pub fn c_mor_light_frame(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     frame(
-        step.pre,
+        step.condition,
         step.post,
         &[
             &format!("pos:P{who}"),
@@ -348,13 +348,13 @@ pub fn c_mor_wing_teleport(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre = step.pre.st.players[who].pos as i64;
+    let condition = step.condition.st.players[who].pos as i64;
     let post = step.post.st.players[who].pos as i64;
-    let n = step.pre.st.owners.len() as i64;
+    let n = step.condition.st.owners.len() as i64;
     // 「传送到移动方向20格后」 -- the jump is +20; wing-02 then adds the
-    // follow-on roll. Pin the jump origin: a walk event must leave pre+20
-    // (or the final position must be pre+20+k).
-    let jumped = (pre + 20).rem_euclid(n);
+    // follow-on roll. Pin the jump origin: a walk event must leave condition+20
+    // (or the final position must be condition+20+k).
+    let jumped = (condition + 20).rem_euclid(n);
     // No settle at the jump tile: the landing of the jump itself must not
     // have paid rent. (A later landing of the follow-on roll may.)
     for e in step.events {
@@ -398,7 +398,7 @@ pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
     // field, or a STARRY event this step) -- not on every later step while
     // the card sits there.
     let pre_on_field = step
-        .pre
+        .condition
         .st
         .players
         .iter()
@@ -586,7 +586,7 @@ pub fn c_mor_rui_demon_money(step: &Step<'_>) -> Result<(), String> {
         if i == who {
             continue;
         }
-        let d = p.money as i64 - step.pre.st.players[i].money as i64;
+        let d = p.money as i64 - step.condition.st.players[i].money as i64;
         if d != -200 {
             return Err(format!(
                 "C-MOR-rui-demon-01: p{i} money delta {d}, expected -200 \
@@ -616,7 +616,7 @@ pub fn c_mor_rui_demon_x(step: &Step<'_>) -> Result<(), String> {
     });
     if !skill_fired {
         // 「每当你的技能被触发后」 -- with no trigger the clause writes nothing.
-        let before = step.pre.st.players[who].state_get("skill.yuriCrit.x");
+        let before = step.condition.st.players[who].state_get("skill.yuriCrit.x");
         let after = step.post.st.players[who].state_get("skill.yuriCrit.x");
         if after != before {
             return Err(format!(
@@ -674,11 +674,11 @@ pub fn c_mor_xiaobai(step: &Step<'_>) -> Result<(), String> {
         if i == who {
             continue;
         }
-        let d = step.pre.st.players[i].money as i64 - p.money as i64;
+        let d = step.condition.st.players[i].money as i64 - p.money as i64;
         if d == amount / 2 {
             found = true;
         }
-        if p.money as i64 - step.pre.st.players[i].money as i64 > 0 {
+        if p.money as i64 - step.condition.st.players[i].money as i64 > 0 {
             return Err(format!(
                 "C-MOR-xiaobai-01: p{i} gained money; the pay must become a lose"
             ));
@@ -720,7 +720,7 @@ pub fn c_mor_garden_teleport(step: &Step<'_>) -> Result<(), String> {
     // The main move is spent: the turn cannot roll again. Observable as
     // `turn.main_moved` staying true.
     if !step.post.turn.main_moved {
-        return Err("C-MOR-garden-02: 「并视为主要移动」 -- main move not spent".into());
+        return Err("C-MOR-garden-02: 「并视为主要移动」 -- is_main_move move not spent".into());
     }
     Ok(())
 }
@@ -1126,7 +1126,7 @@ fn light_gate_and_start() {
         let pos = rng.range(0, 59) as usize;
         t.set_pos(0, pos);
         t.give(0, &[LIGHT]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
 
         let n = 60i32;
@@ -1149,7 +1149,7 @@ fn light_gate_and_start() {
             if t.hand(0).iter().any(|c| c == LIGHT) {
                 // refused -- card stays in hand. Frame: nothing moved.
                 return frame(
-                    &pre,
+                    &condition,
                     t.world(),
                     &[
                         "money:",
@@ -1182,7 +1182,7 @@ fn light_gate_and_start() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P0",
@@ -1218,7 +1218,7 @@ fn again_counter_places_and_consumes_equal() {
         t.set_money(0, money0);
         t.set_money(1, money1);
         t.begin_turn(0);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.dice(&[1]);
         t.roll(0).unwrap();
@@ -1250,7 +1250,7 @@ fn again_counter_places_and_consumes_equal() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:",
@@ -1330,7 +1330,7 @@ fn courage_pays_price_plus_half_houses() {
         let money1 = 10_000 + rng.range(0, 10) * 100;
         t.set_money(0, money0);
         t.set_money(1, money1);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.give_play(0, COURAGE)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -1353,7 +1353,7 @@ fn courage_pays_price_plus_half_houses() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:",
@@ -1378,7 +1378,7 @@ fn courage_agent_tile_gains_1000() {
         let money0 = 10_000 + rng.range(0, 10) * 100;
         t.set_money(0, money0);
         t.dice(&[2, 2, 1]);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.give_play(0, COURAGE).unwrap();
         decline_all(&mut t);
@@ -1387,7 +1387,7 @@ fn courage_agent_tile_gains_1000() {
             return Err(format!("C-MOR-courage-02: delta {got}, expected +1000"));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:P0",
@@ -1413,7 +1413,7 @@ fn courage_unowned_tile_pays_nothing() {
         t.set_money(0, money0);
         t.set_money(1, money1);
         t.dice(&[5, 5, 4]); // unowned 月之森
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.give_play(0, COURAGE).unwrap();
         decline_all(&mut t);
@@ -1430,7 +1430,7 @@ fn courage_unowned_tile_pays_nothing() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "hand:P0",
@@ -1543,7 +1543,7 @@ fn rainbow_halves_a_payment_to_a_same_grade() {
         let money1 = 10_000 + rng.range(0, 10) * 100;
         t.set_money(0, money0);
         t.set_money(1, money1);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.dice(&[1]);
         t.roll(0).unwrap();
@@ -1570,7 +1570,7 @@ fn rainbow_halves_a_payment_to_a_same_grade() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:",
@@ -1607,7 +1607,7 @@ fn rainbow_same_grade_pays_you_at_1_5x() {
         let money1 = 10_000 + rng.range(0, 10) * 100;
         t.set_money(0, money0);
         t.set_money(1, money1);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.dice(&[1]);
         t.roll(1).unwrap();
@@ -1634,7 +1634,7 @@ fn rainbow_same_grade_pays_you_at_1_5x() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "money:",
@@ -1670,7 +1670,7 @@ fn wing_teleports_20_then_rolls() {
         let money1 = 10_000;
         t.set_money(0, money0);
         t.set_money(1, money1);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         t.give_play(0, WING)
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -1699,7 +1699,7 @@ fn wing_teleports_20_then_rolls() {
             ));
         }
         frame(
-            &pre,
+            &condition,
             t.world(),
             &[
                 "pos:P0",
@@ -2216,7 +2216,9 @@ fn garden_gains_100_and_teleports_as_a_main_move() {
             ));
         }
         if !t.world().turn.main_moved {
-            return Err("C-MOR-garden-02: 「并视为主要移动」 -- main move not spent".into());
+            return Err(
+                "C-MOR-garden-02: 「并视为主要移动」 -- is_main_move move not spent".into(),
+            );
         }
         Ok(())
     })

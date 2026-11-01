@@ -6,8 +6,8 @@
 use alloc::format;
 
 use bandori_std::ctx;
+use card_sdk::CardText;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::{CardText};
 
 use crate::util::{all_players, roll};
 
@@ -41,7 +41,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ctx::teleport_to(p, tile);
         // 「获得1层在回合开始时移除的[除外]」 -- `give_exile(p, 1, -1)` is the
         // plain layer the engine ticks off at the player's next turn start
-        // (`misaki_other`'s 「在你的下回合开始前移除的[除外]」 is the same shape).
+        // (`misaki`'s 「在你的下回合开始前移除的[除外]」 is the same shape).
         rules_status::exile::send(p, 1, -1);
         ctx::log(
             player_id,

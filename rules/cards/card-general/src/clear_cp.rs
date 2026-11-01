@@ -1,4 +1,3 @@
-//! `通用:该清CP了` -- C# `CardCP` + `CPControl`: the card that seeds [CP点].
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:该清CP了`）:
 //! > 该清CP了：
@@ -31,7 +30,7 @@ use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
 use bandori_std::mark;
 use card_sdk::abi::{ActionKind, MarkFilter, Message, Target, TriggerKind};
-use card_sdk::{CardText, it, items, para, sec};
+use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 
 pub const CLEAR_CP: CardDef = CardDef::new(
@@ -68,22 +67,17 @@ pub const CLEAR_CP: CardDef = CardDef::new(
 
 const ID: &str = "通用:该清CP了";
 
-/// Where the spread countdown is written down (C# `CPControl.Spread`).
 const SLOT_SPREAD: &str = "clear_cp_spread";
 
 /// User ruling 2026-10-07: 「It also cannot be played when its [特] effect is
 /// still pending.」
 ///
-/// 「Pending」 is read as **the [特] state is still live on the field**: this
-/// card is the [特]'s carrier (C# carries `CPControl` on the placed card), so
-/// while a copy sits on the [使用者]'s field the （1） spread can still fire and
-/// the effect is not finished. The gate is exactly 「a copy is still in play」;
-/// per the graveyard ruling (below) that copy leaves when its **on-card**
-/// [CP点] runs out (however it drops), so once the card is gone the [特] is
-/// over and a new copy may be played. The alternative reading (the literal
-/// 「下2回合开始时」 window, so a second copy could join one that still carries
-/// marks after two turn starts) is not what is implemented; say so if that is
-/// wanted instead.
+/// The gate is exactly 「a copy is still in play」; per the graveyard ruling
+/// (below) that copy leaves when its **on-card** [CP点] runs out (however it
+/// drops), so once the card is gone the [特] is over and a new copy may be played.
+/// The alternative reading (the literal 「下2回合开始时」 window, so a second copy could
+/// join one that still carries marks after two turn starts) is not what is
+/// implemented; say so if that is wanted instead.
 ///
 /// 规则书[特]（1） was previously gated by 「只有在自己[场上]拥有的小等于2个[CP点]时
 /// 才可发动」; sheet 2026-10-06 `新卡组卡` `A8` dropped that gate, and this is a
@@ -130,12 +124,10 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
             &free,
         )?)
     };
-    // 规则书（1）[特] + 规则书[手]: the spread body runs in `spread` below,
-    // through the Fx hook dispatch at `turnStart`. C# carries the whole thing
-    // on a standalone `CPControl` in `H._fx[i].extra`; the port's
-    // persistent-effect carrier is the placed card. Place it **before** the
-    // [CP点]: the `mark:cp` handler stamps this instance as the mark's
-    // provenance, and 「此卡在格子上添加的[CP点]」 (the spread filter) reads it.
+    // 规则书（1）[特] + 规则书[手]: the spread body runs in `spread` below, through the hook
+    // hook dispatch at `turnStart`. Place it **before** the [CP点]: the `mark:cp`
+    // handler stamps this instance as the mark's provenance, and 「此卡在格子上添加的[CP点]」
+    // (the spread filter) reads it.
     if !ctx::is_placed() {
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, ID, &Msg::new(key!("clear_cp_note")));
@@ -161,7 +153,6 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
         );
     }
     // 规则书（1）: 「[使用者]使用此卡后的下2回合开始时」 -- the printed 2 turns.
-    // C# `cPControl.Spread = 2` -- reset the countdown on every play.
     ctx::set_slot(player_id, SLOT_SPREAD, 2);
     Ok(())
 }
@@ -187,7 +178,7 @@ fn place_tile_cp(tile: i32, seat: i32) -> card_sdk::Asked {
             tile,
             seat,
             // 「添加1个[CP点]」 -- one unit per placement.
-            a: 1,
+            arg0: 1,
             ..Default::default()
         },
     )?;
@@ -205,9 +196,6 @@ fn spread_guard(player_id: i32) -> bool {
         && trigger::player_id() == player_id
 }
 
-/// 规则书（1）[特]: 「[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]
-/// 及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」 -- C# `CPControl.TurnStart`
-/// (Spread = 2).
 ///
 /// 「此卡在格子上添加的[CP点]及其产物」 is **provenance**, not ownership: the
 /// marks this card instance placed (and the ones the spread itself placed).

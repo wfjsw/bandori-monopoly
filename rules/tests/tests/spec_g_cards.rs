@@ -260,9 +260,9 @@ fn g_cards_07_derived_cards_never_in_starting_deck() {
     let derived: Vec<&game_core::data::CardData> = d.cards.iter().filter(|k| k.derived).collect();
     assert!(!derived.is_empty(), "the pool has [衍生] cards to reject");
     for k in &derived {
-        let why = game_core::deck::cant_play(d.as_ref(), c, k);
+        let reason = game_core::deck::cant_play(d.as_ref(), c, k);
         assert!(
-            why.is_some(),
+            reason.is_some(),
             "[衍生] {} must not enter a starting deck (book: 「不能加入初始卡组」)",
             k.id
         );
@@ -374,7 +374,7 @@ fn g_cards_10_mulligan_redraws_two_exactly_once() {
         before,
         after,
         "mulligan is a wash-and-redraw: multiset conserved \
-         (pre [{}] vs post [{}])",
+         (condition [{}] vs post [{}])",
         piles_str(&before),
         piles_str(&after)
     );
@@ -506,17 +506,17 @@ fn g_cards_03_non_continuous_play_goes_to_discard() {
         t.set_hand(0, &hand_refs);
         t.set_draw(0, &["通用:GREAT!", "通用:PERFECT!"]);
         t.set_discard(0, &["通用:FEVER!"]);
-        let pre = piles(t.world(), 0);
+        let condition = piles(t.world(), 0);
         t.observe(CLAUSES);
         t.play(0, &card)
             .map_err(|e| format!("play rejected: {e}"))?;
         let post = piles(t.world(), 0);
         // Non-[持续], no [移除] / return-to-hand: the triple is conserved and
         // the card sits in the discard.
-        if pre != post {
+        if condition != post {
             return Err(format!(
-                "pile multiset moved on a simple [手] play: pre [{}] vs post [{}]",
-                piles_str(&pre),
+                "pile multiset moved on a simple [手] play: condition [{}] vs post [{}]",
+                piles_str(&condition),
                 piles_str(&post)
             ));
         }
@@ -544,7 +544,7 @@ fn g_cards_03_continuous_play_stays_on_the_field() {
     let text = data().card(&card).unwrap().text.clone();
     assert!(text.contains("将此卡放置"), "{card} places itself: {text}");
     t.give(0, &[&card]);
-    let pre = piles(t.world(), 0);
+    let condition = piles(t.world(), 0);
     t.observe(CLAUSES);
     t.play(0, &card).expect("play continuous");
     assert!(
@@ -559,7 +559,7 @@ fn g_cards_03_continuous_play_stays_on_the_field() {
     );
     // The triple loses exactly the played card (it moved to the field).
     let post = piles(t.world(), 0);
-    let mut expect = pre.clone();
+    let mut expect = condition.clone();
     let e = expect.get_mut(&card).expect("played card was in the piles");
     *e -= 1;
     if *e == 0 {
@@ -569,8 +569,8 @@ fn g_cards_03_continuous_play_stays_on_the_field() {
         expect,
         post,
         "hand+draw+discard loses exactly the [持续] card: \
-         pre [{}] expect [{}] post [{}]",
-        piles_str(&pre),
+         condition [{}] expect [{}] post [{}]",
+        piles_str(&condition),
         piles_str(&expect),
         piles_str(&post)
     );
@@ -738,7 +738,7 @@ fn g_cards_02_pure_draw_conserves_the_pile_multiset() {
         t.set_hand(0, &[]);
         t.set_draw(0, &draw_refs);
         t.set_discard(0, &[]);
-        let pre = piles(t.world(), 0);
+        let condition = piles(t.world(), 0);
         t.observe(CLAUSES);
         // 江户川乐器店 settle draws 1: a pure draw.
         let keys = settle_on(&mut t, "江户川乐器店");
@@ -750,10 +750,10 @@ fn g_cards_02_pure_draw_conserves_the_pile_multiset() {
             ));
         }
         let post = piles(t.world(), 0);
-        if pre != post {
+        if condition != post {
             return Err(format!(
-                "pure draw moved the multiset: pre [{}] post [{}]",
-                piles_str(&pre),
+                "pure draw moved the multiset: condition [{}] post [{}]",
+                piles_str(&condition),
                 piles_str(&post)
             ));
         }

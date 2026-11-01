@@ -47,9 +47,9 @@ TIMEOUT/OOM.
 | C-AG-sunset-05 | 「所有被[指定]的玩家[支付][使用者]X资金」 | PROVEN* (harness written) | covered by sunset play | pending | `transfer` → `PayTo` | — |
 | C-AG-childhood-01 | 「投掷1d6并[传送]到商店街自己拥有的对应的格子」 | BLOCKED-HOST | — | — | `tile_named("商店街")` = −1 and `is_shop` wrong | — |
 | C-AG-childhood-02 | 「如果投掷结果大于…则[传送]到商店街」 | BLOCKED-HOST | — | — | same (`tile_named`) | — |
-| C-AG-childhood-03 | 「视为你的主要移动」 | PROTOCOL-LEVEL | — | — | `plan::*` / `card_move` are protocol stubs | OPEN-传送主要移动结算 |
+| C-AG-childhood-03 | 「视为你的主要移动」 | PROTOCOL-LEVEL | — | — | `plan::*` / `run_planned_move` are protocol stubs | OPEN-传送主要移动结算 |
 | C-AG-detour-01 | 「(1)此卡可作为反击使用」 | PROTOCOL-LEVEL | — | — | counteract window; (1) prints no trigger X | — |
-| C-AG-detour-02 | 「进行一次 "afterglow"式的移动」 | OPEN | — | — | body is a 4-way C# pick, not the book | OPEN-afterglow式移动 |
+| C-AG-detour-02 | 「进行一次 "afterglow"式的移动」 | OPEN | — | — | body is a 4-way pick, not the book | OPEN-afterglow式移动 |
 | C-AG-detour-03 | 「将下一次的移动掷骰变更为1d6」 | BLOCKED-HOST / OPEN | — | — | depends on (2); `set_base_dice` is a plan stub | — |
 | C-AG-declaration-01 | 「[反击]当你或你拥有的格子被其他玩家的卡效果影响时」 | PROTOCOL-LEVEL + BLOCKED-HOST | — | — | offer window + `trig_by_card`/`effect::*` stubs | — |
 | C-AG-declaration-02 | 「[指定]那名玩家。」 | BLOCKED-HOST | — | — | `ctx::target` stub always Some(0) | — |

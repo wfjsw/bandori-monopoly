@@ -2,13 +2,8 @@ import type { Command, MatchView } from "../core/types.ts";
 
 export const COMMANDS = ["help", "clear", "status", "players", "hand", "inspect", "cards", "tiles", "auto", "act", "money", "tp", "give", "draw", "state"] as const;
 /**
- * Build-time gate on the cheat commands, keyed on the same `NODE_ENV` the glue
- * build uses (`tools/build-glue.mjs`): rsbuild defines `import.meta.env.DEV`
- * from it, so a `production` bundle compiles the cheat paths out along with
- * the engine's cheat code. `undefined` (plain Node running the tests) counts
- * as enabled. The runtime gate is [`ConsoleContext.cheatsEnabled`], which asks
- * the loaded engine.
- */
+ * `undefined` (plain Node running the tests) counts as enabled. The runtime gate
+ * is [`ConsoleContext.cheatsEnabled`], which asks the loaded engine. */
 export const CHEATS = import.meta.env?.DEV !== false;
 export interface ConsoleSession {
   kind: "solo" | "online" | "replay";

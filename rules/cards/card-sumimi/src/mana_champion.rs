@@ -1,4 +1,3 @@
-//! `Sumimi:（真奈）歌唱大赛5连冠` -- C# `CardManaChampion` (MatchHost.cs:11529-11591):
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:（真奈）歌唱大赛5连冠`）:
 //! > （真奈）歌唱大赛5连冠：
@@ -45,7 +44,7 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
         // sheet cell L10
         .fields(&[("group", r#"Sumimi"#), ("owner", r#"纯田真奈"#)]));
 
-/// The half of the trigger the CEL pre cannot express: an effect touches its
+/// The half of the trigger the CEL condition cannot express: an effect touches its
 /// payer as well as its payee (`ctx::effect::hits` counts `from`), and a tile
 /// of the holder is named by the effect (「或你的格子」).
 fn can_counteract(owner: i32) -> bool {
@@ -69,10 +68,6 @@ fn can_counteract(owner: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」
-    // C# `CardManaChampion.Counteract` (MatchHost.cs:11543-11590) walks `H.Others(i)`
-    // offering each a nested `H.Counteract(copy, p)` with `Target = p`; `anyone` is
-    // set only when a nested counteraction lands, and `if (!anyone)` draws 1.
     ctx::log(
         player_id,
         &Msg::new(key!("mana_champion_log")).player_id("who", player_id),
@@ -97,12 +92,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         //   own effect -- once the nested window exists, move the draw here.
         return Ok(());
     }
-    // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」 --
-    // C# `H.DrawR(i, 1, ...)` on `!anyone` (MatchHost.cs:11586-11589).
-    // TODO(规则书)（若没有人在此卡的效果期间打出[反击]卡）: the fallback is
-    //   「没有人在此卡的效果期间打出[反击]卡」 -- a joiner who played a
-    //   [反击] without shielding us still bars the draw; we only see whether a
-    //   designation was cancelled and need a joiner-count.
+    // TODO(规则书)（若没有人在此卡的效果期间打出[反击]卡）: the fallback is 「没有人在此卡的效果期间打出[反击]卡」 -- a
+    // joiner who played a [反击] without shielding us still bars the draw; we only see
+    // whether a designation was cancelled and need a joiner-count.
     ctx::draw(player_id, 1)?;
     Ok(())
 }

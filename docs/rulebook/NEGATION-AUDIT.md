@@ -3,7 +3,7 @@
 **Date:** 2026-10-07 · read-only audit · no code changed
 
 **Terminology:** "counteraction" = the [反击] mechanism (chain / ring / window).
-"hook" = passive listener ([持续]/[特] / Fx). Never "reaction".
+"hook" = passive listener ([持续]/[特] / hook). Never "reaction".
 
 **Ruling under test (user, 2026-10-07):** there are **no activation costs**. Every
 [消耗]/[支付] (and by extension any spend) written in a card/skill/event text is
@@ -41,13 +41,13 @@ costs.
 
 | Path | Negation window | Body runs? | Money/marker spend in body goes through | Verdict |
 |---|---|---|---|---|
-| Hand card play `play_from_hand` | `card` raise, **before** `rules.play` (`play.rs:3916-3930`) | only if `!t.is_cancelled()` | `ctx::pay`/`transfer` → host request → `Cx::money` | **clean** |
+| Hand card play `play_from_hand` | `card` raise, **before** `rules.play` (`play.rs:3916-3930`) | only if `!t.is_cancelled()` | `ctx::pay`/`transfer` → host request → `PlayCtx::money` | **clean** |
 | Skill press `use_skill` | `skillUsed` raise, **before** `rules.play` (`play.rs:641-656`, 花园多惠（2）「将其抵消」) | only if `!t.is_cancelled()` | same, plus `ctx::spend_fire` (direct) | **clean** for money |
 | Event `draw_event` | `event` raise, **before** `rules.event` (`play.rs:4024-4042`) | only if `!t.is_cancelled()` | `ctx::pay`/`transfer`/`gain` | **clean** |
-| Tile settle `settle_at` | `settle` then `settleBody` (`play.rs:1512-1531`) | only if neither cancelled | `ctx::pay_rent` / `ctx::pay` | **clean** |
+| Tile settle `settle_tile_at` | `settle` then `settleBody` (`play.rs:1512-1531`) | only if neither cancelled | `ctx::pay_rent` / `ctx::pay` | **clean** |
 | Counteraction link | `resolve_rounds` checks `link.is_cancelled()` **before** `drive(Call::Counteract)` (`wasm_rules.rs:2695-2726`) | negated → body skipped, card already spent | body's own `ctx::pay` etc. | **clean** for money |
-| Any raise (`Cx::counteract`) | order at one trigger: (1) acting card's own follow-up → (2) hooks → (3) `hand_counteractions` (`wasm_rules.rs:3610-3887`) | see **V1** | | **gap** |
-| Money movement `Cx::money` | `effect` declaration window **before** money moves (`play.rs:2955-2987`); `payCombinedCancel` before split (`play.rs:3201`) | payment settles only if not cancelled | the payment itself | **clean** |
+| Any raise (`PlayCtx::counteract`) | order at one trigger: (1) acting card's own follow-up → (2) hooks → (3) `hand_counteractions` (`wasm_rules.rs:3610-3887`) | see **V1** | | **gap** |
+| Money movement `PlayCtx::money` | `effect` declaration window **before** money moves (`play.rs:2955-2987`); `payCombinedCancel` before split (`play.rs:3201`) | payment settles only if not cancelled | the payment itself | **clean** |
 
 Chain resolution is LIFO over the answer tree; answers settle before the link
 they answer, so a counter that negates an earlier link runs before that link's
@@ -69,7 +69,7 @@ be left behind by a **later** link.
   「每回合结束时失去400资金」 `card-roselia/src/fire_bird.rs:127-140`,
   `ctx::pay` on `turnEnd`) settles **before** any seat can counteract that
   `turnEnd`/`settle`/`card`/`effect` link. Cancelling the link afterwards does
-  not roll the spend back — the hook's `ctx::pay` already ran `Cx::money` (and
+  not roll the spend back — the hook's `ctx::pay` already ran `PlayCtx::money` (and
   its own nested `effect` window opened and closed).
 * **Ruling / rulebook:** rulebook L32 「[反击]…结算优先于X」 — the counteraction
   settles before X. If X includes its triggered [持续] settlement, hooks must
@@ -126,9 +126,9 @@ be left behind by a **later** link.
   only negation that removes it is the whole-effect negation **before** the body
   (`skillUsed`/`card`/`event`). A later step's negation, or a pay-stage cancel
   of an accompanying money payment, leaves the marker spent.
-* **Examples:** 「你可以消耗一个火罐指定…」 (`himari_step.rs:63-80` — pick
+* **Examples:** 「你可以消耗一个火罐指定…」 (`himari.rs:63-80` — pick
   first, then `spend_fire`, then `plan::set_parity`; if the move is later
-  cancelled the fire stands); 「消耗7个[火罐]」 (`kaoru_prince.rs:128`);
+  cancelled the fire stands); 「消耗7个[火罐]」 (`kaoru.rs:128`);
   「消耗所有火罐」 (`misaki_card.rs:71`, inside a counteract body).
 * **Ruling names payments.** Whether 「消耗N个火罐」/「移除[奇迹水晶]」 is a cost
   or effect content is **the question for you** (§5).
@@ -146,10 +146,9 @@ be left behind by a **later** link.
   pure 「获得」 that is arguably correct (「固定」), but it is still money movement
   outside the 支付阶段 windows the rulebook tables. If 「获得」 is also effect
   content under the ruling, this is a hole.
-* **Fixed (2026-10-07):** `ctx::gain_fixed` is `gain` under a name the cards
-  already use -- Tritone's 「立刻获得此次失去的资金金额」 goes through the money
-  pipeline (the `effect` [反击] window, the modifier stages, `pay` / `payAfter`).
-  The C# `fixedAmount` bypass is gone. Files: `crates/game-rules/src/hostfns.rs`,
+* **Fixed (2026-10-07):** `ctx::gain_fixed` is `gain` under a name the cards already use --
+  Tritone's 「立刻获得此次失去的资金金额」 goes through the money pipeline (the `effect` [反击] window, the modifier
+  stages, `pay` / `payAfter`). Files: `crates/game-rules/src/hostfns.rs`,
   `crates/card-sdk/src/ctx.rs`, `rules/cards/card-morfonica/src/tritone.rs`.
 
 ### V5 — the `pay` settlement window ignores `is_cancelled()` — **FIXED 2026-10-07**
@@ -178,7 +177,7 @@ be left behind by a **later** link.
 | Gesture | Where | Scope | Payment consequence |
 |---|---|---|---|
 | Whole-effect negation (`set_cancelled` / `negate_effect` on the `card`/`skillUsed`/`event`/`settle` link) | pre-body window | all-or-nothing | body never runs — **no payment left behind** |
-| Pay-stage cancel (`effect` cancelled, or `payCombinedCancel`) | inside `Cx::money`, before money moves | **this payment only** | that payment returns `Paid::default()`; the body resumes with 0 |
+| Pay-stage cancel (`effect` cancelled, or `payCombinedCancel`) | inside `PlayCtx::money`, before money moves | **this payment only** | that payment returns `Paid::default()`; the body resumes with 0 |
 | Per-recipient (`Trigger::spare`, `ctx::cancel_designation`) | `play.rs:2974` `settles_for`, `net_error.rs:78-93` | one seat | that seat's leg skipped, the rest lands |
 | Mid-body later-step negation | a nested window (e.g. `target`, `drew`) | that step | **earlier settled payments in the same body stand** |
 
@@ -238,9 +237,9 @@ question for a chosen teleport.
 
 The ruling names payments (资金). 「消耗N个火罐」 / 「移除[奇迹水晶]」 / token
 spends are handled as **raw state writes** (`ctx::spend_fire` all-or-nothing,
-`ctx::add_crystals(-n)`, `ctx::add_tok`) with no counteraction window. Skill
+`ctx::add_crystals(-n)`, `ctx::add_held_by_name`) with no counteraction window. Skill
 texts use 「你可以消耗一个火罐…」 / 「消耗N个[火罐]」 wording (e.g.
-`himari_step.rs:5`, `kaoru_prince.rs`, `arisa_bonsai.rs:7`
+`himari.rs:5`, `kaoru.rs`, `arisa.rs:7`
 「使用2个[火罐]为自己的团卡添加1个[奇迹水晶]」).
 
 **Ruled 2026-10-07:**
@@ -255,11 +254,11 @@ texts use 「你可以消耗一个火罐…」 / 「消耗N个[火罐]」 wordin
 Exception: HHW:（美咲） may counteract with 0 火罐 -- 「消耗所有火罐」 is
 vacuous when the pot is empty.
 
-Related pre-gates: `can_use` fire checks (`himari_step.rs:56`, `kaoru_prince.rs:88`
-`FIRE < 7`, `kiritani_zenith.rs:70`, `extraordinary_star.rs:77`, `uika_idol.rs`,
-`anon_restart.rs`, `lisa_goddess.rs`, `mana_donut.rs`, `moca_self.rs`,
-`tomoe_ramen.rs`, `tsugumi_plain.rs`, `rinko_1cm.rs`, `sato_red.rs`,
-`misaki_other.rs`, `tukushi_try.rs`) refuse the press when the pot is short —
+Related pre-gates: `can_use` fire checks (`himari.rs:56`, `kaoru.rs:88`
+`FIRE < 7`, `toko.rs:70`, `kasumi.rs:77`, `uika_sumimi.rs`,
+`anon.rs`, `lisa.rs`, `mana.rs`, `moca.rs`,
+`tomoe.rs`, `tsugumi.rs`, `rinko.rs`, `masking.rs`,
+`misaki.rs`, `shifune.rs`) refuse the press when the pot is short —
 the same activation-cost shape as §4, if markers are effect content.
 
 ---
@@ -301,7 +300,7 @@ LIFO), so a later link that negates it prevents its payment entirely. Clean.
 * No spend in any `cant_play` / `can_counteract` / `hook_guard` (≈120 guards
   checked; all pure reads).
 * `ctx::pay` / `transfer` / `pay_total` / `pay_leg` / `pay_rent` / `gain` all go
-  through `Cx::money` (host request → `wasm_rules.rs:1971-2033`), so every
+  through `PlayCtx::money` (host request → `wasm_rules.rs:1971-2033`), so every
   money movement opens the `effect` declaration window before any money moves,
   and `Pay::must = true` routes shortfall through `raise_funds` → `bankrupt`.
 * `payCombinedCancel` drops the whole command before any 「[分摊]」 leg splits

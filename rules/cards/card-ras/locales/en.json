@@ -64,6 +64,7 @@
   "please_choose_ask": "{{who}} played PLEASE CHOOSE: pick one",
   "please_choose_moved": "PLEASE CHOOSE's effect: {{who}} [teleported] to {{tile}}",
   "please_choose_opt1": "Immediately play a card that can target {{who}} and target them",
+  "please_choose_opt1_card": "Play “{{card}}” and target {{who}}",
   "please_choose_opt1_todo": "PLEASE CHOOSE's effect: “Immediately play a card that can target {{counteractor}}” is not implemented yet",
   "please_choose_opt2": "Let {{who}} [teleport] to your tile",
   "please_choose_title": "PLEASE CHOOSE",
@@ -77,5 +78,5 @@
   "studio_storm_not_on_lh": "can only be played while standing on your own Live House tile",
   "studio_storm_note": "Studio Storm",
   "studio_storm_placed": "{{who}} placed Studio Storm on {{tile}}",
-  "unstoppable_why": "UNSTOPPABLE"
+  "unstoppable_reason": "UNSTOPPABLE"
 }

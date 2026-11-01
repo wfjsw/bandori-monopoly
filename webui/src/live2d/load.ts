@@ -130,7 +130,7 @@ export function loadLive2D(id: string): Promise<LoadedLive2D> {
 
 // ------------------------------------------------------------------ animations
 
-/** One `catalog.json` entry (the game's `Live2DPortrait.Entry`). */
+/** */
 export interface CatalogEntry {
   id: string;
   model: string;

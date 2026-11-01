@@ -576,7 +576,7 @@ fn leave_frame_only_touches_the_out_seat_and_deeds() {
         t.own(1, &deeds);
         t.give(1, &["通用:GREAT"]);
         t.place_raw(1, "通用:[衍生]FEVER!");
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         t.observe(CLAUSES);
         leave(&mut t, 1).map_err(|e| format!("leave rejected: {e}"))?;
 
@@ -606,7 +606,7 @@ fn leave_frame_only_touches_the_out_seat_and_deeds() {
             allowed.push(format!("houses:T{d}"));
         }
         let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
-        frame(&pre, t.world(), &allowed)
+        frame(&condition, t.world(), &allowed)
     })
     .expect("leave frame");
 }

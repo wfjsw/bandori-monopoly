@@ -14,7 +14,7 @@ Agent: HOST-OPS round 2. Coordinator merges.
 | generator | `tools/kani/gen_card_ids.py` (`--check` for drift) |
 | generated table | `rules/kani/src/generated/card_ids.rs` (285 ids, `RULESET` flatten order) |
 | macro | `card_id!("…")` — compile-time literal → `usize`, `compile_error!` on unknown (same contract as `guard_id!`) |
-| indexed API | `invoke::{by_idx, play_idx, entry_idx, hook_idx, hook_only_idx, counteract_idx, skill_play_idx, event_play_idx}` |
+| indexed API | `invoke::{by_idx, play_idx, entry_index, hook_index, hook_only_idx, counteract_idx, skill_play_idx, event_play_idx}` |
 | migration | `tools/kani/migrate_invoke_idx.py` (sed-able; re-run after new harnesses) |
 | proofs | all `rules/kani/src/proofs/*.rs` string-keyed `invoke::` sites rewritten (361 + 28 new HHW) |
 
@@ -33,7 +33,7 @@ the const-index table is the general solution.
 | harness | before | after | covers | notes |
 |---|---|---|---|---|
 | `proofs::ppp::wait_aoki_01_place_on_field_iff` | TIMEOUT / vacuous | **SUCCESSFUL** 195 s (283 s wall) | 1/1 | real verify, not vacuous |
-| `proofs::mor::rainbow_01_half_iff` | TIMEOUT / vacuous | **FAILED** 194 s | 3/3 | cliff gone; spec wants `amount/2` but card is `CeilTo(amount/2, 10)` (book 「减半」 + C# CeilTo). Unit-spec gap, not a host gap |
+| `proofs::mor::rainbow_01_half_iff` | TIMEOUT / vacuous | **FAILED** 194 s | 3/3 | Unit-spec gap, not a host gap |
 | `proofs::ras::riot_02_03_cycle_iff` | TIMEOUT | **TIMEOUT** 600 s | — | no longer `invoke::find`; now `Vec<u8>` `drop_glue` unwinding inside card bodies (String/Vec cliff — see follow-up) |
 
 Migration note for unit authors: after adding a harness call, run
@@ -89,15 +89,15 @@ Each row has a conformance test in `rules/kani/tests/conf_hostops2.rs`
 |---|---|
 | move-plan setters (`set_steps`, `set_base_dice`, `set_teleport_to`, …) | PROTOCOL (scheduling) |
 | `schedule_turn_end`, `linger`, `gate` | PROTOCOL |
-| `turn_start_pos`, `turn_main_steps`, `turn_rolls`, `turn_snap` | stubs (need turn-snap fixture) |
+| `turn_start_pos`, `turn_main_steps`, `turn_rolls`, `turn_snapshot` | stubs (need turn-snap fixture) |
 | `trig_move_*` getters that need a live move payload | partially in `MoveSnap`; several still unmodeled |
 | `trig_card_is`, `trig_cards`, `trig_by_card`, `trig_effect_*` | stubs |
-| `tok_names`, `placed_cards`, `cards_in(Hand)` per-player, `field_instances` buffer | partial / count-only |
+| `held_names`, `placed_cards`, `cards_in(Hand)` per-player, `field_instances` buffer | partial / count-only |
 | `card_text_mentions`, `play_from_hand` | stubs |
 | `card_mortgage` | stub (no `SetMortgaged` effect yet) |
 | `remove_marks_f`, `bump_mark_f`, `mark_src_at` | stubs |
 | `pay_total` | shapes + transfers in model; real pipeline is request/pause (PROTOCOL) |
-| `msg_tile` / `msg_a` / `msg_sender_uid` | stubs |
+| `msg_tile` / `msg_arg0` / `msg_sender_uid` | stubs |
 | `ask_yes` with `opt_n==0` | still stuck-on-yes (see conf_model) |
 | `is_color` | stub |
 | `rent_of` / price tables with house override | OPEN-收费标价 (not this batch) |
@@ -136,7 +136,7 @@ unit agents' live view; re-run unit tables against the new host):
 * stay/stun/exile split rows → **unblocked**.
 * `place_card_on` tile rows (HHW kkr-02) → **unblocked**.
 * Still blocked: move-plan / `trig_move_*` scheduling, `rent_of` tables,
-  `tok_names` / `placed_cards` name lists, `card_text_mentions`,
+  `held_names` / `placed_cards` name lists, `card_text_mentions`,
   `card_mortgage`, marks remove/bump, `pay_total` pipeline, String/Vec
   memcmp cliffs in card bodies.
 

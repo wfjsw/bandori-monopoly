@@ -6,13 +6,13 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use rules_cond::ext::{CondExt, LowerAs};
-use rules_cond::vocab::{Fx, Getter, Name, Scope, StrGetter, Ty};
 use rules_cond::view::CondView;
+use rules_cond::vocab::{FuncKind, Getter, Name, Scope, StrGetter, Type};
 use rules_cond_ir::ctx::{id_of, FnId, IrCtx};
 
 const NO_GET: Getter = |_| 0;
 const NO_GET_STR: StrGetter = |_| std::borrow::Cow::Borrowed("");
-const NO_FX: Fx = Fx::Neighbor;
+const NO_FUNC: FuncKind = FuncKind::Neighbor;
 
 fn owner_get(flat: &str) -> Getter {
     match flat {
@@ -52,26 +52,26 @@ fn sugar(
     lower: LowerAs,
     field: fn(&dyn CondView, i64) -> i64,
 ) -> Name {
-    let ty = if is_bool { Ty::Bool } else { Ty::Int };
+    let ty = if is_bool { Type::Bool } else { Type::Int };
     let scope = if is_func {
         Scope::Func { arity, cand }
     } else {
         Scope::Candidate
     };
     let get: Getter = if is_func { NO_GET } else { owner_get(flat) };
-    let fx = if !is_func {
-        NO_FX
+    let func = if !is_func {
+        NO_FUNC
     } else if is_bool && arity == 2 {
-        Fx::SeatIntIs { var: flat, field }
+        FuncKind::SeatIntIs { var: flat, field }
     } else if is_bool && cand {
-        Fx::IntHas {
+        FuncKind::IntHas {
             var: flat,
             fill: |v| v.cand_set("blocked"),
         }
     } else if is_bool {
-        NO_FX
+        NO_FUNC
     } else {
-        Fx::SeatInt { var: flat, field }
+        FuncKind::SeatInt { var: flat, field }
     };
     Name {
         cel,
@@ -81,7 +81,7 @@ fn sugar(
         ty,
         get,
         get_str: NO_GET_STR,
-        fx,
+        func,
         lower_as: lower,
         doc: "",
     }

@@ -1,4 +1,3 @@
-//! `Sumimi:兼顾偶像与乐队` -- C# `CardIdolAndBand` (MatchHost.cs:11000-11036): reset
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:兼顾偶像与乐队`）:
 //! > 兼顾偶像与乐队：
@@ -36,11 +35,14 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("idol_and_band_no_effect")));
         return Ok(());
     }
-    // 规则书: 「将你的资金重设为3000」 -- a set, not a gain: the figure must
-    // land unbent, so this bypasses the paySplit* modifier stages and the
-    // `effect` [反击] window (`ctx::gain` would run both). C# `H.Money(...,
-    // fixedAmount: true)`.
-    ctx::adjust_money(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")));
+    // 规则书: 「将你的资金重设为3000」 -- a set, not a gain: the figure must land unbent, so this
+    // bypasses the paySplit* modifier stages and the `effect` [反击] window
+    // (`ctx::gain` would run both).
+    ctx::adjust_money(
+        player_id,
+        3000 - have,
+        &Msg::new(key!("idol_and_band_reason")),
+    );
     Ok(())
 }
 

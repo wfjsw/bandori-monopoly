@@ -224,7 +224,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-afterglow式移动** | 「初始Afterglow角色的（2）」 | detour-02 | Which character's (2) is "afterglow-style"? |
 | **OPEN-@Tsugu / OPEN-@Tsugu-ycm** | garbled sheet mentions | tiny-can-01/02 | Are these typos for a real card id? |
 | **OPEN-每三回合** | fire-pot 「每四回合没有使用」 (sheet-sync 2026-10-17 renamed 每三→每四) | fire-pot | Whose turns count the four? *(wording updated 2026-10-17)* |
-| ~~**OPEN-2次cd**~~ | ~~moca skill 「2次使用cd」~~ | — | **RESOLVED / moot 2026-10-17** — the live sheet **dropped** 「该效果对每个玩家的被动技能和卡存在2次使用cd」 entirely (`rules/skills/skill-personas/src/moca_self.rs:15`). There is no cd to scope. |
+| ~~**OPEN-2次cd**~~ | ~~moca skill 「2次使用cd」~~ | — | **RESOLVED / moot 2026-10-17** — the live sheet **dropped** 「该效果对每个玩家的被动技能和卡存在2次使用cd」 entirely (`rules/skills/skill-personas/src/moca.rs:15`). There is no cd to scope. |
 | **OPEN-每圈** | tomoe (3) 「每圈限一次」 | tomoe skill (3) | How is a lap counted? |
 
 ### CRYCHIC
@@ -248,7 +248,7 @@ Grouped by band. Shared concepts (触发结算 / 分摊 / 场上 / 强制停下 
 | **OPEN-HHW-PATROL-PRICE** | 「付款」 amount on 微笑巡逻队 | patrol-02 | Printed build cost, table cost, or free? |
 | **OPEN-HHW-PATROL-3D20** | 3d20 as sum vs three tiles | patrol-02 | Is 3d20 one sum for one build, or three separate tiles? |
 | **OPEN-HHW-BUILDABLE** | 「可建造格子」 | patrol-02 | Is it exactly [可购买格子]? |
-| **OPEN-HHW-RETURN-AMOUNT / OPEN-HHW-RETURN-BOOK / OPEN-HHW-RETURN-RELIEF** | pay amount; crystal 「records」 a player; relief pre/post double | return-02..05 | Is relief half of the doubled amount or of the base? |
+| **OPEN-HHW-RETURN-AMOUNT / OPEN-HHW-RETURN-BOOK / OPEN-HHW-RETURN-RELIEF** | pay amount; crystal 「records」 a player; relief condition/post double | return-02..05 | Is relief half of the doubled amount or of the base? |
 | **OPEN-HHW-CHARITY-RECOMPUTE** | 「初次经过」 after path recompute | charity-01 | Does recompute reset "first pass"? |
 | **OPEN-HHW-KKR-OWNER** | 「所有者」 of CiRCLE-placed card | kkr-03 | The placer or the tile owner? |
 | **OPEN-HHW-NEIGHBOUR** | 「相邻2格」 | misaki | Two tiles away or the two adjacent tiles? |

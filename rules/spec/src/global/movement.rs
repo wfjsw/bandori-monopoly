@@ -658,18 +658,18 @@ pub fn g_move_08(step: &Step<'_>) -> Result<(), String> {
         .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport"))
         .count();
     if walks == 0 {
-        for (i, (pre, post)) in step
-            .pre
+        for (i, (condition, post)) in step
+            .condition
             .st
             .players
             .iter()
             .zip(step.post.st.players.iter())
             .enumerate()
         {
-            if pre.pos != post.pos {
+            if condition.pos != post.pos {
                 return Err(format!(
                     "a roll command that logged no walk still moved player {i} {} -> {}                      (行动阶段 7 「多次触发［主要移动］时无效」)",
-                    pre.pos, post.pos
+                    condition.pos, post.pos
                 ));
             }
         }
@@ -761,7 +761,7 @@ pub fn g_move_10(step: &Step<'_>) -> Result<(), String> {
                 }
                 use game_core::msg::Arg;
                 matches!(
-                    e.msg.a.get("to"),
+                    e.msg.args.get("to"),
                     Some(Arg::PlayerId(v)) if *v == o as i32
                 )
             });
@@ -877,7 +877,7 @@ pub fn verify_circle_payout(
     branch: u8,
 ) -> Result<(), String> {
     if pre_money.len() != post_money.len() || pre_hand.len() != post_hand.len() {
-        return Err("pre/post arity mismatch".into());
+        return Err("condition/post arity mismatch".into());
     }
     if who >= pre_money.len() {
         return Err(format!("who {who} out of range"));
@@ -945,7 +945,7 @@ pub fn verify_one_main_move(
     events: &[game_core::state::MatchEvent],
 ) -> Result<(), String> {
     if pre_pos.len() != post_pos.len() {
-        return Err("pre/post pos arity mismatch".into());
+        return Err("condition/post pos arity mismatch".into());
     }
     let rolls = events
         .iter()
@@ -995,7 +995,7 @@ pub fn verify_overlap(
                 e.player_id == who as i32
                     && (e.other == o as i32
                         || matches!(
-                            e.msg.a.get("to"),
+                            e.msg.args.get("to"),
                             Some(game_core::msg::Arg::PlayerId(v)) if *v == o as i32
                         ))
             });

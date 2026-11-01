@@ -295,7 +295,7 @@ fn spent_plan_stop_and_steps_shape_the_next_move() {
     assert_eq!(
         t.pos(0),
         53,
-        "the main roll is 4, not the event's step count: {:?}",
+        "the is_main_move roll is 4, not the event's step count: {:?}",
         t.keys_since(mark)
     );
     assert!(
@@ -338,12 +338,12 @@ fn spent_plan_reverse_and_resolve_shape_the_next_move() {
     assert_eq!(
         t.pos(0),
         49,
-        "the main roll walks forward: {:?}",
+        "the is_main_move roll walks forward: {:?}",
         t.keys_since(mark)
     );
     assert!(
         prompts > 0,
-        "the main move still settles: {:?}",
+        "the is_main_move move still settles: {:?}",
         t.keys_since(mark)
     );
 }

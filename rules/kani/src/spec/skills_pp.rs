@@ -68,17 +68,17 @@ pub fn skill2_all_pp_overflow(target_down: i32, held: i32) -> i32 {
 // ===========================================================================
 
 /// Post pay amount after the optional discount.
-pub fn aya_with_02_amount(pre_amount: i32, y: i32) -> i32 {
+pub fn aya_02_amount(pre_amount: i32, y: i32) -> i32 {
     (pre_amount - y * 100).max(0)
 }
 
 /// Flip `y` positive fans reverse (capped at the actor's positives).
-pub fn aya_with_02_flip_pos(up: i32, y: i32) -> i32 {
+pub fn aya_02_flip_pos(up: i32, y: i32) -> i32 {
     up.min(y.max(0))
 }
 
 /// Y is chosen in `0..=up` (「自己Y个正面」).
-pub fn aya_with_02_y_ok(y: i32, up: i32) -> bool {
+pub fn aya_02_y_ok(y: i32, up: i32) -> bool {
     y >= 0 && y <= up
 }
 
@@ -89,11 +89,11 @@ pub fn aya_with_02_y_ok(y: i32, up: i32) -> bool {
 // ===========================================================================
 
 /// Post receive amount after the optional boost.
-pub fn chisato_frank_02_amount(pre_amount: i32, y: i32) -> i32 {
+pub fn chisato_02_amount(pre_amount: i32, y: i32) -> i32 {
     pre_amount + y * 100
 }
 
-pub fn chisato_frank_02_flip_pos(up: i32, y: i32) -> i32 {
+pub fn chisato_02_flip_pos(up: i32, y: i32) -> i32 {
     up.min(y.max(0))
 }
 
@@ -105,12 +105,12 @@ pub fn chisato_frank_02_flip_pos(up: i32, y: i32) -> i32 {
 // ===========================================================================
 
 /// Borrowed character index from a 1d4 result (0=aya, 1=chisato, 2=eve, 3=maya).
-pub fn hina_lottery_02_borrow(roll: i32) -> i32 {
+pub fn hina_02_borrow(roll: i32) -> i32 {
     // 1->0, 2->1, 3->2, 4->3
     roll - 1
 }
 
-pub fn hina_lottery_02_roll_ok(roll: i32) -> bool {
+pub fn hina_02_roll_ok(roll: i32) -> bool {
     (1..=4).contains(&roll)
 }
 
@@ -122,12 +122,12 @@ pub fn hina_lottery_02_roll_ok(roll: i32) -> bool {
 // ===========================================================================
 
 /// Watch size = `min(Y + 1, deck_n)`.
-pub fn maya_dawn_02_watch(y: i32, deck_n: i32) -> i32 {
+pub fn maya_02_watch(y: i32, deck_n: i32) -> i32 {
     (y + 1).min(deck_n).max(0)
 }
 
 /// Exactly one watched card joins the hand (counts as a draw).
-pub fn maya_dawn_02_hand_n() -> i32 {
+pub fn maya_02_hand_n() -> i32 {
     1
 }
 
@@ -139,11 +139,11 @@ pub fn maya_dawn_02_hand_n() -> i32 {
 // ===========================================================================
 
 /// Extra dice added = Y (each a d4). Sum range of the extra is `Y..=4Y`.
-pub fn eve_unify_02_extra_dice(y: i32) -> i32 {
+pub fn eve_02_extra_dice(y: i32) -> i32 {
     y.max(0)
 }
 
-pub fn eve_unify_02_extra_sum_ok(extra_sum: i32, y: i32) -> bool {
+pub fn eve_02_extra_sum_ok(extra_sum: i32, y: i32) -> bool {
     extra_sum >= y && extra_sum <= 4 * y
 }
 
@@ -204,30 +204,30 @@ pub fn band_idol_03_no_reward(effects: &[Effect]) -> bool {
 // ===========================================================================
 
 /// Post crystals after the automatic +1 (before any optional spend).
-pub fn band_idol_04_crystals_after_tick(pre: i32) -> i32 {
-    pre + 1
+pub fn band_idol_04_crystals_after_tick(condition: i32) -> i32 {
+    condition + 1
 }
 
 /// If the player takes the option: crystals -5, draw 1. Requires >= 5 after
 /// the tick (the text says 「移除此卡5个」 — the spend needs 5 present).
-pub fn band_idol_04_spend_ok(pre: i32, take: bool) -> bool {
+pub fn band_idol_04_spend_ok(condition: i32, take: bool) -> bool {
     if !take {
         true
     } else {
-        pre + 1 >= 5
+        condition + 1 >= 5
     }
 }
 
 /// Post crystals when the option is taken.
-pub fn band_idol_04_crystals_after_spend(pre: i32) -> i32 {
-    (pre + 1) - 5
+pub fn band_idol_04_crystals_after_spend(condition: i32) -> i32 {
+    (condition + 1) - 5
 }
 
 // ===========================================================================
 // Mutants
 // ===========================================================================
 
-pub fn aya_with_02_amount_mutant(pre_amount: i32, y: i32) -> i32 {
+pub fn aya_02_amount_mutant(pre_amount: i32, y: i32) -> i32 {
     (pre_amount - y * 99).max(0)
 }
 

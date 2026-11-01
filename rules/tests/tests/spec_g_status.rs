@@ -122,8 +122,8 @@ fn grant_event(kind: &str, who: usize) -> MatchEvent {
 /// snapshot). `n` players, all at tile 0, money 1000.
 fn empty_worlds(n: usize) -> (World, World) {
     let t = Table::vanilla(n);
-    let pre = t.snapshot_world();
-    (pre.clone(), pre)
+    let condition = t.snapshot_world();
+    (condition.clone(), condition)
 }
 
 /// Write a layer count **raw** (bypass `state_set`'s floor-at-0 so a mutant
@@ -209,7 +209,7 @@ fn status_layers_never_negative() {
 /// G-STATUS-01 iff: the pure verifier accepts 0 and rejects -1.
 #[test]
 fn layers_nonneg_verifier_rejects_mutants() {
-    let (pre, mut post) = empty_worlds(2);
+    let (condition, mut post) = empty_worlds(2);
     set_layer(&mut post, 0, "stay", 0);
     verify_layers_nonneg(&post).expect("0 layers is fine");
     // LESS is not a thing here (the rule is a lower bound). WRONG: -1.
@@ -218,7 +218,7 @@ fn layers_nonneg_verifier_rejects_mutants() {
         verify_layers_nonneg(&post).is_err(),
         "G-STATUS-01: verifier must reject a negative layer"
     );
-    let _ = pre;
+    let _ = condition;
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ fn stay_decays_one_layer_at_end_of_own_turn() {
         let mut t = Table::vanilla(3);
         with_clauses(&mut t);
         arm_status_before_turn(&mut t, 0, "stay", pre_layers);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         finish_turn(&mut t, 0);
         let post = t.snapshot_world();
         let got = t.state(0, "stay");
@@ -243,7 +243,7 @@ fn stay_decays_one_layer_at_end_of_own_turn() {
             pre_layers - 1
         );
         // Exact frame: only P0's stay may move on a pure decay.
-        frame(&pre, &post, &["state:P0:stay"]).expect("G-STATUS-03 frame");
+        frame(&condition, &post, &["state:P0:stay"]).expect("G-STATUS-03 frame");
     }
 }
 
@@ -266,12 +266,12 @@ fn stay_stacks_and_decays_one() {
 /// Condition false (not their turn end): the decay is a no-op.
 #[test]
 fn stay_decay_is_noop_off_its_tick() {
-    let (mut pre, _) = empty_worlds(2);
-    set_layer(&mut pre, 0, "stay", 3);
-    let post = pre.clone();
+    let (mut condition, _) = empty_worlds(2);
+    set_layer(&mut condition, 0, "stay", 3);
+    let post = condition.clone();
     // Quiet window with no turn-end mark: unchanged is accepted.
     let events: [MatchEvent; 0] = [];
-    verify_stay_turn_end(&pre, &post, &events, 0).expect("no-op when condition false");
+    verify_stay_turn_end(&condition, &post, &events, 0).expect("no-op when condition false");
     assert_eq!(
         post.st.players[0].state_get("stay"),
         3,
@@ -281,7 +281,7 @@ fn stay_decay_is_noop_off_its_tick() {
     let mut shrank = post.clone();
     set_layer(&mut shrank, 0, "stay", 0);
     assert!(
-        verify_stay_turn_end(&pre, &shrank, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &shrank, &events, 0).is_err(),
         "G-STATUS-03: reject a decay that fires off its tick"
     );
 }
@@ -289,19 +289,19 @@ fn stay_decay_is_noop_off_its_tick() {
 /// Mutants on a hand-built compliant stay-decay triple.
 #[test]
 fn stay_decay_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 0, "stay", 2);
-    let mut post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 0, "stay", 2);
+    let mut post = condition.clone();
     set_layer(&mut post, 0, "stay", 1);
     let events = vec![end_turn_event(0)];
 
     // Genuine (hand-built compliant post) is accepted.
-    verify_stay_turn_end(&pre, &post, &events, 0).expect("compliant decay");
+    verify_stay_turn_end(&condition, &post, &events, 0).expect("compliant decay");
 
     // LESS: no decay.
-    let less = pre.clone();
+    let less = condition.clone();
     assert!(
-        verify_stay_turn_end(&pre, &less, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &less, &events, 0).is_err(),
         "G-STATUS-03: reject missing decay"
     );
 
@@ -309,7 +309,7 @@ fn stay_decay_verifier_rejects_mutants() {
     let mut wrong = post.clone();
     set_layer(&mut wrong, 0, "stay", 0);
     assert!(
-        verify_stay_turn_end(&pre, &wrong, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &wrong, &events, 0).is_err(),
         "G-STATUS-03: reject double decay"
     );
 
@@ -317,7 +317,7 @@ fn stay_decay_verifier_rejects_mutants() {
     let mut up = post.clone();
     set_layer(&mut up, 0, "stay", 3);
     assert!(
-        verify_stay_turn_end(&pre, &up, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &up, &events, 0).is_err(),
         "G-STATUS-03: reject a gain at turn end"
     );
 
@@ -326,7 +326,7 @@ fn stay_decay_verifier_rejects_mutants() {
     set_money(&mut more, 1, 1);
     // The decay verifier itself does not own money; frame() is the MORE
     // check. Assert frame rejects the leak.
-    let fr = frame(&pre, &more, &["state:P0:stay"]);
+    let fr = frame(&condition, &more, &["state:P0:stay"]);
     assert!(
         fr.is_err(),
         "G-STATUS-03 frame: reject unrelated money move"
@@ -338,7 +338,7 @@ fn stay_decay_verifier_rejects_mutants() {
     ev2.push(grant_event("stay", 0));
     let mut with_grant = post.clone();
     set_layer(&mut with_grant, 0, "stay", 3);
-    verify_stay_turn_end(&pre, &with_grant, &ev2, 0)
+    verify_stay_turn_end(&condition, &with_grant, &ev2, 0)
         .expect("grant window is not an exact-decay window");
 }
 
@@ -353,7 +353,7 @@ fn stun_decays_one_layer_and_skips_turn() {
         let mut t = Table::vanilla(3);
         with_clauses(&mut t);
         arm_layer(&mut t, 1, "stun", pre_layers);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         finish_turn(&mut t, 0);
         let post = t.snapshot_world();
         let got = t.state(1, "stun");
@@ -369,7 +369,7 @@ fn stun_decays_one_layer_and_skips_turn() {
             "G-STATUS-05: stunned player's turn should auto-skip (row 4)"
         );
         frame(
-            &pre,
+            &condition,
             &post,
             &["state:P1:stun", "state:P1:stunStart", "pos:P0"],
         )
@@ -380,17 +380,17 @@ fn stun_decays_one_layer_and_skips_turn() {
 /// Mutants on a compliant [晕眩] decay + skip triple.
 #[test]
 fn stun_decay_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 1, "stun", 2);
-    let mut post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 1, "stun", 2);
+    let mut post = condition.clone();
     set_layer(&mut post, 1, "stun", 1);
     let events = vec![end_turn_event(1)];
 
-    verify_stun_turn_end(&pre, &post, &events, 1).expect("compliant decay");
+    verify_stun_turn_end(&condition, &post, &events, 1).expect("compliant decay");
 
     // LESS: no decay.
     assert!(
-        verify_stun_turn_end(&pre, &pre.clone(), &events, 1).is_err(),
+        verify_stun_turn_end(&condition, &condition.clone(), &events, 1).is_err(),
         "G-STATUS-05: reject missing [晕眩] decay"
     );
 
@@ -398,7 +398,7 @@ fn stun_decay_verifier_rejects_mutants() {
     let mut wrong = post.clone();
     set_layer(&mut wrong, 1, "stun", 0);
     assert!(
-        verify_stun_turn_end(&pre, &wrong, &events, 1).is_err(),
+        verify_stun_turn_end(&condition, &wrong, &events, 1).is_err(),
         "G-STATUS-05: reject double [晕眩] decay"
     );
 
@@ -450,10 +450,10 @@ fn stun_gate_is_noop_when_not_stunned() {
 /// Mutants on the [晕眩] money gate.
 #[test]
 fn stun_money_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 1, "stun", 1);
-    set_money(&mut pre, 1, 0);
-    let mut post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 1, "stun", 1);
+    set_money(&mut condition, 1, 0);
+    let mut post = condition.clone();
     let events = vec![money_event("rent", 0, 1, 760)];
 
     // Compliant: the rent leg exists but the stunned payee's money is unchanged
@@ -462,26 +462,26 @@ fn stun_money_verifier_rejects_mutants() {
     // or a blocked window. Here we build the book-compliant shape: no money
     // leg involving the stunned seat.
     let quiet: [MatchEvent; 0] = [];
-    verify_no_money_status(&pre, &post, &quiet, 1, MoneyGate::Stun).expect("quiet is fine");
+    verify_no_money_status(&condition, &post, &quiet, 1, MoneyGate::Stun).expect("quiet is fine");
 
     // MORE / WRONG: a rent leg that moved the stunned payee.
     set_money(&mut post, 1, 760);
     assert!(
-        verify_no_money_status(&pre, &post, &events, 1, MoneyGate::Stun).is_err(),
+        verify_no_money_status(&condition, &post, &events, 1, MoneyGate::Stun).is_err(),
         "G-STATUS-04: reject a rent landing on a stunned payee"
     );
 
     // LESS side of the book rule (cannot pay either): a pay leg from them.
     let pay = vec![money_event("pay", 1, 0, 760)];
-    let mut post2 = pre.clone();
+    let mut post2 = condition.clone();
     set_money(&mut post2, 1, -760);
     set_money(&mut post2, 0, 760);
     assert!(
-        verify_no_money_status(&pre, &post2, &pay, 1, MoneyGate::Stun).is_err(),
+        verify_no_money_status(&condition, &post2, &pay, 1, MoneyGate::Stun).is_err(),
         "G-STATUS-04: reject a pay by a stunned payer"
     );
 
-    // Condition false: an un-stunned pre is a no-op for this gate.
+    // Condition false: an un-stunned condition is a no-op for this gate.
     let (mut free, _) = empty_worlds(2);
     set_money(&mut free, 1, 0);
     let mut free_post = free.clone();
@@ -504,7 +504,7 @@ fn exile_decays_one_layer_before_turn_start() {
         with_clauses(&mut t);
         arm_layer(&mut t, 1, "exile", pre_layers);
         t.set_state(1, "exileTo", -1);
-        let pre = t.snapshot_world();
+        let condition = t.snapshot_world();
         finish_turn(&mut t, 0);
         let post = t.snapshot_world();
         let got = t.state(1, "exile");
@@ -515,7 +515,7 @@ fn exile_decays_one_layer_before_turn_start() {
             pre_layers - 1
         );
         frame(
-            &pre,
+            &condition,
             &post,
             &["state:P1:exile", "state:P1:exileTo", "pos:P0"],
         )
@@ -531,7 +531,7 @@ fn exile_expiry_teleports_to_named_tile() {
     arm_layer(&mut t, 1, "exile", 1);
     t.set_state(1, "exileTo", dest as i32);
     with_clauses(&mut t);
-    let pre = t.snapshot_world();
+    let condition = t.snapshot_world();
     finish_turn(&mut t, 0);
     let post = t.snapshot_world();
     assert_eq!(
@@ -546,7 +546,7 @@ fn exile_expiry_teleports_to_named_tile() {
     );
     // Frame: only the exile keys and the pawn's pos.
     frame(
-        &pre,
+        &condition,
         &post,
         &["state:P1:exile", "state:P1:exileTo", "pos:P1", "pos:P0"],
     )
@@ -563,7 +563,7 @@ fn exile_held_grant_does_not_peel_at_turn_start() {
     t.set_state(1, "exileTo", -1);
     t.set_state(1, "exileHold", 1);
     with_clauses(&mut t);
-    let pre = t.snapshot_world();
+    let condition = t.snapshot_world();
     finish_turn(&mut t, 0);
     let post = t.snapshot_world();
     assert_eq!(
@@ -576,7 +576,7 @@ fn exile_held_grant_does_not_peel_at_turn_start() {
         1,
         "G-STATUS-07: hold marker stays until the until-clause clears it"
     );
-    verify_exile_turn_start(&pre, &post, &[], 1).expect("held grant: no peel");
+    verify_exile_turn_start(&condition, &post, &[], 1).expect("held grant: no peel");
     // The turn still auto-skips (duration grant skips the turn, no countdown).
     assert!(
         t.state(1, "exile") > 0 && t.turn() != 1 || t.state(1, "exile") == 1,
@@ -604,37 +604,37 @@ fn exile_held_grant_clear_on_until_leaves_no_layers() {
 /// The hold verifier itself is two-sided: a peeled held grant is a mutant.
 #[test]
 fn exile_held_grant_verifier_rejects_peel() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 1, "exile", 1);
-    set_layer(&mut pre, 1, "exileHold", 1);
-    let mut post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 1, "exile", 1);
+    set_layer(&mut condition, 1, "exileHold", 1);
+    let mut post = condition.clone();
     set_layer(&mut post, 1, "exile", 0); // peeled -- WRONG for a hold
     set_layer(&mut post, 1, "exileHold", 1);
     let events = vec![turn_start_event(1)];
     assert!(
-        verify_exile_turn_start(&pre, &post, &events, 1).is_err(),
+        verify_exile_turn_start(&condition, &post, &events, 1).is_err(),
         "G-STATUS-07: reject a peel of a held grant"
     );
     // Compliant: hold keeps the layer.
-    let mut keep = pre.clone();
+    let mut keep = condition.clone();
     set_layer(&mut keep, 1, "exile", 1);
-    verify_exile_turn_start(&pre, &keep, &events, 1).expect("held grant keeps its layer");
+    verify_exile_turn_start(&condition, &keep, &events, 1).expect("held grant keeps its layer");
 }
 
 /// Mutants on [除外] turn-start decay + no re-acquire.
 #[test]
 fn exile_decay_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 1, "exile", 2);
-    let mut post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 1, "exile", 2);
+    let mut post = condition.clone();
     set_layer(&mut post, 1, "exile", 1);
     let events = vec![turn_start_event(1)];
 
-    verify_exile_turn_start(&pre, &post, &events, 1).expect("compliant decay");
+    verify_exile_turn_start(&condition, &post, &events, 1).expect("compliant decay");
 
     // LESS: no decay.
     assert!(
-        verify_exile_turn_start(&pre, &pre.clone(), &events, 1).is_err(),
+        verify_exile_turn_start(&condition, &condition.clone(), &events, 1).is_err(),
         "G-STATUS-07: reject missing [除外] decay"
     );
 
@@ -642,17 +642,17 @@ fn exile_decay_verifier_rejects_mutants() {
     let mut wrong = post.clone();
     set_layer(&mut wrong, 1, "exile", 0);
     assert!(
-        verify_exile_turn_start(&pre, &wrong, &events, 1).is_err(),
+        verify_exile_turn_start(&condition, &wrong, &events, 1).is_err(),
         "G-STATUS-07: reject double [除外] decay"
     );
 
     // MORE: re-acquisition while active (even if decay cancels it).
     let mut ev = events.clone();
     ev.push(grant_event("exile", 1));
-    let mut reacq = pre.clone();
+    let mut reacq = condition.clone();
     set_layer(&mut reacq, 1, "exile", 2); // 2 -1 decay +1 grant = 2, or net 2
     assert!(
-        verify_exile_turn_start(&pre, &reacq, &ev, 1).is_err(),
+        verify_exile_turn_start(&condition, &reacq, &ev, 1).is_err(),
         "G-STATUS-07: reject re-acquiring [除外] while active"
     );
 }
@@ -660,33 +660,33 @@ fn exile_decay_verifier_rejects_mutants() {
 /// Return-[传送] mutants (G-STATUS-08).
 #[test]
 fn exile_return_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 1, "exile", 1);
-    pre.st.players[1]
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 1, "exile", 1);
+    condition.st.players[1]
         .state
         .insert("exileTo".into(), Default::default());
-    pre.st.players[1].state_set("exileTo", 7);
-    set_pos(&mut pre, 1, 0);
-    let mut post = pre.clone();
+    condition.st.players[1].state_set("exileTo", 7);
+    set_pos(&mut condition, 1, 0);
+    let mut post = condition.clone();
     set_layer(&mut post, 1, "exile", 0);
     set_pos(&mut post, 1, 7);
     let events = vec![turn_start_event(1)];
 
-    verify_exile_return(&pre, &post, &events, 1).expect("compliant return");
+    verify_exile_return(&condition, &post, &events, 1).expect("compliant return");
 
     // WRONG: landed somewhere else.
     let mut wrong = post.clone();
     set_pos(&mut wrong, 1, 3);
     assert!(
-        verify_exile_return(&pre, &wrong, &events, 1).is_err(),
+        verify_exile_return(&condition, &wrong, &events, 1).is_err(),
         "G-STATUS-08: reject landing off the named tile"
     );
 
     // Condition false: exile did not tick out (still 1) -- no return required.
-    let mut still = pre.clone();
+    let mut still = condition.clone();
     set_layer(&mut still, 1, "exile", 1);
     set_pos(&mut still, 1, 0);
-    verify_exile_return(&pre, &still, &events, 1).expect("no return when not expired");
+    verify_exile_return(&condition, &still, &events, 1).expect("no return when not expired");
 }
 
 /// Still-exiled turns are skipped.
@@ -738,20 +738,20 @@ fn stay_skips_main_move() {
 /// Mutants on the [无法移动] main-move skip.
 #[test]
 fn cannot_move_roll_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 0, "stay", 1);
-    pre.st.skip_move = true;
-    set_pos(&mut pre, 0, 4);
-    let post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 0, "stay", 1);
+    condition.st.skip_move = true;
+    set_pos(&mut condition, 0, 4);
+    let post = condition.clone();
     // Compliant: stays put, no settle.
     let events: [MatchEvent; 0] = [];
-    verify_main_move_skipped(&pre, &post, &events, 0, true).expect("compliant skip");
+    verify_main_move_skipped(&condition, &post, &events, 0, true).expect("compliant skip");
 
     // LESS / WRONG: walked away.
     let mut moved = post.clone();
     set_pos(&mut moved, 0, 9);
     assert!(
-        verify_main_move_skipped(&pre, &moved, &events, 0, true).is_err(),
+        verify_main_move_skipped(&condition, &moved, &events, 0, true).is_err(),
         "G-STATUS-02: reject a walk while [无法移动]"
     );
 
@@ -760,7 +760,7 @@ fn cannot_move_roll_verifier_rejects_mutants() {
     ev[0].r#type = "text".into();
     ev[0].msg = Msg::new("log.land_unowned");
     assert!(
-        verify_main_move_skipped(&pre, &post, &ev, 0, true).is_err(),
+        verify_main_move_skipped(&condition, &post, &ev, 0, true).is_err(),
         "G-STATUS-02: reject a settle while [无法移动]"
     );
 
@@ -797,18 +797,18 @@ fn unstoppable_ignores_stay() {
 /// Mutants: unstoppable forbids new [晕眩]/[除外] layers and a [停留] skip.
 #[test]
 fn unstoppable_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 0, "unstoppable", 1);
-    set_layer(&mut pre, 0, "stun", 1);
-    let post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 0, "unstoppable", 1);
+    set_layer(&mut condition, 0, "stun", 1);
+    let post = condition.clone();
     // Compliant: no new layers (decay is a separate clause).
     let events: [MatchEvent; 0] = [];
-    verify_unstoppable(&pre, &post, &events, 0).expect("compliant quiet");
+    verify_unstoppable(&condition, &post, &events, 0).expect("compliant quiet");
 
     // MORE: a grant line for [晕眩].
     let ev = vec![grant_event("stun", 0)];
     assert!(
-        verify_unstoppable(&pre, &post, &ev, 0).is_err(),
+        verify_unstoppable(&condition, &post, &ev, 0).is_err(),
         "G-STATUS-09: reject a [晕眩] grant while unstoppable"
     );
 
@@ -816,7 +816,7 @@ fn unstoppable_verifier_rejects_mutants() {
     let mut up = post.clone();
     set_layer(&mut up, 0, "stun", 5);
     assert!(
-        verify_unstoppable(&pre, &up, &events, 0).is_err(),
+        verify_unstoppable(&condition, &up, &events, 0).is_err(),
         "G-STATUS-09: reject a [晕眩] rise"
     );
 
@@ -826,7 +826,7 @@ fn unstoppable_verifier_rejects_mutants() {
     skip[0].player_id = 0;
     skip[0].msg = Msg::new("log.stay_skip");
     assert!(
-        verify_unstoppable(&pre, &post, &skip, 0).is_err(),
+        verify_unstoppable(&condition, &post, &skip, 0).is_err(),
         "G-STATUS-09: reject a [停留] skip while unstoppable"
     );
 
@@ -929,14 +929,14 @@ fn stun_in_force_at_roll_does_not_walk() {
 /// Mutants: [除外] 「无法收付款」 (same verifier as [晕眩]).
 #[test]
 fn exile_money_verifier_rejects_mutants() {
-    let mut pre = empty_worlds(2).0;
-    set_layer(&mut pre, 1, "exile", 1);
-    set_money(&mut pre, 1, 0);
-    let mut post = pre.clone();
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 1, "exile", 1);
+    set_money(&mut condition, 1, 0);
+    let mut post = condition.clone();
     set_money(&mut post, 1, 760);
     let events = vec![money_event("rent", 0, 1, 760)];
 
-    verify_no_money_status(&pre, &post, &events, 1, MoneyGate::Exile)
+    verify_no_money_status(&condition, &post, &events, 1, MoneyGate::Exile)
         .expect_err("reject rent to an exiled payee");
 
     // Condition false: not exiled -- the same leg is a no-op for this clause.
@@ -951,5 +951,6 @@ fn exile_money_verifier_rejects_mutants() {
 
     // Compliant: blocked window (no leg) or unchanged money.
     let quiet: [MatchEvent; 0] = [];
-    verify_no_money_status(&pre, &pre.clone(), &quiet, 1, MoneyGate::Exile).expect("quiet ok");
+    verify_no_money_status(&condition, &condition.clone(), &quiet, 1, MoneyGate::Exile)
+        .expect("quiet ok");
 }

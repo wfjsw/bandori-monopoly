@@ -185,8 +185,8 @@ fn pure_wings_roll_stream_starts_at_the_teleport_destination() {
 
 // =====================================================================
 // 2. event card: 飞鸟山之战 「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20」
-//    -- `ctx::teleport_to` for the others, a `card_move` teleport + a
-//    `card_move` walk for the drawer.
+//    -- `ctx::teleport_to` for the others, a `run_planned_move` teleport + a
+//    `run_planned_move` walk for the drawer.
 // =====================================================================
 
 fn draw_event_card(t: &mut Table, who: usize, event: &str, faces: &[i32]) {
@@ -213,7 +213,7 @@ fn asukayama_drawer_walk_stream_starts_at_the_park() {
     draw_event_card(&mut t, 1, "飞鸟山之战", &[7]);
     drain(&mut t);
     let ev = moves_since(&t, mark, 1);
-    // The drawer's jump is a `card_move` teleport (it logs `teleport`); the
+    // The drawer's jump is a `run_planned_move` teleport (it logs `teleport`); the
     // 1d20 walk follows and must start at the park, never at the pre-jump tile.
     assert!(
         ev.iter().any(|e| e.r#type == "teleport"),
@@ -293,7 +293,7 @@ fn asukayama_other_players_land_on_the_park_without_a_stale_walk() {
 // 3. field-card hook (settleAfter): Sumimi:一人两个甜甜顿
 //    「你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至…并触发结算」
 //    -- `ctx::teleport_to` back to the original square, then a settle-teleport
-//    (`card_move` teleport) onto a chosen tile.
+//    (`run_planned_move` teleport) onto a chosen tile.
 // =====================================================================
 
 #[test]
@@ -326,7 +326,7 @@ fn two_donuts_settle_teleport_stream_is_continuous() {
         t.recent_keys(20)
     );
     // P0's movement stream: the return jump is a bare `teleport_to` (no event);
-    // the settle-teleport is a `card_move` teleport (logged). Any walk P0 got
+    // the settle-teleport is a `run_planned_move` teleport (logged). Any walk P0 got
     // must start at a tile the stream left them on (12 or the pre-jump 10).
     let ev = moves_since(&t, mark, 0);
     assert_walks_start_at(&ev, 0, &[10, 12], "two_donuts holder");
@@ -417,7 +417,7 @@ fn my_own_problem_counteraction_stream_is_continuous() {
 }
 
 // =====================================================================
-// 5. card-driven teleport move (`ctx::card_move` with `MoveKind::Teleport`):
+// 5. card-driven teleport move (`ctx::run_planned_move` with `MoveKind::Teleport`):
 //    TEST:tele_nosettle 「不[触发结算]」 teleport move (ruling R2).
 // =====================================================================
 
@@ -620,7 +620,10 @@ fn circle_approach_then_settle_teleport_stream_is_continuous() {
     let mut t = Table::vanilla(2);
     t.set_pos(0, 57);
     t.set_pos(1, 20);
-    t.m.world_mut().turn.fixed_roll = Some(6); // 57 -> 0 (CiRCLE) -> 3
+    t.m.world_mut().turn.fixed_roll = Some(game_core::engine::FixedFace {
+            value: 6,
+            source: game_core::engine::rules::RollSource::Unattributed,
+        }); // 57 -> 0 (CiRCLE) -> 3
     let mark = t.mark();
     let start = t.pos(0);
     t.roll(0).unwrap();
@@ -640,10 +643,10 @@ fn circle_approach_then_settle_teleport_stream_is_continuous() {
 }
 
 // =====================================================================
-// 9. a `card_move` right after a bare `ctx::teleport_to` in the same body
+// 9. a `run_planned_move` right after a bare `ctx::teleport_to` in the same body
 //    -- the move must start at the jump's destination (the original bug).
 //    Sumimi:一人两个甜甜圈's return jump is a bare write; the settle-teleport
-//    that follows is a `card_move`. Covered in (3); this one pins the
+//    that follows is a `run_planned_move`. Covered in (3); this one pins the
 //    same-body order with the TEST mover after a skill teleport.
 // =====================================================================
 

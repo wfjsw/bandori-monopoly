@@ -8,7 +8,7 @@
 //! the match took, with a checkpoint at each turn boundary. It is appended
 //! after a successful store put and sealed into a [`StoredRecord`] when the
 //! match ends. The open tick run and the counters are in the store too
-//! ([`store::RecMeta`]), so a process that dies mid-match (or a second server
+//! ([`store::RecordMeta`]), so a process that dies mid-match (or a second server
 //! that takes over) continues the same log; `gaps` is set only when something
 //! was actually lost.
 
@@ -109,7 +109,7 @@ impl FairState {
 
 /// Bookkeeping for one match's record log. Lives beside the blob rather than
 /// inside it: the blob is the engine's, this is the driver's -- and it is in
-/// the [`CrossState`] too ([`crate::store::RecMeta`]), so a match that changes
+/// the [`CrossState`] too ([`crate::store::RecordMeta`]), so a match that changes
 /// hands mid-run loses nothing. Every read and write happens under the match
 /// lock (see [`MatchHandle::run`]).
 ///
@@ -164,9 +164,9 @@ impl MatchHandle {
                 store
                     .rec_meta_put(
                         &id,
-                        &crate::store::RecMeta {
+                        &crate::store::RecordMeta {
                             members,
-                            ..crate::store::RecMeta::default()
+                            ..crate::store::RecordMeta::default()
                         },
                     )
                     .map_err(|e| e.to_string())?;
@@ -177,7 +177,7 @@ impl MatchHandle {
     }
 
     /// A match already in progress, picked up by another process (or after a
-    /// restart). Bookkeeping comes from the store's [`crate::store::RecMeta`];
+    /// restart). Bookkeeping comes from the store's [`crate::store::RecordMeta`];
     /// only if that is missing (a match started before the meta existed) are
     /// the counters rebuilt from the log -- and the `dirty` flag of an
     /// operation that never finished becomes `gaps`.
@@ -232,10 +232,10 @@ impl MatchHandle {
             .ok_or_else(|| "no match".to_string())
     }
 
-    fn load_meta(&self) -> Result<crate::store::RecMeta, String> {
+    fn load_meta(&self) -> Result<crate::store::RecordMeta, String> {
         match self
             .store
-            .rec_meta_get(&self.id)
+            .record_meta_get(&self.id)
             .map_err(|e| e.to_string())?
         {
             Some(m) => Ok(m),
@@ -246,7 +246,7 @@ impl MatchHandle {
                     .store
                     .record_log_get(&self.id)
                     .map_err(|e| e.to_string())?;
-                let mut st = crate::store::RecMeta::default();
+                let mut st = crate::store::RecordMeta::default();
                 for line in &lines {
                     match LogEntry::parse_line(line) {
                         Some(LogEntry::Head(h)) => {
@@ -261,7 +261,7 @@ impl MatchHandle {
                                 st.ticks += n as u64;
                             }
                         }
-                        Some(LogEntry::Checkpoint(c)) => st.last_ckpt_at = c.at,
+                        Some(LogEntry::Checkpoint(c)) => st.last_checkpoint_at = c.at,
                         None => {}
                     }
                 }
@@ -273,7 +273,7 @@ impl MatchHandle {
         }
     }
 
-    fn save_meta(&self, meta: &crate::store::RecMeta) -> Result<(), String> {
+    fn save_meta(&self, meta: &crate::store::RecordMeta) -> Result<(), String> {
         self.store
             .rec_meta_put(&self.id, meta)
             .map_err(|e| e.to_string())
@@ -420,7 +420,7 @@ impl MatchHandle {
     }
 
     /// One member's view frame. `need_extras` = the caller wants the
-    /// per-viewer `view_extra` fields (the bot service does; a human client
+    /// per-viewer `view_extras` fields (the bot service does; a human client
     /// computes them itself from the seat view).
     pub fn view(&self, member: i32, need_extras: bool) -> Result<Value, String> {
         self.peek(|s, e| e.view(s, member, need_extras))
@@ -436,14 +436,14 @@ impl MatchHandle {
     /// `RecordedMatch`: consecutive ticks with the same `k` run-length merge
     /// into one `Ticks` input, and a turn boundary closes the run so the
     /// checkpoint sits between two inputs.
-    fn note<T>(&self, rec: &mut crate::store::RecMeta, input: Input, out: &Out<T>) {
+    fn note<T>(&self, rec: &mut crate::store::RecordMeta, input: Input, out: &Out<T>) {
         if rec.done {
             return;
         }
         match &input {
             Input::Ticks { k, .. } => {
                 rec.ticks += 1;
-                let closed = rec.last_ckpt_at == rec.inputs;
+                let closed = rec.last_checkpoint_at == rec.inputs;
                 match rec.buf {
                     Some((k2, n)) if k2 == *k && !closed => rec.buf = Some((k2, n + 1)),
                     _ => {
@@ -482,12 +482,12 @@ impl MatchHandle {
             if self.store.record_log_append(&self.id, &line).is_err() {
                 rec.gaps = true;
             } else {
-                rec.last_ckpt_at = rec.inputs;
+                rec.last_checkpoint_at = rec.inputs;
             }
         }
     }
 
-    fn flush_buf(&self, rec: &mut crate::store::RecMeta) {
+    fn flush_buf(&self, rec: &mut crate::store::RecordMeta) {
         if let Some((k, n)) = rec.buf.take() {
             let line = LogEntry::Input(Input::Ticks { k, n }).to_line();
             if self.store.record_log_append(&self.id, &line).is_err() {
@@ -498,7 +498,7 @@ impl MatchHandle {
 
     /// Seal the record: seats from the final view, `final_hash` from the blob
     /// the server kept. Idempotent -- the first caller under the match lock
-    /// wins, and `RecMeta::done` is what every other instance sees. The log is
+    /// wins, and `RecordMeta::done` is what every other instance sees. The log is
     /// cleared afterwards so the next match in this room starts clean; the
     /// `done` meta remains until [`Self::start`] replaces it.
     pub fn finalize(&self) {
@@ -528,7 +528,7 @@ impl MatchHandle {
 
     /// Under the match lock: flush the open run, write the sealed record, and
     /// mark the meta `done`. Idempotent across instances.
-    fn seal(&self, meta: &mut crate::store::RecMeta) -> Result<(), String> {
+    fn seal(&self, meta: &mut crate::store::RecordMeta) -> Result<(), String> {
         self.flush_buf(meta);
         meta.dirty = false;
         meta.done = true;

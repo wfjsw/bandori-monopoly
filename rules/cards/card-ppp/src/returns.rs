@@ -1,4 +1,3 @@
-//! `PPP:Returns` -- C# `CardReturns` (MatchHost.cs:8403-8581): a [特] card that
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:Returns`）:
 //! > Returns：
@@ -18,19 +17,15 @@
 //!
 //! > （4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。
 //!
-//! swells the starting deck, sits on the field from game start, and copies another
-//! player's band card at a sticker price.
-//! A pure [特] card (C# has no `Play`): deck setup and game-start placement sit on
-//! the `DeckBeforeGame` / `DeckAtGameStart` hooks; the band copying and the four
-//! [持续] clauses ride field hooks (`TurnStartBefore`, `CardPlayed`) and the
-//! poppin field scan. Only the generic activation-cost ABI form stays deferred
-//! (BACKLOG, not this file).
+//! swells the starting deck, sits on the field from game start, and copies
+//! another player's band card at a sticker price. Only the generic
+//! activation-cost ABI form stays deferred (BACKLOG, not this file).
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use bandori_std::ctx;
-use card_sdk::abi::{ActionKind, CardPile, RollPurpose};
+use card_sdk::abi::{roll_source, ActionKind, CardPile, RollPurpose};
 use card_sdk::ctx::{intern, NameId};
 use card_sdk::{it, items, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -51,15 +46,15 @@ pub const RETURNS: CardDef = CardDef::new(
         // play was counteracted, so a negated 通用 play still pays -- and a hand
         // [反击] card is resolved in the counteraction tree and raises no
         // `cardPlayed` at all, so a 通用 [反击] pays nothing.
-        // 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后」 -- `pre::MINE`
+        // 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后」 -- `condition::MINE`
         // states the actor; the residual guard names the 通用 card. The body
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
-        On::Action(Action::CardPlayed(card_sdk::pre::MINE, Some(on_played_is_general), on_played)),
+        On::Action(Action::CardPlayed(card_sdk::condition::MINE, Some(on_played_is_general), on_played)),
         // 规则书[持续]（2）: 「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
         // exists only while Returns is placed and some other survivor has a
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
-        On::Action(Action::TurnStartBefore(card_sdk::pre::MINE, Some(choose_band_applies), choose_band)),
+        On::Action(Action::TurnStartBefore(card_sdk::condition::MINE, Some(choose_band_applies), choose_band)),
         // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
         // unconditional on the rulebook, but the pick prompt only exists when
         // the pool can feed eight draws. Empty pool = no offer, no flash.
@@ -90,10 +85,7 @@ pub const RETURNS: CardDef = CardDef::new(
         // sheet cell B5
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
-/// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
-/// first, then band, then general) -- a snapshot of the roster; Returns is
-/// a Poppin' Party band card so only that band's pool can hold it. The exclusive
-/// entry is the player's own character card (`exclusive_of`).
+/// The exclusive entry is the player's own character card (`exclusive_of`).
 const BAND_POOL: [&str; 10] = [
     "PPP:Popipa",
     "PPP:Returns",
@@ -119,7 +111,6 @@ const GENERAL_POOL: [&str; 10] = [
     "通用:安可",
 ];
 
-/// C# `DeckRules.Pool`'s exclusive front (the player's own character card).
 fn exclusive_of(player_id: i32) -> Option<&'static str> {
     if ctx::persona_is(player_id, "户山香澄") {
         Some("PPP:（香澄）大家我都喜欢哦")
@@ -136,7 +127,6 @@ fn exclusive_of(player_id: i32) -> Option<&'static str> {
     }
 }
 
-/// C# `DeckRules.Pool(c)` ids minus anything already in the draw pile or hand.
 fn pool_for(player_id: i32) -> Vec<NameId> {
     let mut have: Vec<NameId> = ctx::cards_in(player_id, CardPile::Deck);
     have.extend(ctx::cards_in(player_id, CardPile::Hand));
@@ -159,13 +149,9 @@ fn pool_for(player_id: i32) -> Vec<NameId> {
 }
 
 // 规则书[特]（1）: 「如果此卡被加入初始卡组则卡组卡数添加8。」
-/// C# `CardReturns.DeckBeforeGame` -> `AddEight`: eight ids from `DeckRules.Pool`
-/// go into the draw pile (prompted pick or random), then the pile is shuffled.
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     // `deck_pool_ready` is the residual guard; an empty pool never reaches here.
     let mut pool = pool_for(player_id);
-    // C# `H.AskYes(..., "卡组里有「Returns」：卡组的卡数 +8。要自己从卡池里选 8 张
-    // 加入抽卡区吗？（不选就随机）")`.
     let pick = ctx::ask_yes(
         player_id,
         &Msg::new(key!("returns_add_eight_title")),
@@ -174,7 +160,6 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     let mut added = 0;
     while added < 8 && !pool.is_empty() {
         let index = if pick {
-            // C# `H.AskCard(seat, ..., "选一张加入抽卡区（n/8）", pool, ...)`.
             let refs: Vec<&str> = pool.iter().map(|s| s.as_str()).collect();
             let i = ctx::ask_card(
                 player_id,
@@ -184,16 +169,19 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
             )?;
             i.min(pool.len() - 1)
         } else {
-            // C# `H._rng.Next(pool.Count)` -- a silent host rng. Pure random
-            // index pick, not a 「掷骰」 the player should see countered, so
+            // Pure random index pick, not a 「掷骰」 the player should see countered, so
             // `roll_direct` (it still animates).
-            (ctx::roll_direct(player_id, 1, pool.len() as i32, RollPurpose::Effect)? - 1).max(0)
+            (ctx::roll_direct(
+                player_id,
+                1,
+                pool.len() as i32,
+                RollPurpose::Effect,
+                roll_source::CARD,
+            )? - 1).max(0)
                 as usize
                 % pool.len()
         };
         let id = pool.remove(index);
-        // C# `h.draw.Add(pool[index])` then `H.Shuffle(h.draw)` at the end; each
-        // insert here shuffles, which leaves the same shuffled pile.
         ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom);
         added += 1;
     }
@@ -208,11 +196,8 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
 
 // 规则书[特]（2）: 「游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个
 // 其他存活玩家的团卡。」
-/// C# `CardReturns.DeckAtGameStart` -> `Setup`: pull the id out of the draw pile
-/// (or hand) and place it on the owner's field, then borrow a band.
 fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // `trigger_card == card.id` owns "this card was opened".
-    // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
     if !ctx::take_card(player_id, ID, CardPile::Deck)
         && !ctx::take_card(player_id, ID, CardPile::Hand)
     {
@@ -238,25 +223,19 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// 规则书[持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果。」 -- while Returns
-// is in play the PPP band card's main-settle build restriction is lifted. Read
-// by `skill-groups::poppin` off the owner's field (`find_card("PPP:Returns")`).
-// 规则书[持续]（2）: 「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前
-// 因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」 -- a `turnStart` press.
-// The borrowed band sits beside the PPP one (ruling 2026-10-06); only a prior
-// borrow is swapped out (by its recorded uid), and its crystals leave with it.
-// 规则书[持续]（3）: 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the
-// copy is the instance `place_card` returned (`returns.borrow_uid`); the owner's own
+// 规则书[持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果。」 -- while Returns is in play the
+// PPP band card's main-settle build restriction is lifted. Read by
+// `skill-groups::poppin` off the owner's field (`find_card("PPP:Returns")`).
+// 规则书[持续]（2）: 「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前 因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」 -- a
+// `turnStart` press. The borrowed band sits beside the PPP one (ruling
+// 2026-10-06); only a prior borrow is swapped out (by its recorded uid), and its
+// crystals leave with it. 规则书[持续]（3）: 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the copy is
+// the instance `place_card` returned (`returns.borrow_uid`); the owner's own
 // band card sits beside it and its presses are free.
 // `skill_groups::copy_sticker_gate` is the activation cost (0 stickers → the
 // press is refused) and `spend_copy_sticker` charges the 1 when it runs.
-// 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」 -- the
-// `cardPlayed` hook is in; a card's band is the prefix of its id (`通用:`, `G:`),
-// which is what `H.Db.Card(c.Id)?.group == "通用"` reads.
 
-/// （4）'s applicability: the played card is a 通用 one (a card's band is the
-/// prefix of its id -- `H.Db.Card(c.Id)?.group == "通用"`). The actor is
-/// `pre::MINE`'s job and is not re-checked here (docs/GUARDS.md).
+/// The actor is `condition::MINE`'s job and is not re-checked here (docs/GUARDS.md).
 fn on_played_is_general(_player_id: i32) -> bool {
     ctx::trigger::cards()
         .into_iter()
@@ -268,7 +247,7 @@ fn on_played_is_general(_player_id: i32) -> bool {
 
 /// 规则书[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
 fn on_played(player_id: i32) -> card_sdk::Asked {
-    ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)?;
+    ctx::add_held_by_name(player_id, "星星贴纸", 1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("returns_sticker")));
     Ok(())
 }
@@ -429,7 +408,7 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     // address is the recorded uid -- a name lookup would take the owner's own
     // card first when both carry `skill:Poppin' Party:星之鼓动`.
     if prev >= 0 {
-        let prev_uid = ctx::tok(player_id, "returns.borrow_uid");
+        let prev_uid = ctx::held_count(player_id, "returns.borrow_uid");
         if prev_uid > 0 {
             ctx::unplace_at(prev_uid);
         }
@@ -441,7 +420,7 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     // `copy_sticker_gate` keys on this uid, not on "a borrow exists" -- the
     // owner's own band card sits beside the copy and its presses are free.
     // (`returns.copied` was the old "any borrow" flag; nothing reads it now.)
-    ctx::set_tok(player_id, "returns.borrow_uid", borrowed, 0, -1);
+    ctx::set_held(player_id, "returns.borrow_uid", borrowed, 0, -1);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_got_band")).card("card", want),

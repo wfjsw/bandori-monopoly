@@ -1,4 +1,3 @@
-//! `PP:[丸山彩]憧憬的前方` -- C# `CardAyaLonging` (MatchHost.cs:7995-8063):
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[丸山彩]憧憬的前方`）:
 //! > [丸山彩]憧憬的前方：
@@ -34,30 +33,21 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         On::Filter(Filter::PaySplitAdd("card.placed", None, shave_x_filter)),
         // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 -- the
         // 共鸣 cost makes this half interactive (`try_resonance` prompts), so it
-        // cannot be a pure Filter. It rides `Action::PaySplitMulBefore` (v96),
-        // the writable stage between the `PaySplitAdd` fold and the `PaySplitMul`
-        // fold (规则书 支付阶段 3 「支付计算后」). Sibling Add modifiers no longer
-        // see the 1500 already gone; the shave lands on the composed Add figure.
-        // (1)'s pure `PaySplitAdd` filter stays above it -- two subtractions
-        // under a local floor are order-independent, so the X-then-1500 reading
-        // is preserved.
+        // cannot be a pure Filter. It rides `PayCombinedAddBefore`, the writable
+        // 支付阶段 2 「支付计算时」 stage, so the 1500 sits beside the sibling Add
+        // modifiers as the book's wording has it; (1)'s pure `PaySplitAdd`
+        // filter stays above it -- two subtractions under a local floor are
+        // order-independent.
         //
-        // Reading pinned here: the 1500 shave runs **after** the whole
-        // `PaySplitAdd` fold (base + sibling Add, then −1500 with a local floor).
-        // 规则书 does not pin floor-vs-add order among same-stage ± clauses; see
-        // the sibling-add regression test.
+        // 「消耗或支付」 has two arms: the same body also hangs on the
+        // `spendBefore` window for a raw 消耗.
         // TODO(规则书): local `.max(0)` per clause vs a final floor after the
-        //   whole add/sub stage is still unnamed by the book (the file's existing
-        //   order-independence claim covers X-then-1500, not add-then-floor).
-        // TODO(规则书)（[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0））: a fixed
-        //   −1500 is a 支付阶段 2 「支付计算时」 modifier, but the 共鸣 prompt needs
-        //   an interactive stage-2 hook and there is none (no `PaySplitAddBefore`),
-        //   so it lands at `PaySplitMulBefore` (stage 3) after the whole stage-2
-        //   fold; a sibling stage-2 add therefore composes differently.
-        // TODO(规则书)（[共鸣][反击][消耗]或[支付]时）: `PaySplitMulBefore` runs per
-        //   settled leg, so a split payment prompts, spends one 共鸣 and shaves
-        //   1500 per leg -- the sheet does not say per command or per leg.
-        On::Action(Action::PaySplitMulBefore("actor == owner && value > 0", None, pay_res).counter_reason(key!("aya_longing_when"))),
+        //   whole add/sub stage is still unnamed by the book.
+        // TODO(规则书)（[共鸣][反击][消耗]或[支付]时）: the two links run per settled
+        //   leg / per spend, so a split payment prompts, spends one 共鸣 and
+        //   shaves 1500 per leg -- the sheet does not say per command or per leg.
+        On::Action(Action::SpendBefore("actor == owner && value > 0", None, pay_res)),
+        On::Action(Action::PayCombinedAddBefore("actor == owner && value > 0", None, pay_res).counter_reason(key!("aya_longing_when"))),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
@@ -77,7 +67,6 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // sheet cell D16
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 
-/// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 // 规则书[持续]（1）: 「X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100」
 fn shave_x(player_id: i32) -> i32 {
     let fans = fans::up(player_id) + fans::down(player_id);
@@ -88,7 +77,6 @@ fn shave_x(player_id: i32) -> i32 {
     }
 }
 
-/// C# `CardAyaLonging.Poorest` -- every alive player has at least as much money.
 // 规则书[持续]（1）: 「如果[拥有者]的资金数是所有存活玩家中最少」
 // TODO(规则书)（如果[拥有者]的资金数是所有存活玩家中最少）: the sheet does not say
 //   whether a money tie counts as 「最少」 (OPEN-ties) -- we count it (non-strict `>=`).
@@ -105,9 +93,6 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         "PP:[丸山彩]憧憬的前方",
         &Msg::new(key!("aya_longing_note")),
     );
-    // 规则书[手]: 「并将弃卡区中的一张卡加入手卡」
-    // C# `H._hidden[i].discard.Distinct()` + `H.AskCard` + `H._hidden[i].discard.Remove`
-    // + `H.AddToHand`.
     let mut ids: Vec<NameId> = Vec::new();
     for c in ctx::cards_in(player_id, ctx::CardPile::Graveyard) {
         if !ids.contains(&c) {

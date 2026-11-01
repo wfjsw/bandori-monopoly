@@ -63,6 +63,34 @@ struct Run {
     events: Vec<MatchEvent>,
 }
 
+/// One policy command for a machine-driven seat, mirroring the harness in
+/// `game-core/tests/common`: production drives bots over the human interface,
+/// and `Match::tick` never acts for them.
+fn bot_msg(m: &Match, member: i32) -> Option<game_core::net::NetMessage> {
+    let st = m.state();
+    let me = st.player_of(member);
+    let asked = st.prompt.id > 0 && st.prompt.waiting(me);
+    if !asked && (st.phase != "play" || st.busy || st.vote.id > 0 || st.turn != me) {
+        return None;
+    }
+    bot_core::policy::act_for(m, member)
+}
+
+/// Let every seat on the engine's drive list take one policy command.
+fn act_drive(m: &mut Match) -> bool {
+    let members = m.state().drive;
+    let mut any = false;
+    for member in members {
+        let Some(msg) = bot_msg(m, member) else {
+            continue;
+        };
+        if m.act(member, &msg).is_ok() {
+            any = true;
+        }
+    }
+    any
+}
+
 fn play(data: &Arc<GameData>, rules: Arc<dyn CardRules>, seed: u64, max_rounds: i32) -> Run {
     let mut m = Match::new(
         data.clone(),
@@ -79,6 +107,7 @@ fn play(data: &Arc<GameData>, rules: Arc<dyn CardRules>, seed: u64, max_rounds: 
     let mut last_event = 0i32;
     while !m.ended() {
         m.tick(0.25);
+        act_drive(&mut m);
         for e in m.events_since(last_event) {
             last_event = e.id;
             events.push(e);
@@ -165,7 +194,7 @@ fn native_is_deterministic() {
 /// event streams, identical final saves.
 ///
 /// Root causes closed 2026-10-09 (docs/BOT.md §5 "native-rules drift"):
-/// `RulesHandle::pre` defaulted to `None` on `NativeRulesHandle`, so every
+/// `RulesHandle::condition` defaulted to `None` on `NativeRulesHandle`, so every
 /// CEL condition read as absent and G4-deleted guards ran unfiltered; and
 /// `card-sdk`'s native ABI passed 64-bit guest buffers as truncated `i32`
 /// pointers (`cards_in` &co. returned empty, `rt::leak` handed the host a
@@ -206,7 +235,11 @@ fn native_and_sandbox_agree_on_the_manifest() {
         for (j, (oa, ob)) in a.on.iter().zip(b.on.iter()).enumerate() {
             assert_eq!(oa.kind, ob.kind, "card {} entry {j} kind", a.id);
             assert_eq!(oa.triggers, ob.triggers, "card {} entry {j} triggers", a.id);
-            assert_eq!(oa.pre, ob.pre, "card {} entry {j} condition", a.id);
+            assert_eq!(
+                oa.condition, ob.condition,
+                "card {} entry {j} condition",
+                a.id
+            );
             assert_eq!(oa.has_guard, ob.has_guard, "card {} entry {j} guard", a.id);
             assert_eq!(oa.label, ob.label, "card {} entry {j} label", a.id);
             assert_eq!(
@@ -215,10 +248,10 @@ fn native_and_sandbox_agree_on_the_manifest() {
                 a.id
             );
             // The compiled condition must be present exactly when the source
-            // string is -- the `RulesHandle::pre` default-`None` bug left
+            // string is -- the `RulesHandle::condition` default-`None` bug left
             // every condition silently uncompiled on native.
-            let src = oa.pre.as_deref();
-            let compiled = native.pre(i as i32, j as i32).is_some();
+            let src = oa.condition.as_deref();
+            let compiled = native.condition(i as i32, j as i32).is_some();
             assert_eq!(
                 src.is_some_and(|s| !s.is_empty()),
                 compiled,
@@ -242,3 +275,4 @@ fn native_rules_loads_the_shipped_table() {
         "content hash for the record stamp"
     );
 }
+

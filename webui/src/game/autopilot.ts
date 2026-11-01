@@ -814,7 +814,7 @@ export const policies: Record<PolicyName, Policy> = {
           if (sk) out.push({ act: "skill", card: sk });
         }
         // A refused card must still let the turn move: roll (or end) is next.
-        // Both gates are the engine's own (`why_not_act`, mirroring
+        // Both gates are the engine's own (`cant_act`, mirroring
         // `bot-core::policy` and `turnFlow.ts`): after a card move spent the
         // main move the roll is refused (`err.roll_main_used`) and only `end`
         // gets through -- re-sending `roll` would wedge the seat forever.

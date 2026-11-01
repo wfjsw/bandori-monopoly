@@ -1,7 +1,7 @@
 //! Unit `skills_characters`: clause proofs.
 //!
 //! Per clause emit (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
+//! 1. iff proof (post == spec(condition) and effect log exactly and frame);
 //! 2. no-op proof when the trigger/condition is false;
 //! 3. kani::cover! each branch;
 //! 4. #[kani::should_panic] MUTANT.

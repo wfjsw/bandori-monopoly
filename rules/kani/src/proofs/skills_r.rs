@@ -15,15 +15,15 @@ use crate::invoke;
 use crate::spec::skills_r as spec;
 use crate::world::{self, Effect, MAX_PLAYERS};
 
-// Ops the sayo/rinko/lisa Pass hooks reach (`fire::gain`'s tok/tok_max row
+// Ops the sayo/rinko/lisa Pass hooks reach (`fire::gain`'s tok/held_max row
 // reads, `gain_marker`, `log`, `player_*`).
 crate::host_subset!(skills_r_dispatch {
     log | log_as | effect => arm_log,
     gain_marker => arm_gain_marker,
-    // `fire::get` / `fire::max` read the held row through `tok` / `tok_max`
+    // `fire::get` / `fire::max` read the held row through `tok` / `held_max`
     // (the old named `charge` / `charge_max` readers are retired ops).
     count_held | count_held_name => arm_count_held,
-    tok_max => arm_tok_max,
+    held_max => arm_tok_max,
     persona_skill => arm_band_skill,
     spend_marker => arm_spend_marker,
     player_count => arm_player_count,
@@ -83,8 +83,8 @@ fn sayo_fire_pass_iff_at(user: i32) {
         }
     });
     let n = spec::sayo_circle_gain(someone_out);
-    let pre = world::snapshot();
-    invoke::unwrap_done(skill_personas::sayo_thorns::on_pass_kani(user));
+    let condition = world::snapshot();
+    invoke::unwrap_done(skill_personas::sayo::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -96,7 +96,7 @@ fn sayo_fire_pass_iff_at(user: i32) {
         "C-R-踏上荆棘之路的觉悟-01: GainFire 2 or 3"
     );
     crate::kassert!(
-        post.charge[user as usize] == pre.charge[user as usize] + n,
+        post.charge[user as usize] == condition.charge[user as usize] + n,
         "C-R-踏上荆棘之路的觉悟-01: fire +n"
     );
 }
@@ -127,7 +127,7 @@ pub fn sayo_fire_mutant_is_detected() {
             w.out[p] = false;
         }
     });
-    invoke::unwrap_done(skill_personas::sayo_thorns::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::sayo::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::sayo_circle_gain(false) + 1;
@@ -144,8 +144,8 @@ pub fn sayo_fire_mutant_is_detected() {
 fn rinko_fire_pass_iff_at(user: i32) {
     let user = user;
     skills_r_world(user);
-    let pre = world::snapshot();
-    invoke::unwrap_done(skill_personas::rinko_1cm::on_pass_kani(user));
+    let condition = world::snapshot();
+    invoke::unwrap_done(skill_personas::rinko::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -155,7 +155,7 @@ fn rinko_fire_pass_iff_at(user: i32) {
         "C-R-即使1cm也要前进-01: exactly GainFire 3"
     );
     crate::kassert!(
-        post.charge[user as usize] == pre.charge[user as usize] + spec::rinko_circle_gain(),
+        post.charge[user as usize] == condition.charge[user as usize] + spec::rinko_circle_gain(),
         "C-R-即使1cm也要前进-01: fire +3"
     );
 }
@@ -181,7 +181,7 @@ pub fn rinko_fire_user1_pass_iff() {
 pub fn rinko_fire_mutant_is_detected() {
     let user = 0i32;
     skills_r_world(user);
-    invoke::unwrap_done(skill_personas::rinko_1cm::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::rinko::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::rinko_circle_gain() + 1;
@@ -198,8 +198,8 @@ pub fn rinko_fire_mutant_is_detected() {
 fn lisa_fire_pass_iff_at(user: i32) {
     let user = user;
     skills_r_world(user);
-    let pre = world::snapshot();
-    invoke::unwrap_done(skill_personas::lisa_goddess::on_pass_kani(user));
+    let condition = world::snapshot();
+    invoke::unwrap_done(skill_personas::lisa::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -209,7 +209,7 @@ fn lisa_fire_pass_iff_at(user: i32) {
         "C-R-慈爱女神-01: exactly GainFire 1"
     );
     crate::kassert!(
-        post.charge[user as usize] == pre.charge[user as usize] + spec::lisa_circle_gain(),
+        post.charge[user as usize] == condition.charge[user as usize] + spec::lisa_circle_gain(),
         "C-R-慈爱女神-01: fire +1"
     );
 }
@@ -235,7 +235,7 @@ pub fn lisa_fire_user1_pass_iff() {
 pub fn lisa_fire_mutant_is_detected() {
     let user = 0i32;
     skills_r_world(user);
-    invoke::unwrap_done(skill_personas::lisa_goddess::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::lisa::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::lisa_circle_gain() + 1;

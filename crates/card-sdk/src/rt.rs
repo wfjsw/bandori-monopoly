@@ -22,8 +22,8 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .map(|(_, o)| ManifestOn {
                     kind: o.kind() as i32,
                     triggers: o.triggers(),
-                    pre: {
-                        let p = o.condition();
+                    condition: {
+                        let p = o.condition_of();
                         if p.is_empty() {
                             None
                         } else {
@@ -253,10 +253,10 @@ pub fn on(
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (On::PlayBody(PlayEntry { why_not, .. }), export::OP_GUARD) => match why_not {
-            Some(why) => match why(player_id) {
+        (On::PlayBody(PlayEntry { guard, .. }), export::OP_GUARD) => match guard {
+            Some(g) => match g(player_id) {
                 None => 0,
-                // Kani: the Play `why` reason is a `Msg`; serialising it allocates
+                // Kani: the Play `reason` reason is a `Msg`; serialising it allocates
                 // a `Vec` (and the facade `Msg` is not the wire form). The
                 // symbolic host treats a non-zero reason as "has reason" and
                 // never reads the bytes. Production keeps the real postcard.
@@ -311,18 +311,59 @@ pub fn on(
             _,
         ) => {
             let _ = shape;
-            match drive(player_id, body) {
+            // One body dispatcher: every host- or guest-started body enters a
+            // resolution frame (the `cardFired` raise and the `resolving`
+            // table) and leaves it on both the success and the ask path.
+            let cid = card(bands, idx).id;
+            let entered = crate::ctx::body_enter(cid);
+            if entered == 0 {
+                return 0;
+            }
+            // The frame's `cardFired` raise asked: halt here, and pop the
+            // frame before the host re-runs us with the answer.
+            // Asked: the frame stays up (the host settles the effects on it
+            // and re-enters us), so no `body_leave` here.
+            if entered == crate::abi::EXIT_NEED_INPUT {
+                return crate::abi::EXIT_NEED_INPUT as i64;
+            }
+            let out = match drive(player_id, body) {
                 Ok(()) => 0,
                 // Asked: the host reads the published question and re-runs us
                 // with the answer. The old `EXIT_NEED_INPUT` trap, as a return
                 // value.
                 Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+            };
+            // A body that parked a host request keeps its frame up: the host
+            // settles what it caused on that stack and re-enters us.
+            if out != crate::abi::EXIT_NEED_INPUT as i64 {
+                crate::ctx::body_leave();
             }
+            out
         }
-        (On::Action(e), _) => match (e.drive)(player_id, e.body) {
-            Ok(()) => 0,
-            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
-        },
+        (On::Action(e), _) => {
+            let cid = card(bands, idx).id;
+            let entered = crate::ctx::body_enter(cid);
+            if entered == 0 {
+                return 0;
+            }
+            // The frame's `cardFired` raise asked: halt here, and pop the
+            // frame before the host re-runs us with the answer.
+            // Asked: the frame stays up (the host settles the effects on it
+            // and re-enters us), so no `body_leave` here.
+            if entered == crate::abi::EXIT_NEED_INPUT {
+                return crate::abi::EXIT_NEED_INPUT as i64;
+            }
+            let out = match (e.drive)(player_id, e.body) {
+                Ok(()) => 0,
+                Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+            };
+            // A body that parked a host request keeps its frame up: the host
+            // settles what it caused on that stack and re-enters us.
+            if out != crate::abi::EXIT_NEED_INPUT as i64 {
+                crate::ctx::body_leave();
+            }
+            out
+        }
     }
 }
 
@@ -444,10 +485,6 @@ macro_rules! ruleset {
 
 /// Exports for a module holding exactly one card (the normal layout).
 ///
-/// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract).counter_reason(key!("yolo_when"))]);
-/// card_sdk::ruleset_card!(CARD);
-/// ```
 #[macro_export]
 macro_rules! ruleset_card {
     ($card:expr) => {

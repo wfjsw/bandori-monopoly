@@ -23,14 +23,12 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(Action::TurnStartBefore("", None, declare_cap)).silent(),
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
-        On::Action(Action::Pass(
-            bandori_std::guards::OWN_START,
-            None,
-            on_pass)),
+        On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
         On::Action(Action::DiceRollAfter(
-            card_sdk::pre::MINE,
+            card_sdk::condition::MINE,
             None,
-            on_roll)),
+            on_roll,
+        )),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
         On::Schedule("settle_now", "owner.pos >= 0", None, settle_now),
@@ -87,7 +85,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「消耗1火罐清除自身一层[停留]」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
+    if !bandori_std::fire::spend_skill(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
         return Ok(());
     }
     ctx::state::add(player_id, state_key::STAY, -1);
@@ -95,12 +93,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （3）「并在回合结束时触发结算」 -- `H.SettleAt` on the square the player is
-/// standing on (`docs/TILES.md`: a scheduling clause, not an engine counter).
 /// Standing on a square is the entry's condition (`owner.pos >= 0`).
 fn settle_now(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
-    ctx::card_settle_at(player_id, at, false);
+    ctx::settle_tile_at(player_id, at, false);
     Ok(())
 }
 

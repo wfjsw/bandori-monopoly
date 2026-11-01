@@ -26,7 +26,9 @@ fn arg(name: &str, env: &str, default: &str) -> String {
 
 #[tokio::main]
 async fn main() {
-    let port: u16 = arg("--port", "PORT", "8081").parse().expect("port must be a number");
+    let port: u16 = arg("--port", "PORT", "8081")
+        .parse()
+        .expect("port must be a number");
     let host = arg("--host", "BM_HOST", "127.0.0.1");
     let data_dir = PathBuf::from(arg("--data", "BM_PROFILE_DATA", "data/profile"));
     let static_dir = PathBuf::from(arg("--static", "BM_STATIC", "webui/dist"));
@@ -40,7 +42,8 @@ async fn main() {
         eprintln!("BM_PROFILE_SECRET={secret}");
     }
 
-    let store = Store::open(&data_dir).unwrap_or_else(|e| panic!("cannot open {}: {e}", data_dir.display()));
+    let store = Store::open(&data_dir)
+        .unwrap_or_else(|e| panic!("cannot open {}: {e}", data_dir.display()));
     eprintln!("profile data: {}", data_dir.display());
     let app = Arc::new(App {
         store,
@@ -54,7 +57,10 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .expect("bind");
-    eprintln!("profile server listening on {}", listener.local_addr().expect("local addr"));
+    eprintln!(
+        "profile server listening on {}",
+        listener.local_addr().expect("local addr")
+    );
     axum::serve(listener, router)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;

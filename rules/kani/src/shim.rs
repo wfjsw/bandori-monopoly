@@ -64,7 +64,7 @@ macro_rules! guard_assumed {
         }
         #[cfg(not(kani))]
         {
-            let _ = ($cond, $why);
+            let _ = ($cond, $reason);
         }
     }};
     ($cond:expr) => {

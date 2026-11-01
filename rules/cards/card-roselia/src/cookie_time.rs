@@ -1,4 +1,3 @@
-//! `R:曲奇时间` -- C# `CardCookieTime` (MatchHost.cs:10423-10445): shuffle the
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:曲奇时间`）:
 //! > 曲奇时间：
@@ -23,12 +22,8 @@ pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", S
             .fields(&[("group", r#"Roselia"#), ("owner", "")]),
     );
 
-/// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 -- nothing to return when the
-    // discard pile is empty (C# `H._hidden[player_id].discard.Count != 0`).
-    // TODO(规则书)（将自己弃牌堆的卡全部返回抽牌堆并洗切）: 书中没有出牌条件 -- 弃牌
-    //   堆为空时整张卡被拒，X=0 根本打不出（C# WhyNot 沿用，同 LOY-TSUGU-01）.
+    // TODO(规则书)（将自己弃牌堆的卡全部返回抽牌堆并洗切）:
     if ctx::discard_size(player_id) == 0 {
         return Some(Msg::new(key!("cookie_time_no_discard")));
     }
@@ -36,10 +31,6 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 -- C#
-    // `H.ShuffleAllIntoDeck(i, hand: false, discard: true)`.
-    // 规则书: 「获得500*X资金，X为返回卡的总数」 -- X is `hidden.discard.Count`
-    // before the shuffle (C# `CardCookieTime.Play`).
     let x = ctx::discard_size(player_id);
     // The played card is already out of the hand; the engine discards it only
     // after this effect resolves, so it is not part of this shuffle or payout.
@@ -51,13 +42,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("n", x as i64),
     );
     // 规则书: 「获得500*X资金，X为返回卡的总数」
-    ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")))?;
-    // 规则书: 「并洗切」 -- `shuffle_into_deck` does the shuffle and raises
+    ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_reason")))?;
+    // TODO(规则书)（并洗切）: 规则书: 「并洗切」 -- `shuffle_into_deck` does the shuffle and raises
     // `reshuffled` from the host on commit; listener cards declare
     // `On::Action(&[ActionKind::Reshuffled], "", Some(...))` and get the
     // notification without any card-side raise.
-    // TODO(规则书)（并洗切）: 书中只说洗切，没说洗切会通知 Reshuffled 监听 -- 通知是
-    //   C# `H.Each((Fx f) => f.Reshuffled(i))`，现在由引擎 commit 抬事件.
     Ok(())
 }
 

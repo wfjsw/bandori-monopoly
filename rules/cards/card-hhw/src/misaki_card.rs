@@ -1,4 +1,3 @@
-//! `HHW:（美咲）` -- C# `CardMisakiCard` (MatchHost.cs:4387-4461): [反击] a fire-pot
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（美咲）`）:
 //! > （美咲）[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。
@@ -18,16 +17,12 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         &[ChainKind::DiceRollResult],
         // 规则书[反击]: 「触发结算前可打出此卡」 -- the window is the
         // `diceRollResult` timing, after the roll and before the settle.
-        // 「使用火罐进行移动掷骰后」 -- the [火罐] roll is meant to be card-owned
-        // state: the fire reroll is meant to tag it (`plan::set_tag("fireRoll", 1)`)
-        // and readers ask `move.tag`.
+        // 「使用火罐进行移动掷骰后」 -- the fire recast stamps the transaction
+        // with `roll_source::CHARGE` (the layer-keep die bank), which reaches
+        // this Result window as `roll_source == 1`.
         // 规则书: 「位于你的移动起点与预定移动终点之间」 -- `between(owner) > 0`
         // (there must be a rival to teleport to).
-        // TODO(规则书)（使用火罐进行移动掷骰后）: the book conditions on the fire-pot
-        //   roll -- no shipped producer tags the move `fireRoll` (only the
-        //   `TEST:fireRoll` fixture does) and `roll_source` never reaches this
-        //   trigger, so this pre reads 0 in every real game.
-        "actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0",
+        "actor == owner && roll_source == 1 && between(owner) > 0",
         None,
         counteract).counter_reason(key!("misaki_card_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -38,8 +33,6 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // sheet cell F15
         .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 
-/// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
-/// in the direction the move actually travels (`t.Move.Dir`).
 fn between(player_id: i32) -> Vec<i32> {
     let Some(roll) = trigger::move_roll() else {
         return Vec::new();
@@ -55,10 +48,6 @@ fn between(player_id: i32) -> Vec<i32> {
     ctx::others(player_id)
         .into_iter()
         .filter(|&p| {
-            // 规则书: 「位于你的移动起点与预定移动终点之间」 -- the span is the
-            // rolled distance in the direction actually travelled (C# `H.Forward`
-            // is the forward distance around the ring, mirrored when the move is
-            // backwards).
             let fwd = ctx::tile_forward(start, ctx::player_pos(p));
             let d = if backward { (n - fwd) % n } else { fwd };
             // TODO(规则书)（预定移动终点）: 「之间」 may exclude the planned end --
@@ -70,55 +59,42 @@ fn between(player_id: i32) -> Vec<i32> {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && move.tag('fireRoll') != 0 && between(owner) > 0` is
-    // the pre.
+    // `actor == owner && roll_source == 1 && between(owner) > 0` is the pre.
     let list = between(player_id);
-    // 规则书[反击]: 「使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子」
-    // -- C# `H.AskSeat(i, "另一个我", ..., list)`.
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("misaki_card_title")),
         &Msg::new(key!("misaki_card_ask")),
         &list,
     )?;
-    // 规则书[反击]: 「消耗所有火罐」 -- C# `H.SpendFire(i, H.Fire(i), "（美咲）")`.
     let fire = bandori_std::fire::total(player_id);
     if fire > 0 {
         bandori_std::fire::spend(player_id, fire, &Msg::new(key!("misaki_card_pay")))?;
     }
     // 规则书[反击]: 「传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算」
     let to = ctx::player_pos(who);
-    // C# `m.Cancelled = true` -- only the trigger link is negated; the roll site
-    // reads `t.value` only, so the original walk still runs (see the TODO).
-    // TODO(规则书)（并触发结算（视为你的主要移动））: the book makes the teleport the
-    //   move -- the rolled walk is voided, the piece goes to the chosen tile and
-    //   settles there; we neither cancel the walk nor teleport (below).
+    // TODO(规则书)（并触发结算（视为你的主要移动） ）: the book makes the teleport the move -- the
+    // rolled walk is voided, the piece goes to the chosen tile and settles there; we
+    // neither cancel the walk nor teleport (below).
     trigger::set_cancelled();
-    // C# `H.TeleportMove(m2)` with `TeleportTo = to`, `Resolve` default true,
-    // `Main = m.Main` (「视为你的主要移动」).
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(to);
-    ctx::plan::set_resolve(true);
-    // 规则书[反击]: 「（视为你的主要移动）」 -- C# `m2.Main = m.Main`.
-    // TODO(规则书)（视为你的主要移动）: `card_move` runs as a *main* move while the
-    //   turn's main move already latched `main_moved` before this mid-roll window,
-    //   so the engine refuses it and drops `teleport_to`: the teleport never
-    //   happens.
-    ctx::card_move(player_id);
+    ctx::plan::set_settles(true);
+    // TODO(规则书)（视为你的主要移动）: `run_planned_move` runs as a *main* move while the turn's main
+    // move already latched `main_moved` before this mid-roll window, so the engine
+    // refuses it and drops `teleport_to`: the teleport never happens.
+    ctx::run_planned_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("misaki_card_moved"))
             .player_id("who", player_id)
-            // The refused `card_move` can leave the piece elsewhere: log where it
+            // The refused `run_planned_move` can leave the piece elsewhere: log where it
             // actually is, not the chosen destination.
             .tile("tile", ctx::player_pos(player_id)),
     );
     if ctx::player_out(player_id) {
         return Ok(());
     }
-    // 规则书[反击]: 「随后那格及相邻2格上的所有其他玩家[支付]你500资金」 -- C#
-    // `H.PayR(item, i, 500, "（美咲）", i)` for every `H.Others(i)` on tiles
-    // `to-2 ..= to+2` of the 60-tile ring.
     let n = ctx::tile_count();
     if n <= 0 {
         return Ok(());

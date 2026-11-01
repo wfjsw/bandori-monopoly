@@ -15,22 +15,23 @@ recorded.
 ## Review order and collisions
 
 Every document was written against the same base (ABI v104, `SAVE_VERSION` 12,
-engine kinds ending at 110, Kani `Op` ending at 340). Each draft originally
-reached for the same next numbers, so the band below is allocated **once, in
-landing order**, and the documents carry their row of it. Take these numbers;
-renumber only if the order actually changes, and then shift the whole table.
+`RECORD_VERSION` 4, engine kinds ending at 110, Kani `Op` ending at 340). Each
+draft originally reached for the same next numbers, so the band below is
+allocated **once, in landing order**, and the documents carry their row of it.
+Take these numbers; renumber only if the order actually changes, and then shift
+the whole table.
 
 | group | `ABI_VERSION` | `SAVE_VERSION` | engine kinds | Kani `Op` |
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
-| G01 | 104→105 | 12 | 111–113 | — |
-| G08 | 105→106 | 12→13 | 114–121 | — |
-| G02 | 106→107 | 13 | 122 | 341–350 |
-| G04 | 107→108 | 13 | — | 351–370 |
-| G03 | 108→109 | 13→14 | 123–125 | — |
-| G06 | 109→110 | 14→15 | — | 371–390 |
-| G05 + G13 | 110→111 | 15→16 | — | 391–400 |
-| G07 | 111→112 | 16 | — | 401–410 |
+| G01 | 104→105 | 12 | 111–112 | 341–346 |
+| G08 | 105→106 | 12→13 | 113–120 | 349–368 |
+| G02 | 106→107 | 13 | 122 | 369–377 |
+| G04 | 107→108 | 13 | — | 378–397 |
+| G03 | 108→109 | 13→14 | 123–125 | 398–410 |
+| G06 | 109→110 | 14→15 | — | 411–430 |
+| G05 + G13 | 110→111 | 15→16 | — | 347–348, 431–440 |
+| G07 | 111→112 | 16 | — | 441–450 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
 | G11 | 114→115 | 17→18 | 132–133 | — |
@@ -40,6 +41,27 @@ renumber only if the order actually changes, and then shift the whole table.
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
 
+**2026-10-31 amendment.** The original table filled Op numbers only from G02
+onward and gave G01/G08 no Op row at all, although G01's revised draft imports
+functions and G08's imports twenty. G01's review then dropped its `Actions`
+offer kind in favour of G05's press surface, and a second review split two
+concerns out of G01 — `real_id` to G05 and `created_by` to G08 — because they
+are offer/skin and zone lifecycle, not identity. G01 keeps six ops (341–346)
+and its two kinds (111–112); the vacated ids sit with their new groups
+(G05 347–348, G08 349) so no later band moves for them. Recounted from base
+340 in landing order, G08's twenty imports take 349–368 and every group from
+G02 on shifts ten; kind 121 stays free, which costs nothing. `SAVE_VERSION`
+stays at the value G08 landed (13) — the base column above
+records the *pre-landing* value each document was written against, which is
+why G15/G01 say 12.
+
+**2026-10-31 second amendment (G03).** The G03 review found the draft asked
+for eight roll imports plus `trig_roll` while its Op row was still `—`. G03
+takes 398–406 (nine). At landing the two 「是否触发结算」 answer pairs
+(§4.7's four ops) joined the same band: G03 takes **398–410** (thirteen),
+and every group after it shifts thirteen: G06 411–430, G05+G13 431–440,
+G07 441–450. G04's landed 378–397 is untouched.
+
 Recommended landing order (foundation → dependent):
 
 1. **G15** Kani host — model-only, no version change.
@@ -47,7 +69,7 @@ Recommended landing order (foundation → dependent):
 3. **G08** zone lifecycle — the single zone writer, instance state, leave hooks.
 4. **G02** pay pipeline — payload/stage seams consumed by G09/G10/G12.
 5. **G04** move plan — plan frames and the blocked predicate.
-6. **G03** roll pipeline — stage ladder; reserves the 111+ kind band.
+6. **G03** roll pipeline — the cast ladder over G04's frame; kinds 123–125.
 7. **G06** counteraction/join — depends on G01 payload and G03 kinds.
 8. **G05 + G13** press/invoke — must land together (one `invoke_entry` shape).
 9. **G07** targeting — depends on G01 identity and G06 window.
@@ -61,8 +83,15 @@ Couplings a reviewer must keep in one head:
 
 - **G05 ↔ G13** share `invoke_entry` and the press-entry resolution; G05 adopts
   G13's import verbatim.
-- **G01 ↔ G08** share instance uid and the per-instance store.
-- **G02 ↔ G10** share the settle frame and its outcome facts.
+- **G01 ↔ G08** share instance uid and the per-instance store; G08 also
+  carries the creator edge (`created_by`) that G01's borrowed-row hooks rely
+  on.
+- **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
+  settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
+  `paid`/`body_replaced` facts on top (G02 §12).
+- **G03 ↔ G04** share the window raise point: G04 owns the plan snapshot/fold,
+  G03 raises every roll window inside it and hands the plan-write item (G03
+  item 7) to G04 §4.3.
 - **G03 ↔ G11** share the drawAfter point; their kind bands are adjacent.
 - **G06 ↔ G12** share pending-window reads.
 - **G04 ↔ G12** share the blocked predicate (`cant_move_code_for_activation`).
@@ -72,14 +101,14 @@ Couplings a reviewer must keep in one head:
 
 | group | title | items | doc |
 |---|---|---|---|
-| G01 | Instance identity and per-instance store | 3 | [G01](G01-instance-identity-and-state.md) |
+| G01 | Instance identity and per-instance store | 10 | [G01](G01-instance-identity-and-state.md) |
 | G02 | Pay pipeline payload, stages and raw-money windows | 7 | [G02](G02-pay-pipeline.md) |
 | G03 | Roll pipeline stages and prompt option actions | 5 | [G03](G03-roll-and-prompts.md) |
 | G04 | Move plan, walk sync and forced moves | 7 | [G04](G04-move-plan.md) |
-| G05 | Press surface for placed cards | 1 | [G05](G05-placed-card-press.md) |
+| G05 | Press surface for placed cards | 2 | [G05](G05-placed-card-press.md) |
 | G06 | Counteraction, join and negation windows | 6 | [G06](G06-counteraction-and-join.md) |
 | G07 | Targeting pipeline and distance | 2 | [G07](G07-targeting-and-distance.md) |
-| G08 | Zone and attachment lifecycle | 10 | [G08](G08-zone-lifecycle.md) |
+| G08 | Zone and attachment lifecycle | 11 | [G08](G08-zone-lifecycle.md) |
 | G09 | Tile, build, pass and house-removal hooks | 6 | [G09](G09-tile-build-pass.md) |
 | G10 | Effect outcome, cause and settle facts | 5 | [G10](G10-effect-outcome.md) |
 | G11 | Information and deck inspection | 3 | [G11](G11-information-and-deck.md) |
@@ -144,7 +173,7 @@ map (consolidated → slugs the document names):
 | `plan-shape-scope` | `pure-wings-stale-steps`, `pure-wings-stale-direction`, `pure-wings-pay-factor-leak`, `saki-move-leaks-plan-shape`, `dg-plan-reset`, `sakiko-pay-factor-composition`, `repaint-pay-factor`, `taki-pay-factor-leak`, `rana-pay-factor-multiply` |
 | `charity-rolled-flag` | `charity-dice-move-gate` |
 | `plan-live-sync` | `charity-extra-steps-sync`, `detour-plan-writes-lost`, `misaki-effective-steps` |
-| `effect-move-forced-path` | `sakiko-followers-card-move`, `misaki-teleport`, `fate-forced-hop`, `plan-set-forced` |
+| `effect-move-forced-path` | `sakiko-followers-card-move`, `misaki-teleport`, `dest-forced-hop`, `plan-set-forced` |
 | `trigger-walk-payload` | `detour-parity-unused`, `misaki-planned-start`, `misaki-fire-roll-signal` |
 | `nested-teleport-tail` | `lisa-bond-nested-teleport-window` |
 | `press-surface-placed-card` | `kanon-press-surface-abi`, `even-lost-not-pressable`, `placed-card-press-surface`, `hina-clause-2-swap-missing` |
