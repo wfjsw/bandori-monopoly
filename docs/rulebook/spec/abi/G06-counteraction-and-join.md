@@ -242,10 +242,12 @@ high-severity `:65` entry and `:105`). `ctx::turn_key()` names the turn but
 cannot rebuild the set (`BACKLOG ABI-03`).
 
 The `On::Play` and `On::Counteract` entries share `run`
-(`cant_look_away.rs:17`, `:26-30`) with no way to say "the target set is the
+(`cant_look_away.rs:13-30`) with no way to say "the target set is the
 history, not the actor", so the fix invents one. The self-move clause
-(「若使用者在自身回合内选择了使用者自己…」) is unreachable until the set
-exists.
+(「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」)
+adds a second thing the set lacks: the caster is never in their own counterer
+list, so the body has to offer themselves as an extra option and, when taken,
+run that seat's move as the main move (§6.9).
 
 ### 2.9 `mana-nested-window` — Sumimi:（真奈）歌唱大赛5连冠, rows 845, 1090
 
@@ -347,12 +349,15 @@ settle answer is G03 §4.7's.
 
 `run` is a bare log (`mortis_instinct.rs:45-56`): no play-history scan, no
 placed-card filter, no execution of the copied card's effect (`CARD-REVIEW`
-§`表演的本能`, the `:50` entry). The B half of 2.6: the entry declares
-`copies_previous`, the matcher's `counteract_entry` walks the play history
-back to the most recent other player's non-placed card, resolves **its**
-Counteract entry for the link (with its own contract) and sets
-`link.copied`; the copied body runs, `trigger::link_copied()` naming the
-source, and mortis's own `run` is deleted. Which card was copied and its
+§`表演的本能`, the `:50` entry). The B half of 2.6: a **play record** (`card`, `player`, `placed`, §5.6) is
+appended after every card play; the entry declares `copies_previous`; on a
+counter link the matcher walks the record back to the most recent other
+player's non-`placed` card, resolves **its** Counteract entry (with its own
+contract) and sets `link.copied`; the copied body runs, `link_copied` naming
+the source. On the **play** entry the same record drives `ctx::play_card` on
+the copied card with `link_copied` set, so the play half copies too. The
+`placed` flag is captured during the play (the placement host functions set
+it) and is the only reading of 「不计入效果带有放置于场上的卡」. Which card was copied and its
 memory is the CH-05 question and is read, not decided, here; the `all_kinds`
 fallback of 2.6 stands for a link whose copy is unresolvable.
 
@@ -645,7 +650,24 @@ pub struct CounteractRecord {
     pub countered: i32,
     pub card: String,
 }
+
+// World, beside `countered_this_turn`: the play log mortis reads (§2.15).
+// Capped at the most recent `MAX_PLAY_LOG` entries (open question, §11).
+#[serde(default)]
+pub played_cards: Vec<PlayRecord>,
+
+pub struct PlayRecord {
+    pub card: String,
+    pub player: i32,
+    /// The play's effect placed a card on the field (excluded from a copy).
+    pub placed: bool,
+}
 ```
+
+The record is appended when a card play completes, from a
+`placed_during_play` flag the placement host functions arm (a `PlayCtx`
+field, reset per play). It is **not** cleared at `turn_start`: 「上一张卡」
+has no turn bound.
 
 `World::reset_countered(&mut self) { self.countered_this_turn.clear(); }` is
 called from `turn_start` (`play.rs:733`, beside `reset_gains`).
@@ -667,7 +689,7 @@ called from `turn_start` (`play.rs:733`, beside `reset_gains`).
 | 11 | `pending_negation` | `NEGATES` | `ManifestOn.answer_effect` | |
 | 12 | `join::designation`, `TriggerJoin.designated` | `DESIGNATES` usage, join record | | |
 | 13/14 | `abnormalRefused` (engine kind 121, hook-only) | `abnormal_gate` order | engine kind 121 | |
-| 15 | `trigger::link_copied`, link `copied`, `copies_previous` | `counteract_entry` | `ManifestOn.copies_previous` | |
+| 15 | `trigger::link_copied`, link `copied`, `copies_previous`, `PlayRecord` | `counteract_entry`, `ctx::play_card` | `ManifestOn.copies_previous` | (save) |
 
 **The wire break is the five trailing `ManifestOn` fields** (postcard, not
 self-describing). The imports alone would not need a bump; the manifest shape
@@ -921,10 +943,16 @@ joiner) before the offer, so a guard written as "I am the designated target"
 passes (`net_error.rs:60-65`). `by_card` stays the play's causer, so
 「来自你以外」 keeps reading the causer. The answered link's `target` is
 saved before the round and restored after it, so the committed effect still
-aims at the real recipient.
+aims at the real recipient. 「对应目标」 is the player target: the joiner is
+ever presented as `link.target`, and a tile-shaped effect keeps its original
+`link.tile` (`ctx::effect::tile` still reads it) — whether a joiner should
+present a corresponding tile of their own is §11 question 9.
 
 **Shielding and designation.** `join::shield()` is always applied and
-idempotent: it marks `used[k]` for the running seat and answers `true`. A
+idempotent: it marks `used[k]` for the running seat and answers `true`. The
+mark is the joiner's claim that **this** counter saved the opener (「免于受到
+该影响」): a joiner that cancels something else keeps its declaration count
+but does not shield and draws nothing. A
 joiner's `ctx::cancel_designation(seat)` records `designated[k] = seat` when
 the current body answers a join link (the host function already reaches the
 current link; see G03's `cancel_designation` note). Nothing else is
@@ -1077,10 +1105,14 @@ factor uses G04's `ctx::plan::multiply_pay_factor(500, PayFactorScope::ThisMove)
 (`:84`), which composes, so two repaints stack through the plan frame.
 
 **`Mujica:无法将视线移开`** (`cant_look_away.rs`) — `run` (`:53`) takes
-`ctx::countered_by_this_turn(player_id)` as its target set and returns when
-it is empty (`:65`, `:73-75`); the `target == owner && actor != owner`
-condition stays for the counter entry, and the self-move clause reads
-`ctx::player_id()` from the same list. The `On::Play` entry stops being dead.
+`ctx::countered_by_this_turn(player_id)` as its target set; when the set is
+empty **and** the caster cannot choose themselves it returns (`:73-75`). The
+ask gains the caster as one more selectable seat (the clause's 「选择了使用
+者自己」): when the caster is picked, that seat's forced move runs with
+G04's main-move flag (`is_main_move`, and `skip_move` cleared), each pick is
+resolved through `ctx::move` plus the settle tail, and the `target == owner
+&& actor != owner` condition stays for the counter entry. The `On::Play`
+entry stops being dead.
 
 **`Sumimi:（真奈）歌唱大赛5连冠`** (`mana_champion.rs`) — the body becomes
 the `open` / report / fallback block of §6.4; `designation_cancelled`
@@ -1118,10 +1150,16 @@ now guaranteed to be one.
 copied benefits from the contract fields without change (the matcher asks the
 source card's entries with the source's own contract).
 
+**Every join-capable counter** — a body that targets the joiner on purpose
+must send that leg through `ctx::join::opener()` when one is set (the
+clause's 「改为你」). Today that is `网络链接异常`; `宣战布告`'s designation is
+the causer and needs nothing. §9.3's sweep asserts that every Counteract
+entry whose body calls `ctx::target(player_id)` also consults `join::opener()`.
+
 ## 7. Save, record and replay
 
 * **SAVE_VERSION 14 → 15** (the next free value). `World.countered_this_turn`
-  is durable turn state. The field is `#[serde(default)]`, so a v14 save
+  and `World.played_cards` are durable state (the latter capped). The field is `#[serde(default)]`, so a v14 save
   loads with an empty history; replays ride archived bundles anyway.
 * **RECORD_VERSION stays 4.** No input-stream shape changes; the record's
   `EngineStamp.save_version` moves with `SAVE_VERSION`.
@@ -1147,8 +1185,8 @@ entry (`abi.rs:803-815`):
 ///    `answer_effect` / `all_kinds` / `copies_previous` fields -- postcard is not
 ///    self-describing, so **that** is the wire break. An empty `links` list
 ///    on a Counteract entry now means every chain kind (`all_kinds`) instead
-///    of never, and `copies_previous` dispatches the copied card's entry
-///    (mortis). New `prop::RANGE_CARD`; new imports
+///    of never, and `copies_previous` dispatches the copied card's entry and
+///    play body (mortis), read from `World.played_cards`. New `prop::RANGE_CARD`; new imports
 ///    `ctx::join::{opener,seats,shield,open,opened,joiner_count,joiner,
 ///    joiner_shielded,designation}`,
 ///    `trigger::{pending_negation,extreme_armed,subject_card,link_copied,
@@ -1160,7 +1198,7 @@ entry (`abi.rs:803-815`):
 ///    an alias of `ctx::join::shield`. New hook-only engine kind 121
 ///    (`abnormalRefused`, raised on an abnormal the gate or `immuneAll`
 ///    refused; no window opens on it). SAVE_VERSION 14 -> 15
-///    (`World.countered_this_turn`); RECORD_VERSION unchanged.
+///    (`World.countered_this_turn`, `World.played_cards`); RECORD_VERSION unchanged.
 ```
 
 Band arithmetic from the README: G06 lands `ABI_VERSION` 111→112, engine
@@ -1218,8 +1256,11 @@ including the designates fallback under both shapes.
 A `ruleset-tests` test (not a compiler check; the body is erased) walks every
 `On::Counteract` entry whose body text calls `trigger::set_cancelled` /
 `negate_effect` / `spare` and asserts `.declares_negation()`; and every entry
-with a numeric body (`set_extreme`) asserts `.arms_extreme()`. The source is
-read from `rules/cards/*/src/*.rs` text, keyed by card id.
+with a numeric body (`set_extreme`) asserts `.arms_extreme()`; and every
+`On::Counteract` body that calls `ctx::target(player_id)` (a self-targeted
+leg) asserts a `join::opener()` consult in the same body (the 「改为你」
+redirect, §6.9, §13.1). The source is read from `rules/cards/*/src/*.rs`
+text, keyed by card id.
 
 ### 9.4 Kani obligations
 
@@ -1317,6 +1358,21 @@ explicit flag also keeps `entry_iter` generic. Rejected for one wire byte.
 8. **Join depth cap.** A nested join is allowed and bounded by
    `MAX_COUNTERACT_DEPTH`; whether the book intends a joiner to open a join
    of its own is unruled.
+9. **「对应目标」 for a tile-shaped effect.** The joiner is presented as the
+   player target; should the window also present a corresponding tile of
+   their own (and which one) for guards that read `ctx::effect::tile`?
+10. **Fallback scope (10).** 「没有人在此卡的效果期间打出」 — do counters
+    declared against the same link *before* 真奈 count as played during its
+    effect? Design counts only window joiners.
+11. **Rain's mandatory user.** When the user refuses the designation
+    (`rain.rs:35-38`), are they still required (`ctx::target` again), or is
+    the card played with `X - 1` picks? Design accepts the refusal today.
+12. **Mortis play-log retention.** 「上一张卡」 has no turn bound, so
+    `played_cards` must outlive the turn; how many entries, and may a copy
+    reach past an intervening placed card? (CH-05.)
+13. **Tsugumi on skill effects.** 「任意…效果」 has no source restriction,
+    but the `effect` window exists only on `Card` and `Event`; do skills
+    need their own raise here?
 
 ## 12. Necessity
 
@@ -1463,3 +1519,125 @@ The honest counter-arguments, and their answers:
 * *"Defer the copy (15)."* Legitimate: 15 is the only item whose memory rule
   is undecided (CH-05). Striking it leaves 6 as the A matcher and costs the
   `copies_previous` field and the `link_copied` reader, nothing else.
+
+## 13. Clause match
+
+Every affected card is quoted clause by clause — the numbered branches the
+book itself uses are kept — and each clause is matched to the design element
+that satisfies it, the place it is tested, and a verdict. A verdict of
+**matched** means the clause is expressible exactly and pinned by a test;
+**matched, assumption** means the design has to read an unruled detail and
+§11 carries it; **was gap** means this pass found the design short and the
+fix is now in the body. Clauses of cards only touched by an item's
+prerequisite (the extreme, the history) are included because the design
+changes how they are offered.
+
+### 13.1 `Sumimi:（真奈）歌唱大赛5连冠` (items 1, 2, 9, 10)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「当你或你的格子即将受到来自你以外的效果影响时打出此卡」 | existing entry kind `Effect` and condition (`mana_champion.rs:24-34`); untouched | `c22` | matched |
+| 2 | 「此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡」 | the join window: `join.open` over the live non-opener seats, each offered with `link.target = cursor` (§6.4) | `join_window_offers_a_single_target_effect`, `join_offers_no_seat_twice` | matched, assumption (tile-shaped targets: §11.9) |
+| 3 | 「且其反击卡中针对打出玩家自身的效果改为你」 | `join::opener()`; the body redirects its self-targeted leg; the table sweep enforces the redirect (§6.9) | `join_designation_is_readable` | matched |
+| 4 | 「若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽一张卡」 | `used` is the joiner's `shield()` claim after the cancel; the opener asks each shielded joiner with `ask_yes` and draws for it (§6.4) | `join_draw_belongs_to_the_opener`, `join_draw_is_optional_per_joiner` | matched |
+| 5 | 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡」 | `joiner_count()` — declarations in this window, negated ones included | `fallback_draw_bars_on_a_missed_joiner` | matched, assumption (pre-window counters: §11.10) |
+
+### 13.2 `通用:网络链接异常` (items 1, 2, 9, 12)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」 | existing guard and body (`net_error.rs:44-54`, `:85-102`); rain now reaches clause 1 through `DESIGNATES` | `rain_designations_reach_net_error` | matched |
+| 2 | 「手卡的[手]效果且没有[指定]目标则抵消其所有的效果」 | existing `_ =>` fall-through for the no-designation case | existing `general` suites | matched |
+| 3 | 「事件卡的效果则抵消其所有的效果」 | existing `Event` arm (`net_error.rs:74-80`) | existing `general` suites | matched |
+| — | 「（改为你）」 under a join | `cancel_designation(opener)` + `shield()` (§6.9) | `join_designation_is_readable` | matched |
+
+### 13.3 `AG:（鸫）微小的『能做到』的事` (items 3, 4)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1a | 「使任意结果只有数字区间的效果」 | `NumericShape::NumberInterval` keyed on the subject's `prop::RANGE_CARD` (§5.1, §6.1) | `tsugumi_not_offered_on_sunset`, matrix | matched |
+| 1b | 「以理论最大值或最小值结算」 | `set_extreme` pick unchanged (`tsugumi_can.rs:99-108`) | `tiny_can_pick_counter_forces_the_roll_only`, `tsugumi_offered_on_yolo_and_forces_the_extreme` | matched |
+| 1c | 「除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对…夕阳生效）」 | ycm declares `RANGE_CARD` (a legal target); sunset does not; YOLO does | `tsugumi_offered_on_ycm`, `tsugumi_not_offered_on_sunset` | matched, assumption (§11.4) |
+| — | 「打出此卡时，选择其中一个效果发动」 | existing pick slot; unchanged | `tiny_can_asks_which_effect_at_play` | matched |
+
+### 13.4 `AG:Y.O.L.O`, `通用:@Tsugu ycm`, `AG:无论是何种颜色的夕阳` (item 3)
+
+| card | clause | design element | verdict |
+|---|---|---|---|
+| YOLO | additive interval (`yolo.rs:48`) | `RANGE_CARD` declared | matched |
+| ycm | `3d10` interval | `RANGE_CARD` declared | matched |
+| sunset | table `1d6` | no `RANGE_CARD` | matched |
+
+### 13.5 `CRYCHIC:主唱太拼命了` (item 5)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「一次性向其他玩家支付至少5000资金时」 | `AnswerPayShape::Whole` reads `pay.total_stage`; the 5000 threshold and the other-player condition stay in the condition (`vocal_too_hard.rs:28`) | `vocal_not_offered_on_a_split_leg`, `vocal_offered_on_a_whole_transfer` | matched |
+| 2 | 「免除此次支付」 | existing body | existing `crychic` suites | matched |
+
+### 13.6 `Mujica:（睦/mortis）表演的本能` (items 6, 15)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「此卡打出时效果为场上其他玩家打出的上一张卡」 | `PlayRecord` log + `ctx::play_card` on the copy with `link_copied` (§2.15, §5.6) | `mortis_plays_the_copied_entry` | was gap (play half now specified) |
+| 2 | 「不计入效果带有放置于场上的卡」 | the record's `placed` flag, armed by the placement host functions | `mortis_plays_the_copied_entry` | was gap (record field added) |
+| 3 | 「此卡复制[反击]卡时可在符合条件时打出」 | empty `links` = every kind (`all_kinds`) + `copies_previous`; the copied entry's own contract decides | `mortis_empty_links_match_every_kind` | matched |
+
+### 13.7 `RAS:Repaint` (item 7)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡」 | unchanged condition; the payload carry-forward makes `move.roll` present on a chain | `repaint_cuts_a_roll` | matched |
+| 2 | 「使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数」 | the counter's declaration clone freezes the face, so `on_path` counts the original path; the write lands on the link and on the roll link (§6.3) | `repaint_answers_yolo_and_the_cut_composes` | matched |
+| 3 | 「对方此次结算的支付减半」 | `plan::multiply_pay_factor(500, ThisMove)` (`repaint.rs:84`) | `repaint_contract` | matched |
+
+### 13.8 `Mujica:无法将视线移开` (item 8)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「使当前回合内对你打出过[反击]的所有玩家」 | `World.countered_this_turn` + `ctx::countered_by_this_turn` (§6.5) | `cant_look_away_moves_every_counterer_this_turn` | matched |
+| 2 | 「向你选择的方向强制移动1~4以内的任意步数并[触发结算]」 | existing ask and move/settle body | existing `mujica` suites | matched |
+| 3 | 「（此卡可作为[反击]在有玩家对你使用[反击]后立即使用）」 | existing counter entry kinds (`:26-30`) | existing `cross_chain` cases | matched |
+| 4 | 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」 | the caster offered as an extra target; that move runs as the main move (G04's `is_main_move`, `skip_move` cleared) (§6.9) | `counter_history_is_empty_next_turn` | was gap (self option and main-move flag added) |
+
+### 13.9 `Sumimi:现在她是Sumimi的小初啦` (item 11)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「失去资金的总额即将超过你所在格子的[收费标价]时」 | `trigger::pending_negation() == 0` in the guard, so a declared negation suppresses the offer | `now_sumimi_not_offered_after_a_declared_cancel` | matched |
+| 2 | 「获得相当于…[收费标价]数额的资金（RiNG则为其基础乘数）」 | existing body | existing `sumimi` suites | matched |
+
+### 13.10 `通用:雨啊，快点来吧` (item 12)
+
+| # | clause | design element | test | verdict |
+|---|---|---|---|---|
+| 1 | 「投掷2d2并记录结果为X」 | existing roll | existing `general` suites | matched |
+| 2 | 「[指定]X名玩家」 | `rain.rs` loop; `designations` now readable through `DESIGNATES` | `rain_designations_reach_net_error` | matched |
+| 3 | 「（其中必须包括[使用者]）」 | the user goes through `ctx::target` first (`rain.rs:35`) | same | matched, assumption (a refusal: §11.11) |
+| 4 | 「被[指定]的玩家获得一层[停留]」 | existing `stay::add` (`:65`) | existing `general` suites | matched |
+
+### 13.11 `MyGO:普通与理所当然`, `R:选择自己的舞台` (items 13, 14)
+
+| card | clause | design element | test | verdict |
+|---|---|---|---|---|
+| ordinary | 「受到异常移动效果影响后可打出」 | the `effect` window moves behind the refusal (§6.7) | `ordinary_not_offered_to_an_immune_player` | matched |
+| own_stage | same clause with 「[除外]以外的」 | same ordering; the derived exile check stays (`own_stage.rs:44-48`) | `own_stage_answers_only_landed_abnormals` | matched |
+| own_stage | 「选择自己的本次移动…是否触发结算」 | G03 §4.7's answer | G03 suites | out of group |
+
+### 13.12 Neighbours the design must not break
+
+| card | clause | how it stays true |
+|---|---|---|
+| `AG:宣战布告` | 「当你或你拥有的格子被其他玩家的卡效果影响时」 | its own loose condition receives the join; the designation stays `by_card` |
+| `Mujica:骰子已经掷下` | 「本回合内所有其他玩家无法从手牌中使用[反击]」 | the `noCounteractTurn` gate still runs through `can_counteract_now`; `all_kinds` does not reopen it |
+| `Mujica:骰子已经掷下` | 「（此卡可以被反击）」 | the window is raised before the body arms the lock (existing) |
+
+### 13.13 Result of the match
+
+Three clauses were short of a design element and are now covered: mortis's
+play half and its placed-effect exclusion (13.6 clauses 1-2, via the
+`PlayRecord` and its `placed` flag), and `无法将视线移开`'s self/move clause
+(13.8 clause 4, via the extra target and the main-move flag). Four details
+are unruled and live in §11 questions 9-13. Every other clause maps to an
+existing behaviour plus one named design element, and every mapping has a
+test in §9.1 or an existing suite.
