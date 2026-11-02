@@ -25,7 +25,7 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         // purchase instead), so it does not open this.
         "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
         Some(can_counteract),
-        counteract).counter_reason(key!("hey_kids_when"))],
+        counteract).declares_negation().counter_reason(key!("hey_kids_when"))],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"狂乱Hey Kids!!"#)

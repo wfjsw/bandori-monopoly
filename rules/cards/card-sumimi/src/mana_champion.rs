@@ -6,11 +6,12 @@
 //! [反击] that lets the other players counteract as if they were the target.
 //!
 //! CH-05 join: the `SELF_REDIRECT` property *arms* the join -- the engine
-//! stamps the join on the answered link and each joiner's own body must apply
-//! the redirect itself (`ctx::join_redirect_target()`, only `net_error` does
-//! today; `ctx::self_target` has no callers). The joiner's own body takes its
-//! draw when the shield lands; this body takes the fallback draw when nobody
-//! played a [反击] during it (「若没有人在此卡的效果期间打出[反击]卡」).
+//! opens the answering window on the answered link when this counter is
+//! declared. This body opens the round (`ctx::join::open`), reports it, and
+//! owns **both** draws of the clause: one optional draw per shielding joiner
+//! (「若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽一张卡」)
+//! and the fallback when nobody declared
+//! (「若没有人在此卡的效果期间打出[反击]卡」).
 
 use bandori_std::ctx::{self, trigger};
 use card_sdk::abi::{prop, ChainKind};
@@ -72,30 +73,34 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("mana_champion_log")).player_id("who", player_id),
     );
-    // CH-05 join: the `SELF_REDIRECT` property *arms* the join -- the engine
-    // pre-scans every hand for it and stamps the answered link's
-    // `join_redirect` before any body runs, so counters declared earlier on the
-    // link see it too; each joiner applies it itself in its own body (「改为你」;
-    // only `net_error` does today). A joiner that lands the shield draws itself
-    // (see `net_error.rs`); we take the fallback draw only when nobody played a
-    // [反击].
-    //
-    // TODO(规则书)[judgement](ABI): the full nested PlayCtx (a per-seat
-    //   「如同自身的对应目标被指定一般」 window with its own chain) is still
-    //   open -- see CH-05. The join is a redirect stamped on the link, shared
-    //   by every later counter on it, not a per-seat window. The 「若以此种方式
-    //   使你免于受到该影响」 half (joiner draw) lives in the joiner's body.
-    // 规则书[反击]: 「若以此种方式使你免于受到该影响」
-    if ctx::designation_cancelled(player_id) {
-        // A joiner shielded us; the joiner draws itself. No fallback.
-        // TODO(规则书): the joiner's draw is 真奈's clause, not the joiner's
-        //   own effect -- once the nested window exists, move the draw here.
+    // 规则书[反击]: 「此时场上其他玩家可如同自身的对应目标被指定一般打出
+    // [反击]卡」 -- the nested round on the link this counter answers. A joiner
+    // applies the redirect itself (`ctx::join::opener`, 「改为你」).
+    let _ = ctx::join::open()?;
+    // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡」 --
+    // any declaration during the window bars the fallback, shielding or not.
+    let count = ctx::join::joiner_count();
+    if count == 0 {
+        ctx::draw(player_id, 1)?;
         return Ok(());
     }
-    // TODO(规则书)（若没有人在此卡的效果期间打出[反击]卡）: the fallback is 「没有人在此卡的效果期间打出[反击]卡」 -- a
-    // joiner who played a [反击] without shielding us still bars the draw; we only see
-    // whether a designation was cancelled and need a joiner-count.
-    ctx::draw(player_id, 1)?;
+    // 规则书[反击]: 「若以此种方式使你免于受到该影响，打出那张[反击]卡的
+    // 玩家可抽一张卡」 -- the draw is this card's clause, taken by its owner
+    // for each joiner that shielded (`join::shield`), optionally per joiner.
+    for i in 0..count {
+        if !ctx::join::joiner_shielded(i) {
+            continue;
+        }
+        let who = ctx::join::joiner(i);
+        let take = ctx::ask_yes(
+            player_id,
+            &Msg::new(key!("net_error_draw_title")),
+            &Msg::new(key!("mana_champion_draw")).player_id("who", who),
+        )?;
+        if take {
+            ctx::draw(who, 1)?;
+        }
+    }
     Ok(())
 }
 

@@ -105,6 +105,64 @@ pub struct Trigger {
     pub outcome: Option<game_core::engine::SettleOutcome>,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_skill: bool,
+    /// The card whose effect this link *is*: the raised play's card on a root
+    /// link, the counter card's own id on a counter link (so an entry answering
+    /// it sees the counter as its subject).
+    pub subject_card: Option<String>,
+    /// The join window opened on this link, when one is open.
+    pub join: Option<TriggerJoin>,
+    /// Declared, unresolved answers on this link (indices into the chain, in
+    /// declaration order). Empty on a new counter link.
+    pub answers_declared: Vec<u32>,
+    /// The card a copy resolves (mortis). Set when the entry resolved a copied
+    /// card, read by `trigger::link_copied`. `None` otherwise.
+    pub copied: Option<String>,
+    /// The nearest enclosing link with a roll face ([`ROLL_ROOT_NONE`] = none).
+    /// A counter body's face write propagates here after it settles.
+    pub roll_root: u32,
+    /// Declared, unresolved negating answers on this link, stamped before the
+    /// body runs (`trigger::pending_negation`).
+    pub pending_negation: i32,
+    /// An extreme is armed on this play or declared on this link, stamped
+    /// before the body runs (`trigger::extreme_armed`).
+    pub extreme_armed: bool,
+    /// The kind of every link from the root to this one, root first
+    /// (`trigger::answered_kind`).
+    pub answered_kinds: Vec<crate::TriggerKind>,
+}
+
+/// [`Trigger::roll_root`] sentinel: no enclosing roll link.
+pub const ROLL_ROOT_NONE: u32 = u32::MAX;
+
+/// The join window a `SELF_REDIRECT` effect opened on a link.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerJoin {
+    /// The `SELF_REDIRECT` declarer.
+    pub opener: i32,
+    /// Participating seats, seat order; only these are offered.
+    pub seats: Vec<i32>,
+    /// Per seat, parallel to `seats`: declared a counter in this window.
+    pub declared: Vec<bool>,
+    /// Per seat, parallel to `seats`: the counter landed and called `shield`.
+    pub used: Vec<bool>,
+    /// Per seat, parallel to `seats`: the designation the joiner named
+    /// (`ctx::cancel_designation` while this body runs), `-1` when none.
+    pub designated: Vec<i32>,
+    /// Has `open()` completed its round at least once this pass?
+    pub opened: bool,
+}
+
+impl From<&game_core::engine::rules::JoinState> for TriggerJoin {
+    fn from(j: &game_core::engine::rules::JoinState) -> Self {
+        Self {
+            opener: j.opener,
+            seats: j.seats.clone(),
+            declared: j.declared.clone(),
+            used: j.used.clone(),
+            designated: j.designated.clone(),
+            opened: j.opened,
+        }
+    }
 }
 
 /// The roll transaction a roll trigger belongs to (v109, design G03 §5.4).
@@ -220,6 +278,14 @@ impl Default for Trigger {
             settle_tile: -1,
             outcome: None,
             charge_skill: false,
+            subject_card: None,
+            join: None,
+            answers_declared: Vec::new(),
+            copied: None,
+            roll_root: ROLL_ROOT_NONE,
+            pending_negation: 0,
+            extreme_armed: false,
+            answered_kinds: Vec::new(),
         }
     }
 }
@@ -282,6 +348,14 @@ impl Trigger {
             settle_tile: -1,
             outcome: None,
             charge_skill: false,
+            subject_card: None,
+            join: None,
+            answers_declared: Vec::new(),
+            copied: None,
+            roll_root: ROLL_ROOT_NONE,
+            pending_negation: 0,
+            extreme_armed: false,
+            answered_kinds: Vec::new(),
         }
     }
 
@@ -369,6 +443,11 @@ pub trait CardWorld: Clone + 'static {
         true
     }
     fn set_play_from_hand(&mut self, _v: bool) {}
+    /// Did the play place a card? (`PlayRecord::placed`)
+    fn placed_during_play(&self) -> bool {
+        false
+    }
+    fn set_placed_during_play(&mut self, _v: bool) {}
     /// A gain whose amount skills and crits may not bend.
     fn gain_fixed(&mut self, _player_id: i32, _amount: i32, _reason: crate::Msg) -> i32 {
         0
@@ -1284,6 +1363,35 @@ pub trait CardWorld: Clone + 'static {
     }
     /// 真奈 join: mark that a joiner used the redirect (shielded the target).
     fn set_trigger_join_used(&mut self) {}
+    /// The join window on the current link, when one is open.
+    fn trigger_join(&self) -> Option<TriggerJoin> {
+        self.trigger().join
+    }
+    /// 真奈 join: the running joiner shields the opener (idempotent).
+    fn set_trigger_join_shield(&mut self) {
+        self.set_trigger_join_used();
+    }
+    /// 真奈 join: record the designation the running joiner named.
+    fn set_trigger_join_designation(&mut self, seat: i32) {
+        let who = self.trigger().player_id;
+        let Some(mut j) = self.trigger().join else {
+            return;
+        };
+        if let Some(k) = j.seats.iter().position(|&s| s == who) {
+            j.designated[k] = seat;
+        }
+    }
+    /// The [反击] declarations of the current turn (`countered_by_this_turn`).
+    fn counteracted_records(&self) -> Vec<game_core::engine::CounteractRecord> {
+        Vec::new()
+    }
+    /// The most recent completed card play by a seat **other than** `seat`
+    /// whose effect placed nothing on the field -- the copy source of
+    /// `copies_previous` (mortis, design G06 §2.15). `None` when there is none.
+    fn copy_source_card(&self, seat: i32) -> Option<String> {
+        let _ = seat;
+        None
+    }
 
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.

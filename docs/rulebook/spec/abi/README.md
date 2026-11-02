@@ -61,7 +61,7 @@ for eight roll imports plus `trig_roll` while its Op row was still `—`. G03
 takes 398–406 (nine). At landing the two 「是否触发结算」 answer pairs
 (§4.7's four ops) joined the same band: G03 takes **398–410** (thirteen),
 and every group after it shifts thirteen: G06 411 onward (it settles at
-411–426, see the fourth amendment), G05+G13 431–440, G07 441–450. G04's
+411–426, see the 2026-11-02 amendment), G05+G13 431–440, G07 441–450. G04's
 landed 378–397 is untouched.
 
 **2026-11-01 amendment (G05).** The G05 review found the group is not a press

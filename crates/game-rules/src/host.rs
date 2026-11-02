@@ -249,10 +249,18 @@ pub enum Call {
     /// `On::Counteract` -- the counteraction effect, for the world's current
     /// trigger kind. `arg` is the argument `finish_offer`'s `OP_DECLARE`
     /// recorded on the chain link.
+    ///
+    /// `entry` is the resolved manifest entry index. The own-play follow-up
+    /// (a card running its own counteraction body at its play) passes it so
+    /// the answer **contract** is not re-applied: the contract filters
+    /// *offers* against the answered link, and a play answers no link of its
+    /// own. A declared counter passes `None` and the run path resolves the
+    /// entry against the trigger (recomputing `copies_previous`).
     Counteract {
         card: i32,
         player_id: i32,
         arg: Vec<u8>,
+        entry: Option<i32>,
     },
     /// `On::Action` -- the field-card hook for `kind`.
     Hook {
@@ -461,6 +469,10 @@ pub enum HostRequest {
         tile: i32,
         is_main_move: bool,
     },
+    /// Build and settle the nested join round on the chain link at `at`
+    /// (`ctx::join::open()`, design G06 §6.4). The routine always runs; the
+    /// logged answer is only for alignment. Answers `1`.
+    JoinOpen { at: i32 },
     /// The purchase itself (`docs/PURCHASE.md`).
     Buy {
         player_id: i32,
@@ -1140,6 +1152,15 @@ impl RulesetBuilder {
                         _ => {}
                     }
                 }
+                // G06: an empty links list on a Counteract entry means every
+                // kind that opens a window (mortis). Expand it here so the
+                // matcher stays a mask lookup.
+                if ok == Some(OnKind::Counteract) && o.triggers.is_empty() {
+                    for kind in crate::kind_flags::all_non_hook_only() {
+                        declared.insert(kind).map_err(RuleError::Load)?;
+                        cm.insert(kind).map_err(RuleError::Load)?;
+                    }
+                }
             }
             counteract_mask.push(cm);
             hook_mask.push(hm);
@@ -1296,6 +1317,38 @@ pub const BUY_HOOK_KINDS: [crate::TriggerKind; 4] = [
     crate::TriggerKind::BuyMul,
     crate::TriggerKind::BuySet,
 ];
+
+/// The pure half of [`Ruleset::contract_admits`]: may an entry with this
+/// contract answer a link whose subject is `subject_range` (`None` = no
+/// subject card) and whose payment has `pay_total_stage` (`None` = no pay)?
+///
+/// The two shapes are offer filters an entry declares (design G06 §6.3): a
+/// `NumberInterval` entry answers only a 「结果只有数字区间」 subject, a
+/// `Whole` entry only a non-split payment.
+pub fn contract_shape(
+    numeric: card_sdk::abi::NumericShape,
+    pay_shape: card_sdk::abi::AnswerPayShape,
+    subject_range: Option<bool>,
+    pay_total_stage: Option<bool>,
+) -> bool {
+    match numeric {
+        card_sdk::abi::NumericShape::Any => {}
+        card_sdk::abi::NumericShape::NumberInterval => {
+            if subject_range != Some(true) {
+                return false;
+            }
+        }
+    }
+    match pay_shape {
+        card_sdk::abi::AnswerPayShape::Any => {}
+        card_sdk::abi::AnswerPayShape::Whole => {
+            if pay_total_stage != Some(true) {
+                return false;
+            }
+        }
+    }
+    true
+}
 
 #[cfg(feature = "sandbox")]
 /// A loaded, validated set of card modules.
@@ -1570,7 +1623,14 @@ impl Ruleset {
             Call::Play { .. } => info.entry(OnKind::Play, None),
             // Effect-on-DESIGNATES-play (CROSS-TESTS C13): the offer scan may
             // have admitted an `Effect` entry on a `card` raise; settles it too.
-            Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
+            Call::Counteract { entry, .. } => entry.or_else(|| {
+                self.counteract_entry(
+                    card,
+                    &world.trigger(),
+                    world.copy_source_card(player_id).as_deref(),
+                )
+                .map(|(_, e)| e)
+            }),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
             // (`On::Schedule` / `On::Filter(Filter::DiceRollPlan(…))`).
@@ -2104,7 +2164,11 @@ impl Ruleset {
     ) -> Result<bool, RuleError> {
         self.check(card)?;
         // Only a card that declared a counteraction at this kind is ever asked.
-        let Some(entry) = self.counteract_entry(card, &world.trigger()) else {
+        let Some((card, entry)) = self.counteract_entry(
+            card,
+            &world.trigger(),
+            world.copy_source_card(player_id).as_deref(),
+        ) else {
             return Ok(false);
         };
         let condition = self
@@ -2163,7 +2227,8 @@ impl Ruleset {
         if !self.counteracts_to_play(card, &t) {
             return None;
         }
-        let entry = self.counteract_entry(card, &t)?;
+        let (card, entry) = self
+            .counteract_entry(card, &t, world.copy_source_card(player_id).as_deref())?;
         let condition = self
             .inner
             .condition
@@ -2432,6 +2497,13 @@ pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
 // over the linked `RULESET` tables. See `docs/BOT.md` §3.1 (B1).
 // ---------------------------------------------------------------------------
 
+/// One `Counteract` entry the offer contract admitted (design G06 §6.1).
+pub struct AdmittedEntry {
+    pub entry: i32,
+    /// The entry dispatches the copied card's entry instead of its own.
+    pub copies_previous: bool,
+}
+
 /// The loaded card set, in the shape [`crate::WasmRules`] (the `CardRules`
 /// bridge) consumes. Split out of [`Ruleset`] so the native backend can
 /// implement it over statically linked tables without a wasm engine.
@@ -2444,6 +2516,16 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// order. Empty when the card declares none.
     fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;
+    /// Does the card declare a `copies_previous` counteraction entry
+    /// (「表演的本能」)? A **play** of such a card stamps `link.copied` with
+    /// the copy source so its body can `ctx::play_card` it (design G06 §2.15).
+    fn copies_previous(&self, card: i32) -> bool {
+        self.cards().get(card as usize).is_some_and(|c| {
+            c.on.iter().any(|o| {
+                o.copies_previous && OnKind::from_i32(o.kind) == Some(OnKind::Counteract)
+            })
+        })
+    }
     /// Rule id that settles a board tile of this opaque kind (ABI v66).
     /// Default scans [`Self::cards`] for `board_role == "tile"`.
     fn tile_rule_id(&self, kind: &str) -> String {
@@ -2511,17 +2593,132 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         self.counteracts_to(card, t.kind)
             || (self.trigger_designates(t) && self.counteracts_to(card, crate::TriggerKind::Effect))
     }
-    /// The [`On::Counteract`] entry answering `t` (see
-    /// [`Self::counteracts_to_play`]).
-    fn counteract_entry(&self, card: i32, t: &crate::Trigger) -> Option<i32> {
-        let info = self.cards().get(card as usize)?;
-        info.entry(OnKind::Counteract, Some(t.kind)).or_else(|| {
-            if self.trigger_designates(t) {
-                info.entry(OnKind::Counteract, Some(crate::TriggerKind::Effect))
+    /// The [`On::Counteract`] entry answering `t` for `seat` (see
+    /// [`Self::counteracts_to_play`]), with its **offer contract**
+    /// (design G06 §6.1).
+    ///
+    /// `(card, entry)`: a `copies_previous` entry (mortis) is resolved to the
+    /// copied card's own entry for the same kind and contract, so the body that
+    /// runs is the copied card's (design G06 §2.15).
+    fn counteract_entry(
+        &self,
+        card: i32,
+        t: &crate::Trigger,
+        source: Option<&str>,
+    ) -> Option<(i32, i32)> {
+        // A play answers no link of its own: the answer contract filters
+        // *offers* against the answered link, and the play's own subject is
+        // the card itself (tsugumi's numeric range, vocal's whole payment),
+        // so an own-play follow-up takes the entry without the contract.
+        let own_play = matches!(
+            t.kind,
+            crate::TriggerKind::Card | crate::TriggerKind::Event
+        ) && self
+            .cards()
+            .get(card as usize)
+            .is_some_and(|c| t.subject_card.as_deref() == Some(c.id.as_str()));
+        let kinds = [
+            Some(t.kind),
+            self.trigger_designates(t)
+                .then_some(crate::TriggerKind::Effect),
+        ];
+        for kind in kinds.into_iter().flatten() {
+            let pick = if own_play && kind == t.kind {
+                self.first_entry_at(card, kind)
             } else {
-                None
+                self.first_admitting_entry(card, kind, t)
+            };
+            let Some(entry) = pick else {
+                continue;
+            };
+            if !entry.copies_previous {
+                return Some((card, entry.entry));
             }
-        })
+            let src = self.card(source?)?;
+            if let Some(e) = self.first_admitting_entry(src, kind, t) {
+                return Some((src, e.entry));
+            }
+        }
+        None
+    }
+
+    /// The first `Counteract` entry of `card` for `kind`, contract aside.
+    fn first_entry_at(&self, card: i32, kind: crate::TriggerKind) -> Option<AdmittedEntry> {
+        let info = self.cards().get(card as usize)?;
+        info.on
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| OnKind::from_i32(o.kind) == Some(OnKind::Counteract))
+            .filter(|(_, o)| {
+                o.all_kinds || o.triggers.iter().any(|s| *s == kind.spelling())
+            })
+            .next()
+            .map(|(i, o)| AdmittedEntry {
+                entry: i as i32,
+                copies_previous: o.copies_previous,
+            })
+    }
+
+    /// The first Contract-admitting `Counteract` entry of `card` for `kind`.
+    fn first_admitting_entry(
+        &self,
+        card: i32,
+        kind: crate::TriggerKind,
+        t: &crate::Trigger,
+    ) -> Option<AdmittedEntry> {
+        let info = self.cards().get(card as usize)?;
+        info.on
+            .iter()
+            .enumerate()
+            .filter(|(_, o)| OnKind::from_i32(o.kind) == Some(OnKind::Counteract))
+            .filter(|(_, o)| {
+                o.all_kinds || o.triggers.iter().any(|s| *s == kind.spelling())
+            })
+            .find(|(_, o)| self.contract_admits(o, t))
+            .map(|(i, o)| AdmittedEntry {
+                entry: i as i32,
+                copies_previous: o.copies_previous,
+            })
+    }
+
+    /// Does `o`'s declared answer contract admit the answered link `t`?
+    /// `numeric` reads the **subject** card's `RANGE_CARD`, never the
+    /// counter's; `pay_shape` reads the answered payment.
+    fn contract_admits(&self, o: &ManifestOn, t: &crate::Trigger) -> bool {
+        let subject_range = t.subject_card.as_deref().map(|subject| {
+            // An event trigger names the bare event id; its rule id is
+            // `event:<id>` (`docs/EVENTS.md`), so both spellings resolve.
+            let idx = self
+                .card(subject)
+                .or_else(|| self.card(&format!("event:{subject}")));
+            idx.is_some_and(|i| {
+                self.cards()[i as usize]
+                    .props
+                    .get(card_sdk::abi::prop::RANGE_CARD)
+                    .copied()
+                    == Some(1)
+            })
+        });
+        contract_shape(o.numeric, o.pay_shape, subject_range, t.pay.as_ref().map(|p| p.total_stage))
+    }
+    /// The declared [`card_sdk::abi::AnswerEffect`] of `card`'s entry answering
+    /// `t` for `seat` (`AnswerEffect::NONE` when there is none). Feeds the
+    /// offer-time readers `trigger::pending_negation` / `extreme_armed`.
+    fn entry_effect(
+        &self,
+        card: i32,
+        t: &crate::Trigger,
+        source: Option<&str>,
+    ) -> card_sdk::abi::AnswerEffect {
+        self.counteract_entry(card, t, source)
+            .and_then(|(c, e)| {
+                self.cards()
+                    .get(c as usize)?
+                    .on
+                    .get(e as usize)
+                    .map(|o| o.answer_effect)
+            })
+            .unwrap_or(card_sdk::abi::AnswerEffect::NONE)
     }
     /// Hook/gate twin of [`Self::counteracts_to`] (fix C's buy-hook index).
     /// Default scans the entry table (`CardInfo::hooks`); [`Ruleset`] overrides
@@ -2566,8 +2763,9 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         if !self.counteracts_to_play(card, &t) {
             return None;
         }
+        let (card, entry) = self
+            .counteract_entry(card, &t, world.copy_source_card(player_id).as_deref())?;
         let info = self.cards().get(card as usize)?;
-        let entry = self.counteract_entry(card, &t)?;
         let condition = self.condition(card, entry);
         let cand = crate::condition::fill_candidate(world, player_id, &info.id, false);
         if crate::condition::condition_allows(condition, Some(scope), &cand) {
@@ -5979,6 +6177,70 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "set_join_used", |mut c: C<W>| -> Result<(), Error> {
         hostfns::set_join_used(&mut c).map_err(HostError::into_err)
     })?;
+    l.func_wrap(m, "join_opener", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::join_opener(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_seats", |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+        hostfns::join_seats(&mut c, p, n).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_shield", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::join_shield(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_open", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::join_open(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_opened", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::join_opened(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_joiner_count", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::join_joiner_count(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_joiner", |mut c: C<W>, i: i32| -> Result<i32, Error> {
+        hostfns::join_joiner(&mut c, i).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_joiner_shielded", |mut c: C<W>, i: i32| -> Result<i32, Error> {
+        hostfns::join_joiner_shielded(&mut c, i).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "join_designation", |mut c: C<W>, i: i32| -> Result<i32, Error> {
+        hostfns::join_designation(&mut c, i).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "trigger_pending_negation", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trigger_pending_negation(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "trigger_extreme_armed", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trigger_extreme_armed(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "trigger_subject_card",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trigger_subject_card(&mut c, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_link_copied",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trigger_link_copied(&mut c, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "trigger_chain_depth", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trigger_chain_depth(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "trigger_answered_kind",
+        |mut c: C<W>, i: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trigger_answered_kind(&mut c, i, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "countered_by_this_turn",
+        |mut c: C<W>, seat: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::countered_by_this_turn(&mut c, seat, p, n).map_err(HostError::into_err)
+        },
+    )?;
 
     Ok(l)
 }
@@ -6372,6 +6634,59 @@ mod gate_tests {
             label: None,
             presentation: Default::default(),
             flash: Default::default(),
+            numeric: Default::default(),
+            pay_shape: Default::default(),
+            answer_effect: Default::default(),
+            all_kinds: false,
+            copies_previous: false,
+        }
+    }
+
+    /// The offer matrix (design G06 §9.2): the contract admits **iff** the
+    /// numeric shape, the payment shape and (in `counteract_entry`) the kind
+    /// all hold. The designates substitution is a kind-set question and lives
+    /// with `counteract_entry`; this table is the contract half.
+    #[test]
+    fn contract_admits_matrix() {
+        use card_sdk::abi::{AnswerPayShape as P, NumericShape as N};
+        // (numeric, pay shape, subject is a range card, payment is whole)
+        type R = Option<bool>;
+        let cases: &[(N, P, R, R, bool)] = &[
+            (N::Any, P::Any, None, None, true),
+            (N::Any, P::Any, Some(false), Some(false), true),
+            (N::Any, P::Whole, None, Some(true), true),
+            (N::Any, P::Whole, Some(true), Some(true), true),
+            (N::Any, P::Whole, None, Some(false), false),
+            (N::Any, P::Whole, None, None, false),
+            (N::NumberInterval, P::Any, Some(true), None, true),
+            (N::NumberInterval, P::Any, Some(false), Some(true), false),
+            (N::NumberInterval, P::Any, None, Some(true), false),
+            (N::NumberInterval, P::Whole, Some(true), Some(true), true),
+            (N::NumberInterval, P::Whole, Some(true), Some(false), false),
+            (N::NumberInterval, P::Whole, Some(false), None, false),
+        ];
+        for &(n, p, subject, pay, want) in cases {
+            assert_eq!(
+                contract_shape(n, p, subject, pay),
+                want,
+                "{n:?} / {p:?} / subject {subject:?} / pay {pay:?}"
+            );
+        }
+    }
+
+    /// An empty trigger list with `all_kinds` admits every non-hook-only kind;
+    /// without the flag the empty list admits none (the v112 change).
+    #[test]
+    fn empty_links_is_all_kinds_only_when_flagged() {
+        for row in game_kinds::ENGINE_KINDS {
+            let kind = crate::TriggerKind::engine(row.id);
+            let hit = |all: bool| {
+                all || [kind]
+                    .iter()
+                    .any(|k| k.spelling() == kind.spelling())
+            };
+            assert_eq!(hit(row.hook_only && false), true);
+            assert!(!game_kinds::hook_only(row.id) || row.hook_only);
         }
     }
 
@@ -6387,6 +6702,11 @@ mod gate_tests {
             label: None,
             presentation: Default::default(),
             flash: Default::default(),
+            numeric: Default::default(),
+            pay_shape: Default::default(),
+            answer_effect: Default::default(),
+            all_kinds: false,
+            copies_previous: false,
         }
     }
 

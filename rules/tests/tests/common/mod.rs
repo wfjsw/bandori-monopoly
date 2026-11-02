@@ -1175,6 +1175,7 @@ pub fn log_key(e: &MatchEvent) -> String {
 pub fn int_arg(msg: &Msg, name: &str) -> Option<i64> {
     match msg.args.get(name) {
         Some(Arg::Integer(v)) | Some(Arg::Number(v)) => Some(*v),
+        Some(Arg::PlayerId(v)) | Some(Arg::Tile(v)) => Some(*v as i64),
         _ => None,
     }
 }

@@ -27,6 +27,8 @@ use crate::host::{
 };
 use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
+use crate::world::ROLL_ROOT_NONE;
+use game_core::engine::CounteractRecord;
 use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
 use rules_cond::WindowScope;
@@ -820,6 +822,12 @@ impl CardWorld for Run {
     }
     fn set_play_from_hand(&mut self, v: bool) {
         self.world.turn.play_from_hand = v;
+    }
+    fn placed_during_play(&self) -> bool {
+        self.world.turn.placed_during_play
+    }
+    fn set_placed_during_play(&mut self, v: bool) {
+        self.world.turn.placed_during_play = v;
     }
     fn gain_fixed(&mut self, player_id: i32, amount: i32, reason: crate::Msg) -> i32 {
         let got = self.world.gain_fixed(player_id, amount, reason);
@@ -2231,6 +2239,9 @@ impl CardWorld for Run {
         if !self.world.turn.cancelled_designations.contains(&seat) {
             self.world.turn.cancelled_designations.push(seat);
         }
+        // A joiner's counter names the designation it cancels for the opener's
+        // report (design G06 §6.4; the running seat is `player_id`).
+        self.set_trigger_join_designation(seat);
     }
     fn designation_cancelled(&self, seat: i32) -> bool {
         self.world.turn.cancelled_designations.contains(&seat)
@@ -2461,9 +2472,37 @@ impl CardWorld for Run {
     }
     fn set_trigger_join_used(&mut self) {
         self.trigger.join_used = true;
+        // Keep the per-seat report in step with the legacy alias. The running
+        // seat is the declarer ([`Run::activation_player`]): the trigger is
+        // the *answered* link, whose `player_id` is its payer.
+        let who = self.activation_player;
+        if let Some(j) = &mut self.trigger.join {
+            if let Some(k) = j.seats.iter().position(|&s| s == who) {
+                j.used[k] = true;
+            }
+        }
+    }
+    fn set_trigger_join_designation(&mut self, seat: i32) {
+        let who = self.activation_player;
+        if let Some(j) = &mut self.trigger.join {
+            if let Some(k) = j.seats.iter().position(|&s| s == who) {
+                j.designated[k] = seat;
+            }
+        }
     }
     fn trigger_join_redirect(&self) -> Option<i32> {
         self.trigger.join_redirect
+    }
+    fn counteracted_records(&self) -> Vec<game_core::engine::CounteractRecord> {
+        self.world.countered_this_turn.clone()
+    }
+    fn copy_source_card(&self, seat: i32) -> Option<String> {
+        self.world
+            .played_cards
+            .iter()
+            .rev()
+            .find(|p| p.player != seat && !p.placed)
+            .map(|p| p.card.clone())
     }
 
     // turn plan & scheduling -------------------------------------------------
@@ -3064,6 +3103,11 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         if matches!(req, HostRequest::Draw { .. }) || !run.pile_checkpoints.is_empty() {
             return None;
         }
+        // A join window runs on the work stack (design G06 §6.4): always
+        // pause so the drive's NeedHost arm takes it.
+        if matches!(req, HostRequest::JoinOpen { .. }) {
+            return None;
+        }
         // STACK-01: nested settle while pumping must pause (NeedHost suspends).
         if matches!(req, HostRequest::SettleAt { .. }) {
             let cx_probe = unsafe { &mut *self.cx };
@@ -3415,6 +3459,87 @@ impl<M: CardModules> RulesBridge<M> {
     /// at the outermost leave, restored once the command has driven a move.
     /// `resumed` is `true` only from the resume arm -- the paused world still
     /// holds the command, so it must not snapshot twice.
+    /// Queue a re-run of the body whose host request just suspended, to run
+    /// **after** the nested work the suspension parked (a counter body, a join
+    /// window, a settle). The drive's host-answer log is carried, so the
+    /// requests already applied before the suspension are consumed, not
+    /// repeated; the request that suspended runs again and completes.
+    fn push_body_resume(
+        &self,
+        cx: &mut PlayCtx,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        guarded: bool,
+        trigger: &Trigger,
+        answers: Vec<i32>,
+    ) {
+        let bridge = self as *const RulesBridge<M>;
+        let card_id_own = card_id.to_string();
+        let mut trigger_own = trigger.clone();
+        // The counter node this body settles, when it is one.
+        let node_own: Option<usize> = cx
+            .counteract_chain()
+            .and_then(|c| c.downcast_ref::<CounteractChainCursor>())
+            .map(|c| c.index);
+        cx.insert_work(game_core::engine::ResumeFnWork {
+            f: Box::new(move |cx| {
+                if std::env::var("DBG_HOOK").is_ok() {
+                    eprintln!(
+                        "BODY_RESUME card={card_id_own} call={call:?} answers={answers:?}"
+                    );
+                }
+                if uid >= 0 {
+                    cx.reentrant_hooks.push(uid);
+                }
+                // A counter body's chain is parked in the resume; keep it
+                // parked and drive through the stable pointer (a nested
+                // suspension must be able to park into the same slot).
+                let mut chain_slot = node_own.and(take_chain_box(cx));
+                let mut chain_ptr = chain_slot
+                    .as_ref()
+                    .map(|b| &**b as *const Vec<ChainLink> as *mut Vec<ChainLink>);
+                if let Some(chain) = chain_slot.take() {
+                    park_chain_box(cx, &trigger_own, chain);
+                }
+                let before_face = trigger_own
+                    .mv
+                    .as_ref()
+                    .and_then(|m| m.roll)
+                    .unwrap_or(trigger_own.value);
+                let bridge = unsafe { &*bridge };
+                let r = bridge.drive_inner_body_from(
+                    cx,
+                    call,
+                    &card_id_own,
+                    uid,
+                    &mut trigger_own,
+                    guarded,
+                    answers,
+                    true,
+                );
+                if uid >= 0 {
+                    cx.reentrant_hooks.pop();
+                }
+                match r {
+                    Ok(dest) => {
+                        if let (Some(node), Some(ptr)) = (node_own, chain_ptr.take()) {
+                            let chain = unsafe { &mut *ptr };
+                            bridge.close_drive(cx, chain, node, &mut trigger_own, before_face)?;
+                            let seat = chain[node].seat;
+                            let id = chain[node].id.clone();
+                            let uid = chain[node].uid;
+                            bridge.settle_tail(cx, seat, &id, uid, dest)?;
+                        }
+                        cx.set_drive_dest(dest);
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
+            }),
+        });
+    }
+
     fn drive_inner_body_from(
         &self,
         cx: &mut PlayCtx,
@@ -3458,13 +3583,17 @@ impl<M: CardModules> RulesBridge<M> {
         if std::env::var("DBG_HOOK").is_ok() {
             eprintln!(
                 "DRIVE call={:?} card={} uid={} kind={:?} p={} tile={} inst={}",
-                std::mem::discriminant(&call),
+                call,
                 card_id,
                 uid,
                 trigger.kind,
                 trigger.player_id,
                 trigger.tile,
                 trigger.instance
+            );
+            eprintln!(
+                "DRIVE_SEAT player_id={} by_card={:?} target={} answers={} repl={:?}",
+                trigger.player_id, trigger.by_card, trigger.target, trigger.answers, answers
             );
         }
         let overlay_base = cx.guest_overlay_depth();
@@ -3722,6 +3851,24 @@ impl<M: CardModules> RulesBridge<M> {
                 posted_ids.clear();
                 if activation_id >= 0 {
                     cx.activation.retain(|&id| id != activation_id);
+                }
+                if h.is_suspended() {
+                    // A counter walk inside the request suspended: re-drive
+                    // this body after the nested work, carrying the answers
+                    // the inline pass already consumed.
+                    let mut answers_own = answers.clone();
+                    if let Some(h) = inline.as_mut() {
+                        answers_own.append(&mut h.answers);
+                    }
+                    self.push_body_resume(
+                        cx,
+                        call.clone(),
+                        card_id,
+                        uid,
+                        guarded,
+                        trigger,
+                        answers_own,
+                    );
                 }
                 return Err(h);
             }
@@ -4060,6 +4207,12 @@ impl<M: CardModules> RulesBridge<M> {
                             let uid_own = uid;
                             let guarded_own = guarded;
                             let who = trigger.player_id;
+                            // The counter node this body settles, when the
+                            // drive is one (design G06 §6.2).
+                            let node_own: Option<usize> = cx
+                                .counteract_chain()
+                                .and_then(|c| c.downcast_ref::<CounteractChainCursor>())
+                                .map(|c| c.index);
                             // Remaining counteract work: the caller (drive's
                             // parent) parks a resume; this frame re-enters the
                             // drive itself.
@@ -4068,6 +4221,22 @@ impl<M: CardModules> RulesBridge<M> {
                                     if uid_own >= 0 {
                                         cx.reentrant_hooks.push(uid_own);
                                     }
+                                    // A counter body's chain is parked in the
+                                    // resume; keep it parked and drive through
+                                    // the stable pointer (a nested settle must
+                                    // be able to park into the same slot).
+                                    let mut chain_slot = node_own.and(take_chain_box(cx));
+                                    let mut chain_ptr = chain_slot
+                                        .as_ref()
+                                        .map(|b| &**b as *const Vec<ChainLink> as *mut Vec<ChainLink>);
+                                    if let Some(chain) = chain_slot.take() {
+                                        park_chain_box(cx, &trigger_own, chain);
+                                    }
+                                    let before_face = trigger_own
+                                        .mv
+                                        .as_ref()
+                                        .and_then(|m| m.roll)
+                                        .unwrap_or(trigger_own.value);
                                     let bridge = unsafe { &*bridge };
                                     let r = bridge.drive_inner_body_from(
                                         cx,
@@ -4084,6 +4253,20 @@ impl<M: CardModules> RulesBridge<M> {
                                     }
                                     match r {
                                         Ok(dest) => {
+                                            if let (Some(node), Some(ptr)) = (node_own, chain_ptr.take())
+                                            {
+                                                let chain = unsafe { &mut *ptr };
+                                                bridge.close_drive(
+                                                    cx,
+                                                    chain,
+                                                    node,
+                                                    &mut trigger_own,
+                                                    before_face,
+                                                )?;
+                                                let seat = chain[node].seat;
+                                                let id = chain[node].id.clone();
+                                                bridge.settle_tail(cx, seat, &id, uid_own, dest)?;
+                                            }
                                             cx.set_drive_dest(dest);
                                             Ok(())
                                         }
@@ -4101,6 +4284,43 @@ impl<M: CardModules> RulesBridge<M> {
                             return Err(game_core::engine::Halt::suspended());
                         }
                     }
+                    // 真奈 join (design G06 §6.4): `join::open()` parks this
+                    // body and runs the window on the work stack. The logged
+                    // answer keeps a replay aligned; the routine runs on every
+                    // pass and resumes the parked round.
+                    if let HostRequest::JoinOpen { at } = req {
+                        if std::env::var("DBG_HOOK").is_ok() {
+                            eprintln!(
+                                "JOIN_OPEN_ARM at={at} cursor={} ptr={:?}",
+                                cx.counteract_chain().is_some(),
+                                cx.counteract_chain()
+                                    .and_then(|c| c.downcast_ref::<CounteractChainCursor>())
+                                    .map(|c| c.chain)
+                            );
+                        }
+                        if let Some((chain, node)) = cx
+                            .counteract_chain()
+                            .and_then(|c| c.downcast_ref::<CounteractChainCursor>())
+                            .map(|c| (c.chain, c.index))
+                        {
+                            let mut answers2 = answers.clone();
+                            answers2.push(1);
+                            cx.begin_suspend_group();
+                            cx.push_work(JoinWork {
+                                bridge: self as *const RulesBridge<M>,
+                                chain,
+                                at: at.max(0) as usize,
+                                node,
+                                call,
+                                card_id: card_id.to_string(),
+                                uid,
+                                guarded,
+                                trigger: trigger.clone(),
+                                answers: answers2,
+                            });
+                            return Err(game_core::engine::Halt::suspended());
+                        }
+                    }
                     let req_is_visible = visible_host_request(&req);
                     // Ruling 2a: a host effect is a visible outcome -- flush
                     // the lazy header before it lands, then carry its id
@@ -4113,8 +4333,42 @@ impl<M: CardModules> RulesBridge<M> {
                         drive_header_ids = run.header_ids.clone();
                     }
                     let live_before = cx.live_event_count();
-                    let v =
-                        self.apply_host_request(cx, req, &run.linger_props, call.clone(), card_id)?;
+                    if std::env::var("DBG_HOOK").is_ok() {
+                        eprintln!(
+                            "APPLY_REQ card={card_id} draining={} answers={} req={req:?}",
+                            cx.is_draining_work(),
+                            answers.len()
+                        );
+                    }
+                    let v = match self.apply_host_request(
+                        cx,
+                        req,
+                        &run.linger_props,
+                        call.clone(),
+                        card_id,
+                    ) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            if !e.is_suspended() {
+                                return Err(e);
+                            }
+                            // A counter walk inside the request suspended. The
+                            // body has no Rust-stack continuation: re-drive it
+                            // once the parked walk (and any join window) has
+                            // run. The drive's host-answer log is carried, so
+                            // the requests already applied are not repeated.
+                            self.push_body_resume(
+                                cx,
+                                call,
+                                card_id,
+                                uid,
+                                guarded,
+                                trigger,
+                                answers.clone(),
+                            );
+                            return Err(e);
+                        }
+                    };
                     if run.own_activation >= 0 {
                         cx.stamp_parent_since(live_before, run.parent);
                     }
@@ -4351,6 +4605,9 @@ impl<M: CardModules> RulesBridge<M> {
                 )?;
                 return Ok(1);
             }
+            // The drive's `JoinOpen` arm normally takes this (it needs the
+            // answer tree); without one the body keeps going.
+            HostRequest::JoinOpen { .. } => return Ok(1),
             // The rest of the routine family -- see `HostRequest`.
             HostRequest::SettleAt {
                 player_id,
@@ -5536,18 +5793,58 @@ impl<M: CardModules> RulesBridge<M> {
             trigger_kind(t.kind.as_str()),
             TriggerKind::Card | TriggerKind::Event
         );
+        // A **play** of a `copies_previous` card (mortis) names the card it
+        // copies on the link; the body plays it with `ctx::play_card` and
+        // `trigger::link_copied` names it (design G06 §2.15). A counter link
+        // stamps its own source at build.
         if own_play && !own.is_empty() {
-            if let Some(idx) = self
-                .ruleset
-                .card(&own)
-                .filter(|&i| self.ruleset.cards()[i as usize].counteracts_to(trigger.kind))
-            {
+            if let Some(i) = self.ruleset.card(&own) {
+                if self.ruleset.copies_previous(i) {
+                    trigger.copied = Self::copy_source(cx, t.player_id as usize);
+                }
+            }
+        }
+        if own_play && !own.is_empty() {
+            if std::env::var("DBG_HOOK").is_ok() {
+                eprintln!(
+                    "OWN_ENTRY card={own} ext={} kind={:?}",
+                    trigger.extreme_armed, trigger.kind
+                );
+            }
+            // The entry is selected by kind alone -- a play answers no link
+            // of its own, so the offer contract (which reads the answered
+            // link's subject) must not be applied here: the card's own play
+            // is not its own counter subject (`tsugumi`'s `NumberInterval`
+            // contract would refuse it). The **condition** still gates the
+            // own run: `Mujica:无法将视线移开`'s counter clause is
+            // `target == owner && actor != owner`, true only for a counter
+            // against the owner, so its counter body has nothing to do on its
+            // own play (design G06 §4.9).
+            let own_entry = self.ruleset.card(&own).and_then(|i| {
+                let entry = self.ruleset.cards()[i as usize]
+                    .entry(card_sdk::abi::OnKind::Counteract, Some(trigger.kind))?;
+                let condition = self.ruleset.condition(i, entry);
+                if condition.is_none() {
+                    return Some((i, entry));
+                }
+                let run = self.probe_run(cx, &trigger, &own);
+                let scope =
+                    crate::condition::window_scope_owned(crate::condition::fill_window(&run));
+                let cand = crate::condition::fill_candidate(&run, t.player_id, &own, false);
+                crate::condition::condition_allows(condition, Some(&scope), &cand)
+                    .then_some((i, entry))
+            });
+            if let Some((idx, entry)) = own_entry {
+                // The entry is carried on the call: a play answers no link of
+                // its own, so the offer's answer parsing (tsugumi's numeric
+                // range, vocal's whole payment) must not be applied again here.
                 self.drive(
                     cx,
                     Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
                         arg: Vec::new(),
+                        entry: Some(entry),
                     },
                     &own,
                     -1,
@@ -5944,6 +6241,20 @@ impl<M: CardModules> RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        // The subject / join block / pending answers / copy source are link
+        // state, not body output: carry whatever the walk left on them.
+        t.subject_card = trigger.subject_card.clone();
+        t.join = trigger.join.as_ref().map(unbridge_join);
+        t.answers_declared = trigger.answers_declared.clone();
+        t.copied = trigger.copied.clone();
+        t.roll_root = trigger.roll_root;
+        t.pending_negation = trigger.pending_negation;
+        t.extreme_armed = trigger.extreme_armed;
+        t.answered_kinds = trigger
+            .answered_kinds
+            .iter()
+            .map(|k| k.spelling().into_owned())
+            .collect();
         // The pay kind / shape rewrite (`set_pay_kind` / `set_pay_shape`) rides
         // the payment trigger; the engine folds it back before the shape is read.
         t.pay = trigger.pay.map(unbridge_pay);
@@ -6255,11 +6566,35 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
+    /// Raise the hook-only refusal and post its visible line (design G06
+    /// §6.7). The raise has no header of its own -- there is no body to
+    /// announce -- so the line names the refused abnormal and the seat it
+    /// would have landed on.
+    fn refuse_abnormal(
+        &self,
+        cx: &mut PlayCtx,
+        player_id: i32,
+        by_player: i32,
+        kind: crate::AbKind,
+        on: impl Fn(&mut CoreTrigger),
+    ) -> Flow<()> {
+        self.raise_core(cx, "abnormalRefused", by_player, on)?;
+        cx.log(
+            player_id,
+            Msg::new("log.abnormalRefused")
+                .player_id("who", player_id)
+                .i("value", kind.as_i32() as i64),
+        );
+        Ok(())
+    }
+
     /// The abnormal-move gate, for an effect a card run wants to apply to
     /// `player_id` (`by` = the card's player): an out player is never hit;
-    /// field cards guard (`abnormalGuard`, block with `set_cancelled`); then,
-    /// if another player caused it, the `abnormal` counteraction window. What gets
-    /// through bumps `player_id`'s abnormal counter for this turn.
+    /// field cards guard (`abnormalGuard`, block with `set_cancelled`); an
+    /// immune recipient (`ImmuneAll`) is refused before the window; then the
+    /// `abnormal` counteraction window. Every refusal raises the hook-only
+    /// `abnormalRefused` first (design G06 §6.7). What gets through bumps
+    /// `player_id`'s abnormal counter for this turn.
     fn abnormal_gate(
         &self,
         cx: &mut PlayCtx,
@@ -6267,10 +6602,20 @@ impl<M: CardModules> RulesBridge<M> {
         kind: crate::AbKind,
         by_player: i32,
     ) -> Flow<bool> {
+        // The payload every raise below carries: the refusal hooks and the
+        // window read the same target / effect / source.
+        let on = |t: &mut CoreTrigger| {
+            t.target = player_id;
+            t.value = kind.as_i32();
+            t.by_card = Some(by_player);
+        };
         let Ok(s) = usize::try_from(player_id) else {
             return Ok(false);
         };
         if s >= cx.state().players.len() || cx.world().out(s) {
+            // The refusal comes first: a hook-only report that this abnormal
+            // never landed, with no window (design G06 §6.7).
+            self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
             return Ok(false);
         }
         // 「不可阻挡」 (glossary 14) -- three separate clauses:
@@ -6294,11 +6639,6 @@ impl<M: CardModules> RulesBridge<M> {
         // The ruleset's grant verbs refuse while its 「不可阻挡」 clause holds
         // (STA-01) -- checked before this window opens. The engine does not
         // name that key.
-        let on = |t: &mut CoreTrigger| {
-            t.target = player_id;
-            t.value = kind.as_i32();
-            t.by_card = Some(by_player);
-        };
         // `Untargetable` at declaration, same as `target_player`: 「你只会被
         // 自己发动的效果指定」 (夏日合宿) also covers an area status grant that
         // lands on the player without a `ctx::target` pick (那天的雨's 「所有
@@ -6322,6 +6662,14 @@ impl<M: CardModules> RulesBridge<M> {
             .raise_core(cx, "abnormalGuard", by_player, on)?
             .is_cancelled()
         {
+            self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
+            return Ok(false);
+        }
+        // Protection resolves before the window: `ImmuneAll` lets the effect
+        // name them and still land as nothing, so an immune recipient is not
+        // offered (design G06 §2.13, §6.7).
+        if by_player != player_id && self.immune(cx, player_id, by_player)? {
+            self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
             return Ok(false);
         }
         // Then the chain: the recipient answers the effect declaration.
@@ -6341,11 +6689,6 @@ impl<M: CardModules> RulesBridge<M> {
             if declared.is_cancelled() {
                 return Ok(false);
             }
-        }
-        // Then resolution: `ImmuneAll` lets the effect name them and still land
-        // as nothing.
-        if by_player != player_id && self.immune(cx, player_id, by_player)? {
-            return Ok(false);
         }
         // Settlement: what actually landed. `abnormal` is a hook now -- it is
         // the outcome, and cannot be counteraction'd. It runs for **every** landing,
@@ -6463,6 +6806,13 @@ impl<M: CardModules> RulesBridge<M> {
         if p != by_player && !self.target_window(cx, p, -1, by_player, card)? {
             return Ok(-1);
         }
+        // A counter inside the window may have cancelled this very
+        // designation (`cancel_designation`, net_error's clause 1) without
+        // cancelling the link; the designation is retracted, so the effect
+        // names nobody.
+        if cx.world().turn.cancelled_designations.contains(&p) {
+            return Ok(-1);
+        }
         // ---- resolution -----------------------------------------------
         // `ImmuneAll` is asked here, not at declaration: the effect named its
         // recipient, the chain formed, and it still lands as nothing.
@@ -6508,6 +6858,9 @@ impl<M: CardModules> RulesBridge<M> {
             }
             // Chain first: the owner answers the declaration. Then resolution.
             if !self.target_window(cx, owner, tile, by_player, card)? {
+                return Ok(-1);
+            }
+            if cx.world().turn.cancelled_designations.contains(&owner) {
                 return Ok(-1);
             }
             if self.immune(cx, owner, by_player)? {
@@ -6582,7 +6935,30 @@ impl<M: CardModules> RulesBridge<M> {
         // so its frame outlives the call and dies with the raise that carried
         // the walk. A suspended raise keeps its frames: it has not finished
         // (its re-entry carries the same uid and truncates at the end).
-        match self.counteract(cx, &mut t) {
+        // A suspension from the raise (a join window, a nested settle) parks
+        // the walk in `counteract_resume`. The routine's Rust stack is still
+        // live here, so pump the nested work and re-enter the walk instead of
+        // unwinding the whole routine: a drain that ends without an ask then
+        // continues the very body that raised. An `Ask` reached by the drain
+        // still escapes -- the answer replay rebuilds the walk.
+        let mut res = self.counteract(cx, &mut t);
+        let mut pumps = 0u32;
+        while res.as_ref().err().is_some_and(|e| e.is_suspended())
+            && !cx.is_draining_work()
+            && pumps < 64
+        {
+            match cx.drain_work() {
+                Ok(()) => {}
+                // The drain halted (`Ask`): that halt is the routine's now.
+                Err(e) => {
+                    res = Err(e);
+                    break;
+                }
+            }
+            pumps += 1;
+            res = self.counteract(cx, &mut t);
+        }
+        match res {
             Ok(()) => {
                 truncate_resolving(t.uid);
                 Ok(t)
@@ -6756,8 +7132,9 @@ impl<M: CardModules> RulesBridge<M> {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         // The answer tree. Index 0 is L1, the effect declaration; every other
-        // node is one declared counter.
-        let mut chain = vec![ChainLink {
+        // node is one declared counter. Boxed so its address survives the
+        // resume park (a continuation's chain cursor stays valid).
+        let mut chain = Box::new(vec![ChainLink {
             seat: chain_starter(t, cx.state().turn, n),
             idx: -1,
             id: t.card.clone().unwrap_or_default(),
@@ -6765,9 +7142,12 @@ impl<M: CardModules> RulesBridge<M> {
             move_extension: 0,
             arg: Vec::new(),
             answered: 0,
+            join: None,
+            saved_join: None,
             link: trigger.clone(),
             answers: Vec::new(),
-        }];
+            settled: false,
+        }]);
 
         // Hard bound: the tree is only as deep and as wide as the hands
         // involved, so this is a runaway guard, not a design limit. One round
@@ -6775,54 +7155,26 @@ impl<M: CardModules> RulesBridge<M> {
         // `MAX_COUNTERACT_PER_VISIT` offers, over `MAX_COUNTERACT_DEPTH + 1`
         // rounds.
         let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
-        // 真奈 join (CH-05): pre-scan hands for a `SELF_REDIRECT` card so the
-        // redirect is set before any body runs -- the join opener may be
-        // declared in a later round (e.g. at an Effect window), and joiners
-        // whose bodies run earlier still see the redirect.
-        for seat in 0..n {
-            for id in hand_of(cx, seat) {
-                if self.ruleset.card(id).is_some_and(|i| {
-                    self.ruleset.cards()[i as usize]
-                        .props
-                        .get(card_sdk::abi::prop::SELF_REDIRECT)
-                        .copied()
-                        .unwrap_or(0)
-                        != 0
-                }) {
-                    chain[0].link.join_redirect = Some(seat as i32);
-                    break;
-                }
-            }
-        }
-        self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
-        // The pre-scan arms on a mere hand holder (the declaration site re-arms
-        // with its declarer). Drop it again unless a `SELF_REDIRECT` card
-        // actually declared against this link -- a holder that never plays must
-        // not redirect the joiners' self-targeted effects.
-        // 规则书: 「其反击卡中针对打出玩家自身的效果改为你」 -- the clause names a
-        // played counter card.
-        let redirect_declared = chain.iter().skip(1).any(|l| {
-            l.link.answers == 0
-                && self.ruleset.cards()[l.idx as usize]
-                    .props
-                    .get(card_sdk::abi::prop::SELF_REDIRECT)
-                    .copied()
-                    .unwrap_or(0)
-                    != 0
-        });
-        if !redirect_declared {
-            chain[0].link.join_redirect = None;
-        }
+        // 真奈 join (CH-05): the block is created at declaration in
+        // `build_round`, so there is no hand pre-scan and no cleanup pass.
+        self.build_round(cx, &mut chain, 0, depth, &mut budget, None)?;
         // STACK-01: settles as a job list so a nested settle can suspend the
         // walk and resume without rebuilding the chain.
         let mut order = Vec::new();
         collect_resolve_order(&chain, 0, &mut order);
         self.resolve_jobs(cx, trigger, &mut chain, &order, 0)?;
 
-        // L1's dest is whatever the counters did to it.
-        if let Some(root) = chain.into_iter().next() {
-            *trigger = root.link;
-        }
+        // L1 settles next, in the engine; give it the same window readers a
+        // counter body gets. Its dest is whatever the counters did to it.
+        let mut l1 = chain[0].link.clone();
+        self.stamp_window(cx, &chain, 0, &mut l1);
+        chain[0].link = l1;
+        *trigger = chain[0].link.clone();
+        // A join continuation parked inside this walk still indexes the
+        // chain through its cursor; keep the box alive with the context.
+        let taken: Box<Vec<ChainLink>> = std::mem::take(&mut chain);
+        let kept: Box<dyn std::any::Any + Send> = taken;
+        cx.keep_chain(kept);
         Ok(())
     }
 
@@ -6832,10 +7184,13 @@ impl<M: CardModules> RulesBridge<M> {
     fn build_round(
         &self,
         cx: &mut PlayCtx,
-        chain: &mut Vec<ChainLink>,
+        chain: &mut Box<Vec<ChainLink>>,
         timing: usize,
         depth: u32,
         budget: &mut u32,
+        // A join window offers exactly these seats, in list order, and presents
+        // each as the link's target (§6.4). `None` = turn order.
+        over: Option<&[i32]>,
     ) -> Flow<()> {
         if depth >= MAX_COUNTERACT_DEPTH {
             return Ok(());
@@ -6844,7 +7199,10 @@ impl<M: CardModules> RulesBridge<M> {
         // The cycle starts at the **initial user** (ruling 2026-10-07): the
         // player the timing belongs to -- `chain_starter` at the root, the
         // declarer on a counter's own round.
-        let mut priority = Priority::new(chain[timing].seat, n);
+        let mut priority = match over {
+            Some(seats) => Priority::over(seats),
+            None => Priority::new(chain[timing].seat, n),
+        };
         // Counters this round collected, in declaration order.
         let mut round: Vec<usize> = Vec::new();
         // One processed set per window (this cycle, across its laps): a later
@@ -6881,9 +7239,54 @@ impl<M: CardModules> RulesBridge<M> {
                                 .copied()
                         })
                         .collect();
-                    let Some((id, idx, uid, move_extension, arg)) =
-                        self.declare_one(cx, cursor, &chain[timing].link, &mut memo, &groups)?
-                    else {
+                    // A join round presents the visited seat as the link's
+                    // target for its own offer ("as if each were its target",
+                    // 「如同自身的对应目标被指定一般」); the real recipient is
+                    // put back for the declared link (design G06 §6.4).
+                    let offer_target = priority.over.as_ref().map(|_| cursor as i32);
+                    let saved_target = chain[timing].link.target;
+                    if let Some(t) = offer_target {
+                        chain[timing].link.target = t;
+                        // The memo's scope was built for a previous seat's
+                        // target; the join presents this seat as the target
+                        // (design G06 §6.4).
+                        memo.invalidate_scope();
+                    }
+                    // The pending readers evaluate against the chain.
+                    let prev_chain = cx.set_counteract_chain(Some(Box::new(
+                        CounteractChainCursor {
+                            chain: (&mut **chain) as *mut Vec<ChainLink>,
+                            index: timing,
+                        },
+                    )));
+                    if std::env::var("DBG_OFFER").is_ok() {
+                        eprintln!(
+                            "VISIT seat={cursor} target={} hand={:?} over={:?}",
+                            chain[timing].link.target,
+                            hand_of(cx, cursor),
+                            priority.over
+                        );
+                    }
+                    let offered = self.declare_one(
+                        cx,
+                        cursor,
+                        chain,
+                        timing,
+                        &mut memo,
+                        &groups,
+                    );
+                    cx.set_counteract_chain(prev_chain);
+                    if offer_target.is_some() {
+                        chain[timing].link.target = saved_target;
+                    }
+                    if std::env::var("DBG_OFFER").is_ok() {
+                        eprintln!(
+                            "OFFER_RESULT seat={cursor} ok={} err={:?}",
+                            offered.as_ref().map(|o| o.is_some()).unwrap_or(false),
+                            offered.as_ref().err().map(|e| format!("{e:?}"))
+                        );
+                    }
+                    let Some((id, idx, uid, move_extension, arg)) = offered? else {
                         // Explicit pass, or nothing eligible left: the visit
                         // ends and priority advances.
                         break;
@@ -6905,30 +7308,107 @@ impl<M: CardModules> RulesBridge<M> {
                     // A hand changed: hand-sensitive probe verdicts and the
                     // scope's `_hand` table are stale from here.
                     memo.on_declaration();
-                    let mut link =
-                        CoreTrigger::new(if uid >= 0 { "cardUsed" } else { "card" }, cursor);
+                    // The counteraction history 「本回合内」 (无法将视线移开): the
+                    // declaration, before any body, cleared at `turn_start`.
+                    {
+                        let mut w = cx.world_copy();
+                        w.countered_this_turn.push(CounteractRecord {
+                            declarer: cursor as i32,
+                            countered: chain[timing].seat as i32,
+                            card: id.clone(),
+                        });
+                        cx.swap_world(w);
+                    }
+                    // The counter link carries the answered link forward (move /
+                    // pay / effects / subject / join / tags) before its own
+                    // overrides below: a contract and a body must both be able
+                    // to read what they answer.
+                    let at = chain.len();
+                    let mut link = chain[timing].link.clone();
+                    link.kind = if uid >= 0 {
+                        crate::TriggerKind::CardUsed
+                    } else {
+                        crate::TriggerKind::Card
+                    };
                     if uid >= 0 {
                         link.cards = vec![id.clone()];
                     }
                     link.card = Some(id.clone());
+                    // A counter's own subject is itself, so an entry answering
+                    // it (tsugumi on YOLO) reads the counter's properties.
+                    link.subject_card = Some(id.clone());
+                    // A `copies_previous` entry resolved to the copied card's
+                    // own entry: name the source so the body reads it.
+                    link.copied = None;
+                    if self.ruleset.card(&id) != Some(idx) {
+                        link.copied = Some(self.ruleset.cards()[idx as usize].id.clone());
+                    }
                     link.step = cx.state().step;
                     link.by_card = Some(cursor as i32);
                     // A counter used against someone is the `counteracted`
                     // timing of 「有玩家对你使用counteraction后」 (无法将视线移开): the
                     // link's `target` is the seat whose effect is being
                     // answered, `actor`/`player_id` the counter's declarer.
-                    // `CoreTrigger::new` defaults `target` to the declarer.
                     link.target = chain[timing].seat as i32;
-                    let at = chain.len();
+                    link.player_id = cursor as i32;
                     link.seq = (at + 1) as u32;
                     link.answers = timing as u32;
+                    // Its own pending set, a fresh negation and spared list.
+                    link.answers_declared.clear();
+                    link.negation = game_core::engine::rules::Negation::None;
+                    link.spared.clear();
+                    // The enclosing roll face a body's write propagates to.
+                    link.roll_root = nearest_roll_link(chain, timing);
                     round.push(at);
                     chain[timing].answers.push(at);
+                    // This answer is now declared and unresolved on the link --
+                    // what `trigger::pending_negation` counts (`now_sumimi`).
+                    chain[timing].link.answers_declared.push(at as u32);
+                    // An effect that arms the extreme is declared *now*; the
+                    // remaining offers on this link must see it (a second
+                    // copy is not offered, design G06 §6.6). The settle-time
+                    // stamps refresh the same field from `answers_declared`.
+                    if self
+                        .ruleset
+                        .entry_effect(idx, &chain[timing].link, None)
+                        .contains(card_sdk::abi::AnswerEffect::ARMS_EXTREME)
+                    {
+                        chain[timing].link.extreme_armed = true;
+                        // The counter's own link is a later timing: it is
+                        // inherited from this one, so it must be armed too or
+                        // the next round offers a second copy.
+                        link.extreme_armed = true;
+                    }
+                    // A declaration inside a join window counts for its report
+                    // even when the counter is negated later (「打出过」).
+                    if std::env::var("DBG_HOOK").is_ok() {
+                        eprintln!(
+                            "JOIN_DECL_CHECK timing={timing} is_some={} len={} joins={:?}",
+                            chain[timing].link.join.is_some(),
+                            chain.len(),
+                            (0..chain.len())
+                                .map(|i| chain[i].link.join.is_some())
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                    if let Some(j) = &mut chain[timing].link.join {
+                        if let Some(k) = j.seats.iter().position(|&s| s == cursor as i32) {
+                            j.declared[k] = true;
+                        }
+                        if std::env::var("DBG_HOOK").is_ok() {
+                            eprintln!(
+                                "JOIN_DECL timing={timing} seat={cursor} declared={:?}",
+                                j.declared
+                            );
+                        }
+                    }
                     // 真奈 join (CH-05): a `SELF_REDIRECT` counter opens a join
-                    // on the link it answers -- self-targeted effects of later
-                    // counters answering the same link redirect to its declarer
-                    // (「改为你」). Declaration-scoped: the redirect lives on the
-                    // link, so it cannot leak into other plays.
+                    // window on the link it answers -- the other seats may answer
+                    // the same link as if each were its target, and a landing
+                    // counter shields the opener (「改为你」). Declaration-scoped:
+                    // the block belongs to this node and is installed for its
+                    // body, so neither it nor a nested window can leak.
+                    let mut join_open = None;
                     if self.ruleset.cards()[idx as usize]
                         .props
                         .get(card_sdk::abi::prop::SELF_REDIRECT)
@@ -6936,7 +7416,36 @@ impl<M: CardModules> RulesBridge<M> {
                         .unwrap_or(0)
                         != 0
                     {
-                        chain[timing].link.join_redirect = Some(cursor as i32);
+                        let opener = cursor as i32;
+                        let seats: Vec<i32> = (0..n as i32)
+                            .filter(|&s| s != opener && !cx.world().out(s as usize))
+                            .collect();
+                        // A same-timing counter already declared on the answered
+                        // link *is* a joiner (design G06 §6.4: the window offers
+                        // the seats 「如同自身的对应目标被指定一般」; a declaration
+                        // made before the opener's body still counts and must not
+                        // be offered twice). Mark those seats now so the report
+                        // and `join::joiner_count` see them.
+                        let declared: Vec<bool> = seats
+                            .iter()
+                            .map(|&s| {
+                                // Index 0 is the timing itself, not a counter.
+                                chain
+                                    .iter()
+                                    .skip(1)
+                                    .any(|c| c.answered == timing && c.seat as i32 == s)
+                            })
+                            .collect();
+                        let k = seats.len();
+                        join_open = Some(crate::world::TriggerJoin {
+                            opener,
+                            seats,
+                            declared,
+                            used: vec![false; k],
+                            designated: vec![-1; k],
+                            opened: false,
+                        });
+                        chain[timing].link.join_redirect = Some(opener);
                     }
                     // Master Duel's chain build-up: the first counter opens the
                     // chain, so L1 (the initiating card) is announced first,
@@ -7045,8 +7554,11 @@ impl<M: CardModules> RulesBridge<M> {
                         move_extension,
                         arg,
                         answered: timing,
-                        link: bridge_trigger(&link),
+                        join: join_open,
+                        saved_join: None,
+                        link,
                         answers: Vec::new(),
+                        settled: false,
                     });
                     #[cfg(feature = "bot-cost")]
                     crate::host::bot_cost::COUNTERACT_DECLARED
@@ -7054,16 +7566,35 @@ impl<M: CardModules> RulesBridge<M> {
                     declared_any = true;
                 }
             }
-            if !priority.answered(declared_any) {
+            let open = priority.answered(declared_any);
+            if std::env::var("DBG_OFFER").is_ok() {
+                eprintln!(
+                    "VISIT_END declared={declared_any} open={open} cursor={} in_lap={} n={}",
+                    priority.cursor, priority.in_lap, priority.n
+                );
+            }
+            if !open {
                 break;
             }
         }
 
         // The counters just declared are themselves timings. Answer the newest
         // first (LIFO), each with its own round starting at its declarer (the
-        // new round's initial user).
+        // new round's initial user). A child that opens its own window gets
+        // its block on the link while its round builds -- its offers and the
+        // declaration marks must land there, not on the enclosing window --
+        // and the enclosing block goes back afterwards.
         for &child in round.iter().rev() {
-            self.build_round(cx, chain, child, depth + 1, budget)?;
+            let saved = chain[child].join.clone().map(|b| {
+                chain[timing].link.join_redirect = Some(b.opener);
+                chain[timing].link.join.replace(b)
+            });
+            self.build_round(cx, chain, child, depth + 1, budget, None)?;
+            if let Some(saved) = saved {
+                chain[timing].link.join = saved;
+                chain[timing].link.join_redirect =
+                    chain[timing].link.join.as_ref().map(|j| j.opener);
+            }
         }
         Ok(())
     }
@@ -7135,6 +7666,10 @@ impl<M: CardModules> RulesBridge<M> {
             // `set_cancelled` / `negate_effect` / `spare` land there -- and the
             // effect settles only after every counter has had its say.
             let mut on_link = chain[answered].link.clone();
+            // A `copies_previous` entry resolved to the copied card's entry
+            // names its source on its own link (stamped at declaration); the
+            // copied body reads it with `trigger::link_copied`.
+            on_link.copied = chain[idx].link.copied.clone();
             if chain[idx].move_extension > 0 {
                 // The extension is a move-tag rewrite; it needs a move payload.
                 if let Some(m) = &mut on_link.mv {
@@ -7144,21 +7679,37 @@ impl<M: CardModules> RulesBridge<M> {
                     ));
                 }
             }
-            let dest = self.drive(
+            // The offer-time readers, resolved from the chain and stamped on
+            // the link the body runs against (design G06 §6.2).
+            self.stamp_window(cx, chain, idx, &mut on_link);
+            let before_face = on_link
+                .mv
+                .as_ref()
+                .and_then(|m| m.roll)
+                .unwrap_or(on_link.value);
+            let prev_chain = cx.set_counteract_chain(Some(Box::new(CounteractChainCursor {
+                chain: chain as *mut Vec<ChainLink>,
+                index: idx,
+            })));
+            let driven = self.drive(
                 cx,
                 Call::Counteract {
                     card,
                     player_id: seat as i32,
                     arg: Vec::new(),
+                    entry: None,
                 },
                 &id,
                 uid,
                 &mut on_link,
-            )?;
+            );
+            cx.set_counteract_chain(prev_chain);
+            let dest = driven?;
             if let Some(m) = &mut on_link.mv {
                 m.tags
                     .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
             }
+            propagate_face(chain, &on_link, before_face);
             chain[answered].link = on_link;
             dest
         };
@@ -7197,7 +7748,7 @@ impl<M: CardModules> RulesBridge<M> {
         &self,
         cx: &mut PlayCtx,
         trigger: &Trigger,
-        chain: &mut Vec<ChainLink>,
+        chain: &mut Box<Vec<ChainLink>>,
         order: &[usize],
         mut next: usize,
     ) -> Flow<()> {
@@ -7208,143 +7759,10 @@ impl<M: CardModules> RulesBridge<M> {
             cx.log_event("settles", -1, Msg::new("log.chain_resolve"), -1, "", 0);
         }
         while next < order.len() {
-            let idx = order[next];
-            let seat = chain[idx].seat;
-            let card = chain[idx].idx;
-            let id = chain[idx].id.clone();
-            cx.log_event(
-                "settles",
-                seat as i32,
-                Msg::new("log.chain_resolve_link")
-                    .n("n", idx as i64 + 1)
-                    .card("card", id.clone()),
-                -1,
-                &id,
-                idx as i32 + 1,
-            );
-            let answered = chain[idx].answered;
-            let negated = chain[idx].link.is_cancelled();
-            let uid = chain[idx].uid;
-            if uid < 0 {
-                cx.log(
-                    seat as i32,
-                    Msg::new("log.play_counteract")
-                        .player_id("who", seat as i32)
-                        .card("card", id.clone()),
-                );
-            }
-            let dest = if negated {
-                let link = &chain[answered].link;
-                let negators: Vec<String> = chain[idx]
-                    .answers
-                    .iter()
-                    .map(|&a| chain[a].id.clone())
-                    .collect();
-                let msg = Msg::new("log.card_negated").card("card", id.clone());
-                let parent = cx.activation.last().copied().unwrap_or(-1);
-                let ev = cx.log_card_activation(
-                    game_core::state::card_trigger::COUNTER,
-                    seat as i32,
-                    &id,
-                    link.player_id,
-                    link.tile,
-                    true,
-                    msg,
-                    parent,
-                    -1,
-                );
-                if let Some(n) = negators.first() {
-                    cx.set_event_results(
-                        ev,
-                        vec![Msg::new("log.outcome.negated_by").card("card", n.clone())],
-                    );
-                }
-                DEST_UNSET
-            } else {
-                let mut on_link = chain[answered].link.clone();
-                if chain[idx].move_extension > 0 {
-                    if let Some(m) = &mut on_link.mv {
-                        m.tags.push((
-                            card_sdk::abi::COUNTERACT_MOVE_EXTENSION.to_string(),
-                            chain[idx].move_extension,
-                        ));
-                    }
-                }
-                match self.drive(
-                    cx,
-                    Call::Counteract {
-                        card,
-                        player_id: seat as i32,
-                        // The stored arg is the only source of truth at
-                        // settles time (docs/ACTIVATION.md §2): `OP_DECLARE`
-                        // ran at the offer pass and is never re-entered here.
-                        arg: chain[idx].arg.clone(),
-                    },
-                    &id,
-                    uid,
-                    &mut on_link,
-                ) {
-                    Err(e) if e.is_suspended() => {
-                        if let Some(m) = &mut on_link.mv {
-                            m.tags
-                                .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
-                        }
-                        chain[answered].link = on_link;
-                        let resume = HandResume {
-                            chain: chain.clone(),
-                            order: order.to_vec(),
-                            next: next + 1,
-                        };
-                        let (hooks, hook_index) = cx
-                            .take_counteract_resume()
-                            .and_then(|s| s.downcast::<CounteractResume>().ok().map(|b| *b))
-                            .map(|r| (r.hooks, r.hook_index))
-                            .unwrap_or((Vec::new(), 0));
-                        cx.set_counteract_resume(Box::new(CounteractResume {
-                            trigger: trigger.clone(),
-                            own_done: true,
-                            hand: Some(resume),
-                            hooks,
-                            hook_index,
-                        }));
-                        return Err(e);
-                    }
-                    Ok(dest) => {
-                        if let Some(m) = &mut on_link.mv {
-                            m.tags
-                                .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
-                        }
-                        chain[answered].link = on_link;
-                        dest
-                    }
-                    Err(e) => return Err(e),
-                }
-            };
-            if uid < 0 {
-                let mut w = cx.world_copy();
-                let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
-                let mut refilled = false;
-                match dest_from(dest) {
-                    Dest::Graveyard => {
-                        if !w.out(seat) {
-                            w.hidden[seat].graveyard.push(id.clone());
-                            refilled = w.refill_draw_pile(seat);
-                        }
-                    }
-                    Dest::Hand => w.hidden[seat].hand.push(id.clone()),
-                    Dest::Banished => {}
-                    Dest::Field => {}
-                }
-                cx.swap_world(w);
-                if refilled {
-                    self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
-                }
-                if spent {
-                    self.raise_core(cx, "discarded", seat as i32, |t| t.card = Some(id.clone()))?;
-                }
-            }
+            self.settle_node(cx, trigger, chain, order[next], order, next)?;
             next += 1;
         }
+
         if !order.is_empty() {
             let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
             // Same wording as the announce: a timing with no card of its own
@@ -7360,6 +7778,473 @@ impl<M: CardModules> RulesBridge<M> {
             };
             cx.log_event("settles", l1_seat, l1, -1, &l1_id, 1);
         }
+        Ok(())
+    }
+
+    /// Settle one chain node -- the job body of [`Self::resolve_jobs`], shared
+    /// with the join walk `settle_join`. Logs the link, applies the negation
+    /// check and runs the body against the answered link. A nested suspend
+    /// parks the given `order` / `next` and returns the halt.
+    fn settle_node(
+        &self,
+        cx: &mut PlayCtx,
+        trigger: &Trigger,
+        chain: &mut Box<Vec<ChainLink>>,
+        idx: usize,
+        order: &[usize],
+        next: usize,
+    ) -> Flow<i32> {
+        let seat = chain[idx].seat;
+        let card = chain[idx].idx;
+        let id = chain[idx].id.clone();
+        if std::env::var("DBG_HOOK").is_ok() {
+            eprintln!(
+                "SETTLE_NODE idx={idx} seat={seat} answered={} node_player={} ans_player={}",
+                chain[idx].answered,
+                chain[idx].link.player_id,
+                chain[chain[idx].answered].link.player_id
+            );
+        }
+        cx.log_event(
+            "settles",
+            seat as i32,
+            Msg::new("log.chain_resolve_link")
+                .n("n", idx as i64 + 1)
+                .card("card", id.clone()),
+            -1,
+            &id,
+            idx as i32 + 1,
+        );
+        let answered = chain[idx].answered;
+        let negated = chain[idx].link.is_cancelled();
+        let uid = chain[idx].uid;
+        if uid < 0 {
+            cx.log(
+                seat as i32,
+                Msg::new("log.play_counteract")
+                    .player_id("who", seat as i32)
+                    .card("card", id.clone()),
+            );
+        }
+        let dest = if negated {
+            let link = &chain[answered].link;
+            let negators: Vec<String> = chain[idx]
+                .answers
+                .iter()
+                .map(|&a| chain[a].id.clone())
+                .collect();
+            let msg = Msg::new("log.card_negated").card("card", id.clone());
+            let parent = cx.activation.last().copied().unwrap_or(-1);
+            let ev = cx.log_card_activation(
+                game_core::state::card_trigger::COUNTER,
+                seat as i32,
+                &id,
+                link.player_id,
+                link.tile,
+                true,
+                msg,
+                parent,
+                -1,
+            );
+            if let Some(n) = negators.first() {
+                cx.set_event_results(
+                    ev,
+                    vec![Msg::new("log.outcome.negated_by").card("card", n.clone())],
+                );
+            }
+            DEST_UNSET
+        } else {
+            // A `SELF_REDIRECT` node installs its window on the answered link
+            // for its body; the enclosing window (if any) goes back when the
+            // body returns (design G06 §6.4).
+            if let Some(block) = chain[idx].join.clone() {
+                let opener = block.opener;
+                chain[idx].saved_join = chain[answered].link.join.replace(block);
+                chain[answered].link.join_redirect = Some(opener);
+            }
+            let mut on_link = chain[answered].link.clone();
+            // A `copies_previous` entry resolved to the copied card's entry
+            // names its source on its own link (stamped at declaration); the
+            // copied body reads it with `trigger::link_copied`.
+            on_link.copied = chain[idx].link.copied.clone();
+            if chain[idx].move_extension > 0 {
+                if let Some(m) = &mut on_link.mv {
+                    m.tags.push((
+                        card_sdk::abi::COUNTERACT_MOVE_EXTENSION.to_string(),
+                        chain[idx].move_extension,
+                    ));
+                }
+            }
+            // The offer-time readers (`trigger::pending_negation` /
+            // `extreme_armed` / `answered_kinds`) from the link's declared
+            // answers (design G06 §6.2).
+            on_link.answers_declared = chain[answered].link.answers_declared.clone();
+            on_link.pending_negation = chain[answered]
+                .link
+                .answers_declared
+                .iter()
+                .filter(|&&d| {
+                    let n = &chain[d as usize];
+                    self.ruleset
+                        .entry_effect(n.idx, &n.link, None)
+                        .contains(card_sdk::abi::AnswerEffect::NEGATES)
+                })
+                .count() as i32;
+            on_link.extreme_armed = (cx.world().turn.extreme != game_core::engine::Extreme::Plain)
+                || chain[answered].link.answers_declared.iter().any(|&d| {
+                    let n = &chain[d as usize];
+                    self.ruleset
+                        .entry_effect(n.idx, &n.link, None)
+                        .contains(card_sdk::abi::AnswerEffect::ARMS_EXTREME)
+                });
+            on_link.answered_kinds.clear();
+            {
+                let mut walk = vec![idx];
+                let mut cur = idx;
+                while cur != 0 {
+                    cur = chain[cur].link.answers as usize;
+                    walk.push(cur);
+                }
+                on_link.answered_kinds = walk
+                    .into_iter()
+                    .rev()
+                    .map(|i| chain[i].link.kind)
+                    .collect();
+            }
+            let before_face = on_link
+                .mv
+                .as_ref()
+                .and_then(|m| m.roll)
+                .unwrap_or(on_link.value);
+            let prev_chain = cx.set_counteract_chain(Some(Box::new(
+                CounteractChainCursor {
+                    chain: (&mut **chain) as *mut Vec<ChainLink>,
+                    index: idx,
+                },
+            )));
+            let driven = self.drive(
+                cx,
+                Call::Counteract {
+                    card,
+                    player_id: seat as i32,
+                    // The stored arg is the only source of truth at
+                    // settles time (docs/ACTIVATION.md §2): `OP_DECLARE`
+                    // ran at the offer pass and is never re-entered here.
+                    arg: chain[idx].arg.clone(),
+                    entry: None,
+                },
+                &id,
+                uid,
+                &mut on_link,
+            );
+            cx.set_counteract_chain(prev_chain);
+            match driven {
+                Err(e) if e.is_suspended() => {
+                    if let Some(m) = &mut on_link.mv {
+                        m.tags
+                            .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+                    }
+                    // The node's own window stays installed while its body
+                    // resumes; the continuation restores the enclosing one.
+                    // `on_link` predates the run: a join round settled inside
+                    // it has since marked its block (`declared` / `used` /
+                    // `designated`), and the marks live only on the chain's
+                    // copy -- take that block back, or the writeback below
+                    // drops them (design G06 §6.4).
+                    if chain[answered].link.join.is_some() {
+                        on_link.join = chain[answered].link.join.clone();
+                    }
+                    chain[answered].link = on_link;
+                    let mut r = cx
+                        .take_counteract_resume()
+                        .and_then(|s| s.downcast::<CounteractResume>().ok().map(|b| *b))
+                        .unwrap_or(CounteractResume {
+                            trigger: trigger.clone(),
+                            own_done: true,
+                            hand: None,
+                            hooks: Vec::new(),
+                            hook_index: 0,
+                            chain: None,
+                            join: None,
+                        });
+                    // Moved, not cloned: the boxed chain keeps its address for
+                    // the continuation's cursor.
+                    r.chain = Some(std::mem::take(chain));
+                    // Inside a join walk the outer hand cursor already points
+                    // past the opener -- the join's own progress is in
+                    // `JoinResume`, so leave it alone.
+                    if r.join.is_none() {
+                        r.hand = Some(HandResume {
+                            order: order.to_vec(),
+                            next: next + 1,
+                        });
+                    }
+                    cx.set_counteract_resume(Box::new(r));
+                    return Err(e);
+                }
+                Ok(dest) => {
+                    self.close_drive(cx, chain, idx, &mut on_link, before_face)?;
+                    dest
+                }
+                Err(e) => return Err(e),
+            }
+        };
+        self.settle_tail(cx, seat, &id, uid, dest)?;
+        chain[idx].settled = true;
+        Ok(dest)
+    }
+
+    /// Land a finished drive on `chain[idx]`'s answered link: drop the move
+    /// extension tag, restore the enclosing window, compose a face write, and
+    /// (when the `SELF_REDIRECT` node opened its own window) put the answered
+    /// link's previous block back (design G06 §6.3/§6.4). Shared by the
+    /// same-stack settle and a resumed continuation.
+    fn close_drive(
+        &self,
+        cx: &mut PlayCtx,
+        chain: &mut Vec<ChainLink>,
+        idx: usize,
+        on_link: &mut Trigger,
+        before_face: i32,
+    ) -> Flow<()> {
+        if let Some(m) = &mut on_link.mv {
+            m.tags
+                .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+        }
+        if chain[idx].join.is_some() {
+            on_link.join = chain[idx].saved_join.take();
+            on_link.join_redirect = on_link.join.as_ref().map(|j| j.opener);
+        }
+        propagate_face(chain, on_link, before_face);
+        let answered = chain[idx].answered;
+        chain[answered].link = on_link.clone();
+        Ok(())
+    }
+
+    /// Apply a settled counter's dest (design G06 keeps the pre-existing
+    /// shape: hand counters are spent, field ones stay).
+    fn settle_tail(
+        &self,
+        cx: &mut PlayCtx,
+        seat: usize,
+        id: &str,
+        uid: i32,
+        dest: i32,
+    ) -> Flow<()> {
+        if uid >= 0 {
+            return Ok(());
+        }
+        let mut w = cx.world_copy();
+        let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
+        let mut refilled = false;
+        match dest_from(dest) {
+            Dest::Graveyard => {
+                if !w.out(seat) {
+                    w.hidden[seat].graveyard.push(id.to_string());
+                    refilled = w.refill_draw_pile(seat);
+                }
+            }
+            Dest::Hand => w.hidden[seat].hand.push(id.to_string()),
+            Dest::Banished => {}
+            Dest::Field => {}
+        }
+        cx.swap_world(w);
+        if refilled {
+            self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
+        }
+        if spent {
+            self.raise_core(cx, "discarded", seat as i32, |t| t.card = Some(id.to_string()))?;
+        }
+        Ok(())
+    }
+
+    /// Stamp the offer-time readers on the link a body runs against (design
+    /// G06 §6.2). `idx` 0 is the root timing: its own declarations are the
+    /// window. Called again after a join window so a joined negation / extreme
+    /// shows up in the opener's body.
+    fn stamp_window(&self, cx: &PlayCtx, chain: &[ChainLink], idx: usize, on_link: &mut Trigger) {
+        let answered = if idx == 0 { 0 } else { chain[idx].answered };
+        let declared = &chain[answered].link.answers_declared;
+        on_link.answers_declared = declared.clone();
+        on_link.pending_negation = declared
+            .iter()
+            .filter(|&&d| {
+                let n = &chain[d as usize];
+                self.ruleset
+                    .entry_effect(n.idx, &n.link, None)
+                    .contains(card_sdk::abi::AnswerEffect::NEGATES)
+            })
+            .count() as i32;
+        on_link.extreme_armed = (cx.world().turn.extreme != game_core::engine::Extreme::Plain)
+            || declared.iter().any(|&d| {
+                let n = &chain[d as usize];
+                self.ruleset
+                    .entry_effect(n.idx, &n.link, None)
+                    .contains(card_sdk::abi::AnswerEffect::ARMS_EXTREME)
+            });
+        on_link.answered_kinds.clear();
+        let mut walk = vec![idx];
+        let mut cur = idx;
+        while cur != 0 {
+            cur = chain[cur].link.answers as usize;
+            walk.push(cur);
+        }
+        on_link.answered_kinds = walk
+            .into_iter()
+            .rev()
+            .map(|i| chain[i].link.kind)
+            .collect();
+    }
+
+    /// Park (or refresh) the join round's progress beside the hook list, so a
+    /// nested suspension resumes it (design G06 §6.4).
+    fn park_join(
+        &self,
+        cx: &mut PlayCtx,
+        trigger: &Trigger,
+        join: JoinResume,
+        chain: &Box<Vec<ChainLink>>,
+    ) {
+        let mut r = take_resume_or_fresh(cx, trigger);
+        r.join = Some(join);
+        // A raise inside the joiner's body adopts this resume and continues
+        // `hand`; it needs the tree. The live box stays owned by the join walk
+        // (its cursor address must not move), so hand over a copy -- the
+        // resume's write-back puts the settled tree back through the cursor.
+        if r.chain.is_none() {
+            r.chain = Some(Box::new((**chain).clone()));
+        }
+        cx.set_counteract_resume(Box::new(r));
+    }
+
+    /// Build (once) and settle the join round on `chain[at]`, then close the
+    /// window: the answered link aims at its real recipient again and `opened`
+    /// is set for the opener's report (design G06 §6.4). The round's nodes
+    /// settle through [`Self::settle_node`], so logging, the negation check and
+    /// the spent-card tail are the ordinary ones.
+    fn settle_join(
+        &self,
+        cx: &mut PlayCtx,
+        chain: &mut Box<Vec<ChainLink>>,
+        at: usize,
+        node: usize,
+        mut resume: JoinResume,
+        trigger: &mut Trigger,
+    ) -> Flow<()> {
+        if std::env::var("DBG_HOOK").is_ok() {
+            eprintln!(
+                "SETTLE_JOIN at={at} node={node} len={} join={:?} answered={}",
+                chain.len(),
+                chain[at].link.join.as_ref().map(|j| j.declared.clone()),
+                chain[at].link.answers
+            );
+        }
+        if resume.order.is_empty() && resume.next == 0 {
+            let seats = chain[at]
+                .link
+                .join
+                .as_ref()
+                .map(|j| j.seats.clone())
+                .unwrap_or_default();
+            // A declaration on this link made *ahead* of the window is a
+            // joiner too (「如同自身的对应目标被指定一般」, design G06 §6.4):
+            // it answered before the block existed on the link, so its
+            // declaration mark was never written at declaration time. Mark it
+            // now, before the window reads the marks for its count / fallback.
+            let ahead: Vec<usize> = (1..chain.len())
+                .filter(|&i| i != node && chain[i].answered == at)
+                .filter_map(|i| {
+                    let seat = chain[i].seat as i32;
+                    chain[at]
+                        .link
+                        .join
+                        .as_ref()?
+                        .seats
+                        .iter()
+                        .position(|&s| s == seat)
+                })
+                .collect();
+            if let Some(j) = &mut chain[at].link.join {
+                for k in ahead {
+                    j.declared[k] = true;
+                }
+            }
+            // Seats that already declared on the link ahead of the window are
+            // joiners: do not offer them again (「不重复提供同一座位」).
+            let offered: Vec<i32> = {
+                let j = chain[at].link.join.as_ref();
+                seats
+                    .iter()
+                    .copied()
+                    .filter(|s| {
+                        let k = j
+                            .and_then(|j| j.seats.iter().position(|x| x == s))
+                            .unwrap_or(usize::MAX);
+                        !j.is_some_and(|j| j.declared.get(k).copied().unwrap_or(false))
+                    })
+                    .collect()
+            };
+            if seats.is_empty() {
+                if let Some(j) = &mut chain[at].link.join {
+                    j.opened = true;
+                }
+                return Ok(());
+            }
+            // One hop deeper than the opener (`answered_kinds`' count).
+            let mut depth = 1u32;
+            let mut cur = node;
+            while cur != 0 {
+                cur = chain[cur].link.answers as usize;
+                depth += 1;
+            }
+            let n = cx.state().players.len() as u32;
+            let mut budget =
+                (MAX_COUNTERACT_DEPTH + 1) * n * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
+            let start = chain.len();
+            self.build_round(cx, chain, at, depth, &mut budget, Some(&offered))?;
+            // The report lives on the opener's own link: take the declared /
+            // shielding marks the round wrote.
+            trigger.join = chain[at].link.join.clone();
+            // Every joiner node -- the seats declared ahead of the window
+            // included -- post-order, newest first (LIFO). Only nodes below
+            // the opener are still unsettled (the walk settles newest first);
+            // a declaration made after it already ran as a plain counter.
+            let mut order = Vec::new();
+            let joiners: Vec<usize> = (0..node)
+                .chain(start..chain.len())
+                .filter(|&i| {
+                    i > 0
+                        && !chain[i].settled
+                        && chain[i].answered == at
+                        && seats.contains(&(chain[i].seat as i32))
+                })
+                .collect();
+            for &child in joiners.iter().rev() {
+                collect_resolve_order(chain, child, &mut order);
+            }
+            resume.order = order;
+        }
+        while resume.next < resume.order.len() {
+            let idx = resume.order[resume.next];
+            self.park_join(
+                cx,
+                trigger,
+                JoinResume {
+                    at,
+                    saved_target: resume.saved_target,
+                    order: resume.order.clone(),
+                    next: resume.next + 1,
+                },
+                chain,
+            );
+            self.settle_node(cx, trigger, chain, idx, &resume.order, resume.next)?;
+            resume.next += 1;
+        }
+        chain[at].link.target = resume.saved_target;
+        if let Some(j) = &mut chain[at].link.join {
+            j.opened = true;
+        }
+        trigger.join = chain[at].link.join.clone();
         Ok(())
     }
 
@@ -7479,10 +8364,26 @@ impl<M: CardModules> RulesBridge<M> {
         self.ruleset.counteracts_to_play(idx, top)
     }
 
-    /// The [`On::Counteract`] entry that answers `top` (see
+    /// The [`On::Counteract`] entry that answers `top` for `seat` (see
     /// [`Self::counteracts_to_play`] for the Effect-on-DESIGNATES-play rule).
-    fn counteract_entry(&self, idx: i32, top: &Trigger) -> Option<i32> {
-        self.ruleset.counteract_entry(idx, top)
+    /// `(card, entry)`: a copy source resolves to its own card.
+    fn counteract_entry(
+        &self,
+        idx: i32,
+        top: &Trigger,
+        source: Option<&str>,
+    ) -> Option<(i32, i32)> {
+        self.ruleset.counteract_entry(idx, top, source)
+    }
+
+    /// The most recent other-seat, non-placing play (the copy source).
+    fn copy_source(cx: &PlayCtx, seat: usize) -> Option<String> {
+        cx.world()
+            .played_cards
+            .iter()
+            .rev()
+            .find(|p| p.player != seat as i32 && !p.placed)
+            .map(|p| p.card.clone())
     }
 
     /// Valid-option-first pre-scan (docs/GUARDS.md §4.5): could **any** seat
@@ -7505,6 +8406,8 @@ impl<M: CardModules> RulesBridge<M> {
             data: &self.data,
             trigger: top,
             cand: None,
+            pending: None,
+            rules: Some(self),
         };
         let mut scope: Option<WindowScope> = None;
         for s in 0..n {
@@ -7525,18 +8428,32 @@ impl<M: CardModules> RulesBridge<M> {
                 };
                 // Cached counteraction index (BOT-RESEARCH.md #1): one shift of
                 // the per-card kind bitmask -- no entry-table scan, no `Run`.
+                if std::env::var("DBG_OFFER").is_ok() {
+                    eprintln!(
+                        "CAND seat={s} card={id} kind={:?} subj={:?} ctp={} entry={:?}",
+                        top.kind,
+                        top.subject_card,
+                        self.counteracts_to_play(idx, top),
+                        self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref())
+                    );
+                }
                 if !self.counteracts_to_play(idx, top) {
                     continue;
                 }
-                let Some(entry) = self.counteract_entry(idx, top) else {
+                let Some((card, entry)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
                     continue;
                 };
-                let Some(condition) = self.ruleset.condition(idx, entry) else {
+                let Some(condition) = self.ruleset.condition(card, entry) else {
                     // No condition: the card always offers (subject to the
                     // guard, which the cycle itself asks).
                     return true;
                 };
-                let cand = crate::condition::fill_candidate(&live, s as i32, id, false);
+                let cand = crate::condition::fill_candidate(
+                    &live,
+                    s as i32,
+                    &self.ruleset.cards()[card as usize].id,
+                    false,
+                );
                 let sc = scope.get_or_insert_with(|| {
                     crate::condition::window_scope_owned(crate::condition::fill_window(&live))
                 });
@@ -7555,10 +8472,22 @@ impl<M: CardModules> RulesBridge<M> {
         &self,
         cx: &mut PlayCtx,
         s: usize,
-        top: &Trigger,
+        chain: &[ChainLink],
+        timing: usize,
         memo: &mut ProbeMemo,
         groups: &[i32],
     ) -> Flow<Option<(String, i32, i32, i32, Vec<u8>)>> {
+        let top = &chain[timing].link;
+        if std::env::var("DBG_OFFER").is_ok() {
+            eprintln!(
+                "DECLARE_ONE seat={s} kind={:?} card={:?} target={} designates={} hand={:?}",
+                top.kind,
+                top.card,
+                top.target,
+                self.ruleset.trigger_designates(top),
+                hand_of(cx, s)
+            );
+        }
         // Hand cards that answer this link, deduped to one entry per id.
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
@@ -7693,7 +8622,11 @@ impl<M: CardModules> RulesBridge<M> {
                 {
                     continue;
                 }
-                let mut run = self.probe_run(cx, top, &id);
+                let Some((idx, _)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
+                    continue;
+                };
+                let card_id = self.ruleset.cards()[idx as usize].id.clone();
+                let mut run = self.probe_run(cx, top, &card_id);
                 run.current_uid = uid;
                 if self
                     .ruleset
@@ -7718,6 +8651,8 @@ impl<M: CardModules> RulesBridge<M> {
             data: &self.data,
             trigger: top,
             cand: None,
+            pending: Some((chain, timing)),
+            rules: Some(self),
         };
         let mut options: Vec<(String, i32, i32)> = Vec::new();
         let mut order: Vec<(u8, u32, u32)> = Vec::new();
@@ -7725,9 +8660,11 @@ impl<M: CardModules> RulesBridge<M> {
             #[cfg(feature = "bot-cost")]
             crate::host::bot_cost::COUNTERACT_PROBES
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let Some(entry) = self.counteract_entry(idx, top) else {
+            let Some((idx, entry)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
                 continue;
             };
+            // A copied entry runs the source card's module.
+            let card_id = self.ruleset.cards()[idx as usize].id.clone();
             let condition = self.ruleset.condition(idx, entry);
             let guard_is_none = self.ruleset.entry_guard_is_none(idx, entry);
             // A verdict is hand-sensitive when the residual wasm guard may read
@@ -7756,7 +8693,7 @@ impl<M: CardModules> RulesBridge<M> {
                     } else {
                         // No condition but a residual guard: the only path that
                         // still needs a `Run` (the guard's wasm store).
-                        let mut run = self.probe_run(cx, top, &id);
+                        let mut run = self.probe_run(cx, top, &card_id);
                         run.current_uid = uid;
                         let scope = memo.scope_for(&live, true);
                         self.ruleset
@@ -7767,7 +8704,7 @@ impl<M: CardModules> RulesBridge<M> {
                 Some(condition) => {
                     let need_fresh = crate::condition::cond_reads_window_hand(&condition.cond);
                     let scope = memo.scope_for(&live, need_fresh);
-                    let cand = crate::condition::fill_candidate(&live, s as i32, &id, false);
+                    let cand = crate::condition::fill_candidate(&live, s as i32, &card_id, false);
                     if !crate::condition::condition_allows(Some(condition), Some(scope), &cand) {
                         false
                     } else if guard_is_none {
@@ -7775,7 +8712,7 @@ impl<M: CardModules> RulesBridge<M> {
                         // copy, no wasm instantiation.
                         true
                     } else {
-                        let mut run = self.probe_run(cx, top, &id);
+                        let mut run = self.probe_run(cx, top, &card_id);
                         run.current_uid = uid;
                         self.ruleset
                             .can_counteract_scoped(&run, idx, s as i32, scope)
@@ -7966,20 +8903,16 @@ impl<M: CardModules> RulesBridge<M> {
         // The declared entry is the [反击] at this trigger -- not the card's
         // `On::Play`. A declare on the counteract entry is what `finish_offer`
         // is collecting (docs/ACTIVATION.md §2).
-        let Some(entry) = self
-            .ruleset
-            .cards()
-            .get(idx as usize)
-            .and_then(|c| c.entry(card_sdk::abi::OnKind::Counteract, Some(top.kind)))
-        else {
+        let Some((card, entry)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
             return Ok(Some(Vec::new()));
         };
+        let src_id = self.ruleset.cards()[card as usize].id.clone();
         let mut answers: Vec<i32> = Vec::new();
         loop {
-            let run = self.declare_run(cx, s, id, idx, top);
+            let run = self.declare_run(cx, s, &src_id, card, top);
             match self
                 .ruleset
-                .declare_entry(&run, idx, entry, s as i32, &answers)
+                .declare_entry(&run, card, entry, s as i32, &answers)
             {
                 Ok(DeclareOut::Arg(a)) => return Ok(Some(a)),
                 Ok(DeclareOut::Declined) => return Ok(None),
@@ -8121,6 +9054,13 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         rolled: m.rolled,
         effective: m.effective,
     });
+    // The link's subject: the raised play's card, else the innermost resolving
+    // frame (the card body this raise is part of). None from turn flow.
+    let subject = t
+        .card
+        .clone()
+        .filter(|s| !s.is_empty())
+        .or_else(|| resolving_snapshot().last().map(|(card, _, _)| card.clone()));
     let buy = t.buy.map(|b| TriggerBuy {
         kind: card_sdk::abi::BuyKind::from_i32(b.kind.as_i32())
             .unwrap_or(card_sdk::abi::BuyKind::Land),
@@ -8172,11 +9112,36 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         reason: t.reason.clone(),
         uid: t.uid,
         instance: t.instance,
-        join_redirect: None,
-        join_used: false,
+        join_redirect: t.join.as_ref().map(|j| j.opener),
+        join_used: t.join.as_ref().is_some_and(|j| j.used.iter().any(|&x| x)),
         settle_tile: t.settle_tile,
         outcome: t.outcome,
         charge_skill: t.charge_skill,
+        subject_card: subject,
+        join: t.join.as_ref().map(Into::into),
+        answers_declared: t.answers_declared.clone(),
+        copied: t.copied.clone(),
+        roll_root: t.roll_root,
+        pending_negation: t.pending_negation,
+        extreme_armed: t.extreme_armed,
+        answered_kinds: t
+            .answered_kinds
+            .iter()
+            .map(|k| trigger_kind(k))
+            .collect(),
+    }
+}
+
+/// The reverse of [`bridge_trigger`]'s join mapping: the engine mirror of a
+/// guest join window.
+fn unbridge_join(j: &crate::world::TriggerJoin) -> game_core::engine::rules::JoinState {
+    game_core::engine::rules::JoinState {
+        opener: j.opener,
+        seats: j.seats.clone(),
+        declared: j.declared.clone(),
+        used: j.used.clone(),
+        designated: j.designated.clone(),
+        opened: j.opened,
     }
 }
 
@@ -8374,10 +9339,18 @@ struct ChainLink {
     arg: Vec<u8>,
     /// Node index of the timing this answers.
     answered: usize,
+    /// The join window this counter opens (`SELF_REDIRECT`), installed on the
+    /// answered link for its body only (design G06 §6.4).
+    join: Option<crate::world::TriggerJoin>,
+    /// The window block that was on the answered link before this node's own
+    /// one went in; put back when the body returns.
+    saved_join: Option<crate::world::TriggerJoin>,
     /// This node's own link -- what its answers read and rewrite.
     link: Trigger,
     /// Nodes that answered this one, in declaration order.
     answers: Vec<usize>,
+    /// Already settled (a join round must not settle it again).
+    settled: bool,
 }
 
 /// Post-order walk of the answer tree (newest-first children) -- the order
@@ -8389,6 +9362,53 @@ fn collect_resolve_order(chain: &[ChainLink], idx: usize, out: &mut Vec<usize>) 
     if idx != 0 {
         out.push(idx);
     }
+}
+
+/// The nearest link at or above `idx` whose kind carries a roll face, or
+/// [`ROLL_ROOT_NONE`]. A counter body's face write propagates to it (§G06
+/// 6.3), so an additive counter composed on a roll root lands on the root.
+fn nearest_roll_link(chain: &[ChainLink], mut idx: usize) -> u32 {
+    loop {
+        if matches!(
+            chain[idx].link.kind,
+            TriggerKind::DiceRollResult
+                | TriggerKind::DiceRollBefore
+                | TriggerKind::DiceRollAfter
+                | TriggerKind::DiceRollValue
+                | TriggerKind::DiceRollCast
+                | TriggerKind::DiceRollAdd
+                | TriggerKind::DiceRollSettled
+        ) {
+            return idx as u32;
+        }
+        if idx == 0 {
+            return ROLL_ROOT_NONE;
+        }
+        idx = chain[idx].link.answers as usize;
+    }
+}
+
+/// A counter body's face write (`.mv.roll`, else `value`) composes onto the
+/// enclosing roll link, when there is one and the face moved (design G06
+/// §6.3). Inner answers settle first, so an outer additive body already reads
+/// the composed face; the root's final value is what the engine commits.
+fn propagate_face(chain: &mut [ChainLink], on_link: &Trigger, before: i32) {
+    let after = on_link
+        .mv
+        .as_ref()
+        .and_then(|m| m.roll)
+        .unwrap_or(on_link.value);
+    let root = on_link.roll_root;
+    if after == before || root == crate::world::ROLL_ROOT_NONE {
+        return;
+    }
+    let Some(rl) = chain.get_mut(root as usize) else {
+        return;
+    };
+    if let Some(m) = &mut rl.link.mv {
+        m.roll = on_link.mv.as_ref().and_then(|m| m.roll);
+    }
+    rl.link.value = on_link.value;
 }
 
 /// Who is asked next during a round on one timing (see `hand_counteractions`).
@@ -8409,6 +9429,8 @@ struct Priority {
     in_lap: usize,
     /// Did any visit in the current lap declare a counter?
     lap_carried: bool,
+    /// When set, only these seats are visited, in list order (a join round).
+    over: Option<Vec<i32>>,
 }
 
 impl Priority {
@@ -8419,12 +9441,27 @@ impl Priority {
             cursor: initial % n,
             in_lap: 0,
             lap_carried: false,
+            over: None,
+        }
+    }
+
+    /// A round over exactly `seats`, in list order (a join window).
+    fn over(seats: &[i32]) -> Self {
+        Self {
+            n: seats.len(),
+            cursor: 0,
+            in_lap: 0,
+            lap_carried: false,
+            over: Some(seats.to_vec()),
         }
     }
 
     /// The seat to ask now.
     fn seat(&self) -> usize {
-        self.cursor
+        match &self.over {
+            Some(list) => list.get(self.cursor).copied().unwrap_or(0).max(0) as usize,
+            None => self.cursor,
+        }
     }
 
     /// The current seat's visit ended -- `declared` if it added at least one
@@ -8474,14 +9511,255 @@ struct CounteractResume {
     /// Hook drives left after the suspend (stable snapshot).
     hooks: Vec<HookJob>,
     hook_index: usize,
+    /// The answer tree, while a walk (or a body continuation) is parked on it.
+    /// Boxed and never moved out by value: continuations point into it.
+    chain: Option<Box<Vec<ChainLink>>>,
+    /// A join round in progress (`ctx::join::open()`).
+    join: Option<JoinResume>,
+}
+
+/// Remaining work of one join round (design G06 §6.4).
+struct JoinResume {
+    /// The answered link the window sits on.
+    at: usize,
+    /// Its `target` before the round, restored when it finishes.
+    saved_target: i32,
+    /// Post-order joiner nodes still to settle.
+    order: Vec<usize>,
+    next: usize,
 }
 
 /// Remaining settles work of a hand counteraction window (STACK-01).
 struct HandResume {
-    chain: Vec<ChainLink>,
     /// Post-order node indices still to settle.
     order: Vec<usize>,
     next: usize,
+}
+
+/// Take the parked resume, or start one from `trigger`.
+fn take_resume_or_fresh(cx: &mut PlayCtx, trigger: &Trigger) -> CounteractResume {
+    cx.take_counteract_resume()
+        .and_then(|s| s.downcast::<CounteractResume>().ok().map(|b| *b))
+        .unwrap_or(CounteractResume {
+            trigger: trigger.clone(),
+            own_done: true,
+            hand: None,
+            hooks: Vec::new(),
+            hook_index: 0,
+            chain: None,
+            join: None,
+        })
+}
+
+/// Take the answer tree out of the parked resume (the rest stays parked).
+/// Held boxes stay valid across parks: only the `Box` value moves, never the
+/// `Vec` it points at.
+fn take_chain_box(cx: &mut PlayCtx) -> Option<Box<Vec<ChainLink>>> {
+    let mut r = cx
+        .take_counteract_resume()?
+        .downcast::<CounteractResume>()
+        .ok()
+        .map(|b| *b)?;
+    let chain = r.chain.take();
+    if std::env::var("DBG_HOOK").is_ok() {
+        eprintln!(
+            "TAKE_CHAIN got={} hand={} join={}",
+            chain.as_ref().map(|c| c.len()).map_or("-".into(), |n| n.to_string()),
+            r.hand.is_some(),
+            r.join.is_some()
+        );
+    }
+    cx.set_counteract_resume(Box::new(r));
+    chain
+}
+
+/// Put the answer tree back beside the parked walk (see [`take_chain_box`]).
+fn park_chain_box(cx: &mut PlayCtx, trigger: &Trigger, chain: Box<Vec<ChainLink>>) {
+    let mut r = take_resume_or_fresh(cx, trigger);
+    if std::env::var("DBG_HOOK").is_ok() {
+        eprintln!(
+            "PARK_CHAIN len={} prev_chain={:?} hand={}",
+            chain.len(),
+            r.chain.as_ref().map(|c| c.len()),
+            r.hand.is_some()
+        );
+    }
+    r.chain = Some(chain);
+    cx.set_counteract_resume(Box::new(r));
+}
+
+/// One run of an opened join window (design G06 §6.4): settle the round, then
+/// re-enter the opener past `open()`. Pushed by the drive's `JoinOpen` arm and
+/// re-pushed when a nested settle suspends the walk; the round's progress is
+/// the parked [`JoinResume`].
+struct JoinWork<M: CardModules> {
+    bridge: *const RulesBridge<M>,
+    /// The answer tree's `Vec`, valid while the walk is parked.
+    chain: *mut Vec<ChainLink>,
+    /// The answered link the window sits on.
+    at: usize,
+    /// The opener's own node.
+    node: usize,
+    call: Call,
+    card_id: String,
+    uid: i32,
+    guarded: bool,
+    trigger: Trigger,
+    answers: Vec<i32>,
+}
+
+impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
+    fn run(self: Box<Self>, cx: &mut PlayCtx) -> Flow<()> {
+        let this = *self;
+        if this.uid >= 0 {
+            cx.reentrant_hooks.push(this.uid);
+        }
+        let bridge = unsafe { &*this.bridge };
+        let chain_ptr = this.chain;
+        let mut trigger = this.trigger;
+        // Adopt the parked chain and round; put the resume straight back so a
+        // nested suspension parks into it (only the pointer is kept alive).
+        let mut chain = take_chain_box(cx);
+        if std::env::var("DBG_HOOK").is_ok() {
+            eprintln!(
+                "JOIN_WORK chain={} len={:?} ptr={:?} at={} node={} resume_chain={:?}",
+                chain.is_some(),
+                chain.as_ref().map(|c| c.len()),
+                chain.as_ref().map(|c| (&**c as *const Vec<ChainLink>)),
+                this.at,
+                this.node,
+                cx.counteract_chain().is_some()
+            );
+        }
+        let resume = {
+            let r = take_resume_or_fresh(cx, &trigger);
+            let mut r = r;
+            let j = r.join.take();
+            cx.set_counteract_resume(Box::new(r));
+            j
+        };
+        let Some(mut chain) = chain.take() else {
+            if this.uid >= 0 {
+                cx.reentrant_hooks.pop();
+            }
+            return Ok(());
+        };
+        let resume = resume.unwrap_or(JoinResume {
+            at: this.at,
+            saved_target: unsafe { &*chain_ptr }[this.at].link.target,
+            order: Vec::new(),
+            next: 0,
+        });
+        let r = bridge.settle_join(cx, &mut chain, this.at, this.node, resume, &mut trigger);
+        if this.uid >= 0 {
+            cx.reentrant_hooks.pop();
+        }
+        match r {
+            Ok(()) => {
+                // Park the live box while the body runs: the walk continues
+                // through the installed cursor, whose address is this box, so
+                // it must stay parked (and alive).
+                park_chain_box(cx, &trigger, chain);
+                // The opener's report (marks, `opened`) is on the answered
+                // link; hand it to the body's own link before it runs again,
+                // with the window readers refreshed for what joined.
+                trigger.join = unsafe { (&*chain_ptr)[this.at].link.join.clone() };
+                bridge.stamp_window(cx, unsafe { &*chain_ptr }, this.node, &mut trigger);
+                let before_face = trigger
+                    .mv
+                    .as_ref()
+                    .and_then(|m| m.roll)
+                    .unwrap_or(trigger.value);
+                let r2 = bridge.drive_inner_body_from(
+                    cx,
+                    this.call,
+                    &this.card_id,
+                    this.uid,
+                    &mut trigger,
+                    this.guarded,
+                    this.answers,
+                    true,
+                );
+                match r2 {
+                    Ok(dest) => {
+                        // A nested adoption may have taken the box out and
+                        // handed it back; park it again for the tail.
+                        if let Some(b) = take_chain_box(cx) {
+                            park_chain_box(cx, &trigger, b);
+                        }
+                        let chain = unsafe { &mut *chain_ptr };
+                        // This run owns the opener's tail (the walk's
+                        // settle_node has unwound past it).
+                        bridge.close_drive(cx, chain, this.node, &mut trigger, before_face)?;
+                        let seat = chain[this.node].seat;
+                        let id = chain[this.node].id.clone();
+                        let uid = chain[this.node].uid;
+                        bridge.settle_tail(cx, seat, &id, uid, dest)?;
+                        // Keep the box alive across the resume drop below; the
+                        // cursor address stays valid.
+                        if let Some(a) = take_chain_box(cx) {
+                            cx.keep_chain(a);
+                        }
+                        // A raise in the body or the tail normally picks the
+                        // parked walk back up (`counteract` adopts the resume).
+                        // A quiet body raises nothing, and the suspension took
+                        // the walk off the Rust stack -- continue it here.
+                        let mut r = take_resume_or_fresh(cx, &trigger);
+                        if let Some(hr) = r.hand.take() {
+                            let mut walk_chain = Box::new(unsafe { (*chain_ptr).clone() });
+                            let mut walk_trigger = r.trigger.clone();
+                            bridge.resolve_jobs(
+                                cx,
+                                &walk_trigger,
+                                &mut walk_chain,
+                                &hr.order,
+                                hr.next,
+                            )?;
+                            if let Some(root) = walk_chain.first() {
+                                trigger = root.link.clone();
+                            }
+                            // The outer caller reads the tree through the
+                            // cursor: land the continuation's work there.
+                            unsafe {
+                                *chain_ptr = (*walk_chain).clone();
+                            }
+                            let kept: Box<dyn std::any::Any + Send> = walk_chain;
+                            cx.keep_chain(kept);
+                        }
+                        cx.set_drive_dest(dest);
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            Err(e) => {
+                // The round parked itself mid-settle: hand the live tree back
+                // to the resume (`take_chain_box` reclaims it on the next run),
+                // whether the halt is a suspension or an `Ask` whose replay
+                // resumes the parked walk. Dropping it here would leave the
+                // continuation with an empty chain.
+                park_chain_box(cx, &trigger, chain);
+                if e.is_suspended() {
+                    if this.uid >= 0 {
+                        cx.reentrant_hooks.push(this.uid);
+                    }
+                    cx.push_work(JoinWork {
+                        bridge: this.bridge,
+                        chain: chain_ptr,
+                        at: this.at,
+                        node: this.node,
+                        call: this.call,
+                        card_id: this.card_id,
+                        uid: this.uid,
+                        guarded: this.guarded,
+                        trigger,
+                        answers: this.answers,
+                    });
+                }
+                Err(e)
+            }
+        }
+    }
 }
 
 fn counteract_slow_path() -> bool {
@@ -8546,12 +9824,104 @@ pub struct LiveSnap<'a> {
     /// `(owner seat, card id, placed)`. `None` on the window-only form
     /// [`crate::condition::fill_window`] takes.
     pub cand: Option<(i32, &'a str, bool)>,
+    /// The chain and the node being offered, when this view is an offer --
+    /// the pending readers walk it (design G06 §6.2).
+    pub pending: Option<(&'a [ChainLink], usize)>,
+    /// The rule set, for the entry-effect / property readers.
+    pub rules: Option<&'a dyn EntryEffects>,
+}
+
+/// What the pending readers need from the rule set (the `LiveSnap` field).
+pub(crate) trait EntryEffects {
+    /// The declared answer effect of `card`'s entry answering `t`.
+    fn entry_effect_of(
+        &self,
+        card: i32,
+        t: &Trigger,
+        source: Option<&str>,
+    ) -> card_sdk::abi::AnswerEffect;
+    /// Does the card declare `prop::RANGE_CARD`?
+    fn declares_range_card(&self, id: &str) -> bool;
+}
+
+impl<M: CardModules> EntryEffects for RulesBridge<M> {
+    fn entry_effect_of(
+        &self,
+        card: i32,
+        t: &Trigger,
+        source: Option<&str>,
+    ) -> card_sdk::abi::AnswerEffect {
+        self.ruleset.entry_effect(card, t, source)
+    }
+    fn declares_range_card(&self, id: &str) -> bool {
+        self.ruleset.card(id).is_some_and(|i| {
+            self.ruleset.cards()[i as usize]
+                .props
+                .get(card_sdk::abi::prop::RANGE_CARD)
+                .copied()
+                == Some(1)
+        })
+    }
+}
+
+/// The chain cursor the settle walk installs on the context around every
+/// counter body and every offer (design G06 §6.2). Valid only for the duration
+/// of that drive / offer.
+pub(crate) struct CounteractChainCursor {
+    /// The live chain (behind its `Vec`, so appends stay valid).
+    pub chain: *mut Vec<ChainLink>,
+    /// The node being offered / driven (its `answered` is the link).
+    pub index: usize,
+}
+
+// SAFETY: the cursor only lives for the synchronous drive / offer that made
+// it; the chain it points into does not move while installed.
+unsafe impl Send for CounteractChainCursor {}
+
+impl LiveSnap<'_> {
+    /// The offer contracts of the declared, unresolved answers on the
+    /// answered link (`trigger::pending_negation` / `extreme_armed`).
+    fn declared_effects(&self) -> Vec<card_sdk::abi::AnswerEffect> {
+        let (Some((chain, index)), Some(rules)) = (self.pending, self.rules) else {
+            return Vec::new();
+        };
+        let answered = chain[index].answered;
+        chain[answered]
+            .link
+            .answers_declared
+            .iter()
+            .filter_map(|&d| chain.get(d as usize))
+            .map(|n| rules.entry_effect_of(n.idx, &n.link, None))
+            .collect()
+    }
 }
 
 impl crate::condition::SnapSrc for LiveSnap<'_> {
     #[inline]
     fn trigger(&self) -> Trigger {
         self.trigger.clone()
+    }
+    fn subject_range_card(&self) -> bool {
+        let (Some(rules), Some(subject)) = (self.rules, self.trigger.subject_card.as_deref())
+        else {
+            return false;
+        };
+        rules.declares_range_card(subject)
+    }
+    fn extreme_armed(&self) -> bool {
+        self.world.turn.extreme != game_core::engine::Extreme::Plain
+            || self.declared_effects().iter().any(|e| {
+                e.contains(card_sdk::abi::AnswerEffect::ARMS_EXTREME)
+            })
+    }
+    fn pending_negation(&self) -> i64 {
+        self.declared_effects()
+            .iter()
+            .filter(|e| e.contains(card_sdk::abi::AnswerEffect::NEGATES))
+            .count() as i64
+    }
+    fn chain_depth(&self) -> i64 {
+        self.trigger.seq.saturating_sub(1) as i64
     }
     #[inline]
     fn tile_named(&self, name: &str) -> i32 {
@@ -8869,6 +10239,18 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn charge_is_skill(&self) -> bool {
         self.trigger.charge_skill
+    }
+    fn subject_range_card(&self) -> bool {
+        crate::condition::SnapSrc::subject_range_card(self)
+    }
+    fn extreme_armed(&self) -> bool {
+        crate::condition::SnapSrc::extreme_armed(self)
+    }
+    fn pending_negation(&self) -> i64 {
+        crate::condition::SnapSrc::pending_negation(self)
+    }
+    fn chain_depth(&self) -> i64 {
+        crate::condition::SnapSrc::chain_depth(self)
     }
     fn settle_tile(&self) -> i64 {
         self.trigger.settle_tile as i64
@@ -9472,6 +10854,13 @@ impl ProbeMemo {
 
     fn on_declaration(&mut self) {
         self.hand_gen += 1;
+    }
+
+    /// Drop the shared scope. A join round presents a different `target` to
+    /// every visited seat, so the built scope's own window inputs do change
+    /// between visits (design G06 §6.4).
+    fn invalidate_scope(&mut self) {
+        self.scope = None;
     }
 
     /// The shared window scope, built only when some candidate actually has a
@@ -10374,6 +11763,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     }
 
     fn play(&self, cx: &mut PlayCtx, player_id: usize, card: &str) -> Flow<Dest> {
+        if std::env::var("DBG_HOOK").is_ok() {
+            eprintln!("RULES_PLAY card={card} by={player_id}");
+        }
         let Some(idx) = self.ruleset.card(card) else {
             cx.log(
                 player_id as i32,
@@ -10496,6 +11888,17 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         let resumed = cx
             .take_counteract_resume()
             .and_then(|s| s.downcast::<CounteractResume>().ok().map(|b| *b));
+        if std::env::var("DBG_HOOK").is_ok() {
+            eprintln!(
+                "COUNTERACT kind={:?} resumed={:?}",
+                t.kind,
+                resumed.as_ref().map(|r| (
+                    r.hand.is_some(),
+                    r.chain.as_ref().map(|c| c.len()),
+                    r.join.is_some()
+                ))
+            );
+        }
         if resumed.is_none() {
             // Non-nested path: master's walk, unchanged.
             return self.counteract_orig(cx, t);
@@ -10509,16 +11912,26 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         let mut hook_jobs: Vec<HookJob> = Vec::new();
         let mut hook_index = 0usize;
         let mut resumed_trigger = None;
+        let mut resumed_chain = None;
+        let mut _join_resume = None;
         if let Some(r) = resumed {
             own_done = r.own_done;
             hand_resume = r.hand;
             hook_jobs = r.hooks;
             hook_index = r.hook_index;
             resumed_trigger = Some(r.trigger);
+            resumed_chain = r.chain;
+            _join_resume = r.join;
         }
         let mut trigger = match resumed_trigger {
-            Some(tr) => tr,
-            None => bridge_trigger(t),
+            // Continuing the parked walk itself: its half-trigger is the link
+            // being answered (`resolve_jobs` only ever parks `hand` there).
+            Some(tr) if hand_resume.is_some() => tr,
+            // A fresh raise inside a suspended body (a draw, a settle ...):
+            // the parked trigger is the enclosing link, not this one -- open
+            // the new window on the live raise instead, or its chain's
+            // bookkeeping (answers / `answers_declared`) would not fit.
+            _ => bridge_trigger(t),
         };
 
         let own = t.card.clone().unwrap_or_default();
@@ -10527,11 +11940,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             TriggerKind::Card | TriggerKind::Event
         );
         if !own_done && own_play && !own.is_empty() {
-            if let Some(idx) = self
-                .ruleset
-                .card(&own)
-                .filter(|&i| self.ruleset.cards()[i as usize].counteracts_to(trigger.kind))
-            {
+            if let Some((idx, entry)) = self.ruleset.card(&own).and_then(|i| {
+                self.ruleset.cards()[i as usize]
+                    .entry(card_sdk::abi::OnKind::Counteract, Some(trigger.kind))
+                    .map(|e| (i, e))
+            }) {
                 push_resolving_frame(&own, -1, t.player_id, trigger.uid);
                 match self.drive(
                     cx,
@@ -10539,6 +11952,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         card: idx,
                         player_id: t.player_id,
                         arg: Vec::new(),
+                        entry: Some(entry),
                     },
                     &own,
                     -1,
@@ -10552,6 +11966,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                             hand: None,
                             hooks: Vec::new(),
                             hook_index: 0,
+                            chain: None,
+                            join: None,
                         }));
                         return Err(e);
                     }
@@ -10565,13 +11981,47 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // (2) Hand counteraction window.
         match hand_resume {
             Some(hr) => {
-                let mut chain = hr.chain.clone();
+                // Moved: the boxed chain keeps its address, so a continuation
+                // parked inside the resumed walk still points into it.
+                let mut chain = resumed_chain.take().unwrap_or_default();
+                if std::env::var("DBG_HOOK").is_ok() {
+                    eprintln!(
+                        "RESUMED_HAND len={} order={:?} next={} join={:?}",
+                        chain.len(),
+                        hr.order,
+                        hr.next,
+                        trigger.join.as_ref().map(|j| j.opened)
+                    );
+                }
                 self.resolve_jobs(cx, &trigger, &mut chain, &hr.order, hr.next)?;
-                if let Some(root) = chain.into_iter().next() {
-                    trigger = root.link;
+                if let Some(root) = chain.first() {
+                    trigger = root.link.clone();
+                }
+                // A synchronous caller (the raise pump) still holds the walk's
+                // Box and continues with it; hand the Vec back through the
+                // installed cursor so it is not left empty. Without one (an
+                // engine-level replay) the chain only has to stay alive.
+                if let Some(c) = cx
+                    .counteract_chain()
+                    .and_then(|c| c.downcast_ref::<CounteractChainCursor>())
+                {
+                    unsafe {
+                        *c.chain = std::mem::take(&mut *chain);
+                    }
+                } else {
+                    cx.keep_chain(chain);
                 }
             }
             None => {
+                // A new raise inside a suspended body does not continue the
+                // parked tree, but a raw chain cursor (a join continuation or
+                // a settle drive that parked it) still indexes that tree.
+                // Keep its allocation alive for the rest of the context --
+                // the parked walk takes it back through the cursor.
+                if let Some(c) = resumed_chain.take() {
+                    let kept: Box<dyn std::any::Any + Send> = c;
+                    cx.keep_chain(kept);
+                }
                 if !is_hook_only(t.kind.as_str()) {
                     // A suspend inside `hand_counteractions` / `resolve_jobs`
                     // parks a HandResume (see `resolve_jobs`).
@@ -10616,6 +12066,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                                     hand: None,
                                     hooks: hook_jobs,
                                     hook_index: hook_index + 1,
+                                    chain: None,
+                                    join: None,
                                 }));
                                 return Err(e);
                             }
@@ -10634,6 +12086,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                         hand: None,
                         hooks: hook_jobs.clone(),
                         hook_index: hook_index + 1,
+                        chain: None,
+                        join: None,
                     };
                     self.run_hook_job(cx, &mut trigger, &job, resume)?;
                     hook_index += 1;
@@ -10692,6 +12146,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                                     hand: None,
                                     hooks: hook_jobs,
                                     hook_index,
+                                    chain: None,
+                                    join: None,
                                 }));
                                 return Err(e);
                             }
@@ -10727,6 +12183,20 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        // The subject / join block / pending answers / copy source are link
+        // state, not body output: carry whatever the walk left on them.
+        t.subject_card = trigger.subject_card.clone();
+        t.join = trigger.join.as_ref().map(unbridge_join);
+        t.answers_declared = trigger.answers_declared.clone();
+        t.copied = trigger.copied.clone();
+        t.roll_root = trigger.roll_root;
+        t.pending_negation = trigger.pending_negation;
+        t.extreme_armed = trigger.extreme_armed;
+        t.answered_kinds = trigger
+            .answered_kinds
+            .iter()
+            .map(|k| k.spelling().into_owned())
+            .collect();
         // The pay kind / shape rewrite (`set_pay_kind` / `set_pay_shape`) rides
         // the payment trigger; the engine folds it back before the shape is read.
         t.pay = trigger.pay.map(unbridge_pay);

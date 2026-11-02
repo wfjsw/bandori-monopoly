@@ -3,11 +3,13 @@
 //! > （睦/mortis）表演的本能：
 //! >  此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）
 //!
-//! copy the last non-placed card another player played; the copy is not
-//! implemented yet (`run` only logs), and a [反击] card copied may be played in
-//! that window.
+//! copy the last non-placed card another player played. The engine resolves
+//! the copy: the entry's empty list means every kind, `copies_previous` makes
+//! the matcher walk the play record and dispatch **the copied card's own
+//! entry**, and a **play** stamps `trigger::link_copied` with the source so
+//! the play half copies too (design G06 §2.15).
 
-use card_sdk::abi::ChainKind;
+use card_sdk::ctx::trigger;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
@@ -18,7 +20,11 @@ pub const MORTIS_INSTINCT: CardDef = CardDef::new(
         // 规则书: 「（此卡复制[反击]卡时可在符合条件时打出）」 -- the copied card's
         // own kind decides when it is offered; `Card` is the playable link the
         // copy is declared under.
-        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract).counter_reason(key!("mortis_instinct_when")),
+        // Empty links = every chain kind; the copied card's own entry decides
+        // whether it may be played in the window (its contract included).
+        On::Counteract(&[], "", Some(can_counteract), counteract)
+            .copies_previous()
+            .counter_reason(key!("mortis_instinct_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"表演的本能"#)
@@ -29,29 +35,29 @@ pub const MORTIS_INSTINCT: CardDef = CardDef::new(
         .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"若叶睦"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    run(player_id);
+    // 规则书: 「此卡打出时效果为…上一张卡」 -- the link names the source.
+    if let Some(src) = trigger::link_copied() {
+        ctx::play_card(&src, player_id)?;
+    } else {
+        // Nothing on the play record to copy: name the empty resolution.
+        ctx::log(
+            player_id,
+            &Msg::new(key!("mortis_instinct_nothing")).player_id("who", player_id),
+        );
+    }
     Ok(())
 }
 
 fn can_counteract(_player: i32) -> bool {
-    // TODO(规则书)[judgement]:
-    false
+    // The matcher resolves the copied card's own entry (with its contract);
+    // no card of its own admits or refuses here.
+    true
 }
 
-fn counteract(player_id: i32) -> card_sdk::Asked {
-    run(player_id);
+fn counteract(_player_id: i32) -> card_sdk::Asked {
+    // The copy resolves to the source card's entry and body, so this body
+    // runs only when the matcher kept the entry itself.
     Ok(())
-}
-
-fn run(player_id: i32) {
-    // TODO(规则书)（此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡） The ABI has no play-history
-    // query and no cross-card `PlayCtx` nesting (`ctx::play_card` runs a card's
-    // `play` without the copied card's identity / counteraction mode). ）:
-    // 打出时复制该卡并执行其效果 -- 复制未实现，只记一条 nothing 日志
-    ctx::log(
-        player_id,
-        &Msg::new(key!("mortis_instinct_nothing")).player_id("who", player_id),
-    );
 }
 
 //

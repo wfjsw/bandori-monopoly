@@ -167,6 +167,7 @@ fn typed_engine_consts_have_table_rows() {
         (110, "PaySplitMulBefore"),
         (111, "CardFired"),
         (112, "MarkChanged"),
+        (121, "AbnormalRefused"),
         (122, "SpendBefore"),
         (123, "DiceRollCast"),
         (124, "DiceRollSettled"),

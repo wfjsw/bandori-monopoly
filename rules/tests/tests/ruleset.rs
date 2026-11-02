@@ -186,6 +186,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
                 card,
                 player_id: 0,
                 arg: Vec::new(),
+                entry: None,
             },
             &[FIRE, 3],
             None,

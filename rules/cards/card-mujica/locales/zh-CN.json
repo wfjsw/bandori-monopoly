@@ -5,6 +5,7 @@
   "cant_look_away_dir_title": "无法将视线移开",
   "cant_look_away_forward": "向前",
   "cant_look_away_ordered": "{{who}} 被强制移动 {{n}} 格",
+  "cant_look_away_pick": "让谁强制移动？",
   "cant_look_away_steps": "让 {{who}} 强制移动几格？",
   "cant_look_away_title": "无法将视线移开",
   "cant_look_away_when": "有玩家对你使用[反击]后",

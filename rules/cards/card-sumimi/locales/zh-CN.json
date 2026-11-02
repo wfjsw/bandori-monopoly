@@ -20,6 +20,8 @@
   "l12_taken": "「{{card}}」加入了 {{who}} 的手牌（#L12）",
   "l12_title": "#L12",
   "mana_champion_log": "「歌唱大赛5连冠」：让其他人替 {{who}} 打出 [反击]",
+  "mana_champion_draw": "{{who}} 让你免于受到该影响，为其抽一张卡？",
+  "mana_champion_title": "歌唱大赛5连冠",
   "mana_champion_when": "你或你的格子即将受到来自你以外的效果影响",
   "no_breakup_ask": "[传送] 到哪一格？（结算后资金要变成有相同数字，否则回到原处并取消受到的效果）",
   "no_breakup_mortgaged": "你本回合已经抵押/赎回过。",

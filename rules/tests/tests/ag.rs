@@ -64,6 +64,11 @@ fn declaration_offered_against_targeting_card() {
     t.give(0, &["通用:雨啊，快点来吧"]);
     t.dice(&[1, 1]);
     t.play(0, "通用:雨啊，快点来吧").unwrap();
+    // The play designates its own user (DESIGNATES), so the whole play is
+    // itself a counteraction timing (CROSS-TESTS C13): decline that offer to
+    // reach the target choice, then the targeting opens the window again.
+    assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
+    t.decline();
     t.answer(0, 0).unwrap(); // target P1
     assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
 }

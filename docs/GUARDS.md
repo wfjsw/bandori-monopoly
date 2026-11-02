@@ -142,13 +142,21 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.is_main_move`, `move.dir`, `move.rolled`, `move.effective`, `move.tag('name')`, `roll_source`, `roll_purpose`, `roll_rerolled`, `roll_unused_face`, `roll_chosen_index`, `roll_final_face`, `roll.count`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `roll.*` from `Trigger.roll`; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
+| window | `kind` (a **string** spelling, `VarTy::Str`), `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `pay_kind`, `pay_is_fixed`, `pay_total_stage`, `charge_is_skill`, `settle.tile`, `settle.owner`, `settle.houses`, `settle.mortgaged`, `settle.outcome`, `move.roll`, `move.kind`, `move.remaining`, `move.is_main_move`, `move.dir`, `move.rolled`, `move.effective`, `move.tag('name')`, `roll_source`, `roll_purpose`, `roll_rerolled`, `roll_unused_face`, `roll_chosen_index`, `roll_final_face`, `roll.count`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]`, `chain.depth`, `subject_range_card`, `extreme_armed`, `pending_negation` | `Trigger` + effect-link list (same data `effect::*` imports read); `settle.*` from `Trigger.settle_tile` / `Trigger.outcome` (stamped at raise), its `owner` / `houses` / `mortgaged` read off that tile; `roll.*` from `Trigger.roll`; `plan.fixed_roll` from `TurnCtx.fixed_roll` |
 | window | `turn_player`, `turn_key` | `PlayCtx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/hand/pos/out/stay/stun/exile/tiles` (count) | `World`/`Player` |
 | candidate | `card.id`, `card.placed`, `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
 
 Content sugar keys are **not** extra schema rows: they lower to `state(p, key)`
 (see §4.2b) and read the one keyed-int door.
+
+The G06 chain facts: `chain.depth` is 0 at the root link, `n` for `n` counters
+deep; `subject_range_card` is 1 when the answered link's **subject** card
+declares `prop::RANGE_CARD`; `extreme_armed` is 1 when an extreme is armed on
+the play or a declared answer on this link declares `AnswerEffect::ARMS_EXTREME`;
+`pending_negation` counts the declared, unresolved answers on this link whose
+entry declares `AnswerEffect::NEGATES`. All four are stamped before the offer
+(`wasm_rules::stamp_window`) and read the chain, never the world.
 
 Not in the schema (residual, stays in the wasm guard): `price_tag` (rent-table
 lookup), `grade_of` (a 48-row character→grade table local to the card),

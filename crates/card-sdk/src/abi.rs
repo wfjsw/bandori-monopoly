@@ -780,7 +780,7 @@ use crate::intern::NameId;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 111;
+pub const ABI_VERSION: i32 = 112;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -837,6 +837,28 @@ pub const ABI_VERSION: i32 = 111;
 ///    main move". `set_parity` canonicalizes `2` to `0` (even). The trigger move
 ///    payload gains `rolled` and `effective`, surfaced as `move.rolled` /
 ///    `move.effective`. SAVE_VERSION / RECORD_VERSION unchanged.
+/// v112: **counteraction answer contracts, join windows, counteraction
+///    history, payload carry-forward**. `CounteractEntry` gains `numeric` /
+///    `pay_shape` / `effect` with `On::answers_numbers` /
+///    `.answers_whole_payments` / `.declares_negation` / `.arms_extreme` /
+///    `.copies_previous` sugar, and `ManifestOn` the trailing `numeric` /
+///    `pay_shape` / `answer_effect` / `all_kinds` / `copies_previous` fields --
+///    postcard is not self-describing, so **that** is the wire break. An empty
+///    `links` list on a Counteract entry now means every chain kind
+///    (`all_kinds`) instead of never. New `prop::RANGE_CARD`; new imports
+///    `ctx::join::{opener,seats,shield,open,opened,joiner_count,joiner,
+///    joiner_shielded,designation}`,
+///    `trigger::{pending_negation,extreme_armed,subject_card,link_copied,
+///    chain_depth,answered_kind}` and `ctx::countered_by_this_turn`; new
+///    window variables `subject_range_card` / `extreme_armed` /
+///    `pending_negation` / `chain_depth` (`pay_total_stage` is v107's).
+///    Counter links carry the answered link's payload forward and a face
+///    write propagates to the enclosing roll link. `set_join_used` stays as
+///    an alias of `ctx::join::shield`. New hook-only engine kind 121
+///    (`abnormalRefused`, raised on an abnormal the gate or `immuneAll`
+///    refused; no window opens on it). SAVE_VERSION 15 -> 16
+///    (`World.countered_this_turn`, `World.played_cards`); RECORD_VERSION
+///    unchanged.
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -1546,6 +1568,11 @@ pub mod prop {
     /// the **same link** are redirected to the declarer. Declaration-scoped.
     /// Default `0`.
     pub const SELF_REDIRECT: &str = "selfRedirect";
+    /// 「结果只有数字区间的效果」 (AG:（鸫）微小的『能做到』的事, which may force
+    /// its result to the theoretical maximum or minimum): `1` = the card's
+    /// result is a pure number interval, so a numeric-shape counter may answer
+    /// it. Default `0` (a table, e.g. 「无论是何种颜色的夕阳」).
+    pub const RANGE_CARD: &str = "rangeCard";
     /// 「此卡不受任何其他效果影响」: `1` = the placed instance is immune
     /// (`FieldCard.immune`). Stamped at placement from the card's static props
     /// so a `place_raw` / engine placement sees it without running the play
@@ -2632,6 +2659,10 @@ impl FilterKind {
     /// host folds the answers into one decision.
     pub const ImmuneAll: Self = Self(TriggerKind::ImmuneAll);
 
+    /// Hook. An abnormal effect was refused before it landed (the gate or
+    /// `immuneAll`); no window opens on it. Payload as `AbnormalGuard`.
+    pub const AbnormalRefused: Self = Self(TriggerKind::AbnormalRefused);
+
     /// Filter. The causer is about to name the seat as a target. Payload:
     /// player_id = the seat asked about, by_card = the causer. Body true =
     /// allowed, false = cannot name them; the host folds the answers into one
@@ -3158,9 +3189,14 @@ impl TriggerKind {
     /// `targetableGate`
     pub const TargetableGate: Self = Self::engine(109);
 
+    /// `abnormalRefused` -- an abnormal effect was refused before it landed
+    /// (the status-host gate or `immuneAll`), so no `effect` window opened.
+    /// Hook-only. Payload: `player_id` = the victim, `value` = the abnormal
+    /// kind, `by_card` = the causer; the raise seat is the causer.
+    pub const AbnormalRefused: Self = Self::engine(121);
+
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
-    // ruleset-declared "fansFlip"); the next free **engine** ids are 111/112
-    // and 123-125.
+    // ruleset-declared "fansFlip"); the next free **engine** id was 121.
 
     /// `cardFired` -- a card's body entered its resolution frame: every
     /// body, a play, a hook or a counteraction alike. Hook-only: no
@@ -3390,6 +3426,75 @@ pub struct ManifestOn {
     /// Whether the activation flashes (`On::flash`). See [`Flash`]. v55.
     #[serde(default)]
     pub flash: Flash,
+    /// Numeric shape the entry answers ([`NumericShape`]). v112, offer filter.
+    #[serde(default)]
+    pub numeric: NumericShape,
+    /// Payment shape the entry answers ([`AnswerPayShape`]). v112, offer filter.
+    #[serde(default)]
+    pub pay_shape: AnswerPayShape,
+    /// What the body does to the link ([`AnswerEffect`]). v112, pending readers.
+    #[serde(default)]
+    pub answer_effect: AnswerEffect,
+    /// A Counteract entry whose `triggers` are empty answers **every** chain
+    /// kind (v112; empty used to mean never). v112.
+    #[serde(default)]
+    pub all_kinds: bool,
+    /// Dispatch the copied card's entry instead of this card's: the entry
+    /// stands in for 「场上其他玩家打出的上一张卡」 (v112).
+    #[serde(default)]
+    pub copies_previous: bool,
+}
+
+/// What numeric shape a counteraction entry answers (v112). Offer filter: the
+/// answered link's **subject** card must declare [`prop::RANGE_CARD`] for
+/// [`Self::NumberInterval`].
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq,
+         serde::Serialize, serde::Deserialize)]
+pub enum NumericShape {
+    /// Any answered effect.
+    #[default]
+    Any = 0,
+    /// Only a pure number interval (「结果只有数字区间」).
+    NumberInterval = 1,
+}
+
+/// What payment shape a counteraction entry answers (v112). Offer filter on
+/// `TriggerPay.total_stage`: a 「[分摊]」 leg sets it `false`.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq,
+         serde::Serialize, serde::Deserialize)]
+pub enum AnswerPayShape {
+    /// Any payment (`pay` / `effect` on Pay).
+    #[default]
+    Any = 0,
+    /// One whole transfer, never a split leg (「一次性…支付」).
+    Whole = 1,
+}
+
+/// What an entry's body does to the link, for the offer-time pending readers
+/// (v112). Declared intent, not outcome: the body promises the call.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq,
+         serde::Serialize, serde::Deserialize)]
+pub struct AnswerEffect(pub u8);
+
+impl AnswerEffect {
+    /// No offer-time meaning.
+    pub const NONE: Self = Self(0);
+    /// The body may call `trigger::set_cancelled` / `negate_effect` / `spare`.
+    pub const NEGATES: Self = Self(1);
+    /// The body may call `ctx::set_extreme`.
+    pub const ARMS_EXTREME: Self = Self(2);
+
+    /// Do the bits intersect?
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    /// The union, for the builder sugar.
+    pub const fn or(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).

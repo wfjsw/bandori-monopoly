@@ -48,10 +48,10 @@ fn on_path(me: i32, them: i32, roll: i32) -> i32 {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor != owner && move.kind != Teleport && move.roll != null` is the condition.
-    // TODO(规则书)（当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡）: a
-    //   counter link carries no move face (`move.roll` is null there), so we can
-    //   only answer the root roll and never build on another counter's cut.
+    // `actor != owner && move.kind != Teleport && move.roll != null` is the
+    // condition. The counter link carries the answered roll forward (design
+    // G06 §5.1), so this body reads the *declaration* face and can answer
+    // another counter's link.
     let Some(roll) = trigger::move_roll() else {
         return Ok(());
     };
@@ -69,7 +69,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let now = (roll - x).max(0);
     // TODO(规则书)（使目标玩家的此次移动数-X）: the book cuts the move itself,
     //   but 「直至结果至少为10」 floors are applied again after this window, so a
-    //   cut can be partly undone -- we do not re-cut after the floor.
+    //   cut can be partly undone -- we do not re-cut after the floor. Two
+    //   repaints each read the face carried down the chain and write their own
+    //   cut (`propagate_face` to the root), so the cuts compose.
     trigger::set_move_roll(now);
     ctx::log(
         player_id,

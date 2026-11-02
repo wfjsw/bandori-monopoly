@@ -1687,6 +1687,11 @@ fn ix_ag_declaration_vs_rain() {
     t.begin_turn(1);
     t.dice(&[1, 1]);
     t.give_play(1, "通用:雨啊，快点来吧").unwrap();
+    // The play designates its own user, so it is a counteraction timing of
+    // its own (CROSS-TESTS C13): decline the play-window offer first, pick
+    // the target, then answer the targeting window.
+    assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
+    t.decline();
     t.answer(1, 0).unwrap(); // target P0
     assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
     t.counteract(0, "AG:宣战布告").unwrap();

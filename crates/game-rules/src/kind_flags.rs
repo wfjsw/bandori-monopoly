@@ -24,6 +24,27 @@ pub fn set_kind_flags(flags: Vec<(i32, bool)>) {
     *RULESET_HOOK_ONLY.write().unwrap() = flags;
 }
 
+/// Every known kind that opens a hand-counteraction window: the engine table
+/// plus the registered ruleset kinds, both skipping `hook_only`. Backs an
+/// `On::Counteract` entry with an empty links list (`ManifestOn.all_kinds`,
+/// design G06 §6.1).
+pub fn all_non_hook_only() -> Vec<TriggerKind> {
+    let mut out: Vec<TriggerKind> = game_kinds::ENGINE_KINDS
+        .iter()
+        .filter(|k| !k.hook_only)
+        .map(|k| TriggerKind::engine(k.id))
+        .collect();
+    for (id, hook_only) in RULESET_HOOK_ONLY.read().unwrap().iter() {
+        if !hook_only {
+            out.push(TriggerKind {
+                ns: KindNs::BANDORI,
+                id: *id,
+            });
+        }
+    }
+    out
+}
+
 /// Does this kind skip the hand-counteraction window?
 ///
 /// Engine kinds read `game_kinds`. Ruleset kinds read the load-time table; an

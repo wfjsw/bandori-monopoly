@@ -139,6 +139,18 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn charge_is_skill(&self) -> bool {
         self.trigger.charge_skill
     }
+    fn subject_range_card(&self) -> bool {
+        self.src.subject_range_card()
+    }
+    fn extreme_armed(&self) -> bool {
+        self.src.extreme_armed()
+    }
+    fn pending_negation(&self) -> i64 {
+        self.src.pending_negation()
+    }
+    fn chain_depth(&self) -> i64 {
+        self.src.chain_depth()
+    }
     fn settle_tile(&self) -> i64 {
         self.trigger.settle_tile as i64
     }
@@ -669,6 +681,24 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
 /// cloning the world. Nothing here mutates.
 pub trait SnapSrc {
     fn trigger(&self) -> Trigger;
+    // -- offer-time answer facts (design G06 §6.2). The defaults are the
+    // neutral values; only a live offer world answers them.
+    /// Does the answered link's subject card declare `RANGE_CARD`?
+    fn subject_range_card(&self) -> bool {
+        false
+    }
+    /// Is an extreme armed on this play or declared on the link?
+    fn extreme_armed(&self) -> bool {
+        false
+    }
+    /// Declared, unresolved negating answers on the answered link.
+    fn pending_negation(&self) -> i64 {
+        0
+    }
+    /// Depth of the triggered link, 0 = the effect's own link.
+    fn chain_depth(&self) -> i64 {
+        self.trigger().seq.saturating_sub(1) as i64
+    }
     /// Card ids currently resolving, innermost last. Empty by default so a
     /// fixture world needs no change.
     fn resolving(&self) -> Vec<String> {
@@ -1461,6 +1491,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .unwrap_or(0),
         pay_total_stage: t.pay.map(|p| p.total_stage).unwrap_or(true),
         charge_is_skill: t.charge_skill,
+        subject_range_card: world.subject_range_card(),
+        extreme_armed: world.extreme_armed(),
+        pending_negation: world.pending_negation(),
+        chain_depth: world.chain_depth(),
         settle_tile: t.settle_tile as i64,
         settle_owner: if t.settle_tile >= 0 {
             world.tile_owner(t.settle_tile) as i64
@@ -1568,6 +1602,10 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         pay_is_fixed: 0,
         pay_total_stage: true,
         charge_is_skill: false,
+        subject_range_card: false,
+        extreme_armed: false,
+        pending_negation: 0,
+        chain_depth: 0,
         settle_tile: -1,
         settle_owner: -1,
         settle_houses: 0,

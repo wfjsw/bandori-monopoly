@@ -450,6 +450,57 @@ pub struct Trigger {
     pub outcome: Option<super::cx::SettleOutcome>,
     /// The `ChargePaying` window came from a skill cost (`raise_from(Skill)`).
     pub charge_skill: bool,
+    /// The card whose effect this link *is*: the raised play's card on a root
+    /// link, the counter card's own id on a counter link (so an entry answering
+    /// it sees the counter as its subject).
+    pub subject_card: Option<String>,
+    /// The join window opened on this link, when one is open.
+    pub join: Option<JoinState>,
+    /// Declared, unresolved answers on this link (indices into the chain, in
+    /// declaration order). Empty on a new counter link.
+    pub answers_declared: Vec<u32>,
+    /// The card a copy resolves (mortis). Set when the entry resolved a copied
+    /// card, read by `trigger::link_copied`. `None` otherwise.
+    pub copied: Option<String>,
+    /// The nearest enclosing link with a roll face (`u32::MAX` = none). A
+    /// counter body's face write propagates here after it settles.
+    pub roll_root: u32,
+    /// Declared, unresolved negating answers on this link (a counter body's
+    /// `trigger::pending_negation`).
+    pub pending_negation: i32,
+    /// An extreme is armed on this play or declared on this link.
+    pub extreme_armed: bool,
+    /// The kind of each link from the root up to this one (a counter body's
+    /// `trigger::answered_kind`).
+    pub answered_kinds: Vec<String>,
+}
+
+/// The join window a `SELF_REDIRECT` effect opened on a link.
+///
+/// Mirror of [`game_rules`]'s `TriggerJoin`, carried so the bridge and the
+/// write-back move it without a second encoding.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct JoinState {
+    /// The `SELF_REDIRECT` declarer.
+    pub opener: i32,
+    /// Participating seats, seat order; only these are offered.
+    pub seats: Vec<i32>,
+    /// Per seat, parallel to `seats`: declared a counter in this window.
+    pub declared: Vec<bool>,
+    /// Per seat, parallel to `seats`: the counter landed and called `shield`.
+    pub used: Vec<bool>,
+    /// Per seat, parallel to `seats`: the designation the joiner named
+    /// (`ctx::cancel_designation` while this body runs), `-1` when none.
+    pub designated: Vec<i32>,
+    /// Has `open()` completed its round at least once this pass?
+    pub opened: bool,
+}
+
+/// The guest-side mirror the bridge/write-back converts through.
+impl From<&crate::engine::rules::JoinState> for JoinState {
+    fn from(j: &Self) -> Self {
+        j.clone()
+    }
 }
 
 impl Trigger {
@@ -485,6 +536,14 @@ impl Trigger {
             settle_tile: -1,
             outcome: None,
             charge_skill: false,
+            subject_card: None,
+            join: None,
+            answers_declared: Vec::new(),
+            copied: None,
+            roll_root: u32::MAX,
+            pending_negation: 0,
+            extreme_armed: false,
+            answered_kinds: Vec::new(),
         }
     }
 

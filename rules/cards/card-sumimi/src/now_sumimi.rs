@@ -21,11 +21,10 @@ pub const NOW_SUMIMI: CardDef = CardDef::new(
         // "abnormal"), not the value test.
         // `value > 0` covers only a payment an earlier stage already set to 0
         // (`set_pay_amount(0)`).
-        // TODO(规则书)(ABI)（即将超过你所在格子的[收费标价]）: a payment an
-        //   earlier counter *cancelled* (`set_cancelled`) still reads its
-        //   declared value, so this card is offered -- and gains -- for a
-        //   payment that never settles. Guards run before the round resolves,
-        //   so there is no pending-negation signal to read.
+        // A payment an earlier counter *cancelled* would still read its
+        // declared value; the residual guard reads `pending_negation()` so the
+        // card is not offered over an already-declared negation (design G06
+        // §5.5, item 11).
         "chain_has(Pay) && actor == owner && value > 0",
         Some(can_counteract),
         counteract).counter_reason(key!("now_sumimi_when"))],
@@ -61,6 +60,12 @@ fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当…失去资金的总额即将超过你所在格子的[收费标价]时打出此卡」
     // The payment shape is the condition; the price-tag comparison is the residual.
     // A 0 tag (a non-buyable tile) still lets any positive payment through.
+    // 规则书: the payment must still be coming -- a declared negation on the
+    // link means it will not settle (「即将超过」 was already the point of no
+    // return for a negation guard).
+    if trigger::pending_negation() != 0 {
+        return false;
+    }
     let tag = price_tag(player_id);
     // TODO(规则书)[judgement] The guard here is `amount > Tag` alone: it drops both the
     // running total and the 「即将超过」 window, so it also fires once the total has

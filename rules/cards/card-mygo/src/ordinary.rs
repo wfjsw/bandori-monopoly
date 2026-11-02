@@ -15,9 +15,10 @@ pub const ORDINARY: CardDef = CardDef::new(
     "MyGO:普通与理所当然",
     &[
         // 规则书: 「[反击] 受到异常移动效果影响后可打出」
-        // TODO(规则书)（受到异常移动效果影响后）: 是效果落地**后** -- 现在的
-        //   `ChainKind::Effect` 窗口在结算前开（`immuneAll` 的拒绝还没跑），免疫者
-        //   也会被提供并使用；落地后没有可[反击]的 abnormal 窗口。
+        // The refusals (status gate / `immuneAll`) run **before** this window
+        // (G06 §6.7, engine `abnormal_gate`), so a protected player is no
+        // longer offered; 「影响后」 stays 结算前 within the landed pipeline
+        // (the `abnormal` hook itself is the outcome and cannot be countered).
         On::Counteract(
             &[ChainKind::Effect],
             // TODO(规则书)（[反击] 受到异常移动效果影响后可打出）:

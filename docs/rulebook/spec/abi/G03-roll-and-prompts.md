@@ -1068,8 +1068,9 @@ with the three kinds.
 **Kani `Op` band.** Base 340. G01 341-348, G08 349-368, G02 369-377 and G04
 378-397 are ahead of this group. G03 takes **398-410** (thirteen ops: the seven
 roll reads/writes, `roll_move`, `trigger_roll`, and §4.7's four
-`set`/`get` settle answers); G06 shifts to **411-430**, G05+G13 to **431-440**,
-G07 to **441-450**. The README table carries these rows (§12).
+`set`/`get` settle answers); G06 shifts to **411-426** (it needed sixteen, so
+427-430 stay free), G05+G13 to **431-440**, G07 to **441-450**. The README
+table carries these rows (§12).
 
 Source-only, no bump: `RollValue` gains `purpose`/`rerolled`, the source rank
 function, the cast-history projection, and every card edit.

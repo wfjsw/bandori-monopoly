@@ -850,6 +850,9 @@ pub struct World {
     pub forced_roll: i32,
     /// A joiner used the redirect (hostfns `set_join_used`).
     pub trig_join_used: bool,
+    /// `join::open` ran on this pass (the model has no join round beyond the
+    /// flag; design G06 §6.8).
+    pub trig_join_opened: bool,
     /// `Trigger::main` — fired as part of the turn's [主要移动]?
     /// (`hostfns::trig_move_main` reads this, not `mv.main`.)
     pub trig_main: bool,
@@ -1040,6 +1043,7 @@ impl World {
             trig_join_redirect: -1,
             forced_roll: 0,
             trig_join_used: false,
+            trig_join_opened: false,
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,
             trig_pay_is_rent: false,

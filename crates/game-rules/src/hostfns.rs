@@ -1626,6 +1626,8 @@ fn invoke_inner<C: HostCtx>(
     let saved = st.w().enter_invoke(id, instance);
     let was_from_hand = st.w().play_from_hand();
     st.w().set_play_from_hand(false);
+    let was_placed = st.w().placed_during_play();
+    st.w().set_placed_during_play(false);
     let mut nested = HostState::new(
         rules.clone(),
         st.world.take().expect("world present"),
@@ -1653,6 +1655,7 @@ fn invoke_inner<C: HostCtx>(
     st.invoke_frames.pop();
     if let Some(w) = st.world.as_mut() {
         w.set_play_from_hand(was_from_hand);
+        w.set_placed_during_play(was_placed);
     }
     st.answers = inner.answers;
     st.next_answer = inner.next_answer;
@@ -2216,6 +2219,7 @@ pub fn place_card_on<C: HostCtx>(
 ) -> Result<i32, HostError> {
     let card = guest_str(c, cptr, cl)?;
     let note = guest_msg(c, p, n)?;
+    c.st_mut().w().set_placed_during_play(true);
     Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
 }
 
@@ -2229,6 +2233,7 @@ pub fn place_card_at<C: HostCtx>(
 ) -> Result<i32, HostError> {
     let card = guest_str(c, cptr, cl)?;
     let note = guest_msg(c, p, n)?;
+    c.st_mut().w().set_placed_during_play(true);
     Ok(c.st_mut().w().place_card(player_id, &card, note))
 }
 
@@ -2746,9 +2751,6 @@ pub fn ask<C: HostCtx>(
 /// Two-call out-buffer pattern like [`trig_name`].
 pub fn trig_kind<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostError> {
     let s = c.st().wr().trigger().kind.spelling();
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!("TRIGKIND {}", s);
-    }
     write_str(c, &s, p, n)
 }
 
@@ -3987,6 +3989,221 @@ pub fn join_redirect_target<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 pub fn set_join_used<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
     c.st_mut().w().set_trigger_join_used();
     Ok(())
+}
+
+// -- G06 join window -----------------------------------------------------
+
+/// The opener when this counter answers inside a join window, `-1` else.
+pub fn join_opener<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .trigger_join()
+        .map(|j| j.opener)
+        .unwrap_or(-1))
+}
+
+/// The participating seats of the window this link answers (postcard `Vec`).
+pub fn join_seats<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let list: Vec<i32> = c
+        .st()
+        .wr()
+        .trigger_join()
+        .map(|j| j.seats)
+        .unwrap_or_default();
+    let bytes = postcard::to_allocvec(&list)
+        .map_err(|e| HostError::trap(format!("join_seats encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// This joiner's counter shields the opener: marks `used` and answers `1`.
+/// Idempotent; `0` outside a join.
+pub fn join_shield<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    if c.st().wr().trigger_join().is_none() {
+        return Ok(0);
+    }
+    c.st_mut().w().set_trigger_join_shield();
+    if std::env::var("DBG_HOOK").is_ok() {
+        eprintln!(
+            "JOIN_SHIELD used={:?}",
+            c.st()
+                .wr()
+                .trigger_join()
+                .map(|j| (j.declared.clone(), j.used.clone()))
+        );
+    }
+    Ok(1)
+}
+
+/// Opener side: build and settle the nested join round on this link. Always
+/// applied (the routine runs on every pass); answers `1`. Once the window is
+/// open the call answers from the flag -- the body re-run past a join must not
+/// rebuild the round.
+pub fn join_open<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    if std::env::var("DBG_HOOK").is_ok() {
+        eprintln!(
+            "JOIN_OPEN join={:?} next_answer={}",
+            c.st().wr().trigger_join().map(|j| (j.opened, j.seats.clone())),
+            c.st().next_answer
+        );
+    }
+    if c.st().wr().trigger_join().is_some_and(|j| j.opened) {
+        // Consume the logged answer for alignment with the replay.
+        let st = c.st_mut();
+        if st.answers.get(st.next_answer).is_some() {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
+            st.next_answer += 1;
+        }
+        return Ok(1);
+    }
+    let at = c.st().wr().trigger().seq.saturating_sub(1) as i32;
+    crate::inline::request_always(
+        c,
+        crate::HostRequest::JoinOpen { at },
+        crate::inline::Pause::Sentinel,
+    )
+}
+
+/// Opener side, after `open()`: the round was built.
+pub fn join_opened<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .trigger_join()
+        .is_some_and(|j| j.opened) as i32)
+}
+
+/// Opener side: how many seats declared (bars the fallback).
+pub fn join_joiner_count<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    if std::env::var("DBG_HOOK").is_ok() {
+        eprintln!(
+            "JOINER_COUNT join={:?}",
+            c.st()
+                .wr()
+                .trigger_join()
+                .map(|j| (j.opened, j.seats.clone(), j.declared.clone(), j.used.clone()))
+        );
+    }
+    Ok(c.st()
+        .wr()
+        .trigger_join()
+        .map(|j| j.declared.iter().filter(|&&d| d).count() as i32)
+        .unwrap_or(0))
+}
+
+/// The declared seats in declaration order, or `-1` at `i`.
+fn joiner_at<C: HostCtx>(c: &mut C, i: i32) -> Option<(i32, usize)> {
+    let j = c.st().wr().trigger_join()?;
+    if i < 0 {
+        return None;
+    }
+    let mut seen = 0usize;
+    for (k, &d) in j.declared.iter().enumerate() {
+        if d {
+            if seen == i as usize {
+                return Some((j.seats[k], k));
+            }
+            seen += 1;
+        }
+    }
+    None
+}
+
+/// Opener side: the `i`-th declarer, `-1` when none.
+pub fn join_joiner<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostError> {
+    Ok(joiner_at(c, i).map(|(seat, _)| seat).unwrap_or(-1))
+}
+
+/// Opener side: did declaration `i` land and shield?
+pub fn join_joiner_shielded<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostError> {
+    let Some((_, k)) = joiner_at(c, i) else {
+        return Ok(0);
+    };
+    Ok(c.st()
+        .wr()
+        .trigger_join()
+        .is_some_and(|j| j.used.get(k).copied().unwrap_or(false)) as i32)
+}
+
+/// Opener side: the designation declaration `i` named, `-1` when none.
+pub fn join_designation<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostError> {
+    let Some((_, k)) = joiner_at(c, i) else {
+        return Ok(-1);
+    };
+    Ok(c.st()
+        .wr()
+        .trigger_join()
+        .and_then(|j| j.designated.get(k).copied())
+        .unwrap_or(-1))
+}
+
+// -- G06 pending readers / history ---------------------------------------
+
+/// Declared, unresolved negating answers on this link.
+pub fn trigger_pending_negation<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().pending_negation)
+}
+
+/// An extreme is armed on this play or declared on this link.
+pub fn trigger_extreme_armed<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().extreme_armed as i32)
+}
+
+/// The card whose effect this link is (two-call string pattern).
+pub fn trigger_subject_card<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostError> {
+    let s = c
+        .st()
+        .wr()
+        .trigger()
+        .subject_card
+        .clone()
+        .unwrap_or_default();
+    write_str(c, &s, p, n)
+}
+
+/// The card a copied counter link plays (two-call string pattern).
+pub fn trigger_link_copied<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostError> {
+    let s = c.st().wr().trigger().copied.clone().unwrap_or_default();
+    write_str(c, &s, p, n)
+}
+
+/// The offered link's depth, 0 = the effect's own link.
+pub fn trigger_chain_depth<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().seq.saturating_sub(1) as i32)
+}
+
+/// The kind spelling of the link at depth `i` from the root (`""` when none).
+pub fn trigger_answered_kind<C: HostCtx>(c: &mut C, i: i32, p: i32, n: i32) -> Result<i32, HostError> {
+    let s = usize::try_from(i)
+        .ok()
+        .and_then(|i| c.st().wr().trigger().answered_kinds.get(i).copied())
+        .map(|k| k.spelling().into_owned())
+        .unwrap_or_default();
+    write_str(c, &s, p, n)
+}
+
+/// Distinct players who declared a [反击] against `seat` this turn
+/// (postcard `Vec`, declaration order).
+pub fn countered_by_this_turn<C: HostCtx>(
+    c: &mut C,
+    seat: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let mut out: Vec<i32> = Vec::new();
+    for r in &c.st().wr().counteracted_records() {
+        if r.countered == seat && !out.contains(&r.declarer) {
+            out.push(r.declarer);
+        }
+    }
+    let bytes =
+        postcard::to_allocvec(&out).map_err(|e| HostError::trap(format!("countered encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
 }
 
 #[cfg(test)]

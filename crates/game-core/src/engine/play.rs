@@ -731,6 +731,8 @@ impl PlayCtx<'_> {
         // 结束时」) sees just that turn's credits. Everyone's counter starts
         // fresh with the turn.
         self.w.reset_gains();
+        // 「本回合内」 counterers (无法将视线移开) start fresh too.
+        self.w.reset_countered();
         // Pending pay factors are turn-scoped: a `nextMove` / `nextSettle`
         // write lands on exactly one move / settle and the turn starts them
         // clean. The per-seat settle counter is stamped through this turn.
@@ -5697,6 +5699,8 @@ impl PlayCtx<'_> {
         self.w.turn.cancelled_designations.clear();
         // `play_doubled` is scoped to one play.
         self.w.turn.play_doubled = None;
+        // Did this play place anything? (the copy-source record, G06 §5.6)
+        self.w.turn.placed_during_play = false;
         self.w
             .log(
                 "play",
@@ -5792,6 +5796,11 @@ impl PlayCtx<'_> {
             cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
+        // The completed play joins the copy-source log 「上一张卡」 (G06
+        // §2.15). Not cleared at a turn start; capped by `MAX_PLAY_LOG`.
+        let placed = self.w.turn.placed_during_play;
+        self.w.record_play(id, i as i32, placed);
+        self.w.turn.placed_during_play = false;
         // The play is over: hand back the origin flag (`play_from_hand` is
         // scoped to the play, see the top of this routine) and the forced
         // extreme (`extreme`, same scope).
@@ -5907,8 +5916,22 @@ impl PlayCtx<'_> {
     fn counteract(&mut self, t: &mut Trigger) -> Flow<()> {
         t.step = self.w.st.step;
         let rules = self.rules;
-        let r = rules.counteract(self, t)?;
-        Ok(r)
+        let mut r = rules.counteract(self, t);
+        // STACK-01: a counter body that parked work (a join window, a nested
+        // settle) suspends the walk. The routine's Rust stack is still live
+        // here, so pump the parked work and re-enter the walk instead of
+        // unwinding past the body this raise belongs to -- the same contract
+        // `raise_core` honours for guest raises.
+        let mut pumps = 0u32;
+        while r.as_ref().err().is_some_and(|e| e.is_suspended())
+            && !self.is_draining_work()
+            && pumps < 64
+        {
+            self.drain_work()?;
+            pumps += 1;
+            r = rules.counteract(self, t);
+        }
+        r
     }
 
     /// Build-and-raise a [`Trigger`], returning it as [`Self::counteract`] left it so

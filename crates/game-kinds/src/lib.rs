@@ -409,6 +409,12 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         hook_only: true,
     },
     EngineKind {
+        id: 121,
+        wire: "abnormalRefused",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
         id: 70,
         wire: "untargetable",
         is_filter: true,
@@ -801,6 +807,7 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "diceRollPlan" => Some(67),
         "abnormalGuard" => Some(68),
         "immuneAll" => Some(69),
+        "abnormalRefused" => Some(121),
         "untargetable" => Some(70),
         "redirect" => Some(71),
         "effect" => Some(72),

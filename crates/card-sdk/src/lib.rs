@@ -597,6 +597,15 @@ pub struct CounteractEntry {
     pub header: crate::abi::Presentation,
     /// See [`PlayEntry::texts`].
     pub texts: &'static [(&'static str, &'static str, &'static str)],
+    /// Numeric shape the entry answers (`On::answers_numbers`). v112.
+    pub numeric: crate::abi::NumericShape,
+    /// Payment shape the entry answers (`On::answers_whole_payments`). v112.
+    pub pay_shape: crate::abi::AnswerPayShape,
+    /// What the body does to the link (`On::declares_negation` /
+    /// `On::arms_extreme`). v112.
+    pub effect: crate::abi::AnswerEffect,
+    /// Dispatch the copied card's entry (`On::copies_previous`). v112.
+    pub copies_previous: bool,
 }
 
 /// Shared by Settle / Mortgage / Redeem / Buy / Build -- the docs already say
@@ -914,7 +923,67 @@ impl On {
             flash: crate::abi::Flash::Auto,
             header: crate::abi::Presentation::Visible,
             texts: &[],
+            numeric: crate::abi::NumericShape::Any,
+            pay_shape: crate::abi::AnswerPayShape::Any,
+            effect: crate::abi::AnswerEffect::NONE,
+            copies_previous: false,
         })
+    }
+
+    /// Answer only a pure number interval (`NumericShape::NumberInterval`).
+    pub const fn answers_numbers(self, n: crate::abi::NumericShape) -> Self {
+        match self {
+            On::CounteractBody(mut e) => {
+                e.numeric = n;
+                On::CounteractBody(e)
+            }
+            other => other,
+        }
+    }
+
+    /// Answer only one whole transfer, never a 「[分摊]」 leg.
+    pub const fn answers_whole_payments(self) -> Self {
+        match self {
+            On::CounteractBody(mut e) => {
+                e.pay_shape = crate::abi::AnswerPayShape::Whole;
+                On::CounteractBody(e)
+            }
+            other => other,
+        }
+    }
+
+    /// The body may negate the link (`AnswerEffect::NEGATES`).
+    pub const fn declares_negation(self) -> Self {
+        match self {
+            On::CounteractBody(mut e) => {
+                e.effect = e.effect.or(crate::abi::AnswerEffect::NEGATES);
+                On::CounteractBody(e)
+            }
+            other => other,
+        }
+    }
+
+    /// The body may force the theoretical maximum or minimum
+    /// (`AnswerEffect::ARMS_EXTREME`).
+    pub const fn arms_extreme(self) -> Self {
+        match self {
+            On::CounteractBody(mut e) => {
+                e.effect = e.effect.or(crate::abi::AnswerEffect::ARMS_EXTREME);
+                On::CounteractBody(e)
+            }
+            other => other,
+        }
+    }
+
+    /// Dispatch the copied card's entry instead of this card's (mortis).
+    pub const fn copies_previous(self) -> Self {
+        match self {
+            On::CounteractBody(mut e) => {
+                e.copies_previous = true;
+                On::CounteractBody(e)
+            }
+            other => other,
+        }
     }
 
     /// The rule's **settle body** (`docs/TILES.md`).
@@ -1559,6 +1628,40 @@ impl On {
             On::Action(e) => e.counter_reason,
             _ => None,
         }
+    }
+
+    /// The `Counteract` answer contract's numeric shape (v112); `Any` else.
+    pub const fn numeric(&self) -> abi::NumericShape {
+        match self {
+            On::CounteractBody(e) => e.numeric,
+            _ => abi::NumericShape::Any,
+        }
+    }
+
+    /// The `Counteract` answer contract's payment shape (v112); `Any` else.
+    pub const fn pay_shape(&self) -> abi::AnswerPayShape {
+        match self {
+            On::CounteractBody(e) => e.pay_shape,
+            _ => abi::AnswerPayShape::Any,
+        }
+    }
+
+    /// The `Counteract` body's declared answer effect (v112); `NONE` else.
+    pub const fn answer_effect(&self) -> abi::AnswerEffect {
+        match self {
+            On::CounteractBody(e) => e.effect,
+            _ => abi::AnswerEffect::NONE,
+        }
+    }
+
+    /// Is this a `Counteract` entry with an empty links list (every kind)?
+    pub const fn all_kinds(&self) -> bool {
+        matches!(self, On::CounteractBody(e) if e.links.len() == 0)
+    }
+
+    /// Is this a `copies_previous` entry?
+    pub const fn copies_previous_entry(&self) -> bool {
+        matches!(self, On::CounteractBody(e) if e.copies_previous)
     }
 
     pub const fn kind(&self) -> abi::OnKind {

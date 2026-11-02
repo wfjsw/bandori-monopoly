@@ -152,6 +152,17 @@ pub struct WindowCtx {
     pub pay_total_stage: bool,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_is_skill: bool,
+    /// The answered effect's subject card declares `RANGE_CARD`
+    /// (`subject_range_card`); false elsewhere.
+    pub subject_range_card: bool,
+    /// An extreme is armed on this play, or a declared answer arms one
+    /// (`extreme_armed`).
+    pub extreme_armed: bool,
+    /// Declared, unresolved answers on the answered link that declare a
+    /// negation (`pending_negation`).
+    pub pending_negation: i64,
+    /// Depth of the link being offered, 0 = the root (`chain_depth`).
+    pub chain_depth: i64,
     /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
     pub settle_tile: i64,
     /// `settle.owner` -- `-1` = no settle / unowned.
@@ -229,6 +240,10 @@ impl Default for WindowCtx {
             pay_is_fixed: 0,
             pay_total_stage: true,
             charge_is_skill: false,
+            subject_range_card: false,
+            extreme_armed: false,
+            pending_negation: 0,
+            chain_depth: 0,
             settle_tile: -1,
             settle_owner: -1,
             settle_houses: 0,

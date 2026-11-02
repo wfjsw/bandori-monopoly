@@ -264,6 +264,12 @@ pub struct TurnCtx {
     /// `play_from_hand`. `rules.play` reads it into `Call::Play`'s `arg`.
     #[serde(default)]
     pub play_arg: Vec<u8>,
+    /// Did the play being resolved place a card on the field? Armed by the
+    /// placement host functions, reset per play, read into
+    /// [`PlayRecord::placed`] when the play completes (design G06 §5.6).
+    /// A copy skips a source that placed.
+    #[serde(default)]
+    pub placed_during_play: bool,
     /// Seats whose designation on the play being resolved is cancelled
     /// (「取消其对目标之一的designate」). A per-pair cancel: the rest of the play's
     /// designations still land. Cleared at the start of each play.
@@ -414,6 +420,7 @@ impl Default for TurnCtx {
             extreme: Extreme::Plain,
             play_drove_move: false,
             play_from_hand: false,
+            placed_during_play: false,
             play_arg: Vec::new(),
             cancelled_designations: Vec::new(),
             play_doubled: None,
@@ -796,6 +803,29 @@ pub struct MarkLog {
     pub card: Option<String>,
 }
 
+/// One [反击] declaration of the current turn (无法将视线移开, design G06 §5.6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CounteractRecord {
+    /// The seat that declared.
+    pub declarer: i32,
+    /// The seat whose effect/play was countered.
+    pub countered: i32,
+    /// The declared card.
+    pub card: String,
+}
+
+/// One completed card play (the copy source 「上一张卡」, design G06 §2.15).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayRecord {
+    pub card: String,
+    pub player: i32,
+    /// The play's effect placed a card on the field (excluded from a copy).
+    pub placed: bool,
+}
+
+/// Most recent [`PlayRecord`]s kept on the world.
+pub const MAX_PLAY_LOG: usize = 32;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub st: MatchState,
@@ -868,6 +898,15 @@ pub struct World {
     /// field stand-in (HHW:（育美）(2)).
     #[serde(default)]
     pub gains: Vec<i32>,
+    /// [反击] declarations made this turn, in declaration order. Cleared at
+    /// each turn start (design G06 §6.5).
+    #[serde(default)]
+    pub countered_this_turn: Vec<CounteractRecord>,
+    /// The most recent completed card plays, oldest first, capped at
+    /// [`MAX_PLAY_LOG`]. Not cleared at a turn start -- 「上一张卡」 has no
+    /// turn bound (design G06 §2.15).
+    #[serde(default)]
+    pub played_cards: Vec<PlayRecord>,
     /// Marker **ownership** (user ruling 2026-10-07): a marker is owned by the
     /// **rule that creates it**, wherever its copies sit. Maps a marker name
     /// (「抹茶芭菲」, 「P✽P粉丝」, …) to the owning rule's card id
@@ -1148,6 +1187,8 @@ impl World {
             scheduled: vec![],
             targeted: vec![],
             gains: vec![],
+            countered_this_turn: vec![],
+            played_cards: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             walk_flush: WalkFlush::default(),
             mark_log: Vec::new(),
@@ -1311,6 +1352,25 @@ impl World {
     /// Zero every player's turn-gain counter (「当前回合内」 starts fresh).
     pub fn reset_gains(&mut self) {
         self.gains.iter_mut().for_each(|n| *n = 0);
+    }
+
+    /// Drop the turn's counteraction history (「当前回合内」 starts fresh).
+    pub fn reset_countered(&mut self) {
+        self.countered_this_turn.clear();
+    }
+
+    /// Append one completed card play to the copy-source log (「上一张卡」),
+    /// dropping the oldest past [`MAX_PLAY_LOG`]. Not cleared at a turn start.
+    pub fn record_play(&mut self, card: &str, player: i32, placed: bool) {
+        self.played_cards.push(PlayRecord {
+            card: card.to_string(),
+            player,
+            placed,
+        });
+        let over = self.played_cards.len().saturating_sub(MAX_PLAY_LOG);
+        if over > 0 {
+            self.played_cards.drain(..over);
+        }
     }
 
     /// The one credit write path: add `amount` to the player's money and count

@@ -1072,6 +1072,24 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.trig_join_used = true);
             0
         }
+        // ---- v112 join window / counter facts (shape only) ----
+        // No join round is modelled: `open` is an always-applied pause that
+        // answers 1 and marks the pass, `shield` sets the same flag from the
+        // joiner's side; the report arms are empty and the openers `-1`.
+        Op::join_opener | Op::join_joiner | Op::join_designation => -1,
+        Op::join_seats | Op::trigger_subject_card | Op::trigger_link_copied
+        | Op::trigger_answered_kind | Op::countered_by_this_turn => 0,
+        Op::join_shield => {
+            world::with_world_mut(|w| w.trig_join_used = true);
+            1
+        }
+        Op::join_open => {
+            world::with_world_mut(|w| w.trig_join_opened = true);
+            1
+        }
+        Op::join_opened => world::with_world(|w| w.trig_join_opened as i64),
+        Op::join_joiner_count | Op::join_joiner_shielded | Op::trigger_pending_negation
+        | Op::trigger_extreme_armed | Op::trigger_chain_depth => 0,
         Op::trig_set_cancelled => arm_trig_set_cancelled(a),
         Op::trig_set_negate_effect => arm_trig_set_negate_effect(a),
         Op::trig_set_reason | Op::trig_set_spare => arm_stub_zero(a),

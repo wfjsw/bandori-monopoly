@@ -173,6 +173,29 @@ impl<'a> PlayCtx<'a> {
         self.counteract_resume.take()
     }
 
+    /// Install the counteraction chain cursor (design G06 §6.2). Valid only
+    /// for the duration of one drive / one offer; the caller restores the
+    /// previous value.
+    pub fn set_counteract_chain(
+        &mut self,
+        state: Option<Box<dyn std::any::Any + Send>>,
+    ) -> Option<Box<dyn std::any::Any + Send>> {
+        std::mem::replace(&mut self.counteract_chain, state)
+    }
+
+    /// The installed chain cursor, when one is live.
+    pub fn counteract_chain(&self) -> Option<&(dyn std::any::Any + Send)> {
+        self.counteract_chain.as_deref()
+    }
+
+    /// Keep a counteraction chain's allocation alive for the rest of this
+    /// context. A join continuation parked on the work stack indexes the
+    /// chain through a raw cursor taken before the walk completed, while the
+    /// walk frees its box when it ends (design G06 §6.4).
+    pub fn keep_chain(&mut self, chain: Box<dyn std::any::Any + Send>) {
+        self.chain_keepalive.push(chain);
+    }
+
     /// True when this pump has already started [`MAX_SETTLE_DEPTH`] settles
     /// (rulebook runaway guard -- two cards settling each other). The work
     /// stack keeps the **Rust stack** flat; this is only the rules-level cap.

@@ -54,7 +54,7 @@ before this one. What the draft got wrong:
 | R15 | §4.8 placed `countered_this_turn` on `TurnCtx` and §7 then said its clear is "the default scope". `TurnCtx` is rebuilt per turn, so a save taken mid-turn loses it and the sentence in §7 about a `#[serde(default)]` load contradicts its own container choice. | `World.countered_this_turn` (SAVE'd), cleared at `turn_start` (§5.6, §7). |
 | R16 | §5.1 asserted `counteracts_to_play` "ORs then ANDs". `contract_admits` must not be an AND on the designates fallback: an `Effect`-only entry offered through `trigger_designates` must pass the same contract, and `counteract_entry` returned the first entry by kind, which may be the wrong one when a card has two Counteract entries. | `counteract_entry` scans the card's entries and returns the first that satisfies the contract; the designates fallback is inside the same scan (§6.1). |
 | R17 | The draft demanded `ManifestOn.all_kinds` *and* filled the kind mask with every kind. Filling the mask makes `ruleset.declares()` true for every kind set-wide whenever Mortis is present, which defeats the early-out at `counteract_orig:5462` — unmentioned. | Keep `all_kinds` (explicit beats inferring from an empty list) but say that the `declares` early-out now costs one bridge trigger per raise while Mortis is in the set (§6.1). |
-| R18 | §8 said "the seventh group in landing order, entry inserted immediately below the constant" without the landed G03 entry text and with the wrong numbers; §5.7's Op sentence read "G01/G08/G02/G04/G03 take 341-410 ahead of this group". | Base 111, landing 112; the entry is inserted below `v111`; ops are 411–425 (§8). |
+| R18 | §8 said "the seventh group in landing order, entry inserted immediately below the constant" without the landed G03 entry text and with the wrong numbers; §5.7's Op sentence read "G01/G08/G02/G04/G03 take 341-410 ahead of this group". | Base 111, landing 112; the entry is inserted below `v111`; ops are 411–426 (§8). |
 | R19 | §9.4's obligations named `rules/kani/src/proofs/abi_g06.rs` and `spec/abi_g06.rs`; the `mod` lists name units by crate band or by pilot (`cond_ops`, `hostops_smoke`), never by group, and an unregistered group-name file would dangle. | `spec/g06_windows.rs` + `proofs/g06_windows.rs` are added to `rules/kani/src/spec/mod.rs` and `proofs/mod.rs` beside the ungated `cond_ops` pair; the files are new, not assumed (§9.4). |
 | R20 | §9.1 named tests at paths that do not exist (`gap_window.rs` g19/g20 *do* exist, but the new ones were placed in unnamed files) and omitted the existing suites that pin the behaviour being changed. | One new `rules/tests/tests/g06_windows.rs`, plus the changed suites listed in §9.1. |
 | R21 | Names were abbreviated and two of them invented units: `CounterRecord` beside `CounteractEntry`; `joiner(i)` without saying what it returns; `answered_kind(i)` without saying `i` counts from the root; the "chain cursor" was never named. | The header's naming rules; `CounteractRecord`; `joiner`/`joiner_shielded` documented as index-into-declaration-order; `answered_kind` documented; the cursor is `CounteractChainCursor`. |
@@ -1052,7 +1052,7 @@ only where G12 lands it.
 
 ### 6.8 Kani model
 
-`sys_kani` / `kani_host::Op` gains one op per import (§9's band 411-425);
+`sys_kani` / `kani_host::Op` gains one op per import (§9's band 411-426);
 `native_shims` mirrors them with the `ruleset_*` names and `host.rs` registers
 them next to `join_redirect_target` (`host.rs:5899-5905`). The stubs are
 shape-consistent only: `join::open` = a no-op answering `1` with `opened`
@@ -1202,7 +1202,7 @@ entry (`abi.rs:803-815`):
 ```
 
 Band arithmetic from the README: G06 lands `ABI_VERSION` 111→112, engine
-kind 121, Kani `Op` 411-425 and `SAVE_VERSION` 14→15; the README's G06 row said 109→110/14→15
+kind 121, Kani `Op` 411-426 and `SAVE_VERSION` 14→15; the README's G06 row said 109→110/14→15
 (stale by two ABI steps) and every later row's ABI number shifts two:
 G05+G13 112→113, G07 113→114, G09 114→115, G10 115→116, G11 116→117,
 G12 117→118, G14 118→119. The op bands need no shift (G03's 398-410 landed).
@@ -1269,7 +1269,9 @@ text, keyed by card id.
 
 * `contract_admits_iff` — admits is true iff the kind matches (direct or
   designates), numeric shape holds and pay shape holds. One mutant per
-  predicate must fail.
+  predicate must fail: `contract_admits_ignores_designates_mutant`,
+  `contract_admits_ignores_numeric_mutant`,
+  `contract_admits_ignores_pay_shape_mutant`.
 * `join_report_iff` — `joiner_count` = declared count, `joiner(i)` = i-th
   declarer, `joiner_shielded(i)` = used[i], `designation(i)` = designated[i];
   a mutant that folds `declared` into `used` fails.
