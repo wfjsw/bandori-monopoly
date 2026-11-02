@@ -1317,3 +1317,149 @@ explicit flag also keeps `entry_iter` generic. Rejected for one wire byte.
 8. **Join depth cap.** A nested join is allowed and bounded by
    `MAX_COUNTERACT_DEPTH`; whether the book intends a joiner to open a join
    of its own is unruled.
+
+## 12. Necessity
+
+This section answers one question: why does each piece of §5 exist — and why
+could it not be done smaller? It is written item by item so a reviewer can
+strike an item without striking the group, and surface by surface so a
+reviewer can strike a field without losing sight of what it holds up.
+
+### 12.1 The group
+
+Counteraction is the mechanism the whole card pool threads through: 15 of the
+65 B-class items, 21 sheet rows, the 真奈 join, the extreme forcer, the
+repaint cut, the counterer history, the negation guards and the abnormal
+window. Every one of them is a ruled clause that the current engine either
+answers wrongly or cannot express. The question is not whether the chain
+needs work — the sheet already says it does — but whether the work needs
+*this* shape. Four facts force it:
+
+1. The offer index can only ask "does the kind match" (§3 R1). A contract
+   that is not in the entry cannot be enforced, and the two over-offer items
+   (3, 5) are exactly that missing predicate. An A-path fix would put the
+   predicate into each card's `can_counteract`, where it costs a world copy,
+   a condition evaluation and a duplicated rule per card — and it still could
+   not see the subject or the payment shape through a counter link, because a
+   counter link is a stub (R2).
+2. A counter link drops the answered payload (R2). Repaint cannot read the
+   roll it cuts, and any future entry answering a counter is blind. Fixing
+   that is the carry-forward; once the payload is there, the settle-order
+   loss (R5/R11) has to be answered too, which is the face propagation.
+3. The join is two scalars with no per-seat grain (R3). The book's
+   「如同自身的对应目标被指定一般」 is a *presentation* promise: the seat must
+   be offered as the target. A scalar cannot present anything, cannot report
+   who shielded, and is armed for holders who never played the card. A
+   getter alone (alternative A1) makes the flag readable but leaves the
+   single-target case unoffered.
+4. Guards run before resolution (R4). The negation guard and the extreme lock
+   need facts that only exist after a declaration, and the abnormal window
+   opens before the refusal exists. No reordering inside a card can supply a
+   fact the engine has not recorded.
+
+### 12.2 Per item
+
+Each line states what breaks for a player today and what the smallest
+alternative would be.
+
+* **1 (draw ownership).** Today only `网络链接异常` can draw for a joiner, and
+  真奈 cannot run its own clause. A1 keeps the draw in the joiner's body, so
+  every future joining card must re-implement 真奈's clause. Necessity: the
+  clause belongs to the opener's card; without a report the opener cannot
+  ask it.
+* **2 (shield reader).** `set_join_used` writes to nothing. A1 gives a bare
+  boolean, which cannot distinguish "who joined" from "who shielded" and
+  cannot be indexed per seat. Necessity: one reader per seat, which is
+  `join::shield` plus `joiner_shielded`.
+* **3 (extreme filter).** The card is offered on every play, arms twice, and
+  its own documented exception (ycm) is unreachable (`tsugumi_can.rs:39-46`).
+  Necessity: a shape predicate on the entry, and a pending-extreme reader so
+  a second copy does not re-pick.
+* **4 (event effects).** An event-armed extreme leaks into the next play and
+  events are never offered. `ChainKind::Event` and the saved extreme already
+  exist, so this lands as soon as item 3's filter exists; without the filter
+  the event branch over-offers exactly as the card branch does.
+* **5 (split leg).** The card's own TODO (`vocal_too_hard.rs:22-27`) records
+  that it is dead for the payments 「一次性」 is meant to keep. Necessity: the
+  contract field, plus G02 §2.20's total window as the prerequisite.
+* **6 (empty links).** The entry is never offered (`mortis_instinct.rs:21`).
+  No runtime closure can decide kinds at build time (A3). Necessity: the
+  manifest flag and the build-side expansion.
+* **7 (repaint).** The card answers only the root and its cut is lost between
+  counters (§2.7). Necessity: the carry-forward is what makes the condition
+  true at all; the propagation is what makes the cut survive LIFO.
+* **8 (history).** The `On::Play` entry moves nobody and the counter entry
+  moves one seat (`cant_look_away.rs:55-70`). Necessity: the history is the
+  only source of "all players this turn"; dedupe and clear-at-turn-end are
+  part of it, not extras.
+* **9 (join window).** Single-target effects offer no bystander
+  (`net_error.rs:60-65`). Necessity: the presentation, the seat set and the
+  round; the existing declaration stamp cannot be stretched to either.
+* **10 (joiner count).** The fallback is tied to "a designation was
+  cancelled", which a shielding-nothing joiner does not produce
+  (`mana_champion.rs:89-98`). Necessity: `joiner_count` over `declared`.
+* **11 (pending negation).** `现在她是Sumimi的小初啦` gains on a payment a
+  counter will negate. Necessity: a declared-intent reader before resolution;
+  the entry bit is its only honest source.
+* **12 (designation property).** Without `DESIGNATES` every designation
+  reader sees nothing, and `网络链接异常` takes the whole-play branch
+  (`net_error.rs:50-53`). Necessity: the property (A) — the two body bugs the
+  draft also listed are already fixed on master, so the A part is now one
+  line. The per-joiner record is the B part, needed because the cancel
+  happens inside the joiner's body.
+* **13, 14 (abnormal ordering).** A protected player spends the card on a
+  move that never happens. Necessity: the refused/landed split and the
+  hook-only `abnormalRefused`; G12 §5.1 owns the gate itself.
+* **15 (mortis).** The card logs and does nothing (`mortis_instinct.rs:45-56`).
+  Necessity: the copied-entry dispatch and the `link.copied` fact; without
+  them item 6 only makes an inert card *offered*.
+
+### 12.3 Surface, field by field
+
+| surface | forced by | if removed |
+|---|---|---|
+| `NumericShape` / `prop::RANGE_CARD` | 3, 4, 15 | tsugumi over-offers; the copied entry cannot be matched |
+| `AnswerPayShape` | 5 | split legs are waived one by one |
+| `AnswerEffect` bits | 3, 11 | the second extreme copy re-picks; the negation guard has no source |
+| `ManifestOn.all_kinds` / `copies_previous` | 6, 15 | inert entries stay unoffered; the copy cannot dispatch |
+| `Trigger.subject_card` | 3, 4, 15 | the filter has no subject through a counter link |
+| `Trigger.join` / `TriggerJoin` | 1, 2, 9, 10, 12 | the join is a scalar again (§12.1 point 3) |
+| `Trigger.answers_declared` / `joined` link `copied` | 3, 11, 15 | no pending fact, no copy |
+| `World.countered_this_turn` | 8 | no per-turn set; save would lose it |
+| engine kind 121 | 13, 14 | a refused abnormal is unloggable as such |
+| the fifteen imports | 1, 2, 9, 10, 12, 15, 3, 11, 8, 7 | each is a datum no other import exposes |
+
+Nothing in §5 is speculative: every field is read by at least one item, and
+every item's test in §9.1 reads the field it exists for.
+
+### 12.4 The breaks are the price, and it is small
+
+* **ABI 112.** Five trailing `ManifestOn` fields must exist because postcard
+  is not self-describing. The imports and conditions alone would not need a
+  bump; the manifest does. One bump now, defaulted decode, no migration.
+* **SAVE 15.** The history is the only durable fact. It is
+  `#[serde(default)]`, so old saves load empty, and it clears at
+  `turn_start`.
+* **No new display text, no decision in an import.** Every joiner decision
+  is still `ask_yes` in the opener's body.
+* **Landing independence.** Items 6, 12 (A part) and 4's kind can land ahead
+  of the rest (the A sub-branches in §1); item 5's split-total behaviour
+  waits on G02 §2.20; item 9's nesting waits on G13's copy rule. Nothing in
+  the group needs a later group to compile.
+
+### 12.5 What would argue against the group
+
+The honest counter-arguments, and their answers:
+
+* *"A1 is enough."* It cannot present a seat as the target, so single-target
+  effects stay unjoinable; it cannot distinguish shield from declaration, so
+  the fallback and the draw both stay wrong.
+* *"Put the filters in `can_counteract`."* They are still blind to the
+  subject and the payment shape through a stub link, and they re-evaluate a
+  static property on every offer.
+* *"Never mind the join."* Then items 1, 2, 9, 10 and half of 12 close
+  ungranted, and `cross_chain::c23` / `gap_window::g19` keep passing only
+  through multi-target luck.
+* *"Defer the copy (15)."* Legitimate: 15 is the only item whose memory rule
+  is undecided (CH-05). Striking it leaves 6 as the A matcher and costs the
+  `copies_previous` field and the `link_copied` reader, nothing else.
