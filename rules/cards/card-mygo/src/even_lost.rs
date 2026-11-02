@@ -121,6 +121,14 @@ pub fn go_kani(player_id: i32) -> card_sdk::Asked {
     use_it(player_id, ctx::hand_size(player_id))
 }
 
+/// The declare's body arm. Its arg is whatever the declare answered, so the
+/// caller supplies it.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_it_kani(player_id: i32, n: i32) -> card_sdk::Asked {
+    use_it(player_id, n)
+}
+
 #[cfg(kani)]
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {

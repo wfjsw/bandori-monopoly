@@ -155,6 +155,26 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn place_kani(player_id: i32) -> card_sdk::Asked {
+    place(player_id)
+}
+
+/// The declare's collector -- it may prompt, so it answers a `Declared`.
+#[cfg(kani)]
+#[inline(always)]
+pub fn pick_jump_kani(player_id: i32) -> card_sdk::Declared<i32> {
+    pick_jump(player_id)
+}
+
+/// The declare's body arm; the caller supplies the answered tile.
+#[cfg(kani)]
+#[inline(always)]
+pub fn jump_kani(player_id: i32, pick: i32) -> card_sdk::Asked {
+    jump(player_id, pick)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
 }

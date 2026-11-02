@@ -27,8 +27,11 @@ fn place(t: &mut Table, who: usize, card: &str) {
     }
 }
 
-fn plan_steps(t: &Table) -> Option<i32> {
-    t.m.world().turn.plan.steps
+/// The walk the move actually took. The plan a body shaped lives on the move's
+/// own frame, so it is spent by the time the move ends -- the position is what
+/// outlives it.
+fn walked(t: &Table, from: usize) -> usize {
+    t.pos(0) - from
 }
 
 fn saw(t: &Table, mark: i32, needle: &str) -> bool {
@@ -48,6 +51,7 @@ fn action_at_a_filter_kind_runs() {
     let mut t = Table::vanilla(2);
     t.dice(&[1]);
     place(&mut t, 0, "TEST:planOffer");
+    let start = t.pos(0);
     let mark = t.mark();
     t.roll(0).unwrap();
     assert!(
@@ -65,8 +69,8 @@ fn action_at_a_filter_kind_runs() {
         t.keys_since(mark)
     );
     assert_eq!(
-        plan_steps(&t),
-        Some(3),
+        walked(&t, start),
+        3,
         "the body's `plan::set_steps` shapes this move"
     );
 }
@@ -92,6 +96,7 @@ fn decline_writes_nothing() {
     let mut t = Table::vanilla(2);
     t.dice(&[1]);
     place(&mut t, 0, "TEST:planDecline");
+    let start = t.pos(0);
     let mark = t.mark();
     t.roll(0).unwrap();
     while t.prompt().is_some() {
@@ -102,10 +107,10 @@ fn decline_writes_nothing() {
         "the declining collector's body never runs: {:?}",
         t.keys_since(mark)
     );
-    assert_ne!(
-        plan_steps(&t),
-        Some(5),
-        "the body's `set_steps(5)` never wrote"
+    assert_eq!(
+        walked(&t, start),
+        1,
+        "the body's `set_steps(5)` never wrote: the die's own face walked"
     );
 }
 
@@ -165,7 +170,12 @@ fn hook_declare_runs_the_body_once_with_the_arg() {
         .into_iter()
         .filter(|k| k.contains("plan_offer_body"))
         .count();
-    assert_eq!(hits, 1, "the replayed drive runs the body once: {:?}", t.keys_since(mark));
+    assert_eq!(
+        hits,
+        1,
+        "the replayed drive runs the body once: {:?}",
+        t.keys_since(mark)
+    );
     // …and the recorded answer carries the arg the collector declared.
     let saw_arg = t.m.world().recent.iter().any(|e| {
         e.msg.key().contains("plan_offer_body")
@@ -199,7 +209,12 @@ fn second_copy_not_offered_after_a_claim() {
         .into_iter()
         .filter(|k| k.contains("plan_offer_body"))
         .count();
-    assert_eq!(hits, 1, "only the first copy acted: {:?}", t.keys_since(mark));
+    assert_eq!(
+        hits,
+        1,
+        "only the first copy acted: {:?}",
+        t.keys_since(mark)
+    );
 }
 
 /// The claim is per move: it is cleared with the move that raised it.

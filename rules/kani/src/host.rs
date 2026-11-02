@@ -2394,9 +2394,7 @@ pub fn arm_is_placed(a: Args) -> i64 {
     let _ = a;
     // Instance-bound: the *running* uid must have a slot. `field_n > 0` was
     // wrong with a second copy -- or any other card -- on the field.
-    world::with_world(|w| {
-        (w.last_uid != 0 && w.field.iter().any(|f| f.uid == w.last_uid)) as i64
-    })
+    world::with_world(|w| (w.last_uid != 0 && w.field.iter().any(|f| f.uid == w.last_uid)) as i64)
 }
 
 /// `effective_card_at` -- LE `u16` id of the surface card (2 bytes), 0 when

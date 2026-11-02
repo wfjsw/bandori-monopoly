@@ -395,7 +395,10 @@ struct Saved {
 /// v14: roll transactions (`World.open_rolls`, `next_roll_id`, the turn's
 /// `roll_history` / `fixed_roll`, `World.blocked_settle`). A roll in flight
 /// is live state, not a rebuildable view, so saves carry it.
-pub const SAVE_VERSION: u32 = 14;
+/// v15: the effective card of a field instance (`FieldCard.effective_card`) and
+/// the pre-dice claim on a move (`TurnCtx.plan.claimed`), both
+/// `serde(default)` -- a v14 save restores with them unset.
+pub const SAVE_VERSION: u32 = 15;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns

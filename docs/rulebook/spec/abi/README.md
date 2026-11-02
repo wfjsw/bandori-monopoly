@@ -25,8 +25,8 @@ the whole table.
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
 | G01 | 104→105 | 12 | 111–112 | 341–346 |
-| G08 | 105→106 | 12→13 | 113–120 | 350–369 |
-| G02 | 106→107 | 13 | 122 | 369–377 |
+| G08 | 105→106 | 12→13 | 113–120 | 351–370 |
+| G02 | 106→107 | 13 | 122 | 370–378 |
 | G04 | 110→111 | 13 | — | 378–391 |
 | G03 | 108→109 | 13→14 | 123–125 | 398–410 |
 | G06 | 109→110 | 14→15 | — | 411–430 |
@@ -71,8 +71,8 @@ wire field are gone; the group instead needs one guest `Action` constructor over
 the existing plan kind (kind 67, no new id), a per-move offer claim, and the
 effective-card marker. The offer itself is the entry's `declare`
 (`On::declare_arg`), not an ask in the body: a declined offer must leave no
-card flash and no log line, which only a decline at the admission layer gives. The claim takes `Op` 349, so **G08 shifts to 350** and
-its twenty imports take 350–369; the kind column stays `—` because no engine id
+card flash and no log line, which only a decline at the admission layer gives. The claim takes `Op` 349 and its writer 350, so **G08 shifts to 351**
+and its twenty imports take 351–370; the kind column stays `—` because no engine id
 is consumed. `SAVE_VERSION` still moves for the marker's field.
 
 Recommended landing order (foundation → dependent):

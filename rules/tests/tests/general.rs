@@ -28,6 +28,24 @@ fn skip_all(t: &mut Table) {
     }
 }
 
+/// A [手] card whose placed side is only a filter has nothing to offer at the
+/// plan pass: it is placed for its rider, not for a press. `MyGO:[千早爱音]Anon
+/// Tokyo`'s [限] line is a `PaySplitAdd` filter.
+#[test]
+fn hand_only_placed_card_offers_nothing() {
+    let mut t = Table::vanilla(2);
+    t.dice(&[1]);
+    t.place_raw(0, "MyGO:[千早爱音]Anon Tokyo");
+    let mark = t.mark();
+    t.roll(0).unwrap();
+    assert!(
+        !t.keys_since(mark).iter().any(|k| k.contains("anon_tokyo")),
+        "a filter-only placed card asks nothing at the plan pass: {:?}",
+        t.keys_since(mark)
+    );
+    skip_all(&mut t);
+}
+
 // =====================================================================
 // 通用:@Tsugu ycm
 // =====================================================================

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use game_core::data::GameData;
-use game_core::engine::{Match, StubRules};
+use game_core::engine::{Match, StubRules, SAVE_VERSION};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::stage;
@@ -1018,4 +1018,39 @@ fn save_and_restore_continue_identically() {
         assert_eq!(a.save(), b.save());
     }
     assert!(Match::restore(d, Arc::new(StubRules), "{\"version\":0}").is_err());
+}
+
+/// `FieldCard.effective_card` and `TurnCtx.plan.claimed` are `serde(default)`,
+/// so a document written before them still reads (the version is exact, so the
+/// doc is labelled current).
+#[test]
+fn a_save_without_the_offer_fields_restores() {
+    let d = data();
+    let members: Vec<RoomMember> = (1..=3).map(|i| member(i, true)).collect();
+    let mut a = new_match(&members, 21, MatchMode::Casual);
+    for _ in 0..40 {
+        a.pump_tick(0.25);
+    }
+    let mut v: serde_json::Value = serde_json::from_str(&a.save()).unwrap();
+    fn scrub(v: &mut serde_json::Value) {
+        match v {
+            serde_json::Value::Object(m) => {
+                m.remove("effective_card");
+                m.remove("claimed");
+                for x in m.values_mut() {
+                    scrub(x);
+                }
+            }
+            serde_json::Value::Array(a) => a.iter_mut().for_each(scrub),
+            _ => {}
+        }
+    }
+    scrub(&mut v);
+    v["version"] = serde_json::json!(SAVE_VERSION);
+    let b = Match::restore(d, Arc::new(StubRules), &v.to_string()).unwrap();
+    assert_eq!(b.state(), a.state());
+    assert!(
+        b.world().turn.plan_stack.iter().all(|f| !f.plan.claimed),
+        "the claim defaults to false"
+    );
 }

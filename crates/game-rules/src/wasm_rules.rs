@@ -5634,7 +5634,8 @@ impl<M: CardModules> RulesBridge<M> {
                                     continue;
                                 }
                                 // A marked instance runs its effective card's surface.
-                                let id = world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
+                                let id =
+                                    world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
                                 let Some(idx) = self.ruleset.card(&id) else {
                                     continue;
                                 };
@@ -5666,9 +5667,12 @@ impl<M: CardModules> RulesBridge<M> {
                         // borrowed row; its id comes from the raise's
                         // provenance (`t.card`, `t.instance`).
                         if t.instance >= 0 && !drove.contains(&t.instance) {
-                            let row = world
-                                .field_by_uid(t.instance)
-                                .map(|f| (f.effective_card.clone().unwrap_or_else(|| f.card.clone()), f.owner));
+                            let row = world.field_by_uid(t.instance).map(|f| {
+                                (
+                                    f.effective_card.clone().unwrap_or_else(|| f.card.clone()),
+                                    f.owner,
+                                )
+                            });
                             let id = row.as_ref().map(|r| r.0.clone()).or_else(|| t.card.clone());
                             // The body's seat is the row's holder, not the
                             // trigger's player: for a gate the trigger player
@@ -6018,9 +6022,12 @@ impl<M: CardModules> RulesBridge<M> {
             }
         };
         if t.instance >= 0 {
-            let row = world
-                .field_by_uid(t.instance)
-                .map(|f| (f.effective_card.clone().unwrap_or_else(|| f.card.clone()), f.owner));
+            let row = world.field_by_uid(t.instance).map(|f| {
+                (
+                    f.effective_card.clone().unwrap_or_else(|| f.card.clone()),
+                    f.owner,
+                )
+            });
             let id = row.as_ref().map(|r| r.0.clone()).or(t.card.clone());
             // The row's holder, not the trigger's player (see the walk above).
             let seat = row.as_ref().map_or(t.player_id, |r| r.1);
@@ -7418,7 +7425,10 @@ impl<M: CardModules> RulesBridge<M> {
         let face_down_ok = self.face_down_counter_ok(cx, seat);
         field.iter().any(|(uid, id)| {
             // A marked instance offers its effective card's counteraction.
-            let eff = cx.world().effective_card_at(*uid).unwrap_or_else(|| id.clone());
+            let eff = cx
+                .world()
+                .effective_card_at(*uid)
+                .unwrap_or_else(|| id.clone());
             let Some(idx) = self.ruleset.card(&eff) else {
                 return false;
             };

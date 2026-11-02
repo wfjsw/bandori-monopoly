@@ -790,8 +790,9 @@ mod tests {
         // `diceRollPlan` (ABI v111) = 77.
         assert_eq!(Action::KINDS.len(), 77);
         // A dual kind is filter-shaped but still an action entry.
-        assert!(Action::KINDS.iter().all(|k| !k.is_filter
-            || k.kind.is_dual_action_filter()));
+        assert!(Action::KINDS
+            .iter()
+            .all(|k| !k.is_filter || k.kind.is_dual_action_filter()));
         for k in Action::KINDS {
             assert!(
                 !k.kind.is_filter() || k.kind.is_dual_action_filter(),

@@ -503,7 +503,11 @@ fn even_lost_counter_and_continuing() {
         v.set_draw(0, &["R:曲奇时间"]); // non-empty draw: no eager reshuffle
         let condition = v.snapshot_world();
         v.observe(CLAUSES);
-        v.skill(0, EVEN_LOST).map_err(|e| format!("press: {e}"))?;
+        // G05: the clause is a placed offer raised at the pre-dice plan pass
+        // (the `DiceRollPlan` declare), so it asks when the move is rolled.
+        v.dice(&[1]);
+        v.roll(0).map_err(|e| format!("roll: {e}"))?;
+        v.answer_one(0).map_err(|e| format!("yes: {e}"))?; // 发动
         rest(&mut v);
         drain(&mut v);
         if v.on_field(0, EVEN_LOST) {
@@ -914,6 +918,15 @@ fn rainday_drains_one_crystal_per_turn_end() {
             return Err("C-MYGO-rainday-03: still on field at 0 crystals".into());
         }
         if !t.discard(0).iter().any(|c| c == RAINDAY) {
+            eprintln!("RAIN keys: {:?}", t.recent_keys(40));
+            eprintln!(
+                "RAIN ev: {:?}",
+                t.m.world()
+                    .recent
+                    .iter()
+                    .map(|e| format!("{}|{}|{}", e.r#type, e.card, e.msg.key()))
+                    .collect::<Vec<_>>()
+            );
             return Err(format!(
                 "C-MYGO-rainday-03: must be in 弃牌堆, discard={:?} draw={:?}",
                 t.discard(0),

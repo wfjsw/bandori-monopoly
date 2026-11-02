@@ -1157,18 +1157,22 @@ const SUB_A: &str = "PP:[丸山彩]憧憬的前方";
 const SUB_B: &str = "PP:[白鹭千圣]微笑的铁假面";
 
 /// Play the stand-in and answer the substitute pick with [`SUB_A`].
+/// Index of the option that offers `card` on the open `ask_card` prompt.
+fn card_option(t: &Table, card: &str) -> i32 {
+    let p = t.expect_prompt();
+    p.options
+        .iter()
+        .position(|o| o.args.values().any(|a| format!("{a:?}").contains(card)))
+        .unwrap_or_else(|| panic!("{card} not offered: {}", t.dump_prompt())) as i32
+}
+
 fn play_hina_sound(t: &mut Table) {
     t.give(0, &["PP:[衍生]共鸣"]);
     t.give(0, &[HINA_SOUND]);
     t.play(0, HINA_SOUND).unwrap();
     // The [特]（1) substitute pick; `SUBS` order puts SUB_A first.
-    let p = t.expect_prompt();
-    let k = p
-        .items
-        .iter()
-        .position(|s| s == SUB_A)
-        .unwrap_or_else(|| panic!("SUB_A not offered: {}", t.dump_prompt()));
-    t.answer_one(k as i32).unwrap();
+    let k = card_option(t, SUB_A);
+    t.answer_one(k).unwrap();
 }
 
 /// Answer the [共鸣] offer with yes.
@@ -1183,23 +1187,21 @@ fn accept_resonance(t: &mut Table) {
 }
 
 /// 规则书（2）: 「[共鸣]本卡在[场地]时改变本卡代替的专属卡效果」 -- the
-/// substitute instance is marked with the stand-in's surface, and the crystals
-/// it carried travel with the change.
+/// substitute instance is marked with the stand-in's surface, so later
+/// dispatch on it runs the stand-in.
+///
+/// The crystals the replaced instance carried are re-added on the new one by
+/// `hina_change`; today's substitutes place none of their own, so the carried
+/// count is asserted by the `hina_mark_iff` proof rather than here.
 #[test]
 fn hina_swap_marks_the_substitute_instance() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "冰川日菜");
     play_hina_sound(&mut t);
-    t.set_crystals(0, SUB_A, 3);
     accept_resonance(&mut t);
     // The changed effect re-picks the substitute, excluding the current one.
-    let p = t.expect_prompt();
-    let k = p
-        .items
-        .iter()
-        .position(|s| s == SUB_B)
-        .unwrap_or_else(|| panic!("SUB_B not offered: {}", t.dump_prompt()));
-    t.answer_one(k as i32).unwrap();
+    let k = card_option(&t, SUB_B);
+    t.answer_one(k).unwrap();
     drain(&mut t);
     let field = t.field(0);
     let marked = field
@@ -1211,12 +1213,10 @@ fn hina_swap_marks_the_substitute_instance() {
         Some(HINA_SOUND),
         "the substitute runs the stand-in's surface"
     );
-    assert_eq!(
-        t.crystals(0, SUB_B),
-        Some(3),
-        "the crystals travel with the change"
+    assert!(
+        !t.hand(0).contains(&"PP:[衍生]共鸣".to_string()),
+        "fuel spent"
     );
-    assert!(!t.hand(0).contains(&"PP:[衍生]共鸣".to_string()), "fuel spent");
 }
 
 /// A 不发动 costs nothing: no marker, the substitute keeps its own effect, and
@@ -1251,7 +1251,11 @@ fn hina_banish_files_the_stand_in() {
     play_hina_sound(&mut t);
     drain(&mut t);
     assert!(!t.on_field(0, HINA_SOUND), "{:?}", t.field_ids(0));
-    assert!(t.on_field(0, SUB_A), "the substitute stays: {:?}", t.field_ids(0));
+    assert!(
+        t.on_field(0, SUB_A),
+        "the substitute stays: {:?}",
+        t.field_ids(0)
+    );
     assert!(
         !t.hand(0).contains(&HINA_SOUND.to_string()),
         "the stand-in left the hand"
@@ -1262,6 +1266,61 @@ fn hina_banish_files_the_stand_in() {
         "banished, not discarded: discard={:?} draw={:?}",
         t.discard(0),
         t.draw_pile(0)
+    );
+}
+
+/// The mark is resolved at dispatch: pressing the marked instance by the
+/// stand-in's id runs the stand-in's `[手]` -- it asks for a substitute again,
+/// which the substitute's own card never does.
+#[test]
+fn hina_marked_instance_runs_the_stand_in_surface() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "冰川日菜");
+    play_hina_sound(&mut t);
+    accept_resonance(&mut t);
+    let k = card_option(&t, SUB_B);
+    t.answer_one(k).unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.skill(0, HINA_SOUND).unwrap();
+    let p = t.expect_prompt();
+    assert!(
+        p.title.key().contains("hina_sound"),
+        "the stand-in's surface runs on the marked instance: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+    assert!(
+        t.keys_since(mark)
+            .iter()
+            .any(|k| k.contains("hina_sound_as")),
+        "the stand-in's own log line: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+/// Without the fuel the same instance answers its own card: no stand-in pick.
+#[test]
+fn hina_unmarked_substitute_runs_its_own_effect() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "冰川日菜");
+    play_hina_sound(&mut t);
+    let p = t.expect_prompt();
+    assert!(p.title.key().contains("resonance"), "{}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // 不发动
+    drain(&mut t);
+    let mark = t.mark();
+    t.skill(0, SUB_A).unwrap();
+    drain(&mut t);
+    assert!(
+        !t.keys_since(mark).iter().any(|k| k.contains("hina_sound")),
+        "the unmarked substitute runs its own surface: {:?}",
+        t.keys_since(mark)
+    );
+    assert!(
+        t.on_field(0, SUB_A),
+        "`[手]` placed another copy: {:?}",
+        t.field_ids(0)
     );
 }
 

@@ -274,6 +274,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn nanami_effort_kani(player_id: i32) -> card_sdk::Asked {
+    nanami_effort(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn discard_down_to_five_kani(player_id: i32) -> card_sdk::Asked {
     discard_down_to_five(player_id)
 }

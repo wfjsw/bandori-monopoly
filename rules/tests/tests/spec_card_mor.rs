@@ -37,10 +37,15 @@ const TSUKINOMORI: &str = "月之森女子学院";
 /// Give `who` one hand mark for the skill whose id contains `needle` -- the
 /// `角色标记:<skill id>` counter a 稍微努力了一下 press spends.
 fn give_hand_mark(t: &mut Table, who: usize, needle: &str) {
+    give_hand_marks(t, who, needle, 1);
+}
+
+/// `n` 角色标记 of one skill, the x NNM (3) asks the player to choose.
+fn give_hand_marks(t: &mut Table, who: usize, needle: &str, n: i32) {
     let id = t.skill_id(who, needle);
     let name = format!("角色标记:{id}");
     t.m.world_mut()
-        .set_held(who as i32, &name, 1, i32::MAX, i32::MAX);
+        .set_held(who as i32, &name, n, i32::MAX, i32::MAX);
 }
 
 /// Absorb every open prompt with its fallback (setup only -- a contract
@@ -2523,24 +2528,44 @@ fn nnm_hand_play_spends_marks_and_draws() {
     .expect("C-MOR-nnm-01/02 contract");
 }
 
-/// C-MOR-nnm-04: the placed press spends a crystal for the (2) skill.
+/// Play NNM from hand with `x` marks and take branch (3), placing the card with
+/// `x` crystals; the (3) offer's yes/no is left open to the caller.
+fn play_nnm_branch_three(t: &mut Table, x: i32) -> Result<(), String> {
+    t.give(0, &[NNM]);
+    give_hand_marks(t, 0, "这是很普通的事吧？", x);
+    // The (2) body pays a pot; the offer asks only while one exists.
+    t.m.world_mut()
+        .set_held(0, bandori_std::fire::KEY, 2, i32::MAX, i32::MAX);
+    t.observe(CLAUSES);
+    t.play(0, NNM)
+        .map_err(|e| format!("C-MOR-nnm-04: hand play refused: {e}"))?;
+    // `ask_number` answers by index: 0 = 1, so `x - 1` is the x asked for.
+    t.answer(0, x - 1)
+        .map_err(|e| format!("C-MOR-nnm-04: x={x} rejected: {e}"))?;
+    t.answer(0, 2)
+        .map_err(|e| format!("C-MOR-nnm-04: branch (3) rejected: {e}"))?;
+    Ok(())
+}
+
+/// C-MOR-nnm-04: the placed offer spends a crystal for the (2) skill.
 ///
 /// > （3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的
 /// > （2）技能，此次技能不受数量或轮数限制
+///
+/// G05: (3) is not a press entry -- 「你可以」 is a sub-choice of the body that
+/// just placed the card, asked at placement.
 #[test]
 fn nnm_placed_press_spends_a_crystal() {
     forall(3, 0xC0_10_1C, |rng, _i| {
         let mut t = Table::new(&["广町七深", "户山香澄"]);
         t.clean();
         t.begin_turn(0);
-        t.place_raw(0, NNM);
         let x = rng.range(1, 3);
-        t.set_crystals(0, NNM, x);
-        // The press spends a hand mark for the skill it invokes.
-        give_hand_mark(&mut t, 0, "这是很普通的事吧？");
-        t.observe(CLAUSES);
-        t.skill(0, NNM)
-            .map_err(|e| format!("C-MOR-nnm-04: press refused with {x} crystals: {e}"))?;
+        // The (2) body pays a pot; 广町七深's skill starts with two (`FIRE_INITIAL`),
+        // so the offer's precondition holds without setup.
+        play_nnm_branch_three(&mut t, x)?;
+        t.answer(0, 0)
+            .map_err(|e| format!("C-MOR-nnm-04: yes refused: {e}"))?; // 移除水晶
         decline_all(&mut t);
         if t.crystals(0, NNM) != Some(x - 1) {
             return Err(format!(
@@ -2570,11 +2595,9 @@ fn nnm_last_crystal_discards_the_card() {
         let mut t = Table::new(&["广町七深", "户山香澄"]);
         t.clean();
         t.begin_turn(0);
-        t.place_raw(0, NNM);
-        t.set_crystals(0, NNM, 1);
-        give_hand_mark(&mut t, 0, "这是很普通的事吧？");
-        t.observe(CLAUSES);
-        t.skill(0, NNM).unwrap();
+        play_nnm_branch_three(&mut t, 1)?;
+        t.answer(0, 0)
+            .map_err(|e| format!("C-MOR-nnm-04: yes refused: {e}"))?;
         decline_all(&mut t);
         // 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the card leaves the field as
         // the last crystal goes, so a field lookup is None (not Some(0)).

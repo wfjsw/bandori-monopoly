@@ -132,8 +132,8 @@ pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn bend_kani(player_id: i32, value: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
-    bend(player_id, value)
+pub fn bend_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAddValue {
+    bend(player_id, v)
 }
 
 #[cfg(kani)]

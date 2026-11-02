@@ -6396,13 +6396,15 @@ mod gate_tests {
     #[test]
     fn action_may_list_a_dual_kind_but_not_a_filter_kind() {
         let mut bad = Ruleset::builder();
-        bad.cards.push(card(vec![action(crate::TriggerKind::SettleMul)]));
+        bad.cards
+            .push(card(vec![action(crate::TriggerKind::SettleMul)]));
         assert!(
             matches!(bad.build(), Err(RuleError::Load(ref m)) if m.contains("filter=")),
             "a filter-only kind on an Action is refused"
         );
         let mut ok = Ruleset::builder();
-        ok.cards.push(card(vec![action(crate::TriggerKind::DiceRollPlan)]));
+        ok.cards
+            .push(card(vec![action(crate::TriggerKind::DiceRollPlan)]));
         ok.build().expect("the dual kind is admitted on an Action");
     }
 

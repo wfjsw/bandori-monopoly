@@ -90,5 +90,11 @@ pub fn rui_devil_kani(player_id: i32) -> card_sdk::Asked {
     rui_devil(player_id)
 }
 
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_skill_kani(player_id: i32) -> card_sdk::Asked {
+    on_skill(player_id)
+}
+
 /// One fire happened during this resolution (cleared by the body's tail).
 const FIRED: &str = "rui_devil.fired";

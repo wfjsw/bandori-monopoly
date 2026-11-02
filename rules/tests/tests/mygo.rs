@@ -215,6 +215,28 @@ fn even_lost_second_copy_after_a_claim_not_offered() {
     );
 }
 
+/// The anchor is the main move, so a spent main move offers nothing -- an event
+/// move after it does not come back to the offer.
+#[test]
+fn even_lost_not_offered_after_the_main_move() {
+    let mut t = Table::vanilla(2);
+    t.dice(&[1]);
+    t.place_raw(0, "MyGO:即使迷茫着");
+    t.set_hand(0, &["R:[衍生] 压"]);
+    t.roll(0).unwrap();
+    t.answer_one(1).unwrap(); // 不发动
+    rest(&mut t);
+    drain(&mut t);
+    let mark = t.mark();
+    assert!(t.roll(0).is_err(), "the main move is spent");
+    let keys = t.keys_since(mark);
+    assert!(
+        !keys.iter().any(|k| k.contains("even_lost")),
+        "a spent main move asks nothing: {keys:?}"
+    );
+    assert!(t.on_field(0, "MyGO:即使迷茫着"), "{:?}", t.field_ids(0));
+}
+
 /// A declined declare says nothing and flashes nothing.
 #[test]
 fn even_lost_declined_is_silent() {

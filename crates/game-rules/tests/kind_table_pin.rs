@@ -258,14 +258,16 @@ fn filter_payload_shape_mapping() {
         assert_eq!(k.shape, want.1, "Filter::{} shape", k.name);
     }
     // Actions are `fn(i32) -> Asked` -- the shape column is meaningless and
-    // the macro parks it at Value. Pin that so nobody reads it as a fold.
+    // the macro parks it at Value. Pin that so nobody reads it as a fold. A
+    // dual kind (`DiceRollPlan`) is where an Action row *also* answers as the
+    // filter of the same id, so it carries that filter's payload shape.
     for k in Action::KINDS {
-        assert_eq!(
-            k.shape,
-            FilterShape::Value,
-            "Action::{} shape is inert",
-            k.name
-        );
+        let want = if k.kind.is_dual_action_filter() {
+            FilterShape::Payload
+        } else {
+            FilterShape::Value
+        };
+        assert_eq!(k.shape, want, "Action::{} shape", k.name);
     }
 }
 

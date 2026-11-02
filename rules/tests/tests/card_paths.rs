@@ -427,7 +427,20 @@ fn mutsumi_never_2_runs_the_band_skill_2() {
         "the fill is MyGO / Ave Mujica cards: {:?}",
         t.draw_pile(0)
     );
-    assert_eq!(t.money(0), m0, "no money clause in (2)");
+    // （3）「当此卡移除时，你获得X*500资金，X为此卡上的奇迹水晶数」 -- the (2)
+    // body removes the card, and 「立即执行…（2）效果」 runs it as the invoked
+    // card, so X is the 2 crystals the 3-crystal cost left and （3） pays out.
+    assert_eq!(
+        t.money(0),
+        m0 + 2 * 500,
+        "（3） cashes out the 2 remaining crystals on removal: {:?}",
+        t.recent_keys(20)
+    );
+    assert_eq!(
+        t.crystals(0, &band),
+        None,
+        "the removed card took its crystals with it"
+    );
 }
 
 // 规则书 group:CRYCHIC:美好的往日幻影（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」

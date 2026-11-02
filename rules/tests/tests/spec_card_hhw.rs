@@ -896,8 +896,10 @@ fn wacha_jump_at_nine_markers() {
     t.set_pos(0, 0);
     t.place_raw(0, WACHA);
     set_held(&mut t, 0, "水母标记", 9);
-    t.skill(0, WACHA)
-        .unwrap_or_else(|e| panic!("press refused: {e}"));
+    // G05: the jump is a placed offer raised at the pre-dice plan pass (the
+    // `DiceRollPlan` declare), so it asks when the move is rolled.
+    t.dice(&[1]);
+    t.roll(0).unwrap_or_else(|e| panic!("roll refused: {e}"));
     let p = t.expect_prompt();
     if p.kind != "tile" {
         panic!(

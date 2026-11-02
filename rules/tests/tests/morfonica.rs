@@ -64,6 +64,17 @@ fn add_token(t: &mut Table, who: usize, name: &str, value: i32) {
     });
 }
 
+/// Crystals on the **last** placed copy of `card`. A Play that re-places the
+/// name the harness already put on the field appends a fresh instance, and the
+/// crystals land on that one; [`Table::crystals`] reads the first copy.
+fn last_copy_crystals(t: &Table, card: &str) -> Option<i32> {
+    t.field(0)
+        .into_iter()
+        .filter(|f| f.card == card)
+        .next_back()
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+}
+
 // ============================================================ cards
 
 // --------------------------------------------------- 迷茫之蝶们的三全音
@@ -385,7 +396,7 @@ fn starry_owner_may_reroll_the_move_roll() {
     t.dice(&[3, 7]);
     t.roll(0).unwrap();
     assert!(t.prompt().is_some(), "a reroll choice: {}", t.dump_prompt());
-    t.answer_one(0).unwrap(); // accept the reroll
+    t.answer_one(1).unwrap(); // keep the rerolled face
     decline_all(&mut t);
     assert_eq!(t.pos(0), 50 + 7);
 }
@@ -556,14 +567,10 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     );
     t.answer_one(0).unwrap(); // 发动
     decline_all(&mut t);
-    // (3) placed a second copy; the pressed one spent its only crystal and (4)
-    // discarded it.
-    assert_eq!(
-        t.field_ids(0)
-            .iter()
-            .filter(|c| c.as_str() == "Mor:（NNM）稍微努力了一下")
-            .count(),
-        1,
+    // (3) placed a second copy with its crystal; the yes spent that crystal and
+    // (4) emptied the card off the field.
+    assert!(
+        !t.on_field(0, "Mor:（NNM）稍微努力了一下"),
         "the emptied copy left the field: {:?}",
         t.field_ids(0)
     );
@@ -595,7 +602,7 @@ fn nnm_third_prompt_declined_keeps_the_crystal() {
     t.answer_one(1).unwrap(); // 不发动
     decline_all(&mut t);
     assert_eq!(
-        t.crystals(0, "Mor:（NNM）稍微努力了一下"),
+        last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"),
         Some(1),
         "the crystal (3) just added is not burned by a decline"
     );
@@ -622,7 +629,7 @@ fn nnm_third_without_pot_skips_the_prompt() {
         "no pot, no question: {}",
         t.dump_prompt()
     );
-    assert_eq!(t.crystals(0, "Mor:（NNM）稍微努力了一下"), Some(1));
+    assert_eq!(last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"), Some(1));
 }
 
 /// Only the 角色标记 gate the Play; a crystal is not needed to press.

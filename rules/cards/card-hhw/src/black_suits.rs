@@ -198,6 +198,12 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn resync_kani(player_id: i32) -> card_sdk::Asked {
+    resync(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
 }

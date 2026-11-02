@@ -778,7 +778,7 @@ use crate::intern::NameId;
 ///    `invoke`; the guest declaration of `invoke_skill` collapses onto them
 ///    (`ruleset_invoke_skill` stays a host alias; `invoke_skill` is sugar over
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
-///    **SAVE_VERSION 15 -> 16** (`FieldCard.effective_card`,
+///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
 pub const ABI_VERSION: i32 = 111;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount

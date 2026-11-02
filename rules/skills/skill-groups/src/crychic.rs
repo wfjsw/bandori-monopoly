@@ -120,14 +120,12 @@ fn decks_empty(player_id: i32) -> bool {
 
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("crychic_empty")));
-    // 「当此卡移除时，你获得X*500资金」
-    // TODO(规则书)（3）: 「当此卡移除时」 is a removal-time clause and should fire
-    //   whenever the card leaves -- including the (2)-driven 「移除此卡」 that
-    //   follows. On the `transform_now` path (`mutsumi_never` 「立即执行乐队技能
-    //   的（2）效果」) the nested run has no running instance (`invoke_skill`
-    //   clears `current_uid`), so `crystals()` reads 0 and the cash-out is
-    //   skipped. `mutsumi_never_2_runs_the_band_skill_2` pins that as
-    //   「no money clause in (2)」; deciding (3) here would flip it.
+    // 「当此卡移除时，你获得X*500资金」 -- X is this card's own crystals, so the
+    // read must be the running instance's. Both entry paths give one: the
+    // placed `TurnEndBefore` body, and `mutsumi_never`'s 「立即执行乐队技能的
+    // （2）效果」, whose `invoke_skill` makes the invoked card the running
+    // instance (`enter_invoke`). `mutsumi_never_2_runs_the_band_skill_2` pins
+    // the cash-out on that path.
     let x = ctx::crystals();
     if x > 0 {
         ctx::gain(

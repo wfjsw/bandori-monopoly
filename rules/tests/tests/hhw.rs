@@ -877,6 +877,58 @@ fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
 }
 
 #[test]
+fn wacha_mocha_jump_offered_while_stayed() {
+    // A teleport is legal under the movement gate (rules.txt 47 「无法使用非[传送]
+    // 的移动效果」), so [停留] does not stand the offer down.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_held(&mut t, 0, "水母标记", 9);
+    t.m.world_mut().st.players[0].state_set("stay", 1);
+    t.roll(0).unwrap();
+    assert_eq!(
+        t.expect_prompt().kind,
+        "tile",
+        "offered under [停留]: {}",
+        t.dump_prompt()
+    );
+}
+
+#[test]
+fn wacha_mocha_second_copy_not_offered_after_a_claim() {
+    // The first accepted copy claims the move; the second stands down without
+    // asking (the markers are the player's, so both copies would qualify).
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_held(&mut t, 0, "水母标记", 9);
+    t.roll(0).unwrap();
+    let p = t.expect_prompt();
+    let aquarium = tile("水族馆");
+    let k = p
+        .items
+        .iter()
+        .position(|s| s == &aquarium.to_string())
+        .expect("aquarium offered");
+    t.answer(0, k as i32).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), aquarium, "the first copy took the move");
+    // Only the claiming copy spent itself: one copy is left placed.
+    assert_eq!(
+        t.field_ids(0)
+            .iter()
+            .filter(|c| c.as_str() == "HHW:（花音）Wacha Mocha 啪嗒进行曲")
+            .count(),
+        1,
+        "the second copy did not act: {:?}",
+        t.field_ids(0)
+    );
+}
+
+#[test]
 fn wacha_mocha_hand_play_places_and_offers_nothing() {
     // 「[场]」 is the placement and only that: playing it from hand places it and
     // asks nothing at the play itself.

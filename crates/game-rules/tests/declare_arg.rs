@@ -497,6 +497,9 @@ fn frame_by(t: &Table) -> Option<i32> {
 fn invoke_frame_by_instance_is_the_caller_instance() {
     let mut t = Table::vanilla(2);
     let uid = t.place_raw(0, "TEST:invoker");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
     t.end(0).unwrap();
     drain(&mut t);
     assert_eq!(
