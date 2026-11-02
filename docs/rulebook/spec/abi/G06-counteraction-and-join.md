@@ -1424,7 +1424,7 @@ alternative would be.
 | `ManifestOn.all_kinds` / `copies_previous` | 6, 15 | inert entries stay unoffered; the copy cannot dispatch |
 | `Trigger.subject_card` | 3, 4, 15 | the filter has no subject through a counter link |
 | `Trigger.join` / `TriggerJoin` | 1, 2, 9, 10, 12 | the join is a scalar again (§12.1 point 3) |
-| `Trigger.answers_declared` / `joined` link `copied` | 3, 11, 15 | no pending fact, no copy |
+| `Trigger.answers_declared`, link `copied` | 3, 11, 15 | no pending fact, no copy |
 | `World.countered_this_turn` | 8 | no per-turn set; save would lose it |
 | engine kind 121 | 13, 14 | a refused abnormal is unloggable as such |
 | the fifteen imports | 1, 2, 9, 10, 12, 15, 3, 11, 8, 7 | each is a datum no other import exposes |
