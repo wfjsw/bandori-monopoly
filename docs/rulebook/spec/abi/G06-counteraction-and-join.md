@@ -3,8 +3,8 @@
 Status: **draft for review, design only** (2026-11-01 revision of the
 2026-10-28 draft). No source is edited by this document.
 Worktree `/home/monopoly/web/.claude/worktrees/g06-design-review`, branch
-`worktree-g06-design-review`. Fits **on top of ABI v111** (G01, G08, G02, G04
-and G03 have landed); it does not redo them.
+`worktree-g06-design-review`. Fits **on top of ABI v111** (G01, G08, G02, G04,
+G03 and G05 have landed); it does not redo them.
 Group: **G06**. Family: the [反击] chain — its answer contracts, its payload
 carry-forward, the 真奈 join window, the counteraction history, and the two
 guards that depend on a *declared* answer.
@@ -37,7 +37,7 @@ before this one. What the draft got wrong:
 
 | # | Draft defect | Correction |
 |---|---|---|
-| R1 | The header named worktree `card-rulebook-review` and base ABI 109 / SAVE 14; master is ABI 111 / SAVE 14 with G01/G08/G02/G04/G03 landed, and G06 lands at 112 / 15. | Header and §8 carry the real base and landing numbers; the README row is corrected (§8). |
+| R1 | The header named worktree `card-rulebook-review` and base ABI 109 / SAVE 14; master is ABI 111 / SAVE 15 with G01/G08/G02/G04/G03/G05 landed, and G06 lands at 112 / 16. | Header and §8 carry the real base and landing numbers; the README row is corrected (§8). |
 | R2 | Nearly every `wasm_rules.rs` line cited in §1 and §4 was stale by 300–900 lines (e.g. `6140-6155` for the counter-link build, `7270-7330` for `bridge_trigger`, `7633` for `can_counteract_now`). | Every site is re-cited against master; the counter-link build is `6846-6847`, `bridge_trigger` is `8023`, `can_counteract_now` is `8425` (§2). |
 | R3 | §1.12 described `rain-designates-prop` as 「可指定其一个卡上的[持续]」 and no card in `cards.json` says that. | The row (`BACKLOG` join slug, row 1510) is the rain `DESIGNATES` defect: the card designates players and does not declare the property, so every designation reader sees nothing (`CARD-REVIEW` §`通用:雨啊，快点来吧`). §2.12 says so. |
 | R4 | Item 12 appeared in the §4 table but in **no** §1 body and in **no** §6 card section; `Join` had no designation field although §1.12 promised one. | §2.12 and §6.9 exist; the join records the designation per joiner. |
@@ -1158,8 +1158,8 @@ entry whose body calls `ctx::target(player_id)` also consults `join::opener()`.
 
 ## 7. Save, record and replay
 
-* **SAVE_VERSION 14 → 15** (the next free value). `World.countered_this_turn`
-  and `World.played_cards` are durable state (the latter capped). The field is `#[serde(default)]`, so a v14 save
+* **SAVE_VERSION 15 → 16** (the next free value). `World.countered_this_turn`
+  and `World.played_cards` are durable state (the latter capped). The field is `#[serde(default)]`, so a v15 save
   loads with an empty history; replays ride archived bundles anyway.
 * **RECORD_VERSION stays 4.** No input-stream shape changes; the record's
   `EngineStamp.save_version` moves with `SAVE_VERSION`.
@@ -1197,15 +1197,17 @@ entry (`abi.rs:803-815`):
 ///    write propagates to the enclosing roll link. `set_join_used` stays as
 ///    an alias of `ctx::join::shield`. New hook-only engine kind 121
 ///    (`abnormalRefused`, raised on an abnormal the gate or `immuneAll`
-///    refused; no window opens on it). SAVE_VERSION 14 -> 15
+///    refused; no window opens on it). SAVE_VERSION 15 -> 16
 ///    (`World.countered_this_turn`, `World.played_cards`); RECORD_VERSION unchanged.
 ```
 
 Band arithmetic from the README: G06 lands `ABI_VERSION` 111→112, engine
-kind 121, Kani `Op` 411-426 and `SAVE_VERSION` 14→15; the README's G06 row said 109→110/14→15
-(stale by two ABI steps) and every later row's ABI number shifts two:
-G05+G13 112→113, G07 113→114, G09 114→115, G10 115→116, G11 116→117,
-G12 117→118, G14 118→119. The op bands need no shift (G03's 398-410 landed).
+kind 121, Kani `Op` 411-426 and `SAVE_VERSION` 15→16. The README's G06 row
+said 109→110/14→15 (stale by two ABI steps and one SAVE step, both already
+consumed by G04 and G05). G05 has landed, so only the still-pending rows after
+G06 shift -- one ABI step each: G07 112→113, G09 113→114, G10 114→115, G11
+115→116, G12 116→117, G14 117→118. The op bands need no shift (G03's 398-410
+and G05's 431-440 landed either side of this band).
 
 ## 9. Tests and Kani obligations
 
