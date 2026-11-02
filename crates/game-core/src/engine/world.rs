@@ -270,6 +270,12 @@ pub struct TurnCtx {
     /// A copy skips a source that placed.
     #[serde(default)]
     pub placed_during_play: bool,
+    /// The card id of the play being resolved (`play_from_hand` scope). The
+    /// copy record's 「效果带有放置」 test tells the play's own effect from a
+    /// counteraction's placement by comparing against the innermost resolving
+    /// frame (design G06 §2.15). `None` outside a play.
+    #[serde(default)]
+    pub play_card: Option<String>,
     /// Seats whose designation on the play being resolved is cancelled
     /// (「取消其对目标之一的designate」). A per-pair cancel: the rest of the play's
     /// designations still land. Cleared at the start of each play.
@@ -421,6 +427,7 @@ impl Default for TurnCtx {
             play_drove_move: false,
             play_from_hand: false,
             placed_during_play: false,
+            play_card: None,
             play_arg: Vec::new(),
             cancelled_designations: Vec::new(),
             play_doubled: None,

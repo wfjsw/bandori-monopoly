@@ -5692,6 +5692,10 @@ impl PlayCtx<'_> {
         // it from the snapshot.
         let prev_extreme = self.w.turn.extreme;
         self.w.turn.extreme = Extreme::Plain;
+        // The card whose own effect the placement flag is scoped to; same
+        // lifetime as `play_from_hand` (design G06 §2.15).
+        let prev_play_card = self.w.turn.play_card.take();
+        self.w.turn.play_card = Some(id.to_string());
         // Per-pair designations cancelled on the previous play must not leak
         // into this one. Scoped to the play (not the command): the cancels are
         // written by a counteraction in the `card` window below, which is its
@@ -5806,6 +5810,7 @@ impl PlayCtx<'_> {
         // extreme (`extreme`, same scope).
         self.w.turn.play_from_hand = prev_from_hand;
         self.w.turn.extreme = prev_extreme;
+        self.w.turn.play_card = prev_play_card;
         Ok(())
     }
 

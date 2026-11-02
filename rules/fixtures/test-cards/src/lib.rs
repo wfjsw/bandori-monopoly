@@ -7,7 +7,9 @@ use card_sdk::abi::{
     prop, roll_source, ActionKind, ChainKind, FilterKind, RollPurpose, TriggerKind,
 };
 use card_sdk::serde;
-use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On, PayAddValue, PlanValue, RollValue};
+use card_sdk::{
+    key, Action, CardDef, Filter, GateValue, Msg, On, PayAddValue, PlanValue, RollValue,
+};
 
 /// Plays another card (in another module) in the middle of its own effect.
 const RELAY: CardDef = CardDef::new("TEST:relay", &[On::Play("", None, relay)]);
@@ -49,11 +51,10 @@ const GUARD: CardDef = CardDef::new(
     ],
 );
 
-const AIMER: CardDef =
-    CardDef::new("TEST:aimer", &[On::Play("", None, aimer)])
-        // A [指定] play: the join tests read `designations` and net_error's
-        // clause 1 needs a designation to cancel (G06 §2.12, §6.4).
-        .props(&[(prop::DESIGNATES, 1)]);
+const AIMER: CardDef = CardDef::new("TEST:aimer", &[On::Play("", None, aimer)])
+    // A [指定] play: the join tests read `designations` and net_error's
+    // clause 1 needs a designation to cancel (G06 §2.12, §6.4).
+    .props(&[(prop::DESIGNATES, 1)]);
 /// A **resolution** gate: the effect names the player and the chain forms, and
 /// only what lands is voided.
 const SHIELD: CardDef = CardDef::new(
@@ -130,7 +131,10 @@ fn join_open(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("join_report"))
                 .player_id("who", ctx::join::joiner(i))
                 .i("shielded", ctx::join::joiner_shielded(i) as i64)
-                .i("designation", ctx::join::designation(i).unwrap_or(-1) as i64),
+                .i(
+                    "designation",
+                    ctx::join::designation(i).unwrap_or(-1) as i64,
+                ),
         );
     }
     if n == 0 {
@@ -174,6 +178,23 @@ fn pay_counter(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A [反击] on the `pay` effect link that **negates** the payment: the
+/// declared negation a later offer on the same link must see through
+/// `trigger::pending_negation()`.
+const PAY_NEGATE: CardDef = CardDef::new(
+    "TEST:payNegate",
+    &[
+        On::Counteract(&[ChainKind::Effect], "chain_has(Pay)", None, pay_negate)
+            .declares_negation(),
+    ],
+);
+
+fn pay_negate(player_id: i32) -> card_sdk::Asked {
+    trigger::negate_effect();
+    ctx::log(player_id, &Msg::new(key!("pay_negate_done")));
+    Ok(())
+}
+
 /// A **playable** card whose `Card` [反击] entry is permissive (`always`), so it
 /// is a valid copy source once played -- the mortis copy test (§9.1 row 6/15).
 /// Its `copied` link is logged: the own follow-up has an empty one, the copied
@@ -196,6 +217,49 @@ fn card_copy_counter(player_id: i32) -> card_sdk::Asked {
     ctx::log(
         player_id,
         &Msg::new(key!("card_copy_body")).card("copied", copied.as_str()),
+    );
+    Ok(())
+}
+
+/// A copy source whose counter entry sits at index 2 -- past the copying
+/// card's own two entries -- and carries a label. The copied body's header
+/// must take the **source's** label (design G06 §2.15).
+const LABELED_COPY: CardDef = CardDef::new(
+    "TEST:labeledCopy",
+    &[
+        On::Play("", None, card_copy_play),
+        On::Filter(Filter::ImmuneAll("", None, pass_gate)),
+        On::Counteract(&[ChainKind::Card], "", Some(always), labeled_copy_body).label("（2）"),
+    ],
+);
+
+fn pass_gate(_player_id: i32, g: GateValue) -> GateValue {
+    g
+}
+
+fn labeled_copy_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("labeled_copy_body")));
+    Ok(())
+}
+
+/// A `[反击]` whose body places a card: a counteraction's placement is not
+/// the answered play's own effect, so it must not mark that play as 「效果带有
+/// 放置于场上的卡」 (design G06 §2.15).
+const PLACING_COUNTER: CardDef = CardDef::new(
+    "TEST:placingCounter",
+    &[On::Counteract(
+        &[ChainKind::Card],
+        "",
+        None,
+        placing_counter,
+    )],
+);
+
+fn placing_counter(player_id: i32) -> card_sdk::Asked {
+    ctx::place_card(
+        player_id,
+        "TEST:shield",
+        &Msg::new(key!("placing_counter_note")),
     );
     Ok(())
 }
@@ -592,7 +656,11 @@ fn split_12k(player_id: i32) -> card_sdk::Asked {
 /// reaches the payment; the body logs it so a test can read the answer.
 const SHAPE_LATE: CardDef = CardDef::new(
     "TEST:shapeLate",
-    &[On::Filter(Filter::PaySplitAdd("", Some(total_cut_yes), shape_late))],
+    &[On::Filter(Filter::PaySplitAdd(
+        "",
+        Some(total_cut_yes),
+        shape_late,
+    ))],
 );
 
 fn shape_late(player_id: i32, v: PayAddValue) -> PayAddValue {
@@ -741,7 +809,11 @@ const SETTLE_MUL_HALF: CardDef = CardDef::new(
 /// same settle keeps its own figure.
 const SETTLE_RENT_ADD_100: CardDef = CardDef::new(
     "TEST:settleRentAdd100",
-    &[On::Filter(Filter::SettleRentAdd("card.placed", None, add_100))],
+    &[On::Filter(Filter::SettleRentAdd(
+        "card.placed",
+        None,
+        add_100,
+    ))],
 );
 
 const SETTLE_RENT_MUL_HALF: CardDef = CardDef::new(
@@ -768,10 +840,7 @@ fn settle_pay_1000(player_id: i32) -> card_sdk::Asked {
 /// MONEY-01 idempotence probe: arm a 支付减半 and then settle a tile whose
 /// settle has to prompt, so the drive suspends and its prefix re-runs on the
 /// resume. The 减半 must land **once**.
-const FACTOR_SUSPEND: CardDef = CardDef::new(
-    "TEST:factorSusp",
-    &[On::Play("", None, factor_susp)],
-);
+const FACTOR_SUSPEND: CardDef = CardDef::new("TEST:factorSusp", &[On::Play("", None, factor_susp)]);
 
 fn factor_susp(player_id: i32) -> card_sdk::Asked {
     // The nested settles below happen after this body returns, so the halves
@@ -797,7 +866,11 @@ fn factor_susp(player_id: i32) -> card_sdk::Asked {
 /// arming body's drive mid-settle (MONEY-01 re-run probe).
 const SETTLE_ASK: CardDef = CardDef::new(
     "TEST:settleAsk",
-    &[On::Action(Action::SettleBody("actor == 1", None, settle_ask))],
+    &[On::Action(Action::SettleBody(
+        "actor == 1",
+        None,
+        settle_ask,
+    ))],
 );
 
 fn settle_ask(player_id: i32) -> card_sdk::Asked {
@@ -1603,7 +1676,10 @@ const SETTLE_CANCEL: CardDef = CardDef::new(
 .props(&[(card_sdk::abi::prop::COUNTERACT_FROM_FIELD, 1)]);
 
 fn settle_cancel(player_id: i32) -> card_sdk::Asked {
-    ctx::log(player_id, &Msg::new(key!("cancel_at")).i("tile", ctx::trigger::tile() as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("cancel_at")).i("tile", ctx::trigger::tile() as i64),
+    );
     ctx::trigger::set_cancelled();
     Ok(())
 }
@@ -2494,7 +2570,11 @@ const ROLL_TRACE: CardDef = CardDef::new(
 
 fn roll_trace_play(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "TEST:rollTrace", &Msg::new(key!("roll_trace_note")));
+    ctx::place_card(
+        player_id,
+        "TEST:rollTrace",
+        &Msg::new(key!("roll_trace_note")),
+    );
     Ok(())
 }
 
@@ -2655,8 +2735,12 @@ const PLAN_DECLINE: CardDef = CardDef::new(
     "TEST:planDecline",
     &[
         On::Play("", None, plan_decline_place),
-        On::Action(Action::DiceRollPlan("card.placed", None, plan_decline_unused))
-            .declare_arg(plan_decline_ask, plan_decline_body),
+        On::Action(Action::DiceRollPlan(
+            "card.placed",
+            None,
+            plan_decline_unused,
+        ))
+        .declare_arg(plan_decline_ask, plan_decline_body),
     ],
 );
 
@@ -2742,11 +2826,7 @@ fn invoker_play(player_id: i32) -> card_sdk::Asked {
     // (G13 §4.1, the hand-play case).
     ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(
-        player_id,
-        "TEST:invoker",
-        &Msg::new(key!("invoker_note")),
-    );
+    ctx::place_card(player_id, "TEST:invoker", &Msg::new(key!("invoker_note")));
     Ok(())
 }
 
@@ -2757,19 +2837,93 @@ fn invoker_body(player_id: i32) -> card_sdk::Asked {
 }
 
 card_sdk::ruleset!(&[
-    RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, DICE_MOVER, COUNTER, PROBE, DENY,
-    JOIN_OPEN, JOIN_SHIELD, PAY_COUNTER, CARD_COPY, SETTLE_COPY, PAY_COPY,
-    CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
-    RENT_ADD_100, RENT_MUL_HALF, SETTLE_ADD_100, SETTLE_ADD_50, SETTLE_MUL_HALF, FACTOR_SUSPEND, SETTLE_ASK,
-    PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
-    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
-    SPLIT_12K, SHAPE_LATE, LOSE_RAW, SPEND_FIRE,
-    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
-    ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB, SETTLE_CANCEL,
-    SETTLE_RENT_ADD_100, SETTLE_RENT_MUL_HALF, SETTLE_PAY_1000,
-    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
-    QUIET_COUNTER, QUIET_RAISE,
-    FLASH_ALWAYS, FLASH_NEVER, FLASH_ALWAYS_QUIET, FLASH_FOLD_ALWAYS, FLASH_FOLD_NEVER,
+    RELAY,
+    RECURSE,
+    ECHO,
+    LISTER,
+    STUNNER,
+    STUN_SELF_MOVER,
+    GUARD,
+    AIMER,
+    SHIELD,
+    MOVER,
+    DICE_MOVER,
+    COUNTER,
+    PROBE,
+    DENY,
+    JOIN_OPEN,
+    JOIN_SHIELD,
+    PAY_COUNTER,
+    PAY_NEGATE,
+    CARD_COPY,
+    PLACING_COUNTER,
+    LABELED_COPY,
+    SETTLE_COPY,
+    PAY_COPY,
+    CRYSTAL,
+    DEST_NOW,
+    DEST_TO,
+    TOTAL_CUT,
+    DEAD_PAY,
+    SELF_CHARGE,
+    PAY_ADD_ANY,
+    TELE_NOSOLVE,
+    RENT_ADD_100,
+    RENT_MUL_HALF,
+    SETTLE_ADD_100,
+    SETTLE_ADD_50,
+    SETTLE_MUL_HALF,
+    FACTOR_SUSPEND,
+    SETTLE_ASK,
+    PAY_OVERCUT,
+    XFER_1000,
+    GAIN_1000,
+    LOSE_1000,
+    MARKER_DENY,
+    MARKER_SPEND,
+    CHARGE_ROLL,
+    PRE_REJECT,
+    PRE_ACCEPT,
+    PRE_PLAY,
+    PRE_HOOK,
+    PRE_GATE,
+    PRE_ROLLPLAN,
+    PRE_ATEMD,
+    PRE_SETTLE,
+    SPLIT_12K,
+    SHAPE_LATE,
+    LOSE_RAW,
+    SPEND_FIRE,
+    PASS_TELE,
+    TILE_HOOK,
+    DENY_PLAY,
+    PASS_FLASH,
+    PASS_BEFORE_FLASH,
+    PING,
+    PING_REJECT,
+    ROLL_THEN_PAY,
+    DECK_ONCE,
+    CLOCK_HOOK,
+    READ_HOST_READ,
+    SETTLE_NEST,
+    SETTLE_TAIL,
+    SETTLE_SIB,
+    SETTLE_CANCEL,
+    SETTLE_RENT_ADD_100,
+    SETTLE_RENT_MUL_HALF,
+    SETTLE_PAY_1000,
+    SILENT_PAIR,
+    SILENT_NEST,
+    SILENT_PAY,
+    SILENT_QUIET,
+    SILENT_ASK,
+    QUIET_COUNTER,
+    QUIET_RAISE,
+    FLASH_ALWAYS,
+    FLASH_NEVER,
+    FLASH_ALWAYS_QUIET,
+    FLASH_FOLD_ALWAYS,
+    FLASH_FOLD_NEVER,
     FLASH_HEADER_IDS,
     FLASH_THEN_ASK,
     FLASH_TWO_ASKS,

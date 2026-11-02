@@ -2227,8 +2227,8 @@ impl Ruleset {
         if !self.counteracts_to_play(card, &t) {
             return None;
         }
-        let (card, entry) = self
-            .counteract_entry(card, &t, world.copy_source_card(player_id).as_deref())?;
+        let (card, entry) =
+            self.counteract_entry(card, &t, world.copy_source_card(player_id).as_deref())?;
         let condition = self
             .inner
             .condition
@@ -2504,6 +2504,17 @@ pub struct AdmittedEntry {
     pub copies_previous: bool,
 }
 
+/// Does the `Counteract` entry `o` answer a raise of `kind`?
+///
+/// A declared `triggers` list names its kinds; an **empty** list is the
+/// `all_kinds` shape (mortis, design G06 §6.1) and answers only when its flag
+/// is set -- the load expands the flag into the offer mask over the
+/// non-hook-only kinds ([`crate::kind_flags::all_non_hook_only`]), and this
+/// predicate keeps the per-entry question the same.
+fn kind_admitted(o: &ManifestOn, kind: crate::TriggerKind) -> bool {
+    o.all_kinds || o.triggers.iter().any(|s| *s == kind.spelling())
+}
+
 /// The loaded card set, in the shape [`crate::WasmRules`] (the `CardRules`
 /// bridge) consumes. Split out of [`Ruleset`] so the native backend can
 /// implement it over statically linked tables without a wasm engine.
@@ -2521,9 +2532,8 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// the copy source so its body can `ctx::play_card` it (design G06 §2.15).
     fn copies_previous(&self, card: i32) -> bool {
         self.cards().get(card as usize).is_some_and(|c| {
-            c.on.iter().any(|o| {
-                o.copies_previous && OnKind::from_i32(o.kind) == Some(OnKind::Counteract)
-            })
+            c.on.iter()
+                .any(|o| o.copies_previous && OnKind::from_i32(o.kind) == Some(OnKind::Counteract))
         })
     }
     /// Rule id that settles a board tile of this opaque kind (ABI v66).
@@ -2610,13 +2620,11 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         // *offers* against the answered link, and the play's own subject is
         // the card itself (tsugumi's numeric range, vocal's whole payment),
         // so an own-play follow-up takes the entry without the contract.
-        let own_play = matches!(
-            t.kind,
-            crate::TriggerKind::Card | crate::TriggerKind::Event
-        ) && self
-            .cards()
-            .get(card as usize)
-            .is_some_and(|c| t.subject_card.as_deref() == Some(c.id.as_str()));
+        let own_play = matches!(t.kind, crate::TriggerKind::Card | crate::TriggerKind::Event)
+            && self
+                .cards()
+                .get(card as usize)
+                .is_some_and(|c| t.subject_card.as_deref() == Some(c.id.as_str()));
         let kinds = [
             Some(t.kind),
             self.trigger_designates(t)
@@ -2649,9 +2657,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .iter()
             .enumerate()
             .filter(|(_, o)| OnKind::from_i32(o.kind) == Some(OnKind::Counteract))
-            .filter(|(_, o)| {
-                o.all_kinds || o.triggers.iter().any(|s| *s == kind.spelling())
-            })
+            .filter(|(_, o)| kind_admitted(o, kind))
             .next()
             .map(|(i, o)| AdmittedEntry {
                 entry: i as i32,
@@ -2671,9 +2677,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .iter()
             .enumerate()
             .filter(|(_, o)| OnKind::from_i32(o.kind) == Some(OnKind::Counteract))
-            .filter(|(_, o)| {
-                o.all_kinds || o.triggers.iter().any(|s| *s == kind.spelling())
-            })
+            .filter(|(_, o)| kind_admitted(o, kind))
             .find(|(_, o)| self.contract_admits(o, t))
             .map(|(i, o)| AdmittedEntry {
                 entry: i as i32,
@@ -2699,7 +2703,12 @@ pub trait CardModules: Clone + Send + Sync + 'static {
                     == Some(1)
             })
         });
-        contract_shape(o.numeric, o.pay_shape, subject_range, t.pay.as_ref().map(|p| p.total_stage))
+        contract_shape(
+            o.numeric,
+            o.pay_shape,
+            subject_range,
+            t.pay.as_ref().map(|p| p.total_stage),
+        )
     }
     /// The declared [`card_sdk::abi::AnswerEffect`] of `card`'s entry answering
     /// `t` for `seat` (`AnswerEffect::NONE` when there is none). Feeds the
@@ -2763,8 +2772,8 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         if !self.counteracts_to_play(card, &t) {
             return None;
         }
-        let (card, entry) = self
-            .counteract_entry(card, &t, world.copy_source_card(player_id).as_deref())?;
+        let (card, entry) =
+            self.counteract_entry(card, &t, world.copy_source_card(player_id).as_deref())?;
         let info = self.cards().get(card as usize)?;
         let condition = self.condition(card, entry);
         let cand = crate::condition::fill_candidate(world, player_id, &info.id, false);
@@ -6180,9 +6189,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "join_opener", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::join_opener(&mut c).map_err(HostError::into_err)
     })?;
-    l.func_wrap(m, "join_seats", |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-        hostfns::join_seats(&mut c, p, n).map_err(HostError::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "join_seats",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::join_seats(&mut c, p, n).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(m, "join_shield", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::join_shield(&mut c).map_err(HostError::into_err)
     })?;
@@ -6192,24 +6205,48 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "join_opened", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::join_opened(&mut c).map_err(HostError::into_err)
     })?;
-    l.func_wrap(m, "join_joiner_count", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::join_joiner_count(&mut c).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "join_joiner", |mut c: C<W>, i: i32| -> Result<i32, Error> {
-        hostfns::join_joiner(&mut c, i).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "join_joiner_shielded", |mut c: C<W>, i: i32| -> Result<i32, Error> {
-        hostfns::join_joiner_shielded(&mut c, i).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "join_designation", |mut c: C<W>, i: i32| -> Result<i32, Error> {
-        hostfns::join_designation(&mut c, i).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "trigger_pending_negation", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trigger_pending_negation(&mut c).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "trigger_extreme_armed", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trigger_extreme_armed(&mut c).map_err(HostError::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "join_joiner_count",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::join_joiner_count(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "join_joiner",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::join_joiner(&mut c, i).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "join_joiner_shielded",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::join_joiner_shielded(&mut c, i).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "join_designation",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::join_designation(&mut c, i).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_pending_negation",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_pending_negation(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_extreme_armed",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_extreme_armed(&mut c).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "trigger_subject_card",
@@ -6224,9 +6261,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::trigger_link_copied(&mut c, p, n).map_err(HostError::into_err)
         },
     )?;
-    l.func_wrap(m, "trigger_chain_depth", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trigger_chain_depth(&mut c).map_err(HostError::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "trigger_chain_depth",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_chain_depth(&mut c).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "trigger_answered_kind",
@@ -6674,19 +6715,37 @@ mod gate_tests {
         }
     }
 
-    /// An empty trigger list with `all_kinds` admits every non-hook-only kind;
-    /// without the flag the empty list admits none (the v112 change).
+    /// An empty trigger list without `all_kinds` admits nothing; with the flag
+    /// it admits every kind, and the load's expansion
+    /// ([`crate::kind_flags::all_non_hook_only`], the mask the offer actually
+    /// consults) leaves out exactly the hook-only kinds (the v112 change).
     #[test]
     fn empty_links_is_all_kinds_only_when_flagged() {
+        let mut entry = gate(false, None);
+        entry.kind = OnKind::Counteract as i32;
+        entry.triggers.clear();
+        let expansion = crate::kind_flags::all_non_hook_only();
         for row in game_kinds::ENGINE_KINDS {
             let kind = crate::TriggerKind::engine(row.id);
-            let hit = |all: bool| {
-                all || [kind]
-                    .iter()
-                    .any(|k| k.spelling() == kind.spelling())
-            };
-            assert_eq!(hit(row.hook_only && false), true);
-            assert!(!game_kinds::hook_only(row.id) || row.hook_only);
+            assert!(
+                !kind_admitted(&entry, kind),
+                "unflagged empty list admitted {}",
+                row.wire
+            );
+            assert_eq!(
+                expansion.contains(&kind),
+                !row.hook_only,
+                "expansion vs hook-only for {}",
+                row.wire
+            );
+        }
+        entry.all_kinds = true;
+        for row in game_kinds::ENGINE_KINDS {
+            assert!(
+                kind_admitted(&entry, crate::TriggerKind::engine(row.id)),
+                "flagged empty list refused {}",
+                row.wire
+            );
         }
     }
 

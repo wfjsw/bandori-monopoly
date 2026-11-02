@@ -26,11 +26,11 @@ use crate::host::{
     Call, CardModules, DeclareOut, HostRequest, Outcome, Prompt, PromptOption, RuleError,
 };
 use crate::inline::InlineHost;
-use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::world::ROLL_ROOT_NONE;
-use game_core::engine::CounteractRecord;
+use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
+use game_core::engine::CounteractRecord;
 use rules_cond::WindowScope;
 
 // ------------------------------------------------- silent-entry debug guard
@@ -828,6 +828,9 @@ impl CardWorld for Run {
     }
     fn set_placed_during_play(&mut self, v: bool) {
         self.world.turn.placed_during_play = v;
+    }
+    fn play_card(&self) -> Option<String> {
+        self.world.turn.play_card.clone()
     }
     fn gain_fixed(&mut self, player_id: i32, amount: i32, reason: crate::Msg) -> i32 {
         let got = self.world.gain_fixed(player_id, amount, reason);
@@ -3242,10 +3245,16 @@ impl<M: CardModules> RulesBridge<M> {
         if matches!(call, Call::Buy { .. } | Call::Build { .. }) && card_id.starts_with("tile:") {
             return -1;
         }
+        // A copied entry (`copies_previous`) is the **source** card's entry:
+        // its label and its silent / quiet / flash policy are the source's,
+        // not the copying card's (design G06 §2.15). The header still names
+        // the card the player actually activated (`card_id`).
+        let entry_card = trigger.copied.as_deref().unwrap_or(card_id);
         // Silent entry (`On::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
-        if self.entry_presentation(card_id, entry).header == card_sdk::abi::Presentation::Silent {
+        if self.entry_presentation(entry_card, entry).header == card_sdk::abi::Presentation::Silent
+        {
             return -1;
         }
         use game_core::state::card_trigger;
@@ -3276,7 +3285,7 @@ impl<M: CardModules> RulesBridge<M> {
         let who = if owner >= 0 { owner } else { target };
         // Entry label (「（1）」 and kin) from the manifest, when the card
         // declared one for this entry.
-        let label = self.entry_label(card_id, call.clone(), entry);
+        let label = self.entry_label(entry_card, call.clone(), entry);
         // Wording:
         // * a skill press has no declaration line of its own -> 「发动」
         // * a hand play / a counteraction declaration / a drawn event already logged
@@ -3485,9 +3494,7 @@ impl<M: CardModules> RulesBridge<M> {
         cx.insert_work(game_core::engine::ResumeFnWork {
             f: Box::new(move |cx| {
                 if std::env::var("DBG_HOOK").is_ok() {
-                    eprintln!(
-                        "BODY_RESUME card={card_id_own} call={call:?} answers={answers:?}"
-                    );
+                    eprintln!("BODY_RESUME card={card_id_own} call={call:?} answers={answers:?}");
                 }
                 if uid >= 0 {
                     cx.reentrant_hooks.push(uid);
@@ -3583,13 +3590,7 @@ impl<M: CardModules> RulesBridge<M> {
         if std::env::var("DBG_HOOK").is_ok() {
             eprintln!(
                 "DRIVE call={:?} card={} uid={} kind={:?} p={} tile={} inst={}",
-                call,
-                card_id,
-                uid,
-                trigger.kind,
-                trigger.player_id,
-                trigger.tile,
-                trigger.instance
+                call, card_id, uid, trigger.kind, trigger.player_id, trigger.tile, trigger.instance
             );
             eprintln!(
                 "DRIVE_SEAT player_id={} by_card={:?} target={} answers={} repl={:?}",
@@ -4226,9 +4227,9 @@ impl<M: CardModules> RulesBridge<M> {
                                     // the stable pointer (a nested settle must
                                     // be able to park into the same slot).
                                     let mut chain_slot = node_own.and(take_chain_box(cx));
-                                    let mut chain_ptr = chain_slot
-                                        .as_ref()
-                                        .map(|b| &**b as *const Vec<ChainLink> as *mut Vec<ChainLink>);
+                                    let mut chain_ptr = chain_slot.as_ref().map(|b| {
+                                        &**b as *const Vec<ChainLink> as *mut Vec<ChainLink>
+                                    });
                                     if let Some(chain) = chain_slot.take() {
                                         park_chain_box(cx, &trigger_own, chain);
                                     }
@@ -4253,7 +4254,8 @@ impl<M: CardModules> RulesBridge<M> {
                                     }
                                     match r {
                                         Ok(dest) => {
-                                            if let (Some(node), Some(ptr)) = (node_own, chain_ptr.take())
+                                            if let (Some(node), Some(ptr)) =
+                                                (node_own, chain_ptr.take())
                                             {
                                                 let chain = unsafe { &mut *ptr };
                                                 bridge.close_drive(
@@ -7143,6 +7145,7 @@ impl<M: CardModules> RulesBridge<M> {
             arg: Vec::new(),
             answered: 0,
             join: None,
+            joined_in_window: false,
             saved_join: None,
             link: trigger.clone(),
             answers: Vec::new(),
@@ -7253,12 +7256,11 @@ impl<M: CardModules> RulesBridge<M> {
                         memo.invalidate_scope();
                     }
                     // The pending readers evaluate against the chain.
-                    let prev_chain = cx.set_counteract_chain(Some(Box::new(
-                        CounteractChainCursor {
+                    let prev_chain =
+                        cx.set_counteract_chain(Some(Box::new(CounteractChainCursor {
                             chain: (&mut **chain) as *mut Vec<ChainLink>,
                             index: timing,
-                        },
-                    )));
+                        })));
                     if std::env::var("DBG_OFFER").is_ok() {
                         eprintln!(
                             "VISIT seat={cursor} target={} hand={:?} over={:?}",
@@ -7267,14 +7269,7 @@ impl<M: CardModules> RulesBridge<M> {
                             priority.over
                         );
                     }
-                    let offered = self.declare_one(
-                        cx,
-                        cursor,
-                        chain,
-                        timing,
-                        &mut memo,
-                        &groups,
-                    );
+                    let offered = self.declare_one(cx, cursor, chain, timing, &mut memo, &groups);
                     cx.set_counteract_chain(prev_chain);
                     if offer_target.is_some() {
                         chain[timing].link.target = saved_target;
@@ -7363,7 +7358,17 @@ impl<M: CardModules> RulesBridge<M> {
                     chain[timing].answers.push(at);
                     // This answer is now declared and unresolved on the link --
                     // what `trigger::pending_negation` counts (`now_sumimi`).
+                    // The remaining offers on the link must see it, so the
+                    // counter is kept here beside the `extreme_armed` flag
+                    // below (design G06 §6.2).
                     chain[timing].link.answers_declared.push(at as u32);
+                    if self
+                        .ruleset
+                        .entry_effect(idx, &chain[timing].link, None)
+                        .contains(card_sdk::abi::AnswerEffect::NEGATES)
+                    {
+                        chain[timing].link.pending_negation += 1;
+                    }
                     // An effect that arms the extreme is declared *now*; the
                     // remaining offers on this link must see it (a second
                     // copy is not offered, design G06 §6.6). The settle-time
@@ -7409,12 +7414,20 @@ impl<M: CardModules> RulesBridge<M> {
                     // the block belongs to this node and is installed for its
                     // body, so neither it nor a nested window can leak.
                     let mut join_open = None;
-                    if self.ruleset.cards()[idx as usize]
-                        .props
-                        .get(card_sdk::abi::prop::SELF_REDIRECT)
-                        .copied()
-                        .unwrap_or(0)
-                        != 0
+                    // One window per link: a `SELF_REDIRECT` counter declared
+                    // *inside* a join round (`over` is a join seat list) is a
+                    // joiner of the window already offering it -- that window
+                    // covers this same link, so a second round would overlap
+                    // the first's seats and its settle order. The body reads
+                    // the outer report instead (`trigger.joined_in_window`,
+                    // `join::open` answers `1`; design G06 §6.4).
+                    if over.is_none()
+                        && self.ruleset.cards()[idx as usize]
+                            .props
+                            .get(card_sdk::abi::prop::SELF_REDIRECT)
+                            .copied()
+                            .unwrap_or(0)
+                            != 0
                     {
                         let opener = cursor as i32;
                         let seats: Vec<i32> = (0..n as i32)
@@ -7555,6 +7568,7 @@ impl<M: CardModules> RulesBridge<M> {
                         arg,
                         answered: timing,
                         join: join_open,
+                        joined_in_window: over.is_some(),
                         saved_join: None,
                         link,
                         answers: Vec::new(),
@@ -7670,6 +7684,9 @@ impl<M: CardModules> RulesBridge<M> {
             // names its source on its own link (stamped at declaration); the
             // copied body reads it with `trigger::link_copied`.
             on_link.copied = chain[idx].link.copied.clone();
+            // A joiner reads the window it is answering; its body's
+            // `join::open()` must not open a second one (design G06 §6.4).
+            on_link.joined_in_window = chain[idx].joined_in_window;
             if chain[idx].move_extension > 0 {
                 // The extension is a move-tag rewrite; it needs a move payload.
                 if let Some(m) = &mut on_link.mv {
@@ -7867,6 +7884,9 @@ impl<M: CardModules> RulesBridge<M> {
             // names its source on its own link (stamped at declaration); the
             // copied body reads it with `trigger::link_copied`.
             on_link.copied = chain[idx].link.copied.clone();
+            // A joiner reads the window it is answering; its body's
+            // `join::open()` must not open a second one (design G06 §6.4).
+            on_link.joined_in_window = chain[idx].joined_in_window;
             if chain[idx].move_extension > 0 {
                 if let Some(m) = &mut on_link.mv {
                     m.tags.push((
@@ -7905,23 +7925,18 @@ impl<M: CardModules> RulesBridge<M> {
                     cur = chain[cur].link.answers as usize;
                     walk.push(cur);
                 }
-                on_link.answered_kinds = walk
-                    .into_iter()
-                    .rev()
-                    .map(|i| chain[i].link.kind)
-                    .collect();
+                on_link.answered_kinds =
+                    walk.into_iter().rev().map(|i| chain[i].link.kind).collect();
             }
             let before_face = on_link
                 .mv
                 .as_ref()
                 .and_then(|m| m.roll)
                 .unwrap_or(on_link.value);
-            let prev_chain = cx.set_counteract_chain(Some(Box::new(
-                CounteractChainCursor {
-                    chain: (&mut **chain) as *mut Vec<ChainLink>,
-                    index: idx,
-                },
-            )));
+            let prev_chain = cx.set_counteract_chain(Some(Box::new(CounteractChainCursor {
+                chain: (&mut **chain) as *mut Vec<ChainLink>,
+                index: idx,
+            })));
             let driven = self.drive(
                 cx,
                 Call::Counteract {
@@ -8053,7 +8068,9 @@ impl<M: CardModules> RulesBridge<M> {
             self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
         }
         if spent {
-            self.raise_core(cx, "discarded", seat as i32, |t| t.card = Some(id.to_string()))?;
+            self.raise_core(cx, "discarded", seat as i32, |t| {
+                t.card = Some(id.to_string())
+            })?;
         }
         Ok(())
     }
@@ -8089,11 +8106,7 @@ impl<M: CardModules> RulesBridge<M> {
             cur = chain[cur].link.answers as usize;
             walk.push(cur);
         }
-        on_link.answered_kinds = walk
-            .into_iter()
-            .rev()
-            .map(|i| chain[i].link.kind)
-            .collect();
+        on_link.answered_kinds = walk.into_iter().rev().map(|i| chain[i].link.kind).collect();
     }
 
     /// Park (or refresh) the join round's progress beside the hook list, so a
@@ -8151,9 +8164,16 @@ impl<M: CardModules> RulesBridge<M> {
             // it answered before the block existed on the link, so its
             // declaration mark was never written at declaration time. Mark it
             // now, before the window reads the marks for its count / fallback.
-            let ahead: Vec<usize> = (1..chain.len())
+            // It may already be settled: the walk resolves a round's counters
+            // before the opener's body (`open`) runs, and the report counts a
+            // declaration 「打出过」 whether or not the counter still settles
+            // here.
+            let ahead_nodes: Vec<usize> = (1..chain.len())
                 .filter(|&i| i != node && chain[i].answered == at)
-                .filter_map(|i| {
+                .collect();
+            let ahead: Vec<usize> = ahead_nodes
+                .iter()
+                .filter_map(|&i| {
                     let seat = chain[i].seat as i32;
                     chain[at]
                         .link
@@ -8168,6 +8188,15 @@ impl<M: CardModules> RulesBridge<M> {
                 for k in ahead {
                     j.declared[k] = true;
                 }
+            }
+            // An ahead-declared counter that is itself a `SELF_REDIRECT` card
+            // opened its own block at declaration (no window existed yet). It
+            // is a joiner of *this* window now, so drop the block: otherwise
+            // settling it would open a second, overlapping window over the
+            // same link (design G06 §6.4).
+            for &i in &ahead_nodes {
+                chain[i].join = None;
+                chain[i].joined_in_window = true;
             }
             // Seats that already declared on the link ahead of the window are
             // joiners: do not offer them again (「不重复提供同一座位」).
@@ -8184,10 +8213,15 @@ impl<M: CardModules> RulesBridge<M> {
                     })
                     .collect()
             };
-            if seats.is_empty() {
+            // Nobody left to offer: no block at all, or every seat already
+            // declared ahead of the window. A round over an empty seat list
+            // would divide by zero in `Priority::answered`, so skip it and go
+            // straight to the declared joiners.
+            if offered.is_empty() {
                 if let Some(j) = &mut chain[at].link.join {
                     j.opened = true;
                 }
+                trigger.join = chain[at].link.join.clone();
                 return Ok(());
             }
             // One hop deeper than the opener (`answered_kinds`' count).
@@ -8198,8 +8232,7 @@ impl<M: CardModules> RulesBridge<M> {
                 depth += 1;
             }
             let n = cx.state().players.len() as u32;
-            let mut budget =
-                (MAX_COUNTERACT_DEPTH + 1) * n * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
+            let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
             let start = chain.len();
             self.build_round(cx, chain, at, depth, &mut budget, Some(&offered))?;
             // The report lives on the opener's own link: take the declared /
@@ -8440,7 +8473,9 @@ impl<M: CardModules> RulesBridge<M> {
                 if !self.counteracts_to_play(idx, top) {
                     continue;
                 }
-                let Some((card, entry)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
+                let Some((card, entry)) =
+                    self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref())
+                else {
                     continue;
                 };
                 let Some(condition) = self.ruleset.condition(card, entry) else {
@@ -8622,7 +8657,9 @@ impl<M: CardModules> RulesBridge<M> {
                 {
                     continue;
                 }
-                let Some((idx, _)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
+                let Some((idx, _)) =
+                    self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref())
+                else {
                     continue;
                 };
                 let card_id = self.ruleset.cards()[idx as usize].id.clone();
@@ -8660,7 +8697,9 @@ impl<M: CardModules> RulesBridge<M> {
             #[cfg(feature = "bot-cost")]
             crate::host::bot_cost::COUNTERACT_PROBES
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let Some((idx, entry)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
+            let Some((idx, entry)) =
+                self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref())
+            else {
                 continue;
             };
             // A copied entry runs the source card's module.
@@ -8903,7 +8942,9 @@ impl<M: CardModules> RulesBridge<M> {
         // The declared entry is the [反击] at this trigger -- not the card's
         // `On::Play`. A declare on the counteract entry is what `finish_offer`
         // is collecting (docs/ACTIVATION.md §2).
-        let Some((card, entry)) = self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref()) else {
+        let Some((card, entry)) =
+            self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref())
+        else {
             return Ok(Some(Vec::new()));
         };
         let src_id = self.ruleset.cards()[card as usize].id.clone();
@@ -9119,16 +9160,15 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         charge_skill: t.charge_skill,
         subject_card: subject,
         join: t.join.as_ref().map(Into::into),
+        // The core trigger carries no window seat membership; a link that is a
+        // joiner is flagged on its `ChainLink` and copied in at settle.
+        joined_in_window: false,
         answers_declared: t.answers_declared.clone(),
         copied: t.copied.clone(),
         roll_root: t.roll_root,
         pending_negation: t.pending_negation,
         extreme_armed: t.extreme_armed,
-        answered_kinds: t
-            .answered_kinds
-            .iter()
-            .map(|k| trigger_kind(k))
-            .collect(),
+        answered_kinds: t.answered_kinds.iter().map(|k| trigger_kind(k)).collect(),
     }
 }
 
@@ -9340,8 +9380,11 @@ struct ChainLink {
     /// Node index of the timing this answers.
     answered: usize,
     /// The join window this counter opens (`SELF_REDIRECT`), installed on the
-    /// answered link for its body only (design G06 §6.4).
+    /// answered link for its body only (design G06 §6.4). `None` when the
+    /// declaration was already inside another window (`joined_in_window`).
     join: Option<crate::world::TriggerJoin>,
+    /// Declared inside an open join window: a joiner, not an opener.
+    joined_in_window: bool,
     /// The window block that was on the answered link before this node's own
     /// one went in; put back when the body returns.
     saved_join: Option<crate::world::TriggerJoin>,
@@ -9564,7 +9607,10 @@ fn take_chain_box(cx: &mut PlayCtx) -> Option<Box<Vec<ChainLink>>> {
     if std::env::var("DBG_HOOK").is_ok() {
         eprintln!(
             "TAKE_CHAIN got={} hand={} join={}",
-            chain.as_ref().map(|c| c.len()).map_or("-".into(), |n| n.to_string()),
+            chain
+                .as_ref()
+                .map(|c| c.len())
+                .map_or("-".into(), |n| n.to_string()),
             r.hand.is_some(),
             r.join.is_some()
         );
@@ -9885,6 +9931,10 @@ impl LiveSnap<'_> {
         let (Some((chain, index)), Some(rules)) = (self.pending, self.rules) else {
             return Vec::new();
         };
+        // `index` is the offered link; on a counter's own round that is the
+        // counter, whose `answered` carries the settled-at window declarations
+        // (the counter itself included -- an armed extreme must stay armed,
+        // §6.6).
         let answered = chain[index].answered;
         chain[answered]
             .link
@@ -9910,9 +9960,10 @@ impl crate::condition::SnapSrc for LiveSnap<'_> {
     }
     fn extreme_armed(&self) -> bool {
         self.world.turn.extreme != game_core::engine::Extreme::Plain
-            || self.declared_effects().iter().any(|e| {
-                e.contains(card_sdk::abi::AnswerEffect::ARMS_EXTREME)
-            })
+            || self
+                .declared_effects()
+                .iter()
+                .any(|e| e.contains(card_sdk::abi::AnswerEffect::ARMS_EXTREME))
     }
     fn pending_negation(&self) -> i64 {
         self.declared_effects()
@@ -11796,6 +11847,13 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             uid: cx.world_mut().next_trigger_uid(),
             ..Trigger::default()
         };
+        // A `copies_previous` play (mortis) names the card it copies on its own
+        // play link, so the body can play it with `trigger::link_copied`
+        // (design G06 §2.15). The counteract half stamps the same field at the
+        // counter declaration; without this the play half always read none.
+        if self.ruleset.copies_previous(idx) {
+            trigger.copied = Self::copy_source(cx, player_id);
+        }
         push_resolving_frame(card, uid, player_id as i32, trigger.uid);
         let dest = match self.drive(
             cx,
@@ -12317,7 +12375,7 @@ thread_local! {
 }
 
 /// Snapshot of [`RESOLVING`] for the walk: `(card, uid, owner seat)`.
-fn resolving_snapshot() -> Vec<(String, i32, i32)> {
+pub(crate) fn resolving_snapshot() -> Vec<(String, i32, i32)> {
     RESOLVING.with(|r| {
         r.borrow()
             .iter()

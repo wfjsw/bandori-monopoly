@@ -111,6 +111,10 @@ pub struct Trigger {
     pub subject_card: Option<String>,
     /// The join window opened on this link, when one is open.
     pub join: Option<TriggerJoin>,
+    /// This counter was declared inside an open join window, so the body reads
+    /// the window it is answering: `join::open()` answers `1` instead of
+    /// opening a second one (design G06 §6.4). Transient.
+    pub joined_in_window: bool,
     /// Declared, unresolved answers on this link (indices into the chain, in
     /// declaration order). Empty on a new counter link.
     pub answers_declared: Vec<u32>,
@@ -280,6 +284,7 @@ impl Default for Trigger {
             charge_skill: false,
             subject_card: None,
             join: None,
+            joined_in_window: false,
             answers_declared: Vec::new(),
             copied: None,
             roll_root: ROLL_ROOT_NONE,
@@ -350,6 +355,7 @@ impl Trigger {
             charge_skill: false,
             subject_card: None,
             join: None,
+            joined_in_window: false,
             answers_declared: Vec::new(),
             copied: None,
             roll_root: ROLL_ROOT_NONE,
@@ -448,6 +454,10 @@ pub trait CardWorld: Clone + 'static {
         false
     }
     fn set_placed_during_play(&mut self, _v: bool) {}
+    /// The card id of the play being resolved, `None` outside a play.
+    fn play_card(&self) -> Option<String> {
+        None
+    }
     /// A gain whose amount skills and crits may not bend.
     fn gain_fixed(&mut self, _player_id: i32, _amount: i32, _reason: crate::Msg) -> i32 {
         0

@@ -63,7 +63,9 @@ fn run(caster: i32) -> card_sdk::Asked {
     // A body that suspends on a settle (the self pick's main move, a buy) is
     // restarted from the top. Keep what already moved for this raise and drop
     // it on a new one.
-    let uid = trigger::seq();
+    // The raise's own id (`seq` is the chain position and 0 on every bare play
+    // trigger, so two plays in a turn would share it).
+    let uid = trigger::uid();
     if ctx::slot(caster, UID) != uid {
         ctx::set_slot(caster, UID, uid);
         ctx::set_slot(caster, DONE, 0);

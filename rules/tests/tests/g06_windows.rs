@@ -538,6 +538,122 @@ fn mortis_empty_links_match_every_kind() {
 }
 
 #[test]
+fn mortis_play_copies_the_previous_card() {
+    // The printed play half 「此卡打出时效果为…上一张卡」: the play link names
+    // the source, so the body `ctx::play_card`s it instead of falling to the
+    // empty-resolution branch.
+    let mut t = fresh(&["花园多惠", "仓田真白", "户山香澄"]);
+    // mortis is exclusive to 若叶睦.
+    t.set_character_raw(0, "若叶睦");
+    t.give(0, &[MORTIS]);
+    t.give(1, &["TEST:cardCopy"]);
+    t.begin_turn(1);
+    t.play(1, "TEST:cardCopy").unwrap();
+    drain(&mut t);
+    t.begin_turn(0);
+    let mark = t.mark();
+    t.play(0, MORTIS).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.ends_with("card_copy_play")),
+        "the copied card's play ran: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.ends_with("mortis_instinct_nothing")),
+        "the copy branch was taken: {keys:?}"
+    );
+}
+
+#[test]
+fn a_counter_placement_does_not_mark_the_play() {
+    // 「不计入效果带有放置于场上的卡」 is about the played card's *own* effect:
+    // a counter that places must not make the answered play count as placing
+    // (which would drop it from the copy record).
+    let mut t = fresh(&["花园多惠", "仓田真白", "户山香澄"]);
+    // mortis is exclusive to 若叶睦.
+    t.set_character_raw(0, "若叶睦");
+    t.give(0, &[MORTIS]);
+    t.give(1, &["TEST:cardCopy"]);
+    t.give(2, &["TEST:placingCounter"]);
+    t.begin_turn(1);
+    t.play(1, "TEST:cardCopy").unwrap();
+    declare_when_offered(&mut t, 2, "TEST:placingCounter");
+    drain(&mut t);
+    t.begin_turn(0);
+    let mark = t.mark();
+    t.play(0, MORTIS).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.ends_with("card_copy_play")),
+        "the answered play is still copyable: {keys:?}"
+    );
+}
+
+#[test]
+fn copied_entry_takes_the_source_label() {
+    // The copied entry is the source's: its 「（2）」 label comes off the source
+    // card, not off the copying card's `on` list (where index 2 is absent).
+    let mut t = fresh(&["花园多惠", "仓田真白", "户山香澄"]);
+    let mark = mortis_copies(&mut t, "TEST:labeledCopy");
+    let labeled = t.events_since(mark).iter().any(|e| {
+        // mortis is the card that was activated, so its header carries it.
+        let ours = matches!(e.msg.args.get("card"), Some(Arg::Card(c)) if c == MORTIS);
+        ours && log_key(e).ends_with("effect_applied") && format!("{:?}", e.msg).contains("（2）")
+    });
+    assert!(
+        labeled,
+        "the source's label is used: {:?}",
+        t.keys_since(mark)
+    );
+}
+
+#[test]
+fn cant_look_away_plays_twice() {
+    // The self pick is the only target (no counterer this turn), so each play
+    // must move its caster. The resume id keyed on `trigger::seq()` was 0 for
+    // both plays, so the second kept the first's DONE mask and offered nothing.
+    // (`begin_turn` only puts the step back to 运营; the slots are not cleared
+    // at a turn start.)
+    let mut t = fresh(&["花园多惠", "仓田真白"]);
+    t.give(0, &[CANT_LOOK, CANT_LOOK]);
+    let start = t.pos(0);
+    t.play(0, CANT_LOOK).unwrap();
+    drain(&mut t);
+    let first = t.pos(0);
+    assert_ne!(first, start, "the first play moved: {}", t.dump_prompt());
+    // The forced self move is the main move, so the step is no longer 运营.
+    t.begin_turn(0);
+    t.play(0, CANT_LOOK).unwrap();
+    drain(&mut t);
+    assert_ne!(t.pos(0), first, "the second play moved too");
+}
+
+#[test]
+fn a_placing_play_is_not_copied() {
+    // 「（不计入效果带有放置于场上的卡）」: the play's own effect placed, so
+    // there is nothing to copy.
+    let mut t = fresh(&["花园多惠", "仓田真白", "户山香澄"]);
+    // mortis is exclusive to 若叶睦.
+    t.set_character_raw(0, "若叶睦");
+    t.give(0, &[MORTIS]);
+    t.give(1, &["TEST:shield"]);
+    t.begin_turn(1);
+    t.play(1, "TEST:shield").unwrap();
+    drain(&mut t);
+    t.begin_turn(0);
+    let mark = t.mark();
+    t.play(0, MORTIS).unwrap();
+    drain(&mut t);
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.ends_with("mortis_instinct_nothing")),
+        "the placing play is skipped: {keys:?}"
+    );
+}
+
+#[test]
 fn mortis_plays_the_copied_entry() {
     // The copied body runs and `link_copied` names the source card.
     let mut t = fresh(&["花园多惠", "仓田真白", "户山香澄"]);
@@ -802,6 +918,144 @@ fn join_offers_no_seat_twice() {
 }
 
 #[test]
+fn join_with_every_seat_declared_ahead_still_settles() {
+    // The only other seat already answered the effect before the opener's
+    // `open()`, so the window has nobody left to offer: the empty round must
+    // not divide by zero (`Priority::over(&[])`) and the ahead declaration
+    // must still be reported (design G06 §6.4).
+    let mut t = fresh(&["花园多惠", "纯田真奈", "户山香澄"]);
+    t.give(0, &[AIMER, "TEST:probe"]);
+    t.give(2, &["TEST:probe"]);
+    // The card goes in before the play: a window walked under a suspended
+    // routine reads the routine's own world, so a later `give` is lost on the
+    // next resume.
+    t.give(1, &[JOIN_OPEN]);
+    t.play(0, AIMER).unwrap();
+    let mark = t.mark();
+    let mut probes = 0;
+    let mut opened = false;
+    for _ in 0..60 {
+        if t.prompt().is_none() {
+            break;
+        }
+        if !opened && t.counteract_offered(JOIN_OPEN) {
+            t.counteract(1, JOIN_OPEN).unwrap();
+            opened = true;
+            continue;
+        }
+        if opened && t.counteract_offered("TEST:probe") {
+            let who = t.asked()[0];
+            t.counteract(who, "TEST:probe").unwrap();
+            probes += 1;
+            continue;
+        }
+        t.decline();
+    }
+    assert_eq!(
+        probes,
+        2,
+        "every other seat answered ahead: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+    let reports: Vec<_> = t
+        .keys_since(mark)
+        .into_iter()
+        .filter(|k| k.ends_with("join_report"))
+        .collect();
+    assert_eq!(
+        reports.len(),
+        2,
+        "both ahead declarers are reported: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(event_int(&t, mark, "aimer_done", "got"), Some(1));
+}
+
+#[test]
+fn join_window_with_every_seat_declaring_still_settles() {
+    // Every offered seat declares, so the window has nobody left to offer when
+    // the opener's `open()` comes back. The empty round must not divide by
+    // zero (`Priority::over(&[])`) and the declarations must still be
+    // reported (design G06 §6.4).
+    let mut t = fresh(&["花园多惠", "纯田真奈", "户山香澄"]);
+    t.give(0, &[AIMER, JOIN_SHIELD]);
+    t.give(2, &[JOIN_SHIELD]);
+    // The card goes in before the play: a window walked under a suspended
+    // routine reads the routine's own world, so a later `give` is lost on the
+    // next resume.
+    t.give(1, &[JOIN_OPEN]);
+    t.play(0, AIMER).unwrap();
+    // The opener's declaration drives the whole window synchronously, so the
+    // report events land inside the calls below: mark first.
+    let mark = t.mark();
+    declare_when_offered(&mut t, 1, JOIN_OPEN);
+    declare_in_window(&mut t, 0, JOIN_SHIELD);
+    declare_in_window(&mut t, 2, JOIN_SHIELD);
+    drain(&mut t);
+    let reports: Vec<_> = t
+        .keys_since(mark)
+        .into_iter()
+        .filter(|k| k.ends_with("join_report"))
+        .collect();
+    assert_eq!(
+        reports.len(),
+        2,
+        "both joiners are reported: {:?}",
+        t.keys_since(mark)
+    );
+    let shielded = t
+        .events_since(mark)
+        .iter()
+        .filter(|e| log_key(e).ends_with("join_report"))
+        .filter_map(|e| int_arg(&e.msg, "shielded"))
+        .collect::<Vec<_>>();
+    assert_eq!(shielded, vec![1, 1], "both shielded: {shielded:?}");
+    let designated = t
+        .events_since(mark)
+        .iter()
+        .filter(|e| log_key(e).ends_with("join_report"))
+        .filter_map(|e| int_arg(&e.msg, "designation"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        designated,
+        vec![1, 1],
+        "both name the opener's designation: {designated:?}"
+    );
+    // Each joiner cancelled the opener's designation (「改为你」), so the effect
+    // reaches nobody.
+    assert_eq!(event_int(&t, mark, "aimer_done", "got"), Some(-1));
+}
+
+#[test]
+fn join_opener_inside_the_window_joins_instead_of_reopening() {
+    // A second `SELF_REDIRECT` counter declared *inside* the window is a
+    // joiner: `open()` answers without a second round, so the outer round
+    // keeps its seats and still settles both the joiner and the rest.
+    let mut t = fresh(&["花园多惠", "纯田真奈", "户山香澄", "山吹沙绫"]);
+    t.give(2, &[JOIN_OPEN]);
+    t.give(3, &[JOIN_SHIELD]);
+    aimer_join(&mut t, JOIN_OPEN);
+    let mark = t.mark();
+    declare_in_window(&mut t, 2, JOIN_OPEN);
+    let mut asked = Vec::new();
+    assert!(
+        record_offers(&mut t, JOIN_SHIELD, &mut asked),
+        "the window keeps offering its remaining seat: {}",
+        t.dump_prompt()
+    );
+    assert!(asked.contains(&3), "P3 is still offered: {asked:?}");
+    drain(&mut t);
+    let reports = t
+        .keys_since(mark)
+        .iter()
+        .filter(|k| k.ends_with("join_report"))
+        .count();
+    assert_eq!(reports, 2, "both joiners are reported, not nested away");
+    assert_eq!(event_int(&t, mark, "aimer_done", "got"), Some(1));
+}
+
+#[test]
 fn join_restores_the_effect_target() {
     // A joiner that cancels nothing (probe): after the round the effect still
     // settles on its original recipient.
@@ -838,33 +1092,79 @@ fn fallback_draw_bars_on_a_missed_joiner() {
 // Item 11 -- a declared negation hides now_sumimi
 // =====================================================================
 
+/// P0 pays over 水族馆's 320 tag: the `pay` link's actor is the payer, which
+/// is what sumimi's guard keys on.
+const SUMIMI: &str = "Sumimi:现在她是Sumimi的小初啦";
+
 #[test]
-fn now_sumimi_not_offered_after_a_declared_cancel() {
-    // 登上武道馆 designates P0 as a payer (a `Pay` ride on a designating play);
-    // net_error negates that link's declaration before P0 is visited.
+fn now_sumimi_is_offered_on_an_unnegated_pay() {
+    // The control for the test below: without a declared negation the same
+    // setup does offer sumimi, so that test cannot pass vacuously.
     let mut t = fresh(&["花园多惠", "仓田真白"]);
-    t.give(0, &["Sumimi:现在她是Sumimi的小初啦"]);
-    // P0's own tile tag: a 2000 payment over 水族馆's 320 is a 「超过」.
+    t.give(0, &[SUMIMI]);
     t.set_pos(0, tile("水族馆"));
-    // net_error answers the payment's effect link as its own target (the
-    // payer), so it must sit with the payer.
-    t.give(0, &[NET_ERROR]);
     t.give(1, &["通用:登上武道馆"]);
     t.begin_turn(1);
     drain(&mut t);
     t.play(1, "通用:登上武道馆").unwrap();
-    // P0 (the payer) negates the declaration first.
-    declare_when_offered(&mut t, 0, NET_ERROR);
-    // P0 (the designated payer) is visited next; the declared negation keeps
-    // now_sumimi home.
     let mut asked = Vec::new();
     assert!(
-        !record_offers(&mut t, "Sumimi:现在她是Sumimi的小初啦", &mut asked),
+        record_offers(&mut t, SUMIMI, &mut asked),
+        "sumimi over the pay: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+}
+
+#[test]
+fn now_sumimi_not_offered_after_a_declared_cancel() {
+    // 登上武道馆 gives P0 a 2000 payment over 水族馆's 320. P0 declares a
+    // negating pay counter first; the declared, unresolved negation keeps
+    // sumimi home (「即将超过」 -- design G06 §5.5, item 11).
+    let mut t = fresh(&["花园多惠", "仓田真白"]);
+    // Given first: the visit re-presents the remaining list, so the later
+    // sumimi is reached only because the negating counter was declared.
+    t.give(0, &["TEST:payNegate"]);
+    t.give(0, &[SUMIMI]);
+    t.set_pos(0, tile("水族馆"));
+    t.give(1, &["通用:登上武道馆"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.play(1, "通用:登上武道馆").unwrap();
+    declare_when_offered(&mut t, 0, "TEST:payNegate");
+    let mut asked = Vec::new();
+    assert!(
+        !record_offers(&mut t, SUMIMI, &mut asked),
         "no offer over a declared negation: {}",
         t.dump_prompt()
     );
     drain(&mut t);
     assert_eq!(t.hand(0).len(), 1, "the card stays: {:?}", t.hand(0));
+    assert_eq!(t.money(0), 10_000, "the negated payment does not settle");
+}
+
+#[test]
+fn another_negation_is_still_declarable() {
+    // The guard hides sumimi, not the negations themselves: a second copy is
+    // still offered after the first, and sumimi stays home.
+    let mut t = fresh(&["花园多惠", "仓田真白"]);
+    t.give(0, &["TEST:payNegate", "TEST:payNegate"]);
+    t.give(0, &[SUMIMI]);
+    t.set_pos(0, tile("水族馆"));
+    t.give(1, &["通用:登上武道馆"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.play(1, "通用:登上武道馆").unwrap();
+    // Both copies are legal offers while nothing is declared.
+    declare_when_offered(&mut t, 0, "TEST:payNegate");
+    declare_when_offered(&mut t, 0, "TEST:payNegate");
+    let mut asked = Vec::new();
+    assert!(
+        !record_offers(&mut t, SUMIMI, &mut asked),
+        "still no offer after two negations: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
     assert_eq!(t.money(0), 10_000, "the negated payment does not settle");
 }
 

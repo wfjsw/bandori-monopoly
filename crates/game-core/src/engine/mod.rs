@@ -1554,7 +1554,11 @@ impl Match {
         let mut prov = self.provider.take();
         let (res, delay, mut w) = {
             if std::env::var("DBG_HOOK").is_ok() {
-                eprintln!("EXECUTE answers={} step={}", answers.len(), snapshot.st.step);
+                eprintln!(
+                    "EXECUTE answers={} step={}",
+                    answers.len(),
+                    snapshot.st.step
+                );
             }
             let mut cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
             let mut cx = match prov.as_mut() {
@@ -1567,6 +1571,9 @@ impl Match {
             // work (and the parked chain it points into) is dropped with
             // `cx`. An ask reached by the drain becomes the routine's halt --
             // the answer replay rebuilds the walk, as for every other prompt.
+            // `drain_work` re-pushes a suspended item and keeps pumping, so it
+            // returns only on completion or a real halt: nothing suspended
+            // leaves this block.
             if res.as_ref().err().is_some_and(|h| h.is_suspended()) {
                 res = cx.drain_work();
             }
@@ -1672,17 +1679,15 @@ impl Match {
                     live: Live::new(*ask),
                 });
             }
-            // STACK-01 safety net: a suspension that escaped the work-stack
-            // pump (should not happen -- `drain_work` is the pump). Drain what
-            // was queued and commit, rather than aborting the match.
+            // STACK-01 fallback only: the pump above swallows suspensions, so
+            // this arm is a guard against one escaping it. The work stack does
+            // not survive `into_world` and a fresh context's is empty, so
+            // there is nothing left to drain -- commit what the routine wrote
+            // rather than aborting the match (`changed` / `seq` are already
+            // bumped above).
             Err(Halt(HaltKind::Suspended)) => {
                 self.world = w;
                 self.pending = None;
-                let mut cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
-                let _ = cx.drain_work();
-                self.world = cx.into_world();
-                self.changed = true;
-                self.seq += 1;
                 if !self.flushing_deferred {
                     self.flush_deferred();
                 }
