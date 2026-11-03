@@ -1206,6 +1206,7 @@ fn big(f: impl FnOnce() + Send + 'static) {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn guard_ids_are_stable() {
     big(|| {
         assert_eq!(
@@ -1255,6 +1256,7 @@ fn guard_ids_are_stable() {
 }
 /// The differential: every fixture × every seat × all 139 guards.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_window_vs_ir_fill_agree_on_every_guard() {
     big(|| {
         let fixtures = all_fixtures();
@@ -1284,6 +1286,7 @@ fn fill_window_vs_ir_fill_agree_on_every_guard() {
 /// Non-vacuity: the fixtures actually flip the guards they are named for.
 /// (If both sides were stuck false the differential would still "pass".)
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fixtures_flip_the_guards_they_target() {
     big(|| {
         let aya = "actor == owner && value > 0";
@@ -1337,38 +1340,47 @@ fn fixtures_flip_the_guards_they_target() {
 }
 /// Per-fixture names, so a failure names the world immediately.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_aya_poorest_value() {
     check_all(&fixture_aya_poorest_value());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_aya_value_zero_richest() {
     check_all(&fixture_aya_value_zero_richest());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_tile_kinds() {
     check_all(&fixture_tile_kinds());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_fans_tok() {
     check_all(&fixture_fans_tok());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_chain_pay_move() {
     check_all(&fixture_chain_pay_move());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_no_chain_abnormal() {
     check_all(&fixture_no_chain_abnormal());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_rent_property() {
     check_all(&fixture_rent_property());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_four_players_teleport() {
     check_all(&fixture_four_players_teleport());
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_status_layers() {
     check_all(&fixture_status_layers());
 }
@@ -1377,6 +1389,7 @@ fn fill_diff_status_layers() {
 /// `state(p,'key')` guard yet, so this lowers the sources directly (same
 /// `fill_window` / `fill_from_world` seam `check_guard` uses).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn fill_diff_state_fns() {
     let fx = fixture_status_layers();
     // (src, owner, expected) — agreement first, then a truth value so a

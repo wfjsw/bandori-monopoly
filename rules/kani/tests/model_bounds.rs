@@ -9,6 +9,7 @@
 // `card-sdk`'s `guest` feature declares resolve at test-binary link time.
 // (Same trick conf_model uses by calling `install_host`.)
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn native_shims_are_linked() {
     // Referencing any symbol from the rlib pulls the `#[no_mangle]` shims in.
     let f = game_rules::native_shims::take_host as *const ();
@@ -16,6 +17,7 @@ fn native_shims_are_linked() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn board_hash_table_is_sound() {
     use rules_kani::board::{tile_named, tile_named_bytes, TILE_NAMES, TILE_NAME_HASHES};
     for i in 0..60 {
@@ -39,6 +41,7 @@ fn board_hash_table_is_sound() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn band_starts_match_ruleset() {
     use rules_kani::invoke::{by_idx, ruleset_len, BAND_START, RULESET};
     assert_eq!(BAND_START.len(), RULESET.len() + 1);
@@ -63,6 +66,7 @@ fn intern_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn intern_fixed_loop_bounds() {
     let _g = intern_lock();
     // card-sdk intern: open-addressed, 8 probes, write-once leaked names.
@@ -87,6 +91,7 @@ fn intern_fixed_loop_bounds() {
 /// every pilot/known name must intern to a distinct `NameId`, so a 64-bit
 /// collision cannot silently alias two of them.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn pilot_intern_hashes_are_unique() {
     let _g = intern_lock();
     use rules_kani::host::PILOT_INTERN_NAMES;

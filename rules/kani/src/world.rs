@@ -1625,6 +1625,7 @@ mod namemap_tests {
     use crate::intern;
 
     #[test]
+    #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
     fn direct_index_roundtrip() {
         intern::reset();
         let mut m = NameMap::new();

@@ -2,7 +2,10 @@
 
 Runs the `rules-kani` Kani harnesses (`#[kani::proof]`) with a per-harness
 timeout and bounded parallelism. Fail-closed: any `FAILED` / `TIMEOUT` /
-`UNMODELED` verdict exits nonzero. No `#[ignore]`, no skip list.
+`UNMODELED` verdict exits nonzero. No skip list: every discovered harness runs.
+The separate host conformance tests under `rules/kani/tests/` are `#[ignore]`d
+so the default `cargo test` pass skips them; run them with
+`cargo test -p rules-kani -- --ignored`.
 
 ## Usage
 

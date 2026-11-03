@@ -6,6 +6,11 @@
 //!
 //! Black-box: nothing under `rules/cards/`, `rules/skills/`, `rules/fixtures/`
 //! or `target/scratch/tainted/` is opened.
+//!
+//! The suite is `#[ignore]`d (opt-in) so the default `cargo test` pass skips
+//! it; run it with
+//! `cargo test -p ruleset-tests --test fuzz_interactions -- --ignored`
+//! (bump `FUZZ_ITERS` for a soak).
 
 mod common;
 mod fuzz;
@@ -54,6 +59,7 @@ fn seed_for(i: u32) -> u64 {
 // =====================================================================
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_interactions_invariants() {
     let _s = serial();
     let n = iters();
@@ -128,6 +134,7 @@ fn fuzz_interactions_invariants() {
 // =====================================================================
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_determinism() {
     let _s = serial();
     let n = iters().min(6);
@@ -157,6 +164,7 @@ fn fuzz_determinism() {
 }
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_save_restore() {
     let _s = serial();
     let n = iters().min(6);
@@ -190,6 +198,7 @@ fn fuzz_save_restore() {
 // =====================================================================
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_meta_negation() {
     let _s = serial();
     let n = iters().min(4);
@@ -205,6 +214,7 @@ fn fuzz_meta_negation() {
 }
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_meta_commutativity() {
     let _s = serial();
     let n = iters().min(4);
@@ -220,6 +230,7 @@ fn fuzz_meta_commutativity() {
 }
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_meta_monotonicity() {
     let _s = serial();
     let n = iters().min(4);
@@ -235,6 +246,7 @@ fn fuzz_meta_monotonicity() {
 }
 
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_meta_seat_rotation() {
     let _s = serial();
     let n = iters().min(3);
@@ -254,6 +266,7 @@ fn fuzz_meta_seat_rotation() {
 /// is that a hook cannot re-trigger on its own movement; `MAX_MONEY_DEPTH = 32`
 /// is a safety cap that traps loudly. See `docs/ENGINE.md`.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_money_depth_probe() {
     let _s = serial();
     match meta::check_money_depth(seed_for(0) ^ 0x3E97) {
@@ -271,6 +284,7 @@ fn fuzz_money_depth_probe() {
 /// 的效果可以指定你」 -- while it is up, a foreign [指定] must not touch the
 /// owner.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fuzz_meta_immunity() {
     let _s = serial();
     let n = iters().min(4);

@@ -80,6 +80,10 @@ The rest of the tree (same grep): `cross_*` 111 tests / 40 open,
 A 0 in "open" means none were found, not that the group is verified correct.
 See coverage gaps below.
 
+The `fuzz_interactions` and `fuzz_found` targets (and the `rules-kani` test
+suites) are opt-in: every test in them is `#[ignore]`d, so the default
+`cargo test` pass skips them. Run them with `-- --ignored`.
+
 ### Event rules (2026-10-07)
 
 `rules/events` (`docs/EVENTS.md`) is the event-card category: 28 `event:*`

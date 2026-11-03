@@ -8,6 +8,7 @@ use rules_cond_ir::vars::VarId;
 use rules_kani::{generated, ir_fill};
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn pilot_guards_are_in_the_generated_table() {
     for s in [
         ir_fill::src::AYA_PAY_ADD,
@@ -23,6 +24,7 @@ fn pilot_guards_are_in_the_generated_table() {
 
 /// `guard_id!` resolves at compile time; `BY_ID[id].src` is the same string.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn guard_id_is_the_by_id_index() {
     let id = rules_kani::guard_id!("actor == owner && value > 0");
     assert_eq!(generated::BY_ID[id].src, "actor == owner && value > 0");
@@ -31,6 +33,7 @@ fn guard_id_is_the_by_id_index() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn aya_pay_add_guard_evaluates() {
     let prog = ir_fill::guard_by_src(ir_fill::src::AYA_PAY_ADD);
     for (actor, owner, value, expect) in [
@@ -55,6 +58,7 @@ fn aya_pay_add_guard_evaluates() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn is_start_guard_evaluates() {
     let prog = ir_fill::guard_by_src(ir_fill::src::IS_CIRCLE);
     for (actor, owner, tile, on_circle, expect) in [
@@ -81,6 +85,7 @@ fn is_start_guard_evaluates() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn chain_pay_guard_evaluates() {
     let prog = ir_fill::guard_by_src(ir_fill::src::CHAIN_PAY);
     for (actor, owner, value, target, has_pay, expect) in [

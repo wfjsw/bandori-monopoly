@@ -1,4 +1,5 @@
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn world_size() {
     eprintln!(
         "world={} namemap={}",

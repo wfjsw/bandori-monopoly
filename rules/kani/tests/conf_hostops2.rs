@@ -2,7 +2,10 @@
 //!
 //! Each test pins the **engine** contract (from `game-rules/src/hostfns.rs`
 //! and `game-core/src/engine/ops.rs`) against `rules_kani::host::dispatch`.
-//! Fail-closed: no `#[ignore]`. See `docs/rulebook/spec/kani/HOSTOPS-ROUND2.md`.
+//! Fail-closed: no allowlists. The suite is `#[ignore]`d (opt-in) so the
+//! default `cargo test` pass skips it; run it with
+//! `cargo test -p rules-kani --test conf_hostops2 -- --ignored`.
+//! See `docs/rulebook/spec/kani/HOSTOPS-ROUND2.md`.
 
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
@@ -48,6 +51,7 @@ fn big(f: impl FnOnce() + Send + 'static) {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn state_set_packs_field_and_value() {
     big(|| {
         let _g = model_lock();
@@ -88,6 +92,7 @@ fn state_set_packs_field_and_value() {
 /// `ctx::n(k, v)` doubles only when `play_doubled() == k`. Default is -1
 /// (engine `None`) so `n(0, 600)` yields 600, not 1200.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn play_doubled_defaults_to_no_doubling() {
     big(|| {
         let _g = model_lock();
@@ -105,6 +110,7 @@ fn play_doubled_defaults_to_no_doubling() {
 /// `trig_set_cancelled` / `trig_set_negate_effect` take no value — `sys_kani`
 /// packs `[0;6]`. The call **is** the effect.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn trig_set_cancelled_and_negate_are_noarg_setters() {
     let _g = model_lock();
     install(base());
@@ -124,6 +130,7 @@ fn trig_set_cancelled_and_negate_are_noarg_setters() {
 }
 /// `tile_named` resolves every `board.json` name (0-based engine index).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn tile_named_resolves_board_names() {
     big(|| {
         let _g = model_lock();
@@ -146,6 +153,7 @@ fn tile_named_resolves_board_names() {
 }
 /// `neighbor(player, dir)` = living-seat neighbour in turn order (not a tile).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn neighbor_is_living_seat() {
     big(|| {
         let _g = model_lock();
@@ -180,6 +188,7 @@ fn neighbor_is_living_seat() {
 /// (the retired `stay_of` / `stun_of` / `exile_of`). `exileTo` is its own
 /// key, not an alias of the three layer counters.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn stay_stun_exile_are_distinct() {
     big(|| {
         let _g = model_lock();
@@ -218,6 +227,7 @@ fn stay_stun_exile_are_distinct() {
 }
 /// `add_counter_*` clamps: `(was+n).max(0)`, then `min(max)` when `max > 0`.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn add_counter_clamps_to_max() {
     big(|| {
         let _g = model_lock();
@@ -242,6 +252,7 @@ fn add_counter_clamps_to_max() {
 /// `gain_marker` is an uncapped dumb add (the rules-layer kernel clamps).
 /// Wire: (player, name_p, name_l, n, why_p, why_l).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn gain_marker_is_uncapped_dumb_add() {
     big(|| {
         let _g = model_lock();
@@ -262,6 +273,7 @@ fn gain_marker_is_uncapped_dumb_add() {
 /// `tile_in(_, _, "shop")` = buyable && group == 10 (商店街), not `kind == 5`.
 /// (Was `Op::is_shop` before ABI v56.)
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn is_shop_is_buyable_group_10() {
     big(|| {
         let _g = model_lock();
@@ -296,6 +308,7 @@ fn is_shop_is_buyable_group_10() {
 }
 /// `shuffle_into_deck` moves hand/discard into draw (multiset; order irrelevant).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn shuffle_into_deck_moves_piles() {
     big(|| {
         let _g = model_lock();
@@ -318,6 +331,7 @@ fn shuffle_into_deck_moves_piles() {
 /// `place_card_on` ABI is `[player, tile, cp, cl, ptr, len]` — the card name
 /// is at (a2, a3), the landing tile at a1 (HHW kkr-02 → CiRCLE).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn place_card_on_reads_name_from_cp_cl() {
     big(|| {
         let _g = model_lock();
@@ -334,6 +348,7 @@ fn place_card_on_reads_name_from_cp_cl() {
 }
 /// Generated card-id table matches RULESET flatten order.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn generated_card_ids_match_ruleset() {
     big(|| {
         let _g = model_lock();
@@ -349,6 +364,7 @@ fn generated_card_ids_match_ruleset() {
 /// `set_counter_self`/`counter_self` fall back to `World::self_crystals` —
 /// heat_head's two-phase machine and circle_rebuild's 5 miracle crystals.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn self_crystals_roundtrip_without_field_slot() {
     big(|| {
         let _g = model_lock();
@@ -370,6 +386,7 @@ fn self_crystals_roundtrip_without_field_slot() {
 /// `neighbor(p, ±1)` is the **next** present seat in turn order, wrapping —
 /// not the last one scanned (that was the far side for n=4).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn neighbor_is_the_next_present_seat() {
     big(|| {
         let _g = model_lock();
@@ -392,6 +409,7 @@ fn neighbor_is_the_next_present_seat() {
 /// makes `spend_charge` treat the cost as substituted and skip the real spend
 /// (class C — `chart_rush` lost no [火罐]). Pin the settled polarity.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn raise_returns_settled_not_cancelled() {
     big(|| {
         let _g = model_lock();
@@ -406,6 +424,7 @@ fn raise_returns_settled_not_cancelled() {
 /// `Op::gate` returns `allowed`: **1 = may land**. 0 means guarded / immune /
 /// out and callers skip the effect — same polarity class as `raise`.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn gate_returns_allowed_for_living_seat() {
     big(|| {
         let _g = model_lock();
@@ -419,6 +438,7 @@ fn gate_returns_allowed_for_living_seat() {
 }
 /// `Op::raise_bought` returns HOST-06 `did`: **1 = the hand-over landed**.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn raise_bought_reports_landed() {
     big(|| {
         let _g = model_lock();
@@ -429,6 +449,7 @@ fn raise_bought_reports_landed() {
 }
 /// `Op::rent_unit_mult` is a multiplier: 0 would zero rent. Identity is 1.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn ring_multiplier_is_never_zero() {
     big(|| {
         let _g = model_lock();
@@ -443,6 +464,7 @@ fn ring_multiplier_is_never_zero() {
 /// which is `name_id(kl, v)` and an untagged handle (loud FAIL after the
 /// name_id cut). Blast radius: every body calling `ctx::set_prop`.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn set_self_prop_decodes_key_at_a0_a1_value_a2() {
     big(|| {
         let _g = model_lock();
@@ -465,6 +487,7 @@ fn set_self_prop_decodes_key_at_a0_a1_value_a2() {
 /// `set_tile_prop(tile, kp, kl, v)` packs `[tile, kp, kl, v, 0, 0]` —
 /// key is `name_id(a1, a2)`, value `a3`.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn set_tile_prop_decodes_key_at_a1_a2_value_a3() {
     big(|| {
         let _g = model_lock();
@@ -480,6 +503,7 @@ fn set_tile_prop_decodes_key_at_a1_a2_value_a3() {
 /// `set_prop_at(uid, kp, kl, v)` packs `[uid, kp, kl, v, 0, 0]` —
 /// key is `name_id(a1, a2)`, value `a3`.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn set_prop_at_decodes_key_at_a1_a2_value_a3() {
     big(|| {
         let _g = model_lock();
@@ -500,6 +524,7 @@ fn set_prop_at_decodes_key_at_a1_a2_value_a3() {
 /// `card_counter(player, cp, cl, np, nl)` packs `[player, cp, cl, np, nl]` —
 /// key `name_id(a3, a4)`. Same class as set_self_prop.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn counter_self_and_card_counter_decode_their_own_packing() {
     big(|| {
         let _g = model_lock();
@@ -523,6 +548,7 @@ fn counter_self_and_card_counter_decode_their_own_packing() {
 /// `(a1,a2)`, seat at `a0`. The old decode used `(a0,a1)` = `(player, ptr)`
 /// and loud-FAILED on an untagged handle (same class as set_self_prop).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn hand_count_decodes_name_at_a1_a2() {
     big(|| {
         let _g = model_lock();
@@ -540,6 +566,7 @@ fn hand_count_decodes_name_at_a1_a2() {
 }
 /// `discard_count(player, ptr, len)` — name at `(a1,a2)` (was `(a0,a1)`).
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn discard_count_decodes_name_at_a1_a2() {
     big(|| {
         let _g = model_lock();

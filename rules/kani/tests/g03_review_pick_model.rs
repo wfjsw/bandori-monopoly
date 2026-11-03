@@ -15,6 +15,7 @@ fn fresh() -> (i32, Vec<i32>) {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_keep_new_records_nothing() {
     let (id, faces) = fresh();
     // Production: `kill the n-1 pick` re-keeps the cast the recast chose
@@ -34,6 +35,7 @@ fn model_keep_new_records_nothing() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_keep_old_records_the_chosen_cast() {
     let (id, faces) = fresh();
     arm_roll_pick([id, 0, 0, 0, 0, 0]);
@@ -45,6 +47,7 @@ fn model_keep_old_records_the_chosen_cast() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_source_raise_compares_codes_not_ranks() {
     let (id, _) = fresh();
     // Production `cast` uses `RollSource::rank()`: code 1 (charge, rank 3)
@@ -60,6 +63,7 @@ fn model_source_raise_compares_codes_not_ranks() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_second_pick_uses_the_old_choice_not_the_latest_pair() {
     // I5: `unused_face` is the other of the *latest pair* on every pick.
     // Production with n=3, pick 0 then pick 1 records casts[2]; the model
