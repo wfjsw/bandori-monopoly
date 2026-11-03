@@ -2,9 +2,9 @@
 
 Status: **draft for review, design only** (2026-11-03 revision of the
 2026-10-27 draft). No source is edited by this document.
-Worktree `/home/monopoly/web/.claude/worktrees/g07-design-review`, branch
-`worktree-g07-design-review`. Fits **on top of ABI v112** (G01, G08, G02, G04,
-G03, G05 and G06 have landed); it does not redo them.
+Worktree `/home/monopoly/web/.claude/worktrees/g07-naming`, branch
+`worktree-g07-naming`. Fits **on top of ABI v112** (G01, G08, G02, G04, G03,
+G05 and G06 have landed); it does not redo them.
 Group: **G07**. Family: the designation pipeline (player, self and tile
 targeting), the between-turns designation counter, and the 「距离最近」
 predicate with its per-pair waiver.
@@ -12,10 +12,16 @@ predicate with its per-pair waiver.
 Names are spelled out (G03 R25's rule, G06's header): a **designation** is one
 admission through the targeting pipeline; **counteraction** is the [反击]
 mechanism; a **hook** is a passive listener; the engine-side carrier of one
-raise is a **trigger**, its module-side mirror a **link**. The distance metric
-is `DistanceMetric` with the values `Forward` (clockwise steps, the book's
-「正向」) and `Absolute` (undirected ring distance, the book's 「绝对距离」);
-the waiver is `nearest_exemption`, never “exempt”.
+raise is a **trigger**, its module-side mirror a **link**.
+
+Names are also split by crate (`bandori-std/src/lib.rs:3-9`): `card-sdk`
+holds only generalized runtime machinery, and **this game's vocabulary lives
+in `bandori_std`**. The distance metric is therefore generic
+`DistanceKind { Forward, Shortest }` (the ring measures `tile_forward` and
+`dist` already in the SDK), the selection is generic `ctx::nearest` /
+`ctx::nearest_with_prop`, and the rulebook's own words — the exemption key,
+the grant, the skill's candidate union — are `bandori_std::nearest`. The
+engine reads no game key: the prop key is an argument.
 
 Ground truth is `docs/rulebook/cards.json`; every quoted fragment below was
 re-read there and is identified by its card id beside it. The **row ids are
@@ -29,10 +35,11 @@ mor.md:191-224` (C-MOR-centrifuge-01/02), `docs/rulebook/spec/cards/r.md:
 
 ## 0. Review record
 
-This revision came out of a full review of the 2026-10-27 draft. Every cited
-site was re-read against master, every claim about the engine was re-derived
-from the code, and the band arithmetic was re-run from the groups that landed
-before this one. What the draft got wrong:
+This revision came out of a full review of the 2026-10-27 draft, followed by
+a naming pass against `bandori_std`'s crate contract. Every cited site was
+re-read against master, every claim about the engine was re-derived from the
+code, and the band arithmetic was re-run from the groups that landed before
+this one. What the draft got wrong:
 
 | # | Draft defect | Correction |
 |---|---|---|
@@ -41,13 +48,13 @@ before this one. What the draft got wrong:
 | R3 | §4.3's tile row said "increment iff `owner != by`" while the invariant and the next table also demanded the between-turns window. | §7.3 is one `note_designation` helper used by both entry points; the predicate is exactly `named != by_player && named != st.turn` for players and tiles alike. |
 | R4 | §6 said `RECORD_VERSION` stays 3; G06 landed it at 4. | §9 keeps RECORD_VERSION 4. |
 | R5 | §4.6 said "G03 takes 341-410 ahead of this group", ignoring G06's 411–426 and the landed G05/G13 ops 431–440. | The ops are 441–442 (§11); the Kani `Op` enum now ends at `invoke_frame = 432`. |
-| R6 | §3.2 called the exemption `NEAREST_EXEMPT` / `nearest_exempt` / `grant_nearest_exempt` — three abbreviations of one word. | `prop::NEAREST_EXEMPTION`, `ctx::nearest_exemption`, `ctx::grant_nearest_exemption` (§5.3, §5.4). |
-| R7 | §3.2's enum was named `Nearest`, which collides with the query function `nearest` and does not say what it is. | `DistanceMetric`; the values are the book's own words `Forward` / `Absolute` (§5.2). |
+| R6 | §3.2 called the exemption `NEAREST_EXEMPT` / `nearest_exempt` / `grant_nearest_exempt` — three abbreviations of one word. | `bandori_std::nearest::{EXEMPTION, exemption, grant}` (§5.3, §5.4). |
+| R7 | §3.2's enum was named `Nearest`, which collides with the query function `nearest` and does not say what it is. | `DistanceKind`; the values follow the SDK's existing measures, `Forward` (as in `tile_forward`) and `Shortest` (as in `dist`'s shorter way around) (§5.2). |
 | R8 | §4.5's pseudo-code called `self.others_at(by)` as if it were an iterator and called a `World` measure the engine does not have (the ring length lives on `GameData`). | `nearest` is a `CardWorld` method on `Run`, which owns both the board data and the world; it iterates `self.world.others(by)` and measures with `self.dist` / `self.tile_forward` (§7.5). |
-| R9 | §4.5 ignored `nearest_exemption`'s presence read: the Kani `NameMap::get` cannot distinguish a grant by seat 0 from no grant. | The scan is `props.get(key) == Some(&by)` (engine) / `get_opt` (Kani), never `unwrap_or(0)` (§7.6, §8.4). |
+| R9 | §4.5 ignored the presence read: `prop_at` cannot distinguish a grant by seat 0 from an absent key. | The engine read is `props.get(key) == Some(&by)`, never `unwrap_or(0)` (§7.6); the one `prop_at` helper gates on the card id (§5.3, §8.4). |
 | R10 | §5.5 kept the skill's first-found loop as the expected result, so the regression test could not distinguish "all ties" from "first only". | The test compares `nearest(Forward)[0]` with the old loop and separately asserts the whole tied set (§10.1). |
 | R11 | §5.4's `uid > 0` guard is right but unexplained; `place_card_at` answers `-1` on failure and uids start at 1 (`state.rs:274`). | §8.4 states the guard and the grant order; a refused gate places nothing. |
-| R12 | §5.3 did not say that `NEAREST_EXEMPTION` needs the `game_core::state::prop` mirror, like `DESIGNATES` / `IMMUNE` (`state.rs:455-460`); without it the engine read has no constant. | §5.3 adds the mirror. |
+| R12 | §5.3 put `NEAREST_EXEMPTION` in `card_sdk::abi::prop` and added a `game_core::state::prop` mirror, although the engine no longer needs a constant once it reads a passed key. | The key is `bandori_std::nearest::EXEMPTION` only; the engine takes `prop_key` as an argument (§5.3, §5.5, §7.6). |
 | R13 | §9.1 named tests but no file; G06 established one named file per group. | One new `rules/tests/tests/g07_targeting.rs` (§10.1). |
 | R14 | §8.2 said `kani/r.md` "gains a LISA-BOND-EXEMPT row" without saying the row is protocol-level and the proof is on the pure scan. | §10.4 names the model proof; the card row stays PROTOCOL-LEVEL. |
 | R15 | The draft had no necessity section and no clause match (G06 added them after review). | §12 and §13 exist. |
@@ -56,19 +63,21 @@ before this one. What the draft got wrong:
 | R18 | §4.6's Kani note moved `Op::targeted_count` off `arm_stub_zero` but did not say the existing `arm_target` counts self and tiles unconditionally, so a conformance run would silently bless the old bug. | §7.8 rewrites both `arm_target` branches and moves `targeted_count` to a real reader (§7.8, §10.4). |
 | R19 | §10 alternative A4 said a static prop "cannot ride the grantor seat", but did not mention that `place_card_at` stamps static props at placement. | A4 keeps the reason and cites `wasm_rules.rs:1268-1285` / `ops.rs:1370-1420`. |
 | R20 | §2's "every designation enters one pipeline" omitted `target_all`'s per-seat loop; a list containing the actor would have been an unstated edge. | §7.8 states that `target_all` already loops through `sys::target`, so the actor's seat simply runs the self branch. |
+| R21 | The surface put game words into the SDK: the query was `nearest_skill_candidates`, its host form took a `skill` boolean, and the prop key sat in `abi::prop`, although `card-sdk` is contractually game-agnostic and `bandori_std` is the vocabulary crate (naming pass, `bandori-std/src/lib.rs:5-9`). | The engine and SDK carry only `nearest` / `nearest_with_prop` (no flag, no key constant); `skill_candidates`, `exemption`, `grant` and `EXEMPTION` live in `bandori_std::nearest` (§5.3, §5.4, §5.5, §7.5). |
+| R22 | The tests and proofs were written against the old `skill` flag, so a pure-`bandori_std` layer could not be covered where it now lives. | §10.1 splits the query tests (`nearest`, `nearest_with_prop`) from the layer tests (`bandori_std::nearest::*`), and §10.4's spec board gains a granted/ungranted instance pair so the card-id gate is proved, not just the engine read. |
 
 ## 1. Items
 
 | # | slug(s) | sev | rows | disposition |
 |---|---------|-----|------|-------------|
 | 1 | `target-count-pipeline` — merged `centrifugal-between-turns-counter`, `centrifugal-tile-targeting`, `welcome-self-target-pipeline` | medium | 274, 1037, 1061, 1294 | **demote to A**: one pipeline, one count predicate, doc text and one sugar wrapper; no manifest field, no import |
-| 2 | `lisa-distance-exemption` (merged `lisa-bond-exemption-gap`) | medium | 691, 1451 | B: `DistanceMetric`, `prop::NEAREST_EXEMPTION`, two imports, three wrappers |
+| 2 | `lisa-distance-exemption` (merged `lisa-bond-exemption-gap`) | medium | 691, 1451 | B: `DistanceKind`, two imports, `bandori_std::nearest` |
 
 Item 1 is **demoted to A** on the surface test, not on effort: every fix is in
 the host pipeline and its documentation, and one guest wrapper is sugar over
 the existing `target` import. Item 2 needs a durable per-pair grant (a new
-property) and a host query (two new imports) and stays B. Only item 2 carries
-the batch's wire movement.
+property) and a host selection query (two new imports) and stays B. Only
+item 2 carries the batch's wire movement.
 
 Group coverage against `BACKLOG.md` section B: `target-count-pipeline`
 (1, with its three merged sub-slugs) and `lisa-distance-exemption` (2, with
@@ -90,11 +99,11 @@ non-self player designation increments it (`wasm_rules.rs:6798-6807`). There
 is no “current turn is not the owner's” predicate, so a designation during the
 owner's own turn counts toward the window. Two honest examples on master:
 `AG:宣战布告` (`declare_war.rs:77`) answers a play by targeting its caster,
-and `R:必然的联系（莉莎）` (`lisa_bond.rs:50`) designates the placer's
+and `R:必然的联系（莉莎）` (`lisa_bond.rs:51`) designates the placer's
 same-tile pick. Play any two cards and answer both with 宣战布告 inside your
 own turn: the second counter targets you, `targeted_count` reaches 2, and
 离心力 is offered with no turn boundary in between. The in-file TODO at
-`centrifugal.rs:23-33` records it. `mor.md:202-204` reads the clause as
+`centrifugal.rs:23-33` records it. `mor.md:202-205` reads the clause as
 "since the end of the user's previous turn and before the start of their
 next".
 
@@ -129,7 +138,7 @@ Book (clause (1)):
 
 「任意一名玩家」 includes the user, and the body already offers the user first
 (`welcome_mujica.rs:41-43`). The pick then calls `ctx::target(who)`
-(`:59`) — but `target_player` answers at `p == by_player`
+(`:60`) — but `target_player` answers at `p == by_player`
 (`wasm_rules.rs:6783-6785`) immediately after `redirect` (`:6762-6781`). A
 self designation therefore skips `Untargetable`, the count (which must skip it
 anyway, §7.3), the whole `target` window [`targeted` hooks, the `effect`
@@ -154,13 +163,14 @@ Book:
 
 The placement half works: the counter designates a co-located player through
 the full gate and, on success, places a copy on the hit player's field
-(`lisa_bond.rs:50-57`). The exemption half is inert. The phrase is live in
+(`lisa_bond.rs:54-59`). The exemption half is inert. The phrase is live in
 four bodies — this card, 今井莉莎's skill 2, 濑田薰's skill 2
-(`kaoru.rs:126-140`) and 惊喜对决 (`surprise_duel.rs:70-86`) — and none can
-see the placed instance. The only 「距离最近」 **limit** (a targeting
-restricted to the nearest character) is lisa's skill 2 (「传送到距离你正向
-距离最近的角色所在的格子」, `lisa.rs:69-95`), and it picks the nearest with an
-inline first-best loop (`:71-84`); the other two re-derive a nearest on their
+(`rules/skills/skill-personas/src/kaoru.rs:128-143`) and the 惊喜对决 event
+(`rules/events/src/surprise_duel.rs:70-93`) — and none can see the placed
+instance. The only 「距离最近」 **limit** (a targeting restricted to the
+nearest character) is lisa's skill 2 (「传送到距离你正向距离最近的角色所在
+的格子」, `rules/skills/skill-personas/src/lisa.rs:69-95`), and it picks the
+nearest with an inline first-best loop (`:73-82`); the other two re-derive a nearest on their
 own (a ring direction, a tie-enumerating pick). The TODO is at
 `lisa_bond.rs:65`; BACKLOG ABI-10 (`docs/rulebook/BACKLOG.md:522-530`)
 records it.
@@ -189,8 +199,8 @@ group names the predicate rather than inventing a keyword.
    that means “this instance was placed by X for a waiver on its holder” has
    nowhere to put X.
 4. **The nearest predicate is re-derived in every card.** `my_own_problem`
-   (`:43-57`), `lisa.rs` (`:71-84`), `nfo` (`:76-98`), `kaoru.rs` (`:126-140`)
-   and `surprise_duel.rs` (`:70-86`) each hand-roll distance, tie and skip
+   (`:43-57`), `lisa.rs` (`:73-82`), `nfo` (`:76-98`), `kaoru.rs` (`:128-143`)
+   and `surprise_duel.rs` (`:70-93`) each hand-roll distance, tie and skip
    rules. None has an extension point, so no waiver can reach any of them.
 
 ## 4. Capability as an invariant
@@ -209,10 +219,11 @@ group names the predicate rather than inventing a keyword.
 > **The between-turns counter advances only while the named seat's own turn is
 > not the current turn**, and is zeroed at that seat's own turn start.
 >
-> **The nearest-by-distance predicate is a host query** returning the whole
-> tied set (never a first-found seat), with the waiver set for skill targeting
-> computed into the same query. A waiver is a durable fact on a placed
-> instance, readable by the grantor seat.
+> **The nearest-by-distance selection is a host query** returning the whole
+> tied set (never a first-found seat), with an optional union of seats holding
+> a given instance property. A waiver is a durable fact on a placed instance,
+> readable through that union; the game's skill policy is layered above in
+> `bandori_std`, not in the engine.
 
 Derived obligations:
 
@@ -227,19 +238,21 @@ Derived obligations:
   passes and before the window; a counter that negates the window leaves the
   count advanced.
 * **Nearest exactness.** The query answers exactly every present non-actor
-  seat at the minimal metric distance, in seat order, and — with the skill
-  flag — exactly the union with the exempt seats, deduplicated,
-  distance-then-seat ordered.
-* **Exemption exactness.** The scan is true iff some instance held by the
-  candidate carries `props[NEAREST_EXEMPTION] == Some(grantor)`. A grant by
-  another seat does not count; the value `0` is a valid grantor.
+  seat at the minimal metric distance, in seat order, and — with a property —
+  exactly the union with the matching seats, deduplicated, distance-then-seat
+  ordered.
+* **Property match exactness.** A seat joins the union iff some instance it
+  holds carries `props[key] == Some(by)`. A value naming another seat does
+  not match; the value `0` is a real value.
 * **Instance lifetime.** The exemption dies with the instance; a refused gate
   places no instance and grants nothing.
+* **Layer exactness.** No game word appears in `card_sdk` or in the engine's
+  new surface: the key, the union's purpose and the grant are `bandori_std`.
 
 ## 5. Surface
 
-Everything is generic mechanism: no display text, no player decision inside an
-import.
+Everything is generic mechanism in the SDK; this game's words are in
+`bandori_std`. No display text, no player decision inside an import.
 
 ### 5.1 `card_sdk::ctx` — self wrapper (item 1, no wire change)
 
@@ -260,98 +273,120 @@ signature. The caster is `call.player_id()`, already what
 ### 5.2 `card_sdk::abi` — the metric
 
 ```rust
-/// How the 「最近」 predicate measures distance. Wire `i32`; an unknown value
-/// falls back to `Forward` (the v107 unknown-value rule).
-#[repr(i32)]
+/// How the nearest selection measures the ring. Wire `i32`; an unknown value
+/// falls back to `Forward` (the v107 unknown-value rule). The values are the
+/// two measures the SDK already exposes (`tile_forward` / `dist`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum DistanceMetric {
-    /// Steps strictly ahead around the ring. Co-located (`0`) is **not**
-    /// ahead and is not a forward candidate.
+#[repr(i32)]
+pub enum DistanceKind {
+    /// Steps strictly ahead around the ring (「正向距离」). Co-located (`0`)
+    /// is **not** ahead and is not a candidate.
     #[default]
     Forward = 0,
-    /// Undirected ring distance (「绝对距离」). Co-located is distance `0`
-    /// and is the nearest.
-    Absolute = 1,
+    /// The shorter way around the ring (「绝对距离」). Co-located is distance
+    /// `0` and is the nearest.
+    Shortest = 1,
 }
 ```
 
-### 5.3 `card_sdk::abi::prop` and the engine mirror — the waiver
+No game word: the enum says what it measures, not what the book calls it.
+`ctx.rs:14` re-exports it beside `AbKind, CardPile`.
+
+### 5.3 `bandori_std::nearest` — the game layer
 
 ```rust
-pub mod prop {
-    // …existing keys…
-    /// 「你对对方使用技能将可以无视【距离最近】」: on a **placed
-    /// instance's** `props`, the value is the **grantor** seat whose skills may
-    /// ignore the nearest limit when targeting this instance's holder.
-    /// Written at runtime (like `RENT_HOUSES`), gone with the instance.
-    /// Presence is the fact, so the read is `props.get` — seat `0` is a valid
-    /// grantor.
-    pub const NEAREST_EXEMPTION: &str = "nearestExemption";
+// rules/bandori-std/src/nearest.rs
+use crate::ctx;
+
+/// 「你对对方使用技能将可以无视【距离最近】」: on a **placed instance's**
+/// props, the value is the **grantor** seat whose skills may ignore the
+/// nearest limit when targeting this instance's holder. Written at runtime
+/// and gone with the instance; presence is the fact, so the value `0`
+/// (seat 0) is a real grantor.
+pub const EXEMPTION: &str = "nearestExemption";
+
+/// Mark instance `uid` as granting `grantor` the waiver on its holder.
+pub fn grant(uid: i32, grantor: i32) -> i32 {
+    ctx::set_prop_at(uid, EXEMPTION, grantor)
+}
+
+/// Does `candidate` hold an instance granting `grantor` the waiver?
+///
+/// Per-pair form, for a skill that already has its candidate. `prop_at`
+/// answers `0` for an absent key, so the scan also gates on the card id:
+/// only a placed bond instance carries the key, and every one is granted
+/// right after its placement (§8.4). (The card "PP:[若宫伊芙]属于我的武士道！"
+/// stores `player_id + 1` for the same seat-0 reason at `eve_bushido.rs:66`;
+/// here the card-id gate makes the plain seat unambiguous.)
+pub fn exemption(grantor: i32, candidate: i32) -> bool {
+    ctx::field_instances(candidate).iter().any(|&(uid, card)| {
+        card == "R:必然的联系（莉莎）" && ctx::prop_at(uid, EXEMPTION) == grantor
+    })
+}
+
+/// The candidate list of a 「距离最近」 **skill**: the nearest set plus the
+/// exempt seats, distance-then-seat ordered, deduplicated, raw set first.
+pub fn skill_candidates(grantor: i32, kind: ctx::DistanceKind) -> Vec<i32> {
+    ctx::nearest_with_prop(grantor, kind, EXEMPTION)
 }
 ```
 
-`game_core::state::prop::NEAREST_EXEMPTION` mirrors it (`state.rs:455-466`
-style), because the engine read cannot depend on the guest crate.
+`bandori_std` has no imports of its own today; it reaches host calls through
+the `card_sdk::ctx` facade, which is what these wrappers do. Both the key and
+the word “skill” stop at this crate.
 
-### 5.4 `card_sdk::ctx` — nearest queries and the grant
+### 5.4 `card_sdk::ctx` — the generic queries
 
 ```rust
-/// The nearest other present player(s) by `metric`, seat order on ties.
-/// `Forward` excludes co-located seats; `Absolute` includes them.
-pub fn nearest(by: i32, metric: crate::abi::DistanceMetric) -> Vec<i32>;
+/// The nearest other present player(s) by `kind`, seat order on ties.
+/// `Forward` excludes co-located seats; `Shortest` includes them.
+pub fn nearest(by: i32, kind: crate::abi::DistanceKind) -> Vec<i32>;
 
-/// `nearest`, plus every present seat holding an instance whose
-/// `prop::NEAREST_EXEMPTION` is `by` (the pair's 「距离最近」 waiver), in
-/// distance-then-seat order, deduplicated. The raw nearest set stays first.
-/// This is the candidate list of a 「距离最近」 **skill**.
-pub fn nearest_skill_candidates(
+/// `nearest`, plus every present seat holding an instance whose prop `key`
+/// equals `by`, in distance-then-seat order, deduplicated. The raw nearest
+/// set stays first. Generic: the caller supplies the key.
+pub fn nearest_with_prop(
     by: i32,
-    metric: crate::abi::DistanceMetric,
+    kind: crate::abi::DistanceKind,
+    key: &str,
 ) -> Vec<i32>;
-
-/// Does `candidate` hold an instance granting `by` the waiver?
-/// (Per-pair form for a skill that already has its candidate.)
-pub fn nearest_exemption(by: i32, candidate: i32) -> bool;
-
-/// Mark the instance at `uid` as granting `by` the waiver on its holder.
-/// `ctx::set_prop_at(uid, prop::NEAREST_EXEMPTION, by)`; returns the stored
-/// seat.
-pub fn grant_nearest_exemption(uid: i32, by: i32) -> i32;
 ```
 
-All three reads are imports (`nearest` and `nearest_skill_candidates` are the
-same `ruleset_nearest` import with the skill flag `0` / `1`); the grant is
-sugar over the existing `set_prop_at` (`ctx.rs:1490-1495`) — no new write op.
+Both are reads; the grant is sugar over `set_prop_at` in `bandori_std`
+(§5.3) — no new write op.
 
 ### 5.5 Imports (`card_sdk::ctx::sys`, host `hostfns`, `CardWorld`)
 
 ```rust
-// ctx/sys.rs, beside `dist` (`:277`) and `tile_forward` (`:282`); the same
+// ctx/sys.rs, beside `dist` (`:279`) and `tile_forward` (`:284`); the same
 // `#[cfg_attr(any(not(target_arch = "wasm32"), feature = "native-rules"),
-// link_name = …)]` wrapper the neighbours use.
-pub fn nearest(by: i32, metric: i32, skill: i32, buf: i32, cap: i32) -> i32; // postcard Vec<i32>
-pub fn nearest_exemption(by: i32, candidate: i32) -> i32;
+// link_name = …)]` wrapper the neighbours use. The key is an empty
+// `(ptr, len)` on plain `nearest`.
+pub fn nearest(by: i32, kind: i32, buf: i32, cap: i32) -> i32; // postcard Vec<i32>
+pub fn nearest_with_prop(
+    by: i32, kind: i32, kp: i32, kl: i32, buf: i32, cap: i32,
+) -> i32; // postcard Vec<i32>
 
 // game-rules/src/world.rs (CardWorld trait, beside `dist` (`:674`) and
 // `tile_forward` (`:676`) -- these are world measures, not rules data)
-/// Nearest present seats for `by` under `metric`; `skill` adds the waiver set.
-fn nearest(&self, by: i32, metric: i32, skill: bool) -> Vec<i32>;
-fn nearest_exemption(&self, by: i32, candidate: i32) -> bool;
+fn nearest(&self, by: i32, kind: i32) -> Vec<i32>;
+fn nearest_with_prop(&self, by: i32, kind: i32, key: Option<&str>) -> Vec<i32>;
 ```
 
-`nearest` uses the `designations` out-buffer shape (`hostfns.rs:2333-2346`:
+The trait's `Option<&str>` is the Rust-side spelling of the empty key; the
+wire always carries the `(ptr, len)` pair and an empty one means “no union”.
+Each query uses the `designations` out-buffer shape (`hostfns.rs:2333-2346`:
 postcard, `ctx::out_buf`, cap 4096 — a body of 4–6 players can never approach
-it). `ctx.rs:14` adds `DistanceMetric` beside `AbKind, CardPile`; without the
-re-export, `ctx::DistanceMetric` does not resolve in a card body.
+it).
 
-Both new `CardWorld` methods need the non-`Run` implementors: `NullWorld`
-(`host.rs:6326`, sandbox feature), `rules/tests/tests/testworld.rs:112`,
-`crates/game-rules/tests/testworld.rs:109` and `rules/kani/tests/
-conf_model.rs:322` (§11).
+Both new `CardWorld` methods need the non-`Run` implementors, at their
+`dist` neighbours: `NullWorld` (`host.rs:6579`, sandbox feature),
+`rules/tests/tests/testworld.rs:427`, `crates/game-rules/tests/
+testworld.rs:407` and `rules/kani/tests/conf_model.rs:493` (§11).
 
 ### 5.6 Not changed
 
-`ctx::designations` / `DESIGNATES` / `designation_cancelled` keep their
+`ctx::designations` / `prop::DESIGNATES` / `designation_cancelled` keep their
 meaning: `designations` is the play's **static declared recipient set** (a
 prop-driven list `others(actor)`), not a record of pipeline admissions, and a
 per-pair `cancel_designation` is still checked at both the entry and the
@@ -365,10 +400,11 @@ post-window point. `ctx::dist` / `ctx::tile_forward` stay the raw measures;
 | item | NEW | EXTENDED | WIRE-BREAK | NO-WIRE |
 |---|---|---|---|---|
 | 1 | `ctx::target_self` (sugar) | `target_player` / `target_tile` stage order; `note_designation`; `targeted_count` doc + semantics | — | **yes** |
-| 2 | `DistanceMetric`, `prop::NEAREST_EXEMPTION` (+ engine mirror), 2 imports, 3 wrappers | `CardWorld` trait, every implementor, `World` free functions | new op ids (append-only) | — |
+| 2 | `DistanceKind`, 2 imports, `bandori_std::nearest::{EXEMPTION, grant, exemption, skill_candidates}` | `CardWorld` trait, every implementor, `World` free functions | new op ids (append-only) | — |
 
 Two new append-only op ids are the only wire change; the `ManifestOn` /
-`Trigger` / `HostRequest::Target` shapes are untouched.
+`Trigger` / `HostRequest::Target` shapes are untouched, and no game word
+enters `card_sdk`.
 
 ## 6. `targeted_count` semantics in the vocabulary
 
@@ -400,7 +436,7 @@ stage list becomes:
 | 10 | answer `p` | — | unchanged |
 
 ```rust
-// wasm_rules.rs:6781-6788, before → after
+// wasm_rules.rs:6779-6783, before → after
 -        // A self-target no redirect moved (EXIST's 「包括其他玩家指向自身的卡」
 -        // included): already named, nothing to chain.
 -        if p == by_player {
@@ -508,25 +544,29 @@ the window clause and records the `>= 2` reading with a `TODO(规则书)`
 (§8.1). No window variable is added. `designates` / `DESIGNATES` and
 `designation_cancelled` are untouched — see §5.6.
 
-### 7.5 Nearest query (`CardWorld::nearest` on `Run`)
+### 7.5 The nearest queries on `Run`
 
 `Run` owns both the board data (`self.data.tiles.len()`) and the world. Add
 next to `dist` (`wasm_rules.rs:2097-2112`):
 
 ```rust
-fn nearest(&self, by: i32, metric: i32, skill: bool) -> Vec<i32> {
-    use card_sdk::abi::DistanceMetric;
+fn nearest(&self, by: i32, kind: i32) -> Vec<i32> {
+    self.nearest_with_prop(by, kind, None)
+}
+
+fn nearest_with_prop(&self, by: i32, kind: i32, key: Option<&str>) -> Vec<i32> {
+    use card_sdk::abi::DistanceKind;
     // An unknown code falls back to `Forward` (the v107 unknown-value rule).
-    let absolute = metric == DistanceMetric::Absolute as i32;
+    let shortest = kind == DistanceKind::Shortest as i32;
     let measure = |a: i32, b: i32| {
-        if absolute {
+        if shortest {
             self.dist(a, b)
         } else {
             self.tile_forward(a, b)
         }
     };
     let at = self.world.player_pos(by);
-    if at < 0 || self.data.tiles.len() == 0 {
+    if at < 0 || self.data.tiles.is_empty() {
         return Vec::new();
     }
     let mut best = i32::MAX;
@@ -537,7 +577,7 @@ fn nearest(&self, by: i32, metric: i32, skill: bool) -> Vec<i32> {
             continue; // a seat with no board position cannot be measured
         }
         let d = measure(at, there);
-        if !absolute && d == 0 {
+        if !shortest && d == 0 {
             continue; // co-located is not ahead
         }
         if d < best {
@@ -548,10 +588,9 @@ fn nearest(&self, by: i32, metric: i32, skill: bool) -> Vec<i32> {
             raw.push(p);
         }
     }
-    if !skill {
-        return raw;
-    }
-    // The waiver set, distance-then-seat ordered, appended after the raw set.
+    let Some(key) = key else { return raw };
+    // The matching seats, distance-then-seat ordered, appended after the raw
+    // set. The match is on the *presence* of the value, so seat 0 is a value.
     let mut extra: Vec<i32> = self
         .world
         .others(by)
@@ -559,7 +598,12 @@ fn nearest(&self, by: i32, metric: i32, skill: bool) -> Vec<i32> {
         .filter(|&p| {
             self.world.player_pos(p) >= 0
                 && !raw.contains(&p)
-                && self.nearest_exemption(by, p)
+                && self
+                    .world
+                    .st
+                    .players
+                    .get(p as usize)
+                    .is_some_and(|s| s.field.iter().any(|i| i.props.get(key) == Some(&by)))
         })
         .collect();
     extra.sort_by_key(|&p| (measure(at, self.world.player_pos(p)), p));
@@ -570,26 +614,21 @@ fn nearest(&self, by: i32, metric: i32, skill: bool) -> Vec<i32> {
 
 `others` excludes only out seats (`ops.rs:411-416`), so an exiled seat is
 still a candidate (§13.8). The first raw set stays first; ties are seat order
-because `others` is seat order.
+because `others` is seat order. The property scan is in the engine but knows
+nothing of the key: `props.get(key) == Some(&by)` is `Option`, so an absent
+key and a value of `0` differ.
 
-### 7.6 Exemption scan (`CardWorld::nearest_exemption` on `Run`)
+### 7.6 Where the exemption scan used to be
 
-```rust
-fn nearest_exemption(&self, by: i32, candidate: i32) -> bool {
-    self.world
-        .player_id(candidate)
-        .is_some_and(|s| {
-            s.field.iter().any(|f| {
-                f.props.get(game_core::state::prop::NEAREST_EXEMPTION) == Some(&by)
-            })
-        })
-}
-```
+There is no engine method for the waiver. `bandori_std::nearest::exemption`
+(§5.3) reads the candidate's instances and their props directly, and
+`skill_candidates` is `nearest_with_prop` with the key bound. The engine's
+`nearest_with_prop` is the only place the key is compared, generically.
 
-`props.get` is `Option` — presence is the fact. The instance is found by its
-holder; if it later moves to another field, the waiver follows the instance
-(§13.5). No board scan and no per-play cache — the set changes only on
-placement / removal / movement.
+R9's rule still holds where it matters: the engine never falls back to `0`.
+The `bandori_std` helper's `prop_at` is the SDK's declared-default reader, so
+it gates on the card id first — only a placed bond instance carries the key,
+and every one is granted right after placement.
 
 ### 7.7 `target_all`
 
@@ -601,24 +640,26 @@ It will count every non-actor seat it names (§7.3).
 ### 7.8 Kani model
 
 * `kani_host::Op` gains two append-only ids: `nearest = 441`,
-  `nearest_exemption = 442` (after `invoke_frame = 432`).
+  `nearest_with_prop = 442` (after `invoke_frame = 432`; six slots, the key is
+  `(handle, len)` like every other name argument).
 * `sys_kani.rs` + `native_shims.rs` (`ruleset_nearest`,
-  `ruleset_nearest_exemption`) + `host.rs` registration
+  `ruleset_nearest_with_prop`) + `host.rs` registration
   (`hostfns.rs:2333-2346` pattern) mirror the two imports.
 * `rules/kani/src/host.rs`:
   * `arm_target` (`:3614-3656`) models the new stages: `actor =
-    w.trig_player`; both the player and the tile branch pass when
-    `named == actor`, and increment only when `named != actor &&
-    named != w.turn_player`. (`w.turn_player` exists at `world.rs:833`.)
+    w.trig_player` (`world.rs:833`); both the player and the tile branch pass
+    when `named == actor`, and increment only when `named != actor &&
+    named != w.turn_player` (`world.rs:828`).
   * `Op::targeted_count` moves off the `arm_stub_zero` arm (`:1155`) to a
     real reader of `w.targeted_count[p]`.
-  * `arm_nearest` computes the §7.5 set over `w.pos` / `w.n_players` /
-    `w.out`, postcard-encodes it and writes it with
-    `card_sdk::native::write` (`arm_placed_cards`, `:2815-2847`, is the
-    pattern). `arm_nearest_exemption` scans `w.field[..w.field_n]` for
-    `f.player == candidate && f.props.get_opt(key) == Some(by)`.
-  * `Known` (`:47-78`) pre-interns `nearestExemption` so the compare is
-    `u16` equality; `install_backend` asserts it is valid.
+  * `arm_nearest` computes §7.5 over `w.pos` / `w.n_players` / `w.out`,
+    postcard-encodes it and writes it with `card_sdk::native::write`
+    (`arm_placed_cards`, `:2815-2847`, is the pattern).
+    `arm_nearest_with_prop` additionally resolves the key with
+    `name_id(a2, a3)` and scans `w.field[..w.field_n]` for
+    `f.player == by && f.props.get_opt(key) == Some(by)`.
+  * No `Known` entry is needed: the key arrives with the call, unlike the
+    host's own constants.
 * `rules/kani/tests/conf_model.rs:1062` and `conf_fill_diff.rs:573` stop
   answering `targeted_count` 0 from the `ConfWorld`; the `:73` gap note drops
   `targeted_count`.
@@ -639,7 +680,7 @@ designations advance it, and a self designation neither advances it nor is
 offered against it (`by != owner`). Replace the two TODOs at
 `centrifugal.rs:23-33` and `:40` with one citation of the window clause; keep the
 `>= 2` comment and make it a `TODO(规则书)` for C-MOR-centrifuge-01's
-"second (or later)" reading (`mor.md:202-204`).
+"second (or later)" reading (`mor.md:202-205`).
 
 ### 8.2 `Mujica:欢迎来到ave mujica的世界` — comment only
 
@@ -651,17 +692,18 @@ seat is a variable here).
 
 ### 8.3 `通用:雨` / `AG:宣战布告` — no change
 
-`rain.rs:39` uses `ctx::target(player_id)`; it now runs the row's window like
-every other designation (a counter may cancel the self designation via
-`cancel_designation`, and its own `Untargetable` gate is asked with
-`by == p`, which its condition excludes). `declare_war.rs:77` targets the
+`rain.rs:39` uses `ctx::target(player_id)`; it now raises the window like
+every other designation (its own `Untargetable` gate is asked with
+`by == p`, which its condition excludes; a counter whose guard admits a self
+target can cancel the designation via `cancel_designation` — net_error's
+cannot, its guard demands `target == player_id` with `by_card != player_id`). `declare_war.rs:77` targets the
 caster of the answered card; a self-counter pipelines instead of
 short-circuiting. `declare_war`'s own condition filters `by != player_id`
 (`:47`), so it still does not answer its owner's own card.
 
 ### 8.4 `R:必然的联系（莉莎）`
 
-**Before** (`lisa_bond.rs:50-64`):
+**Before** (`lisa_bond.rs:52-64`):
 
 ```rust
     if let Some(who) = hit {
@@ -685,7 +727,7 @@ short-circuiting. `declare_war`'s own condition filters `by != player_id`
         );
         if uid > 0 {
             // 规则书: 「你对对方使用技能将可以无视【距离最近】这一限制」
-            ctx::grant_nearest_exemption(uid, player_id);
+            bandori_std::nearest::grant(uid, player_id);
         }
         ctx::log(…);
     }
@@ -694,51 +736,60 @@ short-circuiting. `declare_war`'s own condition filters `by != player_id`
 `place_card_at` answers the new instance's uid, `-1` on failure (uids start at
 1, `state.rs:274`); the guard makes a failed placement grant nothing. The grant
 rides the placed instance: leaving the field, or the instance being destroyed,
-ends it. A refused target gate places nothing and grants nothing.
+ends it. A refused target gate places nothing and grants nothing. The grant
+is written **immediately after** the placement, which is what the
+`card-id`-gated `prop_at` read in §5.3 relies on.
 
 ### 8.5 `skill:今井莉莎:慈爱女神` (2)
 
-**Before** (`lisa.rs:71-84`): the inline `tile_forward` loop, first strictly
+**Before** (`rules/skills/skill-personas/src/lisa.rs:73-82`): the inline
+`tile_forward` loop, first strictly
 smaller wins, no waiver. **After:**
 
 ```rust
     // 规则书: 「传送到距离你正向距离最近的角色所在的格子」
-    let candidates = ctx::nearest_skill_candidates(
-        player_id,
-        ctx::DistanceMetric::Forward,
-    );
+    let candidates =
+        bandori_std::nearest::skill_candidates(player_id, ctx::DistanceKind::Forward);
     let to = match candidates.len() {
         0 => return Ok(()),
         1 => ctx::player_pos(candidates[0]),
         _ => ctx::player_pos(ctx::ask_player(
             player_id,
-            &Msg::new(key!("lisa_title")),
-            &Msg::new(key!("lisa_ask")),
+            &Msg::new(key!("lisa_pick_title")),
+            &Msg::new(key!("lisa_pick_ask")),
             &candidates,
         )?),
     };
+    if to < 0 {
+        return Ok(());
+    }
 ```
 
 The ask only appears when the waiver (or a tie) makes the set non-singleton,
-so the no-waiver path is unchanged. `nearest` (raw) stays available for the
-non-skill loops.
+so the no-waiver path is unchanged; `lisa_pick_title` / `lisa_pick_ask` are the
+new locale entries beside `lisa_cancel_title` (`locales/zh-CN.json:138-139`).
+`ctx::nearest` (raw) stays available for the non-skill loops.
 
 ### 8.6 First adopters of the raw query
 
-* `CRYCHIC:是我自己的问题` (`my_own_problem.rs:43-57`) — `nearest()` becomes
-  `ctx::nearest(player_id, ctx::DistanceMetric::Absolute)`; the existing test
-  `near[0]` use is unchanged.
-* `R:与你前往遥远彼方` (`nfo.rs:76-98`) — `nearest_ahead()` becomes
-  `ctx::nearest(player_id, ctx::DistanceMetric::Forward).first().copied()`
+* `CRYCHIC:是我自己的问题`
+  (`rules/cards/card-crychic/src/my_own_problem.rs:43-57`) — `nearest()`
+  becomes `ctx::nearest(player_id, ctx::DistanceKind::Shortest)`; the existing
+  tests (`cross_move::m28a_my_own_problem`, `m28b_…_after_forced_move`) are
+  unchanged.
+* `R:与你前往遥远彼方` (`rules/cards/card-roselia/src/nfo.rs:76-98`) —
+  `nearest_ahead()` becomes
+  `ctx::nearest(player_id, ctx::DistanceKind::Forward).first().copied()`
   with `unwrap_or(-1)`; the existing `p == pos` skip matches `Forward`'s
   co-located exclusion.
-* `skill:濑田薰:梦幻的王子殿下` (2) (`kaoru.rs:126-140`) — the loop becomes
-  `let near = ctx::nearest(player_id, ctx::DistanceMetric::Absolute);`; the
+* `skill:濑田薰:梦幻的王子殿下` (2)
+  (`rules/skills/skill-personas/src/kaoru.rs:128-143`) — the loop becomes
+  `let near = ctx::nearest(player_id, ctx::DistanceKind::Shortest);`; the
   existing tie enumeration and `ask_choice` stay. Without this the card cannot
   see a waiver either.
-* `惊喜对决` (`surprise_duel.rs:70-86`) stays on the raw pair measure
-  (`ctx::tile_forward` / `ctx::dist`): it compares one known pair, it does not
-  select a seat.
+* The 惊喜对决 event (`rules/events/src/surprise_duel.rs:70-93`) stays on the
+  raw pair measure (`ctx::tile_forward` / `ctx::dist`): it compares one known
+  pair, it does not select a seat.
 
 ### 8.7 Tile-designating neighbours
 
@@ -764,7 +815,7 @@ guard still excludes its owner's own card (`:85-87`), which the card's
   and keep the old pipeline; nothing in the record needs rewriting.
 * **Replay determinism.** The pipeline gains no new host prompt and no new
   random draw; the added stages are pure reads and raises. A replay recorded
-  after the change re-runs the same raise sequence. The `nearest` read is
+  after the change re-runs the same raise sequence. The `nearest` reads are
   deterministic (seat order on ties); `ask_player` is an existing recorded
   prompt.
 * **ABI_VERSION** (§11) is the only stamp that moves; `save_version` in an
@@ -777,9 +828,10 @@ guard still excludes its owner's own card (`:85-87`), which the card's
 Fixture probes go in `rules/fixtures/test-cards/src/lib.rs`: a
 `TEST:target_self` body logging `ctx::target_self`'s answer, a
 `TEST:target_tile` body taking the tile from `ask_tile` and calling
-`ctx::target_tile`, a `TEST:nearest` body logging
-`ctx::nearest(…, Forward)` and `(…, Absolute)`, a `TEST:target_counter`
-`On::Counteract(Effect)` entry with `target == owner` that logs, and a
+`ctx::target_tile`, a `TEST:nearest` body logging `ctx::nearest(…, Forward)`
+and `(…, Shortest)`, a `TEST:target_counter` `On::Counteract(Effect)` entry with the guard
+`target >= 0` (self-inclusive) and the body
+`ctx::cancel_designation(trigger::target())` that logs, and a
 `TEST:targeted_probe` `On::Action(Action::Targeted("", …))` that logs
 `trigger::target` / `trigger::tile`. The real cards are used where the clause
 itself matters.
@@ -796,19 +848,20 @@ itself matters.
 | 1b | `g07_centrifugal_tile_targeting_offers` | the second tile hit between turns offers the card; the window carries `tile >= 0` |
 | 1b | `g07_centrifugal_own_tile_does_not_count` | targeting the owner's own tile (owner == by) counts 0 but still raises `targeted` |
 | 1b | `g07_tile_during_own_turn_does_not_count` | an own-turn tile designation of a seat's tile counts 0 |
-| 1c | `g07_welcome_self_target_runs_the_target_window` | an opponent's net_error answers a self pick (the `effect` window exists with `target == by == user`) |
+| 1c | `g07_welcome_self_target_runs_the_target_window` | the fixture's `Targeted` probe fires for a self pick with `target == by == user` and `tile < 0` |
 | 1c | `g07_welcome_self_target_skips_immunity` | under 离心力's shield the self toggle still lands (own source) |
 | 1c | `g07_welcome_self_target_can_be_cancelled` | `cancel_designation(user)` in the window cancels the self designation |
 | 1c | `g07_exist_redirects_a_self_designation` | EXIST on another seat re-names the self pick (the parenthetical, now through the running tail) |
-| 1c | `g07_rain_self_designation_uses_the_pipeline` | the 雨 self pick raises the window and is not counted until an opponent answers |
+| 1c | `g07_rain_self_designation_uses_the_pipeline` | the 雨 self pick raises the `targeted` raise (probe) and does not advance `targeted_count(user)` |
 | 1c | `g07_target_all_includes_the_actor_through_the_pipeline` | the fixture's `target_all` list containing the actor windows it and counts the others |
 | 1c | `g07_tile_self_designation_can_be_cancelled` | `cancel_designation(owner)` in an own-tile window makes `target_tile` answer false |
 | 1c | `g07_own_tile_raises_the_targeted_hook` | the fixture's `Targeted` probe fires for an own tile with `tile >= 0` |
 | 2 | `g07_nearest_forward_matches_the_legacy_loop` | a fixture board: `nearest(Forward)[0]` equals the pre-change `lisa` loop result |
-| 2 | `g07_nearest_absolute_returns_all_ties` | two seats at the same minimal distance are both returned, seat order |
-| 2 | `g07_nearest_forward_excludes_co_located` / `g07_nearest_absolute_includes_co_located` | the two metrics' boundary |
-| 2 | `g07_lisa_bond_grants_the_waiver` | place, then `nearest_skill_candidates(Forward)` of the placer contains the designated co-located seat |
-| 2 | `g07_lisa_bond_waiver_is_per_grantor` | `nearest_exemption(other, designated)` is false; `nearest_exemption(placer, designated)` is true |
+| 2 | `g07_nearest_shortest_returns_all_ties` | two seats at the same minimal distance are both returned, seat order |
+| 2 | `g07_nearest_forward_excludes_co_located` / `g07_nearest_shortest_includes_co_located` | the two metrics' boundary |
+| 2 | `g07_lisa_bond_grants_the_waiver` | place, then `skill_candidates(Forward)` of the placer contains the designated co-located seat |
+| 2 | `g07_lisa_bond_waiver_is_per_grantor` | `nearest::exemption(other, designated)` is false; `nearest::exemption(placer, designated)` is true |
+| 2 | `g07_lisa_bond_waiver_by_seat_zero` | the same with grantor seat 0 (the `prop_at` default collision) |
 | 2 | `g07_lisa_bond_waiver_dies_with_the_instance` | sweep the placed instance to the discard → no longer exempt |
 | 2 | `g07_lisa_bond_refused_gate_grants_nothing` | 夏日合宿 on the candidate, another-source refusal → no instance, no exemption |
 | 2 | `g07_lisa_goddess_offers_the_designated_seat` | with the waiver, the press prompts and can teleport to the co-located seat |
@@ -816,27 +869,33 @@ itself matters.
 
 Existing tests that must stay green: `welcome_offers_self_as_well`,
 `welcome_switches_designated_state`, `welcome_no_state2_is_noop`, `rain_*`,
-`declare_war_*`, `inter_declare_war_answers_no_road_targeting`,
+`spec_card_mor::centrifuge_offers_only_on_the_second_targeting`,
+`declaration_pays_500_and_draws`,
+`declaration_offered_against_targeting_card`, `ix_declaration_vs_budokan`,
+`inter_declare_war_answers_no_road_targeting`,
 `cross_chain::c12_exist_vs_summer_camp`, `teleport_move::*`,
 `roselia.rs:636` (lisa skill forward-nearest), `roselia.rs:671` (bond
 placement), `unintended_found::budokan_leaves_targeted_counters`,
-`engine::save_and_restore_continue_identically`, `record_codec` round-trips,
-every `*_kani` `ppcost` export.
+`crates/game-core/tests/engine.rs::save_and_restore_continue_identically`,
+`crates/game-core/tests/record_codec.rs` round-trips, every `*_kani`
+`ppcost` export.
 
 ### 10.2 Query-matrix test
 
 `g07_targeting.rs` also drives the fixture `TEST:nearest` on a fixed four-seat
-board: for each `(metric, skill)` pair it asserts the exact sequence, including
-the empty and singleton cases, the co-located boundary and a duplicate
-exemption. This is the direct unit of §4's nearest obligations.
+board: for each `(kind, with_prop)` pair it asserts the exact sequence,
+including the empty and singleton cases, the co-located boundary and a
+duplicate matching value. This is the direct unit of §4's nearest
+obligations.
 
 ### 10.3 Static sweep
 
-`g06_static_sweep.rs`-style, over `rules/cards/*/src/*.rs`: every
-`place_card_at` whose card grants a waiver asserts a `grant_nearest_exemption`
-call on its returned uid; every card body that hand-rolls a
-`min`/`filter == best` over `ctx::dist`/`ctx::tile_forward` asserts a
-`TODO(ABI)` naming `ctx::nearest` until migrated.
+`g06_static_sweep.rs`-style, over `rules/cards/*/src/*.rs` and
+`rules/skills/*/src/*.rs`: every `place_card_at` whose card grants a waiver
+asserts a `nearest::grant` call on its returned uid; every card body that
+hand-rolls a `min`/`filter == best` over `ctx::dist`/`ctx::tile_forward`
+asserts a `TODO(ABI)` naming `ctx::nearest` until migrated; no card body
+writes the key string `"nearestExemption"` by hand.
 
 ### 10.4 Kani obligations
 
@@ -856,20 +915,24 @@ call on its returned uid; every card body that hand-rolls a
 * `nearest_iff` — the returned set is exactly every present non-`by` seat at
   the minimal metric distance, seat order; mutants "first only" and "all
   candidates" fail.
-* `nearest_skill_iff` — exactly `raw ∪ exempt` in distance-then-seat order; a
-  mutant dropping exemptions fails, one admitting a non-exempt farther seat
-  fails.
-* `exemption_scan_iff` — true iff some instance of the candidate carries
-  `props[NEAREST_EXEMPTION] == by`; a mutant matching any grantor fails, one
-  using `unwrap_or(0)` fails on grantor 0 vs absent.
-* `exemption_dies_with_instance` — after the instance unit is removed the scan
-  is false.
+* `nearest_with_prop_iff` — exactly `raw ∪ matching` in distance-then-seat
+  order; a mutant dropping matches fails, one admitting a non-matching farther
+  seat fails.
+* `prop_match_iff` — true iff some instance of the seat carries
+  `props[key] == by`; a mutant matching any holder fails, one using
+  `unwrap_or(0)` fails on the value `0` versus absence.
+* `exemption_dies_with_instance` — after the instance unit is removed the
+  match is false.
+
+The last two are also the `bandori_std::nearest::exemption` card-id gate: a
+spec-level board with two field cards, one carrying the key and one not,
+pins the read.
 
 Card bodies stay PROTOCOL-LEVEL: `kani/mor.md:56` keeps the centrifuge rows
 PROTOCOL-LEVEL (the window is the protocol), the count becomes a modelled host
 query; `kani/mujica.md:44` loses the BLOCKED-HOST note on C-MUJICA-欢迎-02
 (`Op::target` admits and `arm_target` models the stages); `kani/r.md:78` keeps
-C-R-必然的联系-01..04 PROTOCOL-LEVEL but names the exemption scan as its host
+C-R-必然的联系-01..04 PROTOCOL-LEVEL but names the property match as its host
 side.
 
 ## 11. Versioning and band arithmetic
@@ -878,7 +941,7 @@ side.
 contract block (`abi.rs:840-863`):
 
 ```
-/// v113: **designation pipeline and distance queries**. `ctx::target` now
+/// v113: **designation pipeline and nearest queries**. `ctx::target` now
 ///    runs a self-designation (`p == by`) through `Untargetable`, the
 ///    between-turns count and the `target` [反击] window, and skips only the
 ///    count and `ImmuneAll` (own source); `ctx::target_tile` likewise runs the
@@ -886,19 +949,18 @@ contract block (`abi.rs:840-863`):
 ///    `targeted_count` counter advances only while the seat's own turn is not
 ///    current (「两个你的回合之间」) and is zeroed at its own turn start; a
 ///    named-but-negated designation still counts. New `ctx::target_self`
-///    sugar. New imports `ruleset_nearest` / `ruleset_nearest_exemption`
-///    (`ctx::nearest`, `ctx::nearest_skill_candidates`,
-///    `ctx::nearest_exemption`, `abi::DistanceMetric::{Forward,Absolute}`)
-///    and the runtime-written `prop::NEAREST_EXEMPTION`
-///    (`ctx::grant_nearest_exemption` sugar over `set_prop_at`).
-///    SAVE_VERSION / RECORD_VERSION unchanged.
+///    sugar. New imports `ruleset_nearest` / `ruleset_nearest_with_prop`
+///    (`ctx::nearest`, `ctx::nearest_with_prop`,
+///    `abi::DistanceKind::{Forward,Shortest}`); the prop key and the game
+///    layer stay in `bandori_std::nearest`. SAVE_VERSION / RECORD_VERSION
+///    unchanged.
 ```
 
 Band arithmetic from the README: G07 owns `ABI_VERSION` 112→113 and the Kani
 `Op` band 441–450; it takes two ops (441–442) and no engine kind (the table's
-kind column is “—”), and `SAVE_VERSION` stays 16 / `RECORD_VERSION` 4. The G06 landing consumed
-111→112 and 411–426; G05+G13's 431–440 are landed on the other side of this
-band.
+kind column is “—”), and `SAVE_VERSION` stays 16 / `RECORD_VERSION` 4. The G06
+landing consumed 111→112 and 411–426; G05+G13's 431–440 are landed on the
+other side of this band.
 
 ## 12. Alternatives
 
@@ -927,10 +989,10 @@ props from the card definition (`wasm_rules.rs:1268-1285`,
 cannot ride a static prop. Would need the `user` field instead; rejected only
 because `props` avoids changing `place_card_at`'s signature.
 
-**A5 — keep the inline nearest loops and give them a
-`ctx::nearest_exemption` check.** One new import only, but every 「最近」 card
-must re-derive ties and order, and lisa's skill would still be the only gate.
-Rejected; the host query is the invariant.
+**A5 — keep the inline nearest loops and give them a per-pair check.** One
+new import only, but every 「最近」 card must re-derive ties and order, and
+lisa's skill would still be the only gate. Rejected; the host query is the
+invariant.
 
 **A6 — a single-seat `ctx::nearest`.** Simpler signature, but loses ties
 (`my_own_problem` already enumerates them) and cannot express
@@ -942,16 +1004,27 @@ fits; but the per-pair value still has nowhere to live (a mark has no payload
 beyond kind / owner / source), and it would need a second mark filter per
 query. Rejected; `props` is already the per-instance key/value store.
 
-**A8 — make the skill take the first candidate always and prompt only on
-`Absolute`.** Preserves the old no-prompt behaviour but with a waiver the
-player can then never pick the exempt target when a nearer one exists — the
-opposite of 「无视」. Rejected.
+**A8 — make the skill take the first candidate always and prompt only when
+the metric is `Shortest`.** Preserves the old no-prompt behaviour but with a
+waiver the player can then never pick the exempt target when a nearer one
+exists — the opposite of 「无视」. Rejected.
 
 **A9 — count a self designation too, because the engine's `target` window now
 sees it.** Simpler predicate (`p != turn` only), but the book says 「其他角色
 技能或卡牌的目标」 and the owner's own card is not another character's. A
 player could then charge 离心力 by playing self-targeted cards. Rejected on the
 clause; §8.1 keeps the card's `by != owner` guard redundant-but-explicit.
+
+**A10 — keep the game words in the SDK (`nearest_exemption` in `abi::prop`
+and a `skill` flag on the host query).** Fewer files, but `card-sdk` is
+contractually generic and `bandori_std` exists for exactly this vocabulary;
+the flag also puts the book's "skills only" policy inside the engine.
+Rejected; §5.3/§5.4 keep the split.
+
+**A11 — one `nearest` import with an `Option`al key on the wire.** Would fold
+the two queries, but the host arg convention is six `i32` slots and
+`by + kind + key + buffer` needs seven; a sentinel packing or a widened `Args`
+would be the price. Rejected.
 
 ## 13. Open questions
 
@@ -960,7 +1033,7 @@ clause; §8.1 keeps the card's `by != owner` guard redundant-but-explicit.
    `st.turn` is still that seat) does not count. Is `st.turn != named` the
    right cut, or must `endTurnAfter` already count?
 2. **Second offer.** `>= 2` keeps offering on the third and later
-   between-turns designation (`mor.md:204-206` says "second (or later)"). Does
+   between-turns designation (`mor.md:202-205` says "second (or later)"). Does
    the book's 「第二次」 allow a later re-offer if the second was declined?
 3. **DESIGNATES plays.** A card that declares its recipient set via
    `prop::DESIGNATES` (「[指定]…所有玩家」) names players without a
@@ -1044,12 +1117,13 @@ tests passing on the wrong reason.
 | surface | forced by | if removed |
 |---|---|---|
 | `ctx::target_self` | 1c readability | callers use `ctx::target(player_id)`; no behaviour change |
-| `DistanceMetric` | 2 (Forward) and §8.6 (Absolute) | the query cannot say which ring measure it means |
-| `prop::NEAREST_EXEMPTION` + mirror | 2 | the instance cannot name its grantor |
-| `nearest` import | 2, §8.6 | every card re-derives ties and the waiver |
-| `nearest_exemption` import | 2 (per-pair form) | a card with a candidate cannot ask |
-| `grant_nearest_exemption` | 2 | a raw `set_prop_at` call with a string literal |
-| `nearest_skill_candidates` | 2, 8.5 | the skill must union raw and exempt itself |
+| `DistanceKind` | 2 (Forward) and §8.6 (Shortest) | the query cannot say which ring measure it means |
+| `nearest` | 2, §8.6 | every card re-derives ties |
+| `nearest_with_prop` | 2 | the union needs a second host call and card-side merge |
+| `bandori_std::nearest::EXEMPTION` | 2 | the key literal is repeated in the card and the tests |
+| `bandori_std::nearest::grant` | 2 | a raw `set_prop_at` call with a string literal |
+| `bandori_std::nearest::exemption` | 2 (per-pair form) | a card with a candidate cannot ask |
+| `bandori_std::nearest::skill_candidates` | 2, §8.5 | the skill must union raw and exempt itself |
 
 Nothing in §5 is speculative: every field is read by at least one item, and
 every item's test in §10.1 reads the field it exists for.
@@ -1062,6 +1136,8 @@ every item's test in §10.1 reads the field it exists for.
   an existing saved map.
 * **No new display text, no decision in an import.** Every decision is still
   `ask_player` / `ask_tile` in a body; `nearest` returns a list.
+* **No game word in the SDK.** The engine takes the key as an argument and
+  the union's policy is in `bandori_std`.
 * **Landing independence.** Item 1 compiles and lands alone; item 2's imports
   and card usage land as one piece. Neither needs a later group.
 
@@ -1093,7 +1169,7 @@ this pass found the design short and the fix is now in the body.
 |---|---|---|---|---|
 | 1 | 「当你在两个你的回合之间（回合1结束，回合2开始）」 | `note_designation`'s `st.turn != named` and the turn-start reset (§7.3) | `g07_centrifugal_own_turn_targeting_is_not_counted`, `g07_centrifugal_window_closes_at_own_turn_start` | matched |
 | 2 | 「第二次成为其他角色技能或卡牌的目标时」 | the count increments on a named player or tile designation, `named != by_player` (§7.1-§7.3); `>= 2` reading kept with `TODO(规则书)` | `g07_centrifugal_second_between_turns_targeting_offers`, `g07_centrifugal_tile_targeting_counts` | matched, assumption (§13.2) |
-| 3 | 「你可以打出此卡」 | existing optional `On::Counteract` entry; unchanged | existing `morfonica` suites | matched |
+| 3 | 「你可以打出此卡」 | existing optional `On::Counteract` entry; unchanged | `spec_card_mor::centrifuge_offers_only_on_the_second_targeting` | matched |
 | 4 | 「直到下个你的回合开始时」 | existing `Action::TurnStart` body; unchanged | existing | matched |
 | 5 | 「无效化你受到的所有效果」 | existing `Filter::ImmuneAll`; a self designation skips the *own* shield (§7.1) | `g07_welcome_self_target_skips_immunity` | matched, assumption (§13.4) |
 
@@ -1112,7 +1188,7 @@ this pass found the design short and the fix is now in the body.
 | 1 | 「【反击】当你使用技能进行传送后，你可以打出此卡」 | existing `MoveAfter` entry and condition; unchanged | `roselia.rs:671`, `roselia.rs:969` | matched |
 | 2 | 「并指定一个和你在同一地块的角色」 | existing ask + `ctx::target`; the full gate, unchanged | `roselia.rs:671` | matched |
 | 3 | 「将此卡放在对方的游戏区」 | `place_card_at` returning the uid (§8.4) | `g07_lisa_bond_grants_the_waiver` | matched |
-| 4 | 「你对对方使用技能将可以无视【距离最近】这一限制」 | `grant_nearest_exemption` + `nearest_skill_candidates` (§5.3-§5.4, §7.5-§7.6, §8.4-§8.5) | `g07_lisa_goddess_offers_the_designated_seat` | was gap (now granted) |
+| 4 | 「你对对方使用技能将可以无视【距离最近】这一限制」 | `nearest::grant` + `skill_candidates` (§5.3-§5.4, §7.5-§7.6, §8.4-§8.5) | `g07_lisa_goddess_offers_the_designated_seat` | was gap (now granted) |
 | 5 | 「当你发动该效果后，此卡进入弃牌堆」 | the played copy's default `Dest::Graveyard`; the placed copy is the persistent marker | `roselia.rs:671` (discard assertion) | matched |
 
 ### 15.4 `skill:今井莉莎:慈爱女神` (2) (item 2)
@@ -1120,7 +1196,7 @@ this pass found the design short and the fix is now in the body.
 | # | clause | design element | test | verdict |
 |---|---|---|---|---|
 | 1 | 「消耗一个火罐」 | existing `spend_skill`, after the candidate pick | existing `roselia.rs:636` | matched |
-| 2 | 「传送到距离你正向距离最近的角色所在的格子」 | `nearest_skill_candidates(Forward)`; the raw set is the legacy result, the waiver appends the designated seat (§8.5) | `g07_nearest_forward_matches_the_legacy_loop`, `g07_lisa_goddess_no_prompt_without_waiver` | matched |
+| 2 | 「传送到距离你正向距离最近的角色所在的格子」 | `skill_candidates(Forward)`; the raw set is the legacy result, the waiver appends the designated seat (§8.5) | `g07_nearest_forward_matches_the_legacy_loop`, `g07_lisa_goddess_no_prompt_without_waiver` | matched |
 | 3 | 「触发结算」 | existing `plan::set_settles(true)`; unchanged | existing | out of group |
 | 4 | 「本次传送触发结算前…此次传送不触发任何结算」 | existing second-fire `ask_yes`; unchanged | existing | out of group |
 
@@ -1134,7 +1210,7 @@ this pass found the design short and the fix is now in the body.
 | `通用:雨` | 「（其中必须包括[使用者]）」 | the user goes through `ctx::target` first; a cancel is a permitted refusal (§13.4) |
 | `AG:ONE OF US`, `AG:无论是何种颜色的夕阳`, `R:交换`, `MyGO:anon_tokyo`, `PP:strong_flower` | tile designations | the window now also fires for an own tile; no body change |
 | `CRYCHIC:是我自己的问题`, `R:与你前往遥远彼方`, `skill:濑田薰:梦幻的王子殿下` (2) | 「绝对距离最近」 / 「前方最近」 / 「绝对距离最近」 | migrated to the raw query with the same measure and tie rule (§8.6) |
-| `惊喜对决` | 「绝对距离最近的方向」 | stays on the raw pair measure; the direction is unchanged |
+| the 惊喜对决 event | 「绝对距离最近的方向」 | stays on the raw pair measure; the direction is unchanged |
 
 ### 15.6 Result of the match
 
