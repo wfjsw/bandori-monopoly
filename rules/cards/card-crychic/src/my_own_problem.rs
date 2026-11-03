@@ -41,19 +41,9 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 fn nearest(player_id: i32) -> Vec<i32> {
-    let pos = ctx::player_pos(player_id);
-    let others = ctx::others(player_id);
-    let Some(best) = others
-        .iter()
-        .map(|&p| ctx::dist(pos, ctx::player_pos(p)))
-        .min()
-    else {
-        return Vec::new();
-    };
-    others
-        .into_iter()
-        .filter(|&p| ctx::dist(pos, ctx::player_pos(p)) == best)
-        .collect()
+    // 「绝对距离最近的玩家」 -- the host query returns every seat at the
+    // minimal distance, in seat order.
+    ctx::nearest(player_id, ctx::DistanceKind::Shortest)
 }
 
 /// A derived seat scan outside the CEL schema (docs/GUARDS.md §4.2c). The `actor

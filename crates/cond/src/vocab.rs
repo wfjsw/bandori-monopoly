@@ -1223,7 +1223,7 @@ pub const VOCAB: &[Name] = &[
             field: |v, s| v.targeted_count(s),
         },
         lower_as: crate::ext::LowerAs::Direct,
-        doc: "targeted_count(p) -> hostile targetings of p this turn",
+        doc: "targeted_count(p) -> other players' player/tile targetings of p since p's own turn start (between p's turns)",
     },
     // -- player-state lookup -------------------------------------------------
     Name {

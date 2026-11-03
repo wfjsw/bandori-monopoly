@@ -94,7 +94,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
         panic!("expected a prompt")
     };
-    assert_eq!(p.kind, PromptKind::Choice);
+    assert_eq!(p.kind, PromptKind::Tile);
     assert_eq!(p.player_id, 1);
     // The fire and two roll answers are already on the log; the pick is the
     // fourth slot.
@@ -111,13 +111,11 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     // Pass 2: answer with the last option -> commits a mark on that roll's tile.
     let pick: i32 = 1;
     // Every option is a labelled roll (`hagumi_marks_opt`), carrying its tile.
-    let PromptOption::Str(opt) = &p.options[pick as usize] else {
+    let PromptOption::Tile { tile, label } = &p.options[pick as usize] else {
         panic!("roll options are labelled")
     };
-    let Some(game_core::msg::Arg::Tile(expected_tile)) = opt.args.get("tile") else {
-        panic!("the option carries its tile: {opt:?}")
-    };
-    let expected_tile = *expected_tile;
+    assert_eq!(label.key(), "cards:card-hhw.hagumi_marks_opt");
+    let expected_tile = *tile;
     assert_eq!(expected_tile, 47, "the 48 roll maps to tile 47");
     let answers = [FIRE, rolls[0], rolls[1], pick];
     let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
@@ -262,7 +260,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     };
     assert_eq!(
         (p.kind, p.player_id, p.answer_slot),
-        (PromptKind::Choice, 2, 4)
+        (PromptKind::Tile, 2, 4)
     );
 
     // Replay with the answer: outer and inner effects both complete, in order.
@@ -284,10 +282,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
             && after.events[1].ends_with("cards:card-hhw.hagumi_marks_placed{tile=tile:14}")
             && after.events[2].ends_with("cards:fixture-test-cards.relay_end")
     );
-    let PromptOption::Str(opt) = &p.options[0] else {
-        panic!()
-    };
-    let Some(game_core::msg::Arg::Tile(t)) = opt.args.get("tile") else {
+    let PromptOption::Tile { tile: t, .. } = &p.options[0] else {
         panic!()
     };
     assert_eq!(after.marks[0].0, *t);

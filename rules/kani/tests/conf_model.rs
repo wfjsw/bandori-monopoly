@@ -115,6 +115,7 @@ pub struct ConfWorld {
     pub charge: [i32; 4],
     pub charge_max: [i32; 4],
     pub stay: [i32; 4],
+    pub targeted: [i32; 4],
     pub tiles_owner: [i32; 60],
     pub tiles_houses: [i32; 60],
     pub tiles_mortgaged: [bool; 60],
@@ -196,6 +197,7 @@ impl ConfWorld {
             charge: [0; 4],
             charge_max: [3; 4],
             stay: [0; 4],
+            targeted: [0; 4],
             tiles_owner: [-1; 60],
             tiles_houses: [0; 60],
             tiles_mortgaged: [false; 60],
@@ -495,6 +497,37 @@ impl CardWorld for ConfWorld {
     }
     fn tile_forward(&self, a: i32, b: i32) -> i32 {
         self.dist(a, b)
+    }
+    fn nearest(&self, by: i32, kind: i32) -> Vec<i32> {
+        self.nearest_with_prop(by, kind, None)
+    }
+    fn nearest_with_prop(&self, by: i32, kind: i32, _key: Option<&str>) -> Vec<i32> {
+        // The model holds no field instances, so the property union is empty.
+        let shortest = kind == card_sdk::abi::DistanceKind::Shortest as i32;
+        let at = if by >= 0 && by < self.n_players {
+            self.pos[by as usize]
+        } else {
+            return Vec::new();
+        };
+        let mut best = i32::MAX;
+        let mut out: Vec<i32> = Vec::new();
+        for p in 0..self.n_players {
+            if p == by || self.out[p as usize] {
+                continue;
+            }
+            let d = self.dist(at, self.pos[p as usize]);
+            if !shortest && d == 0 {
+                continue;
+            }
+            if d < best {
+                best = d;
+                out.clear();
+                out.push(p);
+            } else if d == best {
+                out.push(p);
+            }
+        }
+        out
     }
     fn neighbor(&self, player_id: i32, dir: i32) -> i32 {
         let d = if dir == 0 { 1 } else { -1 };
@@ -1059,8 +1092,12 @@ impl CardWorld for ConfWorld {
     fn gains_this_turn(&self, _player: i32) -> i32 {
         0
     }
-    fn targeted_count(&self, _player_id: i32) -> i32 {
-        0
+    fn targeted_count(&self, player_id: i32) -> i32 {
+        if player_id >= 0 && (player_id as usize) < self.targeted.len() {
+            self.targeted[player_id as usize]
+        } else {
+            0
+        }
     }
     fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
         Vec::new()

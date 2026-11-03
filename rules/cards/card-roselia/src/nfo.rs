@@ -74,27 +74,12 @@ fn character_crystals(player_id: i32) -> i32 {
 }
 
 fn nearest_ahead(player_id: i32) -> i32 {
-    let n = ctx::tile_count();
-    let pos = ctx::player_pos(player_id);
-    if n <= 0 || pos < 0 {
-        return -1;
-    }
-    let mut best = -1;
-    let mut best_d = i32::MAX;
-    // By reference: consuming the `Vec` into `IntoIter` trips the Kani 0.68
-    // `__rust_dealloc` layout check (see `replay_from_discard`).
-    for &o in &ctx::others(player_id) {
-        let p = ctx::player_pos(o);
-        if p < 0 || p == pos {
-            continue;
-        }
-        let d = (p - pos).rem_euclid(n);
-        if d > 0 && d < best_d {
-            best_d = d;
-            best = o;
-        }
-    }
-    best
+    // 「前方最近」 -- forward distance skips a co-located seat and the host
+    // returns the tied set in seat order; the first is the legacy pick.
+    ctx::nearest(player_id, ctx::DistanceKind::Forward)
+        .first()
+        .copied()
+        .unwrap_or(-1)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {

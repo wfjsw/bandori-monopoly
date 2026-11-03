@@ -271,7 +271,7 @@ fn stay_decay_is_noop_off_its_tick() {
     let post = condition.clone();
     // Quiet window with no turn-end mark: unchanged is accepted.
     let events: [MatchEvent; 0] = [];
-    verify_stay_turn_end(&condition, &post, &events, 0).expect("no-op when condition false");
+    verify_stay_turn_end(&condition, &post, &events, 0, false).expect("no-op when condition false");
     assert_eq!(
         post.st.players[0].state_get("stay"),
         3,
@@ -281,7 +281,7 @@ fn stay_decay_is_noop_off_its_tick() {
     let mut shrank = post.clone();
     set_layer(&mut shrank, 0, "stay", 0);
     assert!(
-        verify_stay_turn_end(&condition, &shrank, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &shrank, &events, 0, false).is_err(),
         "G-STATUS-03: reject a decay that fires off its tick"
     );
 }
@@ -296,12 +296,12 @@ fn stay_decay_verifier_rejects_mutants() {
     let events = vec![end_turn_event(0)];
 
     // Genuine (hand-built compliant post) is accepted.
-    verify_stay_turn_end(&condition, &post, &events, 0).expect("compliant decay");
+    verify_stay_turn_end(&condition, &post, &events, 0, false).expect("compliant decay");
 
     // LESS: no decay.
     let less = condition.clone();
     assert!(
-        verify_stay_turn_end(&condition, &less, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &less, &events, 0, false).is_err(),
         "G-STATUS-03: reject missing decay"
     );
 
@@ -309,7 +309,7 @@ fn stay_decay_verifier_rejects_mutants() {
     let mut wrong = post.clone();
     set_layer(&mut wrong, 0, "stay", 0);
     assert!(
-        verify_stay_turn_end(&condition, &wrong, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &wrong, &events, 0, false).is_err(),
         "G-STATUS-03: reject double decay"
     );
 
@@ -317,7 +317,7 @@ fn stay_decay_verifier_rejects_mutants() {
     let mut up = post.clone();
     set_layer(&mut up, 0, "stay", 3);
     assert!(
-        verify_stay_turn_end(&condition, &up, &events, 0).is_err(),
+        verify_stay_turn_end(&condition, &up, &events, 0, false).is_err(),
         "G-STATUS-03: reject a gain at turn end"
     );
 
@@ -338,8 +338,25 @@ fn stay_decay_verifier_rejects_mutants() {
     ev2.push(grant_event("stay", 0));
     let mut with_grant = post.clone();
     set_layer(&mut with_grant, 0, "stay", 3);
-    verify_stay_turn_end(&condition, &with_grant, &ev2, 0)
+    verify_stay_turn_end(&condition, &with_grant, &ev2, 0, false)
         .expect("grant window is not an exact-decay window");
+}
+
+/// A step that stopped mid-decision (`turnEndBefore` opened a counteraction
+/// prompt) has not reached the tick yet: no decay is not a violation. The
+/// answering step, which carries the wear-off, is judged instead.
+#[test]
+fn stay_decay_waits_for_a_mid_turn_end_prompt() {
+    let mut condition = empty_worlds(2).0;
+    set_layer(&mut condition, 0, "stay", 2);
+    let post = condition.clone();
+    let events = vec![end_turn_event(0)];
+    assert!(
+        verify_stay_turn_end(&condition, &post, &events, 0, false).is_err(),
+        "at rest, the missing decay is a violation"
+    );
+    verify_stay_turn_end(&condition, &post, &events, 0, true)
+        .expect("mid-decision: the decay is still to come");
 }
 
 // ---------------------------------------------------------------------------
@@ -386,11 +403,11 @@ fn stun_decay_verifier_rejects_mutants() {
     set_layer(&mut post, 1, "stun", 1);
     let events = vec![end_turn_event(1)];
 
-    verify_stun_turn_end(&condition, &post, &events, 1).expect("compliant decay");
+    verify_stun_turn_end(&condition, &post, &events, 1, false).expect("compliant decay");
 
     // LESS: no decay.
     assert!(
-        verify_stun_turn_end(&condition, &condition.clone(), &events, 1).is_err(),
+        verify_stun_turn_end(&condition, &condition.clone(), &events, 1, false).is_err(),
         "G-STATUS-05: reject missing [晕眩] decay"
     );
 
@@ -398,7 +415,7 @@ fn stun_decay_verifier_rejects_mutants() {
     let mut wrong = post.clone();
     set_layer(&mut wrong, 1, "stun", 0);
     assert!(
-        verify_stun_turn_end(&condition, &wrong, &events, 1).is_err(),
+        verify_stun_turn_end(&condition, &wrong, &events, 1, false).is_err(),
         "G-STATUS-05: reject double [晕眩] decay"
     );
 
@@ -409,7 +426,7 @@ fn stun_decay_verifier_rejects_mutants() {
     let mut post2 = pre2.clone();
     set_layer(&mut post2, 1, "stun", 1);
     let ev_skip = vec![turn_start_event(1), stunned_skip_event(1)];
-    verify_stun_turn_end(&pre2, &post2, &ev_skip, 1).expect("skip present");
+    verify_stun_turn_end(&pre2, &post2, &ev_skip, 1, false).expect("skip present");
     // No skip line, but still stunned after the start: row 4 broken. Use a
     // window that only marks turn start (no end), so no decay is required.
     let mut pre3 = empty_worlds(2).0;
@@ -417,7 +434,7 @@ fn stun_decay_verifier_rejects_mutants() {
     let post3 = pre3.clone();
     let ev_noskip = vec![turn_start_event(1)];
     assert!(
-        verify_stun_turn_end(&pre3, &post3, &ev_noskip, 1).is_err(),
+        verify_stun_turn_end(&pre3, &post3, &ev_noskip, 1, false).is_err(),
         "G-STATUS-05: reject a stunned turn that did not skip (row 4)"
     );
 }
@@ -576,7 +593,7 @@ fn exile_held_grant_does_not_peel_at_turn_start() {
         1,
         "G-STATUS-07: hold marker stays until the until-clause clears it"
     );
-    verify_exile_turn_start(&condition, &post, &[], 1).expect("held grant: no peel");
+    verify_exile_turn_start(&condition, &post, &[], 1, false).expect("held grant: no peel");
     // The turn still auto-skips (duration grant skips the turn, no countdown).
     assert!(
         t.state(1, "exile") > 0 && t.turn() != 1 || t.state(1, "exile") == 1,
@@ -612,13 +629,13 @@ fn exile_held_grant_verifier_rejects_peel() {
     set_layer(&mut post, 1, "exileHold", 1);
     let events = vec![turn_start_event(1)];
     assert!(
-        verify_exile_turn_start(&condition, &post, &events, 1).is_err(),
+        verify_exile_turn_start(&condition, &post, &events, 1, false).is_err(),
         "G-STATUS-07: reject a peel of a held grant"
     );
     // Compliant: hold keeps the layer.
     let mut keep = condition.clone();
     set_layer(&mut keep, 1, "exile", 1);
-    verify_exile_turn_start(&condition, &keep, &events, 1).expect("held grant keeps its layer");
+    verify_exile_turn_start(&condition, &keep, &events, 1, false).expect("held grant keeps its layer");
 }
 
 /// Mutants on [除外] turn-start decay + no re-acquire.
@@ -630,11 +647,11 @@ fn exile_decay_verifier_rejects_mutants() {
     set_layer(&mut post, 1, "exile", 1);
     let events = vec![turn_start_event(1)];
 
-    verify_exile_turn_start(&condition, &post, &events, 1).expect("compliant decay");
+    verify_exile_turn_start(&condition, &post, &events, 1, false).expect("compliant decay");
 
     // LESS: no decay.
     assert!(
-        verify_exile_turn_start(&condition, &condition.clone(), &events, 1).is_err(),
+        verify_exile_turn_start(&condition, &condition.clone(), &events, 1, false).is_err(),
         "G-STATUS-07: reject missing [除外] decay"
     );
 
@@ -642,7 +659,7 @@ fn exile_decay_verifier_rejects_mutants() {
     let mut wrong = post.clone();
     set_layer(&mut wrong, 1, "exile", 0);
     assert!(
-        verify_exile_turn_start(&condition, &wrong, &events, 1).is_err(),
+        verify_exile_turn_start(&condition, &wrong, &events, 1, false).is_err(),
         "G-STATUS-07: reject double [除外] decay"
     );
 
@@ -652,7 +669,7 @@ fn exile_decay_verifier_rejects_mutants() {
     let mut reacq = condition.clone();
     set_layer(&mut reacq, 1, "exile", 2); // 2 -1 decay +1 grant = 2, or net 2
     assert!(
-        verify_exile_turn_start(&condition, &reacq, &ev, 1).is_err(),
+        verify_exile_turn_start(&condition, &reacq, &ev, 1, false).is_err(),
         "G-STATUS-07: reject re-acquiring [除外] while active"
     );
 }
@@ -953,4 +970,13 @@ fn exile_money_verifier_rejects_mutants() {
     let quiet: [MatchEvent; 0] = [];
     verify_no_money_status(&condition, &condition.clone(), &quiet, 1, MoneyGate::Exile)
         .expect("quiet ok");
+}
+
+/// Soak case 205 (seed `0x47dd798aeea55cd1`): a stunned seat's turn was
+/// skipped by the [除外] host's line -- one act gate, one line -- and the
+/// stun skip arm must accept it instead of demanding its own message.
+#[test]
+fn stunned_skip_is_answered_by_an_exile_skip_line() {
+    let seed = 0x47dd798aeea55cd1u64;
+    rules_spec::fuzz::soak_one(seed, rules_spec::global::area("status")).unwrap();
 }

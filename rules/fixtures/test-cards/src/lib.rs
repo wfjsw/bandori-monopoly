@@ -2,6 +2,10 @@
 
 //! Test-only cards for the host's cross-module tests.
 
+extern crate alloc;
+
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{
     prop, roll_source, ActionKind, ChainKind, FilterKind, RollPurpose, TriggerKind,
@@ -55,6 +59,36 @@ const AIMER: CardDef = CardDef::new("TEST:aimer", &[On::Play("", None, aimer)])
     // A [指定] play: the join tests read `designations` and net_error's
     // clause 1 needs a designation to cancel (G06 §2.12, §6.4).
     .props(&[(prop::DESIGNATES, 1)]);
+/// Targets its own seat through the full pipeline and logs the answer.
+const TARGET_SELF: CardDef = CardDef::new("TEST:target_self", &[On::Play("", None, target_self)]);
+/// Targets a tile the player picks (through `ctx::target_tile`) and logs it.
+const TARGET_TILE: CardDef = CardDef::new("TEST:target_tile", &[On::Play("", None, target_tile)]);
+/// Targets the actor and every other seat through `ctx::target_all` and logs
+/// the seats that landed.
+const TARGET_ALL: CardDef = CardDef::new("TEST:target_all", &[On::Play("", None, target_all)]);
+/// Logs both nearest queries on a fixed board, for the query-matrix test.
+const NEAREST: CardDef = CardDef::new("TEST:nearest", &[On::Play("", None, nearest)]);
+/// Reads the bond waiver from inside a card run (the host-backed helpers cannot
+/// run hostless in the test process): logs the exempt mask for grantor seats
+/// 0..3 and the user's forward candidate mask.
+const EXEMPTION_PROBE: CardDef =
+    CardDef::new("TEST:exemption_probe", &[On::Play("", None, exemption_probe)]);
+/// An effect-window counter that admits a self-designation and cancels it.
+const TARGET_COUNTER: CardDef = CardDef::new(
+    "TEST:target_counter",
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        "",
+        Some(target_counter_yes),
+        target_counter,
+    )],
+)
+.props(&[(prop::DESIGNATES, 1)]);
+/// A `targeted` hook that logs the raise (`target` / `tile` / `by`).
+const TARGETED_PROBE: CardDef = CardDef::new(
+    "TEST:targeted_probe",
+    &[On::Action(Action::Targeted("", None, targeted_probe))],
+);
 /// A **resolution** gate: the effect names the player and the chain forms, and
 /// only what lands is voided.
 const SHIELD: CardDef = CardDef::new(
@@ -312,6 +346,120 @@ fn aimer(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("aimer_done"))
             .i("got", got as i64)
             .i("count", ctx::targeted_count(target) as i64),
+    );
+    Ok(())
+}
+
+fn target_self(player_id: i32) -> card_sdk::Asked {
+    let got = ctx::target_self(player_id).unwrap_or(-1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("target_self_done")).i("got", got as i64),
+    );
+    Ok(())
+}
+
+fn target_tile(player_id: i32) -> card_sdk::Asked {
+    let tiles: Vec<i32> = (0..ctx::tile_count()).collect();
+    let t = ctx::ask_tile(
+        player_id,
+        &Msg::new(key!("target_tile_title")),
+        &Msg::new(key!("target_tile_ask")),
+        &tiles,
+    )?;
+    let got = ctx::target_tile(t);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("target_tile_done"))
+            .tile("tile", t)
+            .i("got", got as i64),
+    );
+    Ok(())
+}
+
+/// A seat list as a bit mask (seat `s` = bit `s`), for a compact exact log.
+fn seat_mask(seats: &[i32]) -> i64 {
+    seats.iter().fold(0i64, |m, &p| m | (1i64 << p))
+}
+
+fn target_all(player_id: i32) -> card_sdk::Asked {
+    let mut list = Vec::new();
+    list.push(player_id);
+    list.extend(ctx::others(player_id));
+    let got = ctx::target_all(&list);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("target_all_done")).i("got", seat_mask(&got)),
+    );
+    Ok(())
+}
+
+fn nearest(player_id: i32) -> card_sdk::Asked {
+    let fwd = ctx::nearest(player_id, ctx::DistanceKind::Forward);
+    let short = ctx::nearest(player_id, ctx::DistanceKind::Shortest);
+    let exempt = ctx::nearest_with_prop(
+        player_id,
+        ctx::DistanceKind::Forward,
+        bandori_std::nearest::EXEMPTION,
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nearest_done"))
+            .i("fwd", seat_mask(&fwd))
+            .i("short", seat_mask(&short))
+            .i("exempt", seat_mask(&exempt)),
+    );
+    Ok(())
+}
+
+fn exemption_probe(player_id: i32) -> card_sdk::Asked {
+    let n = ctx::player_count().min(4);
+    let mut g = [0i64; 4];
+    for grantor in 0..n {
+        for p in 0..n {
+            if bandori_std::nearest::exemption(grantor, p) {
+                g[grantor as usize] |= 1i64 << p;
+            }
+        }
+    }
+    let cand = ctx::nearest_with_prop(
+        player_id,
+        ctx::DistanceKind::Forward,
+        bandori_std::nearest::EXEMPTION,
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("exemption_probe_done"))
+            .i("g0", g[0])
+            .i("g1", g[1])
+            .i("g2", g[2])
+            .i("g3", g[3])
+            .i("candidates", seat_mask(&cand)),
+    );
+    Ok(())
+}
+
+fn target_counter_yes(_player_id: i32) -> bool {
+    trigger::target() >= 0
+}
+
+fn target_counter(player_id: i32) -> card_sdk::Asked {
+    let who = trigger::target();
+    ctx::cancel_designation(who);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("target_counter_done")).player_id("who", who),
+    );
+    Ok(())
+}
+
+fn targeted_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("targeted_probe_done"))
+            .player_id("who", trigger::target())
+            .tile("tile", trigger::tile())
+            .i("by", trigger::by_card().unwrap_or(-1) as i64),
     );
     Ok(())
 }
@@ -2845,6 +2993,13 @@ card_sdk::ruleset!(&[
     STUN_SELF_MOVER,
     GUARD,
     AIMER,
+    TARGET_SELF,
+    TARGET_TILE,
+    TARGET_ALL,
+    NEAREST,
+    EXEMPTION_PROBE,
+    TARGET_COUNTER,
+    TARGETED_PROBE,
     SHIELD,
     MOVER,
     DICE_MOVER,

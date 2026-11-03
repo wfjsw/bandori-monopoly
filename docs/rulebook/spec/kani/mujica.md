@@ -41,7 +41,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-视线-02 | 「视为其主要移动」 | PROTOCOL-LEVEL | — | — | `main_moved` scheduling | — |
 | C-MUJICA-视线-03 | 「（此卡可作为[反击]…）」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-欢迎-01 | 「选择以下效果其一发动」 | PROTOCOL-LEVEL | — | — | (2) is a [反击] branch | — |
-| C-MUJICA-欢迎-02 | 「转换任意一名玩家的状态（…无效果）」 | BLOCKED-HOST + FAILS | `welcome_toggle_arithmetic_iff`, `welcome_no_state2_mutant_is_detected` | see run table | **BLOCKED-HOST** `Op::target` returns 0 always (cannot designate). **WRONG** (engine): prompt omits the user (「任意一名」 includes self); toggles a non-状态2 seat (required no-op). | — |
+| C-MUJICA-欢迎-02 | 「转换任意一名玩家的状态（…无效果）」 | PROTOCOL-LEVEL | `welcome_toggle_arithmetic_iff`, `welcome_no_state2_mutant_is_detected` | see run table | The prompt offers the user (「任意一名」 includes self, fixed with the pipeline) and `arm_target` now models the full designation stage set; the toggle no-op is the card gate. | — |
 | C-MUJICA-欢迎-03 | 「[反击] 当有其他玩家切换状态时…」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-花火-01 | 「放置于场上并放置2个奇迹水晶」 | PROVEN | `sparkler_places_two_crystals_iff`, `sparkler_crystal_count_mutant_is_detected` | see run table | — | — |
 | C-MUJICA-花火-02 | 「回合结束后自动移除一个…并…额外回合」 | BLOCKED-HOST / OPEN | `sparkler_burn` (partial) | — | `give_extra_turn` is a silent stub (no Effect); crystal removal is recordable | OPEN-花火额外回合 |

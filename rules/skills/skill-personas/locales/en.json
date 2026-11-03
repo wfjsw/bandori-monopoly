@@ -140,6 +140,8 @@
   "lisa_gain": "Loving Goddess: +1 fire pot",
   "lisa_moved": "Teleported to {{tile}}",
   "lisa_no_fire": "You need a fire pot.",
+  "lisa_pick_ask": "Teleport to which character's tile?",
+  "lisa_pick_title": "Loving Goddess",
   "lisa_spend": "Loving Goddess",
   "lisa_temp": "Gave {{who}} an over-cap temporary fire pot",
   "lisa_temp_none": "The temporary fire pot for {{who}} did not land (at their cap)",

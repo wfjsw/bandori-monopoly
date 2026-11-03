@@ -620,7 +620,9 @@ pub fn g_flow_07(step: &Step<'_>) -> Result<(), String> {
 /// * **Frame:** n/a.
 /// * **Rulings & OPEN:** The tick is 「每回合结束时」 -- 行动阶段 row 18,
 ///   before row 19 (结束阶段后). `stunStart` (「本回合获得的晕眩」) ticks at
-///   the *next* turn's start and is G-STATUS's business, not this row.
+///   the *next* turn's start and is G-STATUS's business, not this row. A
+///   window stopped mid-decision (`post_prompt_open`) has not reached the tick
+///   yet; the answering window carries it.
 /// * **Executable:** [`g_flow_08`].
 const G_FLOW_08: Clause = Clause::new(
     "G-FLOW-08",
@@ -632,6 +634,12 @@ const G_FLOW_08: Clause = Clause::new(
 /// Executable form of [`G-FLOW-08`].
 pub fn g_flow_08(step: &Step<'_>) -> Result<(), String> {
     if !turn_ended(step) || has_card_events(step) {
+        return Ok(());
+    }
+    // The window stopped mid-decision before the tick (`turnEndBefore` opened
+    // a counteraction prompt): the wear-off has not run yet, and the answering
+    // window carries it. Judging here would fail every prompt-bearing end.
+    if step.post_prompt_open {
         return Ok(());
     }
     // Whose turn ended? The pre-turn owner (`end` of that seat), plus every

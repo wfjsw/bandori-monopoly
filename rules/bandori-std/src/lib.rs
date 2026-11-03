@@ -61,6 +61,10 @@ pub mod fire;
 pub mod guards;
 /// Ruleset-declared raise-point kind ids and tile kind/class strings.
 pub mod kind;
+/// 「无视【距离最近】」 -- the exemption instance prop, its grant, and the
+/// candidate list of a 「距离最近」 skill over the generic `ctx::nearest`
+/// queries.
+pub mod nearest;
 /// Roster metadata types (`PersonaDef` / `GroupDef`, `meta_key`) and the
 /// canonical data-file order tables (ABI v63, `docs/CARDS.md`).
 pub mod roster;

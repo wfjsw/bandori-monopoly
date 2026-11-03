@@ -168,6 +168,15 @@ fn declaration_offered_against_targeting_card() {
         t.dice(&[1, 1]);
         t.play(0, "通用:雨啊，快点来吧")
             .map_err(|e| format!("play rejected: {e}"))?;
+        // The play's own window runs before the body picks its target: pass it
+        // so the card is offered on the targeting link, which is this test's
+        // subject.
+        while t
+            .prompt()
+            .is_some_and(|p| p.title.key() == "ask.counteract.title")
+        {
+            t.decline();
+        }
         // The targeting prompt is for P0; answer "target P1".
         if t.prompt().is_some() {
             t.answer(0, 0)

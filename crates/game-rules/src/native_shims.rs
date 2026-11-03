@@ -94,6 +94,10 @@ pub trait HostOps {
     fn op_dist(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_tile_forward`
     fn op_tile_forward(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_nearest`
+    fn op_nearest(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_nearest_with_prop`
+    fn op_nearest_with_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_neighbor`
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_players_on_count`
@@ -998,6 +1002,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_tile_forward(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::tile_forward(self, a[0], a[1])? as i64)
+    }
+    fn op_nearest(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::nearest(self, a[0], a[1], a[2], a[3])? as i64)
+    }
+    fn op_nearest_with_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::nearest_with_prop(
+            self, a[0], a[1], a[2], a[3], a[4], a[5],
+        )? as i64)
     }
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::neighbor(self, a[0], a[1])? as i64)
@@ -2534,6 +2546,31 @@ pub unsafe extern "C-unwind" fn ruleset_set_owner(tile: i32, player_id: i32) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_nearest(by: i32, kind: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_nearest([by, kind, buf, cap, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_nearest_with_prop(
+    by: i32,
+    kind: i32,
+    kp: i32,
+    kl: i32,
+    buf: i32,
+    cap: i32,
+) -> i32 {
+    with_host(
+        |h| match h.op_nearest_with_prop([by, kind, kp, kl, buf, cap]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]

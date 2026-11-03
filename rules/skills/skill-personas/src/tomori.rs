@@ -141,6 +141,8 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         let landing = ctx::trigger::tile();
         // 「那名玩家所在的格子」 -- the other party within five tiles. Nearest
         // wins when several qualify (「前后五格内」 names one window).
+        // TODO(ABI): nearest-within-5 over `ctx::dist`; `ctx::nearest(Shortest)`
+        // answers the half, the range stays local.
         let mut best = -1;
         let mut best_d = i32::MAX;
         for p in 0..ctx::player_count() {

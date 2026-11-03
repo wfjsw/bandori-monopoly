@@ -53,7 +53,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-courage-03 | unowned tile ⇒ nobody pays | PROVEN | `courage_03_unowned_iff`, `courage_03_empty_when_no_agent_misfire` | (pending) | empty-effect limb + money frame | — |
 | C-MOR-summer-01 | 「直到下个自己的回合开始前，你只会被自己发动的效果指定」 | PROTOCOL-LEVEL | — | — | multi-turn designation window | OPEN-指定 |
 | C-MOR-summer-02 | 「当此卡效果结束…则抽一张牌」 | PROTOCOL-LEVEL | — | — | window end + negation counter | — |
-| C-MOR-centrifuge-01 | 「[反击]…第二次成为…目标时」 | PROTOCOL-LEVEL | — | — | [反击] + targeting count | OPEN-目标计数 |
+| C-MOR-centrifuge-01 | 「[反击]…第二次成为…目标时」 | PROTOCOL-LEVEL | — | — | [反击] window; the count is a modelled host reader (`targeted_count`, between-turns predicate in `arm_target`), the second-or-later reading OPEN | OPEN-目标计数 |
 | C-MOR-centrifuge-02 | 「直到下个你的回合开始时，无效化你受到的所有效果」 | PROTOCOL-LEVEL | — | — | multi-turn negate shield | OPEN-无效化 |
 | C-MOR-rainbow-01 | 「当你向学妹或同级生支付时…此次支付金额减半」 | **FAILS (D GENUINE)** | `rainbow_01_half_iff`, `rainbow_01_mutant_is_detected` | keep FAILING | Mutant collides on amounts like 18/38 | grade table ruling 2026-10-06 |
 | C-MOR-rainbow-02 | 「当学姐或同级生向你支付…变成1.5倍」 | **FAILS (D GENUINE)** | `rainbow_02_boost_iff`, `rainbow_02_mutant_is_detected` | keep FAILING | book 1.5倍; body CeilTo-10 | grade table ruling 2026-10-06 |

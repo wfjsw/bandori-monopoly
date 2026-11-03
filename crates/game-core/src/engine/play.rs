@@ -1149,6 +1149,7 @@ impl PlayCtx<'_> {
                     .finish_move_body(i, m, is_main_move, false)
                     .map(|()| false);
             }
+            let entry_teleport = m.teleport_to.is_some();
             if m.teleport_to.is_some() {
                 // Planted before the roll (have already been rewritten): no die
                 // is cast. The main move's `roll` condition still runs, on the
@@ -1187,9 +1188,13 @@ impl PlayCtx<'_> {
             if ran {
                 self.close_roll_window(&mut m);
             }
-            // A `void_walk` teleport has already run (and raised its tail)
-            // from inside the window; a bare window write teleported above;
-            // only an ordinary move walks. `ran` is not required here: a
+            // A teleport the step itself carried (`entry_teleport`), a
+            // `void_walk` teleport run from inside the window, and a bare
+            // window write teleported above all end the same way -- only an
+            // ordinary move walks. Without `entry_teleport` here, a body's
+            // pre-written landing (whose frame copy the teleport just spent)
+            // would be followed by a zero-step walk that settles the landing
+            // tile a second time. `ran` is not required here: a
             // replacement whose abnormal gate refused it never reaches the
             // engine (`HostRequest::Move` returns 0 after clearing
             // `teleport_to`/`void_walk` and resetting `kind = Walk`), and
@@ -1198,7 +1203,7 @@ impl PlayCtx<'_> {
             if !self.out(i)
                 && self.playing()
                 && move_plan::walk_runs(
-                    m.teleport_to.is_some() || after_teleport.is_some(),
+                    entry_teleport || after_teleport.is_some(),
                     m.cancelled,
                     m.void_walk,
                 )
@@ -1292,6 +1297,15 @@ impl PlayCtx<'_> {
         let settles = m.settles;
         let reason = m.reason.clone();
         let ran = self.teleport_as(i, to, settles, reason, is_main_move)?;
+        // The frame's landing is spent by the hop just taken: a body that
+        // pre-shapes the step (`plan::set_teleport_to` then
+        // `run_planned_move`, `PP:[衍生]重叠的声音`) would otherwise have it
+        // replayed by the caller's post-window take, teleporting twice. A
+        // landing a later stage wrote onto the frame is a different value and
+        // stays for the take.
+        if self.w.plan().teleport_to == m.teleport_to {
+            self.w.plan_mut().teleport_to = None;
+        }
         m.kind = MoveKind::Teleport;
         m.rolled = false;
         m.total = 1;

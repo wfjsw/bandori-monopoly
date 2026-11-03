@@ -2,9 +2,9 @@
 //! 规则书（docs/rulebook/cards.json, id `R:必然的联系（莉莎）`）:
 //! > 必然的联系（莉莎）：【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。
 //!
-//! after a skill teleport: park this card on a same-tile character's field. The
-//! 「距离最近」 skip that your skills on them should get is not wired yet (see
-//! TODO).
+//! after a skill teleport: park this card on a same-tile character's field, and
+//! record the placer on the instance so their skills may ignore 「距离最近」
+//! when targeting that holder (`bandori_std::nearest`).
 //!
 //! Raised on the unified `MoveAfter` (every movement case) and discriminated
 //! by cond: `move.kind == Teleport && move.by_skill` selects 「使用技能进行传送」.
@@ -51,11 +51,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // The played card itself keeps the default `Dest::Graveyard` --
     // 「当你发动该效果后，此卡进入弃牌堆」.
     if let Some(who) = hit {
-        ctx::place_card_at(
+        let uid = ctx::place_card_at(
             who,
             "R:必然的联系（莉莎）",
             &Msg::new(key!("lisa_bond_note")).player_id("who", player_id),
         );
+        // 规则书: 「你对对方使用技能将可以无视【距离最近】这一限制」 -- the
+        // waiver rides the placed instance and dies with it. `-1` = the
+        // placement failed, so there is nothing to grant on.
+        if uid > 0 {
+            bandori_std::nearest::grant(uid, player_id);
+        }
         ctx::log(
             player_id,
             &Msg::new(key!("lisa_bond_placed"))

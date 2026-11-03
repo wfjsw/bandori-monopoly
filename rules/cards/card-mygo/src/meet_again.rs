@@ -32,6 +32,8 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
         // sheet cell I13
         .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
+/// TODO(ABI): the smallest either-direction distance is `ctx::nearest(Shortest)`
+/// plus the pair direction; hand-rolled until the card is re-read against it.
 fn next_dist(player_id: i32, dir: i32) -> i32 {
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);

@@ -1508,6 +1508,14 @@ pub fn held_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::held_names, [player_id, p, n, buf, cap, 0])
 }
 
+pub fn nearest(by: i32, kind: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::nearest, [by, kind, buf, cap, 0, 0])
+}
+
+pub fn nearest_with_prop(by: i32, kind: i32, kp: i32, kl: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::nearest_with_prop, [by, kind, kp, kl, buf, cap])
+}
+
 pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::designations, [player_id, buf, cap, 0, 0, 0])
 }

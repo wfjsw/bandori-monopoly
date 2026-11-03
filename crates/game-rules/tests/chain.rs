@@ -94,6 +94,17 @@ fn answered_card(t: &Table) -> Option<String> {
     }
 }
 
+/// The `detail` key of the open counteraction prompt -- which link it answers
+/// (`ask.counteract.detail.play` for the card's own play round, `.effect` for
+/// the designation window the play opens).
+fn answered_detail(t: &Table) -> Option<String> {
+    let p = t.prompt()?;
+    match p.text.args.get("detail") {
+        Some(Arg::Msg(m)) => Some(m.key().to_string()),
+        _ => None,
+    }
+}
+
 /// Give `who` `n` copies of `card`.
 fn give_n(t: &mut Table, who: usize, card: &str, n: usize) {
     let cards: Vec<&str> = vec![card; n];
@@ -138,6 +149,25 @@ fn the_initial_user_is_asked_first() {
         t.dump_prompt()
     );
     t.decline();
+    // Nothing was declared against the play, so X settles and its designation
+    // opens a window of its own on the `effect` link -- a new timing with the
+    // same cycle. All three seats still hold their declined probes; a quiet lap
+    // closes it too.
+    for seat in [0, 1, 2] {
+        assert_eq!(
+            t.asked(),
+            vec![seat],
+            "the designation round asks seat {seat}: {}",
+            t.dump_prompt()
+        );
+        assert_eq!(
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.effect"),
+            "{}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
     assert_eq!(
         ev_args(&t, "aimer_done", "got"),
@@ -261,6 +291,23 @@ fn a_seat_with_no_eligible_card_is_skipped_without_a_prompt() {
         t.dump_prompt()
     );
     t.decline();
+    // The designation's own `effect` window: P1 still holds nothing and is
+    // skipped again; P0 and P2 each pass on the quiet lap that closes it.
+    for seat in [0, 2] {
+        assert_eq!(
+            t.asked(),
+            vec![seat],
+            "the designation round asks seat {seat}: {}",
+            t.dump_prompt()
+        );
+        assert_eq!(
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.effect"),
+            "{}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
 }
 
@@ -315,9 +362,9 @@ fn a_later_seats_declaration_re_opens_an_earlier_seat() {
     // fresh timings -- they must not be X's round.
     while t.prompt().is_some() {
         assert_ne!(
-            answered_card(&t).as_deref(),
-            Some("TEST:aimer"),
-            "X's round must be closed after the quiet lap (ruling 2026-10-07): {}",
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.play"),
+            "X's play round must be closed after the quiet lap (ruling 2026-10-07): {}",
             t.dump_prompt()
         );
         t.decline();
@@ -373,9 +420,9 @@ fn the_round_closes_after_a_quiet_lap() {
     // offered there. Those windows are fresh timings -- not X's round.
     while t.prompt().is_some() {
         assert_ne!(
-            answered_card(&t).as_deref(),
-            Some("TEST:aimer"),
-            "a quiet lap must close X's round (ruling 2026-10-07): {}",
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.play"),
+            "a quiet lap must close X's play round (ruling 2026-10-07): {}",
             t.dump_prompt()
         );
         t.decline();
