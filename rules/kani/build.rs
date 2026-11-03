@@ -15,6 +15,22 @@ mod on_parse;
 use on_parse::*;
 
 const ARRAY_OPS: &[&str] = &[
+    "join_opener",
+    "join_seats",
+    "join_shield",
+    "join_open",
+    "join_opened",
+    "join_joiner_count",
+    "join_joiner",
+    "join_joiner_shielded",
+    "join_designation",
+    "trigger_pending_negation",
+    "trigger_extreme_armed",
+    "trigger_subject_card",
+    "trigger_link_copied",
+    "trigger_chain_depth",
+    "trigger_answered_kind",
+    "countered_by_this_turn",
     "roll",
     "roll_direct",
     "roll_recast",

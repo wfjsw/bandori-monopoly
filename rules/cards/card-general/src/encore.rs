@@ -21,7 +21,7 @@ pub const ENCORE: CardDef = CardDef::new(
         // [支付]/[获得] and must not open this window.
         "target == owner && effect.has(Abnormal)",
         None,
-        counteract).counter_reason(key!("encore_when"))],
+        counteract).declares_negation().counter_reason(key!("encore_when"))],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()

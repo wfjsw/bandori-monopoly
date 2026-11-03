@@ -29,14 +29,14 @@ the whole table.
 | G02 | 106→107 | 13 | 122 | 370–378 |
 | G04 | 110→111 | 13 | — | 378–391 |
 | G03 | 108→109 | 13→14 | 123–125 | 398–410 |
-| G06 | 109→110 | 15→16 | — | 411–430 |
+| G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
-| G07 | 111→112 | 16 | — | 441–450 |
-| G09 | 112→113 | 16 | 126–130 | — |
-| G10 | 113→114 | 16→17 | 131 | — |
-| G11 | 114→115 | 17→18 | 132–133 | — |
-| G12 | 115→116 | 18 | 107 | — |
-| G14 | 116→117 | 18 | — | — |
+| G07 | 112→113 | 16 | — | 441–450 |
+| G09 | 113→114 | 16 | 126–130 | — |
+| G10 | 114→115 | 16→17 | 131 | — |
+| G11 | 115→116 | 17→18 | 132–133 | — |
+| G12 | 116→117 | 18 | 107 | — |
+| G14 | 117→118 | 18 | — | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -60,8 +60,9 @@ why G15/G01 say 12.
 for eight roll imports plus `trig_roll` while its Op row was still `—`. G03
 takes 398–406 (nine). At landing the two 「是否触发结算」 answer pairs
 (§4.7's four ops) joined the same band: G03 takes **398–410** (thirteen),
-and every group after it shifts thirteen: G06 411–430, G05+G13 431–440,
-G07 441–450. G04's landed 378–397 is untouched.
+and every group after it shifts thirteen: G06 411 onward (it settles at
+411–426, see the 2026-11-02 amendment), G05+G13 431–440, G07 441–450. G04's
+landed 378–397 is untouched.
 
 **2026-11-01 amendment (G05).** The G05 review found the group is not a press
 surface at all: every clause the sheet prints on a placed card is an
@@ -74,6 +75,16 @@ effective-card marker. The offer itself is the entry's `declare`
 card flash and no log line, which only a decline at the admission layer gives. The claim takes `Op` 349 and its writer 350, so **G08 shifts to 351**
 and its twenty imports take 351–370; the kind column stays `—` because no engine id
 is consumed. `SAVE_VERSION` still moves for the marker's field.
+
+**2026-11-02 amendment (G06).** G04 and G05 have landed; `ABI_VERSION` is 111
+and `SAVE_VERSION` 15 (G05 landed one SAVE step ahead of its own row, which is
+why the row reads 15→16 and the constant 15). The G06 row still carried the
+pre-G03 numbers (109→110 / 14→15), so the row is rewritten to **111→112 /
+15→16**. Every pending row after G06 shifts one ABI step: G07 112→113, G09
+113→114, G10 114→115, G11 115→116, G12 116→117, G14 117→118; SAVE rows do not
+move. G06's sixteen imports take the free **411–426**, leaving 427–430 free so
+G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
+takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
 
 Recommended landing order (foundation → dependent):
 

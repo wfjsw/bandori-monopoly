@@ -27,7 +27,11 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         // the hook's applicability (the residual guard).
         On::Filter(Filter::BuyAdd(card_sdk::condition::MINE, Some(buy_add_on_a_tile), buy_add_1500)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 「结果只有数字区间」: a forced extreme (微小的『能做到』的事 (1)) may
+// change its 3d10 pips (design G06 §6.9).
+.props(&[(card_sdk::abi::prop::RANGE_CARD, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"@Tsugu ycm"#)
         .raw_name(r#"@Tsugu ycm"#)
         .tags(&[r#"手"#])

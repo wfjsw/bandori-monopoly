@@ -996,6 +996,14 @@ fn look_away_only_moves_counteractors() {
                 "pos:P0",
                 "pos:P1",
                 "pos:P2",
+                // Progress slots: the body resumes past a suspended settle
+                // instead of moving everyone again.
+                "state:P0:cantLookRuns",
+                "state:P0:cantLookDone",
+                "state:P0:cantLookUid",
+                // The caster may join the set on their own turn; the forced
+                // settle can land an abnormal.
+                "turn.abnormal",
             ],
         )
     })

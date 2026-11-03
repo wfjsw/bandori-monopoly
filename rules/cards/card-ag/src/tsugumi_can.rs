@@ -10,7 +10,7 @@
 //! own teleport arm (LOY-TSUGU-01).
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{ChainKind, NumericShape};
 use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,15 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
         On::Play("", None, play),
-        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract).counter_reason(key!("tsugumi_can_when")),
+        On::Counteract(
+            &[ChainKind::Card, ChainKind::Event],
+            "",
+            Some(can_counteract),
+            counteract,
+        )
+        .answers_numbers(NumericShape::NumberInterval)
+        .arms_extreme()
+        .counter_reason(key!("tsugumi_can_when")),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"微小的『能做到』的事"#)
@@ -38,11 +46,12 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
 
 fn can_counteract(player_id: i32) -> bool {
     let _ = player_id;
-    // TODO(规则书)[judgement](ABI) 规则书（1）: 「除@Tsugu ycm以外无法直接改变骰子点数」 -- ycm is the one
-    // exception, i.e. the card whose pips MAY be forced, so a ycm play is not
-    // excluded here (OPEN-@Tsugu reads the sheet mention as garbled); a future
-    // RangeCard filter must keep letting ycm through.
-    true
+    // 规则书（1）: 「除@Tsugu ycm以外无法直接改变骰子点数」 -- the entry's
+    // `NumberInterval` contract keeps the offer to a range-card subject (ycm
+    // names `prop::RANGE_CARD` too, so its mention is the exception it reads
+    // as, OPEN-@Tsugu). The one thing the contract cannot see is a second
+    // extreme already armed on the play: the settle would then pick twice.
+    !trigger::extreme_armed()
 }
 
 /// Per-play slot: which printed effect was chosen. 1-based so an unset slot

@@ -180,6 +180,35 @@ pub enum Pause {
     Trap,
 }
 
+/// Like [`request_or_pause`], but the routine runs on every live pass: a
+/// logged answer is consumed for alignment and ignored (design G06 §6.4 -- a
+/// join round must be rebuilt after any `Ask` re-runs the walk).
+pub fn request_always<C: HostCtx>(
+    c: &mut C,
+    req: HostRequest,
+    pause: Pause,
+) -> Result<i32, HostError> {
+    {
+        let st = c.st_mut();
+        if st.answers.get(st.next_answer).is_some() {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
+            st.next_answer += 1;
+        }
+    }
+    // A simulation has no join routine of its own; answer through the inline
+    // host when there is one.
+    if let Some(v) = request_or_inline(c, req.clone())? {
+        return Ok(v);
+    }
+    let st = c.st_mut();
+    st.host_request = Some(req);
+    match pause {
+        Pause::Sentinel => Ok(card_sdk::abi::EXIT_NEED_INPUT),
+        Pause::Trap => Err(HostError::NeedInput),
+    }
+}
+
 /// The shared pause point for a host request: consume a logged answer, else
 /// answer inline (simulation mode), else park `req` on `host_request` and
 /// return the caller's pause shape.

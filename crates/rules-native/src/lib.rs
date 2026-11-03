@@ -140,6 +140,11 @@ impl NativeRulesHandle {
                         // The entry's own accessors -- no index walk.
                         presentation: o.header_of(),
                         flash: o.flash_of(),
+                        numeric: o.numeric(),
+                        pay_shape: o.pay_shape(),
+                        answer_effect: o.answer_effect(),
+                        all_kinds: o.all_kinds(),
+                        copies_previous: o.copies_previous_entry(),
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger
@@ -153,6 +158,14 @@ impl NativeRulesHandle {
                         declared
                             .insert(tk)
                             .unwrap_or_else(|e| panic!("{}: {e}", card.id));
+                    }
+                    // G06: an empty Counteract links list means every kind.
+                    if o.all_kinds {
+                        for tk in game_rules::kind_flags::all_non_hook_only() {
+                            declared
+                                .insert(tk)
+                                .unwrap_or_else(|e| panic!("{}: {e}", card.id));
+                        }
                     }
                 }
                 let mut props: BTreeMap<String, i32> = card
@@ -575,7 +588,9 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
     match call {
         Call::Play { .. } => info.entry(OnKind::Play, None),
         // (Play mode selection happens in `NativeModules::play_entry_for`.)
-        Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(trigger_kind)),
+        Call::Counteract { entry, .. } => {
+            entry.or_else(|| info.entry(OnKind::Counteract, Some(trigger_kind)))
+        }
         Call::Hook { kind, .. } => info.hook_entry(*kind),
         Call::AtEnd { entry, .. } => Some(*entry),
         Call::DiceRollPlan { .. } => info.hook_entry(card_sdk::abi::TriggerKind::DiceRollPlan),

@@ -1196,6 +1196,7 @@ fn t24_parking_space() {
     );
     // Parking Space (1): 「[结算]改为回合结束后获得一层[停留]」 -- the stay
     // counter is deferred to `TurnEndAfter`.
+    eprintln!("t24 pre-pass stay = {}", t.state(1, "stay"));
     pass(&mut t, 1);
     eprintln!(
         "t24 record: P1 pos = {}, stay = {}, marks = {:?}",

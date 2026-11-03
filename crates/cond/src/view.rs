@@ -49,6 +49,14 @@ pub trait CondView {
     fn pay_total_stage(&self) -> bool;
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     fn charge_is_skill(&self) -> bool;
+    /// Does the answered subject card declare `RANGE_CARD`?
+    fn subject_range_card(&self) -> bool;
+    /// Is an extreme armed for this play?
+    fn extreme_armed(&self) -> bool;
+    /// Declared, unresolved negating answers on the answered link.
+    fn pending_negation(&self) -> i64;
+    /// Depth of the offered link, 0 = the root.
+    fn chain_depth(&self) -> i64;
     /// The innermost open settle's tile (`settle.tile`), `-1` = no settle.
     fn settle_tile(&self) -> i64;
     /// `settle.owner` -- `-1` = no settle / unowned.

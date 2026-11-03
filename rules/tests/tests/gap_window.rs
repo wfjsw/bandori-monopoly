@@ -159,9 +159,10 @@ fn g19_manas_join_window_lets_a_third_party_drop_one() {
             break;
         }
         // 「可抽一张卡」 is optional and asks yes / no; its fallback is "no".
-        let draw_ask = t
-            .prompt()
-            .is_some_and(|p| p.title.key().ends_with("net_error_draw_title"));
+        let draw_ask = t.prompt().is_some_and(|p| {
+            let k = p.title.key();
+            k.ends_with("net_error_draw_title") || k.ends_with("mana_champion_draw")
+        });
         if t.counteract_offered("Sumimi:（真奈）歌唱大赛5连冠") {
             t.counteract(0, "Sumimi:（真奈）歌唱大赛5连冠").unwrap();
         } else if t.counteract_offered("通用:网络链接异常") {

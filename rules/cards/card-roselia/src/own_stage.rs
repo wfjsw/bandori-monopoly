@@ -13,10 +13,9 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
-    // TODO(规则书)（受到[除外]以外的异常移动效果影响时可打出此卡）: the window must
-    //   follow a landing abnormal -- the host raises it before the `ImmuneAll`
-    //   refusal, so a protected player still spends the card and answers for a
-    //   move that never happens.
+    // The window follows the refusals now (G06 §6.7): both the field guard and
+    // `immuneAll` raise `abnormalRefused` and answer `false` ahead of it, so a
+    // protected player no longer spends the card on a move that never lands.
     &[On::Counteract(
         &[ChainKind::Effect],
         "target == owner",

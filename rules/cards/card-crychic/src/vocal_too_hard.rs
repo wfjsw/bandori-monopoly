@@ -19,16 +19,15 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         // 「一次性」 excludes a [分摊] share (`pay_total_stage`).
         // TODO(规则书)（支付至少5000资金）: 门槛应是实际支付额 -- the `effect`
         //   窗的 `value` 是修正前的宣告额 (CROSS-TESTS C20)。
-        // TODO(ABI)（一次性…支付）: a 「[分摊]」 command raises the `effect` window
-        //   only on its legs, never on the command total (`pay_total_stages`
-        //   runs the `payCombined*` stages alone), so with `pay_total_stage`
-        //   this counter never answers a split total at all -- it is dead for
-        //   exactly the payments 「一次性」 is meant to keep. Needs an
-        //   `effect`-shaped window on `payTotalBefore` (G02 spec 2.20).
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && pay_total_stage && value >= 5000",
+        // 「一次性」 is the entry's `Whole` contract now, not a condition
+        // variable: a 「[分摊]」 leg is refused at the offer. The `effect`
+        // window still only opens on legs, so a split *total* is unreachable
+        // until G02 §2.20's `payTotalBefore` (design G06 §2.5, §6.9).
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value >= 5000",
         None,
         counteract,
     )
+    .answers_whole_payments()
     .counter_reason(key!("vocal_too_hard_when"))],
 )
 .meta(

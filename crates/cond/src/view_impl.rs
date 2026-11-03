@@ -62,6 +62,18 @@ impl CondView for SnapshotView<'_> {
     fn charge_is_skill(&self) -> bool {
         self.win.charge_is_skill
     }
+    fn subject_range_card(&self) -> bool {
+        self.win.subject_range_card
+    }
+    fn extreme_armed(&self) -> bool {
+        self.win.extreme_armed
+    }
+    fn pending_negation(&self) -> i64 {
+        self.win.pending_negation
+    }
+    fn chain_depth(&self) -> i64 {
+        self.win.chain_depth
+    }
     fn settle_tile(&self) -> i64 {
         self.win.settle_tile
     }

@@ -33,7 +33,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             // require a player target.
             "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
             None,
-            counteract).counter_reason(key!("centrifugal_when")),
+            counteract).declares_negation().counter_reason(key!("centrifugal_when")),
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`condition::MINE`): the gate only claims immunity for
         // the seat it protects.

@@ -24,7 +24,7 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         // (there must be a rival to teleport to).
         "actor == owner && roll_source == 1 && between(owner) > 0",
         None,
-        counteract).counter_reason(key!("misaki_card_when"))],
+        counteract).declares_negation().counter_reason(key!("misaki_card_when"))],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")
         .raw_name(r#"（美咲）"#)

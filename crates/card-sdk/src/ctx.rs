@@ -3972,6 +3972,141 @@ pub mod trigger {
     pub fn answers() -> i32 {
         unsafe { sys::trig_answers() }
     }
+
+    /// Declared, unresolved answers on this link whose entry declares
+    /// [`crate::abi::AnswerEffect::NEGATES`] (design G06 §6.2).
+    pub fn pending_negation() -> i32 {
+        unsafe { sys::trigger_pending_negation() }
+    }
+
+    /// An extreme is armed on this play, or a declared answer on this link
+    /// declares [`crate::abi::AnswerEffect::ARMS_EXTREME`].
+    pub fn extreme_armed() -> bool {
+        unsafe { sys::trigger_extreme_armed() != 0 }
+    }
+
+    /// The card whose effect this link is ([`Self`]'s `subject_card`): the
+    /// played card on a root link, the counter's own card on a counter link.
+    pub fn subject_card() -> Option<String> {
+        let s = read_str(|b, c| unsafe { sys::trigger_subject_card(b, c) });
+        (!s.is_empty()).then_some(s)
+    }
+
+    /// The card a `copied` counter link plays; `None` otherwise.
+    pub fn link_copied() -> Option<String> {
+        let s = read_str(|b, c| unsafe { sys::trigger_link_copied(b, c) });
+        (!s.is_empty()).then_some(s)
+    }
+
+    /// 0 = the root link, n = n counters deep.
+    pub fn chain_depth() -> i32 {
+        unsafe { sys::trigger_chain_depth() }
+    }
+
+    /// The kind of the link at depth `i`, counting up from the root; `None`
+    /// when `i` is out of range or the link is not on the chain.
+    pub fn answered_kind(i: i32) -> Option<TriggerKind> {
+        let s = read_str(|b, c| unsafe { sys::trigger_answered_kind(i, b, c) });
+        (!s.is_empty()).then(|| TriggerKind::from_str(&s))
+    }
+}
+
+/// 真奈 join window (design G06 §5.4). A `SELF_REDIRECT` counter opens a
+/// window on the link it answers: the other seats may answer the same link as
+/// if each were its target, and a landing counter shields the opener.
+pub mod join {
+    use alloc::vec::Vec;
+
+    use crate::abi::PromptKind as _;
+    use crate::Prompt;
+
+    /// The opener when this counter answers inside a join window, `None`
+    /// outside one.
+    pub fn opener() -> Option<i32> {
+        let v = unsafe { super::sys::join_opener() };
+        (v >= 0).then_some(v)
+    }
+
+    /// The participating seats of the window this link answers, seat order.
+    pub fn seats() -> Vec<i32> {
+        const CAP: usize = 16;
+        let (p, scratch) = super::out_buf(CAP);
+        let n = unsafe { super::sys::join_seats(p, CAP as i32) };
+        if n <= 0 {
+            return Vec::new();
+        }
+        if n as usize > CAP {
+            let (p2, scratch2) = super::out_buf(n as usize);
+            let m = unsafe { super::sys::join_seats(p2, n) };
+            if m <= 0 || m > n {
+                return Vec::new();
+            }
+            let buf = super::out_read(p2, m, scratch2);
+            return postcard::from_bytes(&buf[..m as usize]).unwrap_or_default();
+        }
+        let buf = super::out_read(p, n, scratch);
+        postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+    }
+
+    /// This joiner's counter shields the opener (「免于受到该影响」): marks the
+    /// running seat and returns `true`. Idempotent; `false` outside a join.
+    pub fn shield() -> bool {
+        unsafe { super::sys::join_shield() != 0 }
+    }
+
+    /// Opener side: build and settle the nested join round on the answered
+    /// link. `Err(Prompt)` if the round pauses; `true` when it completed.
+    pub fn open() -> Result<bool, Prompt> {
+        Ok(super::asked(unsafe { super::sys::join_open() })? != 0)
+    }
+
+    /// Opener side, after [`open`]: the round was built.
+    pub fn opened() -> bool {
+        unsafe { super::sys::join_opened() != 0 }
+    }
+
+    /// Opener side: how many seats declared (bars the fallback).
+    pub fn joiner_count() -> i32 {
+        unsafe { super::sys::join_joiner_count() }
+    }
+
+    /// Opener side: the `i`-th declarer, in declaration order (`-1` if none).
+    pub fn joiner(i: i32) -> i32 {
+        unsafe { super::sys::join_joiner(i) }
+    }
+
+    /// Opener side: did declaration `i` land and shield?
+    pub fn joiner_shielded(i: i32) -> bool {
+        unsafe { super::sys::join_joiner_shielded(i) != 0 }
+    }
+
+    /// Opener side: the designation declaration `i` named, `None` if none.
+    pub fn designation(i: i32) -> Option<i32> {
+        let v = unsafe { super::sys::join_designation(i) };
+        (v >= 0).then_some(v)
+    }
+}
+
+/// Distinct players who declared a [反击] against `seat` this turn, in
+/// declaration order (「本回合内」 counters read it).
+pub fn countered_by_this_turn(seat: i32) -> Vec<i32> {
+    const CAP: usize = 8;
+    let (p, scratch) = out_buf(CAP);
+    let n = unsafe { sys::countered_by_this_turn(seat, p, CAP as i32) };
+    if n <= 0 {
+        return Vec::new();
+    }
+    if n as usize > CAP {
+        let (p2, scratch2) = out_buf(n as usize);
+        let m = unsafe { sys::countered_by_this_turn(seat, p2, n) };
+        if m <= 0 || m > n {
+            return Vec::new();
+        }
+        let buf = out_read(p2, m, scratch2);
+        return postcard::from_bytes(&buf[..m as usize]).unwrap_or_default();
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
 /// The effects a chain link declares, with their recipients already named.

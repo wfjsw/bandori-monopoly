@@ -852,6 +852,38 @@ pub trait HostOps {
     fn op_join_redirect_target(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_join_used`
     fn op_set_join_used(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_opener`
+    fn op_join_opener(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_seats`
+    fn op_join_seats(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_shield`
+    fn op_join_shield(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_open`
+    fn op_join_open(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_opened`
+    fn op_join_opened(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_joiner_count`
+    fn op_join_joiner_count(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_joiner`
+    fn op_join_joiner(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_joiner_shielded`
+    fn op_join_joiner_shielded(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_join_designation`
+    fn op_join_designation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_pending_negation`
+    fn op_trigger_pending_negation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_extreme_armed`
+    fn op_trigger_extreme_armed(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_subject_card`
+    fn op_trigger_subject_card(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_link_copied`
+    fn op_trigger_link_copied(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_chain_depth`
+    fn op_trigger_chain_depth(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_answered_kind`
+    fn op_trigger_answered_kind(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_countered_by_this_turn`
+    fn op_countered_by_this_turn(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
 }
 
 impl<C: crate::host::HostCtx> HostOps for C {
@@ -2166,6 +2198,54 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_set_join_used(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::set_join_used(self)?;
         Ok(0)
+    }
+    fn op_join_opener(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_opener(self)? as i64)
+    }
+    fn op_join_seats(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_seats(self, a[0], a[1])? as i64)
+    }
+    fn op_join_shield(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_shield(self)? as i64)
+    }
+    fn op_join_open(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_open(self)? as i64)
+    }
+    fn op_join_opened(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_opened(self)? as i64)
+    }
+    fn op_join_joiner_count(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_joiner_count(self)? as i64)
+    }
+    fn op_join_joiner(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_joiner(self, a[0])? as i64)
+    }
+    fn op_join_joiner_shielded(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_joiner_shielded(self, a[0])? as i64)
+    }
+    fn op_join_designation(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::join_designation(self, a[0])? as i64)
+    }
+    fn op_trigger_pending_negation(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_pending_negation(self)? as i64)
+    }
+    fn op_trigger_extreme_armed(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_extreme_armed(self)? as i64)
+    }
+    fn op_trigger_subject_card(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_subject_card(self, a[0], a[1])? as i64)
+    }
+    fn op_trigger_link_copied(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_link_copied(self, a[0], a[1])? as i64)
+    }
+    fn op_trigger_chain_depth(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_chain_depth(self)? as i64)
+    }
+    fn op_trigger_answered_kind(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_answered_kind(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_countered_by_this_turn(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::countered_by_this_turn(self, a[0], a[1], a[2])? as i64)
     }
 }
 
@@ -5716,4 +5796,136 @@ pub unsafe extern "C-unwind" fn ruleset_set_join_used() {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_opener() -> i32 {
+    with_host(|h| match h.op_join_opener([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_seats(p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_join_seats([p, n, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_shield() -> i32 {
+    with_host(|h| match h.op_join_shield([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_open() -> i32 {
+    with_host(|h| match h.op_join_open([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_opened() -> i32 {
+    with_host(|h| match h.op_join_opened([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_joiner_count() -> i32 {
+    with_host(|h| match h.op_join_joiner_count([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_joiner(i: i32) -> i32 {
+    with_host(|h| match h.op_join_joiner([i, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_joiner_shielded(i: i32) -> i32 {
+    with_host(|h| match h.op_join_joiner_shielded([i, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_join_designation(i: i32) -> i32 {
+    with_host(|h| match h.op_join_designation([i, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_pending_negation() -> i32 {
+    with_host(
+        |h| match h.op_trigger_pending_negation([0, 0, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_extreme_armed() -> i32 {
+    with_host(|h| match h.op_trigger_extreme_armed([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_subject_card(p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_trigger_subject_card([p, n, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_link_copied(p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_trigger_link_copied([p, n, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_chain_depth() -> i32 {
+    with_host(|h| match h.op_trigger_chain_depth([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_answered_kind(i: i32, p: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_trigger_answered_kind([i, p, n, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_countered_by_this_turn(seat: i32, p: i32, n: i32) -> i32 {
+    with_host(
+        |h| match h.op_countered_by_this_turn([seat, p, n, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }

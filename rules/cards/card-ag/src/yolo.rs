@@ -19,7 +19,10 @@ pub const YOLO: CardDef = CardDef::new(
         counteract,
     )],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)])
+.props(&[
+    (card_sdk::abi::prop::SONG, 1),
+    (card_sdk::abi::prop::RANGE_CARD, 1),
+])
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"Y.O.L.O"#)

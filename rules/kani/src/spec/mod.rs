@@ -6,6 +6,7 @@
 pub mod ag;
 pub mod crychic;
 pub mod events;
+pub mod g06_windows;
 pub mod general;
 pub mod hhw;
 pub mod markers;

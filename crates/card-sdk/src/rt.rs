@@ -59,6 +59,22 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     // lookup-by-index callers).
                     presentation: o.header_of(),
                     flash: o.flash_of(),
+                    numeric: match o {
+                        On::CounteractBody(e) => e.numeric,
+                        _ => crate::abi::NumericShape::Any,
+                    },
+                    pay_shape: match o {
+                        On::CounteractBody(e) => e.pay_shape,
+                        _ => crate::abi::AnswerPayShape::Any,
+                    },
+                    answer_effect: match o {
+                        On::CounteractBody(e) => e.effect,
+                        _ => crate::abi::AnswerEffect::NONE,
+                    },
+                    // Empty links used to mean "never"; v112 reads them as
+                    // every kind.
+                    all_kinds: matches!(o, On::CounteractBody(e) if e.links.is_empty()),
+                    copies_previous: matches!(o, On::CounteractBody(e) if e.copies_previous),
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of

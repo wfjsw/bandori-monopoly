@@ -951,6 +951,70 @@ pub fn set_join_used() {
     kani_host::call_unit(Op::set_join_used, [0, 0, 0, 0, 0, 0]);
 }
 
+pub fn join_opener() -> i32 {
+    kani_host::call_i32(Op::join_opener, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn join_seats(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::join_seats, [p, n, 0, 0, 0, 0])
+}
+
+pub fn join_shield() -> i32 {
+    kani_host::call_i32(Op::join_shield, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn join_open() -> i32 {
+    kani_host::call_i32(Op::join_open, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn join_opened() -> i32 {
+    kani_host::call_i32(Op::join_opened, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn join_joiner_count() -> i32 {
+    kani_host::call_i32(Op::join_joiner_count, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn join_joiner(i: i32) -> i32 {
+    kani_host::call_i32(Op::join_joiner, [i, 0, 0, 0, 0, 0])
+}
+
+pub fn join_joiner_shielded(i: i32) -> i32 {
+    kani_host::call_i32(Op::join_joiner_shielded, [i, 0, 0, 0, 0, 0])
+}
+
+pub fn join_designation(i: i32) -> i32 {
+    kani_host::call_i32(Op::join_designation, [i, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_pending_negation() -> i32 {
+    kani_host::call_i32(Op::trigger_pending_negation, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_extreme_armed() -> i32 {
+    kani_host::call_i32(Op::trigger_extreme_armed, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_subject_card(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::trigger_subject_card, [p, n, 0, 0, 0, 0])
+}
+
+pub fn trigger_link_copied(p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::trigger_link_copied, [p, n, 0, 0, 0, 0])
+}
+
+pub fn trigger_chain_depth() -> i32 {
+    kani_host::call_i32(Op::trigger_chain_depth, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_answered_kind(i: i32, p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::trigger_answered_kind, [i, p, n, 0, 0, 0])
+}
+
+pub fn countered_by_this_turn(seat: i32, p: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::countered_by_this_turn, [seat, p, n, 0, 0, 0])
+}
+
 pub fn trig_set_cancelled() {
     kani_host::call_unit(Op::trig_set_cancelled, [0, 0, 0, 0, 0, 0]);
 }

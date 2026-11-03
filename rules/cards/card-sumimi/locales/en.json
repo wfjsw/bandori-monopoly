@@ -20,6 +20,8 @@
   "l12_taken": "{{card}} joined {{who}}'s hand (#L12)",
   "l12_title": "#L12",
   "mana_champion_log": "\"Singing Contest 5-Peat\": the others may play [Counter] cards for {{who}}",
+  "mana_champion_draw": "{{who}} shielded you -- draw one card for it?",
+  "mana_champion_title": "Singing Contest 5-Peat",
   "mana_champion_when": "when you or your tile is about to be hit by an effect from someone else",
   "no_breakup_ask": "[Teleport] to which tile? (money must end up with a repeated digit after settling, or you return and every effect is cancelled)",
   "no_breakup_mortgaged": "You have already mortgaged or redeemed this turn.",

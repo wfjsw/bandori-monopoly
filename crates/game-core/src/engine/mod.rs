@@ -57,8 +57,8 @@ pub use work::{
     WorkItem,
 };
 pub use world::{
-    Extreme, FixedFace, Hidden, Lingering, Scheduled, SettleAnswer, SharedWorld, TurnCtx,
-    TurnSnapshot, World,
+    CounteractRecord, Extreme, FixedFace, Hidden, Lingering, PlayRecord, Scheduled, SettleAnswer,
+    SharedWorld, TurnCtx, TurnSnapshot, World,
 };
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
@@ -398,7 +398,10 @@ struct Saved {
 /// v15: the effective card of a field instance (`FieldCard.effective_card`) and
 /// the pre-dice claim on a move (`TurnCtx.plan.claimed`), both
 /// `serde(default)` -- a v14 save restores with them unset.
-pub const SAVE_VERSION: u32 = 15;
+/// v16: counteraction history (`World.countered_this_turn`, `World.played_cards`
+/// over `MAX_PLAY_LOG`). Both are durable facts a save taken mid-turn must
+/// carry (design G06 §7).
+pub const SAVE_VERSION: u32 = 16;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -1550,12 +1553,30 @@ impl Match {
         // path, unchanged.
         let mut prov = self.provider.take();
         let (res, delay, mut w) = {
+            if std::env::var("DBG_HOOK").is_ok() {
+                eprintln!(
+                    "EXECUTE answers={} step={}",
+                    answers.len(),
+                    snapshot.st.step
+                );
+            }
             let mut cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
             let mut cx = match prov.as_mut() {
                 Some(p) => cx.with_provider(&mut **p),
                 None => cx,
             };
-            let res = run(&mut cx, &routine);
+            let mut res = run(&mut cx, &routine);
+            // A work-stack suspension that escaped the routine has no pump
+            // above it; drain it here, in the same context, or the queued
+            // work (and the parked chain it points into) is dropped with
+            // `cx`. An ask reached by the drain becomes the routine's halt --
+            // the answer replay rebuilds the walk, as for every other prompt.
+            // `drain_work` re-pushes a suspended item and keeps pumping, so it
+            // returns only on completion or a real halt: nothing suspended
+            // leaves this block.
+            if res.as_ref().err().is_some_and(|h| h.is_suspended()) {
+                res = cx.drain_work();
+            }
             let delay = cx.take_delay();
             (res, delay, cx.into_world())
         };
@@ -1658,17 +1679,15 @@ impl Match {
                     live: Live::new(*ask),
                 });
             }
-            // STACK-01 safety net: a suspension that escaped the work-stack
-            // pump (should not happen -- `drain_work` is the pump). Drain what
-            // was queued and commit, rather than aborting the match.
+            // STACK-01 fallback only: the pump above swallows suspensions, so
+            // this arm is a guard against one escaping it. The work stack does
+            // not survive `into_world` and a fresh context's is empty, so
+            // there is nothing left to drain -- commit what the routine wrote
+            // rather than aborting the match (`changed` / `seq` are already
+            // bumped above).
             Err(Halt(HaltKind::Suspended)) => {
                 self.world = w;
                 self.pending = None;
-                let mut cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
-                let _ = cx.drain_work();
-                self.world = cx.into_world();
-                self.changed = true;
-                self.seq += 1;
                 if !self.flushing_deferred {
                     self.flush_deferred();
                 }

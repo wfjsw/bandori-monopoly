@@ -5,6 +5,7 @@
   "cant_look_away_dir_title": "Can't Look Away",
   "cant_look_away_forward": "Forward",
   "cant_look_away_ordered": "{{who}} is force-moved {{n}} tile(s)",
+  "cant_look_away_pick": "Who is force-moved?",
   "cant_look_away_steps": "Force-move {{who}} how many tiles?",
   "cant_look_away_title": "Can't Look Away",
   "cant_look_away_when": "after a player uses [Counter] on you",

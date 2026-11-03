@@ -1954,6 +1954,88 @@ mod abi {
             link_name = "ruleset_set_join_used"
         )]
         pub fn set_join_used();
+        // v112 (G06) -- the join window, the pending-answer readers and the
+        // counteraction history. Lists use the postcard two-call pattern.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_opener"
+        )]
+        pub fn join_opener() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_seats"
+        )]
+        pub fn join_seats(p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_shield"
+        )]
+        pub fn join_shield() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_open"
+        )]
+        pub fn join_open() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_opened"
+        )]
+        pub fn join_opened() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_joiner_count"
+        )]
+        pub fn join_joiner_count() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_joiner"
+        )]
+        pub fn join_joiner(i: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_joiner_shielded"
+        )]
+        pub fn join_joiner_shielded(i: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_join_designation"
+        )]
+        pub fn join_designation(i: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_pending_negation"
+        )]
+        pub fn trigger_pending_negation() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_extreme_armed"
+        )]
+        pub fn trigger_extreme_armed() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_subject_card"
+        )]
+        pub fn trigger_subject_card(p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_link_copied"
+        )]
+        pub fn trigger_link_copied(p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_chain_depth"
+        )]
+        pub fn trigger_chain_depth() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_answered_kind"
+        )]
+        pub fn trigger_answered_kind(i: i32, p: i32, n: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_countered_by_this_turn"
+        )]
+        pub fn countered_by_this_turn(seat: i32, p: i32, n: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_gate"

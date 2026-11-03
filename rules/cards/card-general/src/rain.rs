@@ -7,11 +7,14 @@
 //! gain a [停留] layer, the user among them.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::abi::{prop, roll_source, RollPurpose};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{para, sec, CardText};
 
 pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play("", None, rain)])
+    // 规则书: 「[指定]X名玩家」 -- a designation, so a counter on the play can
+    // reach the named seats (design G06 §5.5, item 12).
+    .props(&[(prop::DESIGNATES, 1)])
     .meta(
         &card_sdk::meta::CardMeta::new()
             .name(r#"雨啊，快点来吧"#)

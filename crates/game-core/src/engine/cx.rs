@@ -576,6 +576,14 @@ pub struct PlayCtx<'a> {
     /// here; the re-entered `CardRules::counteract` adopts them instead of
     /// re-collecting from a world the nested settle already changed.
     pub(crate) counteract_resume: Option<Box<dyn std::any::Any + Send>>,
+    /// The live counteraction chain (a type-erased `CounteractChainCursor`),
+    /// installed around every counter body and every offer so the guests can
+    /// read the pending answers (design G06 §6.2). Valid only for the duration
+    /// of one drive / one offer.
+    pub(crate) counteract_chain: Option<Box<dyn std::any::Any + Send>>,
+    /// Counteraction chains whose address a parked continuation still
+    /// references (see [`Self::keep_chain`]). Transient (not serialized).
+    pub(crate) chain_keepalive: Vec<Box<dyn std::any::Any + Send>>,
     /// Dest a just-resumed drive returned (STACK-01). The card-dest work
     /// item reads it after the resume completes.
     pub(crate) last_drive_fate: Option<i32>,
@@ -1180,6 +1188,8 @@ impl<'a> PlayCtx<'a> {
             draining_work: false,
             suspend_base: 0,
             counteract_resume: None,
+            counteract_chain: None,
+            chain_keepalive: Vec::new(),
             last_drive_fate: None,
             drive_skip: 0,
             settle_ops: 0,
@@ -1276,6 +1286,16 @@ impl<'a> PlayCtx<'a> {
     /// only then the halt. A provider that returns `None` falls through to the
     /// halt, so the tree can still branch on the prompts it cares about.
     pub fn ask(&mut self, mut ask: Ask) -> Flow<Reply> {
+        if std::env::var("DBG_HOOK").is_ok() {
+            eprintln!(
+                "ASK kind={:?} title={} players={:?} cursor={} answers={}",
+                ask.view.kind,
+                ask.view.title.key(),
+                ask.view.players,
+                self.cursor,
+                self.answers.len()
+            );
+        }
         self.w.ask_seq += 1;
         ask.view.id = self.w.ask_seq;
         self.fill_ai(&mut ask);
