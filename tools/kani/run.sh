@@ -2,8 +2,10 @@
 # tools/kani/run.sh — run rules-kani harnesses with bounded parallelism.
 #
 # Fail-closed: any FAILED / TIMEOUT / UNMODELED verdict exits nonzero.
-# No #[ignore], no skip list. See docs/rulebook/spec/KANI.md and
-# docs/rulebook/spec/KANI-FOUNDATION.md.
+# No skip list: every discovered harness runs. The host conformance tests
+# under rules/kani/tests/ are #[ignore]d; run them with
+# `cargo test -p rules-kani -- --ignored`.
+# See docs/rulebook/spec/KANI.md and docs/rulebook/spec/KANI-FOUNDATION.md.
 #
 # Usage:
 #   tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out DIR]

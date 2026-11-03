@@ -110,6 +110,7 @@ fn walk(dir: &Path, shapes: &HashMap<String, BodyShape>, out: &mut Vec<(String, 
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn every_on_body_has_a_kani_wrapper() {
     // `CARGO_MANIFEST_DIR` is `rules/kani`; the source trees are siblings.
     let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");

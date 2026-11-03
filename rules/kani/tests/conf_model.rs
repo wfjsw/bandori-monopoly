@@ -9,8 +9,10 @@
 //! Compares resulting state + effect events. Any divergence is a **BUG IN THE
 //! MODEL** unless the message says otherwise (engine bug candidate).
 //!
-//! Fail-closed: no `#[ignore]`, no allowlists. Unmodeled ops panic on the
-//! model side and surface as test failures.
+//! Fail-closed: no allowlists. Unmodeled ops panic on the model side and
+//! surface as test failures. The suite is `#[ignore]`d (opt-in) so the default
+//! `cargo test` pass skips it; run it with
+//! `cargo test -p rules-kani --test conf_model -- --ignored`.
 //!
 //! `tests/conf_model.rs` is the entry point. The generated `SymOps` bridge
 //! (HostOps -> dispatch) comes from `build.rs` via OUT_DIR.
@@ -1601,6 +1603,7 @@ fn diff_op_seq(
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_gain_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -1617,6 +1620,7 @@ fn op_gain_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_pay_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -1631,6 +1635,7 @@ fn op_pay_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_teleport_to_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -1649,6 +1654,7 @@ fn op_teleport_to_matches_engine() {
 /// `gain_charge` was ABI-88 genericized to `gain_marker` (name-as-data).
 /// Same contract: clamped at `charge_max`, returns the amount gained.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_gain_marker_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -1666,6 +1672,7 @@ fn op_gain_marker_matches_engine() {
 /// `give_stay` was ABI-88 genericized to `apply_abnormal(player, kind=STAY, n, to)`.
 /// Same contract: a stay layer appears and the grant is logged.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_apply_abnormal_stay_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -1683,6 +1690,7 @@ fn op_apply_abnormal_stay_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_player_pos_money_player_count_player_out_tile_count_match() {
     big(|| {
         let _g = model_lock();
@@ -1728,6 +1736,7 @@ fn op_player_pos_money_player_count_player_out_tile_count_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_tile_named_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -1743,6 +1752,7 @@ fn op_tile_named_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_set_houses_houses_of_match() {
     big(|| {
         let _g = model_lock();
@@ -1768,6 +1778,7 @@ fn op_set_houses_houses_of_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_set_owner_tile_owner_match() {
     big(|| {
         let _g = model_lock();
@@ -1786,6 +1797,7 @@ fn op_set_owner_tile_owner_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_add_to_dest_take_card_cards_in_hand_size_match() {
     big(|| {
         let _g = model_lock();
@@ -1813,6 +1825,7 @@ fn op_add_to_dest_take_card_cards_in_hand_size_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_to_discard_and_hand_size() {
     big(|| {
         let _g = model_lock();
@@ -1837,6 +1850,7 @@ fn op_to_discard_and_hand_size() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn state_set_get_value_match() {
     big(|| {
         let _g = model_lock();
@@ -1856,6 +1870,7 @@ fn state_set_get_value_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_count_held_set_held_name_match() {
     big(|| {
         let _g = model_lock();
@@ -1875,6 +1890,7 @@ fn op_count_held_set_held_name_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_set_dest_place_card_at_match() {
     big(|| {
         let _g = model_lock();
@@ -1895,6 +1911,7 @@ fn op_set_dest_place_card_at_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_trig_set_pay_amount_trig_value_match() {
     big(|| {
         let _g = model_lock();
@@ -1920,6 +1937,7 @@ fn op_trig_set_pay_amount_trig_value_match() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_ask_yes_fixed_answers() {
     big(|| {
         let _g = model_lock();
@@ -2004,6 +2022,7 @@ fn run_hook(id: &str, player: i32) {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_ag_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2013,6 +2032,7 @@ fn card_band_ag_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_crychic_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2020,6 +2040,7 @@ fn card_band_crychic_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_general_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2028,6 +2049,7 @@ fn card_band_general_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_hhw_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2035,6 +2057,7 @@ fn card_band_hhw_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_morfonica_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2045,6 +2068,7 @@ fn card_band_morfonica_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_mujica_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2054,6 +2078,7 @@ fn card_band_mujica_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_mygo_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2065,6 +2090,7 @@ fn card_band_mygo_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_pp_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2072,6 +2098,7 @@ fn card_band_pp_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_ppp_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2080,6 +2107,7 @@ fn card_band_ppp_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_ras_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2087,6 +2115,7 @@ fn card_band_ras_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_roselia_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2095,6 +2124,7 @@ fn card_band_roselia_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_band_sumimi_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2103,6 +2133,7 @@ fn card_band_sumimi_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_skill_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2111,6 +2142,7 @@ fn card_skill_conforms() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn card_event_conforms() {
     big(|| {
         let _g = model_lock();
@@ -2168,6 +2200,7 @@ fn rent_model() -> KWorld {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_rent_of_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -2185,6 +2218,7 @@ fn op_rent_of_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_buy_price_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -2201,6 +2235,7 @@ fn op_buy_price_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_tile_at_set_tile_at_match_engine() {
     big(|| {
         let _g = model_lock();
@@ -2304,6 +2339,7 @@ fn trig_get(label: &str, real: impl FnOnce(&mut ConfHost) -> i64, op: Op, args: 
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_trig_move_payload_matches_engine() {
     let _g = model_lock();
     trig_get(
@@ -2369,6 +2405,7 @@ fn op_trig_move_payload_matches_engine() {
     );
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_trig_move_sentinels_match_engine() {
     let _g = model_lock();
     // No-move sentinels: kind=-1, roll=-1, dir=1, from=-1, remaining=0,
@@ -2456,6 +2493,7 @@ fn op_trig_move_sentinels_match_engine() {
     );
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_trig_buy_deal_payload_matches_engine() {
     big(|| {
         let _g = model_lock();
@@ -2510,6 +2548,7 @@ fn op_trig_buy_deal_payload_matches_engine() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_trig_buy_setters_match_engine() {
     big(|| {
         let _g = model_lock();
@@ -2567,6 +2606,7 @@ fn op_trig_buy_setters_match_engine() {
 // ---------------------------------------------------------------------------
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_trig_set_pay_kind_and_shape() {
     big(|| {
         diff_op_seq(
@@ -2590,6 +2630,7 @@ fn op_trig_set_pay_kind_and_shape() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_multiply_pay_factor_scopes() {
     big(|| {
         let conf = base_conf();
@@ -2643,6 +2684,7 @@ fn op_multiply_pay_factor_scopes() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_set_pay_factor_auto() {
     big(|| {
         let mut conf = base_conf();
@@ -2667,6 +2709,7 @@ fn op_set_pay_factor_auto() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_settle_readers() {
     big(|| {
         let mut conf = base_conf();
@@ -2696,6 +2739,7 @@ fn op_settle_readers() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_paid_in_settle_by_and_rent_quote() {
     big(|| {
         let mut conf = base_conf();
@@ -2723,6 +2767,7 @@ fn op_paid_in_settle_by_and_rent_quote() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_pay_command_moves_money() {
     big(|| {
         let (mp, ml) = intern_msg("conf.pay_command");
@@ -2747,6 +2792,7 @@ fn op_pay_command_moves_money() {
     });
 }
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn op_commit_redeem_folds_spend_before() {
     big(|| {
         // No write: the asked amount is the cost.
@@ -2776,6 +2822,7 @@ fn op_commit_redeem_folds_spend_before() {
 /// Not an assertion, a signpost: both worlds are large (the model's 60-tile
 /// `NameMap`s dominate), so every test body runs on [`big`]'s wide stack.
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn world_size_needs_the_big_stack() {
     big(|| {
         println!(

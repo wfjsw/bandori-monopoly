@@ -14,7 +14,15 @@ appropriate to the change from that worktree.
 
 Skip the Kani proofs and the fuzz targets in the default check pass — they are
 opt-in only. Run them when the task is itself about proofs or fuzzing, or when
-the user asks for them.
+the user asks for them. The opt-in suites are `#[ignore]`d, so the default
+`cargo test` pass skips them; run one with `-- --ignored`:
+
+```sh
+tools/kani/run.sh                                                    # proofs
+cargo test -p rules-kani -- --ignored                                # kani conformance
+FUZZ_ITERS=2000 cargo test -p ruleset-tests --test fuzz_interactions -- --ignored
+cargo test -p ruleset-tests --test fuzz_found -- --ignored
+```
 
 Offload (only) complex implementations to subagents, with comprehensive 
 instructions, guidance, and in-progress assistance. The main agent should 

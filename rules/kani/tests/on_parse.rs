@@ -45,6 +45,7 @@ const C: CardDef = CardDef::new("t", &[
 "#;
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn parse_on_bodies_one_per_shape() {
     let shapes = shapes();
     let got = parse_on_bodies(SNIPPET, &shapes);
@@ -89,6 +90,7 @@ fn parse_on_bodies_one_per_shape() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn parse_on_bodies_trailing_comma_and_multiline() {
     let shapes = shapes();
     let src = r#"
@@ -112,6 +114,7 @@ fn parse_on_bodies_trailing_comma_and_multiline() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn retired_spellings_are_loud() {
     let shapes = shapes();
     for src in [
@@ -128,6 +131,7 @@ fn retired_spellings_are_loud() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn default_exprs_are_shape_typed() {
     assert_eq!(default_expr(BodyShape::Value), "0");
     assert_eq!(default_expr(BodyShape::Flag), "0");
@@ -216,6 +220,7 @@ fn count_on_spellings(src: &str) -> usize {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn real_tree_registrations_are_not_silently_empty() {
     let shapes = shapes();
     let root = rules_root();
@@ -283,6 +288,7 @@ fn real_tree_registrations_are_not_silently_empty() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn every_registration_names_a_declared_kind() {
     let shapes = shapes();
     let root = rules_root();
@@ -357,6 +363,7 @@ fn every_registration_names_a_declared_kind() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn kind_shapes_cover_all_payload_families() {
     let shapes = shapes();
     let mut seen = std::collections::BTreeSet::new();
@@ -381,6 +388,7 @@ fn kind_shapes_cover_all_payload_families() {
 }
 
 #[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn pre_string_reads_inner_ctor_arg() {
     let shapes = shapes();
     let _ = &shapes;

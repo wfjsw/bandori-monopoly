@@ -1,10 +1,10 @@
 //! Findings filed by the interaction fuzzer (`tests/fuzz_interactions.rs`).
 //!
-//! Each entry is a minimal reproduction of a violation the fuzzer found, kept
-//! as an `#[ignore = "DISCREPANCY: …"]` test so `cargo test` stays green while
-//! the underlying engine / card gap is open. The fuzzer's skip-list
-//! (`fuzz::KNOWN_FINDINGS`) points at these names so a default `FUZZ_ITERS`
-//! run does not re-trip them.
+//! Each entry is a minimal reproduction of a violation the fuzzer found. The
+//! whole target is opt-in and `#[ignore]`d; run it with
+//! `cargo test -p ruleset-tests --test fuzz_found -- --ignored`. The fuzzer's
+//! skip-list (`fuzz::KNOWN_FINDINGS`) points at these names so a default
+//! `FUZZ_ITERS` run does not re-trip them.
 //!
 //! Black-box: nothing under `rules/cards/`, `rules/skills/`, `rules/fixtures/`
 //! or `target/scratch/tainted/` is opened.
@@ -22,6 +22,7 @@ use common::*;
 /// 「立刻获得此次失去的资金金额」 now logs a `gain` bank leg (via `gain_fixed`),
 /// and FEVER!'s pay hook goes through the money pipeline's `paySplitAdd` stage.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn money_ledger_gap() {
     let seed = 0xF022_F022_F022_F022u64.wrapping_mul(0x9E37_79B9_7F4A_7C15);
     let mut t = Table::with_seed(&["户山香澄", "花园多惠", "山吹沙绫"], seed);
@@ -43,6 +44,7 @@ fn money_ledger_gap() {
 /// every write (`state_set` / `state_add`), so clearing a stay cannot drive
 /// the counter below zero.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn negative_status_leak() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(3)
@@ -57,6 +59,7 @@ fn negative_status_leak() {
 /// The card implementation (`bandori_std::fire`) polices the cap; the engine
 /// stores the advertised `max` but does not clamp to it.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn fire_over_cap() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(5)
@@ -76,6 +79,7 @@ fn fire_over_cap() {
 /// an engine or card-effect fabrication. The original fuzzer seed no longer
 /// reproduces; this pins the invariant on that seed and a nearby sweep.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn unknown_card_id() {
     let base = 0xF022_F022_F022_F022u64
         .wrapping_add(7)
@@ -99,6 +103,7 @@ fn unknown_card_id() {
 /// a card module. The engine logs it and keeps going; the fuzzer treats it as
 /// an invariant violation.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn card_trap_reachable() {
     // The fuzzer records `Trace::traps`. Any non-zero count is the finding;
     // the failing seed is printed by `fuzz_interactions_invariants`.
@@ -119,6 +124,7 @@ fn card_trap_reachable() {
 /// must consume exactly the same answer sequence). The original finding seed
 /// holds; this pins it.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn determinism_break() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(13)
@@ -132,6 +138,7 @@ fn determinism_break() {
 /// `#[serde(skip)]`, so a restore dropped the pending move's dice and the next
 /// roll diverged. Now serialized (`SAVE_VERSION` 7).
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn save_restore_break() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(17)
@@ -149,6 +156,7 @@ fn save_restore_break() {
 /// seat, and a stunned seat silently skipped the declare). The check now uses
 /// a vanilla board and declares as the asked seat.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn negation_not_total() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(19)
@@ -164,6 +172,7 @@ fn negation_not_total() {
 /// 0.5× vs owner's Fire bird 1.5×), which is the case the old identical-pair
 /// probe could not decide.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn multiply_order_matters() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(23)
@@ -176,6 +185,7 @@ fn multiply_order_matters() {
 /// teleporting tile; the check now measures the walk length itself
 /// (`main_steps`) on a vanilla board.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn monotonicity_break() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(29)
@@ -185,6 +195,7 @@ fn monotonicity_break() {
 
 /// An effect on an immune / untargetable player still changed that player.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn immunity_gap() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(31)
@@ -220,6 +231,7 @@ fn immunity_gap() {
 /// nothing queued). The state-clamping fix (fire cap / status floor) removed
 /// the cascade that left `step = END` spinning.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn settle_loop_stuck() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(41)
@@ -243,6 +255,7 @@ fn settle_loop_stuck() {
 /// The probe runs a nested chain; the assertion is that it completes without
 /// hitting the safety cap (which would panic).
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn money_depth_opens_windows() {
     match fuzz::meta::check_money_depth(0x3E97) {
         Ok(_report) => {
@@ -270,6 +283,7 @@ fn money_depth_opens_windows() {
 /// `MatchPlayer::state_set`: a stay / stun / stunStart item picks up the
 /// rulebook's tick (「玩家的每回合结束时移除一层」) whenever it has none.
 #[test]
+#[ignore = "opt-in: fuzz suite; run with `-- --ignored`"]
 fn returns_prompt_storm() {
     let seed = 10174556463119430459u64;
     fuzz::one_iter(seed, 4).expect("PPP:Returns turn-start prompt storm");
