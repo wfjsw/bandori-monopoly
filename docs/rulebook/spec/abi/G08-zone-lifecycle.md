@@ -184,9 +184,11 @@ Book (PPP:Returns（1）):
 Current site: `rules/cards/card-ppp/src/returns.rs:31-37`. The card reads
 `CardPlayed` and has no way to ask whether the play it heard was cancelled;
 `play_from_hand` raises `discarded` and the two play announcements from one
-place (`play.rs:5781-5814`) and knows `t.is_cancelled()` at `:5762`, but the
-flag never reaches the trigger (C2). `one_of_us`'s counter-half needs the
-same fact sideways.
+place (`play.rs:5781-5814`) and knows `t.is_cancelled()` at `:5762`, but every
+`raise!` builds a **fresh** `Trigger::new` (`rules.rs:680-685`) and does not
+copy the `card` link's negation, so `trigger::cancelled()` is false on
+`cardAfter`/`cardPlayed` even for a negated play (C2). `one_of_us`'s
+counter-half needs the same fact sideways.
 
 ### 2.5 `hand-changed-event` — rows 57, 58, 197, 642, 1688
 
@@ -1134,88 +1136,281 @@ Rejected.
 
 ## 14. Necessity
 
-Written item by item, so a reviewer can strike one without striking the group,
-and surface by surface, so a reviewer can strike a field without losing what
-it holds up.
+This section answers three questions per item, in order: **does the book
+actually print the clause**, **is the surface its minimum**, and **why can it
+not wait**. It is written item by item and surface by surface so a reviewer
+can strike one piece without having to strike the group. Every claim of the
+form "today X" cites the site where X happens, and every "if removed" names
+the card test that fails without it.
 
-### 14.1 The group
+Each surface carries one of three classes:
 
-The group is one hole with two ends: cards can be *on* other cards, and cards
-can leave. Today neither is a fact, so every card that needs one hard-codes
-it: Here the world parks a string, 灯 parks a tile, 喵梦 samples a flag it can
-never see, and six cards guess a leave destination. The same writer that gives
-the attachment its row gives the leave its event and the waste its bit — a
-listener that hears "this card leaves, because its host left" needs exactly
-the ordering of §7.5.
+* **forced** — no alternative satisfies the clause; the surface is the
+  minimum.
+* **forced-now** — an alternative exists but is mistimed or not
+  composition-safe; the surface is the smallest correct shape *in this
+  group*.
+* **convenience** — a named wrapper over a mechanism already present; it can
+  be struck with a mechanical rewrite and no behaviour change. Conveniences
+  are listed so they are not mistaken for load-bearing.
+
+### 14.1 The group: two facts and one order
+
+The group is not eleven independent fixes. It is **two facts that do not
+exist** and **one ordering that follows from them**:
+
+1. *A card can be in a named place, and a move between places is one
+   describable event.* Today the place is a vector membership (`s.field`,
+   `s.hand`, `s.graveyard`) and a `tile`; the pair is never named, leaves are
+   `s.field.remove` (`ops.rs:1726-1727`), arrivals are `push`
+   (`ops.rs:1431`), and the only event a few callers happen to raise
+   (`discarded`, `drawn`, `card`/`cardAfter`) is raised without the pair or
+   the reason (C1, C2).
+2. *A card can sit on another card and can have been made by another card.*
+   `FieldCard` has `tile` and nothing else, so the two relations have no home
+   (C4), and six cards hard-code a destination or a string that should be a
+   row (C3).
+3. *Order follows:* a host and a creator must be left before the card, and a
+   listener must run before the row changes. That ordering is the whole
+   reason a host cascade cannot be written after the fact.
+
+Items 1, 3, 4, 5 and 6 are all instances of fact 1 — they are the reason
+(cause), the count (drawn vs added), the waste bit, the outcome, and the
+before/after pair. Items 2, 7 and 8 are fact 2 and its cascade. Item 9 is the
+one piece of bookkeeping (C5) that has no place to live until the writer
+exists to record it.
+
+The book prints all of them; none is speculative. `docs/rulebook/cards.json`
+is the ground truth and §15 quotes each sentence.
 
 ### 14.2 Per item
 
-* **1 (flip).** Two kinds and one re-signed import; without them clause 1 is
-  unimplemented and clause 2 is dead in the ordinary path (C7).
-* **2 (rehome + owner + creator).** Without it ONE OF US's card dies with the
-  bankrupt side and the survivor keeps only a rewritten owner; `black_suits`'s
-  borrowed instance outlives its marker. The smallest alternative (A10) loses
-  the identity the pair carries.
-* **3 (opening deal).** The deal is one batch today, so the one card keyed on
-  it is hand-rolled and the mulligan half absent. One event and a
-  per-card loop.
-* **4 (play outcome).** The caller already holds `is_cancelled`; without it
-  PPP:Returns cannot separate a resolved from a negated play.
-* **5 (hand arrival).** Four direct push sites and one tutor with a TODO;
-  without the event every "on arrival" clause re-derives which caller it was.
-* **6 (waste).** The bit is the only carrier a `Discarded` hook can read; the
-  log line cannot gate.
-* **7 (attachment).** The row and the cascade. Without it Here the world's
-  held card is not observable at all.
-* **8 (leave).** The event, the destination and the cascade's trigger.
-* **9 (order).** The engine's own ledger; the card-side alternative (a slot
-  written by whichever card happens to be in play) is stale after a sale.
+**1 — face flip (rows 347, 348, 1043, 1272).** Clause 1 「每当此卡将从正面
+翻至背面时可选择失去2个火罐」 is **not implemented at all**; clause 2 「每当此卡
+将从背面翻至正面时此卡拥有者抽一张卡」 is implemented by a sampler that is
+skipped exactly when it fires (C7): the field walk's guard skips every
+face-down card (`wasm_rules.rs:5950-5952`, `:6097-6099`), so `WAS_DOWN` stays
+`0` and the draw never happens in the ordinary path (`nyamu_card.rs:57-73`).
 
-### 14.3 Surface, field by field
+*Smallest alternative:* A1-style sampling at more kinds — every kind a flip
+can happen at (play, counteraction, status exit, Untargetable expiry) would
+need its own copy of the sample, and the sample still cannot run while down.
+*Class:* forced. Two kinds and one re-signed import, because clause 1 is a
+choice (a prompt) and 「将从…翻至」 is strictly before the face changes.
+*Fails without it:* `nyamu`'s two clauses, both silent.
 
-| surface | forced by | if removed |
+**2 — rehome, owner, creator (rows 1107, 1124; adopted 283, 487, 488, 490,
+1029, 1555).** The book says 「将两张被指定地契放置在该卡上并转移到存活方的
+游戏区，该方视为拥有此地契」. Today the whole hand-over is one tile-owner
+rewrite (`one_of_us.rs:319`): nothing is parked on the card, the card itself
+stays on the bankrupt row and is cleared with it (`play.rs:5158`), and the
+survivor is not distinguished from a bankruptcy or a forfeit.
+
+*Smallest alternative:* A10 (`unplace` + `place`) gets the card to the
+survivor but loses the row's identity — counters, crystals and the effective
+card — and needs a leave/enter pair for a move that never leaves play. A
+separate `set_instance_owner` write is unavoidable either way because
+「视为拥有」 is a fact about the *card*.
+*Class:* forced for the request and the owner write; forced-now for the
+creator edge (the two cards that need it, `black_suits` and `hina_sound`,
+both carry `TODO(G08)`).
+*Fails without it:* ONE OF US's transfer, its cause test, the borrowed
+`tile:circle`, and 日菜's substitute.
+
+**3 — opening deal (row 32).** 「开局时抽到此卡洗回」 and 「换牌后，若此卡在
+你的手牌中，则将此卡打出」 are split by the deal, and the deal is one batch
+`draw(i, n, false)` (`play.rs:548`) that raises nothing. The card answers
+`DeckAtGameStart` (which fires after the mulligan, `same_sky.rs:15-18`) and
+hand-rolls the return; the play half is hand-carried and carries a
+`TODO(ABI)` (`:72-75`).
+
+*Smallest alternative:* reusing `Drawn` — it is exactly the event the deal
+does not raise, and the `hooks=false` batch exists to keep the deal quiet.
+A11 (body-only play) would skip `declare_activation`, the `card` window and
+`cardPlayed`, which is the half the sheet asks for.
+*Class:* forced (`openingHandDealt`), forced-now (`play_hand_card`,
+`set_dest_unwatched`).
+*Fails without it:* the card is swept too late and its auto-play is not a
+real play.
+
+**4 — play outcome (rows 34, 677, 680).** 「每当一张[使用]的卡被[抵消]时」.
+The caller holds `t.is_cancelled()` (`play.rs:5762`), but each `raise!` builds
+a fresh trigger (`rules.rs:680-685`) and copies neither the negation nor the
+link, so the announcement hooks see `cancelled == false` on a negated play.
+
+*Smallest alternative:* reading `trigger::negation` on the hook — impossible
+for the same reason (fresh trigger, `Negation::None`); re-raising through the
+original link would change the hook's other payload. A second kind
+(`cardPlayCancelled`) doubles the announcement surface.
+*Class:* forced. One optional enum on three existing kinds.
+*Fails without it:* PPP:Returns counts every play as resolved.
+
+**5 — hand arrival (rows 57, 58, 197, 642, 1688).** Five clauses key on
+「…加入手牌时」 or on a hand-size crossing. Every hand entry is a bare
+`push` (`play.rs:5731`, `:5781`; `ops.rs:1207`; the Hand branch of
+`add_to_dest`, `wasm_rules.rs:1180-1195`, raises only when the caller passed
+`DrewBefore`), and `auction_pulled` says so with `TODO(ABI)`
+(`auction_pulled.rs:21-22`).
+
+*Smallest alternative:* A7 (raise only in `add_to_dest`) is today's shape and
+cannot see the two direct pushes or the deal. A *condition* on hand size at
+some other kind re-derives what a listener could have been told.
+*Class:* forced for the event; forced for `counted` (the draw/added
+distinction is the difference between five clauses' meanings);
+convenience for nothing.
+*Fails without it:* the tutor, the bounce, `fate_together`'s return,
+`forever`'s clamp and the CRYCHIC band counter.
+
+**6 — waste (rows 510, 522, 523, 1396, 1701).** 「未生效的情况下进入弃牌堆」
+and 「视为此卡未生效」. `discarded` cannot say, the log line is display, and
+`miracle` writes only the line (`miracle.rs:171-177`).
+
+*Smallest alternative:* a `cond` over a card name for the specific cards —
+possible for MIRACLE, impossible for the band clause (「你的卡」, any card) and
+for any future card. A condition also cannot read a per-entry fact after the
+row moved.
+*Class:* forced (`wasted`, `set_ineffective_at`), convenience
+(`is_ineffective_at`, so a card can check its own flag without a prop).
+*Fails without it:* the band （3） crystal and MIRACLE's clause.
+
+**7 — attachment (row 1075).** 「将那张卡背面朝上放置于此卡上」. The held
+card is a string in a prop while its crystals sit on the host
+(`here_the_world.rs:148-179`); a second copy reads the same prop.
+
+*Smallest alternative:* A2 (tile sentinel + host in a prop) lies in `tile_at`
+and cannot express a chain; A3 (a second vector) needs a second uid space and
+every scan written twice. A4 (keep the prop hold and add only a leave hook)
+leaves the held card unobservable, unflippable and unable to follow its host.
+*Class:* forced (`on`, `attach_card`, `detach_card`, `attached_cards`,
+`attachment_host`).
+*Fails without it:* Here the world's hold, the host cascade, ONE OF US's
+「放置在该卡上」.
+
+**8 — leave (rows 639, 645, 867, 875, 1074, 1252, 1474, 1488, 1514, 1515,
+1689, 1695).** Twelve rows across four cards. The event does not exist, so
+`summer_camp` reports its end only at the owner's turn start
+(`summer_camp.rs:25-27`), `resolve` pays only where it was played
+(`resolve.rs:31-34`), and `guerrilla`/`soyo_colors` never clear their tile
+grant (`guerrilla.rs:236-239`, `soyo_colors.rs:103-105`).
+
+*Smallest alternative:* a per-card scan at every kind — the four cards would
+each need the same five-sample ladder, and a leave caused by another card
+(e.g. a counterspell) is not any of those kinds.
+*Class:* forced (`zoneLeft`/`zoneLeftAfter`, `prop::LEAVE_DEST`); forced-now
+(`set_dest_unwatched`).
+*Fails without it:* all four cards' leave timing, and the cascade's trigger.
+
+**9 — order (rows 188, 994).** 「最早拥有的格子」. The card takes `owned.min()`
+(`tomori_inner_shout.rs:113-140`), because nothing records acquisition.
+
+*Smallest alternative:* the card writing its own list at play time — too
+late, since every deed taken before the play is already unordered; a list
+written by whichever card is in play is absent until that card is played and
+goes stale on a sale.
+*Class:* forced for the ledger (engine-side); demoted on the card side,
+which needs only the read.
+*Fails without it:* 灯's card places on the lowest board index, not the first
+acquisition.
+
+### 14.3 What cannot be split
+
+The landing order in §11 already says which items compile alone. The
+converse matters for necessity: some items cannot be *struck* without
+striking another, because they share one fact.
+
+| item | needs from | because |
 |---|---|---|
-| `Zone` | 2, 5, 6, 7, 8 | the pair cannot be named |
-| `ZoneChangeCause` | 2, 8 | a listener cannot tell bankruptcy from a cost discard |
-| `PlayOutcome` | 4 | Returns re-derives the flag from `negation` |
-| `OutCause` | 2 | ONE OF US cannot tell bankruptcy from removal |
-| `ZoneChange` payload | 1, 3, 5, 6, 7, 8 | six separate field pairs |
-| `prop::LEAVE_DEST` | 8 | the four cards keep a hard-coded default |
-| `trigger::zone` | all | the payload is unreachable |
-| `trigger::play_outcome` / `out_cause` | 4 / 2 | same |
-| `zone_of`, `attachment_host`, `attached_cards`, `created_cards` | 7, 8 | a full scan per question |
-| `instance_owner`, `set_instance_owner` | 2 | the owner is only a gate-side comparison (`actor == owner`), and 「视为拥有」 has no writer |
-| `set_created_by_at` | 2 | none |
-| `set_ineffective_at` | 6 | MIRACLE keeps only a log line |
-| `is_ineffective_at` | 6 (read back) | a card cannot test its own waste flag |
-| `rehome_card` | 2 | A10's identity loss |
-| `play_hand_card` | 3 | A11's skipped pipeline |
-| `set_dest_unwatched` | 3, 8 | batch moves each raise a full hook set |
-| `earliest_owned_tile` | 9 | the card keeps `owned.min()` |
-| `FieldCard.on` / `created_by` / `effective` | 7 / 2 / 6 | the relation has no home |
-| `owned_seq` / `next_owned_seq` | 9 | no order |
-| kinds 113–119, 132 (`openingHandDealt`) | 1, 3, 5, 6, 7, 8 | no window, no hook |
+| 2 | 7 | 「放置在该卡上」 is an attachment |
+| 2 | 8 | the card must leave with its seat and still carry the pair |
+| 7 | 8 | a host that goes must raise before its attachments move |
+| 8 | 1, 3, 5 | `counted`, `wasted` and the flip ride the same payload |
+| 5 | 3 | the deal is a hand arrival |
+| 9 | — | independent, but only the ledger; the read is convenience |
 
-### 14.4 The breaks are the price, and it is small
+Striking 7 while keeping 2 leaves ONE OF US's deeds in a prop; striking 8
+while keeping 7 leaves attachments with no cascade trigger; striking 1/3/5
+while keeping 8 makes the payload carry two of five fields and gives the
+writer a shape it will have to break. Those are the couplings a reviewer
+must keep in one head.
 
-* **ABI 114.** Fifteen new imports and six re-signed signatures; a module
-  built before the bump cannot instantiate, which is the point of the version.
-* **SAVE 17.** Three `#[serde(default)]` fields still move the version because
-  the attachment relation must survive a save for replay stability.
+### 14.4 Surface, field by field
+
+| surface | class | forced by | if removed |
+|---|---|---|---|
+| `Zone` | forced | 2, 5, 6, 7, 8 | the pair cannot be named |
+| `ZoneChangeCause` | forced | 2, 8 | a listener cannot tell bankruptcy from a cost discard |
+| `PlayOutcome` | forced | 4 | Returns counts negated plays as resolved |
+| `OutCause` | forced | 2 | ONE OF US cannot tell bankruptcy from removal |
+| `ZoneChange` payload | forced | 1, 3, 5, 6, 7, 8 | six separate field pairs and two payload shapes |
+| `prop::LEAVE_DEST` | forced | 8 | the four cards keep a hard-coded default |
+| `trigger::zone` | forced | all | the payload is unreachable |
+| `trigger::play_outcome` / `out_cause` | forced | 4 / 2 | same |
+| `zone_of`, `attachment_host`, `attached_cards`, `created_cards` | forced | 7, 8 | a full scan per question, and no `attached_cards` answer at all |
+| `instance_owner` | forced | 2 | the owner is only a gate-side comparison (`actor == owner`) |
+| `set_instance_owner` | forced | 2 | 「视为拥有」 has no writer |
+| `set_created_by_at` | forced | 2 | `black_suits` keeps its interim `unplace_at` and the child leaks |
+| `set_ineffective_at` | forced | 6 | MIRACLE keeps only a log line |
+| `is_ineffective_at` | convenience | 6 | a card using a prop key instead |
+| `rehome_card` | forced | 2 | A10's identity loss |
+| `play_hand_card` | forced | 3 | A11's skipped pipeline |
+| `set_dest_unwatched` | convenience | 3, 8 | every batch move pays a full hook set |
+| `earliest_owned_tile` | forced | 9 | the card keeps `owned.min()` |
+| `FieldCard.on` / `created_by` / `effective` | forced | 7 / 2 / 6 | the relation has no home |
+| `owned_seq` / `next_owned_seq` | forced | 9 | no order |
+| `set_dest(cause)`, `send_to_dest`, `transfer_to_dest`, `unplace_at`, `set_face_down_at`, `add_to_dest(counted)` | forced | 1, 5, 8 | an uncaused move reads as `Other`; a flip cannot say why |
+| `HostRequest::{Leave,Flip,Attach,Detach,Rehome,PlayHand}` | forced | 1, 2, 3, 7, 8 | a plain hostfn cannot pause or prompt |
+| kinds 113–119, 132 (`openingHandDealt`) | forced | 1, 3, 5, 6, 7, 8 | no window, no hook |
+
+Every forced surface has a test in §10.1 that reads it. There is no field
+without a reader and no test without a field.
+
+### 14.5 The cost, priced against the workarounds
+
+* **ABI 114.** Fifteen new imports and six re-signed signatures. The
+  alternative is per-card workarounds: five cards each re-deriving a hand
+  arrival, four each guessing a destination, two each writing their own
+  borrowed-instance cleanup, and `same_sky` keeping a hand-rolled play. That
+  is more code than the surface, in places no later group can fix centrally.
+* **SAVE 17.** Three `#[serde(default)]` fields still move the version,
+  because the attachment relation must survive a save for replay stability.
+  The alternative — attachments reloaded from a prop — is exactly the state
+  we are leaving.
 * **No display text, no decision inside an import.** Every decision stays
   `ask_*` in a body; the requests carry no text.
 * **No game word in the SDK.** The zone family is generic; the keys and sugar
   are `bandori_std::zones`.
-* **Landing independence.** Items 1, 3, 4, 5, 6, 9 compile and land alone on
-  the writer; 2, 7 and 8 land as one piece but only after it.
+* **Landing independence.** Items 1, 3, 4, 5, 6 and 9 land alone on the
+  writer; 2, 7 and 8 land as one piece. Nothing needs a later group.
 
-### 14.5 What would argue against the group
+### 14.6 Why now, and not after another group
 
-If an attachment were only ever a display (no clause ever reads it), the
-`on` field and the cascade would be overkill — but Here the world puts a
-drawn card on itself and reads it back, and an attachment must follow its
-host. If the leave hook never needed to choose a destination,
-`prop::LEAVE_DEST` could go; four cards need exactly that.
+Three reasons, each checkable:
+
+1. **Live, not prospective.** Every one of the nine items has a `TODO` at the
+   site or a fallback §2 shows to be observably wrong — and two of them (ONE
+   OF US's dead hand-over, 喵梦's dead draw) sit on heavily played cards.
+2. **The writer is a precondition for later groups.** G09's build/pass hooks,
+   G10's settle facts and G11's deck frames all move cards or read where a
+   card is; today each would have to grow its own move helper, which is how
+   `unplace_at`, `move_now` and `apply_dest` came to disagree.
+3. **The order is cheapest here.** The cascade order (§7.5) is only cheap
+   while there is one writer and no other caller; introducing attachments
+   later would mean auditing every existing removal again.
+
+### 14.7 What would falsify the necessity
+
+* If the book printed no clause that reads an attachment, `on` and the
+  cascade would be overkill (A4 would do). It prints three.
+* If no leave clause needed to choose a destination, `prop::LEAVE_DEST` could
+  go — four cards need exactly that, all of them with the leak today.
+* If a hand arrival were always a draw, `counted` would be redundant — the
+  tutor, the bounce and the deal are the counter-examples.
+* If every play announcement already carried the negation, item 4 would be a
+  release note rather than a field. Section §2.4 shows the fresh-trigger
+  reason it does not.
+
+None of these holds. The group is necessary, and each surface is the
+minimum that makes its clause true.
 
 ## 15. Clause match
 
