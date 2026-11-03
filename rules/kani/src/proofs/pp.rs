@@ -1583,3 +1583,217 @@ pub fn shine_again_01_rescue_iff() {
         );
     }
 }
+
+// ===========================================================================
+// G05 `PP:[冰川日菜]会发出怎样的声音呢？` (2) passive marker
+// 「[共鸣]本卡在[场地]时改变本卡代替的专属卡效果」
+// The fuel is `PP:[衍生]共鸣`. The substitute is fixed to 大和麻弥 (index 1),
+// whose [手] is a no-op under the model, so the re-pick's recovery placement
+// is the one that lands; the change then picks 丸山彩 (index 0).
+// Seat-symmetric: user=0/1.
+// ===========================================================================
+
+const HINA: &str = "PP:[冰川日菜]会发出怎样的声音呢？";
+const HINA_FUEL: &str = "PP:[衍生]共鸣";
+const HINA_MAMI: &str = "PP:[大和麻弥]可能性为∞";
+const HINA_AYA: &str = "PP:[丸山彩]憧憬的前方";
+
+crate::host_subset!(hina_mark_dispatch {
+    field_instances => arm_field_instances,
+    place_card_at => arm_place_card,
+    play_card => arm_protocol_stub,
+    unplace_at => arm_unplace_card,
+    counter_at => arm_counter_at,
+    add_counter_at => arm_add_counter_at,
+    set_effective_card_at => arm_set_effective_card_at,
+    set_dest => arm_set_fate,
+    log | effect => arm_log,
+    hand_count => arm_hand_count,
+    count_held | count_held_name => arm_count_held,
+    discard_from_hand => arm_discard_from_hand,
+    group_skills => arm_band_skills,
+    add_group_skill => arm_add_band_skill,
+    cards_in => arm_cards_in,
+    take_card => arm_take_card,
+    add_to_dest => arm_add_to_dest,
+    opt_str | opt_int | opt_tile => arm_opt,
+    opt_price | opt_ai => arm_opt_price,
+    ask => arm_ask,
+});
+
+/// Pre-state: the stand-in is placed as the offered instance, a [共鸣] is in
+/// hand and the Pastel✽Palettes band skill is on the field. `answers` are the
+/// substitute pick, the [共鸣] answer and the change's pick.
+fn hina_marked(user: i32, resonance_yes: bool) -> i32 {
+    host::install_backend(hina_mark_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    let mut offer = 0;
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        offer = w.place_instance(user, HINA);
+        // The band skill is the [共鸣] crystal target (`group_skills`).
+        w.place_instance(user, "skill:Pastel✽Palettes:与偶像一起");
+        w.hand_pile[0] = crate::intern::intern(HINA_FUEL).0;
+        w.hand_n = 1;
+        w.answers[0] = 1; // 大和麻弥
+        w.answers[1] = if resonance_yes { 0 } else { 1 };
+        w.answers[2] = 0; // 丸山彩
+        w.next_answer = 0;
+        w.symbolic_answers = false;
+        w.last_uid = offer;
+        w.bound_uid = offer;
+    });
+    offer
+}
+
+fn hina_fuel_in_hand() -> i32 {
+    let id = crate::intern::intern(HINA_FUEL);
+    world::with_world(|w| world::pile_count(&w.hand_pile, w.hand_n, id.0))
+}
+
+/// The instance's marker is the stand-in's surface.
+fn hina_marked_at(uid: i32) -> bool {
+    let want = crate::intern::intern(HINA).0;
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].uid == uid {
+                return w.field[i].effective_card == want;
+            }
+            i += 1;
+        }
+        false
+    })
+}
+
+fn hina_instance_of(card: &str) -> Option<i32> {
+    let want = crate::intern::intern(card);
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].card == want.0 {
+                return Some(w.field[i].uid);
+            }
+            i += 1;
+        }
+        None
+    })
+}
+
+/// A yes: the fuel is spent, the substitute instance runs the stand-in's
+/// surface, and the stand-in leaves.
+fn hina_mark_iff_at(user: i32) {
+    let offer = hina_marked(user, true);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_pp::hina_sound::hina_sound_kani(user));
+
+    let post = world::snapshot();
+    let stand_in_gone = world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].uid == offer {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    });
+    let substitute = hina_instance_of(HINA_AYA);
+    let dest = world::with_world(|w| w.dest);
+    let fuel = hina_fuel_in_hand();
+    let Some(sub) = substitute else {
+        kani::assert(false, "the change places a substitute");
+        return;
+    };
+    let marked = hina_marked_at(sub);
+    let crystals = world::with_world(|w| w.field_crystals(sub));
+
+    crate::kassert!(
+        spec::pp::hina_mark_ok(marked, crystals, 0, fuel == 0),
+        "the substitute is marked, carries its crystals, fuel gone"
+    );
+    crate::kassert!(stand_in_gone, "the stand-in banishes itself");
+    crate::kassert!(dest == 3, "the stand-in's dest is Banished");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    kani::cover!(true, "body returned");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn hina_mark_iff() {
+    hina_mark_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn hina_mark_iff_user1() {
+    hina_mark_iff_at(1);
+}
+
+/// A declined [共鸣]: no marker, the crystals stay, the fuel card stays in
+/// hand; the stand-in still banishes itself (the placement is not undone).
+fn hina_mark_without_resonance_noop_at(user: i32) {
+    let offer = hina_marked(user, false);
+    let condition = world::snapshot();
+    invoke::unwrap_done(card_pp::hina_sound::hina_sound_kani(user));
+    let post = world::snapshot();
+    let substitute = hina_instance_of(HINA_MAMI);
+    let Some(sub) = substitute else {
+        kani::assert(false, "大和麻弥 is placed");
+        return;
+    };
+    let marked = hina_marked_at(sub);
+    let crystals = world::with_world(|w| w.field_crystals(sub));
+    let fuel = hina_fuel_in_hand();
+    crate::kassert!(
+        spec::pp::hina_no_mark_ok(!marked, crystals, 0, fuel == 1),
+        "no resonance: no marker, crystals and fuel kept"
+    );
+    crate::kassert!(
+        world::with_world(|w| {
+            let mut i = 0usize;
+            while i < w.field_n as usize {
+                if w.field[i].uid == offer {
+                    return false;
+                }
+                i += 1;
+            }
+            true
+        }),
+        "the stand-in still banishes itself"
+    );
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    kani::cover!(true, "body returned");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn hina_mark_without_resonance_noop() {
+    hina_mark_without_resonance_noop_at(0);
+}
+
+/// MUTANT: the marker is written even on a declined [共鸣].
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+#[kani::should_panic]
+pub fn hina_mark_without_resonance_noop_mutant() {
+    let user = 0;
+    hina_marked(user, false);
+    invoke::unwrap_done(card_pp::hina_sound::hina_sound_kani(user));
+    let Some(sub) = hina_instance_of(HINA_MAMI) else {
+        kani::assert(false, "大和麻弥 is placed");
+        return;
+    };
+    crate::kassert!(
+        hina_marked_at(sub),
+        "mutant: the decline was treated as a yes"
+    );
+}

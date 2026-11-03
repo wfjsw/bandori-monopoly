@@ -873,6 +873,17 @@ pub fn unwrap_done(r: Asked) {
     }
 }
 
+/// The declared-answer form of [`unwrap_done`]: proofs that pin the answer to
+/// a raise need it back (`Activation::Arg` / `Activation::Decline`).
+pub fn unwrap_declared<T: card_sdk::ActivationArg>(
+    r: card_sdk::Declared<T>,
+) -> card_sdk::Activation<T> {
+    match r {
+        Ok(a) => a,
+        Err(Prompt) => panic!("unexpected EXIT_NEED_INPUT"),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Compatibility aliases used by the pilot proofs (money_shave must keep
 // compiling). These go through `card_id!` so they are scan-free under Kani.

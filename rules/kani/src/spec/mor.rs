@@ -615,6 +615,31 @@ pub fn nnm_05_wants_discard(dest: i32) -> bool {
     dest == 0
 }
 
+/// G05 (3)'s offer: 「将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹
+/// 水晶」. A yes spends exactly one of the x it just placed, so the new copy
+/// ends at `x - 1` (the placement is unconditional; the charge is the yes).
+pub fn nnm_place_crystal_after_yes(x: i32) -> i32 {
+    x - 1
+}
+
+/// G05 (3): the accepted half invokes the owner's (2) entry at the *placed*
+/// instance with the cost **not** pre-paid (「视为发动」, `paid = 0`) — the
+/// skill's own count/CD gate is skipped.
+pub fn nnm_place_invoke_ok(
+    invoke: (crate::intern::NameId, crate::intern::NameId, bool, i32),
+    skill: crate::intern::NameId,
+    instance: i32,
+) -> bool {
+    invoke.0 == skill && invoke.1 == crate::intern::intern("2") && !invoke.2 && invoke.3 == instance
+}
+
+/// G05 (3) skip (no persona skill / no pot): the card is placed with its x
+/// crystals and nothing else happens — no crystal is burned and no entry is
+/// invoked.
+pub fn nnm_place_skip_ok(crystals: i32, x: i32, invocation_n: usize) -> bool {
+    crystals == x && invocation_n == 0
+}
+
 /// nnm-05 companion: the Play press with already-empty crystals is a no-op —
 /// no `UnplaceCard` and dest unchanged. Exhaustion is a CounterChanged clause,
 /// not an inline check at the press site.

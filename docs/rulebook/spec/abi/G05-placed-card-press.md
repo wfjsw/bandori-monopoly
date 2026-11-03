@@ -1076,7 +1076,7 @@ fn hina_change(player_id: i32, instance: i32) -> Asked {
 ## 10. Save, record, replay
 
 * **Save:** `FieldCard.effective_card` and `TurnCtx.plan.claimed` are
-  `#[serde(default)]`; **SAVE_VERSION 15 -> 16** (`engine/mod.rs:398`; eighth
+  `#[serde(default)]`; **SAVE_VERSION 14 -> 15** (`engine/mod.rs:401`; eighth
   SAVE bump in the README landing order — take the next free one if the order
   moves).
 * **Record:** nothing on the wire changes. `RECORD_VERSION` stays 4.
@@ -1123,7 +1123,7 @@ README's kind column stays `—`. Changelog block, after the
 ///    `invoke`; the guest declaration of `invoke_skill` collapses onto them
 ///    (`ruleset_invoke_skill` stays a host alias; `invoke_skill` is sugar over
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
-///    **SAVE_VERSION 15 -> 16** (`FieldCard.effective_card`,
+///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
 ```
 

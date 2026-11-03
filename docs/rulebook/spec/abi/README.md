@@ -29,8 +29,8 @@ the whole table.
 | G02 | 106→107 | 13 | 122 | 370–378 |
 | G04 | 110→111 | 13 | — | 378–391 |
 | G03 | 108→109 | 13→14 | 123–125 | 398–410 |
-| G06 | 109→110 | 14→15 | — | 411–430 |
-| G05 + G13 | 110→111 | 15→16 | — | 347–349, 431–440 |
+| G06 | 109→110 | 15→16 | — | 411–430 |
+| G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 111→112 | 16 | — | 441–450 |
 | G09 | 112→113 | 16 | 126–130 | — |
 | G10 | 113→114 | 16→17 | 131 | — |
@@ -49,9 +49,9 @@ concerns out of G01 — `effective_card` (then spelt `real_id`) to G05 and
 `created_by` to G08 — because they are offer/skin and zone lifecycle, not
 identity. G01 keeps six ops (341–346)
 and its two kinds (111–112); the vacated ids sit with their new groups
-(G05 347–349, G08 350) so no later band moves for them. Recounted from base
-340 in landing order, G08's twenty imports take 350–369 and every group from
-G02 on shifts ten; kind 121 stays free, which costs nothing. `SAVE_VERSION`
+(G05 347–350, G08 351) so no later band moves for them. Recounted from base
+340 in landing order, G08's twenty imports take 351–370 and every group from
+G02 on shifts eleven; kind 121 stays free, which costs nothing. `SAVE_VERSION`
 stays at the value G08 landed (13) — the base column above
 records the *pre-landing* value each document was written against, which is
 why G15/G01 say 12.

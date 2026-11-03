@@ -79,6 +79,19 @@ pub const TEMP_KEY: &str = "tempFire";
 /// The persona-skill field instance that owns this seat's fire pools.
 /// Resolved through the existing guest lookup (`persona_skill` + `find_card`)
 /// -- no dedicated host import. -1 when the seat has no persona skill.
+///
+/// Under `cfg(kani)` both halves go by intern id (`persona_skill_id` /
+/// `find_card_id`): `total` asks this twice, and the `String` round trip was
+/// the dominant cost of the nanami harnesses.
+#[cfg(kani)]
+fn skill_uid(player_id: i32) -> i32 {
+    let Some(skill) = crate::persona_skill_id(player_id) else {
+        return -1;
+    };
+    ctx::find_card_id(player_id, skill).unwrap_or(-1)
+}
+
+#[cfg(not(kani))]
 fn skill_uid(player_id: i32) -> i32 {
     let Some(skill) = ctx::persona_skill(player_id) else {
         return -1;
@@ -150,7 +163,12 @@ pub fn max(player_id: i32) -> i32 {
 /// Total pots the seat can spend: the pool plus any live temp pots
 /// (MARKERS.md §10(2) spend order).
 pub fn total(player_id: i32) -> i32 {
-    get(player_id) + temp::get(player_id)
+    // One `writable` for both reads: it is a pure lookup, and each half used to
+    // resolve the owner instance again through `get` / `temp::get`.
+    if !writable(player_id) {
+        return 0;
+    }
+    ctx::held_count(player_id, KEY) + ctx::held_count(player_id, TEMP_KEY)
 }
 
 // ------------------------------------------------------------- declaration

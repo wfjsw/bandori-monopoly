@@ -886,7 +886,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- band / skills ----
         Op::group_pool => arm_band_crystals(a),
         Op::add_group_pool => arm_add_band_crystals(a),
-        Op::group_skill | Op::persona_skill => arm_band_skill(a),
+        Op::group_skill => arm_band_skill(a),
+        Op::persona_skill => arm_persona_skill(a),
         Op::group_skills => arm_band_skills(a),
         Op::add_group_skill => arm_add_band_skill(a),
         Op::invoke_entry => arm_invoke_entry(a),
@@ -945,13 +946,12 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::counter_max_at => 0,
         Op::set_counter_max_at => 0,
         // ---- effective card + offer claim (G05 §5, §6.2) ----
+        Op::set_fixed_roll => arm_set_fixed_roll(a),
+        Op::fixed_roll => arm_fixed_roll(a),
         Op::effective_card_at => arm_effective_card_at(a),
         Op::set_effective_card_at => arm_set_effective_card_at(a),
-        Op::plan_claimed => world::with_world(|w| w.plan_claimed as i64),
-        Op::plan_claim => world::with_world_mut(|w| {
-            w.plan_claimed = true;
-            0
-        }),
+        Op::plan_claimed => arm_plan_claimed(a),
+        Op::plan_claim => arm_plan_claim(a),
         Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
         Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
         // ---- move payload (hostfns 1830–1880; sentinels when no move) ----
@@ -1112,7 +1112,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::plan_add_follower
         | Op::set_play_doubled
         | Op::set_no_money_loss
-        | Op::set_fixed_roll
         | Op::set_next_steps
         | Op::set_build_discount
         | Op::set_build_cost_pct
@@ -1127,7 +1126,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_remaining
         | Op::move_total
         | Op::move_dir
-        | Op::fixed_roll
         | Op::turn_main_steps
         | Op::turn_rolls
         | Op::turn_snapshot
@@ -1474,9 +1472,85 @@ pub fn arm_band_skill(a: Args) -> i64 {
     }
 }
 
+/// `group_skills` -- postcard `Vec<(uid, id, extra)>` of the player's attached
+/// skill instances (any field row named `skill:…`). Empty when none is planted,
+/// which is what every older harness saw from the `0` stub.
 pub fn arm_band_skills(a: Args) -> i64 {
-    let _ = a;
-    0
+    let [a0, buf, cap, ..] = a;
+    let list: Vec<(i32, String, i32)> = world::with_world(|w| {
+        let mut v = Vec::new();
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].player == a0 {
+                let name = intern::resolve_str(intern::NameId(w.field[i].card));
+                if name.starts_with("skill:") {
+                    v.push((w.field[i].uid, name.to_string(), 0));
+                }
+            }
+            i += 1;
+        }
+        v
+    });
+    let bytes = postcard::to_allocvec(&list).unwrap_or_default();
+    if bytes.is_empty() {
+        return 0;
+    }
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
+}
+
+/// `persona_skill` -- the seat's character-skill id, 0 (none) while
+/// [`World::persona_skill`] is 0.
+///
+/// Kani wire: two LE bytes of the interned [`intern::NameId`] (`buf == 0` is
+/// the probe). The guest's `cfg(kani)` twin asks for exactly that, so neither
+/// side runs postcard's byte-at-a-time UTF-8 validator over the id.
+#[cfg(kani)]
+pub fn arm_persona_skill(a: Args) -> i64 {
+    let [_a0, buf, cap, ..] = a; // one bound skill per seat, the persona's own
+    let id = world::with_world(|w| w.persona_skill);
+    if id == 0 {
+        return 0;
+    }
+    if buf == 0 {
+        return 2;
+    }
+    if cap < 2 {
+        return -1;
+    }
+    card_sdk::native::write(buf, &id.to_le_bytes());
+    2
+}
+
+/// Production wire: postcard `String` (the bytes the real host writes).
+#[cfg(not(kani))]
+pub fn arm_persona_skill(a: Args) -> i64 {
+    let [_a0, buf, cap, ..] = a; // one bound skill per seat, the persona's own
+    let bytes = world::with_world(|w| {
+        if w.persona_skill == 0 {
+            Vec::new()
+        } else {
+            let s = intern::resolve_str(intern::NameId(w.persona_skill)).to_string();
+            postcard::to_allocvec(&s).unwrap_or_default()
+        }
+    });
+    if bytes.is_empty() {
+        return 0;
+    }
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
 }
 
 pub fn arm_build_cost(a: Args) -> i64 {
@@ -2290,7 +2364,9 @@ pub fn arm_inc_slot(a: Args) -> i64 {
 
 /// `invoke_entry` -- the nested guest does not run under Kani, so record the
 /// call facts (`G13` §5.5) and answer a symbolic `Dest`. `by_instance` is the
-/// running uid; `instance` is the target's own field slot, if any.
+/// model's running-instance slot (`last_uid`, the same one `arm_self_uid`
+/// answers; a `place` inside the body advances it, as the model's `self_uid`
+/// does); `instance` is the target's own field slot, if any.
 pub fn arm_invoke_entry(a: Args) -> i64 {
     let [player, card_p, card_n, entry_p, entry_n, flags] = a;
     let card = name_id(card_p, card_n);
@@ -2402,10 +2478,15 @@ pub fn arm_is_placed(a: Args) -> i64 {
 pub fn arm_effective_card_at(a: Args) -> i64 {
     let [a0, buf, cap, ..] = a;
     let id = world::with_world(|w| {
-        w.field
-            .iter()
-            .find(|f| f.uid == a0)
-            .map(|f| f.effective_card)
+        w.field.iter().find(|f| f.uid == a0).map(|f| {
+            // An unmarked instance answers its own card (`u16::MAX` is the
+            // model's "no marker", as in `arm_placed_cards`).
+            if f.effective_card == u16::MAX {
+                f.card
+            } else {
+                f.effective_card
+            }
+        })
     });
     let Some(id) = id else { return 0 };
     if buf == 0 {
@@ -2422,9 +2503,12 @@ pub fn arm_effective_card_at(a: Args) -> i64 {
 pub fn arm_set_effective_card_at(a: Args) -> i64 {
     let [a0, p, n, ..] = a;
     let id = name_id(p, n);
+    // The engine clears on the empty surface (`""`), which interns to a valid
+    // id -- `is_valid` alone would keep a marker to the empty name.
+    let clear = !id.is_valid() || intern::resolve_str(id).is_empty();
     world::with_world_mut(|w| {
         if let Some(f) = w.field.iter_mut().find(|f| f.uid == a0) {
-            f.effective_card = if id.is_valid() { id.0 } else { u16::MAX };
+            f.effective_card = if clear { u16::MAX } else { id.0 };
             1
         } else {
             0
@@ -3006,7 +3090,7 @@ pub fn arm_self_tile(a: Args) -> i64 {
 
 pub fn arm_self_uid(a: Args) -> i64 {
     let _ = a;
-    world::with_world(|w| w.last_uid) as i64
+    world::with_world(|w| w.bound_uid) as i64
 }
 
 pub fn arm_set_counter_self(a: Args) -> i64 {
@@ -3047,7 +3131,10 @@ pub fn arm_set_fate(a: Args) -> i64 {
             // the effect log). World state only: field slot drops, pile
             // gains the card.
             if a0 != 2 {
-                let uid = w.last_uid;
+                // The run's instance, **not** `last_uid`: an inner `place_card`
+                // advances the self slot, but `apply_dest` files
+                // `Run::current_uid`.
+                let uid = w.bound_uid;
                 if let Some(card) = w.remove_field(uid) {
                     match a0 {
                         0 => world::pile_push(&mut w.discard_pile, &mut w.discard_n, card),
@@ -3790,9 +3877,48 @@ pub fn arm_to_discard(a: Args) -> i64 {
     0
 }
 
+/// `held_names` -- LE `u16` [`NameId`]s of the seat's **non-zero** counter
+/// names with the prefix (`角色标记:*` for nanami). `buf == 0` is the count
+/// probe (the `field_instances` convention: no postcard, no UTF-8 scan).
 pub fn arm_tok_names(a: Args) -> i64 {
-    let _ = a;
-    0
+    let [a0, a1, a2, buf, cap, ..] = a;
+    let prefix = intern::resolve(name_id(a1, a2));
+    let mut ids = [0u16; intern::SLOTS];
+    let n = world::with_world(|w| {
+        let p = player_idx(a0);
+        // Only the already-interned prefix space is scanned: the table is
+        // append-only and `n` is concrete at every call site.
+        let bound = intern::len() as usize;
+        let mut n = 0usize;
+        let mut i = 0usize;
+        while i < bound {
+            let key = intern::NameId(i as u16);
+            if let Some(v) = w.player_keys[p].get_opt(key) {
+                if v != 0 && intern::resolve(key).starts_with(prefix) {
+                    ids[n] = i as u16;
+                    n += 1;
+                }
+            }
+            i += 1;
+        }
+        n
+    });
+    if buf == 0 {
+        return n as i64;
+    }
+    if cap < (n * 2) as i32 {
+        return -1;
+    }
+    let mut encoded = [0u8; intern::SLOTS * 2];
+    let mut i = 0usize;
+    while i < n {
+        let b = ids[i].to_le_bytes();
+        encoded[i * 2] = b[0];
+        encoded[i * 2 + 1] = b[1];
+        i += 1;
+    }
+    card_sdk::native::write(buf, &encoded[..n * 2]);
+    n as i64
 }
 
 /// `trigger::kind()` — two-call out-buffer: write the spelling bytes.
@@ -4069,6 +4195,28 @@ pub fn arm_unplace_card(a: Args) -> i64 {
 
 pub fn arm_plan_stub(_a: Args) -> i64 {
     0
+}
+
+/// `plan::claim` — an accepted offer takes this move for itself, which stands
+/// every later offer's guard down (`G05` §5).
+pub fn arm_plan_claim(_a: Args) -> i64 {
+    world::with_world_mut(|w| w.plan_claimed = true);
+    0
+}
+
+pub fn arm_plan_claimed(_a: Args) -> i64 {
+    world::with_world(|w| w.plan_claimed as i64)
+}
+
+/// `plan::set_fixed_roll` — pins the face (`opts.plan_fixed_roll`).
+pub fn arm_set_fixed_roll(a: Args) -> i64 {
+    world::with_world_mut(|w| w.plan_fixed_roll = a[0]);
+    0
+}
+
+/// `ctx::fixed_roll` — the pinned face, `-1` when unpinned.
+pub fn arm_fixed_roll(_a: Args) -> i64 {
+    world::with_world(|w| w.plan_fixed_roll as i64)
 }
 
 pub fn arm_protocol_stub(_a: Args) -> i64 {

@@ -255,3 +255,70 @@ pub fn identity_and_cap_stubs() {
     crate::kassert!(call(Op::counter_max_at, [uid, 0, 0, 0, 0, 0]) == 0);
     crate::kassert!(call(Op::set_counter_max_at, [uid, 0, 0, 0, 0, 0]) == 0);
 }
+
+// ---------------------------------------------------------------------------
+// G05 effective-card surface (§6.2)
+// ---------------------------------------------------------------------------
+
+/// Invariant `placed_instance_answers_with_its_effective_card`: each instance
+/// resolves its **own** surface -- an unmarked copy its row's card, a marked
+/// copy the stand-in -- and clearing the marker restores the row's card.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(16)]
+pub fn placed_instance_answers_with_its_effective_card() {
+    install_empty();
+    const PLAIN: &str = "Mor:（NNM）稍微努力了一下";
+    const OTHER: &str = "HHW:whatever";
+    const STAND_IN: &str = "PP:[冰川日菜]会发出怎样的声音呢？";
+    let (a, b) = world::with_world_mut(|w| {
+        w.n_players = 2;
+        (w.place_instance(0, PLAIN), w.place_instance(1, OTHER))
+    });
+    let plain = crate::intern::intern(PLAIN);
+    let other = crate::intern::intern(OTHER);
+    let stand_in = crate::intern::intern(STAND_IN);
+
+    // Unmarked: the row's own card.
+    crate::kassert!(
+        card_sdk::ctx::effective_card_at(a) == Some(plain),
+        "an unmarked instance answers its own card"
+    );
+    // Marked: the stand-in's surface, and the sibling is unaffected.
+    card_sdk::ctx::set_effective_card_at(b, STAND_IN);
+    crate::kassert!(
+        card_sdk::ctx::effective_card_at(b) == Some(stand_in),
+        "a marked instance answers the stand-in"
+    );
+    crate::kassert!(
+        card_sdk::ctx::effective_card_at(a) == Some(plain),
+        "the sibling is unaffected by the other's marker"
+    );
+    kani::cover!(true, "both instances read independently");
+    // Clearing restores the row's own card.
+    card_sdk::ctx::set_effective_card_at(b, "");
+    crate::kassert!(
+        card_sdk::ctx::effective_card_at(b) == Some(other),
+        "clearing returns the row's card"
+    );
+}
+
+/// MUTANT: a marked instance keeps answering its row's card.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(16)]
+#[kani::should_panic]
+pub fn placed_instance_answers_with_its_effective_card_mutant() {
+    install_empty();
+    const OTHER: &str = "HHW:whatever";
+    const STAND_IN: &str = "PP:[冰川日菜]会发出怎样的声音呢？";
+    let b = world::with_world_mut(|w| {
+        w.n_players = 2;
+        w.place_instance(1, OTHER)
+    });
+    card_sdk::ctx::set_effective_card_at(b, STAND_IN);
+    crate::kassert!(
+        card_sdk::ctx::effective_card_at(b) == Some(crate::intern::intern(OTHER)),
+        "mutant: marker ignored"
+    );
+}

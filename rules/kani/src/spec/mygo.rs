@@ -426,3 +426,47 @@ pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, 
 pub fn tomori_card_02_crystals(x: i32) -> i32 {
     x + 1
 }
+
+// ===========================================================================
+// G05 `MyGO:即使迷茫着` (2)
+// 「[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要
+//  移动格数为你当前手牌张数」
+// ===========================================================================
+
+/// The offer's guard: 「主要阶段中」 is the anchor, so only the movement gate
+/// ([停留] / [晕眩] / [除外]), another offer's claim, a pinned face and an
+/// empty hand can stand it down.
+pub fn even_lost_offered(
+    claimed: bool,
+    pinned: bool,
+    hand: i32,
+    stun: i32,
+    stay: i32,
+    unstoppable: i32,
+    exile: i32,
+) -> bool {
+    !(claimed || pinned) && hand > 0 && stun == 0 && (stay == 0 || unstoppable > 0) && exile == 0
+}
+
+/// The accepted half: 「将此卡置入弃牌堆」 (dest = Graveyard, instance gone),
+/// 「使你的此次主要移动格数为你当前手牌张数」 (the face and the steps are the
+/// hand size — no die is thrown).
+pub fn even_lost_use_ok(
+    dest: i32,
+    steps: Option<i32>,
+    face: i32,
+    hand: i32,
+    discarded: bool,
+) -> bool {
+    dest == 0 && steps == Some(hand) && face == hand && discarded
+}
+
+/// The decline and the two no-ops leave the seat, the plan and the field as
+/// they were.
+pub fn even_lost_unchanged(condition: &Snapshot, post: &Snapshot, hand: i32) -> bool {
+    hand == post.hand_resonance[condition.trig_player as usize]
+        && crate::world::arr4_eq(condition.money, post.money)
+        && crate::world::arr4_eq(condition.pos, post.pos)
+        && crate::world::arr8b_eq(condition.hand, post.hand)
+        && post.log_n == condition.log_n
+}

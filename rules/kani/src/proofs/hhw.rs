@@ -1068,3 +1068,253 @@ pub fn misaki_card_window_alone_mutant() {
     crate::kassert!(again == 1, "mutant: window alone still runs");
     kani::cover!(again == 0, "refused");
 }
+
+// ===========================================================================
+// G05 `HHW:（花音）Wacha Mocha 啪嗒进行曲` placed jump offer
+// 「主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆
+//  或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆」
+// The question is the entry's declare, so a 不发动 never enters the body and
+// leaves no flash or log. Seat-symmetric (「此卡」 on its owner): user=0/1.
+// ===========================================================================
+
+const KANON: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
+const JELLY: &str = "水母标记";
+
+crate::host_subset!(kanon_jump_dispatch {
+    tile_named => arm_tile_named,
+    opt_tile | opt_int | opt_str => arm_opt,
+    opt_price | opt_ai => arm_opt_price,
+    ask => arm_ask,
+    count_held | count_held_name => arm_count_held,
+    plan_claimed => arm_plan_claimed,
+    plan_claim => arm_plan_claim,
+    set_held_name => arm_set_held_name,
+    set_teleport_to => arm_set_teleport_to,
+    set_settles | set_kind => arm_stub_zero,
+    set_dest => arm_set_fate,
+    log | effect => arm_log,
+});
+
+/// The jump's offer with `jelly` 水母标记 on the placed instance. Answers are
+/// concrete: `answers[0]` is the tile id (aquarium by default) or `-1`.
+fn kanon_placed(user: i32, jelly: i32, answer: i32) -> i32 {
+    host::install_backend(kanon_jump_dispatch);
+    sparse_base(user, 0, 10_000);
+    let mut uid = 0;
+    world::with_world_mut(|w| {
+        uid = w.place_instance(user, KANON);
+        w.key_set(user, crate::intern::intern(JELLY), jelly);
+        w.answers[0] = answer;
+        w.next_answer = 0;
+        w.symbolic_answers = false;
+        w.last_uid = uid;
+        w.bound_uid = uid;
+    });
+    uid
+}
+
+fn kanon_tile(name: &str) -> i32 {
+    crate::board::tile_named_bytes(
+        crate::intern::resolve_str(crate::intern::intern(name)).as_bytes(),
+    )
+}
+
+fn kanon_jelly(user: i32) -> i32 {
+    world::with_world(|w| w.key_get(user, crate::intern::intern(JELLY)))
+}
+
+/// `uid` has left the field.
+fn kanon_gone(uid: i32) -> bool {
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].uid == uid {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    })
+}
+
+/// Accepted jump at a concrete seat: every 标记 cleared, a teleport plan
+/// raised for the declared tile, the card filed to the discard.
+fn kanon_jump_at_nine_iff_at(user: i32) {
+    let pick = kanon_tile("水族馆");
+    let uid = kanon_placed(user, 9, pick);
+    let condition = world::snapshot();
+    crate::kassert!(
+        card_hhw::kanon_march::can_jump_kani(user),
+        "9 marks and no claim admit the offer"
+    );
+    let l0 = world::with_world(|w| w.log_n);
+    let declared = card_hhw::kanon_march::pick_jump_kani(user);
+    crate::kassert!(
+        world::with_world(|w| w.log_n) == l0,
+        "frame: log_n after declare"
+    );
+    let answer = invoke::unwrap_declared(declared);
+    let picked = match answer {
+        card_sdk::Activation::Arg(t) => t,
+        card_sdk::Activation::Decline => {
+            kani::assert(false, "the tile answer is an accept");
+            return;
+        }
+    };
+    kani::cover!(picked == pick, "the declared tile is the answer");
+    invoke::unwrap_done(card_hhw::kanon_march::jump_kani(user, picked));
+
+    let jelly = kanon_jelly(user);
+    let teleport = world::with_world(|w| w.teleport);
+    let dest = world::with_world(|w| w.dest);
+    let narration_n = world::with_world(|w| w.narration_n);
+    let claimed = world::with_world(|w| w.plan_claimed);
+    let post = world::snapshot();
+
+    crate::kassert!(
+        spec::hhw::kanon_jump_ok(jelly, teleport, dest, kanon_gone(uid)),
+        "jump: pool cleared, teleport planned, card discarded"
+    );
+    crate::kassert!(claimed, "an accepted offer claims the move");
+    crate::kassert!(narration_n == 1, "exactly one log");
+    crate::kassert!(world::arr4_eq(condition.money, post.money), "frame: money");
+    crate::kassert!(world::arr4_eq(condition.pos, post.pos), "frame: pos");
+    crate::kassert!(
+        spec::hhw::piles_unchanged(&condition, &post),
+        "frame: piles"
+    );
+    // Exactly one effect: the 「清除所有标记」 write. The narration `ctx::log`
+    // is its own counter (「喊出呼诶诶～!」 is a voice line, not an effect).
+    let jelly_id = crate::intern::intern(JELLY).0;
+    crate::kassert!(
+        post.log_n == condition.log_n + 1,
+        "frame: exactly one effect"
+    );
+    crate::kassert!(
+        world::with_world(|w| {
+            w.log_n > 0
+                && matches!(
+                    w.log[w.log_n as usize - 1],
+                    Effect::SetToken { player, key, n }
+                        if player == user && key == jelly_id && n == 0
+                )
+        }),
+        "frame: the effect is the marker clear"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn kanon_jump_at_nine_iff() {
+    kanon_jump_at_nine_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn kanon_jump_at_nine_iff_user1() {
+    kanon_jump_at_nine_iff_at(1);
+}
+
+/// Below nine marks: the guard is false and the offer is not raised.
+fn kanon_jump_below_nine_noop_at(user: i32) {
+    kanon_placed(user, 8, kanon_tile("水族馆"));
+    let condition = world::snapshot();
+    let offered = card_hhw::kanon_march::can_jump_kani(user);
+    kani::cover!(!offered, "8 marks do not admit");
+    crate::kassert!(!offered, "below nine, no offer");
+    let post = world::snapshot();
+    crate::kassert!(
+        spec::hhw::kanon_unchanged(
+            &condition,
+            &post,
+            8,
+            kanon_jelly(user),
+            world::with_world(|w| w.teleport),
+            world::with_world(|w| w.plan_claimed),
+        ),
+        "no-op leaves pool, plan and field"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn kanon_jump_below_nine_noop() {
+    kanon_jump_below_nine_noop_at(0);
+}
+
+/// Another offer already claimed the move: this one stands down.
+fn kanon_jump_claimed_move_noop_at(user: i32) {
+    kanon_placed(user, 9, kanon_tile("水族馆"));
+    world::with_world_mut(|w| w.plan_claimed = true);
+    let condition = world::snapshot();
+    let offered = card_hhw::kanon_march::can_jump_kani(user);
+    kani::cover!(!offered, "a claim stands the offer down");
+    crate::kassert!(!offered, "claimed move: no offer");
+    let post = world::snapshot();
+    crate::kassert!(
+        spec::hhw::kanon_unchanged_claimed(
+            &condition,
+            &post,
+            9,
+            kanon_jelly(user),
+            world::with_world(|w| w.plan_claimed),
+        ),
+        "no-op leaves pool, plan and field"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn kanon_jump_claimed_move_noop() {
+    kanon_jump_claimed_move_noop_at(0);
+}
+
+/// A declined declare (「不选」 answers -1): no body, no teleport, no log,
+/// the card stays placed and every mark stays.
+fn kanon_jump_declined_noop_and_silent_at(user: i32) {
+    kanon_placed(user, 9, -1);
+    let condition = world::snapshot();
+    let declared = card_hhw::kanon_march::pick_jump_kani(user);
+    let answer = invoke::unwrap_declared(declared);
+    let declined = matches!(answer, card_sdk::Activation::Decline);
+    kani::cover!(declined, "不选 declines");
+    crate::kassert!(declined, "the 不选 slot declines");
+    let post = world::snapshot();
+    let narration_n = world::with_world(|w| w.narration_n);
+    crate::kassert!(narration_n == 0, "a declined declare is silent");
+    crate::kassert!(
+        spec::hhw::kanon_unchanged(
+            &condition,
+            &post,
+            9,
+            kanon_jelly(user),
+            world::with_world(|w| w.teleport),
+            world::with_world(|w| w.plan_claimed),
+        ),
+        "a decline leaves pool, plan and field"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn kanon_jump_declined_noop_and_silent() {
+    kanon_jump_declined_noop_and_silent_at(0);
+}
+
+/// MUTANT: the jump keeps the marks instead of clearing them.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+#[kani::should_panic]
+pub fn kanon_jump_at_nine_iff_mutant() {
+    let user = 0;
+    let pick = kanon_tile("水族馆");
+    kanon_placed(user, 9, pick);
+    invoke::unwrap_done(card_hhw::kanon_march::jump_kani(user, pick));
+    crate::kassert!(kanon_jelly(user) == 9, "mutant: the pool was not cleared");
+}

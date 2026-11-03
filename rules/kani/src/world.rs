@@ -767,6 +767,9 @@ pub struct World {
     pub play_doubled: i32,
     pub persona_id: [u16; MAX_PLAYERS],
     pub group_id: [u16; MAX_PLAYERS],
+    /// The `persona_skill` answer (0 = the seat has no persona skill). A
+    /// harness sets it to the `skill:<character>:<name>` id it binds.
+    pub persona_skill: u16,
     /// Generic per-player named counters (tokens, held, state).
     pub player_keys: [NameMap; MAX_PLAYERS],
     /// Band crystals / skills (kept explicit; also mirrored in player_keys).
@@ -798,6 +801,14 @@ pub struct World {
     pub next_uid: i32,
     /// Pending `place_card` destination (`ctx::set_dest`).
     pub dest: i32,
+    /// The instance the **run** is for (`Run::current_uid`): what `set_dest` /
+    /// `self_uid` answer. An inner `place_card` does not move it (the engine's
+    /// `apply_dest` files `current_uid`), so it differs from `last_uid` after a
+    /// body places.
+    pub bound_uid: i32,
+    /// The model's "running instance" slot for **self** writes: the harness's
+    /// offered instance, advanced by `place_card` (`ctx::add_counter_self` and
+    /// friends follow the latest placement).
     pub last_uid: i32,
     /// A card claimed the move at the pre-dice pass.
     pub plan_claimed: bool,
@@ -997,6 +1008,7 @@ impl World {
             play_doubled: -1,
             persona_id: [u16::MAX; MAX_PLAYERS],
             group_id: [u16::MAX; MAX_PLAYERS],
+            persona_skill: 0,
             player_keys: [NameMap::new(); MAX_PLAYERS],
             group_pool: [0; MAX_PLAYERS],
             fans_pos: [0; MAX_PLAYERS],
@@ -1014,6 +1026,7 @@ impl World {
             field_n: 0,
             next_uid: 1,
             dest: 0,
+            bound_uid: 1,
             last_uid: 1,
             plan_claimed: false,
             invoke_n: 0,
@@ -1310,6 +1323,34 @@ impl World {
             i += 1;
         }
         None
+    }
+
+    /// Plant a field instance as a harness pre-state -- the same row
+    /// `arm_place_card` writes: a fresh uid, the running-instance slot and a
+    /// `FieldCard` on the owner's tile. Returns the uid; `last_uid` becomes it,
+    /// which is also the instance the offer body runs on.
+    pub fn place_instance(&mut self, player: i32, card: &str) -> i32 {
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        self.last_uid = uid;
+        self.bound_uid = uid;
+        let tile = self.pos[player_idx(player)];
+        let fi = self.field_n as usize;
+        if fi < MAX_FIELD {
+            self.field[fi] = FieldCard {
+                uid,
+                card: intern::intern(card).0,
+                player,
+                tile,
+                face_down: false,
+                immune: false,
+                crystals: 0,
+                props: NameMap::new(),
+                effective_card: u16::MAX,
+            };
+            self.field_n += 1;
+        }
+        uid
     }
 
     /// Refresh `fans_pos` / `fans_neg` for **one** seat from `player_keys`.

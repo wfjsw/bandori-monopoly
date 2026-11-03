@@ -159,6 +159,13 @@ pub fn place_kani(player_id: i32) -> card_sdk::Asked {
     place(player_id)
 }
 
+/// The offer's guard, for the no-op proofs (the engine runs it host-side).
+#[cfg(kani)]
+#[inline(always)]
+pub fn can_jump_kani(player_id: i32) -> bool {
+    can_jump(player_id)
+}
+
 /// The declare's collector -- it may prompt, so it answers a `Declared`.
 #[cfg(kani)]
 #[inline(always)]

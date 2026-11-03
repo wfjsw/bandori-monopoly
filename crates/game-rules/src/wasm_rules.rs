@@ -31,6 +31,15 @@ use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
 use rules_cond::WindowScope;
 
+// ------------------------------------------------------- surface resolution
+
+/// The card an instance currently runs: its effective card when a stand-in has
+/// marked it, else its own. Every dispatch and instance read resolves through
+/// this one function (`docs/rulebook/spec/abi/G05-placed-card-press.md` §6.2).
+fn surface_card(w: &game_core::engine::World, uid: i32, raw: &str) -> String {
+    w.effective_card_at(uid).unwrap_or_else(|| raw.to_string())
+}
+
 // ------------------------------------------------- silent-entry debug guard
 
 thread_local! {
@@ -5634,8 +5643,7 @@ impl<M: CardModules> RulesBridge<M> {
                                     continue;
                                 }
                                 // A marked instance runs its effective card's surface.
-                                let id =
-                                    world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
+                                let id = surface_card(&world, uid, &raw);
                                 let Some(idx) = self.ruleset.card(&id) else {
                                     continue;
                                 };
@@ -5977,15 +5985,12 @@ impl<M: CardModules> RulesBridge<M> {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                     continue;
                 }
-                // A marked instance runs its effective card's surface; the
-                // face-down mark stays on the row's own card.
-                let id = world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
+                // A marked instance runs its effective card's surface.
+                let id = surface_card(&world, uid, &raw);
                 let Some(idx) = self.ruleset.card(&id) else {
                     continue;
                 };
-                if self.ruleset.cards()[idx as usize].hooks(kind)
-                    && !world.card_face_down(player_id as i32, &raw)
-                {
+                if self.ruleset.cards()[idx as usize].hooks(kind) && !world.is_face_down_at(uid) {
                     jobs.push(HookJob {
                         call: Call::Hook {
                             card: idx,
@@ -6089,13 +6094,11 @@ impl<M: CardModules> RulesBridge<M> {
             if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                 continue;
             }
-            let id = world.effective_card_at(uid).unwrap_or_else(|| raw.clone());
+            let id = surface_card(&world, uid, &raw);
             let Some(idx) = self.ruleset.card(&id) else {
                 continue;
             };
-            if self.ruleset.cards()[idx as usize].hooks(kind)
-                && !world.card_face_down(game_core::state::BOARD_OWNER, &raw)
-            {
+            if self.ruleset.cards()[idx as usize].hooks(kind) && !world.is_face_down_at(uid) {
                 jobs.push(HookJob {
                     call: Call::Hook {
                         card: idx,
@@ -6177,11 +6180,16 @@ impl<M: CardModules> RulesBridge<M> {
                 return Ok(());
             }
             // Field cards including skills, in field order.
-            for (uid, id) in world.field_instances(player_id) {
+            for (uid, raw) in world.field_instances(player_id) {
                 // A pile card that placed itself last pass is now a field
                 // instance; its id is already in `seen_ids`, so do not
                 // dispatch it a second time (two headers for one body).
-                if seen_uids.contains(&uid) || seen_ids.contains(&id) {
+                if seen_uids.contains(&uid) {
+                    continue;
+                }
+                // A marked instance runs its effective card's surface.
+                let id = surface_card(&world, uid, &raw);
+                if seen_ids.contains(&id) {
                     continue;
                 }
                 seen_uids.push(uid);
@@ -6191,9 +6199,7 @@ impl<M: CardModules> RulesBridge<M> {
                     continue;
                 };
                 // 「场上所有背面朝上的卡无法产生效果」.
-                if !self.ruleset.cards()[idx as usize].hooks(kind)
-                    || world.card_face_down(player_id, &id)
-                {
+                if !self.ruleset.cards()[idx as usize].hooks(kind) || world.is_face_down_at(uid) {
                     continue;
                 }
                 trigger.card = Some(id.clone());
@@ -7425,10 +7431,7 @@ impl<M: CardModules> RulesBridge<M> {
         let face_down_ok = self.face_down_counter_ok(cx, seat);
         field.iter().any(|(uid, id)| {
             // A marked instance offers its effective card's counteraction.
-            let eff = cx
-                .world()
-                .effective_card_at(*uid)
-                .unwrap_or_else(|| id.clone());
+            let eff = surface_card(cx.world(), *uid, id);
             let Some(idx) = self.ruleset.card(&eff) else {
                 return false;
             };
@@ -7444,10 +7447,11 @@ impl<M: CardModules> RulesBridge<M> {
     /// Does `seat` control a face-up source granting direct play of face-down
     /// field cards ([`card_sdk::abi::prop::COUNTERACT_FACE_DOWN`])?
     fn face_down_counter_ok(&self, cx: &PlayCtx, seat: usize) -> bool {
-        cx.world()
-            .field_instances(seat as i32)
-            .iter()
-            .any(|(uid, id)| !cx.world().is_face_down_at(*uid) && self.face_down_counter_prop(id))
+        let field = cx.world().field_instances(seat as i32);
+        field.iter().any(|(uid, id)| {
+            !cx.world().is_face_down_at(*uid)
+                && self.face_down_counter_prop(&surface_card(cx.world(), *uid, id))
+        })
     }
 
     /// The [`card_sdk::abi::prop::COUNTERACT_FROM_FIELD`] opt-in of `idx`.
@@ -7600,7 +7604,7 @@ impl<M: CardModules> RulesBridge<M> {
                 cx.world().field_instances(s as i32).into_iter().enumerate()
             {
                 // A marked instance offers its effective card's counteraction.
-                let id = cx.world().effective_card_at(uid).unwrap_or(raw);
+                let id = surface_card(cx.world(), uid, &raw);
                 let Some(idx) = self.ruleset.card(&id) else {
                     continue;
                 };
@@ -8021,11 +8025,13 @@ impl<M: CardModules> RulesBridge<M> {
     /// the real trigger, not a default. The play path passes a default -- a
     /// play answers no trigger.
     fn declare_run(&self, cx: &PlayCtx, s: usize, id: &str, _idx: i32, top: &Trigger) -> Run {
+        // A marked instance answers for its effective card too, so the probe
+        // binds the instance whose surface is `id`.
         let uid = cx
             .world()
             .field_instances(s as i32)
             .into_iter()
-            .find(|(_, c)| c == id)
+            .find(|(uid, c)| surface_card(cx.world(), *uid, c) == id)
             .map_or(-1, |(uid, _)| uid);
         Run {
             world: cx.share_world(),

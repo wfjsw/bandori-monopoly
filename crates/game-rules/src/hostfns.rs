@@ -3333,12 +3333,24 @@ fn query_guard_entry<C: HostCtx>(
         .clone()
         .ok_or_else(|| HostError::trap("query_guard unavailable here"))?;
     let condition = rules.condition(card, entry);
+    // The probe asks the question the invocation would answer: the target's
+    // own instance (a hand card has none) and the target as `trigger_card`, so
+    // a reaction-shaped condition (`trigger_card != 0 && …`) sees the same
+    // frame an `invoke_entry` would open (docs/rulebook/spec/abi/G13 §4.6).
+    let instance = {
+        let world = c.st().wr();
+        world
+            .field_instances(player_id)
+            .into_iter()
+            .chain(world.field_instances(game_core::state::BOARD_OWNER))
+            .find(|(_, cid)| cid == id)
+            .map_or(-1, |(uid, _)| uid)
+    };
     let scope;
     let scope: Option<&crate::condition::WindowScope> = if condition.is_some() {
-        scope = crate::condition::window_scope_owned(crate::condition::fill_window_ambient(
-            c.st().wr(),
-            player_id,
-        ));
+        let mut win = crate::condition::fill_window_ambient(c.st().wr(), player_id);
+        win.trigger_card = i64::from(card);
+        scope = crate::condition::window_scope_owned(win);
         Some(&scope)
     } else {
         None
@@ -3353,7 +3365,7 @@ fn query_guard_entry<C: HostCtx>(
             || (),
             || -> Result<Option<()>, HostError> {
                 let mut world = c.st().wr().clone();
-                world.enter_card(id);
+                world.enter_invoke(id, instance);
                 let depth = c.st().depth + 1;
                 let nested = HostState::new(rules.clone(), world, vec![], depth);
                 let (res, _inner, left) =
@@ -3372,7 +3384,7 @@ fn query_guard_entry<C: HostCtx>(
     // A residual guard answers 0/1. Probe mode: a pause is "does not admit".
     let asked: Result<bool, ()> = crate::condition::admits(condition, scope, &cand, || {
         let mut world = c.st().wr().clone();
-        world.enter_card(id);
+        world.enter_invoke(id, instance);
         let depth = c.st().depth + 1;
         let nested = HostState::new(rules.clone(), world, vec![], depth);
         let (res, _inner, left) =

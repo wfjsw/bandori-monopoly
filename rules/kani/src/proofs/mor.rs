@@ -2056,3 +2056,248 @@ pub fn wing_01_dir_stub_gap() {
         "C-MOR-wing-01 BLOCKED-HOST: move_dir stub cannot express 「移动方向」"
     );
 }
+
+// ===========================================================================
+// G05 `Mor:（NNM）稍微努力了一下` (3) placed offer
+// 「将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的
+//  （2）技能，此次技能不受数量或轮数限制」
+// The offer is a sub-choice of the Play body (the placement is unconditional),
+// so the prove point is (3)'s sub-body `place_with_offer` with the answer
+// pinned. Seat-symmetric (「你的」): user=0/1 harnesses, n_players = 2.
+// ===========================================================================
+
+const NANAMI: &str = "Mor:（NNM）稍微努力了一下";
+const NANAMI_SKILL: &str = "skill:广町七深:这是很普通的事吧？";
+
+/// (3)'s sub-body ops. `persona_skill` and the pot read are reached on every
+/// run (the silent-skip arms); `invoke_entry` only on a yes.
+crate::host_subset!(nanami_third_dispatch {
+    count_held | count_held_name => arm_count_held,
+    field_instances => arm_field_instances,
+    opt_int | opt_str | opt_tile => arm_opt,
+    ask => arm_ask,
+    set_dest => arm_set_fate,
+    place_card_at => arm_place_card,
+    add_counter_self => arm_add_counter_self,
+    persona_skill => arm_persona_skill,
+    invoke_entry => arm_invoke_entry,
+    log | effect => arm_log,
+});
+
+/// Pre-state for (3): the card is the running instance, the seat may hold a
+/// persona skill and a pot; `answers[0] = 0` accepts.
+/// Returns `(offer_uid, skill_uid)`.
+fn nanami_third_world(user: i32, with_skill: bool, with_pot: bool) -> (i32, i32) {
+    let mut offer = 0;
+    let mut skill = 0;
+    sparse2(nanami_third_dispatch, user, |w| {
+        offer = w.place_instance(user, NANAMI);
+        if with_skill {
+            skill = w.place_instance(user, NANAMI_SKILL);
+            w.persona_skill = crate::intern::intern(NANAMI_SKILL).0;
+        }
+        w.charge[user as usize] = if with_pot { 1 } else { 0 };
+        w.answers[0] = 0;
+        w.next_answer = 0;
+        w.last_uid = offer;
+        w.bound_uid = offer;
+    });
+    (offer, skill)
+}
+
+/// Field uid of the `NANAMI` instance created at `uid`, if any.
+fn nanami_instance(uid: i32) -> Option<i32> {
+    let want = crate::intern::intern(NANAMI);
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].uid == uid && w.field[i].card == want.0 {
+                return Some(uid);
+            }
+            i += 1;
+        }
+        None
+    })
+}
+
+/// (3) iff at a concrete seat: a yes spends one of the just-placed crystals,
+/// invokes the owner's (2) at the new instance with the cost not pre-paid, and
+/// leaves the offered copy alone.
+fn nanami_third_yes_iff_at(user: i32) {
+    let x = 2;
+    let (offer, _) = nanami_third_world(user, true, true);
+    let condition = world::snapshot();
+    let pre_field = world::with_world(|w| w.field_n);
+    let new_uid = world::with_world(|w| w.next_uid);
+    invoke::unwrap_done(card_morfonica::nanami_effort::place_with_offer_kani(
+        user, x,
+    ));
+    kani::cover!(true, "body returned");
+
+    let post = world::snapshot();
+    let field_n = world::with_world(|w| w.field_n);
+    let new = nanami_instance(new_uid);
+    let invoke = world::with_world(|w| w.last_invoke);
+    let invocation_n = world::with_world(|w| w.invoke_n);
+    let narration_n = world::with_world(|w| w.narration_n);
+    let offer_crystals = world::with_world(|w| w.field_crystals(offer));
+    let dest = world::with_world(|w| w.dest);
+
+    crate::kassert!(field_n == pre_field + 1, "(3) places exactly one card");
+    let Some(new) = new else {
+        kani::assert(false, "(3) places a second copy");
+        return;
+    };
+    let crystals = world::with_world(|w| w.field_crystals(new));
+    crate::kassert!(
+        crystals == spec::nnm_place_crystal_after_yes(x),
+        "the yes burns exactly one of the x placed crystals"
+    );
+    crate::kassert!(offer_crystals == 0, "the offered copy is untouched");
+    crate::kassert!(
+        spec::nnm_place_invoke_ok(invoke, crate::intern::intern(NANAMI_SKILL), new),
+        "the owner skill's (2) is invoked at the placed copy, unpaid"
+    );
+    crate::kassert!(invocation_n == 1, "exactly one invocation");
+    crate::kassert!(narration_n == 2, "placed + skill: exactly two logs");
+    crate::kassert!(dest == 2, "(3) itself does not unplace the card");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, condition.pos), "frame: pos");
+    kani::cover!(crystals == 1, "x = 2 leaves one crystal");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn nanami_third_yes_iff() {
+    nanami_third_yes_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn nanami_third_yes_iff_user1() {
+    nanami_third_yes_iff_at(1);
+}
+
+/// No persona skill: the offer is skipped without a prompt — the placed
+/// crystals stay whole and nothing is invoked.
+fn nanami_third_no_crystal_noop_at(user: i32) {
+    let x = 2;
+    nanami_third_world(user, false, true);
+    let condition = world::snapshot();
+    let new_uid = world::with_world(|w| w.next_uid);
+    invoke::unwrap_done(card_morfonica::nanami_effort::place_with_offer_kani(
+        user, x,
+    ));
+    kani::cover!(true, "body returned");
+    let post = world::snapshot();
+    let Some(new) = nanami_instance(new_uid) else {
+        kani::assert(false, "(3) still places");
+        return;
+    };
+    let crystals = world::with_world(|w| w.field_crystals(new));
+    let invocation_n = world::with_world(|w| w.invoke_n);
+    let narration_n = world::with_world(|w| w.narration_n);
+    crate::kassert!(
+        spec::nnm_place_skip_ok(crystals, x, invocation_n as usize),
+        "no skill: no crystal burned, no invocation"
+    );
+    crate::kassert!(narration_n == 1, "only the placement is logged");
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn nanami_third_no_crystal_noop() {
+    nanami_third_no_crystal_noop_at(0);
+}
+
+/// No pot: (2) could not pay, so the offer is skipped silently too.
+fn nanami_third_no_pot_noop_at(user: i32) {
+    let x = 2;
+    nanami_third_world(user, true, false);
+    let condition = world::snapshot();
+    let new_uid = world::with_world(|w| w.next_uid);
+    invoke::unwrap_done(card_morfonica::nanami_effort::place_with_offer_kani(
+        user, x,
+    ));
+    kani::cover!(true, "body returned");
+    let post = world::snapshot();
+    let Some(new) = nanami_instance(new_uid) else {
+        kani::assert(false, "(3) still places");
+        return;
+    };
+    let crystals = world::with_world(|w| w.field_crystals(new));
+    let invocation_n = world::with_world(|w| w.invoke_n);
+    crate::kassert!(
+        spec::nnm_place_skip_ok(crystals, x, invocation_n as usize),
+        "no pot: no crystal burned, no invocation"
+    );
+    crate::kassert!(world::arr4_eq(post.money, condition.money), "frame: money");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn nanami_third_no_pot_noop() {
+    nanami_third_no_pot_noop_at(0);
+}
+
+/// With a second copy already placed, the crystal and the invocation bind the
+/// **newly placed** instance, not the older copy.
+fn nanami_third_binds_second_instance_at(user: i32) {
+    let x = 2;
+    let (first, _) = nanami_third_world(user, true, true);
+    let second = world::with_world_mut(|w| {
+        let uid = w.place_instance(user, NANAMI);
+        w.last_uid = uid;
+        w.bound_uid = uid;
+        uid
+    });
+    let first_crystals = world::with_world(|w| w.field_crystals(first));
+    let new_uid = world::with_world(|w| w.next_uid);
+    invoke::unwrap_done(card_morfonica::nanami_effort::place_with_offer_kani(
+        user, x,
+    ));
+    kani::cover!(true, "body returned");
+    let Some(new) = nanami_instance(new_uid) else {
+        kani::assert(false, "(3) places a new copy");
+        return;
+    };
+    let invoke = world::with_world(|w| w.last_invoke);
+    let crystals = world::with_world(|w| w.field_crystals(new));
+    crate::kassert!(crystals == x - 1, "the new copy carries x - 1");
+    crate::kassert!(
+        world::with_world(|w| w.field_crystals(first)) == first_crystals,
+        "the older copy is untouched"
+    );
+    crate::kassert!(new != second, "a fresh instance, not the pre-placed one");
+    crate::kassert!(invoke.3 == new, "by_instance is the new copy");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(48)]
+pub fn nanami_third_binds_second_instance() {
+    nanami_third_binds_second_instance_at(0);
+}
+
+/// MUTANT: burning the crystal of the *offered* copy instead of the placed
+/// one. A second copy must then disagree.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+#[kani::should_panic]
+pub fn nanami_third_yes_iff_mutant() {
+    let user = 0;
+    let (offer, _) = nanami_third_world(user, true, true);
+    invoke::unwrap_done(card_morfonica::nanami_effort::place_with_offer_kani(
+        user, 2,
+    ));
+    crate::kassert!(
+        world::with_world(|w| w.field_crystals(offer)) == 1,
+        "mutant: the offered copy was not the one that paid"
+    );
+}

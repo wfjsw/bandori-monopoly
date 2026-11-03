@@ -639,3 +639,54 @@ pub fn bitset_count(b: &[bool; MAX_CARDS]) -> i32 {
     }
     n
 }
+
+// ===========================================================================
+// G05 `HHW:（花音）Wacha Mocha 啪嗒进行曲` placed jump
+// 「主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆
+//  或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆」
+// ===========================================================================
+
+/// The guard: 「若此卡上有至少9个水母标记」 and no other offer claimed this
+/// move.
+pub fn kanon_jump_offered(jelly: i32, claimed: bool) -> bool {
+    jelly >= 9 && !claimed
+}
+
+/// The accepted half: 「清除所有标记」 (all 9+ are gone), 「视为本次主要移动」
+/// (a teleport plan) and 「然后此卡置入弃牌堆」 (the running instance is on the
+/// discard, dest = Graveyard).
+pub fn kanon_jump_ok(jelly: i32, teleport: bool, dest: i32, discarded: bool) -> bool {
+    jelly == 0 && teleport && dest == 0 && discarded
+}
+
+/// The decline and the two no-ops: the pool, the plan and the field stay.
+pub fn kanon_unchanged(
+    condition: &Snapshot,
+    post: &Snapshot,
+    jelly_before: i32,
+    jelly_after: i32,
+    teleport: bool,
+    claimed: bool,
+) -> bool {
+    jelly_before == jelly_after && !teleport && !claimed && plains_unchanged(condition, post)
+}
+
+/// The same no-op on a move another offer already claimed: everything stays,
+/// but the claim that stood this offer down is still standing.
+pub fn kanon_unchanged_claimed(
+    condition: &Snapshot,
+    post: &Snapshot,
+    jelly_before: i32,
+    jelly_after: i32,
+    still_claimed: bool,
+) -> bool {
+    jelly_before == jelly_after && still_claimed && plains_unchanged(condition, post)
+}
+
+/// Every per-seat/money field untouched (the offer writes no seat state).
+pub fn plains_unchanged(condition: &Snapshot, post: &Snapshot) -> bool {
+    crate::world::arr4_eq(condition.money, post.money)
+        && crate::world::arr4_eq(condition.pos, post.pos)
+        && piles_unchanged(condition, post)
+        && post.log_n == condition.log_n
+}

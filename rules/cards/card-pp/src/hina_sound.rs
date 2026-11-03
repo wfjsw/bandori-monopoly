@@ -106,6 +106,9 @@ fn hina_sound(player_id: i32) -> card_sdk::Asked {
         ctx::play_card(sub, player_id)?;
     }
     let Some(instance) = new_instance_since(player_id, &before, sub) else {
+        // The substitute's [手] was negated (or the field is full): nothing
+        // landed to mark, so the stand-in stays placed instead of being
+        // banished into an empty field.
         return Ok(());
     };
     // 规则书（2）「[共鸣]」: the change costs the fuel, and is passive -- asked
@@ -155,8 +158,18 @@ fn hina_change(player_id: i32, instance: i32) -> card_sdk::Asked {
     } else {
         ctx::play_card(sub, player_id)?;
     }
-    let Some(next) = new_instance_since(player_id, &before, sub) else {
-        return Ok(());
+    let next = match new_instance_since(player_id, &before, sub) {
+        Some(next) => next,
+        None => {
+            // The re-pick's [手] was negated and the old instance is already
+            // unplaced: place the substitute plainly so the field keeps a card
+            // (the change is a re-pick, not a second play).
+            ctx::place_card(player_id, sub, &as_msg);
+            let Some(next) = new_instance_since(player_id, &before, sub) else {
+                return Ok(());
+            };
+            next
+        }
     };
     ctx::set_effective_card_at(next, ID);
     // The crystals are the substitute's own ([手] filler), so they travel with

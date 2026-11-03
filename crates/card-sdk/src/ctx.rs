@@ -2068,6 +2068,46 @@ pub fn add_held_by_name(player_id: i32, name: &str, n: i32, max: i32) -> Result<
     add_held(name, player_id, n, max)
 }
 
+/// [`held_count`] for a [`NameId`] already in hand (an entry of
+/// [`held_names`]): no name re-hash. Under `cfg(kani)` the id is passed as the
+/// intern handle (the host's name facade); elsewhere the resolved text goes
+/// back through the ordinary name path.
+#[cfg(kani)]
+#[cfg_attr(kani, inline(always))]
+pub fn held_count_id(player_id: i32, id: crate::intern::NameId) -> i32 {
+    unsafe { sys::count_held_name(crate::intern::encode_handle(id), 0, player_id) }
+}
+
+#[cfg(not(kani))]
+#[cfg_attr(kani, inline(always))]
+pub fn held_count_id(player_id: i32, id: crate::intern::NameId) -> i32 {
+    held_count(player_id, id.as_str())
+}
+
+/// [`add_held_by_name`] for a [`NameId`] already in hand.
+#[cfg(kani)]
+#[cfg_attr(kani, inline(always))]
+pub fn add_held_id(
+    player_id: i32,
+    id: crate::intern::NameId,
+    n: i32,
+    max: i32,
+) -> Result<i32, Prompt> {
+    let p = crate::intern::encode_handle(id);
+    asked(unsafe { sys::add_held(p, 0, player_id, n, max) })
+}
+
+#[cfg(not(kani))]
+#[cfg_attr(kani, inline(always))]
+pub fn add_held_id(
+    player_id: i32,
+    id: crate::intern::NameId,
+    n: i32,
+    max: i32,
+) -> Result<i32, Prompt> {
+    add_held(id.as_str(), player_id, n, max)
+}
+
 // ---------------------------------------------------------- keyed state
 
 /// The keyed state surface: `{value, min, max, expires}` items the engine holds
@@ -3102,12 +3142,16 @@ pub mod plan {
     }
 
     /// A card has claimed this move's plan at the pre-dice pass; later offers
-    /// at the same pass stand down. One-shot, cleared with the move.
+    /// at the same pass stand down. One-shot: it lives on the move's plan
+    /// frame and dies with the move. Written outside a move (a turn-start hook,
+    /// a pressed skill) it lands on the staging plan and is consumed by the
+    /// next main move.
     pub fn claim() {
         unsafe { sys::plan_claim() }
     }
 
-    /// Has any card claimed this move? (`false` outside a move.)
+    /// Has any card claimed the move in flight? `false` outside a move unless
+    /// an out-of-move claim is still waiting for the next main move.
     pub fn is_claimed() -> bool {
         unsafe { sys::plan_claimed() != 0 }
     }
@@ -4017,7 +4061,35 @@ pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
 
 /// Names of the player's non-zero counters whose name starts with `prefix`.
 /// The listing half of the counter query; [`held`] reads one by name.
-#[cfg_attr(kani, inline(always))]
+///
+/// Under `cfg(kani)` the host answers LE `u16` [`NameId`]s (`buf == 0` is the
+/// count probe) — never postcard, whose `Vec<&str>` decoder is a BMC cliff.
+#[cfg(kani)]
+pub fn held_names(player_id: i32, prefix: &str) -> Vec<NameId> {
+    let (p, l) = s(prefix);
+    let n = unsafe { sys::held_names(player_id, p, l, 0, 0) };
+    if n <= 0 {
+        return Vec::new();
+    }
+    let need = (n as usize) * 2;
+    let (bp, scratch) = out_buf(need);
+    if unsafe { sys::held_names(player_id, p, l, bp, need as i32) } != n {
+        return Vec::new();
+    }
+    let buf = out_read(bp, need as i32, scratch);
+    let mut out: Vec<NameId> = Vec::new();
+    let mut i = 0usize;
+    while i < n as usize {
+        out.push(NameId(u16::from_le_bytes([
+            buf.get(i * 2).copied().unwrap_or(0),
+            buf.get(i * 2 + 1).copied().unwrap_or(0),
+        ])));
+        i += 1;
+    }
+    out
+}
+
+#[cfg(not(kani))]
 pub fn held_names(player_id: i32, prefix: &str) -> Vec<NameId> {
     let (p, l) = s(prefix);
     let cap = 4096;
@@ -4581,7 +4653,10 @@ pub fn effective_card_at(uid: i32) -> Option<NameId> {
 /// Name another card's surface for this instance; `""` clears. Returns
 /// whether the instance is on the field.
 pub fn set_effective_card_at(uid: i32, card: &str) -> bool {
-    unsafe { sys::set_effective_card_at(uid, card.as_ptr() as i32, card.len() as i32) != 0 }
+    // `s` is the name-handle facade (the intern handle under Kani, the arena
+    // bytes on wasm) -- a raw `as_ptr` is untagged and the host model traps.
+    let (p, l) = s(card);
+    unsafe { sys::set_effective_card_at(uid, p, l) != 0 }
 }
 
 /// Is the instance at `uid` face-down?
@@ -4613,8 +4688,15 @@ pub fn set_immune_at(uid: i32, on: bool) -> bool {
 /// compares intern ids — no postcard `Vec<(i32, String)>` decode at all.
 #[cfg(kani)]
 pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
+    find_card_id(player_id, crate::intern::intern(name))
+}
+
+/// [`find_card`] for an id already in hand: the resolver without the name
+/// re-hash. Kani only — production decodes the text forms and has no id to give.
+#[cfg(kani)]
+#[cfg_attr(kani, inline(always))]
+pub fn find_card_id(player_id: i32, want: NameId) -> Option<i32> {
     const MAX_F: usize = 8;
-    let want = crate::intern::intern(name);
     let n = unsafe { sys::field_instances(player_id, 0, 0) };
     if n <= 0 || n > MAX_F as i32 {
         return None;

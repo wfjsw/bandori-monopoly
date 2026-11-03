@@ -307,6 +307,49 @@ pub fn group_skill(player_id: i32) -> Option<String> {
 }
 
 /// Rule id of `player_id`'s character skill, or `None`.
+///
+/// Under `cfg(kani)` the host answers the interned id as two LE bytes
+/// (`buf == 0` is the probe): postcard's `String` decoder validates UTF-8 byte
+/// by byte, which is a BMC cliff for one id. Production keeps the postcard
+/// wire the real host writes.
+#[cfg(kani)]
+pub fn persona_skill(player_id: i32) -> Option<String> {
+    Some(persona_skill_id(player_id)?.as_str().into())
+}
+
+/// [`persona_skill`] without the `String`: the interned id.
+///
+/// The id is what callers feed straight back into an identity seam
+/// ([`card_sdk::ctx::find_card_id`], `invoke_entry`'s card handle), so the
+/// Kani twin never builds -- or re-interns -- the text. Production resolves
+/// and re-interns (`intern` is a hash the real guest pays anyway).
+#[cfg(kani)]
+pub fn persona_skill_id(player_id: i32) -> Option<card_sdk::ctx::NameId> {
+    if unsafe { raw::sys::persona_skill(player_id, 0, 2) } != 2 {
+        return None;
+    }
+    let (p, scratch) = raw::out_buf(2);
+    if unsafe { raw::sys::persona_skill(player_id, p, 2) } != 2 {
+        return None;
+    }
+    let buf = raw::out_read(p, 2, scratch);
+    let id = card_sdk::ctx::NameId(u16::from_le_bytes([
+        buf.get(0).copied().unwrap_or(0),
+        buf.get(1).copied().unwrap_or(0),
+    ]));
+    if id.is_valid() {
+        Some(id)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(kani))]
+pub fn persona_skill_id(player_id: i32) -> Option<card_sdk::ctx::NameId> {
+    persona_skill(player_id).map(|s| card_sdk::ctx::intern(&s))
+}
+
+#[cfg(not(kani))]
 pub fn persona_skill(player_id: i32) -> Option<String> {
     let cap = 1024;
     let (p, scratch) = raw::out_buf(cap as usize);

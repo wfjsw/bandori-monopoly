@@ -893,6 +893,10 @@ impl PlayCtx<'_> {
     /// End of turn: status effects wear off, next turn queued.
     pub(crate) fn end_turn(&mut self, i: usize) -> Flow<()> {
         self.w.st.step = stage::END;
+        // The offer claim is one move's; a claim staging is still holding came
+        // from outside a move (see `main_move`), so it dies with this turn.
+        // Writes later in the end hooks are for the next turn's move and stay.
+        self.w.turn.plan.claimed = false;
         // A blocked main move's withheld settle (G03 §4.7). The blocked branch
         // stamped `Settle` by default and a card could only decline with
         // `Skip`; run the ordinary landing settle at the seat's own tile (the
@@ -1867,7 +1871,15 @@ impl PlayCtx<'_> {
         // is *still* immobile re-stamps it at the clamp in `run_move_body`.
         self.w
             .set_blocked_settle_answer(i, super::world::SettleAnswer::Unanswered);
-        let seed = self.w.turn.plan.clone();
+        // A claim written outside a frame (a turn-start hook, a pressed skill)
+        // landed on staging. It is one-shot and belongs to exactly the move
+        // that consumes it, so clear it from staging here rather than let it
+        // stand the offers of every later move down too.
+        let seed = {
+            let mut seed = self.w.turn.plan.clone();
+            self.w.turn.plan.claimed = false;
+            seed
+        };
         self.w.begin_plan(i, PlanKind::MainMove, seed);
         let m = self.w.plan().clone();
         self.adopt_plan(&m);

@@ -205,12 +205,15 @@ impl Slot {
 /// `len_mismatch_fail` panic path CBMC still explores. `s.len() <= MAX_NAME`
 /// here (the caller rejects longer).
 #[cfg(kani)]
-fn leak_name(s: &[u8]) -> &'static [u8] {
+fn leak_name(s: &[u8], cell: usize) -> &'static [u8] {
     let n = s.len().min(MAX_NAME);
-    // Leak justified by the `leak_name` docs above: the bytes are write-once
-    // and must be a real `'static` so a returned slice can outlive every
-    // `&mut Table`. Fixed `MAX_NAME` block; one per interned name, freed never.
-    let buf: &'static mut [u8] = Box::leak(Box::new([0u8; MAX_NAME]));
+    // Write-once and a real `'static` so a returned slice can outlive every
+    // `&mut Table` (see the docs above). Kani does **not** use the heap here:
+    // every `Box::leak` is a fresh object under the verifier's
+    // `same_allocation` model, and `known_init` alone leaks seventeen of them
+    // (minutes of checks per harness). One fixed `MAX_NAME` cell per name in a
+    // static arena instead; `cell < MAX_INTERN` is the insert's own bound.
+    let buf: &'static mut [u8; MAX_NAME] = unsafe { &mut (*core::ptr::addr_of_mut!(ARENA))[cell] };
     macro_rules! cpy {
         ($i:expr) => {
             // `.get`, not `[i]`: no slice_index_fail panic path.
@@ -286,10 +289,16 @@ fn leak_name(s: &[u8]) -> &'static [u8] {
     &buf[..n]
 }
 
+/// Kani name-byte arena — one `MAX_NAME` cell per interned name, indexed by
+/// insertion order. Write-once like the production leaks; static so the
+/// verifier never sees the allocator.
+#[cfg(kani)]
+static mut ARENA: [[u8; MAX_NAME]; MAX_INTERN] = [[0u8; MAX_NAME]; MAX_INTERN];
+
 /// Production twin of [`leak_name`] — ordinary copy, no length cap. See the
 /// write-once note on the `cfg(kani)` twin for why the bytes are leaked.
 #[cfg(not(kani))]
-fn leak_name(s: &[u8]) -> &'static [u8] {
+fn leak_name(s: &[u8], _cell: usize) -> &'static [u8] {
     // Leak justified by the `leak_name` docs above: write-once name bytes that
     // must be a real `'static` (no later `&mut Table` may alias them). One
     // allocation per distinct name, sized to the name, never freed.
@@ -667,7 +676,8 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
         slot.hash = h;
         // Write-once leak, not table memory — `resolve` can hand out a real
         // `&'static` (see [`leak_name`]). The zero-loop copy lives there.
-        slot.name = leak_name(s);
+        let cell = t.n as usize;
+        slot.name = leak_name(s, cell);
         t.n += 1;
         NameId(first_empty as u16)
     })
@@ -710,7 +720,8 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
         // Write-once leak — `resolve` hands out a real `&'static` (see
         // [`leak_name`]). `bytes_eq` above already distinguishes same-hash
         // names, so the slot does not need a separate `len` column.
-        slot.name = leak_name(s);
+        let cell = t.n as usize;
+        slot.name = leak_name(s, cell);
         t.n += 1;
         NameId(first_empty as u16)
     })

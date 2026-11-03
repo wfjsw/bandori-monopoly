@@ -948,3 +948,204 @@ pub fn tomori_card_02_mutant_is_detected() {
         "mutant: 1-stay spec must not match the 2-stay card"
     );
 }
+
+// ===========================================================================
+// G05 `MyGO:即使迷茫着` (2) placed offer
+// 「[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要
+//  移动格数为你当前手牌张数」
+// The question is the entry's declare, so a 不发动 never enters the body and
+// leaves no flash or log. Seat-symmetric (「你的」): user=0/1.
+// ===========================================================================
+
+const EVEN_LOST: &str = "MyGO:即使迷茫着";
+
+crate::host_subset!(even_lost_offer_dispatch {
+    hand_size => arm_hand_size,
+    plan_claimed => arm_plan_claimed,
+    plan_claim => arm_plan_claim,
+    fixed_roll => arm_fixed_roll,
+    set_fixed_roll => arm_set_fixed_roll,
+    set_steps => arm_set_steps,
+    state_get => arm_state_get,
+    opt_int | opt_str | opt_tile => arm_opt,
+    ask => arm_ask,
+    set_dest => arm_set_fate,
+    log | effect => arm_log,
+});
+
+/// The offer's pre-state: the card is placed (the running instance) and the
+/// seat holds `hand` cards (the `hand_resonance` view is the only hand the
+/// model reads). `answers[0] = 0` accepts.
+fn even_lost_offer(user: i32, hand: i32, answer: i32) -> i32 {
+    host::install_backend(even_lost_offer_dispatch);
+    sparse2_user(even_lost_offer_dispatch, user);
+    let mut uid = 0;
+    world::with_world_mut(|w| {
+        uid = w.place_instance(user, EVEN_LOST);
+        for s in 0..4 {
+            w.hand[s] = false;
+        }
+        for p in 0..MAX_PLAYERS {
+            w.hand_resonance[p] = 0;
+        }
+        w.hand_resonance[user as usize] = hand;
+        w.answers[0] = answer;
+        w.next_answer = 0;
+        w.symbolic_answers = false;
+        w.last_uid = uid;
+        w.bound_uid = uid;
+    });
+    uid
+}
+
+fn even_lost_gone(uid: i32) -> bool {
+    world::with_world(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].uid == uid {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    })
+}
+
+/// The accepted offer at a concrete seat: the hand size becomes the face and
+/// the step count, the card is filed to the discard, the move is claimed.
+fn even_lost_yes_sets_face_and_steps_iff_at(user: i32) {
+    let hand = 2;
+    let uid = even_lost_offer(user, hand, 0);
+    let condition = world::snapshot();
+    crate::kassert!(
+        card_mygo::even_lost::can_use_kani(user),
+        "an open move with a hand admits the offer"
+    );
+    let declared = card_mygo::even_lost::ask_use_kani(user);
+    let answer = invoke::unwrap_declared(declared);
+    let n = match answer {
+        card_sdk::Activation::Arg(n) => n,
+        card_sdk::Activation::Decline => {
+            kani::assert(false, "a yes answers the hand size");
+            return;
+        }
+    };
+    invoke::unwrap_done(card_mygo::even_lost::use_it_kani(user, n));
+
+    let dest = world::with_world(|w| w.dest);
+    let steps = world::with_world(|w| w.steps);
+    let face = world::with_world(|w| w.plan_fixed_roll);
+    let claimed = world::with_world(|w| w.plan_claimed);
+    let narration_n = world::with_world(|w| w.narration_n);
+    let post = world::snapshot();
+
+    crate::kassert!(n == hand, "the declare carries the hand size");
+    crate::kassert!(
+        spec::even_lost_use_ok(dest, steps, face, hand, even_lost_gone(uid)),
+        "the hand size is the face and the steps; the card is discarded"
+    );
+    crate::kassert!(claimed, "an accepted offer claims the move");
+    crate::kassert!(narration_n == 1, "exactly one log");
+    crate::kassert!(post.log_n == condition.log_n, "no effect log");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn even_lost_yes_sets_face_and_steps_iff() {
+    even_lost_yes_sets_face_and_steps_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn even_lost_yes_sets_face_and_steps_iff_user1() {
+    even_lost_yes_sets_face_and_steps_iff_at(1);
+}
+
+/// [停留] blocks the move (no [不受阻挡]): no offer.
+fn even_lost_blocked_move_noop_at(user: i32) {
+    even_lost_offer(user, 2, 0);
+    world::with_world_mut(|w| w.stay[user as usize] = 1);
+    let condition = world::snapshot();
+    kani::cover!(true, "[停留] preset");
+    crate::kassert!(
+        !card_mygo::even_lost::can_use_kani(user),
+        "stayed: no offer"
+    );
+    crate::kassert!(
+        spec::even_lost_unchanged(&condition, &world::snapshot(), 2),
+        "no-op leaves seat, plan and field"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn even_lost_blocked_move_noop() {
+    even_lost_blocked_move_noop_at(0);
+}
+
+/// Another offer already claimed the move.
+fn even_lost_claimed_move_noop_at(user: i32) {
+    even_lost_offer(user, 2, 0);
+    world::with_world_mut(|w| w.plan_claimed = true);
+    let condition = world::snapshot();
+    kani::cover!(true, "claim preset");
+    crate::kassert!(
+        !card_mygo::even_lost::can_use_kani(user),
+        "claimed: no offer"
+    );
+    crate::kassert!(
+        spec::even_lost_unchanged(&condition, &world::snapshot(), 2),
+        "no-op leaves seat, plan and field"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn even_lost_claimed_move_noop() {
+    even_lost_claimed_move_noop_at(0);
+}
+
+/// A declined declare: no body, no face, no log, the card stays placed.
+fn even_lost_declined_noop_and_silent_at(user: i32) {
+    let uid = even_lost_offer(user, 2, 1);
+    let condition = world::snapshot();
+    let declared = card_mygo::even_lost::ask_use_kani(user);
+    let answer = invoke::unwrap_declared(declared);
+    let declined = matches!(answer, card_sdk::Activation::Decline);
+    kani::cover!(declined, "不发动 declines");
+    crate::kassert!(declined, "a no declines the offer");
+    let post = world::snapshot();
+    let narration_n = world::with_world(|w| w.narration_n);
+    crate::kassert!(narration_n == 0, "a declined declare is silent");
+    crate::kassert!(
+        spec::even_lost_unchanged(&condition, &post, 2),
+        "a decline leaves seat, plan and field"
+    );
+    crate::kassert!(!even_lost_gone(uid), "the card stays placed");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn even_lost_declined_noop_and_silent() {
+    even_lost_declined_noop_and_silent_at(0);
+}
+
+/// MUTANT: the face is a fixed number instead of the hand size.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+#[kani::should_panic]
+pub fn even_lost_yes_sets_face_and_steps_iff_mutant() {
+    let user = 0;
+    even_lost_offer(user, 2, 0);
+    invoke::unwrap_done(card_mygo::even_lost::use_it_kani(user, 5));
+    crate::kassert!(
+        world::with_world(|w| w.plan_fixed_roll) == 2,
+        "mutant: hand size is not the face"
+    );
+}

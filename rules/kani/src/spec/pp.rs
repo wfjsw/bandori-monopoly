@@ -674,3 +674,31 @@ pub fn log_empty(effects: &[Effect]) -> bool {
 fn _keep_max_cards() -> usize {
     MAX_CARDS
 }
+
+// ===========================================================================
+// G05 `PP:[冰川日菜]会发出怎样的声音呢？` (2)
+// 「[共鸣]本卡在[场地]时改变本卡代替的专属卡效果」
+// ===========================================================================
+
+/// The yes: the stand-in banishes itself (the fuel row is gone), exactly one
+/// new substitute instance is placed, it carries the stand-in's surface as
+/// `effective_card`, and the substitute's own crystals travelled with it.
+pub fn hina_mark_ok(
+    effective_marked: bool,
+    carried: i32,
+    pre_crystals: i32,
+    fuel_gone: bool,
+) -> bool {
+    effective_marked && carried == pre_crystals && fuel_gone
+}
+
+/// A declined [共鸣] leaves the substitute's marker unset, its crystals in
+/// place and the fuel card in hand.
+pub fn hina_no_mark_ok(
+    effective_unmarked: bool,
+    carried: i32,
+    pre_crystals: i32,
+    fuel_kept: bool,
+) -> bool {
+    effective_unmarked && carried == pre_crystals && fuel_kept
+}

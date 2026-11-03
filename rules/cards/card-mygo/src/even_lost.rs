@@ -121,6 +121,13 @@ pub fn go_kani(player_id: i32) -> card_sdk::Asked {
     use_it(player_id, ctx::hand_size(player_id))
 }
 
+/// The declare's collector — it may prompt, so it answers a `Declared`.
+#[cfg(kani)]
+#[inline(always)]
+pub fn ask_use_kani(player_id: i32) -> Declared<i32> {
+    ask_use(player_id)
+}
+
 /// The declare's body arm. Its arg is whatever the declare answered, so the
 /// caller supplies it.
 #[cfg(kani)]
@@ -133,4 +140,12 @@ pub fn use_it_kani(player_id: i32, n: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
+}
+
+/// The offer's guard, for the blocked/claimed no-op proofs (the engine runs it
+/// host-side).
+#[cfg(kani)]
+#[inline(always)]
+pub fn can_use_kani(player_id: i32) -> bool {
+    can_use(player_id)
 }
