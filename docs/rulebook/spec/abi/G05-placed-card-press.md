@@ -1,6 +1,7 @@
 # ABI design G05 — Offers from placed cards
 
-**Status:** draft for user review · design only, no source touched.
+**Status:** implemented — landed on master in `9ce8a398`. The `Must land with:
+G13` dependency below still carries the G13 follow-ups.
 **Worktree:** `.claude/worktrees/g05-design-review` (branch
 `worktree-g05-design-review`), base `master@b97eac0d` (ABI 110, SAVE 14,
 RECORD 4).
