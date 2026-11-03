@@ -1016,7 +1016,13 @@ pub fn tile_forward<C: HostCtx>(c: &mut C, a: i32, b: i32) -> Result<i32, HostEr
 
 /// `ctx::nearest` -- the nearest other present seat(s) by distance kind,
 /// postcard-encoded into the guest buffer.
-pub fn nearest<C: HostCtx>(c: &mut C, by: i32, kind: i32, buf: i32, cap: i32) -> Result<i32, HostError> {
+pub fn nearest<C: HostCtx>(
+    c: &mut C,
+    by: i32,
+    kind: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
     let list = { c.st().wr().nearest(by, kind) };
     let bytes = postcard::to_allocvec(&list)
         .map_err(|e| HostError::trap(format!("nearest encode: {e}")))?;

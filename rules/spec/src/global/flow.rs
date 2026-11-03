@@ -60,6 +60,7 @@ fn turn_ended(step: &Step<'_>) -> bool {
     has_key(step, "log.end_turn")
         || has_key(step, "log.stunned_skip")
         || has_key(step, "log.exiled_skip")
+        || has_key(step, "log.exiled_skip_hold")
 }
 
 /// Exile layers of player `i`.
@@ -654,7 +655,10 @@ pub fn g_flow_08(step: &Step<'_>) -> Result<(), String> {
     }
     for e in step.events {
         let k = spec_kit::event_key(e);
-        if k == "log.stunned_skip" || k == "log.exiled_skip" {
+        if matches!(
+            k.as_str(),
+            "log.stunned_skip" | "log.exiled_skip" | "log.exiled_skip_hold"
+        ) {
             seats.push(e.player_id as usize);
         }
     }

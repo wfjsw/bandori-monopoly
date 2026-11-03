@@ -77,7 +77,12 @@ fn turn_ended(events: &[MatchEvent], who: usize) -> bool {
     let w = who as i32;
     for e in events {
         let k = msg_key(e);
-        if e.player_id == w && matches!(k, "end_turn" | "stunned_skip" | "exiled_skip") {
+        if e.player_id == w
+            && matches!(
+                k,
+                "end_turn" | "stunned_skip" | "exiled_skip" | "exiled_skip_hold"
+            )
+        {
             return true;
         }
     }
@@ -349,7 +354,13 @@ const G_STATUS_03: Clause = Clause::new(
 /// Executable form of [`G_STATUS_03`].
 pub fn g_status_03(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.condition.st.players.len() {
-        verify_stay_turn_end(step.condition, step.post, step.events, i, step.post_prompt_open)?;
+        verify_stay_turn_end(
+            step.condition,
+            step.post,
+            step.events,
+            i,
+            step.post_prompt_open,
+        )?;
     }
     Ok(())
 }
@@ -447,7 +458,13 @@ const G_STATUS_05: Clause = Clause::new(
 /// Executable form of [`G_STATUS_05`].
 pub fn g_status_05(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.condition.st.players.len() {
-        verify_stun_turn_end(step.condition, step.post, step.events, i, step.post_prompt_open)?;
+        verify_stun_turn_end(
+            step.condition,
+            step.post,
+            step.events,
+            i,
+            step.post_prompt_open,
+        )?;
     }
     Ok(())
 }
@@ -547,7 +564,13 @@ const G_STATUS_07: Clause = Clause::new(
 /// Executable form of [`G_STATUS_07`].
 pub fn g_status_07(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.condition.st.players.len() {
-        verify_exile_turn_start(step.condition, step.post, step.events, i, step.post_prompt_open)?;
+        verify_exile_turn_start(
+            step.condition,
+            step.post,
+            step.events,
+            i,
+            step.post_prompt_open,
+        )?;
     }
     Ok(())
 }
@@ -903,7 +926,10 @@ pub fn verify_stun_turn_end(
         let skipped = events.iter().any(|e| {
             e.r#type == "status"
                 && e.player_id == who as i32
-                && matches!(msg_key(e), "stunned_skip" | "exiled_skip")
+                && matches!(
+                    msg_key(e),
+                    "stunned_skip" | "exiled_skip" | "exiled_skip_hold"
+                )
         });
         // Row 4's skip is logged at the *end* of 开始阶段, after `turnStartBefore`
         // / `turnStart` (and the exile return) have run. A counteraction on any

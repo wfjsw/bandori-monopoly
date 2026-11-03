@@ -71,8 +71,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // plus any seat a `R:必然的联系（莉莎）` copy grants the waiver on
     // (「无视【距离最近】」). The pick only appears when that makes the set
     // non-singleton, so the plain path is unchanged.
-    let candidates =
-        bandori_std::nearest::skill_candidates(player_id, ctx::DistanceKind::Forward);
+    let candidates = bandori_std::nearest::skill_candidates(player_id, ctx::DistanceKind::Forward);
     let to = match candidates.len() {
         0 => return Ok(()),
         1 => ctx::player_pos(candidates[0]),

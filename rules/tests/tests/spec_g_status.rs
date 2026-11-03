@@ -635,7 +635,8 @@ fn exile_held_grant_verifier_rejects_peel() {
     // Compliant: hold keeps the layer.
     let mut keep = condition.clone();
     set_layer(&mut keep, 1, "exile", 1);
-    verify_exile_turn_start(&condition, &keep, &events, 1, false).expect("held grant keeps its layer");
+    verify_exile_turn_start(&condition, &keep, &events, 1, false)
+        .expect("held grant keeps its layer");
 }
 
 /// Mutants on [除外] turn-start decay + no re-acquire.

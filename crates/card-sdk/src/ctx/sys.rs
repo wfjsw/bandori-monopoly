@@ -291,8 +291,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_nearest_with_prop"
         )]
-        pub fn nearest_with_prop(by: i32, kind: i32, kp: i32, kl: i32, buf: i32, cap: i32)
-            -> i32;
+        pub fn nearest_with_prop(by: i32, kind: i32, kp: i32, kl: i32, buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_neighbor"

@@ -446,7 +446,11 @@ fn g07_welcome_self_target_can_be_cancelled() {
         Some(0),
         "the counter saw the self name"
     );
-    assert_eq!(t.state(0, "skillState"), 1, "the cancelled pick does nothing");
+    assert_eq!(
+        t.state(0, "skillState"),
+        1,
+        "the cancelled pick does nothing"
+    );
 }
 
 #[test]
@@ -781,11 +785,7 @@ fn g07_lisa_bond_waiver_dies_with_the_instance() {
     t.m.world_mut().st.players[1]
         .field
         .retain(|f| f.card != LISA_LINK);
-    assert_eq!(
-        probe_exempt(&mut t, 0),
-        0,
-        "the waiver went with the card"
-    );
+    assert_eq!(probe_exempt(&mut t, 0), 0, "the waiver went with the card");
 }
 
 #[test]
@@ -892,7 +892,11 @@ fn g07_lisa_goddess_no_prompt_without_waiver() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), 10, "the plain path still teleports to the nearest");
+    assert_eq!(
+        t.pos(0),
+        10,
+        "the plain path still teleports to the nearest"
+    );
 }
 
 // =====================================================================

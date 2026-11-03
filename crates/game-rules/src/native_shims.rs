@@ -1007,9 +1007,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::nearest(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_nearest_with_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
-        Ok(crate::hostfns::nearest_with_prop(
-            self, a[0], a[1], a[2], a[3], a[4], a[5],
-        )? as i64)
+        Ok(crate::hostfns::nearest_with_prop(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
     }
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::neighbor(self, a[0], a[1])? as i64)

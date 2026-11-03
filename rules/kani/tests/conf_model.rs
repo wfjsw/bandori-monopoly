@@ -495,10 +495,13 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("set_owner {tile} {player_id}"));
     }
     fn dist(&self, a: i32, b: i32) -> i32 {
-        (b - a).rem_euclid(60)
+        // The shorter way around the board loop.
+        let d = (b - a).rem_euclid(60);
+        d.min(60 - d)
     }
     fn tile_forward(&self, a: i32, b: i32) -> i32 {
-        self.dist(a, b)
+        // Steps forward from a to b around the board loop.
+        (b - a).rem_euclid(60)
     }
     fn nearest(&self, by: i32, kind: i32) -> Vec<i32> {
         self.nearest_with_prop(by, kind, None)
@@ -517,7 +520,11 @@ impl CardWorld for ConfWorld {
             if p == by || self.out[p as usize] {
                 continue;
             }
-            let d = self.dist(at, self.pos[p as usize]);
+            let d = if shortest {
+                self.dist(at, self.pos[p as usize])
+            } else {
+                self.tile_forward(at, self.pos[p as usize])
+            };
             if !shortest && d == 0 {
                 continue;
             }

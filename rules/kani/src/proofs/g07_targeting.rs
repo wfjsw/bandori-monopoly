@@ -11,7 +11,8 @@ use kani::cover;
 use crate::kassert;
 use crate::spec::g07_targeting::{
     counts, exemption, nearest, nearest_with_prop, pipeline, prop_match, tile_counts, Instance,
-    CANCELLED, COUNT, GATE, IMMUNE, LANDED, REDIRECT, SEATS, UNTARGETABLE, WINDOW,
+    CANCELLED, COUNT, EARLY_CANCEL, GATE, IMMUNE, LANDED, OUT, REDIRECT, SEATS, UNTARGETABLE,
+    WINDOW,
 };
 
 /// Symbolic pipeline inputs. `p`/`by` stay in the four-seat model and a
@@ -128,12 +129,14 @@ pub fn pipeline_stages_iff() {
     kassert!(got.named == named, "the name is the post-redirect seat");
     kassert!(got.landed == landed, "only a landed call answers");
 
-    // A self name that stays self runs the gate and the window, never the
-    // count or the shield.
+    // A self designation that gets past `Untargetable` runs the window; one
+    // an earlier stage refuses never reaches it. Neither the count nor the
+    // shield applies to a self name.
     kassert!(
         named != by
-            || (got.stages & (UNTARGETABLE | WINDOW)) == (UNTARGETABLE | WINDOW),
-        "self includes Untargetable and the window"
+            || (got.stages & (OUT | EARLY_CANCEL | GATE | UNTARGETABLE)) != 0
+            || got.stages & WINDOW != 0,
+        "a self designation past Untargetable runs the window"
     );
     kassert!(
         named != by || got.stages & (COUNT | IMMUNE) == 0,
@@ -243,7 +246,10 @@ pub fn targeted_increment_drops_turn_mutant() {
     let named: i32 = kani::any();
     let by: i32 = kani::any();
     let turn: i32 = kani::any();
-    kassert!(counts(named, by, turn) == (named != by), "turn guard dropped");
+    kassert!(
+        counts(named, by, turn) == (named != by),
+        "turn guard dropped"
+    );
 }
 
 /// MUTANT: self counted.
@@ -393,7 +399,11 @@ pub fn nearest_with_prop_iff() {
 
     let mut want = raw;
     for s in 0..SEATS {
-        if s != by && present[s] && raw & (1 << s) == 0 && prop_match(&values[s], by as i32) {
+        if s != by
+            && present[s]
+            && raw & (1 << s) == 0
+            && prop_match(core::slice::from_ref(&values[s]), by as i32)
+        {
             want |= 1 << s;
         }
     }
@@ -418,12 +428,15 @@ pub fn nearest_with_prop_drops_matches_mutant() {
 #[kani::proof]
 #[kani::should_panic]
 pub fn nearest_with_prop_admits_farther_mutant() {
-    let present = [false, true, true, false];
-    let measure = [0, 3, 7, 0];
-    let values = [None, Some(5), None, None];
+    // P1 is nearest and does not match (the raw set); P2 is farther and does
+    // match (a legitimate extra); P3 is farther still and does not match, so
+    // only a mutant that appends every farther seat adds it.
+    let present = [false, true, true, true];
+    let measure = [0, 3, 5, 7];
+    let values = [None, None, Some(0), None];
     let got = nearest_with_prop(0, &present, &measure, &values, true);
-    // P1 matches at 3; P2 measures 7 without a match, yet the mutant adds it.
-    kassert!(got == 0b0010, "farther admitted");
+    // The real set is 0b0110; the mutant's is every farther seat, 0b1110.
+    kassert!(got == 0b1110, "only the farther match is admitted");
 }
 
 // ---- the property read and its gate ------------------------------------
@@ -444,10 +457,11 @@ pub fn prop_match_iff() {
 #[kani::proof]
 #[kani::should_panic]
 pub fn prop_match_unwrap_or_zero_mutant() {
-    let values = [None, Some(0), None, None];
+    // No instance carries the key; P1 carries another seat's value.
+    let values = [None, Some(1), None, None];
     let by = 0;
     let got = values.iter().any(|v| v.unwrap_or(0) == by);
-    // Only P1 carries the key's value, but the mutant matches P0 and P2 too.
+    // The real read is false; the mutant's absent P0/P2/P3 all read seat 0.
     kassert!(
         got == prop_match(&values, by),
         "absent keys admitted as seat 0"
@@ -473,11 +487,12 @@ pub fn exemption_iff() {
 #[kani::proof]
 #[kani::should_panic]
 pub fn exemption_without_the_card_gate_mutant() {
-    // One bond-less instance with no value (an unrelated placed card).
+    // An unrelated placed card that nevertheless carries the grantor: only the
+    // card-id gate (`bond`) excludes it.
     let instances = [
         Instance {
             bond: false,
-            grantor: None,
+            grantor: Some(0),
         },
         Instance {
             bond: false,
@@ -492,9 +507,7 @@ pub fn exemption_without_the_card_gate_mutant() {
             grantor: None,
         },
     ];
-    let got = instances
-        .iter()
-        .any(|i| prop_match(&[i.grantor], 0));
+    let got = instances.iter().any(|i| prop_match(&[i.grantor], 0));
     kassert!(got == exemption(0, &instances), "no card-id gate");
 }
 

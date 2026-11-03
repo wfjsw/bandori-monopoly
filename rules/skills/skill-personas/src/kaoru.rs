@@ -124,10 +124,12 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// （2）「在绝对距离最近的一名玩家场上放置3个[怪盗标记]，并使你的本次移动以微笑号
 /// 为起点」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    // 「绝对距离最近的一名玩家」 -- the host query answers the whole tied set
-    // in seat order (plus any seat a bond copy exempts), so the existing
-    // enumeration below is unchanged.
-    let near = ctx::nearest(player_id, ctx::DistanceKind::Shortest);
+    // 「绝对距离最近的一名玩家」 -- [`skill_candidates`] answers the whole tied
+    // set in seat order, plus any seat a bond copy exempts (「无视【距离最近】」
+    // applies to skills), so the existing enumeration below is unchanged.
+    //
+    // [`skill_candidates`]: bandori_std::nearest::skill_candidates
+    let near = bandori_std::nearest::skill_candidates(player_id, ctx::DistanceKind::Shortest);
     if near.is_empty() {
         return Ok(());
     }

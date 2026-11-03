@@ -30,9 +30,9 @@ pub fn grant(uid: i32, grantor: i32) -> i32 {
 /// `player_id + 1` for the same seat-0 reason; here the card-id gate makes the
 /// plain seat unambiguous.)
 pub fn exemption(grantor: i32, candidate: i32) -> bool {
-    ctx::field_instances(candidate)
-        .iter()
-        .any(|&(uid, card)| card == "R:必然的联系（莉莎）" && ctx::prop_at(uid, EXEMPTION) == grantor)
+    ctx::field_instances(candidate).iter().any(|&(uid, card)| {
+        card == "R:必然的联系（莉莎）" && ctx::prop_at(uid, EXEMPTION) == grantor
+    })
 }
 
 /// The candidate list of a 「距离最近」 **skill**: the nearest set plus the
