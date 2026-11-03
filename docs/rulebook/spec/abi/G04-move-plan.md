@@ -1,7 +1,7 @@
 # G04 — Move plan, walk sync and forced moves
 
-Status: **draft for review, design only** (2026-11-01 revision of the
-2026-10-28 draft). No source is edited by this document.
+Status: **implemented** — landed on master in `a15173fb`. This is the
+2026-11-01 revision of the 2026-10-28 draft.
 Worktree `/home/monopoly/web/.claude/worktrees/g04-design-review`, branch
 `worktree-g04-design-review`. Fits **on top of ABI v107** (G01 instance
 identity and G08 zone lifecycle landed; G02 pay pipeline landed — this

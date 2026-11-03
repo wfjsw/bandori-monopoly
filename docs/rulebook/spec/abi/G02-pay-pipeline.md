@@ -1,7 +1,9 @@
 # G02 — Pay pipeline payload, stages and raw-money windows
 
-Status: **draft for review, design only** (2026-10-31 revision of the
-2026-10-28 draft). No source is edited by this document.
+Status: **partially implemented** — the payload, shape, factor-scope and
+counter items landed on master in `d031d1b7`. Two items remain open and stay
+in `docs/rulebook/BACKLOG.md`: `pay-stage-presplit` and `raw-money-window`.
+This is the 2026-10-31 revision of the 2026-10-28 draft.
 Group: **G02**. Family: payment command context, pay shapes, factor scoping,
 settle identity on the payload and raw-money windows.
 
