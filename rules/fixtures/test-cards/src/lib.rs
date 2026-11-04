@@ -3138,10 +3138,15 @@ const INVOKED: CardDef = CardDef::new(
 
 fn invoked_body(player_id: i32) -> card_sdk::Asked {
     let by = ctx::invoke().map_or(-1, |f| f.by_instance);
+    let entry = ctx::invoke().map_or_else(String::new, |f| f.entry.as_str().into());
     ctx::log(
         player_id,
         &Msg::new(key!("invoked_frame"))
             .i("by", by as i64)
+            .i("self", ctx::self_uid() as i64)
+            .i("instance", ctx::invoke().map_or(-1, |f| f.instance) as i64)
+            .card("card", &trigger_card())
+            .card("entry", &entry)
             .i("paid", ctx::invoke_paid() as i64),
     );
     Ok(())
@@ -3169,6 +3174,106 @@ fn invoker_play(player_id: i32) -> card_sdk::Asked {
 fn invoker_body(player_id: i32) -> card_sdk::Asked {
     // A placed card's hook: `by_instance` is this instance.
     ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    Ok(())
+}
+
+/// G13 §10.2: the target instance is bound as `self_uid` inside the body and
+/// the caller's instance is back afterwards.
+const INVOKE_BIND: CardDef = CardDef::new(
+    "TEST:invoke_bind",
+    &[On::Action(Action::TurnEnd("", None, invoke_bind))],
+);
+
+fn invoke_bind(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("bind_before")).i("self", ctx::self_uid() as i64));
+    ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    ctx::log(player_id, &Msg::new(key!("bind_after")).i("self", ctx::self_uid() as i64));
+    Ok(())
+}
+
+/// G13 §10.2: `trigger.card` names the target inside the body and is restored
+/// to the caller after.
+const INVOKE_SEED: CardDef = CardDef::new(
+    "TEST:invoke_seed",
+    &[On::Action(Action::CardPlayed("", None, invoke_seed))],
+);
+
+/// The trigger's card (`trigger.cards`): the invoked card inside the invoke
+/// frame, the played card in the caller's `cardPlayed` hook.
+fn trigger_card() -> String {
+    ctx::trigger::cards()
+        .into_iter()
+        .next()
+        .map_or_else(String::new, |c| c.as_str().into())
+}
+
+fn invoke_seed(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("seed_before")).card("card", &trigger_card()));
+    ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    ctx::log(player_id, &Msg::new(key!("seed_after")).card("card", &trigger_card()));
+    Ok(())
+}
+
+/// G13 §10.2: an unknown entry is a no-op (`DEST_UNSET`), not a trap.
+const INVOKE_BAD_ENTRY: CardDef = CardDef::new(
+    "TEST:invoke_bad_entry",
+    &[On::Action(Action::TurnEnd("", None, invoke_bad_entry))],
+);
+
+fn invoke_bad_entry(player_id: i32) -> card_sdk::Asked {
+    let r = ctx::invoke_entry(player_id, "TEST:invoked", "nope");
+    ctx::log(player_id, &Msg::new(key!("bad_entry")).i("ok", r.is_ok() as i64));
+    Ok(())
+}
+
+/// G13 §10.2: an unknown card traps.
+const INVOKE_BAD_CARD: CardDef = CardDef::new(
+    "TEST:invoke_bad_card",
+    &[On::Action(Action::TurnEnd("", None, invoke_bad_card))],
+);
+
+fn invoke_bad_card(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_entry(player_id, "TEST:nope", "two")?;
+    Ok(())
+}
+
+/// G13 §10.2: a `Filter` entry is not invocable (its body shape differs).
+const INVOKE_FILTER: CardDef = CardDef::new(
+    "TEST:invoke_filter",
+    &[
+        On::Filter(Filter::PaySplitMul("", None, identity)).id("f"),
+        On::Action(Action::TurnEnd("", None, invoke_filter)),
+    ],
+);
+
+fn identity(_player_id: i32, value: i32) -> i32 {
+    value
+}
+
+fn invoke_filter(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_entry(player_id, "TEST:invoke_filter", "f")?;
+    Ok(())
+}
+
+/// G13 §10.2: `invoke_skill` resolves `entry::PRESS`.
+const INVOKE_SKILL_PROBE: CardDef = CardDef::new(
+    "TEST:invoke_skill",
+    &[On::Action(Action::TurnEnd("", None, invoke_skill_probe))],
+);
+
+fn invoke_skill_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_skill(player_id, "TEST:invoked")?;
+    Ok(())
+}
+
+/// G13 §10.2: `play_card` also lands on the first Play, not on a named entry.
+const PLAY_CARD_PROBE: CardDef = CardDef::new(
+    "TEST:play_card_probe",
+    &[On::Action(Action::TurnEnd("", None, play_card_probe))],
+);
+
+fn play_card_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::play_card("TEST:invoked", player_id)?;
     Ok(())
 }
 
@@ -3304,5 +3409,12 @@ card_sdk::ruleset!(&[
     PLAN_DECLINE,
     DUAL_ACTION,
     INVOKED,
-    INVOKER
+    INVOKER,
+    INVOKE_BIND,
+    INVOKE_SEED,
+    INVOKE_BAD_ENTRY,
+    INVOKE_BAD_CARD,
+    INVOKE_FILTER,
+    INVOKE_SKILL_PROBE,
+    PLAY_CARD_PROBE
 ]);

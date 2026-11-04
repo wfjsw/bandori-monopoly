@@ -456,6 +456,7 @@ fn mutsumi_never_2_band_2_removes_the_crychic_cards() {
     t.set_draw(0, &[]);
     t.set_discard(0, &[]);
     t.set_hand(0, &["CRYCHIC:（睦）从没有觉得..."]);
+    let money_before = t.money(0);
     t.play(0, "CRYCHIC:（睦）从没有觉得...").unwrap();
     let k = t
         .option("opt2")
@@ -494,6 +495,7 @@ fn mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall() {
     t.set_draw(0, &[]);
     t.set_discard(0, &[]);
     t.set_hand(0, &["CRYCHIC:（睦）从没有觉得..."]);
+    let money_before = t.money(0);
     t.play(0, "CRYCHIC:（睦）从没有觉得...").unwrap();
     let k = t
         .option("opt2")
@@ -516,6 +518,9 @@ fn mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall() {
         "filled to 10 then drew 2: {:?}",
         t.draw_pile(0)
     );
+    // The shortfall pays the cash-out on the crystals spent -- with none spare,
+    // the bound instance is not reached and nothing is paid.
+    assert_eq!(t.money(0), money_before, "no crystal, no cash-out");
 }
 
 // =====================================================================

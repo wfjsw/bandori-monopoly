@@ -524,3 +524,181 @@ fn invoke_from_plain_card_and_skill() {
         t.recent_keys(40)
     );
 }
+
+/// The last log with `key`, if any.
+fn last_log<'a>(t: &'a Table, key: &str) -> Option<&'a game_core::msg::Msg> {
+    let mut last = None;
+    for e in t.m.world().recent.iter() {
+        if e.msg.key().contains(key) {
+            last = Some(&e.msg);
+        }
+    }
+    last
+}
+
+/// `log.card_trap` bodies logged since `mark` -- a trap does not fail the turn.
+fn traps_since(t: &Table, mark: i32) -> Vec<String> {
+    t.events_since(mark)
+        .into_iter()
+        .filter(|e| e.msg.key().contains("card_trap"))
+        .map(|e| format!("{:?}", e.msg))
+        .collect()
+}
+
+fn int_arg(msg: &game_core::msg::Msg, name: &str) -> Option<i32> {
+    match msg.args.get(name) {
+        Some(game_core::msg::Arg::Integer(v)) => Some(*v as i32),
+        _ => None,
+    }
+}
+
+fn card_arg(msg: &game_core::msg::Msg, name: &str) -> Option<String> {
+    match msg.args.get(name) {
+        Some(game_core::msg::Arg::Card(c)) => Some(c.clone()),
+        _ => None,
+    }
+}
+
+/// The last `invoked_frame` logged from **inside** an invocation: only an
+/// invoke frame binds an instance (`instance >= 0`). The target card's own
+/// `TurnEnd` hook logs the same key outside one, with `instance == -1`.
+fn invoked_frame(t: &Table) -> Option<&game_core::msg::Msg> {
+    let mut last = None;
+    for e in t.m.world().recent.iter() {
+        if !e.msg.key().contains("invoked_frame") {
+            continue;
+        }
+        if matches!(int_arg(&e.msg, "instance"), Some(v) if v >= 0) {
+            last = Some(&e.msg);
+        }
+    }
+    last
+}
+
+/// G13 §4.1: the target's own instance is `self_uid` **inside** the body; the
+/// caller's instance is back when the body returns.
+#[test]
+fn invoke_binds_the_target_and_restores_the_outer_frame() {
+    let mut t = Table::vanilla(2);
+    let caller = t.place_raw(0, "TEST:invoke_bind");
+    let target = t.place_raw(0, "TEST:invoked");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    let frame = invoked_frame(&t).expect("the body ran");
+    assert_eq!(int_arg(frame, "self"), Some(target), "target instance bound");
+    assert_eq!(int_arg(frame, "instance"), Some(target));
+    assert_eq!(int_arg(last_log(&t, "bind_before").unwrap(), "self"), Some(caller));
+    assert_eq!(int_arg(last_log(&t, "bind_after").unwrap(), "self"), Some(caller));
+}
+
+/// G13 §4.2: 「该技能」 inside the body resolves to the **target** card; the
+/// caller's trigger.card is back afterwards.
+#[test]
+fn invoke_seeds_and_restores_the_trigger_card() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:invoke_seed");
+    t.place_raw(0, "TEST:invoked");
+    t.set_hand(0, &[]);
+    t.set_hand(1, &["TEST:lister"]);
+    drain(&mut t);
+    // Player 1's play: its `cardPlayed` is what seeds the trigger card.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.give_play(1, "TEST:lister").unwrap();
+    drain(&mut t);
+    let frame = invoked_frame(&t).expect("the body ran");
+    assert_eq!(
+        card_arg(frame, "card").as_deref(),
+        Some("TEST:invoked"),
+        "the trigger names the invoked card"
+    );
+    for key in ["seed_before", "seed_after"] {
+        assert_eq!(
+            card_arg(last_log(&t, key).unwrap(), "card").as_deref(),
+            Some("TEST:lister"),
+            "{key} keeps the played card"
+        );
+    }
+}
+
+/// An unknown entry is a no-op (`Ok`), so the caller carries on.
+#[test]
+fn invoke_unknown_entry_is_a_noop() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:invoke_bad_entry");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.place_raw(0, "TEST:invoked");
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(int_arg(last_log(&t, "bad_entry").unwrap(), "ok"), Some(1));
+    assert!(invoked_frame(&t).is_none(), "no body ran");
+}
+
+/// An unknown card traps.
+#[test]
+fn invoke_unknown_card_traps() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:invoke_bad_card");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert!(!traps_since(&t, mark).is_empty(), "unknown card traps: {:?}", t.recent_keys(24));
+}
+
+/// A `Filter` entry is not one of the invocable kinds and traps.
+#[test]
+fn invoke_filter_entry_traps() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:invoke_filter");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert!(!traps_since(&t, mark).is_empty(), "a Filter entry traps: {:?}", t.recent_keys(24));
+}
+
+/// `ctx::invoke_skill` is sugar for the press: it runs the card's Play, never a
+/// named action entry.
+#[test]
+fn invoke_skill_is_invoke_entry_press() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:invoke_skill");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.place_raw(0, "TEST:invoked");
+    t.end(0).unwrap();
+    drain(&mut t);
+    let frame = invoked_frame(&t).expect("the body ran");
+    // The resolved id of the bare `On::Play` is empty; `press` is a resolver,
+    // not an entry id.
+    assert_eq!(card_arg(frame, "entry").as_deref(), Some(""));
+}
+
+/// `play_card` resolves the first Play, never a named action entry.
+#[test]
+fn play_card_still_picks_the_play_entry() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:play_card_probe");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.place_raw(0, "TEST:invoked");
+    t.end(0).unwrap();
+    drain(&mut t);
+    let frame = last_log(&t, "invoked_frame").expect("the body ran");
+    assert_eq!(card_arg(frame, "entry").as_deref(), Some(""));
+}

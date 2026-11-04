@@ -1199,7 +1199,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_build
         | Op::card_buy
         | Op::card_offer_build
-        | Op::settle_tile_at
         | Op::card_mortgage
         | Op::query_guard
         | Op::declared_arg
@@ -1223,6 +1222,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::flash_card
         | Op::flash_card_keyed
         | Op::flash_tile => arm_protocol_stub(a),
+
+        // A protocol stub, but recorded: a clause can still be held to "it
+        // settles here, and nowhere when it is on no square".
+        Op::settle_tile_at => arm_settle_tile_at(a),
 
         // ---- cross-card messages (`ctx::send` / `On::Message`) ----
         Op::send => arm_send(a),
@@ -2012,7 +2015,9 @@ pub fn arm_roll(a: Args) -> i64 {
     if purpose == 1 {
         arm_do_move_roll(a)
     } else {
-        roll_dice(count, sides) as i64
+        let v = roll_dice(count, sides);
+        world::with_world_mut(|w| w.roll_calls = w.roll_calls.saturating_add(1));
+        v as i64
     }
 }
 
@@ -3374,8 +3379,31 @@ pub fn arm_round_no(a: Args) -> i64 {
     world::with_world(|w| w.round_no) as i64
 }
 
-pub fn arm_schedule_turn_end(_a: Args) -> i64 {
+pub fn arm_schedule_turn_end(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.last_schedule = (a0, a1);
+        w.schedule_turn_end_n = w.schedule_turn_end_n.saturating_add(1);
+    });
     0
+}
+
+/// `settle_tile_at` — a protocol stub (the settle's real scheduling is
+/// PROTOCOL-LEVEL), but record the call so a clause can still be held to "it
+/// settles here, and nowhere when placed nowhere".
+pub fn arm_settle_tile_at(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.last_settle = (a0, a1);
+        w.settle_calls = w.settle_calls.saturating_add(1);
+    });
+    0
+}
+
+/// `trigger::is_settle_redirect()` — the pending settle was card-forced
+/// (`TriggerMove::settle_redirect`).
+pub fn arm_trig_settle_redirect(_a: Args) -> i64 {
+    world::with_world(|w| w.move_snap.settle_redirect as i64)
 }
 
 pub fn arm_self_tile(a: Args) -> i64 {

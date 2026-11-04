@@ -6381,6 +6381,9 @@ impl<M: CardModules> RulesBridge<M> {
             }
             for (uid, raw) in world.field_instances(player_id as i32) {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                    if std::env::var("DBG_HOOK").is_ok() {
+                        eprintln!("SKIP uid={uid} kind={kind:?} reentrant");
+                    }
                     continue;
                 }
                 // A marked instance runs its effective card's surface.
