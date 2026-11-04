@@ -75,7 +75,7 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | C-R-学生会的检查-04 | place at half house cost | PROTOCOL-LEVEL | — | — | optional placement + pay | — |
 | C-R-学生会的检查-05/06 | forced stop + half rent | PROTOCOL-LEVEL | — | — | passer force-stop + settle rent factor | OPEN-触发结算 |
 | C-R-学生会的检查-07 | refund on under-collection | OPEN | — | — | 「本卡原应拿到的资金」 undefined | OPEN-STUDENT-REFUND |
-| C-R-必然的联系-01..04 | [反击] after skill teleport | PROTOCOL-LEVEL | — | — | [反击] window + play-area placement + ignore limit | — |
+| C-R-必然的联系-01..04 | [反击] after skill teleport | PROTOCOL-LEVEL | — | — | [反击] window + play-area placement; the ignore-limit half is the instance prop match on the modelled `nearest_with_prop` arm | — |
 | C-R-蓝玫瑰的骄傲-01 | 20% of Livehouse deeds | (pending more setup) | (spec in `spec::r`) | — | 「地契价值」 = tile price; rounding OPEN | OPEN-ROUND10 |
 | C-R-蓝玫瑰的骄傲-02/03 | teleport next unbought / RiNG 4 | PROTOCOL-LEVEL | — | — | teleport + main move + no-settle | OPEN-触发结算 |
 | C-R-轨迹-01..03 | bankruptcy reveal / take deed / demolish | PROTOCOL-LEVEL | — | — | bankruptcy window is engine scheduling | — |

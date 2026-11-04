@@ -50,12 +50,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("welcome_mujica_ask")),
         &candidates,
     )?;
-    // TODO(ABI): A pick of the user's own seat (the routine case -- it heads the
-    // list) runs only the out / cancel / gate checks and `redirect`; once the target
-    // is still the user it stops. the self-target tail is skipped -- `target_player`
-    // answers at `p == by` right after `redirect`, before Untargetable / `_targeted`
-    // / the `target` window / ImmuneAll, so only an EXIST-style redirect can re-name
-    // the pick; the rest of the pipeline never sees it.
+    // A pick of the user's own seat (the routine case -- it heads the list) is a
+    // self designation: it runs the full pipeline (out / cancel / gate /
+    // `redirect` / Untargetable / the `target` window) like any other name, and
+    // only skips the between-turns count and `ImmuneAll`, which do not apply to
+    // the seat's own card.
     let Some(hit) = ctx::target(who) else {
         return Ok(());
     };

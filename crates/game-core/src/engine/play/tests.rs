@@ -557,6 +557,25 @@ fn g04_forced_never_refused() {
     );
 }
 
+/// A body that pre-writes its own landing (`plan::set_teleport_to`) and then
+/// runs `run_planned_move` (`PP:[衍生]重叠的声音`) teleports once: the frame's
+/// copy is spent by the hop, not replayed by the post-window take.
+#[test]
+fn g04_prewritten_landing_teleports_once() {
+    let (d, mut w) = setup(2);
+    let target = first(&d, |x| !x.is_buyable() && x.name != d.tiles[0].name) as i32;
+    w.set_teleport_to(Some(Tile(target)));
+    w.set_settles(false);
+    let (w2, p) = run(&d, &w, &[], planned);
+    assert!(p.is_none());
+    assert_eq!(w2.st.players[0].pos, target);
+    assert_eq!(
+        w2.recent.iter().filter(|e| e.r#type == "teleport").count(),
+        1,
+        "the pre-written landing is taken once"
+    );
+}
+
 /// G04 §8.1 / I3: a forced move marked `main_override` on a free slot is the
 /// main move -- it latches the slot and consumes the staging.
 #[test]

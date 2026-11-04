@@ -930,6 +930,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::invoke_frame => arm_invoke_frame(a),
         Op::invoke_skill => arm_invoke_skill(a),
 
+        // ---- nearest selection (G07) ----
+        Op::nearest => arm_nearest(a),
+        Op::nearest_with_prop => arm_nearest_with_prop(a),
+
         // ---- events ----
         Op::event_is_active => {
             let id = name_id(a0, a1);
@@ -1191,8 +1195,15 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::turn_snapshot
         | Op::turn_start_pos
         | Op::schedule_turn_end
-        | Op::linger
-        | Op::targeted_count => arm_stub_zero(a),
+        | Op::linger => arm_stub_zero(a),
+        Op::targeted_count => world::with_world(|w| {
+            let p = a0;
+            if p >= 0 && (p as usize) < MAX_PLAYERS {
+                w.targeted_count[p as usize] as i64
+            } else {
+                0
+            }
+        }),
 
         // ---- hook-status flags (polarity-sensitive; see arm_*) ----
         // 0 on these means "cancelled / blocked / substituted", which makes
@@ -2526,6 +2537,154 @@ pub fn arm_invoke_frame(a: Args) -> i64 {
     encoded[23] = db[3];
     card_sdk::native::write(buf, &encoded);
     RECORD as i64
+}
+
+/// `ctx::nearest` -- the nearest other present seat(s), LE `i32`s. The
+/// selection is §7.5 of G07: raw nearest set in seat order, then (with a key)
+/// the matching seats distance-then-seat ordered, deduplicated.
+pub fn arm_nearest(a: Args) -> i64 {
+    arm_nearest_impl(a, false)
+}
+
+/// `ctx::nearest_with_prop` -- `arm_nearest` plus every seat holding an
+/// instance whose prop `key` (a `(handle, len)` pair like every name argument)
+/// equals `by`.
+pub fn arm_nearest_with_prop(a: Args) -> i64 {
+    arm_nearest_impl(a, true)
+}
+
+fn arm_nearest_impl(a: Args, with_prop: bool) -> i64 {
+    let [by, kind, kp, kl, buf, cap] = a;
+    let key = if with_prop {
+        Some(name_id(kp, kl))
+    } else {
+        None
+    };
+    world::with_world(|w| {
+        let n_players = w.n_players;
+        let at = if by >= 0 && by < n_players {
+            w.pos[by as usize]
+        } else {
+            -1
+        };
+        if at < 0 {
+            return 0;
+        }
+        let n_tiles = w.tiles.len() as i32;
+        if n_tiles <= 0 {
+            return 0;
+        }
+        let shortest = kind == 1;
+        let measure = |a: i32, b: i32| {
+            let d = ((b - a) % n_tiles + n_tiles) % n_tiles;
+            if shortest {
+                d.min(n_tiles - d)
+            } else {
+                d
+            }
+        };
+        let mut raw: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+        let mut raw_n = 0usize;
+        let mut best = i32::MAX;
+        let mut p = 0i32;
+        while p < n_players {
+            if p != by && !w.out[p as usize] {
+                let there = w.pos[p as usize];
+                if there >= 0 {
+                    let d = measure(at, there);
+                    if shortest || d != 0 {
+                        if d < best {
+                            best = d;
+                            raw_n = 0;
+                        }
+                        if d == best && raw_n < MAX_PLAYERS {
+                            raw[raw_n] = p;
+                            raw_n += 1;
+                        }
+                    }
+                }
+            }
+            p += 1;
+        }
+        let mut extra: [i32; MAX_PLAYERS] = [0; MAX_PLAYERS];
+        let mut extra_n = 0usize;
+        if let Some(key) = key {
+            let mut q = 0i32;
+            while q < n_players {
+                if q != by && !w.out[q as usize] && w.pos[q as usize] >= 0 {
+                    let mut held = false;
+                    let mut i = 0usize;
+                    while i < w.field_n as usize {
+                        let f = &w.field[i];
+                        if f.player == q && f.props.get_opt(key) == Some(by) {
+                            held = true;
+                        }
+                        i += 1;
+                    }
+                    let mut seen = false;
+                    let mut r = 0usize;
+                    while r < raw_n {
+                        if raw[r] == q {
+                            seen = true;
+                        }
+                        r += 1;
+                    }
+                    if held && !seen && extra_n < MAX_PLAYERS {
+                        extra[extra_n] = q;
+                        extra_n += 1;
+                    }
+                }
+                q += 1;
+            }
+            // Insertion sort by (distance, seat): the extra set is tiny.
+            let mut i = 1usize;
+            while i < extra_n {
+                let v = extra[i];
+                let kv = (measure(at, w.pos[v as usize]), v);
+                let mut j = i;
+                while j > 0 {
+                    let before = extra[j - 1];
+                    if (measure(at, w.pos[before as usize]), before) <= kv {
+                        break;
+                    }
+                    extra[j] = before;
+                    j -= 1;
+                }
+                extra[j] = v;
+                i += 1;
+            }
+        }
+        let total = raw_n + extra_n;
+        if buf == 0 {
+            return total as i64;
+        }
+        if cap < (total as i32) * 4 {
+            return -1;
+        }
+        let mut encoded = [0u8; MAX_PLAYERS * 4];
+        let mut i = 0usize;
+        while i < raw_n {
+            let b = (raw[i] as i32).to_le_bytes();
+            let o = i * 4;
+            encoded[o] = b[0];
+            encoded[o + 1] = b[1];
+            encoded[o + 2] = b[2];
+            encoded[o + 3] = b[3];
+            i += 1;
+        }
+        let mut j = 0usize;
+        while j < extra_n {
+            let b = extra[j].to_le_bytes();
+            let o = (raw_n + j) * 4;
+            encoded[o] = b[0];
+            encoded[o + 1] = b[1];
+            encoded[o + 2] = b[2];
+            encoded[o + 3] = b[3];
+            j += 1;
+        }
+        card_sdk::native::write(buf, &encoded[..total * 4]);
+        total as i64
+    })
 }
 
 /// `is_own_placement` -- did the running body mint this row? The real host
@@ -3984,7 +4143,14 @@ pub fn arm_target(a: Args) -> i64 {
                 return -1;
             }
             let owner = w.tiles[tile as usize].owner;
-            if owner >= 0 && (owner as usize) < w.n_players as usize {
+            // An own tile still runs the window; it is not «other source» for
+            // the count, and a designation during the seat's own turn is
+            // before its between-turns window.
+            if owner >= 0
+                && (owner as usize) < w.n_players as usize
+                && owner != w.trig_player
+                && owner != w.turn_player
+            {
                 w.targeted_count[owner as usize] =
                     w.targeted_count[owner as usize].saturating_add(1);
             }
@@ -4004,7 +4170,11 @@ pub fn arm_target(a: Args) -> i64 {
                 && (p as usize) < w.n_players as usize
                 && !w.out[p as usize]
             {
-                w.targeted_count[p as usize] = w.targeted_count[p as usize].saturating_add(1);
+                // A self-designation runs the window but never counts; the
+                // count only accumulates between the seat's turns.
+                if p != w.trig_player && p != w.turn_player {
+                    w.targeted_count[p as usize] = w.targeted_count[p as usize].saturating_add(1);
+                }
                 p as i64
             } else {
                 -1

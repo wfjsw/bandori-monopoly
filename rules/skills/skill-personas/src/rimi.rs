@@ -94,6 +94,8 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// （2）「[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房」.
 /// 「地产商」 is the agent tile class (`kind=agent`), not the buyable set --
 /// 可购买格子 explicitly excludes 地产商 (rulebook 「[可购买格子]」).
+/// TODO(ABI): the farthest-tie loop is hand-rolled over `ctx::dist`; `ctx::nearest`
+/// is the nearest direction only.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     let mut best = 0;

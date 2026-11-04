@@ -67,21 +67,21 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「将此次移动变为传送到距离你正向距离最近的角色所在的格子，触发结算」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    // 「距离你正向距离最近的角色」 -- the nearest character ahead.
-    let at = ctx::player_pos(player_id);
-    let n = ctx::tile_count();
-    let mut best = i32::MAX;
-    let mut to = -1;
-    for p in 0..ctx::player_count() {
-        if p == player_id || ctx::player_out(p) {
-            continue;
-        }
-        let d = ctx::tile_forward(at, ctx::player_pos(p));
-        if d > 0 && d < best {
-            best = d;
-            to = ctx::player_pos(p);
-        }
-    }
+    // 「距离你正向距离最近的角色所在的格子」 -- the nearest character ahead,
+    // plus any seat a `R:必然的联系（莉莎）` copy grants the waiver on
+    // (「无视【距离最近】」). The pick only appears when that makes the set
+    // non-singleton, so the plain path is unchanged.
+    let candidates = bandori_std::nearest::skill_candidates(player_id, ctx::DistanceKind::Forward);
+    let to = match candidates.len() {
+        0 => return Ok(()),
+        1 => ctx::player_pos(candidates[0]),
+        _ => ctx::player_pos(ctx::ask_player(
+            player_id,
+            &Msg::new(key!("lisa_pick_title")),
+            &Msg::new(key!("lisa_pick_ask")),
+            &candidates,
+        )?),
+    };
     if to < 0 {
         return Ok(());
     }

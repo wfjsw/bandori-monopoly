@@ -1194,6 +1194,45 @@ pub fn tile_forward<C: HostCtx>(c: &mut C, a: i32, b: i32) -> Result<i32, HostEr
     Ok({ c.st().wr().tile_forward(a, b) })
 }
 
+/// `ctx::nearest` -- the nearest other present seat(s) by distance kind,
+/// postcard-encoded into the guest buffer.
+pub fn nearest<C: HostCtx>(
+    c: &mut C,
+    by: i32,
+    kind: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let list = { c.st().wr().nearest(by, kind) };
+    let bytes = postcard::to_allocvec(&list)
+        .map_err(|e| HostError::trap(format!("nearest encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// `ctx::nearest_with_prop` -- the same set plus every seat holding an
+/// instance whose prop `key` equals `by`, the key read from the guest.
+pub fn nearest_with_prop<C: HostCtx>(
+    c: &mut C,
+    by: i32,
+    kind: i32,
+    kp: i32,
+    kl: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let key = guest_str(c, kp, kl)?;
+    let list = { c.st().wr().nearest_with_prop(by, kind, Some(&key)) };
+    let bytes = postcard::to_allocvec(&list)
+        .map_err(|e| HostError::trap(format!("nearest_with_prop encode: {e}")))?;
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
 pub fn neighbor<C: HostCtx>(c: &mut C, player_id: i32, dir: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().neighbor(player_id, dir) })
 }

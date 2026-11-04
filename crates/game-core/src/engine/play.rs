@@ -1347,6 +1347,15 @@ impl PlayCtx<'_> {
         let settles = m.settles;
         let reason = m.reason.clone();
         let ran = self.teleport_as(i, to, settles, reason, is_main_move)?;
+        // The frame's landing is spent by the hop just taken: a body that
+        // pre-shapes the step (`plan::set_teleport_to` then
+        // `run_planned_move`, `PP:[衍生]重叠的声音`) would otherwise have it
+        // replayed by the caller's post-window take, teleporting twice. A
+        // landing a later stage wrote onto the frame is a different value and
+        // stays for the take.
+        if self.w.plan().teleport_to == m.teleport_to {
+            self.w.plan_mut().teleport_to = None;
+        }
         m.kind = MoveKind::Teleport;
         m.rolled = false;
         m.total = 1;

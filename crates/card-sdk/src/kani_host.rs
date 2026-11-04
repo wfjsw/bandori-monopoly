@@ -448,6 +448,9 @@ pub enum Op {
     // v111 (G05/G13 invocation surface). 431-440 is this group's README band.
     invoke_entry = 431,
     invoke_frame = 432,
+    // v113 (G07 designation/nearest surface). 441-450 is this group's band.
+    nearest = 441,
+    nearest_with_prop = 442,
     // v114 (G08): the zone family (451-465 of the README band).
     zone_of = 451,
     attachment_host = 452,

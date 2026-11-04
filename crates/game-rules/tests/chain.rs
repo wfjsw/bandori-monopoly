@@ -94,9 +94,10 @@ fn answered_card(t: &Table) -> Option<String> {
     }
 }
 
-/// The prompt's `detail` key (`…detail.play` / `…detail.effect`): which raise
-/// of the same card the window answers.
-fn answered_raise(t: &Table) -> Option<String> {
+/// The `detail` key of the open counteraction prompt -- which link it answers
+/// (`ask.counteract.detail.play` for the card's own play round, `.effect` for
+/// the designation window the play opens).
+fn answered_detail(t: &Table) -> Option<String> {
     let p = t.prompt()?;
     match p.text.args.get("detail") {
         Some(Arg::Msg(m)) => Some(m.key().to_string()),
@@ -148,21 +149,25 @@ fn the_initial_user_is_asked_first() {
         t.dump_prompt()
     );
     t.decline();
-    // The play is [指定], so its effect raise is a second, fresh timing of the
-    // same card (CROSS-TESTS C13) with its own round -- P0 first again. A
-    // plain pass spends nothing, so every probe is offered there too.
-    assert_eq!(
-        answered_raise(&t).as_deref(),
-        Some("ask.counteract.detail.effect"),
-        "the effect raise's own round: {}",
-        t.dump_prompt()
-    );
-    assert_eq!(t.asked(), vec![0], "{}", t.dump_prompt());
-    t.decline();
-    assert_eq!(t.asked(), vec![1], "{}", t.dump_prompt());
-    t.decline();
-    assert_eq!(t.asked(), vec![2], "{}", t.dump_prompt());
-    t.decline();
+    // Nothing was declared against the play, so X settles and its designation
+    // opens a window of its own on the `effect` link -- a new timing with the
+    // same cycle. All three seats still hold their declined probes; a quiet lap
+    // closes it too.
+    for seat in [0, 1, 2] {
+        assert_eq!(
+            t.asked(),
+            vec![seat],
+            "the designation round asks seat {seat}: {}",
+            t.dump_prompt()
+        );
+        assert_eq!(
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.effect"),
+            "{}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
     assert_eq!(
         ev_args(&t, "aimer_done", "got"),
@@ -286,22 +291,23 @@ fn a_seat_with_no_eligible_card_is_skipped_without_a_prompt() {
         t.dump_prompt()
     );
     t.decline();
-    // The effect raise repeats the same skip on its own round.
-    assert_eq!(
-        answered_raise(&t).as_deref(),
-        Some("ask.counteract.detail.effect"),
-        "{}",
-        t.dump_prompt()
-    );
-    assert_eq!(t.asked(), vec![0], "{}", t.dump_prompt());
-    t.decline();
-    assert_eq!(
-        t.asked(),
-        vec![2],
-        "P1 is still skipped: {}",
-        t.dump_prompt()
-    );
-    t.decline();
+    // The designation's own `effect` window: P1 still holds nothing and is
+    // skipped again; P0 and P2 each pass on the quiet lap that closes it.
+    for seat in [0, 2] {
+        assert_eq!(
+            t.asked(),
+            vec![seat],
+            "the designation round asks seat {seat}: {}",
+            t.dump_prompt()
+        );
+        assert_eq!(
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.effect"),
+            "{}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());
 }
 
@@ -349,18 +355,18 @@ fn a_later_seats_declaration_re_opens_an_earlier_seat() {
         t.dump_prompt()
     );
     t.decline();
-    // Lap 3 brought no declaration -- quiet lap, so X's play round is closed
-    // and the declared probes settle LIFO. Their payments raise their own
-    // money windows (docs/ENGINE.md) and the [指定] play's effect raise is a
-    // fresh timing of its own (CROSS-TESTS C13); none of them is another lap of
-    // X's play round. Pass through them.
-    assert_ne!(
-        answered_raise(&t).as_deref(),
-        Some("ask.counteract.detail.play"),
-        "X's play round is closed after the quiet lap: {}",
-        t.dump_prompt()
-    );
+    // Lap 3 brought no declaration -- quiet lap, so X's round is closed and the
+    // declared probes settle LIFO. Each probe body moves money, and the money
+    // pipeline opens a window on every movement (docs/ENGINE.md); P0's leftover
+    // probe answers any effect link and is offered there. Those windows are
+    // fresh timings -- they must not be X's round.
     while t.prompt().is_some() {
+        assert_ne!(
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.play"),
+            "X's play round must be closed after the quiet lap (ruling 2026-10-07): {}",
+            t.dump_prompt()
+        );
         t.decline();
     }
     // LIFO: P1's later declaration settles before P2's earlier one.
@@ -408,17 +414,17 @@ fn the_round_closes_after_a_quiet_lap() {
     t.decline();
     assert_eq!(t.asked(), vec![2], "lap 2: {}", t.dump_prompt());
     t.decline();
-    // The quiet lap closes the play round on X: the declared probe settles,
-    // its money movement is a timing of its own (docs/ENGINE.md), and the
-    // [指定] play's effect raise follows as a fresh timing (CROSS-TESTS C13) --
-    // none of them is another lap of X's play round. Pass through them.
-    assert_ne!(
-        answered_raise(&t).as_deref(),
-        Some("ask.counteract.detail.play"),
-        "a quiet lap must close X's round (ruling 2026-10-07): {}",
-        t.dump_prompt()
-    );
+    // The quiet lap closes the round on X. The declared probe then settles and
+    // its money movement is itself a timing (the money pipeline opens a window
+    // on every movement); the leftover probes answer any effect link and are
+    // offered there. Those windows are fresh timings -- not X's round.
     while t.prompt().is_some() {
+        assert_ne!(
+            answered_detail(&t).as_deref(),
+            Some("ask.counteract.detail.play"),
+            "a quiet lap must close X's play round (ruling 2026-10-07): {}",
+            t.dump_prompt()
+        );
         t.decline();
     }
     assert_eq!(

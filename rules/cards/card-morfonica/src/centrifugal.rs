@@ -24,13 +24,12 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             // TODO(规则书)（第二次成为其他角色技能或卡牌的目标）: 规则书:
             // 「当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时」 `chain_has(Target) && target ==
             // owner && by >= 0 && by != owner` is the `target` effect entry, aimed at the
-            // owner, from another player's card. ）: the book counts designations between
-            // your turns -- `targeted_count` counts since your own turn start, so a
-            // targeting during your own turn counts too. the book says the second time --
-            // `>= 2` keeps offering the card on every later targeting. the book counts the
-            // second *targeting* -- a tile targeting opens the window but never advances
-            // `targeted_count`, so it is offered off an unrelated count; `tile_id < 0` would
-            // require a player target.
+            // owner, from another player's card. ）: `targeted_count` is the between-turns
+            // count -- it advances only while your own turn is not the current one, and both
+            // player names and tile names (of tiles you own) advance it (design G07 §7.3).
+            // the book says the second time -- `>= 2` keeps offering the card on every later
+            // targeting. the book counts the second *targeting*; the window may carry a tile
+            // (`tile >= 0`), not only a player.
             "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
             None,
             counteract).declares_negation().counter_reason(key!("centrifugal_when")),

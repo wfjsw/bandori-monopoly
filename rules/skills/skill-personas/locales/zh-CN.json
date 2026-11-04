@@ -140,6 +140,8 @@
   "lisa_gain": "慈爱女神：+1 [火罐]",
   "lisa_moved": "[传送]至 {{tile}}",
   "lisa_no_fire": "你需要 1 个[火罐]。",
+  "lisa_pick_ask": "传送到哪名角色所在的格子？",
+  "lisa_pick_title": "慈爱女神",
   "lisa_spend": "慈爱女神",
   "lisa_temp": "给 {{who}} 一个可超过上限的临时火罐",
   "lisa_temp_none": "给 {{who}} 的临时火罐没有放上（其火罐已达上限）",

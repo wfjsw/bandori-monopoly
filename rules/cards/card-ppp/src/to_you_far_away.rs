@@ -38,6 +38,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
+    // TODO(ABI): nearest/farthest by `ctx::dist` are hand-rolled here; `ctx::nearest`
+    // (Shortest) covers the nearest half, the farthest half stays local.
     let best = others
         .iter()
         .map(|&p| ctx::dist(pos, ctx::player_pos(p)))

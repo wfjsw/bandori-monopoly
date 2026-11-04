@@ -54,6 +54,11 @@ fn play_from_hand_flag_leaks_past_the_turn() {
             t.decline();
         }
         let _ = t.end(who);
+        // The END step may open its optional buy; clear it before the next
+        // turn's dice.
+        while t.prompt().is_some() {
+            t.decline();
+        }
     }
     assert!(
         !t.m.world().turn.play_from_hand,
@@ -98,6 +103,11 @@ fn kokoro_no_ame_leaves_turn_abnormal() {
             t.decline();
         }
         let _ = t.end(who);
+        // The END step may open its optional buy; clear it before the next
+        // turn's dice.
+        while t.prompt().is_some() {
+            t.decline();
+        }
     }
     let ab = &t.m.world().turn.abnormal;
     assert!(
@@ -141,6 +151,11 @@ fn budokan_leaves_targeted_counters() {
             t.decline();
         }
         let _ = t.end(who);
+        // The END step may open its optional buy; clear it before the next
+        // turn's dice.
+        while t.prompt().is_some() {
+            t.decline();
+        }
     }
     let tg = t.m.world().targeted.clone();
     assert!(

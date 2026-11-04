@@ -430,6 +430,12 @@ impl CardWorld for TestWorld {
     fn tile_forward(&self, _: i32, _: i32) -> i32 {
         0
     }
+    fn nearest(&self, _: i32, _: i32) -> Vec<i32> {
+        Vec::new()
+    }
+    fn nearest_with_prop(&self, _: i32, _: i32, _: Option<&str>) -> Vec<i32> {
+        Vec::new()
+    }
     fn neighbor(&self, _: i32, _: i32) -> i32 {
         -1
     }

@@ -1,7 +1,7 @@
 # G06 — Counteraction, join and negation windows
 
-Status: **draft for review, design only** (2026-11-01 revision of the
-2026-10-28 draft). No source is edited by this document.
+Status: **implemented** — landed on master in `b5c30afa`. This is the
+2026-11-01 revision of the 2026-10-28 draft.
 Worktree `/home/monopoly/web/.claude/worktrees/g06-design-review`, branch
 `worktree-g06-design-review`. Fits **on top of ABI v111** (G01, G08, G02, G04,
 G03 and G05 have landed); it does not redo them.

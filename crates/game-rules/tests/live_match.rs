@@ -599,12 +599,17 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
     )
     .expect("play the counter");
     let st = m.state();
-    let done = fixture_events(&st, "aimer_done");
-    assert_eq!(done.len(), 1);
+    // The negated activation never runs its body, so the aimer logs nothing;
+    // the negation line and the counter's own body are what the resolution
+    // shows.
+    assert!(
+        st.events.iter().any(|e| e.msg.key() == "log.card_negated"),
+        "the play's activation was negated"
+    );
     assert_eq!(
-        int_arg(done[0], "got"),
-        -1,
-        "the counter negated the declaration, so the targeting never landed"
+        fixture_events(&st, "aimer_done").len(),
+        0,
+        "a negated play never runs its body"
     );
     assert_eq!(
         fixture_events(&st, "counter_fired").len(),

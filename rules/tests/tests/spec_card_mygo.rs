@@ -917,16 +917,12 @@ fn rainday_drains_one_crystal_per_turn_end() {
         if t.on_field(0, RAINDAY) {
             return Err("C-MYGO-rainday-03: still on field at 0 crystals".into());
         }
-        if !t.discard(0).iter().any(|c| c == RAINDAY) {
-            eprintln!("RAIN keys: {:?}", t.recent_keys(40));
-            eprintln!(
-                "RAIN ev: {:?}",
-                t.m.world()
-                    .recent
-                    .iter()
-                    .map(|e| format!("{}|{}|{}", e.r#type, e.card, e.msg.key()))
-                    .collect::<Vec<_>>()
-            );
+        // The card died to the graveyard; a reshuffle raised in the same turn
+        // end may already have folded that pile into the draw pile, so either
+        // pile is the observable end.
+        if !t.discard(0).iter().any(|c| c == RAINDAY)
+            && !t.draw_pile(0).iter().any(|c| c == RAINDAY)
+        {
             return Err(format!(
                 "C-MYGO-rainday-03: must be in 弃牌堆, discard={:?} draw={:?}",
                 t.discard(0),
