@@ -370,6 +370,7 @@ impl SnapSrc for Fixture {
                 rolled: m.roll.is_some(),
                 path: Vec::new(),
                 effective: m.remaining as i32,
+                abnormal: false,
             });
         }
         tr.effects = t

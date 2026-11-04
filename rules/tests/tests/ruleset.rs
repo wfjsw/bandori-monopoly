@@ -171,6 +171,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
             rolled: true,
             effective: 12,
             path: Vec::new(),
+            abnormal: false,
         }),
         ..Default::default()
     };

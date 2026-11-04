@@ -261,10 +261,10 @@ produced it.
 
 | id | wire | class | filter | hook-only | meaning |
 |---:|---|---|---|---|---|
-| 132 | `inspected` | Action | no | yes | a card entered an inspection frame. Payload: `player_id` = deck owner, `target` = owner, `card` = the revealed card, `cards` = `[that card]`, `value` = reveal index, `by_card` = looker. Dispatched to the revealed card itself. |
-| 133 | `drawAfter` | Action | no | yes | one draw action finished. Payload: `player_id` = drawer, `value` = cards drawn, `cards` = the batch. |
+| 141 | `inspected` | Action | no | yes | a card entered an inspection frame. Payload: `player_id` = deck owner, `target` = owner, `card` = the revealed card, `cards` = `[that card]`, `value` = reveal index, `by_card` = looker. Dispatched to the revealed card itself. |
+| 142 | `drawAfter` | Action | no | yes | one draw action finished. Payload: `player_id` = drawer, `value` = cards drawn, `cards` = the batch. |
 
-These are this group's **README band** (132/133). Every draft group has its own
+These are this group's **README band** (141/142). Every draft group has its own
 consecutive band in landing order instead of all reaching for 111; both kinds
 move with the band if the order changes. Retired 104 is unrelated to
 `ABI_VERSION`.
@@ -648,7 +648,7 @@ the wasm cannot load on an older host), `CardPile` gains a wire code, and
 `take_card` / the refill sites change semantics around the frame. No existing
 signature or kind id moves. `ManifestOn` is unchanged; the kind pins
 (`kind_table_pin.rs`, `kinds.rs` `KINDS`, `on_parse.rs`) and the CEL listener
-list get 132/133 (the earlier groups take 111-131 ahead of this group).
+list get 141/142 (the earlier groups take 111-140 ahead of this group).
 
 ---
 

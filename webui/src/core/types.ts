@@ -93,6 +93,9 @@ export interface MatchPlayer {
   persona: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
   discard: string[]; mulligan: boolean; bankrupt: boolean; left: boolean; outOrder: number;
   assets: number; score: number; rank: number;
+  /** The over-limit hand was created by a draw that permits it
+   * (「可超过上限」); absent reads `false`. */
+  overHandAllowed?: boolean;
   /** Bot decision policy (`"standard"` / `"chaos"`). Ignored on a human seat. */
   mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
@@ -291,6 +294,11 @@ export interface MatchView {
   aiAnswer?: { answer: number; picked: string[]; worth: number } | null;
   /** Parallel to `hand`: would the engine allow each card right now? */
   playable?: boolean[];
+  /**
+   * Parallel to `hand`: would a bot offer it (static `prop::AI_NEVER`)?
+   * Combine with `playable`; never legality -- a human can still play it.
+   */
+  aiPlayable?: boolean[];
   /**
    * Parallel to `hand`: the card's bot-only **estimated execution cost**
    * (`prop::EST_COST`, user ruling 2026-10-07). Only bots / autopilot read it,

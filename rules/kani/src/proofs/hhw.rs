@@ -197,6 +197,7 @@ fn athletic_world_placed(user: i32, crystals: i32) {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals,
             props: NameMap::new(),
             effective_card: u16::MAX,

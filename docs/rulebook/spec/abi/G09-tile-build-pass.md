@@ -6,8 +6,9 @@ Worktree `/home/monopoly/web/.claude/worktrees/worktree-g09-design-review`, bran
 **Group:** G09, family "Tile, build, pass and house-removal hooks".
 **Ground truth:** `docs/rulebook/cards.json`; every fragment below was re-read
 from that file against the card id named beside it.
-**Base:** `ABI_VERSION` 113, `SAVE_VERSION` 16, `RECORD_VERSION` 4, engine kinds
-through 131, Kani `Op` through 450 (G01–G08 and G05/G13/G06/G07 landed).
+**Base:** `ABI_VERSION` 115, `SAVE_VERSION` 17, `RECORD_VERSION` 4, engine kinds
+through 134, Kani `Op` through 450 (G01–G08, G05/G13, G06, G07, G12 and G14
+landed).
 
 Terminology: **counteraction** = the [反击] window / chain link; **hook** = a
 passive listener (`On::Action` / `On::Filter` / a `[持续]` field body). Never
@@ -270,13 +271,13 @@ made inside an import: `card_build_as` charges, hooks and the card decide.
 
 ### 4.1 New engine kinds — `crates/card-sdk/src/abi.rs`, `crates/game-kinds`
 
-Wire ids **132–136** (fresh band above the highest id in use, 131; see §8 for
+Wire ids **135–139** (fresh band above the highest id in use, 134; see §8 for
 the README allocation shift). All get an `EngineKind` row in
 `crates/game-kinds/src/lib.rs` beside 75, with `is_filter: false` /
-`hook_only: false` like their rise sibling `houseAdded`. 132–133 are dual-role:
+`hook_only: false` like their rise sibling `houseAdded`. 135–136 are dual-role:
 a `TriggerKind` const (raise site, `ChainKind`) **and** an `ActionKind` const
 (the same id, the `Self(TriggerKind::X)` alias form `HouseAdded` uses at
-`abi.rs:2471`). 134–136 are `Effect.kind` spellings only — never raised, so they
+`abi.rs:2471`). 137–139 are `Effect.kind` spellings only — never raised, so they
 get a `TriggerKind` const for `effect::kind` / `effect::has` and the wire name,
 but no raise site.
 
@@ -285,17 +286,17 @@ but no raise site.
 /// `tileEffectBefore` -- before a tile's extra effects run, on a pass step and
 /// on a settle. Payload: `tile` (the governing tile), `position` (the board
 /// slot), `mv` (the move/step). Dual-role: a counteraction window and a hook.
-pub const TileEffectBefore: Self = Self::engine(132);
+pub const TileEffectBefore: Self = Self::engine(135);
 
 /// `houseRemoved` -- a tile's house count has just fallen.
 /// Payload: `tile`, `value` (the count after the fall).
 /// `player_id` is the tile's owner at the time of the write.
-pub const HouseRemoved: Self = Self::engine(133);
+pub const HouseRemoved: Self = Self::engine(136);
 
 // effect-only spellings (`Effect.kind`), one per write:
-pub const HouseAdd: Self = Self::engine(134);    // value = delta, target = owner
-pub const HouseRemove: Self = Self::engine(135); // value = delta, target = owner
-pub const OwnerSet: Self = Self::engine(136);    // value = new owner
+pub const HouseAdd: Self = Self::engine(137);    // value = delta, target = owner
+pub const HouseRemove: Self = Self::engine(138); // value = delta, target = owner
+pub const OwnerSet: Self = Self::engine(139);    // value = new owner
 
 // ActionKind — same ids, the `Self(TriggerKind::X)` alias form:
 pub const TileEffectBefore: Self = Self(TriggerKind::TileEffectBefore);
@@ -511,7 +512,7 @@ The engine round-trips `paid.loss` and clamps all charges at 0.
 
 | change | class |
 |---|---|
-| five new engine kind ids 132–136 | wire (kind table + `from_wire`) |
+| five new engine kind ids 135–139 | wire (kind table + `from_wire`) |
 | new imports above | wire (import table, `sys.rs`, `sys_kani.rs`, `native_shims.rs`) |
 | `HostRequest::BuildAs { player_id, tile, charge, amount, numerator, denominator, owner_required }` | host-internal (the new verb's request) |
 | `HostRequest::TileWrite { operation, tile, value }` (see §5.4) | host-internal (`set_houses` / `add_house` / `set_owner` become round-trips) |
@@ -1267,7 +1268,7 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
   `TurnCtx.plan.tags` (already serialized, v7), and `Trigger` / `TriggerMove`
   are never serialized (`Saved.pending` holds `Routine` state and `Live`, not
   triggers). `MoveCtx.path` keeps its type (`Vec<i32>`), only its meaning
-  changes; a save taken mid-move before v114 and restored after it carries
+  changes; a save taken mid-move before v116 and restored after it carries
   positions in that one path, which the next move overwrites -- only a `paid`
   window during the restored move can see it. `house_log` is per-run scratch.
   `SettleEntry` and `SettleFrame` are transient, as is `MovePlan.reach`. A save
@@ -1290,14 +1291,14 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
 
 ## 8. Versioning
 
-`ABI_VERSION` 112 → **113** (tenth group in landing order), entry inserted
+`ABI_VERSION` 115 → **116** (landed after G12 and G14), entry inserted
 immediately below the constant (newest first):
 
 ```
-/// v113: **tile events, one build pipeline, tile-write effects, house falls,
-///    move paths.** New engine kinds `tileEffectBefore` (132),
-///    `houseRemoved` (133) and the effect-only spellings `houseAdd` (134) /
-///    `houseRemove` (135) / `ownerSet` (136). `Trigger` gains `position` (the
+/// v116: **tile events, one build pipeline, tile-write effects, house falls,
+///    move paths.** New engine kinds `tileEffectBefore` (135),
+///    `houseRemoved` (136) and the effect-only spellings `houseAdd` (137) /
+///    `houseRemove` (138) / `ownerSet` (139). `Trigger` gains `position` (the
 ///    board position; `tile` is the tile, and a tile's rule instances, extras,
 ///    owner, houses, mortgage and props all travel with it) and `TriggerMove`
 ///    gains `path`; `prop::SWAPPED_TILE` (SDK sugar `ctx::set_swapped_tile`)
@@ -1316,16 +1317,17 @@ immediately below the constant (newest first):
 ///    `add_house` / `set_owner` now open an `effect` window with a declared
 ///    tile effect before applying and may be cancelled there; `add_house` /
 ///    `set_houses` raise `houseRemoved` on a fall, and `assign_deed`
-///    contributes a fall for the previous owner. SAVE_VERSION 16 and
+///    contributes a fall for the previous owner. SAVE_VERSION 17 and
 ///    RECORD_VERSION 4 unchanged.
 ```
 
 **README band shift.** G02's landed arithmetic kinds consumed 126–131, which
 were the tail of this group's allocated row (126–130) and G10's (131). Kind ids
 are wire-stable, so the allocation moves rather than the landed ids: G09 takes
-**132–136**, G10 **137**, G11 **138–139**; G12 keeps the still-free 107 and G14
-the empty row. The Op row moves to **452–463** (twelve imports). The README
-table and the group rows are edited with this document.
+**135–139**, G10 **140**, G11 **141–142**. G12's landing then took 134 for
+`abnormalGate`, so this group's block resumes above it; its Op row keeps
+**452–463** (twelve imports, above G12's 443–450). The README table and the
+group rows are edited with this document.
 
 The old two-argument import is a real alias, not sugar in the guest: an archived
 bundle calls the symbol directly. `card_build`'s handler keeps answering the

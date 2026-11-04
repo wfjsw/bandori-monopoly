@@ -138,10 +138,11 @@ bounces moves on instead of looping. Online it always moves well inside the
 turn timer.
 
 Limitations: auto-play is client-only, so other players do not see the
-`board.afk` tag on the seat. The command is computed against the *frame* the
-page holds, so a pressed command can be a beat stale if another seat acted
-meanwhile; the driver keeps its ordered candidates and moves on when the
-server refuses one.
+`board.afk` tag on the seat. It reads `aiPlayable` like a standard bot and so
+skips a card a bot would skip; a chaos takeover does not, matching the engine.
+The command is computed against the *frame* the page holds, so a pressed
+command can be a beat stale if another seat acted meanwhile; the driver keeps
+its ordered candidates and moves on when the server refuses one.
 
 ### Bot mentality (engine bots)
 

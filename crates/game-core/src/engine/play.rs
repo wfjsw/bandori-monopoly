@@ -962,6 +962,16 @@ impl PlayCtx<'_> {
             self.w.next_turn_pending = true;
             return Ok(());
         }
+        // The turn-end dispose is the backstop for a permitted excess
+        // (「可超过上限」): a skipped callback, a callback that drew, or a cap
+        // lowered below the callback's number all end here at the real limit.
+        while self.over_hand(i) {
+            let hand_len = self.w.hidden[i].hand.len();
+            let k = self.w.rng.below(hand_len);
+            let card = self.w.hidden[i].hand[k].clone();
+            self.discard(i, &card)?;
+        }
+        self.w.st.players[i].over_hand_allowed = false;
         {
             let s = &mut self.w.st.players[i];
             // Timed counters due now (timed layers wear off here). The
@@ -1087,6 +1097,7 @@ impl PlayCtx<'_> {
         self.w.turn.plan_scope.moves += 1;
         if is_main_move {
             self.w.turn.main_moved = true;
+            self.w.turn.move_activation_ordinal = self.w.turn.activation_ordinal;
         }
         let kind = if is_main_move {
             PlanKind::MainMove
@@ -1944,6 +1955,7 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
+        self.w.turn.move_activation_ordinal = self.w.turn.activation_ordinal;
         // Taking the main move lifts the 「无法移动」 premise: a withheld
         // turn-end settle (stamped at a blocked turn start, or by a card) is no
         // longer owed -- the move settles where it lands instead. A move that
@@ -2712,6 +2724,12 @@ impl PlayCtx<'_> {
                 base_rent_add: self.w.turn.settle_rent_add,
                 outcome: super::cx::SettleOutcome::Settled,
                 move_context: Some(frame.m.clone()),
+                mv: super::rules::Trigger::new("settle", frame.player)
+                    .with_move(&frame.m)
+                    .mv
+                    .clone()
+                    .expect("planted by `with_move`"),
+                is_main_move: frame.m.is_main_move,
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -5357,6 +5375,7 @@ impl PlayCtx<'_> {
         s.tokens.clear();
         s.field.clear();
         self.w.hidden[i].hand.clear();
+        self.w.settle_over_hand_allowance(i);
         self.w.extra_turns.retain(|&x| x != i);
         // One cleanup path keyed by instance (user ruling 2026-10-10): every
         // bound counter unit dies with its owning card instance. The standing
@@ -5642,13 +5661,18 @@ impl PlayCtx<'_> {
         self.w.st.players[i].over_hand(self.w.hidden[i].hand.len())
     }
 
+    /// Over the limit **and** not permitted to stay there (「可超过上限」).
+    pub fn over_hand_blocking(&self, i: usize) -> bool {
+        self.w.st.players[i].over_hand_blocking(self.w.hidden[i].hand.len())
+    }
+
     /// From the top of the pile; reshuffle the discard pile when empty.
     /// Bots discard down to the hand limit at random.
     ///
     /// `log` is also "raise the per-draw points": the opening deal passes
     /// `false` (see [`Self::opening`]); every draw during play passes `true`.
     pub(crate) fn draw(&mut self, i: usize, n: usize, log: bool) -> Flow<()> {
-        self.draw_cards_with_hooks(i, n, log)?;
+        self.draw_cards_with_hooks(i, n, log, false)?;
         Ok(())
     }
 
@@ -5680,7 +5704,17 @@ impl PlayCtx<'_> {
     /// card-driven draws (`HostRequest::Draw` -> here) and engine draws (the start square
     /// reward, turn draws) go through this. Opening hands pass `hooks = false`
     /// and raise none of the three.
-    pub fn draw_cards_with_hooks(&mut self, i: usize, n: usize, hooks: bool) -> Flow<i32> {
+    ///
+    /// `over_hand_limit` is 「可超过上限」: that draw skips the immediate trim
+    /// and sets [`MatchPlayer::over_hand_allowed`], so the excess reaches the
+    /// card's own scheduled dispose at turn end. The limit state is untouched.
+    pub fn draw_cards_with_hooks(
+        &mut self,
+        i: usize,
+        n: usize,
+        hooks: bool,
+        over_hand_limit: bool,
+    ) -> Flow<i32> {
         if self.out(i) {
             return Ok(0);
         }
@@ -5740,9 +5774,9 @@ impl PlayCtx<'_> {
         }
         if hooks && got > 0 {
             let over = self.over_hand(i).then(|| {
-                Msg::new("log.part.over_hand").i(
-                    "limit",
-                    i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()),
+                Msg::over_hand_part(
+                    self.w.st.players[i].hand_limit().unwrap_or_default(),
+                    over_hand_limit,
                 )
             });
             self.w
@@ -5758,8 +5792,13 @@ impl PlayCtx<'_> {
         }
         // 「任何时刻若持有手卡超过上限则需要立刻将手卡弃至上限张」 -- discard
         // down immediately, bot and human alike (the human `discard` command
-        // remains for voluntary / other overflow paths).
-        if self.playing() {
+        // remains for voluntary / other overflow paths). A 「可超过上限」 draw
+        // is the named exception: the excess stays and the turn end disposes.
+        if over_hand_limit {
+            if got > 0 && self.over_hand(i) {
+                self.w.st.players[i].over_hand_allowed = true;
+            }
+        } else if self.playing() {
             while self.over_hand(i) {
                 let hand_len = self.w.hidden[i].hand.len();
                 let k = self.w.rng.below(hand_len);
@@ -5779,6 +5818,7 @@ impl PlayCtx<'_> {
             h.hand.remove(k);
         }
         h.graveyard.push(card.to_string());
+        self.w.settle_over_hand_allowance(i);
         let limit = i64::from(self.w.st.players[i].hand_limit().unwrap_or_default());
         self.w
             .log(
@@ -5887,6 +5927,7 @@ impl PlayCtx<'_> {
         };
         self.w.turn.play_arg = arg;
         self.w.hidden[i].hand.remove(k);
+        self.w.settle_over_hand_allowance(i);
         // `play_from_hand` -- this one came out of the hand. **Scoped to the
         // play**: raised for the duration of this resolution and restored when
         // it ends, so a later play (or a skill press, which is not a hand press
@@ -5934,14 +5975,41 @@ impl PlayCtx<'_> {
         self.w.turn.cards_played = self.w.turn.cards_played.saturating_add(1);
         let two_cards = self.w.turn.cards_played == 2;
         self.wait(0.9);
-        let t = raise!(
-            self,
-            "card",
-            i,
-            card = Some(id.to_string()),
-            cards = vec![id.to_string()],
-            by_card = Some(i as i32)
-        )?;
+        // 「打出此卡的回合任何使用者使用的卡包含添加骰效果的卡不受任何其他
+        // 效果影响」 -- the grant prop raises the turn flag; a dice-adding play
+        // under it opens no counteraction window of its own. The flag is raised
+        // here, before the window, because the body runs after it.
+        let rules = self.rules;
+        if rules.card_prop(id, crate::state::prop::GRANTS_DICE_IMMUNITY) != 0 {
+            self.w.turn.dice_immune = true;
+        }
+        let immune_play =
+            self.w.turn.dice_immune && rules.card_prop(id, crate::state::prop::ADDS_DICE) != 0;
+        let t = if immune_play {
+            let mut t = Trigger::new("card", i);
+            t.card = Some(id.to_string());
+            t.cards = vec![id.to_string()];
+            t.by_card = Some(i as i32);
+            t.step = self.w.st.step;
+            t.activation_ordinal = self.w.turn.activation_ordinal;
+            self.w.log(
+                "play",
+                i as i32,
+                Msg::new("log.play_immune")
+                    .card("card", id)
+                    .player_id("who", i),
+            );
+            t
+        } else {
+            raise!(
+                self,
+                "card",
+                i,
+                card = Some(id.to_string()),
+                cards = vec![id.to_string()],
+                by_card = Some(i as i32)
+            )?
+        };
         if two_cards {
             // A separate counteraction timing from the play's own `card` window: Here
             // the world answers 「当有人同一回合内打出两张卡时」, not the play.
@@ -6132,6 +6200,7 @@ impl PlayCtx<'_> {
     /// each call site.
     fn counteract(&mut self, t: &mut Trigger) -> Flow<()> {
         t.step = self.w.st.step;
+        t.activation_ordinal = self.w.turn.activation_ordinal;
         let rules = self.rules;
         let mut r = rules.counteract(self, t);
         // STACK-01: a counter body that parked work (a join window, a nested
@@ -6155,15 +6224,18 @@ impl PlayCtx<'_> {
     /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     pub(crate) fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
-        // A raise inside an open settle inherits the settling move and its
-        // full path (`effect` / `pay` / `payAfter` / `paid`), so a card asked
-        // by the payment can tell which move's settle it belongs to.
-        if t.mv.is_none()
-            && matches!(t.kind.as_str(), "effect" | "pay" | "payAfter" | "paid")
-        {
-            if let Some(entry_move) = self.settle_stack.last().and_then(|e| e.move_context.clone())
-            {
-                t.with_move(&entry_move);
+        // A raise inside an open settle inherits the settle's move when it
+        // carries none of its own, so every stage of the settle (the payment
+        // stages raise without a move) can read `is_settle_redirect` /
+        // `is_main_move` from `ctx::trigger`, and a card asked by the payment
+        // can tell which move's settle it belongs to. The
+        // `settle`/`settleBody`/… raises pass the move explicitly and are left
+        // alone. Tags come from the live plan: a counteraction may have armed
+        // one since the entry was pushed.
+        if t.mv.is_none() {
+            if let Some(e) = self.settle_stack.last() {
+                t.mv = Some(e.mv.clone());
+                t.is_main_move |= e.is_main_move;
                 if let Some(mv) = t.mv.as_mut() {
                     mv.tags = self.w.plan().tags.clone();
                 }

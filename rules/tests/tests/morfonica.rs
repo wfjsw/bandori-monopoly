@@ -585,6 +585,91 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     );
 }
 
+/// G13 §10.2: (3)'s yes invokes the persona skill's `2` entry -- the skill's
+/// own mark log appears, a pot is paid by the body, and the skill's (3) mark
+/// pick (`nanami_which`) is not asked.
+#[test]
+fn nanami_press_invokes_skill_two() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.set_fire(0, 1, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // 发动: one crystal
+    // The invoked (2) body asks its own question; answer it too.
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // 发动 the (2)
+    decline_all(&mut t);
+    assert_eq!(
+        t.m.world()
+            .held_count(0, "角色标记:skill:广町七深:这是很普通的事吧？"),
+        1,
+        "the (2) body minted the used skill's mark"
+    );
+    assert_eq!(t.m.world().held_count(0, "charge"), 0, "the (2) paid one pot");
+    let keys = t.recent_keys(80);
+    assert!(
+        keys.iter().any(|k| k.contains("nanami_mark")),
+        "the (2) mark log: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.contains("nanami_which")),
+        "the invoked body is (2), not the (3) mark pick: {keys:?}"
+    );
+}
+
+/// G13 §10.2: exactly one crystal is removed, however many were placed.
+#[test]
+fn nanami_press_spends_one_crystal_only() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 2);
+    t.set_fire(0, 1, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(1).unwrap(); // x = 2
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // 发动: one crystal
+    decline_all(&mut t);
+    assert_eq!(
+        last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"),
+        Some(1),
+        "2 placed, exactly 1 removed"
+    );
+}
+
+/// G13 §10.2: no pot, no offer -- and so no crystal leaves either.
+#[test]
+fn nanami_press_without_pot_refused() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.set_fire(0, 0, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(
+        t.prompt().is_none(),
+        "no pot, no question: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(
+        last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"),
+        Some(1),
+        "no crystal was removed"
+    );
+    assert!(!t.recent_keys(60).iter().any(|k| k.contains("nanami_ask")));
+}
+
 /// «你可以»: the question comes before the crystal leaves, so a 不发动 keeps
 /// it (and the card).
 #[test]

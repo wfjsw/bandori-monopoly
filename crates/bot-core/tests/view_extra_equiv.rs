@@ -7,6 +7,8 @@
 //!
 //! Hard invariants (the gates read only public / own-exact state):
 //! * `playable` -- one flag per hand card, equal every time.
+//! * `ai_playable` -- the static bot-offer flag, parallel to `playable` and
+//!   equal every time (it reads no hidden state).
 //! * `estimated_cost` -- static card property, equal every time.
 //! * `skills` -- same list, same `enabled` / `reason`.
 //!
@@ -99,6 +101,8 @@ struct Tallies {
     views: usize,
     playable_ok: usize,
     playable_bad: usize,
+    ai_playable_ok: usize,
+    ai_playable_bad: usize,
     est_cost_ok: usize,
     est_cost_bad: usize,
     skills_ok: usize,
@@ -118,6 +122,7 @@ struct Tallies {
 fn strip_extras(view: &mut SeatView) {
     view.ai_answer = None;
     view.playable = Vec::new();
+    view.ai_playable = Vec::new();
     view.estimated_cost = Vec::new();
 }
 
@@ -149,6 +154,18 @@ fn compare_one(
             want.playable,
             got.playable,
             view.hand,
+            serde_json::to_string(&normalized(&view.state)).unwrap_or_default(),
+        );
+    }
+
+    if got.ai_playable == want.ai_playable {
+        t.ai_playable_ok += 1;
+    } else {
+        t.ai_playable_bad += 1;
+        panic!(
+            "{label} member {member}: ai_playable diverged\n  server: {:?}\n  client: {:?}\n  state: {}",
+            want.ai_playable,
+            got.ai_playable,
             serde_json::to_string(&normalized(&view.state)).unwrap_or_default(),
         );
     }
@@ -252,10 +269,12 @@ fn seat_view_extras_match_the_server_on_seeded_games() {
     }
 
     eprintln!(
-        "seat-view extras equivalence: {} views | playable {}/{} | estCost {}/{} | skills {}/{} | ai both-none {} exact {} diverged {} presence-bad {}",
+        "seat-view extras equivalence: {} views | playable {}/{} | aiPlayable {}/{} | estCost {}/{} | skills {}/{} | ai both-none {} exact {} diverged {} presence-bad {}",
         t.views,
         t.playable_ok,
         t.playable_ok + t.playable_bad,
+        t.ai_playable_ok,
+        t.ai_playable_ok + t.ai_playable_bad,
         t.est_cost_ok,
         t.est_cost_ok + t.est_cost_bad,
         t.skills_ok,
@@ -268,6 +287,7 @@ fn seat_view_extras_match_the_server_on_seeded_games() {
 
     assert!(t.views > 50, "too few views sampled: {}", t.views);
     assert_eq!(t.playable_bad, 0, "playable must agree every time");
+    assert_eq!(t.ai_playable_bad, 0, "ai_playable must agree every time");
     assert_eq!(t.est_cost_bad, 0, "estimated_cost must agree every time");
     assert_eq!(t.skills_bad, 0, "skills must agree every time");
     assert_eq!(

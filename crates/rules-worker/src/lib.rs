@@ -341,7 +341,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
 
         // Read-only ops: the blob comes back unchanged, so it is not echoed.
         // `needExtras` (default false): compute the per-viewer `view_extras`
-        // fields (`aiAnswer` / `playable` / `estCost` / `skills`). A human
+        // fields (`aiAnswer` / `playable` / `aiPlayable` / `estCost` /
+        // `skills`). A human
         // client derives those itself from the seat view (the seat-view
         // engine, `docs/BOT.md` §1) -- skipping here is pure saved work. The
         // bot service asks for them.
@@ -380,6 +381,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             if need_extras {
                 view["aiAnswer"] = extra.get("aiAnswer").cloned().unwrap_or(Value::Null);
                 view["playable"] = extra.get("playable").cloned().unwrap_or(Value::Null);
+                view["aiPlayable"] = extra.get("aiPlayable").cloned().unwrap_or(Value::Null);
                 view["estCost"] = extra.get("estCost").cloned().unwrap_or(Value::Null);
                 view["skills"] = extra.get("skills").cloned().unwrap_or(Value::Null);
             }

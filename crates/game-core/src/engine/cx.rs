@@ -480,7 +480,7 @@ impl SettleOutcome {
 /// the entry's own settle-scoped writes compose on top without re-reading the
 /// stack. `outcome` starts
 /// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
-///
+
 /// A card-issued **house write** (设计 5.4): the effective change is computed
 /// against the tile's cap first, and an unchanged count opens no window.
 #[derive(Clone, Copy, Debug)]
@@ -507,6 +507,13 @@ pub struct SettleEntry {
     /// The settle's move, stamped onto raises inside the settle so a payment
     /// listener can see which move it belongs to (and its path).
     pub move_context: Option<crate::engine::move_ctx::MoveCtx>,
+    /// The settle's move view. A raise inside the settle inherits it when it
+    /// carries none of its own (see `PlayCtx::raise`), so a payment hook can
+    /// tell a card-forced settle (`settle_redirect`) from the walk's and reads
+    /// the main-move flag the settle belongs to.
+    pub mv: super::rules::TriggerMove,
+    /// The settle's main-move flag, stamped on inheriting raises.
+    pub is_main_move: bool,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and

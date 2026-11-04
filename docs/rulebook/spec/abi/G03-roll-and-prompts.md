@@ -1,7 +1,7 @@
 # G03 — Roll pipeline stages and prompt option actions
 
-Status: **draft for review, design only** (2026-10-31 revision of the
-2026-10-28 draft). No source is edited by this document.
+Status: **implemented** — landed on master in `b641539b`. This is the
+2026-10-31 revision of the 2026-10-28 draft.
 Worktree `/home/monopoly/web/.claude/worktrees/g03-design-review`, branch
 `worktree-g03-design-review`. Fits **on top of ABI v108** (G04's landing:
 plan frames, the window fold and `void_walk`); it does not redo G04.

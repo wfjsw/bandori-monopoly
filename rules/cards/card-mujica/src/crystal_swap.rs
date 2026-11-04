@@ -87,7 +87,7 @@ fn is_group_label(card: &str, player_id: i32) -> bool {
     !ctx::persona_is(player_id, owner)
 }
 
-fn slots() -> Vec<Slot> {
+fn slots(by: i32) -> Vec<Slot> {
     let mut v: Vec<Slot> = Vec::new();
     for s in 0..ctx::player_count() {
         if ctx::player_out(s) {
@@ -97,7 +97,7 @@ fn slots() -> Vec<Slot> {
             // TODO(规则书)（「场上一张卡」）: the cell names no face-down exclusion -- face-down cards
             // are dropped from both endpoints; only the immune half is grounded in
             // 「不受任何效果影响」.
-            if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
+            if ctx::is_face_down_at(uid) || ctx::is_immune_from_at(uid, by) {
                 continue;
             }
             v.push(Slot {
@@ -115,7 +115,7 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上」
     // -- pick the source among the cards that hold one, then the destination
     // among the rest, and move exactly one crystal between the two uids.
-    let all = slots();
+    let all = slots(player_id);
     let from: Vec<usize> = (0..all.len()).filter(|&i| all[i].get() > 0).collect();
     if from.is_empty() || all.len() < 2 {
         ctx::log(

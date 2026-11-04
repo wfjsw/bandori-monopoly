@@ -195,8 +195,11 @@ fn pure_pile_window(step: &Step<'_>) -> bool {
 ///   `handLimit` state (default 5, raised / lowered by effects). A limit of
 ///   `NO_HAND_LIMIT` (`i32::MAX`) means uncapped. The player was **at or
 ///   under** the limit in `condition` -- an arranged over-limit hand is a
-///   non-canonical setup and is not this act's fault. No prompt is open in
-///   `post` (the step is at rest; a discard decision may be the prompt).
+///   non-canonical setup and is not this act's fault. **Unless** the player
+///   carries the permitted excess (`over_hand_allowed`, set only by a
+///   「可超过上限」 draw and cleared by the turn-end sweep), which is the card
+///   clause's escape hatch. No prompt is open in `post` (the step is at rest;
+///   a discard decision may be the prompt).
 /// * **Effect:** the player's private hand length is at most the limit in
 ///   `post`.
 /// * **Frame:** n/a (pure read).
@@ -225,6 +228,12 @@ pub fn g_cards_01(step: &Step<'_>) -> Result<(), String> {
             continue;
         };
         if limit == game_core::state::key::NO_HAND_LIMIT {
+            continue;
+        }
+        // 「可超过上限」 (card clause): the excess is permitted until the
+        // turn-end dispose. The turn-end sweep clears the flag, so the next
+        // act is checked normally again.
+        if p.over_hand_allowed {
             continue;
         }
         let limit = limit as usize;

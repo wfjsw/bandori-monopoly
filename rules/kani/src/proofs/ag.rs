@@ -149,6 +149,7 @@ fn plant_field(user: i32, card_id: usize, uid: i32, crystals: i32) {
             tile: -1,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals,
             props: NameMap::new(),
             effective_card: u16::MAX,

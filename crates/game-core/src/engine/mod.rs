@@ -169,7 +169,12 @@ pub struct RawAiAnswer {
 #[derive(Debug, Clone, Default)]
 pub struct ViewExtra {
     pub ai_answer: Option<RawAiAnswer>,
+    /// Would `cant_play` allow it (human legality / glow)?
     pub playable: Vec<bool>,
+    /// Would a bot offer it: the bare static `ai_play` answer. Combine with
+    /// `playable`; never legality. Static facts only, so the seat-view engine
+    /// computes it exactly.
+    pub ai_playable: Vec<bool>,
     pub estimated_cost: Vec<i32>,
     /// The viewer's pressable skills (`skill:*` field instances with an
     /// `On::Play` entry), each gated through [`cant_act`].
@@ -402,7 +407,10 @@ struct Saved {
 /// v16: counteraction history (`World.countered_this_turn`, `World.played_cards`
 /// over `MAX_PLAY_LOG`). Both are durable facts a save taken mid-turn must
 /// carry (design G06 §7).
-pub const SAVE_VERSION: u32 = 16;
+/// v17: the permitted over-limit hand (`MatchPlayer.over_hand_allowed`,
+/// `serde(default)`). A save taken over the limit must carry it -- the `end`
+/// gate reads it (design G14 §8).
+pub const SAVE_VERSION: u32 = 17;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -921,7 +929,10 @@ impl Match {
                 let live_skip = self.world.st.skip_move;
                 let main_moved = self.world.turn.main_moved;
                 let held = self.world.hidden.get(ti).map_or(0, |h| h.hand.len());
-                let over_hand = st.players.get(ti).is_some_and(|p| p.over_hand(held));
+                let over_hand = st
+                    .players
+                    .get(ti)
+                    .is_some_and(|p| p.over_hand_blocking(held));
                 let my_turn = st.turn == ti as i32;
                 let owes_roll = st.step == stage::OPS && !live_skip && !main_moved;
                 let queued_end = my_turn && self.world.end_already_queued();
@@ -1388,6 +1399,7 @@ impl Match {
         serde_json::json!({
             "aiAnswer": ai_answer,
             "playable": p.playable,
+            "aiPlayable": p.ai_playable,
             "estCost": p.estimated_cost,
             "skills": p.skills,
         })
@@ -1411,15 +1423,22 @@ impl Match {
         });
         let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         let mut playable = Vec::new();
+        let mut ai_playable = Vec::new();
         let mut estimated_cost = Vec::new();
-        // One `cant_play` per distinct card id: a hand may hold duplicates and
-        // the answer is a pure query of the (unchanged) state within this loop.
-        let mut memo: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
+        // One `cant_play` / `ai_play` per distinct card id: a hand may hold
+        // duplicates and both are pure queries of the (unchanged) state within
+        // this loop.
+        let mut memo: std::collections::HashMap<&str, (bool, bool)> =
+            std::collections::HashMap::new();
         for c in &self.world.hidden[i].hand {
-            let ok = *memo
-                .entry(c.as_str())
-                .or_insert_with(|| cx.cant_play(i, c, false).is_none());
+            let (ok, ai_ok) = *memo.entry(c.as_str()).or_insert_with(|| {
+                (
+                    cx.cant_play(i, c, false).is_none(),
+                    self.rules.ai_play(&cx, i, c),
+                )
+            });
             playable.push(ok);
+            ai_playable.push(ai_ok);
             estimated_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
         // The viewer's pressable skills: every `skill:*` field instance with an
@@ -1457,6 +1476,7 @@ impl Match {
         ViewExtra {
             ai_answer,
             playable,
+            ai_playable,
             estimated_cost,
             skills,
         }
@@ -1543,6 +1563,9 @@ impl Match {
     }
 
     fn start(&mut self, r: Routine) {
+        // Bumped **before** the snapshot so a replay from it re-reads the same
+        // activation identity instead of allocating a new one.
+        self.world.turn.activation_ordinal += 1;
         let snapshot = self.world.clone();
         self.execute(r, snapshot, vec![]);
     }
@@ -3012,7 +3035,7 @@ fn cant_act(cx: &PlayCtx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if st.step == stage::MOVE {
                 return Some(Msg::new("err.moving"));
             }
-            if cx.over_hand(i) {
+            if cx.over_hand_blocking(i) {
                 return Some(Msg::new("err.over_hand").i(
                     "limit",
                     i64::from(cx.w.st.players[i].hand_limit().unwrap_or_default()),

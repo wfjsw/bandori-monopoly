@@ -96,7 +96,7 @@ fn last_card_refills_before_drawn_and_drew() {
     let (data, w) = setup();
     let rules = Probe::default();
     let mut cx = PlayCtx::new(w, &data, &rules, &[]);
-    assert_eq!(cx.draw_cards_with_hooks(0, 1, true).unwrap(), 1);
+    assert_eq!(cx.draw_cards_with_hooks(0, 1, true, false).unwrap(), 1);
     assert_eq!(*rules.seen.lock().unwrap(), ["reshuffled", "drawn", "drew"]);
     let w = cx.world_copy();
     assert_eq!(w.hidden[0].hand, ["last"]);
@@ -109,7 +109,7 @@ fn multi_draw_refills_between_cards_without_an_extra_draw() {
     let (data, w) = setup();
     let rules = Probe::default();
     let mut cx = PlayCtx::new(w, &data, &rules, &[]);
-    assert_eq!(cx.draw_cards_with_hooks(0, 2, true).unwrap(), 2);
+    assert_eq!(cx.draw_cards_with_hooks(0, 2, true, false).unwrap(), 2);
     assert_eq!(
         *rules.seen.lock().unwrap(),
         ["reshuffled", "drawn", "drew", "drawn", "drew"]
@@ -127,7 +127,7 @@ fn cancelled_draw_does_not_empty_or_shuffle_the_deck() {
         ..Default::default()
     };
     let mut cx = PlayCtx::new(w, &data, &rules, &[]);
-    assert_eq!(cx.draw_cards_with_hooks(0, 1, true).unwrap(), 0);
+    assert_eq!(cx.draw_cards_with_hooks(0, 1, true, false).unwrap(), 0);
     assert!(rules.seen.lock().unwrap().is_empty());
     let w = cx.world_copy();
     assert_eq!(w.hidden[0].deck, ["last"]);

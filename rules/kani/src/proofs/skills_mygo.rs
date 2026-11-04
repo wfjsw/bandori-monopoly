@@ -242,6 +242,719 @@ pub fn band_04_mutant_is_detected() {
 }
 
 // ===========================================================================
+// G13 — `skill:高松灯:诗超绊` (2), borrowed-clause body
+//
+// Book:
+// > （2）当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐，在该玩家
+// > [触发结算]前强制将该玩家[传送]至自己所在的格子并[触发结算]，然后使其投掷
+// > 1d20，若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]；
+// > 在此技能影响下的支付价格变为原本的一半。
+//
+// The `before_settle_applies` guard is exercised elsewhere (dist / once-per-move);
+// these harnesses call the body directly after assuming it admitted: `mover !=
+// owner` (the (2) arm), the mover's landing `landing`, the owner's own square
+// as the destination, and both seats on the board. A borrower is represented by
+// an invocation frame with `paid` set — the borrowed path must not ask or spend.
+// The roll is pinned with `forced_roll`; the roll itself is not an `Effect`, so
+// `roll_calls` counts it. `schedule_turn_end` / `settle_tile_at` are protocol
+// stubs, recorded by the host so "exactly one" / "none" stays checkable.
+// Narration (`ctx::log`) is not the frame.
+// ===========================================================================
+
+const OWED_SETTLE: &str = "skill.tomoriPoem.owedSettle";
+const USED_THIS_MOVE: &str = "skill.tomoriPoem.usedThisMove";
+const HALF_PRICE: &str = "skill.tomoriPoem.halfPrice";
+const BORROWED: &str = "skill.tomoriPoem.borrowed";
+
+/// Ops of a **paid** (2) press: no ask, no raise, no spend. That the body
+/// cannot ask on this path is itself checked — an `ask` here is an
+/// `outside_subset` FAIL.
+crate::host_subset!(tomori_pull_paid_dispatch {
+    trig_player => arm_trig_player,
+    invoke_frame => arm_invoke_frame,
+    state_set => arm_state_set,
+    teleport_to => arm_teleport_to,
+    player_pos => arm_player_pos,
+    roll => arm_roll,
+    gate => arm_gate,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
+    schedule_turn_end => arm_schedule_turn_end,
+    log | log_as | effect => arm_log,
+});
+
+/// The same plus the offer: still no spend (a declined answer returns first).
+crate::host_subset!(tomori_pull_ask_dispatch {
+    trig_player => arm_trig_player,
+    invoke_frame => arm_invoke_frame,
+    ask => arm_ask,
+    state_set => arm_state_set,
+    teleport_to => arm_teleport_to,
+    player_pos => arm_player_pos,
+    roll => arm_roll,
+    gate => arm_gate,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
+    schedule_turn_end => arm_schedule_turn_end,
+    log | log_as | effect => arm_log,
+});
+
+/// The skill's own collect: `raise` opens the `ChargePaying` window,
+/// `persona_skill` / `count_held` / `held_max` answer `writable`,
+/// `spend_marker` is the dumb spend.
+crate::host_subset!(tomori_pull_spend_dispatch {
+    trig_player => arm_trig_player,
+    invoke_frame => arm_invoke_frame,
+    ask => arm_ask,
+    raise => arm_raise,
+    persona_skill => arm_persona_skill,
+    count_held | count_held_name => arm_count_held,
+    held_max => arm_tok_max,
+    spend_marker => arm_spend_marker,
+    state_set => arm_state_set,
+    teleport_to => arm_teleport_to,
+    player_pos => arm_player_pos,
+    roll => arm_roll,
+    gate => arm_gate,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
+    schedule_turn_end => arm_schedule_turn_end,
+    log | log_as | effect => arm_log,
+});
+
+/// A **paid** (2) body: a borrower already paid, so no ask / raise / spend;
+/// the (2) destination is `player_pos(owner)` itself, so no distance scan
+/// either. `outside_subset` still guards the cut.
+crate::host_subset!(tomori_follow_up2_dispatch {
+    trig_player => arm_trig_player,
+    invoke_frame => arm_invoke_frame,
+    state_set => arm_state_set,
+    state_get => arm_state_get,
+    state_add => arm_state_add,
+    teleport_to => arm_teleport_to,
+    player_pos => arm_player_pos,
+    roll => arm_roll,
+    gate => arm_gate,
+    raise_after => arm_raise_after,
+    skip_main_move => arm_stub_zero,
+    schedule_turn_end => arm_schedule_turn_end,
+    log | log_as | effect => arm_log,
+});
+
+/// A **paid** (3) body: no roll / stay / schedule at all; only the nearest-
+/// within-5 destination scan and the teleport.
+crate::host_subset!(tomori_follow_up3_dispatch {
+    trig_player => arm_trig_player,
+    trig_tile => arm_trig_tile,
+    invoke_frame => arm_invoke_frame,
+    state_set => arm_state_set,
+    teleport_to => arm_teleport_to,
+    player_pos => arm_player_pos,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    dist => arm_dist,
+    log | log_as | effect => arm_log,
+});
+
+/// `owed_settle` + its `SettleAfter` body reach: the latch writes, the
+/// position read and the settle stub.
+crate::host_subset!(tomori_owed_dispatch {
+    trig_player => arm_trig_player,
+    trig_settle_redirect => arm_trig_settle_redirect,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    player_pos => arm_player_pos,
+    settle_tile_at => arm_settle_tile_at,
+});
+
+fn effects_of(buf: &mut [Effect; world::MAX_LOG]) -> usize {
+    let log_n = world::with_world(|ww| ww.log_n);
+    let logbuf: [Effect; world::MAX_LOG] = world::with_world(|ww| ww.log);
+    *buf = logbuf;
+    log_n
+}
+
+fn key_get(p: i32, key: crate::intern::NameId) -> i32 {
+    world::with_world(|w| w.key_get(p, key))
+}
+
+fn roll_calls() -> u32 {
+    world::with_world(|w| w.roll_calls)
+}
+
+fn schedules() -> u32 {
+    world::with_world(|w| w.schedule_turn_end_n)
+}
+
+fn settles() -> u32 {
+    world::with_world(|w| w.settle_calls)
+}
+
+/// 2-seat world with both seats living and concrete squares (`pos`), then the
+/// mover's landing as the trigger tile. No money / fans: the body reads none,
+/// so the model stays small. In-place only.
+fn tomori_world(
+    dispatch: card_sdk::kani_host::Backend,
+    owner: i32,
+    mover: i32,
+    landing: i32,
+    pos: [i32; MAX_PLAYERS],
+) {
+    let _ = owner;
+    host::install_backend(dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        // Yes/no answers come from the scripted slots, not the symbolic pick.
+        w.symbolic_answers = false;
+        for p in 0..MAX_PLAYERS {
+            w.out[p] = p >= 2;
+            w.stay[p] = 0;
+            w.charge[p] = 0;
+            w.pos[p] = pos[p];
+        }
+        w.trig_player = mover;
+        w.trig_tile = landing;
+        w.next_answer = 0;
+        w.answers[0] = 0;
+    });
+}
+
+/// An open invocation frame on the mover (a borrowing card's run). `paid` is
+/// what `ctx::invoke_paid()` answers.
+fn borrow_frame(mover: i32, paid: bool) {
+    world::with_world_mut(|w| {
+        w.invoke_stack[0] = (
+            crate::intern::NameId(0),
+            crate::intern::NameId(0),
+            mover,
+            0,
+            -1,
+            paid,
+            0,
+        );
+        w.invoke_n = 1;
+    });
+}
+
+/// (2) press world: the mover lands on 3, the owner sits on 6 (the (2)
+/// destination). `charge` is the mover's pots, `answer` the scripted offer
+/// answer; the face is pinned high so no follow-up muddies the cost arm.
+fn tomori_pull_world(
+    dispatch: card_sdk::kani_host::Backend,
+    owner: i32,
+    charge: i32,
+    answer: i32,
+    paid: bool,
+) -> i32 {
+    debug_assert!(owner == 0 || owner == 1);
+    let mover = 1 - owner;
+    let mut pos = [0i32; MAX_PLAYERS];
+    pos[owner as usize] = 6;
+    pos[mover as usize] = 4;
+    tomori_world(dispatch, owner, mover, 3, pos);
+    borrow_frame(mover, paid);
+    world::with_world_mut(|w| {
+        w.charge[mover as usize] = charge;
+        // A paid body must never read the answer: a refusal is scripted.
+        w.answers[0] = if paid { 1 } else { answer };
+        w.forced_roll = 7;
+    });
+    mover
+}
+
+/// The accepted shape both the borrowed and the paid press leave: latches,
+/// teleport, one roll; `stay` untouched, nothing owed.
+fn tomori_pull_accepted_ok(mover: i32, destination: i32, stay_before: i32, cost: i32) {
+    let (post_charge, post_pos, post_stay) = world::with_world(|w| {
+        (
+            w.charge[mover as usize],
+            w.pos[mover as usize],
+            w.stay[mover as usize],
+        )
+    });
+    let (logbuf, log_n) = world::with_world(|w| (w.log, w.log_n));
+    let used_key = crate::intern::intern(USED_THIS_MOVE);
+    let half_key = crate::intern::intern(HALF_PRICE);
+    crate::kassert!(
+        spec::skills_mygo::tomori_pull_effects_ok(
+            &logbuf[..log_n],
+            mover,
+            destination,
+            used_key.0,
+            half_key.0
+        ),
+        "(2): exactly latch, half-latch, teleport"
+    );
+    crate::kassert!(post_charge == cost, "(2): the press collected `cost`");
+    crate::kassert!(key_get(mover, used_key) == 1, "once-per-move latch");
+    crate::kassert!(key_get(mover, half_key) == 1, "half-price latch");
+    crate::kassert!(post_pos == destination, "mover teleported");
+    crate::kassert!(roll_calls() == 1, "exactly one 1d20");
+    crate::kassert!(schedules() == 0, "high face owes nothing");
+    crate::kassert!(post_stay == stay_before, "no stay");
+}
+
+/// A **paid** frame asks nothing and spends nothing — the borrowed press only
+/// runs the body. `charge` is symbolic and must come back untouched.
+fn tomori_pull_paid_at(owner: i32) {
+    let charge: i32 = kani::any();
+    kani::assume(charge >= 0 && charge <= 8);
+    let mover = tomori_pull_world(tomori_pull_paid_dispatch, owner, charge, 1, true);
+    let stay_before = world::with_world(|w| w.stay[mover as usize]);
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+    kani::cover!(true, "paid press runs");
+    tomori_pull_accepted_ok(mover, 6, stay_before, charge);
+    crate::kassert!(
+        world::with_world(|w| w.invoke_n) == 1,
+        "the body does not nest"
+    );
+}
+
+/// The skill's own collect: an accepted answer moves exactly four pots.
+fn tomori_pull_unpaid_accepted_at(owner: i32) {
+    let charge: i32 = kani::any();
+    kani::assume(charge >= 4 && charge <= 8);
+    let mover = tomori_pull_world(tomori_pull_spend_dispatch, owner, charge, 0, false);
+    let stay_before = world::with_world(|w| w.stay[mover as usize]);
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+    kani::cover!(true, "accepted, payable press runs");
+    tomori_pull_accepted_ok(mover, 6, stay_before, charge - 4);
+}
+
+/// A declined offer, or an accepted one the mover cannot pay for (fewer than
+/// four pots, no crystal in the model), is a total no-op.
+fn tomori_pull_unpaid_noop_at<const ANSWER: i32>(owner: i32) {
+    let charge: i32 = kani::any();
+    if ANSWER == 0 {
+        // An accepted answer without the pots to back it.
+        kani::assume(charge >= 0 && charge < 4);
+    } else {
+        // A declined answer at any balance: the body must not even read it.
+        kani::assume(charge >= 0 && charge <= 8);
+    }
+    // A decline returns before collecting; a shortfall still walks the
+    // collect path (and is refused there), so it needs the wider subset.
+    let dispatch = if ANSWER == 0 {
+        tomori_pull_spend_dispatch
+    } else {
+        tomori_pull_ask_dispatch
+    };
+    let mover = tomori_pull_world(dispatch, owner, charge, ANSWER, false);
+    let (pos_before, stay_before) =
+        world::with_world(|w| (w.pos[mover as usize], w.stay[mover as usize]));
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+    kani::cover!(true, "no-op press runs");
+    let (post_charge, post_pos) =
+        world::with_world(|w| (w.charge[mover as usize], w.pos[mover as usize]));
+    let (logbuf, log_n) = world::with_world(|w| (w.log, w.log_n));
+    let used_key = crate::intern::intern(USED_THIS_MOVE);
+    let half_key = crate::intern::intern(HALF_PRICE);
+    crate::kassert!(log_n == 0, "refusal: no effects");
+    crate::kassert!(post_charge == charge, "refusal: no pot leaves");
+    crate::kassert!(post_pos == pos_before, "refusal: no teleport");
+    crate::kassert!(
+        key_get(mover, used_key) == 0 && key_get(mover, half_key) == 0,
+        "refusal: no latch"
+    );
+    crate::kassert!(
+        roll_calls() == 0 && schedules() == 0,
+        "refusal: no roll/schedule"
+    );
+    crate::kassert!(
+        world::with_world(|w| w.stay[mover as usize]) == stay_before,
+        "no stay"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_pull_invokes_paid_iff_accepted() {
+    tomori_pull_paid_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_pull_unpaid_accepted_spends() {
+    tomori_pull_unpaid_accepted_at(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_pull_unpaid_declined_does_not_spend() {
+    tomori_pull_unpaid_noop_at::<1>(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_pull_unpaid_short_pots_do_not_spend() {
+    tomori_pull_unpaid_noop_at::<0>(0);
+}
+
+/// MUTANT: a paid press that still spends four pots must disagree.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+#[kani::should_panic]
+pub fn tomori_pull_mutant_paid_spends() {
+    let owner = 0i32;
+    let mover = 1i32;
+    let mut pos = [0i32; MAX_PLAYERS];
+    pos[owner as usize] = 6;
+    pos[mover as usize] = 4;
+    tomori_world(tomori_pull_paid_dispatch, owner, mover, 3, pos);
+    borrow_frame(mover, true);
+    world::with_world_mut(|w| {
+        w.charge[mover as usize] = 5;
+        w.forced_roll = 7;
+    });
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+    // The mutant spec: the paid path still charged. The body leaves 5.
+    crate::kassert!(
+        world::with_world(|w| w.charge[mover as usize]) == 1,
+        "mutant: paid press charged four"
+    );
+}
+
+/// The follow-up (roll / [停留] / owed settle) belongs to the (2) arm —
+/// `mover != owner` — not to the cost. `MOVER_IS_OWNER` is a const so each
+/// harness folds away the arm it does not prove (the two together are the iff;
+/// keeping both in one body doubles the CBMC path count).
+fn tomori_follow_up_at<const MOVER_IS_OWNER: bool>(owner: i32) {
+    debug_assert!(owner == 0 || owner == 1);
+    let mover = if MOVER_IS_OWNER { owner } else { 1 - owner };
+    let other = 1 - owner;
+    let landing = 3;
+    let mut pos = [0i32; MAX_PLAYERS];
+    // (2): the destination is the owner's own square. (3): the other party
+    // within five of the landing.
+    if MOVER_IS_OWNER {
+        pos[owner as usize] = landing;
+        pos[other as usize] = 5;
+    } else {
+        pos[owner as usize] = 6;
+        pos[mover as usize] = 4;
+    }
+    let destination = if MOVER_IS_OWNER { 5 } else { 6 };
+    let dispatch = if MOVER_IS_OWNER {
+        tomori_follow_up3_dispatch
+    } else {
+        tomori_follow_up2_dispatch
+    };
+    tomori_world(dispatch, owner, mover, landing, pos);
+    borrow_frame(mover, true);
+    world::with_world_mut(|w| w.forced_roll = 1);
+    let used_key = crate::intern::intern(USED_THIS_MOVE);
+    let half_key = crate::intern::intern(HALF_PRICE);
+    let owed_key = crate::intern::intern(OWED_SETTLE);
+    // Only the stay column is compared afterwards; a full `snapshot()` is the
+    // CBMC cost cliff at this harness size.
+    let stay_before = world::with_world(|w| w.stay[mover as usize]);
+
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+
+    let (post_pos, post_stay) =
+        world::with_world(|w| (w.pos[mover as usize], w.stay[mover as usize]));
+    let (logbuf, log_n) = world::with_world(|w| (w.log, w.log_n));
+    let effects = &logbuf[..log_n];
+    let followed = !MOVER_IS_OWNER;
+    kani::cover!(followed, "mover is not the owner");
+    kani::cover!(!followed, "mover is the owner");
+
+    if followed {
+        crate::kassert!(
+            spec::skills_mygo::tomori_follow_up_effects_ok(
+                effects,
+                mover,
+                destination,
+                used_key.0,
+                half_key.0,
+                owed_key.0
+            ),
+            "(2): teleport then exactly one stay + owed latch"
+        );
+        crate::kassert!(
+            post_stay == spec::skills_mygo::tomori_stay_after(stay_before, true),
+            "(2): exactly one stay layer"
+        );
+        crate::kassert!(roll_calls() == 1, "(2): exactly one roll");
+        crate::kassert!(
+            key_get(mover, owed_key) == spec::skills_mygo::tomori_owed_after(true),
+            "(2): owed latch"
+        );
+        crate::kassert!(
+            schedules() == spec::skills_mygo::tomori_schedules_after(true),
+            "(2): exactly one owed schedule"
+        );
+        crate::kassert!(
+            world::with_world(|w| w.last_schedule) == (mover, 1),
+            "(2): scheduled at the mover's next turn end"
+        );
+    } else {
+        crate::kassert!(
+            spec::skills_mygo::tomori_pull_effects_ok(
+                effects,
+                mover,
+                destination,
+                used_key.0,
+                half_key.0
+            ),
+            "(3): latch, half-latch, teleport only"
+        );
+        crate::kassert!(
+            post_stay == spec::skills_mygo::tomori_stay_after(stay_before, false),
+            "(3): no stay"
+        );
+        crate::kassert!(roll_calls() == 0, "(3): no roll");
+        crate::kassert!(key_get(mover, owed_key) == 0, "(3): no owed latch");
+        crate::kassert!(schedules() == 0, "(3): no owed schedule");
+    }
+    crate::kassert!(post_pos == destination, "teleported to the destination");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_follow_up_iff_the_mover_is_not_the_owner() {
+    tomori_follow_up_at::<false>(0);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_follow_up_none_when_the_mover_is_the_owner() {
+    tomori_follow_up_at::<true>(0);
+}
+
+/// MUTANT: tying the follow-up to `cost == 4` predicts a roll even when the
+/// owner has no square (`destination < 0`), where the body returns early.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+#[kani::should_panic]
+pub fn tomori_follow_up_mutant_cost_four() {
+    let owner = 0i32;
+    let mover = 1i32;
+    let mut pos = [0i32; MAX_PLAYERS];
+    pos[owner as usize] = -1;
+    pos[mover as usize] = 4;
+    tomori_world(tomori_follow_up2_dispatch, owner, mover, 3, pos);
+    borrow_frame(mover, true);
+    world::with_world_mut(|w| w.forced_roll = 1);
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+    let cost = 4;
+    crate::kassert!(
+        !spec::skills_mygo::tomori_follow_up_mutant_cost_four(cost) || roll_calls() == 1,
+        "mutant: cost 4 always rolls"
+    );
+}
+
+/// The roll threshold: [停留] + owed latch + schedule exactly on 6 or less.
+fn tomori_marks_the_mover_iff_roll_at(owner: i32) {
+    let mover = 1 - owner;
+    let destination = 6;
+    let mut pos = [0i32; MAX_PLAYERS];
+    pos[owner as usize] = destination;
+    pos[mover as usize] = 4;
+    tomori_world(tomori_follow_up2_dispatch, owner, mover, 3, pos);
+    borrow_frame(mover, true);
+    let face: i32 = kani::any();
+    kani::assume(face >= 1 && face <= 20);
+    world::with_world_mut(|w| w.forced_roll = face);
+    let used_key = crate::intern::intern(USED_THIS_MOVE);
+    let half_key = crate::intern::intern(HALF_PRICE);
+    let owed_key = crate::intern::intern(OWED_SETTLE);
+
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+
+    let followed = spec::skills_mygo::tomori_follow_up(face);
+    kani::cover!(followed, "face 6 or less");
+    kani::cover!(!followed, "face above 6");
+
+    let post_stay = world::with_world(|w| w.stay[mover as usize]);
+    let (logbuf, log_n) = world::with_world(|w| (w.log, w.log_n));
+    let effects = &logbuf[..log_n];
+    if followed {
+        crate::kassert!(
+            spec::skills_mygo::tomori_follow_up_effects_ok(
+                effects,
+                mover,
+                destination,
+                used_key.0,
+                half_key.0,
+                owed_key.0
+            ),
+            "face <= 6: exactly one stay + owed latch"
+        );
+    } else {
+        crate::kassert!(
+            spec::skills_mygo::tomori_pull_effects_ok(
+                effects,
+                mover,
+                destination,
+                used_key.0,
+                half_key.0
+            ),
+            "face > 6: no follow-up effects"
+        );
+    }
+    crate::kassert!(
+        post_stay == spec::skills_mygo::tomori_stay_after(0, followed),
+        "stay iff the face is low"
+    );
+    crate::kassert!(
+        key_get(mover, owed_key) == spec::skills_mygo::tomori_owed_after(followed),
+        "owed latch iff the face is low"
+    );
+    crate::kassert!(
+        schedules() == spec::skills_mygo::tomori_schedules_after(followed),
+        "schedule iff the face is low"
+    );
+    crate::kassert!(roll_calls() == 1, "the roll happens on the (2) arm");
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_owed_settle_marks_the_mover_iff_the_roll_is_low() {
+    tomori_marks_the_mover_iff_roll_at(0);
+}
+
+/// MUTANT: an off-by-one threshold (`< 6`) must disagree at face 6.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+#[kani::should_panic]
+pub fn tomori_owed_settle_mutant_below_six() {
+    let owner = 0i32;
+    let mover = 1i32;
+    let mut pos = [0i32; MAX_PLAYERS];
+    pos[owner as usize] = 6;
+    pos[mover as usize] = 4;
+    tomori_world(tomori_follow_up2_dispatch, owner, mover, 3, pos);
+    borrow_frame(mover, true);
+    let face: i32 = kani::any();
+    kani::assume(face >= 1 && face <= 20);
+    world::with_world_mut(|w| w.forced_roll = face);
+    let owed_key = crate::intern::intern(OWED_SETTLE);
+    invoke::unwrap_done(skill_personas::tomori::before_settle_kani(owner));
+    crate::kassert!(
+        key_get(mover, owed_key)
+            == spec::skills_mygo::tomori_follow_up_mutant_below_six(face) as i32,
+        "mutant: owed latch on face < 6"
+    );
+}
+
+/// The owed settle always clears the owed and borrowed latches; it asks for
+/// exactly one settle on the player's own square only when there is one. The
+/// half price armed by the forced settle rides that settle and the deferred
+/// `SettleAfter` body disarms it; with no square it is dropped in place.
+fn tomori_owed_settle_clears_iff_at(player: i32) {
+    debug_assert!(player == 0 || player == 1);
+    let mut pos = [0i32; MAX_PLAYERS];
+    tomori_world(tomori_owed_dispatch, player, player, 3, pos);
+    let at: i32 = kani::any();
+    kani::assume(at >= -1 && at <= 8);
+    world::with_world_mut(|w| {
+        w.pos[player as usize] = at;
+        // The settle is the card-forced one, so its `settleAfter` body runs.
+        w.move_snap.settle_redirect = true;
+        // Stale latches: the callback must clear them.
+        w.key_set(player, crate::intern::intern(OWED_SETTLE), 1);
+        w.key_set(player, crate::intern::intern(HALF_PRICE), 1);
+        w.key_set(player, crate::intern::intern(BORROWED), 1);
+    });
+    let owed_key = crate::intern::intern(OWED_SETTLE);
+    let half_key = crate::intern::intern(HALF_PRICE);
+    let borrowed_key = crate::intern::intern(BORROWED);
+
+    invoke::unwrap_done(skill_personas::tomori::owed_settle_kani(player));
+    kani::cover!(at >= 0, "on the board (settles)");
+    kani::cover!(at < 0, "off the board (no settle)");
+
+    let (logbuf, log_n) = world::with_world(|w| (w.log, w.log_n));
+    let settles_here = at >= 0;
+    crate::kassert!(
+        spec::skills_mygo::tomori_owed_effects_ok(
+            &logbuf[..log_n],
+            player,
+            owed_key.0,
+            borrowed_key.0,
+            half_key.0,
+            settles_here
+        ),
+        "owed settle: clear owed + borrowed; half only with a settle"
+    );
+    crate::kassert!(key_get(player, owed_key) == 0, "owed latch cleared");
+    crate::kassert!(key_get(player, borrowed_key) == 0, "borrowed latch cleared");
+    if settles_here {
+        crate::kassert!(settles() == 1, "settles exactly once");
+        crate::kassert!(
+            world::with_world(|w| w.last_settle) == (player, at),
+            "settles the player's own square"
+        );
+        crate::kassert!(
+            key_get(player, half_key) == 1,
+            "half price still armed for the settle paying now"
+        );
+        // The deferred `SettleAfter` body.
+        invoke::unwrap_done(skill_personas::tomori::clear_owed_paying_kani(player));
+        let (logbuf2, cn) = world::with_world(|w| (w.log, w.log_n));
+        kani::cover!(cn == 4, "owed settle: four latch writes");
+        crate::kassert!(
+            spec::skills_mygo::tomori_owed_clear_effects_ok(
+                &logbuf2[log_n..cn],
+                player,
+                borrowed_key.0,
+                half_key.0
+            ),
+            "SettleAfter: disarm half, disarm borrowed"
+        );
+    } else {
+        crate::kassert!(settles() == 0, "no settle with no square");
+    }
+    crate::kassert!(
+        key_get(player, half_key) == 0,
+        "half price disarmed afterwards"
+    );
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+pub fn tomori_owed_settle_clears_its_latches_iff_it_settles() {
+    tomori_owed_settle_clears_iff_at(0);
+}
+
+/// MUTANT: disarming the half price inside `owed_settle` itself (before the
+/// deferred settle pays) must disagree.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(20)]
+#[kani::should_panic]
+pub fn tomori_owed_settle_mutant_half_disarmed_early() {
+    tomori_world(tomori_owed_dispatch, 0, 0, 3, [0i32; MAX_PLAYERS]);
+    world::with_world_mut(|w| {
+        w.pos[0] = 2;
+        w.move_snap.settle_redirect = true;
+        w.key_set(0, crate::intern::intern(HALF_PRICE), 1);
+    });
+    let half_key = crate::intern::intern(HALF_PRICE);
+    invoke::unwrap_done(skill_personas::tomori::owed_settle_kani(0));
+    let (logbuf, log_n) = world::with_world(|w| (w.log, w.log_n));
+    crate::kassert!(
+        spec::skills_mygo::tomori_owed_effects_mutant_half_disarmed_early(
+            &logbuf[..log_n],
+            half_key.0
+        ),
+        "mutant: owed_settle itself disarms the half latch"
+    );
+}
+
+// ===========================================================================
 // Classification notes (no harness — documented in the unit table):
 // C-MYGO-band-01 (开局 3d20 start tile) — PROTOCOL-LEVEL: game-start
 //   scheduling (`On::Action(DeckBeforeGame)`); the body's 3d20 sum is

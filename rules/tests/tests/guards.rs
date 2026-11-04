@@ -10,6 +10,7 @@
 mod common;
 
 use common::*;
+use game_core::engine::SettleAnswer;
 
 /// Skip every open prompt (counteract windows included).
 fn drain(t: &mut Table) {
@@ -154,7 +155,8 @@ fn ordinary_matches_only_abnormal() {
 /// 规则书: 「[反击] 受到[除外]以外的异常移动效果影响时可打出此卡」. The old
 /// guard read `trigger::abnormal_kind()`, which is `None` inside the `effect`
 /// window (the abnormal rides the link's effect list) -- so the card never
-/// fired at all.
+/// fired at all. G12 §6.4 also flips the answer target: the [晕眩] landing is
+/// blocked, so the turn-end slate takes the answer (see the tail of the test).
 #[test]
 fn own_stage_matches_non_exile_abnormal() {
     let mut t = Table::vanilla(2);
@@ -175,6 +177,20 @@ fn own_stage_matches_non_exile_abnormal() {
         1,
         "R:选择自己的舞台",
         "[晕眩] is an [除外]-less [异常移动效果]",
+    );
+    // G12 §6.4: 「选择自己的本次移动（或无法移动的回合结束时）是否触发结算」
+    // branches on the landing's blocked-ness, not its kind. A [晕眩] holds the
+    // move, so the declined answer goes to the turn-end slate and the move
+    // override is left untouched.
+    assert_eq!(
+        t.m.world().blocked_settle_answer(1),
+        SettleAnswer::Skip,
+        "a blocked landing answers the turn-end settle"
+    );
+    assert_eq!(
+        t.m.world().st.players[1].state_get("resolveOverride"),
+        0,
+        "the move override is untouched"
     );
 }
 

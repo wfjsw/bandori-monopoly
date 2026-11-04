@@ -85,6 +85,9 @@ pub struct TriggerMove {
     /// (so a `passBefore` of the step not yet taken does not see it; its
     /// `passTile` and settle do). Tiles, not positions.
     pub path: Vec<i32>,
+    /// Did an abnormal land during this move? Set on the move's frame as it
+    /// lands, readable from every trigger raised later in the walk.
+    pub abnormal: bool,
 }
 
 /// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
@@ -408,6 +411,12 @@ pub struct Trigger {
     /// the tile `On::Settle` body needs the flag (a main landing only
     /// announces; the offers come at the end step) and has no `mv`.
     pub is_main_move: bool,
+    /// The activation this raise belongs to; stamped by `counteract` from
+    /// `turn.activation_ordinal`. 0 outside a routine.
+    pub activation_ordinal: i32,
+    /// Did the abnormal this trigger announces hold the move? Meaningful only on
+    /// the `effect` and `abnormal` raises of an abnormal; false elsewhere.
+    pub abnormal_blocked: bool,
     /// The move that caused this trigger, when one did. `None` = no move.
     pub mv: Option<TriggerMove>,
     /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
@@ -530,6 +539,8 @@ impl Trigger {
             step: 0,
             by_card: None,
             is_main_move: false,
+            activation_ordinal: 0,
+            abnormal_blocked: false,
             mv: None,
             pay: None,
             buy: None,
@@ -665,6 +676,7 @@ impl Trigger {
             rolled: m.rolled,
             effective: m.effective_steps(),
             path: m.path.clone(),
+            abnormal: m.abnormal,
         });
         self.is_main_move = m.is_main_move;
         self
@@ -985,7 +997,10 @@ pub trait CardRules: Send + Sync {
         cx.land_at_built_in(player_id, position, tile, is_main_move)
     }
 
-    /// Would a bot play it now?
+    /// Would a bot offer it now? Standard / advanced policies consult this;
+    /// chaos ignores it by design (`bot-core/src/policy.rs`). The rule set
+    /// answers from the card's static `prop::AI_NEVER` -- never legality, so a
+    /// human can still play the card.
     fn ai_play(&self, _cx: &PlayCtx, _player: usize, _card: &str) -> bool {
         true
     }
@@ -1115,6 +1130,10 @@ pub enum Gate {
     /// May a hand card be played right now? Play-only (unlike [`Self::Act`],
     /// which also gates [主动] skills).
     Play,
+    /// May an abnormal of this kind (an `AbKind` wire code) from `by` land on the
+    /// seat? `exemption = false` asks the refusal; `true` asks "would this kind
+    /// hold this mover's move?" (blocked-ness). CEL-only.
+    Abnormal { kind: i32, by: i32, exemption: bool },
 }
 
 /// The card-side context of a [`Gate::Exclusive`] question.

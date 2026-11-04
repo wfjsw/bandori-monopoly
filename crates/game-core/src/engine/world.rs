@@ -220,6 +220,18 @@ pub struct TurnCtx {
     pub player_id: usize,
     pub extra: bool,
     pub main_moved: bool,
+    /// One higher per routine; stamped onto a trigger by `counteract`.
+    #[serde(default)]
+    pub activation_ordinal: i32,
+    /// The activation that consumed this turn's main move; 0 = none.
+    #[serde(default)]
+    pub move_activation_ordinal: i32,
+    /// A landed abnormal during this turn's main move (read at turn end).
+    #[serde(default)]
+    pub move_abnormal: bool,
+    /// 「打出此卡的回合」: hand plays of dice-adding cards skip the `card` window.
+    #[serde(default)]
+    pub dice_immune: bool,
     pub played: Vec<String>,
     /// Hand-card plays this turn (skills do not count). 「当有人同一回合内打出
     /// 两张卡时」 (TwoCards) reads this -- the second card play raises it.
@@ -417,6 +429,10 @@ impl Default for TurnCtx {
             player_id: 0,
             extra: false,
             main_moved: false,
+            activation_ordinal: 0,
+            move_activation_ordinal: 0,
+            move_abnormal: false,
+            dice_immune: false,
             played: Vec::new(),
             cards_played: 0,
             no_money_loss: Vec::new(),
@@ -1008,6 +1024,21 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    // ------------------------------------------------ hand limit
+
+    /// Clear the permitted-over-limit state once the hand fits again
+    /// (「可超过上限」). Called from every hand-shrink site; a no-op while the
+    /// hand is still over.
+    pub fn settle_over_hand_allowance(&mut self, i: usize) {
+        let fits = self
+            .hidden
+            .get(i)
+            .is_some_and(|h| !self.st.players[i].over_hand(h.hand.len()));
+        if fits {
+            self.st.players[i].over_hand_allowed = false;
+        }
+    }
+
     // ------------------------------------------------ plan frames
 
     /// The plan the move currently reads: the innermost frame, else the
@@ -1093,6 +1124,17 @@ impl World {
         let Some(frame) = self.turn.plan_stack.pop() else {
             return;
         };
+        // The span is the whole walk: a landing inside a nested move belongs
+        // to the walk it sits in, so the bit climbs to the frame still open.
+        if let Some(parent) = self.turn.plan_stack.last_mut() {
+            parent.plan.abnormal |= frame.plan.abnormal;
+        }
+        // The move span outlives its frame: a later move does not clear the
+        // latch (only the turn start does), and 「该次移动过程中」 at the
+        // turn end still needs it.
+        if frame.kind == PlanKind::MainMove {
+            self.turn.move_abnormal |= frame.plan.abnormal;
+        }
         if self.turn.plan_stack.is_empty() {
             self.turn.plan = match (frame.kind, ran) {
                 (PlanKind::MainMove, true) => MoveCtx::default(),

@@ -369,7 +369,16 @@ const ARRAY_OPS: &[&str] = &[
     "trig_move_effective_steps",
     "nearest_tile_on_axis",
     "farthest_tile_on_axis",
-    // v114 (G09): identity/position conversion, build reads and the build verb.
+    // v114 (G12): status readers and the two turn flags.
+    "trigger_activation_ordinal",
+    "trigger_abnormal_blocked",
+    "trigger_move_abnormal",
+    "cant_move_code_for_activation",
+    "is_immune_from_at",
+    "set_self_immune_except_owner",
+    "dice_immune",
+    "set_dice_immune",
+    // v116 (G09): identity/position conversion, build reads and the build verb.
     "tile_of",
     "position_of_tile",
     "tile_extra_count",

@@ -341,9 +341,9 @@ the ABI takes an explicit key, so a card can hold several.
 
 ### 4.4 Kinds and entries
 
-* `TriggerKind::EventResolved = Self::engine(131)` (README band; 110 is
+* `TriggerKind::EventResolved = Self::engine(140)` (README band; 110 is
   `PaySplitMulBefore`, 94 retired).
-* `ActionKind::EventResolved = Self::engine(131)` with the doc line and an
+* `ActionKind::EventResolved = Self::engine(140)` with the doc line and an
   `action_kinds!` entry (`crates/card-sdk/src/kinds.rs`, `EventAfter;` +
   `EventResolved;`).
 * The release dispatches **own-instance**, like `Drawn`
@@ -418,7 +418,7 @@ pub enum JournalRequest {
 |---|---|
 | 9 new imports (§4.2) | new wire |
 | `Trigger` + `SettleFacts` fields (§4.1) | new guest-visible payload, read through the new imports |
-| `TriggerKind` / `ActionKind` 131, spelling `eventResolved` | new wire value (manifest trigger spelling) |
+| `TriggerKind` / `ActionKind` 140, spelling `eventResolved` | new wire value (manifest trigger spelling) |
 | `HostRequest::DrawEventAt` | new request variant; reaches a save only through its `JournalRequest` mirror, not record-visible |
 | `EventDefer`, `WorldSnap`, `WorldRestore`, `WorldSnapDrop` requests | same |
 | renumbered ids | none |
@@ -863,7 +863,7 @@ pub const ABI_VERSION: i32 = 114;   // was 113 (eleventh group)
 `ABI_VERSION` is bumped because the import table, the trigger payload and the
 manifest kind spelling all change; the host refuses a different version, so
 additive is still a bump. `TriggerKind::EventResolved = 131`;
-`kind_table_pin.rs:167` (the pin rows end at `(110, …)`) gains `(131, "EventResolved")`.
+`kind_table_pin.rs` gains `(140, "EventResolved")`.
 
 **Merge caveat:** G06 also appends `Trigger` payload (its `subject_card` /
 `join` / `answers_declared`) and lands before this group. Besides the number,

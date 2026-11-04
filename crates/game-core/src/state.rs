@@ -453,6 +453,10 @@ pub mod prop {
     /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
     /// reserve check -- never by legality. `0` = unknown / assume free.
     pub const EST_COST: &str = "estCost";
+    /// Bot-only: nonzero = standard / advanced bot policies must not offer this
+    /// card. Absent or `0` = offer. A static card fact, never legality -- a
+    /// human can still play the card. Mirrors `card_sdk::abi::prop::AI_NEVER`.
+    pub const AI_NEVER: &str = "aiNever";
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     /// `1` on a source on the owner's field: the owner may play their
@@ -469,6 +473,16 @@ pub mod prop {
     /// so a `place_raw` / engine placement sees it without running the play
     /// body. Mirrors `card_sdk::abi::prop::IMMUNE`.
     pub const IMMUNE: &str = "immune";
+    /// 「不受除拥有此卡的玩家以外的玩家的效果影响」: `1` = the placed instance
+    /// gets `FieldCard.immune_except_owner` stamped at placement, read through
+    /// `is_immune_from_at`. Mirrors `card_sdk::abi::prop::IMMUNE_EXCEPT_OWNER`.
+    pub const IMMUNE_EXCEPT_OWNER: &str = "immuneExceptOwner";
+    /// 「卡包含添加骰效果」: `1` = the card's effect adds dice to a move
+    /// (`plan::add_extra_dice`). Read at the play to test the dice immunity.
+    pub const ADDS_DICE: &str = "addsDice";
+    /// 「打出此卡的回合…」: `1` = playing the card raises `turn.dice_immune` for
+    /// the rest of its turn. Mirrors `card_sdk::abi::prop::GRANTS_DICE_IMMUNITY`.
+    pub const GRANTS_DICE_IMMUNITY: &str = "grantsDiceImmunity";
     /// Virtual **rent** house count (「房屋数视为…」). Presence is the override
     /// (a count of `0` is legitimate); real `st.houses` is untouched. On a
     /// placed card of the tile's owner (`ctx::set_prop`, gone with the card) or
@@ -679,6 +693,13 @@ pub struct MatchPlayer {
     pub assets: i32,
     pub score: i32,
     pub rank: i32,
+    /// The current over-limit hand was created by a draw that permits it
+    /// (「可超过上限」). While set, the excess does not block `end`; it is
+    /// cleared as soon as the hand fits again and after the turn-end sweep.
+    /// `[serde(default)]` so a pre-v17 save restores with it unset. Wire:
+    /// `overHandAllowed`.
+    #[serde(default)]
+    pub over_hand_allowed: bool,
 }
 
 impl Default for MatchPlayer {
@@ -724,6 +745,7 @@ impl Default for MatchPlayer {
             assets: 0,
             score: 0,
             rank: 0,
+            over_hand_allowed: false,
         }
     }
 }
@@ -852,6 +874,11 @@ impl MatchPlayer {
     pub fn over_hand(&self, held: usize) -> bool {
         self.hand_limit()
             .is_some_and(|limit| held > usize::try_from(limit).unwrap_or(0))
+    }
+
+    /// Over the limit **and** not permitted to stay there (「可超过上限」).
+    pub fn over_hand_blocking(&self, held: usize) -> bool {
+        self.over_hand(held) && !self.over_hand_allowed
     }
 
     pub fn skill_state(&self) -> i32 {
@@ -1169,6 +1196,9 @@ pub struct FieldCard {
     /// 「此卡不受…效果影响」. A value on the card, not a subclass override:
     /// effects that would touch it read this and skip.
     pub immune: bool,
+    /// 「不受除拥有者以外的效果影响」; read through `is_immune_from_at`.
+    #[serde(default)]
+    pub immune_except_owner: bool,
     /// The card rule's declared static **properties** (see [`prop`]), stamped
     /// onto the instance at placement and gone with it. A continuous effect
     /// like 「手卡上限数量减1」 (`prop::HAND_LIMIT_DELTA`) rides here, so a
@@ -1231,6 +1261,7 @@ impl Default for FieldCard {
             counters: BTreeMap::new(),
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             props: BTreeMap::new(),
             group_skill: false,
             extra: false,
