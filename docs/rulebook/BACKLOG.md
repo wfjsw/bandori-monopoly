@@ -403,7 +403,7 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **kind**: ABI defect
 - **class**: B
 - **severity**: medium
-- **suggested batch**: draw/discard pipeline
+- **suggested batch**: draw/discard pipeline (designed in G11)
 - **locations**
   - `rules/cards/card-pp/src/infinite_possibility.rs:30`
 - **rulebook**: [特]「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]（次效果优先于其他后续效果）」.

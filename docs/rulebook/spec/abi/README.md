@@ -34,7 +34,7 @@ the whole table.
 | G07 | 112→113 | 16 | — | 441–450 |
 | G09 | 113→114 | 16 | 126–130 | — |
 | G10 | 114→115 | 16→17 | 131 | — |
-| G11 | 115→116 | 17→18 | 132–133 | — |
+| G11 | 115→116 | 17→18 | 132–133 | 451–454 |
 | G12 | 116→117 | 18 | 107 | — |
 | G14 | 117→118 | 18 | — | — |
 
@@ -85,6 +85,13 @@ pre-G03 numbers (109→110 / 14→15), so the row is rewritten to **111→112 /
 move. G06's sixteen imports take the free **411–426**, leaving 427–430 free so
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
+
+**2026-11-04 amendment (G11).** G07 has landed; `ABI_VERSION` is 113 and its
+two ops use 441 and 442 of the 441–450 band. G09's document claims 411–430 and
+G10's 431–449 in their own rows; the highest op claim today is 450, so G11's
+four imports take **451–454** — consecutive, after every existing claim, so no
+landed or pending row moves for them. The kind column stays 132–133 (after
+G10's 131); the group takes no other engine id.
 
 Recommended landing order (foundation → dependent):
 
