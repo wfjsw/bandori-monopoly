@@ -281,6 +281,11 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         s.busy = false;
         s.landed = -1;
         s.skip_move = false;
+        // A new turn starts with its main move unspent. Without this the
+        // cloned frame's `main_moved` (true after this turn's roll) would
+        // contradict the `can_roll_here = true` below once the determinizer
+        // rebuilt the world from it.
+        s.main_moved = false;
         s.prompt = MatchPrompt::default();
         s.plan = MovePlan::default();
         // Roll is owed, so `end` is gated off (`cant_act`). No settle

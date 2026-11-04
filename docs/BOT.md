@@ -397,7 +397,12 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   * event deck order — the unseen remainder of non-derived events, shuffled,
     with the public `event_top` face-down slots pinned on top in order;
     discard / active / removed respected;
-  * fresh match-RNG seed and a fresh `live_rng` per fork.
+  * fresh match-RNG seed and a fresh `live_rng` per fork;
+  * the turn's live public context — the turn seat, the played-card history,
+    and **whether the main move is spent** (`MatchState::main_moved`). The
+    spent flag is a turn counter, not a board fact, so the fork cannot
+    re-derive it: dropping it made the policy answer `roll` into
+    `err.roll_main_used` for the rest of the turn (the room 5FCRYP wedge).
   A fork reproduces the view **exactly** for the searching seat (same public
   state, same own hand / draw composition, hidden-zone counts equal, no card
   in two zones, opponent hands ⊆ allowed minus sightings) — pinned by

@@ -897,6 +897,11 @@ impl Match {
         st.seq = self.seq;
         st.vote = self.vote.clone();
         st.busy = self.pending.is_some();
+        // The roll / end gates read this (`cant_act`), so it has to ride the
+        // view: a rebuilt fork (bot-core's determinizer) restores the world
+        // from the frame and would otherwise think the main move is still
+        // owed, answering `roll` into `err.roll_main_used` forever.
+        st.main_moved = self.world.turn.main_moved;
         if let Some(p) = &self.pending {
             let l = &p.live;
             st.prompt = l.ask.view.clone();

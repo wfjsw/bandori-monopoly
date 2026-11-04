@@ -142,6 +142,15 @@ pub struct MatchState {
     pub roller: i32,
     pub busy: bool,
     pub skip_move: bool,
+    /// The turn's main move is already spent (`world.turn.main_moved`): a
+    /// card ran it, or an off-board main-move expiry teleported the seat at
+    /// its turn start. The roll gate refuses such a roll (`err.roll_main_used`)
+    /// and `end` is the only turn command left. Public: a client that never
+    /// sees it cannot tell a spent main move from an owed roll (the seat
+    /// spamming `roll` into the refusal is how the 2026-11-04 room 5FCRYP
+    /// wedged).
+    #[serde(default)]
+    pub main_moved: bool,
     pub landed: i32,
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
@@ -265,6 +274,7 @@ impl Default for MatchState {
             roller: -1,
             busy: false,
             skip_move: false,
+            main_moved: false,
             landed: -1,
             think_time: 0,
             can_roll_here: false,

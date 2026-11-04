@@ -489,6 +489,7 @@ fn a_human_plays_a_turn_with_commands() {
         m.act(1, &NetMessage::act("fly")).unwrap_err().key(),
         "err.unknown_act"
     );
+    assert!(!m.state().main_moved, "the main move is still owed");
     let before = m.state().players[me as usize].pos;
     m.act(1, &NetMessage::act("roll")).unwrap();
     while m.state().busy {
@@ -497,6 +498,11 @@ fn a_human_plays_a_turn_with_commands() {
     }
     let st = m.state();
     assert_eq!(st.step, stage::END);
+    // The view must carry the spent slot, not just the gate that folds it:
+    // a rebuilt fork (bot-core's determinizer) restores from the view and
+    // otherwise answers `roll` into `err.roll_main_used` for the turn.
+    assert!(st.main_moved, "the view reports the spent main move");
+    assert!(!st.can_roll_here, "and the roll is no longer offered");
     assert_ne!(
         st.players[me as usize].pos, before,
         "the roll moved the token"

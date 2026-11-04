@@ -271,6 +271,10 @@ fn sample_world(
     world.event_removed = view.state.event_removed.clone();
     world.ask_seq = ask_seq;
     world.turn.player_id = view.state.turn.max(0) as usize;
+    // The spent main move is not re-derivable from the fork's world (it is a
+    // turn counter, not a board fact). Dropping it made `act_for_view` answer
+    // `roll` into `err.roll_main_used` for the rest of the turn.
+    world.turn.main_moved = view.state.main_moved;
     // The view's public play history, so the fork's max-plays gate and skill
     // de-dup see what the live seat sees (`MatchState::played_count` alone
     // cannot answer `played.contains`).

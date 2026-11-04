@@ -240,6 +240,9 @@ export interface MatchState {
   phase: string; matchId: number; seq: number; mode: number; turn: number; round: number; step: number;
   debugOpen: boolean;
   roller: number; busy: boolean; skipMove: boolean; landed: number;
+  /** The turn's main move is already spent, so the roll is refused and only
+   *  `end` gets through. Optional: absent on an engine before the field. */
+  mainMoved?: boolean;
   /** ThinkTime room setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited. */
   thinkTime: number;
   /** Would `act {act:"roll"}` be accepted now (`cant_act`'s roll branch). */
