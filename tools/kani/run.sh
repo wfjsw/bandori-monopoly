@@ -310,7 +310,7 @@ unit_features() {
     skills_hhw) echo "band-hhw,skills-personas,skills-groups" ;;
     skills_mor) echo "band-morfonica,skills-groups,skills-personas" ;;
     skills_ras) echo "band-ras,skills-personas" ;;
-    skills_mygo) echo "band-mygo,skills-groups" ;;
+    skills_mygo) echo "band-mygo,skills-groups,skills-personas" ;;
     skills_mujica) echo "band-mujica,skills-groups" ;;
     skills_crychic) echo "band-crychic,skills-groups,skills-personas" ;;
     skills_sumimi) echo "band-sumimi,skills-groups" ;;

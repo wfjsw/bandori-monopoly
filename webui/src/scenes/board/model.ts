@@ -2,7 +2,7 @@
 // popups.
 
 import { D } from "../../core/data";
-import { overHand } from "../../core/hand";
+import { overAny, overHand } from "../../core/hand";
 import type { PersonaData, Command, MatchPlayer, MatchState, MatchView } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { toast } from "../../ui/Toast";
@@ -32,7 +32,10 @@ export interface Model {
   colorOf(i: number): string;
   /** tr("common.you") for yourself. */
   nameOf(i: number): string;
+  /** Blocking overflow: over the limit and not permitted to stay there. */
   overHand: boolean;
+  /** Raw overflow: over the limit at all (the discard affordance). */
+  overAny: boolean;
 }
 
 export function model(v: MatchView): Model {
@@ -53,6 +56,7 @@ export function model(v: MatchView): Model {
     colorOf: (i) => charOf(i)?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length],
     nameOf: (i) => (i === v.playerId && i >= 0 ? tr("common.you") : namesOf(S).playerId(i)),
     overHand: overHand(me, v.hand.length),
+    overAny: overAny(me, v.hand.length),
   };
 }
 

@@ -109,5 +109,15 @@
   "trap_declare_body": "trap-declare body ran",
   "trap_declare_note": "trap-declare placed",
   "trigger_seen_body": "trigger-seen body ran with arg {{arg}}",
-  "xfer_1000_reason": "probe transfer 1000"
+  "xfer_1000_reason": "probe transfer 1000",
+  "forcer_done": "forced move: ran={{ran}} pos={{pos}}",
+  "immune_touch_done": "immunity touch: uid={{uid}} immune={{immune}}",
+  "plan_stay_done": "stay landed before the roll",
+  "plan_stay_note": "stays the mover at the roll plan",
+  "reverser_done": "reverse: allowed={{allowed}}",
+  "stayer_done": "stay landed; count {{count}}",
+  "stopper_done": "stop: allowed={{allowed}}",
+  "teleporter_done": "teleported to {{pos}}",
+  "end_stay_done": "stay landed after the walk",
+  "end_stay_note": "stays the actor at the turn end"
 }

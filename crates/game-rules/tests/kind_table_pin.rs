@@ -180,6 +180,7 @@ fn typed_engine_consts_have_table_rows() {
         (131, "SettleRentMul"),
         (132, "Inspected"),
         (133, "DrawAfter"),
+        (134, "AbnormalGate"),
     ];
     for (id, name) in named {
         let row =
@@ -199,9 +200,9 @@ fn typed_engine_consts_have_table_rows() {
 /// Kind ids are allocated by the ABI README groups and never reused. The
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
 #[test]
-fn kind_id_ceiling_is_133() {
+fn kind_id_ceiling_is_134() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 133, "highest engine kind id");
+    assert_eq!(max, 134, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the
@@ -251,6 +252,7 @@ fn filter_payload_shape_mapping() {
         ("TargetableGate", FilterShape::Gate),
         ("SettleRentAdd", FilterShape::Value),
         ("SettleRentMul", FilterShape::Value),
+        ("AbnormalGate", FilterShape::Gate),
     ];
     assert_eq!(expect.len(), Filter::KINDS.len(), "shape table size");
     for k in Filter::KINDS {

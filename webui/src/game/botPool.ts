@@ -29,6 +29,7 @@ import { describeWorkerError } from "./workerError.ts";
 export interface ViewExtras {
   /** Parallel to `hand`: would `cant_play` allow each card now? */
   playable: boolean[];
+  aiPlayable: boolean[];
   /** Parallel to `hand`: bot-only estimated execution cost (reserve check). */
   estCost: number[];
   /** The viewer's pressable skills, gated through `cant_act`. */

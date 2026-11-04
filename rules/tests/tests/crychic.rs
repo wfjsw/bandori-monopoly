@@ -1471,13 +1471,29 @@ fn place_shout_at(t: &mut Table, who: usize, tile: i32) {
     f.tile = tile;
 }
 
+/// 「若你的乐队技能为“MyGO!!!!!”」 -- both the (3) placement and the pull hang
+/// on the band, so the harness has to attach the MyGO band skill.
+fn bind_mygo_band(t: &mut Table) {
+    t.place_raw(0, "skill:MyGO!!!!!:迷途之星");
+}
+
 /// Roll P1 from `from` by `n` and answer the tomori prompt with `accept`.
 /// Returns whether the prompt was offered.
 fn run_shout_move(t: &mut Table, from: usize, n: i32, accept: bool) -> bool {
+    run_shout_move_faces(t, from, &[n], accept)
+}
+
+/// As [`run_shout_move`], accepting, with the borrowed 1d20 face loaded after
+/// the move roll.
+fn run_shout_move_rolling(t: &mut Table, from: usize, n: i32, face: i32) -> bool {
+    run_shout_move_faces(t, from, &[n, face], true)
+}
+
+fn run_shout_move_faces(t: &mut Table, from: usize, faces: &[i32], accept: bool) -> bool {
     t.begin_turn(1);
     drain(t);
     t.set_pos(1, from);
-    t.dice(&[n]);
+    t.dice(faces);
     t.roll(1).unwrap();
     let mut offered = false;
     for _ in 0..32 {
@@ -1506,6 +1522,7 @@ fn tomori_shout_window_is_the_controller_near_the_card() {
     // mover's landing near 你. P0 stands 2 from the card; P1 lands 3 from P0.
     let mut t = Table::vanilla(2);
     t.clean();
+    bind_mygo_band(&mut t);
     t.set_pos(0, 32);
     place_shout_at(&mut t, 0, 30);
     t.set_fire(0, 1, 10);
@@ -1522,6 +1539,7 @@ fn tomori_shout_window_closed_when_the_landing_is_far() {
     // 5格内时」. 你 is near the card, but the mover lands far from 你.
     let mut t = Table::vanilla(2);
     t.clean();
+    bind_mygo_band(&mut t);
     t.set_pos(0, 32);
     place_shout_at(&mut t, 0, 30);
     t.set_fire(0, 1, 10);
@@ -1537,6 +1555,7 @@ fn tomori_shout_window_closed_when_controller_is_far() {
     // The mover lands right next to the card, but 你 is more than 5 away.
     let mut t = Table::vanilla(2);
     t.clean();
+    bind_mygo_band(&mut t);
     t.set_pos(0, 50);
     place_shout_at(&mut t, 0, 30);
     t.set_fire(0, 1, 10);
@@ -1554,6 +1573,7 @@ fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
     let deed = tile("江户川公园");
     let mut t = Table::vanilla(2);
     t.clean();
+    bind_mygo_band(&mut t);
     t.set_pos(0, deed);
     t.set_owner(deed, Some(0));
     place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
@@ -1593,14 +1613,251 @@ fn tomori_shout_pulls_to_the_controllers_own_tile_with_settle() {
     }
     let full = 5000 - b.money(1);
     assert!(full > 0, "baseline rent is positive");
-    assert!(paid < full, "half-pay bend: paid {paid} vs full {full}");
+    assert_eq!(
+        paid,
+        (full + 1) / 2,
+        "halved exactly once, not quartered: paid {paid} vs full {full}"
+    );
+}
+
+#[test]
+fn tomori_shout_pull_runs_the_borrowed_second_body() {
+    // 规则书（3）: 「使用一次高松灯（MyGO!!!!!）的（2）技能」 -- the skill's own
+    // body runs, which is what logs `tomori_moved`; the shout's old copy did not.
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.clean();
+    bind_mygo_band(&mut t);
+    t.set_pos(0, deed);
+    t.set_owner(deed, Some(0));
+    place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
+    t.set_fire(0, 1, 10);
+    assert!(run_shout_move_rolling(&mut t, (deed + 54) % 60, 8, 3));
+    assert_eq!(t.pos(1), deed, "the body teleported the mover");
+    assert!(
+        t.recent_keys(24).iter().any(|k| k.contains("tomori_moved")),
+        "the skill's own body log: {:?}",
+        t.recent_keys(24)
+    );
+}
+
+#[test]
+fn tomori_shout_pull_rolls_once_and_leans_on_six_or_less() {
+    // 规则书（2）: 「使其投掷1d20，若出目小于等于6则获得一层[停留]」.
+    for (face, low) in [(6, true), (7, false)] {
+        let deed = tile("江户川公园");
+        let mut t = Table::vanilla(2);
+        t.clean();
+        bind_mygo_band(&mut t);
+        t.set_pos(0, deed);
+        t.set_owner(deed, Some(0));
+        place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
+        t.set_fire(0, 1, 10);
+        t.set_money(1, 5000);
+        assert_eq!(t.m.world().scheduled.len(), 0);
+        assert!(run_shout_move_rolling(&mut t, (deed + 54) % 60, 8, face));
+        let stay = if low { 1 } else { 0 };
+        assert_eq!(t.state(1, "stay"), stay, "face {face}");
+        assert_eq!(t.state(1, "skill.tomoriPoem.owedSettle"), stay, "face {face}");
+        assert_eq!(
+            t.m.world().scheduled.len(),
+            stay as usize,
+            "one owed settle on 6 or less, none above; face {face}"
+        );
+    }
+}
+
+#[test]
+fn tomori_shout_spends_one_fire_not_four() {
+    // 规则书（3）: 「消耗1火罐使用一次…（2）技能」 -- the borrowed clause's own
+    // four pots are not collected on top.
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.clean();
+    bind_mygo_band(&mut t);
+    t.set_pos(0, deed);
+    t.set_owner(deed, Some(0));
+    place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
+    t.set_fire(0, 2, 10);
+    t.set_money(1, 5000);
+    assert!(run_shout_move_rolling(&mut t, (deed + 54) % 60, 8, 7));
+    assert_eq!(t.charge(0), 1, "exactly one pot, not four");
+}
+
+#[test]
+fn tomori_shout_delayed_settle_runs_at_the_movers_next_turn_end() {
+    // 规则书（2）: 「并在自己的下回合结束时[触发结算]」 -- the settle is the
+    // mover's, on the mover's position, at the mover's own next turn end.
+    let deed = tile("江户川公园");
+    let mut t = Table::vanilla(2);
+    t.clean();
+    bind_mygo_band(&mut t);
+    t.set_pos(0, deed);
+    t.set_owner(deed, Some(0));
+    place_shout_at(&mut t, 0, ((deed + 3) % 60) as i32);
+    t.set_fire(0, 1, 10);
+    t.set_money(1, 5000);
+    assert!(run_shout_move_rolling(&mut t, (deed + 54) % 60, 8, 6));
+    assert_eq!(t.state(1, "stay"), 1, "the [停留] keeps the mover in place");
+    pass_cry(&mut t, 1);
+    pass_cry(&mut t, 0);
+    assert_eq!(t.turn(), 1, "the mover's next turn");
+    let before = t.money(1);
+    let data = t.m.data();
+    let rent = t.m.world().rent_of(&data, deed as i32);
+    pass_cry(&mut t, 1);
+    assert_eq!(t.pos(1), deed, "the mover never moved");
+    assert!(
+        t.money(1) < before,
+        "the owed settle paid at the mover's own turn end: {before} -> {}",
+        t.money(1)
+    );
+    // 「在此技能影响下的支付价格变为原本的一半」 -- once. The shout's own
+    // half filter and the skill's stand-down, not both on one payment.
+    assert_eq!(
+        before - t.money(1),
+        (rent + 1) / 2,
+        "the owed settle is halved once (rent {rent})"
+    );
+    assert_eq!(
+        t.state(1, "skill.tomoriPoem.owedSettle"),
+        0,
+        "the latch is spent"
+    );
+}
+
+#[test]
+fn tomori_shout_does_not_offer_when_the_skill_already_ran() {
+    // The skill dispatches first; accepting its own offer must keep the shout
+    // from asking for a second use of the same skill on the same landing.
+    let mut t = Table::vanilla(2);
+    t.clean();
+    bind_mygo_band(&mut t);
+    // The poem is placed before the shout: same field walk, lower uid first.
+    t.place_raw(0, "skill:高松灯:诗超绊");
+    t.set_pos(0, 32);
+    place_shout_at(&mut t, 0, 30);
+    t.set_fire(0, 10, 10);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, 31);
+    t.dice(&[1, 3]);
+    t.roll(1).unwrap();
+    let mut skill_offered = false;
+    let mut shout_offered = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if p.title.key().contains("tomori_inner_shout") {
+            shout_offered = true;
+            let _ = t.answer_one(0);
+        } else if p.title.key().contains("tomori_title") {
+            skill_offered = true;
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(skill_offered, "the skill's own offer came first");
+    assert!(!shout_offered, "the shout stands down: {:?}", t.recent_keys(24));
+}
+
+#[test]
+fn tomori_shout_offers_after_the_skill_offer_is_declined() {
+    // Declining the skill's four-pot offer leaves the one-pot borrow available.
+    let mut t = Table::vanilla(2);
+    t.clean();
+    bind_mygo_band(&mut t);
+    t.place_raw(0, "skill:高松灯:诗超绊");
+    t.set_pos(0, 32);
+    place_shout_at(&mut t, 0, 30);
+    t.set_fire(0, 10, 10);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, 31);
+    t.dice(&[1, 3]);
+    t.roll(1).unwrap();
+    let mut skill_offered = false;
+    let mut shout_offered = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if p.title.key().contains("tomori_inner_shout") {
+            shout_offered = true;
+            let _ = t.answer_one(0);
+        } else if p.title.key().contains("tomori_title") {
+            skill_offered = true;
+            t.decline();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(skill_offered, "the skill's own offer came first");
+    assert!(
+        shout_offered,
+        "the shout still offers after the decline: {:?}",
+        t.recent_keys(24)
+    );
+}
+
+#[test]
+fn tomori_shout_halves_once_even_with_the_poem_placed() {
+    // Both filters could answer: the shout's for the borrow (`POEM_BORROWED`
+    // makes the poem stand down) and the poem's for the owed settle (the shout
+    // stands down when the poem is on the field). Each settle is halved once.
+    let mut t = Table::vanilla(2);
+    t.clean();
+    bind_mygo_band(&mut t);
+    t.place_raw(0, "skill:高松灯:诗超绊");
+    t.set_pos(0, 32);
+    t.set_owner(32, Some(0));
+    place_shout_at(&mut t, 0, 30);
+    t.set_fire(0, 10, 10);
+    t.set_money(1, 50_000);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, 31);
+    t.dice(&[1, 3]);
+    t.roll(1).unwrap();
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if p.title.key().contains("tomori_inner_shout") {
+            let _ = t.answer_one(0);
+        } else if p.title.key().contains("tomori_title") {
+            t.decline();
+        } else {
+            t.decline();
+        }
+    }
+    let data = t.m.data();
+    let rent = t.m.world().rent_of(&data, 32);
+    let after_forced = t.money(1);
+    assert_eq!(
+        after_forced,
+        50_000 - (rent + 1) / 2,
+        "the forced settle is halved once (rent {rent})"
+    );
+    pass_cry(&mut t, 1);
+    pass_cry(&mut t, 0);
+    assert_eq!(t.turn(), 1);
+    pass_cry(&mut t, 1);
+    assert_eq!(
+        t.money(1),
+        after_forced - (rent + 1) / 2,
+        "the owed settle is halved once"
+    );
 }
 
 // LOY-TOMORI-03 「最早拥有的格子」 is unpinned: (3) only runs for a MyGO-band
-// player (`ctx::group_skills(…)` naming `skill:MyGO!!!!!:…`), and the harness
-// has no band setter
-// -- 高松灯（CRYCHIC）is the card's exclusive and is CRYCHIC band, so the (3)
-// placement path is unreachable from a test today. The fallback itself is
+// player (`ctx::group_skills(…)` naming `skill:MyGO!!!!!:…`) and needs an
+// acquisition order the engine does not keep. The fallback itself is
 // documented at the `TODO(规则书)` in `tomori_inner_shout.rs`.
 
 #[test]

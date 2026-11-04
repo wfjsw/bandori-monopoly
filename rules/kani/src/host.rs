@@ -20,6 +20,7 @@ use card_sdk::kani_host::{self, Args, Op};
 
 use crate::board;
 use crate::intern::{self, NameId};
+use crate::spec::g12_status;
 use crate::world::{
     self, Effect, World, CARD_RESONANCE, MAX_PLAYERS, TILE_SHOP, TILE_SHOP_NAME, TOK_PP_NEG,
     TOK_PP_POS,
@@ -831,9 +832,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::apply_abnormal => arm_apply_abnormal(a),
-        // The stay move-latch is turn-flow; the kani world has no skip_move
-        // field (the model records the layer write only). Protocol-level.
-        Op::skip_main_move | Op::clear_move_skip => 0,
+        // The stay move-latch is turn-flow (`World.st.skip_move`); it is the
+        // `3` branch of `cant_move`. Packing: `(player, locked)`.
+        Op::skip_main_move => arm_skip_main_move(a),
+        Op::clear_move_skip => arm_clear_move_skip(a),
         Op::give_extra_turn => {
             // Recorded so the protocol can schedule it. Scheduling is
             // PROTOCOL-LEVEL (the turn engine owns the extra-turn queue).
@@ -865,11 +867,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::log_as => arm_log(a),
-        Op::cant_move => world::with_world(|w| {
-            (w.stay[player_idx(a0)] > 0
-                || w.stun[player_idx(a0)] > 0
-                || w.exile[player_idx(a0)] > 0) as i64
-        }),
+        // Same code space as the engine (§5.4), composed from the running
+        // activation: turn → skip → spent.
+        Op::cant_move => arm_cant_move(a),
         Op::abnormal_count => world::with_world(|w| {
             let mut n = 0;
             let mut p = 0;
@@ -897,6 +897,19 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- nearest selection (G07) ----
         Op::nearest => arm_nearest(a),
         Op::nearest_with_prop => arm_nearest_with_prop(a),
+
+        // ---- v114 (G12) status / blocked-ness / immunity ----
+        // The trigger readers expose the stamp the harness / engine put on
+        // the raise; the ordinal form runs the engine's exact `cant_move_from`
+        // predicate (`spec::g12_status`, shared with the plain read above).
+        Op::trigger_activation_ordinal => arm_trigger_activation_ordinal(a),
+        Op::trigger_abnormal_blocked => arm_trigger_abnormal_blocked(a),
+        Op::trigger_move_abnormal => arm_trigger_move_abnormal(a),
+        Op::cant_move_code_for_activation => arm_cant_move_code_for_activation(a),
+        Op::is_immune_from_at => arm_is_immune_from_at(a),
+        Op::set_self_immune_except_owner => arm_set_self_immune_except_owner(a),
+        Op::dice_immune => arm_dice_immune(a),
+        Op::set_dice_immune => arm_set_dice_immune(a),
 
         // ---- inspection / reveal (G11) ----
         Op::inspection_begin => arm_inspection_begin(a),
@@ -1192,7 +1205,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_build
         | Op::card_buy
         | Op::card_offer_build
-        | Op::settle_tile_at
         | Op::card_mortgage
         | Op::query_guard
         | Op::declared_arg
@@ -1216,6 +1228,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::flash_card
         | Op::flash_card_keyed
         | Op::flash_tile => arm_protocol_stub(a),
+
+        // A protocol stub, but recorded: a clause can still be held to "it
+        // settles here, and nowhere when it is on no square".
+        Op::settle_tile_at => arm_settle_tile_at(a),
 
         // ---- cross-card messages (`ctx::send` / `On::Message`) ----
         Op::send => arm_send(a),
@@ -1640,6 +1656,105 @@ pub fn arm_card_counter(a: Args) -> i64 {
     }) as i64
 }
 
+// ---- v114 (G12) status / blocked-ness / immunity -------------------------
+
+/// `trigger::activation_ordinal` — the running activation stamp.
+pub fn arm_trigger_activation_ordinal(_a: Args) -> i64 {
+    world::with_world(|w| w.turn_activation_ordinal) as i64
+}
+
+/// `trigger::abnormal_blocked` — the raise's blocked-ness bit.
+pub fn arm_trigger_abnormal_blocked(_a: Args) -> i64 {
+    world::with_world(|w| w.trig_abnormal_blocked as i64)
+}
+
+/// `trigger::move_abnormal` — the in-flight frame's span bit, OR the turn
+/// latch `end_plan` copies it into (`turn.move_abnormal`).
+pub fn arm_trigger_move_abnormal(_a: Args) -> i64 {
+    world::with_world(|w| (w.move_snap.abnormal || w.turn_move_abnormal) as i64)
+}
+
+/// `cant_move_code_for_activation(player, activation)` — the engine's order,
+/// turn → skip → spent, with "spent" suppressed for the asking activation.
+pub fn arm_cant_move_code_for_activation(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world(|w| {
+        g12_status::cant_move_code(
+            w.turn_player,
+            a0,
+            w.skip_move,
+            w.main_moved,
+            w.move_activation_ordinal,
+            a1,
+        ) as i64
+    })
+}
+
+/// `cant_move(player)` — the same code against the running activation.
+pub fn arm_cant_move(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        g12_status::cant_move_code(
+            w.turn_player,
+            a0,
+            w.skip_move,
+            w.main_moved,
+            w.move_activation_ordinal,
+            w.turn_activation_ordinal,
+        ) as i64
+    })
+}
+
+/// `skip_main_move(player, locked)` / `clear_move_skip(player)` — the turn's
+/// move latch (`World.st.skip_move`), the `3` branch of `cant_move`.
+pub fn arm_skip_main_move(a: Args) -> i64 {
+    world::with_world_mut(|w| w.skip_move = a[1] != 0);
+    0
+}
+
+pub fn arm_clear_move_skip(_a: Args) -> i64 {
+    world::with_world_mut(|w| w.skip_move = false);
+    0
+}
+
+/// `is_immune_from_at(uid, by)` — false without an instance, else the
+/// any-flavour flag or the except-owner flavour for a foreign causer.
+pub fn arm_is_immune_from_at(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world(|w| {
+        w.field_by_uid(a0).is_some_and(|f| {
+            g12_status::is_immune_from(f.immune, f.immune_except_owner, f.player, a1)
+        }) as i64
+    })
+}
+
+/// `set_self_immune_except_owner(on)` — mirrors `set_self_immune`: writes the
+/// model's running instance (slot 0) and answers whether it exists.
+pub fn arm_set_self_immune_except_owner(a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        if w.field_n == 0 {
+            0
+        } else {
+            w.field[0].immune_except_owner = a[0] != 0;
+            1
+        }
+    })
+}
+
+/// `dice_immune()` — the turn's flag.
+pub fn arm_dice_immune(_a: Args) -> i64 {
+    world::with_world(|w| w.dice_immune as i64)
+}
+
+/// `set_dice_immune(on)` — sets the turn flag and answers its previous value.
+pub fn arm_set_dice_immune(a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        let prev = w.dice_immune;
+        w.dice_immune = a[0] != 0;
+        prev as i64
+    })
+}
+
 /// `run_planned_move` — `1` ran, `0` refused.
 ///
 /// The engine's decision (`G04-move-plan` §4.10): a main move of the turn
@@ -1658,6 +1773,10 @@ pub fn arm_card_move(a: Args) -> i64 {
         } else {
             if is_main_move {
                 w.main_moved = true;
+                // The move is latched to the activation that spent it
+                // (`play.rs`, both the direct and the landing path), so a
+                // replay of the same routine re-reads it as its own.
+                w.move_activation_ordinal = w.turn_activation_ordinal;
             }
             1
         }
@@ -1912,7 +2031,9 @@ pub fn arm_roll(a: Args) -> i64 {
     if purpose == 1 {
         arm_do_move_roll(a)
     } else {
-        roll_dice(count, sides) as i64
+        let v = roll_dice(count, sides);
+        world::with_world_mut(|w| w.roll_calls = w.roll_calls.saturating_add(1));
+        v as i64
     }
 }
 
@@ -2206,7 +2327,11 @@ pub fn arm_draw(a: Args) -> i64 {
                 world::pile_push(&mut w.hand_pile, &mut w.hand_n, u16::MAX);
                 i += 1;
             }
-            w.push(Effect::Draw { player: a0, n });
+            if a2 & card_sdk::abi::draw_flag::OVER_HAND_LIMIT != 0 {
+                w.push(Effect::DrawOver { player: a0, n });
+            } else {
+                w.push(Effect::Draw { player: a0, n });
+            }
         });
         n as i64
     }
@@ -2961,6 +3086,7 @@ pub fn arm_place_card(a: Args) -> i64 {
                 tile,
                 face_down: false,
                 immune: false,
+                immune_except_owner: false,
                 crystals: 0,
                 props: world::NameMap::new(),
                 effective_card: u16::MAX,
@@ -2998,6 +3124,7 @@ pub fn arm_place_card_at(a: Args) -> i64 {
                     tile,
                     face_down: false,
                     immune: false,
+                    immune_except_owner: false,
                     crystals: 0,
                     props: world::NameMap::new(),
                     effective_card: u16::MAX,
@@ -3036,6 +3163,7 @@ pub fn arm_place_card_on(a: Args) -> i64 {
                     tile,
                     face_down: false,
                     immune: false,
+                    immune_except_owner: false,
                     crystals: 0,
                     props: world::NameMap::new(),
                     effective_card: u16::MAX,
@@ -3271,8 +3399,31 @@ pub fn arm_round_no(a: Args) -> i64 {
     world::with_world(|w| w.round_no) as i64
 }
 
-pub fn arm_schedule_turn_end(_a: Args) -> i64 {
+pub fn arm_schedule_turn_end(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.last_schedule = (a0, a1);
+        w.schedule_turn_end_n = w.schedule_turn_end_n.saturating_add(1);
+    });
     0
+}
+
+/// `settle_tile_at` — a protocol stub (the settle's real scheduling is
+/// PROTOCOL-LEVEL), but record the call so a clause can still be held to "it
+/// settles here, and nowhere when placed nowhere".
+pub fn arm_settle_tile_at(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.last_settle = (a0, a1);
+        w.settle_calls = w.settle_calls.saturating_add(1);
+    });
+    0
+}
+
+/// `trigger::is_settle_redirect()` — the pending settle was card-forced
+/// (`TriggerMove::settle_redirect`).
+pub fn arm_trig_settle_redirect(_a: Args) -> i64 {
+    world::with_world(|w| w.move_snap.settle_redirect as i64)
 }
 
 pub fn arm_self_tile(a: Args) -> i64 {

@@ -34,6 +34,7 @@ export function mergeExtras(v: MatchView, e: ViewExtras): MatchView {
   return {
     ...v,
     playable: e.playable,
+    aiPlayable: e.aiPlayable,
     estCost: e.estCost,
     skills: e.skills,
     aiAnswer: e.aiAnswer,
@@ -47,13 +48,14 @@ export function mergeExtras(v: MatchView, e: ViewExtras): MatchView {
  * Each key caches its own exact extras. On a miss, the most recent set's
  * `skills` carries forward -- a stale-but-present stand-in, so a new state seq
  * does not empty the skill row and unmount its faces for a paint. The decision
- * fields (`playable` / `estCost` / `aiAnswer`) never carry: they describe one
+ * fields (`playable` / `aiPlayable` / `estCost` / `aiAnswer`) never carry: they describe one
  * prompt, and borrowing another key's would grey a legal card or answer 托管
  * with the wrong choice.
  *
  * Failure is not fatal: a refused / timed-out `extras` leaves the frame
  * carrying whatever stand-in is already there (consumers already tolerate a
- * missing field -- `view.playable && !view.playable[i]`, `view.skills ?? []`,
+ * missing field -- `view.playable && !view.playable[i]`,
+ * `view.aiPlayable && !view.aiPlayable[i]`, `view.skills ?? []`,
  * `view.aiAnswer ?? null`) and the key is marked failed so the same decision
  * is not retried.
  */
@@ -84,7 +86,7 @@ export class OnlineExtras {
    *  **only `skills`** carries the most recent set forward: the roster's
    *  pressable skills are stable across a decision, and an absent list empties
    *  the skill row (its faces remount, and their art flashes). The decision
-   *  fields (`playable` / `estCost` / `aiAnswer`) are decision-specific and
+   *  fields (`playable` / `aiPlayable` / `estCost` / `aiAnswer`) are decision-specific and
    *  must never be borrowed from another key -- a stale `playable` greys a
    *  legal card and a stale `aiAnswer` answers 托管 with the previous
    *  decision.
@@ -95,6 +97,7 @@ export class OnlineExtras {
     if (exact) {
       if (
         v.playable === exact.playable &&
+        v.aiPlayable === exact.aiPlayable &&
         v.estCost === exact.estCost &&
         v.skills === exact.skills &&
         v.aiAnswer === exact.aiAnswer

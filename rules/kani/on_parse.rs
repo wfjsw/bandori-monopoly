@@ -205,6 +205,19 @@ fn ctor_head(s: &str) -> Option<(String, usize)> {
     }
 }
 
+/// A raw dual-kind first argument: `ActionKind(TriggerKind::X)` (the
+/// `card_sdk::kinds::action` helper) names the engine kind `X`, which the
+/// typed constructors cannot spell.
+fn raw_dual_kind(arg: &str) -> Option<String> {
+    let arg = arg.trim();
+    let inner = arg
+        .strip_prefix("ActionKind(")
+        .or_else(|| arg.strip_prefix("FilterKind("))?
+        .strip_suffix(')')?;
+    let last = inner.rsplit("::").next()?.trim();
+    is_ident(last).then(|| last.to_string())
+}
+
 /// Map a `filter_kinds!` payload type path to its [`BodyShape`].
 fn payload_shape(ty: &str) -> BodyShape {
     let last = ty.rsplit("::").next().unwrap_or(ty).trim();
@@ -368,7 +381,7 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             if inner.contains("FilterBody::") {
                 panic!("on_parse: retired `FilterBody::` arm in `On::{variant}` at byte {start}");
             }
-            let Some((kind, open)) = ctor_head(inner) else {
+            let Some((mut kind, open)) = ctor_head(inner) else {
                 panic!(
                     "on_parse: `On::{variant}(` at byte {start} is not `Ns::Kind(...)` — got `{}`",
                     inner.chars().take(60).collect::<String>()
@@ -384,6 +397,13 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             let Some(body) = body_ident(last) else {
                 panic!("on_parse: `On::{variant}::{kind}` last arg `{last}` is not a body ident");
             };
+            // `card_sdk::kinds::action(ActionKind(TriggerKind::X), …)` — the
+            // raw helper is not itself a kind; the first argument names one.
+            if kind == "action" {
+                if let Some(k) = args.first().and_then(|a| raw_dual_kind(a)) {
+                    kind = k;
+                }
+            }
             let shape = if variant == "Filter" {
                 *shapes.get(&kind).unwrap_or_else(|| {
                     panic!(

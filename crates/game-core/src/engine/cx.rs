@@ -480,7 +480,7 @@ impl SettleOutcome {
 /// the entry's own settle-scoped writes compose on top without re-reading the
 /// stack. `outcome` starts
 /// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SettleEntry {
     pub player: usize,
     pub tile: usize,
@@ -493,6 +493,13 @@ pub struct SettleEntry {
     pub base_add: i32,
     pub base_rent_add: i32,
     pub outcome: SettleOutcome,
+    /// The settle's move view. A raise inside the settle inherits it when it
+    /// carries none of its own (see `PlayCtx::raise`), so a payment hook can
+    /// tell a card-forced settle (`settle_redirect`) from the walk's and reads
+    /// the main-move flag the settle belongs to.
+    pub mv: super::rules::TriggerMove,
+    /// The settle's main-move flag, stamped on inheriting raises.
+    pub is_main_move: bool,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and

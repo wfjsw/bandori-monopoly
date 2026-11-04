@@ -659,6 +659,194 @@ fn stun_self(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// ------------------------------------------------- G12 abnormal delivery
+// Every deliverer below aims its effect at the first other player, so the
+// `by != actor` half of the [不可阻挡] gate is what the tests exercise.
+
+/// The first other seat, or -1.
+fn first_other(player_id: i32) -> i32 {
+    ctx::others(player_id).first().copied().unwrap_or(-1)
+}
+
+/// Received [传送]: the bare engine teleport (kind 4).
+const TELEPORTER: CardDef = CardDef::new("TEST:teleporter", &[On::Play("", None, teleporter)]);
+
+fn teleporter(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    let to = ctx::tile_steps_ahead(target, 3);
+    if to < 0 {
+        return Ok(());
+    }
+    ctx::teleport_to(target, to);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("teleporter_done")).i("pos", ctx::player_pos(target) as i64),
+    );
+    Ok(())
+}
+
+/// Received [强制移动]: four steps through `run_planned_move` (kind 5).
+const FORCER: CardDef = CardDef::new("TEST:forcer", &[On::Play("", None, forcer)]);
+
+fn forcer(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    ctx::plan::set_steps(4);
+    let ran = ctx::run_planned_move(target);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("forcer_done"))
+            .i("ran", ran as i64)
+            .i("pos", ctx::player_pos(target) as i64),
+    );
+    Ok(())
+}
+
+/// Received [强制停下] (kind 6): the caller-side gate, then a marker.
+const STOPPER: CardDef = CardDef::new("TEST:stopper", &[On::Play("", None, stopper)]);
+
+fn stopper(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    let allowed = ctx::gate(target, bandori_std::kind::abnormal::Stop);
+    if allowed {
+        ctx::state::add(target, "TEST:stopped", 1);
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("stopper_done")).i("allowed", allowed as i64),
+    );
+    Ok(())
+}
+
+/// Received reverse (kind 7): the caller-side gate, then a marker.
+const REVERSER: CardDef = CardDef::new("TEST:reverser", &[On::Play("", None, reverser)]);
+
+fn reverser(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    let allowed = ctx::gate(target, bandori_std::kind::abnormal::Reverse);
+    if allowed {
+        ctx::state::add(target, "TEST:reversed", 1);
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("reverser_done")).i("allowed", allowed as i64),
+    );
+    Ok(())
+}
+
+/// Received [停留] layer: the status verb, which gates kind 1 itself.
+const STAYER: CardDef = CardDef::new("TEST:stayer", &[On::Play("", None, stayer)]);
+
+fn stayer(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    rules_status::stay::add(target, 1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("stayer_done")).i("count", rules_status::stay::get(target) as i64),
+    );
+    Ok(())
+}
+
+/// Lands a [停留] on the actor **before the roll** (the in-move span:
+/// `diceRollPlan` runs inside the main move's frame).
+const PLAN_STAY: CardDef = CardDef::new(
+    "TEST:planStay",
+    &[
+        On::Play("", None, plan_stay_place),
+        On::Action(Action::DiceRollPlan(
+            "actor == owner && card.placed",
+            None,
+            plan_stay,
+        )),
+    ],
+);
+
+fn plan_stay_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:planStay",
+        &Msg::new(key!("plan_stay_note")),
+    );
+    Ok(())
+}
+
+fn plan_stay(player_id: i32) -> card_sdk::Asked {
+    rules_status::stay::add(player_id, 1);
+    ctx::log(player_id, &Msg::new(key!("plan_stay_done")));
+    Ok(())
+}
+
+/// Lands a [停留] on the actor **after the walk**: `endTurnBefore` runs once
+/// the move's frame has closed, before the `turnEnd` raises.
+const END_STAY: CardDef = CardDef::new(
+    "TEST:endStay",
+    &[
+        On::Play("", None, end_stay_place),
+        On::Action(Action::EndTurnBefore(
+            "actor == owner && card.placed",
+            None,
+            end_stay,
+        )),
+    ],
+);
+
+fn end_stay_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:endStay", &Msg::new(key!("end_stay_note")));
+    Ok(())
+}
+
+fn end_stay(player_id: i32) -> card_sdk::Asked {
+    rules_status::stay::add(player_id, 1);
+    ctx::log(player_id, &Msg::new(key!("end_stay_done")));
+    Ok(())
+}
+
+/// Touches the first `PP:再次闪耀` on the board through its causer-aware
+/// immunity read: one [奇迹水晶] when `is_immune_from_at(uid, by)` is false.
+const IMMUNE_TOUCH: CardDef =
+    CardDef::new("TEST:immuneTouch", &[On::Play("", None, immune_touch)]);
+
+fn immune_touch(player_id: i32) -> card_sdk::Asked {
+    let mut found = None;
+    for s in 0..ctx::player_count() {
+        if let Some((uid, _)) = ctx::field_instances(s)
+            .into_iter()
+            .find(|(_, id)| id.as_str() == "PP:再次闪耀")
+        {
+            found = Some(uid);
+            break;
+        }
+    }
+    let uid = found.unwrap_or(-1);
+    let immune = uid >= 0 && ctx::is_immune_from_at(uid, player_id);
+    if !immune && uid >= 0 {
+        ctx::add_counter_at(uid, bandori_std::counter::CRYSTALS, 1, 0);
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("immune_touch_done"))
+            .i("uid", uid as i64)
+            .i("immune", immune as i64),
+    );
+    Ok(())
+}
+
 fn guard_play(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
@@ -3081,10 +3269,15 @@ const INVOKED: CardDef = CardDef::new(
 
 fn invoked_body(player_id: i32) -> card_sdk::Asked {
     let by = ctx::invoke().map_or(-1, |f| f.by_instance);
+    let entry = ctx::invoke().map_or_else(String::new, |f| f.entry.as_str().into());
     ctx::log(
         player_id,
         &Msg::new(key!("invoked_frame"))
             .i("by", by as i64)
+            .i("self", ctx::self_uid() as i64)
+            .i("instance", ctx::invoke().map_or(-1, |f| f.instance) as i64)
+            .card("card", &trigger_card())
+            .card("entry", &entry)
             .i("paid", ctx::invoke_paid() as i64),
     );
     Ok(())
@@ -3115,6 +3308,106 @@ fn invoker_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// G13 §10.2: the target instance is bound as `self_uid` inside the body and
+/// the caller's instance is back afterwards.
+const INVOKE_BIND: CardDef = CardDef::new(
+    "TEST:invoke_bind",
+    &[On::Action(Action::TurnEnd("", None, invoke_bind))],
+);
+
+fn invoke_bind(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("bind_before")).i("self", ctx::self_uid() as i64));
+    ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    ctx::log(player_id, &Msg::new(key!("bind_after")).i("self", ctx::self_uid() as i64));
+    Ok(())
+}
+
+/// G13 §10.2: `trigger.card` names the target inside the body and is restored
+/// to the caller after.
+const INVOKE_SEED: CardDef = CardDef::new(
+    "TEST:invoke_seed",
+    &[On::Action(Action::CardPlayed("", None, invoke_seed))],
+);
+
+/// The trigger's card (`trigger.cards`): the invoked card inside the invoke
+/// frame, the played card in the caller's `cardPlayed` hook.
+fn trigger_card() -> String {
+    ctx::trigger::cards()
+        .into_iter()
+        .next()
+        .map_or_else(String::new, |c| c.as_str().into())
+}
+
+fn invoke_seed(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("seed_before")).card("card", &trigger_card()));
+    ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    ctx::log(player_id, &Msg::new(key!("seed_after")).card("card", &trigger_card()));
+    Ok(())
+}
+
+/// G13 §10.2: an unknown entry is a no-op (`DEST_UNSET`), not a trap.
+const INVOKE_BAD_ENTRY: CardDef = CardDef::new(
+    "TEST:invoke_bad_entry",
+    &[On::Action(Action::TurnEnd("", None, invoke_bad_entry))],
+);
+
+fn invoke_bad_entry(player_id: i32) -> card_sdk::Asked {
+    let r = ctx::invoke_entry(player_id, "TEST:invoked", "nope");
+    ctx::log(player_id, &Msg::new(key!("bad_entry")).i("ok", r.is_ok() as i64));
+    Ok(())
+}
+
+/// G13 §10.2: an unknown card traps.
+const INVOKE_BAD_CARD: CardDef = CardDef::new(
+    "TEST:invoke_bad_card",
+    &[On::Action(Action::TurnEnd("", None, invoke_bad_card))],
+);
+
+fn invoke_bad_card(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_entry(player_id, "TEST:nope", "two")?;
+    Ok(())
+}
+
+/// G13 §10.2: a `Filter` entry is not invocable (its body shape differs).
+const INVOKE_FILTER: CardDef = CardDef::new(
+    "TEST:invoke_filter",
+    &[
+        On::Filter(Filter::PaySplitMul("", None, identity)).id("f"),
+        On::Action(Action::TurnEnd("", None, invoke_filter)),
+    ],
+);
+
+fn identity(_player_id: i32, value: i32) -> i32 {
+    value
+}
+
+fn invoke_filter(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_entry(player_id, "TEST:invoke_filter", "f")?;
+    Ok(())
+}
+
+/// G13 §10.2: `invoke_skill` resolves `entry::PRESS`.
+const INVOKE_SKILL_PROBE: CardDef = CardDef::new(
+    "TEST:invoke_skill",
+    &[On::Action(Action::TurnEnd("", None, invoke_skill_probe))],
+);
+
+fn invoke_skill_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::invoke_skill(player_id, "TEST:invoked")?;
+    Ok(())
+}
+
+/// G13 §10.2: `play_card` also lands on the first Play, not on a named entry.
+const PLAY_CARD_PROBE: CardDef = CardDef::new(
+    "TEST:play_card_probe",
+    &[On::Action(Action::TurnEnd("", None, play_card_probe))],
+);
+
+fn play_card_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::play_card("TEST:invoked", player_id)?;
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY,
     RECURSE,
@@ -3122,6 +3415,14 @@ card_sdk::ruleset!(&[
     LISTER,
     STUNNER,
     STUN_SELF_MOVER,
+    TELEPORTER,
+    FORCER,
+    STOPPER,
+    REVERSER,
+    STAYER,
+    PLAN_STAY,
+    END_STAY,
+    IMMUNE_TOUCH,
     GUARD,
     AIMER,
     TARGET_SELF,
@@ -3240,6 +3541,13 @@ card_sdk::ruleset!(&[
     DUAL_ACTION,
     INVOKED,
     INVOKER,
+    INVOKE_BIND,
+    INVOKE_SEED,
+    INVOKE_BAD_ENTRY,
+    INVOKE_BAD_CARD,
+    INVOKE_FILTER,
+    INVOKE_SKILL_PROBE,
+    PLAY_CARD_PROBE,
     INSPECT_PROBE,
     LOOK_AT_TWO,
     LOOK_REVEAL,

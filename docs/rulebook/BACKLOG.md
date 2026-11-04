@@ -180,8 +180,8 @@ Design: `docs/rulebook/spec/abi/G12-status-and-immunity.md`
 
 Design: `docs/rulebook/spec/abi/G13-invoke-and-copy.md`
 
-- **invoke-skill-entry** (medium, rows 437,996) — invoke_skill runs On::Play only and loses the skill instance; `rules/cards/card-morfonica/src/nanami_effort.rs`
-- **tomori-borrowed-second-half** (medium, rows 187,995) — Borrowed (2): the roll/停留/delayed settle half never runs; `rules/cards/card-crychic/src/tomori_inner_shout.rs`
+- **invoke-skill-entry** (medium, rows 437,996) — invoke_skill runs On::Play only and loses the skill instance; `rules/cards/card-morfonica/src/nanami_effort.rs` — **landed** (G13, 2026-11-04: named-entry invoke + coverage)
+- **tomori-borrowed-second-half** (medium, rows 187,995) — Borrowed (2): the roll/停留/delayed settle half never runs; `rules/cards/card-crychic/src/tomori_inner_shout.rs` — **landed** (G13, 2026-11-04)
 
 ## G14 — CardDef AI hooks and hand limit
 

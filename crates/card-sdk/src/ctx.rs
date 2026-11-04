@@ -884,6 +884,18 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 /// with the whole batch after the last of them. Pauses like [`pay`] does; the
 /// body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    draw_flags(player_id, n, 0)
+}
+
+/// Draw `n` cards **without** the immediate hand-limit trim (「可超过上限」).
+/// The excess is allowed until the hand fits again or the turn ends: the
+/// card's own scheduled discard is the usual disposer, and `end` is accepted
+/// meanwhile. The limit state itself is untouched. Pauses like [`draw`].
+pub fn draw_over_hand_limit(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    draw_flags(player_id, n, crate::abi::draw_flag::OVER_HAND_LIMIT)
+}
+
+fn draw_flags(player_id: i32, n: i32, flags: i32) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::draw");
     #[cfg(kani)]
     {
@@ -894,7 +906,7 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
         macro_rules! draw1 {
             () => {
                 if taken < n.max(0) {
-                    got += asked(unsafe { sys::draw(player_id, 1) })?;
+                    got += asked(unsafe { sys::draw(player_id, 1, flags) })?;
                     taken += 1;
                 }
             };
@@ -911,9 +923,9 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     #[cfg(not(kani))]
     {
         // One host call for the whole instruction: the host draws the cards
-        // (replacements, refill and pausing included) and raises `drawAfter`
-        // once for the batch.
-        asked(unsafe { sys::draw(player_id, n.max(0)) })
+        // (replacements, refill, the over-limit flag and pausing included) and
+        // raises `drawAfter` once for the batch.
+        asked(unsafe { sys::draw(player_id, n.max(0), flags) })
     }
 }
 
@@ -2374,6 +2386,14 @@ pub fn cant_move_code(player_id: i32) -> i32 {
     unsafe { sys::cant_move(player_id) }
 }
 
+/// [`cant_move_code`] from the named activation: "already moved" is suppressed
+/// when that activation drove this turn's main move, so a re-run of a body
+/// reads back as "not spent".
+#[doc(hidden)]
+pub fn cant_move_code_for_activation(player_id: i32, activation_ordinal: i32) -> i32 {
+    unsafe { sys::cant_move_code_for_activation(player_id, activation_ordinal) }
+}
+
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
 #[doc(hidden)]
@@ -2437,6 +2457,18 @@ pub fn round_no() -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn turn_key() -> i32 {
     unsafe { sys::turn_key() }
+}
+
+/// Is the turn's dice immunity up (「打出此卡的回合…」)?
+#[doc(hidden)]
+pub fn dice_immune() -> bool {
+    unsafe { sys::dice_immune() != 0 }
+}
+
+/// Raise the turn's dice immunity (idempotent; for dynamic grants).
+#[doc(hidden)]
+pub fn set_dice_immune(on: bool) -> bool {
+    unsafe { sys::set_dice_immune(on as i32) != 0 }
 }
 
 /// Where a card goes when its effect finishes. Wire values 0..=3 are the
@@ -3907,6 +3939,25 @@ pub mod trigger {
         unsafe { sys::trig_move_rolled() != 0 }
     }
 
+    /// The running activation's ordinal; 0 outside a routine.
+    #[doc(hidden)]
+    pub fn activation_ordinal() -> i32 {
+        unsafe { sys::trigger_activation_ordinal() }
+    }
+
+    /// Did the abnormal this trigger announces hold the move? Meaningful only
+    /// on the `effect` and `abnormal` raises of an abnormal.
+    #[doc(hidden)]
+    pub fn abnormal_blocked() -> bool {
+        unsafe { sys::trigger_abnormal_blocked() != 0 }
+    }
+
+    /// Did an abnormal land during the triggering move?
+    #[doc(hidden)]
+    pub fn move_abnormal() -> bool {
+        unsafe { sys::trigger_move_abnormal() != 0 }
+    }
+
     /// The triggering move's effective length.
     pub fn move_effective_steps() -> i32 {
         unsafe { sys::trig_move_effective_steps() }
@@ -4556,7 +4607,11 @@ pub fn linger(player_id: i32, expires: i32) -> bool {
     unsafe { sys::linger(player_id, expires) != 0 }
 }
 
-/// Is this placed field card immune to other effects?
+/// Is this placed field card immune to **any** effect?
+///
+/// The cause-blind read: the any-flavour flag only, so an 「除拥有者以外」
+/// card reads `false` here. A check that knows who is acting uses
+/// [`is_immune_from_at`] instead, which also honours the owner exemption.
 #[cfg_attr(kani, inline(always))]
 pub fn card_immune(player_id: i32, card: &str) -> bool {
     let (cp, cl) = s(card);
@@ -4681,6 +4736,11 @@ pub fn set_build_discount(n: i32, layers: i32) {
 
 /// 「此卡不受…效果影响」. Set it at play time; effects that
 /// would touch the card read [`card_immune`] and skip.
+///
+/// This writes the **any-flavour** flag. 「不受除拥有者以外的效果影响」 has no
+/// name-based setter -- the card's own body uses
+/// [`set_self_immune_except_owner`] -- and an effect from a given causer
+/// checks with [`is_immune_from_at`] rather than [`card_immune`].
 #[cfg_attr(kani, inline(always))]
 pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
     let (cp, cl) = s(card);
@@ -4804,6 +4864,12 @@ pub fn self_immune() -> bool {
 /// Mark **this instance** 「不受任何效果影响」; returns whether it is on the field.
 pub fn set_self_immune(on: bool) -> bool {
     unsafe { sys::set_self_immune(on as i32) != 0 }
+}
+
+/// Mark **this instance** 「不受除拥有者以外的效果影响」; returns whether it
+/// is on the field.
+pub fn set_self_immune_except_owner(on: bool) -> bool {
+    unsafe { sys::set_self_immune_except_owner(on as i32) != 0 }
 }
 
 /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
@@ -4938,8 +5004,17 @@ pub fn set_face_down_at(uid: i32, on: bool) -> bool {
 }
 
 /// Is the instance at `uid` marked 「不受任何效果影响」?
+///
+/// The cause-blind read -- the any-flavour flag only. When the acting causer
+/// is known, [`is_immune_from_at`] is the correct question.
 pub fn is_immune_at(uid: i32) -> bool {
     unsafe { sys::is_immune_at(uid) != 0 }
+}
+
+/// Is the instance at `uid` immune to an effect from `by`? The any-flavour
+/// flag, or the 「除拥有者以外」 flavour for a causer other than the owner.
+pub fn is_immune_from_at(uid: i32, by: i32) -> bool {
+    unsafe { sys::is_immune_from_at(uid, by) != 0 }
 }
 
 /// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.

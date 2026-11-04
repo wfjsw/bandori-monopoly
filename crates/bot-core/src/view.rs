@@ -50,6 +50,10 @@ pub struct SeatView {
     pub cards_played: usize,
     /// Parallel to [`Self::hand`]: would `cant_play` allow each card right now?
     pub playable: Vec<bool>,
+    /// Parallel to [`Self::hand`]: would a bot offer it -- the bare static
+    /// `ai_play` answer (`prop::AI_NEVER`). Combine with `playable` via
+    /// [`Self::offerable`]; never legality.
+    pub ai_playable: Vec<bool>,
     /// Parallel to [`Self::hand`]: the card's bot-only **estimated execution
     /// cost** (`prop::EST_COST`, user ruling 2026-10-07). Reserve check only,
     /// never legality. `0` = unknown / assume free.
@@ -68,12 +72,23 @@ impl Default for SeatView {
             played: Vec::new(),
             cards_played: 0,
             playable: Vec::new(),
+            ai_playable: Vec::new(),
             estimated_cost: Vec::new(),
         }
     }
 }
 
 impl SeatView {
+    /// Per hand card: `cant_play` allows it **and** a bot would offer it. A
+    /// missing `ai_playable` entry (an older frame) counts as `true`.
+    pub fn offerable(&self) -> Vec<bool> {
+        self.playable
+            .iter()
+            .enumerate()
+            .map(|(k, &p)| p && self.ai_playable.get(k).copied().unwrap_or(true))
+            .collect()
+    }
+
     /// The view frame for `member`, from the public [`Match`] accessors only
     /// (`state` / `hand_of` / `draw_of` / `view_extras`). This is what a remote
     /// bot service would be sent; nothing else is read.
@@ -97,6 +112,7 @@ impl SeatView {
             played: played.to_vec(),
             cards_played,
             playable: extra.playable,
+            ai_playable: extra.ai_playable,
             estimated_cost: extra.estimated_cost,
         }
     }

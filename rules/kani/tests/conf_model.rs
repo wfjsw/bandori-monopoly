@@ -940,8 +940,16 @@ impl CardWorld for ConfWorld {
     fn can_pay(&self, player_id: i32) -> i32 {
         (self.money(player_id) > 0) as i32
     }
-    fn cant_move(&self, player_id: i32) -> i32 {
-        (self.stay[player_id.max(0) as usize % 4] > 0) as i32
+    fn cant_move_from(&self, player_id: i32, _activation_ordinal: i32) -> i32 {
+        // Same 0/1/3 shape as the bridge; `cant_move` inherits it through the
+        // trait default.
+        if self.turn_player != player_id {
+            1
+        } else if self.stay[player_id.max(0) as usize % 4] > 0 {
+            3
+        } else {
+            0
+        }
     }
     fn turn_player(&self) -> i32 {
         self.turn_player
@@ -990,6 +998,7 @@ impl CardWorld for ConfWorld {
                 settle_redirect: false,
                 rolled: self.move_roll >= 0,
                 effective: self.move_remaining,
+                abnormal: false,
             });
         }
         if self.trig_pay_kind >= 0 || self.trig_pay_is_rent {
@@ -1376,7 +1385,7 @@ impl InlineHost for ConfInline {
                 (0..count.max(0)).map(|_| (sides.max(1) + 1) / 2).sum()
             }),
             HostRequest::Marker { .. } => Some(1),
-            HostRequest::Draw { player_id: _, n } => Some(n),
+            HostRequest::Draw { player_id: _, n, .. } => Some(n),
             // G11: the frame move is the answer, front-first, clamped to the
             // deck. The `inspected` raises are hook-side and not modelled.
             HostRequest::InspectionBegin {
@@ -2546,6 +2555,7 @@ fn op_tile_at_set_tile_at_match_engine() {
             tile: 3,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: 0,
             props: kworld::NameMap::new(),
             effective_card: u16::MAX,

@@ -384,7 +384,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_draw"
         )]
-        pub fn draw(player_id: i32, n: i32) -> i32;
+        pub fn draw(player_id: i32, n: i32, flags: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_draw_event"
@@ -587,6 +587,11 @@ mod abi {
             link_name = "ruleset_set_self_immune"
         )]
         pub fn set_self_immune(on: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_self_immune_except_owner"
+        )]
+        pub fn set_self_immune_except_owner(on: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_is_placed"
@@ -986,6 +991,11 @@ mod abi {
         pub fn cant_move(player_id: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_cant_move_code_for_activation"
+        )]
+        pub fn cant_move_code_for_activation(player_id: i32, activation_ordinal: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_turn_player"
         )]
         pub fn turn_player() -> i32;
@@ -999,6 +1009,16 @@ mod abi {
             link_name = "ruleset_turn_key"
         )]
         pub fn turn_key() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_dice_immune"
+        )]
+        pub fn dice_immune() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_dice_immune"
+        )]
+        pub fn set_dice_immune(on: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_persona_is"
@@ -1633,6 +1653,21 @@ mod abi {
         pub fn trig_move_rolled() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_activation_ordinal"
+        )]
+        pub fn trigger_activation_ordinal() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_abnormal_blocked"
+        )]
+        pub fn trigger_abnormal_blocked() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_move_abnormal"
+        )]
+        pub fn trigger_move_abnormal() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_move_effective_steps"
         )]
         pub fn trig_move_effective_steps() -> i32;
@@ -2121,6 +2156,11 @@ mod abi {
             link_name = "ruleset_is_immune_at"
         )]
         pub fn is_immune_at(uid: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_is_immune_from_at"
+        )]
+        pub fn is_immune_from_at(uid: i32, by: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_immune_at"

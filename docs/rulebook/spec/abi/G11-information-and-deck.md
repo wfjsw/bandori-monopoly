@@ -1,6 +1,6 @@
 # ABI design G11 — Information and deck inspection
 
-**Status:** implemented (ABI **114**, SAVE **17**, kinds 132–133, ops 451–454).
+**Status:** implemented (ABI **116**, SAVE **18**, kinds 132–133, ops 451–454).
 **Worktree:** `.claude/worktrees/g11-design` (branch `worktree-g11-design`).
 **Group:** G11, family "Information and deck inspection".
 **Ground truth:** `docs/rulebook/cards.json`; every book fragment below is
@@ -8,11 +8,11 @@ verbatim from it, re-read on 2026-11-04 at the card id named beside it.
 **Row ids** are the review-sheet row ids (`CARD-REVIEW-2026-10-27.md`); they are
 not `cards.json` indices.
 
-Baseline: the tree's `ABI_VERSION 113`, `SAVE_VERSION 16`,
+Baseline: the tree's `ABI_VERSION 115`, `SAVE_VERSION 17`,
 `RECORD_VERSION 4`, engine kinds ending at 131, Kani `Op` ending at 442 (G07's
 declared band 441–450, two used). G09 and G10 are designed but not landed;
 under the README landing order this group lands twelfth, so its row is
-`ABI_VERSION` **113 → 114**, `SAVE_VERSION` **16 → 17**, engine kinds
+`ABI_VERSION` **115 → 116**, `SAVE_VERSION` **17 → 18**, engine kinds
 **132–133** (the README band, after G10's 131). Op: G09's row is still `—` and
 claims 411–430 in its document, G10 claims 431–449, and G07 holds up to 450,
 so this group takes **451–454** — four consecutive values after the highest
@@ -796,7 +796,7 @@ stay. The `infinite_possibility.rs:46` TODO goes.
 
 ## 7. Save / record / replay
 
-* **`SAVE_VERSION` 16 → 17** (last SAVE row in the landing order; take the
+* **`SAVE_VERSION` 17 → 18** (last SAVE row in the landing order; take the
   next free one at landing). A save may be taken while a look is paused: the
   frame holds cards in no pile, so dropping it loses them. `inspection_frames`,
   `next_inspection_id` and `reveals` are saved; `#[serde(default)]` is shape
@@ -816,11 +816,11 @@ stay. The `infinite_possibility.rs:46` TODO goes.
 
 ## 8. Versioning
 
-`ABI_VERSION` **113 → 114** (insert immediately below the constant and above
+`ABI_VERSION` **115 → 116** (insert immediately below the constant and above
 the newest note, matching the tree's newest-first block):
 
 ```
-/// v114: **deck inspection, public reveal, and the draw-action point**.
+/// v116: **deck inspection, public reveal, and the draw-action point**.
 ///    `CardPile::Inspection = 4` (cards an open look has turned over and not
 ///    yet released); `cards_in` / `take_card` accept it and the empty-deck
 ///    refill is suppressed on the pile writes while a look holds that seat's
@@ -835,7 +835,7 @@ the newest note, matching the tree's newest-first block):
 ///    continues) and `drawAfter` (one raise per draw instruction, `value` =
 ///    batch length, `cards` = the batch; `drew` stays per card). New public
 ///    `MatchPlayer.reveal` overlay, `MatchView.inspection` for the caller's
-///    own frame, and the `"reveal"` event type. SAVE_VERSION 16 -> 17 (open
+///    own frame, and the `"reveal"` event type. SAVE_VERSION 17 -> 18 (open
 ///    frames are saved); RECORD_VERSION unchanged.
 ```
 
@@ -979,7 +979,7 @@ dispatches to a deck card, not the field), `rules/kani/tests/on_parse.rs`
 
 | area | files |
 |---|---|
-| card-sdk | `abi.rs` (`CardPile`, `TriggerKind` / `ActionKind` consts, v114 note), `kinds.rs` (action list), `ctx.rs` (wrappers, one-call `draw`), `ctx/sys.rs` + `ctx/sys_kani.rs`, `kani_host.rs` (`Op` 451–454) |
+| card-sdk | `abi.rs` (`CardPile`, `TriggerKind` / `ActionKind` consts, v116 note), `kinds.rs` (action list), `ctx.rs` (wrappers, one-call `draw`), `ctx/sys.rs` + `ctx/sys_kani.rs`, `kani_host.rs` (`Op` 451–454) |
 | game-core | `state.rs` (`RevealView` / `InspectionView`, `MatchPlayer.reveal`), `engine/world.rs` (fields, helpers, `public_state`, initializer), `engine/mod.rs` (`Pending.outermost`, execute flag, `inspection_of`, reveal clear), `engine/play.rs` (`drawAfter` raise) |
 | game-rules | `host.rs` (`HostRequest` variants, linker registration, `CardWorld` default methods for the four imports, `NullWorld`), `hostfns.rs`, `world.rs` (trait methods), `wasm_rules.rs` (arms, run fields, apply/commit, own-card kind, refill sites, `check_silent_body` / `drive_should_flash`), `native_shims.rs` (regenerate with `target/scratch/gen_native_shims3.py`) |
 | game-kinds | `lib.rs` (rows 132–133, `wire` / `from_wire`, hook arrays) |

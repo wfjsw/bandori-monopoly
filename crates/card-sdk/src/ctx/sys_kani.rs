@@ -208,8 +208,8 @@ pub fn pay_command(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i3
     kani_host::call_i32(Op::pay_command, [from, to, amount, spec, ptr, len])
 }
 
-pub fn draw(player_id: i32, n: i32) -> i32 {
-    kani_host::call_i32(Op::draw, [player_id, n, 0, 0, 0, 0])
+pub fn draw(player_id: i32, n: i32, flags: i32) -> i32 {
+    kani_host::call_i32(Op::draw, [player_id, n, flags, 0, 0, 0])
 }
 
 pub fn draw_event(player_id: i32) -> i32 {
@@ -370,6 +370,10 @@ pub fn self_immune() -> i32 {
 
 pub fn set_self_immune(on: i32) -> i32 {
     kani_host::call_i32(Op::set_self_immune, [on, 0, 0, 0, 0, 0])
+}
+
+pub fn set_self_immune_except_owner(on: i32) -> i32 {
+    kani_host::call_i32(Op::set_self_immune_except_owner, [on, 0, 0, 0, 0, 0])
 }
 
 pub fn is_placed() -> i32 {
@@ -717,6 +721,13 @@ pub fn cant_move(player_id: i32) -> i32 {
     kani_host::call_i32(Op::cant_move, [player_id, 0, 0, 0, 0, 0])
 }
 
+pub fn cant_move_code_for_activation(player_id: i32, activation_ordinal: i32) -> i32 {
+    kani_host::call_i32(
+        Op::cant_move_code_for_activation,
+        [player_id, activation_ordinal, 0, 0, 0, 0],
+    )
+}
+
 pub fn turn_player() -> i32 {
     kani_host::call_i32(Op::turn_player, [0, 0, 0, 0, 0, 0])
 }
@@ -727,6 +738,14 @@ pub fn round_no() -> i32 {
 
 pub fn turn_key() -> i32 {
     kani_host::call_i32(Op::turn_key, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn dice_immune() -> i32 {
+    kani_host::call_i32(Op::dice_immune, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn set_dice_immune(on: i32) -> i32 {
+    kani_host::call_i32(Op::set_dice_immune, [on, 0, 0, 0, 0, 0])
 }
 
 pub fn persona_is(player_id: i32, ptr: i32, len: i32) -> i32 {
@@ -1270,6 +1289,18 @@ pub fn trig_move_rolled() -> i32 {
     kani_host::call_i32(Op::trig_move_rolled, [0, 0, 0, 0, 0, 0])
 }
 
+pub fn trigger_activation_ordinal() -> i32 {
+    kani_host::call_i32(Op::trigger_activation_ordinal, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_abnormal_blocked() -> i32 {
+    kani_host::call_i32(Op::trigger_abnormal_blocked, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_move_abnormal() -> i32 {
+    kani_host::call_i32(Op::trigger_move_abnormal, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn trig_move_effective_steps() -> i32 {
     kani_host::call_i32(Op::trig_move_effective_steps, [0, 0, 0, 0, 0, 0])
 }
@@ -1644,6 +1675,10 @@ pub fn set_face_down_at(uid: i32, on: i32) -> i32 {
 
 pub fn is_immune_at(uid: i32) -> i32 {
     kani_host::call_i32(Op::is_immune_at, [uid, 0, 0, 0, 0, 0])
+}
+
+pub fn is_immune_from_at(uid: i32, by: i32) -> i32 {
+    kani_host::call_i32(Op::is_immune_from_at, [uid, by, 0, 0, 0, 0])
 }
 
 pub fn set_immune_at(uid: i32, on: i32) -> i32 {

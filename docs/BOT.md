@@ -147,7 +147,16 @@ client/server split -- list it here.
 |---|---|---|---|
 | `CardRules::card_prop(id, "estCost")` | **static** `CardDef::props` map (`card-sdk::abi::prop::EST_COST`). Never derived from prose, never from the world. Default `0`. | always equal | none |
 
-#### F. `aiAnswer` -- the prompt prefill
+#### F. `aiPlayable` -- `rules.ai_play(&cx, i, card)`
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| `CardRules::ai_play` | the **static** `CardDef::props` map (`card-sdk::abi::prop::AI_NEVER`). Never the world, never derived from prose. Default `0` = offer. | always equal | offered when it should not be (an offer gate -- never legality, so a card never greys wrongly) |
+
+`aiPlayable` is the offer half; consumers combine it with `playable`
+(`SeatView::offerable`). Chaos (`docs/BOT-DRIVE.md`) ignores it on purpose.
+
+#### G. `aiAnswer` -- the prompt prefill
 
 `aiAnswer` is the answer the engine stamps **once, at prompt-open**, on the
 live stream (`Ask::ai` / `ai_picked` / `worth`: `PlayCtx::fill_ai` for ordinary
@@ -204,7 +213,7 @@ pick) may diverge from the server's own draw. The blast radius is the sent
 command, which the server applies verbatim -- a divergence is a different but
 legal play, never a desync.
 
-#### G. `cant_act` -- the other branches (not extras, listed for completeness)
+#### G2. `cant_act` -- the other branches (not extras, listed for completeness)
 
 Only `act:"skill"` and `act:"play"` feed the seat-view extras. The rest of
 `cant_act` is public throughout (phase / turn / step / `busy` /

@@ -41,7 +41,11 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // start (the text gives no narrower timing).
         On::Action(Action::TurnStart("actor == owner && card.placed", None, offer_resonance)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// 规则书[特]: 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」 -- a
+// placement-stamped immunity flavour (the engine stamps the placed instance).
+.props(&[(card_sdk::abi::prop::IMMUNE_EXCEPT_OWNER, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次闪耀"#)
         .raw_name(r#"再次闪耀"#)
         .tags(&[r#"手"#, r#"反击"#, r#"持续"#, r#"特"#])
@@ -73,12 +77,9 @@ fn shine_again(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("shine_again_note")),
     );
     ctx::set_prop(PROP_COLORS, 0);
-    // TODO(规则书)（此卡不受除拥有此卡的玩家以外的玩家的效果影响）: A plain flag on the card, read
-    // causer-blind, so the owner's own effects skip it too. the book exempts the
-    // *owner's* effects, but `set_self_immune` is 「不受任何效果影响」 and every
-    // `is_immune_at` consumer skips the card whoever caused the effect. Needs an
-    // owner-exempt immunity flavour (a by-causer read).
-    ctx::set_self_immune(true);
+    // 「不受除拥有此卡的玩家以外的…影响」 rides the `immuneExceptOwner` prop
+    // declared on the card: the engine stamps the placed instance, so the
+    // owner's own effects still land.
     Ok(())
 }
 

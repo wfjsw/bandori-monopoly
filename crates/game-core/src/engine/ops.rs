@@ -1354,12 +1354,17 @@ impl World {
             got += 1;
         }
         if got > 0 {
-            let over = self.st.players[i]
-                .over_hand(self.hidden[i].hand.len())
-                .then(|| {
-                    Msg::new("log.part.over_hand")
-                        .i("limit", self.st.players[i].hand_limit().unwrap_or_default())
-                });
+            let over_now = self.st.players[i].over_hand(self.hidden[i].hand.len());
+            if over_hand_limit && over_now {
+                // 「可超过上限」: the excess is allowed to the turn end.
+                self.st.players[i].over_hand_allowed = true;
+            }
+            let over = over_now.then(|| {
+                Msg::over_hand_part(
+                    self.st.players[i].hand_limit().unwrap_or_default(),
+                    over_hand_limit,
+                )
+            });
             self.log(
                 "draw",
                 player_id,
@@ -1370,7 +1375,6 @@ impl World {
             )
             .value = got;
         }
-        let _ = over_hand_limit;
         got
     }
 
@@ -1401,6 +1405,7 @@ impl World {
                     h.hand.remove(k);
                 }
                 h.graveyard.push(card.to_string());
+                self.settle_over_hand_allowance(i);
                 return self.refill_after_pile_write(i);
             }
         }
@@ -1576,6 +1581,13 @@ impl World {
         // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
         // side effect -- `place_raw` and engine placement must see it too.
         let immune = props.get(crate::state::prop::IMMUNE).copied().unwrap_or(0) != 0;
+        // 「不受除拥有此卡的玩家以外的玩家的效果影响」 is the same kind of static
+        // property, stamped per instance and causer-checked at the read.
+        let immune_except_owner = props
+            .get(crate::state::prop::IMMUNE_EXCEPT_OWNER)
+            .copied()
+            .unwrap_or(0)
+            != 0;
         let inst = FieldCard {
             uid,
             card: card.to_string(),
@@ -1585,6 +1597,7 @@ impl World {
             counters: BTreeMap::new(),
             face_down: false,
             immune,
+            immune_except_owner,
             props,
             group_skill,
             extra: false,
@@ -1862,11 +1875,30 @@ impl World {
         self.field_by_uid(uid).is_some_and(|f| f.immune)
     }
 
+    /// Is the instance at `uid` immune to an effect from `by`? The any-flavour
+    /// flag, or the 「除拥有者以外」 flavour for a causer other than the owner.
+    pub fn is_immune_from_at(&self, uid: i32, by: i32) -> bool {
+        self.field_by_uid(uid)
+            .is_some_and(|f| f.immune || (f.immune_except_owner && by != f.owner))
+    }
+
     /// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.
     pub fn set_immune_at(&mut self, uid: i32, on: bool) -> bool {
         match self.field_by_uid_mut(uid) {
             Some(f) => {
                 f.immune = on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Mark the instance at `uid` 「不受除拥有者以外的效果影响」; returns
+    /// whether it exists.
+    pub fn set_immune_except_owner_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.immune_except_owner = on;
                 true
             }
             None => false,

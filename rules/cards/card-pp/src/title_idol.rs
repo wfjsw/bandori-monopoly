@@ -51,7 +51,7 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
     // is in this loop too -- clause 1's +2 and clause 2's +n are two separate adds
     // to the same pool.
     for (uid, c) in ctx::field_instances(player_id) {
-        if ctx::is_immune_at(uid) {
+        if ctx::is_immune_from_at(uid, player_id) {
             continue;
         }
         if !ctx::card_text_mentions(c.as_str(), "奇迹水晶") {

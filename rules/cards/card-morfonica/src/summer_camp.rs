@@ -6,6 +6,7 @@
 //! by others until your next turn, then draw if nothing was blocked.
 
 use bandori_std::ctx::{self, trigger};
+use card_sdk::abi::prop;
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
@@ -27,7 +28,10 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         //   no draw, and the negation count is never reset.
         On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// Standard / advanced bots never offer it (human legality is untouched).
+.props(&[(prop::AI_NEVER, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)
         .raw_name(r#"夏日合宿"#)
         .tags(&[])
@@ -36,7 +40,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn summer_camp(player_id: i32) -> card_sdk::Asked {
-    // TODO(ABI)
+    // Bot offer: `prop::AI_NEVER` on the def -- a human still plays it by hand.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("summer_camp_note")));
     ctx::log(

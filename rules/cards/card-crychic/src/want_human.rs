@@ -9,7 +9,7 @@
 //! also banks a crystal.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::TriggerKind;
 use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
@@ -32,8 +32,8 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
             Some(boost_armed),
             boost_add,
         )),
-        // 规则书（2）: consume the one-shot boost and snapshot the abnormal
-        // counter once the result is final (still before the movement itself).
+        // 规则书（2）: consume the one-shot boost once the result is final
+        // (still before the movement itself).
         On::Action(Action::DiceRollSettled(
             "actor == owner && card.placed && roll_purpose == 1",
             None,
@@ -74,8 +74,8 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
     // The props ride the instance just placed (`current_uid`), so two copies
     // keep their own X and the value dies with the card.
     ctx::set_prop(SLOT_X, x);
-    // Fresh placement: no boost snapshot from a previous instance.
-    ctx::set_prop(SLOT_AB_BEFORE, 0);
+    // A re-placement resets the per-move arming flag (see `SLOT_ARMED`).
+    ctx::set_prop(SLOT_ARMED, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_declared"))
@@ -90,7 +90,10 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
 
 const SLOT_BOOST: &str = "want_human_boost";
 
-const SLOT_AB_BEFORE: &str = "want_human_ab_before";
+/// The boost was consumed by a move this turn: the abnormal payoff below pays
+/// only for the move the turn-start clause armed (`SLOT_ARMED`), not for any
+/// turn with an abnormal in it.
+const SLOT_ARMED: &str = "want_human_armed";
 
 /// The `DiceRollCast` window. Every cast of one of your move rolls is checked
 /// -- a reroll lands as another Cast, not a later `DiceRollAfter`.
@@ -128,10 +131,8 @@ fn boost_add(player_id: i32, v: RollValue) -> RollValue {
     }
 }
 
-/// 规则书（2）: consume the armed boost and snapshot the abnormal counter so
-/// 「若该次移动过程中受到异常移动效果影响」 can be checked at turn end. The
-/// result is final here, so a reroll can no longer replace the face the boost
-/// was logged against.
+/// 规则书（2）: consume the armed boost. The result is final here, so a reroll
+/// can no longer replace the face the boost was logged against.
 fn on_settled(player_id: i32) -> card_sdk::Asked {
     let armed = ctx::prop(SLOT_BOOST);
     if armed <= 0 {
@@ -139,7 +140,7 @@ fn on_settled(player_id: i32) -> card_sdk::Asked {
     }
     let boost = armed - 1;
     ctx::set_prop(SLOT_BOOST, 0);
-    ctx::set_prop(SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
+    ctx::set_prop(SLOT_ARMED, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_boost"))
@@ -178,15 +179,18 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                     .i("n", boost as i64),
             );
         }
-        // TODO(规则书)（若该次移动过程中受到异常移动效果影响）: 只该看该次移动 -- 这里是整回合的 `abnormal_count`
-        // 在回合结束时比，移动之后、回合结束 之前落下的异常也会算数。
+        // 规则书（2）: 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶」
+        // -- the move's own span (the frame bit latched when the walk ends), so a
+        // landing before the roll counts and one after the walk does not.
         TriggerKind::TurnEnd => {
-            let ab_before = ctx::prop(SLOT_AB_BEFORE);
-            if ab_before <= 0 {
+            // Only the move the arm fired for pays (「该次移动」); the flag is
+            // cleared first so a replayed turn-end body does not pay twice.
+            if ctx::prop(SLOT_ARMED) != 0 {
+                ctx::set_prop(SLOT_ARMED, 0);
+            } else {
                 return Ok(());
             }
-            ctx::set_prop(SLOT_AB_BEFORE, 0);
-            if ctx::abnormal_count(player_id) > ab_before - 1 {
+            if ctx::trigger::move_abnormal() {
                 ctx::add_crystals(2, 0)?;
                 ctx::log(
                     player_id,

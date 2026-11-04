@@ -2050,6 +2050,9 @@ fn ix_echo_chain_adds_crystals() {
 }
 
 /// 规则书: 再次闪耀 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」
+///
+/// G12 §5.7: the flavour is the causer-aware placement stamp, not the
+/// cause-blind `immune` flag.
 #[test]
 fn ix_shine_immunity_flag() {
     let mut t = Table::vanilla(2);
@@ -2059,7 +2062,8 @@ fn ix_shine_immunity_flag() {
         .into_iter()
         .find(|f| f.card == "PP:再次闪耀")
         .expect("placed");
-    assert!(f.immune, "immune flag");
+    assert!(f.immune_except_owner, "immuneExceptOwner flag");
+    assert!(!f.immune, "the any-flavour flag stays clear");
 }
 
 // ============================================================ discrepancies

@@ -130,6 +130,13 @@ pub struct Trigger {
     /// An extreme is armed on this play or declared on this link, stamped
     /// before the body runs (`trigger::extreme_armed`).
     pub extreme_armed: bool,
+    /// The activation this raise belongs to; 0 outside a routine
+    /// (`trigger::activation_ordinal`).
+    pub activation_ordinal: i32,
+    /// Did the abnormal this trigger announces hold the move? Meaningful only
+    /// on the `effect` / `abnormal` raises of an abnormal
+    /// (`trigger::abnormal_blocked`).
+    pub abnormal_blocked: bool,
     /// The kind of every link from the root to this one, root first
     /// (`trigger::answered_kind`).
     pub answered_kinds: Vec<crate::TriggerKind>,
@@ -216,6 +223,9 @@ pub struct TriggerMove {
     pub rolled: bool,
     /// The length the move will take (`trigger::move_effective_steps()`).
     pub effective: i32,
+    /// Did an abnormal land somewhere in this walk's span
+    /// (`trigger::move_abnormal()`)?
+    pub abnormal: bool,
 }
 
 /// The payment a `pay` / `paid` trigger is about.
@@ -290,6 +300,8 @@ impl Default for Trigger {
             roll_root: ROLL_ROOT_NONE,
             pending_negation: 0,
             extreme_armed: false,
+            activation_ordinal: 0,
+            abnormal_blocked: false,
             answered_kinds: Vec::new(),
         }
     }
@@ -361,6 +373,8 @@ impl Trigger {
             roll_root: ROLL_ROOT_NONE,
             pending_negation: 0,
             extreme_armed: false,
+            activation_ordinal: 0,
+            abnormal_blocked: false,
             answered_kinds: Vec::new(),
         }
     }
@@ -718,6 +732,11 @@ pub trait CardWorld: Clone + 'static {
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;
+    /// Draw without the immediate hand-limit trim (「可超过上限」). Default:
+    /// same as [`Self::draw`] -- a world without a hand limit behaves the same.
+    fn draw_over(&mut self, player_id: i32, n: i32) -> i32 {
+        self.draw(player_id, n)
+    }
     /// Put one copy of `card` into `player_id`'s pile at `dest` (wire [`Dest`] code
     /// -- 0 graveyard, 1 hand, 2 field, 3 banished, 4 deck top, 5 deck bottom,
     /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_dest`].
@@ -836,6 +855,9 @@ pub trait CardWorld: Clone + 'static {
     fn set_self_immune(&mut self, _on: bool) -> bool {
         false
     }
+    fn set_self_immune_except_owner(&mut self, _on: bool) -> bool {
+        false
+    }
     /// Ids of the player's placed field cards, in placement order.
     fn placed_cards(&self, _player_id: i32) -> Vec<String> {
         Vec::new()
@@ -923,6 +945,14 @@ pub trait CardWorld: Clone + 'static {
         false
     }
     fn set_immune_at(&mut self, _uid: i32, _on: bool) -> bool {
+        false
+    }
+    /// 「不受除拥有此卡的玩家以外的玩家的效果影响」: `immune`, or the except-owner
+    /// flavour with `by` not the instance's owner.
+    fn is_immune_from_at(&self, _uid: i32, _by: i32) -> bool {
+        false
+    }
+    fn set_immune_except_owner_at(&mut self, _uid: i32, _on: bool) -> bool {
         false
     }
     /// A named counter on the *running card instance*. Sugar over
@@ -1317,8 +1347,15 @@ pub trait CardWorld: Clone + 'static {
     /// May this player act at all? Not out, with the act and on-board gates open.
     fn can_pay(&self, player_id: i32) -> i32;
     /// May this player still take the main move? 0 = available, 1 = not your
-    /// turn, 2 = already moved, 3 = cannot move this turn.
-    fn cant_move(&self, player_id: i32) -> i32;
+    /// turn, 2 = already moved, 3 = cannot move this turn. The spent read is
+    /// against the running activation, so a replayed routine that already
+    /// drove its own move does not read as spent.
+    fn cant_move(&self, player_id: i32) -> i32 {
+        self.cant_move_from(player_id, self.trigger().activation_ordinal)
+    }
+    /// [`Self::cant_move`] for a named activation: a move that same
+    /// activation already drove does not read as spent.
+    fn cant_move_from(&self, player_id: i32, activation_ordinal: i32) -> i32;
     /// Spend `n` of a named counter; 1 when the player had enough. The name is
     /// data; the spent-raise carries the name.
     fn spend_marker(&mut self, player_id: i32, name: &str, n: i32, reason: Msg) -> i32;
@@ -1459,6 +1496,18 @@ pub trait CardWorld: Clone + 'static {
     /// Steps this turn's main move walked (0 = none).
     fn turn_main_steps(&self) -> i32 {
         0
+    }
+    /// Did an abnormal land during this turn's main move (the move latch)?
+    fn turn_move_abnormal(&self) -> bool {
+        false
+    }
+    /// 「打出此卡的回合…」: the turn's dice-immunity flag.
+    fn turn_dice_immune(&self) -> bool {
+        false
+    }
+    /// Set the turn's dice-immunity flag; answers its previous value.
+    fn set_turn_dice_immune(&mut self, _on: bool) -> bool {
+        false
     }
     /// Move a named counter's advertised cap; returns the new cap. Storage
     /// only -- the pull-under is the rules-layer kernel's job. The name is data.

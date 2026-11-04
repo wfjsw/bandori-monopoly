@@ -711,6 +711,9 @@ function affordableCards(view: MatchView, params: StrategyParams | number): stri
   const ok: string[] = [];
   for (let i = 0; i < view.hand.length; i++) {
     if (view.playable && !view.playable[i]) continue;
+    // Standard also honours the card's static bot-avoid flag (`aiNever`);
+    // chaos deliberately does not.
+    if (typeof params !== "number" && view.aiPlayable && !view.aiPlayable[i]) continue;
     const card = view.hand[i];
     const est = view.estCost?.[i] ?? 0;
     // A bare number is chaos's fixed `CHAOS_RESERVE`; the bot passes its

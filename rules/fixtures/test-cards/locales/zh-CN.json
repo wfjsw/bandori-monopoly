@@ -109,5 +109,15 @@
   "trap_declare_body": "trap-declare body ran",
   "trap_declare_note": "trap-declare placed",
   "trigger_seen_body": "trigger-seen body ran with arg {{arg}}",
-  "xfer_1000_reason": "试探对转 1000"
+  "xfer_1000_reason": "试探对转 1000",
+  "forcer_done": "强制移动：执行={{ran}} 位置={{pos}}",
+  "immune_touch_done": "免疫接触：uid={{uid}} 免疫={{immune}}",
+  "plan_stay_done": "掷骰前落下一层停留",
+  "plan_stay_note": "在掷骰规划时使移动者停留",
+  "reverser_done": "反向：允许={{allowed}}",
+  "stayer_done": "停留落地；层数 {{count}}",
+  "stopper_done": "强制停下：允许={{allowed}}",
+  "teleporter_done": "传送到 {{pos}}",
+  "end_stay_done": "移动后落下一层停留",
+  "end_stay_note": "在回合结束时使行动者停留"
 }

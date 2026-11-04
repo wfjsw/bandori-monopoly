@@ -15,6 +15,13 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
     "RAS:（MASKING）CRUSH ON THE DRUM!!!",
     &[On::Play("", Some(cant_play), play)],
 )
+// 规则书[特]: 「打出此卡的回合任何[使用者]使用的卡包含添加骰效果的卡不受
+// 任何其他效果影响」 -- the play raises the turn's dice immunity (the engine
+// reads it before the play's own `card` window).
+.props(&[
+    (card_sdk::abi::prop::GRANTS_DICE_IMMUNITY, 1),
+    (card_sdk::abi::prop::ADDS_DICE, 1),
+])
 .meta(
     &card_sdk::meta::CardMeta::new()
         .name(r#"CRUSH ON THE DRUM!!!"#)
@@ -52,7 +59,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("crush_drum_roll")).i("n", count as i64),
     );
-    // TODO(规则书)[judgement](ABI):
+    // TODO(规则书)[judgement](ABI): `OPEN-crush-immune` scope -- settle-time
+    // effects after the play and later plays.
     Ok(())
 }
 
