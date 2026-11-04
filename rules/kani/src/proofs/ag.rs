@@ -152,6 +152,11 @@ fn plant_field(user: i32, card_id: usize, uid: i32, crystals: i32) {
             crystals,
             props: NameMap::new(),
             effective_card: u16::MAX,
+            owner: user,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         w.last_uid = uid;
         w.next_uid = uid + 1;

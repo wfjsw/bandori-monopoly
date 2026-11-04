@@ -1844,6 +1844,11 @@ impl World {
             let p = player_idx(cur);
             self.first_tile[p] = first;
         }
+        if owner >= 0 {
+            let first = self.earliest_owned_tile(owner);
+            let p = player_idx(owner);
+            self.first_tile[p] = first;
+        }
     }
 
     /// The player's earliest-owned tile by acquisition sequence, `-1` if none.

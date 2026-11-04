@@ -100,6 +100,11 @@ pub fn tile_at_set_tile_at_roundtrip() {
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: 0,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         w.field_n = 1;
     });

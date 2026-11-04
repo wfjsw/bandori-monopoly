@@ -172,7 +172,7 @@ pub fn leave_cascade_children_first_mutant() {
 /// An attached row is never listed by the field pass or the tile-rule pass
 /// (I6), attached or not; detaching makes both see it again.
 #[kani::proof]
-#[kani::unwind(8)]
+#[kani::unwind(12)]
 pub fn attached_rows_not_listed() {
     let mut w = World::new();
     let host = seed(&mut w, 0, CARD_HOST, 4);
@@ -214,21 +214,28 @@ pub fn attached_rows_not_listed() {
 /// MUTANT: the field pass keeps attached rows.
 #[kani::proof]
 #[kani::should_panic]
-#[kani::unwind(8)]
+#[kani::unwind(12)]
 pub fn attached_rows_listed_mutant() {
     let mut w = World::new();
     let host = seed(&mut w, 0, CARD_HOST, 4);
     let _att = seed_attached(&mut w, host, CARD_ATTACHMENT, -1);
-    let mut out = [0i32; crate::world::MAX_FIELD];
-    // Mutant: no `on < 0` filter.
-    let n = w.field_instances_into(0, &mut out);
+    // Mutant: no `on < 0` filter -- every live row of the holder counts.
+    let mut n = 0;
+    let mut i = 0;
+    while i < crate::world::MAX_FIELD {
+        if w.field[i].player == 0 && w.field[i].card != u16::MAX {
+            n += 1;
+        }
+        i += 1;
+    }
+    // The real pass answers 1; the unfiltered mutant answers 2.
     kassert!(n == 1, "mutant lists the attachment too");
 }
 
 /// `set_face_down_at` answers `1` on a live row and `0` on a dead uid, and a
 /// live row's face follows the write.
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(12)]
 pub fn flip_dead_refused_live_applied() {
     let mut w = World::new();
     let uid = seed(&mut w, 0, CARD_HOST, 0);
@@ -258,7 +265,7 @@ pub fn flip_dead_refused_live_applied() {
 /// lowest tile index), and a sale / release rewrites the owner's `firstTile`
 /// slot (I13).
 #[kani::proof]
-#[kani::unwind(8)]
+#[kani::unwind(64)]
 pub fn earliest_owned_is_sequence_min() {
     let mut w = World::new();
     // Acquire the higher index first: index order is not acquisition order.
@@ -295,7 +302,7 @@ pub fn earliest_owned_is_sequence_min() {
 /// MUTANT: the answer is the lowest owned tile index.
 #[kani::proof]
 #[kani::should_panic]
-#[kani::unwind(8)]
+#[kani::unwind(64)]
 pub fn earliest_owned_is_lowest_index_mutant() {
     let mut w = World::new();
     sale(&mut w, 5, 0);
@@ -326,8 +333,9 @@ pub fn attach_refusal_iff() {
 
     // A live, non-ancestor host is admitted (an attached one too); an
     // ancestor, the card itself and a dead uid are refused.
+    // Re-parenting an attached row keeps its real `from` (`Attached`).
     kassert!(
-        attach_admitted(&w, b, d) == Some((ZONE_FIELD, 0)),
+        attach_admitted(&w, b, d) == Some((ATTACHED, 0)),
         "from / holder resolved"
     );
     kassert!(
@@ -371,7 +379,7 @@ pub fn attach_cycle_admitted_mutant() {
 /// A Graveyard arrival carries `wasted` exactly when the row's `effective`
 /// bit was clear, and the landing clears it (I8).
 #[kani::proof]
-#[kani::unwind(4)]
+#[kani::unwind(12)]
 pub fn wasted_iff_and_cleared() {
     let mut w = World::new();
     let uid = seed(&mut w, 0, CARD_HOST, 0);
@@ -395,7 +403,7 @@ pub fn wasted_iff_and_cleared() {
 /// MUTANT: `wasted` is the effective bit itself.
 #[kani::proof]
 #[kani::should_panic]
-#[kani::unwind(4)]
+#[kani::unwind(12)]
 pub fn wasted_is_effective_mutant() {
     let mut w = World::new();
     let uid = seed(&mut w, 0, CARD_HOST, 0);
@@ -410,7 +418,7 @@ pub fn wasted_is_effective_mutant() {
 /// MUTANT: the landing leaves the bit alone.
 #[kani::proof]
 #[kani::should_panic]
-#[kani::unwind(4)]
+#[kani::unwind(12)]
 pub fn wasted_bit_not_cleared_mutant() {
     let mut w = World::new();
     let uid = seed(&mut w, 0, CARD_HOST, 0);

@@ -2098,6 +2098,14 @@ impl World {
                 p.state_set(crate::state::key::FIRST_TILE, first + 1);
             }
         }
+        if owner >= 0 {
+            // The acquisition mirror: 「最早获得」 reads the ledger, so a first
+            // acquisition (no previous owner) must arm it too.
+            let first = self.earliest_owned_tile(owner);
+            if let Some(p) = self.player_mut(owner) {
+                p.state_set(crate::state::key::FIRST_TILE, first + 1);
+            }
+        }
     }
 
     /// The player's earliest-owned tile under the acquisition order, `-1` if
