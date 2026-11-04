@@ -114,6 +114,11 @@ sudo monopoly-systemctl stop "$SERVICE"
 
 step "backend binaries + ruleset + data"
 cp target/release/server target/release/bot-service target/release/rules-worker "$LIVE_DIR/bin/"
+# The pool's workers read the glue identity from `engine_id.json` beside their
+# own binary. The live working directory has no source tree, so without this
+# copy every online record seals an empty bundle: replays fall back to stamp
+# matching and "download replay, include engine" has nothing to embed.
+cp webui/src/wasm/engine_id.json "$LIVE_DIR/bin/engine_id.json"
 rm -rf "$LIVE_DIR/dist/cards"
 cp -a dist/cards "$LIVE_DIR/dist/"
 # append-only on purpose: engine-archive/ keeps every bundle a record may need
@@ -148,6 +153,19 @@ for _ in $(seq 1 60); do
 done
 [ -n "$up" ] || die "the backend on $BACKEND never answered 200; see: sudo monopoly-systemctl logs $SERVICE"
 step "backend is answering on $BACKEND"
+
+# A worker that cannot name the deployed engine seals online records nobody can
+# embed an engine for (and fairness verification refuses them). Spawn one the
+# way the pool does and read its stamp.
+step "live rules-worker names the deployed engine bundle"
+worker_bundle="$(cd "$LIVE_DIR" && printf '{"id":1,"op":"info"}\n' | ./bin/rules-worker --data data --rules dist/cards 2>/dev/null | node -e '
+  let s = "";
+  process.stdin.on("data", (d) => (s += d)).on("end", () => {
+    try { process.stdout.write(JSON.parse(s).stamp.bundle || ""); } catch { process.stdout.write(""); }
+  });
+')"
+printf '   %-32s %s\n' "worker stamp bundle" "${worker_bundle:0:12}…"
+[ "$worker_bundle" = "$bundle" ] || die "the live worker seals bundle '${worker_bundle}', not $bundle"
 
 fail=0
 for path in / /menu /api/health /data/index.json /assets/engine/index.json; do

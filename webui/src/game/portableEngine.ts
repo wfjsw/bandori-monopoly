@@ -22,7 +22,6 @@ import {
   type BundleEntry,
 } from "./engineBundle";
 import {
-  isSha256Hex,
   loaderPolicyFrom,
   PortableError,
   sha256Hex,
@@ -30,11 +29,11 @@ import {
   trustedLoaderUrl,
   untrustedLoaderMessage,
   verifyEmbedded,
-  type BuildFile,
   type EmbeddedBundle,
   type PortableManifest,
   type ZstdCodec,
 } from "./portable";
+import { collectBundleForExport } from "./portableExport";
 import {
   currentStamp,
   openOnOwnEngine,
@@ -373,134 +372,6 @@ async function assembleDataFor(
   return build(true);
 }
 
-// ---------------------------------------------------------------- export
-
-/** Engine files gathered for packing. */
-export interface BundleForExport {
-  files: BuildFile[];
-  glueSha256: string;
-  api: number;
-  bundle: string;
-  /** Where the bytes came from: the hosted archive, or a record's own tail. */
-  origin: "hosted" | "embedded";
-}
-
-/**
- * Collect the engine bundle a record needs for a portable export.
- *
- * Prefers the record's own embedded copy (re-exporting a portable record is
- * free), otherwise fetches the hosted archive bundle and checks it against
- * the index's recorded hashes. Returns null when this deployment has no copy
- * of that engine -- the UI disables the option with that reason.
- */
-export async function collectBundleForExport(
-  header: RecordHeader,
-  embedded: EmbeddedBundle | null,
-): Promise<BundleForExport | null> {
-  const want = header.engine?.bundle ?? embedded?.manifest.bundle ?? "";
-  if (!want) return null;
-  if (embedded && (embedded.manifest.bundle === want || !header.engine?.bundle)) {
-    return {
-      files: [...embedded.files].map(([path, bytes]) => ({ path, bytes })),
-      glueSha256: embedded.manifest.glueSha256,
-      api: embedded.manifest.api,
-      bundle: want,
-      origin: "embedded",
-    };
-  }
-  const entry = entryFor(await archiveIndex(), want);
-  const serveId = entry ? serveIdFor(entry, want) : want;
-  // `URL` needs an absolute base: `/assets/engine/<id>/` alone throws.
-  const base = new URL(bundleBase(serveId), location.origin);
-  let manifest: {
-    id?: string;
-    api?: number;
-    glueSha256?: string;
-    layout?: {
-      glueJs?: string;
-      glueWasm?: string;
-      dataDir?: string;
-      dataFiles?: string[];
-      rulesIndex?: string;
-      modulesDir?: string;
-    };
-  };
-  try {
-    // no-store: a bundle archived by a deploy after this page loaded must not
-    // lose to a cached 404 for its directory.
-    const r = await fetch(new URL("bundle.json", base), { cache: "no-store" });
-    if (!r.ok) return null;
-    manifest = await r.json();
-  } catch {
-    return null;
-  }
-  const L = manifest.layout ?? {};
-  const files: BuildFile[] = [];
-  const get = async (path: string, url: string | URL): Promise<BuildFile | null> => {
-    try {
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return { path, bytes: new Uint8Array(await r.arrayBuffer()) };
-    } catch (e) {
-      console.warn(`portable export: cannot fetch ${url}:`, e);
-      return null;
-    }
-  };
-  const push = async (path: string, url: string | URL) => {
-    const f = await get(path, url);
-    if (!f) throw new PortableError(`engine bundle ${want} is incomplete (missing ${path})`);
-    files.push(f);
-  };
-  await push("bundle.json", new URL("bundle.json", base));
-  if (L.glueJs) await push(L.glueJs, new URL(L.glueJs, base));
-  if (L.glueWasm) await push(L.glueWasm, new URL(L.glueWasm, base));
-  for (const n of L.dataFiles ?? []) await push(`${L.dataDir ?? "data"}/${n}`, new URL(`${L.dataDir ?? "data"}/${n}`, base));
-  if (L.rulesIndex) {
-    await push(L.rulesIndex, new URL(L.rulesIndex, base));
-    const idx = JSON.parse(new TextDecoder().decode(files.find((f) => f.path === L.rulesIndex)!.bytes)) as {
-      modules?: { file: string }[];
-      conds?: { file?: string };
-    };
-    if (idx.conds?.file) {
-      const rel = `${L.rulesIndex.replace(/\/[^/]*$/, "")}/${idx.conds.file}`;
-      await push(rel, new URL(idx.conds.file, new URL(L.rulesIndex, base)));
-    }
-    for (const m of idx.modules ?? []) {
-      await push(`modules/${m.file}`, new URL(`modules/${m.file}`, new URL("/assets/engine/", location.origin)));
-    }
-  }
-  // Identity: the index's glueSha256, else hash the pair ourselves.
-  const glueJs = files.find((f) => f.path === (L.glueJs ?? "glue.js"));
-  const glueWasm = files.find((f) => f.path === (L.glueWasm ?? "glue_bg.wasm"));
-  const glueSha256 =
-    entry?.glueSha256 ??
-    manifest.glueSha256 ??
-    (glueJs && glueWasm ? await sha256Hex(concat(glueJs.bytes, glueWasm.bytes)) : "");
-  if (!isSha256Hex(glueSha256)) return null;
-
-  // When the index records per-file hashes, the fetched bytes must match --
-  // "same bytes, verified" before they go into a new file.
-  if (entry?.files) {
-    for (const f of files) {
-      const claimed = entry.files[f.path] ?? entry.files[`${entry.id}/${f.path}`];
-      if (typeof claimed === "string") {
-        const got = await sha256Hex(f.bytes);
-        if (got !== claimed) {
-          throw new PortableError(`hosted ${f.path} does not match the archive index (got ${got})`);
-        }
-      }
-    }
-  }
-  return { files, glueSha256, api: manifest.api ?? 1, bundle: want, origin: "hosted" };
-}
-
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const out = new Uint8Array(a.length + b.length);
-  out.set(a, 0);
-  out.set(b, a.length);
-  return out;
-}
-
 /**
  * Make a portable copy of `bytes`: the plain record untouched, plus the engine
  * bundle it needs. Throws a `PortableError` (with a user-facing message) when
@@ -511,13 +382,7 @@ export async function exportPortable(
   header: RecordHeader,
 ): Promise<{ bytes: Uint8Array; plainLen: number; portableLen: number }> {
   const prep = await prepareRecord(bytes);
-  const bundle = await collectBundleForExport(header, prep.embedded);
-  if (!bundle) {
-    throw new PortableError(
-      `this deployment has no copy of engine bundle ${header.engine?.bundle || "?"} to embed — ` +
-        `run \`node tools/archive-engine.mjs\` (or open a record that carries its engine)`,
-    );
-  }
+  const bundle = await collectBundleForExport(header, prep.embedded, currentStamp());
   const { buildPortable } = await import("./portable");
   const built = await buildPortable(prep.record, bundle.files, {
     bundle: bundle.bundle,
