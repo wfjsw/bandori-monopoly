@@ -870,9 +870,9 @@ with it.
 ### 8.3 Sumimi:Here the world (`here_the_world.rs`)
 
 The hold is `ctx::attach_card(ctx::self_uid(), id, Effect, true)`, whose answer
-is the held instance; the crystals go on that instance
+is the held instance; the crystals go on the host instance (`其` is 此卡)
 (`ctx::add_counter_at`); the return is `ctx::detach_card(held, Dest::Hand,
-Effect)`; the turn-start tick counts the held instance's crystals. A
+Effect)`; the turn-start tick counts the host's crystals. A
 `zoneLeft` body on the host
 returns the held card and sets `prop::LEAVE_DEST` to `Graveyard`
 (`bandori_std::zones::set_leave_destination`). Both `TODO(规则书)` and the

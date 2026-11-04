@@ -20,8 +20,8 @@ const ID: &str = "Sumimi:Here the world";
 const USER_PROP: &str = "here_user";
 
 /// The held card's instance uid (`+1`). The held card is a real attached
-/// instance (「放置于此卡上」); the crystals that time the hold sit on **that**
-/// instance (「为其放置3个奇迹水晶」), so they die with it when it returns.
+/// instance (「放置于此卡上」); the crystals that time the hold sit on **this**
+/// host instance (「为其放置3个奇迹水晶」 -- 其 is 此卡), so they die with it.
 const HELD: &str = "here_held";
 
 /// The held instance, `-1` when there is none.
@@ -113,7 +113,7 @@ fn drew(player_id: i32) -> card_sdk::Asked {
     ctx::set_turns_left(3);
     // 规则书（2）: 「并为其放置3个奇迹水晶」 -- the hold's own timer, on this
     // host instance.
-    ctx::add_counter_at(held, bandori_std::counter::CRYSTALS, 3, 0);
+    ctx::add_counter_at(ctx::self_uid(), bandori_std::counter::CRYSTALS, 3, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("here_the_world_held")).player_id("who", player_id),
@@ -133,7 +133,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     }
     // 「那名玩家的每个回合开始时移除一个」 -- the tick, on the host instance.
     ctx::dec_turns_left();
-    let left = ctx::add_counter_at(held, bandori_std::counter::CRYSTALS, -1, 0);
+    let left = ctx::add_counter_at(ctx::self_uid(), bandori_std::counter::CRYSTALS, -1, 0);
     if left > 0 {
         return Ok(());
     }

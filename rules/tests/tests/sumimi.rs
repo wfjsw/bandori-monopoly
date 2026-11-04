@@ -264,11 +264,12 @@ fn here_the_world_holds_a_draw_and_returns_it() {
         .find(|f| f.face_down)
         .map(|f| (f.uid, f.card.clone()))
         .expect("the draw is held");
-    assert!(t.m.world().attachment_host(held) > 0, "placed on the card");
+    let host = t.m.world().attachment_host(held);
+    assert!(host > 0, "placed on the card");
     // 「并为其放置3个奇迹水晶」 -- the crystals time the hold and sit on the
-    // held instance.
+    // host (其 = 此卡), so they die with it.
     assert_eq!(
-        t.m.world().counter_at(held, bandori_std::counter::CRYSTALS),
+        t.m.world().counter_at(host, bandori_std::counter::CRYSTALS),
         3
     );
     // 规则书（2）: 「那名玩家的每个回合开始时移除一个」 -- the tick is at each
@@ -281,12 +282,12 @@ fn here_the_world_holds_a_draw_and_returns_it() {
     };
     next_p1_turn(&mut t);
     assert_eq!(
-        t.m.world().counter_at(held, bandori_std::counter::CRYSTALS),
+        t.m.world().counter_at(host, bandori_std::counter::CRYSTALS),
         2
     );
     next_p1_turn(&mut t);
     assert_eq!(
-        t.m.world().counter_at(held, bandori_std::counter::CRYSTALS),
+        t.m.world().counter_at(host, bandori_std::counter::CRYSTALS),
         1
     );
     let user_hand = t.hand(0).len();
