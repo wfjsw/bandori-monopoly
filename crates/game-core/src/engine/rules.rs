@@ -925,7 +925,10 @@ pub trait CardRules: Send + Sync {
         cx.land_at_built_in(player_id, tile, is_main_move)
     }
 
-    /// Would a bot play it now?
+    /// Would a bot offer it now? Standard / advanced policies consult this;
+    /// chaos ignores it by design (`bot-core/src/policy.rs`). The rule set
+    /// answers from the card's static `prop::AI_NEVER` -- never legality, so a
+    /// human can still play the card.
     fn ai_play(&self, _cx: &PlayCtx, _player: usize, _card: &str) -> bool {
         true
     }

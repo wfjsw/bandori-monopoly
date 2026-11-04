@@ -22,6 +22,8 @@ pub mod events;
 pub mod g06_windows;
 #[cfg(feature = "band-general")]
 pub mod g07_targeting;
+#[cfg(feature = "band-morfonica")]
+pub mod g14_ai_and_hand_limit;
 pub mod general;
 #[cfg(feature = "band-hhw")]
 pub mod hhw;

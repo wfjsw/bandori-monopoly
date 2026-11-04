@@ -588,7 +588,7 @@ pub fn decide(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
         &d,
         &view.state,
         &view.hand,
-        &view.playable,
+        &view.offerable(),
         &view.estimated_cost,
         seat,
     );
@@ -757,7 +757,7 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
         &d,
         &target.state,
         &target.hand,
-        &target.playable,
+        &target.offerable(),
         &target.estimated_cost,
         seat,
     );

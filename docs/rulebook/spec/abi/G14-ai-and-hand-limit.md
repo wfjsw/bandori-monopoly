@@ -8,10 +8,9 @@ and was re-read on 2026-11-04 against the card id named beside it.
 **Row ids** are the review-sheet ids carried by `G14.json`; they are **not**
 `cards.json` indices.
 
-**Base:** master at ABI **113**, `SAVE_VERSION` **16**. G14 is the last group in the
-README landing order and lands after G11 (ABI 116) and G12 (ABI 117): the tree it
-lands on is ABI **117**, `SAVE_VERSION` **18**. It takes **118** and `SAVE_VERSION`
-**19**; §9 carries the band arithmetic.
+**Base:** master at ABI **113**, `SAVE_VERSION` **16**. G14 landed before G09–G12,
+so it takes the next free numbers, **114** / **17**; §9 and the README
+landing table carry the arithmetic and the later rows' shift.
 
 Terminology. **The seat's AI** means either bot policy (standard or advanced) or
 the browser autopilot (托管); **chaos** is the separate disruptive policy. A
@@ -45,10 +44,10 @@ arithmetic re-run from the landing order. What the draft got wrong:
 
 | # | Draft defect | Correction |
 |---|---|---|
-| R1 | The draft based the work on `card-rulebook-review` and ABI 116→117. Master is ABI 113; the README reservation for G14 is **117→118** after G11/G12. | Header states the real base and §9 takes 118. |
+| R1 | The draft based the work on `card-rulebook-review` and ABI 116→117. Master is ABI 113; G14 lands before G09–G12, so §9 takes the next free numbers 114 / 17 and the README rows of the later groups shift one up. | Header states the real base; README reconciled 2026-11-04. |
 | R2 | Nearly every citation was stale (`ops.rs:1024`, `wasm_rules.rs:4347`, `ai.rs:329`, `hostfns.rs:846`). G07 and the policy split moved them. | Every site is re-cited: the dead parameter 1168/1202, the `Draw` arm 5199-5229, the policy seam `bot-core/src/policy.rs:339-375`, `hostfns::draw` 1073. |
 | R3 | The draft let the hand stay over the limit until turn end but never revisited the `end` gate. `cant_act` refuses `end` while `over_hand` (`engine/mod.rs:3014`), so the seat could never *reach* turn end and the card's own scheduled discard would never run. The server view's `can_end_here` (`:923-937`), the client's `turnFlow` / `Side` / autopilot gates carried the same refusal. | §5.2 adds the allowed-excess fact; the end gate, the view preview and the client gates read it. §10 pins the whole story. |
-| R4 | The draft said `SAVE_VERSION` unchanged. An over-limit hand is a live, savable state whose end gate depends on the allowance, so a save taken over the limit must carry it. | `SAVE_VERSION` 18→19 (`MatchPlayer.over_hand_allowed`, `#[serde(default)]`). §8. |
+| R4 | The draft said `SAVE_VERSION` unchanged. An over-limit hand is a live, savable state whose end gate depends on the allowance, so a save taken over the limit must carry it. | `SAVE_VERSION` 16→17 (`MatchPlayer.over_hand_allowed`, `#[serde(default)]`). §8. |
 | R5 | The draft never mentioned the formal hand-limit clause `G-CARDS-01` (`rules/spec/src/global/cards.rs:184-238`), which fails plain on any act that leaves a hand over its limit. | §10.2 amends the clause with the allowance fact and adds a spec test. |
 | R6 | The draft said "no locale key" and simultaneously suppressed the over-limit warning, leaving the player no explanation why six cards on a limit of five is fine. | A new part key `log.part.over_hand_allowed` replaces the warning on the exempt draw only. §5.6. |
 | R7 | The draft described chaos via a "numeric `params`" argument at `autopilot.ts:803/:807`. Since the policy split chaos is a separate policy function; the numeric argument is `CHAOS_RESERVE`. | §5.10 / §6.1 use the real discriminator. |
@@ -707,8 +706,8 @@ stays (a different item). Bodies and `*_kani` exports unchanged.
 
 ## 8. Save / record / replay
 
-* **SAVE_VERSION 18 → 19.** `MatchPlayer.over_hand_allowed` is `#[serde(default)]`
-  and `MatchPlayer` is `#[serde(default)]`, so a v18 save restores with it
+* **SAVE_VERSION 16 → 17.** `MatchPlayer.over_hand_allowed` is `#[serde(default)]`
+  and `MatchPlayer` is `#[serde(default)]`, so a v16 save restores with it
   unset; a save taken over the limit must carry it because the end gate reads
   it. The guest body re-issues the flag on replay, but a save is a prompt
   boundary and the host answer is negative (already applied), so the allowance
@@ -735,13 +734,13 @@ stays (a different item). Bodies and `*_kani` exports unchanged.
 
 ## 9. Versioning and band arithmetic
 
-The README row is `G14 | 117→118 | 18→19 | — | —`; G14 is last in the landing
-order. G11 (116) and G12 (117) land before it; this document takes:
+The README row is `G14 | 113→114 | 16→17 | — | —`. G14 lands **before** G09–G12
+(they still hold 114–118 / 17–19); this document takes:
 
-* `ABI_VERSION` **117 → 118** — the `ruleset_draw` arity only. The prop and the
+* `ABI_VERSION` **113 → 114** — the `ruleset_draw` arity only. The prop and the
   extra are data on existing shapes and need no bump.
-* `SAVE_VERSION` **18 → 19** — the allowance bit (the README row changes from
-  `18` to `18→19`; no later row moves because G14 is last).
+* `SAVE_VERSION` **16 → 17** — the allowance bit (the README row reads
+  `16→17`).
 * engine kinds: **none**; Kani `Op`: **none**.
 * `RECORD_VERSION` unchanged.
 
@@ -749,7 +748,7 @@ ABI entry inserted immediately **below** the `pub const ABI_VERSION` line
 (newest-first, `abi.rs:783`) in the `/// vNNN:` style:
 
 ```
-/// v118: **an over-limit draw and a card's static bot-avoid flag**.
+/// v114: **an over-limit draw and a card's static bot-avoid flag**.
 ///    `ruleset_draw` gains a `flags` word: [`draw_flag::OVER_HAND_LIMIT`] (1)
 ///    makes the draw skip the immediate hand-limit discard-down while still
 ///    moving the cards; the excess is *allowed* (`MatchPlayer.over_hand_allowed`,
@@ -757,7 +756,7 @@ ABI entry inserted immediately **below** the `pub const ABI_VERSION` line
 ///    `end` is accepted and the card's scheduled dispose runs; the over-limit
 ///    warning part is replaced by `log.part.over_hand_allowed` for that draw.
 ///    `ctx::draw` passes 0, the sugar `ctx::draw_over_hand_limit` passes the
-///    bit, and the limit state itself is untouched. **SAVE_VERSION 18 -> 19**
+///    bit, and the limit state itself is untouched. **SAVE_VERSION 16 -> 17**
 ///    (the allowance bit, `serde(default)`). RECORD_VERSION unchanged.
 ///    `ManifestEntry` is unchanged: the prop `aiNever` (nonzero = standard /
 ///    advanced policies do not offer the card; absent/0 = offer; never
@@ -775,7 +774,7 @@ ABI entry inserted immediately **below** the `pub const ABI_VERSION` line
 
 | test | assertion |
 |---|---|
-| `g14_nnm_draw_over_cap_is_not_trimmed` | hand of six incl. NNM, two marks, branch (1), x=2: the hand is seven and nothing was discarded |
+| `g14_nnm_draw_over_cap_is_not_trimmed` | hand of five incl. NNM, two marks, branch (1), x=2: the hand is six and nothing was discarded (five, not six, because CRYCHIC's group skill closes the play gate at `hand >= 6`) |
 | `g14_over_hand_allowed_lets_the_turn_end` | after the draw `over_hand` is true, `over_hand_allowed` is true, `act:"end"` is **accepted**, and `can_end_here` is true |
 | `g14_nnm_end_of_turn_discards_to_five` | continuing to the end leaves five via the scheduled body; the allowance is false afterwards |
 | `g14_turn_end_sweeps_a_lowered_cap` | with the cap at four, turn end leaves four |
@@ -785,7 +784,7 @@ ABI entry inserted immediately **below** the `pub const ABI_VERSION` line
 | `g14_effect_draw_schedules_the_discard` | the `before_turn_end("discard_down_to_five")` callback exists after the draw |
 | `g14_allowance_survives_save_restore` | save after the draw, restore, the end gate and the scheduled discard still behave |
 | `g14_over_limit_log_part` | the exempt draw logs `log.part.over_hand_allowed`; a normal overflow logs `log.part.over_hand` |
-| `g14_manual_human_play_is_unchanged` | a human still plays 夏日合宿 and `playable` stays true (item 2 control) |
+| `g14_human_can_still_play_summer_camp` | a human still plays 夏日合宿, `playable` stays true and the manual `act:"play"` is accepted (item 2 control) |
 
 ### 10.2 Formal hand-limit clause
 
@@ -804,8 +803,10 @@ if p.over_hand_allowed {
 Its doc's **Condition** gains: "unless the player carries the permitted excess
 (`over_hand_allowed`), which only an exempt draw sets and the turn-end sweep
 clears". The **Rulings & OPEN** note records that the base 「立刻」 and a card's
-「可超过上限」 coexist via that flag. New `rules/tests/tests/spec_g_cards.rs`
-test `g_cards_01_allows_a_card_permitted_draw`: play NNM branch (1) under
+「可超过上限」 coexist via that flag. New test
+`g_cards_01_allows_a_card_permitted_draw` (in
+`rules/tests/tests/g14_ai_and_hand_limit.rs`, beside the G14 group): play NNM
+branch (1) under
 `observe(CLAUSES)` and assert no violation, plus the existing plain-overflow
 case (`:405`, `:442`) still finding an unallowed overflow.
 
@@ -816,13 +817,21 @@ case (`:405`, `:442`) still finding an unallowed overflow.
 `g07_targeting`, registered `#[cfg(feature = "band-morfonica")]` in both
 `mod.rs`s):
 
-* `nnm_02_draw_over_iff` — `effect_draw_kani` with symbolic `x` in `1..=4`:
-  exactly `x` `Effect::DrawOver { player, n: 1 }` and nothing else (one import
-  per card). `unwrap_done` shows the body returned; frame: hand +x, dest and
-  money unchanged.
-* `nnm_02_mutant_plain_draw_is_detected` — the same shape over `Effect::Draw`
-  fails.
-* `plain_draw_stays_plain` — a plain-draw card still logs `Effect::Draw`.
+* `nnm_02_draw_over_x1_iff`, `nnm_02_draw_over_x2_iff`,
+  `nnm_02_draw_over_user1_iff` — `effect_draw_kani`: exactly `x`
+  `Effect::DrawOver { player, n: 1 }` and nothing else (one import per card).
+  `unwrap_done` shows the body returned; frame: hand +x, dest and money
+  unchanged. **The import count is concrete per harness.** A symbolic `x` over
+  the same body (assumed `1..=4`) pushed each CBMC run past the 900 s budget;
+  `x = 1` and `x = 2` bracket the single / repeated import shape, and
+  `user = 1` covers a second seat. Unwind drops 32 → 24 with it (24 clears the
+  model's `MAX_EXTRA` 16 name scan).
+* `nnm_02_draw_over_mutant_plain` (`x = 2`) — the same shape over
+  `Effect::Draw` fails.
+* `plain_draw_stays_plain` — a plain-draw card still logs `Effect::Draw`. Its
+  subset declares the whole 10次招募 body: `pay`, `pay_command` (the
+  `PayCommand::send` façade), `state_get` / `state_set` (the 「1回限定」 latch)
+  and `draw`.
 * `summer_ai_never_declared` / `summer_ai_never_mutant` — `SUMMER_CAMP.props`
   contains `(AI_NEVER, 1)`; a copy without it fails.
 * No new `Op`; `arm_draw` must not hit the unmodeled-op guard for flags `0`
@@ -843,8 +852,8 @@ and is unchanged by this group.
 | `g14_standard_bot_plays_a_normal_card` | contrast: a control card without the prop in the same fixture is played (missing from hand) |
 | `g14_chaos_still_plays_summer_camp` | `make_bot(0, Chaos)`: the card leaves the hand (open question 1; invert if the ruling changes) |
 | `g14_human_can_still_play_summer_camp` | `playable` true and the manual `act:"play"` accepted |
-| `g14_view_extra_ai_playable_marks_summer_false` (`crates/game-core/tests/view_extra.rs`) | `TestRules` gains an `ai_never: Vec<String>` and an `ai_play` override (the trait default is `true`; `card_prop` alone does not reach it): `playable[i] == true`, `ai_playable[i] == false`, other cards true |
-| `standard_skips_ai_never` / `chaos_plays_ai_never` (`webui/src/game/autopilot.test.ts`) | the command list honours / ignores `aiPlayable` |
+| `view_extra_ai_playable_is_false_regardless_of_legality` (`crates/game-core/tests/view_extra.rs`) | `TestRules` gains an `ai_never: Vec<String>` and an `ai_play` override (the trait default is `true`; `card_prop` alone does not reach it): `playable[i] == true`, `ai_playable[i] == false`, other cards true |
+| `the standard policy skips a card flagged aiNever even when playable` / `chaos plays an aiNever card` (`webui/src/game/autopilot.test.ts`) | the command list honours / ignores `aiPlayable` |
 | `view_extra_equiv` (`crates/bot-core/tests/view_extra_equiv.rs`) | `ai_playable` gets its own must-agree counters and divergence message like `playable`, and `strip_extras` clears it (`:120`) |
 
 Existing suites that stay green: `summer_plays_to_field_until_next_turn_then_draws`,
@@ -859,7 +868,7 @@ Existing suites that stay green: `summer_plays_to_field_until_next_turn_then_dra
 **A1 — a real `CardDef` field plus `ManifestEntry.ai_play`.** Most explicit and
 future-proof for a tri-state, but threads the field through `new` and seven
 `const` builders, appends a manifest field (postcard is not self-describing: a second
-wire break) and adds a `CardInfo` field. Rejected for v118. It remains the
+wire break) and adds a `CardInfo` field. Rejected for v114. It remains the
 migration path if the fact ever stops being a bool.
 
 **A2 — a wasm `OP_AI_PLAY` hook.** Truest to "hook" and lets a card inspect the
@@ -1126,7 +1135,7 @@ priced in §13.4.
 
 | # | clause | design element | test | verdict |
 |---|---|---|---|---|
-| 1 | 「抽x张卡（可超过上限）」 | `ctx::draw_over_hand_limit` → `draw_flag::OVER_HAND_LIMIT` → the trim skip (§5.1-§5.6) | `g14_nnm_draw_over_cap_is_not_trimmed`, `nnm_02_draw_over_iff` | matched |
+| 1 | 「抽x张卡（可超过上限）」 | `ctx::draw_over_hand_limit` → `draw_flag::OVER_HAND_LIMIT` → the trim skip (§5.1-§5.6) | `g14_nnm_draw_over_cap_is_not_trimmed`, `nnm_02_draw_over_x1_iff`, `nnm_02_draw_over_x2_iff` | matched |
 | 2 | 「回合结束后将手牌弃置到五张」 | the existing `before_turn_end("discard_down_to_five")` schedule; the allowance keeps the turn end reachable (§6.2) | `g14_over_hand_allowed_lets_the_turn_end`, `g14_nnm_end_of_turn_discards_to_five` | matched (Q5 on a lowered cap) |
 | 3 | the base rule 「任何时刻…立刻弃至上限」 (`rulebook-doc.md:126`) | the trim stays the default; the allowance is the named exception (§3) | `g14_plain_draw_still_trims`, `g_cards_01_allows_a_card_permitted_draw` | matched |
 

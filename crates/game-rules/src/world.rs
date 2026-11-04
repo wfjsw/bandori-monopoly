@@ -718,6 +718,11 @@ pub trait CardWorld: Clone + 'static {
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;
+    /// Draw without the immediate hand-limit trim (「可超过上限」). Default:
+    /// same as [`Self::draw`] -- a world without a hand limit behaves the same.
+    fn draw_over(&mut self, player_id: i32, n: i32) -> i32 {
+        self.draw(player_id, n)
+    }
     /// Put one copy of `card` into `player_id`'s pile at `dest` (wire [`Dest`] code
     /// -- 0 graveyard, 1 hand, 2 field, 3 banished, 4 deck top, 5 deck bottom,
     /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_dest`].

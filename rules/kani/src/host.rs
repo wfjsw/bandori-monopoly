@@ -2190,7 +2190,11 @@ pub fn arm_draw(a: Args) -> i64 {
                 world::pile_push(&mut w.hand_pile, &mut w.hand_n, u16::MAX);
                 i += 1;
             }
-            w.push(Effect::Draw { player: a0, n });
+            if a2 & card_sdk::abi::draw_flag::OVER_HAND_LIMIT != 0 {
+                w.push(Effect::DrawOver { player: a0, n });
+            } else {
+                w.push(Effect::Draw { player: a0, n });
+            }
         });
         n as i64
     }

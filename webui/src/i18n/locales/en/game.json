@@ -394,6 +394,7 @@
   "log.part.no_move": " -- didn't move",
   "log.part.no_resolve": " (no [Settle])",
   "log.part.over_hand": " (over {{limit}} cards -- discard the extras)",
+  "log.part.over_hand_allowed": " (may exceed the limit of {{limit}} -- discard down at turn end)",
   "log.part.owe": "owes {{amount}}{{to}}, has only {{money}}",
   "log.part.owe_to": " to {{who}}",
   "log.part.paid_to": " paid to {{who}}",

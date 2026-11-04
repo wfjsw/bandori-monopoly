@@ -1070,16 +1070,33 @@ pub fn players_on_at<C: HostCtx>(
     Ok({ c.st().wr().players_on_at(tile, except, index) })
 }
 
-pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostError> {
+pub fn draw<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    n: i32,
+    flags: i32,
+) -> Result<i32, HostError> {
+    let over_hand_limit = flags & abi::draw_flag::OVER_HAND_LIMIT != 0;
     // Negative replies encode draws the engine already applied, including
     // replacements, refill and after-hooks. Guest replay only returns their
     // count; the fresh world copy already contains the resulting piles.
     // Positive replies remain supported by standalone host fixtures.
-    fn apply_reply<C: HostCtx>(c: &mut C, player_id: i32, n: i32, reply: i32) -> i32 {
+    fn apply_reply<C: HostCtx>(
+        c: &mut C,
+        player_id: i32,
+        n: i32,
+        reply: i32,
+        over_hand_limit: bool,
+    ) -> i32 {
         if reply < 0 {
             (-(reply + 1)).clamp(0, n.max(0))
         } else {
-            c.st_mut().w().draw(player_id, reply.clamp(0, n.max(0)))
+            let n = reply.clamp(0, n.max(0));
+            if over_hand_limit {
+                c.st_mut().w().draw_over(player_id, n)
+            } else {
+                c.st_mut().w().draw(player_id, n)
+            }
         }
     }
     {
@@ -1088,13 +1105,24 @@ pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostEr
             let answer = st.next_answer;
             st.w().after_host(answer);
             st.next_answer += 1;
-            return Ok(apply_reply(c, player_id, n, reply));
+            return Ok(apply_reply(c, player_id, n, reply, over_hand_limit));
         }
     }
-    if let Some(reply) = crate::inline::request_or_inline(c, HostRequest::Draw { player_id, n })? {
-        return Ok(apply_reply(c, player_id, n, reply));
+    if let Some(reply) = crate::inline::request_or_inline(
+        c,
+        HostRequest::Draw {
+            player_id,
+            n,
+            over_hand_limit,
+        },
+    )? {
+        return Ok(apply_reply(c, player_id, n, reply, over_hand_limit));
     }
-    c.st_mut().host_request = Some(HostRequest::Draw { player_id, n });
+    c.st_mut().host_request = Some(HostRequest::Draw {
+        player_id,
+        n,
+        over_hand_limit,
+    });
     Ok(abi::EXIT_NEED_INPUT)
 }
 

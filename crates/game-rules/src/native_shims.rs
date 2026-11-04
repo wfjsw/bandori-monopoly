@@ -1058,7 +1058,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(crate::hostfns::pay_command(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
     }
     fn op_draw(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
-        Ok(crate::hostfns::draw(self, a[0], a[1])? as i64)
+        Ok(crate::hostfns::draw(self, a[0], a[1], a[2])? as i64)
     }
     fn op_draw_event(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::draw_event(self, a[0])? as i64)
@@ -2773,8 +2773,8 @@ pub unsafe extern "C-unwind" fn ruleset_pay_command(
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_draw(player_id: i32, n: i32) -> i32 {
-    with_host(|h| match h.op_draw([player_id, n, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_draw(player_id: i32, n: i32, flags: i32) -> i32 {
+    with_host(|h| match h.op_draw([player_id, n, flags, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

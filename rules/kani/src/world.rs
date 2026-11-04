@@ -389,6 +389,13 @@ pub enum Effect {
         player: i32,
         n: i32,
     },
+    /// `ctx::draw_over_hand_limit` -- `ruleset_draw` with
+    /// [`card_sdk::abi::draw_flag::OVER_HAND_LIMIT`]. The model has no hand
+    /// limit, so the flag is only observable here.
+    DrawOver {
+        player: i32,
+        n: i32,
+    },
     GainMoney {
         player: i32,
         n: i32,

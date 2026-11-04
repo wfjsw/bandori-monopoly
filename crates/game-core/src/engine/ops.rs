@@ -1183,12 +1183,19 @@ impl World {
             got += 1;
         }
         if got > 0 {
-            let over = self.st.players[i]
-                .over_hand(self.hidden[i].hand.len())
-                .then(|| {
-                    Msg::new("log.part.over_hand")
-                        .i("limit", self.st.players[i].hand_limit().unwrap_or_default())
-                });
+            let over_now = self.st.players[i].over_hand(self.hidden[i].hand.len());
+            if over_hand_limit && over_now {
+                // 「可超过上限」: the excess is allowed to the turn end.
+                self.st.players[i].over_hand_allowed = true;
+            }
+            let over = over_now.then(|| {
+                let key = if over_hand_limit {
+                    "log.part.over_hand_allowed"
+                } else {
+                    "log.part.over_hand"
+                };
+                Msg::new(key).i("limit", self.st.players[i].hand_limit().unwrap_or_default())
+            });
             self.log(
                 "draw",
                 player_id,
@@ -1199,7 +1206,6 @@ impl World {
             )
             .value = got;
         }
-        let _ = over_hand_limit;
         got
     }
 
@@ -1230,6 +1236,7 @@ impl World {
                     h.hand.remove(k);
                 }
                 h.graveyard.push(card.to_string());
+                self.settle_over_hand_allowance(i);
                 return self.refill_draw_pile(i);
             }
         }

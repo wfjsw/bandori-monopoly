@@ -1008,6 +1008,21 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    // ------------------------------------------------ hand limit
+
+    /// Clear the permitted-over-limit state once the hand fits again
+    /// (「可超过上限」). Called from every hand-shrink site; a no-op while the
+    /// hand is still over.
+    pub fn settle_over_hand_allowance(&mut self, i: usize) {
+        let fits = self
+            .hidden
+            .get(i)
+            .is_some_and(|h| !self.st.players[i].over_hand(h.hand.len()));
+        if fits {
+            self.st.players[i].over_hand_allowed = false;
+        }
+    }
+
     // ------------------------------------------------ plan frames
 
     /// The plan the move currently reads: the innermost frame, else the

@@ -384,7 +384,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_draw"
         )]
-        pub fn draw(player_id: i32, n: i32) -> i32;
+        pub fn draw(player_id: i32, n: i32, flags: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_draw_event"

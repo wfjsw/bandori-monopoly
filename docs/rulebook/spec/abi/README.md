@@ -32,11 +32,11 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 113→114 | 16 | 126–130 | — |
-| G10 | 114→115 | 16→17 | 131 | — |
-| G11 | 115→116 | 17→18 | 132–133 | — |
-| G12 | 116→117 | 18 | 107 | — |
-| G14 | 117→118 | 18→19 | — | — |
+| G14 | 113→114 | 16→17 | — | — |
+| G09 | 114→115 | 17 | 126–130 | — |
+| G10 | 115→116 | 17→18 | 131 | — |
+| G11 | 116→117 | 18→19 | 132–133 | — |
+| G12 | 117→118 | 19 | 107 | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -97,6 +97,12 @@ flag word. That makes the SAVE row **18→19**; the ABI row stays 117→118 (the
 arity break), and no later row moves because G14 is last. The group also adds
 one static card prop (`aiNever`), which changes no id: it rides the existing
 `props` map.
+
+**2026-11-04 landing note (G14).** G14 landed before G09–G12, so it takes the
+next free numbers, **113→114** / **16→17**, not the 117→118 / 18→19 the row
+predicted. The G09–G12 rows move up one each (ABI and SAVE both); G14 is now
+the first of the remaining groups, not the last. `ABI_VERSION` is 114 and
+`SAVE_VERSION` 17.
 
 Recommended landing order (foundation → dependent):
 

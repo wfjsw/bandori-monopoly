@@ -427,7 +427,7 @@ fn decide(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         &ctx.data,
         &st,
         &view.hand,
-        &view.playable,
+        &view.offerable(),
         &view.estimated_cost,
         seat,
     );
@@ -596,7 +596,7 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         &ctx.data,
         &st,
         &target.hand,
-        &target.playable,
+        &target.offerable(),
         &target.estimated_cost,
         seat,
     );

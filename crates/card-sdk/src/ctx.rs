@@ -883,6 +883,18 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 /// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
 /// does; the body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    draw_flags(player_id, n, 0)
+}
+
+/// Draw `n` cards **without** the immediate hand-limit trim (「可超过上限」).
+/// The excess is allowed until the hand fits again or the turn ends: the
+/// card's own scheduled discard is the usual disposer, and `end` is accepted
+/// meanwhile. The limit state itself is untouched. Pauses like [`draw`].
+pub fn draw_over_hand_limit(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    draw_flags(player_id, n, crate::abi::draw_flag::OVER_HAND_LIMIT)
+}
+
+fn draw_flags(player_id: i32, n: i32, flags: i32) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::draw");
     #[cfg(kani)]
     {
@@ -893,7 +905,7 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
         macro_rules! draw1 {
             () => {
                 if taken < n.max(0) {
-                    got += asked(unsafe { sys::draw(player_id, 1) })?;
+                    got += asked(unsafe { sys::draw(player_id, 1, flags) })?;
                     taken += 1;
                 }
             };
@@ -911,7 +923,7 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     {
         let mut got = 0;
         for _ in 0..n.max(0) {
-            got += asked(unsafe { sys::draw(player_id, 1) })?;
+            got += asked(unsafe { sys::draw(player_id, 1, flags) })?;
         }
         Ok(got)
     }

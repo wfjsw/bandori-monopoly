@@ -8,6 +8,8 @@ pub mod crychic;
 pub mod events;
 pub mod g06_windows;
 pub mod g07_targeting;
+#[cfg(feature = "band-morfonica")]
+pub mod g14_ai_and_hand_limit;
 pub mod general;
 pub mod hhw;
 pub mod markers;

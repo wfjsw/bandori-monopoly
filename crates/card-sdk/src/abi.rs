@@ -780,7 +780,24 @@ use crate::intern::NameId;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 113;
+///
+/// v114: **an over-limit draw and a card's static bot-avoid flag** (G14).
+///    `ruleset_draw` gains a `flags` word: [`draw_flag::OVER_HAND_LIMIT`] (1)
+///    makes the draw skip the immediate hand-limit discard-down while still
+///    moving the cards; the excess is *allowed*
+///    (`MatchPlayer.over_hand_allowed`, wire `overHandAllowed`) until the hand
+///    fits again or the turn ends, so `end` is accepted and the card's
+///    scheduled dispose runs; the over-limit warning part is replaced by
+///    `log.part.over_hand_allowed` for that draw. `ctx::draw` passes 0, the
+///    sugar `ctx::draw_over_hand_limit` passes the bit, and the limit state
+///    itself is untouched. **SAVE_VERSION 16 -> 17** (the allowance bit,
+///    `serde(default)`). RECORD_VERSION unchanged. `ManifestEntry` is
+///    unchanged: the prop `aiNever` (nonzero = standard / advanced policies do
+///    not offer the card; absent/0 = offer; never legality) rides the
+///    existing `props` map and the existing host `CardRules::ai_play` seam;
+///    `ViewExtra.ai_playable` (wire `aiPlayable`) lets the client-side
+///    seat-view engine read the same static fact with no hidden read.
+pub const ABI_VERSION: i32 = 114;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -910,6 +927,14 @@ pub mod pay_flag {
     pub const ALLOW_MORTGAGE: i32 = 1 << 1;
     /// Run the command-wide pre-split stages (cleared by `pay_leg`).
     pub const TOTAL_STAGE: i32 = 1 << 2;
+}
+
+/// `ruleset_draw` flags.
+pub mod draw_flag {
+    /// Bit 0: this draw is exempt from the immediate hand-limit discard-down
+    /// (「可超过上限」). The limit itself is untouched; the hand may stay over
+    /// until it fits again or the turn ends.
+    pub const OVER_HAND_LIMIT: i32 = 1 << 0;
 }
 
 /// The packed `pay_command` answer.
@@ -1604,6 +1629,11 @@ pub mod prop {
     /// Constant for now; an X-dependent cost may later become a `rules-cond`
     /// expression. `0` (the default) means "unknown / assume free".
     pub const EST_COST: &str = "estCost";
+    /// Bot-only: nonzero = standard / advanced bot policies must not offer
+    /// this card. Absent or `0` = offer. A static card fact, never legality --
+    /// a human can still play the card. Read by `CardRules::ai_play`; rides
+    /// the existing `ManifestEntry.props`.
+    pub const AI_NEVER: &str = "aiNever";
     /// 「有[指定]目标」: `1` = this play names
     /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
     /// 所有的效果」. The named set is the play's **other living players** (the

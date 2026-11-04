@@ -729,6 +729,46 @@ impl Run {
     }
 }
 
+/// The host-side body of `CardWorld::draw` / `draw_over`: one routine, the
+/// `over` flag only changes the trim and the log part. This path has no trim
+/// loop (the draw routine on the match side owns it), so the flag's whole job
+/// here is the allowance and the log.
+fn run_draw(r: &mut Run, player_id: i32, n: i32, over: bool) -> i32 {
+    let before = r
+        .world
+        .hidden
+        .get(player_id.max(0) as usize)
+        .map(|h| h.hand.len())
+        .unwrap_or(0);
+    let will_refill = r
+        .world
+        .hidden
+        .get(player_id.max(0) as usize)
+        .is_some_and(|h| !h.graveyard.is_empty() && n > 0 && h.deck.len() <= n as usize);
+    let got = r.world.draw_cards(player_id, n, over);
+    if will_refill && got > 0 {
+        // Visible outcome: `commit_after` raises `reshuffled`.
+        r.flush_header();
+        r.reshuffle_log.push(player_id);
+    }
+    if got > 0 {
+        let drawn: Vec<String> = r
+            .world
+            .hidden
+            .get(player_id.max(0) as usize)
+            .map(|h| h.hand[before..].to_vec())
+            .unwrap_or_default();
+        if !drawn.is_empty() {
+            // Visible outcome: `commit_after` raises `drawn` / `drew`.
+            r.flush_header();
+            for id in drawn {
+                r.draw_log.push((player_id, id));
+            }
+        }
+    }
+    got
+}
+
 impl CardWorld for Run {
     // ---- G03 roll surface -------------------------------------------------
     // The run's world is the write-through copy the guest reads (and the one
@@ -1110,39 +1150,10 @@ impl CardWorld for Run {
 
     // hand / deck -----------------------------------------------------------
     fn draw(&mut self, player_id: i32, n: i32) -> i32 {
-        let before = self
-            .world
-            .hidden
-            .get(player_id.max(0) as usize)
-            .map(|h| h.hand.len())
-            .unwrap_or(0);
-        let will_refill = self
-            .world
-            .hidden
-            .get(player_id.max(0) as usize)
-            .is_some_and(|h| !h.graveyard.is_empty() && n > 0 && h.deck.len() <= n as usize);
-        let got = self.world.draw_cards(player_id, n, true);
-        if will_refill && got > 0 {
-            // Visible outcome: `commit_after` raises `reshuffled`.
-            self.flush_header();
-            self.reshuffle_log.push(player_id);
-        }
-        if got > 0 {
-            let drawn: Vec<String> = self
-                .world
-                .hidden
-                .get(player_id.max(0) as usize)
-                .map(|h| h.hand[before..].to_vec())
-                .unwrap_or_default();
-            if !drawn.is_empty() {
-                // Visible outcome: `commit_after` raises `drawn` / `drew`.
-                self.flush_header();
-                for id in drawn {
-                    self.draw_log.push((player_id, id));
-                }
-            }
-        }
-        got
+        run_draw(self, player_id, n, false)
+    }
+    fn draw_over(&mut self, player_id: i32, n: i32) -> i32 {
+        run_draw(self, player_id, n, true)
     }
     fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
         match dest {
@@ -1205,7 +1216,7 @@ impl CardWorld for Run {
             CardPile::Deck => &mut h.deck,
             CardPile::Field => return self.world.unplace_card(player_id, card).is_some(),
         };
-        match list.iter().position(|c| c == card) {
+        let took = match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
                 if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize) {
@@ -1216,7 +1227,11 @@ impl CardWorld for Run {
                 true
             }
             None => false,
+        };
+        if took && src == CardPile::Hand {
+            self.world.settle_over_hand_allowance(player_id.max(0) as usize);
         }
+        took
     }
     fn cards_in(&self, player_id: i32, pile: CardPile) -> Vec<String> {
         let Some(h) = self.world.hidden.get(player_id.max(0) as usize) else {
@@ -2245,6 +2260,7 @@ impl CardWorld for Run {
         };
         h.hand.remove(p);
         h.graveyard.push(card.to_string());
+        self.world.settle_over_hand_allowance(player_id.max(0) as usize);
         // Visible outcome: `commit_after` raises `discarded` (and maybe
         // `reshuffled`). The header names the clause that discarded.
         self.flush_header();
@@ -2263,6 +2279,7 @@ impl CardWorld for Run {
         let mut moved: Vec<String> = Vec::new();
         if hand {
             moved.append(&mut self.world.hidden[idx].hand);
+            self.world.settle_over_hand_allowance(idx);
         }
         if discard {
             moved.append(&mut self.world.hidden[idx].graveyard);
@@ -5196,7 +5213,11 @@ impl<M: CardModules> RulesBridge<M> {
             // and per-card hooks. A later card/event prompt must see the new deck.
             // The negative answer records an already-applied draw so guest replay
             // reports the count without moving those cards a second time.
-            HostRequest::Draw { player_id, n } => {
+            HostRequest::Draw {
+                player_id,
+                n,
+                over_hand_limit,
+            } => {
                 let Ok(player) = usize::try_from(player_id) else {
                     return Ok(-1);
                 };
@@ -5225,7 +5246,12 @@ impl<M: CardModules> RulesBridge<M> {
                         return Ok(0);
                     }
                 }
-                let got = cx.draw_cards_with_hooks(player, n.max(0) as usize, true)?;
+                let got = cx.draw_cards_with_hooks(
+                    player,
+                    n.max(0) as usize,
+                    true,
+                    over_hand_limit,
+                )?;
                 return Ok(-got - 1);
             }
             HostRequest::Pay {
@@ -7390,6 +7416,7 @@ impl<M: CardModules> RulesBridge<M> {
                         let mut w = cx.world_copy();
                         if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
                             w.hidden[cursor].hand.remove(pos);
+                            w.settle_over_hand_allowance(cursor);
                         }
                         cx.swap_world(w);
                     }
@@ -11355,6 +11382,13 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     /// goes through [`Self::card_props`]).
     fn card_prop(&self, card: &str, key: &str) -> i32 {
         self.ruleset.card_prop(card, key)
+    }
+
+    /// Would a bot offer it? Static card fact: `prop::AI_NEVER`.
+    fn ai_play(&self, _cx: &PlayCtx, _player: usize, card: &str) -> bool {
+        self.ruleset
+            .card_prop(card, game_core::state::prop::AI_NEVER)
+            == 0
     }
 
     /// The card rule's declared **tile texts** (`On::texts`), see

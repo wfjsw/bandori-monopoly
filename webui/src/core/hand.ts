@@ -15,7 +15,16 @@ export function handLimit(me: MatchPlayer): number | null {
 }
 
 /** Holding `held` cards puts the player over the hand limit. */
-export function overHand(me: MatchPlayer, held: number): boolean {
+export function overAny(me: MatchPlayer, held: number): boolean {
   const limit = handLimit(me);
   return limit !== null && held > limit;
+}
+
+/**
+ * Over the limit **and** not permitted to stay there (「可超过上限」): this is
+ * the form the end gates read. The discard affordance keeps using
+ * {@link overAny}.
+ */
+export function overHand(me: MatchPlayer, held: number): boolean {
+  return overAny(me, held) && !me.overHandAllowed;
 }

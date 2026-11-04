@@ -208,8 +208,8 @@ pub fn pay_command(from: i32, to: i32, amount: i32, spec: i32, ptr: i32, len: i3
     kani_host::call_i32(Op::pay_command, [from, to, amount, spec, ptr, len])
 }
 
-pub fn draw(player_id: i32, n: i32) -> i32 {
-    kani_host::call_i32(Op::draw, [player_id, n, 0, 0, 0, 0])
+pub fn draw(player_id: i32, n: i32, flags: i32) -> i32 {
+    kani_host::call_i32(Op::draw, [player_id, n, flags, 0, 0, 0])
 }
 
 pub fn draw_event(player_id: i32) -> i32 {

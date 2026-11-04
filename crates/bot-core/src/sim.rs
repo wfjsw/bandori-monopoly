@@ -199,11 +199,17 @@ impl Simulator for MatchSim {
         let st = fork.state();
         let hand = fork.hand_of(self.member);
         let extra = fork.view_extras_typed(self.member);
+        let offerable: Vec<bool> = extra
+            .playable
+            .iter()
+            .zip(&extra.ai_playable)
+            .map(|(&p, &a)| p && a)
+            .collect();
         action::legal_actions_with_cost(
             &self.data,
             &st,
             &hand,
-            &extra.playable,
+            &offerable,
             &extra.estimated_cost,
             seat,
         )

@@ -550,7 +550,13 @@ pub enum HostRequest {
     /// each, so a `drewBefore` hook may replace a card of it -- and answers with
     /// how many were actually drawn. The effect then replays past this call and
     /// does **not** move the cards again (they are already in the live world).
-    Draw { player_id: i32, n: i32 },
+    Draw {
+        player_id: i32,
+        n: i32,
+        /// Skip the immediate hand-limit discard-down and allow the excess to
+        /// reach turn end (「可超过上限」). The limit state is untouched.
+        over_hand_limit: bool,
+    },
     /// Draw the top event and settles it (「抽取一个事件卡」).
     /// The engine runs the whole event pipeline (public reveal, immediate
     /// effect, filing to the event discard, the reshuffle-when-empty half).
@@ -4659,8 +4665,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "draw",
-        |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            hostfns::draw(&mut c, player_id, n).map_err(HostError::into_err)
+        |mut c: C<W>, player_id: i32, n: i32, flags: i32| -> Result<i32, Error> {
+            hostfns::draw(&mut c, player_id, n, flags).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(

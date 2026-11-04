@@ -1345,7 +1345,7 @@ impl InlineHost for ConfInline {
                 (0..count.max(0)).map(|_| (sides.max(1) + 1) / 2).sum()
             }),
             HostRequest::Marker { .. } => Some(1),
-            HostRequest::Draw { player_id: _, n } => Some(n),
+            HostRequest::Draw { player_id: _, n, .. } => Some(n),
             HostRequest::Target {
                 player_id, tile, ..
             } => {

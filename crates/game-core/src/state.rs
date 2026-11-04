@@ -442,6 +442,10 @@ pub mod prop {
     /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
     /// reserve check -- never by legality. `0` = unknown / assume free.
     pub const EST_COST: &str = "estCost";
+    /// Bot-only: nonzero = standard / advanced bot policies must not offer this
+    /// card. Absent or `0` = offer. A static card fact, never legality -- a
+    /// human can still play the card. Mirrors `card_sdk::abi::prop::AI_NEVER`.
+    pub const AI_NEVER: &str = "aiNever";
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     /// `1` on a source on the owner's field: the owner may play their
@@ -668,6 +672,13 @@ pub struct MatchPlayer {
     pub assets: i32,
     pub score: i32,
     pub rank: i32,
+    /// The current over-limit hand was created by a draw that permits it
+    /// (「可超过上限」). While set, the excess does not block `end`; it is
+    /// cleared as soon as the hand fits again and after the turn-end sweep.
+    /// `[serde(default)]` so a pre-v17 save restores with it unset. Wire:
+    /// `overHandAllowed`.
+    #[serde(default)]
+    pub over_hand_allowed: bool,
 }
 
 impl Default for MatchPlayer {
@@ -713,6 +724,7 @@ impl Default for MatchPlayer {
             assets: 0,
             score: 0,
             rank: 0,
+            over_hand_allowed: false,
         }
     }
 }
@@ -841,6 +853,11 @@ impl MatchPlayer {
     pub fn over_hand(&self, held: usize) -> bool {
         self.hand_limit()
             .is_some_and(|limit| held > usize::try_from(limit).unwrap_or(0))
+    }
+
+    /// Over the limit **and** not permitted to stay there (「可超过上限」).
+    pub fn over_hand_blocking(&self, held: usize) -> bool {
+        self.over_hand(held) && !self.over_hand_allowed
     }
 
     pub fn skill_state(&self) -> i32 {

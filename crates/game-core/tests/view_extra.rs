@@ -117,6 +117,8 @@ use game_core::state::stage;
 struct TestRules {
     play: Vec<String>,
     refuse: Option<Msg>,
+    /// Cards declaring the static bot-avoid prop (`aiNever`).
+    ai_never: Vec<String>,
 }
 
 impl CardRules for TestRules {
@@ -129,6 +131,9 @@ impl CardRules for TestRules {
         } else {
             None
         }
+    }
+    fn ai_play(&self, _cx: &PlayCtx, _player: usize, card: &str) -> bool {
+        !self.ai_never.iter().any(|c| c == card)
     }
     fn play(&self, _cx: &mut PlayCtx, _player: usize, _card: &str) -> Flow<Dest> {
         Ok(Dest::Field)
@@ -220,6 +225,7 @@ fn skills_list_only_activatable_rules_during_ops() {
         Arc::new(TestRules {
             play: vec![],
             refuse: None,
+            ai_never: vec![],
         }),
         5,
     );
@@ -228,6 +234,7 @@ fn skills_list_only_activatable_rules_during_ops() {
     let rules = Arc::new(TestRules {
         play: vec![ids[0].clone()],
         refuse: None,
+        ai_never: vec![],
     });
     // Rebuild with the right `has_play` list (the match is cheap to restart).
     let mut m = solo_with(rules, 5);
@@ -246,6 +253,7 @@ fn skills_carry_the_engine_gate_reason_when_blocked() {
         Arc::new(TestRules {
             play: vec![],
             refuse: None,
+            ai_never: vec![],
         }),
         6,
     );
@@ -255,6 +263,7 @@ fn skills_carry_the_engine_gate_reason_when_blocked() {
         Arc::new(TestRules {
             play: vec![ids[0].clone()],
             refuse: Some(refuse),
+            ai_never: vec![],
         }),
         6,
     );
@@ -274,6 +283,7 @@ fn skills_are_disabled_outside_the_ops_window() {
         Arc::new(TestRules {
             play: vec![],
             refuse: None,
+            ai_never: vec![],
         }),
         7,
     );
@@ -282,6 +292,7 @@ fn skills_are_disabled_outside_the_ops_window() {
         Arc::new(TestRules {
             play: vec![ids[0].clone()],
             refuse: None,
+            ai_never: vec![],
         }),
         7,
     );
@@ -316,6 +327,7 @@ fn skills_press_through_cant_act_matches_the_list() {
         Arc::new(TestRules {
             play: vec![],
             refuse: None,
+            ai_never: vec![],
         }),
         8,
     );
@@ -324,6 +336,7 @@ fn skills_press_through_cant_act_matches_the_list() {
         Arc::new(TestRules {
             play: vec![ids[0].clone()],
             refuse: None,
+            ai_never: vec![],
         }),
         8,
     );
@@ -351,4 +364,36 @@ fn skills_press_through_cant_act_matches_the_list() {
             assert_eq!(err.key(), s["reason"]["k"].as_str().unwrap());
         }
     }
+}
+
+// ---- the static bot-avoid prop (`aiPlayable`) ------------------------------
+
+/// `aiPlayable` is the bare static `ai_play` fact, parallel to the hand: false
+/// for a card declaring `aiNever` while `playable` (human legality) stays
+/// true. The client-side standard / advanced policies read it; `cant_play`
+/// never does.
+#[test]
+fn view_extra_ai_playable_is_false_regardless_of_legality() {
+    let mut m = solo_with(
+        Arc::new(TestRules {
+            play: vec!["TEST:G14A".into(), "TEST:G14B".into()],
+            refuse: None,
+            ai_never: vec!["TEST:G14A".into()],
+        }),
+        9,
+    );
+    wait_ops(&mut m, 1);
+    let seat = m.state().player_of(1) as usize;
+    m.world_mut().hidden[seat].hand = vec!["TEST:G14A".into(), "TEST:G14B".into()];
+    let extra = m.view_extras(1);
+    assert_eq!(
+        extra["playable"],
+        serde_json::json!([true, true]),
+        "legality is untouched by the prop"
+    );
+    assert_eq!(
+        extra["aiPlayable"],
+        serde_json::json!([false, true]),
+        "only the aiNever card is withheld from bots"
+    );
 }

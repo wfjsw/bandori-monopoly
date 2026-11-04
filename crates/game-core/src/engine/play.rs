@@ -928,6 +928,16 @@ impl PlayCtx<'_> {
             self.w.next_turn_pending = true;
             return Ok(());
         }
+        // The turn-end dispose is the backstop for a permitted excess
+        // (「可超过上限」): a skipped callback, a callback that drew, or a cap
+        // lowered below the callback's number all end here at the real limit.
+        while self.over_hand(i) {
+            let hand_len = self.w.hidden[i].hand.len();
+            let k = self.w.rng.below(hand_len);
+            let card = self.w.hidden[i].hand[k].clone();
+            self.discard(i, &card)?;
+        }
+        self.w.st.players[i].over_hand_allowed = false;
         {
             let s = &mut self.w.st.players[i];
             // Timed counters due now (timed layers wear off here). The
@@ -5171,6 +5181,7 @@ impl PlayCtx<'_> {
         s.tokens.clear();
         s.field.clear();
         self.w.hidden[i].hand.clear();
+        self.w.settle_over_hand_allowance(i);
         self.w.extra_turns.retain(|&x| x != i);
         // One cleanup path keyed by instance (user ruling 2026-10-10): every
         // bound counter unit dies with its owning card instance. The standing
@@ -5456,13 +5467,18 @@ impl PlayCtx<'_> {
         self.w.st.players[i].over_hand(self.w.hidden[i].hand.len())
     }
 
+    /// Over the limit **and** not permitted to stay there (「可超过上限」).
+    pub fn over_hand_blocking(&self, i: usize) -> bool {
+        self.w.st.players[i].over_hand_blocking(self.w.hidden[i].hand.len())
+    }
+
     /// From the top of the pile; reshuffle the discard pile when empty.
     /// Bots discard down to the hand limit at random.
     ///
     /// `log` is also "raise the per-draw points": the opening deal passes
     /// `false` (see [`Self::opening`]); every draw during play passes `true`.
     pub(crate) fn draw(&mut self, i: usize, n: usize, log: bool) -> Flow<()> {
-        self.draw_cards_with_hooks(i, n, log)?;
+        self.draw_cards_with_hooks(i, n, log, false)?;
         Ok(())
     }
 
@@ -5494,7 +5510,17 @@ impl PlayCtx<'_> {
     /// card-driven draws (`HostRequest::Draw` -> here) and engine draws (the start square
     /// reward, turn draws) go through this. Opening hands pass `hooks = false`
     /// and raise none of the three.
-    pub fn draw_cards_with_hooks(&mut self, i: usize, n: usize, hooks: bool) -> Flow<i32> {
+    ///
+    /// `over_hand_limit` is 「可超过上限」: that draw skips the immediate trim
+    /// and sets [`MatchPlayer::over_hand_allowed`], so the excess reaches the
+    /// card's own scheduled dispose at turn end. The limit state is untouched.
+    pub fn draw_cards_with_hooks(
+        &mut self,
+        i: usize,
+        n: usize,
+        hooks: bool,
+        over_hand_limit: bool,
+    ) -> Flow<i32> {
         if self.out(i) {
             return Ok(0);
         }
@@ -5554,10 +5580,13 @@ impl PlayCtx<'_> {
         }
         if hooks && got > 0 {
             let over = self.over_hand(i).then(|| {
-                Msg::new("log.part.over_hand").i(
-                    "limit",
-                    i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()),
-                )
+                let key = if over_hand_limit {
+                    "log.part.over_hand_allowed"
+                } else {
+                    "log.part.over_hand"
+                };
+                Msg::new(key)
+                    .i("limit", i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()))
             });
             self.w
                 .log(
@@ -5572,8 +5601,13 @@ impl PlayCtx<'_> {
         }
         // 「任何时刻若持有手卡超过上限则需要立刻将手卡弃至上限张」 -- discard
         // down immediately, bot and human alike (the human `discard` command
-        // remains for voluntary / other overflow paths).
-        if self.playing() {
+        // remains for voluntary / other overflow paths). A 「可超过上限」 draw
+        // is the named exception: the excess stays and the turn end disposes.
+        if over_hand_limit {
+            if got > 0 && self.over_hand(i) {
+                self.w.st.players[i].over_hand_allowed = true;
+            }
+        } else if self.playing() {
             while self.over_hand(i) {
                 let hand_len = self.w.hidden[i].hand.len();
                 let k = self.w.rng.below(hand_len);
@@ -5593,6 +5627,7 @@ impl PlayCtx<'_> {
             h.hand.remove(k);
         }
         h.graveyard.push(card.to_string());
+        self.w.settle_over_hand_allowance(i);
         let limit = i64::from(self.w.st.players[i].hand_limit().unwrap_or_default());
         self.w
             .log(
@@ -5701,6 +5736,7 @@ impl PlayCtx<'_> {
         };
         self.w.turn.play_arg = arg;
         self.w.hidden[i].hand.remove(k);
+        self.w.settle_over_hand_allowance(i);
         // `play_from_hand` -- this one came out of the hand. **Scoped to the
         // play**: raised for the duration of this resolution and restored when
         // it ends, so a later play (or a skill press, which is not a hand press

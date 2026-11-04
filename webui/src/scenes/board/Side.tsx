@@ -364,14 +364,15 @@ export const Hand = memo(function Hand({ m, sess, busy, pulse }: { m: Model; ses
   }, []);
   const unpeek = useCallback(() => setHover(null), []);
   // Playable right now -- the play action's own gate. Glows blue on the face;
-  // everything else stays an ordinary card (no dimming). Over the hand limit
-  // the action is discard, not play, so nothing glows. Absent `playable` (solo
+  // everything else stays an ordinary card (no dimming). While the overflow
+  // blocks the turn end the action is discard, not play, so nothing glows; an
+  // allowed overflow (「可超过上限」) keeps both. Absent `playable` (solo
   // before merge / failed online extras) keeps the card eligible.
   const cardPlayable = (k: number) =>
     canPlay && !sess.readOnly && !sheet.open && !m.overHand && m.v.playable?.[k] !== false;
   // First click selects (highlighted border); clicking the selected card (or
-  // Enter) plays it directly; while over the limit it instead opens the detail
-  // popup, whose button discards (discarding needs that confirmation). Clicking
+  // Enter) plays it directly; while over the limit at all it instead opens the
+  // detail popup, whose button discards (discarding needs that confirmation). Clicking
   // anywhere else drops the pick again -- it is a lens, not a mode.
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
@@ -389,7 +390,7 @@ export const Hand = memo(function Hand({ m, sess, busy, pulse }: { m: Model; ses
     setPicked(null);
     setHover(null);
     if (sess.readOnly || sheet.open || auto) return;
-    if (m.overHand) {
+    if (m.overAny) {
       const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
       return void showCard(id, [{ label: tr("board.discardThis"), enabled: true, kind: "white", run: () => act(sess, { act: "discard", card: id }) }], note);
     }
