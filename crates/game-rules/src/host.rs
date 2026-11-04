@@ -4615,6 +4615,28 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "nearest",
+        |mut c: C<W>, by: i32, kind: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::nearest(&mut c, by, kind, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "nearest_with_prop",
+        |mut c: C<W>,
+         by: i32,
+         kind: i32,
+         kp: i32,
+         kl: i32,
+         buf: i32,
+         cap: i32|
+         -> Result<i32, Error> {
+            hostfns::nearest_with_prop(&mut c, by, kind, kp, kl, buf, cap)
+                .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "neighbor",
         |mut c: C<W>, player_id: i32, dir: i32| -> Result<i32, Error> {
             hostfns::neighbor(&mut c, player_id, dir).map_err(HostError::into_err)
@@ -6581,6 +6603,12 @@ impl CardWorld for NullWorld {
     }
     fn tile_forward(&self, _: i32, _: i32) -> i32 {
         0
+    }
+    fn nearest(&self, _: i32, _: i32) -> Vec<i32> {
+        Vec::new()
+    }
+    fn nearest_with_prop(&self, _: i32, _: i32, _: Option<&str>) -> Vec<i32> {
+        Vec::new()
     }
     fn neighbor(&self, _: i32, _: i32) -> i32 {
         -1

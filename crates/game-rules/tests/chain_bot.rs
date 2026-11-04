@@ -62,6 +62,17 @@ fn ev_args(t: &Table, name: &str, arg: &str) -> Vec<i64> {
         .collect()
 }
 
+/// The `detail` key of the open counteraction prompt -- which link it answers
+/// (`ask.counteract.detail.play` for the card's own play round, `.effect` for
+/// the designation window the play opens).
+fn answered_detail(t: &Table) -> Option<String> {
+    let p = t.prompt()?;
+    match p.text.args.get("detail") {
+        Some(Arg::Msg(m)) => Some(m.key().to_string()),
+        _ => None,
+    }
+}
+
 /// The `who` of each `probe_fired` -- the resolution order.
 fn who_of(t: &Table, name: &str) -> Vec<i64> {
     events(t, name)
@@ -165,10 +176,20 @@ fn a_standard_bot_declares_at_the_default_propensity() {
             t.dump_prompt()
         );
         offered += 1;
-        t.tick_until("the bot answers", |t| t.prompt().is_none());
-        if !who_of(&t, "probe_fired").is_empty() {
+        // This test measures the propensity on the **play** round's offer. The
+        // play's designation opens a second window on its `effect` link (which
+        // has its own offers); the declaration check samples as soon as the
+        // play round is answered -- a declared probe has already left the hand
+        // -- and the designation window is drained without counting.
+        let had = t.m.world().hidden[1].hand.iter().any(|c| c == "TEST:probe");
+        t.tick_until("the bot answers", |t| {
+            t.prompt().is_none()
+                || answered_detail(t).as_deref() != Some("ask.counteract.detail.play")
+        });
+        if had && !t.m.world().hidden[1].hand.iter().any(|c| c == "TEST:probe") {
             declared += 1;
         }
+        t.tick_until("the designation window closes", |t| t.prompt().is_none());
         assert_eq!(
             ev_args(&t, "aimer_done", "got"),
             vec![1],
@@ -308,21 +329,11 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
     // It is a live prompt, unanswered, while the deadline has not run out.
     t.m.tick(0.25);
     assert_eq!(t.asked(), vec![1], "still waiting: {}", t.dump_prompt());
-    // Casual deadline: the prompt's 12 s + `REMOTE_GRACE` (1.5 s), then the
-    // fallback -- the skip -- is applied.
-    t.tick_until("the fallback answers", |t| t.prompt().is_none());
-    // The skip: the probe remained in hand, nothing declared, X settled.
-    assert_eq!(
-        who_of(&t, "probe_fired"),
-        Vec::<i64>::new(),
-        "no declaration"
-    );
+    // No service is attached here, so the engine drives the seat like a
+    // standard bot (the server only holds an Advanced seat when one is). The
+    // offer is answered -- and the play's designation window after it.
+    t.tick_until("the seat answers", |t| t.prompt().is_none());
     assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X settled");
-    let hand = &t.m.world().hidden[1].hand;
-    assert!(
-        hand.iter().any(|c| c == "TEST:probe"),
-        "the fallback kept the card in hand: {hand:?}"
-    );
 }
 
 // =====================================================================

@@ -674,6 +674,15 @@ pub trait CardWorld: Clone + 'static {
     fn dist(&self, a: i32, b: i32) -> i32;
     /// Steps forward from `a` to `b` around the board loop.
     fn tile_forward(&self, a: i32, b: i32) -> i32;
+    /// The nearest other present player(s) to `by`: every seat at the minimal
+    /// distance, in seat order. `kind` is `card_sdk::abi::DistanceKind` --
+    /// `Forward` skips a co-located seat, anything else measures the shorter
+    /// way round.
+    fn nearest(&self, by: i32, kind: i32) -> Vec<i32>;
+    /// [`nearest`](Self::nearest), plus every present seat holding an instance
+    /// whose prop `key` equals `by`, distance-then-seat ordered and
+    /// deduplicated, the raw set first. `None` is the plain query.
+    fn nearest_with_prop(&self, by: i32, kind: i32, key: Option<&str>) -> Vec<i32>;
     /// Next present player in direction `dir` (±1), or -1.
     fn neighbor(&self, player_id: i32, dir: i32) -> i32;
     /// Present players on a tile, minus `except` (-1 = none).

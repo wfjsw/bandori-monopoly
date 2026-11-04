@@ -77,7 +77,12 @@ fn turn_ended(events: &[MatchEvent], who: usize) -> bool {
     let w = who as i32;
     for e in events {
         let k = msg_key(e);
-        if e.player_id == w && matches!(k, "end_turn" | "stunned_skip" | "exiled_skip") {
+        if e.player_id == w
+            && matches!(
+                k,
+                "end_turn" | "stunned_skip" | "exiled_skip" | "exiled_skip_hold"
+            )
+        {
             return true;
         }
     }
@@ -335,7 +340,9 @@ pub fn g_status_02(step: &Step<'_>) -> Result<(), String> {
 ///   is the skip form of the [无法移动] consequence (see G-STATUS-02). A
 ///   grant logged in the same window as the decay may offset the -1 (the
 ///   engine's turnEndAfter 「[停留] they grant survives this turn's wear-off」).
-///   A [清除] that zeros layers is a different clause (card text).
+///   A [清除] that zeros layers is a different clause (card text). A window
+///   that stopped mid-decision (`post_prompt_open`: a `turnEndBefore` counteraction,
+///   say) has not reached the tick; the answering window carries it.
 /// * **Executable:** [`g_status_03`].
 const G_STATUS_03: Clause = Clause::new(
     "G-STATUS-03",
@@ -347,7 +354,13 @@ const G_STATUS_03: Clause = Clause::new(
 /// Executable form of [`G_STATUS_03`].
 pub fn g_status_03(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.condition.st.players.len() {
-        verify_stay_turn_end(step.condition, step.post, step.events, i)?;
+        verify_stay_turn_end(
+            step.condition,
+            step.post,
+            step.events,
+            i,
+            step.post_prompt_open,
+        )?;
     }
     Ok(())
 }
@@ -445,7 +458,13 @@ const G_STATUS_05: Clause = Clause::new(
 /// Executable form of [`G_STATUS_05`].
 pub fn g_status_05(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.condition.st.players.len() {
-        verify_stun_turn_end(step.condition, step.post, step.events, i)?;
+        verify_stun_turn_end(
+            step.condition,
+            step.post,
+            step.events,
+            i,
+            step.post_prompt_open,
+        )?;
     }
     Ok(())
 }
@@ -545,7 +564,13 @@ const G_STATUS_07: Clause = Clause::new(
 /// Executable form of [`G_STATUS_07`].
 pub fn g_status_07(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.condition.st.players.len() {
-        verify_exile_turn_start(step.condition, step.post, step.events, i)?;
+        verify_exile_turn_start(
+            step.condition,
+            step.post,
+            step.events,
+            i,
+            step.post_prompt_open,
+        )?;
     }
     Ok(())
 }
@@ -760,6 +785,7 @@ pub fn verify_stay_turn_end(
     post: &World,
     events: &[MatchEvent],
     who: usize,
+    prompt_open: bool,
 ) -> Result<(), String> {
     let before = layers(condition, who, STAY);
     let after = layers(post, who, STAY);
@@ -780,6 +806,12 @@ pub fn verify_stay_turn_end(
         // `g` is a grant *line* count, not a layer total (`give_stay(p, 2)`
         // logs once). Do not invent a bound from it. Exact decay is the
         // quiet-window case below; the clean scenarios pin multi-layer grants.
+        return Ok(());
+    }
+    // The window stopped mid-decision before the tick (`turnEndBefore` opened
+    // a counteraction prompt, say): the turn end is not finished, so the
+    // answering window carries and is judged on the wear-off instead.
+    if prompt_open {
         return Ok(());
     }
     // 「玩家的每回合结束时移除一层」 -- exactly one layer off, floor 0.
@@ -865,11 +897,20 @@ pub fn verify_stun_turn_end(
     post: &World,
     events: &[MatchEvent],
     who: usize,
+    prompt_open: bool,
 ) -> Result<(), String> {
     let before = layers(condition, who, STUN);
     let after = layers(post, who, STUN);
     let g = grants(events, who, STUN);
-    if turn_ended(events, who) && !status_cleared(events) && !busy_window(events) && g == 0 {
+    // `prompt_open`: the window stopped mid-decision before the tick (a
+    // `turnEndBefore` counteraction prompt); the answering window carries the
+    // wear-off.
+    if turn_ended(events, who)
+        && !status_cleared(events)
+        && !busy_window(events)
+        && g == 0
+        && !prompt_open
+    {
         let expected = (before - 1).max(0);
         if after != expected {
             return Err(format!(
@@ -879,8 +920,16 @@ pub fn verify_stun_turn_end(
     }
     let stunned_at_start = stun_layers(condition, who) > 0;
     if turn_started(events, who) && stunned_at_start {
+        // Either auto-skip line answers: the act gate is one gate, and a seat
+        // that is both [晕眩] and [除外] gets whichever host's message the
+        // ruleset resolves (the turn is skipped either way).
         let skipped = events.iter().any(|e| {
-            e.r#type == "status" && e.player_id == who as i32 && msg_key(e) == "stunned_skip"
+            e.r#type == "status"
+                && e.player_id == who as i32
+                && matches!(
+                    msg_key(e),
+                    "stunned_skip" | "exiled_skip" | "exiled_skip_hold"
+                )
         });
         // Row 4's skip is logged at the *end* of 开始阶段, after `turnStartBefore`
         // / `turnStart` (and the exile return) have run. A counteraction on any
@@ -888,11 +937,12 @@ pub fn verify_stun_turn_end(
         // settle stops at prompts -- so a window whose last mark is `log.turn`
         // may simply be cut before the gate was consulted. `st.step` is still
         // `START` in that case (the skip path sets `END`; an open gate lets
-        // `tick_play` lift the turn to `OPS`). Only demand the skip once the
-        // turn has left 开始阶段. The book (「跳过经营和主要移动阶段」) forbids
+        // `tick_play` lift the turn to `OPS`), and a `prompt_open` window can
+        // still be mid-decision past `START`. Only demand the skip once the
+        // turn has left 开始阶段 at rest. The book (「跳过经营和主要移动阶段」) forbids
         // those phases, not an atomic same-window log line.
         let start_still_open = post.st.step == game_core::state::stage::START;
-        if !skipped && !start_still_open && stun_layers(post, who) > 0 {
+        if !skipped && !start_still_open && !prompt_open && stun_layers(post, who) > 0 {
             return Err(format!(
                 "G-STATUS-05: stunned player {who} started a turn without the 运营/主要移动 skip (row 4)"
             ));
@@ -909,6 +959,7 @@ pub fn verify_exile_turn_start(
     post: &World,
     events: &[MatchEvent],
     who: usize,
+    prompt_open: bool,
 ) -> Result<(), String> {
     let before = layers(condition, who, EXILE);
     let after = layers(post, who, EXILE);
@@ -924,7 +975,8 @@ pub fn verify_exile_turn_start(
         // them opens a prompt the observer's settle stops at. `st.step` is
         // still `START` while 开始阶段 is mid-flight.
         let start_still_open = post.st.step == game_core::state::stage::START;
-        if !start_still_open {
+        // `prompt_open`: mid-decision on a `turnStartBefore` / return prompt.
+        if !start_still_open && !prompt_open {
             // Duration grant (「获得[除外]直至X」): the hold marker suppresses
             // the layer tick (G-STATUS-07 ruling 2026-10-18). The turn is
             // still auto-skipped; the layer count must not move.

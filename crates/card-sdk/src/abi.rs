@@ -780,7 +780,7 @@ use crate::intern::NameId;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 112;
+pub const ABI_VERSION: i32 = 113;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -859,6 +859,20 @@ pub const ABI_VERSION: i32 = 112;
 ///    refused; no window opens on it). SAVE_VERSION 15 -> 16
 ///    (`World.countered_this_turn`, `World.played_cards`); RECORD_VERSION
 ///    unchanged.
+///
+/// v113: **designation pipeline and nearest queries**. `ctx::target` now runs
+///    a self-designation (`p == by`) through `Untargetable`, the between-turns
+///    count and the `target` [反击] window, and skips only the count and
+///    `ImmuneAll` (own source); `ctx::target_tile` likewise runs the window for
+///    an own tile and counts a live other owner's tile. The `targeted_count`
+///    counter advances only while the seat's own turn is not current
+///    (「两个你的回合之间」) and is zeroed at its own turn start; a
+///    named-but-negated designation still counts. New `ctx::target_self`
+///    sugar. New imports `ruleset_nearest` / `ruleset_nearest_with_prop`
+///    (`ctx::nearest`, `ctx::nearest_with_prop`,
+///    `abi::DistanceKind::{Forward,Shortest}`); the prop key and the game layer
+///    stay in the ruleset crate (`bandori_std::nearest`). SAVE_VERSION /
+///    RECORD_VERSION unchanged.
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -968,6 +982,39 @@ impl PayShape {
             1 => PayShape::Fixed,
             2 => PayShape::PayeeHalf,
             _ => PayShape::Normal,
+        }
+    }
+}
+
+/// How a nearest-seat query measures the board loop.
+///
+/// The two values are the two ring measures the SDK already exposes
+/// ([`crate::ctx::tile_forward`] / [`crate::ctx::dist`]); the enum only names
+/// which one a query means. Generic -- the game's own words for the limit
+/// (「距离最近」 and its waiver) live above, in the ruleset crate.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[repr(i32)]
+pub enum DistanceKind {
+    /// Steps strictly ahead around the loop (「正向距离」). A co-located seat
+    /// (`0`) is **not** ahead and is not a candidate.
+    #[default]
+    Forward = 0,
+    /// The shorter way around the loop (「绝对距离」). A co-located seat is
+    /// distance `0` and is the nearest.
+    Shortest = 1,
+}
+
+impl DistanceKind {
+    pub const fn as_i32(self) -> i32 {
+        self as i32
+    }
+
+    /// Unknown codes fall back to [`DistanceKind::Forward`] (the v107
+    /// unknown-value rule).
+    pub const fn from_i32(v: i32) -> Self {
+        match v {
+            1 => DistanceKind::Shortest,
+            _ => DistanceKind::Forward,
         }
     }
 }

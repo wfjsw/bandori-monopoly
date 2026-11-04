@@ -78,6 +78,8 @@ const ARRAY_OPS: &[&str] = &[
     "set_owner",
     "dist",
     "tile_forward",
+    "nearest",
+    "nearest_with_prop",
     "neighbor",
     "players_on_count",
     "players_on_at",

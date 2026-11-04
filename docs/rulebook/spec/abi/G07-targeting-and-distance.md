@@ -1,9 +1,9 @@
 # G07 — Targeting pipeline and distance
 
-Status: **draft for review, design only** (2026-11-03 revision of the
-2026-10-27 draft). No source is edited by this document.
-Worktree `/home/monopoly/web/.claude/worktrees/g07-naming`, branch
-`worktree-g07-naming`. Fits **on top of ABI v112** (G01, G08, G02, G04, G03,
+Status: **implemented** (2026-11-03 revision of the 2026-10-27 draft; the
+design landed as ABI v113).
+Worktree `/home/monopoly/web/.claude/worktrees/g07-impl`, branch
+`worktree-g07-impl`. Fits **on top of ABI v112** (G01, G08, G02, G04, G03,
 G05 and G06 have landed); it does not redo them.
 Group: **G07**. Family: the designation pipeline (player, self and tile
 targeting), the between-turns designation counter, and the 「距离最近」
@@ -377,7 +377,8 @@ The trait's `Option<&str>` is the Rust-side spelling of the empty key; the
 wire always carries the `(ptr, len)` pair and an empty one means “no union”.
 Each query uses the `designations` out-buffer shape (`hostfns.rs:2333-2346`:
 postcard, `ctx::out_buf`, cap 4096 — a body of 4–6 players can never approach
-it).
+it). Only the wasm guest decodes postcard; the kani stand-in host writes and
+`ctx::nearest_out` reads the same buffer as a run of LE `i32` (§7.8).
 
 Both new `CardWorld` methods need the non-`Run` implementors, at their
 `dist` neighbours: `NullWorld` (`host.rs:6579`, sandbox feature),
@@ -653,8 +654,10 @@ It will count every non-actor seat it names (§7.3).
   * `Op::targeted_count` moves off the `arm_stub_zero` arm (`:1155`) to a
     real reader of `w.targeted_count[p]`.
   * `arm_nearest` computes §7.5 over `w.pos` / `w.n_players` / `w.out`,
-    postcard-encodes it and writes it with `card_sdk::native::write`
-    (`arm_placed_cards`, `:2815-2847`, is the pattern).
+    **LE-encodes** it as a run of `i32` and writes it with
+    `card_sdk::native::write` (`arm_placed_cards`, `:2815-2847`, is the
+    pattern). The kani `ctx::nearest_out` decodes the LE run; the wasm path
+    alone uses postcard (§5.5).
     `arm_nearest_with_prop` additionally resolves the key with
     `name_id(a2, a3)` and scans `w.field[..w.field_n]` for
     `f.player == by && f.props.get_opt(key) == Some(by)`.
@@ -838,7 +841,7 @@ itself matters.
 
 | item | test | assertion |
 |---|---|---|
-| 1a | `g07_centrifugal_own_turn_targeting_is_not_counted` | 宣战布告 twice inside the owner's own turn → not offered; after their turn ends one more targeting → offered |
+| 1a | `g07_centrifugal_own_turn_targeting_is_not_counted` | 宣战布告 twice inside the owner's own turn → not offered and the count stays 0; after their turn ends, two between-turns targetings → not offered on the first and offered on the second |
 | 1a | `g07_centrifugal_second_between_turns_targeting_offers` | another player plays 欢迎 at the owner twice during that player's turn → offered on the second |
 | 1a | `g07_centrifugal_window_closes_at_own_turn_start` | one between-turns targeting, own turn starts, then a targeting in the own turn → no offer |
 | 1a | `g07_centrifugal_count_is_per_seat` | two seats targeted during the same turn keep separate counts |

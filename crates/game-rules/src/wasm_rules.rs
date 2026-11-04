@@ -2120,6 +2120,66 @@ impl CardWorld for Run {
         }
         ((b - a) % n + n) % n
     }
+    fn nearest(&self, by: i32, kind: i32) -> Vec<i32> {
+        self.nearest_with_prop(by, kind, None)
+    }
+    fn nearest_with_prop(&self, by: i32, kind: i32, key: Option<&str>) -> Vec<i32> {
+        // An unknown code falls back to `Forward` (the v107 unknown-value rule).
+        let shortest = kind == card_sdk::abi::DistanceKind::Shortest as i32;
+        let measure = |a: i32, b: i32| {
+            if shortest {
+                self.dist(a, b)
+            } else {
+                self.tile_forward(a, b)
+            }
+        };
+        let at = self.world.player_pos(by);
+        if at < 0 || self.data.tiles.is_empty() {
+            return Vec::new();
+        }
+        let mut best = i32::MAX;
+        let mut raw: Vec<i32> = Vec::new();
+        for p in self.world.others(by) {
+            let there = self.world.player_pos(p);
+            if there < 0 {
+                continue; // a seat with no board position cannot be measured
+            }
+            let d = measure(at, there);
+            if !shortest && d == 0 {
+                continue; // co-located is not ahead
+            }
+            if d < best {
+                best = d;
+                raw.clear();
+                raw.push(p);
+            } else if d == best {
+                raw.push(p);
+            }
+        }
+        let Some(key) = key else { return raw };
+        // The matching seats, distance-then-seat ordered, appended after the
+        // raw set. The match is on the *presence* of the value, so seat 0 is a
+        // value (the key is written by `bandori_std::nearest::grant`; the
+        // engine knows nothing of it).
+        let mut extra: Vec<i32> = self
+            .world
+            .others(by)
+            .into_iter()
+            .filter(|&p| {
+                self.world.player_pos(p) >= 0
+                    && !raw.contains(&p)
+                    && self
+                        .world
+                        .st
+                        .players
+                        .get(p as usize)
+                        .is_some_and(|s| s.field.iter().any(|i| i.props.get(key) == Some(&by)))
+            })
+            .collect();
+        extra.sort_by_key(|&p| (measure(at, self.world.player_pos(p)), p));
+        raw.extend(extra);
+        raw
+    }
     fn neighbor(&self, player_id: i32, dir: i32) -> i32 {
         // The next present player in turn order, wrapping.
         let n = self.world.st.players.len();
@@ -6731,6 +6791,33 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(t.is_cancelled())
     }
 
+    /// Count one naming of `named` by `by_player`, while the sheet's window is
+    /// open.
+    ///
+    /// 规则书 (`Mor:离心力，不为所动`): 「当你在两个你的回合之间（回合1结束，
+    /// 回合2开始）…成为…目标」. A seat naming itself is the same seat's own
+    /// card and never counts; a designation during the named seat's own turn is
+    /// before the window opens (the counter is zeroed at that turn's start).
+    /// The caller has already passed `Untargetable`, so a refused name does not
+    /// reach here (named counts, negated still counts).
+    fn note_designation(&self, cx: &mut PlayCtx, named: i32, by_player: i32) {
+        let Ok(s) = usize::try_from(named) else {
+            return;
+        };
+        if named == by_player || cx.world().st.turn == named {
+            return;
+        }
+        if s >= cx.state().players.len() {
+            return;
+        }
+        let mut w = cx.world_copy();
+        if w.targeted.len() <= s {
+            w.targeted.resize(s + 1, 0);
+        }
+        w.targeted[s] += 1;
+        cx.swap_world(w);
+    }
+
     /// `by`'s card `card` tries to target player `p`. Answers the player
     /// actually targeted (a `redirect` hook may move a single-target hit), or
     /// -1. Not ported: the per-play `immune<p>` tags and the
@@ -6786,11 +6873,11 @@ impl<M: CardModules> RulesBridge<M> {
                 p = to;
             }
         }
-        // A self-target no redirect moved (EXIST's 「包括其他玩家指向自身的卡」
-        // included): already named, nothing to chain.
-        if p == by_player {
-            return Ok(p);
-        }
+        // A self-target (including EXIST's 「包括其他玩家指向自身的卡」) runs
+        // the same tail: `Untargetable`, the window and the retraction check
+        // all apply to a seat naming itself; only the between-turns count and
+        // `ImmuneAll` are skipped (the named seat's own card is not 「其他角色
+        // 技能或卡牌」), below.
         // `Untargetable` governs who may be *named*. Block here and the effect
         // cannot name `p` at all, so no chain forms against them. Checked on
         // the post-redirect name.
@@ -6803,17 +6890,10 @@ impl<M: CardModules> RulesBridge<M> {
         }
         // Named. Count it *after* naming, so a player who cannot be named does
         // not accrue 「成为目标」 counts (see `centrifugal`'s 「第二次」).
-        if let Ok(s) = usize::try_from(p) {
-            let mut w = cx.world_copy();
-            if w.targeted.len() <= s {
-                w.targeted.resize(s + 1, 0);
-            }
-            w.targeted[s] += 1;
-            cx.swap_world(w);
-        }
+        self.note_designation(cx, p, by_player);
         // ---- chain ----------------------------------------------------
         // Counters answer the declaration; they may negate or spare it.
-        if p != by_player && !self.target_window(cx, p, -1, by_player, card)? {
+        if !self.target_window(cx, p, -1, by_player, card)? {
             return Ok(-1);
         }
         // A counter inside the window may have cancelled this very
@@ -6825,8 +6905,10 @@ impl<M: CardModules> RulesBridge<M> {
         }
         // ---- resolution -----------------------------------------------
         // `ImmuneAll` is asked here, not at declaration: the effect named its
-        // recipient, the chain formed, and it still lands as nothing.
-        if self.immune(cx, p, by_player)? {
+        // recipient, the chain formed, and it still lands as nothing. A
+        // self-designation skips it (the seat's own card, as `abnormal_gate`
+        // and the payment gate already do).
+        if p != by_player && self.immune(cx, p, by_player)? {
             return Ok(-1);
         }
         Ok(p)
@@ -6855,10 +6937,12 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(-1);
         };
         let live = usize::try_from(owner).is_ok_and(|o| !cx.world().out(o));
-        if owner >= 0 && owner != by_player && live {
+        if owner >= 0 && live {
             // Naming a tile names its owner (the owner answers the declaration
             // below), so `Untargetable` is asked on the owner like
-            // `target_player` asks it on the named player.
+            // `target_player` asks it on the named player. An own tile runs the
+            // same gate and window; it does not count and is not stopped by its
+            // owner's shield, below.
             if self
                 .raise_core(cx, "untargetable", owner, |t| t.by_card = Some(by_player))?
                 .is_cancelled()
@@ -6866,6 +6950,7 @@ impl<M: CardModules> RulesBridge<M> {
                 cx.log(owner, Msg::new("log.untargetable").player_id("who", owner));
                 return Ok(-1);
             }
+            self.note_designation(cx, owner, by_player);
             // Chain first: the owner answers the declaration. Then resolution.
             if !self.target_window(cx, owner, tile, by_player, card)? {
                 return Ok(-1);
@@ -6873,7 +6958,7 @@ impl<M: CardModules> RulesBridge<M> {
             if cx.world().turn.cancelled_designations.contains(&owner) {
                 return Ok(-1);
             }
-            if self.immune(cx, owner, by_player)? {
+            if owner != by_player && self.immune(cx, owner, by_player)? {
                 return Ok(-1);
             }
         }

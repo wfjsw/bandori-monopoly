@@ -11,7 +11,7 @@
 #[cfg(target_arch = "wasm32")]
 use alloc::{string::String, vec::Vec};
 
-pub use crate::abi::{AbKind, CardPile};
+pub use crate::abi::{AbKind, CardPile, DistanceKind};
 use crate::abi::{MoveKind, PromptKind, TriggerKind};
 use crate::msg::Msg;
 use crate::Prompt;
@@ -3448,6 +3448,14 @@ pub fn target(player_id: i32) -> Option<i32> {
     (r >= 0).then_some(r)
 }
 
+/// Target **yourself** through the full pipeline (「指定」 yourself).
+/// `Some(hit)` is the seat actually named — a `redirect` may still move it
+/// elsewhere; `None` when the designation was refused or cancelled.
+/// Sugar over [`target`]; the engine path is identical.
+pub fn target_self(player_id: i32) -> Option<i32> {
+    target(player_id)
+}
+
 /// Target each player in turn (no redirect);
 /// returns the players that were targeted, in order, without duplicates.
 pub fn target_all(players: &[i32]) -> Vec<i32> {
@@ -3467,8 +3475,92 @@ pub fn target_tile(tile: i32) -> bool {
     unsafe { sys::target(-1, tile, 0) >= 0 }
 }
 
-/// Times other players' cards targeted `player_id` since its
-/// own turn last started.
+/// The nearest other present player(s) to `by` by `kind`, seat order on ties.
+/// `Forward` excludes a co-located seat; `Shortest` includes it. Never a
+/// first-found seat: every seat at the minimal distance is returned.
+#[cfg(kani)]
+pub fn nearest(by: i32, kind: DistanceKind) -> Vec<i32> {
+    nearest_out(by, kind, None)
+}
+
+#[cfg(not(kani))]
+pub fn nearest(by: i32, kind: DistanceKind) -> Vec<i32> {
+    let cap = 4096;
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::nearest(by, kind.as_i32(), p, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// [`nearest`], plus every present seat holding an instance whose prop `key`
+/// equals `by`, in distance-then-seat order and deduplicated. The raw nearest
+/// set stays first. Generic: the caller supplies the key.
+#[cfg(kani)]
+pub fn nearest_with_prop(by: i32, kind: DistanceKind, key: &str) -> Vec<i32> {
+    nearest_out(by, kind, Some(key))
+}
+
+#[cfg(not(kani))]
+pub fn nearest_with_prop(by: i32, kind: DistanceKind, key: &str) -> Vec<i32> {
+    let cap = 4096;
+    let (kp, kl) = s(key);
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::nearest_with_prop(by, kind.as_i32(), kp, kl, p, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    let buf = out_read(p, n, scratch);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// The shared `cfg(kani)` body: the host writes LE `i32`s (no postcard — its
+/// `Vec` deserializer is a BMC cliff), the length is asked first.
+#[cfg(kani)]
+fn nearest_out(by: i32, kind: DistanceKind, key: Option<&str>) -> Vec<i32> {
+    const MAX_N: usize = 8;
+    let (n, kp, kl) = match key {
+        Some(k) => {
+            let (kp, kl) = s(k);
+            let n = unsafe { sys::nearest_with_prop(by, kind.as_i32(), kp, kl, 0, 0) };
+            (n, kp, kl)
+        }
+        None => (unsafe { sys::nearest(by, kind.as_i32(), 0, 0) }, 0, 0),
+    };
+    if n <= 0 || n as usize > MAX_N {
+        return Vec::new();
+    }
+    let need = (n as usize) * 4;
+    let (p, scratch) = out_buf(need);
+    let got = unsafe {
+        match key {
+            Some(_) => sys::nearest_with_prop(by, kind.as_i32(), kp, kl, p, need as i32),
+            None => sys::nearest(by, kind.as_i32(), p, need as i32),
+        }
+    };
+    if got != n {
+        return Vec::new();
+    }
+    let buf = out_read(p, need as i32, scratch);
+    (0..n as usize)
+        .map(|i| {
+            let b = i * 4;
+            i32::from_le_bytes([
+                buf.get(b).copied().unwrap_or(0),
+                buf.get(b + 1).copied().unwrap_or(0),
+                buf.get(b + 2).copied().unwrap_or(0),
+                buf.get(b + 3).copied().unwrap_or(0),
+            ])
+        })
+        .collect()
+}
+
+/// Designations of `player_id` by other sources since `player_id`'s own turn
+/// ended -- 「两个你的回合之间」 (`Mor:离心力，不为所动`). Zeroed at its own turn
+/// start, not counted during its own turn, and a named-then-negated
+/// designation still counts.
 pub fn targeted_count(player_id: i32) -> i32 {
     unsafe { sys::targeted_count(player_id) }
 }

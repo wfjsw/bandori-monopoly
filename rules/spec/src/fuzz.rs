@@ -612,6 +612,7 @@ pub fn soak(clauses: &[Clause], iters: u32) -> Result<(), String> {
         let seed = 0x5EED_0000_0000_0000u64
             .wrapping_add(i as u64)
             .wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        eprintln!("SOAKCASE {i} {seed:#x}");
         if let Err(e) = soak_one(seed, clauses) {
             return Err(format!("soak case {i}/{iters} (seed {seed:#x}): {e}"));
         }
