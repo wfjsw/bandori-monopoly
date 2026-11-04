@@ -8,8 +8,8 @@ and was re-read on 2026-11-04 against the card id named beside it.
 **Row ids** are the review-sheet ids carried by `G14.json`; they are **not**
 `cards.json` indices.
 
-**Base:** master at ABI **113**, `SAVE_VERSION` **16**. G14 landed before G09–G12,
-so it takes the next free numbers, **114** / **17**; §9 and the README
+**Base:** master at ABI **114**, `SAVE_VERSION` **16** (G12 landed first). G14 is
+next, so it takes **115** / **17**; §9 and the README
 landing table carry the arithmetic and the later rows' shift.
 
 Terminology. **The seat's AI** means either bot policy (standard or advanced) or
@@ -44,7 +44,7 @@ arithmetic re-run from the landing order. What the draft got wrong:
 
 | # | Draft defect | Correction |
 |---|---|---|
-| R1 | The draft based the work on `card-rulebook-review` and ABI 116→117. Master is ABI 113; G14 lands before G09–G12, so §9 takes the next free numbers 114 / 17 and the README rows of the later groups shift one up. | Header states the real base; README reconciled 2026-11-04. |
+| R1 | The draft based the work on `card-rulebook-review` and ABI 116→117. Master was ABI 113 at review time and G12 has since landed at 114, so §9 takes the next numbers 115 / 17 and the unlanded later groups shift one up. | Header states the real base; README reconciled 2026-11-04. |
 | R2 | Nearly every citation was stale (`ops.rs:1024`, `wasm_rules.rs:4347`, `ai.rs:329`, `hostfns.rs:846`). G07 and the policy split moved them. | Every site is re-cited: the dead parameter 1168/1202, the `Draw` arm 5199-5229, the policy seam `bot-core/src/policy.rs:339-375`, `hostfns::draw` 1073. |
 | R3 | The draft let the hand stay over the limit until turn end but never revisited the `end` gate. `cant_act` refuses `end` while `over_hand` (`engine/mod.rs:3014`), so the seat could never *reach* turn end and the card's own scheduled discard would never run. The server view's `can_end_here` (`:923-937`), the client's `turnFlow` / `Side` / autopilot gates carried the same refusal. | §5.2 adds the allowed-excess fact; the end gate, the view preview and the client gates read it. §10 pins the whole story. |
 | R4 | The draft said `SAVE_VERSION` unchanged. An over-limit hand is a live, savable state whose end gate depends on the allowance, so a save taken over the limit must carry it. | `SAVE_VERSION` 16→17 (`MatchPlayer.over_hand_allowed`, `#[serde(default)]`). §8. |
@@ -742,10 +742,10 @@ stays (a different item). Bodies and `*_kani` exports unchanged.
 
 ## 9. Versioning and band arithmetic
 
-The README row is `G14 | 113→114 | 16→17 | — | —`. G14 lands **before** G09–G12
-(they still hold 114–118 / 17–19); this document takes:
+The README row is `G14 | 114→115 | 16→17 | — | —`. G14 lands **after** G12
+(G09–G11 are still unlanded and shift one more step); this document takes:
 
-* `ABI_VERSION` **113 → 114** — the `ruleset_draw` arity only. The prop and the
+* `ABI_VERSION` **114 → 115** — the `ruleset_draw` arity only. The prop and the
   extra are data on existing shapes and need no bump.
 * `SAVE_VERSION` **16 → 17** — the allowance bit (the README row reads
   `16→17`).
@@ -756,7 +756,7 @@ ABI entry inserted immediately **below** the `pub const ABI_VERSION` line
 (newest-first, `abi.rs:783`) in the `/// vNNN:` style:
 
 ```
-/// v114: **an over-limit draw and a card's static bot-avoid flag**.
+/// v115: **an over-limit draw and a card's static bot-avoid flag**.
 ///    `ruleset_draw` gains a `flags` word: [`draw_flag::OVER_HAND_LIMIT`] (1)
 ///    makes the draw skip the immediate hand-limit discard-down while still
 ///    moving the cards; the excess is *allowed* (`MatchPlayer.over_hand_allowed`,
@@ -876,7 +876,7 @@ Existing suites that stay green: `summer_plays_to_field_until_next_turn_then_dra
 **A1 — a real `CardDef` field plus `ManifestEntry.ai_play`.** Most explicit and
 future-proof for a tri-state, but threads the field through `new` and seven
 `const` builders, appends a manifest field (postcard is not self-describing: a second
-wire break) and adds a `CardInfo` field. Rejected for v114. It remains the
+wire break) and adds a `CardInfo` field. Rejected for v115. It remains the
 migration path if the fact ever stops being a bool.
 
 **A2 — a wasm `OP_AI_PLAY` hook.** Truest to "hook" and lets a card inspect the

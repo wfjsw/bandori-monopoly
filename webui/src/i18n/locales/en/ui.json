@@ -56,6 +56,7 @@
   "anim.chainKind.houseAdded": "After house added",
   "anim.chainKind.r:bandori:78": "Before charge spend",
   "anim.chainKind.r:bandori:21": "Layer grant",
+  "anim.chainKind.abnormalGate": "Abnormal-move gate",
   "anim.chainKind.abnormalGuard": "Abnormal-move guard",
   "anim.chainKind.actGate": "Action gate",
   "anim.chainKind.onBoardGate": "On-board gate",

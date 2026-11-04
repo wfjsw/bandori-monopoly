@@ -1063,6 +1063,7 @@ impl PlayCtx<'_> {
         self.w.turn.plan_scope.moves += 1;
         if is_main_move {
             self.w.turn.main_moved = true;
+            self.w.turn.move_activation_ordinal = self.w.turn.activation_ordinal;
         }
         let kind = if is_main_move {
             PlanKind::MainMove
@@ -1891,6 +1892,7 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
+        self.w.turn.move_activation_ordinal = self.w.turn.activation_ordinal;
         // Taking the main move lifts the 「无法移动」 premise: a withheld
         // turn-end settle (stamped at a blocked turn start, or by a card) is no
         // longer owed -- the move settles where it lands instead. A move that
@@ -2621,6 +2623,12 @@ impl PlayCtx<'_> {
                 base_add: self.w.turn.settle_pay_add,
                 base_rent_add: self.w.turn.settle_rent_add,
                 outcome: super::cx::SettleOutcome::Settled,
+                mv: super::rules::Trigger::new("settle", frame.player)
+                    .with_move(&frame.m)
+                    .mv
+                    .clone()
+                    .expect("planted by `with_move`"),
+                is_main_move: frame.m.is_main_move,
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -2643,7 +2651,7 @@ impl PlayCtx<'_> {
         } else {
             // Completions nest LIFO, so the finished entry is the top: its
             // `base` is the product of every outer settle, which restores.
-            let finished = self.settle_stack[frame.stack_idx];
+            let finished = self.settle_stack[frame.stack_idx].clone();
             self.settle_stack.truncate(frame.stack_idx);
             self.w.turn.settle_open = self.settle_stack.len() as u32;
             self.w.turn.settle_pay_factor = finished.base;
@@ -5781,14 +5789,41 @@ impl PlayCtx<'_> {
         self.w.turn.cards_played = self.w.turn.cards_played.saturating_add(1);
         let two_cards = self.w.turn.cards_played == 2;
         self.wait(0.9);
-        let t = raise!(
-            self,
-            "card",
-            i,
-            card = Some(id.to_string()),
-            cards = vec![id.to_string()],
-            by_card = Some(i as i32)
-        )?;
+        // 「打出此卡的回合任何使用者使用的卡包含添加骰效果的卡不受任何其他
+        // 效果影响」 -- the grant prop raises the turn flag; a dice-adding play
+        // under it opens no counteraction window of its own. The flag is raised
+        // here, before the window, because the body runs after it.
+        let rules = self.rules;
+        if rules.card_prop(id, crate::state::prop::GRANTS_DICE_IMMUNITY) != 0 {
+            self.w.turn.dice_immune = true;
+        }
+        let immune_play =
+            self.w.turn.dice_immune && rules.card_prop(id, crate::state::prop::ADDS_DICE) != 0;
+        let t = if immune_play {
+            let mut t = Trigger::new("card", i);
+            t.card = Some(id.to_string());
+            t.cards = vec![id.to_string()];
+            t.by_card = Some(i as i32);
+            t.step = self.w.st.step;
+            t.activation_ordinal = self.w.turn.activation_ordinal;
+            self.w.log(
+                "play",
+                i as i32,
+                Msg::new("log.play_immune")
+                    .card("card", id)
+                    .player_id("who", i),
+            );
+            t
+        } else {
+            raise!(
+                self,
+                "card",
+                i,
+                card = Some(id.to_string()),
+                cards = vec![id.to_string()],
+                by_card = Some(i as i32)
+            )?
+        };
         if two_cards {
             // A separate counteraction timing from the play's own `card` window: Here
             // the world answers 「当有人同一回合内打出两张卡时」, not the play.
@@ -5979,6 +6014,7 @@ impl PlayCtx<'_> {
     /// each call site.
     fn counteract(&mut self, t: &mut Trigger) -> Flow<()> {
         t.step = self.w.st.step;
+        t.activation_ordinal = self.w.turn.activation_ordinal;
         let rules = self.rules;
         let mut r = rules.counteract(self, t);
         // STACK-01: a counter body that parked work (a join window, a nested
@@ -6002,6 +6038,17 @@ impl PlayCtx<'_> {
     /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     pub(crate) fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
+        // A raise inside an open settle inherits the settle's move when it
+        // carries none of its own, so every stage of the settle (the payment
+        // stages raise without a move) can read `is_settle_redirect` and
+        // `is_main_move` from `ctx::trigger`. The `settle`/`settleBody`/… raises
+        // pass the move explicitly and are left alone.
+        if t.mv.is_none() {
+            if let Some(e) = self.settle_stack.last() {
+                t.mv = Some(e.mv.clone());
+                t.is_main_move |= e.is_main_move;
+            }
+        }
         self.counteract(&mut t)?;
         Ok(t)
     }

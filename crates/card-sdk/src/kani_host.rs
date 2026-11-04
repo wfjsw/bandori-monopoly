@@ -451,6 +451,15 @@ pub enum Op {
     // v113 (G07 designation/nearest surface). 441-450 is this group's band.
     nearest = 441,
     nearest_with_prop = 442,
+    // v114 (G12 status / blocked-ness / immunity surface). Tail of G07's band.
+    trigger_activation_ordinal = 443,
+    trigger_abnormal_blocked = 444,
+    trigger_move_abnormal = 445,
+    cant_move_code_for_activation = 446,
+    is_immune_from_at = 447,
+    set_self_immune_except_owner = 448,
+    dice_immune = 449,
+    set_dice_immune = 450,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

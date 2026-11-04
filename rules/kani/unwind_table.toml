@@ -18,3 +18,19 @@ aya_haruka_02_shave_iff = 32
 aya_haruka_02_mutant_x_off_by_one = 32
 aya_haruka_02_mutant_is_detected = 32
 rent_of_property_table = 12
+
+# G13 tomori (2): the owed/settle harnesses walk the `NameMap` extra column
+# (MAX_EXTRA = 16, a full miss is 16 iterations). 20 covers it with margin;
+# 32 made the owed harness exceed the 900 s budget under load.
+tomori_pull_invokes_paid_iff_accepted = 20
+tomori_pull_unpaid_accepted_spends = 20
+tomori_pull_unpaid_declined_does_not_spend = 20
+tomori_pull_unpaid_short_pots_do_not_spend = 20
+tomori_pull_mutant_paid_spends = 20
+tomori_follow_up_iff_the_mover_is_not_the_owner = 18
+tomori_follow_up_none_when_the_mover_is_the_owner = 18
+tomori_follow_up_mutant_cost_four = 20
+tomori_owed_settle_marks_the_mover_iff_the_roll_is_low = 20
+tomori_owed_settle_mutant_below_six = 20
+tomori_owed_settle_clears_its_latches_iff_it_settles = 20
+tomori_owed_settle_mutant_half_disarmed_early = 20

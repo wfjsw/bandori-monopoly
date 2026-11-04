@@ -606,6 +606,7 @@ fn ifonly_02_iff_at(user: i32) {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,

@@ -32,11 +32,11 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G14 | 113→114 | 16→17 | — | — |
-| G09 | 114→115 | 17 | 126–130 | — |
-| G10 | 115→116 | 17→18 | 131 | — |
-| G11 | 116→117 | 18→19 | 132–133 | — |
-| G12 | 117→118 | 19 | 107 | — |
+| G09 | 115→116 | 17 | 126–130 | — |
+| G10 | 116→117 | 17→18 | 131 | — |
+| G11 | 117→118 | 18 | 132–133 | — |
+| G12 | 113→114 | 16 | 134 | 443–450 |
+| G14 | 114→115 | 16→17 | — | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -86,6 +86,13 @@ move. G06's sixteen imports take the free **411–426**, leaving 427–430 free 
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
 
+**2026-11-04 amendment (G12 review and landing).** The G12 row's kind column
+read 107, which is the **ruleset** namespace's `fansFlip`; free **engine** ids
+resumed at 121 (G06) and G11's row holds 132–133, so G12 takes **134**. Its
+eight imports take the unused tail of G07's Op band, **443–450** (G07 landed
+441–442 only). G12 then landed **ahead of G09–G11**, so its row is the real
+113→114 with SAVE unchanged at 16, and every later ABI row shifts one step.
+
 **2026-11-04 amendment (G14).** The G14 review found that fixing the trim alone
 is not enough: `cant_act`'s `end` gate refuses an over-limit hand, so the very
 turn end the card's own scheduled discard hangs off would never be reached, and
@@ -93,15 +100,12 @@ the formal `G-CARDS-01` clause would fail on the act. G14 therefore adds a
 durable per-player allowance (`overHandAllowed`, `serde(default)`) that exempts
 an allowed excess from the end gate and from the clause, is cleared when the
 hand fits again and swept at turn end, and the ABI row gains one `ruleset_draw`
-flag word. That makes the SAVE row **18→19**; the ABI row stays 117→118 (the
-arity break), and no later row moves because G14 is last. The group also adds
-one static card prop (`aiNever`), which changes no id: it rides the existing
-`props` map.
+flag word (an arity break for that import). The group also adds one static
+card prop (`aiNever`), which changes no id: it rides the existing `props` map.
 
-**2026-11-04 landing note (G14).** G14 landed before G09–G12, so it takes the
-next free numbers, **113→114** / **16→17**, not the 117→118 / 18→19 the row
-predicted. The G09–G12 rows move up one each (ABI and SAVE both); G14 is now
-the first of the remaining groups, not the last. `ABI_VERSION` is 114 and
+**2026-11-04 landing note (G14).** G14 landed after G12, so it takes the next
+free numbers, **114→115** / **16→17**, and the not-yet-landed G09–G11 rows
+shift one more step (ABI and SAVE both). `ABI_VERSION` is 115 and
 `SAVE_VERSION` 17.
 
 Recommended landing order (foundation → dependent):
@@ -118,8 +122,8 @@ Recommended landing order (foundation → dependent):
 10. **G09** tile/build/pass — depends on G02 header and G08 zone writer.
 11. **G10** effect outcome — settle facts and defer depend on G02/G09.
 12. **G11** information/deck — drawAfter, inspection frames.
-13. **G12** status/immunity — depends on G04 blocked-ness and G06 pending.
-14. **G14** AI/hand limit — smallest consumer surface, last.
+13. **G12** status/immunity — depends on G04 blocked-ness and G06 pending. *(landed early, at ABI 114)*
+14. **G14** AI/hand limit — smallest consumer surface. *(landed early, at ABI 115, after G12)*
 
 Couplings a reviewer must keep in one head:
 

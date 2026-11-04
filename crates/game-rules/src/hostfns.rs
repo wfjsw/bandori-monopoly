@@ -945,6 +945,12 @@ pub fn set_immune_at<C: HostCtx>(c: &mut C, uid: i32, on: i32) -> Result<i32, Ho
     Ok({ c.st_mut().w().set_immune_at(uid, on != 0) as i32 })
 }
 
+/// Causer-aware immunity: `immune`, or the except-owner flavour when `by` is
+/// not the instance's owner.
+pub fn is_immune_from_at<C: HostCtx>(c: &mut C, uid: i32, by: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().is_immune_from_at(uid, by) as i32 })
+}
+
 pub fn set_build_discount<C: HostCtx>(c: &mut C, n: i32, layers: i32) -> Result<(), HostError> {
     c.st_mut().w().set_build_discount(n, layers);
     Ok(())
@@ -1409,6 +1415,10 @@ pub fn self_immune<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 
 pub fn set_self_immune<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostError> {
     Ok({ c.st_mut().w().set_self_immune(on != 0) as i32 })
+}
+
+pub fn set_self_immune_except_owner<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostError> {
+    Ok({ c.st_mut().w().set_self_immune_except_owner(on != 0) as i32 })
 }
 
 pub fn self_prop<C: HostCtx>(c: &mut C, kp: i32, kl: i32) -> Result<i32, HostError> {
@@ -2066,6 +2076,16 @@ pub fn can_pay<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> 
 
 pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().cant_move(player_id) })
+}
+
+/// [`cant_move`] for the activation the caller is running under: a move this
+/// same activation already drove does not read as spent.
+pub fn cant_move_code_for_activation<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    activation_ordinal: i32,
+) -> Result<i32, HostError> {
+    Ok({ c.st().wr().cant_move_from(player_id, activation_ordinal) })
 }
 
 /// Generic marker spend. The name is data; opens `markerSpend` with that name.
@@ -4254,6 +4274,34 @@ pub fn join_designation<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostError>
 /// Declared, unresolved negating answers on this link.
 pub fn trigger_pending_negation<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().trigger().pending_negation)
+}
+
+/// The activation this raise belongs to (stamped by `counteract`; 0 outside a
+/// routine).
+pub fn trigger_activation_ordinal<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().activation_ordinal)
+}
+
+/// Did the abnormal this trigger announces hold the move? Meaningful only on
+/// the `effect` / `abnormal` raises of an abnormal.
+pub fn trigger_abnormal_blocked<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().abnormal_blocked as i32)
+}
+
+/// Did an abnormal land somewhere in this move's span?
+pub fn trigger_move_abnormal<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    let t = c.st().wr();
+    Ok((t.trigger().mv.as_ref().is_some_and(|m| m.abnormal) || t.turn_move_abnormal()) as i32)
+}
+
+/// The turn's dice-immunity flag.
+pub fn dice_immune<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().turn_dice_immune() as i32)
+}
+
+/// Set the turn's dice-immunity flag; answers the previous value.
+pub fn set_dice_immune<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostError> {
+    Ok(c.st_mut().w().set_turn_dice_immune(on != 0) as i32)
 }
 
 /// An extreme is armed on this play or declared on this link.

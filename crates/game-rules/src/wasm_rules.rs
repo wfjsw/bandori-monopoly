@@ -1383,6 +1383,9 @@ impl CardWorld for Run {
     fn set_self_immune(&mut self, on: bool) -> bool {
         self.world.set_immune_at(self.current_uid, on)
     }
+    fn set_self_immune_except_owner(&mut self, on: bool) -> bool {
+        self.world.set_immune_except_owner_at(self.current_uid, on)
+    }
     fn placed_cards(&self, player_id: i32) -> Vec<String> {
         self.world.placed_cards(player_id)
     }
@@ -1565,6 +1568,12 @@ impl CardWorld for Run {
     }
     fn set_immune_at(&mut self, uid: i32, on: bool) -> bool {
         self.world.set_immune_at(uid, on)
+    }
+    fn is_immune_from_at(&self, uid: i32, by: i32) -> bool {
+        self.world.is_immune_from_at(uid, by)
+    }
+    fn set_immune_except_owner_at(&mut self, uid: i32, on: bool) -> bool {
+        self.world.set_immune_except_owner_at(uid, on)
     }
 
     // marks & bound units (user ruling 2026-10-10) ---------------------------
@@ -2359,16 +2368,21 @@ impl CardWorld for Run {
         };
         (!s.out()) as i32
     }
-    fn cant_move(&self, player_id: i32) -> i32 {
-        // Why the main move is still unavailable (0 = free).
+    fn cant_move_from(&self, player_id: i32, activation_ordinal: i32) -> i32 {
+        // Why the main move is still unavailable (0 = free). Turn → skip →
+        // spent: a [停留] turn answers 3 even after this activation's own
+        // teleport, and a move an earlier activation drove answers 2 however
+        // the move gate stands.
         if self.world.st.turn != player_id {
             return 1;
         }
-        if self.world.turn.main_moved {
-            return 2;
-        }
         if self.world.st.skip_move {
             return 3;
+        }
+        if self.world.turn.main_moved
+            && self.world.turn.move_activation_ordinal != activation_ordinal
+        {
+            return 2;
         }
         0
     }
@@ -2647,6 +2661,15 @@ impl CardWorld for Run {
     }
     fn turn_main_steps(&self) -> i32 {
         self.world.turn.main_steps
+    }
+    fn turn_move_abnormal(&self) -> bool {
+        self.world.turn.move_abnormal
+    }
+    fn turn_dice_immune(&self) -> bool {
+        self.world.turn.dice_immune
+    }
+    fn set_turn_dice_immune(&mut self, on: bool) -> bool {
+        std::mem::replace(&mut self.world.turn.dice_immune, on)
     }
     fn add_marker_max(&mut self, player_id: i32, name: &str, n: i32) -> i32 {
         self.world.add_marker_max(player_id, name, n)
@@ -6384,6 +6407,9 @@ impl<M: CardModules> RulesBridge<M> {
             }
             for (uid, raw) in world.field_instances(player_id as i32) {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                    if std::env::var("DBG_HOOK").is_ok() {
+                        eprintln!("SKIP uid={uid} kind={kind:?} reentrant");
+                    }
                     continue;
                 }
                 // A marked instance runs its effective card's surface.
@@ -6687,10 +6713,12 @@ impl<M: CardModules> RulesBridge<M> {
     /// The abnormal-move gate, for an effect a card run wants to apply to
     /// `player_id` (`by` = the card's player): an out player is never hit;
     /// field cards guard (`abnormalGuard`, block with `set_cancelled`); an
-    /// immune recipient (`ImmuneAll`) is refused before the window; then the
+    /// immune recipient (`ImmuneAll`) is refused before the window; the
+    /// ruleset's `abnormalGate` may refuse the landing itself; then the
     /// `abnormal` counteraction window. Every refusal raises the hook-only
     /// `abnormalRefused` first (design G06 §6.7). What gets through bumps
-    /// `player_id`'s abnormal counter for this turn.
+    /// `player_id`'s abnormal counter for this turn and stamps the walk's
+    /// abnormal span.
     fn abnormal_gate(
         &self,
         cx: &mut PlayCtx,
@@ -6714,25 +6742,13 @@ impl<M: CardModules> RulesBridge<M> {
             self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
             return Ok(false);
         }
-        // 「不可阻挡」 (glossary 14) -- three separate clauses:
-        // 1. movement abnormals (teleport / forced / stop / reverse): a blanket
-        //    bypass, the ones that put the player somewhere they did not
-        //    choose. A self-caused move (`by == player_id`) is *chosen*, not
-        //    「受到的」 (「可选择受到的teleport，[强制移动]，[强制停下]效果是否生效」),
-        //    so [不可阻挡] does not refuse it -- a card's own `run_planned_move`
-        //    (里美's 「期间[不可阻挡]」) must still walk.
-        // 2. the stacked layer grants: 「也不会获得新的层数」 --
-        //    the gain does not land at all (this gate answers `false`, so the
-        //    layer is never written). Existing layers still decay (「在适当时机
-        //    依旧掉层」).
-        // 3. the move-gate layer: 「无视已存在的[停留]」 is a movement bypass (already in 1's
-        //    spirit via the move-gate checks at move time), not a refusal of
-        //    new layers -- but 「也不会获得新的层数」 names only 晕眩 and 除外.
-        let movement = matches!(
-            kind,
-            crate::AbKind(4) | crate::AbKind(5) | crate::AbKind(6) | crate::AbKind(7)
-        );
-        // The ruleset's grant verbs refuse while its 「不可阻挡」 clause holds
+        // 「不可阻挡」 (glossary 14) is the ruleset's answer, asked through the
+        // `abnormalGate` CEL gate: the refusal read below, and the
+        // blocked-ness read after it. A self-caused move (`by == player_id`)
+        // is *chosen*, not 「受到的」 (「可选择受到的teleport，[强制移动]，
+        // [强制停下]效果是否生效」), so the host exempts it -- a card's own
+        // `run_planned_move` (里美's 「期间[不可阻挡]」) must still walk.
+        // The ruleset's grant verbs also refuse while its 「不可阻挡」 clause holds
         // (STA-01) -- checked before this window opens. The engine does not
         // name that key.
         // `Untargetable` at declaration, same as `target_player`: 「你只会被
@@ -6768,12 +6784,50 @@ impl<M: CardModules> RulesBridge<M> {
             self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
             return Ok(false);
         }
+        // The landing gate: the ruleset refuses the kind before any window
+        // opens (「无视已存在的[停留]」 / 「无法获得新的层数」). The layer is
+        // never written; existing layers still decay (「在适当时机依旧掉层」).
+        let ask = game_core::engine::Gate::Abnormal {
+            kind: kind.as_i32(),
+            by: by_player,
+            exemption: false,
+        };
+        if !cx.world().gate_open(self, ask, s) {
+            self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
+            // The refusing rule supplies the skip line as data
+            // (`gate_skip_msgs`), same as every other gate.
+            cx.log(
+                player_id,
+                self.gate_skip_msg(ask, s).player_id("who", player_id),
+            );
+            return Ok(false);
+        }
+        // Blocked-ness: did this landing hold the mover's move? The engine
+        // half is the mover's `MOVE_EXEMPT` (the same expression the clamp
+        // uses); the ruleset half is the gate's exemption read, which answers
+        // *open* for a kind that does not hold.
+        let exempt = cx.world().st.players[s].state_get(game_core::state::key::MOVE_EXEMPT) > 0;
+        let ask = game_core::engine::Gate::Abnormal {
+            kind: kind.as_i32(),
+            by: by_player,
+            exemption: true,
+        };
+        let blocked = !exempt && !cx.world().gate_open(self, ask, s);
+        // The span: the walk this landed in, read by the walk and latched at
+        // its end (`TurnCtx.move_abnormal`). A landing that *is* the incoming
+        // move (a forced move requested from staging) arrives before any
+        // frame opens, so the bit is written to staging there and the frame
+        // seeds from it (`plan_mut`, the same fallback the refusal path uses).
+        let mut w = cx.world_copy();
+        w.plan_mut().abnormal = true;
+        cx.swap_world(w);
         // Then the chain: the recipient answers the effect declaration.
         // Self-applied abnormals (「因任何原因」/「包括你的技能」) open the
         // window too; cards filter by their guards (`effect::has(Abnormal)`).
         {
             let declared = self.raise_core(cx, "effect", by_player, |t| {
                 on(t);
+                t.abnormal_blocked = blocked;
                 t.effects.push(game_core::engine::rules::Effect {
                     kind: "abnormal".into(),
                     target: player_id,
@@ -6790,7 +6844,10 @@ impl<M: CardModules> RulesBridge<M> {
         // the outcome, and cannot be counteraction'd. It runs for **every** landing,
         // self-applied included (「场上每有玩家获得」 counts each layer, and
         // 「每次受到…影响」 counts one's own too).
-        self.raise_core(cx, "abnormal", by_player, on)?;
+        self.raise_core(cx, "abnormal", by_player, |t| {
+            on(t);
+            t.abnormal_blocked = blocked;
+        })?;
         let mut w = cx.world_copy();
         if w.turn.abnormal.len() <= s {
             w.turn.abnormal.resize(s + 1, 0);
@@ -9214,6 +9271,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         settle_redirect: m.settle_redirect,
         rolled: m.rolled,
         effective: m.effective,
+        abnormal: m.abnormal,
     });
     // The link's subject: the raised play's card, else the innermost resolving
     // frame (the card body this raise is part of). None from turn flow.
@@ -9288,6 +9346,8 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         roll_root: t.roll_root,
         pending_negation: t.pending_negation,
         extreme_armed: t.extreme_armed,
+        activation_ordinal: t.activation_ordinal,
+        abnormal_blocked: t.abnormal_blocked,
         answered_kinds: t.answered_kinds.iter().map(|k| trigger_kind(k)).collect(),
     }
 }
@@ -11127,6 +11187,7 @@ fn buy_trigger(
     t: usize,
     price: i32,
     st: &game_core::state::MatchState,
+    activation_ordinal: i32,
 ) -> Trigger {
     Trigger {
         kind,
@@ -11134,6 +11195,9 @@ fn buy_trigger(
         tile: t as i32,
         value: price,
         step: st.step,
+        // The quote runs inside the buy's own activation, so a hook that reads
+        // `trigger::activation_ordinal()` sees the same one the commit will.
+        activation_ordinal,
         buy: Some(TriggerBuy {
             kind: card_sdk::abi::BuyKind::from_i32(q.kind.as_i32())
                 .unwrap_or(card_sdk::abi::BuyKind::Land),
@@ -11148,6 +11212,15 @@ fn buy_trigger(
 }
 
 impl<M: CardModules> RulesBridge<M> {
+    /// Stamp the envelope every body carries: the live step and the running
+    /// activation. Bodies are built outside `counteract` (a play, a tile
+    /// settle, an event rule), so a body trigger and the raise of the same
+    /// activation must agree on the ordinal here.
+    fn stamp(&self, cx: &PlayCtx, t: &mut crate::world::Trigger) {
+        t.step = cx.state().step;
+        t.activation_ordinal = cx.world().turn.activation_ordinal;
+    }
+
     /// The live instances that could carry a buy hook: each player's field
     /// instances in placement order, then the board field (the tile / event /
     /// mark rules), then the turn's **lingering** instances -- the hand-card
@@ -11290,6 +11363,7 @@ impl<M: CardModules> RulesBridge<M> {
             step: cx.state().step,
             ..Trigger::default()
         };
+        self.stamp(cx, &mut trigger);
         prepare(&mut trigger, cx.state());
         for (uid, id) in instances {
             let Some(idx) = self.ruleset.card(&id) else {
@@ -11317,7 +11391,14 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         if !self.ruleset.declares(kind) {
             return None;
         }
-        let win = crate::gate::window_of_world(w, player);
+        let win = match gate {
+            game_core::engine::Gate::Abnormal {
+                kind,
+                by,
+                exemption,
+            } => crate::gate::window_of_abnormal(w, player, kind, by, exemption),
+            _ => crate::gate::window_of_world(w, player),
+        };
         Some(self.ruleset.gate_open(kind, &win))
     }
     fn exclusive_use(
@@ -11486,6 +11567,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             is_main_move,
             ..Trigger::default()
         };
+        self.stamp(cx, &mut trigger);
         for (uid, id) in instances {
             let Some(idx) = self.ruleset.card(&id) else {
                 continue;
@@ -11894,7 +11976,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     };
                 }
                 let mut at = |run: &mut Run, kind: TriggerKind, price: i32| {
-                    let mut trig = buy_trigger(kind, q, t, price, st);
+                    let mut trig = buy_trigger(kind, q, t, price, st, w.turn.activation_ordinal);
                     for &(uid, owner, ref card) in &instances {
                         self.pure_buy_hook(run, uid, owner, card, kind, &mut trig);
                     }
@@ -11974,6 +12056,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             uid: cx.world_mut().next_trigger_uid(),
             ..Trigger::default()
         };
+        self.stamp(cx, &mut trigger);
         // A `copies_previous` play (mortis) names the card it copies on its own
         // play link, so the body can play it with `trigger::link_copied`
         // (design G06 §2.15). The counteract half stamps the same field at the
@@ -12034,6 +12117,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             uid: cx.world_mut().next_trigger_uid(),
             ..Trigger::default()
         };
+        self.stamp(cx, &mut trigger);
         push_resolving_frame(&rid, uid, player_id as i32, trigger.uid);
         let dest = match self.drive(
             cx,
@@ -12067,6 +12151,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         if t.uid == 0 {
             t.uid = cx.world_mut().next_trigger_uid();
         }
+        // The activation this raise belongs to, stamped at the same choke so
+        // a replayed routine reads its own moves back as not-spent. Nested
+        // raises inherit the running value.
+        t.activation_ordinal = cx.world().turn.activation_ordinal;
         // STACK-01: a nested settle suspends the drive and parks the rest of
         // this walk in `cx.counteract_resume`. Re-entry adopts that state so
         // every completed body runs exactly once.
