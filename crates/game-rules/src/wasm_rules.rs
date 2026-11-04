@@ -6785,10 +6785,13 @@ impl<M: CardModules> RulesBridge<M> {
         };
         let blocked = !exempt && !cx.world().gate_open(self, ask, s);
         // The span: the walk this landed in, read by the walk and latched at
-        // its end (`TurnCtx.move_abnormal`).
-        if let Some(f) = cx.world_mut().turn.plan_stack.last_mut() {
-            f.plan.abnormal = true;
-        }
+        // its end (`TurnCtx.move_abnormal`). A landing that *is* the incoming
+        // move (a forced move requested from staging) arrives before any
+        // frame opens, so the bit is written to staging there and the frame
+        // seeds from it (`plan_mut`, the same fallback the refusal path uses).
+        let mut w = cx.world_copy();
+        w.plan_mut().abnormal = true;
+        cx.swap_world(w);
         // Then the chain: the recipient answers the effect declaration.
         // Self-applied abnormals (「因任何原因」/「包括你的技能」) open the
         // window too; cards filter by their guards (`effect::has(Abnormal)`).
@@ -11154,6 +11157,7 @@ fn buy_trigger(
     t: usize,
     price: i32,
     st: &game_core::state::MatchState,
+    activation_ordinal: i32,
 ) -> Trigger {
     Trigger {
         kind,
@@ -11161,6 +11165,9 @@ fn buy_trigger(
         tile: t as i32,
         value: price,
         step: st.step,
+        // The quote runs inside the buy's own activation, so a hook that reads
+        // `trigger::activation_ordinal()` sees the same one the commit will.
+        activation_ordinal,
         buy: Some(TriggerBuy {
             kind: card_sdk::abi::BuyKind::from_i32(q.kind.as_i32())
                 .unwrap_or(card_sdk::abi::BuyKind::Land),
@@ -11932,7 +11939,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     };
                 }
                 let mut at = |run: &mut Run, kind: TriggerKind, price: i32| {
-                    let mut trig = buy_trigger(kind, q, t, price, st);
+                    let mut trig = buy_trigger(kind, q, t, price, st, w.turn.activation_ordinal);
                     for &(uid, owner, ref card) in &instances {
                         self.pure_buy_hook(run, uid, owner, card, kind, &mut trig);
                     }

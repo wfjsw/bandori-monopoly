@@ -304,6 +304,7 @@ crate::host_subset!(g12_dispatch {
     cant_move => arm_cant_move,
     skip_main_move => arm_skip_main_move,
     clear_move_skip => arm_clear_move_skip,
+    run_planned_move => arm_card_move,
     is_immune_from_at => arm_is_immune_from_at,
     set_self_immune_except_owner => arm_set_self_immune_except_owner,
     dice_immune => arm_dice_immune,
@@ -404,6 +405,40 @@ pub fn host_arms_cant_move() {
     );
     call(Op::clear_move_skip, [0, 0, 0, 0, 0, 0]);
     kassert!(call(Op::cant_move, [1; 6]) == 1, "off-turn answers 1");
+}
+
+/// Taking the main move latches it to the running activation (`play.rs`), so
+/// its own routine re-reads the move as not spent while a routine that starts
+/// afterwards is refused.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn run_planned_move_latches_the_activation() {
+    host::install_backend(g12_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = SEATS;
+        w.turn_player = 0;
+    });
+    world::begin_activation();
+    let ord = world::with_world(|w| w.turn_activation_ordinal);
+    kassert!(
+        call(Op::run_planned_move, [0; 6]) == 1,
+        "a fresh main move runs"
+    );
+    kassert!(
+        world::with_world(|w| w.move_activation_ordinal) == ord,
+        "the move is latched to the activation that spent it"
+    );
+    kassert!(
+        call(Op::cant_move, [0; 6]) == 0,
+        "the asking activation is not spent"
+    );
+    world::begin_activation();
+    kassert!(call(Op::cant_move, [0; 6]) == 2, "a later activation is");
+    kassert!(
+        call(Op::run_planned_move, [0; 6]) == 0,
+        "and its move is refused"
+    );
 }
 
 /// The immunity arm reads the three-term predicate, and the setter writes the

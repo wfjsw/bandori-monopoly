@@ -9,7 +9,7 @@
 //! also banks a crystal.
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{ActionKind, TriggerKind};
+use card_sdk::abi::TriggerKind;
 use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
@@ -74,6 +74,8 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
     // The props ride the instance just placed (`current_uid`), so two copies
     // keep their own X and the value dies with the card.
     ctx::set_prop(SLOT_X, x);
+    // A re-placement resets the per-move arming flag (see `SLOT_ARMED`).
+    ctx::set_prop(SLOT_ARMED, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_declared"))
@@ -87,6 +89,11 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
 }
 
 const SLOT_BOOST: &str = "want_human_boost";
+
+/// The boost was consumed by a move this turn: the abnormal payoff below pays
+/// only for the move the turn-start clause armed (`SLOT_ARMED`), not for any
+/// turn with an abnormal in it.
+const SLOT_ARMED: &str = "want_human_armed";
 
 /// The `DiceRollCast` window. Every cast of one of your move rolls is checked
 /// -- a reroll lands as another Cast, not a later `DiceRollAfter`.
@@ -133,6 +140,7 @@ fn on_settled(player_id: i32) -> card_sdk::Asked {
     }
     let boost = armed - 1;
     ctx::set_prop(SLOT_BOOST, 0);
+    ctx::set_prop(SLOT_ARMED, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("want_human_boost"))
@@ -175,6 +183,13 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // -- the move's own span (the frame bit latched when the walk ends), so a
         // landing before the roll counts and one after the walk does not.
         TriggerKind::TurnEnd => {
+            // Only the move the arm fired for pays (「该次移动」); the flag is
+            // cleared first so a replayed turn-end body does not pay twice.
+            if ctx::prop(SLOT_ARMED) != 0 {
+                ctx::set_prop(SLOT_ARMED, 0);
+            } else {
+                return Ok(());
+            }
             if ctx::trigger::move_abnormal() {
                 ctx::add_crystals(2, 0)?;
                 ctx::log(

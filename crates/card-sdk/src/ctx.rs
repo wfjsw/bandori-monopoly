@@ -4554,7 +4554,11 @@ pub fn linger(player_id: i32, expires: i32) -> bool {
     unsafe { sys::linger(player_id, expires) != 0 }
 }
 
-/// Is this placed field card immune to other effects?
+/// Is this placed field card immune to **any** effect?
+///
+/// The cause-blind read: the any-flavour flag only, so an 「除拥有者以外」
+/// card reads `false` here. A check that knows who is acting uses
+/// [`is_immune_from_at`] instead, which also honours the owner exemption.
 #[cfg_attr(kani, inline(always))]
 pub fn card_immune(player_id: i32, card: &str) -> bool {
     let (cp, cl) = s(card);
@@ -4679,6 +4683,11 @@ pub fn set_build_discount(n: i32, layers: i32) {
 
 /// 「此卡不受…效果影响」. Set it at play time; effects that
 /// would touch the card read [`card_immune`] and skip.
+///
+/// This writes the **any-flavour** flag. 「不受除拥有者以外的效果影响」 has no
+/// name-based setter -- the card's own body uses
+/// [`set_self_immune_except_owner`] -- and an effect from a given causer
+/// checks with [`is_immune_from_at`] rather than [`card_immune`].
 #[cfg_attr(kani, inline(always))]
 pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
     let (cp, cl) = s(card);
@@ -4806,7 +4815,6 @@ pub fn set_self_immune(on: bool) -> bool {
 
 /// Mark **this instance** 「不受除拥有者以外的效果影响」; returns whether it
 /// is on the field.
-#[doc(hidden)]
 pub fn set_self_immune_except_owner(on: bool) -> bool {
     unsafe { sys::set_self_immune_except_owner(on as i32) != 0 }
 }
@@ -4943,13 +4951,15 @@ pub fn set_face_down_at(uid: i32, on: bool) -> bool {
 }
 
 /// Is the instance at `uid` marked 「不受任何效果影响」?
+///
+/// The cause-blind read -- the any-flavour flag only. When the acting causer
+/// is known, [`is_immune_from_at`] is the correct question.
 pub fn is_immune_at(uid: i32) -> bool {
     unsafe { sys::is_immune_at(uid) != 0 }
 }
 
 /// Is the instance at `uid` immune to an effect from `by`? The any-flavour
 /// flag, or the 「除拥有者以外」 flavour for a causer other than the owner.
-#[doc(hidden)]
 pub fn is_immune_from_at(uid: i32, by: i32) -> bool {
     unsafe { sys::is_immune_from_at(uid, by) != 0 }
 }

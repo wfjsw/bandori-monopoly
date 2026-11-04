@@ -63,18 +63,23 @@ pub fn ignores_stay(unstoppable: i32) -> bool {
     unstoppable > 0
 }
 
-/// The refusal answer of the abnormal gate: a received movement abnormal does
-/// not land.
+// Both bodies are the shape the filter constructor requires. Gate entries are
+// CEL-only: the runtime host never calls them, the **condition** decides and a
+// matching condition is the closed case. The `allowed` write is the cancel
+// signal `GateValue::write` raises (`Some(false)` -> `set_cancelled`); the
+// Kani body dispatch (`*_kani`, at the bottom) still exercises it, and
+// `Some(true)` is a no-op.
+//
+// The refusal answer: a received movement abnormal does not land.
 fn refuse(_owner: i32, mut g: GateValue) -> GateValue {
-    g.allowed = Some(false); // deny
+    g.allowed = Some(false);
     g
 }
 
-/// The exemption answer of the abnormal gate: an exempt kind (a landed layer,
-/// or any teleport) does not hold this mover's move (the landing still
-/// happens).
+// The exemption answer: an exempt kind (a landed layer, or any teleport) does
+// not hold this mover's move (the landing still happens).
 fn exempt(_owner: i32, mut g: GateValue) -> GateValue {
-    g.allowed = Some(true); // allow
+    g.allowed = Some(true);
     g
 }
 // ------------------------------------------------------------- canonical API
@@ -95,6 +100,8 @@ pub fn get(player_id: i32) -> i32 {
     card_sdk::ctx::state::get(player_id, KEY)
 }
 
+// `build.rs` emits these into the Kani body-dispatch table
+// (`wrapper_check` requires one per `On::*` body).
 #[cfg(kani)]
 #[inline(always)]
 pub fn refuse_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::GateValue {

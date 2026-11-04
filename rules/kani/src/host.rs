@@ -1764,6 +1764,10 @@ pub fn arm_card_move(a: Args) -> i64 {
         } else {
             if is_main_move {
                 w.main_moved = true;
+                // The move is latched to the activation that spent it
+                // (`play.rs`, both the direct and the landing path), so a
+                // replay of the same routine re-reads it as its own.
+                w.move_activation_ordinal = w.turn_activation_ordinal;
             }
             1
         }

@@ -1587,6 +1587,13 @@ pub fn reset_world(w: World) {
     *world_mut() = w;
 }
 
+/// Open a new activation, mirroring `Match::start`'s bump before the routine
+/// snapshot (`crates/game-core/src/engine/mod.rs`). A proof that models a
+/// second body landing after the first calls this between the two.
+pub fn begin_activation() {
+    with_world_mut(|w| w.turn_activation_ordinal += 1);
+}
+
 /// Snapshot for condition/post comparison. Effects and narration are the log.
 /// Field names are stable so existing proofs compile.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

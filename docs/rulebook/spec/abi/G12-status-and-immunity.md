@@ -622,6 +622,12 @@ half asks §3's exemption read (the gate answers *open* = exempt). Both the
 `effect` and the `abnormal` raise set `t.abnormal_blocked = blocked` through
 their `on` closure; every other raise site leaves it false.
 
+A landing therefore evaluates the gate's conditions twice: once on the entry
+check (the refusal read, `step = 0`) and once here. Each pass is a pure CEL
+over the per-seat gate window, so it allocates only that window and is
+O(players); keeping it around to reuse would need a second window that
+outlives the raise, so the repeat is accepted.
+
 ### 5.7 Immunity
 
 `is_immune_at` is unchanged. `is_immune_from_at(uid, by)` is additive:
@@ -825,8 +831,8 @@ discrepancy fails), per G15's contract.
 
 ### 9.3 Conformance
 
-`rules/tests/tests/g06_windows.rs`'s `abnormalRefused` coverage gains the
-gate refusal; `guards.rs`'s own_stage row flips its expectation.
+`rules/tests/tests/g12_status.rs` gains the gate refusal coverage;
+`guards.rs`'s own_stage row flips its expectation.
 
 ## 10. Alternatives
 
