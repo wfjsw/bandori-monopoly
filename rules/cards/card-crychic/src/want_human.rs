@@ -57,7 +57,7 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
 pub(crate) const SLOT_X: &str = "want_human_x";
 
 fn want_human(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "CRYCHIC:想要成为人类",

@@ -12,6 +12,7 @@
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
 use bandori_std::ctx::{self, trigger};
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -76,7 +77,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // (`place_mark` stamps `instance = ctx::self_uid()`) and the
         // `MarkChanged` guard can name it.
         if !ctx::is_placed() {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
             ctx::place_card(
                 player_id,
                 "HHW:黑衣人的补给",
@@ -133,9 +134,6 @@ fn sync_circle_instance(group: i32) {
     // The book keys the borrow on the crystal's presence. The `MarkChanged`
     // entry above (and the `counterChanged` path of a purge) is what keeps this
     // true outside this card's own bodies; the direct calls here stay too.
-    // TODO(G08) created_by: the borrowed instance outlives the stand-in until
-    //   G08's `created_by` edge lands -- its own `unplace_at` is the
-    //   interim cleanup, not a replacement.
     let has = ctx::count_marks(group, &MarkFilter::any().kind(MARK)) > 0;
     // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a tile"
     // gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The board
@@ -147,15 +145,22 @@ fn sync_circle_instance(group: i32) {
         .find(|(uid, id)| id == "tile:circle" && ctx::tile_at(*uid) == Some(group))
         .map(|(uid, _)| uid);
     if has && borrowed.is_none() {
-        ctx::place_card_on(
+        // 规则书: 「该格获得"CiRCLE"格子的全部效果」 -- the borrowed instance is
+        // this stand-in's child, so it drops with the card.
+        let uid = ctx::place_card_on(
             -1,
             group,
             "tile:circle",
             &Msg::new(key!("black_suits_attach")),
         );
+        if uid >= 0 {
+            ctx::set_created_by_at(uid, ctx::self_uid());
+        }
     } else if !has {
         if let Some(uid) = borrowed {
-            ctx::unplace_at(uid);
+            // The glow is gone before the stand-in leaves (an external clear):
+            // drop the child now, from this body (not a creator cascade).
+            ctx::unplace_at(uid, ctx::Dest::Graveyard, ZoneChangeCause::Effect);
         }
     }
 }
@@ -180,7 +185,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     sync_circle_instance(t);
     // Stand-in cleanup: nothing left to remove, so file the card away.
     if own_crystals(t, player_id) == 0 {
-        ctx::set_dest(ctx::Dest::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     }
     Ok(())
 }

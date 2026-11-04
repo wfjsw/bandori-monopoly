@@ -54,7 +54,7 @@ pub const FEVER: CardDef = CardDef::new(
 
 fn fever(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("fever_note")));
     // 1-based so player 0 is representable (unset prop reads back as 0). Written on
     // the instance `place_card` just bound the run to -- the same shape as
@@ -105,9 +105,13 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     // discard is then the best we have -- same pile whenever owner == user).
     let user = ctx::prop(PROP_USER) - 1;
     if user >= 0 {
-        ctx::set_transfer_to_dest(user, ctx::Dest::Graveyard);
+        ctx::set_transfer_to_dest(
+            user,
+            ctx::Dest::Graveyard,
+            card_sdk::abi::ZoneChangeCause::Effect,
+        );
     } else {
-        ctx::set_dest(ctx::Dest::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     }
     ctx::log(
         player_id,

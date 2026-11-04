@@ -63,7 +63,7 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书（1）: 「将此卡放置于在此卡使用者下一名行动的玩家场上」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(next, ID, &Msg::new(key!("umiri_note")));
     // The user is an on-card counter of the instance just placed (1-based, so 0
     // reads as "unset"), so two copies keep separate users and the value dies
@@ -152,7 +152,11 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // TODO(规则书)（将此卡与使用者拿取的所有乐队技能卡置入弃牌堆）:
-        ctx::unplace_at(uid);
+        ctx::unplace_at(
+            uid,
+            ctx::Dest::Graveyard,
+            card_sdk::abi::ZoneChangeCause::Effect,
+        );
         ctx::log(
             user,
             &Msg::new(key!("umiri_dropped_band"))
@@ -162,7 +166,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（3）: 「将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡」 -- the
     // discard is filed now, before the draw (a draw can reshuffle the discard).
-    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::set_counter(USER_KEY, 0);
     ctx::draw(user, 1)?;
     ctx::log(user, &Msg::new(key!("umiri_ended")).player_id("who", user));

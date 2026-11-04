@@ -68,6 +68,9 @@ pub mod roster;
 pub mod roster_order;
 /// Shared status verbs (stay / stun / exile) over the generic engine services.
 pub mod status;
+/// Zone-family sugar: leave destinations, the 「未生效」 flag, played-card id
+/// matches (`docs/rulebook/spec/abi/G08-zone-lifecycle.md` §5.6).
+pub mod zones;
 
 /// State-map keys that name this ruleset's pots / statuses. Frozen webui wire.
 ///

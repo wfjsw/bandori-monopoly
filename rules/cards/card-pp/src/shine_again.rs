@@ -66,7 +66,7 @@ const PROP_COLORS: &str = "shine_again_colors";
 
 fn shine_again(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "PP:再次闪耀",

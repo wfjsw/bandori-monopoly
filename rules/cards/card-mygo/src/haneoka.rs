@@ -49,6 +49,9 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     let r = ctx::roll(player_id, 1, 20, RollPurpose::Effect, roll_source::CARD)?;
     if r < 10 {
         // 规则书 (sheet 2026-10-06): 「若小于10，此卡放入弃牌堆且视为此卡未生效」
+        // 「视为此卡未生效」 -- the discard's waste bit (no instance yet, the
+        // mark lands on the play).
+        bandori_std::zones::set_ineffective();
         ctx::log(
             player_id,
             &Msg::new(key!("haneoka_no_effect"))
@@ -97,7 +100,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         // 规则书 (sheet 2026-10-06): 「至少为20，则将此卡放置在自己场上」;
         // the PaySplitChoose hook below offers 「在后续任何时刻可将其置入弃牌堆并
         // 抵消一次任意付款」.
-        ctx::set_dest(ctx::Dest::Field);
+        ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
         ctx::place_card(
             player_id,
             ID,
@@ -124,7 +127,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     trigger::set_pay_amount(0);
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("haneoka_cancelled"))

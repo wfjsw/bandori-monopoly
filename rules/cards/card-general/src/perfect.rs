@@ -36,12 +36,12 @@ pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play("
 
 fn perfect(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「1. [移除]此卡」
-    ctx::set_dest(ctx::Dest::Banished);
+    ctx::set_dest(ctx::Dest::Banished, card_sdk::abi::ZoneChangeCause::Effect);
     // 规则书[手]: 「2. 将一张“FEVER!“加入弃卡区」 -- `ctx::add_to_dest` is the
     // create-only push; `ctx::to_discard` would first consume a same-named hand copy.
     // TODO(规则书)（将一张“FEVER!“加入弃卡区）: 加入仍记进 `discard_log`，会触发
     //   「进入弃卡区」钩子 -- 书是「加入」，并未「弃置」.
-    ctx::add_to_dest(player_id, "通用:[衍生]FEVER!", ctx::Dest::Graveyard);
+    ctx::add_to_dest(player_id, "通用:[衍生]FEVER!", ctx::Dest::Graveyard, false);
     ctx::log(
         player_id,
         &Msg::new(key!("perfect_added")).player_id("who", player_id),

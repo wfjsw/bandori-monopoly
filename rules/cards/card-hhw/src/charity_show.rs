@@ -47,7 +47,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // The hook dispatch only runs on placed cards, so this placement stands in for
     // the player attachment (same pattern as `card-sumimi`'s 儿时玩伴的鼓励); the
     // `TurnEndAfter` hook below files it away at the owner's turn end.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("charity_show_note")));
     // Instance props (not player state): scoped to this placed card.
     ctx::set_prop(PROP_TURN, ctx::turn_key());
@@ -137,7 +137,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_TURN, 0);
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 

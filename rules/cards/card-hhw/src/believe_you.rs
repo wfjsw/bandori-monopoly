@@ -101,7 +101,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         )?;
         let id = ids[pick.min(ids.len() - 1)];
         if ctx::take_card(player_id, id, CardPile::Deck) {
-            ctx::add_to_dest(player_id, id, ctx::Dest::Hand);
+            ctx::add_to_dest(player_id, id, ctx::Dest::Hand, false);
             ctx::log(
                 player_id,
                 &Msg::new(key!("believe_you_kept")).card("card", id),

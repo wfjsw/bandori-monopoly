@@ -5,7 +5,8 @@
 //!
 //! [反击] auto-plays when drawn: money by hand size, else draw.
 
-use bandori_std::ctx;
+use bandori_std::ctx::{self, trigger};
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -13,10 +14,12 @@ pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
         On::Action(Action::Drawn("trigger_card == card.id", None, counteract).counter_reason(key!("same_sky_when"))),
-        // TODO(规则书)（（开局时抽到此卡洗回））: the book returns the copy as it enters
-        //   the opening hand -- we sweep it only after the 初始重抽 window, so it
-        //   stays visible to the seat through the mulligan.
-        On::Action(Action::DeckAtGameStart("", None, return_at_opening)),
+        // 规则书: 「（开局时抽到此卡洗回）」 -- the deal itself, while the copy is in
+        // the opening hand.
+        On::Action(Action::OpeningHandDealt("", None, return_at_opening)),
+        // 规则书: 「换牌后，若此卡在你的手牌中，则将此卡打出」 -- the mulligan
+        // redraw is an uncounted `handChanged` with cause `Mulligan`.
+        On::Action(Action::HandChanged("", None, after_mulligan)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"朝同一片天空迈进"#)
@@ -28,15 +31,13 @@ pub const SAME_SKY: CardDef = CardDef::new(
 
 const ID: &str = "AG:朝同一片天空迈进";
 
-/// The opening deal and mulligan raise no `Drawn` hooks, so the old `step() == 0`
-/// branch is unreachable; this rides `On::Action(Action::DeckAtGameStart("",
-/// None, return_at_opening))`, which fires on this card over draw + hand after
-/// the mulligan.
+/// 规则书: 「（开局时抽到此卡洗回）」 -- the dealt copy goes back into the deck at
+/// the deal, before the mulligan asks.
 fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
     while ctx::take_card(player_id, ID, ctx::CardPile::Hand) {
-        ctx::add_to_dest(player_id, ID, ctx::Dest::DeckRandom);
+        ctx::add_to_dest(player_id, ID, ctx::Dest::DeckRandom, false);
         returned += 1;
     }
     if returned > 0 {
@@ -45,6 +46,25 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("same_sky_returned")).player_id("who", player_id),
         );
     }
+    Ok(())
+}
+
+/// 规则书: 「换牌后，若此卡在你的手牌中，则将此卡打出」 -- only the mulligan
+/// redraw (cause `Mulligan`); the copy still in hand is played for real, through
+/// the play pipeline (`card` window, `cardPlayed`).
+fn after_mulligan(player_id: i32) -> card_sdk::Asked {
+    let is_mulligan = trigger::zone().is_some_and(|z| z.cause == ZoneChangeCause::Mulligan);
+    if !is_mulligan {
+        return Ok(());
+    }
+    if !ctx::cards_in(player_id, ctx::CardPile::Hand)
+        .iter()
+        .any(|c| c == ID)
+    {
+        return Ok(());
+    }
+    // 规则书: 「则将此卡打出」.
+    ctx::play_hand_card(player_id, ID);
     Ok(())
 }
 
@@ -70,9 +90,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // 规则书[反击]: 「如果你的手牌数小于3，抽一张卡」
         ctx::draw(player_id, 1)?;
     }
-    // TODO(ABI): the auto-play raises no `cardPlayed` -- this hand-carried path
-    // bypasses the play pipeline, and `ctx::raise` cannot carry the
-    // card / cards / by_card payload a 「当他人…打出手牌时」 listener reads.
+    // This is the [反击] declaration half (its own counteract pipeline); the
+    // mulligan half above plays for real through `play_hand_card`.
     Ok(())
 }
 
@@ -91,4 +110,10 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn return_at_opening_kani(player_id: i32) -> card_sdk::Asked {
     return_at_opening(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_mulligan_kani(player_id: i32) -> card_sdk::Asked {
+    after_mulligan(player_id)
 }

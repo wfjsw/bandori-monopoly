@@ -780,7 +780,7 @@ use crate::intern::NameId;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 112;
+pub const ABI_VERSION: i32 = 115;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -859,6 +859,23 @@ pub const ABI_VERSION: i32 = 112;
 ///    refused; no window opens on it). SAVE_VERSION 15 -> 16
 ///    (`World.countered_this_turn`, `World.played_cards`); RECORD_VERSION
 ///    unchanged.
+/// v115: **zone, attachment and creator lifecycle** (design G08; G07's band
+///    114 is reserved and not implemented in this batch). Every card move
+///    between zones is one `ZoneTransition` through one writer; `zoneLeft` /
+///    `zoneLeftAfter` fire on the leaving instance, `handChanged` on a hand
+///    arrival (`counted` only from the draw routine), `discarded` carries
+///    `wasted`, `card`/`cardAfter` carry `play_outcome`, `beforeOut` carries
+///    `out_cause`. New kinds 113-119 and `openingHandDealt` (132); new payload
+///    `abi::ZoneChange` through `ctx::trigger::zone()`. `FieldCard.on` /
+///    `created_by` / `effective`; `ctx::attach_card` / `detach_card` /
+///    `attached_cards` / `attachment_host` / `rehome_card` / `play_hand_card`
+///    / `zone_of` / `instance_owner` / `set_instance_owner` /
+///    `set_created_by_at` / `set_ineffective_at` / `is_ineffective_at` /
+///    `set_dest_unwatched` / `earliest_owned_tile` / `is_own_placement` (did
+///    this body mint the row it is looking at); `unplace_at` /
+///    `set_face_down_at` / `add_to_dest` / `set_dest` / `send_to_dest` /
+///    `transfer_to_dest` gain a cause/flag argument. SAVE_VERSION 16 -> 17
+///    (the edges and the held-card relation); RECORD_VERSION unchanged.
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -1536,6 +1553,10 @@ pub enum Target {
 ///
 /// Every key has a defined default of `0` when a card does not declare it.
 pub mod prop {
+    /// A `Dest` code the card wants when it leaves the field, read at
+    /// `zoneLeft` commit time. Absent = `Graveyard`. Mirrored in
+    /// `game_core::state::prop`.
+    pub const LEAVE_DEST: &str = "leaveDest";
     /// Offer this placed source in the hand-counteraction window. Default 0.
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     /// `1` on a source on the owner's field: the owner's **face-down** field
@@ -1887,7 +1908,10 @@ impl PromptKind {
 /// How the player gets there -- a move is exactly one of these (walk the path
 /// vs jump to the destination). One definition in `game-kinds`, shared with the
 /// engine; re-exported here so guest call sites keep their path.
-pub use game_kinds::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
+pub use game_kinds::{
+    Dice, Dir, MoveKind, MsgKey, OutCause, Payee, PlayOutcome, Seat, Tile, Zone, ZoneChange,
+    ZoneChangeCause,
+};
 
 bitflags::bitflags! {
     /// What a move resolves as it goes -- the settle axis, its own category
@@ -2352,8 +2376,42 @@ impl ActionKind {
     pub const TurnEndAfter: Self = Self(TriggerKind::TurnEndAfter);
 
     /// Action. This card just reached the discard pile. Payload: card = the card
-    /// id.
+    /// id, `trigger::zone()` with `wasted` set when it never took effect.
     pub const Discarded: Self = Self(TriggerKind::Discarded);
+
+    /// Action. The instance is about to leave a played zone (`Field` /
+    /// `Attached`), **before** the row changes. Payload: `trigger::zone()`
+    /// (from/to/cause/holder). A body may rewrite the destination with
+    /// `bandori_std::zones::set_leave_destination`.
+    pub const ZoneLeft: Self = Self(TriggerKind::ZoneLeft);
+
+    /// Action. The instance left; the row change is done. Payload:
+    /// `trigger::zone()` with the pair reversed. Hook-only.
+    pub const ZoneLeftAfter: Self = Self(TriggerKind::ZoneLeftAfter);
+
+    /// Action. A card entered a hand (any card, instance-less). Payload:
+    /// `trigger::zone()`; `counted` is true only for a draw. Hook-only.
+    pub const HandChanged: Self = Self(TriggerKind::HandChanged);
+
+    /// Action. The instance is about to flip face-down / face-up, before the
+    /// face changes. Payload: `value` = the face it turns to (1 = down).
+    pub const CardFaceFlipped: Self = Self(TriggerKind::CardFaceFlipped);
+
+    /// Action. The flip landed. Payload: `value`. Hook-only.
+    pub const CardFaceFlippedAfter: Self = Self(TriggerKind::CardFaceFlippedAfter);
+
+    /// Action. A card was filed onto another instance. Payload:
+    /// `trigger::zone()` (`to = Attached`), the attached card on `instance`.
+    pub const CardAttached: Self = Self(TriggerKind::CardAttached);
+
+    /// Action. A card came off its host. Payload: `trigger::zone()`
+    /// (`from = Attached`). Hook-only.
+    pub const CardDetached: Self = Self(TriggerKind::CardDetached);
+
+    /// Action. One card of the opening deal entered its owner's hand, in deal
+    /// order. Payload: `card`, `value` = deal order. Hook-only; the mulligan
+    /// redraw is `HandChanged` instead.
+    pub const OpeningHandDealt: Self = Self(TriggerKind::OpeningHandDealt);
 
     /// Action. Before match start (游戏开始前) -- raised once per player before
     /// the opening hands are drawn, and dispatched to every effect source: field
@@ -3006,6 +3064,30 @@ impl TriggerKind {
 
     /// `paySplitAt`
     pub const PaySplitAt: Self = Self::engine(57);
+
+    /// `zoneLeft`
+    pub const ZoneLeft: Self = Self::engine(113);
+
+    /// `zoneLeftAfter`
+    pub const ZoneLeftAfter: Self = Self::engine(114);
+
+    /// `handChanged`
+    pub const HandChanged: Self = Self::engine(115);
+
+    /// `cardFaceFlipped`
+    pub const CardFaceFlipped: Self = Self::engine(116);
+
+    /// `cardFaceFlippedAfter`
+    pub const CardFaceFlippedAfter: Self = Self::engine(117);
+
+    /// `cardAttached`
+    pub const CardAttached: Self = Self::engine(118);
+
+    /// `cardDetached`
+    pub const CardDetached: Self = Self::engine(119);
+
+    /// `openingHandDealt`
+    pub const OpeningHandDealt: Self = Self::engine(132);
 
     /// `rentAdd`
     pub const RentAdd: Self = Self::engine(126);

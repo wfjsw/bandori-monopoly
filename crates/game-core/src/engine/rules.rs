@@ -442,6 +442,12 @@ pub struct Trigger {
     /// creating instance); never restamped per hook job -- the job's own
     /// instance is `self_uid()`.
     pub instance: i32,
+    /// The transition this raise is about. `None` outside the zone family.
+    pub zone: Option<game_kinds::ZoneChange>,
+    /// The playing card's outcome on `card` / `cardAfter`; `None` elsewhere.
+    pub play_outcome: Option<game_kinds::PlayOutcome>,
+    /// Why the player left on `beforeOut`; `None` elsewhere.
+    pub out_cause: Option<game_kinds::OutCause>,
     /// The tile of the innermost open settle, or `-1` when none is open. Not a
     /// pay-only fact -- `settleBody` / `settleAfter` / `tileResolved` carry it
     /// with no `pay` payload, and `settleAfter` raises after the entry popped.
@@ -533,6 +539,9 @@ impl Trigger {
             name: None,
             uid: 0,
             instance: -1,
+            zone: None,
+            play_outcome: None,
+            out_cause: None,
             settle_tile: -1,
             outcome: None,
             charge_skill: false,

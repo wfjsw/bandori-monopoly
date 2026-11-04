@@ -236,8 +236,8 @@ pub fn offer_build(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::offer_build, [player_id, tile, 0, 0, 0, 0])
 }
 
-pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32) {
-    kani_host::call_unit(Op::add_to_dest, [player_id, ptr, len, dest, 0, 0]);
+pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32, counted: i32) {
+    kani_host::call_unit(Op::add_to_dest, [player_id, ptr, len, dest, counted, 0]);
 }
 
 pub fn take_card(player_id: i32, ptr: i32, len: i32, src: i32) -> i32 {
@@ -284,20 +284,24 @@ pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i3
     kani_host::call_i32(Op::place_card_at, [player_id, cp, cl, ptr, len, 0])
 }
 
-pub fn set_dest(dest: i32) {
-    kani_host::call_unit(Op::set_dest, [dest, 0, 0, 0, 0, 0]);
+pub fn set_dest(dest: i32, cause: i32) {
+    kani_host::call_unit(Op::set_dest, [dest, cause, 0, 0, 0, 0]);
 }
 
-pub fn set_transfer_to_dest(to: i32, dest: i32) {
-    kani_host::call_unit(Op::set_transfer_to_dest, [to, dest, 0, 0, 0, 0]);
+pub fn set_transfer_to_dest(to: i32, dest: i32, cause: i32) {
+    kani_host::call_unit(Op::set_transfer_to_dest, [to, dest, cause, 0, 0, 0]);
 }
 
-pub fn send_to_dest(dest: i32) -> i32 {
-    kani_host::call_i32(Op::send_to_dest, [dest, 0, 0, 0, 0, 0])
+pub fn send_to_dest(dest: i32, cause: i32) -> i32 {
+    kani_host::call_i32(Op::send_to_dest, [dest, cause, 0, 0, 0, 0])
 }
 
-pub fn transfer_to_dest(to: i32, dest: i32) -> i32 {
-    kani_host::call_i32(Op::transfer_to_dest, [to, dest, 0, 0, 0, 0])
+pub fn transfer_to_dest(to: i32, dest: i32, cause: i32) -> i32 {
+    kani_host::call_i32(Op::transfer_to_dest, [to, dest, cause, 0, 0, 0])
+}
+
+pub fn set_dest_unwatched(dest: i32) {
+    kani_host::call_unit(Op::set_dest_unwatched, [dest, 0, 0, 0, 0, 0]);
 }
 
 pub fn rent_unit_mult() -> i32 {
@@ -344,8 +348,8 @@ pub fn self_face_down() -> i32 {
     kani_host::call_i32(Op::self_face_down, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn set_self_face_down(on: i32) -> i32 {
-    kani_host::call_i32(Op::set_self_face_down, [on, 0, 0, 0, 0, 0])
+pub fn set_self_face_down(on: i32, cause: i32) -> i32 {
+    kani_host::call_i32(Op::set_self_face_down, [on, cause, 0, 0, 0, 0])
 }
 
 pub fn self_immune() -> i32 {
@@ -793,6 +797,18 @@ pub fn trig_uid() -> i32 {
 
 pub fn trig_instance() -> i32 {
     kani_host::call_i32(Op::trig_instance, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trigger_zone(buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::trigger_zone, [buf, cap, 0, 0, 0, 0])
+}
+
+pub fn trig_play_outcome() -> i32 {
+    kani_host::call_i32(Op::trig_play_outcome, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_out_cause() -> i32 {
+    kani_host::call_i32(Op::trig_out_cause, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn body_enter(p: i32, n: i32) -> i32 {
@@ -1598,8 +1614,8 @@ pub fn field_instances(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::field_instances, [player_id, buf, cap, 0, 0, 0])
 }
 
-pub fn unplace_at(uid: i32) -> i32 {
-    kani_host::call_i32(Op::unplace_at, [uid, 0, 0, 0, 0, 0])
+pub fn unplace_at(uid: i32, destination: i32, cause: i32) -> i32 {
+    kani_host::call_i32(Op::unplace_at, [uid, destination, cause, 0, 0, 0])
 }
 
 pub fn tile_at(uid: i32) -> i32 {
@@ -1610,12 +1626,16 @@ pub fn set_tile_at(uid: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::set_tile_at, [uid, tile, 0, 0, 0, 0])
 }
 
+pub fn is_own_placement(uid: i32) -> i32 {
+    kani_host::call_i32(Op::is_own_placement, [uid, 0, 0, 0, 0, 0])
+}
+
 pub fn is_face_down_at(uid: i32) -> i32 {
     kani_host::call_i32(Op::is_face_down_at, [uid, 0, 0, 0, 0, 0])
 }
 
-pub fn set_face_down_at(uid: i32, on: i32) -> i32 {
-    kani_host::call_i32(Op::set_face_down_at, [uid, on, 0, 0, 0, 0])
+pub fn set_face_down_at(uid: i32, on: i32, cause: i32) -> i32 {
+    kani_host::call_i32(Op::set_face_down_at, [uid, on, cause, 0, 0, 0])
 }
 
 pub fn is_immune_at(uid: i32) -> i32 {
@@ -1636,4 +1656,60 @@ pub fn set_card_face_down(player_id: i32, cp: i32, cl: i32, down: i32) -> i32 {
 
 pub fn card_face_down(player_id: i32, cp: i32, cl: i32) -> i32 {
     kani_host::call_i32(Op::card_face_down, [player_id, cp, cl, 0, 0, 0])
+}
+
+pub fn zone_of(instance: i32) -> i32 {
+    kani_host::call_i32(Op::zone_of, [instance, 0, 0, 0, 0, 0])
+}
+
+pub fn attachment_host(instance: i32) -> i32 {
+    kani_host::call_i32(Op::attachment_host, [instance, 0, 0, 0, 0, 0])
+}
+
+pub fn attached_cards(host: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::attached_cards, [host, buf, cap, 0, 0, 0])
+}
+
+pub fn created_cards(creator: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::created_cards, [creator, buf, cap, 0, 0, 0])
+}
+
+pub fn earliest_owned_tile(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::earliest_owned_tile, [player_id, 0, 0, 0, 0, 0])
+}
+
+pub fn instance_owner(instance: i32) -> i32 {
+    kani_host::call_i32(Op::instance_owner, [instance, 0, 0, 0, 0, 0])
+}
+
+pub fn attach_card(host: i32, ptr: i32, len: i32, cause: i32, face_down: i32) -> i32 {
+    kani_host::call_i32(Op::attach_card, [host, ptr, len, cause, face_down, 0])
+}
+
+pub fn detach_card(instance: i32, dest: i32, cause: i32) -> i32 {
+    kani_host::call_i32(Op::detach_card, [instance, dest, cause, 0, 0, 0])
+}
+
+pub fn set_instance_owner(instance: i32, owner: i32) -> i32 {
+    kani_host::call_i32(Op::set_instance_owner, [instance, owner, 0, 0, 0, 0])
+}
+
+pub fn set_created_by_at(instance: i32, creator: i32) -> i32 {
+    kani_host::call_i32(Op::set_created_by_at, [instance, creator, 0, 0, 0, 0])
+}
+
+pub fn set_ineffective_at(instance: i32, on: i32) -> i32 {
+    kani_host::call_i32(Op::set_ineffective_at, [instance, on, 0, 0, 0, 0])
+}
+
+pub fn is_ineffective_at(instance: i32) -> i32 {
+    kani_host::call_i32(Op::is_ineffective_at, [instance, 0, 0, 0, 0, 0])
+}
+
+pub fn rehome_card(tile: i32, owner: i32) -> i32 {
+    kani_host::call_i32(Op::rehome_card, [tile, owner, 0, 0, 0, 0])
+}
+
+pub fn play_hand_card(player_id: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::play_hand_card, [player_id, ptr, len, 0, 0, 0])
 }

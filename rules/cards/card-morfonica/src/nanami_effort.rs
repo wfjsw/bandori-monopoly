@@ -142,7 +142,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
 /// 视为发动你的（2）技能」. The placement is unconditional; the charge is the
 /// offer's yes.
 fn place_with_offer(player_id: i32, x: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
     ctx::add_crystals(x, 0)?;
     ctx::log(
@@ -209,7 +209,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("nanami_effort_exhausted")).player_id("who", player_id),

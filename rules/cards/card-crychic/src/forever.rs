@@ -19,24 +19,10 @@ pub const FOREVER: CardDef = CardDef::new(
     &[
         // 规则书（1）[手]: 「移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。」
         On::Play("", None, forever),
-        // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a
-        // continuous condition, so the check runs at every point a hand size
-        // moves (draw, discard-from-hand, play-from-hand) and at the turn
-        // boundaries as a backstop. `Drew` alone only sees draws.
-        // TODO(规则书)（此卡立即置入弃牌堆）: 「立即」 is any hand-size change -- an
-        //   add-to-hand (tutor / bounce / skill) raises no event, so it is only
-        //   seen at the next draw / discard / play or at a turn boundary.
-        On::Action(Action::Drew(
-            "card.placed && owner.hand >= 7",
-            None,
-            on_drew,
-        )),
-        On::Action(Action::DiscardAfter(
-            "card.placed && owner.hand >= 7",
-            None,
-            on_drew,
-        )),
-        On::Action(Action::CardPlayed(
+        // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- the
+        // hand-arrival event (any add, bounce or mulligan) plus the turn
+        // boundaries as a backstop.
+        On::Action(Action::HandChanged(
             "card.placed && owner.hand >= 7",
             None,
             on_drew,
@@ -82,7 +68,7 @@ fn forever(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「获得2000+500*X资金，X为移除的奇迹水晶数量」
     // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a standing
     // check, not a draw-only expiry: `on_drew` is wired to every event above.
-    ctx::set_dest(ctx::Dest::Field); // 规则书（2）[持续]: the card lives in play
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play); // 规则书（2）[持续]: the card lives in play
     ctx::place_card(player_id, ID, &Msg::new(key!("forever_note")));
     Ok(())
 }
@@ -92,7 +78,7 @@ fn forever(player_id: i32) -> card_sdk::Asked {
 fn on_drew(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）[持续]: 「若你的手牌大于等于7」 -- `owner.hand >= 7` in the condition. `send_to_dest`
     // files it now (a bare `unplace_self` would banish it).
-    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("forever_discard")).player_id("who", player_id),

@@ -165,10 +165,19 @@ fn a_standard_bot_declares_at_the_default_propensity() {
             t.dump_prompt()
         );
         offered += 1;
-        t.tick_until("the bot answers", |t| t.prompt().is_none());
+        // Sample the **first** offer only. The play is [指定], so the same
+        // probe is offered again on the effect raise (CROSS-TESTS C13); waiting
+        // for no prompt would count both windows in one sample and push the
+        // measured rate up.
+        let id = t.expect_prompt().id;
+        t.tick_until("the bot answers the first offer", |t| {
+            t.prompt().map(|p| p.id) != Some(id)
+        });
         if !who_of(&t, "probe_fired").is_empty() {
             declared += 1;
         }
+        // Let the effect window (and anything after) finish unsettled.
+        t.tick_until("the effect window closes", |t| t.prompt().is_none());
         assert_eq!(
             ev_args(&t, "aimer_done", "got"),
             vec![1],
@@ -310,19 +319,26 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
     assert_eq!(t.asked(), vec![1], "still waiting: {}", t.dump_prompt());
     // Casual deadline: the prompt's 12 s + `REMOTE_GRACE` (1.5 s), then the
     // fallback -- the skip -- is applied.
-    t.tick_until("the fallback answers", |t| t.prompt().is_none());
-    // The skip: the probe remained in hand, nothing declared, X settled.
+    let id = t.expect_prompt().id;
+    t.tick_until("the fallback answers", |t| {
+        t.prompt().map(|p| p.id) != Some(id)
+    });
+    // The skip: the probe remained in hand and nothing declared on this offer.
+    // (The card is offered again on the play's effect raise -- CROSS-TESTS
+    // C13 -- so measure before ticking further.)
     assert_eq!(
         who_of(&t, "probe_fired"),
         Vec::<i64>::new(),
         "no declaration"
     );
-    assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X settled");
     let hand = &t.m.world().hidden[1].hand;
     assert!(
         hand.iter().any(|c| c == "TEST:probe"),
         "the fallback kept the card in hand: {hand:?}"
     );
+    // Drain the effect window too, so the play settles.
+    t.tick_until("the effect window closes", |t| t.prompt().is_none());
+    assert_eq!(ev_args(&t, "aimer_done", "got"), vec![1], "X settled");
 }
 
 // =====================================================================

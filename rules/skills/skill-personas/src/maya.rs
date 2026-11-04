@@ -102,13 +102,13 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     if ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
-        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
+        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand, false);
         trigger::set_cancelled();
     }
     // 「剩余观看的牌洗回卡组」
     for c in look.iter().filter(|c| **c != keep) {
         ctx::take_card(player_id, c.as_str(), CardPile::Deck);
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckRandom);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckRandom, false);
     }
     // The fan tail, identical to the other three.
     if ctx::in_group(player_id, "Pastel✽Palettes") {

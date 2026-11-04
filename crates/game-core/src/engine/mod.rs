@@ -31,6 +31,7 @@ mod setup;
 mod tile_text;
 mod work;
 mod world;
+mod zone;
 
 pub use tile_text::compose as compose_tile_texts;
 
@@ -57,8 +58,8 @@ pub use work::{
     WorkItem,
 };
 pub use world::{
-    CounteractRecord, Extreme, FixedFace, Hidden, Lingering, PlayRecord, Scheduled, SettleAnswer,
-    SharedWorld, TurnCtx, TurnSnapshot, World,
+    CounteractRecord, DeckPlacement, Extreme, FixedFace, Hidden, Lingering, PlayRecord, Scheduled,
+    SettleAnswer, SharedWorld, TurnCtx, TurnSnapshot, World, ZoneTransition,
 };
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
@@ -401,7 +402,11 @@ struct Saved {
 /// v16: counteraction history (`World.countered_this_turn`, `World.played_cards`
 /// over `MAX_PLAY_LOG`). Both are durable facts a save taken mid-turn must
 /// carry (design G06 §7).
-pub const SAVE_VERSION: u32 = 16;
+/// v17: the instance edges and the owner order (`FieldCard.on` / `created_by` /
+/// `effective`, `MatchState.owned_seq` / `next_owned_seq`). All
+/// `serde(default)`; the attachment relation is a persisted relation, not a
+/// repairable scalar, so the version moves (design G08 §9).
+pub const SAVE_VERSION: u32 = 17;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns

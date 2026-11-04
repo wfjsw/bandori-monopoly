@@ -205,6 +205,39 @@ fn ctor_head(s: &str) -> Option<(String, usize)> {
     }
 }
 
+/// Read a leading Rust path, answering its last segment and the offset just
+/// past it. Unlike [`ctor_head`] the path need not be followed by `(`.
+fn leading_path_last(s: &str) -> Option<(String, usize)> {
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() && b[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    loop {
+        let start = i;
+        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+            i += 1;
+        }
+        if i == start {
+            return None;
+        }
+        let last = s[start..i].to_string();
+        let save = i;
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i + 1 < b.len() && b[i] == b':' && b[i + 1] == b':' {
+            i += 2;
+            continue;
+        }
+        i = save;
+        while i < b.len() && b[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        return Some((last, i));
+    }
+}
+
 /// Map a `filter_kinds!` payload type path to its [`BodyShape`].
 fn payload_shape(ty: &str) -> BodyShape {
     let last = ty.rsplit("::").next().unwrap_or(ty).trim();
@@ -368,12 +401,27 @@ pub fn parse_on_bodies(src: &str, shapes: &HashMap<String, BodyShape>) -> Vec<On
             if inner.contains("FilterBody::") {
                 panic!("on_parse: retired `FilterBody::` arm in `On::{variant}` at byte {start}");
             }
-            let Some((kind, open)) = ctor_head(inner) else {
+            let Some((mut kind, mut open)) = ctor_head(inner) else {
                 panic!(
                     "on_parse: `On::{variant}(` at byte {start} is not `Ns::Kind(...)` — got `{}`",
                     inner.chars().take(60).collect::<String>()
                 );
             };
+            // A lowercase head is a helper fn (`kinds::action(ActionKind(Kind),
+            // …)`): the real kind is the wrapper's inner kind and the args start
+            // at that wrapper.
+            if kind.chars().next().is_some_and(|c| c.is_ascii_lowercase()) {
+                let Some((wrapper, wopen)) = ctor_head(&inner[open + 1..]) else {
+                    panic!("on_parse: helper `{kind}` has no `Kind(...)` argument");
+                };
+                if wrapper != "ActionKind" && wrapper != "FilterKind" {
+                    panic!("on_parse: helper `{kind}` first argument is `{wrapper}`, not a kind");
+                }
+                let Some((real, _)) = leading_path_last(&inner[open + 1 + wopen + 1..]) else {
+                    panic!("on_parse: `{wrapper}` carries no kind path");
+                };
+                kind = real;
+            }
             let Some(end) = paren_end(inner, open) else {
                 panic!("on_parse: unbalanced ctor call for `On::{variant}::{kind}`");
             };

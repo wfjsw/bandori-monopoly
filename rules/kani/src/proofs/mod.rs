@@ -20,6 +20,7 @@ pub mod crychic;
 pub mod events;
 #[cfg(feature = "band-general")]
 pub mod g06_windows;
+pub mod g08_zone_lifecycle;
 pub mod general;
 #[cfg(feature = "band-hhw")]
 pub mod hhw;

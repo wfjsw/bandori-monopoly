@@ -448,6 +448,28 @@ pub enum Op {
     // v111 (G05/G13 invocation surface). 431-440 is this group's README band.
     invoke_entry = 431,
     invoke_frame = 432,
+    // v114 (G08): the zone family (451-465 of the README band).
+    zone_of = 451,
+    attachment_host = 452,
+    attached_cards = 453,
+    created_cards = 454,
+    earliest_owned_tile = 455,
+    instance_owner = 456,
+    attach_card = 457,
+    detach_card = 458,
+    set_instance_owner = 459,
+    set_created_by_at = 460,
+    set_ineffective_at = 461,
+    is_ineffective_at = 462,
+    rehome_card = 463,
+    play_hand_card = 464,
+    set_dest_unwatched = 465,
+    // The trigger readers lose their own ids to the fifteen imports; they take
+    // the README's review reserve (466-470).
+    trigger_zone = 466,
+    trig_play_outcome = 467,
+    trig_out_cause = 468,
+    is_own_placement = 469,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

@@ -222,6 +222,7 @@ pub fn request_or_pause<C: HostCtx>(
         if let Some(&x) = st.answers.get(st.next_answer) {
             let answer = st.next_answer;
             st.w().after_host(answer);
+            st.w().replay_host(&req, x);
             st.next_answer += 1;
             return Ok(x);
         }

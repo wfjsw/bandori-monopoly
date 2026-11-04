@@ -30,6 +30,10 @@ pub const MIRACLE: CardDef = CardDef::new(
         // the bit this very step writes -- the payout would slip to the next pass,
         // possibly onto an empty tile.
         On::Action(Action::PassTile("actor == owner && card.placed && players_on(tile.id, owner) > 0", Some(record_pass_applies), pass_player)).quiet_when_empty(),
+        // （3）「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效」 -- the
+        // discard's waste bit, wherever the discard came from (its own pass
+        // clause, another card's dump, a cascade).
+        On::Action(Action::ZoneLeft("card.placed", None, on_discard)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
@@ -47,7 +51,7 @@ pub const MIRACLE: CardDef = CardDef::new(
 const ID: &str = "MyGO:难以复刻的奇迹";
 
 fn miracle(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("miracle_note")));
     // A fresh copy starts with an empty [经过] mask -- the slot is player-scoped
     // and would otherwise carry a previous copy's bits.
@@ -121,6 +125,19 @@ fn record_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 规则书（3）: mark a discard that still carries crystals as 未生效.
+fn on_discard(_player_id: i32) -> card_sdk::Asked {
+    let to_discard = trigger::zone().is_some_and(|z| z.to == card_sdk::abi::Zone::Graveyard);
+    if to_discard && ctx::crystals() > 0 {
+        ctx::set_ineffective_at(ctx::self_uid(), true);
+        ctx::log(
+            _player_id,
+            &Msg::new(key!("miracle_wasted")).player_id("who", _player_id),
+        );
+    }
+    Ok(())
+}
+
 /// 规则书（2）: 「当你[经过]场上的所有玩家各一次」 -- every other player has been
 /// passed once. Derived scan over the running mask (docs/GUARDS.md §4.2).
 fn all_others_passed(player_id: i32) -> bool {
@@ -165,11 +182,10 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
             ctx::gain(player_id, purse, &msg)?;
         }
     }
-    // "上面还有奇迹水晶：视为没有生效" : "完成了")`.
-    ctx::set_dest(ctx::Dest::Graveyard);
+    // 规则书（3）: the waste bit itself is set by the `zoneLeft` body on the
+    // way out (`on_discard`); the log here is display only.
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     if left {
-        // TODO(规则书)[judgement] （3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- we only log
-        // `miracle_wasted`; the card is not actually marked 未生效.
         ctx::log(
             player_id,
             &Msg::new(key!("miracle_wasted")).player_id("who", player_id),

@@ -164,6 +164,11 @@ impl Table {
             for card in top_first.iter().rev() {
                 w.hidden[0].deck.insert(0, card.to_string());
             }
+            // `quick_start`'s `submit_deck` replaces a pile it fills; mark the
+            // seats ready so the seeded top actually survives to the deal.
+            for p in w.st.players.iter_mut() {
+                p.deck_ready = true;
+            }
         }
         m.quick_start();
         let mut t = Table { m, n };
@@ -339,6 +344,19 @@ impl Table {
     }
 
     fn act(&mut self, who: usize, m: NetMessage) -> Result<(), String> {
+        eprintln!(
+            "TABLE_ACT m={:p} act={} field={:?}",
+            &self.m as *const _,
+            m.act,
+            self.m
+                .world()
+                .st
+                .players
+                .iter()
+                .flat_map(|p| p.field.iter())
+                .map(|f| f.uid)
+                .collect::<Vec<_>>()
+        );
         let r = self
             .m
             .act(who as i32 + 1, &m)

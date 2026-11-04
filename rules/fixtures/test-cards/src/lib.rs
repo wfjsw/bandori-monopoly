@@ -102,6 +102,18 @@ const PROBE: CardDef = CardDef::new(
 /// play (`seq` 0), and negates that counter's activation so its body does not
 /// run. The declarer may answer their own link (the rulebook does not forbid
 /// it).
+/// [反击] the play's own `card` link (any declarer) and negates it. Unlike
+/// `TEST:counter` (an effect link) this is the *activation* window itself, so
+/// the play's outcome reads `Cancelled`.
+const NEGATOR: CardDef = CardDef::new(
+    "TEST:negator",
+    &[On::Counteract(&[ChainKind::Card], "", Some(negator_yes), counter)],
+);
+
+fn negator_yes(player_id: i32) -> bool {
+    trigger::by_card().is_some_and(|by| by != player_id)
+}
+
 const DENY: CardDef = CardDef::new(
     "TEST:deny",
     &[On::Counteract(&[ChainKind::Card], "", Some(deny_yes), deny)],
@@ -320,7 +332,7 @@ fn shield_play(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
     };
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(target, "TEST:shield", &Msg::new(key!("shield_note")));
     Ok(())
 }
@@ -386,7 +398,7 @@ fn dice_mover(player_id: i32) -> card_sdk::Asked {
 }
 
 fn crystal_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:named-counter",
@@ -413,7 +425,7 @@ fn crystal_changed_guard(player_id: i32) -> bool {
 }
 
 fn crystal_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     // Which write emptied it: a removal, or a write that landed on none.
     let reason = if trigger::value() < 0 {
         key!("named-counter-empty")
@@ -430,9 +442,9 @@ fn crystal_changed(player_id: i32) -> card_sdk::Asked {
 const DEST_NOW: CardDef = CardDef::new("TEST:fate_now", &[On::Play("", None, fate_now)]);
 
 fn fate_now(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:fate_now", &Msg::new(key!("fate_note")));
-    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("fate_now_left")).i("placed", ctx::is_placed() as i64),
@@ -445,10 +457,10 @@ fn fate_now(player_id: i32) -> card_sdk::Asked {
 const DEST_TO: CardDef = CardDef::new("TEST:dest_to", &[On::Play("", None, dest_to)]);
 
 fn dest_to(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:dest_to", &Msg::new(key!("fate_note")));
     if let Some(&user) = ctx::others(player_id).first() {
-        ctx::set_transfer_to_dest(user, ctx::Dest::Graveyard);
+        ctx::set_transfer_to_dest(user, ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     }
     Ok(())
 }
@@ -515,7 +527,7 @@ fn guard_play(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
     };
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(target, "TEST:guard", &Msg::new(key!("guard_note")));
     Ok(())
 }
@@ -754,7 +766,7 @@ const PAY_ADD_ANY: CardDef = CardDef::new(
 );
 
 fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:payAddAny",
@@ -1029,7 +1041,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
 );
 
 fn fire_roll_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:fireRoll",
@@ -1133,7 +1145,7 @@ const PRE_HOOK: CardDef = CardDef::new(
 );
 
 fn pre_hook_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:preHook", &Msg::new(key!("pre_hook_note")));
     Ok(())
 }
@@ -1166,7 +1178,7 @@ const PRE_GATE: CardDef = CardDef::new(
 );
 
 fn pre_gate_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:preGate", &Msg::new(key!("pre_gate_note")));
     Ok(())
 }
@@ -1187,7 +1199,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
 );
 
 fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:preRollPlan",
@@ -1217,7 +1229,7 @@ const PRE_ATEMD: CardDef = CardDef::new(
 );
 
 fn pre_at_end_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:preAtEnd",
@@ -1259,7 +1271,7 @@ const PASS_TELE: CardDef = CardDef::new(
 );
 
 fn pass_tele_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:pass_tele",
@@ -1310,7 +1322,7 @@ const TILE_HOOK: CardDef = CardDef::new(
 );
 
 fn tile_hook_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:tileHook",
@@ -1375,7 +1387,7 @@ const PASS_FLASH: CardDef = CardDef::new(
 );
 
 fn pass_flash_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:pass_flash",
@@ -1416,7 +1428,7 @@ const PASS_BEFORE_FLASH: CardDef = CardDef::new(
 );
 
 fn pass_before_flash_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:pass_before_flash",
@@ -1516,7 +1528,7 @@ const DECK_ONCE: CardDef = CardDef::new(
 );
 
 fn deck_once(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(
         player_id,
         "TEST:deckOnce",
@@ -1537,7 +1549,7 @@ const CLOCK_HOOK: CardDef = CardDef::new(
 );
 
 fn clock_hook_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:clockHook",
@@ -1718,7 +1730,7 @@ const SILENT_PAY: CardDef = CardDef::new(
 );
 
 fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:silentPair",
@@ -1728,7 +1740,7 @@ fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn silent_nest_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:silentNest",
@@ -1738,7 +1750,7 @@ fn silent_nest_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn silent_pay_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:silentPay",
@@ -1792,7 +1804,7 @@ const SILENT_QUIET: CardDef = CardDef::new(
 );
 
 fn silent_quiet_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:silentQuiet",
@@ -1846,7 +1858,7 @@ const QUIET_RAISE: CardDef = CardDef::new(
 );
 
 fn quiet_counter_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:quietCounter",
@@ -1865,7 +1877,7 @@ fn quiet_counter_body(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn quiet_raise_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:quietRaise",
@@ -1892,7 +1904,7 @@ const SILENT_ASK: CardDef = CardDef::new(
 );
 
 fn silent_ask_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:silentAsk",
@@ -1989,7 +2001,7 @@ const FLASH_FOLD_NEVER: CardDef = CardDef::new(
 );
 
 fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:flashFoldAlways",
@@ -1999,7 +2011,7 @@ fn flash_fold_always_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn flash_fold_never_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:flashFoldNever",
@@ -2038,7 +2050,7 @@ const FLASH_HEADER_IDS: CardDef = CardDef::new(
 );
 
 fn flash_header_ids_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:flashHeaderIds",
@@ -2182,7 +2194,7 @@ const CUSTOM_FILTER: CardDef = CardDef::new(
 );
 
 fn custom_filter_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:customFilter",
@@ -2415,7 +2427,7 @@ const TRAP_DECLARE: CardDef = CardDef::new(
 );
 
 fn trap_declare_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:trap_declare",
@@ -2493,7 +2505,7 @@ const NAMED_OPEN: CardDef = CardDef::new(
 );
 
 fn named_open_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:named_open", &Msg::new(key!("named_note")));
     Ok(())
 }
@@ -2514,7 +2526,7 @@ const NAMED_SHUT: CardDef = CardDef::new(
 );
 
 fn named_shut_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:named_shut", &Msg::new(key!("named_note")));
     Ok(())
 }
@@ -2569,7 +2581,7 @@ const ROLL_TRACE: CardDef = CardDef::new(
 );
 
 fn roll_trace_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:rollTrace",
@@ -2619,7 +2631,7 @@ const FIRE_RECAST: CardDef = CardDef::new(
 );
 
 fn fire_recast_play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:fireRecast",
@@ -2688,7 +2700,7 @@ const PLAN_OFFER: CardDef = CardDef::new(
 );
 
 fn plan_offer_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:planOffer",
@@ -2745,7 +2757,7 @@ const PLAN_DECLINE: CardDef = CardDef::new(
 );
 
 fn plan_decline_place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "TEST:planDecline",
@@ -2825,7 +2837,7 @@ fn invoker_play(player_id: i32) -> card_sdk::Asked {
     // Before the placement the run has no instance: `by_instance` is `-1`
     // (G13 §4.1, the hand-play case).
     ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "TEST:invoker", &Msg::new(key!("invoker_note")));
     Ok(())
 }
@@ -2833,6 +2845,405 @@ fn invoker_play(player_id: i32) -> card_sdk::Asked {
 fn invoker_body(player_id: i32) -> card_sdk::Asked {
     // A placed card's hook: `by_instance` is this instance.
     ctx::invoke_entry(player_id, "TEST:invoked", "two")?;
+    Ok(())
+}
+
+/// Zone-family hook probe: every zone kind logs the payload so a test can
+/// read the pair, the cause and the two bits. Its play places itself and
+/// records the instance for `TEST:drop`; `TEST.zoner.dest` (a `Dest` wire
+/// code + 1) makes its `zoneLeft` rewrite the destination.
+const ZONER: CardDef = CardDef::new(
+    "TEST:zoner",
+    &[
+        On::Play("", None, zoner_play),
+        On::Action(Action::ZoneLeft("", None, zoner_left)),
+        On::Action(Action::ZoneLeftAfter("", None, zoner_left_after)),
+        On::Action(Action::CardFaceFlipped("", None, zoner_flipped)),
+        On::Action(Action::CardFaceFlippedAfter("", None, zoner_flipped_after)),
+        On::Action(Action::HandChanged("", None, zoner_hand_changed)),
+        On::Action(Action::CardAttached("", None, zoner_attached)),
+        On::Action(Action::CardDetached("", None, zoner_detached)),
+        On::Action(Action::Discarded("", None, zoner_discarded)),
+        On::Action(Action::OpeningHandDealt("", None, zoner_dealt)),
+        On::Action(Action::CardAfter("", None, zoner_outcome)),
+        On::Action(Action::CardPlayed("", None, zoner_outcome)),
+    ],
+);
+
+fn zoner_play(player_id: i32) -> card_sdk::Asked {
+    let me = ctx::place_self_to_field(
+        player_id,
+        "TEST:zoner",
+        &Msg::new(key!("zoner_play")),
+        card_sdk::abi::ZoneChangeCause::Play);
+    ctx::state::set(player_id, "TEST.drop.uid", me);
+    Ok(())
+}
+
+fn zoner_left(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_left", player_id);
+    let dest = ctx::state::get(player_id, "TEST.zoner.dest");
+    if dest > 0 {
+        bandori_std::zones::set_leave_destination(ctx::Dest::from_i32(dest));
+    }
+    Ok(())
+}
+
+fn zoner_left_after(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_left_after", player_id);
+    Ok(())
+}
+
+fn zoner_flipped(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_flipped", player_id);
+    Ok(())
+}
+
+fn zoner_flipped_after(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_flipped_after", player_id);
+    Ok(())
+}
+
+fn zoner_hand_changed(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_hand_changed", player_id);
+    Ok(())
+}
+
+fn zoner_attached(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_attached", player_id);
+    Ok(())
+}
+
+fn zoner_detached(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_detached", player_id);
+    Ok(())
+}
+
+fn zoner_discarded(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_discarded", player_id);
+    Ok(())
+}
+
+fn zoner_outcome(player_id: i32) -> card_sdk::Asked {
+    let outcome = trigger::play_outcome().map_or(-1, |o| o.as_i32());
+    ctx::log(player_id, &Msg::new("zoner_outcome").i("outcome", outcome as i64));
+    Ok(())
+}
+
+fn zoner_dealt(player_id: i32) -> card_sdk::Asked {
+    zoner_log("zoner_dealt", player_id);
+    Ok(())
+}
+
+/// One log line per zone raise: the hook name, the instance, the pair, the
+/// cause and the two bits.
+fn zoner_log(what: &str, player_id: i32) {
+    let zone = trigger::zone().unwrap_or_default();
+    ctx::log(
+        player_id,
+        &Msg::new(what)
+            .i("uid", trigger::instance() as i64)
+            .i("from", zone.from.as_i32() as i64)
+            .i("to", zone.to.as_i32() as i64)
+            .i("cause", zone.cause.as_i32() as i64)
+            .i("face", trigger::value() as i64)
+            .i("wasted", zone.wasted as i64)
+            .i("counted", zone.counted as i64),
+    );
+}
+
+/// Places itself, records the instance and attaches the first hand card to
+/// itself face-down. It hears `zoneLeft` too, so a cascade's order shows.
+const HOLDER: CardDef = CardDef::new(
+    "TEST:holder",
+    &[
+        On::Play("", None, holder_play),
+        On::Action(Action::ZoneLeft("", None, zoner_left)),
+    ],
+);
+
+fn holder_play(player_id: i32) -> card_sdk::Asked {
+    let me = ctx::place_self_to_field(
+        player_id,
+        "TEST:holder",
+        &Msg::new(key!("holder_play")),
+        card_sdk::abi::ZoneChangeCause::Play);
+    ctx::state::set(player_id, "TEST.drop.uid", me);
+    let held = ctx::cards_in(player_id, CardPile::Hand);
+    if let Some(card) = held.first() {
+        ctx::attach_card(
+            me,
+            card.as_str(),
+            card_sdk::abi::ZoneChangeCause::Effect,
+            true,
+        );
+    }
+    Ok(())
+}
+
+/// Places itself, then makes a child of itself (`created_by`); the child's own
+/// body runs, up to depth 2, so a grandchild recurses. It hears `zoneLeft` so
+/// the creator cascade's order and cause show.
+const CREATOR: CardDef = CardDef::new(
+    "TEST:creator",
+    &[
+        On::Play("", None, creator_play),
+        On::Action(Action::ZoneLeft("", None, zoner_left)),
+    ],
+);
+
+fn creator_play(player_id: i32) -> card_sdk::Asked {
+    let me = ctx::place_self_to_field(
+        player_id,
+        "TEST:creator",
+        &Msg::new(key!("creator_play")),
+        card_sdk::abi::ZoneChangeCause::Play);
+    // A nested `play_card` of the same card is this card creating a child: the
+    // caller left its own instance in `TEST.creator.maker`.
+    let maker = ctx::state::get(player_id, "TEST.creator.maker");
+    if maker > 0 {
+        ctx::set_created_by_at(me, maker);
+    }
+    let depth = ctx::state::get(player_id, "TEST.creator.depth");
+    if depth == 0 {
+        ctx::state::set(player_id, "TEST.drop.uid", me);
+    }
+    ctx::state::set(player_id, "TEST.creator.depth", depth + 1);
+    if depth < 2 {
+        ctx::state::set(player_id, "TEST.creator.maker", me);
+        ctx::play_card("TEST:creator", player_id)?;
+    }
+    Ok(())
+}
+
+/// Takes the instance recorded at `TEST.drop.uid` off the field to the
+/// destination code at `TEST.drop.dest` (unset/`0` = the Graveyard), cause
+/// `Effect`.
+const DROP: CardDef = CardDef::new("TEST:drop", &[On::Play("", None, drop_play)]);
+
+fn drop_play(player_id: i32) -> card_sdk::Asked {
+    let uid = ctx::state::get(player_id, "TEST.drop.uid");
+    let dest = ctx::state::get(player_id, "TEST.drop.dest");
+    ctx::unplace_at(
+        uid,
+        ctx::Dest::from_i32(dest),
+        card_sdk::abi::ZoneChangeCause::Effect,
+    );
+    Ok(())
+}
+
+/// Declares a target (so an effect window opens) and logs its own play
+/// outcome from `cardAfter` / `cardPlayed`: a negated play still announces
+/// itself, `Cancelled`.
+const OUTCOMER: CardDef = CardDef::new("TEST:outcomer", &[On::Play("", None, outcomer_play)]);
+
+fn outcomer_play(player_id: i32) -> card_sdk::Asked {
+    if let Some(&target) = ctx::others(player_id).first() {
+        ctx::target(target);
+    }
+    Ok(())
+}
+
+/// A placed bystander that logs every `cardPlayed` outcome it hears.
+const OBSERVER: CardDef = CardDef::new(
+    "TEST:observer",
+    &[On::Action(Action::CardPlayed("", None, observer_outcome))],
+);
+
+fn observer_outcome(player_id: i32) -> card_sdk::Asked {
+    let outcome = trigger::play_outcome().map_or(-1, |o| o.as_i32());
+    ctx::log(
+        player_id,
+        &Msg::new("observer_outcome").i("outcome", outcome as i64),
+    );
+    Ok(())
+}
+
+/// Marks itself never-effective, then leaves to the Graveyard: the `discarded`
+/// raise must carry `wasted`.
+const WASTER: CardDef = CardDef::new(
+    "TEST:waster",
+    &[
+        On::Play("", None, waster_play),
+        On::Action(Action::Discarded("", None, zoner_discarded)),
+    ],
+);
+
+fn waster_play(player_id: i32) -> card_sdk::Asked {
+    let me = ctx::place_self_to_field(
+        player_id,
+        "TEST:waster",
+        &Msg::new(key!("waster_play")),
+        card_sdk::abi::ZoneChangeCause::Play);
+    ctx::state::set(player_id, "TEST.waster.uid", me);
+    ctx::set_ineffective_at(me, true);
+    ctx::unplace_at(
+        me,
+        ctx::Dest::Graveyard,
+        card_sdk::abi::ZoneChangeCause::Effect,
+    );
+    Ok(())
+}
+
+/// Inert filler for the cycle probe.
+const CYC: CardDef = CardDef::new("TEST:cyc", &[]);
+
+/// Places itself and a `TEST:cyc`, attaches the cyc (row re-parent), then
+/// attaches itself back onto the cyc -- a cycle, which must refuse. The two
+/// answers are logged.
+const CYCLER: CardDef = CardDef::new("TEST:cycler", &[On::Play("", None, cycler_play)]);
+
+fn cycler_play(player_id: i32) -> card_sdk::Asked {
+    let me = ctx::place_self_to_field(
+        player_id,
+        "TEST:cycler",
+        &Msg::new(key!("cycler_play")),
+        card_sdk::abi::ZoneChangeCause::Play);
+    let other = ctx::place_card_at(player_id, "TEST:cyc", &Msg::new(key!("cyc_place")));
+    let first = ctx::attach_card(
+        me,
+        "TEST:cyc",
+        card_sdk::abi::ZoneChangeCause::Effect,
+        false,
+    );
+    let second = ctx::attach_card(
+        other,
+        "TEST:cycler",
+        card_sdk::abi::ZoneChangeCause::Effect,
+        false,
+    );
+    ctx::log(
+        player_id,
+        &Msg::new("cycler_attach")
+            .i("first", first as i64)
+            .i("second", second as i64),
+    );
+    Ok(())
+}
+
+/// A board-owned rule: places itself on tile 0 at the neutral board owner,
+/// records the instance and attaches the first hand card face-down.
+const BOARDER: CardDef = CardDef::new("TEST:brd", &[On::Play("", None, brd_play)]);
+
+fn brd_play(player_id: i32) -> card_sdk::Asked {
+    // `-1` is the neutral board owner (the rule sits on the tile, not a seat).
+    let me = ctx::place_card_on(-1, 0, "TEST:brd", &Msg::new(key!("brd_place")));
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
+    ctx::state::set(player_id, "TEST.drop.uid", me);
+    let held = ctx::cards_in(player_id, CardPile::Hand);
+    if let Some(card) = held.first() {
+        ctx::attach_card(
+            me,
+            card.as_str(),
+            card_sdk::abi::ZoneChangeCause::Effect,
+            true,
+        );
+    }
+    Ok(())
+}
+
+/// Leaves the recorded board rule to the Graveyard.
+const BOARD_OFF: CardDef = CardDef::new("TEST:brdOff", &[On::Play("", None, drop_play)]);
+
+/// Places itself and flips down then up: its own flip hooks must hear it
+/// while it is face-down.
+const FLIPPER: CardDef = CardDef::new(
+    "TEST:flipper",
+    &[
+        On::Play("", None, flipper_play),
+        On::Action(Action::CardFaceFlipped("", None, zoner_flipped)),
+        On::Action(Action::CardFaceFlippedAfter("", None, zoner_flipped_after)),
+    ],
+);
+
+fn flipper_play(player_id: i32) -> card_sdk::Asked {
+    let me = ctx::place_self_to_field(
+        player_id,
+        "TEST:flipper",
+        &Msg::new(key!("flipper_play")),
+        card_sdk::abi::ZoneChangeCause::Play);
+    ctx::set_face_down_at(me, true, card_sdk::abi::ZoneChangeCause::Effect);
+    ctx::set_face_down_at(me, false, card_sdk::abi::ZoneChangeCause::Effect);
+    Ok(())
+}
+
+/// Rehomes tile 0 to player 1 (`ctx::rehome_card`).
+const REHOMER: CardDef = CardDef::new("TEST:rehomer", &[On::Play("", None, rehomer_play)]);
+
+fn rehomer_play(player_id: i32) -> card_sdk::Asked {
+    let other = if player_id == 0 { 1 } else { 0 };
+    ctx::rehome_card(0, other);
+    Ok(())
+}
+
+/// Logs the player's earliest-owned tile (`ctx::earliest_owned_tile`).
+const TILE_PROBE: CardDef = CardDef::new("TEST:tileProbe", &[On::Play("", None, tile_probe_play)]);
+
+fn tile_probe_play(player_id: i32) -> card_sdk::Asked {
+    let tile = ctx::earliest_owned_tile(player_id);
+    ctx::log(player_id, &Msg::new("tile_probe").i("tile", tile as i64));
+    Ok(())
+}
+
+/// Draws one card (the `counted` hand arrival).
+const DRAWER: CardDef = CardDef::new("TEST:drawer", &[On::Play("", None, drawer_play)]);
+
+fn drawer_play(player_id: i32) -> card_sdk::Asked {
+    ctx::draw(player_id, 1)?;
+    Ok(())
+}
+
+/// Tutors `TEST:zoner` from the draw pile into the hand (an uncounted
+/// arrival).
+const TUTOR: CardDef = CardDef::new("TEST:tutor", &[On::Play("", None, tutor_play)]);
+
+fn tutor_play(player_id: i32) -> card_sdk::Asked {
+    ctx::add_to_dest(player_id, "TEST:zoner", ctx::Dest::Hand, false);
+    Ok(())
+}
+
+/// Turns the player's last field instance face-down (`ctx::set_face_down_at`,
+/// so its flip hooks run). The prober does not place itself.
+const FLIP_DOWN: CardDef = CardDef::new("TEST:flipDown", &[On::Play("", None, flip_down_play)]);
+
+fn flip_down_play(player_id: i32) -> card_sdk::Asked {
+    if let Some(&(uid, _)) = ctx::field_instances(player_id).last() {
+        ctx::set_face_down_at(uid, true, card_sdk::abi::ZoneChangeCause::Effect);
+    }
+    Ok(())
+}
+
+/// Turns the player's last field instance face-up.
+const FLIP_UP: CardDef = CardDef::new("TEST:flipUp", &[On::Play("", None, flip_up_play)]);
+
+fn flip_up_play(player_id: i32) -> card_sdk::Asked {
+    if let Some(&(uid, _)) = ctx::field_instances(player_id).last() {
+        ctx::set_face_down_at(uid, false, card_sdk::abi::ZoneChangeCause::Effect);
+    }
+    Ok(())
+}
+
+/// Leaves the player's last field instance to the Graveyard (`ctx::unplace_at`).
+const DUMPER: CardDef = CardDef::new("TEST:dumper", &[On::Play("", None, dumper_play)]);
+
+fn dumper_play(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new("dbg.dumper").n("uids", ctx::field_instances(player_id).iter().map(|(u, _)| *u).len() as i64).n("pick", ctx::field_instances(player_id).last().map_or(-1, |(u, _)| *u) as i64));
+    if let Some(&(uid, _)) = ctx::field_instances(player_id).last() {
+        ctx::unplace_at(
+            uid,
+            ctx::Dest::Graveyard,
+            card_sdk::abi::ZoneChangeCause::Effect,
+        );
+    }
+    Ok(())
+}
+
+/// Tutors `PPP:[衍生]拍卖撤下来了` into the hand (an uncounted arrival into
+/// another card's hook).
+const TUTOR_AUCTION: CardDef = CardDef::new("TEST:tutorAuction", &[On::Play("", None, tutor_auction_play)]);
+
+fn tutor_auction_play(player_id: i32) -> card_sdk::Asked {
+    ctx::add_to_dest(player_id, "PPP:[衍生]拍卖撤下来了", ctx::Dest::Hand, false);
     Ok(())
 }
 
@@ -2851,6 +3262,7 @@ card_sdk::ruleset!(&[
     COUNTER,
     PROBE,
     DENY,
+    NEGATOR,
     JOIN_OPEN,
     JOIN_SHIELD,
     PAY_COUNTER,
@@ -2953,5 +3365,25 @@ card_sdk::ruleset!(&[
     PLAN_DECLINE,
     DUAL_ACTION,
     INVOKED,
-    INVOKER
+    INVOKER,
+    ZONER,
+    HOLDER,
+    CREATOR,
+    DROP,
+    WASTER,
+    OUTCOMER,
+    OBSERVER,
+    CYC,
+    CYCLER,
+    BOARDER,
+    BOARD_OFF,
+    FLIPPER,
+    REHOMER,
+    TILE_PROBE,
+    DRAWER,
+    TUTOR,
+    FLIP_DOWN,
+    FLIP_UP,
+    DUMPER,
+    TUTOR_AUCTION
 ]);

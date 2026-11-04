@@ -207,7 +207,7 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     let dest = ctx::play_card(top.as_str(), player_id)?;
     match dest {
         ctx::Dest::Field | ctx::Dest::Banished => {}
-        dest => ctx::add_to_dest(player_id, top.as_str(), dest),
+        dest => ctx::add_to_dest(player_id, top.as_str(), dest, false),
     }
     Ok(())
 }

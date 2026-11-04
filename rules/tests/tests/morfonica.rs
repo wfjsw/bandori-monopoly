@@ -194,6 +194,26 @@ fn summer_plays_to_field_until_next_turn_then_draws() {
     assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one card");
 }
 
+// 规则书: 「当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌」 -- an
+// early leave is the same end, so the draw still happens (and it files to the
+// discard).
+#[test]
+fn summer_early_leave_still_draws() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压"]);
+    t.give(0, &["Mor:夏日合宿", "TEST:dumper"]);
+    t.play(0, "Mor:夏日合宿").unwrap();
+    t.play(0, "TEST:dumper").unwrap();
+    decline_all(&mut t);
+    assert!(!t.on_field(0, "Mor:夏日合宿"), "{:?}", t.field_ids(0));
+    assert!(
+        t.discard(0).contains(&"Mor:夏日合宿".to_string()),
+        "the card is in the discard: {:?}",
+        t.discard(0)
+    );
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one card");
+}
+
 // --------------------------------------------------- 你的光芒将照亮前路
 
 #[test]

@@ -45,7 +45,7 @@ pub fn rule_id(id: &str) -> String {
 ///
 /// 规则书: 「将此卡放置于场地中央」 -- staying is what that means mechanically.
 pub fn keep() {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
 }
 
 /// 「放入事件弃牌」 -- expire the active event `id` into the discard.

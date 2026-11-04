@@ -299,6 +299,7 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Value {
         33 => FnId::State,
         34 => FnId::CandHas,
         35 => FnId::CardIs,
+        36 => FnId::Resolving,
         _ => return Value::Err,
     };
     let nargs = n.b as usize;
@@ -351,6 +352,15 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Value]) -> Value {
             };
             // `card_is('id')` ≡ `trigger_card == id_of(id)`.
             Value::Bool(ctx.scalar_val(vars_trigger_card_idx()) == Value::Int(want))
+        }
+        FnId::Resolving => {
+            let want = match int(0) {
+                Ok(v) => v,
+                Err(()) => return Value::Err,
+            };
+            // `resolving('id')` -- is that card's body on the resolving stack?
+            // The host registers each resolving name in the named table.
+            Value::Bool(ctx.named_get(want).is_some())
         }
         // ABI v56 generic tile queries. String args lower to `id_of` hashes.
         FnId::TileIs => {

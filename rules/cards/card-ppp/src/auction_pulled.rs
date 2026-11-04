@@ -18,9 +18,10 @@ const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     "PPP:[衍生]拍卖撤下来了",
-    // TODO(ABI)（此卡加入手牌时）: no hand-entry trigger -- `Action::Drawn` only
-    //   covers the draw routine; a tutor add-to-hand (e.g. 相信你) does not place this.
+    // 规则书: 「此卡加入手牌时」 -- a draw (`Drawn`) and any uncounted hand
+    // arrival (`HandChanged`, `counted == false`) both place it.
     &[On::Action(Action::Drawn("", None, hook)),
+    On::Action(Action::HandChanged("", None, hook)),
     On::Action(Action::TurnStart("", None, hook))],
 ).props(&[(card_sdk::abi::prop::EST_COST, 540), (card_sdk::abi::prop::IMMUNE, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"拍卖撤下来了"#)
@@ -40,15 +41,21 @@ pub const AUCTION_PULLED: CardDef = CardDef::new(
 
 fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        TriggerKind::Drawn => {
+        TriggerKind::Drawn | TriggerKind::HandChanged => {
             if !trigger::card_is(ID) {
                 return Ok(());
             }
-            // 规则书: 「此卡加入手牌时将此卡放置在自身场上」
+            // 规则书: 「此卡加入手牌时将此卡放置在自身场上」 -- an uncounted
+            // arrival only (`counted` arrivals are the draw routine's `drawn`).
+            if trigger::kind() == TriggerKind::HandChanged
+                && trigger::zone().map_or(true, |z| z.counted)
+            {
+                return Ok(());
+            }
             if !ctx::take_card(player_id, ID, CardPile::Hand) {
                 return Ok(());
             }
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
             ctx::place_card(player_id, ID, &Msg::new(key!("auction_pulled_note")));
             // TODO(ABI)（此卡拥有者火罐上限加1）: no leave-field hook point -- the cap is written on the
             // seat row and never reverted when this card leaves play.

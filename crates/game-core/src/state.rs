@@ -213,6 +213,13 @@ pub struct MatchState {
     pub board_field: Vec<FieldCard>,
     pub bans: Vec<String>,
     pub owners: Vec<i32>,
+    /// Per tile: when the current owner took it (the acquisition order,
+    /// `-1` = nobody holds it). Written only by `World::set_tile_owner`.
+    #[serde(default)]
+    pub owned_seq: Vec<i32>,
+    /// Next acquisition sequence to hand out.
+    #[serde(default)]
+    pub next_owned_seq: i32,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
     pub embers: Vec<i32>,
@@ -278,6 +285,8 @@ impl Default for MatchState {
             board_field: vec![],
             bans: vec![],
             owners: vec![],
+            owned_seq: vec![],
+            next_owned_seq: 0,
             houses: vec![],
             mortgaged: vec![],
             embers: vec![],
@@ -424,6 +433,10 @@ pub mod key {
     /// 移动效果影响」). The walk clamp skips while this is > 0; the turn-start
     /// move-gate skip is a different question and is not cancelled.
     pub const MOVE_EXEMPT: &str = "moveExempt";
+    /// The player's earliest-owned tile + 1 (`-1` = none), a cache rebuilt by
+    /// [`crate::engine::ops::World::set_tile_owner`]. 灯's card reads the slot;
+    /// `ctx::earliest_owned_tile` is the authority.
+    pub const FIRST_TILE: &str = "firstTile";
 }
 
 /// Named **card properties** -- the keys of a card rule's declared property
@@ -434,6 +447,10 @@ pub mod key {
 /// in step). Every key has a defined default of `0` when a card does not
 /// declare it.
 pub mod prop {
+    /// A `Dest` wire code the card wants when it leaves play, read at the
+    /// `zoneLeft` commit. Absent = the Graveyard. Mirrors
+    /// `card_sdk::abi::prop::LEAVE_DEST`.
+    pub const LEAVE_DEST: &str = "leaveDest";
     /// Continuous 「手卡上限数量减1」 while the card sits on the field. Stamped
     /// onto the field instance at placement and gone with the card. `-1` cuts
     /// the owner's hand limit.
@@ -1177,7 +1194,27 @@ pub struct FieldCard {
     /// still names the copy, its counters and where it is filed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_card: Option<String>,
+    /// The instance this one sits on (`Zone::Attached`), `-1` when not
+    /// attached. Holds exactly while the row is attached.
+    #[serde(default = "minus_one")]
+    pub on: i32,
+    /// The instance that made this one, `-1` when none. A child dies with its
+    /// creator.
+    #[serde(default = "minus_one")]
+    pub created_by: i32,
+    /// Did this card take effect? Cleared by `set_ineffective_at`; read by a
+    /// Graveyard arrival and cleared there.
+    #[serde(default = "truth")]
+    pub effective: bool,
     pub note: Msg,
+}
+
+fn minus_one() -> i32 {
+    -1
+}
+
+fn truth() -> bool {
+    true
 }
 
 impl Default for FieldCard {
@@ -1196,6 +1233,9 @@ impl Default for FieldCard {
             extra: false,
             counter_max: BTreeMap::new(),
             effective_card: None,
+            on: -1,
+            created_by: -1,
+            effective: true,
             note: Msg::default(),
         }
     }

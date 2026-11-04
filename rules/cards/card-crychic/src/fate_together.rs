@@ -49,7 +49,7 @@ const PROP_HIT: &str = "fate_hit";
 fn fate_together(player_id: i32) -> card_sdk::Asked {
     // The free-floating effect maps to this card in play: the `PayAfter` /
     // `TurnStart` hooks below fire while it is placed.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         ID,
@@ -129,18 +129,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            // TODO(规则书)（不触发乐队技能的（3）效果）: the return must not read as
-            //   a hand gain for band (3) -- we do not resync the band's hand
-            //   watermark, so the next draw still sees a 4→5 crossing (before 4,
-            //   now 6) and adds the crystal.
+            // 规则书（2）: 「将此卡返回手牌（不触发乐队技能的（3）效果）」 -- the
+            // return is an uncounted `HandChanged` (`counted == false`), so it is
+            // no draw and band (3) does not see a hand-gain crossing.
             if ctx::prop(PROP_HIT) == 0 {
-                ctx::set_dest(ctx::Dest::Hand);
+                ctx::set_dest(ctx::Dest::Hand, card_sdk::abi::ZoneChangeCause::Effect);
                 ctx::log(
                     player_id,
                     &Msg::new(key!("fate_together_returned")).player_id("who", player_id),
                 );
             } else {
-                ctx::set_dest(ctx::Dest::Graveyard);
+                ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
             }
         }
         _ => {}

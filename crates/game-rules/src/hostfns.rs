@@ -9,7 +9,7 @@
 //! Errors are [`HostError`] (not the wasm engine's `Error`) so this module has
 //! no wasmi/wasmtime dependency; each backend converts at its boundary.
 
-use card_sdk::abi::{self, export, OnKind, PromptKind};
+use card_sdk::abi::{self, export, OnKind, PromptKind, ZoneChangeCause};
 
 use crate::host::{
     engine_msg, CallOut, GuestMem, HostCtx, HostError, HostRequest, HostState, Prompt,
@@ -917,8 +917,174 @@ pub fn field_instances<C: HostCtx>(
     Ok(bytes.len() as i32)
 }
 
-pub fn unplace_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
-    Ok({ c.st_mut().w().unplace_at(uid) })
+/// `ctx::unplace_at` -- the leave writer (`zoneLeft` runs before the row
+/// moves). `Pause::Trap`: the window may prompt.
+pub fn unplace_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    destination: i32,
+    cause: i32,
+) -> Result<i32, HostError> {
+    let req = HostRequest::Leave {
+        uid,
+        destination,
+        to: -1,
+        cause,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
+}
+
+/// The zone family's plain reads and writes.
+pub fn zone_of<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().zone_of(uid))
+}
+
+pub fn attachment_host<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().attachment_host(uid))
+}
+
+/// Write a `Vec<i32>` as LE `i32`s; answers the byte length.
+fn write_uid_list<C: HostCtx>(
+    c: &mut C,
+    list: Vec<i32>,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let mut bytes = Vec::with_capacity(list.len() * 4);
+    for v in list {
+        bytes.extend_from_slice(&v.to_le_bytes());
+    }
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+pub fn attached_cards<C: HostCtx>(
+    c: &mut C,
+    host: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let list = c.st().wr().attached_cards(host);
+    write_uid_list(c, list, buf, cap)
+}
+
+pub fn created_cards<C: HostCtx>(
+    c: &mut C,
+    creator: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let list = c.st().wr().created_cards(creator);
+    write_uid_list(c, list, buf, cap)
+}
+
+pub fn earliest_owned_tile<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    let r = c.st().wr().earliest_owned_tile(player_id);
+    Ok(r)
+}
+
+pub fn instance_owner<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().instance_owner(uid))
+}
+
+pub fn set_instance_owner<C: HostCtx>(c: &mut C, uid: i32, owner: i32) -> Result<i32, HostError> {
+    Ok(c.st_mut().w().set_instance_owner(uid, owner) as i32)
+}
+
+pub fn set_created_by_at<C: HostCtx>(c: &mut C, uid: i32, creator: i32) -> Result<i32, HostError> {
+    Ok(c.st_mut().w().set_created_by_at(uid, creator) as i32)
+}
+
+pub fn set_ineffective_at<C: HostCtx>(c: &mut C, uid: i32, on: i32) -> Result<i32, HostError> {
+    Ok(c.st_mut().w().set_ineffective_at(uid, on != 0) as i32)
+}
+
+pub fn is_ineffective_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().is_ineffective_at(uid) as i32)
+}
+
+/// `ctx::attach_card` -- files a fresh instance on `host`.
+pub fn attach_card<C: HostCtx>(
+    c: &mut C,
+    host: i32,
+    p: i32,
+    n: i32,
+    cause: i32,
+    face_down: i32,
+) -> Result<i32, HostError> {
+    let card = guest_str(c, p, n)?;
+    // A live instance of the name is re-parented instead of a pile copy being
+    // filed. The guest's own world holds the same view, so read it before the
+    // pause: the pile copy, when there is one, is consumed.
+    let live_copy = c.st().wr().live_instance_of(host, &card, host);
+    let req = HostRequest::Attach {
+        host,
+        card: card.clone(),
+        cause,
+        face_down,
+    };
+    let uid = crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)?;
+    if uid >= 0 && live_copy.is_none() {
+        // The routine removed the pile copy on the live world. Take it out of
+        // the body's own view too, or the committed world would keep it in
+        // the hand beside the attachment. (On a pausing pass the view is
+        // discarded with the pass, so only the consuming pass matters.)
+        c.st_mut().w().take_from_hand(host, &card);
+    }
+    Ok(uid)
+}
+
+pub fn detach_card<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    destination: i32,
+    cause: i32,
+) -> Result<i32, HostError> {
+    let req = HostRequest::Detach {
+        uid,
+        destination,
+        cause,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
+}
+
+pub fn rehome_card<C: HostCtx>(c: &mut C, tile: i32, owner: i32) -> Result<i32, HostError> {
+    let req = HostRequest::Rehome { tile, owner };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
+}
+
+pub fn play_hand_card<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostError> {
+    let card = guest_str(c, p, n)?;
+    let req = HostRequest::PlayHand { player_id, card };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
+}
+
+/// The `Trigger.zone` payload (postcard `Option<ZoneChange>`), `&[]` outside
+/// the zone family.
+pub fn trigger_zone<C: HostCtx>(c: &mut C, buf: i32, cap: i32) -> Result<i32, HostError> {
+    let payload = c.st().wr().trigger().zone;
+    write_postcard(c, &payload, buf, cap, "trigger_zone")
+}
+
+/// The `PlayOutcome` code, `-1` outside `card` / `cardAfter`.
+pub fn trig_play_outcome<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .play_outcome
+        .map_or(-1, |v| v.as_i32()))
+}
+
+/// The `OutCause` code, `-1` outside `beforeOut`.
+pub fn trig_out_cause<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().out_cause.map_or(-1, |v| v.as_i32()))
 }
 
 pub fn tile_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
@@ -929,12 +1095,26 @@ pub fn set_tile_at<C: HostCtx>(c: &mut C, uid: i32, tile: i32) -> Result<i32, Ho
     Ok({ c.st_mut().w().set_tile_at(uid, tile) as i32 })
 }
 
+pub fn is_own_placement<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().is_own_placement(uid) as i32 })
+}
+
 pub fn is_face_down_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().is_face_down_at(uid) as i32 })
 }
 
-pub fn set_face_down_at<C: HostCtx>(c: &mut C, uid: i32, on: i32) -> Result<i32, HostError> {
-    Ok({ c.st_mut().w().set_face_down_at(uid, on != 0) as i32 })
+pub fn set_face_down_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    on: i32,
+    cause: i32,
+) -> Result<i32, HostError> {
+    let req = HostRequest::Flip {
+        uid,
+        face_down: on,
+        cause,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
 }
 
 pub fn is_immune_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
@@ -1129,6 +1309,7 @@ pub fn add_to_dest<C: HostCtx>(
     p: i32,
     n: i32,
     dest: i32,
+    counted: i32,
 ) -> Result<(), HostError> {
     // Field / Banished are not piles; `place_card` / "gone" is the right verb.
     if !matches!(dest, 0 | 1 | 4 | 5 | 6) {
@@ -1137,7 +1318,9 @@ pub fn add_to_dest<C: HostCtx>(
         )));
     }
     let card = guest_str(c, p, n)?;
-    c.st_mut().w().add_to_dest(player_id, &card, dest);
+    c.st_mut()
+        .w()
+        .add_to_dest(player_id, &card, dest, counted != 0);
     Ok(())
 }
 
@@ -1182,11 +1365,6 @@ pub fn to_discard<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Resu
     Ok(())
 }
 
-pub fn hand_count<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostError> {
-    let card = guest_str(c, p, n)?;
-    Ok(c.st().wr().hand_count(player_id, &card))
-}
-
 pub fn discard_count<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -1207,6 +1385,12 @@ pub fn deck_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErro
 
 pub fn discard_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().discard_size(player_id) })
+}
+
+pub fn hand_count<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostError> {
+    let card = guest_str(c, p, n)?;
+    let v = c.st().wr().hand_count(player_id, &card);
+    Ok(v)
 }
 
 pub fn discard_from_hand<C: HostCtx>(
@@ -1232,8 +1416,16 @@ pub fn shuffle_into_deck<C: HostCtx>(
     })
 }
 
+/// Take the run's own instance off play into its leave destination.
 pub fn unplace_card<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok({ c.st_mut().w().unplace_card() })
+    let uid = c.st().wr().self_uid();
+    let req = HostRequest::Leave {
+        uid,
+        destination: -1,
+        to: -1,
+        cause: ZoneChangeCause::Effect.as_i32(),
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
 }
 
 pub fn event_expire<C: HostCtx>(
@@ -1332,8 +1524,14 @@ pub fn self_face_down<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok({ c.st().wr().self_face_down() as i32 })
 }
 
-pub fn set_self_face_down<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostError> {
-    Ok({ c.st_mut().w().set_self_face_down(on != 0) as i32 })
+pub fn set_self_face_down<C: HostCtx>(c: &mut C, on: i32, cause: i32) -> Result<i32, HostError> {
+    let uid = c.st().wr().self_uid();
+    let req = HostRequest::Flip {
+        uid,
+        face_down: on,
+        cause,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
 }
 
 pub fn self_immune<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
@@ -2237,7 +2435,9 @@ pub fn place_card_on<C: HostCtx>(
     // (design G06 §2.15): a counteraction's body runs with `play_from_hand`
     // off, so its placement must not mark the play being answered.
     mark_placed_by_the_play(c);
-    Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
+    Ok(c.st_mut()
+        .w()
+        .place_or(&card, |w| w.place_card_on(player_id, tile, &card, note)))
 }
 
 pub fn place_card_at<C: HostCtx>(
@@ -2252,25 +2452,60 @@ pub fn place_card_at<C: HostCtx>(
     let note = guest_msg(c, p, n)?;
     // See `place_card_on`: only the play's own effect marks the play.
     mark_placed_by_the_play(c);
-    Ok(c.st_mut().w().place_card(player_id, &card, note))
+    Ok(c.st_mut()
+        .w()
+        .place_or(&card, |w| w.place_card(player_id, &card, note)))
 }
 
-pub fn set_dest<C: HostCtx>(c: &mut C, dest: i32) -> Result<(), HostError> {
-    c.st_mut().w().set_dest(dest);
+pub fn set_dest<C: HostCtx>(c: &mut C, dest: i32, cause: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_dest(dest, cause);
     Ok(())
 }
 
-pub fn set_transfer_to_dest<C: HostCtx>(c: &mut C, to: i32, dest: i32) -> Result<(), HostError> {
-    c.st_mut().w().set_transfer_to_dest(to, dest);
+/// `ctx::set_dest_unwatched` -- the next `set_dest` raises no arrival hook.
+pub fn set_dest_unwatched<C: HostCtx>(c: &mut C, dest: i32) -> Result<(), HostError> {
+    c.st_mut().w().set_dest(dest, -1);
     Ok(())
 }
 
-pub fn send_to_dest<C: HostCtx>(c: &mut C, dest: i32) -> Result<i32, HostError> {
-    Ok(c.st_mut().w().send_to_dest(dest).unwrap_or(-1))
+pub fn set_transfer_to_dest<C: HostCtx>(
+    c: &mut C,
+    to: i32,
+    dest: i32,
+    cause: i32,
+) -> Result<(), HostError> {
+    c.st_mut().w().set_transfer_to_dest(to, dest, cause);
+    Ok(())
 }
 
-pub fn transfer_to_dest<C: HostCtx>(c: &mut C, to: i32, dest: i32) -> Result<i32, HostError> {
-    Ok(c.st_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
+/// [`unplace_at`] on the run's own instance, applied now: the row moves before
+/// the rest of the effect runs.
+pub fn send_to_dest<C: HostCtx>(c: &mut C, dest: i32, cause: i32) -> Result<i32, HostError> {
+    let uid = c.st().wr().self_uid();
+    let req = HostRequest::Leave {
+        uid,
+        destination: dest,
+        to: -1,
+        cause,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
+}
+
+/// [`send_to_dest`] into another seat's area (`to` is whose).
+pub fn transfer_to_dest<C: HostCtx>(
+    c: &mut C,
+    to: i32,
+    dest: i32,
+    cause: i32,
+) -> Result<i32, HostError> {
+    let uid = c.st().wr().self_uid();
+    let req = HostRequest::Leave {
+        uid,
+        destination: dest,
+        to,
+        cause,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
 }
 
 pub fn rent_unit_mult<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
@@ -2852,10 +3087,6 @@ pub fn body_enter<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErro
 /// money moves raised are walked *after* the guest call returns, so the host
 /// drops the frame when the raise behind it finishes (`raise_core`), not here.
 pub fn body_leave<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
-    if std::env::var("DBG_HOOK").is_ok() {
-        let card = c.st().wr().current_card().to_string();
-        eprintln!("LEAVE card={} kind={:?}", card, c.st().wr().trigger().kind);
-    }
     Ok(())
 }
 
@@ -4052,15 +4283,6 @@ pub fn join_shield<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
         return Ok(0);
     }
     c.st_mut().w().set_trigger_join_shield();
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOIN_SHIELD used={:?}",
-            c.st()
-                .wr()
-                .trigger_join()
-                .map(|j| (j.declared.clone(), j.used.clone()))
-        );
-    }
     Ok(1)
 }
 
@@ -4069,16 +4291,6 @@ pub fn join_shield<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 /// open the call answers from the flag -- the body re-run past a join must not
 /// rebuild the round.
 pub fn join_open<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOIN_OPEN join={:?} next_answer={}",
-            c.st()
-                .wr()
-                .trigger_join()
-                .map(|j| (j.opened, j.seats.clone())),
-            c.st().next_answer
-        );
-    }
     if c.st().wr().trigger_join().is_some_and(|j| j.opened) {
         // Consume the logged answer for alignment with the replay.
         let st = c.st_mut();
@@ -4088,13 +4300,6 @@ pub fn join_open<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
             st.next_answer += 1;
         }
         return Ok(1);
-    }
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOIN_OPEN_CHK joined={} block={}",
-            c.st().wr().trigger().joined_in_window,
-            c.st().wr().trigger().join.is_some()
-        );
     }
     if c.st().wr().trigger().joined_in_window {
         // Declared inside the window it is answering: one window per link.
@@ -4118,17 +4323,6 @@ pub fn join_opened<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 
 /// Opener side: how many seats declared (bars the fallback).
 pub fn join_joiner_count<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOINER_COUNT join={:?}",
-            c.st().wr().trigger_join().map(|j| (
-                j.opened,
-                j.seats.clone(),
-                j.declared.clone(),
-                j.used.clone()
-            ))
-        );
-    }
     Ok(c.st()
         .wr()
         .trigger_join()

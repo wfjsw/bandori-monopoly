@@ -70,7 +70,7 @@ fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, PASSER, NEVER);
     // 规则书（2）: 「你的下回合开始前」 -- the card waits in play for its window:
     // the `PassPlayer` / `SettleBefore` hooks only reach a placed field card.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "CRYCHIC:想要抓住...",
@@ -141,7 +141,7 @@ fn on_turn_start(player_id: i32) -> card_sdk::Asked {
             ctx::run_planned_move(player_id);
         }
     }
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::state::set(player_id, PASSER, NEVER);
     Ok(())
 }

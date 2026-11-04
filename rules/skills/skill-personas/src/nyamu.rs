@@ -146,7 +146,7 @@ fn enter_two(player_id: i32) {
         if ctx::is_face_down_at(uid) {
             continue;
         }
-        ctx::set_face_down_at(uid, true);
+        ctx::set_face_down_at(uid, true, card_sdk::abi::ZoneChangeCause::Effect);
         // 「不受任何效果影响」
         ctx::set_immune_at(uid, true);
         n += 1;
@@ -165,7 +165,7 @@ fn enter_two(player_id: i32) {
 fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
     for (uid, _c) in ctx::field_instances(player_id) {
         if ctx::is_immune_at(uid) {
-            ctx::set_face_down_at(uid, false);
+            ctx::set_face_down_at(uid, false, card_sdk::abi::ZoneChangeCause::Effect);
             ctx::set_immune_at(uid, false);
         }
     }

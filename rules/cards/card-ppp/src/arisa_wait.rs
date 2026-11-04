@@ -43,7 +43,7 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
 
 fn arisa_wait(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]。」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("arisa_wait_note")));
     ctx::log(
         player_id,

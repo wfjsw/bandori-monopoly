@@ -733,6 +733,14 @@ action_kinds! {
     CardFired;
     MarkChanged;
     SpendBefore;
+    ZoneLeft;
+    ZoneLeftAfter;
+    HandChanged;
+    CardFaceFlipped;
+    CardFaceFlippedAfter;
+    CardAttached;
+    CardDetached;
+    OpeningHandDealt;
     DiceRollPlan @ dual;
 }
 
@@ -788,7 +796,7 @@ mod tests {
         // 73 before `diceRollCast` / `diceRollSettled` (G03, ABI v109), plus
         // G01's `cardFired` / `markChanged` (ABI v105) = 76, plus G05's dual
         // `diceRollPlan` (ABI v111) = 77.
-        assert_eq!(Action::KINDS.len(), 77);
+        assert_eq!(Action::KINDS.len(), 85);
         // A dual kind is filter-shaped but still an action entry.
         assert!(Action::KINDS
             .iter()

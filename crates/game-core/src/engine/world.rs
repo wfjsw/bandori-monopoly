@@ -58,6 +58,62 @@ fn one() -> f64 {
     1.0
 }
 
+/// Where in a draw pile a `Deck` landing goes (the `Dest` codes 4/5/6).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DeckPlacement {
+    /// On top (`Dest::DeckTop`; the end of the vector is the top).
+    Top,
+    /// Underneath (`Dest::DeckBottom`).
+    Bottom,
+    /// Anywhere (`Dest::DeckRandom`, the default).
+    #[default]
+    Random,
+}
+
+/// One card move, fully described before any row changes (design G08 §7.1).
+///
+/// A transition is the single shape every zone change takes: the pair, the
+/// cause, the landing seat, and for an attachment its host and face. The
+/// engine's `Run::zone_prepare` resolves it and `Run::zone_commit` applies it;
+/// `World::apply_zone_row` is the pure row half.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZoneTransition {
+    pub uid: i32,
+    pub from: game_kinds::Zone,
+    pub to: game_kinds::Zone,
+    pub cause: game_kinds::ZoneChangeCause,
+    /// The seat whose area it lands in; `-1` = the row's owner.
+    pub holder: i32,
+    /// The host for `to = Attached`.
+    pub host: i32,
+    /// Where in the pile a `to = Deck` landing goes.
+    pub deck: DeckPlacement,
+    /// The arrival face for `to = Attached` (the book puts held cards down).
+    pub face_down: bool,
+    /// Raised only when the caller is the draw routine.
+    pub counted: bool,
+    /// Already inside a cascade (the cycle guard).
+    pub cascaded: bool,
+}
+
+impl ZoneTransition {
+    /// A transition from `from` into `to` with a neutral holder.
+    pub fn new(uid: i32, from: game_kinds::Zone, to: game_kinds::Zone) -> Self {
+        Self {
+            uid,
+            from,
+            to,
+            cause: game_kinds::ZoneChangeCause::Other,
+            holder: -1,
+            host: -1,
+            deck: DeckPlacement::default(),
+            face_down: false,
+            counted: false,
+            cascaded: false,
+        }
+    }
+}
+
 /// How a play settles its number-range dice (「以理论最大值或最小值结算」).
 /// The wire encoding is the old `1` / `0` / `-1` triple; only the Rust side is
 /// an enum.
@@ -270,6 +326,12 @@ pub struct TurnCtx {
     /// A copy skips a source that placed.
     #[serde(default)]
     pub placed_during_play: bool,
+    /// The play being resolved never took effect (`set_ineffective_at(-1)`,
+    /// i.e. on a hand card that has no instance; 「视为此卡未生效」). The
+    /// play's own arrival into the Graveyard carries it as the `wasted` bit.
+    /// Scoped to one play, like `play_from_hand`.
+    #[serde(default)]
+    pub play_ineffective: bool,
     /// The card id of the play being resolved (`play_from_hand` scope). The
     /// copy record's 「效果带有放置」 test tells the play's own effect from a
     /// counteraction's placement by comparing against the innermost resolving
@@ -427,6 +489,7 @@ impl Default for TurnCtx {
             play_drove_move: false,
             play_from_hand: false,
             placed_during_play: false,
+            play_ineffective: false,
             play_card: None,
             play_arg: Vec::new(),
             cancelled_designations: Vec::new(),

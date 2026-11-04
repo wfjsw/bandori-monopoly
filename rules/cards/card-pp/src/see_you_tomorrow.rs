@@ -72,7 +72,7 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     //   who could already play can never pay it (and its +2 crystals). BACKLOG
     //   LOY-SEEYOU-02.
     if up > down && !crate::resonance::try_resonance(player_id)? {
-        ctx::set_dest(ctx::Dest::Hand);
+        ctx::set_dest(ctx::Dest::Hand, card_sdk::abi::ZoneChangeCause::Effect);
         return Ok(());
     }
     // 规则书[手]: 「将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正」 -- X is the

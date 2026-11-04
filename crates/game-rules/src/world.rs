@@ -89,6 +89,12 @@ pub struct Trigger {
     /// The instance/row this raise is about (`-1` = none). Never restamped
     /// per hook job -- the job's own instance is `self_uid()`.
     pub instance: i32,
+    /// The transition this raise is about. `None` outside the zone family.
+    pub zone: Option<game_kinds::ZoneChange>,
+    /// The playing card's outcome on `card` / `cardAfter`; `None` elsewhere.
+    pub play_outcome: Option<game_kinds::PlayOutcome>,
+    /// Why the player left on `beforeOut`; `None` elsewhere.
+    pub out_cause: Option<game_kinds::OutCause>,
     /// A `BuyGate` refusal's reason key.
     pub reason: Option<String>,
     /// 真奈 join: the seat self-targeted effects of counters answering **this
@@ -281,6 +287,9 @@ impl Default for Trigger {
             join_used: false,
             settle_tile: -1,
             outcome: None,
+            zone: None,
+            play_outcome: None,
+            out_cause: None,
             charge_skill: false,
             subject_card: None,
             join: None,
@@ -352,6 +361,9 @@ impl Trigger {
             join_used: false,
             settle_tile: -1,
             outcome: None,
+            zone: None,
+            play_outcome: None,
+            out_cause: None,
             charge_skill: false,
             subject_card: None,
             join: None,
@@ -435,6 +447,18 @@ pub trait CardWorld: Clone + 'static {
     /// additive. Defaults to a plain log so test worlds need not implement it.
     fn effect(&mut self, player_id: i32, msg: Msg) {
         self.log(player_id, msg);
+    }
+
+    /// Mint a row for a body placement, re-using the uid the same-ordered
+    /// placement of an earlier pass minted. A re-run then lands on the same
+    /// instance instead of adding a second row for one placement. The world
+    /// outside a drive has no placement log; it mints every time.
+    fn place_or<F>(&mut self, card: &str, place: F) -> i32
+    where
+        F: FnOnce(&mut Self) -> i32,
+    {
+        let _ = card;
+        place(self)
     }
 
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32;
@@ -712,7 +736,8 @@ pub trait CardWorld: Clone + 'static {
     /// Put one copy of `card` into `player_id`'s pile at `dest` (wire [`Dest`] code
     /// -- 0 graveyard, 1 hand, 2 field, 3 banished, 4 deck top, 5 deck bottom,
     /// 6 deck shuffle). Named-card counterpart of [`Self::send_to_dest`].
-    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32);
+    /// `counted` marks a draw arrival (the `handChanged` listener's flag).
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32, counted: bool);
     /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
     /// anywhere; returns whether it was there.
     fn take_card(&mut self, player_id: i32, card: &str, src: crate::CardPile) -> bool;
@@ -731,6 +756,15 @@ pub trait CardWorld: Clone + 'static {
     fn discard_size(&self, player_id: i32) -> i32;
     /// One copy hand -> discard; 1 when it was held.
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32;
+    /// Remove one copy of `card` from the hand in place (the attach routine's
+    /// own pile move); `false` when it was not held.
+    fn take_from_hand(&mut self, _player_id: i32, _card: &str) -> bool {
+        false
+    }
+    /// A live instance of `card` with `player_id` that is not `except`.
+    fn live_instance_of(&self, _player_id: i32, _card: &str, _except: i32) -> Option<i32> {
+        None
+    }
     /// Shuffle the hand and/or the discard pile into the draw pile.
     fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32;
 
@@ -750,19 +784,29 @@ pub trait CardWorld: Clone + 'static {
     /// Place the card **on a tile** rather than with its owner;
     /// `tile: -1` is [`Self::place_card`]. Returns the new instance's uid.
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32;
-    /// Where this card goes when its effect finishes.
-    fn set_dest(&mut self, dest: i32);
+    /// Where this card goes when its effect finishes. `cause` is the
+    /// transition's [`game_kinds::ZoneChangeCause`] code.
+    fn set_dest(&mut self, dest: i32, cause: i32);
     /// [`Self::set_dest`] aimed at another player's pile: `to` is whose
     /// discard/hand/deck it lands in, for 「将此卡放入[使用者]弃卡区」 when
     /// [使用者] is not the one holding it.
-    fn set_transfer_to_dest(&mut self, to: i32, dest: i32);
+    fn set_transfer_to_dest(&mut self, to: i32, dest: i32, cause: i32);
     /// Move the running instance to `dest` **now** rather than when its effect
     /// finishes -- for a card that must be gone before the rest of the effect
     /// runs (a move or a settle follows). Lands in its own owner's pile;
     /// returns the owner it left, or `None` when it was not in play.
-    fn send_to_dest(&mut self, dest: i32) -> Option<i32>;
+    fn send_to_dest(&mut self, dest: i32, cause: i32) -> Option<i32>;
     /// [`Self::send_to_dest`] aimed at another player's pile: `to` is whose.
-    fn transfer_to_dest(&mut self, to: i32, dest: i32) -> Option<i32>;
+    fn transfer_to_dest(&mut self, to: i32, dest: i32, cause: i32) -> Option<i32>;
+    /// Re-apply a host request to this body's **own view** when its answer is
+    /// replayed from the log. The shell applied the request to the live world
+    /// on the pass that paused; the re-run's guest copy has to show the same
+    /// result, or a body that reads right after the call (`is_placed`, a
+    /// counter on the moved row) sees the pre-request state and the replayed
+    /// run diverges from the pass that paused. `answer` is the logged return
+    /// value. Only zone requests need it -- a plain answer carries no world
+    /// change.
+    fn replay_host(&mut self, _req: &crate::host::HostRequest, _answer: i32) {}
     /// Take the *running* instance off the field; returns the owner it left
     /// (or -1). No locator: the instance is the one the run was dispatched for.
     fn unplace_card(&mut self) -> i32;
@@ -799,7 +843,7 @@ pub trait CardWorld: Clone + 'static {
     fn self_face_down(&self) -> bool {
         false
     }
-    fn set_self_face_down(&mut self, _on: bool) -> bool {
+    fn set_self_face_down(&mut self, _on: bool, _cause: i32) -> bool {
         false
     }
     fn self_immune(&self) -> bool {
@@ -876,8 +920,53 @@ pub trait CardWorld: Clone + 'static {
     fn set_tile_prop(&mut self, _tile: i32, _key: &str, _value: i32) -> i32 {
         0
     }
-    fn unplace_at(&mut self, _uid: i32) -> i32 {
+    /// Take the instance at `uid` off play into `destination` (a guest `Dest`
+    /// code; `-1` = its own leave destination). Answers the owner it left.
+    fn unplace_at(&mut self, _uid: i32, _destination: i32, _cause: i32) -> i32 {
         -1
+    }
+    /// The zone of an instance (a [`game_kinds::Zone`] wire code).
+    fn zone_of(&self, _uid: i32) -> i32 {
+        0
+    }
+    fn attachment_host(&self, _uid: i32) -> i32 {
+        -1
+    }
+    fn attached_cards(&self, _host: i32) -> Vec<i32> {
+        Vec::new()
+    }
+    fn created_cards(&self, _creator: i32) -> Vec<i32> {
+        Vec::new()
+    }
+    fn earliest_owned_tile(&self, _player_id: i32) -> i32 {
+        -1
+    }
+    fn instance_owner(&self, _uid: i32) -> i32 {
+        -1
+    }
+    fn set_instance_owner(&mut self, _uid: i32, _owner: i32) -> bool {
+        false
+    }
+    fn set_created_by_at(&mut self, _uid: i32, _creator: i32) -> bool {
+        false
+    }
+    fn set_ineffective_at(&mut self, _uid: i32, _on: bool) -> bool {
+        false
+    }
+    fn is_ineffective_at(&self, _uid: i32) -> bool {
+        false
+    }
+    fn attach_card(&mut self, _host: i32, _card: &str, _cause: i32, _face_down: bool) -> i32 {
+        -1
+    }
+    fn detach_card(&mut self, _uid: i32, _destination: i32, _cause: i32) -> i32 {
+        -1
+    }
+    fn rehome_card(&mut self, _tile: i32, _owner: i32) -> bool {
+        false
+    }
+    fn play_hand_card(&mut self, _player_id: i32, _card: &str) -> bool {
+        false
     }
     fn tile_at(&self, _uid: i32) -> i32 {
         -2
@@ -888,7 +977,12 @@ pub trait CardWorld: Clone + 'static {
     fn is_face_down_at(&self, _uid: i32) -> bool {
         false
     }
-    fn set_face_down_at(&mut self, _uid: i32, _on: bool) -> bool {
+    /// See [`card_sdk::ctx::is_own_placement`]; `false` where the caller has no
+    /// per-run placement ledger.
+    fn is_own_placement(&self, _uid: i32) -> bool {
+        false
+    }
+    fn set_face_down_at(&mut self, _uid: i32, _on: bool, _cause: i32) -> bool {
         false
     }
     fn is_immune_at(&self, _uid: i32) -> bool {

@@ -99,7 +99,7 @@ fn pick_jump(player_id: i32) -> Declared<i32> {
 /// 「[场]花音每次倒走时此卡获得一个水母标记」 -- the placement. `place` keeps
 /// the 9-cap.
 fn place(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("kanon_march_note")));
     ctx::log(
         player_id,
@@ -138,7 +138,7 @@ fn jump(player_id: i32, pick: i32) -> card_sdk::Asked {
         &Msg::new(key!("kanon_march_jump")).tile("tile", pick),
     );
     // 规则书: 「然后此卡置入弃牌堆」
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 

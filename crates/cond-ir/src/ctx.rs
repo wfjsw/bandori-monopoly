@@ -60,6 +60,10 @@ pub enum FnId {
     /// `card_is('id')` -- the trigger's card id hash equals `id_of(id)`.
     /// Pair of [`FnId::CounterIs`]; compared against `VarId::TriggerCard`.
     CardIs = 35,
+    /// `resolving('id')` -- the card's body is on the resolving stack. The
+    /// name is an `id_of` hash baked at lower time; membership is read from
+    /// the named table the way `tile_named` reads its value.
+    Resolving = 36,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).

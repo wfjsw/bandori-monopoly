@@ -41,7 +41,7 @@ const ID: &str = "MyGO:哪怕这旅程没有终点";
 
 fn endless_journey(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置于当前格子上」 -- bound to where the player is.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card_on(
         player_id,
         ctx::player_pos(player_id),
@@ -80,7 +80,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("endless_journey_decayed")).player_id("who", player_id),

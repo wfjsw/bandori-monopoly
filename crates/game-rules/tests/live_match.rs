@@ -562,11 +562,30 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
     m.give_cards(actor, &["TEST:aimer"]);
     m.give_cards(other, &["TEST:counter"]);
     m.act(actor, &play("TEST:aimer")).expect("play the aimer");
-    // The counteraction window is offered to the named recipient; play the counter.
+    // The play opens the play's own window first (C13): `TEST:counter` answers
+    // to the *effect*, so the recipient passes this one.
     let st = m.state();
     assert_eq!(
         st.prompt.kind, "choice",
         "a [反击] window should be pending: {:?}",
+        st.prompt
+    );
+    let prompt = st.prompt.id;
+    let pass = st.prompt.options.len().max(2) as i32 - 1;
+    m.act(
+        other,
+        &NetMessage {
+            prompt,
+            value: pass,
+            ..NetMessage::act("answer")
+        },
+    )
+    .expect("pass the play window");
+    // The effect window names the card's raise; play the counter.
+    let st = m.state();
+    assert_eq!(
+        st.prompt.kind, "choice",
+        "the effect window should be pending: {:?}",
         st.prompt
     );
     let prompt = st.prompt.id;

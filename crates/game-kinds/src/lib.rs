@@ -24,7 +24,10 @@ pub mod move_plan;
 pub mod vocab;
 
 pub use move_plan::PlanKind;
-pub use vocab::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
+pub use vocab::{
+    Dice, Dir, MoveKind, MsgKey, OutCause, Payee, PlayOutcome, Seat, Tile, Zone, ZoneChange,
+    ZoneChangeCause,
+};
 
 /// One live engine trigger kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -650,6 +653,57 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: false,
         hook_only: true,
     },
+    // G08: the zone family. Raised by the single zone writer; 113-119 are the
+    // block between the live 112 and 121. `openingHandDealt` takes the lowest
+    // free id above the live table.
+    EngineKind {
+        id: 113,
+        wire: "zoneLeft",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 114,
+        wire: "zoneLeftAfter",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 115,
+        wire: "handChanged",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 116,
+        wire: "cardFaceFlipped",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 117,
+        wire: "cardFaceFlippedAfter",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 118,
+        wire: "cardAttached",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 119,
+        wire: "cardDetached",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 132,
+        wire: "openingHandDealt",
+        is_filter: false,
+        hook_only: true,
+    },
     EngineKind {
         id: 122,
         wire: "spendBefore",
@@ -847,6 +901,14 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "paySplitMulBefore" => Some(110),
         "cardFired" => Some(111),
         "markChanged" => Some(112),
+        "zoneLeft" => Some(113),
+        "zoneLeftAfter" => Some(114),
+        "handChanged" => Some(115),
+        "cardFaceFlipped" => Some(116),
+        "cardFaceFlippedAfter" => Some(117),
+        "cardAttached" => Some(118),
+        "cardDetached" => Some(119),
+        "openingHandDealt" => Some(132),
         "spendBefore" => Some(122),
         "diceRollCast" => Some(123),
         "diceRollSettled" => Some(124),
@@ -915,7 +977,8 @@ mod tests {
         const HOOKS: &[i32] = &[
             45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68,
             69, 70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106,
-            110, 111, 112, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+            110, 111, 112, 114, 115, 117, 119, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+            132,
         ];
         for r in ENGINE_KINDS {
             assert_eq!(
@@ -927,6 +990,6 @@ mod tests {
             assert_eq!(r.hook_only, HOOKS.contains(&r.id), "hook_only id {}", r.id);
         }
         assert_eq!(FILTERS.len(), 34);
-        assert_eq!(HOOKS.len(), 54);
+        assert_eq!(HOOKS.len(), 60);
     }
 }

@@ -542,10 +542,35 @@ impl PlayCtx<'_> {
         for i in 0..self.w.player_count() {
             raise!(self, "deckBeforeGame", i)?;
         }
-        // The opening deal, per player's own hand size.
+        // The opening deal, per player's own hand size, one card at a time:
+        // each single deal raises `openingHandDealt` on the dealt card
+        // (「开局时抽到此卡洗回」). Cause `Opening`, counted (the `drawn`
+        // points are not raised -- the deal is quiet).
         for i in 0..self.w.player_count() {
             let n = self.start_hand(i);
-            self.draw(i, n, false)?;
+            for _ in 0..n {
+                let before = self.w.hidden[i].hand.len();
+                self.draw(i, 1, false)?;
+                let dealt = (self.w.hidden[i].hand.len() > before)
+                    .then(|| self.w.hidden[i].hand.last().cloned())
+                    .flatten();
+                if let Some(card) = dealt {
+                    raise!(
+                        self,
+                        "openingHandDealt",
+                        i,
+                        card = Some(card),
+                        zone = Some(game_kinds::ZoneChange {
+                            from: game_kinds::Zone::Deck,
+                            to: game_kinds::Zone::Hand,
+                            cause: game_kinds::ZoneChangeCause::Opening,
+                            holder: i as i32,
+                            wasted: false,
+                            counted: true,
+                        })
+                    )?;
+                }
+            }
         }
         self.wait(3.0);
         // 2. 初始重抽 -- **every** seat decides, not only the human ones. The
@@ -640,7 +665,32 @@ impl PlayCtx<'_> {
         self.w.hidden[i].deck = draw;
         self.w.st.players[i].mulligan = true;
         let n = self.start_hand(i);
-        self.draw(i, n, false)?;
+        // The redraw is a `handChanged` per card with cause `Mulligan` -- not a
+        // second `openingHandDealt` (Q8), so 朝同一片天空迈进 can tell
+        // 「开局时抽到」 from 「换牌后」.
+        for _ in 0..n {
+            let before = self.w.hidden[i].hand.len();
+            self.draw(i, 1, false)?;
+            let dealt = (self.w.hidden[i].hand.len() > before)
+                .then(|| self.w.hidden[i].hand.last().cloned())
+                .flatten();
+            if let Some(card) = dealt {
+                raise!(
+                    self,
+                    "handChanged",
+                    i,
+                    card = Some(card),
+                    zone = Some(game_kinds::ZoneChange {
+                        from: game_kinds::Zone::Deck,
+                        to: game_kinds::Zone::Hand,
+                        cause: game_kinds::ZoneChangeCause::Mulligan,
+                        holder: i as i32,
+                        wasted: false,
+                        counted: false,
+                    })
+                )?;
+            }
+        }
         self.w.log(
             "mulligan",
             i as i32,
@@ -1149,7 +1199,8 @@ impl PlayCtx<'_> {
                     .finish_move_body(i, m, is_main_move, false)
                     .map(|()| false);
             }
-            if m.teleport_to.is_some() {
+            let entry_teleport = m.teleport_to.is_some();
+            if entry_teleport {
                 // Planted before the roll (have already been rewritten): no die
                 // is cast. The main move's `roll` condition still runs, on the
                 // transaction's own view and with the "no face" sentinel.
@@ -1187,9 +1238,13 @@ impl PlayCtx<'_> {
             if ran {
                 self.close_roll_window(&mut m);
             }
-            // A `void_walk` teleport has already run (and raised its tail)
-            // from inside the window; a bare window write teleported above;
-            // only an ordinary move walks. `ran` is not required here: a
+            // A teleport the step itself carried (`entry_teleport`), a
+            // `void_walk` teleport run from inside the window, and a bare
+            // window write teleported above all end the same way -- only an
+            // ordinary move walks. Without `entry_teleport` here, a body's
+            // pre-written landing (whose frame copy the teleport just spent)
+            // would be followed by a zero-step walk that settles the landing
+            // tile a second time. `ran` is not required here: a
             // replacement whose abnormal gate refused it never reaches the
             // engine (`HostRequest::Move` returns 0 after clearing
             // `teleport_to`/`void_walk` and resetting `kind = Walk`), and
@@ -1198,7 +1253,7 @@ impl PlayCtx<'_> {
             if !self.out(i)
                 && self.playing()
                 && move_plan::walk_runs(
-                    m.teleport_to.is_some() || after_teleport.is_some(),
+                    entry_teleport || after_teleport.is_some(),
                     m.cancelled,
                     m.void_walk,
                 )
@@ -5068,8 +5123,13 @@ impl PlayCtx<'_> {
         self.wait(1.6);
         raise!(self, "bankrupt", i)?;
         // `beforeOut` (hook) -- before the player is cleared.
-        raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i)?;
+        raise!(
+            self,
+            "beforeOut",
+            i,
+            out_cause = Some(game_kinds::OutCause::Bankrupt)
+        )?;
+        let deeds = self.remove_from_game(i, game_kinds::OutCause::Bankrupt)?;
         // `bankruptResolved` (Q6 / K11) -- the terminal: cash-in done, the seat
         // cleared, the leftover auctions finished. Nothing else observes
         // "cleanup + auctions finished", so this is the point a 「结算完成时」
@@ -5102,8 +5162,13 @@ impl PlayCtx<'_> {
             Msg::new("log.forfeit").player_id("who", i),
         );
         // `beforeOut` (hook) -- before the player is cleared.
-        raise!(self, "beforeOut", i)?;
-        let deeds = self.remove_from_game(i)?;
+        raise!(
+            self,
+            "beforeOut",
+            i,
+            out_cause = Some(game_kinds::OutCause::Forfeit)
+        )?;
+        let deeds = self.remove_from_game(i, game_kinds::OutCause::Forfeit)?;
         // `leaveAfter` -- after the player is cleared out, but before the
         // game-over check so it still runs when leaving ends the match.
         raise!(self, "leaveAfter", i)?;
@@ -5118,7 +5183,7 @@ impl PlayCtx<'_> {
     }
 
     /// Clear the player; its land returns to the bank.
-    fn remove_from_game(&mut self, i: usize) -> Flow<Vec<usize>> {
+    fn remove_from_game(&mut self, i: usize, cause: game_kinds::OutCause) -> Flow<Vec<usize>> {
         // Collect the rule ids this seat's field carries **before** the clear
         // below: markers those rules own leave the game with them (user ruling
         // 2026-10-07), wherever the copies sit.
@@ -5127,9 +5192,6 @@ impl PlayCtx<'_> {
             .iter()
             .map(|f| f.card.clone())
             .collect();
-        // Every bound counter unit dies with its owning card instance (user
-        // ruling 2026-10-10). Collect the uids before the field is cleared.
-        let owned_uids: Vec<i32> = self.w.st.players[i].field.iter().map(|f| f.uid).collect();
         let s = &mut self.w.st.players[i];
         s.ai = true;
         s.money = 0;
@@ -5155,17 +5217,31 @@ impl PlayCtx<'_> {
         // `owner == -1`) are not player-held and remain. `pp::
         // shanyao_counter_on_short_payment` pins the fan being cleared.
         s.tokens.clear();
-        s.field.clear();
+        // The field leaves through the writer, one transition per card, so
+        // each instance hears its own `zoneLeft` and its attachments / children
+        // cascade (I11, I12). 「移出游戏」 is the `Banished` seat; the row
+        // cleanup (bound units included) is the writer's.
+        // Attached rows are not listed: their host's transition cascades them
+        // (and a host that a leave body keeps on the field keeps them
+        // attached, e.g. ONE OF US's parked deeds riding the card across).
+        let leaving: Vec<i32> = self.w.st.players[i]
+            .field
+            .iter()
+            .filter(|f| f.on < 0)
+            .map(|f| f.uid)
+            .collect();
+        // `OutCause` and `ZoneChangeCause` are separate vocabularies; the
+        // zone transition names why the row leaves, so map across.
+        let zone_cause = match cause {
+            game_kinds::OutCause::Bankrupt => game_kinds::ZoneChangeCause::Bankruptcy,
+            game_kinds::OutCause::Forfeit => game_kinds::ZoneChangeCause::Forfeit,
+            game_kinds::OutCause::Removed => game_kinds::ZoneChangeCause::Other,
+        };
+        for uid in leaving {
+            self.zone_leave(uid, 3, -1, zone_cause.as_i32())?;
+        }
         self.w.hidden[i].hand.clear();
         self.w.extra_turns.retain(|&x| x != i);
-        // One cleanup path keyed by instance (user ruling 2026-10-10): every
-        // bound counter unit dies with its owning card instance. The standing
-        // the tile-mark owner pseudo card is never on a player field and is never
-        // destroyed, so its tile [tile marks] remain. Legacy rows (`instance == -1`)
-        // still go through the name-keyed purge below.
-        for uid in owned_uids {
-            self.w.destroy_instance_units(uid);
-        }
         self.purge_markers_owned_by(&owned_rules);
         let deeds: Vec<usize> = (0..self.data.tiles.len())
             .filter(|&t| self.w.st.owners[t] == i as i32)
@@ -5519,6 +5595,25 @@ impl PlayCtx<'_> {
                 continue;
             };
             got += 1;
+            // `handChanged` -- a hand arrival. The draw routine is the one
+            // place that marks it `counted` (「抽」); the opening deal and the
+            // mulligan raise their own point instead (`hooks == false` here).
+            if hooks {
+                raise!(
+                    self,
+                    "handChanged",
+                    i,
+                    card = Some(card.clone()),
+                    zone = Some(game_kinds::ZoneChange {
+                        from: game_kinds::Zone::Deck,
+                        to: game_kinds::Zone::Hand,
+                        cause: game_kinds::ZoneChangeCause::Draw,
+                        holder: i as i32,
+                        wasted: false,
+                        counted: true,
+                    })
+                )?;
+            }
             // Empty-deck maintenance has priority over the card's own Drawn,
             // field Drew hooks, and any prompts those effects may open.
             self.refill_draw_pile(i, hooks)?;
@@ -5672,8 +5767,9 @@ impl PlayCtx<'_> {
         self.rules_cant_play(i, id)
     }
 
-    /// Play a card from the hand.
-    pub(crate) fn play_from_hand(&mut self, i: usize, id: &str) -> Flow<()> {
+    /// Play a card from the hand. Also the `play_hand_card` import's routine
+    /// (a card run from hand by another effect, design G08 §5.4).
+    pub fn play_from_hand(&mut self, i: usize, id: &str) -> Flow<()> {
         let Some(k) = self.w.hidden[i].hand.iter().position(|c| c == id) else {
             return Ok(());
         };
@@ -5708,6 +5804,11 @@ impl PlayCtx<'_> {
         // lifetime as `play_from_hand` (design G06 §2.15).
         let prev_play_card = self.w.turn.play_card.take();
         self.w.turn.play_card = Some(id.to_string());
+        // Whether the play never took effect (「视为此卡未生效」 on a card with
+        // no instance, e.g. 羽丘's failed roll): same lifetime, and its
+        // arrival carries the waste bit.
+        let prev_ineffective = self.w.turn.play_ineffective;
+        self.w.turn.play_ineffective = false;
         // Per-pair designations cancelled on the previous play must not leak
         // into this one. Scoped to the play (not the command): the cancels are
         // written by a counteraction in the `card` window below, which is its
@@ -5759,7 +5860,8 @@ impl PlayCtx<'_> {
         // Dest below but its effect body does not run. The card still flashes,
         // marked negated. A play that goes through announces itself at its body
         // (`drive_inner_body`), which is the point the effect actually runs.
-        let dest = if t.is_cancelled() {
+        let cancelled = t.is_cancelled();
+        let dest = if cancelled {
             self.card_activated(
                 crate::state::card_trigger::PLAY,
                 i as i32,
@@ -5772,16 +5874,47 @@ impl PlayCtx<'_> {
         } else {
             rules.play(self, i, id)?
         };
+        // The played hand card has no instance, so its own arrival is filed by
+        // name here; the zone-family hooks still fire with the play's
+        // `ZoneChange` (`from` = the hand it left).
+        let arrival = game_kinds::ZoneChange {
+            from: game_kinds::Zone::Hand,
+            to: match dest {
+                Dest::Hand => game_kinds::Zone::Hand,
+                Dest::Banished => game_kinds::Zone::Banished,
+                _ => game_kinds::Zone::Graveyard,
+            },
+            cause: game_kinds::ZoneChangeCause::Play,
+            holder: i as i32,
+            wasted: self.w.turn.play_ineffective,
+            counted: false,
+        };
+        let outcome = game_kinds::PlayOutcome::from_i32(cancelled as i32);
         match dest {
             Dest::Graveyard => {
                 if !self.out(i) {
                     self.w.hidden[i].graveyard.push(id.to_string());
                     self.refill_draw_pile(i, true)?;
                     // `discarded` -- before the `cardPlayed` announcement.
-                    raise!(self, "discarded", i, card = Some(id.to_string()))?;
+                    raise!(
+                        self,
+                        "discarded",
+                        i,
+                        card = Some(id.to_string()),
+                        zone = Some(arrival)
+                    )?;
                 }
             }
-            Dest::Hand => self.w.hidden[i].hand.push(id.to_string()),
+            Dest::Hand => {
+                self.w.hidden[i].hand.push(id.to_string());
+                raise!(
+                    self,
+                    "handChanged",
+                    i,
+                    card = Some(id.to_string()),
+                    zone = Some(arrival)
+                )?;
+            }
             Dest::Banished => {
                 self.w.log(
                     "text",
@@ -5794,14 +5927,17 @@ impl PlayCtx<'_> {
         // `cardAfter` -- the card's own effect is fully resolved and it has
         // landed wherever its `Dest` sent it. The played id rides `cards` too
         // (the `card` / `skillUsed` pattern), so a residual can read
-        // `trigger::cards()` and match the id's band prefix.
+        // `trigger::cards()` and match the id's band prefix. The outcome is
+        // what a 「被抵消时」 clause reads (PPP:Returns) -- a negated play
+        // still announces itself.
         raise!(
             self,
             "cardAfter",
             i,
             card = Some(id.to_string()),
             cards = vec![id.to_string()],
-            by_card = Some(i as i32)
+            by_card = Some(i as i32),
+            play_outcome = Some(outcome)
         )?;
         // `cardPlayed` (hook) -- a card's hand effect resolved (its `Dest` is final).
         raise!(
@@ -5810,7 +5946,8 @@ impl PlayCtx<'_> {
             i,
             card = Some(id.to_string()),
             cards = vec![id.to_string()],
-            by_card = Some(i as i32)
+            by_card = Some(i as i32),
+            play_outcome = Some(outcome)
         )?;
         // The completed play joins the copy-source log 「上一张卡」 (G06
         // §2.15). Not cleared at a turn start; capped by `MAX_PLAY_LOG`.
@@ -5823,6 +5960,7 @@ impl PlayCtx<'_> {
         self.w.turn.play_from_hand = prev_from_hand;
         self.w.turn.extreme = prev_extreme;
         self.w.turn.play_card = prev_play_card;
+        self.w.turn.play_ineffective = prev_ineffective;
         Ok(())
     }
 

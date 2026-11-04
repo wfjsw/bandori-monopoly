@@ -333,7 +333,7 @@ fn every_registration_names_a_declared_kind() {
             "Action::KINDS has `{name}` but the action_kinds! table parse missed it"
         );
     }
-    assert_eq!(sdk_filter.len(), 28, "Filter::KINDS row count");
+    assert_eq!(sdk_filter.len(), 34, "Filter::KINDS row count");
 
     for f in &files {
         let Ok(src) = std::fs::read_to_string(f) else {

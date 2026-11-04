@@ -8,7 +8,8 @@
 use alloc::vec::Vec;
 
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::MarkRef;
+use bandori_std::zones::ZoneChangeCause;
+use card_sdk::abi::OutCause;
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
 
@@ -16,24 +17,33 @@ use card_sdk::{key, Action, CardDef, Msg, On};
 /// overwrite the first copy's pair. `one_of_us_partner` is stored `+1` so seat
 /// 0 survives (an unset prop reads back as 0).
 const PARTNER: &str = "one_of_us_partner";
+/// The two parked deeds are attached instances (uid `+1`); each records its
+/// tile in `DEED_TILE` (`tile + 1`). 「放置在该卡上」 is an attachment.
 const MINE: &str = "one_of_us_mine";
 const THEIRS: &str = "one_of_us_theirs";
+const DEED_TILE: &str = "one_of_us_tile";
 const RENT: &str = "one_of_us_rent";
+/// The bankrupt seat, `+1`, recorded by `before_out` for the leave fallback.
+const OUT: &str = "one_of_us_out";
+/// The attachment's card identity -- a deed is a property.
+const DEED: &str = "tile:property";
 
 pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
         // 将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契
         On::Play("", Some(cant_play), play),
-        // 规则书: 「当其中一方破产时」 -- the leaver is one of the pair.
-        // TODO(规则书)（当其中一方破产时）: the sheet names 破产 only -- `beforeOut`
-        //   also fires on forfeit / leave and carries no cause, so a forfeit
-        //   hands the pair's deeds over too (TODO(ABI): a cause on the trigger).
+        // 规则书: 「当其中一方破产时」 -- the leaver is one of the pair and the
+        // cause is a bankruptcy (`beforeOut` also fires on forfeit / removal).
         On::Action(Action::BeforeBankrupt(
             "card.placed",
             Some(before_out_applies),
             before_out
         )),
+        // 规则书: 「将两张被指定地契放置在该卡上并转移到存活方的游戏区」 -- the
+        // card leaves with the bankrupt seat's clear; its own leave hook is the
+        // fallback when `before_out` could not rehome a deed.
+        On::Action(Action::ZoneLeft("card.placed", None, on_leave)),
         // 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle
         // runs to completion at the original owner (`tileResolved`, the
         // 「结算完成时」 terminal, `SETTLE-STAGES.md` §4 M5) and only then does
@@ -149,7 +159,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if !ctx::target_tile(b) {
         return Ok(());
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "AG:ONE OF US",
@@ -174,29 +184,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PARTNER, partner + 1);
 
     // 规则书: 「指定双方各一块地契」 -- the pair of deeds is the lasting [指定]
-    // while this card is in play: one designation mark per deed, owned by this
-    // field instance (dies with the card via `destroy_instance_units`). The
-    // mark is the displayed record; the stored `MarkRef` is the retrievable
-    // handle (the `one_of_us_mine` / `one_of_us_theirs` instance props hold
-    // refs to the marks, not bare tile ids).
-    let a_ref = ctx::designate_tile(
-        a,
-        player_id,
-        &Msg::new(key!("one_of_us_note"))
-            .player_id("who", partner)
-            .tile("a", a)
-            .tile("b", b),
-    );
-    let b_ref = ctx::designate_tile(
-        b,
-        player_id,
-        &Msg::new(key!("one_of_us_note"))
-            .player_id("who", partner)
-            .tile("a", a)
-            .tile("b", b),
-    );
-    ctx::set_prop(MINE, a_ref.into());
-    ctx::set_prop(THEIRS, b_ref.into());
+    // while this card is in play: one parked attachment per deed, on this
+    // instance (「放置在该卡上」), so it dies with the card. Each attachment
+    // records its tile; the `one_of_us_mine` / `one_of_us_theirs` props hold the
+    // attachment uids.
+    let a_uid = park_deed(player_id, a);
+    let b_uid = park_deed(player_id, b);
+    ctx::set_prop(MINE, a_uid + 1);
+    ctx::set_prop(THEIRS, b_uid + 1);
     // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金 直接增加，不受其他任何效果影响）」 -- the split is
     // `measure_rent` + `share_at_resolved` below: the settle completes at the
     // original owner (`tileResolved`), then the other side's half lands as a **raw**
@@ -204,11 +199,32 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Is `tile` one of the pair's designated deeds?
-/// The source of truth is this instance's [指定] marks
-/// (`ctx::designates`, one per deed placed in `play`).
+/// Park one designated deed on this instance: a `tile:property` instance
+/// attached face-up, recording the deed's tile. The name is filed into the
+/// hand first (`attach_card` sources from a hand copy). Answers the uid, `-1`
+/// when refused.
+///
+/// 规则书: 「将两张被指定地契放置在该卡上」 -- both designated deeds sit on the
+/// card, not as marks on their tiles.
+fn park_deed(player_id: i32, tile: i32) -> i32 {
+    ctx::add_to_dest(player_id, DEED, ctx::Dest::Hand, false);
+    let uid = ctx::attach_card(ctx::self_uid(), DEED, ZoneChangeCause::Effect, false);
+    if uid >= 0 {
+        ctx::set_prop_at(uid, DEED_TILE, tile + 1);
+    }
+    uid
+}
+
+/// Is `tile` one of the pair's designated deeds? The source of truth is the two
+/// parked attachments (`MINE` / `THEIRS`) and the tiles they record.
 fn designated(tile: i32) -> bool {
-    tile >= 0 && ctx::designates(tile)
+    if tile < 0 {
+        return false;
+    }
+    [MINE, THEIRS].iter().any(|key| {
+        let uid = ctx::prop(key) - 1;
+        uid >= 0 && ctx::prop_at(uid, DEED_TILE) - 1 == tile
+    })
 }
 
 /// Recorded on an instance prop; `share_at_resolved` spends it. Residual guard
@@ -288,46 +304,93 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」 when either side of the
-/// pair leaves, the designated deeds it still owns go to the survivor and the
-/// pair is cleared.
+/// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」 --
+/// on a bankruptcy, each designated deed the leaver still owns is rehomed to
+/// the survivor unchanged (the row keeps its identity, counters and the card
+/// stays attached), and the card itself is deemed the survivor's. A deed sold
+/// to a third party has left the set and is skipped.
 fn before_out(owner: i32) -> card_sdk::Asked {
-    // [`before_out_applies`] is the actor test.
+    // [`before_out_applies`] is the actor test; the sheet names 破产 only.
+    if trigger::out_cause() != Some(OutCause::Bankrupt) {
+        return Ok(());
+    }
     let partner = ctx::prop(PARTNER) - 1;
     let out = trigger::player_id();
     let survivor = if out == owner { partner } else { owner };
-    if ctx::player_out(survivor) && survivor != out {
+    if survivor < 0 || (ctx::player_out(survivor) && survivor != out) {
         return Ok(());
     }
-    // The pair's designated deeds -- the `MarkRef`s stored at play time (the
-    // mark is the displayed record of 「两张被指定地契」; the stored ref is the
-    // handle). A dead ref is skipped; the pair is done once `one_of_us_partner`
-    // is cleared below, so nothing re-reads them after that.
+    // 「转移到存活方的游戏区，该方视为拥有此地契」 -- the card too transfers;
+    // `zoneLeft` (below) lands it in the survivor's field.
+    ctx::set_prop(OUT, out + 1);
+    ctx::set_instance_owner(ctx::self_uid(), survivor);
     for key in [MINE, THEIRS] {
-        let r = MarkRef::from(ctx::prop(key));
-        if !r.is_live() {
+        let uid = ctx::prop(key) - 1;
+        if uid < 0 {
             continue;
         }
-        let t = r.tile();
-        // TODO(规则书)（当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契）: the book parks 「两张」
-        // designated deeds on the card (「放置在该卡上」), moves the card into the survivor's
-        // area and only deems them the owner (「视为拥有」) -- we park nothing, rewrite the
-        // real owner, skip a deed already sold to a third party, and leave the card
-        // itself to the bankrupt field clear. BACKLOG W3-ONEOFUS-01 / C-Q50. 规则书:
-        // 「将两张被指定地契放置在该卡上并转移到存活方的游戏区」
+        let t = ctx::prop_at(uid, DEED_TILE) - 1;
         if t >= 0 && ctx::tile_owner(t) == out {
-            ctx::set_owner(t, survivor);
-            ctx::log(
-                survivor,
-                &Msg::new(key!("one_of_us_transferred"))
-                    .tile("tile", t)
-                    .player_id("who", survivor)
-                    .player_id("out", out),
-            );
+            rehome(t, out, survivor);
         }
     }
+    Ok(())
+}
+
+/// The card's own leave (cause `Bankruptcy`): the fallback for a deed
+/// `before_out` could not rehome, plus 「转移到存活方的游戏区」 -- the card
+/// stays in play on the survivor's field instead of leaving the game.
+///
+/// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区」
+fn on_leave(owner: i32) -> card_sdk::Asked {
+    if trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
+    let bankrupt = trigger::zone().is_some_and(|z| z.cause == ZoneChangeCause::Bankruptcy);
+    if !bankrupt {
+        // An ordinary leave; a bankruptcy that already requeued the card must
+        // not leave the `Field` destination behind.
+        bandori_std::zones::set_leave_destination(ctx::Dest::Graveyard);
+        return Ok(());
+    }
+    // `before_out` already made the survivor the instance's owner (and hence
+    // the raise's seat); it also recorded the leaver. Without `before_out` the
+    // raise's seat still is the leaver.
+    let survivor = ctx::instance_owner(ctx::self_uid());
+    let out = match ctx::prop(OUT) {
+        0 => owner,
+        v => v - 1,
+    };
+    if survivor < 0 {
+        return Ok(());
+    }
+    bandori_std::zones::set_leave_destination(ctx::Dest::Field);
+    for key in [MINE, THEIRS] {
+        let uid = ctx::prop(key) - 1;
+        if uid < 0 {
+            continue;
+        }
+        let t = ctx::prop_at(uid, DEED_TILE) - 1;
+        if t >= 0 && ctx::tile_owner(t) == out {
+            rehome(t, out, survivor);
+        }
+    }
+    // The pair is done on the way out; the parked attachments die with the card
+    // only on a later ordinary leave, so clear them here when it stays.
     ctx::set_prop(PARTNER, 0);
     Ok(())
+}
+
+/// Move one deed row to the survivor and log it.
+fn rehome(tile: i32, out: i32, survivor: i32) {
+    ctx::rehome_card(tile, survivor);
+    ctx::log(
+        survivor,
+        &Msg::new(key!("one_of_us_transferred"))
+            .tile("tile", tile)
+            .player_id("who", survivor)
+            .player_id("out", out),
+    );
 }
 
 /// Residual guard for [`before_out`]: this copy has a pair and the leaver is
@@ -353,6 +416,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn before_out_kani(player_id: i32) -> card_sdk::Asked {
     before_out(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_leave_kani(player_id: i32) -> card_sdk::Asked {
+    on_leave(player_id)
 }
 
 #[cfg(kani)]

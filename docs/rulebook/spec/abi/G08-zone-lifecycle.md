@@ -326,10 +326,13 @@ trace of the order.
 * **I4 (destination is a fact).** A `zoneLeft` responder may rewrite the
   pending destination by writing `prop::LEAVE_DEST` (the
   `bandori_std::zones::set_leave_destination` sugar); the writer re-reads it
-  after the window and uses the rewritten value. The resolution order is:
-  explicit argument, then `prop::LEAVE_DEST` on the instance, then the
-  cause's default (`Graveyard`, except `Rehome`/`HostLeft` which keep the
-  row's place).
+  after the window and uses the rewritten value. The prop is the *pending*
+  destination: the writer clears it before the window, so only a write made in
+  that window is a rewrite and a value left behind by an earlier leave can
+  never override a destination this caller named. The starting value is the
+  caller's explicit argument, else whatever `prop::LEAVE_DEST` already holds,
+  else the cause's default (`Graveyard`, except `Rehome`/`HostLeft`, which keep
+  the row's place).
 * **I5 (cascade order).** A transition out of `Field`/`Attached` processes the
   leaver's attachments first (each as its own transition, cause `HostLeft`),
   then its created children (cause `CreatorLeft`), then the leaver. A child
@@ -343,7 +346,12 @@ trace of the order.
   exists and is not the child. A child is never reused for another creator.
 * **I8 (waste).** `set_ineffective_at` stamps `effective = false` on the
   instance; a transition into `Graveyard` reads it into the transition's
-  `wasted` bit and then clears it. A card's own normal play never sets it.
+  `wasted` bit and then clears it. The read happens **after** `zoneLeft` (the
+  `zoneLeft` payload carries the pre-hook bit, the `discarded` raise the
+  post-hook one), because marking is exactly what that body is for. A card
+  played from the hand has no instance yet: `set_ineffective_at(-1, true)`
+  stamps the play being resolved (`Turn.play_ineffective`) and the play's own
+  destination carries it. A card's own normal play never sets it.
 * **I9 (count).** `counted` is true **iff** the draw routine performs the
   transition into `Hand`; every other caller leaves it false.
 * **I10 (play outcome).** Both play announcements fire exactly once per
@@ -502,13 +510,15 @@ pub fn set_instance_owner(instance: i32, owner: i32) -> bool;
 /// Record that `instance` was made by `creator` (`-1` clears).
 pub fn set_created_by_at(instance: i32, creator: i32) -> bool;
 /// Mark the instance as not having taken effect, and read the bit back; the
-/// writer also reads it at the next Graveyard entry (I8).
+/// writer also reads it at the next Graveyard entry (I8). `instance = -1`
+/// marks the play being resolved instead (a hand card has no instance).
 pub fn set_ineffective_at(instance: i32, ineffective: bool) -> bool;
 pub fn is_ineffective_at(instance: i32) -> bool;
 /// The player's earliest-owned tile under the acquisition order, `-1` if none.
 pub fn earliest_owned_tile(player_id: i32) -> i32;
 /// Put a card (`card` is a name) onto `host`, face-down when `face_down`.
-/// The new instance's uid, `-1` when refused.
+/// A live instance of the name is re-parented; a pile copy is filed fresh.
+/// The attached instance's uid, `-1` when refused (cycle, dead host, no copy).
 pub fn attach_card(host: i32, card: &str, cause: ZoneChangeCause, face_down: bool) -> i32;
 /// Take `instance` off its host into `dest` (`-1` = its leave destination).
 pub fn detach_card(instance: i32, dest: Dest, cause: ZoneChangeCause) -> i32;
@@ -634,8 +644,10 @@ the band 113–120 is the block still free between 112 and 121 (G06's
 hook-only, carries no window, and G11's `132–133` row shifts to 133–134.
 
 `discarded` (existing kind 58) keeps its wire and gains the `wasted` bit in its
-`zone` payload. `card` (kind 12) / `cardAfter` (32) / `cardPlayed` (50) gain
-`play_outcome`. `beforeOut` (65) gains `out_cause`.
+`zone` payload. `cardAfter` (32) / `cardPlayed` (50) gain `play_outcome` --
+the `card` (12) window is still open when the cancellation lands, so kind 12
+cannot carry the outcome of its own window. `beforeOut` (65) gains
+`out_cause`.
 
 ### 6.3 What each raise carries
 
@@ -684,8 +696,9 @@ transition; `Run::zone_commit(&mut self, transition)` is the only row writer
 (I1). It:
 
 1. reads the row, refuses a stale `uid` or a dead instance;
-2. when `from` is `Field`/`Attached`, raises `zoneLeft` on the instance and
-   lets the body rewrite the destination (I4);
+2. when `from` is `Field`/`Attached`, clears `prop::LEAVE_DEST`, raises
+   `zoneLeft` on the instance, and adopts the destination only if the body
+   rewrote it (I4);
 3. cascades attachments, then children (I5), each through
    `zone_prepare`/`zone_commit` with `cascaded = true`;
 4. applies the row through `World::apply_zone_row`: detaches `on`, clears
@@ -714,8 +727,9 @@ and `remove_from_game` (`:5121`) all become callers. `ops.rs:1726-1727`'s
   after each single deal (replacing the batch `draw(i, n, false)`), and the
   mulligan redraw (`:634`) is counted with cause `Mulligan` — a `handChanged`
   only, not a second `openingHandDealt` (§13 Q8).
-* `wasted`: `FieldCard.effective` defaults true; `set_ineffective_at` clears it;
-  a Graveyard arrival reads it (I8). `discarded` carries it.
+* `wasted`: `FieldCard.effective` defaults true; `set_ineffective_at` clears it
+  (or `Turn.play_ineffective` for a `-1` mark); a Graveyard arrival reads it
+  after the leave hooks (I8). `discarded` carries it.
 * `play_outcome`: `play_from_hand` already knows `t.is_cancelled()`
   (`play.rs:5762`); both announcements read it (I10). `cardAfter`/`cardPlayed`
   fire even for a cancelled play — that is what PPP:Returns negates.
@@ -770,13 +784,17 @@ Each is handled in `apply_host_request` (`wasm_rules.rs:4501`) exactly like
 
 ### 7.5 Attachment rules
 
-* `attach_card(host, card, cause, face_down)`: `card` is a **name**. A card in
-  a pile has no instance, so the writer files a new row: `from = Nowhere`, a
-  fresh uid, `on = host`, `tile = host.tile`, `owner` = the source pile's
-  seat (not the host's — Here the world holds *its target's* card), the face
-  from the argument, and one copy of the name removed from `hand`. Moving an
-  already-attached card to another host is `detach` + `attach` (a fresh
-  instance; counters do not carry) — no current card needs a re-parent.
+* `attach_card(host, card, cause, face_down)`: `card` is a **name**. A copy in
+  the caller's hand is taken first (a card in a pile has no instance): the
+  writer files a new row (`from = Nowhere`, a fresh uid, `owner` = the pile's
+  seat — not the host's; Here the world holds *its target's* card). That order
+  keeps a caller that just drew the copy on the copy it means. Only a name
+  with **no hand copy** falls back to the caller's first live instance, which
+  is re-parented as it stands: its uid, counters and creator edges ride along,
+  `from` is its real zone, and the cycle guard walks the host chain (I6) —
+  which is what makes "A on B, then B on A" a refusal rather than a second
+  stack. Either way `on = host`, `tile = host.tile` and the face is the
+  argument's.
 * `detach_card(uid, dest, cause)`: `dest` `-1` means the row's own
   `prop::LEAVE_DEST`, else `Hand`; the name is pushed into the destination
   pile and the row is dropped.
@@ -862,10 +880,17 @@ C-Q49 "when does it leave" note get their answer.
 
 ### 8.4 MyGO:MIRACLE (`miracle.rs`) and MyGO band （3） (`mygo.rs`)
 
-`miracle` calls `ctx::set_ineffective_at(instance, true)` before its
-`set_dest(Graveyard)` when crystals remain; the log line stays as display.
+`miracle` marks itself from its own `zoneLeft` entry: when the transition's
+`to` is `Graveyard` and crystals remain, it calls
+`ctx::set_ineffective_at(ctx::self_uid(), true)` — the writer's post-hook read
+(I8) then puts the bit on `discarded`, wherever the discard came from (its own
+pass clause, another card's dump, a cascade). The old
+mark-before-`set_dest` placement in the pass body missed every other path.
 `mygo`'s `Discarded` condition becomes `trigger::zone().is_some_and(|z|
 z.wasted)` and the band （3） gains exactly the cards that entered unused.
+`haneoka`'s clause is the hand-play form: the card is discarded while still a
+hand card, so the mark goes on the play (`ctx::set_ineffective_at(-1, true)`,
+`bandori_std::zones::set_ineffective`), not on an instance.
 
 ### 8.5 Alice/CiRCLE (`black_suits.rs`) and 日菜 (`hina_sound.rs`)
 
@@ -912,6 +937,28 @@ ras, mygo) drop to the sheet's own timing.
   `owned_seq` is in the save, so `earliest_owned_tile` is stable.
 * A pause inside a cascade records its `HostRequest` in the answer log like
   every other `Pause::Trap` site, so a re-run consumes the same answers.
+* A re-run re-executes the body from its top, so the reads **before** the
+  replayed request must see the entry state, not the request's result. The
+  drive puts the rows a routine took out back at its loop top (the row
+  overlays keep the pre-overlay row) and hands the reinserted uids to the
+  pass: a uid the pass's replay takes out again is gone, a uid it leaves is
+  dropped from the committed world (a nested hook's leave the enclosing
+  routine never re-issues). The commit pass's staging overlay leaves the rows
+  in place for the same reason -- that pass replays every request itself --
+  but leaves a row the body **minted** out: the replay re-places it at the
+  same call (the placement ledger pins the uid), so a body that reads the
+  field before and after a placement (the stand-in cards) must not find its
+  own row already there. Piles follow the same rule one level up: the pile
+  checkpoint that re-supplies an answered request's pile half is captured
+  *before* the body's own pile writes are overlaid on the live world, or a
+  body that discards and then asks (the [共鸣] fuel) would find the fuel gone
+  on every re-run and skip its own branch.
+* A replayed `Leave` of the running instance re-posts the
+  `log.outcome.unplace` line the original `unplace_card` posted. The commit
+  pass replaces the learn pass's line stream in place, so every line the learn
+  pass wrote at a pause must be written again at the same point or the stream
+  shifts. A replayed `Detach` posts none (the live `zone_detach` writes no
+  such line).
 
 ## 10. Tests and Kani obligations
 
@@ -925,6 +972,9 @@ kind, `TEST:holder` with an attachment, `TEST:creator` with a child):
    `zoneLeftAfter`, the payload pair reversed on the second.
 2. `leave_destination_rewrite_wins` — the body sets `Hand`; the row lands in
    the hand, not the graveyard.
+2b. `stale_leave_destination_does_not_override_the_caller` — after an earlier
+   `Hand` rewrite, a second leave whose body writes nothing and whose caller
+   names `Banished` lands banished: the prop is pending, not persistent.
 3. `attachment_cascades_before_host` — host leaves; the attachment's
    `zoneLeft` precedes the host's, both carry `HostLeft`.
 4. `creator_child_dies_with_creator` — the child row is gone, cause
@@ -989,22 +1039,23 @@ separately).
 
 ## 11. Versioning and band arithmetic
 
-`ABI_VERSION` 112 → **114** (G07 lands 112 → 113 first; this document takes
-113 → **114**), entry inserted below the v113 contract block:
+`ABI_VERSION` 113 → **115** (the base was 113 when this batch landed; G07
+still takes 114 next, so 114 stays reserved), entry inserted below the v113
+contract block:
 
 ```
-/// v114: **zone, attachment and creator lifecycle**. Every card move between
+/// v115: **zone, attachment and creator lifecycle**. Every card move between
 ///    zones is one `ZoneTransition` through one writer; `zoneLeft` /
 ///    `zoneLeftAfter` fire on the leaving instance, `handChanged` on a hand
 ///    arrival (`counted` only from the draw routine), `discarded` carries
-///    `wasted`, `card`/`cardAfter` carry `play_outcome`, `beforeOut` carries
+///    `wasted`, `cardAfter`/`cardPlayed` carry `play_outcome`, `beforeOut` carries
 ///    `out_cause`. New kinds 113-119 and `openingHandDealt`; new payload
 ///    `abi::ZoneChange` through `ctx::trigger::zone()`. `FieldCard.on` /
 ///    `created_by` / `effective`; `ctx::attach_card` / `detach_card` /
 ///    `attached_cards` / `attachment_host` / `rehome_card` / `play_hand_card`
 ///    / `zone_of` / `instance_owner` / `set_instance_owner` /
 ///    `set_created_by_at` / `set_ineffective_at` / `is_ineffective_at` /
-///    `set_dest_unwatched` / `earliest_owned_tile`; `unplace_at` /
+///    `set_dest_unwatched` / `earliest_owned_tile` / `is_own_placement`; `unplace_at` /
 ///    `set_face_down_at` / `add_to_dest`
 ///    / `set_dest` / `send_to_dest` / `transfer_to_dest` gain a cause/flag
 ///    argument. SAVE_VERSION 16 -> 17 (the edges and the held-card relation);

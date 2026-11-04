@@ -554,6 +554,11 @@ pub struct PlayCtx<'a> {
     /// duration (see [`Self::overlay_guest_state`]). A stack: nested drives push
     /// and pop their own. Transient (not serialized).
     pub(crate) guest_overlays: Vec<GuestOverlay>,
+    /// Uids a [`Self::restore_guests_to`] put back into the live world for a
+    /// re-run's reads. A drive drains the set at its loop top and hands it to
+    /// every pass; a uid its replay never takes out again must not survive the
+    /// commit (see `commit_after`).
+    pub(crate) reinserted: Vec<i32>,
     /// Play-gate verdicts for the current world stamp (fix A,
     /// `docs/BOT.md` "engine efficiency A–C"). `rules.cant_play` is a pure
     /// query of the world; within one unchanged world state the same
@@ -680,6 +685,77 @@ pub struct GuestOverlay {
         Option<crate::state::StateVar>,
         crate::state::StateVar,
     )>,
+    /// Rows the guest overlay merged into the live world, with both sides, so
+    /// the drive can undo the merge before the replay re-applies it (see
+    /// [`PlayCtx::overlay_guest_rows`] / [`PlayCtx::restore_guests_to`]).
+    rows: Vec<RowOverlay>,
+    /// Pile contents (hand, discard) the guest overlay replaced, with both
+    /// sides -- see [`PlayCtx::overlay_guest_piles`].
+    piles: Vec<PileOverlay>,
+}
+
+/// One live row a guest overlay touched: where it sits, and the live and
+/// guest versions (`prev` is `None` for a row the guest newly minted).
+#[derive(Debug)]
+struct RowOverlay {
+    /// `true` for the board rule rows, otherwise a seat index.
+    board: bool,
+    player: usize,
+    /// Index the row had in its list when it was overlaid, so a restore can
+    /// put a row the routine deleted back where it was.
+    at: usize,
+    uid: i32,
+    prev: Option<crate::state::FieldCard>,
+    wrote: Option<crate::state::FieldCard>,
+    /// A row the guest took out stays in the live world when the overlay
+    /// pops. The overlay that stages the commit pass needs this: that pass
+    /// replays the leave, and its reads must see the entry state.
+    keep: bool,
+}
+
+/// One seat's piles a guest overlay replaced. A zone routine files an attached
+/// card into the hand and drops detached ones in the discard pile, so the
+/// routine must see the body's own pile writes -- and the replay must get them
+/// back (minus whatever the routine itself moved).
+#[derive(Debug)]
+struct PileOverlay {
+    player: usize,
+    prev_hand: Vec<String>,
+    wrote_hand: Vec<String>,
+    prev_discard: Vec<String>,
+    wrote_discard: Vec<String>,
+}
+
+/// Rebuild `live` from `prev` plus the routine's own delta (`wrote` -> `live`):
+/// cards the routine removed come out of `prev`, cards it added are appended.
+/// The body's own writes are not in `prev`, so its replay re-applies them.
+fn merge_pile(live: &mut Vec<String>, prev: Vec<String>, wrote: Vec<String>) {
+    let mut now = prev;
+    let mut rest = live.clone();
+    for c in &wrote {
+        match rest.iter().position(|x| x == c) {
+            Some(k) => {
+                rest.remove(k);
+            }
+            None => {
+                // Gone from live since the overlay: the routine moved it away.
+                if let Some(k) = now.iter().position(|x| x == c) {
+                    now.remove(k);
+                }
+            }
+        }
+    }
+    let mut rest = wrote;
+    for c in live.iter() {
+        match rest.iter().position(|x| x == c) {
+            Some(k) => {
+                rest.remove(k);
+            }
+            // Not in the body's view: the routine moved it here.
+            None => now.push(c.clone()),
+        }
+    }
+    *live = now;
 }
 
 impl<'a> PlayCtx<'a> {
@@ -1002,6 +1078,209 @@ impl<'a> PlayCtx<'a> {
         }
     }
 
+    /// Show the guest's field rows to a host routine (a body may place a row
+    /// and then act on it). New rows stay in the live world: the re-run's
+    /// placement re-uses the same uid (`CardWorld::place_or`).
+    ///
+    /// An **existing** live row keeps its own counters (and counter maxima):
+    /// the guest's copy carries the counter and prop writes the body made this
+    /// pass (`ctx::dec_turns_left` and kin), which the commit pass replays --
+    /// copying them here would double-apply them. Only the linkage a zone
+    /// routine acts on (`on`, `tile`, owner, creator, face, surface) and the
+    /// flags stamped at placement cross.
+    pub fn overlay_guest_rows(&mut self, from: &World) {
+        self.overlay_guest_rows_with(from, false)
+    }
+
+    /// [`Self::overlay_guest_rows`] for the overlay that stages a commit pass:
+    /// the rows the guest took out stay behind when the overlay pops, and the
+    /// rows it minted are left for the pass's own replay to re-place (see
+    /// [`RowOverlay::keep`]).
+    pub fn overlay_guest_rows_keep(&mut self, from: &World) {
+        self.overlay_guest_rows_with(from, true)
+    }
+
+    fn overlay_guest_rows_with(&mut self, from: &World, keep: bool) {
+        let mut rows: Vec<RowOverlay> = Vec::new();
+        let mut merge = |board: bool,
+                         i: usize,
+                         live: &mut Vec<crate::state::FieldCard>,
+                         guest: &[crate::state::FieldCard]| {
+            // A live row the guest no longer has: the guest's replay took it
+            // out (a host `Leave` / `Detach`). Take it out here too -- the
+            // routine has to read the guest's view -- but record it, so the
+            // restore puts it back for the enclosing frame's next pass. The
+            // re-run re-issues the request and the replay takes it out again;
+            // the reads before that point must see the row.
+            let mut gone: Vec<(usize, crate::state::FieldCard)> = Vec::new();
+            for (at, row) in live.iter_mut().enumerate() {
+                let Some(g) = guest.iter().find(|g| g.uid == row.uid) else {
+                    gone.push((at, row.clone()));
+                    continue;
+                };
+                rows.push(RowOverlay {
+                    board,
+                    player: i,
+                    at,
+                    uid: row.uid,
+                    prev: Some(row.clone()),
+                    wrote: Some(g.clone()),
+                    keep,
+                });
+                row.on = g.on;
+                row.tile = g.tile;
+                row.owner = g.owner;
+                row.user = g.user;
+                row.created_by = g.created_by;
+                row.face_down = g.face_down;
+                row.effective = g.effective;
+                row.effective_card = g.effective_card.clone();
+                row.extra = g.extra;
+                row.group_skill = g.group_skill;
+            }
+            // A row the guest took out stays in live for a `keep` overlay (the
+            // commit pass's staging): that pass replays every request, so its
+            // reads must see the entry state, and the replay takes the row out
+            // again on its own. Any other overlay takes the row out here -- the
+            // routine has to read the guest's view -- and the restore puts it
+            // back. Either way the pre-overlay row is on record. Splice last
+            // index first so the earlier ones keep their `at`.
+            for (at, row) in gone.into_iter().rev() {
+                rows.push(RowOverlay {
+                    board,
+                    player: i,
+                    at,
+                    uid: row.uid,
+                    prev: Some(row.clone()),
+                    // Present in live and not to be reverted: `wrote` equal to
+                    // `prev` makes the restore a no-op.
+                    wrote: keep.then(|| row.clone()),
+                    keep,
+                });
+                if !keep {
+                    live.remove(at);
+                }
+            }
+            for g in guest {
+                if !live.iter().any(|r| r.uid == g.uid) {
+                    // The commit pass's staging overlay leaves a guest-minted
+                    // row out: its body re-runs from the top and re-places the
+                    // row there, so the pass must start from the entry state --
+                    // a body that diffs the field around a placement would
+                    // otherwise see its own row as pre-existing.
+                    if keep {
+                        continue;
+                    }
+                    // A fresh row arrives with the props stamped at
+                    // placement, but its **counters** are runtime writes
+                    // the replay (or commit pass) redoes -- start from an
+                    // empty set, as a live placement would. Explicitly
+                    // setting counts (`set_crystals`) is idempotent, but an
+                    // additive one (`add_crystals`) would otherwise apply
+                    // twice.
+                    let mut pushed = g.clone();
+                    pushed.counters.clear();
+                    rows.push(RowOverlay {
+                        board,
+                        player: i,
+                        at: live.len(),
+                        uid: g.uid,
+                        prev: None,
+                        wrote: Some(pushed.clone()),
+                        keep,
+                    });
+                    live.push(pushed);
+                }
+            }
+        };
+        for (i, p) in self.w.st.players.iter_mut().enumerate() {
+            if let Some(q) = from.st.players.get(i) {
+                merge(false, i, &mut p.field, &q.field);
+            }
+        }
+        let mut board = std::mem::take(&mut self.w.st.board_field);
+        merge(true, 0, &mut board, &from.st.board_field);
+        self.w.st.board_field = board;
+        // The rows carry uids the guest minted. A host routine running on the
+        // live world (an `attach` placing the attached card) allocates from
+        // `next_card_uid`, so reserve past every guest uid -- otherwise the
+        // placed card collides with a guest row and `field_by_uid` may answer
+        // the wrong instance.
+        self.w.st.next_card_uid = self.w.st.next_card_uid.max(from.st.next_card_uid);
+        let mut o = GuestOverlay::default();
+        o.rows = rows;
+        self.guest_overlays.push(o);
+    }
+
+    /// Lay the guest's pile contents (hand, discard) over the live world for a
+    /// zone routine: `attach_card` files a copy into the hand and `detach_card`
+    /// drops one in the discard pile, and the routine runs on the live world.
+    /// [`Self::restore_guests_to`] replays only the routine's own moves back.
+    pub fn overlay_guest_piles(&mut self, from: &World) {
+        let mut piles = Vec::new();
+        for i in 0..self.w.hidden.len().min(from.hidden.len()) {
+            let g = &from.hidden[i];
+            let live = &mut self.w.hidden[i];
+            if live.hand == g.hand && live.graveyard == g.graveyard {
+                continue;
+            }
+            piles.push(PileOverlay {
+                player: i,
+                prev_hand: live.hand.clone(),
+                wrote_hand: g.hand.clone(),
+                prev_discard: live.graveyard.clone(),
+                wrote_discard: g.graveyard.clone(),
+            });
+            live.hand = g.hand.clone();
+            live.graveyard = g.graveyard.clone();
+        }
+        let mut o = GuestOverlay::default();
+        o.piles = piles;
+        self.guest_overlays.push(o);
+    }
+
+    /// A nested drive committed: the enclosing frames' row overlays predate
+    /// its world and would undo it on their next re-run (a row the nested
+    /// effect took out would be put back, a field it wrote reverted). Re-anchor
+    /// every record to the committed world: a row that is there now is its own
+    /// new `prev` *and* `wrote` (so a revert is a no-op), a row that is gone
+    /// has no record to restore.
+    pub fn rebase_guest_overlays(&mut self, base: usize) {
+        if base == 0 {
+            return;
+        }
+        let mut overlays = std::mem::take(&mut self.guest_overlays);
+        for o in overlays.iter_mut().take(base) {
+            for r in o.rows.iter_mut() {
+                let live = if r.board {
+                    Some(&self.w.st.board_field)
+                } else {
+                    self.w.st.players.get(r.player).map(|p| &p.field)
+                };
+                let Some(live) = live else { continue };
+                match live.iter().find(|f| f.uid == r.uid) {
+                    Some(row) => {
+                        r.prev = Some(row.clone());
+                        r.wrote = Some(row.clone());
+                    }
+                    None => {
+                        // The nested commit took the row out. Keep the
+                        // pre-overlay row: the enclosing re-run has to read it
+                        // before its own logged request re-applies the leave,
+                        // and only the re-application -- not a revert -- may
+                        // take it away again, so drop just the `wrote` side.
+                        // A commit the enclosing routine never re-issues (a
+                        // nested hook's leave) is not resurrected by this:
+                        // `commit_after` drops rows the live world no longer
+                        // has.
+                        r.wrote = None;
+                    }
+                }
+            }
+        }
+        self.guest_overlays = overlays;
+    }
+
     pub fn overlay_guest_state(&mut self, from: &World) {
         let mut o = GuestOverlay::default();
         let n = self.w.st.players.len().min(from.st.players.len());
@@ -1054,6 +1333,13 @@ impl<'a> PlayCtx<'a> {
         self.guest_overlays.len()
     }
 
+    /// Drain the uids the restores so far put back for a re-run's reads: the
+    /// pass that starts now carries them, and drops the ones its replay does
+    /// not take out again (see `commit_after`).
+    pub fn take_reinserted(&mut self) -> Vec<i32> {
+        std::mem::take(&mut self.reinserted)
+    }
+
     /// Drop every [`GuestOverlay`] this drive pushed (down to `base`), keeping
     /// only the host routine's own effects.
     ///
@@ -1063,8 +1349,85 @@ impl<'a> PlayCtx<'a> {
     ///   base value, so the replay's re-application composes rather than
     ///   double-counts.
     pub fn restore_guests_to(&mut self, base: usize) {
+        let _guard = ();
+        let mut reinserted: Vec<i32> = Vec::new();
         while self.guest_overlays.len() > base {
             let o = self.guest_overlays.pop().expect("len > base");
+            // Rows first, in reverse, field by field: a field the routine left
+            // at the guest's value goes back to its pre-overlay value, a field
+            // the routine wrote is kept (the replay composes on top of it). A
+            // guest-minted row disappears when no field was touched. The
+            // replay re-creates the row from its own placement, so nothing is
+            // lost either way.
+            for r in o.rows.into_iter().rev() {
+                let live = if r.board {
+                    Some(&mut self.w.st.board_field)
+                } else {
+                    self.w.st.players.get_mut(r.player).map(|p| &mut p.field)
+                };
+                let Some(live) = live else { continue };
+                let Some(pos) = live.iter().position(|f| f.uid == r.uid) else {
+                    // The routine itself took the row out (a host `Leave` /
+                    // `Detach`): put the pre-overlay row back where it was.
+                    // The re-run re-issues the request and the replay takes
+                    // it out again -- but the reads before that point must
+                    // see it.
+                    if let Some(prev) = r.prev {
+                        let at = r.at.min(live.len());
+                        reinserted.push(prev.uid);
+                        live.insert(at, prev);
+                    }
+                    continue;
+                };
+                let Some(wrote) = r.wrote else { continue };
+                let Some(prev) = r.prev else {
+                    // Guest-minted: drop it unless the routine wrote the row.
+                    // A `keep` overlay (the commit-pass staging) leaves it --
+                    // the replay re-uses the uid without placing the row again.
+                    if live[pos] == wrote && !r.keep {
+                        live.remove(pos);
+                    }
+                    continue;
+                };
+                let row = &mut live[pos];
+                macro_rules! revert {
+                    ($f:ident) => {
+                        if row.$f == wrote.$f {
+                            row.$f = prev.$f;
+                        }
+                    };
+                }
+                revert!(on);
+                revert!(tile);
+                revert!(owner);
+                revert!(user);
+                revert!(created_by);
+                revert!(face_down);
+                revert!(immune);
+                revert!(effective);
+                revert!(note);
+                revert!(extra);
+                revert!(group_skill);
+                if row.effective_card == wrote.effective_card {
+                    row.effective_card = prev.effective_card;
+                }
+                if row.props == wrote.props {
+                    row.props = prev.props;
+                }
+                if row.counters == wrote.counters {
+                    row.counters = prev.counters;
+                }
+                if row.counter_max == wrote.counter_max {
+                    row.counter_max = prev.counter_max;
+                }
+            }
+            for p in o.piles.into_iter().rev() {
+                let Some(live) = self.w.hidden.get_mut(p.player) else {
+                    continue;
+                };
+                merge_pile(&mut live.hand, p.prev_hand, p.wrote_hand);
+                merge_pile(&mut live.graveyard, p.prev_discard, p.wrote_discard);
+            }
             for (i, k, base_v, wrote_v) in o.state {
                 let now = self
                     .w
@@ -1123,6 +1486,7 @@ impl<'a> PlayCtx<'a> {
                 }
             }
         }
+        self.reinserted.extend(reinserted);
     }
 
     /// The shared game data (tile/card lookups).
@@ -1183,6 +1547,7 @@ impl<'a> PlayCtx<'a> {
             move_start: -1,
             move_depth: 0,
             guest_overlays: Vec::new(),
+            reinserted: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),
             work_stack: Vec::new(),
             draining_work: false,
@@ -1286,16 +1651,6 @@ impl<'a> PlayCtx<'a> {
     /// only then the halt. A provider that returns `None` falls through to the
     /// halt, so the tree can still branch on the prompts it cares about.
     pub fn ask(&mut self, mut ask: Ask) -> Flow<Reply> {
-        if std::env::var("DBG_HOOK").is_ok() {
-            eprintln!(
-                "ASK kind={:?} title={} players={:?} cursor={} answers={}",
-                ask.view.kind,
-                ask.view.title.key(),
-                ask.view.players,
-                self.cursor,
-                self.answers.len()
-            );
-        }
         self.w.ask_seq += 1;
         ask.view.id = self.w.ask_seq;
         self.fill_ai(&mut ask);

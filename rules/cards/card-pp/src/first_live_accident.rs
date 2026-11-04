@@ -35,7 +35,7 @@ pub const FIRST_LIVE_ACCIDENT: CardDef = CardDef::new(
 
 fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     let uid = ctx::place_card(
         player_id,
         "PP:初次演出事故",
@@ -50,7 +50,12 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     //   hook (BACKLOG HOST-02), so a (2) window on that very draw still opens.
     ctx::set_held(player_id, "skillBlock:Pastel✽Palettes", 1, 0, uid);
     // 规则书[手]: 「并将1张“重叠的声音”加入抽卡区并洗切」
-    ctx::add_to_dest(player_id, "PP:[衍生]重叠的声音", ctx::Dest::DeckRandom);
+    ctx::add_to_dest(
+        player_id,
+        "PP:[衍生]重叠的声音",
+        ctx::Dest::DeckRandom,
+        false,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("first_live_added"))

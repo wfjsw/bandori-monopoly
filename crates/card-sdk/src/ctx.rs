@@ -11,7 +11,7 @@
 #[cfg(target_arch = "wasm32")]
 use alloc::{string::String, vec::Vec};
 
-pub use crate::abi::{AbKind, CardPile};
+pub use crate::abi::{AbKind, CardPile, OutCause, PlayOutcome, Zone, ZoneChange, ZoneChangeCause};
 use crate::abi::{MoveKind, PromptKind, TriggerKind};
 use crate::msg::Msg;
 use crate::Prompt;
@@ -937,10 +937,13 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
 /// `Dest::Field` / `Dest::Banished` are not piles and trap.
 ///
 /// Replaces `add_to_hand` / `add_to_deck` / `add_to_deck_at`.
+///
+/// `counted` marks the arrival as a draw for the `handChanged` listener; only
+/// a draw routine passes `true`. Every other caller leaves it `false`.
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
+pub fn add_to_dest(player_id: i32, card: &str, dest: Dest, counted: bool) {
     let (p, l) = s(card);
-    unsafe { sys::add_to_dest(player_id, p, l, dest as i32) }
+    unsafe { sys::add_to_dest(player_id, p, l, dest as i32, counted as i32) }
 }
 
 /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
@@ -1186,39 +1189,46 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
 /// the played hand card's dest -- and a play whose hand card retires elsewhere
 /// (「…然后此卡[移除]」) names its own [`Dest`].
 #[cfg_attr(kani, inline(always))]
-pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg) -> i32 {
+pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg, cause: ZoneChangeCause) -> i32 {
     crate::pure::refuse_if_filter("ctx::place_self_to_field");
-    set_dest(Dest::Field);
+    set_dest(Dest::Field, cause);
     place_card(player_id, card, note)
 }
 
 /// Where this card goes afterwards (see [`Dest`]). For a
 /// play it is the hand card's dest; for a field effect, the instance's.
-pub fn set_dest(dest: Dest) {
+/// `cause` rides the transition's `ZoneChange` — say why it leaves
+/// (`Effect`, `Cost`, `Expire`, …), never `Other` where a real reason exists.
+pub fn set_dest(dest: Dest, cause: ZoneChangeCause) {
     crate::pure::refuse_if_filter("ctx::set_dest");
-    unsafe { sys::set_dest(dest as i32) }
+    unsafe { sys::set_dest(dest as i32, cause.as_i32()) }
 }
 
 /// [`set_dest`] aimed at another player's pile -- 「将此卡放入[使用者]弃卡区」
 /// when [使用者] is not the one holding the card. `to` is whose discard / hand
 /// / deck it lands in.
-pub fn set_transfer_to_dest(to: i32, dest: Dest) {
-    unsafe { sys::set_transfer_to_dest(to, dest as i32) }
+pub fn set_transfer_to_dest(to: i32, dest: Dest, cause: ZoneChangeCause) {
+    unsafe { sys::set_transfer_to_dest(to, dest as i32, cause.as_i32()) }
 }
 
 /// [`set_dest`] applied **now** rather than when this effect finishes: for a
 /// card that must be gone before the rest of the effect runs (a move or a
 /// settle follows). Lands in its own owner's pile. Returns the owner it left,
 /// or `None` when it was not in play.
-pub fn send_to_dest(dest: Dest) -> Option<i32> {
-    let v = unsafe { sys::send_to_dest(dest as i32) };
+pub fn send_to_dest(dest: Dest, cause: ZoneChangeCause) -> Option<i32> {
+    let v = unsafe { sys::send_to_dest(dest as i32, cause.as_i32()) };
     (v >= 0).then_some(v)
 }
 
 /// [`send_to_dest`] aimed at another player's pile: `to` is whose.
-pub fn transfer_to_dest(to: i32, dest: Dest) -> Option<i32> {
-    let v = unsafe { sys::transfer_to_dest(to, dest as i32) };
+pub fn transfer_to_dest(to: i32, dest: Dest, cause: ZoneChangeCause) -> Option<i32> {
+    let v = unsafe { sys::transfer_to_dest(to, dest as i32, cause.as_i32()) };
     (v >= 0).then_some(v)
+}
+
+/// Suppress the arrival hook for the next [`set_dest`] (a batch's own moves).
+pub fn set_dest_unwatched(dest: Dest) {
+    unsafe { sys::set_dest_unwatched(dest as i32) }
 }
 
 /// Move a player without settling (no [触发结算] at the landing).
@@ -3675,6 +3685,36 @@ pub mod trigger {
         unsafe { sys::trig_instance() }
     }
 
+    /// The transition this raise is about, `None` outside the zone family.
+    pub fn zone() -> Option<ZoneChange> {
+        let n = unsafe { sys::trigger_zone(0, 0) };
+        if n <= 0 {
+            return None;
+        }
+        let (p, scratch) = out_buf(n as usize);
+        if unsafe { sys::trigger_zone(p, n) } != n {
+            return None;
+        }
+        let buf = out_read(p, n, scratch);
+        // The seam carries the `Option` as postcard wrote it (a `Some` tag
+        // byte precedes the payload; `None` is the single `0`).
+        postcard::from_bytes::<Option<ZoneChange>>(&buf[..n as usize])
+            .ok()
+            .flatten()
+    }
+
+    /// The play's outcome on `card` / `cardAfter`; `None` elsewhere.
+    pub fn play_outcome() -> Option<PlayOutcome> {
+        let v = unsafe { sys::trig_play_outcome() };
+        (v >= 0).then(|| PlayOutcome::from_i32(v))
+    }
+
+    /// Why the player left on `beforeOut`; `None` elsewhere.
+    pub fn out_cause() -> Option<OutCause> {
+        let v = unsafe { sys::trig_out_cause() };
+        (v >= 0).then(|| OutCause::from_i32(v))
+    }
+
     /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
     /// Only meaningful for kinds that aren't step-specific (e.g. `mortgage`
     /// can fire during both step 1 and step 3).
@@ -4659,8 +4699,8 @@ pub fn self_face_down() -> bool {
 }
 
 /// Flip **this instance**; returns whether it is on the field.
-pub fn set_self_face_down(on: bool) -> bool {
-    unsafe { sys::set_self_face_down(on as i32) != 0 }
+pub fn set_self_face_down(on: bool, cause: ZoneChangeCause) -> bool {
+    unsafe { sys::set_self_face_down(on as i32, cause.as_i32()) != 0 }
 }
 
 /// Is **this instance** marked 「不受任何效果影响」?
@@ -4728,9 +4768,119 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, NameId)> {
     decode_uid_name_list(&buf[..n as usize])
 }
 
-/// Take the instance at `uid` off the field; returns the owner it left.
-pub fn unplace_at(uid: i32) -> i32 {
-    unsafe { sys::unplace_at(uid) }
+/// Take the instance at `uid` off play into `destination`; returns the owner
+/// it left (`-1` when it was not in play). `destination` is a `Dest` code;
+/// `Dest::Field` keeps it in play (a no-op move).
+pub fn unplace_at(uid: i32, destination: Dest, cause: ZoneChangeCause) -> i32 {
+    unsafe { sys::unplace_at(uid, destination as i32, cause.as_i32()) }
+}
+
+/// The zone of an instance; [`Zone::Nowhere`] for an unknown `uid`.
+pub fn zone_of(instance: i32) -> Zone {
+    Zone::from_i32(unsafe { sys::zone_of(instance) })
+}
+
+/// The instance `instance` sits on, `-1` when it is not attached.
+pub fn attachment_host(instance: i32) -> i32 {
+    unsafe { sys::attachment_host(instance) }
+}
+
+/// The instances attached to `host`, in filing order.
+pub fn attached_cards(host: i32) -> Vec<i32> {
+    uid_list(|b, c| unsafe { sys::attached_cards(host, b, c) })
+}
+
+/// The instances `creator` made, in creation order.
+pub fn created_cards(creator: i32) -> Vec<i32> {
+    uid_list(|b, c| unsafe { sys::created_cards(creator, b, c) })
+}
+
+/// Decode an `i32`-per-entry host list.
+fn uid_list(call: impl Fn(i32, i32) -> i32) -> Vec<i32> {
+    let n = call(0, 0);
+    if n <= 0 {
+        return Vec::new();
+    }
+    // The host writes LE `i32`s; the cap only bounds a garbage length.
+    let need = ((n as usize) * 4).min(4096);
+    let (p, scratch) = out_buf(need);
+    if unsafe { call(p, need as i32) } != n {
+        return Vec::new();
+    }
+    let buf = out_read(p, need as i32, scratch);
+    let mut out = Vec::with_capacity(n as usize);
+    let mut i = 0usize;
+    while i < n as usize {
+        let base = i * 4;
+        out.push(i32::from_le_bytes([
+            buf.get(base).copied().unwrap_or(0),
+            buf.get(base + 1).copied().unwrap_or(0),
+            buf.get(base + 2).copied().unwrap_or(0),
+            buf.get(base + 3).copied().unwrap_or(0),
+        ]));
+        i += 1;
+    }
+    out
+}
+
+/// The instance's real owner (`FieldCard.owner`), `-1` when dead.
+pub fn instance_owner(instance: i32) -> i32 {
+    unsafe { sys::instance_owner(instance) }
+}
+
+/// Set the real owner without moving the row (「视为拥有」); `false` when dead.
+pub fn set_instance_owner(instance: i32, owner: i32) -> bool {
+    unsafe { sys::set_instance_owner(instance, owner) != 0 }
+}
+
+/// Record that `instance` was made by `creator` (`-1` clears); `false` when
+/// `instance` is dead.
+pub fn set_created_by_at(instance: i32, creator: i32) -> bool {
+    unsafe { sys::set_created_by_at(instance, creator) != 0 }
+}
+
+/// Mark the instance as not having taken effect (or clear the mark). The
+/// writer also reads the bit at the next Graveyard entry; `false` when dead.
+pub fn set_ineffective_at(instance: i32, ineffective: bool) -> bool {
+    unsafe { sys::set_ineffective_at(instance, ineffective as i32) != 0 }
+}
+
+/// Has the instance not taken effect?
+pub fn is_ineffective_at(instance: i32) -> bool {
+    unsafe { sys::is_ineffective_at(instance) != 0 }
+}
+
+/// The player's earliest-owned tile under the acquisition order, `-1` if none.
+pub fn earliest_owned_tile(player_id: i32) -> i32 {
+    unsafe { sys::earliest_owned_tile(player_id) }
+}
+
+/// Put a card (by name) onto `host`, face-down when `face_down`. A live
+/// instance of the name is re-parented; otherwise the name comes off the
+/// caller's hand into a fresh instance. Answers the attached uid, `-1` when
+/// refused (a cycle, a dead host, no copy).
+pub fn attach_card(host: i32, card: &str, cause: ZoneChangeCause, face_down: bool) -> i32 {
+    let (p, l) = s(card);
+    unsafe { sys::attach_card(host, p, l, cause.as_i32(), face_down as i32) }
+}
+
+/// Take `instance` off its host into `dest`; answers the instance's owner,
+/// `-1` when it was not attached.
+pub fn detach_card(instance: i32, dest: Dest, cause: ZoneChangeCause) -> i32 {
+    unsafe { sys::detach_card(instance, dest as i32, cause.as_i32()) }
+}
+
+/// Move the deed row on `tile` to `owner` unchanged (identity, counters and
+/// crystals stay). `false` when the tile has no row.
+pub fn rehome_card(tile: i32, owner: i32) -> bool {
+    unsafe { sys::rehome_card(tile, owner) != 0 }
+}
+
+/// Remove `card` from `player`'s hand and run its play now. `false` when the
+/// card is not in that hand.
+pub fn play_hand_card(player: i32, card: &str) -> bool {
+    let (p, l) = s(card);
+    unsafe { sys::play_hand_card(player, p, l) != 0 }
 }
 
 /// Where the instance at `uid` sits (`Some(-1)` = with its owner, `None` = gone).
@@ -4794,14 +4944,24 @@ pub fn set_effective_card_at(uid: i32, card: &str) -> bool {
     unsafe { sys::set_effective_card_at(uid, p, l) != 0 }
 }
 
+/// Did **this body** place the instance at `uid` in the current run? True for
+/// a row the body itself minted (or re-minted) this drive, false for one that
+/// was already on the field. A body that reacts to the field and also places
+/// into it reads this so its own card does not trip the reaction on a re-run
+/// (the replay re-executes the body against the world its own pass left).
+pub fn is_own_placement(uid: i32) -> bool {
+    unsafe { sys::is_own_placement(uid) != 0 }
+}
+
 /// Is the instance at `uid` face-down?
 pub fn is_face_down_at(uid: i32) -> bool {
     unsafe { sys::is_face_down_at(uid) != 0 }
 }
 
-/// Flip the instance at `uid`; returns whether it exists.
-pub fn set_face_down_at(uid: i32, on: bool) -> bool {
-    unsafe { sys::set_face_down_at(uid, on as i32) != 0 }
+/// Flip the instance at `uid`; returns whether it exists. `cause` says why
+/// (the flip's own `cardFaceFlipped` hooks may read it).
+pub fn set_face_down_at(uid: i32, on: bool, cause: ZoneChangeCause) -> bool {
+    unsafe { sys::set_face_down_at(uid, on as i32, cause.as_i32()) != 0 }
 }
 
 /// Is the instance at `uid` marked 「不受任何效果影响」?
