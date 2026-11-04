@@ -264,11 +264,9 @@ fn here_the_world_holds_a_draw_and_returns_it() {
         .find(|f| f.face_down)
         .map(|f| (f.uid, f.card.clone()))
         .expect("the draw is held");
-    assert_eq!(
-        t.m.world().attachment_host(held) > 0,
-        true,
-        "placed on the card"
-    );
+    assert!(t.m.world().attachment_host(held) > 0, "placed on the card");
+    // 「并为其放置3个奇迹水晶」 -- the crystals time the hold and sit on the
+    // held instance.
     assert_eq!(
         t.m.world().counter_at(held, bandori_std::counter::CRYSTALS),
         3
