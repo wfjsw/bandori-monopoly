@@ -481,7 +481,8 @@ pins a known vector.
 
 The same recipe applies to the **server**: `rules-worker` fills `bundle` from
 the deployed glue identity (`BD_GLUE_SHA`, or the `glueSha256` in
-`BD_ENGINE_ID`, default `webui/src/wasm/engine_id.json`) plus its own ruleset
+`BD_ENGINE_ID`, default `engine_id.json` beside the worker binary, then
+`webui/src/wasm/engine_id.json` in the repo) plus its own ruleset
 hash and the same empty `data_sha256`, so a server-made record and a
 browser-made record of the same deploy seal the **same** stamp and resolve to
 the same bundle.
@@ -755,8 +756,12 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
 5. `node tools/archive-engine.mjs --backup <dir>` -- copy the store to your
    backup target. This command never uploads anything.
 6. Server: no extra step beyond the same repo build; `rules-worker` picks the
-   glue identity up from `webui/src/wasm/engine_id.json` (or `BD_GLUE_SHA` /
-   `BD_ENGINE_ID`).
+   glue identity up from `engine_id.json` beside the binaries (which
+   `deploy-production.sh` copies from `webui/src/wasm/`, and which is checked
+   against the sealed bundle before the deploy finishes), then the repo path
+   (or `BD_GLUE_SHA` / `BD_ENGINE_ID`). Without it, every online record seals
+   an empty bundle: replay falls back to stamp matching, "include engine"
+   fails, and fairness verification refuses the record.
 
 ### 9.7 Tests
 
@@ -797,6 +802,13 @@ replayed **in the browser**, never uploaded to or hosted by the server; the
 plain `.bdrec` format does not change; every existing record keeps replaying
 exactly as before. Exporting the portable form is opt-in (「包含引擎（可离线回放）」
 / "Include engine (play offline)", **default off**) on every download dialog.
+
+Encoding needs the bundle the record was written with. A record whose stamp has
+an empty `bundle` -- a host that could not see its own glue identity -- is
+resolved exactly like opening it (`resolveBundle`): the page's own engine is
+tried first, then the archived build whose stamp identity fields match. The
+deployment must still ship the identity file so new records name the bundle
+outright (§9.6).
 
 ### 10.1 Format
 
