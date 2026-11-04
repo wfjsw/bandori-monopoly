@@ -32,9 +32,9 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 113→114 | 16 | 126–130 | — |
-| G10 | 114→115 | 16→17 | 131 | — |
-| G11 | 115→116 | 17→18 | 132–133 | — |
+| G09 | 113→114 | 16 | 132–136 | 451–461 |
+| G10 | 114→115 | 16→17 | 137 | — |
+| G11 | 115→116 | 17→18 | 138–139 | — |
 | G12 | 116→117 | 18 | 107 | — |
 | G14 | 117→118 | 18 | — | — |
 
@@ -86,6 +86,15 @@ move. G06's sixteen imports take the free **411–426**, leaving 427–430 free 
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
 
+**2026-11-04 amendment (G09).** G02's landed rent/settle arithmetic took kinds
+126–131, which had swallowed this group's allocated 126–130 *and* G10's 131;
+G08's row band 113–120 went unused. Kind ids are wire-stable, so the allocation
+moves, not the landed ids: G09 takes **132–136** (five: two hand-window kinds
+and three effect-only spellings), G10 **137**, G11 **138–139**. G12 keeps the
+still-free 107 and G14 the empty row; 113–120 stay spare. G09's eleven imports
+(the position/tile conversion, the build reads and verb, the move-path reads)
+take **452–463**, right after G07's landed 441–450.
+
 Recommended landing order (foundation → dependent):
 
 1. **G15** Kani host — model-only, no version change.
@@ -113,6 +122,9 @@ Couplings a reviewer must keep in one head:
 - **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
   settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
   `paid`/`body_replaced` facts on top (G02 §12).
+- **G02 ↔ G09** share the build payment: G09's pipeline is a `PayKind::Build`
+  leg over G02's header, priced by `build_price`, and G09's `TileWrite` effect
+  reuses G02's `effect` window shape.
 - **G03 ↔ G04** share the window raise point: G04 owns the plan snapshot/fold,
   G03 raises every roll window inside it and hands the plan-write item (G03
   item 7) to G04 §4.3.
