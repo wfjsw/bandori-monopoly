@@ -66,6 +66,7 @@ arithmetic re-run from the landing order. What the draft got wrong:
 | R19 | The draft's `BotView.ai_never` set does not exist; the type is `SeatView`. | §5.10 uses `SeatView::offerable`, and the predicted frame simply keeps `ai_playable`. |
 | R20 | The draft's necessity for item 2 was one sentence and never eliminated the strategy book, which already has a per-card `play_weight_milli`. | §13.3 rejects the book with the reason (offline, persona-keyed, not shipped with the card). |
 | R21 | The draft had no note on `docs/BOT.md` §1.1's hidden-state audit, although `ai_play` becomes a new gate the client computes. | §5.10 adds the audit row (static prop read, always equal). |
+| R22 | The draft's necessity was four bullets, each asserting rather than showing: no trace, no demotion path, and no priced near-miss — although **A3 would actually make the card work**. | §13 now carries literal traces with card ids and counts, a demotion table, the priced A3/A13 near-misses, per-element severities and a residual-risk list. §11 gains A13. |
 
 ## 1. Items, per item
 
@@ -912,6 +913,14 @@ by the policy.** This only moves the prop lookup into the strategy layer and
 still needs the prop; it also makes the standard policy depend on a book the
 chaos/advanced paths do not share consistently. Rejected.
 
+**A13 — a second import `ruleset_draw_over` instead of a flag word.** Additive,
+so no arity break and no `ABI_VERSION` step (`ruleset_draw_event` is the
+precedent for a second import). Rejected: it duplicates the whole call chain on
+all three cfg paths (linker entry, `native_shims` extern, Kani `Op` arm — an
+`Op` id this group does not have), and every later flag would need a third
+import. `pay_flag` already establishes flags as the way an existing call grows,
+and the arity break costs one bump today and nothing later.
+
 ---
 
 ## 12. Open questions
@@ -953,83 +962,161 @@ chaos/advanced paths do not share consistently. Rejected.
 
 ## 13. Necessity
 
-### 13.1 What "necessary" means
+### 13.1 The standard
 
 A surface element is necessary only if all four hold:
 
-1. **A book clause or an observable failing trace requires the fact.** Item 1
-   has both (clause (1) and the trim trace). Item 2 is heuristic (the sheet is
-   silent) and must carry a reproducible wrong behaviour instead.
-2. **No existing surface can express it.** §13.3 enumerates the candidates and
-   names the engine reason each fails.
-3. **The cheapest alternative fails concretely.** §13.4 names the observable
-   that breaks.
-4. **The set is minimal.** Each field is read by a named gate, test or spec;
-   nothing is speculative.
+1. **The book (or a reproducible defect) requires the fact.** Item 1 has a
+   printed clause. Item 2 is a heuristic, so it must carry a reproducible,
+   card-static defect instead. A "nice to have" with no trace is not enough.
+2. **No existing surface can express it.** §13.4 lists every candidate and the
+   engine reason each fails. Where a candidate *would* work, it is named and
+   the cost of taking it instead is priced (§13.4, A3 and A13).
+3. **The cheapest alternative fails concretely.** Each row names the observable
+   that breaks, not a principle.
+4. **The set is minimal.** Every field is read by a named gate, test or spec.
+   Nothing is carried for a speculative card.
 
-### 13.2 The broken behaviour is observable
+Necessity is argued per item and per element, and each has a stated **demotion
+path** so a reviewer can strike it deliberately (§13.3) rather than let it
+drift.
 
-* **1.** A branch-(1) play today discards the just-drawn cards immediately back
-  to five (the probe in row 441's `verify_note`), so 「可超过上限」 never
-  happens and the scheduled body finds nothing. With only the trim fixed, the
-  seat then cannot end at all (`err.over_hand`), which is the second trace in
-  R3.
-* **2.** A standard bot on its first 运营 plays 夏日合宿 unconditionally
-  (`policy.rs:339-375` gates only legality, strategy weight and cost); the
-  card sits on the field with no incoming effect and the bot has spent its
-  defensive play. There is no value in the sheet the policy can read.
+### 13.2 Book basis and the failing trace
 
-### 13.3 Candidate surfaces, and why each fails
+**Item 1 — a printed clause, twice violated.** The sheet's clause (1) has two
+halves and both are inert today:
 
-| candidate | item | why it fails |
+* **「可超过上限」.** The draw trims immediately. Trace: a hand of six
+  (`通用:GREAT`, `通用:[衍生]PERFECT`, `通用:登上武道馆`, `通用:雨啊，快点来吧`,
+  `通用:CiRCLE THANKS PARTY!`, `Mor:（NNM）稍微努力了一下`), two character
+  marks, branch (1), x = 2. `ctx::draw` moves to eight,
+  `draw_cards_with_hooks` discards three at random in the same transition
+  (`play.rs:5575-5583`), and the seat is back at five. The clause's
+  parenthetical never happens. This is the probe in row 441's `verify_note`.
+* **「回合结束后将手牌弃置到五张」.** Because the trim already happened, the
+  scheduled `discard_down_to_five` (`nanami_effort.rs:242-259`) sees a hand of
+  five, computes `extra = 0`, discards nothing and logs nothing. The clause's
+  whole effect is dead output.
+
+Fixing only the trim creates the second trace: the hand is six or seven at
+turn end, `cant_act`'s `end` gate refuses the `end` (`mod.rs:3014-3017`,
+`err.over_hand`), and the callback that hangs off the turn end can never run.
+So the item is necessary **twice over** — the printed exemption and the printed
+timing each fail on their own.
+
+**Item 2 — no clause; a defect on the offer side.** The sheet prints nothing
+about bots, so the bar is a reproducible defect in a shipped policy. Trace: a
+standard bot seat holding 夏日合宿 at the first 运营 always plays it. The filter
+at `policy.rs:339-375` consults legality, the `hold_for_counteract` flag, the
+round window, `play_weight_milli` and the money floor — every value defaulted
+neutral — and nothing in the sheet or the manifest says "hold this". The card's
+payoff clause (「你没有因为此卡效果无效化任何影响则抽一张牌」) and its
+「直到下个自己的回合开始前」 shield are spent on a turn chosen by accident of
+draw. The same defect reaches the 托管 takeover through `playable`
+(`autopilot.ts:709-723`), which is `cant_play` only.
+
+The defect is **card-static**: nothing the sampled world says makes the first
+运营 right, so a static declaration is exactly the right shape and can be proven
+equal client and server (`docs/BOT.md` §1.1).
+
+### 13.3 Doing nothing, and the demotion path
+
+Doing nothing is not neutral for either item; both leave a knowingly wrong
+result in a shipped path. If the reviewer rejects an item, the demotion must be
+taken as its own decision:
+
+| item | if the design is not taken | cost |
 |---|---|---|
-| `state::set(HAND_LIMIT, NO_HAND_LIMIT)` in the card | 1 | the guest raise does not cross the routine boundary (`cx.rs:1018-1023`); A3 would also change every host routine's pending-state view |
-| `ctx::draw` with no flag and re-adding trimmed cards | 1 | the cards crossed the discard; `discarded` / `discardAfter` already fired; ordering with copies is unstable (A7) |
-| a per-card static "draws may exceed" prop | 1 | a card may mix an exempt and a normal draw in one body; the flag is a property of the call |
-| the `NO_HAND_LIMIT` state alone | 1 | it is the cap, not the draw; a lowered cap (`HAND_LIMIT_DELTA`) and 「可超过上限」 are independent |
-| the `log.part.over_hand` presence as the gate | 1 | it is presentation data and is absent exactly when the hand is under the limit; also suppressed by design in the fix |
-| the scheduled callback's existence as the allowance (A9) | 1 | many callbacks schedule for other reasons and do not dispose a hand |
-| `MatchPlayer.hand` (the public count) as the allowance | 1 | it is a mirror updated later than the private hand; the gate reads the private hand |
-| `cant_play` / a legality reason | 2 | a human must still play the card; an `aiNever` card is *legal* |
-| a TypeScript table entry in `autopilot.ts` | 2 | the server bot and the advanced service never see it |
-| the strategy book's per-card weight (A11/A12) | 2 | offline, persona-keyed, not shipped with the card, and not shared by the engine bot and the client |
+| 1 | implement "trim immediately" and tag the card `TODO(规则书)` | one printed clause ignored and the turn-end body dead; the discrepancy shows up in the black-box suite |
+| 2 | leave the card in the bot's unconditional play set | every standard/bot/托管 seat keeps burning the card; no carrier is added for the next defensive card either |
+
+Item 1 is graded medium and `hand-limit-lift` is a real clause; item 2 is graded
+low and may legitimately be struck. They are separable (§13.6).
+
+### 13.4 Candidate surfaces, and why each fails
+
+| candidate | item | why it fails / what taking it would cost |
+|---|---|---|
+| `state::set(HAND_LIMIT, NO_HAND_LIMIT)` in the card | 1 | the guest raise does not cross the routine boundary (`cx.rs:1018-1023`). **A3 would make it work** — see the A3 row |
+| A3 — let every guest state increase cross the overlay | 1 | works, and is the honest near-miss: it would revive the existing body with no new import. It changes what every host routine sees of *pending* state and carries the still-open 心の雨 ruling (`docs/ENGINE.md:460`), so it is its own batch. The flag does not become redundant under A3 (Q8) and is local to the call, so the flag is the narrow unit either way |
+| a single `NO_HAND_LIMIT` raise with no flag (A3 only) | 1 | cannot express a body that mixes an exempt and a normal draw; re-reads and rewrites the limit per card; the limit is shared state, so a nested draw inherits the lift |
+| `ctx::draw` with no flag and re-adding trimmed cards | 1 | the cards crossed the discard (`discarded` / `discardAfter` already fired), the order of multiple copies is unstable, and the draw hooks saw the wrong hand size (A7) |
+| a per-card static "draws may exceed" prop | 1 | a body may mix draw kinds; the exemption is a property of the call (A3 row) |
+| the `log.part.over_hand` presence as the gate | 1 | it is presentation data and is absent exactly when the hand is under the limit; the fix also suppresses it by design |
+| a second import `ruleset_draw_over` (A13) | 1 | works and needs no version break, but duplicates the call chain on three cfg paths and consumes a Kani `Op`; every later flag would need another import |
+| "the caller discards the excess before ending" | 1 | the printed timing is 「回合结束后」; the callback becomes dead and a timed-out seat must discard by hand |
+| the scheduled callback's existence as the allowance (A9) | 1 | many cards schedule callbacks for unrelated reasons and never dispose a hand |
+| `MatchPlayer.hand` (the public count) as the allowance | 1 | it is a mirror updated later than the private hand the gate reads |
+| `cant_play` / a legality reason | 2 | a human must still play the card; an `aiNever` card is *legal*, so legality would grey it |
+| a TypeScript table entry in `autopilot.ts` | 2 | the engine bot and the advanced service never see it |
+| the strategy book's per-card weight (A11/A12) | 2 | offline, persona-keyed, not shipped with the card, excluded from `data_sha256`, and not shared consistently by the engine bot and the client |
 | a guest `OP_AI_PLAY` hook (A2) | 2 | works, but runs a guest body per candidate; a static bool is the cheap correct form for a never |
-| a `CardDef` field (A1) | 2 | same information, larger surface: builder threading, manifest field, `CardInfo` field, a second wire break |
+| a `CardDef` field (A1) | 2 | same information, larger surface: `new` plus seven builders, a manifest field, a `CardInfo` field and a second wire break |
 
-### 13.4 What each element buys, and what its removal breaks
+### 13.5 Element by element
 
-| element | removed |
+Honest severity in brackets: **[required]**, **[belt]**, **[plumbing]**.
+
+| element | removed → |
 |---|---|
-| `draw_flag::OVER_HAND_LIMIT` + arity | no way to tell the host *which* draw is exempt; the trim cannot be selectively skipped |
-| `ctx::draw_over_hand_limit` | every call site would spell the bit by hand |
-| `HostRequest::Draw.over_hand_limit` | the host arm cannot carry the decision past the pause boundary |
-| `over_hand_allowed` + `over_hand_blocking` | the end gate refuses the very act that runs the dispose; R3 returns |
-| `settle_over_hand_allowance` | a stale permission reopens the end gate after an unrelated hand addition |
-| the turn-end sweep | a cap below five or a callback-draw starts the next turn over the cap |
-| `prop::AI_NEVER` + the `ai_play` override | every policy offers the card |
-| `ViewExtra::ai_playable` | the client-side AI and the advanced service cannot see the fact the engine bot sees |
+| `draw_flag::OVER_HAND_LIMIT` + the arity [required] | no way to say *which* draw is exempt; the trim cannot be selectively skipped |
+| `ctx::draw_over_hand_limit` [plumbing] | every call site spells the bit by hand; the flag has no name in card code |
+| `HostRequest::Draw.over_hand_limit` [required] | the host arm cannot carry the decision across the pause boundary; the flag dies at `hostfns` |
+| `over_hand_allowed` [required] | the end gate refuses the very act that runs the dispose; the card deadlocks at its own turn end |
+| `over_hand_blocking` [plumbing] | the four gate sites each open-code `over_hand && !allowed` |
+| `settle_over_hand_allowance` [belt] | the flag can outlive the overflow: a later non-draw hand addition would let `end` through while over the limit. The turn-end sweep still fixes the *hand*; the belt keeps the flag honest at rest |
+| the turn-end sweep [required] | a skipped callback, a callback that drew, or a cap lowered below five starts the next turn over the cap |
+| the log part [required] | six cards over a limit of five reads as an error the player cannot explain |
+| `prop::AI_NEVER` + the `ai_play` override [required for item 2] | every policy offers the card; the seam stays unanswered |
+| `ViewExtra::ai_playable` [required for item 2] | the engine bot sees the fact and the 托管 seat and advanced service do not — the defect moves rather than disappears |
 
-### 13.5 Grouping
+### 13.6 Grouping
 
 Item 1 is independent of item 2; they share one ABI step only because both are
-small and last. Striking item 2 leaves item 1 intact; striking item 1 leaves
-item 2 intact.
+small and last. Striking item 2 leaves item 1 fully intact; striking item 1
+leaves item 2 intact (the prop, the extra and the client plumbing do not touch
+the draw).
 
-### 13.6 Counterarguments
+### 13.7 Counterarguments
 
-* *"Four cards could just call `ctx::discard`..."* — no; the card discards
-  *drawn* cards at random, the routine already owns the trim, and the hand-size
-  hook points must see each drawn card in hand.
-* *"`over_hand_allowed` is derivable from hand length and limit."* — no; a hand
-  over the cap is legal-looking either way. Only the draw knows it was exempt.
-* *"Put `aiNever` in the sheet."* — the sheet has no bot column; the prop is
-  the manifest's answer and needs no data-file edit.
+* *"The card could discard its own excess."* — it does not know which cards;
+  the card discards **random hand cards**, the routine already owns the trim,
+  and `drawn` / `handSize` hooks must observe each card actually in hand.
+* *"`over_hand_allowed` is derivable from the hand length and the limit."* — no;
+  an over-limit hand looks identical whether or not it is permitted. Only the
+  draw that caused it knows, and that knowledge is exactly what must persist to
+  the turn end.
+* *"Just let the player discard before ending."* — see the A8/A9 rows: it
+  changes the printed timing and kills the scheduled body.
+* *"Put `aiNever` in the sheet."* — the sheet has no bot column, and a card
+  fact should not require a data-file edit; the manifest already carries props
+  (`CardInfo.props`) to the client.
+* *"One card does not justify an ABI step."* — the step is shared with a
+  clause-grade item; item 2 alone adds no op, no kind and no manifest field, and
+  it answers a seam (`ai_play`) the engine already calls for every candidate.
+* *"Item 2 is only a heuristic."* — true, graded low, and separable (§13.6); it
+  is still a deterministic, card-static wrong offer on three shipped paths.
 
-### 13.7 Cost
+### 13.8 Residual risk a reviewer may still strike
+
+* The **`can_end_here` preview** is not load-bearing (the server gate is); it
+  is kept so the client's end affordance and the server's acceptance agree.
+* **`settle_over_hand_allowance`** could be replaced by the sweep alone with the
+  same end hand, at the price of a stale flag at rest (§13.5).
+* **`aiNever`'s reach over chaos** is Q1; narrowing it costs only the chaos
+  clause of the test set.
+* The **`drawOut` interaction** is out of scope: a replacement is its own draw
+  and inherits no flag, and no card combines a replacement with 「可超过上限」
+  today (Q6 covers any newly discovered text).
+
+### 13.9 Cost
 
 One ABI step, one SAVE step, one dead-parameter revival, one bool on the saved
-player, one prop and one view bit. No new op, no new engine kind, no new
-manifest field, no new decision.
+player, one prop and one view bit. No new op, no new engine kind, no new export
+name, no new manifest field, no new prompt, and no new decision type. The
+element that costs the most surface — the slot-3 argument — is retired only by
+A13, which costs more (three duplicated externs and a Kani `Op` id) and is
+priced in §13.4.
 
 ---
 
