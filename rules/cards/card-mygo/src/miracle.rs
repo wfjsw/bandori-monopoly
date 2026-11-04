@@ -214,6 +214,12 @@ pub fn miracle_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn on_discard_kani(player_id: i32) -> card_sdk::Asked {
+    on_discard(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
     before_build(player_id)
 }
