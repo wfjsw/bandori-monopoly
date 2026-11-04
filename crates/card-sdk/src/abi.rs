@@ -798,7 +798,24 @@ use crate::intern::NameId;
 ///    `ViewExtra.ai_playable` (wire `aiPlayable`) lets the client-side
 ///    seat-view engine read the same static fact with no hidden read.
 ///
-/// v116: **tile events, one build pipeline, tile-write effects, house falls,
+/// v116: **deck inspection, public reveal, and the draw-action point** (G11).
+///    `CardPile::Inspection = 4` (cards an open look has turned over and not
+///    yet released); `cards_in` / `take_card` accept it and the empty-deck
+///    refill is suppressed on the pile writes while a look holds that seat's
+///    deck open. New imports `ruleset_inspection_begin(looker, owner, count,
+///    public)`, `ruleset_inspection_end(player, shuffle)`,
+///    `ruleset_reveal_pile(player, pile, reason)` and
+///    `ruleset_reveal_card(player, card, reason)`; guest wrappers
+///    `ctx::inspection_begin` / `inspection_end` / `reveal_pile` /
+///    `reveal_card`. New hook-only Action kinds `inspected` (a card entered a
+///    look; dispatched to the revealed card, raised before the look continues)
+///    and `drawAfter` (one raise per draw instruction, `value` = batch length,
+///    `cards` = the batch; `drew` stays per card). New public
+///    `MatchPlayer.reveal` overlay, `MatchView.inspection` for the caller's own
+///    frame, and the `"reveal"` event type. SAVE_VERSION 17 -> 18 (open frames
+///    are saved); RECORD_VERSION unchanged.
+///
+/// v117: **tile events, one build pipeline, tile-write effects, house falls,
 ///    move paths** (`spec/abi/G09-tile-build-pass.md`). A **tile** is an
 ///    identity, a **position** is a slot: `Trigger` gains `position` and
 ///    `TriggerMove` gains `path`, and every position-fed raise site converts
@@ -816,7 +833,7 @@ use crate::intern::NameId;
 ///    the `effect` window before applying. `Trigger` / `TriggerMove` are
 ///    host-only; `FieldCard.position` is `serde(default) -1`, so
 ///    SAVE_VERSION / RECORD_VERSION are unchanged.
-pub const ABI_VERSION: i32 = 116;
+pub const ABI_VERSION: i32 = 117;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -924,8 +941,8 @@ pub const ABI_VERSION: i32 = 116;
 ///    three prop keys `IMMUNE_EXCEPT_OWNER` / `ADDS_DICE` /
 ///    `GRANTS_DICE_IMMUNITY`. SAVE_VERSION / RECORD_VERSION unchanged (every
 ///    new persisted field is `serde(default)`).
-/// v116: **tile events, one build pipeline, tile-write effects, house falls,
-///    move paths** (`spec/abi/G09-tile-build-pass.md`). See the v116 entry at
+/// v117: **tile events, one build pipeline, tile-write effects, house falls,
+///    move paths** (`spec/abi/G09-tile-build-pass.md`). See the v117 entry at
 ///    the release marker; the kinds are `tileEffectBefore` (135),
 ///    `houseRemoved` (136) and `houseAdd` / `houseRemove` / `ownerSet`
 ///    (137-139).
@@ -2159,6 +2176,10 @@ pub enum CardPile {
     Deck = 2,
     /// Cards placed on the player's field, in placement order.
     Field = 3,
+    /// The cards open inspections have turned over, in reveal order
+    /// (top-first). Not a pile: only `inspection_begin` fills it, and a
+    /// leftover returns to the deck. Addressed by **deck owner**.
+    Inspection = 4,
 }
 
 impl CardPile {
@@ -2168,6 +2189,7 @@ impl CardPile {
             1 => Self::Graveyard,
             2 => Self::Deck,
             3 => Self::Field,
+            4 => Self::Inspection,
             _ => return None,
         })
     }
@@ -2546,6 +2568,19 @@ impl ActionKind {
     /// Action. A player's discard pile has been shuffled back into its deck.
     /// Payload: none beyond the raise seat.
     pub const Reshuffled: Self = Self(TriggerKind::Reshuffled);
+
+    /// Action, hook-only (no window). One card of a draw pile was turned over
+    /// into an inspection frame. Payload: player_id = target = the deck owner,
+    /// card = the revealed id, cards = that id, value = reveal position
+    /// (1-based), by_card = the looker. Dispatched to the revealed card itself;
+    /// raised before the look body's next statement.
+    pub const Inspected: Self = Self(TriggerKind::Inspected);
+
+    /// Action, hook-only (no window). One draw instruction finished -- after the
+    /// last card, before the over-hand sweep. Payload: player_id = the drawer,
+    /// value = the batch length, cards = the batch. At most one per draw
+    /// instruction; the per-card point is Drew.
+    pub const DrawAfter: Self = Self(TriggerKind::DrawAfter);
 
     /// Action. A player became the owner of the tile (buy or auction).
     /// Payload: tile; some paths also set by_card or the buy record.
@@ -3210,6 +3245,12 @@ impl TriggerKind {
 
     /// `settleRentMul`
     pub const SettleRentMul: Self = Self::engine(131);
+
+    /// `inspected` (hook-only)
+    pub const Inspected: Self = Self::engine(132);
+
+    /// `drawAfter` (hook-only)
+    pub const DrawAfter: Self = Self::engine(133);
 
     /// `discarded`
     pub const Discarded: Self = Self::engine(58);

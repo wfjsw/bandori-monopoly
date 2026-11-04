@@ -280,6 +280,22 @@ pub fn cards_in(player_id: i32, pile: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::cards_in, [player_id, pile, buf, cap, 0, 0])
 }
 
+pub fn inspection_begin(looker: i32, owner: i32, count: i32, public: i32) -> i32 {
+    kani_host::call_i32(Op::inspection_begin, [looker, owner, count, public, 0, 0])
+}
+
+pub fn inspection_end(player_id: i32, shuffle: i32) -> i32 {
+    kani_host::call_i32(Op::inspection_end, [player_id, shuffle, 0, 0, 0, 0])
+}
+
+pub fn reveal_pile(player_id: i32, pile: i32, ptr: i32, len: i32) {
+    kani_host::call_unit(Op::reveal_pile, [player_id, pile, ptr, len, 0, 0]);
+}
+
+pub fn reveal_card(player_id: i32, card_ptr: i32, card_len: i32, ptr: i32, len: i32) {
+    kani_host::call_unit(Op::reveal_card, [player_id, card_ptr, card_len, ptr, len, 0]);
+}
+
 pub fn to_discard(player_id: i32, ptr: i32, len: i32) {
     kani_host::call_unit(Op::to_discard, [player_id, ptr, len, 0, 0, 0]);
 }

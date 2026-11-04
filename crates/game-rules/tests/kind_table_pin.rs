@@ -178,6 +178,8 @@ fn typed_engine_consts_have_table_rows() {
         (129, "SettleMul"),
         (130, "SettleRentAdd"),
         (131, "SettleRentMul"),
+        (132, "Inspected"),
+        (133, "DrawAfter"),
         (134, "AbnormalGate"),
         (135, "TileEffectBefore"),
         (136, "HouseRemoved"),

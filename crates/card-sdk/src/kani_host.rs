@@ -460,19 +460,24 @@ pub enum Op {
     set_self_immune_except_owner = 448,
     dice_immune = 449,
     set_dice_immune = 450,
-    // v116 (G09 tile/build/path surface). 452-463 is this group's band.
-    trig_position = 452,
-    position_of_tile = 453,
-    tile_at = 454,
-    tile_extra_count = 455,
-    self_position = 456,
-    build_price = 457,
-    build_cost_percent = 458,
-    build_discount = 459,
-    tile_buildable = 460,
-    card_build_as = 461,
-    trig_move_path_length = 462,
-    trig_move_path = 463,
+    // v116 (G11 inspection/reveal surface). 451-454 is this group's band.
+    inspection_begin = 451,
+    inspection_end = 452,
+    reveal_pile = 453,
+    reveal_card = 454,
+    // v117 (G09 tile/build/path surface). 455-466 is this group's band.
+    trig_position = 455,
+    position_of_tile = 456,
+    tile_at = 457,
+    tile_extra_count = 458,
+    self_position = 459,
+    build_price = 460,
+    build_cost_percent = 461,
+    build_discount = 462,
+    tile_buildable = 463,
+    card_build_as = 464,
+    trig_move_path_length = 465,
+    trig_move_path = 466,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

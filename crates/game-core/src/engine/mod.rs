@@ -319,6 +319,15 @@ struct Pending {
     snapshot: World,
     answers: Vec<Answered>,
     live: Live,
+    /// The routine is the outermost one: its end clears the reveal overlay.
+    /// Defaults to `true` on a save written before the field existed -- a
+    /// resumed routine then clears rather than letting the overlay stick.
+    #[serde(default = "outermost_by_default")]
+    outermost: bool,
+}
+
+fn outermost_by_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -410,7 +419,12 @@ struct Saved {
 /// v17: the permitted over-limit hand (`MatchPlayer.over_hand_allowed`,
 /// `serde(default)`). A save taken over the limit must carry it -- the `end`
 /// gate reads it (design G14 §8).
-pub const SAVE_VERSION: u32 = 17;
+/// v18: deck inspection frames (`World.inspection_frames`,
+/// `next_inspection_id`) and the public reveal records (`World.reveals`). A
+/// save may be taken while a look is paused and the frame holds cards in no
+/// pile, so dropping it loses them; the reveal overlay would otherwise
+/// vanish mid-routine (design G11).
+pub const SAVE_VERSION: u32 = 18;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -1316,6 +1330,26 @@ impl Match {
         (&self.world.turn.played, self.world.turn.cards_played)
     }
 
+    /// The caller's own innermost open inspection frame, for
+    /// `MatchView.inspection`: the cards they are looking at, top-first.
+    pub fn inspection_of(&self, member: i32) -> Option<crate::state::InspectionView> {
+        let seat = self.player_index(member)? as i32;
+        let frame = self
+            .world
+            .inspection_frames
+            .iter()
+            .rfind(|f| f.looker == seat)?;
+        Some(crate::state::InspectionView {
+            cards: frame
+                .cards
+                .iter()
+                .filter(|c| c.revealed)
+                .map(|c| c.id.clone())
+                .collect(),
+            public: frame.public,
+        })
+    }
+
     pub fn draw_of(&self, member: i32) -> Vec<String> {
         let mut v = self
             .player_index(member)
@@ -1556,6 +1590,10 @@ impl Match {
         let mut cx = PlayCtx::new(self.world.clone(), &data, &*rules, &[]);
         let r = f(&mut cx);
         self.world = cx.into_world();
+        // Nothing is pending after a direct write, so the reveal overlay it
+        // produced is over -- and with it any look hold (nothing will file).
+        self.world.reveals.clear();
+        self.world.look_hold.iter_mut().for_each(|held| *held = false);
         self.changed = true;
         self.seq += 1;
         self.arm_clock_hold();
@@ -1567,10 +1605,19 @@ impl Match {
         // activation identity instead of allocating a new one.
         self.world.turn.activation_ordinal += 1;
         let snapshot = self.world.clone();
-        self.execute(r, snapshot, vec![]);
+        // A start outside the deferred pump is the outermost routine: only it
+        // ends the public reveal overlay.
+        let outermost = !self.flushing_deferred;
+        self.execute(r, snapshot, vec![], outermost);
     }
 
-    fn execute(&mut self, routine: Routine, snapshot: World, answers: Vec<Answered>) {
+    fn execute(
+        &mut self,
+        routine: Routine,
+        snapshot: World,
+        answers: Vec<Answered>,
+        outermost: bool,
+    ) {
         let (data, rules) = (self.data.clone(), self.rules.clone());
         // Simulation mode: answer inline through the installed provider
         // (`docs/BOT.md` §3.2). With none installed this is the halt/replay
@@ -1637,6 +1684,13 @@ impl Match {
                         }
                     }
                 }
+                if outermost {
+                    w.reveals.clear();
+                    // A look's hold only has to survive until its own play
+                    // files the card; a look from a hook or a skill press has
+                    // no filing of its own, so the routine end releases it.
+                    w.look_hold.iter_mut().for_each(|held| *held = false);
+                }
                 self.world = w;
                 self.pending = None;
                 self.wait = delay.min(MAX_WAIT);
@@ -1701,6 +1755,7 @@ impl Match {
                     snapshot,
                     answers,
                     live: Live::new(*ask),
+                    outermost,
                 });
             }
             // STACK-01 fallback only: the pump above swallows suspensions, so
@@ -1710,6 +1765,10 @@ impl Match {
             // rather than aborting the match (`changed` / `seq` are already
             // bumped above).
             Err(Halt(HaltKind::Suspended)) => {
+                // The routine is over, so its overlay and its look holds are
+                // too (same rule as the `Ended` arm above).
+                w.reveals.clear();
+                w.look_hold.iter_mut().for_each(|held| *held = false);
                 self.world = w;
                 self.pending = None;
                 if !self.flushing_deferred {
@@ -1736,7 +1795,7 @@ impl Match {
         self.prompt_log.push(a.clone());
         let mut answers = p.answers;
         answers.push(a);
-        self.execute(p.routine, p.snapshot, answers);
+        self.execute(p.routine, p.snapshot, answers, p.outermost);
     }
 
     /// Every [`Answered`] committed so far, in order (`docs/BOT.md` §3.2's

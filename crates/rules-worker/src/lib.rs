@@ -377,6 +377,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 "played": played,
                 "cardsPlayed": cards_played,
                 "tileQuotes": m.tile_quotes(member),
+                // The viewer's own open look (design G11); nobody else's.
+                "inspection": m.inspection_of(member),
             });
             if need_extras {
                 view["aiAnswer"] = extra.get("aiAnswer").cloned().unwrap_or(Value::Null);

@@ -32,11 +32,11 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 115→116 | 17 | 135–139 | 452–463 |
-| G10 | 116→117 | 17→18 | 140 | — |
-| G11 | 117→118 | 18 | 141–142 | — |
 | G12 | 113→114 | 16 | 134 | 443–450 |
 | G14 | 114→115 | 16→17 | — | — |
+| G11 | 115→116 | 17→18 | 132–133 | 451–454 |
+| G09 | 116→117 | 18 | 135–139 | 455–466 |
+| G10 | 117→118 | 18→19 | 140 | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -116,12 +116,24 @@ card prop (`aiNever`), which changes no id: it rides the existing `props` map.
 free numbers, **114→115** / **16→17**, and the not-yet-landed G09–G11 rows
 shift one more step (ABI and SAVE both).
 
-**2026-11-04 landing note (G09).** G09 landed after G12 and G14 and takes the
-next free numbers: **115→116** / SAVE stays at 17. G12's landed 134 swallowed
-the amended kind block's first id and the G12/G14 landings took 443–450, so
-G09's five kinds move to **135–139**; its imports keep the **452–463** band.
-G10 and G11 shift to 116→117 / kind 140 and 117→118 / kinds 141–142.
-`ABI_VERSION` is 116 and `SAVE_VERSION` 17.
+**2026-11-04 landing note (G09).** G09 lands after G12, G14 and G11 and takes
+the next free numbers: **116→117** / SAVE stays at 18. G12's landed 134
+swallowed the amended kind block's first id, so G09's five kinds move to
+**135–139**; G11's 451–454 push its imports to the next free band,
+**455–466**. G10 shifts to 117→118 / 18→19 / kind 140. `ABI_VERSION` is 117
+and `SAVE_VERSION` 18.
+
+**2026-11-04 amendment (G11).** G07 has landed; its two ops use 441 and 442 of
+the 441–450 band and G12's tail takes 443–450. G09's document claims 411–430
+and G10's 431–449 in their own rows; the highest op claim today is 450, so
+G11's four imports take **451–454** — consecutive, after every existing claim,
+so no landed or pending row moves for them. The kind column stays 132–133
+(after G10's 131); the group takes no other engine id.
+
+**2026-11-04 landing note (G11).** G11 landed after G14, so it takes the next
+free numbers, **115→116** / **17→18**, and the not-yet-landed G09/G10 rows
+shift one more step (ABI and SAVE both). `ABI_VERSION` is 116 and
+`SAVE_VERSION` 18.
 
 Recommended landing order (foundation → dependent):
 
@@ -136,7 +148,7 @@ Recommended landing order (foundation → dependent):
 9. **G07** targeting — depends on G01 identity and G06 window.
 10. **G09** tile/build/pass — depends on G02 header and G08 zone writer.
 11. **G10** effect outcome — settle facts and defer depend on G02/G09.
-12. **G11** information/deck — drawAfter, inspection frames.
+12. **G11** information/deck — drawAfter, inspection frames. *(landed early, at ABI 116)*
 13. **G12** status/immunity — depends on G04 blocked-ness and G06 pending. *(landed early, at ABI 114)*
 14. **G14** AI/hand limit — smallest consumer surface. *(landed early, at ABI 115, after G12)*
 

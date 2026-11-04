@@ -195,6 +195,10 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::Teleport { .. }
         | HostRequest::TeleportAs { .. } => Some("move"),
         HostRequest::Draw { .. } | HostRequest::DrawEvent { .. } => Some("draw"),
+        HostRequest::InspectionBegin { .. } | HostRequest::InspectionEnd { .. } => {
+            Some("inspection")
+        }
+        HostRequest::RevealPile { .. } | HostRequest::RevealCard { .. } => Some("reveal"),
         HostRequest::Build { .. }
         | HostRequest::BuildAs { .. }
         | HostRequest::OfferBuild { .. }
@@ -363,6 +367,20 @@ pub struct Run {
     /// Cards this run drew, `(player_id, id)` -- the engine raises `drawn` /
     /// `drew` for each once the run commits (the per-draw after points).
     draw_log: Vec<(i32, String)>,
+    /// One draw **instruction** this run made, `(player_id, batch)` -- the
+    /// engine raises `drawAfter` once with the whole batch after the last
+    /// `drew` of the drive (design G11 §5.7). A replacement is in this and in
+    /// `draw_log`; a cancelled draw is in neither.
+    draw_after_log: Vec<(i32, Vec<String>)>,
+    /// Frame ids present when the `Run` was built -- the commit net (§5.4)
+    /// leaves those alone unless the run adopted them. The drive constructors
+    /// fill it; the pure query/probe runs leave it empty, which is safe only
+    /// because they never commit (if one ever gains a commit, fill it first).
+    frames_at_drive_start: Vec<i32>,
+    /// Frames this run adopted instead of creating (a replayed
+    /// `inspection_begin`, §5.2). The commit net releases them even though
+    /// they are in `frames_at_drive_start`.
+    adopted: Vec<i32>,
     /// Players whose deck this run shuffled -- `reshuffled` once it commits.
     reshuffle_log: Vec<i32>,
     /// Named markers spent during the run, `(player_id, n, name)` -- raised as
@@ -605,6 +623,73 @@ impl Run {
         }
     }
 
+    /// Publish a reveal (design G11 §5.6). The overlay is applied at once --
+    /// a reveal is a view, not a pile write -- and the line rides this
+    /// drive's `posted` slots so a prompt re-run replays it rather than
+    /// posting a second one.
+    #[allow(clippy::too_many_arguments)]
+    fn post_reveal(
+        &mut self,
+        player: i32,
+        reason: Msg,
+        pile: game_core::state::RevealPile,
+        ids: Vec<String>,
+        card: &str,
+        to: i32,
+    ) {
+        // A reveal is a visible outcome: post the lazy 「效果适用」 header
+        // first (same rule as `post_log_value`), so the line and any state it
+        // shows group under the body that produced them.
+        self.flush_header();
+        let count = ids.len() as i32;
+        // A reveal-only body is not 「无事发生」 and a `silent` entry that
+        // reveals is a bug.
+        self.logged = self.logged.saturating_add(1);
+        // The overlay is live view state: write it straight to the live world
+        // when there is one (a pass's pile checkpoint does not carry
+        // `reveals`), else to the guest copy.
+        if let Some(live) = self.live {
+            let cx = unsafe { &mut *live };
+            cx.world_mut().push_reveal(player, reason.clone(), pile, ids);
+        } else {
+            self.world.push_reveal(player, reason.clone(), pile, ids);
+        }
+        let parent = self.parent;
+        if let Some(live) = self.live {
+            let cx = unsafe { &mut *live };
+            let id = if self.log_index < self.posted.len() {
+                let id = self.posted[self.log_index];
+                self.log_index += 1;
+                if cx.relog_event(id, reason.clone()) {
+                    id
+                } else {
+                    let id = cx.log_event("reveal", player, reason, parent, card, count);
+                    self.posted[self.log_index - 1] = id;
+                    id
+                }
+            } else {
+                self.log_index += 1;
+                let id = cx.log_event("reveal", player, reason, parent, card, count);
+                self.posted.push(id);
+                id
+            };
+            cx.set_event_to(id, to);
+            return;
+        }
+        // No live sink: guest-copy only (probe / quote).
+        let e = self.world.log("reveal", player, reason);
+        if !card.is_empty() {
+            e.card = card.to_string();
+        }
+        if count != 0 {
+            e.value = count;
+        }
+        e.to = to;
+        if parent >= 0 {
+            e.parent = parent;
+        }
+    }
+
     /// Scope a flash identity to this drive's card so a later activation of
     /// the same card is a fresh drive (and a nested drive is independent).
     fn flash_key(&self, inner: &str) -> String {
@@ -843,8 +928,10 @@ fn run_draw(r: &mut Run, player_id: i32, n: i32, over: bool) -> i32 {
             .map(|h| h.hand[before..].to_vec())
             .unwrap_or_default();
         if !drawn.is_empty() {
-            // Visible outcome: `commit_after` raises `drawn` / `drew`.
+            // Visible outcome: `commit_after` raises `drawn` / `drew` (and the
+            // batch's `drawAfter`).
             r.flush_header();
+            r.draw_after_log.push((player_id, drawn.clone()));
             for id in drawn {
                 r.draw_log.push((player_id, id));
             }
@@ -1264,7 +1351,7 @@ impl CardWorld for Run {
                     h.graveyard.push(card.to_string());
                 }
                 self.discard_log.push((player_id, card.to_string()));
-                if self.world.refill_draw_pile(idx) {
+                if self.world.refill_after_pile_write(idx) {
                     self.reshuffle_log.push(player_id);
                 }
             }
@@ -1305,19 +1392,38 @@ impl CardWorld for Run {
         }
     }
     fn take_card(&mut self, player_id: i32, card: &str, src: CardPile) -> bool {
+        if src == CardPile::Field {
+            return self.world.unplace_card(player_id, card).is_some();
+        }
+        // An inspection pile is addressed by deck owner; innermost frame
+        // first (the look a body is inside is the newest one).
+        if src == CardPile::Inspection {
+            for frame in self.world.inspection_frames.iter_mut().rev() {
+                if frame.deck_owner != player_id {
+                    continue;
+                }
+                if let Some(k) = frame.cards.iter().position(|c| c.id == card) {
+                    frame.cards.remove(k);
+                    return true;
+                }
+            }
+            return false;
+        }
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
             return false;
         };
         let list = match src {
             CardPile::Hand => &mut h.hand,
             CardPile::Graveyard => &mut h.graveyard,
-            CardPile::Deck => &mut h.deck,
-            CardPile::Field => return self.world.unplace_card(player_id, card).is_some(),
+            _ => &mut h.deck,
         };
         let took = match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
-                if src == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize) {
+                // A look at the deck holds its refill (design G11 I2).
+                if src == CardPile::Deck
+                    && self.world.refill_after_pile_write(player_id.max(0) as usize)
+                {
                     // Visible outcome: `commit_after` raises `reshuffled`.
                     self.flush_header();
                     self.reshuffle_log.push(player_id);
@@ -1332,6 +1438,21 @@ impl CardWorld for Run {
         took
     }
     fn cards_in(&self, player_id: i32, pile: CardPile) -> Vec<String> {
+        if pile == CardPile::Inspection {
+            // Revealed entries only, front-first; the frame is top-first and
+            // the innermost (newest) frame holds the card nearest the front.
+            let idx = player_id;
+            return self
+                .world
+                .inspection_frames
+                .iter()
+                .rev()
+                .filter(|f| f.deck_owner == idx)
+                .flat_map(|f| f.cards.iter())
+                .filter(|c| c.revealed)
+                .map(|c| c.id.clone())
+                .collect();
+        }
         let Some(h) = self.world.hidden.get(player_id.max(0) as usize) else {
             return Vec::new();
         };
@@ -1341,7 +1462,89 @@ impl CardWorld for Run {
             // The end of the vec is the top of the pile; list top first.
             CardPile::Deck => h.deck.iter().rev().cloned().collect(),
             CardPile::Field => self.world.placed_cards(player_id),
+            CardPile::Inspection => unreachable!(),
         }
+    }
+    // inspection end / reveals (design G11 §5.4, §5.6) ----------------------
+    /// Close the caller's innermost frame. Applied directly: the SDK wrapper
+    /// returns a bare `i32`, so a sentinel here would be swallowed by any
+    /// body that does not end on the call.
+    fn inspection_end(&mut self, player: i32, shuffle: bool) -> i32 {
+        let released = self.world.finish_inspection_of(player, shuffle);
+        if released > 0 {
+            self.post_log_value(
+                "text",
+                player,
+                Msg::new("log.inspection_returned").n("count", released as i64),
+                "",
+                0,
+            );
+        }
+        released
+    }
+
+    /// Publish a whole pile. Applied directly: a reveal is a view overlay,
+    /// not a pause point.
+    fn reveal_pile(&mut self, player: i32, pile: CardPile, reason: Msg) {
+        let (view, ids) = {
+            let world = &self.world;
+            match pile {
+                CardPile::Hand => (
+                    game_core::state::RevealPile::Hand,
+                    hidden_pile(world, player, CardPile::Hand).unwrap_or_default(),
+                ),
+                CardPile::Graveyard => (
+                    game_core::state::RevealPile::Discard,
+                    hidden_pile(world, player, CardPile::Graveyard).unwrap_or_default(),
+                ),
+                CardPile::Deck => {
+                    let mut ids = hidden_pile(world, player, CardPile::Deck).unwrap_or_default();
+                    // The open frames are the true top of the deck.
+                    ids.splice(0..0, inspection_held(world, player));
+                    (game_core::state::RevealPile::Deck, ids)
+                }
+                // Field is `placed_cards` (no pile order) and the inspection
+                // frame is the look itself; `reveal_card` is the verb there.
+                _ => return,
+            }
+        };
+        self.post_reveal(player, reason, view, ids, "", pile as i32);
+    }
+    /// Publish one card id, appended to the seat's revealed cards. An id that
+    /// is already published (a re-run of the same pass, or a card in a public
+    /// look) is a no-op: one overlay entry and one line.
+    fn reveal_card(&mut self, player: i32, card: &str, reason: Msg) {
+        let seen = {
+            let world = &self.world;
+            world
+                .reveals
+                .iter()
+                .find(|r| r.player == player)
+                .is_some_and(|r| r.deck.iter().any(|c| c == card))
+                // A public frame's turned cards are part of the same overlay
+                // (`public_state` splices them in).
+                || world
+                    .inspection_frames
+                    .iter()
+                    .rev()
+                    .filter(|f| f.deck_owner == player && f.public)
+                    .flat_map(|f| f.cards.iter())
+                    .filter(|c| c.revealed)
+                    .any(|c| c.id == card)
+        };
+        // Already published (a replay of the same pass): keep both the
+        // overlay entry and the log line single.
+        if seen {
+            return;
+        }
+        self.post_reveal(
+            player,
+            reason,
+            game_core::state::RevealPile::Card,
+            vec![card.to_string()],
+            card,
+            CardPile::Inspection as i32,
+        );
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
         // Visible outcome: `commit_after` raises `discarded` (and maybe
@@ -2395,7 +2598,7 @@ impl CardWorld for Run {
         // `reshuffled`). The header names the clause that discarded.
         self.flush_header();
         self.discard_log.push((player_id, card.to_string()));
-        if self.world.refill_draw_pile(player_id.max(0) as usize) {
+        if self.world.refill_after_pile_write(player_id.max(0) as usize) {
             self.reshuffle_log.push(player_id);
         }
         1
@@ -3333,7 +3536,11 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         // guest from the engine's resulting snapshot, so both execution modes
         // see those changes before subsequent guest reads and prompts.
         let run = Self::as_run(any);
-        if matches!(req, HostRequest::Draw { .. }) || !run.pile_checkpoints.is_empty() {
+        if matches!(
+            req,
+            HostRequest::Draw { .. } | HostRequest::InspectionBegin { .. }
+        ) || !run.pile_checkpoints.is_empty()
+        {
             return None;
         }
         // A join window runs on the work stack (design G06 §6.4): always
@@ -3355,6 +3562,19 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
             run.flush_header();
         }
         let cx = unsafe { &mut *self.cx };
+        // The three inline inspection/reveal routines keep the body on one
+        // forward pass; the guest's preceding pile writes must land on the
+        // live world first, exactly as the NeedHost arm syncs them (G11 §5.5).
+        if matches!(
+            req,
+            HostRequest::InspectionEnd { .. }
+                | HostRequest::RevealPile { .. }
+                | HostRequest::RevealCard { .. }
+        ) {
+            let mut w = cx.world_copy();
+            PileCheckpoint::new(run.world.deep_clone()).apply(&mut w);
+            cx.swap_world(w);
+        }
         let bridge = unsafe { &*self.bridge };
         let card_id: &str = unsafe { &*self.card_id };
         cx.adopt_turn_policy(&run.world);
@@ -3362,8 +3582,14 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         cx.overlay_guest_plan_tags(&run.world);
         let linger = run.linger_props.clone();
         let live_before = cx.live_event_count();
+        let done = matches!(req, HostRequest::InspectionEnd { .. });
         match bridge.apply_host_request(cx, run, req, &linger, self.call.clone(), card_id) {
             Ok(v) => {
+                if done {
+                    // The frame is gone and its cards are back in the deck: the
+                    // guest's next read must see that, not its own copy.
+                    run.world = cx.share_world();
+                }
                 cx.stamp_parent_since(live_before, run.parent);
                 self.answers.push(v);
                 Some(v)
@@ -3687,7 +3913,7 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &mut Trigger,
         guarded: bool,
     ) -> Flow<i32> {
-        self.drive_inner_body_from(cx, call, card_id, uid, trigger, guarded, Vec::new(), false)
+        self.drive_inner_body_from(cx, call, card_id, uid, trigger, guarded, Vec::new(), false, Vec::new())
     }
 
     /// [`Self::drive_inner_body`] with a pre-filled answer log (STACK-01
@@ -3712,6 +3938,7 @@ impl<M: CardModules> RulesBridge<M> {
         guarded: bool,
         trigger: &Trigger,
         answers: Vec<i32>,
+        adopted: Vec<i32>,
     ) {
         let bridge = self as *const RulesBridge<M>;
         let card_id_own = card_id.to_string();
@@ -3754,6 +3981,7 @@ impl<M: CardModules> RulesBridge<M> {
                     guarded,
                     answers,
                     true,
+                    adopted,
                 );
                 if uid >= 0 {
                     cx.reentrant_hooks.pop();
@@ -3787,9 +4015,10 @@ impl<M: CardModules> RulesBridge<M> {
         guarded: bool,
         answers: Vec<i32>,
         resumed: bool,
+        adopted: Vec<i32>,
     ) -> Flow<i32> {
         cx.world_mut().enter_plan_command(resumed);
-        let r = self.drive_inner_body_scoped(cx, call, card_id, uid, trigger, guarded, answers);
+        let r = self.drive_inner_body_scoped(cx, call, card_id, uid, trigger, guarded, answers, adopted);
         cx.world_mut().leave_plan_command();
         r
     }
@@ -3803,6 +4032,7 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &mut Trigger,
         guarded: bool,
         mut answers: Vec<i32>,
+        adopted: Vec<i32>,
     ) -> Flow<i32> {
         // A fresh execution (a resume pre-fills `answers`) gets a ledger id of
         // its own, so the previous execution's writes cannot suppress this
@@ -3813,6 +4043,10 @@ impl<M: CardModules> RulesBridge<M> {
         let ledger_exec = cx.ledger_exec();
         let mut pile_base: Option<PileCheckpoint> = None;
         let mut pile_checkpoints = std::collections::BTreeMap::new();
+        // Inspection frames this drive owns (adopted on an earlier pass or
+        // handed in by a resume); the commit net releases exactly these plus
+        // everything opened since the pass's own base (design G11 §5.4).
+        let mut drive_adopted: Vec<i32> = adopted;
         // Guest-state overlays this drive pushed (one per `NeedHost`). Dropped
         // at the top of the next iteration -- the routine has finished and the
         // replay re-applies the guest writes from the restored world. Nested
@@ -3880,6 +4114,8 @@ impl<M: CardModules> RulesBridge<M> {
             if let Some(base) = &pile_base {
                 base.apply(&mut world);
             }
+            let frames_at_drive_start: Vec<i32> =
+                world.inspection_frames.iter().map(|f| f.id).collect();
             let mut run = Run {
                 world,
                 pile_checkpoints: Arc::new(pile_checkpoints.clone()),
@@ -3897,6 +4133,9 @@ impl<M: CardModules> RulesBridge<M> {
                 paid_log: vec![],
                 discard_log: vec![],
                 draw_log: vec![],
+                draw_after_log: vec![],
+                frames_at_drive_start,
+                adopted: drive_adopted.clone(),
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
                 house_log: vec![],
@@ -4099,6 +4338,7 @@ impl<M: CardModules> RulesBridge<M> {
                         guarded,
                         trigger,
                         answers_own,
+                        run.adopted.clone(),
                     );
                 }
                 return Err(h);
@@ -4168,6 +4408,8 @@ impl<M: CardModules> RulesBridge<M> {
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
                     }
+                    let frames_at_drive_start: Vec<i32> =
+                        world.inspection_frames.iter().map(|f| f.id).collect();
                     // This pass's world is the one that lands: the learn pass's
                     // copy above is dropped when any pause was answered. Its
                     // write-through lines are already on the live stream, so
@@ -4191,6 +4433,9 @@ impl<M: CardModules> RulesBridge<M> {
                         paid_log: vec![],
                         discard_log: vec![],
                         draw_log: vec![],
+                        draw_after_log: vec![],
+                        frames_at_drive_start,
+                        adopted: drive_adopted.clone(),
                         reshuffle_log: vec![],
                         marker_spent_log: vec![],
                         house_log: vec![],
@@ -4408,7 +4653,11 @@ impl<M: CardModules> RulesBridge<M> {
                     // 微笑游行's redirect) must be on the live frame the nested
                     // settle reads (`spec/abi/G04-move-plan.md` §4.3).
                     cx.overlay_guest_plan_tags(&run.world);
-                    if matches!(req, HostRequest::Draw { .. }) && pile_base.is_none() {
+                    if matches!(
+                        req,
+                        HostRequest::Draw { .. } | HostRequest::InspectionBegin { .. }
+                    ) && pile_base.is_none()
+                    {
                         pile_base = Some(PileCheckpoint::new(cx.world_copy()));
                     }
                     if pile_base.is_some() {
@@ -4446,6 +4695,7 @@ impl<M: CardModules> RulesBridge<M> {
                             let call_own = call;
                             let uid_own = uid;
                             let guarded_own = guarded;
+                            let run_adopted_own = run.adopted.clone();
                             let who = trigger.player_id;
                             // The counter node this body settles, when the
                             // drive is one (design G06 §6.2).
@@ -4487,6 +4737,7 @@ impl<M: CardModules> RulesBridge<M> {
                                         guarded_own,
                                         answers2,
                                         true,
+                                        run_adopted_own.clone(),
                                     );
                                     if uid_own >= 0 {
                                         cx.reentrant_hooks.pop();
@@ -4566,6 +4817,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 guarded,
                                 trigger: trigger.clone(),
                                 answers: answers2,
+                                adopted: run.adopted.clone(),
                             });
                             return Err(game_core::engine::Halt::suspended());
                         }
@@ -4590,6 +4842,12 @@ impl<M: CardModules> RulesBridge<M> {
                         );
                     }
                     let linger = run.linger_props.clone();
+                    let begun = match &req {
+                        HostRequest::InspectionBegin { looker, owner, .. } => {
+                            Some((*looker, *owner))
+                        }
+                        _ => None,
+                    };
                     let v = match self.apply_host_request(
                         cx,
                         &mut run,
@@ -4616,10 +4874,27 @@ impl<M: CardModules> RulesBridge<M> {
                                 guarded,
                                 trigger,
                                 answers.clone(),
+                                run.adopted.clone(),
                             );
                             return Err(e);
                         }
                     };
+                    // The begin drove a frame: this drive owns it, so the
+                    // commit net must release it even when the pass's own base
+                    // still holds it (G11 §5.2/§5.4).
+                    if let Some((looker, owner)) = begun {
+                        let held = cx
+                            .world()
+                            .inspection_frames
+                            .iter()
+                            .rev()
+                            .find(|f| f.looker == looker && f.deck_owner == owner)
+                            .map(|f| f.id);
+                        if let Some(id) = held {
+                            run.adopted.push(id);
+                            drive_adopted.push(id);
+                        }
+                    }
                     if run.own_activation >= 0 {
                         cx.stamp_parent_since(live_before, run.parent);
                     }
@@ -4747,6 +5022,9 @@ impl<M: CardModules> RulesBridge<M> {
         call: Call,
         card_id: &str,
     ) -> Flow<i32> {
+        if std::env::var("DBG_FRAME").is_ok() {
+            eprintln!("APPLY_REQ_TOP card={card_id} req={req:?}");
+        }
         match req {
             HostRequest::Gate { player_id, kind } => {
                 let allowed = self.abnormal_gate(cx, player_id, kind, call.player_id())?;
@@ -5483,6 +5761,192 @@ impl<M: CardModules> RulesBridge<M> {
                 )?;
                 return Ok(-got - 1);
             }
+            // Turn deck-top cards face up in a frame for `looker` (design G11
+            // §5.2). Idempotent across a replayed pass: an unfinished frame of
+            // the same (looker, deck) is adopted, and its `revealed` flags skip
+            // what was already raised. A public frame publishes each card as it
+            // turns; the reveal is a child of the caller's activation.
+            HostRequest::InspectionBegin {
+                looker,
+                owner,
+                count,
+                public,
+            } => {
+                let frame_id = {
+                    let w = cx.world_mut();
+                    match w
+                        .inspection_frames
+                        .iter()
+                        .rev()
+                        .find(|f| f.looker == looker && f.deck_owner == owner && !f.finished)
+                    {
+                        Some(f) => f.id,
+                        None => w.open_inspection(looker, owner, count, public),
+                    }
+                };
+                let parent = cx.activation.last().copied().unwrap_or(-1);
+                loop {
+                    let next = {
+                        let w = cx.world_mut();
+                        let Some(frame) = w.inspection_frames.iter_mut().find(|f| f.id == frame_id)
+                        else {
+                            break;
+                        };
+                        match frame.cards.iter_mut().position(|c| !c.revealed) {
+                            Some(k) => {
+                                frame.cards[k].revealed = true;
+                                Some((frame.cards[k].id.clone(), k as i32 + 1, frame.public))
+                            }
+                            None => None,
+                        }
+                    };
+                    let Some((card, position, is_public)) = next else {
+                        break;
+                    };
+                    if is_public {
+                        let reason = Msg::new("log.inspection_reveal")
+                            .card("card", &card)
+                            .player_id("who", looker);
+                        // Re-published by replacement: the open frame is the
+                        // true top of the deck, so a re-applied begin (or any
+                        // later card) restates the same prefix instead of
+                        // appending a duplicate set. The frame's own cards are
+                        // left out -- `public_state` splices the public frame
+                        // in front of this list, so including them here would
+                        // show each card twice.
+                        {
+                            let ids =
+                                hidden_pile(cx.world(), owner, CardPile::Deck).unwrap_or_default();
+                            cx.world_mut().push_reveal(
+                                owner,
+                                reason.clone(),
+                                game_core::state::RevealPile::Deck,
+                                ids,
+                            );
+                        }
+                        let id = cx.log_event("reveal", owner, reason, parent, &card, 1);
+                        cx.set_event_to(id, CardPile::Inspection as i32);
+                    }
+                    self.raise_core(cx, "inspected", owner, |t| {
+                        t.target = owner;
+                        t.card = Some(card.clone());
+                        t.cards = vec![card.clone()];
+                        t.value = position;
+                        t.by_card = Some(looker);
+                    })?;
+                }
+                let held = {
+                    let w = cx.world_mut();
+                    match w.inspection_frames.iter_mut().find(|f| f.id == frame_id) {
+                        Some(f) => {
+                            f.finished = true;
+                            f.cards.len() as i32
+                        }
+                        None => 0,
+                    }
+                };
+                // One `inspection` line per look: the banner names who looked
+                // and how many cards turned. The frame itself rides the view.
+                let id = cx.log_event(
+                    "inspection",
+                    owner,
+                    Msg::new("log.inspection_open").n("count", held as i64),
+                    parent,
+                    "",
+                    held,
+                );
+                cx.set_event_to(id, CardPile::Inspection as i32);
+                return Ok(held);
+            }
+            // Release the caller's innermost frame; a body that forgot to
+            // answers 0 and leaks it to the commit net (design G11 §5.4).
+            //
+            // The three arms below are the **pause fallback**: today's
+            // `hostfns` apply these through the live `Run` and never build a
+            // request (G11 §5.5), so they run only if a caller ever takes the
+            // pausing route. Keep them in step with `Run::inspection_end` /
+            // `Run::reveal_pile` / `Run::reveal_card`.
+            HostRequest::InspectionEnd { player_id, shuffle } => {
+                let released = cx.world_mut().finish_inspection_of(player_id, shuffle);
+                if released > 0 {
+                    // 「观看的牌放回卡组」 -- the leftovers, named by count.
+                    cx.log(
+                        player_id,
+                        Msg::new("log.inspection_returned").n("count", released as i64),
+                    );
+                }
+                return Ok(released);
+            }
+            // Publish a pile to the table. The reveal is a view overlay, not a
+            // pile write: it touches no card (design G11 §5.6).
+            HostRequest::RevealPile {
+                player_id,
+                pile,
+                reason,
+            } => {
+                let (view, ids) = match CardPile::from_i32(pile) {
+                    Some(CardPile::Hand) => (
+                        game_core::state::RevealPile::Hand,
+                        hidden_pile(cx.world(), player_id, CardPile::Hand).unwrap_or_default(),
+                    ),
+                    Some(CardPile::Graveyard) => (
+                        game_core::state::RevealPile::Discard,
+                        hidden_pile(cx.world(), player_id, CardPile::Graveyard)
+                            .unwrap_or_default(),
+                    ),
+                    Some(CardPile::Deck) => {
+                        let mut ids =
+                            hidden_pile(cx.world(), player_id, CardPile::Deck).unwrap_or_default();
+                        // The open frames are the true top of the deck.
+                        ids.splice(
+                            0..0,
+                            inspection_held(cx.world(), player_id),
+                        );
+                        (game_core::state::RevealPile::Deck, ids)
+                    }
+                    _ => return Ok(0),
+                };
+                let count = ids.len() as i32;
+                let parent = cx.activation.last().copied().unwrap_or(-1);
+                cx.world_mut()
+                    .push_reveal(player_id, reason.clone(), view, ids);
+                let id = cx.log_event("reveal", player_id, reason, parent, "", count);
+                cx.set_event_to(id, pile);
+                return Ok(count);
+            }
+            // Publish one card id; appended to the seat's revealed cards.
+            // Same no-op rule as `Run::reveal_card`: an already published id
+            // (a re-run, or a public look's own card) adds nothing.
+            HostRequest::RevealCard {
+                player_id,
+                card,
+                reason,
+            } => {
+                let seen = cx
+                    .world()
+                    .reveals
+                    .iter()
+                    .find(|r| r.player == player_id)
+                    .is_some_and(|r| r.deck.iter().any(|c| *c == card))
+                    || cx.world().inspection_frames.iter().rev().any(|f| {
+                        f.deck_owner == player_id
+                            && f.public
+                            && f.cards.iter().any(|c| c.revealed && c.id == card)
+                    });
+                if seen {
+                    return Ok(1);
+                }
+                let parent = cx.activation.last().copied().unwrap_or(-1);
+                cx.world_mut().push_reveal(
+                    player_id,
+                    reason.clone(),
+                    game_core::state::RevealPile::Card,
+                    vec![card.clone()],
+                );
+                let id = cx.log_event("reveal", player_id, reason, parent, &card, 1);
+                cx.set_event_to(id, CardPile::Inspection as i32);
+                return Ok(1);
+            }
             HostRequest::Pay {
                 from,
                 to,
@@ -5615,6 +6079,12 @@ impl<M: CardModules> RulesBridge<M> {
                 return true;
             }
         }
+        // A look is a card move off another seat's deck.
+        for (who, batch) in &after.draw_after_log {
+            if *who != owner && !batch.is_empty() {
+                return true;
+            }
+        }
         // Charge spend on self = SelfOnly. Counter writes on self = SelfOnly.
         // (counter_log rows are (owner, card, uid, name, delta) -- the
         // instance's owner; if that is not the drive owner, it touched another
@@ -5667,7 +6137,7 @@ impl<M: CardModules> RulesBridge<M> {
                         return true;
                     }
                 }
-                "draw" | "discard" | "mulligan" => {
+                "draw" | "discard" | "mulligan" | "inspection" | "reveal" => {
                     if e.player_id != owner && e.player_id >= 0 {
                         return true;
                     }
@@ -5925,6 +6395,32 @@ impl<M: CardModules> RulesBridge<M> {
         }
         let mark_rows = std::mem::take(&mut after.world.mark_log);
         cx.swap_shared(after.world);
+        // Commit net (design G11 §5.4): release every frame this drive opened
+        // and did not close -- a body that returned without
+        // `inspection_end`, a frame opened inside a cancelled hook. Frames in
+        // the pass's base belong to an enclosing drive and stay, unless this
+        // drive adopted them. Top-down so the newest look goes back first;
+        // leftovers keep their order (a reference reveal does not shuffle).
+        {
+            let mut index = cx.world().inspection_frames.len();
+            while index > 0 {
+                index -= 1;
+                let frame = &cx.world().inspection_frames[index];
+                if after.frames_at_drive_start.contains(&frame.id)
+                    && !after.adopted.contains(&frame.id)
+                {
+                    continue;
+                }
+                let looker = frame.looker;
+                let count = cx.world_mut().release_frame(index, false);
+                if count > 0 {
+                    cx.log(
+                        looker,
+                        Msg::new("log.inspection_returned").n("count", count as i64),
+                    );
+                }
+            }
+        }
         // Empty-deck maintenance precedes all settlement after-hooks.
         for player_id in after.reshuffle_log {
             self.raise_core(cx, "reshuffled", player_id, |_| {})?;
@@ -5969,6 +6465,15 @@ impl<M: CardModules> RulesBridge<M> {
                 t.card = Some(id.clone());
                 t.value = 1;
                 t.cards = vec![id];
+            })?;
+        }
+        // The draw-instruction point (design G11 §5.7): once per call, with
+        // the whole batch, after the last per-card `drew` of the drive.
+        for (player_id, batch) in after.draw_after_log {
+            let count = batch.len() as i32;
+            self.raise_core(cx, "drawAfter", player_id, move |t| {
+                t.value = count;
+                t.cards = batch;
             })?;
         }
         // kind 73 (`fireSpent`, wire-stable; `TODO(ABI) ABI-MARKER-SPENT`
@@ -6218,13 +6723,17 @@ impl<M: CardModules> RulesBridge<M> {
                     // clause is never instantiated for one.
                     self.game_start_hooks(cx, t.player_id, kind, &mut trigger)?;
                 } else {
-                    // Own-card dispatch for `Drawn` (the card is in a hand / pile)
-                    // and `Discarded` (the card that just entered the discard --
-                    // RAS:游击演出's [特] 「此卡进入弃卡区的回合结束时」). A placed
-                    // field card also hears about discards (MyGO group (3) 「每次你
-                    // 的卡在未生效的情况下进入弃牌堆时」), so `Discarded` falls
-                    // through to the field-card walk as well.
-                    if matches!(kind, TriggerKind::Drawn | TriggerKind::Discarded) {
+                    // Own-card dispatch for `Drawn` (the card is in a hand / pile),
+                    // `Inspected` (the turned-up card, held in the frame --
+                    // design G11 §5.5) and `Discarded` (the card that just entered
+                    // the discard -- RAS:游击演出's [特] 「此卡进入弃卡区的回合结束
+                    // 时」). A placed field card also hears about discards (MyGO group
+                    // (3) 「每次你的卡在未生效的情况下进入弃牌堆时」), so
+                    // `Discarded` falls through to the field-card walk as well.
+                    if matches!(
+                        kind,
+                        TriggerKind::Drawn | TriggerKind::Inspected | TriggerKind::Discarded
+                    ) {
                         if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
                             if let Some(idx) = self
                                 .ruleset
@@ -6245,7 +6754,7 @@ impl<M: CardModules> RulesBridge<M> {
                             }
                         }
                     }
-                    if kind != TriggerKind::Drawn {
+                    if !matches!(kind, TriggerKind::Drawn | TriggerKind::Inspected) {
                         let world = cx.world_copy();
                         if std::env::var("DBG_HOOK").is_ok() {
                             eprintln!("WALK kind={:?} resolving={:?}", kind, resolving_snapshot());
@@ -8200,7 +8709,7 @@ impl<M: CardModules> RulesBridge<M> {
             Dest::Graveyard => {
                 if !w.out(seat) {
                     w.hidden[seat].graveyard.push(id.clone());
-                    refilled = w.refill_draw_pile(seat);
+                    refilled = w.refill_after_pile_write(seat);
                 }
             }
             Dest::Hand => w.hidden[seat].hand.push(id.clone()),
@@ -8515,7 +9024,7 @@ impl<M: CardModules> RulesBridge<M> {
             Dest::Graveyard => {
                 if !w.out(seat) {
                     w.hidden[seat].graveyard.push(id.to_string());
-                    refilled = w.refill_draw_pile(seat);
+                    refilled = w.refill_after_pile_write(seat);
                 }
             }
             Dest::Hand => w.hidden[seat].hand.push(id.to_string()),
@@ -8763,6 +9272,9 @@ impl<M: CardModules> RulesBridge<M> {
             paid_log: vec![],
             discard_log: vec![],
             draw_log: vec![],
+            draw_after_log: vec![],
+            frames_at_drive_start: vec![],
+            adopted: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
             house_log: vec![],
@@ -9080,6 +9592,9 @@ impl<M: CardModules> RulesBridge<M> {
                 paid_log: vec![],
                 discard_log: vec![],
                 draw_log: vec![],
+                draw_after_log: vec![],
+                frames_at_drive_start: vec![],
+                adopted: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
                 house_log: vec![],
@@ -9479,6 +9994,9 @@ impl<M: CardModules> RulesBridge<M> {
             paid_log: vec![],
             discard_log: vec![],
             draw_log: vec![],
+            draw_after_log: vec![],
+            frames_at_drive_start: vec![],
+            adopted: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
             house_log: vec![],
@@ -10118,6 +10636,8 @@ struct JoinWork<M: CardModules> {
     guarded: bool,
     trigger: Trigger,
     answers: Vec<i32>,
+    /// Frames the drive had already adopted (the commit net, G11 §5.4).
+    adopted: Vec<i32>,
 }
 
 impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
@@ -10191,6 +10711,7 @@ impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
                     this.guarded,
                     this.answers,
                     true,
+                    this.adopted,
                 );
                 match r2 {
                     Ok(dest) => {
@@ -10266,6 +10787,7 @@ impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
                         guarded: this.guarded,
                         trigger,
                         answers: this.answers,
+                        adopted: this.adopted,
                     });
                 }
                 Err(e)
@@ -12055,6 +12577,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             paid_log: vec![],
             discard_log: vec![],
             draw_log: vec![],
+            draw_after_log: vec![],
+            frames_at_drive_start: vec![],
+            adopted: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
             house_log: vec![],
@@ -12126,6 +12651,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 paid_log: vec![],
                 discard_log: vec![],
                 draw_log: vec![],
+                draw_after_log: vec![],
+                frames_at_drive_start: vec![],
+                adopted: vec![],
                 reshuffle_log: vec![],
                 marker_spent_log: vec![],
                 house_log: vec![],
@@ -12257,6 +12785,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             paid_log: vec![],
             discard_log: vec![],
             draw_log: vec![],
+            draw_after_log: vec![],
+            frames_at_drive_start: vec![],
+            adopted: vec![],
             reshuffle_log: vec![],
             marker_spent_log: vec![],
             house_log: vec![],
@@ -12989,12 +13520,40 @@ fn drive_seat(call: &Call) -> i32 {
     }
 }
 
+/// The ids of one of a seat's plain piles, top-first for the deck (`None` for
+/// a seat with no hidden state). The `Inspection` frame is
+/// [`inspection_held`].
+fn hidden_pile(w: &game_core::engine::World, player_id: i32, pile: CardPile) -> Option<Vec<String>> {
+    let h = w.hidden.get(player_id.max(0) as usize)?;
+    Some(match pile {
+        CardPile::Hand => h.hand.clone(),
+        CardPile::Graveyard => h.graveyard.clone(),
+        // The end of the vec is the top of the pile; list top first.
+        CardPile::Deck => h.deck.iter().rev().cloned().collect(),
+        _ => return None,
+    })
+}
+
+/// The revealed cards a seat's open inspection frames hold, front-first
+/// (innermost frame first). These are off the deck but still its top.
+fn inspection_held(w: &game_core::engine::World, owner: i32) -> Vec<String> {
+    w.inspection_frames
+        .iter()
+        .rev()
+        .filter(|f| f.deck_owner == owner)
+        .flat_map(|f| f.cards.iter())
+        .filter(|c| c.revealed)
+        .map(|c| c.id.clone())
+        .collect()
+}
+
 /// Kinds that run on a fresh instance of one card (named on `t.card`) rather
 /// than on the cards in play.
 fn is_own_card_kind(kind: TriggerKind) -> bool {
-    // `Drawn` is the drawn card's own hook (it is still in hand). `Discarded`
+    // `Drawn` is the drawn card's own hook (it is still in hand); `Inspected`
+    // is the turned-up card's own hook (it sits in the frame). `Discarded`
     // is a field-card point instead -- a placed card hears about discards.
-    matches!(kind, TriggerKind::Drawn)
+    matches!(kind, TriggerKind::Drawn | TriggerKind::Inspected)
 }
 
 /// The match-start points. They reach **every effect source** of the player

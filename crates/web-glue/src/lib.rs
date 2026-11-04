@@ -777,6 +777,7 @@ fn frame(
         "aiPlayable": extra.ai_playable,
         "estCost": extra.estimated_cost,
         "tileQuotes": m.tile_quotes(member),
+        "inspection": m.inspection_of(member),
         "skills": extra.skills,
     })
 }
@@ -912,7 +913,7 @@ impl SoloMatch {
     }
 
     /// `{state, hand, handNotes, draw, you, playerId, aiAnswer, playable,
-    /// tileQuotes}` -- the same shape as the server's `match` frame.
+    /// tileQuotes, inspection}` -- the same shape as the server's `match` frame.
     /// `aiAnswer` / `playable` are the per-viewer extras from
     /// [`Match::view_extras`] (the 托管 autopilot's inputs); `tileQuotes` is
     /// the per-viewer board caption data ([`Match::tile_quotes`]).
@@ -1104,6 +1105,7 @@ impl ReplayMatch {
                 "aiPlayable": serde_json::Value::Null,
                 "estCost": serde_json::Value::Null,
                 "tileQuotes": m.tile_quotes(-1),
+                "inspection": m.inspection_of(-1),
                 "skills": serde_json::Value::Null,
             }));
         }

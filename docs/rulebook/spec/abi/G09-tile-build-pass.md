@@ -6,9 +6,9 @@ Worktree `/home/monopoly/web/.claude/worktrees/worktree-g09-design-review`, bran
 **Group:** G09, family "Tile, build, pass and house-removal hooks".
 **Ground truth:** `docs/rulebook/cards.json`; every fragment below was re-read
 from that file against the card id named beside it.
-**Base:** `ABI_VERSION` 115, `SAVE_VERSION` 17, `RECORD_VERSION` 4, engine kinds
-through 134, Kani `Op` through 450 (G01–G08, G05/G13, G06, G07, G12 and G14
-landed).
+**Base:** `ABI_VERSION` 116, `SAVE_VERSION` 18, `RECORD_VERSION` 4, engine kinds
+through 133, Kani `Op` through 454 (G01–G08, G05/G13, G06, G07, G12, G14 and
+G11 landed).
 
 Terminology: **counteraction** = the [反击] window / chain link; **hook** = a
 passive listener (`On::Action` / `On::Filter` / a `[持续]` field body). Never
@@ -384,7 +384,7 @@ keep a local constant.
 
 ### 4.5 Imports (`crates/card-sdk/src/ctx.rs`, re-exported via `bandori_std::ctx`)
 
-Twelve new imports, Kani `Op` 452–463 (§5.7).
+Twelve new imports, Kani `Op` 455–466 (§5.7).
 
 ```rust
 // ---- identity / position conversion
@@ -1017,8 +1017,8 @@ card armed.
 
 ### 5.7 Kani model
 
-`crates/card-sdk/src/kani_host.rs` gains `Op` rows 452–463 (the enum ends at
-`nearest_with_prop` 442), one per new import, and `sys_kani.rs` /
+`crates/card-sdk/src/kani_host.rs` gains `Op` rows 455–466 (the enum ends at
+`set_dice_immune` 450, then G11's 451–454), one per new import, and `sys_kani.rs` /
 `native_shims.rs` / the host trait register each beside its neighbours
 (`set_tag` at 1066, `card_build` at 1166, `trig_move_tag` at 786).
 
@@ -1268,7 +1268,7 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
   `TurnCtx.plan.tags` (already serialized, v7), and `Trigger` / `TriggerMove`
   are never serialized (`Saved.pending` holds `Routine` state and `Live`, not
   triggers). `MoveCtx.path` keeps its type (`Vec<i32>`), only its meaning
-  changes; a save taken mid-move before v116 and restored after it carries
+  changes; a save taken mid-move before v117 and restored after it carries
   positions in that one path, which the next move overwrites -- only a `paid`
   window during the restored move can see it. `house_log` is per-run scratch.
   `SettleEntry` and `SettleFrame` are transient, as is `MovePlan.reach`. A save
@@ -1291,11 +1291,11 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
 
 ## 8. Versioning
 
-`ABI_VERSION` 115 → **116** (landed after G12 and G14), entry inserted
+`ABI_VERSION` 116 → **117** (landed after G12, G14 and G11), entry inserted
 immediately below the constant (newest first):
 
 ```
-/// v116: **tile events, one build pipeline, tile-write effects, house falls,
+/// v117: **tile events, one build pipeline, tile-write effects, house falls,
 ///    move paths.** New engine kinds `tileEffectBefore` (135),
 ///    `houseRemoved` (136) and the effect-only spellings `houseAdd` (137) /
 ///    `houseRemove` (138) / `ownerSet` (139). `Trigger` gains `position` (the
@@ -1317,17 +1317,17 @@ immediately below the constant (newest first):
 ///    `add_house` / `set_owner` now open an `effect` window with a declared
 ///    tile effect before applying and may be cancelled there; `add_house` /
 ///    `set_houses` raise `houseRemoved` on a fall, and `assign_deed`
-///    contributes a fall for the previous owner. SAVE_VERSION 17 and
+///    contributes a fall for the previous owner. SAVE_VERSION 18 and
 ///    RECORD_VERSION 4 unchanged.
 ```
 
 **README band shift.** G02's landed arithmetic kinds consumed 126–131, which
 were the tail of this group's allocated row (126–130) and G10's (131). Kind ids
 are wire-stable, so the allocation moves rather than the landed ids: G09 takes
-**135–139**, G10 **140**, G11 **141–142**. G12's landing then took 134 for
-`abnormalGate`, so this group's block resumes above it; its Op row keeps
-**452–463** (twelve imports, above G12's 443–450). The README table and the
-group rows are edited with this document.
+**135–139**, G10 **140**. G12's landing then took 134 for `abnormalGate`, so
+this group's block resumes above it; G11 then took 132–133 and 451–454, so the
+Op row moves to **455–466** (twelve imports, above every landed claim). The
+README table and the group rows are edited with this document.
 
 The old two-argument import is a real alias, not sugar in the guest: an archived
 bundle calls the symbol directly. `card_build`'s handler keeps answering the

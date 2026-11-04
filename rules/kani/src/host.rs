@@ -937,6 +937,12 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::dice_immune => arm_dice_immune(a),
         Op::set_dice_immune => arm_set_dice_immune(a),
 
+        // ---- inspection / reveal (G11) ----
+        Op::inspection_begin => arm_inspection_begin(a),
+        Op::inspection_end => arm_inspection_end(a),
+        Op::reveal_pile => arm_reveal_pile(a),
+        Op::reveal_card => arm_reveal_card(a),
+
         // ---- events ----
         Op::event_is_active => {
             let id = name_id(a0, a1);
@@ -1886,6 +1892,16 @@ pub fn arm_cards_in(a: Args) -> i64 {
                 while i < w.deck_n as usize && n < world::MAX_CARDS {
                     ids[n] = card_slot_of_id(intern::NameId(w.deck_pile[i]));
                     n += 1;
+                    i += 1;
+                }
+            } else if a1 == 4 {
+                // Inspection frame: revealed entries only, front-first.
+                let mut i = 0usize;
+                while i < w.inspection_n as usize && n < world::MAX_CARDS {
+                    if w.inspection_revealed[i] {
+                        ids[n] = card_slot_of_id(intern::NameId(w.inspection_pile[i]));
+                        n += 1;
+                    }
                     i += 1;
                 }
             }
@@ -4030,6 +4046,14 @@ pub fn arm_take_card(a: Args) -> i64 {
                     }
                 }
             }
+        } else if pile == 2 {
+            let ok = world::pile_take(&mut w.deck_pile, &mut w.deck_n, id);
+            if ok {
+                refill_if_empty(w, player_id);
+            }
+            ok
+        } else if pile == 4 {
+            world::pile_take(&mut w.inspection_pile, &mut w.inspection_n, id)
         } else {
             false
         };
@@ -4240,9 +4264,26 @@ pub fn arm_tile_steps_ahead(a: Args) -> i64 {
     }
 }
 
+/// The minimal refill the model lacked (v114): an emptied deck takes the
+/// discard front back, unless an open inspection frame holds that seat's deck.
+fn refill_if_empty(w: &mut World, owner: i32) {
+    if w.inspection_deck_owner == player_idx(owner) as i32 || w.deck_n > 0 {
+        return;
+    }
+    while w.deck_n == 0 && w.discard_n > 0 {
+        let card = w.discard_pile[0];
+        let mut i = 1usize;
+        while i < w.discard_n as usize {
+            w.discard_pile[i - 1] = w.discard_pile[i];
+            i += 1;
+        }
+        w.discard_n -= 1;
+        world::pile_unshift(&mut w.deck_pile, &mut w.deck_n, card);
+    }
+}
+
 pub fn arm_to_discard(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
-    let _ = a0;
     let slot = card_slot(a1, a2);
     let id = card_u16(a1, a2);
     world::with_world_mut(|w| {
@@ -4250,6 +4291,88 @@ pub fn arm_to_discard(a: Args) -> i64 {
         if (slot as usize) < 4 {
             w.discard[slot as usize] = true;
         }
+        refill_if_empty(w, a0);
+    });
+    0
+}
+
+/// `inspection_begin` -- turn up to `count` cards off `owner`'s deck front into
+/// the frame. The `inspected` raises are not modelled (no hook dispatch under
+/// Kani); a proof asserts on the move.
+pub fn arm_inspection_begin(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let want = a2.max(0) as usize;
+    world::with_world_mut(|w| {
+        let moved = world::pile_shift_front(
+            &mut w.deck_pile,
+            &mut w.deck_n,
+            want,
+            &mut w.inspection_pile,
+            &mut w.inspection_n,
+        );
+        w.inspection_deck_owner = player_idx(a1) as i32;
+        w.inspection_public = a3 != 0;
+        w.inspection_frame_n = 1;
+        let mut i = 0usize;
+        while i < moved {
+            w.inspection_revealed[i] = true;
+            i += 1;
+        }
+        w.push(Effect::InspectionHold {
+            looker: a0,
+            owner: a1,
+            n: moved as i32,
+        });
+        moved as i64
+    })
+}
+
+/// `inspection_end` -- return the frame to the deck front in order.
+///
+/// The `shuffle` flag is deliberately unmodelled: the proof model's stub keeps
+/// the order for it too (a real shuffle is a permutation the proofs compare by
+/// multiset, and no deterministic order is provable without the RNG). The
+/// engine's shuffle is exercised by the conformance suite and the card tests.
+pub fn arm_inspection_end(a: Args) -> i64 {
+    let [a0, _a1, ..] = a;
+    world::with_world_mut(|w| {
+        let owner = w.inspection_deck_owner;
+        let mut n = 0i32;
+        let mut j = w.inspection_n;
+        while j > 0 {
+            j -= 1;
+            let card = w.inspection_pile[j as usize];
+            world::pile_unshift(&mut w.deck_pile, &mut w.deck_n, card);
+            n += 1;
+        }
+        w.inspection_n = 0;
+        w.inspection_frame_n = 0;
+        w.inspection_deck_owner = -1;
+        w.push(Effect::InspectionReturn { owner: a0, n });
+        n as i64
+    })
+}
+
+/// `reveal_pile` -- a publication; no pile moves.
+pub fn arm_reveal_pile(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.push(Effect::Reveal {
+            player: a0,
+            pile: a1,
+        });
+    });
+    0
+}
+
+/// `reveal_card` -- one card published (`pile = -1`, a single card).
+pub fn arm_reveal_card(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        w.push(Effect::Reveal {
+            player: a0,
+            pile: -1,
+        });
     });
     0
 }

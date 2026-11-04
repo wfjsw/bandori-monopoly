@@ -123,8 +123,12 @@ pub struct ConfWorld {
     pub tiles_mortgaged: [bool; 60],
     /// Per-player hand card names (multiset).
     pub hands: Vec<Vec<String>>,
+    /// Per-player draw pile; index 0 is the FRONT (top), matching the model.
     pub decks: Vec<Vec<String>>,
     pub discards: Vec<Vec<String>>,
+    /// G11 inspection frames: the held cards per deck owner, front-first.
+    pub inspection: Vec<Vec<String>>,
+    pub inspection_public: [bool; 4],
     /// Keyed state (slots). Separate from held, matching the real engine.
     pub state: BTreeMap<(i32, String), i32>,
     /// `state_flag` bits per key (`state_set_flags`). Bit 0 = NEVER_NEGATIVE.
@@ -206,6 +210,8 @@ impl ConfWorld {
             hands: vec![Vec::new(); 4],
             decks: vec![Vec::new(); 4],
             discards: vec![Vec::new(); 4],
+            inspection: vec![Vec::new(); 4],
+            inspection_public: [false; 4],
             state: BTreeMap::new(),
             state_flags: BTreeMap::new(),
             held: BTreeMap::new(),
@@ -268,6 +274,7 @@ impl ConfWorld {
             CardPile::Hand => &mut self.hands,
             CardPile::Graveyard => &mut self.discards,
             CardPile::Deck => &mut self.decks,
+            CardPile::Inspection => &mut self.inspection,
             _ => &mut self.hands,
         }
     }
@@ -277,6 +284,7 @@ impl ConfWorld {
             CardPile::Hand => &self.hands,
             CardPile::Graveyard => &self.discards,
             CardPile::Deck => &self.decks,
+            CardPile::Inspection => &self.inspection,
             _ => &self.hands,
         }
     }
@@ -623,6 +631,29 @@ impl CardWorld for ConfWorld {
         } else {
             false
         }
+    }
+    /// The engine applies these three directly on the world (no inline
+    /// request), so the conf adapter owns their `CardWorld` halves.
+    fn inspection_end(&mut self, player: i32, shuffle: bool) -> i32 {
+        let p = player.max(0) as usize % 4;
+        let held = std::mem::take(&mut self.inspection[p]);
+        let n = held.len();
+        if shuffle {
+            self.decks[p].extend(held);
+        } else {
+            let mut rest = std::mem::take(&mut self.decks[p]);
+            let mut back = held;
+            back.append(&mut rest);
+            self.decks[p] = back;
+        }
+        self.events.push(format!("inspection_return {player} {n}"));
+        n as i32
+    }
+    fn reveal_pile(&mut self, player: i32, pile: CardPile, _reason: EngineMsg) {
+        self.events.push(format!("reveal {player} {}", pile as i32));
+    }
+    fn reveal_card(&mut self, player: i32, card: &str, _reason: EngineMsg) {
+        self.events.push(format!("reveal_card {player} {card}"));
     }
     fn cards_in(&self, player_id: i32, pile: CardPile) -> Vec<String> {
         let p = player_id.max(0) as usize % 4;
@@ -1356,6 +1387,28 @@ impl InlineHost for ConfInline {
             }),
             HostRequest::Marker { .. } => Some(1),
             HostRequest::Draw { player_id: _, n, .. } => Some(n),
+            // G11: the frame move is the answer, front-first, clamped to the
+            // deck. The `inspected` raises are hook-side and not modelled.
+            HostRequest::InspectionBegin {
+                looker,
+                owner,
+                count,
+                public,
+            } => {
+                let o = owner.max(0) as usize % 4;
+                let n = count.max(0) as usize;
+                let n = n.min(w.decks[o].len());
+                let held: Vec<String> = w.decks[o].drain(..n).collect();
+                w.inspection[o].extend(held);
+                w.inspection_public[o] = public;
+                w.events.push(format!("inspection_hold {looker} {owner} {n}"));
+                Some(n as i32)
+            }
+            // `inspection_end` / `reveal_*` are applied by the engine directly
+            // on the world (`CardWorld`), never as a request.
+            HostRequest::InspectionEnd { .. }
+            | HostRequest::RevealPile { .. }
+            | HostRequest::RevealCard { .. } => Some(1),
             HostRequest::Target {
                 player_id, tile, ..
             } => {
@@ -1903,6 +1956,205 @@ fn op_to_discard_and_hand_size() {
         );
     });
 }
+// ---------------------------------------------------------------------------
+// G11 inspection / reveal (design `spec/abi/G11-information-and-deck.md` §9)
+// ---------------------------------------------------------------------------
+
+/// Seed `owner`'s deck front-first on both sides, run the ops, and compare the
+/// answers plus the deck and frame contents. `exact = false` compares the
+/// multisets instead (a shuffle).
+fn diff_inspection(
+    label: &str,
+    seed_front: &[&str],
+    exact: bool,
+    real: impl FnOnce(&mut ConfHost) -> i64,
+    model: impl FnOnce() -> i64,
+) {
+    let _g = model_lock();
+    install_model_world(&[]);
+    let ids: Vec<u16> = seed_front
+        .iter()
+        .map(|c| card_sdk::intern::intern(c).0)
+        .collect();
+    kworld::with_world_mut(|w| {
+        w.deck_n = 0;
+        for (i, id) in ids.iter().enumerate() {
+            w.deck_pile[i] = *id;
+        }
+        w.deck_n = ids.len() as u8;
+    });
+    let model_ret = model();
+    let (mut model_deck, mut model_held) = model_piles();
+
+    let mut conf = ConfHost::new(base_conf(), Vec::new());
+    conf.st_mut().w().decks[1] = seed_front.iter().map(|c| c.to_string()).collect();
+    let mut inline = ConfInline;
+    let real_ret = with_inline_host(&mut inline, || real(&mut conf));
+    let (mut real_deck, mut real_held) = real_piles(&conf);
+
+    if exact {
+        if real_deck != model_deck || real_held != model_held {
+            panic!(
+                "MODEL-vs-ENGINE DIVERGENCE [{label}]: deck real={real_deck:?} model={model_deck:?}; held real={real_held:?} model={model_held:?}"
+            );
+        }
+    } else {
+        real_deck.sort();
+        model_deck.sort();
+        real_held.sort();
+        model_held.sort();
+        if real_deck != model_deck || real_held != model_held {
+            panic!(
+                "MODEL-vs-ENGINE DIVERGENCE [{label}]: deck multiset real={real_deck:?} model={model_deck:?}; held real={real_held:?} model={model_held:?}"
+            );
+        }
+    }
+    if real_ret != model_ret {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [{label}]: return real={real_ret} model={model_ret} (BUG IN THE MODEL unless engine)"
+        );
+    }
+}
+
+/// `(deck[1], frame[1])` from the real world.
+fn real_piles(c: &ConfHost) -> (Vec<String>, Vec<String>) {
+    let w = c.st().wr();
+    (w.decks[1].clone(), w.inspection[1].clone())
+}
+
+/// `(deck[1], frame[1])` from the model world, as names.
+fn model_piles() -> (Vec<String>, Vec<String>) {
+    kworld::with_world(|w| {
+        let name = |id: u16| card_sdk::intern::resolve_str(card_sdk::intern::NameId(id)).to_string();
+        let deck = (0..w.deck_n as usize).map(|i| name(w.deck_pile[i])).collect();
+        let held = (0..w.inspection_n as usize)
+            .map(|i| name(w.inspection_pile[i]))
+            .collect();
+        (deck, held)
+    })
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_inspection_begin_takes_the_top_first() {
+    big(|| {
+        let _g = model_lock();
+        diff_inspection(
+            "inspection_begin",
+            &["A", "B", "C"],
+            true,
+            |c| game_rules::hostfns::inspection_begin(c, 0, 1, 2, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::inspection_begin, [0, 1, 2, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_inspection_begin_clamps_at_the_deck() {
+    big(|| {
+        let _g = model_lock();
+        diff_inspection(
+            "inspection_begin clamp",
+            &["A", "B"],
+            true,
+            |c| game_rules::hostfns::inspection_begin(c, 0, 1, 9, 1).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::inspection_begin, [0, 1, 9, 1, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_inspection_end_returns_in_order() {
+    big(|| {
+        let _g = model_lock();
+        diff_inspection(
+            "inspection_end",
+            &["A", "B", "C"],
+            true,
+            |c| {
+                game_rules::hostfns::inspection_begin(c, 0, 1, 2, 0).unwrap();
+                game_rules::hostfns::inspection_end(c, 1, 0).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::inspection_begin, [0, 1, 2, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::inspection_end, [1, 0, 0, 0, 0, 0])
+            },
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_inspection_end_shuffle_keeps_the_multiset() {
+    big(|| {
+        let _g = model_lock();
+        diff_inspection(
+            "inspection_end shuffle",
+            &["A", "B", "C"],
+            false,
+            |c| {
+                game_rules::hostfns::inspection_begin(c, 0, 1, 2, 0).unwrap();
+                game_rules::hostfns::inspection_end(c, 1, 1).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::inspection_begin, [0, 1, 2, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::inspection_end, [1, 1, 0, 0, 0, 0])
+            },
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_to_discard_does_not_refill_while_held() {
+    big(|| {
+        let _g = model_lock();
+        let (cp, cl) = intern_str("held.card");
+        diff_inspection(
+            "held to_discard",
+            &["A"],
+            true,
+            |c| {
+                game_rules::hostfns::inspection_begin(c, 0, 1, 1, 0).unwrap();
+                game_rules::hostfns::to_discard(c, 1, cp, cl).unwrap();
+                0
+            },
+            || {
+                rules_kani::host::dispatch(Op::inspection_begin, [0, 1, 1, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::to_discard, [1, cp, cl, 0, 0, 0]);
+                0
+            },
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_reveal_touches_no_pile() {
+    big(|| {
+        let _g = model_lock();
+        let (mp, ml) = intern_msg("conf.reveal");
+        let (cp, cl) = intern_str("A");
+        diff_inspection(
+            "reveal",
+            &["A", "B"],
+            true,
+            |c| {
+                game_rules::hostfns::reveal_pile(c, 0, 2, mp, ml).unwrap();
+                game_rules::hostfns::reveal_card(c, 0, cp, cl, mp, ml).unwrap();
+                0
+            },
+            || {
+                rules_kani::host::dispatch(Op::reveal_pile, [0, 2, mp, ml, 0, 0]);
+                rules_kani::host::dispatch(Op::reveal_card, [0, cp, cl, mp, ml, 0]);
+                0
+            },
+        );
+    });
+}
+
 #[test]
 #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn state_set_get_value_match() {

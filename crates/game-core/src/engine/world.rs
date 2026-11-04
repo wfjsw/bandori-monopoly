@@ -44,6 +44,46 @@ pub struct Hidden {
     pub pick_intent: String,
 }
 
+/// One open deck inspection: the cards a look has turned over and not yet
+/// released, top-first, and who may look at them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InspectionFrame {
+    pub id: i32,
+    pub looker: i32,
+    pub deck_owner: i32,
+    pub public: bool,
+    /// Top-first. `revealed` is false for entries a not-yet-finished
+    /// `inspection_begin` has moved but not raised `inspected` for.
+    pub cards: Vec<InspectionCard>,
+    /// The begin that owns the frame has returned. A resumed begin (its first
+    /// pass suspended on an `inspected` hook, so no answer was recorded)
+    /// adopts the innermost unfinished frame of its looker and deck instead of
+    /// moving a second prefix.
+    pub finished: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InspectionCard {
+    pub id: String,
+    pub revealed: bool,
+}
+
+/// One seat's public reveal: the ids published, and the clause that published
+/// them. `piles` marks the lists that are a whole pile (`hand`, `deck`,
+/// `discard`): such a list is kept in step with the pile while the record
+/// lives, so a card that moves out mid-look leaves the published list too.
+/// Single shown cards are appended and never rewritten.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RevealRecord {
+    pub player: i32,
+    pub reason: Msg,
+    pub hand: Vec<String>,
+    pub deck: Vec<String>,
+    pub discard: Vec<String>,
+    #[serde(default)]
+    pub piles: [bool; 3],
+}
+
 fn full_build_cost() -> i32 {
     100
 }
@@ -853,6 +893,22 @@ pub const MAX_PLAY_LOG: usize = 32;
 pub struct World {
     pub st: MatchState,
     pub hidden: Vec<Hidden>,
+    /// Open inspection frames, innermost last. Ids come from
+    /// `next_inspection_id` so the commit net can name what belongs to a
+    /// drive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inspection_frames: Vec<InspectionFrame>,
+    #[serde(default)]
+    pub next_inspection_id: i32,
+    /// Seat whose deck a **just-closed** look still holds: set when the
+    /// drive's `inspection_end` closes a frame over that deck, cleared by the
+    /// next play's own card filing. Pile writes stay suppressed for the rest
+    /// of the activation, including that filing (design G11 I2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub look_hold: Vec<bool>,
+    /// Public reveal records, cleared at the outermost routine's end.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reveals: Vec<RevealRecord>,
     pub rng: Rng,
     pub next_event: i32,
     /// The event tail. See [`EventTail`]: a routine snapshot needs this only to
@@ -1219,6 +1275,10 @@ impl World {
             blocked_settle: vec![SettleAnswer::Unanswered; players],
             extra_turns: vec![],
             out_count: 0,
+            inspection_frames: Vec::new(),
+            next_inspection_id: 1,
+            look_hold: vec![false; players],
+            reveals: Vec::new(),
             event_deck: vec![],
             event_discard: vec![],
             event_removed: vec![],
@@ -1585,10 +1645,77 @@ impl World {
     /// Public state: hidden-zone sizes and the event tail filled in.
     pub fn public_state(&self) -> MatchState {
         let mut st = self.st.clone();
-        for (player_id, h) in st.players.iter_mut().zip(&self.hidden) {
+        for (index, (player_id, h)) in st.players.iter_mut().zip(&self.hidden).enumerate() {
             player_id.hand = h.hand.len() as i32;
             player_id.draw = h.deck.len() as i32;
             player_id.discard = h.graveyard.clone();
+            let seat = index as i32;
+            let record = self.reveals.iter().rev().find(|r| r.player == seat);
+            // A public frame's held cards are published draw-pile ids: they
+            // are off the deck but visible. Innermost frame first.
+            let held: Vec<String> = self
+                .inspection_frames
+                .iter()
+                .rev()
+                .filter(|f| f.deck_owner == seat && f.public)
+                .flat_map(|f| {
+                    f.cards
+                        .iter()
+                        .filter(|c| c.revealed)
+                        .map(|c| c.id.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            player_id.reveal = match (record, held.is_empty()) {
+                (None, true) => None,
+                (record, _) => {
+                    let mut view = crate::state::RevealView {
+                        reason: record.map(|r| r.reason.clone()).unwrap_or_default(),
+                        ..Default::default()
+                    };
+                    // A list published as a whole pile follows the pile: the
+                    // overlay is the live view, not a snapshot of the reveal
+                    // (a card drawn or kept during the look leaves it).
+                    if let Some(r) = record {
+                        view.hand = if r.piles[0] {
+                            h.hand.clone()
+                        } else {
+                            r.hand.clone()
+                        };
+                        // A public look publishes the deck for as long as its
+                        // clause runs -- open frame, or the filing right after
+                        // it (`look_hold`) -- so the deck list follows the
+                        // pile, not the reveal moment.
+                        let published = r.piles[1]
+                            || self.look_hold.get(index).copied().unwrap_or(false)
+                            || self
+                                .inspection_frames
+                                .iter()
+                                .any(|f| f.deck_owner == seat && f.public);
+                        view.deck = if published {
+                            h.deck.iter().rev().cloned().collect()
+                        } else {
+                            r.deck.clone()
+                        };
+                        view.discard = if r.piles[2] {
+                            h.graveyard.clone()
+                        } else {
+                            r.discard.clone()
+                        };
+                    }
+                    // The frame is the true top; a deck reveal made while it
+                    // was open already listed the held cards, so drop that
+                    // copy (one occurrence each) before splicing them in
+                    // front, and each card shows exactly once.
+                    for id in &held {
+                        if let Some(pos) = view.deck.iter().position(|c| c == id) {
+                            view.deck.remove(pos);
+                        }
+                    }
+                    view.deck.splice(0..0, held);
+                    Some(view)
+                }
+            };
         }
         // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
         // only when something was logged since the last read.

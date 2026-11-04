@@ -476,6 +476,26 @@ mod abi {
         pub fn cards_in(player_id: i32, pile: i32, buf: i32, cap: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_inspection_begin"
+        )]
+        pub fn inspection_begin(looker: i32, owner: i32, count: i32, public: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_inspection_end"
+        )]
+        pub fn inspection_end(player_id: i32, shuffle: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_reveal_pile"
+        )]
+        pub fn reveal_pile(player_id: i32, pile: i32, ptr: i32, len: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_reveal_card"
+        )]
+        pub fn reveal_card(player_id: i32, card_ptr: i32, card_len: i32, ptr: i32, len: i32);
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_to_discard"
         )]
         pub fn to_discard(player_id: i32, ptr: i32, len: i32);

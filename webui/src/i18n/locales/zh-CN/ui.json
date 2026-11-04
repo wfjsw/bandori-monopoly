@@ -5,6 +5,8 @@
   "anim.buyOk": "购买成功！",
   "anim.discard": "弃牌",
   "anim.draw": "抽手牌",
+  "anim.inspection": "查看卡组",
+  "anim.reveal": "公开",
   "anim.effect": "发动效果",
   "anim.event": "事件",
   "anim.eventEnd": "事件离场",
@@ -95,6 +97,8 @@
   "anim.chainKind.drawn": "抽到",
   "anim.chainKind.drew": "抽牌",
   "anim.chainKind.drewBefore": "抽牌前",
+  "anim.chainKind.drawAfter": "抽牌后",
+  "anim.chainKind.inspected": "被观看后",
   "anim.chainKind.endTurnAfter": "结束回合后",
   "anim.chainKind.endTurnBefore": "结束回合前",
   "anim.chainKind.eventAfter": "事件后",
@@ -850,5 +854,11 @@
   "install.why": "从主屏幕启动可全屏游玩，体验更好",
   "install.action": "添加到主屏幕",
   "install.steps": "Safari：点底部分享按钮，选择「添加到主屏幕」",
-  "install.override": "继续用浏览器玩"
+  "install.override": "继续用浏览器玩",
+  "board.inspection": "观看的牌：{{n}} 张",
+  "ui.inspection.public": "公开",
+  "board.revealTitle": "公开：{{who}}",
+  "board.revealHand": "公开的手牌",
+  "board.revealDeck": "公开的卡组",
+  "board.revealDiscard": "公开的弃卡区"
 }

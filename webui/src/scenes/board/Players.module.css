@@ -44,7 +44,10 @@
 .money img { width: 22px; }
 .money b { font-size: 19px; line-height: 1.2; }
 .sub { grid-column: 2 / 4; display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 14px; line-height: 1.2; min-width: 0; overflow: hidden; white-space: nowrap; }
-.hand, .fire { display: flex; align-items: center; gap: 3px; }
+.hand, .fire, .reveal { display: flex; align-items: center; gap: 3px; }
+.reveal { cursor: pointer; color: #7fd1ff; }
+.reveal i { width: 15px; height: 15px; }
+.reveal:focus-visible { outline: 1px solid #7fd1ff; }
 .hand i { color: var(--tag-red); width: 17px; height: 17px; }
 .fire img { width: 18px; }
 /* Per-player graveyard, at the right of the module. */
