@@ -498,8 +498,8 @@ impl NamedVal {
 /// overflows at slot 64 in the debug build.
 /// `NameId::INVALID` / out-of-range ids never alias a live key: `get_opt`
 /// is `None`, `set` is a documented no-op.
-/// Extra (key, value) slots for derived ids (`key + 0x2000/0x4000/0x8000`
-/// MIN/MAX/EXPIRES columns) that live outside the intern bucket range.
+/// Extra (key, value) slots for any remaining ids outside both the intern
+/// bucket range and the derived-column tags.
 const MAX_EXTRA: usize = 16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -509,7 +509,9 @@ pub struct NameMap {
     /// `vals[i] == 0`). One word per 64 slots -- a single `u64` overflows at
     /// slot 64 in the debug build.
     present: [u64; (crate::intern::SLOTS + 63) / 64],
-    /// Linear fallback for `NameId.0 >= SLOTS` (derived MIN/MAX/EXPIRES).
+    /// Linear fallback for ids outside the intern range (derived columns on
+    /// field cards / tiles). Player state columns live on [`World`], not here:
+    /// a per-map column array would have to be paid by all 60 tile maps.
     extra: [(NameId, i32); MAX_EXTRA],
     extra_n: u8,
 }
@@ -772,6 +774,11 @@ pub struct World {
     pub persona_skill: u16,
     /// Generic per-player named counters (tokens, held, state).
     pub player_keys: [NameMap; MAX_PLAYERS],
+    /// MIN / MAX / EXPIRES / FLAGS columns of `player_keys`, direct-indexed
+    /// `[player][column][base key]`. Off `NameMap` on purpose: the 60 tile
+    /// maps and 8 field maps would otherwise each carry four column arrays.
+    pub player_cols: [[[i32; crate::intern::SLOTS]; 4]; MAX_PLAYERS],
+    pub player_cols_present: [[[u64; (crate::intern::SLOTS + 63) / 64]; 4]; MAX_PLAYERS],
     /// Band crystals / skills (kept explicit; also mirrored in player_keys).
     pub group_pool: [i32; MAX_PLAYERS],
 
@@ -859,6 +866,17 @@ pub struct World {
     /// When non-zero, `roll_dice` returns this value instead of a symbolic
     /// face (harness control for dice-clause proofs; 0 = symbolic).
     pub forced_roll: i32,
+    /// Effect-roll calls (`arm_roll` non-move branch) — the roll itself is not
+    /// an `Effect`, so proofs that owe exactly one roll count it here.
+    pub roll_calls: u32,
+    /// `at_turn_end` / `at_next_turn_end` / `before_turn_end` calls, recorded
+    /// by `arm_schedule_turn_end` (`(player, mode)` of the last).
+    pub schedule_turn_end_n: u32,
+    pub last_schedule: (i32, i32),
+    /// `settle_tile_at` calls, recorded by `arm_settle_tile_at` (the settle
+    /// itself is a protocol stub with no effect-log entry).
+    pub settle_calls: u32,
+    pub last_settle: (i32, i32),
     /// A joiner used the redirect (hostfns `set_join_used`).
     pub trig_join_used: bool,
     /// `join::open` ran on this pass (the model has no join round beyond the
@@ -994,8 +1012,21 @@ fn player_idx(player: i32) -> usize {
     }
 }
 
+/// Derived column tag (`NameId.0 >> 12`) → column slot. The engine's state
+/// columns are `key + 0x1000` (flags) / `+0x2000` (expires) / `+0x4000` (min)
+/// / `+0x8000` (max).
+fn column_of(tag: usize) -> Option<usize> {
+    match tag {
+        0x1 => Some(0),
+        0x2 => Some(1),
+        0x4 => Some(2),
+        0x8 => Some(3),
+        _ => None,
+    }
+}
+
 impl World {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             n_players: 2,
             money: [0; MAX_PLAYERS],
@@ -1013,6 +1044,8 @@ impl World {
             group_id: [u16::MAX; MAX_PLAYERS],
             persona_skill: 0,
             player_keys: [NameMap::new(); MAX_PLAYERS],
+            player_cols: [[[0; crate::intern::SLOTS]; 4]; MAX_PLAYERS],
+            player_cols_present: [[[0; (crate::intern::SLOTS + 63) / 64]; 4]; MAX_PLAYERS],
             group_pool: [0; MAX_PLAYERS],
             fans_pos: [0; MAX_PLAYERS],
             fans_neg: [0; MAX_PLAYERS],
@@ -1055,6 +1088,11 @@ impl World {
             trig_negate: false,
             trig_join_redirect: -1,
             forced_roll: 0,
+            roll_calls: 0,
+            schedule_turn_end_n: 0,
+            last_schedule: (-1, 0),
+            settle_calls: 0,
+            last_settle: (-1, -1),
             trig_join_used: false,
             trig_join_opened: false,
             trig_main: false,
@@ -1198,20 +1236,68 @@ impl World {
     /// Flag byte declared for `key` (0 when none). Stored at `key + 0x1000`,
     /// beside the MIN/MAX/EXPIRES derived columns.
     pub fn key_flags(&self, player: i32, key: NameId) -> u8 {
-        if player < 0 || player as usize >= MAX_PLAYERS {
-            return 0;
-        }
-        let id = NameId(key.0.wrapping_add(0x1000));
-        self.player_keys[player as usize].get(id) as u8
+        self.col_get(player, key, 0x1000) as u8
     }
 
     /// Declare [`state_flag`] bits for `key` (`state_set` field `FLAGS`).
     pub fn key_set_flags(&mut self, player: i32, key: NameId, flags: u8) {
-        if player < 0 || player as usize >= MAX_PLAYERS {
+        self.col_set(player, key, 0x1000, flags as i32);
+    }
+
+    /// One derived column cell (`tag` = 0x1000 flags / 0x2000 expires /
+    /// 0x4000 min / 0x8000 max), direct-indexed.
+    fn col_get(&self, player: i32, key: NameId, tag: u16) -> i32 {
+        let Some(c) = column_of(tag as usize >> 12) else {
+            return 0;
+        };
+        self.player_cols[player_idx(player)][c][(key.0 as usize) & 0xfff]
+    }
+
+    fn col_set(&mut self, player: i32, key: NameId, tag: u16, v: i32) {
+        let Some(c) = column_of(tag as usize >> 12) else {
             return;
+        };
+        let p = player_idx(player);
+        let base = (key.0 as usize) & 0xfff;
+        self.player_cols[p][c][base] = v;
+        self.player_cols_present[p][c][base / 64] |= 1u64 << (base % 64);
+    }
+
+    /// A present column cell addressed by the **derived** id, for `ir_fill`'s
+    /// named probe (`Option` = present).
+    pub fn col_get_opt(&self, player: i32, key: NameId) -> Option<i32> {
+        let i = key.0 as usize;
+        if i < 0x1000 {
+            return None;
         }
-        let id = NameId(key.0.wrapping_add(0x1000));
-        self.player_keys[player as usize].set(id, flags as i32);
+        let c = column_of(i >> 12)?;
+        let base = i & 0xfff;
+        if base >= crate::intern::SLOTS {
+            return None;
+        }
+        let p = player_idx(player);
+        if ((self.player_cols_present[p][c][base / 64] >> (base % 64)) & 1) == 1 {
+            return Some(self.player_cols[p][c][base]);
+        }
+        None
+    }
+
+    /// Visit every present column cell of `player` as `base + tag` ids
+    /// (`ir_fill` copies them with the map).
+    pub fn for_each_col(&self, player: i32, mut f: impl FnMut(NameId, i32)) {
+        let p = player_idx(player);
+        for (c, tag) in [0x1000u16, 0x2000, 0x4000, 0x8000].into_iter().enumerate() {
+            let mut i = 0usize;
+            while i < crate::intern::SLOTS {
+                if ((self.player_cols_present[p][c][i / 64] >> (i % 64)) & 1) == 1 {
+                    f(
+                        NameId((i as u16).wrapping_add(tag)),
+                        self.player_cols[p][c][i],
+                    );
+                }
+                i += 1;
+            }
+        }
     }
 
     /// Mirror a fan-key write into the pilot `fans_pos` / `fans_neg` views.
@@ -1229,35 +1315,23 @@ impl World {
     // ---- state MIN / MAX / EXPIRES columns (hostfns `state_set` field 1/2/3) ----
     /// Declared MAX for `key` (0 = none). Stored beside the value.
     pub fn key_max(&self, player: i32, key: NameId) -> i32 {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x8000));
-        self.player_keys[p].get(id)
+        self.col_get(player, key, 0x8000)
     }
     pub fn key_min(&self, player: i32, key: NameId) -> i32 {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x4000));
-        self.player_keys[p].get(id)
+        self.col_get(player, key, 0x4000)
     }
     /// `Tick` code: 0 none / 1 TurnStart / 2 TurnEnd (hostfns field 3).
     pub fn key_expires(&self, player: i32, key: NameId) -> i32 {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x2000));
-        self.player_keys[p].get(id)
+        self.col_get(player, key, 0x2000)
     }
     pub fn key_set_max(&mut self, player: i32, key: NameId, v: i32) {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x8000));
-        self.player_keys[p].set(id, v);
+        self.col_set(player, key, 0x8000, v);
     }
     pub fn key_set_min(&mut self, player: i32, key: NameId, v: i32) {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x4000));
-        self.player_keys[p].set(id, v);
+        self.col_set(player, key, 0x4000, v);
     }
     pub fn key_set_expires(&mut self, player: i32, key: NameId, v: i32) {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x2000));
-        self.player_keys[p].set(id, v);
+        self.col_set(player, key, 0x2000, v);
     }
 
     // ---- field-instance counters (uid-addressed) ----
@@ -1525,15 +1599,13 @@ pub fn pile_count(pile: &[u16; MAX_CARDS], n: u8, card: u16) -> i32 {
 // Single-threaded model. A `static mut` avoids `thread_local!`, which Kani
 // only partially models (and which contributed to an ICE in kani-compiler
 // 0.68.0 during the pilot).
-static mut WORLD: Option<World> = None;
+static mut WORLD: World = World::new();
 
 fn world_mut() -> &'static mut World {
-    unsafe {
-        if WORLD.is_none() {
-            WORLD = Some(World::new());
-        }
-        WORLD.as_mut().unwrap_unchecked()
-    }
+    // Const-initialized: no `Option` branch and no per-harness `World::new()`
+    // store sequence (that init emitted hundreds of bounds checks and was a
+    // large share of the CBMC property count).
+    unsafe { &mut *core::ptr::addr_of_mut!(WORLD) }
 }
 
 /// Read the global world. `inline(always)` so a host arm's closure is a

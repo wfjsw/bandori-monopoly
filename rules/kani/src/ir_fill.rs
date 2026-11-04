@@ -735,6 +735,13 @@ fn fill_named(c: &mut IrCtx, w: &World, owner: i32) {
             filled += 1;
         }
     });
+    // Derived state columns (MIN / MAX / EXPIRES / FLAGS) live outside the map.
+    w.for_each_col(owner, |key, value| {
+        if filled < NAMED_CAP {
+            c.named_set(id_of_name_id(key), value as i64);
+            filled += 1;
+        }
+    });
     // Pilot fan views (same keys, guaranteed present even if the map is empty).
     c.named_set(ID_TOK_PP_POS, w.fans_pos[owner as usize] as i64);
     c.named_set(ID_TOK_PP_NEG, w.fans_neg[owner as usize] as i64);
@@ -1547,6 +1554,11 @@ pub fn fill_for_guard(
                 // the 8×8 walk.)
                 let map = &w.player_keys[op];
                 map.for_each(|key, value| {
+                    if id_of_name_id(key) == name_id {
+                        c.named_set(name_id, value as i64);
+                    }
+                });
+                w.for_each_col(op as i32, |key, value| {
                     if id_of_name_id(key) == name_id {
                         c.named_set(name_id, value as i64);
                     }

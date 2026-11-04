@@ -2611,6 +2611,12 @@ impl PlayCtx<'_> {
                 base_add: self.w.turn.settle_pay_add,
                 base_rent_add: self.w.turn.settle_rent_add,
                 outcome: super::cx::SettleOutcome::Settled,
+                mv: super::rules::Trigger::new("settle", frame.player)
+                    .with_move(&frame.m)
+                    .mv
+                    .clone()
+                    .expect("planted by `with_move`"),
+                is_main_move: frame.m.is_main_move,
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -2633,7 +2639,7 @@ impl PlayCtx<'_> {
         } else {
             // Completions nest LIFO, so the finished entry is the top: its
             // `base` is the product of every outer settle, which restores.
-            let finished = self.settle_stack[frame.stack_idx];
+            let finished = self.settle_stack[frame.stack_idx].clone();
             self.settle_stack.truncate(frame.stack_idx);
             self.w.turn.settle_open = self.settle_stack.len() as u32;
             self.w.turn.settle_pay_factor = finished.base;
@@ -5969,6 +5975,17 @@ impl PlayCtx<'_> {
     /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     pub(crate) fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
+        // A raise inside an open settle inherits the settle's move when it
+        // carries none of its own, so every stage of the settle (the payment
+        // stages raise without a move) can read `is_settle_redirect` and
+        // `is_main_move` from `ctx::trigger`. The `settle`/`settleBody`/… raises
+        // pass the move explicitly and are left alone.
+        if t.mv.is_none() {
+            if let Some(e) = self.settle_stack.last() {
+                t.mv = Some(e.mv.clone());
+                t.is_main_move |= e.is_main_move;
+            }
+        }
         self.counteract(&mut t)?;
         Ok(t)
     }

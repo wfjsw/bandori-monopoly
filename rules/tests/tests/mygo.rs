@@ -1427,6 +1427,119 @@ fn tomori_self_teleport_settles_at_the_destination() {
     );
 }
 
+/// P1 lands next to P0's tile and P0 accepts the (2) press with `face` loaded
+/// for the follow-up roll. Returns the rent P1 paid on the forced settle.
+fn tomori_second_forced_settle(face: i32) -> i32 {
+    let deed = tile("江户川公园");
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 4, 4);
+    t.set_pos(0, deed);
+    t.set_owner(deed, Some(0));
+    t.set_money(1, 5000);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, deed - 2);
+    t.dice(&[2, face]); // deed-2 -> deed-1, then the 1d20
+    t.roll(1).unwrap();
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori_title") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.pos(1), deed, "pulled onto P0's tile");
+    5000 - t.money(1)
+}
+
+#[test]
+fn tomori_second_halves_every_payment_of_the_forced_settle() {
+    // 规则书 (2): 「在此技能影响下的支付价格变为原本的一半」 -- the semicolon
+    // puts the bend on the whole skill, so a face above 6 still halves.
+    let deed = tile("江户川公园");
+    let paid = tomori_second_forced_settle(7);
+    // Baseline: the same landing without the press.
+    let mut b = Table::new(&["高松灯", "千早爱音"]);
+    b.clean();
+    b.set_pos(0, 5);
+    b.set_owner(deed, Some(0));
+    b.set_money(1, 5000);
+    b.begin_turn(1);
+    drain(&mut b);
+    b.set_pos(1, deed - 2);
+    b.dice(&[2]);
+    b.roll(1).unwrap();
+    for _ in 0..8 {
+        if b.prompt().is_none() {
+            break;
+        }
+        b.decline();
+    }
+    let full = 5000 - b.money(1);
+    assert!(full > 0, "baseline rent is positive");
+    assert_eq!(
+        paid,
+        (full + 1) / 2,
+        "the forced settle is halved: paid {paid} vs full {full}"
+    );
+}
+
+#[test]
+fn tomori_second_settles_for_the_mover_at_their_turn_end() {
+    // 规则书 (2): 「并在自己的下回合结束时[触发结算]」 -- 「其」/「自己」 is the
+    // moved player, so the settle is the mover's, at the mover's own position and
+    // turn end.
+    let deed = tile("江户川公园");
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 4, 4);
+    t.set_pos(0, deed);
+    t.set_owner(deed, Some(0));
+    t.set_money(1, 5000);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, deed - 2);
+    t.dice(&[2, 6]);
+    t.roll(1).unwrap();
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori_title") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.state(1, "stay"), 1, "the [停留] holds the mover");
+    let pass = |t: &mut Table, who: usize| {
+        t.m.world_mut().st.skip_move = true;
+        t.end(who).unwrap();
+        drain(t);
+    };
+    pass(&mut t, 1);
+    pass(&mut t, 0);
+    assert_eq!(t.turn(), 1, "the mover's next turn");
+    let before = t.money(1);
+    pass(&mut t, 1);
+    assert_eq!(t.pos(1), deed, "the mover never moved");
+    assert!(
+        t.money(1) < before,
+        "the settle is the mover's and fires at their own turn end: {before} -> {}",
+        t.money(1)
+    );
+}
+
 // ---------------------------------------------------------------- 千早爱音 重新开始
 
 #[test]

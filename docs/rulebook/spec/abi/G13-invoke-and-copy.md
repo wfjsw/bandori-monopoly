@@ -1,7 +1,7 @@
 # G13 — Skill invocation and borrowed-clause context
 
-Status: **design revision** (2026-11-04 rewrite of the 2026-10-27 draft; no
-source touched by this document). Worktree
+Status: **implemented** (2026-11-04 rewrite of the 2026-10-27 draft, then built
+and verified in the same worktree; the body below is the shipped shape). Worktree
 `/home/monopoly/web/.claude/worktrees/g13-design-review`, branch
 `worktree-g13-design-review`. Starts from master at ABI 113, SAVE 16,
 RECORD 4, highest engine kind 131, highest Kani `Op` 442. It does not redo any
@@ -22,13 +22,22 @@ document can be followed against the tree.
 
 Names chosen by this revision likewise carry no abbreviation: the entry
 identifier is `"2"`; the keys are `skill.tomoriPoem.usedThisMove`,
-`skill.tomoriPoem.owedSettle` and `skill.tomoriPoem.halfPrice`; the functions
-are `before_settle`, `before_settle_applies`, `half_price_applies`,
-`owed_settle`, `clear_used_this_move`, `used_this_move_key`, `clear_latches`
-and `offer_open`; the schedule name is `"owed_settle"`. `usedThisMove` and
-`owedSettle` replace the current `acted` and `due` key strings; `clear_acted`,
-`half`, `not_latched` and `latch_key` are renamed to match, and the shout's
-`clear_latch` becomes `clear_latches` because it clears three keys.
+`skill.tomoriPoem.owedSettle`, `skill.tomoriPoem.halfPrice` and
+`skill.tomoriPoem.borrowed`; the functions are `before_settle`,
+`before_settle_applies`, `half_price_applies`, `owed_settle`,
+`clear_used_this_move`, `used_this_move_key`, `clear_latches`,
+`clear_owed_paying` and `offer_open`; the schedule name is `"owed_settle"`.
+`usedThisMove` and `owedSettle` replace the current `acted` and `due` key
+strings; `clear_acted`, `half`, `not_latched` and `latch_key` are renamed to
+match, and the shout's `clear_latch` becomes `clear_latches` because it clears
+three keys.
+
+The borrowed card's own half-price latch is **shared** (`skill.tomoriPoem.halfPrice`):
+the shout sets it instead of carrying a second one, and `skill.tomoriPoem.borrowed`
+tells the poem's filter to stand down while a borrow is the one running. The
+shout keeps its `PaySplitMul` filter for exactly that borrowed settle and
+stands down again afterwards when the poem instance is on the field to answer
+for itself (and at the owed settle, §7.2).
 
 Two short handles used throughout: the **poem** is 高松灯's persona skill
 `skill:高松灯:诗超绊` and the **shout** is `CRYCHIC:（灯）内心的呐喊`, the card
@@ -55,12 +64,12 @@ item that is still broken. What the draft got wrong:
 | R2 | The draft's §6.3 borrowed call is `invoke_entry_paid(…, "2")` and says "the settle then reaches `2-effect` through the normal filter". The engine dispatches the target card's own entries in the *same* raise pass, and the poem's skill instance has a lower instance identifier than the shout (bound at game start versus played later), so `2` and `2-effect` both run **before** the shout is reached. When the shout later invokes `2`, `2-effect` has already declined. | The single-entry design of §7: the borrowed body is `2` itself, so there is no second entry and no dispatch-order dependence (`wasm_rules.rs:5998` walks instances by identifier, seat by seat). |
 | R3 | `2` and `2-effect` are two `SettleBefore` entries on one card and rely on the engine running every matching entry. `after_offer_applies` is evaluated on `2-effect` in the same pass as `2`; the borrowed call runs `2` but not `2-effect` (see R2). | One entry, `2`. Its body asks and pays only when `ctx::invoke_paid()` is false. |
 | R4 | The draft's `"2-effect"` body sets `OFFERED` in `2`, clears it on entry, and gates `2-effect` on it. Three latches (`OFFERED`, `USED_THIS_MOVE`, `OWED_SETTLE`) for one clause. | Two latches: `USED_THIS_MOVE` (one use per move, already exists) and `OWED_SETTLE` (one owed settle). `OFFERED` disappears with the second entry. |
-| R5 | The half-price is implemented on **both** cards: the shout keeps `half_key` (`tomori_inner_shout.rs:155-157, 172-181`) and the poem's `half` reads `OWED_SETTLE` (`tomori.rs:75-79`). On the borrowed path, when the roll is 6 or less, both `PaySplitMul` filters are active and the payment is quartered, not halved. | The latch moves into the poem, one filter only (§7.1); the shout's filter, key and `on_pay` are deleted. |
+| R5 | The half-price is implemented on **both** cards: the shout keeps `half_key` (`tomori_inner_shout.rs:155-157, 172-181`) and the poem's `half` reads `OWED_SETTLE` (`tomori.rs:75-79`). On the borrowed path, when the roll is 6 or less, both `PaySplitMul` filters are active and the payment is quartered, not halved. | **One shared latch** (`skill.tomoriPoem.halfPrice`) plus a `borrowed` stand-down; both filters remain because the poem cannot answer its own owed settle (§4.4, §7.1, §7.2). The shout's `half_key`/`half` are deleted and its filter is re-gated. |
 | R6 | The draft's settle callback clears `OWED_SETTLE` **before** settling, so the existing `OWED_SETTLE`-gated half filter is off during the very settle it was supposed to cover; the draft still claims "the existing `half` filter is correct as written". Contradiction. | `owed_settle` sets the half-price latch around its own `settle_tile_at` and clears it after (§7.1); `OWED_SETTLE` only marks that a settle is owed. |
 | R7 | The draft moves `OWED_SETTLE` to the mover but leaves the *persona* delay's player wrong: the current `at_turn_end` settles `player_id`, and `Action::TurnEnd("actor == owner …")` dispatches with the card **owner**, so the plain (2) path settles the controller's tile at the controller's turn end, not the mover's. | `ctx::at_next_turn_end(mover, "owed_settle")` (§7.1) carries the mover as the callback's player; the callback settles the mover's own position. |
 | R8 | The draft's `ctx::settle_tile_at(mover, …, true)` keeps the current `is_main_move = true` for a turn-end forced settle. | `false`: the owed settle is not the mover's main move. Row 734 is the same defect shape and already names the two non-main precedents (`tomori_crychic.rs:103`, `rinne_rain.rs:53`). |
 | R9 | The draft never notices that the poem's own (2) offer and the shout offer both admit on the same landing, and that the poem is dispatched first (lower instance identifier). Current `before_settle_applies` only checks `USED_THIS_MOVE`; the shout only checks its own latch. | §7.3 documents the two offers and their order, and the shout's admission also reads the poem's `USED_THIS_MOVE` so a second invocation of the same skill is the player's explicit choice, never an accident. |
-| R10 | The draft's §6.3 shout sets `half_key` and teleports itself, then invokes. With the body owning both, the borrowed path teleports twice and the half is set by the caller. | The body owns the teleport and its log; the shout sets only its once-per-move latch, pays, invokes, and logs the borrowed use (§7.2). |
+| R10 | The draft's §6.3 shout sets `half_key` and teleports itself, then invokes. With the body owning both, the borrowed path teleports twice and the half is set by the caller. | The body owns the teleport and its log; the shout claims its once-per-move latch, arms the shared bend and its stand-down, pays, invokes, and logs the borrowed use (§7.2). |
 | R11 | The draft's §4.5 lists `Press` as an invocable entry kind. There is no `OnKind::Press`; `entry::PRESS` is a reserved *resolver* that yields a `Play`. | The invocable set is the landed one: `Play`, `Action`, `Settle`, `Schedule`; `Filter`, `Counteract`, `Message` trap (`hostfns.rs:1636-1650`). |
 | R12 | The draft's §5.1 step 4 finds the instance with `find(|(_, c)| c == id)`, written before G05's effective-card rule. A stand-in instance answers for its effective card. | The landed lookup compares `effective_card_at(uid)` (`hostfns.rs:1657-1664`); §3 keeps it. |
 | R13 | Item 1's §9 tests were never written. The landed suite has two frame tests (`declare_arg.rs:497-531`) and the mutsumi cash-out (`card_paths.rs:361`), but none of `nanami_press_invokes_skill_two`, `…spends_one_crystal_only`, `…without_pot_refused`, the trigger seed/restore pair, the trap checks, or the PRESS/`play_card` discrimination. | §10.2 lists the missing item 1 coverage as a landing obligation, not as new design. |
@@ -77,7 +86,7 @@ item that is still broken. What the draft got wrong:
 | # | slug | severity | rows | disposition |
 |---|---|---|---|---|
 | 1 | `invoke-skill-entry` (BACKLOG also carries `nanami-press-invokes-clause-3`) | medium | 735 | **code landed by G05**; §2 verifies it, §10.2 lists the missing tests |
-| 2 | `tomori-borrowed-second-half` | medium | 408, 421 | **designed here**; no new ABI, skill body + shout body |
+| 2 | `tomori-borrowed-second-half` | medium | 408, 421 | **landed**; no new ABI, skill body + shout body + one host trigger fill |
 
 ### 1.1 Item 1 — what is landed
 
@@ -191,7 +200,12 @@ The implementation must hold:
   Play" and never by a band skill.
 * **Fabric.** The target instance is the persona skill's field row. The
   body's self-addressed reads (`crystals`, `is_placed`, `self_uid`, props)
-  answer for that row.
+  answer for that row. The shout's controller (高松灯（CRYCHIC）) holds the
+  variant persona 跌跌撞撞, so the borrowed skill is never placed for them:
+  the body runs with the scripted instance identifier `-1` and the skill's own
+  `Filter` / `SettleAfter` hooks do not dispatch. The borrower must therefore
+  carry every latch and every post-settle clear the body would have left to
+  those hooks (§7.2).
 * **Context.** `trigger.player_id` is the mover and `trigger.tile` is the
   abandoned landing — the borrowed clause reads both. `trigger.card` /
   `trigger.cards` name the borrowed card, so 「该技能」 in the body resolves to
@@ -204,7 +218,10 @@ The implementation must hold:
   identifier, the entry identifier and the instance captured at schedule time,
   `wasm_rules.rs:2581-2606`, `world.rs:466-495`).
 * **Half price.** The forced settle and the owed settle are both payments
-  under the skill; both are halved, exactly once.
+  under the skill; both are halved, exactly once. Exactly one filter may
+  answer a payment: the poem's stands down under `skill.tomoriPoem.borrowed`,
+  and the shout's stands down at the poem's own settles (§7.2). Both latches
+  survive `MoveResolved` while a settle is owed.
 * **Once per move.** The shout has one use per move per copy; the dropped
   latch travels with the move (`MoveResolved`).
 * **Pause.** Any prompt in the body (the roll's own window; an abnormal
@@ -254,6 +271,17 @@ The shout halves through `half_key` (`tomori_inner_shout.rs:36, 155-181`) and
 the skill halves through `OWED_SETTLE` (`tomori.rs:56, 75-79`). Both are `Mul` stages
 and compose. On a roll of 6 or less both are live for the forced settle.
 
+Keeping both filters is not avoidable, because the two settle families reach
+different hooks. The skill's filter is skipped during its **own** owed settle:
+the body is the resolving frame and a money hook cannot re-trigger on its own
+movement (`reentrant_hooks`, `wasm_rules.rs:6000-6005`), so a placed poem
+cannot answer the owed settle it caused. The shout's filter must cover that
+payment when the controller has a copy out. Conversely the shout's filter must
+stand down whenever the poem answers, or both compose. The resolution is one
+shared latch plus a stand-down bit (§7.1, §7.2), not two independent halvings:
+`skill.tomoriPoem.halfPrice` says *a payment is halved*, and
+`skill.tomoriPoem.borrowed` says *the borrower's filter is the one doing it*.
+
 ### 4.5 The same landing carries two offers
 
 Both residuals admit in the same window: the poem's (2) whenever another
@@ -265,29 +293,44 @@ both can be accepted and the skill runs twice.
 ## 5. Surface — no new ABI
 
 The invocation surface is complete. This item adds **no import**, no manifest
-field, no engine kind and no wire type. It changes two card bodies, adds one
-guest state key and re-aims two existing keys at the mover:
+field, no engine kind and no wire type. It changes two card bodies, adds two
+guest state keys and re-aims two existing keys at the mover:
 
 ```
 skill.tomoriPoem.usedThisMove    -- exists as `skill.tomoriPoem.acted`; one use per move, on the mover
 skill.tomoriPoem.owedSettle      -- exists as `skill.tomoriPoem.due`; an owed settle, on the mover
-skill.tomoriPoem.halfPrice       -- new; the half-price latch, on the mover
+skill.tomoriPoem.halfPrice       -- new; the half-price latch, on the mover (shared by both filters)
+skill.tomoriPoem.borrowed        -- new; set while a borrower's filter is the one halving
 ```
 
-All three are player slots, i.e. the existing dynamic key store; a new key
-needs no save version (nothing enumerates the keys). The two existing keys are
-renamed to spell the words out, and both stop being read off the owner — the
-mover now carries them. The shout's `latch_key` is renamed `used_this_move_key`
-to say which latch it is.
+All are player slots, i.e. the existing dynamic key store; a new key needs no
+save version (nothing enumerates the keys). The two existing keys are renamed
+to spell the words out, and both stop being read off the owner — the mover now
+carries them. The shout's `latch_key` is renamed `used_this_move_key` to say
+which latch it is.
 
-The only crossing identifier is the skill's card string
-(`skill:高松灯:诗超绊`), obtained through `bandori_std::persona_skill`
-(`bandori-std/src/lib.rs:320-322`), exactly as the nanami body does.
+The only crossing identifier is the skill's card string, used literally
+(`skill:高松灯:诗超绊`): the borrowed skill is the **base** 高松灯 persona, and
+the controller holds 跌跌撞撞, so neither `ctx::persona_skill` nor
+`ctx::group_skills` resolves it without matching on the raw identifier.
+
+**One host-side change** rides along, outside the guest surface:
+`PlayCtx::raise` now lets a raise inside an open settle inherit the settle's
+move view (§6). The half filters read `ctx::trigger::is_settle_redirect()` to
+pick the owed settle apart from an ordinary one, and the payment stages raise
+without a move of their own.
 
 ## 6. Engine wiring
 
-Nothing engine-side changes. The relevant machinery is cited so a reviewer can
-check the fit:
+The invocation machinery itself is untouched. One host fix is needed for the
+filters: `ctx::trigger::is_settle_redirect()` is documented as a hook-readable
+fact (`move_ctx.rs:195-202`), but the payment stages raise a trigger with no
+move view of their own, so the flag read `false` on every payment, card-forced
+or not. `PlayCtx::raise` now fills an empty move view from the innermost open
+settle (`play.rs`, `SettleEntry.mv`); a card-forced settle builds its move in
+`card_settle_move`, so payments inside it report the redirect and payments
+inside the walk's own settle do not. The rest of the machinery is cited so a
+reviewer can check the fit:
 
 * `ctx::at_next_turn_end` pushes a `Scheduled` record with the player as owner
   **and** target, `skip = true` when scheduled during that player's own turn,
@@ -312,6 +355,9 @@ The invocation core is reused verbatim; `COST_PAID` is passed through
 /// 「在此技能影响下的支付价格变为原本的一半」 -- on the moved player, around
 /// the forced settle and the owed settle only.
 const HALF_PRICE: &str = "skill.tomoriPoem.halfPrice";
+/// Set by a borrowing card while it runs: the borrower's filter carries the
+/// bend and this card's stands down wherever both could answer.
+const BORROWED: &str = "skill.tomoriPoem.borrowed";
 ```
 
 Entry (replaces the unnamed `SettleBefore` at `:51-55`):
@@ -324,7 +370,8 @@ On::Action(Action::SettleBefore("tile.id >= 0", Some(before_settle_applies), bef
 
 The half-price filter keeps its shape (`:56`) and only changes its gate and
 name; `is_placed` is dropped because the owed settle runs from a schedule,
-after the skill instance may be gone:
+after the skill instance may be gone (and a floating instance is `-1` for a
+borrow). `BORROWED` makes it stand down while a borrower's filter answers:
 
 ```rust
 On::Filter(Filter::PaySplitMul("", Some(half_price_applies), on_pay))
@@ -392,24 +439,32 @@ fn before_settle_applies(player_id: i32) -> bool {
 ```
 
 Half filter — the latch sits on the paying player, who is the mover on both
-settles, and no `is_placed` check is needed because the owed settle runs from a
-schedule:
+settles; the payer is `trigger.player_id` even though the guard's argument is
+the card owner. `BORROWED` is the stand-down (§7.2), and `settle_tile` keeps
+an ordinary payment outside any settle out:
 
 ```rust
-fn half_price_applies(player_id: i32) -> bool {
-    state::get(player_id, HALF_PRICE) > 0
+fn half_price_applies(_player_id: i32) -> bool {
+    let payer = ctx::trigger::player_id();
+    ctx::trigger::settle_tile() >= 0
+        && state::get(payer, HALF_PRICE) > 0
+        && state::get(payer, BORROWED) == 0
 }
 ```
 
-Clear (the existing `MoveResolved` hook at `:62-64`, renamed) and the owed
-settle (replacing `at_turn_end` at `:217-224`):
+Clear (the existing `MoveResolved` hook at `:62-64`, renamed), the owed
+settle (replacing `at_turn_end` at `:217-224`) and the post-payment clear:
 
 ```rust
 fn clear_used_this_move(_player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
     if mover >= 0 {
         state::set(mover, USED_THIS_MOVE, 0);
-        state::set(mover, HALF_PRICE, 0);             // the forced settle is over
+        // An owed settle pays later and must stay halved.
+        if state::get(mover, OWED_SETTLE) == 0 {
+            state::set(mover, HALF_PRICE, 0);
+            state::set(mover, BORROWED, 0);
+        }
     }
     Ok(())
 }
@@ -418,17 +473,46 @@ fn clear_used_this_move(_player_id: i32) -> card_sdk::Asked {
 /// position. Not a main move (row 734's shape).
 fn owed_settle(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, OWED_SETTLE, 0);
-    state::set(player_id, HALF_PRICE, 1);
+    // A borrow's own bend is long gone; this is this skill's settle.
+    state::set(player_id, BORROWED, 0);
     let at = ctx::player_pos(player_id);
-    if at >= 0 {
-        ctx::settle_tile_at(player_id, at, false);
+    if at < 0 {
+        state::set(player_id, HALF_PRICE, 0);
+        return Ok(());
     }
-    state::set(player_id, HALF_PRICE, 0);
+    // `HALF_PRICE` is still armed from the forced settle (its `MoveResolved`
+    // drop was skipped while owed); it must stay up for this payment, and the
+    // deferred `settleAfter` drops it.
+    ctx::settle_tile_at(player_id, at, false);
+    Ok(())
+}
+
+/// The owed settle finished paying: drop the latches. `settleAfter` fires for
+/// every settle, so it re-checks the redirect inside the body (the guard's
+/// view of the trigger is the pre-payment one).
+fn clear_owed_paying(_player_id: i32) -> card_sdk::Asked {
+    if !ctx::trigger::is_settle_redirect() {
+        return Ok(());
+    }
+    let mover = ctx::trigger::player_id();
+    if mover >= 0 && state::get(mover, HALF_PRICE) > 0 {
+        state::set(mover, HALF_PRICE, 0);
+        state::set(mover, BORROWED, 0);
+    }
     Ok(())
 }
 On::Action(Action::MoveResolved("", None, clear_used_this_move))
+On::Action(Action::SettleAfter("", None, clear_owed_paying))
 On::Schedule("owed_settle", "", None, owed_settle)
 ```
+
+Two details this shape pins:
+
+* the half latch is armed by the **forced** settle (`before_settle`) and
+  outlives it while `OWED_SETTLE` is set, because the owed settle is a later,
+  separate payment that must be halved too;
+* the clear is on `settleAfter`, not inside `owed_settle`: the request is
+  deferred to the work stack, so the body returns before the payment happens.
 
 The `TurnEnd` entry and its `actor == owner` condition are removed; a schedule
 is what 「自己的下回合结束时」 means and it does not need the instance to be
@@ -437,65 +521,93 @@ on the field.
 ### 7.2 `rules/cards/card-crychic/src/tomori_inner_shout.rs`
 
 The hook at `:30` keeps its condition and swaps `Some(not_latched)` for
-`Some(offer_open)`; the new body also stands down when the skill's own use
-already claimed this move:
+`Some(offer_open)`; the offer additionally requires the band skill the
+rulebook names.
 
 ```rust
-/// The borrowed skill's own key -- must match `tomori.rs`.
+/// The borrowed skill's own keys -- must match `tomori.rs`.
 const POEM_USED_THIS_MOVE: &str = "skill.tomoriPoem.usedThisMove";
 const POEM_HALF_PRICE: &str = "skill.tomoriPoem.halfPrice";
+const POEM_BORROWED: &str = "skill.tomoriPoem.borrowed";
+const POEM_OWED_SETTLE: &str = "skill.tomoriPoem.owedSettle";
 
-fn offer_open(_player_id: i32) -> bool {
+fn offer_open(player_id: i32) -> bool {
+    // 「若你的乐队技能为“MyGO!!!!!”」 gates the whole sentence.
+    if !ctx::group_skills(player_id)
+        .iter()
+        .any(|(_, id, _)| id.as_str().starts_with("skill:MyGO!!!!!:"))
+    {
+        return false;
+    }
     let mover = ctx::trigger::player_id();
     ctx::slot(mover, &used_this_move_key()) == 0 && ctx::slot(mover, POEM_USED_THIS_MOVE) == 0
 }
 ```
 
-`pull`:
+`pull` arms the shared bend and the stand-down before invoking, so the filters
+that run inside the body see them:
 
 ```rust
 fn pull(player_id: i32) -> card_sdk::Asked {
-    let Some(skill) = ctx::persona_skill(player_id) else {
-        return Ok(());
-    };
     let mover = ctx::trigger::player_id();
     if ctx::player_pos(player_id) < 0 {
         return Ok(());
     }
-    if !ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("tomori_inner_shout_title")),
-        &Msg::new(key!("tomori_inner_shout_pull")).player_id("who", mover),
-    )? {
+    if !ctx::ask_yes(…) ? {
         return Ok(());
     }
     if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomori_inner_shout_spend")))? {
         return Ok(());
     }
     // Claim the card's own once-per-move before the body teleports, so the
-    // redirect re-raise does not offer again.
+    // redirect re-raise does not offer again. The half-price rides on this
+    // copy; `POEM_BORROWED` makes the skill's own filter stand down.
     ctx::set_slot(mover, &used_this_move_key(), 1);
+    ctx::set_slot(mover, POEM_HALF_PRICE, 1);
+    ctx::set_slot(mover, POEM_BORROWED, 1);
     // 「使用一次高松灯（MyGO!!!!!）的（2）技能」 -- the body, paid: one pot,
     // not four. The body owns the teleport, the roll and the delay.
-    ctx::invoke_entry_paid(player_id, &skill, "2")?;
-    ctx::log(
-        player_id,
-        &Msg::new(key!("tomori_inner_shout_pulled"))
-            .player_id("who", mover)
-            .tile("tile", ctx::player_pos(player_id)),
-    );
+    ctx::invoke_entry_paid(player_id, POEM, "2")?;
+    ctx::log(…);
     Ok(())
 }
 ```
 
+`POEM` is the literal `"skill:高松灯:诗超绊"` (§5).
+
 Renamed: `latch_key` (`:148-153`) becomes `used_this_move_key`; its format
 string and the per-instance suffix stay.
 
-Deleted: `half_key`, `half`, `on_pay`, and the
-`On::Filter(Filter::PaySplitMul(...))` entry (`:34-36, 155-157, 172-181`).
-`clear_latches` keeps the shout's own latch and **also** clears the two poem
-latches it uses, so they cannot leak when the skill instance is unplaced and
-its own `MoveResolved` never runs:
+Kept, with a new guard: the card's own `PaySplitMul` filter (`:34-36,
+155-157, 172-181`, renamed). It covers the payments of the settle it caused;
+the poem's filter is stood down by `POEM_BORROWED` there. Afterwards it stands
+down itself whenever the poem instance is on the field to answer for that
+player, and at *every* card-forced settle:
+
+```rust
+fn half_price_applies(player_id: i32) -> bool {
+    if !ctx::is_placed()
+        || ctx::trigger::settle_tile() < 0
+        || ctx::slot(ctx::trigger::player_id(), POEM_HALF_PRICE) == 0
+    {
+        return false;
+    }
+    // The active bend while this copy's borrow runs; afterwards only when the
+    // poem is not on the field to answer for itself -- and at the owed settle
+    // the poem's own filter is skipped anyway (its body is the resolving one,
+    // and a money hook cannot re-trigger on its own payment).
+    ctx::slot(ctx::trigger::player_id(), POEM_BORROWED) > 0
+        || ctx::trigger::is_settle_redirect()
+        || !ctx::field_instances(player_id)
+            .iter()
+            .any(|(_, c)| c.as_str() == POEM)
+}
+```
+
+`clear_latches` keeps the shout's own latch and **also** clears the borrowed
+skill's once-per-move latch, so it cannot leak when the skill instance is
+unplaced and its own `MoveResolved` never runs. The half-price survives while
+a settle is owed, and a `settleAfter` hook drops it after that payment:
 
 ```rust
 fn clear_latches(_player_id: i32) -> card_sdk::Asked {
@@ -503,10 +615,36 @@ fn clear_latches(_player_id: i32) -> card_sdk::Asked {
     if mover >= 0 {
         ctx::set_slot(mover, &used_this_move_key(), 0);
         ctx::set_slot(mover, POEM_USED_THIS_MOVE, 0);
-        ctx::set_slot(mover, POEM_HALF_PRICE, 0);
+        // An owed settle pays later and must stay halved.
+        if ctx::slot(mover, POEM_OWED_SETTLE) == 0 {
+            ctx::set_slot(mover, POEM_HALF_PRICE, 0);
+            ctx::set_slot(mover, POEM_BORROWED, 0);
+        }
     }
     Ok(())
 }
+
+/// The owed settle's payment is adjudicated after its body returns; drop the
+/// half-price and the borrow latch once it is done. Only a card-forced settle
+/// (`settle_redirect`) is that one.
+fn clear_owed_paying(_player_id: i32) -> card_sdk::Asked {
+    if !ctx::trigger::is_settle_redirect() {
+        return Ok(());
+    }
+    let mover = ctx::trigger::player_id();
+    if mover >= 0 && ctx::slot(mover, POEM_HALF_PRICE) > 0 {
+        ctx::set_slot(mover, POEM_HALF_PRICE, 0);
+        ctx::set_slot(mover, POEM_BORROWED, 0);
+    }
+    Ok(())
+}
+On::Action(Action::SettleAfter("", None, clear_owed_paying))
+```
+
+Both cards converge on the same shape: the body's own latches are cleared at
+`MoveResolved` unless a settle is owed, and the owed settle's payment clears
+them through `settleAfter`. On a placed poem both hooks run, and the guard's
+conditional keeps them from clearing each other's pending state.
 ```
 
 ### 7.3 The two offers on one landing
@@ -520,15 +658,21 @@ Sequence on a qualifying landing, with the poem placed and the shout placed:
    clear but `USED_THIS_MOVE` is 1, so the shout does **not** offer — the skill already
    ran this move.
 3. if the poem's offer was declined, `USED_THIS_MOVE` stays 0; the shout offers, pays
-   one pot, invokes `2` with `COST_PAID`, and the body sets `USED_THIS_MOVE` / `HALF_PRICE`
-   itself.
+   one pot, arms `HALF_PRICE` / `BORROWED` and invokes `2` with `COST_PAID`, and
+   the body sets `USED_THIS_MOVE` itself.
 4. the redirect re-raise at the destination dispatches both residuals again;
-   `USED_THIS_MOVE` and the shout's own latch both refuse.
+   `USED_THIS_MOVE` and the shout's own latch both refuse. The forced settle's
+   payments are answered by the shout's filter (`BORROWED` stands the poem's
+   down), and the after-payment clears stand down in the same way.
+5. an owed settle after a low roll is a separate, later payment. It is
+   card-forced, so the shout's filter answers it whatever the field looks like,
+   and the shout's `settleAfter` clears the latches once it is done.
 
 There is always at most one skill use per landing. The shout's own once-per-move
 latch is still needed for the case the poem instance is not on the field (the
 harness `Table::vanilla`; a skill that has been removed), where no poem offer
-exists at all.
+exists at all, and for a second shout copy: the borrowed skill's latch is one
+integer per player, the shout's is one per instance.
 
 The order has one cost: the player is asked for the skill's four pots first and
 must decline to take the shout's one-pot route. When the shout is the cheaper
@@ -545,8 +689,9 @@ and listed as an open question (§14 q4) rather than smuggled into this item.
 
 ## 8. Save, record and replay
 
-* **SAVE_VERSION unchanged (16).** `skill.tomoriPoem.halfPrice` is a player slot;
-  slots are a dynamic key/value map. `Scheduled` is already saved and already
+* **SAVE_VERSION unchanged (16).** `skill.tomoriPoem.halfPrice` and
+  `skill.tomoriPoem.borrowed` are player slots; slots are a dynamic key/value
+  map. `Scheduled` is already saved and already
   carries `card`, `owner`, `target`, `skip`, `early`, `uid` and `entry`
   (`world.rs:466-495`); the owed settle uses that shape. The two renamed key
   strings (`acted` → `usedThisMove`, `due` → `owedSettle`) cost at most one
@@ -558,7 +703,9 @@ and listed as an open question (§14 q4) rather than smuggled into this item.
   stack is transient (`host.rs:3189-3196`).
 * **RECORD_VERSION unchanged (4).** Entry identifiers are body literals; the
   trigger and the roll answers are recorded as today. The 1d20 uses the
-  serialized random stream.
+  serialized random stream. The host fix only adds a derived field to a
+  trigger in memory (`Trigger.mv` from the settle), which is recomputed on a
+  replay like the rest of the trigger.
 * **Replay.** A record made after this change replays on a bundle that has it;
   an archived bundle replays on its own host. Nothing in the record names an
   import.
@@ -566,7 +713,8 @@ and listed as an open question (§14 q4) rather than smuggled into this item.
 ## 9. Versioning
 
 **No bump of its own.** The surface is the G05/v111 adoption described in
-`abi.rs:771-782`; this revision adds card code only. If a reviewer wants the
+`abi.rs:771-782`; this revision adds card code and a host-internal trigger fill
+(the `mv` inheritance in §6), no wire change. If a reviewer wants the
 follow-up recorded, append one line under the v111 block:
 
 ```
@@ -589,8 +737,8 @@ File: `rules/tests/tests/crychic.rs`, beside the existing window tests
 | `tomori_shout_pull_runs_the_borrowed_second_body` | the skill's own `tomori_moved` log appears (proves the body, not the copy); the mover is on the controller's tile |
 | `tomori_shout_pull_rolls_once_and_leans_on_six_or_less` | forced 6 ⇒ one `stay` and one owed schedule; forced 7 ⇒ neither |
 | `tomori_shout_spends_one_fire_not_four` | pool 2, exactly one spent (`COST_PAID` suppresses the four) |
-| `tomori_shout_delayed_settle_runs_at_the_movers_next_turn_end` | the settle fires at the mover's next turn end, on the mover's position, and then clears |
-| `tomori_shout_delayed_settle_pays_half` | the owed settle is halved once, not quartered |
+| `tomori_shout_delayed_settle_runs_at_the_movers_next_turn_end` | the settle fires at the mover's next turn end, on the mover's position, pays half the rent once, and then clears |
+| `tomori_shout_halves_once_even_with_the_poem_placed` | with a poem instance on the field, the forced settle and the owed settle are each halved exactly once by the shout's filter |
 | `tomori_shout_does_not_offer_when_the_skill_already_ran` | accept the skill's own offer ⇒ the shout offers no second use |
 | `tomori_shout_offers_after_the_skill_offer_is_declined` | decline the skill's offer ⇒ the shout still offers |
 
@@ -602,9 +750,9 @@ File: `rules/tests/tests/mygo.rs`, for the persona path without the shout:
 | `tomori_second_halves_every_payment_of_the_forced_settle` | a roll above 6 still halves the forced settle (the current `OWED_SETTLE` gate would not) |
 
 The existing `tomori_shout_pulls_to_the_controllers_own_tile_with_settle`
-stays; its half assertion becomes meaningful rather than quartered.
+stays; its half assertion is now a single halving rather than a quartering.
 
-### 10.2 Item 1 coverage still owed
+### 10.2 Item 1 coverage (written by this worktree)
 
 File `crates/game-rules/tests/declare_arg.rs` (extension of `:497-531`):
 
@@ -633,18 +781,40 @@ Static: `on_parse.rs` (`.id` on the `SettleBefore` survives the manifest),
 ## 11. Kani obligations
 
 The Kani host records the invocation rather than running it
-(`rules/kani/src/host.rs:2400-2465`): `invoke_n`, `last_invoke = (card, entry,
-paid, by_instance)` and a bounded stack. Proofs:
+(`rules/kani/src/host.rs`): `invoke_n`, `last_invoke = (card, entry, paid,
+by_instance)` and a bounded stack; `arm_roll` counts effect rolls, and
+`settle_tile_at` / `at_next_turn_end` record their calls (`settle_calls`,
+`schedule_turn_end_n`). The `settle_redirect` trigger read is the modelled
+`TriggerMove` field, set by the harness. Proofs, each with a `#[should_panic]`
+mutant twin:
 
-* `tomori_pull_invokes_paid_iff_accepted` — `paid == true`, one pot spent, no
-  invocation on a declined answer or a failed substitution;
-* `tomori_follow_up_iff_the_mover_is_not_the_owner` — the follow-up arm is
-  `mover != player_id`, not `cost == 4`;
-* `tomori_owed_settle_marks_the_mover_iff_the_roll_is_low` — `stay` and `OWED_SETTLE`
-  only on 6 or less;
-* `tomori_owed_settle_clears_its_latches_iff_it_settles` — `OWED_SETTLE` and `HALF_PRICE` are
-  zero after;
+* `tomori_pull_invokes_paid_iff_accepted` — `paid == true`: nothing asked,
+  nothing spent, the exact accepted effect frame;
+* `tomori_pull_unpaid_declined_does_not_spend` — a declined answer is a total
+  no-op (no pot, no teleport, no latch, no roll);
+* `tomori_pull_unpaid_short_pots_do_not_spend` — an accepted answer with fewer
+  than four pots and no crystal is refused at the collect;
+* `tomori_pull_mutant_paid_spends` — mutant: the paid path still charging four;
+* `tomori_follow_up_iff_the_mover_is_not_the_owner` (plus
+  `…_none_when_the_mover_is_the_owner`) — the follow-up arm is `mover != player_id`,
+  not `cost == 4`;
+* `tomori_owed_settle_marks_the_mover_iff_the_roll_is_low` — one `stay`, the
+  `OWED_SETTLE` latch and exactly one schedule only on 6 or less;
+* `tomori_owed_settle_clears_its_latches_iff_it_settles` — `OWED_SETTLE` and
+  `BORROWED` clear always; exactly one settle on the player's own square when
+  they have one, none otherwise; `HALF_PRICE` stays armed for that payment and
+  the deferred `SettleAfter` body disarms it;
 * the `invoke_paid` model read is `last_invoke.paid`.
+
+The paid, declined, follow-up (both arms), roll-threshold and owed-clear
+harnesses and all four mutants verified; the two accepted/post-collect
+harnesses (`…_unpaid_accepted_spends`, `…_unpaid_short_pots_do_not_spend`) are
+written and compile but their CBMC runs were still in flight when the pass was
+stopped, so their verdicts are owed.
+
+The borrowed *shout* body itself (`invoke_entry_paid`, the shared latch, the
+stand-downs) is PROTOCOL-LEVEL filesystem glue around the same proven body; the
+crychic suite covers it black-box.
 
 ## 12. Alternatives
 
@@ -657,8 +827,11 @@ paid, by_instance)` and a bounded stack. Proofs:
    for a single entry.
 3. **Keep the half-price latch on the shout** and make the poem's filter
    stand down when borrowed. The settle filters run after the frame is popped,
-   so a body cannot see that it was borrowed; it would need a third persistent
-   marker. Rejected.
+   so a body cannot see that it was borrowed; it would need a persistent
+   marker. **Partially adopted**: the shout does keep its filter, because the
+   poem cannot answer its own owed settle, and `skill.tomoriPoem.borrowed` is
+   that marker. The latch itself is shared, so the "迫使 the poem stand down"
+   half holds.
 4. **Let `ctx::settle_tile_at(..., true)` stand.** The owed settle is then
    reported as a main move and on-main-move hooks (row 734's shape) answer
    wrongly. Rejected.
@@ -764,12 +937,16 @@ It is not cheaper:
 | the trigger seed | 「该技能」/「该角色」 resolves to the shout | nanami mark name, §2.3, trigger replacement |
 | `COST_PAID` | the body charges four pots after the shout charged one | §7.1 |
 | the schedule on the mover | the settle lands on the controller, on the controller's tile, at the controller's turn end | §4.2 |
-| the single `HALF_PRICE` latch | the charge quarters (two filters) or is lost after `MoveResolved` | §4.4 |
+| the shared `HALF_PRICE` latch | the charge is lost after `MoveResolved`, or the payer is not the one the guard reads | §4.4 |
+| the `POEM_BORROWED` stand-down | with a poem instance out, two filters answer one payment and it quarters | §4.4, `tomori_shout_halves_once_even_with_the_poem_placed` |
+| the redirect term in the shout's filter | the poem's filter is skipped on its own owed settle, so that payment is not halved | §4.4, `tomori_shout_delayed_settle_runs_at_the_movers_next_turn_end` |
+| the `OWED_SETTLE` term in both `MoveResolved` clears | the half is dropped before the owed settle pays | §7.1, §7.2 |
+| the `is_settle_redirect` read in both `settleAfter` clears | the latch survives every later settle | §7.1, §7.2 |
 | the `USED_THIS_MOVE` read in the shout | the skill runs twice on one landing | §4.5 |
 | the body's own teleport | the caller and the body both teleport | §4.4 / R10 |
 
 The minimum version is therefore the single-entry, paid, mover-scheduled,
-single-latch design. The draft's second entry adds state without removing any
+shared-latch design. The draft's second entry adds state without removing any
 of the above, and the copy alternative removes none.
 
 ### 13.6 What would make the group unnecessary
@@ -801,14 +978,16 @@ of the above, and the copy alternative removes none.
 4. **Mutsumi's destination (row 426).** Should (2) leave the played card to the
    engine default? §7.4 says yes, but the mark is `TODO(规则书)`-worthy and is
    not needed for the invocation.
-5. **Unplaced target.** A persona skill is always placed; the shout path still
-   works if it is not (instance `-1`, the owed schedule captures `uid = -1`).
-   A card invoked from a hand or a pile reads `is_placed` false, which the half
-   filter no longer depends on. No transient instance is needed.
-6. **A missing persona skill.** §7.2 resolves it before the ask, so a missing
-   skill is a silent no-op and nothing is paid. A card-side warning message
-   could name it, but the shout's own admission already requires a MyGO band
-   skill and the persona is bound for the only player of the card.
+5. **Unplaced target.** The shout's controller holds the variant persona, so
+   the borrowed skill is **never** placed for them: the body runs with the
+   scripted instance identifier `-1` and the skill's own `Filter` / hooks do
+   not dispatch. The borrower carries the bend and the clears for exactly that
+   reason (§7.2). Nothing transient is needed.
+6. **A missing persona skill.** §7.2 names the skill literally
+   (`skill:高松灯:诗超绊`) and does not resolve it from the seat, so a missing
+   entry on the card is the only failure mode; the `invoke_entry_paid` then
+   traps as an unknown entry. The shout's own admission already requires a
+   MyGO band skill, and the persona is fixed for the only player of the card.
 
 ## 15. Clause match
 
@@ -817,5 +996,6 @@ of the above, and the copy alternative removes none.
 | 高松灯 (2) | 「当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐」 | guard `before_settle_applies` (dist arm, `mover != player_id`), cost `4` in `before_settle` |
 | 高松灯 (2) | 「在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子并[触发结算]」 | `teleport_to(mover, player_pos(owner))` inside `SettleBefore`; the redirect re-raises the window at the destination |
 | 高松灯 (2) | 「然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]」 | `roll` on the mover, `stay::add`, `OWED_SETTLE` on the mover, `at_next_turn_end(mover, "owed_settle")`, `owed_settle` |
-| 高松灯 (2) | 「在此技能影响下的支付价格变为原本的一半」 | `HALF_PRICE` latch around the forced settle and the owed settle, one `PaySplitMul` |
-| 内心的呐喊 (3) | 「你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能」 | the hook's `card.placed && dist(pos(owner), card.tile) <= 5`, one-pot `fire::spend`, `invoke_entry_paid(…, "2")` |
+| 高松灯 (2) | 「在此技能影响下的支付价格变为原本的一半」 | `HALF_PRICE` latch around the forced settle and the owed settle; the poem's `PaySplitMul` (stood down by `BORROWED`) or the shout's, never both; cleared at `settleAfter` |
+| 内心的呐喊 (3) | 「若你的乐队技能为“MyGO!!!!!”」 | `offer_open`'s band-skill scan |
+| 内心的呐喊 (3) | 「你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能」 | the hook's `card.placed && dist(pos(owner), card.tile) <= 5`, one-pot `fire::spend`, `invoke_entry_paid(player_id, POEM, "2")` |
