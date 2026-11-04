@@ -1308,6 +1308,11 @@ const OVERLAP: &str = "PP:[衍生]重叠的声音";
 /// the user. Drive a forced [传送] instead (the same shape the engine's
 /// window keys on). 重叠的声音's teleport is 「不[结算]」, so answering 「是」
 /// is the only thing that can make this move settle.
+///
+/// A forced move is a *blocked* landing under G12 §3 (it takes effect on the
+/// walk), so the 「是」 answer rides the 「无法移动的回合结束时」 slate rather
+/// than the move override: the teleport still runs, and the settle comes at
+/// the turn end on the tile it reached.
 #[test]
 fn own_stage_offered_on_abnormal_move() {
     let mut t = vanilla2();
@@ -1337,6 +1342,16 @@ fn own_stage_offered_on_abnormal_move() {
         "选择自己的舞台 never offered on a forced [传送]; prompt={}",
         t.dump_prompt()
     );
+    if answered && !settled {
+        // Turn-end slate (see the doc comment): run the rest of the turn.
+        let _ = t.end(0);
+        while let Some(p) = t.prompt() {
+            if p.title.key().contains("buy") {
+                settled = true;
+            }
+            t.decline();
+        }
+    }
     assert!(
         settled,
         "answering 「是」 must settle the move (the station's buy offer)"

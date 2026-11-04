@@ -1542,6 +1542,9 @@ impl Match {
     }
 
     fn start(&mut self, r: Routine) {
+        // Bumped **before** the snapshot so a replay from it re-reads the same
+        // activation identity instead of allocating a new one.
+        self.world.turn.activation_ordinal += 1;
         let snapshot = self.world.clone();
         self.execute(r, snapshot, vec![]);
     }

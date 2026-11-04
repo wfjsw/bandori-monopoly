@@ -200,6 +200,9 @@ pub struct MoveCtx {
     /// `card_sdk::ctx::trigger::is_settle_redirect()`.
     #[serde(default)]
     pub settle_redirect: bool,
+    /// An abnormal landed somewhere in this walk's span.
+    #[serde(default)]
+    pub abnormal: bool,
     /// Whether this move can build on the tile it lands on. `false` is the
     /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
     /// one flag, not two.
@@ -317,6 +320,7 @@ impl Default for MoveCtx {
             rent_factor: 1.0,
             settle_as_agent: false,
             settle_redirect: false,
+            abnormal: false,
             can_build: true,
             build_anywhere: false,
             more_steps: 0,

@@ -80,6 +80,9 @@ pub struct TriggerMove {
     pub rolled: bool,
     /// The length the move will actually take.
     pub effective: i32,
+    /// Did an abnormal land during this move? Set on the move's frame as it
+    /// lands, readable from every trigger raised later in the walk.
+    pub abnormal: bool,
 }
 
 /// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
@@ -397,6 +400,12 @@ pub struct Trigger {
     /// the tile `On::Settle` body needs the flag (a main landing only
     /// announces; the offers come at the end step) and has no `mv`.
     pub is_main_move: bool,
+    /// The activation this raise belongs to; stamped by `counteract` from
+    /// `turn.activation_ordinal`. 0 outside a routine.
+    pub activation_ordinal: i32,
+    /// Did the abnormal this trigger announces hold the move? Meaningful only on
+    /// the `effect` and `abnormal` raises of an abnormal; false elsewhere.
+    pub abnormal_blocked: bool,
     /// The move that caused this trigger, when one did. `None` = no move.
     pub mv: Option<TriggerMove>,
     /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
@@ -518,6 +527,8 @@ impl Trigger {
             step: 0,
             by_card: None,
             is_main_move: false,
+            activation_ordinal: 0,
+            abnormal_blocked: false,
             mv: None,
             pay: None,
             buy: None,
@@ -652,6 +663,7 @@ impl Trigger {
             settle_redirect: m.settle_redirect,
             rolled: m.rolled,
             effective: m.effective_steps(),
+            abnormal: m.abnormal,
         });
         self.is_main_move = m.is_main_move;
         self
@@ -1055,6 +1067,10 @@ pub enum Gate {
     /// May a hand card be played right now? Play-only (unlike [`Self::Act`],
     /// which also gates [主动] skills).
     Play,
+    /// May an abnormal of this kind (an `AbKind` wire code) from `by` land on the
+    /// seat? `exemption = false` asks the refusal; `true` asks "would this kind
+    /// hold this mover's move?" (blocked-ness). CEL-only.
+    Abnormal { kind: i32, by: i32, exemption: bool },
 }
 
 /// The card-side context of a [`Gate::Exclusive`] question.

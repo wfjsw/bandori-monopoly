@@ -56,6 +56,7 @@
   "anim.chainKind.houseAdded": "盖房后",
   "anim.chainKind.r:bandori:78": "充能支付前",
   "anim.chainKind.r:bandori:21": "状态层获得",
+  "anim.chainKind.abnormalGate": "异常移动限制",
   "anim.chainKind.abnormalGuard": "异常移动判定",
   "anim.chainKind.actGate": "行动限制",
   "anim.chainKind.onBoardGate": "在场限制",

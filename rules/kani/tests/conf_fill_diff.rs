@@ -369,6 +369,7 @@ impl SnapSrc for Fixture {
                 settle_redirect: false,
                 rolled: m.roll.is_some(),
                 effective: m.remaining as i32,
+                abnormal: false,
             });
         }
         tr.effects = t

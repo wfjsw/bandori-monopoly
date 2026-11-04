@@ -908,7 +908,7 @@ impl KindMask {
 
 /// The gate kinds answered natively from conditions alone (see
 /// [`gate_open_over`]). Index = position in this array.
-pub const GATE_KINDS: [crate::TriggerKind; 7] = [
+pub const GATE_KINDS: [crate::TriggerKind; 8] = [
     crate::TriggerKind::ActGate,
     crate::TriggerKind::PayGate,
     crate::TriggerKind::MoveGate,
@@ -916,6 +916,7 @@ pub const GATE_KINDS: [crate::TriggerKind; 7] = [
     crate::TriggerKind::TargetableGate,
     crate::TriggerKind::ExclusiveUse,
     crate::TriggerKind::PlayGate,
+    crate::TriggerKind::AbnormalGate,
 ];
 
 fn gate_index(kind: crate::TriggerKind) -> Option<usize> {
@@ -954,7 +955,7 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             }
             if o.has_guard || o.condition.is_none() {
                 return Err(RuleError::Load(format!(
-                    "{}/{ei}: an ActGate/PayGate/MoveGate/ExclusiveUse entry must be CEL-only (a condition, no residual guard)",
+                    "{}/{ei}: an ActGate/PayGate/MoveGate/ExclusiveUse/AbnormalGate entry must be CEL-only (a condition, no residual guard)",
                     c.id
                 )));
             }
@@ -4503,6 +4504,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "is_immune_from_at",
+        |mut c: C<W>, uid: i32, by: i32| -> Result<i32, Error> {
+            hostfns::is_immune_from_at(&mut c, uid, by).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "set_immune_at",
         |mut c: C<W>, uid: i32, on: i32| -> Result<i32, Error> {
             hostfns::set_immune_at(&mut c, uid, on).map_err(HostError::into_err)
@@ -4870,6 +4878,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "set_self_immune_except_owner",
+        |mut c: C<W>, on: i32| -> Result<i32, Error> {
+            hostfns::set_self_immune_except_owner(&mut c, on).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "self_prop",
         |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
             hostfns::self_prop(&mut c, kp, kl).map_err(HostError::into_err)
@@ -5143,6 +5158,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::cant_move(&mut c, player_id).map_err(HostError::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "cant_move_code_for_activation",
+        |mut c: C<W>, player_id: i32, activation_ordinal: i32| -> Result<i32, Error> {
+            hostfns::cant_move_code_for_activation(&mut c, player_id, activation_ordinal)
+                .map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(m, "turn_player", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::turn_player(&mut c).map_err(HostError::into_err)
     })?;
@@ -5152,6 +5175,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "turn_key", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::turn_key(&mut c).map_err(HostError::into_err)
     })?;
+    l.func_wrap(m, "dice_immune", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::dice_immune(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "set_dice_immune",
+        |mut c: C<W>, on: i32| -> Result<i32, Error> {
+            hostfns::set_dice_immune(&mut c, on).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "persona_is",
@@ -6264,6 +6297,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "trigger_activation_ordinal",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_activation_ordinal(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_abnormal_blocked",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_abnormal_blocked(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_move_abnormal",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_move_abnormal(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "trigger_extreme_armed",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::trigger_extreme_armed(&mut c).map_err(HostError::into_err)
@@ -6644,6 +6698,9 @@ impl CardWorld for NullWorld {
         0
     }
     fn cant_move(&self, _: i32) -> i32 {
+        1
+    }
+    fn cant_move_from(&self, _: i32, _: i32) -> i32 {
         1
     }
     fn spend_marker(&mut self, _: i32, _: &str, _: i32, _: crate::Msg) -> i32 {

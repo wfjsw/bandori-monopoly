@@ -2333,6 +2333,14 @@ pub fn cant_move_code(player_id: i32) -> i32 {
     unsafe { sys::cant_move(player_id) }
 }
 
+/// [`cant_move_code`] from the named activation: "already moved" is suppressed
+/// when that activation drove this turn's main move, so a re-run of a body
+/// reads back as "not spent".
+#[doc(hidden)]
+pub fn cant_move_code_for_activation(player_id: i32, activation_ordinal: i32) -> i32 {
+    unsafe { sys::cant_move_code_for_activation(player_id, activation_ordinal) }
+}
+
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
 #[doc(hidden)]
@@ -2396,6 +2404,18 @@ pub fn round_no() -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn turn_key() -> i32 {
     unsafe { sys::turn_key() }
+}
+
+/// Is the turn's dice immunity up (「打出此卡的回合…」)?
+#[doc(hidden)]
+pub fn dice_immune() -> bool {
+    unsafe { sys::dice_immune() != 0 }
+}
+
+/// Raise the turn's dice immunity (idempotent; for dynamic grants).
+#[doc(hidden)]
+pub fn set_dice_immune(on: bool) -> bool {
+    unsafe { sys::set_dice_immune(on as i32) != 0 }
 }
 
 /// Where a card goes when its effect finishes. Wire values 0..=3 are the
@@ -3866,6 +3886,25 @@ pub mod trigger {
         unsafe { sys::trig_move_rolled() != 0 }
     }
 
+    /// The running activation's ordinal; 0 outside a routine.
+    #[doc(hidden)]
+    pub fn activation_ordinal() -> i32 {
+        unsafe { sys::trigger_activation_ordinal() }
+    }
+
+    /// Did the abnormal this trigger announces hold the move? Meaningful only
+    /// on the `effect` and `abnormal` raises of an abnormal.
+    #[doc(hidden)]
+    pub fn abnormal_blocked() -> bool {
+        unsafe { sys::trigger_abnormal_blocked() != 0 }
+    }
+
+    /// Did an abnormal land during the triggering move?
+    #[doc(hidden)]
+    pub fn move_abnormal() -> bool {
+        unsafe { sys::trigger_move_abnormal() != 0 }
+    }
+
     /// The triggering move's effective length.
     pub fn move_effective_steps() -> i32 {
         unsafe { sys::trig_move_effective_steps() }
@@ -4765,6 +4804,13 @@ pub fn set_self_immune(on: bool) -> bool {
     unsafe { sys::set_self_immune(on as i32) != 0 }
 }
 
+/// Mark **this instance** 「不受除拥有者以外的效果影响」; returns whether it
+/// is on the field.
+#[doc(hidden)]
+pub fn set_self_immune_except_owner(on: bool) -> bool {
+    unsafe { sys::set_self_immune_except_owner(on as i32) != 0 }
+}
+
 /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
 /// order. Walk this rather than [`placed_cards`] whenever the next step
 /// addresses the instance -- the *name* is not an identity, so a name-keyed
@@ -4899,6 +4945,13 @@ pub fn set_face_down_at(uid: i32, on: bool) -> bool {
 /// Is the instance at `uid` marked 「不受任何效果影响」?
 pub fn is_immune_at(uid: i32) -> bool {
     unsafe { sys::is_immune_at(uid) != 0 }
+}
+
+/// Is the instance at `uid` immune to an effect from `by`? The any-flavour
+/// flag, or the 「除拥有者以外」 flavour for a causer other than the owner.
+#[doc(hidden)]
+pub fn is_immune_from_at(uid: i32, by: i32) -> bool {
+    unsafe { sys::is_immune_from_at(uid, by) != 0 }
 }
 
 /// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.

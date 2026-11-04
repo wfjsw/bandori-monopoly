@@ -469,7 +469,7 @@ impl CardWorld for TestWorld {
     fn can_pay(&self, _: i32) -> i32 {
         1
     }
-    fn cant_move(&self, _: i32) -> i32 {
+    fn cant_move_from(&self, _: i32, _: i32) -> i32 {
         0
     }
     fn spend_marker(&mut self, _: i32, _: &str, _: i32, _: Msg) -> i32 {

@@ -271,6 +271,9 @@ pub struct MoveSnap {
     /// The steps the move actually took (`move.effective`): the fixed count,
     /// else `next_steps`, else the roll.
     pub effective: i32,
+    /// An abnormal landed somewhere in this walk's span
+    /// (`trigger::move_abnormal`, `MoveCtx.abnormal`).
+    pub abnormal: bool,
 }
 
 impl MoveSnap {
@@ -286,6 +289,7 @@ impl MoveSnap {
         settle_redirect: false,
         rolled: false,
         effective: 0,
+        abnormal: false,
     };
 
     /// A move payload is present when kind is a real `MoveKind` (0/1).
@@ -623,6 +627,9 @@ pub struct FieldCard {
     pub tile: i32,
     pub face_down: bool,
     pub immune: bool,
+    /// 「不受除拥有者以外的效果影响」 (`immuneExceptOwner`), causer-aware
+    /// flavour read through `hostfns::is_immune_from_at`.
+    pub immune_except_owner: bool,
     pub crystals: i32,
     pub props: NameMap,
     /// The card whose printed surface this instance runs (`u16::MAX` = its
@@ -638,6 +645,7 @@ impl FieldCard {
         tile: -1,
         face_down: false,
         immune: false,
+        immune_except_owner: false,
         crystals: 0,
         props: NameMap::new(),
         effective_card: u16::MAX,
@@ -853,6 +861,9 @@ pub struct World {
     pub trig_tile: i32,
     pub trig_cancelled: bool,
     pub trig_negate: bool,
+    /// `Trigger.abnormal_blocked` — did the announced abnormal hold the move
+    /// (`trigger::abnormal_blocked`)?
+    pub trig_abnormal_blocked: bool,
     /// 真奈 join (CH-05): the seat a joiner's self-targeted effects are
     /// redirected to; `-1` outside a join (hostfns `join_redirect_target`).
     pub trig_join_redirect: i32,
@@ -901,6 +912,22 @@ pub struct World {
     pub rent_quote: i32,
     /// The turn's main move is already taken (`run_planned_move` latch).
     pub main_moved: bool,
+    /// The move gate holds this turn (`skip_main_move` / `clear_move_skip`),
+    /// i.e. `World.st.skip_move`. A [停留] turn answers `3` from `cant_move`.
+    pub skip_move: bool,
+    /// The running activation (`turn.activation_ordinal`; 0 outside a
+    /// routine). Stamped from the single routine entry before the snapshot
+    /// (`trigger::activation_ordinal`).
+    pub turn_activation_ordinal: i32,
+    /// The activation that consumed this turn's main move
+    /// (`turn.move_activation_ordinal`; 0 = none).
+    pub move_activation_ordinal: i32,
+    /// A landed abnormal during this turn's main move, latched at the walk's
+    /// end (`turn.move_abnormal`, read by `trigger::move_abnormal`).
+    pub turn_move_abnormal: bool,
+    /// 「打出此卡的回合…」: the turn's dice-immunity flag
+    /// (`turn.dice_immune`).
+    pub dice_immune: bool,
     /// The next move is forced (`plan::set_forced`).
     pub forced: bool,
     /// A forced move counts as the main move anyway (`set_main_override`).
@@ -1053,6 +1080,7 @@ impl World {
             trig_tile: -1,
             trig_cancelled: false,
             trig_negate: false,
+            trig_abnormal_blocked: false,
             trig_join_redirect: -1,
             forced_roll: 0,
             trig_join_used: false,
@@ -1076,6 +1104,11 @@ impl World {
             paid_in_settle_by: [0; MAX_PLAYERS],
             rent_quote: -1,
             main_moved: false,
+            skip_move: false,
+            turn_activation_ordinal: 0,
+            move_activation_ordinal: 0,
+            turn_move_abnormal: false,
+            dice_immune: false,
             forced: false,
             main_override: false,
             void_walk: false,
@@ -1348,6 +1381,7 @@ impl World {
                 tile,
                 face_down: false,
                 immune: false,
+                immune_except_owner: false,
                 crystals: 0,
                 props: NameMap::new(),
                 effective_card: u16::MAX,

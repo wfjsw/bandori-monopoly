@@ -204,6 +204,8 @@ pub trait HostOps {
     fn op_self_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_self_immune`
     fn op_set_self_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_self_immune_except_owner`
+    fn op_set_self_immune_except_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_is_placed`
     fn op_is_placed(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_self_prop`
@@ -272,12 +274,18 @@ pub trait HostOps {
     fn op_can_pay(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_cant_move`
     fn op_cant_move(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_cant_move_code_for_activation`
+    fn op_cant_move_code_for_activation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_turn_player`
     fn op_turn_player(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_round_no`
     fn op_round_no(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_turn_key`
     fn op_turn_key(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_dice_immune`
+    fn op_dice_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_set_dice_immune`
+    fn op_set_dice_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_persona_is`
     fn op_persona_is(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_persona`
@@ -686,6 +694,8 @@ pub trait HostOps {
     fn op_set_face_down_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_is_immune_at`
     fn op_is_immune_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_is_immune_from_at`
+    fn op_is_immune_from_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_immune_at`
     fn op_set_immune_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_build_cost_pct`
@@ -876,6 +886,12 @@ pub trait HostOps {
     fn op_join_designation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trigger_pending_negation`
     fn op_trigger_pending_negation(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_activation_ordinal`
+    fn op_trigger_activation_ordinal(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_abnormal_blocked`
+    fn op_trigger_abnormal_blocked(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trigger_move_abnormal`
+    fn op_trigger_move_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trigger_extreme_armed`
     fn op_trigger_extreme_armed(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trigger_subject_card`
@@ -1176,6 +1192,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_set_self_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::set_self_immune(self, a[0])? as i64)
     }
+    fn op_set_self_immune_except_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::set_self_immune_except_owner(self, a[0])? as i64)
+    }
     fn op_is_placed(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::is_placed(self)? as i64)
     }
@@ -1293,6 +1312,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_cant_move(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::cant_move(self, a[0])? as i64)
     }
+    fn op_cant_move_code_for_activation(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::cant_move_code_for_activation(self, a[0], a[1])? as i64)
+    }
     fn op_turn_player(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::turn_player(self)? as i64)
     }
@@ -1301,6 +1323,12 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_turn_key(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::turn_key(self)? as i64)
+    }
+    fn op_dice_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::dice_immune(self)? as i64)
+    }
+    fn op_set_dice_immune(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::set_dice_immune(self, a[0])? as i64)
     }
     fn op_persona_is(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::persona_is(self, a[0], a[1], a[2])? as i64)
@@ -1978,6 +2006,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_is_immune_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::is_immune_at(self, a[0])? as i64)
     }
+    fn op_is_immune_from_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::is_immune_from_at(self, a[0], a[1])? as i64)
+    }
     fn op_set_immune_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::set_immune_at(self, a[0], a[1])? as i64)
     }
@@ -2238,6 +2269,15 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trigger_pending_negation(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trigger_pending_negation(self)? as i64)
+    }
+    fn op_trigger_activation_ordinal(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_activation_ordinal(self)? as i64)
+    }
+    fn op_trigger_abnormal_blocked(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_abnormal_blocked(self)? as i64)
+    }
+    fn op_trigger_move_abnormal(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trigger_move_abnormal(self)? as i64)
     }
     fn op_trigger_extreme_armed(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trigger_extreme_armed(self)? as i64)
@@ -3115,6 +3155,16 @@ pub unsafe extern "C-unwind" fn ruleset_set_self_immune(on: i32) -> i32 {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_self_immune_except_owner(on: i32) -> i32 {
+    with_host(
+        |h| match h.op_set_self_immune_except_owner([on, 0, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_is_placed() -> i32 {
     with_host(|h| match h.op_is_placed([0, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3485,6 +3535,35 @@ pub unsafe extern "C-unwind" fn ruleset_can_pay(player_id: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_cant_move(player_id: i32) -> i32 {
     with_host(|h| match h.op_cant_move([player_id, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_cant_move_code_for_activation(
+    player_id: i32,
+    activation_ordinal: i32,
+) -> i32 {
+    with_host(|h| {
+        match h.op_cant_move_code_for_activation([player_id, activation_ordinal, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_dice_immune() -> i32 {
+    with_host(|h| match h.op_dice_immune([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_dice_immune(on: i32) -> i32 {
+    with_host(|h| match h.op_set_dice_immune([on, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -5366,6 +5445,14 @@ pub unsafe extern "C-unwind" fn ruleset_is_immune_at(uid: i32) -> i32 {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_is_immune_from_at(uid: i32, by: i32) -> i32 {
+    with_host(|h| match h.op_is_immune_from_at([uid, by, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_immune_at(uid: i32, on: i32) -> i32 {
     with_host(|h| match h.op_set_immune_at([uid, on, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -5913,6 +6000,34 @@ pub unsafe extern "C-unwind" fn ruleset_trigger_pending_negation() -> i32 {
             Err(e) => abort_host(e),
         },
     )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_activation_ordinal() -> i32 {
+    with_host(
+        |h| match h.op_trigger_activation_ordinal([0, 0, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_abnormal_blocked() -> i32 {
+    with_host(
+        |h| match h.op_trigger_abnormal_blocked([0, 0, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trigger_move_abnormal() -> i32 {
+    with_host(|h| match h.op_trigger_move_abnormal([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]

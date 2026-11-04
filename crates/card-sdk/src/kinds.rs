@@ -644,6 +644,7 @@ filter_kinds! {
     ActGate => gate;
     PayGate => gate;
     MoveGate => gate;
+    AbnormalGate => gate;
     ExclusiveUse => gate;
     TurnBonusTime => value;
     TurnBaseTime => value;

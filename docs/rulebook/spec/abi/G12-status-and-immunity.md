@@ -1,12 +1,11 @@
 # G12 — Status, blocked-ness and immunity gates
 
-Status: **draft for user review** (2026-11-04 revision of the 2026-10-27
-draft). Design only; no source is touched.
+Status: **implemented** (2026-11-04 revision of the 2026-10-27 draft; the
+design landed as ABI v114).
 Worktree `/home/monopoly/web/.claude/worktrees/g12-design`, branch
-`worktree-g12-design`. Fits **on top of ABI 113** (G01, G08, G02, G04, G03,
-G06, G05+G13 and G07 have landed). Its landing row in the README is the
-**next free** at its position in the landing order, not the row of an
-earlier group.
+`worktree-g12-design`. Landed directly on ABI 113 (G01, G08, G02, G04, G03,
+G06, G05+G13 and G07 have landed before it), ahead of G09–G11, so its numbers
+are §8's, not the README's earlier planned row.
 
 Group: **G12**. Family: the status layer's effects on the turn flow — the
 replay-stable move gate, the [不可阻挡] bypass, move-scoped abnormal reads,
@@ -478,7 +477,8 @@ if !cx.world().gate_open(self, ask, s) {
     // 「无视已存在的[停留]」/「无法获得新的层数」：the layer or the move
     // rewrite does not land at all. Existing layers still decay.
     self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
-    self.log_gate_skip(player_id, kind);   // `gate_skip_msgs`, one new key
+    // the refusing rule's key from `gate_skip_msgs`, one new key
+    cx.log(player_id, self.gate_skip_msg(ask, s).player_id("who", player_id));
     return Ok(false);
 }
 ```
@@ -491,11 +491,13 @@ kind):
 
 * refusal, kinds 4/5/6/7:
   `On::Filter(Filter::AbnormalGate("step == 0 && value >= 4 && by != actor", None, refuse))`
-* exemption (the gate answers *open* when the kind does not hold the move):
-  `On::Filter(Filter::AbnormalGate(
-  "step == 1 && (value == 4 || (value <= 3 && state(actor,'unstoppable') > 0))",
-  None, exempt))` — teleport always, the layers only while unstoppable.
-  Forced/stop/reverse need no entry: they always hold when they land.
+* exemption: a gate entry's condition is its **closed** case, so this names
+  the kinds that *hold* the move — `On::Filter(Filter::AbnormalGate(
+  "step == 1 && value != 4 && (value >= 5 || state(actor,'unstoppable') == 0)",
+  None, exempt))`: forced / stop / reverse always; the layers only while not
+  unstoppable; teleport never. The engine reads
+  `blocked = !MOVE_EXEMPT && !gate_open(…)`, i.e. a closed gate is a held
+  move.
 
 `by != actor` is 「可选择受到的…是否生效」: a self-caused move (a card's own
 `run_planned_move`, 里美's 「期间[不可阻挡]」) is chosen, not 「受到的」, and
@@ -521,22 +523,27 @@ fn start(&mut self, r: Routine) {
 
 `counteract` stamps it next to `step`, in **both** funnels — the engine's
 `Play::counteract` (`play.rs:5947-5966`) and the host's `RulesBridge`
-(`wasm_rules.rs:12029-12040`, which already stamps the raise's `uid` at the
-same choke), so a guest raise and an engine raise agree. The `uid` is not a
-substitute for the ordinal: it is an allocation counter (the host's own
-comment at `:12032-12034`), while the ordinal is read back out of the
-snapshot.
+(`wasm_rules.rs`, which already stamps the raise's `uid` at the same choke),
+so a guest raise and an engine raise agree. The `uid` is not a substitute for
+the ordinal: it is an allocation counter (the host's own comment there),
+while the ordinal is read back out of the snapshot.
+
+**A body's trigger is not a raise.** The host builds play, tile-settle and
+event-rule body triggers with a struct literal, outside `counteract`, so
+those constructors call one `stamp` helper that copies the same two fields:
 
 ```rust
-fn counteract(&mut self, t: &mut Trigger) -> Flow<()> {
-    t.step = self.w.st.step;
-    t.activation_ordinal = self.w.turn.activation_ordinal;
-    …
+fn stamp(&self, cx: &PlayCtx, t: &mut world::Trigger) {
+    t.step = cx.state().step;
+    t.activation_ordinal = cx.world().turn.activation_ordinal;
 }
 ```
 
-Nested raises inherit the running value, which is what makes a status-host
-body dispatched inside a card body answer the *card's* activation.
+This is load-bearing and was found only by running the §9.1 test: without it
+the body reads `0` while the move was stamped with the routine's ordinal, and
+the replay still drops the teleport. Nested raises and bodies inherit the
+running value, which is what makes a status-host body dispatched inside a card
+body answer the *card's* activation.
 
 ### 5.3 The move stamp
 
@@ -767,18 +774,18 @@ the derived bits are recomputed on replay of an archived bundle.
 
 ## 8. Landing arithmetic
 
-Base: ABI 113, SAVE 16, RECORD 4, highest engine kind 131, highest Kani `Op`
-442. G07 owns the `Op` band 441–450 and used only 441–442, so **443–450** are
-free inside it; G12 takes all eight. Landing at G12's slot behind G09 (114),
-G10 (115) and G11 (116):
+The group landed directly on master (ABI 113, SAVE 16, RECORD 4, highest
+engine kind 131, highest Kani `Op` 442) ahead of G09–G11, so the numbers are
+the base's, not the README's earlier row for G12 (which assumed it landed
+fourth):
 
-* **ABI 116 → 117.** The eight imports and the three wire fields are a
+* **ABI 113 → 114.** The eight imports and the three wire fields are a
   break; a module built before the bump cannot instantiate against the new
   host, which is the point of the version.
-* **SAVE 16 → 18** (G09 and G10 each take one step; G11 keeps 18). G12 adds
-  no *new* step of its own: §7.2's defaults make it backward compatible.
+* **SAVE 16 unchanged.** G12 adds no step of its own: §7.2's defaults make
+  it backward compatible. G09–G11's rows shift one step each.
 * **RECORD 4** unchanged.
-* **Engine kind 134.** 132–133 are G11's row; 131 is G10's.
+* **Engine kind 134.** 132–133 stay reserved for G11; 131 is G10's.
 * **Kani `Op` 443–450**, the eight free slots at the tail of G07's band.
 
 ## 9. Tests and Kani obligations

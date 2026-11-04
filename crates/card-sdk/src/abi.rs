@@ -780,7 +780,7 @@ use crate::intern::NameId;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 113;
+pub const ABI_VERSION: i32 = 114;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -873,6 +873,21 @@ pub const ABI_VERSION: i32 = 113;
 ///    `abi::DistanceKind::{Forward,Shortest}`); the prop key and the game layer
 ///    stay in the ruleset crate (`bandori_std::nearest`). SAVE_VERSION /
 ///    RECORD_VERSION unchanged.
+///
+/// v114: **G12 status, blocked-ness and immunity gates.** New trigger readers
+///    `ctx::trigger::{activation_ordinal, abnormal_blocked, move_abnormal}` and
+///    the activated-move read `ctx::cant_move_code_for_activation` (same code
+///    space as `cant_move_code`, except "already moved" is suppressed when the
+///    move was driven by the asking activation). New immunity readers /
+///    writers `ctx::is_immune_from_at`, `ctx::set_self_immune_except_owner` for
+///    the 「除拥有者以外」 flavour, and the turn flag
+///    `ctx::dice_immune` / `ctx::set_dice_immune` (「打出此卡的回合…」). The
+///    trigger wire gains `Trigger.activation_ordinal` / `Trigger.abnormal_blocked`
+///    and `TriggerMove.abnormal`. New CEL-only filter kind `AbnormalGate = 134`
+///    (payload: seat, kind, causer; `step = 1` on the blocked-ness read) and the
+///    three prop keys `IMMUNE_EXCEPT_OWNER` / `ADDS_DICE` /
+///    `GRANTS_DICE_IMMUNITY`. SAVE_VERSION / RECORD_VERSION unchanged (every
+///    new persisted field is `serde(default)`).
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -1625,6 +1640,17 @@ pub mod prop {
     /// so a `place_raw` / engine placement sees it without running the play
     /// body. Mirrors `game_core::state::prop::IMMUNE`.
     pub const IMMUNE: &str = "immune";
+    /// 「不受除拥有此卡的玩家以外的玩家的效果影响」: `1` = the placed instance
+    /// gets `FieldCard.immune_except_owner` stamped at placement, read through
+    /// `is_immune_from_at`. Mirrors `game_core::state::prop::IMMUNE_EXCEPT_OWNER`.
+    pub const IMMUNE_EXCEPT_OWNER: &str = "immuneExceptOwner";
+    /// 「卡包含添加骰效果」: `1` = the card's effect adds dice to a move
+    /// (`plan::add_extra_dice`). Read at the play to test the dice immunity.
+    /// Mirrors `game_core::state::prop::ADDS_DICE`.
+    pub const ADDS_DICE: &str = "addsDice";
+    /// 「打出此卡的回合…」: `1` = playing the card raises `turn.dice_immune` for
+    /// the rest of its turn. Mirrors `game_core::state::prop::GRANTS_DICE_IMMUNITY`.
+    pub const GRANTS_DICE_IMMUNITY: &str = "grantsDiceImmunity";
     /// Song-title card marker (「卡名为歌名的卡」, Kizuna Music's X): `1` =
     /// this card's printed name is a song title. A ruleset-level fact other
     /// rules read back via `ctx::card_prop` (`card_prop` host import); the
@@ -2785,6 +2811,11 @@ impl FilterKind {
     /// the host folds the answers into one decision.
     pub const MoveGate: Self = Self(TriggerKind::MoveGate);
 
+    /// Filter. May an abnormal of this kind from `by` land on the seat?
+    /// CEL-only, hook-only. Payload: the seat on `player_id`, `value` = the
+    /// kind, `by_card` = the causer, `step = 1` on the blocked-ness read.
+    pub const AbnormalGate: Self = Self(TriggerKind::AbnormalGate);
+
     /// Filter. May the player use this exclusive resource? Payload: the
     /// exclusive card on the window, name = the owner, value / step as owner
     /// flags. Body true = allowed, false = denied; the host folds the answers
@@ -3195,6 +3226,14 @@ impl TriggerKind {
     /// `moveGate`
     pub const MoveGate: Self = Self::engine(97);
 
+    /// `abnormalGate` — may an abnormal of this kind from `by` land on the
+    /// seat? Filter, CEL-only, hook-only. Payload: the seat on `player_id`,
+    /// `value` = the `AbKind` wire code, `by_card` = the causer, `step = 1` on
+    /// the blocked-ness read. Distinct from `abnormalGuard`: the guard is a
+    /// placed card's pre-declaration block; the gate is a turn-flow capability
+    /// the engine asks natively before a window opens.
+    pub const AbnormalGate: Self = Self::engine(134);
+
     /// `exclusiveUse`
     pub const ExclusiveUse: Self = Self::engine(98);
 
@@ -3243,7 +3282,8 @@ impl TriggerKind {
     pub const AbnormalRefused: Self = Self::engine(121);
 
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
-    // ruleset-declared "fansFlip"); the next free **engine** id was 121.
+    // ruleset-declared "fansFlip"); the next free **engine** id was 121, and
+    // the highest engine id is now 134 (abnormalGate).
 
     /// `cardFired` -- a card's body entered its resolution frame: every
     /// body, a play, a hook or a counteraction alike. Hook-only: no

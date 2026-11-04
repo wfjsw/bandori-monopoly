@@ -715,6 +715,12 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: true,
         hook_only: true,
     },
+    EngineKind {
+        id: 134,
+        wire: "abnormalGate",
+        is_filter: true,
+        hook_only: true,
+    },
 ];
 
 /// The table row for `id`, or `None` when the id is retired / unknown.
@@ -857,6 +863,7 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "settleMul" => Some(129),
         "settleRentAdd" => Some(130),
         "settleRentMul" => Some(131),
+        "abnormalGate" => Some(134),
         _ => None,
     };
     #[cfg(not(kani))]
@@ -910,12 +917,12 @@ mod tests {
     fn filter_and_hook_sets() {
         const FILTERS: &[i32] = &[
             52, 55, 56, 57, 67, 68, 69, 70, 71, 79, 80, 81, 82, 83, 84, 85, 86, 95, 96, 97, 98, 99,
-            100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131,
+            100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131, 134,
         ];
         const HOOKS: &[i32] = &[
             45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68,
             69, 70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106,
-            110, 111, 112, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+            110, 111, 112, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131, 134,
         ];
         for r in ENGINE_KINDS {
             assert_eq!(
@@ -926,7 +933,7 @@ mod tests {
             );
             assert_eq!(r.hook_only, HOOKS.contains(&r.id), "hook_only id {}", r.id);
         }
-        assert_eq!(FILTERS.len(), 34);
-        assert_eq!(HOOKS.len(), 54);
+        assert_eq!(FILTERS.len(), 35);
+        assert_eq!(HOOKS.len(), 56);
     }
 }

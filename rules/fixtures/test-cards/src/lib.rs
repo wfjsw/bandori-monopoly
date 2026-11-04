@@ -659,6 +659,194 @@ fn stun_self(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// ------------------------------------------------- G12 abnormal delivery
+// Every deliverer below aims its effect at the first other player, so the
+// `by != actor` half of the [不可阻挡] gate is what the tests exercise.
+
+/// The first other seat, or -1.
+fn first_other(player_id: i32) -> i32 {
+    ctx::others(player_id).first().copied().unwrap_or(-1)
+}
+
+/// Received [传送]: the bare engine teleport (kind 4).
+const TELEPORTER: CardDef = CardDef::new("TEST:teleporter", &[On::Play("", None, teleporter)]);
+
+fn teleporter(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    let to = ctx::tile_steps_ahead(target, 3);
+    if to < 0 {
+        return Ok(());
+    }
+    ctx::teleport_to(target, to);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("teleporter_done")).i("pos", ctx::player_pos(target) as i64),
+    );
+    Ok(())
+}
+
+/// Received [强制移动]: four steps through `run_planned_move` (kind 5).
+const FORCER: CardDef = CardDef::new("TEST:forcer", &[On::Play("", None, forcer)]);
+
+fn forcer(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    ctx::plan::set_steps(4);
+    let ran = ctx::run_planned_move(target);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("forcer_done"))
+            .i("ran", ran as i64)
+            .i("pos", ctx::player_pos(target) as i64),
+    );
+    Ok(())
+}
+
+/// Received [强制停下] (kind 6): the caller-side gate, then a marker.
+const STOPPER: CardDef = CardDef::new("TEST:stopper", &[On::Play("", None, stopper)]);
+
+fn stopper(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    let allowed = ctx::gate(target, bandori_std::kind::abnormal::Stop);
+    if allowed {
+        ctx::state::add(target, "TEST:stopped", 1);
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("stopper_done")).i("allowed", allowed as i64),
+    );
+    Ok(())
+}
+
+/// Received reverse (kind 7): the caller-side gate, then a marker.
+const REVERSER: CardDef = CardDef::new("TEST:reverser", &[On::Play("", None, reverser)]);
+
+fn reverser(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    let allowed = ctx::gate(target, bandori_std::kind::abnormal::Reverse);
+    if allowed {
+        ctx::state::add(target, "TEST:reversed", 1);
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("reverser_done")).i("allowed", allowed as i64),
+    );
+    Ok(())
+}
+
+/// Received [停留] layer: the status verb, which gates kind 1 itself.
+const STAYER: CardDef = CardDef::new("TEST:stayer", &[On::Play("", None, stayer)]);
+
+fn stayer(player_id: i32) -> card_sdk::Asked {
+    let target = first_other(player_id);
+    if target < 0 {
+        return Ok(());
+    }
+    rules_status::stay::add(target, 1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("stayer_done")).i("count", rules_status::stay::get(target) as i64),
+    );
+    Ok(())
+}
+
+/// Lands a [停留] on the actor **before the roll** (the in-move span:
+/// `diceRollPlan` runs inside the main move's frame).
+const PLAN_STAY: CardDef = CardDef::new(
+    "TEST:planStay",
+    &[
+        On::Play("", None, plan_stay_place),
+        On::Action(Action::DiceRollPlan(
+            "actor == owner && card.placed",
+            None,
+            plan_stay,
+        )),
+    ],
+);
+
+fn plan_stay_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:planStay",
+        &Msg::new(key!("plan_stay_note")),
+    );
+    Ok(())
+}
+
+fn plan_stay(player_id: i32) -> card_sdk::Asked {
+    rules_status::stay::add(player_id, 1);
+    ctx::log(player_id, &Msg::new(key!("plan_stay_done")));
+    Ok(())
+}
+
+/// Lands a [停留] on the actor **after the walk**: `endTurnBefore` runs once
+/// the move's frame has closed, before the `turnEnd` raises.
+const END_STAY: CardDef = CardDef::new(
+    "TEST:endStay",
+    &[
+        On::Play("", None, end_stay_place),
+        On::Action(Action::EndTurnBefore(
+            "actor == owner && card.placed",
+            None,
+            end_stay,
+        )),
+    ],
+);
+
+fn end_stay_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:endStay", &Msg::new(key!("end_stay_note")));
+    Ok(())
+}
+
+fn end_stay(player_id: i32) -> card_sdk::Asked {
+    rules_status::stay::add(player_id, 1);
+    ctx::log(player_id, &Msg::new(key!("end_stay_done")));
+    Ok(())
+}
+
+/// Touches the first `PP:再次闪耀` on the board through its causer-aware
+/// immunity read: one [奇迹水晶] when `is_immune_from_at(uid, by)` is false.
+const IMMUNE_TOUCH: CardDef =
+    CardDef::new("TEST:immuneTouch", &[On::Play("", None, immune_touch)]);
+
+fn immune_touch(player_id: i32) -> card_sdk::Asked {
+    let mut found = None;
+    for s in 0..ctx::player_count() {
+        if let Some((uid, _)) = ctx::field_instances(s)
+            .into_iter()
+            .find(|(_, id)| id.as_str() == "PP:再次闪耀")
+        {
+            found = Some(uid);
+            break;
+        }
+    }
+    let uid = found.unwrap_or(-1);
+    let immune = uid >= 0 && ctx::is_immune_from_at(uid, player_id);
+    if !immune && uid >= 0 {
+        ctx::add_counter_at(uid, bandori_std::counter::CRYSTALS, 1, 0);
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("immune_touch_done"))
+            .i("uid", uid as i64)
+            .i("immune", immune as i64),
+    );
+    Ok(())
+}
+
 fn guard_play(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
@@ -2991,6 +3179,14 @@ card_sdk::ruleset!(&[
     LISTER,
     STUNNER,
     STUN_SELF_MOVER,
+    TELEPORTER,
+    FORCER,
+    STOPPER,
+    REVERSER,
+    STAYER,
+    PLAN_STAY,
+    END_STAY,
+    IMMUNE_TOUCH,
     GUARD,
     AIMER,
     TARGET_SELF,

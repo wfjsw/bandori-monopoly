@@ -1801,7 +1801,10 @@ fn hina_skill_2_borrows_skill() {
 
 // ============================================================ again-shine
 
-/// C-PP-shine-again-00 -- [特] immunity on the instance; [手] places it.
+/// C-PP-shine-again-00 -- [特] causer-aware immunity on the instance; [手]
+/// places it. G12 §5.7/§6.7: the flavour is the placement-stamped
+/// `immuneExceptOwner` (「不受除拥有此卡的玩家以外的…影响」), not the
+/// cause-blind `immune` flag.
 #[test]
 fn shine_again_places_immune() {
     let mut t = Table::vanilla(2);
@@ -1811,8 +1814,8 @@ fn shine_again_places_immune() {
         .into_iter()
         .find(|f| f.card == "PP:再次闪耀")
         .expect("placed");
-    if !f.immune {
-        panic!("C-PP-shine-again-00: 不受除拥有者以外的效果影响 -- immune not set");
+    if !f.immune_except_owner {
+        panic!("C-PP-shine-again-00: 不受除拥有者以外的效果影响 -- immuneExceptOwner not stamped");
     }
 }
 

@@ -922,6 +922,18 @@ pub fn fill_from_world(
             move_dir
         },
     );
+    // Production's `move.rolled` is `m.roll.is_some()`: the overlay's roll is
+    // the fixture's move face, else the world's own frame bit.
+    c.set_scalar(
+        VarId::MoveRolled,
+        if ov.move_roll != -1 {
+            1
+        } else if mv.present() {
+            mv.rolled as i64
+        } else {
+            0
+        },
+    );
     // No World/overlay field yet; `move.by_skill` reads false (absent move).
     c.set_scalar(VarId::MoveBySkill, 0);
 
@@ -1411,6 +1423,16 @@ pub fn fill_for_guard(
             ov.move_dir
         } else {
             move_dir
+        }
+    );
+    set_if!(
+        VarId::MoveRolled,
+        if ov.move_roll != -1 {
+            1
+        } else if mv.present() {
+            mv.rolled as i64
+        } else {
+            0
         }
     );
     set_if!(VarId::MoveBySkill, 0);

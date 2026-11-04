@@ -97,6 +97,7 @@ pub fn tile_at_set_tile_at_roundtrip() {
             tile: from,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,

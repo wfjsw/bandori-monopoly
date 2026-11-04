@@ -8,6 +8,7 @@ pub mod crychic;
 pub mod events;
 pub mod g06_windows;
 pub mod g07_targeting;
+pub mod g12_status;
 pub mod general;
 pub mod hhw;
 pub mod markers;

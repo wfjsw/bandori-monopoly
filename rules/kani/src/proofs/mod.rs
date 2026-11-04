@@ -22,6 +22,7 @@ pub mod events;
 pub mod g06_windows;
 #[cfg(feature = "band-general")]
 pub mod g07_targeting;
+pub mod g12_status;
 pub mod general;
 #[cfg(feature = "band-hhw")]
 pub mod hhw;
