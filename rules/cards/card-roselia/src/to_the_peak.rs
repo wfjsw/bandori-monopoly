@@ -70,7 +70,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let to = free
             .into_iter()
             .min_by_key(|&t| {
-                let d = ctx::tile_forward(pos, t);
+                // `tile_forward` is a slot difference, `t` a tile identity.
+                let d = ctx::tile_forward(pos, ctx::position_of_tile(t));
                 if d == 0 {
                     ctx::tile_count()
                 } else {
@@ -80,7 +81,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .unwrap_or(-1);
         // `Forward` 0 (the only free tile is underfoot) is taken as a full lap, as in
         // the `min_by_key` above.
-        let num = ctx::tile_forward(pos, to);
+        let num = ctx::tile_forward(pos, ctx::position_of_tile(to));
         let num = if num == 0 { ctx::tile_count() } else { num };
         ctx::plan::set_steps(num);
         ctx::plan::set_settles(true);

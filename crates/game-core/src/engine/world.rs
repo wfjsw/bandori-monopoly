@@ -1550,9 +1550,13 @@ impl World {
         }
         // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
         // only when something was logged since the last read.
-        st.tile_at = (0..self.st.owners.len())
-            .map(|p| self.tile_standing_at(p as i32))
-            .collect();
+        st.tile_at = if self.has_swaps() {
+            (0..self.st.owners.len())
+                .map(|p| self.tile_standing_at(p as i32))
+                .collect()
+        } else {
+            (0..self.st.owners.len() as i32).collect()
+        };
         st.events = self.recent.window();
         st.event_deck = self.event_deck.len() as i32;
         st.event_discard = self.event_discard.clone();

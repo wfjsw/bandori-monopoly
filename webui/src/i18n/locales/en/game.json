@@ -193,6 +193,7 @@
   "log.blocked_gain": "{{who}} is {{status}} -- cannot move money; the {{amount}} is not received",
   "log.blocked_pay": "{{who}} is {{status}} -- cannot move money; the {{amount}} is not paid",
   "log.build": "{{who}} built house #{{nth}} on {{tile}} ({{cost}})",
+  "log.build_refund_cancelled": "{{who}} paid for a house but the build was cancelled -- refunded {{cost}}",
   "log.build_refund_full": "{{who}} paid for a house but {{tile}} is fully built -- refunded {{cost}}",
   "log.build_refund_not_owned": "{{who}} paid for a house but {{tile}} is no longer theirs -- refunded {{cost}}",
   "log.buy": "{{who}} bought {{tile}} ({{price}}{{extra}})",

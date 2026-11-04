@@ -226,7 +226,7 @@ fn apply_plan(player_id: i32, pick: DetourPick) {
             let pos = ctx::player_pos(player_id);
             let b = ctx::tile_named("银河拉面馆");
             if n > 0 && pos >= 0 && b >= 0 {
-                let forward = ctx::tile_forward(pos, b);
+                let forward = ctx::tile_forward(pos, ctx::position_of_tile(b));
                 let toward = if forward <= n - forward { 1 } else { -1 };
                 let start = (pos + toward * 10).rem_euclid(n);
                 ctx::plan::set_start(start, "回家的路上绕个道");

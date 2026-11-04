@@ -1775,6 +1775,14 @@ impl World {
             .map(|f| (f.position(), f.uid))
     }
 
+    /// Does any instance carry a swap binding? The tile/position converters
+    /// fall back to the identity without one, so bulk builders can skip their
+    /// per-slot walk on the ordinary board.
+    pub fn has_swaps(&self) -> bool {
+        self.swap_records()
+            .any(|f| f.props.get(crate::state::prop::SWAPPED_TILE).is_some_and(|&q| q >= 0))
+    }
+
     /// The tile standing at board position `position` (`position` itself when
     /// nothing is bound there).
     pub fn tile_standing_at(&self, position: i32) -> i32 {

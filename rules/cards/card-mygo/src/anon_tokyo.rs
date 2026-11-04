@@ -136,7 +136,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
     } else if rules_status::move_blocked(player_id).is_none() {
         ctx::plan::set_steps(1);
         // Forward(here, t) != 1 means the chosen tile is the step behind.
-        ctx::plan::set_reverse(ctx::tile_forward(here, t) != 1);
+        ctx::plan::set_reverse(ctx::tile_forward(here, ctx::position_of_tile(t)) != 1);
         ctx::log(
             player_id,
             &Msg::new(key!("anon_tokyo_step")).tile("tile", t),

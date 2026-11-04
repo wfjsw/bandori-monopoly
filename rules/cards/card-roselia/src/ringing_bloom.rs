@@ -125,9 +125,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 ///   owner-wide `RENT_HOUSES` view already lifts it.
 fn apply_view(player_id: i32) {
     let max_h = counted_max(player_id);
-    if max_h > 0 {
-        ctx::set_prop(prop::RENT_HOUSES, max_h);
-    }
+    // Written unconditionally: a max that drops back to 0 (every house razed)
+    // must clear the view too, not leave the last count standing.
+    ctx::set_prop(prop::RENT_HOUSES, max_h);
     // Reconcile the whole set, not just the rise: a tile that has caught up with
     // the max is no longer 「受此效果影响获得额外房屋数」 and must charge in full.
     for &t in &ctx::owned_tiles(player_id) {

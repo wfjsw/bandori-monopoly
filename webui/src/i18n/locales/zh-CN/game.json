@@ -193,6 +193,7 @@
   "log.blocked_gain": "{{who}} 处于 {{status}}，无法收付款，这笔 {{amount}} 不能拿",
   "log.blocked_pay": "{{who}} 处于 {{status}}，无法收付款，这笔 {{amount}} 不用付",
   "log.build": "{{who}} 在 {{tile}} 加盖了第 {{nth}} 栋房屋（{{cost}}）",
+  "log.build_refund_cancelled": "{{who}} 付了盖房的钱，但盖房被取消，退回 {{cost}}",
   "log.build_refund_full": "{{who}} 付了盖房的钱，但 {{tile}} 已经盖满了，退回 {{cost}}",
   "log.build_refund_not_owned": "{{who}} 付了盖房的钱，但 {{tile}} 已经不是 Ta 的地了，退回 {{cost}}",
   "log.buy": "{{who}} 买下了 {{tile}}（{{price}}{{extra}}）",

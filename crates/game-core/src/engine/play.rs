@@ -2563,14 +2563,14 @@ impl PlayCtx<'_> {
     /// settle (`SETTLE-STAGES.md` §7). Runs for a 「不[触发结算]」 move too:
     /// the movement completed, it just settled to nothing. Not raised when the
     /// mover went out mid-walk (the move is abandoned, not resolved).
-    fn move_resolved(&mut self, m: &Move) -> Flow<()> {
+    fn move_resolved(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         if self.out(i) || !self.playing() {
             self.w.turn.move_open = false;
             return Ok(());
         }
         raise!(self, "moveResolved", i, @m m, position = self.w.st.players[i].pos)?;
-        self.clear_move_tags(&mut m.clone());
+        self.clear_move_tags(m);
         // A `thisMove` factor dies with its move (the settle above already saw
         // it); a later landing pays full again.
         self.w.plan_mut().pay_factor = 1.0;
@@ -3896,30 +3896,43 @@ impl PlayCtx<'_> {
         // `write_houses` answers the pre count when the window cancelled.
         let before = self.w.st.houses[t];
         let h = self.write_houses(i, t, super::cx::HouseWrite::Add(1), None)?;
-        if h != before {
-            let text = Msg::new("log.build")
-                .player_id("who", i)
-                .tile("tile", t)
-                .i("nth", h)
-                .n("cost", cost);
-            let e = self.w.log("build", i as i32, text);
-            e.value = 0;
-            e.to = t as i32;
-            e.other = h;
+        if h == before {
+            // Cancelled `houseAdd`: the money is already paid but no house
+            // landed, so refund and stop here -- `houseAdded` / `buildAfter`
+            // are post-commit points (设计 5.3 step 6/7).
+            if cost > 0 && !self.out(i) {
+                self.w.credit(i as i32, cost);
+                self.w.log(
+                    "text",
+                    i as i32,
+                    Msg::new("log.build_refund_cancelled")
+                        .player_id("who", i)
+                        .tile("tile", t)
+                        .n("cost", cost),
+                );
+            }
+            return Ok(false);
         }
+        let text = Msg::new("log.build")
+            .player_id("who", i)
+            .tile("tile", t)
+            .i("nth", h)
+            .n("cost", cost);
+        let e = self.w.log("build", i as i32, text);
+        e.value = 0;
+        e.to = t as i32;
+        e.other = h;
         // `houseAdded` -- 「你拥有格子上的房屋总数增加时」 (鳰原令王那 (2)) is
         // the post-commit point for *any* house increase, the same raise the
         // guest's `add_house` logs at its own commit (`wasm_rules.rs`
         // `house_log`). The tile's owner is the actor (`-1` → the payer,
         // 设计 5.3). Raised before `buildAfter` (the hook point before the
         // action hook, matching `buy()`'s `bought` → `buyAfter`).
-        if h != before {
-            let owner = self.w.st.owners[t];
-            let who = if owner >= 0 { owner } else { i as i32 };
-            raise!(self, "houseAdded", who.max(0) as usize, tile = t as i32, value = h)?;
-        }
+        let owner = self.w.st.owners[t];
+        let who = if owner >= 0 { owner } else { i as i32 };
+        raise!(self, "houseAdded", who.max(0) as usize, tile = t as i32, value = h)?;
         // `buildAfter` -- only after the house actually commits (not on the
-        // refund path above).
+        // refund paths above).
         raise!(self, "buildAfter", i, tile = t as i32)?;
         Ok(true)
     }

@@ -715,6 +715,20 @@ pub trait SnapSrc {
     fn tile_standing_at(&self, position: i32) -> i32 {
         position
     }
+    /// Is any instance carrying a swap binding? False bypasses the per-slot
+    /// conversion in [`Self::tile_standing_map`].
+    fn has_swaps(&self) -> bool {
+        false
+    }
+    /// Per board slot, the tile standing there -- the identity vector unless a
+    /// swap actually binds something.
+    fn tile_standing_map(&self) -> Vec<i64> {
+        let n = self.tile_count();
+        if n <= 0 || !self.has_swaps() {
+            return (0..n.max(0) as i64).collect();
+        }
+        (0..n).map(|p| self.tile_standing_at(p) as i64).collect()
+    }
     /// Board name of `tile` (the `tile_named` spelling, line breaks already
     /// stripped). Empty when the id is out of range. `fill_window` registers
     /// every name so a condition's `tile_named('…')` resolves.
@@ -867,6 +881,10 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn tile_standing_at(&self, position: i32) -> i32 {
         CardWorld::tile_standing_at(self, position)
+    }
+    #[inline]
+    fn has_swaps(&self) -> bool {
+        CardWorld::has_swaps(self)
     }
     #[inline]
     fn tile_count(&self) -> i32 {
@@ -1493,9 +1511,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         actor: t.player_id as i64,
         target: t.target as i64,
         tile,
-        tile_at: (0..world.tile_count())
-            .map(|p| world.tile_standing_at(p) as i64)
-            .collect(),
+        tile_at: world.tile_standing_map(),
         value: t.value as i64,
         step: t.step as i64,
         by: t.by_card.map(|b| b as i64).unwrap_or(-1),
@@ -1611,9 +1627,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             mortgaged: 0,
             price: 0,
         },
-        tile_at: (0..world.tile_count())
-            .map(|p| world.tile_standing_at(p) as i64)
-            .collect(),
+        tile_at: world.tile_standing_map(),
         value: 0,
         step: 0,
         by: -1,

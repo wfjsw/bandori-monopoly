@@ -391,6 +391,17 @@ fn sunset_demolishes_and_charges() {
         let condition = t.snapshot_world();
         t.give_play(0, "AG:即使夕阳落山")
             .map_err(|e| format!("play rejected: {e}"))?;
+        // The card designates all four tiles one prompt at a time; the option
+        // list is exactly those four (offered as ids), so answering the first
+        // option each round picks each once.
+        for _ in 0..4 {
+            if t.prompt().is_none() {
+                break;
+            }
+            for who in t.asked() {
+                t.answer(who, 0)?;
+            }
+        }
         skip_all(&mut t);
 
         for &tile in &tiles {

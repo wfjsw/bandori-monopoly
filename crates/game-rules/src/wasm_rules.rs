@@ -1640,6 +1640,9 @@ impl CardWorld for Run {
     fn tile_standing_at(&self, position: i32) -> i32 {
         self.world.tile_standing_at(position)
     }
+    fn has_swaps(&self) -> bool {
+        self.world.has_swaps()
+    }
     fn position_of_tile(&self, tile: i32) -> i32 {
         self.world.position_of_tile(tile)
     }
@@ -4472,13 +4475,17 @@ impl<M: CardModules> RulesBridge<M> {
                                     }
                                 }),
                             });
-                            let mut fr = game_core::engine::SettleFrame::new(
+                            // Same stage order as the outermost settle: the
+                            // frame starts at `RaiseTileEffect`, so the pump
+                            // opens the tile's effect window before `settle`
+                            // (设计 5.2 / 6.1) -- forcing `RaiseSettle` here
+                            // would skip it for every nested settle.
+                            let fr = game_core::engine::SettleFrame::new(
                                 player_id,
                                 cx.position_of_tile(tile as i32) as usize,
                                 tile as i32,
                                 frame_m,
                             );
-                            fr.stage = game_core::engine::SettleStage::RaiseSettle;
                             cx.push_work(game_core::engine::SettleWork { frame: fr });
                             let _ = who;
                             // A STACK-01 suspend **resumes** this drive; its
@@ -10326,6 +10333,9 @@ impl crate::condition::SnapSrc for LiveSnap<'_> {
     fn tile_standing_at(&self, position: i32) -> i32 {
         self.world.tile_standing_at(position)
     }
+    fn has_swaps(&self) -> bool {
+        self.world.has_swaps()
+    }
     fn subject_range_card(&self) -> bool {
         let (Some(rules), Some(subject)) = (self.rules, self.trigger.subject_card.as_deref())
         else {
@@ -11536,8 +11546,10 @@ impl<M: CardModules> RulesBridge<M> {
         if instances.is_empty() {
             return standalone(cx, player_id, tile);
         }
+        // `position` is the trigger's slot fact; the owner is a **tile** fact
+        // (`owners[tile]`), and the two differ under a swap (设计 5.1).
         let position = cx.position_of_tile(tile as i32);
-        let owner = cx.state().owners.get(position as usize).copied().unwrap_or(-1);
+        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
         let before = snap(cx.state());
         let mut trigger = Trigger {
             kind: TriggerKind::None,
@@ -11722,7 +11734,15 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         if !cx.prep_land(player_id, position, is_main_move) {
             return Ok(());
         }
-        let owner = cx.state().owners.get(position).copied().unwrap_or(-1);
+        // `owners` is **tile**-indexed, not slot-indexed: under a swap the
+        // settled slot and the governing tile differ, and the body wants the
+        // tile's deed owner (设计 5.1).
+        let owner = cx
+            .state()
+            .owners
+            .get(tile.max(0) as usize)
+            .copied()
+            .unwrap_or(-1);
         // `On::Settle` dispatches by entry kind (`Call::Settle`), not by a
         // trigger kind, so the link's kind is `None` -- it is the body of the
         // settle the engine already raised (`settle` / `settleBefore` /

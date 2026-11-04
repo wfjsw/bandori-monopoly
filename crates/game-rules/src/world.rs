@@ -260,7 +260,9 @@ impl Default for Trigger {
             player_id: 0,
             target: 0,
             tile: 0,
-            position: 0,
+            // `-1` like [`Trigger::new`]: a defaulted trigger is about no
+            // tile, so `trigger::position` must not read a false slot 0.
+            position: -1,
             value: 0,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
@@ -835,6 +837,11 @@ pub trait CardWorld: Clone + 'static {
     /// nothing is bound there) -- the engine's `tile_at` reader.
     fn tile_standing_at(&self, position: i32) -> i32 {
         position
+    }
+    /// Is any instance carrying a swap binding? Default `false` -- a fixture
+    /// world answering the identity on [`Self::tile_standing_at`] is right to.
+    fn has_swaps(&self) -> bool {
+        false
     }
     /// The board slot tile `tile` currently stands at (`tile` itself when
     /// nothing is bound to it) -- the engine's `position_of_tile` reader.

@@ -85,7 +85,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let to = if !free.is_empty() {
         free.into_iter()
             .min_by_key(|&t| {
-                let d = ctx::tile_forward(pos, t);
+                let d = ctx::tile_forward(pos, ctx::position_of_tile(t));
                 if d == 0 {
                     ctx::tile_count()
                 } else {
