@@ -1270,7 +1270,8 @@ immediately below the constant (newest first):
 ///    the tile, so `ctx::self_tile` and `card.tile` already read it. New
 ///    imports `ctx::trigger::{position, move_path_length, move_path}`,
 ///    `ctx::tile_extra_count`, `ctx::position_of_tile`, `ctx::tile_at`,
-///    `ctx::tile_buildable`, `ctx::build_price`, `ctx::build_cost_percent`,
+///    `ctx::self_position`, `ctx::tile_buildable`, `ctx::build_price`,
+///    `ctx::build_cost_percent`,
 ///    `ctx::build_discount`, `ctx::card_build_as`; new move tag
 ///    `tag::SUPPRESS_TILE_EFFECTS`; new CEL field `tile.position`. Host
 ///    requests: `BuildAs` (the build verb), `TileWrite` (the guest tile
@@ -1287,7 +1288,7 @@ immediately below the constant (newest first):
 were the tail of this group's allocated row (126–130) and G10's (131). Kind ids
 are wire-stable, so the allocation moves rather than the landed ids: G09 takes
 **132–136**, G10 **137**, G11 **138–139**; G12 keeps the still-free 107 and G14
-the empty row. The Op row moves to **451–461** (eleven imports). The README
+the empty row. The Op row moves to **452–463** (twelve imports). The README
 table and the group rows are edited with this document.
 
 The old two-argument import is a real alias, not sugar in the guest: an archived

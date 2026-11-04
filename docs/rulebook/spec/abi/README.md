@@ -32,7 +32,7 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 113→114 | 16 | 132–136 | 451–461 |
+| G09 | 113→114 | 16 | 132–136 | 452–463 |
 | G10 | 114→115 | 16→17 | 137 | — |
 | G11 | 115→116 | 17→18 | 138–139 | — |
 | G12 | 116→117 | 18 | 107 | — |
@@ -91,7 +91,7 @@ takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
 G08's row band 113–120 went unused. Kind ids are wire-stable, so the allocation
 moves, not the landed ids: G09 takes **132–136** (five: two hand-window kinds
 and three effect-only spellings), G10 **137**, G11 **138–139**. G12 keeps the
-still-free 107 and G14 the empty row; 113–120 stay spare. G09's eleven imports
+still-free 107 and G14 the empty row; 113–120 stay spare. G09's twelve imports
 (the position/tile conversion, the build reads and verb, the move-path reads)
 take **452–463**, right after G07's landed 441–450.
 
