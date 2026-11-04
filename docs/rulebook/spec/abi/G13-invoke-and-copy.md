@@ -1,816 +1,821 @@
-# ABI design G13 — Skill invoke and copy context
+# G13 — Skill invocation and borrowed-clause context
 
-**Status: draft for user review. Design only — no source edits, no commit.**
-Worktree `/home/monopoly/web/.claude/worktrees/card-rulebook-review`, branch
-`worktree-card-rulebook-review`. Group G13, family **"Skill invoke and copy
-context"**.
+Status: **design revision** (2026-11-04 rewrite of the 2026-10-27 draft; no
+source touched by this document). Worktree
+`/home/monopoly/web/.claude/worktrees/g13-design-review`, branch
+`worktree-g13-design-review`. Starts from master at ABI 113, SAVE 16,
+RECORD 4, highest engine kind 131, highest Kani `Op` 442. It does not redo any
+landed group.
 
-Ground truth: `docs/rulebook/cards.json`; every fragment below was re-read from
-that file on 2026-10-28 against the card id named beside it. The skill-clause
-text (nanami's and tomori's (2)) is not in `cards.json` — it is the character
-sheet, quoted here from the rule file that owns it.
+Group: **G13**. Family: running another card's named clause — the entry the
+clause is named by, the instance it runs on, the borrowing card's context, the
+borrower's cost and the delay the body owes back to the borrower.
 
-**Closed slugs and rows:** both items are covered.
+Names are spelled out (G03 R25, G06, G07, G10): an **invocation** is one
+nested run of a named entry; the **invoking** card is the borrower and the card
+it runs is the **target**; an **entry identifier** is the declared slug of one
+clause (`On::….id("2")`); an **instance identifier** is the field row that
+owns the target copy; a **hook** is a passive listener. `trigger` is not
+shortened to `trig`, and `identifier` is not shortened to `id` in prose. Code
+spelling is left as it is (`entry::PRESS`, `self_uid`, `invoke_entry`) so the
+document can be followed against the tree.
 
-| # | slug | merge of | cls | severity | rows |
-|---|---|---|---|---|---|
-| 1 | `invoke-skill-entry` | `nanami-press-invokes-clause-3`, `mutsumi-nested-invoke` | B | medium | 437, 996 |
-| 2 | `tomori-borrowed-second-half` | `tomori-borrowed-2-second-half` | B | medium | 187, 995 |
+Names chosen by this revision likewise carry no abbreviation: the entry
+identifier is `"2"`; the keys are `skill.tomoriPoem.usedThisMove`,
+`skill.tomoriPoem.owedSettle` and `skill.tomoriPoem.halfPrice`; the functions
+are `before_settle`, `before_settle_applies`, `half_price_applies`,
+`owed_settle`, `clear_used_this_move`, `used_this_move_key`, `clear_latches`
+and `offer_open`; the schedule name is `"owed_settle"`. `usedThisMove` and
+`owedSettle` replace the current `acted` and `due` key strings; `clear_acted`,
+`half`, `not_latched` and `latch_key` are renamed to match, and the shout's
+`clear_latch` becomes `clear_latches` because it clears three keys.
 
-**Row note.** The four rows above are the ones filed in the group/BACKLOG.
-Re-reading `card-review-2026-10-27.json`, rows 437 (sakiko_lead citation), 996
-(ranger comment), 187 (crystal_swap citation) and 995 (ranger comment) do not
-touch invocation — they are mis-filed next to this group. The rows that *do*
-describe the defects are **734, 735, 737** (nanami press) and **407, 408, 421,
-426** (mutsumi cash-out; tomori second half). Both sets are carried through the
-tables below; the fragments come from `cards.json` either way.
+Two short handles used throughout: the **poem** is 高松灯's persona skill
+`skill:高松灯:诗超绊` and the **shout** is `CRYCHIC:（灯）内心的呐喊`, the card
+that borrows it. Neither is a file name.
 
-Two sub-parts demote to **A** and need no ABI (marked in §2):
-`skill-groups/src/crychic.rs:131` can read `ctx::group_crystals(player_id)` today
-(the filed item 81), and tomori's 1d20 / [停留] / half-lifetime can be spelled
-with existing imports. The capability itself — a named entry, an instance, and a
-frame — is B for both items.
+Ground truth: `docs/rulebook/cards.json`, plus the character and band sheets
+for the two borrowed clauses (`rules/skills/skill-personas/src/nanami.rs`,
+`rules/skills/skill-personas/src/tomori.rs`). Every quoted fragment below was
+re-read against that file on 2026-11-04 and is named with its card identifier
+beside it. Row numbers are positions in
+`docs/rulebook/card-review-2026-10-27.json` and are not `cards.json` indices.
 
----
+## 0. Review record
 
-## 2. Problem
+This revision came out of a full review of the 2026-10-27 draft against the
+tree as it stands after the G05 landing. The draft's central ABI was adopted
+verbatim by G05 and is already on master; the review therefore had two jobs:
+verify the landed surface against the draft's invariants and re-derive the one
+item that is still broken. What the draft got wrong:
 
-### 2.1 `invoke-skill-entry` — Mor:（NNM）稍微努力了一下 (rows 437, 996; review rows 734, 735, 737) and CRYCHIC:（睦）从没有觉得... (review row 426)
+| # | Draft defect | Correction |
+|---|---|---|
+| R1 | The header put the draft in `card-rulebook-review` on a base of ABI 104 and presented both items as unbuilt. G05 has since landed the whole invocation surface, the nanami body and the mutsumi invocation. | Header carries the real base; §2 records what landed and what is still missing (tests), §1 splits the item into **landed code** and **missing coverage**. |
+| R2 | The draft's §6.3 borrowed call is `invoke_entry_paid(…, "2")` and says "the settle then reaches `2-effect` through the normal filter". The engine dispatches the target card's own entries in the *same* raise pass, and the poem's skill instance has a lower instance identifier than the shout (bound at game start versus played later), so `2` and `2-effect` both run **before** the shout is reached. When the shout later invokes `2`, `2-effect` has already declined. | The single-entry design of §7: the borrowed body is `2` itself, so there is no second entry and no dispatch-order dependence (`wasm_rules.rs:5998` walks instances by identifier, seat by seat). |
+| R3 | `2` and `2-effect` are two `SettleBefore` entries on one card and rely on the engine running every matching entry. `after_offer_applies` is evaluated on `2-effect` in the same pass as `2`; the borrowed call runs `2` but not `2-effect` (see R2). | One entry, `2`. Its body asks and pays only when `ctx::invoke_paid()` is false. |
+| R4 | The draft's `"2-effect"` body sets `OFFERED` in `2`, clears it on entry, and gates `2-effect` on it. Three latches (`OFFERED`, `USED_THIS_MOVE`, `OWED_SETTLE`) for one clause. | Two latches: `USED_THIS_MOVE` (one use per move, already exists) and `OWED_SETTLE` (one owed settle). `OFFERED` disappears with the second entry. |
+| R5 | The half-price is implemented on **both** cards: the shout keeps `half_key` (`tomori_inner_shout.rs:155-157, 172-181`) and the poem's `half` reads `OWED_SETTLE` (`tomori.rs:75-79`). On the borrowed path, when the roll is 6 or less, both `PaySplitMul` filters are active and the payment is quartered, not halved. | The latch moves into the poem, one filter only (§7.1); the shout's filter, key and `on_pay` are deleted. |
+| R6 | The draft's settle callback clears `OWED_SETTLE` **before** settling, so the existing `OWED_SETTLE`-gated half filter is off during the very settle it was supposed to cover; the draft still claims "the existing `half` filter is correct as written". Contradiction. | `owed_settle` sets the half-price latch around its own `settle_tile_at` and clears it after (§7.1); `OWED_SETTLE` only marks that a settle is owed. |
+| R7 | The draft moves `OWED_SETTLE` to the mover but leaves the *persona* delay's player wrong: the current `at_turn_end` settles `player_id`, and `Action::TurnEnd("actor == owner …")` dispatches with the card **owner**, so the plain (2) path settles the controller's tile at the controller's turn end, not the mover's. | `ctx::at_next_turn_end(mover, "owed_settle")` (§7.1) carries the mover as the callback's player; the callback settles the mover's own position. |
+| R8 | The draft's `ctx::settle_tile_at(mover, …, true)` keeps the current `is_main_move = true` for a turn-end forced settle. | `false`: the owed settle is not the mover's main move. Row 734 is the same defect shape and already names the two non-main precedents (`tomori_crychic.rs:103`, `rinne_rain.rs:53`). |
+| R9 | The draft never notices that the poem's own (2) offer and the shout offer both admit on the same landing, and that the poem is dispatched first (lower instance identifier). Current `before_settle_applies` only checks `USED_THIS_MOVE`; the shout only checks its own latch. | §7.3 documents the two offers and their order, and the shout's admission also reads the poem's `USED_THIS_MOVE` so a second invocation of the same skill is the player's explicit choice, never an accident. |
+| R10 | The draft's §6.3 shout sets `half_key` and teleports itself, then invokes. With the body owning both, the borrowed path teleports twice and the half is set by the caller. | The body owns the teleport and its log; the shout sets only its once-per-move latch, pays, invokes, and logs the borrowed use (§7.2). |
+| R11 | The draft's §4.5 lists `Press` as an invocable entry kind. There is no `OnKind::Press`; `entry::PRESS` is a reserved *resolver* that yields a `Play`. | The invocable set is the landed one: `Play`, `Action`, `Settle`, `Schedule`; `Filter`, `Counteract`, `Message` trap (`hostfns.rs:1636-1650`). |
+| R12 | The draft's §5.1 step 4 finds the instance with `find(|(_, c)| c == id)`, written before G05's effective-card rule. A stand-in instance answers for its effective card. | The landed lookup compares `effective_card_at(uid)` (`hostfns.rs:1657-1664`); §3 keeps it. |
+| R13 | Item 1's §9 tests were never written. The landed suite has two frame tests (`declare_arg.rs:497-531`) and the mutsumi cash-out (`card_paths.rs:361`), but none of `nanami_press_invokes_skill_two`, `…spends_one_crystal_only`, `…without_pot_refused`, the trigger seed/restore pair, the trap checks, or the PRESS/`play_card` discrimination. | §10.2 lists the missing item 1 coverage as a landing obligation, not as new design. |
+| R14 | The draft says item 1's mutsumi half expects the existing test to flip from "no money clause"; it did flip (`card_paths.rs:433-436` asserts `+2 * 500`). The shortfall's zero-money assertion (`…cash_out_is_zero_on_a_shortfall`) is still missing. | §10.2 adds it to the shortfall test rather than a new test. |
+| R15 | Row bookkeeping is still loose. The draft correctly rejected 437/996/187/995, but its replacement set includes 734 (noble blue's main-move flag) and 737 (the hand-limit lift, which is G14's `hand-limit-lift`), neither of them an invocation defect. | §1.1 keeps 735 (the `play_card`-runs-(3) defect) as item 1's row and cites 734/737 as adjacent evidence, not as the item. |
+| R16 | The draft treats 407 (「最早拥有的格子」) as an item 2 row although it is the placement-order defect owned by `LOY-TOMORI-03`. | §1.2 lists 407 as an adjacent row with its own owner; the design does not touch it. |
+| R17 | Row 426 is the unprinted `Banished` destination on mutsumi, not the lost instance read. Both were folded into item 1's narrative. | §7.4 keeps the invocation fix; the destination TODO is called out as a separate open reading on the same body. |
+| R18 | The draft's §2 citations predate the G05 landing and drift by tens of lines (`hostfns.rs:2726-2747`, `:1358-1371`, `:1553`, `:3062`, `wasm_rules.rs:1458`, `:1409`, `:2520-2528`, `condition.rs:1393-1422`). | Every site is re-cited in §2-§7, mostly `hostfns.rs:1590-1718`, `wasm_rules.rs:2652-2681`, `nanami.rs:56-67`, `tomori.rs:47-207`, `tomori_inner_shout.rs:30, 192-224`. |
+| R19 | The draft has no necessity section, no clause match and no explicit statement that the invariant survives a prompt pause. | §3, §12 and §13 exist; the pause invariant states the rule and §8 says why no save field is needed. |
+| R20 | The draft's §5.5 Kani arm was speculative (`fate_hint`, `last_invoke` as a tuple). The landed model records a three-deep invocation stack and exposes `invoke_n` / `last_invoke` (`rules/kani/src/host.rs:2400-2465`). | §11 works from the landed model. |
 
-`cards.json#Mor:（NNM）稍微努力了一下`, clause (3):
+## 1. Items and disposition
 
-> 「（3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的
-> （2）技能，此次技能不受数量或轮数限制」
+| # | slug | severity | rows | disposition |
+|---|---|---|---|---|
+| 1 | `invoke-skill-entry` (BACKLOG also carries `nanami-press-invokes-clause-3`) | medium | 735 | **code landed by G05**; §2 verifies it, §10.2 lists the missing tests |
+| 2 | `tomori-borrowed-second-half` | medium | 408, 421 | **designed here**; no new ABI, skill body + shout body |
 
-`cards.json#CRYCHIC:（睦）从没有觉得...`, clause (2):
+### 1.1 Item 1 — what is landed
 
-> 「（2）消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的
-> （2）效果，然后弃一张卡。」
+G05 adopted the whole invocation surface and `9ce8a398` implements item 1's
+two callers:
 
-The borrowed clause for nanami is 广町七深's character sheet (2)
-(`rules/skills/skill-personas/src/nanami.rs:5-6`):
+* `Mor:（NNM）稍微努力了一下` (3) asks its crystal question and invokes the
+  persona skill's clause `2` (`nanami_effort.rs:144-185`), with its own cost
+  checks (an owned persona skill, a pot) rather than the skill's condition;
+* `CRYCHIC:（睦）从没有觉得...` (2) spends the crystals, invokes the band
+  skill, and the band cash-out reads the bound instance
+  (`mutsumi_never.rs:59-78`, `skill-groups/src/crychic.rs:128-139`);
+* `invoke_entry` derives the target instance from the invoking seat's field
+  with the effective-card rule and seeds the trigger (`hostfns.rs:1590-1718`);
+* `query_guard` seeds the same frame (`hostfns.rs:3381-3459`).
 
-> 「（2）当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上
-> 存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）」
+Adjacent rows review the same cards but belong to other groups: 734 is the
+main-move flag on a card-forced settle (kept in §7.1 as the precedent for the
+owed settle's `is_main_move`), 737 is the hand-limit lift (`G14`
+`hand-limit-lift`), and 426 is the unprinted `Banished` destination on
+mutsumi's (2).
 
-Two distinct holes, one root.
+Remaining for item 1 is coverage (§10.2) and one reading call (§7.4). No code
+design remains.
 
-**(a) The clause is unaddressable.** `ctx::play_card` / `ctx::invoke_skill` look
-up `OnKind::Play` and nothing else (`hostfns.rs:2726-2747`, `:1358-1371`), so
-"the (2) skill" is whatever that card happens to expose as its press:
+### 1.2 Item 2 — what is broken
 
-* 广町七深's `On::Play` is clause **(3)** `use_skill` — the mark-spending
-  recursion, not (2). `nanami_effort.rs:285` therefore runs (3); review row 737
-  states exactly this. When the owner has a mark, (3) then asks which mark and
-  invokes *another* skill, which is a different effect from (2).
-* The CRYCHIC band skill's `On::Play` happens to be its (2) `transform_now`
-  (`skill-groups/src/crychic.rs:262-275`), so mutsumi gets the right body by
-  luck, not by name. Any band skill whose (2) is a hook would break mutsumi.
+`CRYCHIC:（灯）内心的呐喊` (3) (`tomori_inner_shout.rs:30, 192-224`) is a
+hand-written copy of the first half of 高松灯 (2): it asks, spends one pot,
+teleports the mover to the controller's tile, sets two latches and logs. It
+never runs the skill's own body, so the roll, the [停留], the owed settle at
+the mover's next turn end, the half-price on the *skill's* forced settle and
+every later fix to the skill all stop at the card boundary. Row 408; the site
+TODO at `:220-222` and `BACKLOG TOMORI-BIND-01` record it.
 
-The `entry::PRESS` slug from v98 can *probe* an entry, but there is no way to
-*run* one: `query_guard` is read-only.
+Row 421 is the same hook's window: `move.is_main_move` narrows a clause the
+sheet states as 「时机合适时」 and the borrowed skill states as 「[移动终点]」,
+not 「主要移动终点」. The revision keeps the narrowing and keeps the TODO; it
+does not resolve 421 (`G13` does not own timing).
 
-**(b) The invoked skill loses its instance.** `play_card` and `invoke_skill`
-call `enter_card`, which replaces `current_uid` with `-1` and never re-binds
-(`hostfns.rs:1553`, `:3062`; `wasm_rules.rs:2520-2528`). Every
-self-addressed read inside the invoked body therefore answers 0 / false:
-`ctx::crystals()` (`bandori-std/src/lib.rs:213-215` → `counter` →
-`counter_at(current_uid, …)`, `wasm_rules.rs:1458`), `ctx::is_placed()`
-(`:1409`), `ctx::self_uid()`, `ctx::prop_at(self_uid(), …)`, the instance pools,
-and the `CounterChanged` raise against the instance.
+Row 407 (「最早拥有的格子」) is `LOY-TOMORI-03`; out of scope here.
 
-Consequences in the tree:
+## 2. Landed surface, verified
 
-* CRYCHIC band (3) 「当此卡移除时，你获得X*500资金，X为此卡上的奇迹水晶数」 reads
-  `let x = ctx::crystals();` (`skill-groups/src/crychic.rs:131`). Invoked by
-  mutsumi (5 crystals, 3 spent ⇒ 2 left) the read is 0, the cash-out is skipped
-  and `spend_crystals` never runs. The existing test pins the wrong behaviour:
-  `card_paths.rs::mutsumi_never_2_runs_the_band_skill_2` asserts
-  `"no money clause in (2)"`. Review row 426.
-* Any invoked card's own `CounterChanged` hook (the shape `nanami_effort.rs:43`
-  uses) would raise against the void uid when the invoked body writes a
-  counter. The CRYCHIC band skill has no such hook today; its (3) is the direct
-  read above, the same defect at its removal point.
-* Nanami's `cant_play` gate (`nanami_effort.rs:77-84`) checks 「a mark exists」
-  because the **wrong** clause (3) is run; the (2) body needs a **pot** rule
-  instead. The mark check and the pot cost both belong to the clause, so the
-  gate is wrong in both directions.
+The following is on master and this design builds on it unchanged.
 
-Expected: the press runs the owner's **named (2) entry**, with the skill
-instance bound as the running instance, for the duration of the nested run.
-`curr→expected` from the group, verbatim: *"The invoked skill's named (2) hook
-runs with the skill instance bound; the cash-out reads the skill pool."*
+### 2.1 Guest
 
-**Demote to A:** the cash-out's 0 read is fixed *today* without any ABI by
-reading `ctx::group_crystals(player_id)` (`bandori-std/src/lib.rs:260-262`)
-instead of `ctx::crystals()`. That is a stopgap only: it names "the player's
-first group instance", so it still cannot read a *persona* skill instance and it
-does not fix (a).
+```rust
+// crates/card-sdk/src/ctx.rs
+pub fn invoke_entry(player_id: i32, card: &str, entry_id: &str) -> Result<Dest, Prompt>;
+pub fn invoke_entry_paid(player_id: i32, card: &str, entry_id: &str) -> Result<Dest, Prompt>;
+pub fn invoke() -> Option<InvokeFrame>;
+pub fn invoke_paid() -> bool;
+pub fn invoke_skill(player_id: i32, card: &str) -> Result<Dest, Prompt>; // sugar: PRESS
+```
 
-### 2.2 `tomori-borrowed-second-half` — CRYCHIC:（灯）内心的呐喊 (rows 187, 995; review rows 407, 408, 421)
+`invoke_entry` and `invoke_entry_paid` are the import pair
+(`ctx.rs:2993-3017`); `invoke_skill` is sugar over `entry::PRESS`
+(`ctx.rs:3069-3074`). The invocation frame is `abi::InvokeFrame`
+(`abi.rs:1281-1311`) with the `invoke::COST_PAID` bit (`abi.rs:1279-1284`).
 
-`cards.json#CRYCHIC:（灯）内心的呐喊`, clause (3):
+### 2.2 Host
 
-> 「（3）若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上，
-> 你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的
-> （2）技能。」
+`invoke_inner` (`hostfns.rs:1603-1718`) is the one core behind
+`invoke_entry`, `invoke_skill` (`:1574-1587`) and `play_card`. It:
 
-The borrowed clause is 高松灯's character sheet (2)
-(`rules/skills/skill-personas/src/tomori.rs:5-8`):
+1. resolves the entry by `entry::PRESS` → the first Play
+   (`host.rs:188-190`), else `entry_by_id` (`host.rs:162-170`);
+2. rejects unknown cards with a trap and unknown/unnamed entries with
+   `DEST_UNSET` (`hostfns.rs:1613-1634`);
+3. admits `Play`, `Action`, `Settle`, `Schedule` only (`:1636-1650`);
+4. finds the target instance on the invoking seat's field through
+   `effective_card_at` (`:1657-1664`);
+5. records `by_instance = self_uid()` and the caller's depth
+   (`:1652-1655`);
+6. opens the frame with `enter_invoke` (`wasm_rules.rs:2652-2670`): saves the
+   caller's card, destination, destination target and instance, replaces
+   `trigger.card` / `trigger.cards` with the target, and sets
+   `current_uid = instance` (`-1` when unplaced);
+7. runs `OP_RUN` only, without a gate or a declare
+   (`hostfns.rs:1697-1698`);
+8. restores the world, the answers, the asked prompt and the frame, then
+   `leave_invoke` restores the caller's instance and trigger
+   (`wasm_rules.rs:2671-2681`);
+9. answers the inner `Dest`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`.
 
-> 「（2）当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐，在该玩家
-> [触发结算]前强制将该玩家[传送]至自己所在的格子并[触发结算]，然后使其投掷1d20，
-> 若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]；在此技能影响
-> 下的支付价格变为原本的一半。」
+`ruleset_invoke_entry` / `ruleset_invoke_frame` are wired in the host table,
+the native shims and the Kani host (`host.rs:4978-5002`,
+`native_shims.rs:241-242, 3295-3304`, `rules/kani/src/host.rs:2400-2465`).
 
-`tomori_inner_shout.rs::pull` (`:213-245`) is a hand-written **copy of the first
-half only**: it asks, spends 1 fire, teleports the mover to the controller's
-tile, sets `latch` / `half`. It never rolls 1d20, never adds [停留], never owes
-a settle, and never runs the skill's own code — so every future fix to 诗超绊
-(2) skips the borrowed path. The site TODO at `:241-243` says so; review rows
-407/408 record it; `BACKLOG TOMORI-BIND-01` owns it.
+### 2.3 Invariants the draft stated and the landing keeps
 
-The existing implementation also shows *why* a bare "call the skill" is not
-enough: the skill's body asks and spends **4** fire, while 内心的呐喊 (3) says
-**1**; and the skill's own delay uses `state::set(player_id, DUE, 1)` +
-`On::Action(Action::TurnEnd("actor == owner" …))` (`tomori.rs:190`,
-`:57-61`), i.e. a **placed** instance's hook — the borrowed skill is not placed,
-so the hook never dispatches. The delay must be expressible by the caller of
-the borrowed body (existing `ctx::at_next_turn_end`, `ctx.rs:3375`).
-
-Expected: the borrowed (2) **body** runs — teleport, latch, 1d20, ≤6 ⇒ [停留] and
-a settle owed at the mover's next turn end, half price — under the inner
-shout's cost (1 fire) and the shout's own [停留]-clearing schedule.
-
-**Demote to A:** the roll spelling (`ctx::roll(mover, 1, 20,
-RollPurpose::Effect, roll_source::SKILL)`), `rules_status::stay::add`, and
-`ctx::settle_tile_at` all exist; a copy could be finished with no ABI. The B
-part is "run the borrowed body, not a copy".
-
-### 2.3 Shared root causes
-
-1. **No entry addressing on the run surface.** v98 added slugs for *queries*
-   only; the run imports still hard-code `OnKind::Play`.
-2. **No instance frame.** `enter_card` clears the uid instead of binding the
-   target's own instance, so a nested run is a *name*, not an instance.
-3. **No invoke context.** The invoked body cannot see "who borrowed me" and the
-   trigger's card payload is stale, so a hook-shaped entry (the only shape most
-   (2) clauses have) cannot find the skill it is acting as.
-4. **Borrowed cost/timing is re-implemented per caller** because nothing marks
-   "this invocation's cost is already paid" or returns the delay to the caller.
-
----
+Named entry (resolver above), instance binding (`hostfns.rs:1665-1681`,
+`wasm_rules.rs:2652-2670`), pause through the sentinel (`hostfns.rs:1711-1715`),
+trigger replacement and restore (`wasm_rules.rs:2656-2679`), body only
+(`hostfns.rs:1697-1698`), `Dest` returned only (`hostfns.rs:1713`), no player
+decision inside the import, totality in wasm, native and Kani. No invariant
+moved.
 
 ## 3. Capability as an invariant
 
-**An invocation names its target entry, binds the target's live instance as the
-running instance, seeds the invoked card as the skill in use, and pushes a frame
-that survives re-entrancy and prompt pauses; the frame is popped on return with
-the caller's instance, card and trigger restored. A press resolves by clause id
-when one is named, and by the card's own activation entry otherwise.**
+**A borrowed clause runs its own body under the borrower's trigger, on the
+target's live instance, with the borrower's cost already paid, and returns the
+delay it owes to the borrower as a schedule on the moved player.**
 
-Invariants the implementation must hold (each gets a test or a Kani obligation,
-§9):
+The implementation must hold:
 
-* **I1 Named entry.** Every invocation resolves an **entry id**: either the
-  reserved `entry::PRESS` (`abi.rs:1153-1162`) or a slug the target card
-  declared (`On::….id("2")`, `card-sdk/src/lib.rs:1185-1199`). Never "the first
-  `On::Play`". Unknown card traps; unresolvable entry is a no-op.
-* **I2 Instance.** Before the body runs, `current_uid` is the target's field
-  instance on the invoking player, or `-1` when the target is not placed. The
-  frame records the **caller's** instance as `by_instance` and restores it on
-  return.
-  `self_uid()` inside the body is the target instance, never the caller's, and
-  never inherited.
-* **I3 Frame.** Frames nest (`MAX_NESTING`, `host.rs:94`) and pause through the
-  existing `Asked`/`EXIT_NEED_INPUT` machinery; a re-run re-derives the stack.
-  Restoration happens on every exit path, including a trap-free no-op.
-* **I4 Trigger.** The caller's trigger view (kind, actor, tile, value, move) is
-  inherited unchanged; `trigger.card` / `trigger.cards` are **replaced** by the
-  invoked card for the frame and restored on return. "The skill in use" is the
-  invoked card, which is what 「该角色」 / 「该技能」 reads.
-* **I5 Body, not gate.** The invoke runs the entry's **body**. The condition,
-  residual guard and play gate are *not* evaluated; a caller that must know
-  first asks `ctx::query_guard` (which now seeds the same frame). `On::Filter`
-  (a value fold) is not invocable.
-* **I6 Dest.** The import returns the inner body's `Dest`; moving the card is
-  the caller's job (the `play_card` contract, `ctx.rs:2917-2920`). The engine
-  never silently unplaces the target.
-* **I7 Determinism.** No import asks a player. Prompts inside the body pause the
-  invocation through the existing sentinel; the ids are literals in the caller's
-  body, so a replay re-derives the same call.
-* **I8 Totality.** The import exists in wasm, native and Kani; the Kani arm
-  records the call (card id, entry id, `paid`) and returns a symbolic `Dest`.
+* **Target.** The borrowed clause is addressed by its declared entry
+  identifier (`2`) on the character's **persona** skill, never by "the first
+  Play" and never by a band skill.
+* **Fabric.** The target instance is the persona skill's field row. The
+  body's self-addressed reads (`crystals`, `is_placed`, `self_uid`, props)
+  answer for that row.
+* **Context.** `trigger.player_id` is the mover and `trigger.tile` is the
+  abandoned landing — the borrowed clause reads both. `trigger.card` /
+  `trigger.cards` name the borrowed card, so 「该技能」 in the body resolves to
+  the skill, not the shout.
+* **Cost.** The shout's cost is one pot; the skill's four must not be
+  collected. `COST_PAID` is the signal, and only this path passes it.
+* **Delay.** The roll and the owed settle belong to the **mover**, at the
+  mover's next turn end, on the mover's own position. The callback survives
+  the skill instance being gone or unplaced (the schedule carries the card
+  identifier, the entry identifier and the instance captured at schedule time,
+  `wasm_rules.rs:2581-2606`, `world.rs:466-495`).
+* **Half price.** The forced settle and the owed settle are both payments
+  under the skill; both are halved, exactly once.
+* **Once per move.** The shout has one use per move per copy; the dropped
+  latch travels with the move (`MoveResolved`).
+* **Pause.** Any prompt in the body (the roll's own window; an abnormal
+  gate inside `teleport_to`) pauses the whole invocation through
+  `EXIT_NEED_INPUT`; the outer play re-runs and re-derives the chain. No frame
+  field is saved.
+* **Determinism.** The roll goes through the serialized random stream like
+  every other roll; the entry identifier is a body literal.
 
----
+## 4. Problem restated
 
-## 4. Surface
+### 4.1 The copy cannot be completed in place
 
-### 4.1 `abi.rs` additions
+Finishing `pull` by hand duplicates: the mover's condition, the destination
+choice, the teleport, the roll, the stay, the owed-settle key and the
+half-price. Every one of them already exists in `tomori.rs:135-207`. A second
+implementation is exactly the drift that produced row 408.
 
-```rust
-/// Invocation flags for `ruleset_invoke_entry` (`ctx::invoke_entry_paid`).
-pub mod invoke {
-    /// The caller already paid the entry's activation cost; the body must not
-    /// collect it again. Read with `ctx::invoke_paid()`.
-    pub const COST_PAID: i32 = 1;
-}
+### 4.2 The persona path is itself wrong about the delayed settle
 
-/// `(card, entry, by, by_instance, instance, paid, depth)` -- the innermost
-/// invocation frame (`ctx::invoke`), postcard on the out-buffer. `entry` is the
-/// **resolved** entry id (`""` when that entry is unnamed, e.g. a `play_card`
-/// into a bare `On::Play`) — never an alias spelling. `by` / `by_instance` are
-/// the invoking player and the invoking card instance (`-1` when the caller was
-/// not a placed card, i.e. a hand play); `instance` is the target instance
-/// (`-1` when the target is not placed). The host frame stores `String`s; the
-/// guest interns them on decode like `group_skills`
-/// (`bandori-std/src/lib.rs:311-327`).
-pub struct InvokeFrame {
-    pub card: NameId,
-    pub entry: NameId,
-    pub by: i32,
-    pub by_instance: i32,
-    pub instance: i32,
-    pub paid: bool,
-    pub depth: i32,
-}
+`at_turn_end` (`tomori.rs:217-224`) receives the card **owner** because the
+`TurnEnd` entry is a hook on the owner's instance (`:57-61`). It settles the
+owner's position; the owner's turn end is the trigger. The sheet's clause
+lives on the **mover**:
+
+> 「…然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的下回合结束时
+> [触发结算]」
+
+`其` and `自己的` are the moved player. The half-price is likewise the moved
+player's, and `PaySplitMul` receives the **payer**
+(`play.rs:4094-4096, 3120-3133`), so the current `state::get(player_id, OWED_SETTLE)`
+reads the payer while the body writes the owner — correct only in the (3) arm
+where the mover and the owner are the same player.
+
+### 4.3 Dispatch order defeats the draft's two-entry split
+
+The hook walk is seat by seat, instance identifier ascending
+(`wasm_rules.rs:5998`). The persona skill is bound during setup
+(`game-core/src/engine/setup.rs:134`); the shout is placed only when played, so
+the skill's entries always run first on a shared landing. A second
+`SettleBefore` entry (`2-effect`) has already been dispatched, and declined, by
+the time the shout invokes `2`.
+
+### 4.4 Two half-price filters quarter the payment
+
+The shout halves through `half_key` (`tomori_inner_shout.rs:36, 155-181`) and
+the skill halves through `OWED_SETTLE` (`tomori.rs:56, 75-79`). Both are `Mul` stages
+and compose. On a roll of 6 or less both are live for the forced settle.
+
+### 4.5 The same landing carries two offers
+
+Both residuals admit in the same window: the poem's (2) whenever another
+player's endpoint is within five of the owner, and the shout's whenever the
+controller is within five of this card and the endpoint is within five of the
+controller. The poem runs first (§4.3). Without a shared once-per-move read,
+both can be accepted and the skill runs twice.
+
+## 5. Surface — no new ABI
+
+The invocation surface is complete. This item adds **no import**, no manifest
+field, no engine kind and no wire type. It changes two card bodies, adds one
+guest state key and re-aims two existing keys at the mover:
+
+```
+skill.tomoriPoem.usedThisMove    -- exists as `skill.tomoriPoem.acted`; one use per move, on the mover
+skill.tomoriPoem.owedSettle      -- exists as `skill.tomoriPoem.due`; an owed settle, on the mover
+skill.tomoriPoem.halfPrice       -- new; the half-price latch, on the mover
 ```
 
-No new `OnKind`, no `ManifestOn` change: entry ids are the v98 field.
+All three are player slots, i.e. the existing dynamic key store; a new key
+needs no save version (nothing enumerates the keys). The two existing keys are
+renamed to spell the words out, and both stop being read off the owner — the
+mover now carries them. The shout's `latch_key` is renamed `used_this_move_key`
+to say which latch it is.
 
-### 4.2 Import
+The only crossing identifier is the skill's card string
+(`skill:高松灯:诗超绊`), obtained through `bandori_std::persona_skill`
+(`bandori-std/src/lib.rs:320-322`), exactly as the nanami body does.
+
+## 6. Engine wiring
+
+Nothing engine-side changes. The relevant machinery is cited so a reviewer can
+check the fit:
+
+* `ctx::at_next_turn_end` pushes a `Scheduled` record with the player as owner
+  **and** target, `skip = true` when scheduled during that player's own turn,
+  and the current card and instance captured (`wasm_rules.rs:2581-2606`,
+  `ctx.rs:3678-3685`);
+* the turn-end pass takes due records out of the world before running them and
+  invokes `Call::AtEnd { player_id: owner, entry }`
+  (`wasm_rules.rs:6235-6280`), so the body receives the mover;
+* `MoveResolved` is the existing per-move cleanup point
+  (`tomori_inner_shout.rs:31-33`, `tomori.rs:64-65`);
+* `settle_tile_at` runs the settle with an explicit main-move bit
+  (`ctx.rs:4343-4345`, `hostfns.rs:2452-2465`).
+
+The invocation core is reused verbatim; `COST_PAID` is passed through
+`ctx::invoke_entry_paid`.
+
+## 7. Card usage — before / after
+
+### 7.1 `rules/skills/skill-personas/src/tomori.rs`
 
 ```rust
-// guest declaration (ctx/sys.rs), ruleset module
-pub fn invoke_entry(
-    player_id: i32,
-    card_p: i32, card_n: i32,
-    entry_p: i32, entry_n: i32,
-    flags: i32,
-) -> i32;
-
-// the innermost frame as postcard `InvokeFrame`; `(0, 0)` = size probe
-pub fn invoke_frame(out_ptr: i32, cap: i32) -> i32;
-
-// host table (host.rs) and native shims `op_invoke_entry([i32; 6])` /
-// `op_invoke_frame([i32; 6])`
+/// 「在此技能影响下的支付价格变为原本的一半」 -- on the moved player, around
+/// the forced settle and the owed settle only.
+const HALF_PRICE: &str = "skill.tomoriPoem.halfPrice";
 ```
 
-`invoke_entry` returns the inner `Dest` code, or `EXIT_NEED_INPUT`; six `i32`s,
-the native `[i32; 6]` maximum already in use. `invoke_frame` returns the
-postcard byte count (`out_ptr = 0` asks for the size only, the `group_skills`
-shape).
-
-`ruleset_invoke_skill` and `ruleset_play_card` are **kept** and become thin
-host-side calls into the same core with `flags = 0`; no signature moves (§8).
-They do **not** share an entry resolver: `invoke_skill` passes `entry::PRESS`,
-`play_card` passes its Play-first pick (`entry(OnKind::Play, None)`). Both mean
-the card's first Play today; the alias exists so a caller can say "the
-activation entry" without naming it (G05 §6.1).
-
-### 4.3 Guest wrappers (`card-sdk/src/ctx.rs`, next to `play_card` / `query_guard`)
+Entry (replaces the unnamed `SettleBefore` at `:51-55`):
 
 ```rust
-/// Run one named entry of `id` nested, as `player_id`, with its field instance
-/// bound. Body only -- ask `query_guard` first when the gate matters.
-pub fn invoke_entry(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
-    invoke_entry_flags(player_id, id, entry_id, 0)
-}
-
-/// `invoke_entry` for an entry whose cost the caller has already paid:
-/// the body sees `ctx::invoke_paid()` and must not collect it again.
-pub fn invoke_entry_paid(player_id: i32, id: &str, entry_id: &str) -> Result<Dest, Prompt> {
-    invoke_entry_flags(player_id, id, entry_id, crate::abi::invoke::COST_PAID)
-}
-
-fn invoke_entry_flags(player_id: i32, id: &str, entry_id: &str, flags: i32) -> Result<Dest, Prompt>;
-
-/// The innermost invocation frame, if this body is running inside one.
-pub fn invoke() -> Option<InvokeFrame>;
-
-/// `invoke().is_some_and(|f| f.paid)` -- sugar, not a second import.
-pub fn invoke_paid() -> bool;
+On::Action(Action::SettleBefore("tile.id >= 0", Some(before_settle_applies), before_settle))
+    .id("2")
+    .label("（2）")
 ```
 
-`ctx::invoke_paid()` is a read, not a decision. `ctx::invoke()` is what a
-logged invocation names (`by_instance`), and what future entries will branch on.
-
-### 4.4 Entry addressing
-
-* `entry::PRESS` (`abi.rs:1153-1162`) keeps its spelling, and resolves the
-  card's **first Play** -- unchanged from the pre-v111 engine, which is what a
-  skill button runs. `ctx::invoke_skill` is therefore exactly
-  `invoke_entry(…, entry::PRESS)`. `ctx::play_card` is not: it picks a Play
-  first, without the alias.
-* Clause slugs are declared by the target: 广町七深's (2) becomes
-  `On::Action(Action::CardUsed(…), …).id("2").label("（2）")`; 诗超绊's (2)
-  offer becomes `.id("2")` and its effect half `.id("2-effect")`. `"2"` is a
-  valid slug (`is_entry_slug`, `host.rs:3108`); labels stay display text.
-* `entry::PRESS` remains reserved (`host.rs:1098-1109`); the activation entry *may*
-  also carry `.id("2")` where the sheet numbers it, because a clause id is
-  identity and `PRESS` is a resolver, not a name.
-* Resolution: `PRESS` → the first Play
-  (`play_entry_preferring_gated()`, `host.rs:188-190`, which is
-  `entry(OnKind::Play, None)`); any other id → `entry_by_id`
-  (`host.rs:162-170`). Card unknown ⇒ trap
-  (`invoke_entry: unknown card {id:?}`); entry unknown/unnamed ⇒ **no-op**
-  returning `DEST_UNSET`, matching today's "no `On::Play` entry" path.
-
-### 4.5 Invocable kinds
-
-| kind | invocable | why |
-|---|---|---|
-| `Play` | yes | a hand play; the existing path |
-| `Press` | yes | the alias for the first Play (G05 §6.1); same body shape |
-| `Action` | yes | (2) clauses are reaction-shaped; the body is `fn(i32) -> Asked` |
-| `Settle` / `Schedule` | yes | same body shape |
-| `Filter` | no | a pure value fold (`i32 -> i32`), not an activation; trap |
-| `Counteract` | no | the body reads the answered chain link; trap |
-| `Message` | no | the body reads a message payload; trap |
-
-The kind is taken from `info.on[entry].kind`. The trigger **kind** stays the
-caller's; only `card` / `cards` are seeded (I4).
-
-### 4.6 `ctx::query_guard` extension
-
-`query_guard` already resolves by the same ids and clones the world
-(`hostfns.rs:2804-2824`, `:2868-2902`). It gains the same frame seeding: look up
-the target's instance and `enter_invoke(id, instance)` instead of
-`enter_card(id)`.
-This is required, not cosmetic: a gate shaped as a reaction residual
-(`on_skill_applies` reads `trigger::cards()`, `nanami.rs:79-84`) is
-otherwise always false inside the caller's run and the probe is useless.
-
-The CEL scope needs the same fact. `fill_window_ambient` fills
-`actor = player_id` and `trigger_card = 0` (`condition.rs:1393-1422`), and a
-reaction-shaped condition such as `"actor != owner && trigger_card != 0 && …"`
-(`nanami.rs:58-62`) therefore refuses. After the scope is built,
-`query_guard_entry` overwrites `scope.trigger_card = card` (and keeps
-`actor = player_id`) so the probe asks the question the invoke would answer. No
-wire change; PRESS probes become *more* accurate because `is_placed()`-shaped
-guards now see the real instance.
-
-### 4.7 What does *not* move
-
-`ctx::play_card` (card play with a returned `Dest`), `ctx::invoke_skill` (press
-by `entry::PRESS`), `ruleset_send` and the declare/`declared_arg` machinery are
-untouched. `declare` is per-entry and unrelated to invocation: an invoke runs
-`OP_RUN` only, so a body with `declare` gets `T::default()` from
-`drive_body_arg` (`card-sdk/src/lib.rs:215-229`) and its collector never asks.
-That is documented on the entry wrapper.
-
----
-
-## 5. Engine wiring
-
-### 5.1 One core
-
-`hostfns::invoke_skill` (`:1531-1600`), `hostfns::play_card` (`:3045-3109`) and
-the new `hostfns::invoke_entry` become one `invoke_inner(c, player_id, id,
-entry_id, flags)`:
-
-1. `guest_str` the id and the entry id; `rules.by_id` (trap on unknown);
-2. `depth >= MAX_NESTING` ⇒ trap `invoke_entry nested deeper than 8`;
-3. resolve the entry (4.4) and check the kind (4.5);
-4. `let instance = st.w().field_instances(player_id).iter().find(|(_, c)| c == id)`
-   — the same lookup the press paths already do (`wasm_rules.rs:9392-9397`,
-   `:9090-9100`);
-5. take fuel/answers, `HostState::new(…, depth + 1)`, `next_answer` carried;
-6. `enter_invoke(&id, instance)` (5.2), `play_from_hand(false)` saved/cleared;
-7. `call_entry(…, OP_RUN, player_id, &[], false)`; **no** `OP_GUARD`, **no**
-   `OP_DECLARE`, no `cardUsed` raise;
-8. restore world/answers/asked/host_request, `leave_invoke(saved)`,
-   `set_play_from_hand(was)`;
-9. `Ok(dest)`, `EXIT_NEED_INPUT` as `Ok(EXIT_NEED_INPUT)`, other errors trap.
-
-`invoke_skill` passes `entry::PRESS`; `play_card` resolves a Play first (G05
-§6.1) and keeps its "card play" doc.
-
-### 5.2 The frame (`wasm_rules.rs`; `CardWorld` default in `world.rs:1132-1141`)
-
-`enter_card` / `leave_card` are generalised to:
+The half-price filter keeps its shape (`:56`) and only changes its gate and
+name; `is_placed` is dropped because the owed settle runs from a schedule,
+after the skill instance may be gone:
 
 ```rust
-/// Open a nested invocation of `id` with the target instance `instance` (or -1).
-/// Saves the caller's card, dest, instance and trigger card payload.
-fn enter_invoke(&mut self, id: &str, instance: i32) -> InvokeSaved;
-/// Restore the caller's frame; returns the inner body's Dest.
-fn leave_invoke(&mut self, saved: InvokeSaved) -> i32;
+On::Filter(Filter::PaySplitMul("", Some(half_price_applies), on_pay))
 ```
 
-`enter_invoke` is `enter_card` plus `self.current_uid = instance` and
-`self.trigger.card/cards` saved + replaced with `id` (single: `card = Some(id)`,
-`cards = vec![id]`). `leave_invoke` restores both and
-`current_uid = saved.instance`.
-`Run.invoke_stack: Vec<InvokeFrame>` (not saved, §7) is pushed/popped here;
-`ctx::invoke()` and `invoke_paid()` read its top through one `invoke_frame`
-output-buffer import, and `self_uid()` keeps reading `current_uid` as today
-(`wasm_rules.rs:1479`).
-
-`enter_card` / `leave_card` stay **as they are** (clear uid, no seeding) so
-`send` and the event paths do not change; `enter_invoke` reuses their
-save/restore. `send` already binds a uid the same way
-(`hostfns.rs:3315-3319`) and keeps its own message context instead of the
-trigger seed; unifying it onto `enter_invoke` is a later cleanup, not this
-design.
-
-### 5.3 Trigger
-
-`CoreTrigger` already carries `card` / `cards`; the raised `cardUsed` press sets
-both (`play.rs:1168-1176`), so a *normal* press inside the invoked body's view is
-already "the skill in use". A borrowed invocation reproduces that fact without a
-raise: the frame seeds it. `ctx::trigger::*` in the invoked body therefore reads
-the caller's actor / tile / value (needed by 诗超绊 (2): the mover is
-`trigger::player_id()`, the abandoned landing is `trigger::tile()`) and the
-invoked card as 「该角色」 (needed by 七深 (2)).
-
-A raise is **not** added: an invocation is already committed on the caller's
-line, and a second counteraction window would let a [反击] negate a body whose
-cost was paid three effects ago.
-
-### 5.4 Limits, dest and traps
-
-* `MAX_NESTING` and the shared fuel budget are reused verbatim; the nested
-  guest and the outer run share one budget (`call_entry` already does,
-  `host.rs:3005-3016`).
-* Cost is the caller's business. `invoke_entry` is only the "cost paid" signal
-  (I5); it does not validate that anything was paid.
-* A trap inside the invoked body aborts the whole play (the play already
-  committed); the no-op entry path returns `DEST_UNSET`.
-* `Dest`: returned only. A placed target that wants to leave uses
-  `ctx::unplace_at(ctx::self_uid())` in its own body (the band (2) sweep
-  already does, `skill-groups/src/crychic.rs:168`).
-
-### 5.5 Kani model (`rules/kani/src/host.rs`, `crates/card-sdk/src/kani_host.rs`)
-
-The Kani host cannot execute the nested guest, so the arm records facts:
+Body:
 
 ```rust
-pub fn arm_invoke_entry(a: Args) -> i64 {
-    world::with_world_mut(|w| {
-        w.invoke_n += 1;
-        w.last_invoke = (name_id(a[1], a[2]), name_id(a[3], a[4]), a[5] & 1);
-    });
-    // symbolic dest: DEST_UNSET, Graveyard or Field, the three a borrowed body uses
-    world::with_world(|w| w.fate_hint) as i64   // a `fate_hint` field on the model
-}
-```
-
-`invoke_skill` and `play_card` both map to this arm: the recorded shape is the
-same, and only the entry argument differs (PRESS versus a resolved Play). `invoke_paid`
-is a cheap `last_invoke.2 == 1` where a proof needs it. Both are added to
-`rules/kani/build.rs`'s allowlist (`:124` region) and to each group's `host_subset!`
-table that uses them. A proof-only reader `last_invoke()` exposes
-`(card, entry, paid)` and `invoke_n`.
-
-### 5.6 Probing and the gate
-
-**The (2) condition does not survive a self-invocation, so `query_guard` cannot
-be the gate.** The condition is
-`actor != owner && trigger_card != 0 && charge(owner) >= 1`
-(`nanami.rs:58-62`) and `query_guard_entry` fills its candidate with
-`fill_candidate(world, player_id, id, false)`
-(`hostfns.rs:3210`), which sets `owner = player_id`. On the owner's own
-invocation `actor == owner`, so `actor != owner` is false and the probe answers
-`false` for exactly the case it is asked about. (The remaining terms — a trigger card and a
-pot — are true whenever a pot exists, so the probe is not "nearly right"; it is
-always wrong.)
-
-Nanami's prompt therefore tests its own costs directly, in the card
-(G05 §9.1): a crystal on the instance, `bandori_std::fire::total(player_id) >= 1`,
-and an owned persona skill. The body then invokes **unpaid** — the (2)'s pot cost
-is part of the clause and is collected by its own ask. `fire::total` includes
-temporary pots because `fire::spend` draws them first, so a temporary pot alone
-must admit. The 不再迷茫 substitution is not modelled (G05 open question 1).
-
----
-
-## 6. Card usage — before / after
-
-**G05 note.** When a clause is *asked* — nanami's crystal is an `ask_yes` in
-(3), and the offer's own conditions are the caller's — is the G05 group's. This
-document only guarantees what a body can *address* and *bind*; the gate
-rewrites below are the minimum to keep the cards coherent with the clause and
-are G05's to finish.
-
-### 6.1 `rules/cards/card-morfonica/src/nanami_effort.rs` (item 1)
-
-```rust
-// before: cant_play (:77-84)
-if owner_skill(player_id).is_none() { …no_skill }
-if ctx::held_names(player_id, TOKEN_PREFIX).is_empty() { …no_mark }
-// after: the (2) needs a pot, not a mark -- own costs only, no query_guard
-let Some(skill) = ctx::persona_skill(player_id) else { …no_skill };
-if bandori_std::fire::total(player_id) < 1 { …no_pot }
-
-// before: use_skill (:259-287)
-fn owner_skill(p) -> Option<NameId> { ctx::placed_cards(p).find(starts_with("skill:")) }
-ctx::add_crystals(-1, 0)?;
-ctx::play_card(id.as_str(), player_id)?;    // runs (3)
-// after
-let Some(skill) = ctx::persona_skill(player_id) else { return Ok(()) };
-ctx::add_crystals(-1, 0)?;                  // 「移除一个奇迹水晶」
-ctx::invoke_entry(player_id, &skill, "2")?; // 「视为发动你的（2）技能」
-```
-
-`owner_skill` → `ctx::persona_skill` so a band attachment can never be mistaken
-for the character skill (`OPEN-借用技能` remains open for a non-七深 owner; §11).
-The 「不受数量或轮数限制」 TODO resolves: the body runs with no gate, and the
-CD lives in `on_skill_applies` which the invoke does not run.
-
-Borrowed (2) body (`rules/skills/skill-personas/src/nanami.rs`):
-
-```rust
-On::Action(Action::CardUsed(…), Some(on_skill_applies), on_skill).id("2").label("（2）")
-```
-
-No body change: `trigger::cards()` now carries the invoked skill id (I4), and
-`ctx::ask_yes` + `fire::spend(1)` + the mark grant run as written.
-
-### 6.2 `rules/cards/card-crychic/src/mutsumi_never.rs` (item 1)
-
-```rust
-// before (:81-83)
-ctx::invoke_skill(player_id, &skill)?;
-// after
-ctx::invoke_entry(player_id, &skill, ctx::entry::PRESS)?;   // now instance-bound
-ctx::log(player_id, &Msg::new(key!("mutsumi_never_invoked")).card("card", skill));
-```
-
-Behavioural flip: with the band instance bound, `at_turn_end`'s
-`let x = ctx::crystals()` reads the post-spend count (e.g. 5 → 2 ⇒ 1000), pays
-it, and `spend_crystals` consumes the instance. The `"no money clause in (2)"`
-assertion in `card_paths.rs:361` flips to the paid figure. `skill-groups` needs
-**no** change once bound; `group_crystals` at `:131` is only the A stopgap.
-
-### 6.3 `rules/skills/skill-personas/src/tomori.rs` and
-`rules/cards/card-crychic/src/tomori_inner_shout.rs` (item 2)
-
-Poem: split the (2) into two named entries and route both callers through one
-effect body.
-
-```rust
-/// The (2) offer was accepted and paid on this settle; `"2-effect"` consumes
-/// it. Cleared on entry to the effect, so the pair is one-shot per settle.
-const OFFERED: &str = "skill.tomoriPoem.offered";
-
-// (2) offer -- ask + pay, latch OFFERED; the effect is a second entry so a
-//     borrower can enter it alone
-On::Action(Action::SettleBefore(…), Some(before_settle_applies), before_settle)
-    .id("2").label("（2）"),
-// (2) effect -- teleport + latch + roll + delay; runs on the same settle as a
-//     just-paid offer, or alone when a borrower invoked it
-On::Action(Action::SettleBefore("", Some(after_offer_applies), before_settle_effect))
-    .id("2-effect").label("（2）"),
-
-fn before_settle(player_id: i32) -> Asked {
+fn before_settle(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
-    // (3) is the owner's own landing near another (cost 1, *their* tile);
+    // (3) is the owner's own landing near someone else (cost 1, *their* tile);
     // (2) is someone else's landing near the owner (cost 4, the owner's tile).
-    let (cost, dest) = if mover == player_id {
+    let (cost, destination) = if mover == player_id {
         (1, nearest_other_tile(player_id))
     } else {
         (4, ctx::player_pos(player_id))
     };
-    if dest < 0 { return Ok(()); }
-    if !ctx::invoke_paid() {                            // a borrower may have paid
-        if !ask_yes(…) { return Ok(()); }
-        if !fire::spend(player_id, cost, …)? { return Ok(()); }
+    if destination < 0 {
+        return Ok(());
     }
-    state::set(mover, OFFERED, 1);                      // "2-effect" consumes it
-    Ok(())                                              // the effect is its own entry
-}
-
-/// `"2-effect"` applies exactly once: `"2"` just offered, so the latch is set;
-/// a paid invocation marks the cost paid instead.
-fn after_offer_applies(player_id: i32) -> bool {
-    let mover = ctx::trigger::player_id();
-    ctx::invoke_paid() || ctx::slot(mover, OFFERED) != 0
-}
-
-/// The destination is recomputed so the entry is self-contained when invoked
-/// (`"2-effect"` takes only `player_id`).
-fn before_settle_effect(player_id: i32) -> Asked {
-    let mover = ctx::trigger::player_id();
-    state::set(mover, OFFERED, 0);                      // one shot
-    let dest = if mover == player_id { nearest_other_tile(player_id) }
-               else { ctx::player_pos(player_id) };
-    if dest < 0 { return Ok(()); }
-    ctx::teleport_to(mover, dest);
-    state::set(mover, ACTED, 1);
-    if mover != player_id {                            // the (2) arm, not cost == 4
+    // A borrower already paid; only the skill's own offer collects.
+    if !ctx::invoke_paid() {
+        if !ctx::ask_yes(…)? {
+            return Ok(());
+        }
+        if !bandori_std::fire::spend_skill(player_id, cost, …)? {
+            return Ok(());
+        }
+    }
+    state::set(mover, USED_THIS_MOVE, 1);
+    state::set(mover, HALF_PRICE, 1);
+    ctx::teleport_to(mover, destination);
+    ctx::log(player_id, &Msg::new(key!("tomori_moved")).player_id("who", mover).tile("tile", destination));
+    if mover != player_id {
+        // (2) 「然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的下回合
+        // 结束时[触发结算]」 -- the follow-up is the (2) arm, not the cost 4.
         let n = ctx::roll(mover, 1, 20, RollPurpose::Effect, roll_source::SKILL)?;
         if n <= 6 {
             rules_status::stay::add(mover, 1);
-            state::set(mover, DUE, 1);                  // the **payer's** slot
-            ctx::at_next_turn_end(mover, "due_settle"); // 「自己的下回合结束时」
+            state::set(mover, OWED_SETTLE, 1);
+            ctx::at_next_turn_end(mover, "owed_settle");
+            ctx::log(player_id, &Msg::new(key!("tomori_stay")).i("n", n as i64));
         }
     }
-    log;
+    Ok(())
 }
-On::Schedule("due_settle", "", None, due_settle)       // = the old at_turn_end
 ```
 
-Two entries, not one body calling the other: the engine **runs every matching
-entry**, so a normal press enters `"2"` and then `"2-effect"` on the same
-settle. `"2"` therefore only offers and latches; `"2-effect"` is the single
-effect body, gated by the `OFFERED` latch (cleared on entry) or by
-`invoke_paid` on a call that skipped the offer.
-
-`nearest_other_tile` is the existing scan lifted out of `before_settle`
-(`tomori.rs:141-160`).
-
-`DUE` moves from the owner to the **mover** (`state::set(mover, DUE, 1)`), which
-makes the existing `half` filter correct as written: its body receives the payer
-and reads `state::get(player_id, DUE) > 0` (`tomori.rs:74-78`). The
-`TurnEnd` entry and its `actor == owner` condition go away; a schedule fires on the
-mover's next turn end (already skip-safe, `ctx.rs:3375`), which is what
-「自己的下回合结束时」 means, and it survives the card not being placed — the
-borrowed case. `due_settle` clears `DUE` first, then settles.
-
-Shout `pull`:
+Guard: the existing `USED_THIS_MOVE` refusal stays first; it is the once-per-move claim
+that the shout also reads (§7.3):
 
 ```rust
-// before (:229-237): teleport_to + latch_key + half_key + log
-// after
-ctx::set_slot(mover, &half_key(), 1);                     // covers the forced settle
-// Paid call of the offer entry: `invoke_paid` makes "2" skip ask/pay, and the
-// settle then reaches "2-effect" through the normal filter.
-ctx::invoke_entry_paid(player_id, "skill:高松灯:诗超绊", "2")?;
-ctx::log(...);                                            // 「使用一次…（2）技能」
+fn before_settle_applies(player_id: i32) -> bool {
+    let landing = ctx::trigger::tile();
+    if landing < 0 { return false; }
+    let mover = ctx::trigger::player_id();
+    if ctx::slot(mover, USED_THIS_MOVE) != 0 { return false; }
+    if mover != player_id {
+        return ctx::dist(landing, ctx::player_pos(player_id)) <= 5;
+    }
+    (0..ctx::player_count()).any(|p| {
+        p != player_id && !ctx::player_out(p) && ctx::dist(landing, ctx::player_pos(p)) <= 5
+    })
+}
 ```
 
-`clear_latch` on `MoveResolved` clears `latch_key` and **`half_key`** (the forced
-settle is over). The shout adds its own `On::Schedule("due_settle", …)` entry:
-set `half_key`, `ctx::settle_tile_at(mover, pos, true)`, clear `half_key`. One
-fire (not four) because the shout paid before invoking (`COST_PAID`); the roll
-and delay come from the skill body.
+Half filter — the latch sits on the paying player, who is the mover on both
+settles, and no `is_placed` check is needed because the owed settle runs from a
+schedule:
 
-`tomori.rs::at_turn_end` becomes `due_settle` (`On::Schedule` instead of
-`On::Action(Action::TurnEnd)`) and is unchanged apart from the clear order.
-
----
-
-## 7. Save / record / replay
-
-* **SAVE_VERSION unchanged.** The invoke stack is transient: a pause returns
-  `EXIT_NEED_INPUT` through the caller, the answer log is saved as today, and
-  the resume re-runs the outer entry, re-enters and re-derives the whole chain
-  (the same model `play_card` nested calls already rely on). The target
-  uid is re-looked-up. No new serde field; the newly *used* `Scheduled` rows are
-  the v102 shape and already save.
-* **RECORD_VERSION unchanged (3).** Ids are body literals and prompt answers are
-  already recorded; no RNG or input shape moves. The poem's 1d20 goes through
-  the serialized RNG stream like every roll.
-* **Replay.** An archived bundle replays through its own host; nothing in the
-  record names the new import. A record made after this design replays only on a
-  bundle that has it — the normal forward rule.
-
-If a pause-with-open-frame is ever observed across a save boundary to lose
-state, the fallback is to persist `invoke_stack` with `#[serde(default)]` and
-bump SAVE_VERSION by one beyond G05's (17 at the README landing order; take
-the head at landing, shifting the later groups); the
-design above does not need it.
-
-## 8. Versioning
-
-**No bump of its own.** The new import is additive; no existing import moves
-arity and no manifest field changes. `ruleset_invoke_skill` and
-`ruleset_play_card` stay at their current signatures. This group lands **with
-G05**, which does bump (110 → 111 for the press entries), and this block
-appends to that version's note.
-
-Insert below the current head note (the `v111` block, inside G05's note):
-
-```
-/// v111 (continued): **named-entry invocation**. New imports
-///    `ruleset_invoke_entry(player_id, card, entry, flags)` and
-///    `ruleset_invoke_frame(out, cap)` -- run one named
-///    entry of `card` nested with its field instance bound as `current_uid`
-///    and the invoked card seeded as the skill in use (`trigger.card` /
-///    `trigger.cards`), both restored on return. `ruleset_invoke_skill` /
-///    `ruleset_play_card` are wrappers over the same core -- PRESS and
-///    Play-first respectively (G05 §6.1); signatures unchanged.
-///    `flags` bit 0 = `invoke::COST_PAID`
-///    (`ctx::invoke_paid`). Guest surface `ctx::invoke_entry` /
-///    `ctx::invoke_entry_paid` / `ctx::invoke`; `ctx::query_guard` seeds and
-///    binds the same frame. Play / Action / Settle / Schedule entries are
-///    invocable; Filter / Counteract / Message trap; an unknown entry is a
-///    no-op. ABI_VERSION unchanged (no signature moved).
+```rust
+fn half_price_applies(player_id: i32) -> bool {
+    state::get(player_id, HALF_PRICE) > 0
+}
 ```
 
-If the reviewer prefers the alternative of extending `ruleset_invoke_skill` with
-the entry pair (5 args), that *is* a wire break on top and the group takes the
-next number instead (112 → 113), shifting the rest, with a
-one-line reason.
+Clear (the existing `MoveResolved` hook at `:62-64`, renamed) and the owed
+settle (replacing `at_turn_end` at `:217-224`):
 
-## 9. Tests (per item) and Kani obligations
+```rust
+fn clear_used_this_move(_player_id: i32) -> card_sdk::Asked {
+    let mover = ctx::trigger::player_id();
+    if mover >= 0 {
+        state::set(mover, USED_THIS_MOVE, 0);
+        state::set(mover, HALF_PRICE, 0);             // the forced settle is over
+    }
+    Ok(())
+}
 
-Black-box tests use the existing `Table` harness and `t.option` / `answer_q`.
+/// 「并在自己的下回合结束时[触发结算]」 -- the owed settle, at the mover's own
+/// position. Not a main move (row 734's shape).
+fn owed_settle(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, OWED_SETTLE, 0);
+    state::set(player_id, HALF_PRICE, 1);
+    let at = ctx::player_pos(player_id);
+    if at >= 0 {
+        ctx::settle_tile_at(player_id, at, false);
+    }
+    state::set(player_id, HALF_PRICE, 0);
+    Ok(())
+}
+On::Action(Action::MoveResolved("", None, clear_used_this_move))
+On::Schedule("owed_settle", "", None, owed_settle)
+```
 
-| item | test |
+The `TurnEnd` entry and its `actor == owner` condition are removed; a schedule
+is what 「自己的下回合结束时」 means and it does not need the instance to be
+on the field.
+
+### 7.2 `rules/cards/card-crychic/src/tomori_inner_shout.rs`
+
+The hook at `:30` keeps its condition and swaps `Some(not_latched)` for
+`Some(offer_open)`; the new body also stands down when the skill's own use
+already claimed this move:
+
+```rust
+/// The borrowed skill's own key -- must match `tomori.rs`.
+const POEM_USED_THIS_MOVE: &str = "skill.tomoriPoem.usedThisMove";
+const POEM_HALF_PRICE: &str = "skill.tomoriPoem.halfPrice";
+
+fn offer_open(_player_id: i32) -> bool {
+    let mover = ctx::trigger::player_id();
+    ctx::slot(mover, &used_this_move_key()) == 0 && ctx::slot(mover, POEM_USED_THIS_MOVE) == 0
+}
+```
+
+`pull`:
+
+```rust
+fn pull(player_id: i32) -> card_sdk::Asked {
+    let Some(skill) = ctx::persona_skill(player_id) else {
+        return Ok(());
+    };
+    let mover = ctx::trigger::player_id();
+    if ctx::player_pos(player_id) < 0 {
+        return Ok(());
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("tomori_inner_shout_title")),
+        &Msg::new(key!("tomori_inner_shout_pull")).player_id("who", mover),
+    )? {
+        return Ok(());
+    }
+    if !bandori_std::fire::spend(player_id, 1, &Msg::new(key!("tomori_inner_shout_spend")))? {
+        return Ok(());
+    }
+    // Claim the card's own once-per-move before the body teleports, so the
+    // redirect re-raise does not offer again.
+    ctx::set_slot(mover, &used_this_move_key(), 1);
+    // 「使用一次高松灯（MyGO!!!!!）的（2）技能」 -- the body, paid: one pot,
+    // not four. The body owns the teleport, the roll and the delay.
+    ctx::invoke_entry_paid(player_id, &skill, "2")?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_inner_shout_pulled"))
+            .player_id("who", mover)
+            .tile("tile", ctx::player_pos(player_id)),
+    );
+    Ok(())
+}
+```
+
+Renamed: `latch_key` (`:148-153`) becomes `used_this_move_key`; its format
+string and the per-instance suffix stay.
+
+Deleted: `half_key`, `half`, `on_pay`, and the
+`On::Filter(Filter::PaySplitMul(...))` entry (`:34-36, 155-157, 172-181`).
+`clear_latches` keeps the shout's own latch and **also** clears the two poem
+latches it uses, so they cannot leak when the skill instance is unplaced and
+its own `MoveResolved` never runs:
+
+```rust
+fn clear_latches(_player_id: i32) -> card_sdk::Asked {
+    let mover = ctx::trigger::player_id();
+    if mover >= 0 {
+        ctx::set_slot(mover, &used_this_move_key(), 0);
+        ctx::set_slot(mover, POEM_USED_THIS_MOVE, 0);
+        ctx::set_slot(mover, POEM_HALF_PRICE, 0);
+    }
+    Ok(())
+}
+```
+
+### 7.3 The two offers on one landing
+
+Sequence on a qualifying landing, with the poem placed and the shout placed:
+
+1. the poem's `2` is dispatched first (lower instance identifier). It asks for
+   four pots and, if accepted, sets `USED_THIS_MOVE` / `HALF_PRICE`, teleports, rolls, may owe
+   a settle.
+2. the shout is dispatched. `offer_open` is false because its own latch is
+   clear but `USED_THIS_MOVE` is 1, so the shout does **not** offer — the skill already
+   ran this move.
+3. if the poem's offer was declined, `USED_THIS_MOVE` stays 0; the shout offers, pays
+   one pot, invokes `2` with `COST_PAID`, and the body sets `USED_THIS_MOVE` / `HALF_PRICE`
+   itself.
+4. the redirect re-raise at the destination dispatches both residuals again;
+   `USED_THIS_MOVE` and the shout's own latch both refuse.
+
+There is always at most one skill use per landing. The shout's own once-per-move
+latch is still needed for the case the poem instance is not on the field (the
+harness `Table::vanilla`; a skill that has been removed), where no poem offer
+exists at all.
+
+The order has one cost: the player is asked for the skill's four pots first and
+must decline to take the shout's one-pot route. When the shout is the cheaper
+route, the skill could stand down on its own; that needs the skill body to scan
+for a placed shout, and is left as open question 1 rather than added here.
+
+### 7.4 Mutsumi's destination reading
+
+The invocation fix does not touch row 426. `branch_crystals` sets
+`ctx::set_dest(ctx::Dest::Banished)` (`mutsumi_never.rs:99`) although only (3)
+prints 「此卡[移除]」. The engine default for a played card is the graveyard,
+so (2) should probably not set a destination at all. It is small, same body,
+and listed as an open question (§14 q4) rather than smuggled into this item.
+
+## 8. Save, record and replay
+
+* **SAVE_VERSION unchanged (16).** `skill.tomoriPoem.halfPrice` is a player slot;
+  slots are a dynamic key/value map. `Scheduled` is already saved and already
+  carries `card`, `owner`, `target`, `skip`, `early`, `uid` and `entry`
+  (`world.rs:466-495`); the owed settle uses that shape. The two renamed key
+  strings (`acted` → `usedThisMove`, `due` → `owedSettle`) cost at most one
+  extra use when a save made before the rename is loaded mid-move; the pending
+  schedule carries its entry identifier, so the delayed settle itself is not
+  lost. The `TurnEnd` gate that read the old `due` key is removed. A pause inside the
+  borrowed body returns `EXIT_NEED_INPUT` through the caller; the resume
+  re-runs the outer entry and re-derives the whole chain. The invocation frame
+  stack is transient (`host.rs:3189-3196`).
+* **RECORD_VERSION unchanged (4).** Entry identifiers are body literals; the
+  trigger and the roll answers are recorded as today. The 1d20 uses the
+  serialized random stream.
+* **Replay.** A record made after this change replays on a bundle that has it;
+  an archived bundle replays on its own host. Nothing in the record names an
+  import.
+
+## 9. Versioning
+
+**No bump of its own.** The surface is the G05/v111 adoption described in
+`abi.rs:771-782`; this revision adds card code only. If a reviewer wants the
+follow-up recorded, append one line under the v111 block:
+
+```
+/// v111 (continued, G13): the borrowed-clause follow-up is card-only --
+///    `skill:高松灯:诗超绊` names its (2) `"2"` and honours
+///    `ctx::invoke_paid()`; the shout invokes it paid and the body schedules
+///    the owed settle on the mover. No wire change.
+```
+
+## 10. Tests
+
+### 10.1 Item 2
+
+File: `rules/tests/tests/crychic.rs`, beside the existing window tests
+(`:1503-1600`). The two offer-order tests bind the persona skill explicitly
+(the same setup as `mygo.rs`'s skill tests); the rest place only the shout.
+
+| test | assertion |
 |---|---|
-| 1 | `morfonica.rs::nanami_press_invokes_skill_two` (G05 §12) — 1 fire, persona skill of 七深 bound; after the press: 1 pot spent, one `角色标记:skill:广町七深:…` gained, the `nanami_mark` log present, no `nanami_which` (the (3) pick) prompt; the invoked frame is pushed and popped |
-| 1 | `morfonica.rs::nanami_press_spends_one_crystal_only` — starting 2 crystals, 1 removed |
-| 1 | `morfonica.rs::nanami_press_without_pot_refused` — 0 fire, no crystal substitute → `nanami_effort_no_pot`/gate refusal before the crystal is spent |
-| 1 | `crychic.rs::mutsumi_never_cash_out_reads_the_band_instance` — 5 crystals: after (2) the band card is gone, money `+2*500` (not the pre-spend 5), band crystals 0 (no `Sumimi:#L11` placed, so the substitution order is not involved) |
-| 1 | `crychic.rs::mutsumi_never_cash_out_is_zero_on_a_shortfall` — 1 crystal: all spent, no money |
-| ABI | `crates/game-rules/tests/card_activation.rs::invoke_binds_the_target_and_restores_the_outer_frame` — test card A invokes test card B; B reads `self_uid` = B's uid, A's `self_uid` is restored after |
-| ABI | `card_activation.rs::invoke_seeds_and_restores_the_trigger_card` / `::invoke_unknown_entry_is_a_noop` / `::invoke_unknown_card_traps` / `::invoke_filter_entry_traps` |
-| ABI | `card_activation.rs::invoke_skill_is_invoke_entry_press` — identical `Dest` and log as the PRESS slug (both now go through `invoke_entry`) |
-| ABI | `card_activation.rs::play_card_still_picks_the_play_entry` — a card with both a Play and a press: `ctx::play_card` runs the Play, `ctx::invoke_skill` runs the press |
-| 2 | `crychic.rs::tomori_shout_pull_runs_the_borrowed_second_body` — the poem's own `tomori_moved` log appears (proves the body, not the copy), mover teleported to the controller's tile |
-| 2 | `crychic.rs::tomori_shout_pull_rolls_once_and_leans_on_six_or_less` — forced face 6 ⇒ `stay` 1 plus a scheduled settle; face 7 ⇒ none |
-| 2 | `crychic.rs::tomori_shout_delayed_settle_pays_half_at_the_movers_next_turn_end` — the settle runs on the mover's next turn end (not the controller's), at half, and then clears |
-| 2 | `crychic.rs::tomori_shout_spends_one_fire_not_four` — fire pool 2, one spent, `COST_PAID` suppresses the poem's 4 |
-| 2 | `mygo.rs::tomori_second_settles_at_the_movers_turn_end` — the standalone skill, same delay assertion |
+| `tomori_shout_pull_runs_the_borrowed_second_body` | the skill's own `tomori_moved` log appears (proves the body, not the copy); the mover is on the controller's tile |
+| `tomori_shout_pull_rolls_once_and_leans_on_six_or_less` | forced 6 ⇒ one `stay` and one owed schedule; forced 7 ⇒ neither |
+| `tomori_shout_spends_one_fire_not_four` | pool 2, exactly one spent (`COST_PAID` suppresses the four) |
+| `tomori_shout_delayed_settle_runs_at_the_movers_next_turn_end` | the settle fires at the mover's next turn end, on the mover's position, and then clears |
+| `tomori_shout_delayed_settle_pays_half` | the owed settle is halved once, not quartered |
+| `tomori_shout_does_not_offer_when_the_skill_already_ran` | accept the skill's own offer ⇒ the shout offers no second use |
+| `tomori_shout_offers_after_the_skill_offer_is_declined` | decline the skill's offer ⇒ the shout still offers |
 
-Static: `rules/kani/tests/on_parse.rs` (`.id` on an `On::Action` survives the
-manifest), `split_hook_entries.rs` (the poem's two (2) entries keep distinct
-kinds/ids), `crates/card-sdk/src/kinds.rs` count unchanged.
+File: `rules/tests/tests/mygo.rs`, for the persona path without the shout:
 
-**Kani obligations** (specs from the quotes only; the Kani host records call
-facts rather than running the nested guest):
+| test | assertion |
+|---|---|
+| `tomori_second_settles_for_the_mover_at_their_turn_end` | the settle is the mover's, at the mover's position, at the mover's turn end |
+| `tomori_second_halves_every_payment_of_the_forced_settle` | a roll above 6 still halves the forced settle (the current `OWED_SETTLE` gate would not) |
 
-* `nanami_press_invokes_exactly_one_entry_iff_a_crystal_and_the_second_admits`
-  — one `invoke_entry` with entry `"2"`, `paid == false`, crystal −1; zero when
-  the gate refuses.
-* `nanami_press_gains_no_mark_by_itself` — the mark arrives from the inner body,
-  so the press's own effect set is one crystal + one log + one invoke.
-* `mutsumi_burns_min_three_crystals_iff_it_invokes` — `n = min(3, crystals)`
-  before the call, and `invoke_n == 1` iff a band skill is bound.
-* `mutsumi_borrowed_invoke_is_unpaid` — flags 0: the band (2) is not a cost the
-  card pre-paid.
-* `tomori_pull_invokes_paid_iff_accepted` — `paid == true`, one fire spent, and
-  no invoke on a declined ask or a failed substitution.
-* `tomori_roll_follow_up_iff_the_mover_is_not_the_owner` — the `mover != player_id`
-  arm, not `cost == 4`.
-* `tomori_due_settle_clears_its_latch_iff_it_settles` — `DUE` (poem) / `half`
-  (shout) are 0 after the deferred settle, and the settle happens exactly once
-  at the mover's next turn end.
-* ABI stub totality: `invoke_entry` / `invoke_frame` arms exist in the
-  `kani_host` match (compiler-exhaustive) and in `rules/kani/build.rs`.
+The existing `tomori_shout_pulls_to_the_controllers_own_tile_with_settle`
+stays; its half assertion becomes meaningful rather than quartered.
 
-## 10. Alternatives
+### 10.2 Item 1 coverage still owed
 
-1. **Extend `ruleset_invoke_skill` with the entry pair** (5 args) instead of a
-   new import. One primitive fewer, but a signature break: every current wasm
-   needs the bump and the archived-bundle story gains a version fork. Rejected;
-   the additive import is free because `invoke_skill` is already just PRESS.
-2. **No ABI: every borrower copies the half it needs** (finish tomori's copy,
-   hand-write nanami's (2)). Zero surface, but two implementations per borrowed
-   clause — the exact drift that caused item 2 — and the copy cannot bind an
-   instance, so the CRYCHIC cash-out stays broken unless it is also special-
-   cased to `group_crystals`. Rejected.
-3. **Typed invoke argument (the `declare` mirror)**: `invoke_entry::<T>` +
-   `ctx::invoke_arg::<T>()`, with `fn(i32, T)` bodies. More general than
-   `COST_PAID` (a target tile, a count), but doubles `BodyShape` and adds
-   postcard ceremony to every site for two fields. Rejected now; it composes on
-   top of this design later.
-4. **Raise a synthetic `cardUsed` for each invoke.** The body then gets its own
-   event context and payload for free, but a second counteraction window opens
-   for an already-committed invocation and every `cardUsed` listener reruns on
-   the invoked line. Rejected; seeding without a raise is enough for I4.
-5. **Full call handles** (`ctx::call(card, entry) -> RunHandle`, explicit
-   return). More general than fire-and-return, unnecessary while `Asked` already
-   pauses through. Rejected for this batch.
+File `crates/game-rules/tests/declare_arg.rs` (extension of `:497-531`):
 
-## 11. Open questions
+* `invoke_binds_the_target_and_restores_the_outer_frame` — target `self_uid`
+  inside the body, caller restored after;
+* `invoke_seeds_and_restores_the_trigger_card`;
+* `invoke_unknown_entry_is_a_noop`;
+* `invoke_unknown_card_traps`;
+* `invoke_filter_entry_traps`;
+* `invoke_skill_is_invoke_entry_press`;
+* `play_card_still_picks_the_play_entry`.
 
-1. **Who is 「你的（2）技能」 for a non-七深 owner?** `OPEN-借用技能`
-   (`spec/OPEN-QUESTIONS.md:276`). This design binds the *invoking* player's
-   persona skill; if the sheet ever means the card's owner instead, the lookup
-   moves to the card's owner (a new owner-of-instance reader) and the entry id
-   stays.
-2. A `invoke_entry_gated` wrapper could ask `query_guard` first if a clause ever needs "normal
-  limits".
-3. **Trigger kind.** The invoked body inherits the caller's kind. Should an
-   `Action` entry instead present its own declared kind for the frame? Today's
-   bodies do not read it, but a future guard might.
-4. **Static slug check.** An unknown entry is a no-op; a typo is therefore
-   silent. Add a build-time or test-time scan that every literal passed to
-   `invoke_entry` resolves on its target.
-5. **`play_card` unification.** Should `ctx::play_card` be documented as
-   `invoke_entry(PLAY, …)` (and eventually folded), or stay a separate concept
-   because it is for hand/pile cards? It now shares the core either way, but it
-   does **not** pick PRESS: on a card with both a Play and a press, a play means
-   the Play (G05 §6.1).
-6. **`COST_PAID` validation.** The flag trusts the caller. Should the engine
-   compare a declared card-authored cost prop against what was paid, or is
-   trust plus one test per site sufficient?
-7. **Transient instances for borrowed, unplaced skills.** A persona skill is a
-   placed `skill:*` instance, and step 4 of `invoke_inner` finds it, so
-   `is_placed()` is **true** in a borrowed persona body. The open case is a card
-   invoked from a zone it is not placed in (a hand or pile card), where the
-   lookup is empty and `is_placed()` false; if such an entry needs it true, the
-   engine must materialize a transient instance. Today's bodies do not.
-8. **Pot gates vs the crystal substitution.** 七深's (2) condition says
-   `charge(owner) >= 1`; `fire::spend` can take a 不再迷茫 crystal instead
-   (`tomori.rs:101-104` is the same question on the poem side and omits the
-   gate). Should the (2) gate be `charge(owner) >= 1 || a substitute is armed`,
-   or is a 0-pot press meant to be refused? The design keeps the sheet's literal
-   pot condition on the gate and lets `fire::spend` substitute only inside the
-   body's ask.
-9. **Should an invoked entry's `declare` run?** Today it gets `T::default()`.
-   A later addendum could run `OP_DECLARE` with the invoke frame seeded, at the
-   cost of a prompt inside a nested run.
+File `rules/tests/tests/morfonica.rs`:
+
+* `nanami_press_invokes_skill_two` — one pot, one mark, the `nanami_mark`
+  log, no `nanami_which`;
+* `nanami_press_spends_one_crystal_only`;
+* `nanami_press_without_pot_refused` — no crystal is spent.
+
+And extend `card_paths.rs::mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall`
+with `assert_eq!(t.money(0), m0)`.
+
+Static: `on_parse.rs` (`.id` on the `SettleBefore` survives the manifest),
+`kind_table_pin.rs` (unchanged kinds).
+
+## 11. Kani obligations
+
+The Kani host records the invocation rather than running it
+(`rules/kani/src/host.rs:2400-2465`): `invoke_n`, `last_invoke = (card, entry,
+paid, by_instance)` and a bounded stack. Proofs:
+
+* `tomori_pull_invokes_paid_iff_accepted` — `paid == true`, one pot spent, no
+  invocation on a declined answer or a failed substitution;
+* `tomori_follow_up_iff_the_mover_is_not_the_owner` — the follow-up arm is
+  `mover != player_id`, not `cost == 4`;
+* `tomori_owed_settle_marks_the_mover_iff_the_roll_is_low` — `stay` and `OWED_SETTLE`
+  only on 6 or less;
+* `tomori_owed_settle_clears_its_latches_iff_it_settles` — `OWED_SETTLE` and `HALF_PRICE` are
+  zero after;
+* the `invoke_paid` model read is `last_invoke.paid`.
+
+## 12. Alternatives
+
+1. **Finish the copy instead** (roll, stay, schedule in the shout). No step
+   forward: the shout already drifts, the hand-written destination logic would
+   be duplicated, and nothing binds the skill instance. Rejected.
+2. **Two entries with an `OFFERED` latch** (the draft). Correct only if the
+   borrowed call names the second entry *and* the effect can be reached
+   without the dispatch pass; more state and a dispatch-order trap. Rejected
+   for a single entry.
+3. **Keep the half-price latch on the shout** and make the poem's filter
+   stand down when borrowed. The settle filters run after the frame is popped,
+   so a body cannot see that it was borrowed; it would need a third persistent
+   marker. Rejected.
+4. **Let `ctx::settle_tile_at(..., true)` stand.** The owed settle is then
+   reported as a main move and on-main-move hooks (row 734's shape) answer
+   wrongly. Rejected.
+5. **Raise a synthetic `cardUsed` for the borrowed run** so the skill's own
+   condition re-runs. A second counteraction window opens on an already
+   committed line and every `cardUsed` listener re-runs. Rejected; body-only
+   is the landed contract.
+6. **A declared argument carrying the mover** (`invoke_entry::<i32>`). One
+   more value crosses only to avoid reading `trigger.player_id`, which the
+   inherited trigger already supplies. Rejected for this item.
+
+## 13. Necessity
+
+Two questions decide the group: can the defect actually be reached, and is
+there a smaller route than one named-entry invoke? The first is yes and
+player-visible; the second has no surviving candidate.
+
+### 13.1 The defect is reached in normal play
+
+「内心的呐喊」 is a shipped card played by 高松灯（CRYCHIC） once the band has
+transformed to MyGO!!!!!. Its offer fires on an ordinary landing and the
+existing tests pin that window (`crychic.rs:1503-1600`). The player answers,
+pays one pot, and gets only the teleport: the roll, the [停留], the delay and
+the half-price of the skill's own settle never happen (site TODO,
+`tomori_inner_shout.rs:220-222`; row 408). The visible failure is not an edge
+case behind a gate — it is the body of the card.
+
+The same shape broke two other cards before G05: 七深 (3) with a crystal and no
+mark burned the crystal and ran the skill's *other* clause (row 735), and 睦
+(2) invoked the band skill with no bound instance, so the crystal cash-out
+read `0` and the spend never happened (row 426's neighbourhood, now pinned at
+`card_paths.rs:433-436`). Borrowed clauses are a live, player-facing mechanic,
+not a hypothetical.
+
+### 13.2 No existing surface can address the clause
+
+Every "run that card" route resolves the first `On::Play`:
+
+* `ctx::play_card` and `ctx::invoke_skill` both pass `entry::PRESS`;
+  `PRESS` resolves `play_entry_preferring_gated()` (`host.rs:188-190`);
+* **the poem has no `On::Play` at all.** Its entries are all `Action`
+  (`tomori.rs:42-65`). `play_card` or `invoke_skill` on it finds no Play,
+  returns `DEST_UNSET` (`hostfns.rs:1632-1634`) and runs **nothing**. There is
+  no route to the poem's (2) before this group;
+* `query_guard` probes an entry but is read-only (`hostfns.rs:3317-3362`);
+* `declare` collects an argument and does not run a body (`ACTIVATION.md` §2);
+* a copy is the only fallback, and it cannot bind the skill's instance.
+
+The first-Play convention does work for *some* skills, by coincidence: 鳰原
+令王那's (2) is its `On::Play` (`pareo.rs:33`), 冰川纱夜's press is its (2) as
+well (`sayo.rs:34`). A caller therefore cannot tell "the skill's press" from
+"the skill's (2)": on 七深 and 诗超绊 they differ. That is exactly the class of
+defect row 735 records, and it is why `PRESS` and a clause identifier must be
+two different resolutions (§2.2).
+
+### 13.3 The borrowers are not one card
+
+Cross-card use is printed on several cards and is already implemented in
+several places:
+
+| card | clause | how it reaches the other card |
+|---|---|---|
+| `Mor:（NNM）稍微努力了一下` (3) | 「视为发动你的（2）技能」 | `invoke_entry(…, "2")` — landed |
+| `CRYCHIC:（睦）从没有觉得...` (2) | 「立即执行乐队技能的（2）效果」 | `invoke_skill` — landed |
+| `CRYCHIC:（灯）内心的呐喊` (3) | 「使用一次高松灯（MyGO!!!!!）的（2）技能」 | **this item** |
+| `CRYCHIC:春日影` (2) | 「使用一次Crychic角色的技能」 | `play_card` + `PRESS` (`haruhikage.rs:109-127`) |
+| `R:（纱夜）弹奏弹奏弹奏，继续弹奏` | 「视为使用一次此卡使用者的技能」 | announces only; the invoke is the TODO (`sayo_play.rs:58-68`) |
+| `HHW:梦幻的回礼` | 「自动使用一次你的乐队技能」 | copy |
+| `Mujica:（海铃）` | takes every band skill card | no run yet |
+| `Mujica:（睦/mortis）表演的本能` | copies the previous card | `play_card` (`mortis_instinct.rs:40`) |
+
+Five of the eight already go through a run import; the other three are
+announcements or copies. A fix shaped only for 灯 leaves the same first-Play
+assumption under 春日影, 纱夜 and 表演的本能, where it is wrong whenever the
+borrowed clause is not the first Play.
+
+### 13.4 What the copy alternative costs, measured
+
+Finishing the shout's copy is the only alternative that needs no shared body.
+It is not cheaper:
+
+* **It already drifted.** The copy halves unconditionally (as the sheet's
+  semicolon says) while the skill gates the half on the roll; the skill's own
+  delay settles the controller's tile at the controller's turn end while the
+  copy has no delay at all (§4.2, §4.4). Two implementations have already
+  produced three different readings of one pair of sentences.
+* **The sheet numbers clauses, not bodies.** Both callers want "the (2)"; a
+  copy re-derives when the (2) fires and what it costs, so every future
+  correction (the delay target, the half, a ruling on 421) is two edits with
+  no compiler link between them.
+* **A copy cannot bind.** The borrowed body must answer `is_placed`,
+  `self_uid` and its own counters for the skill instance. Only the engine
+  frame does that; a second copy would either re-implement the binding
+  (impossible in the guest) or leave the instance unreadable. 睦's cash-out is
+  the proof: before `enter_invoke` it read `0` (`card_paths.rs:433-436`).
+
+### 13.5 Every piece is load-bearing
+
+| remove | what breaks | evidence |
+|---|---|---|
+| the entry identifier `2` | the poem is unreachable (no Play) | §13.2 |
+| the instance binding | the body reads a void instance; 睦's cash-out is 0 | `card_paths.rs:433-436` |
+| the trigger seed | 「该技能」/「该角色」 resolves to the shout | nanami mark name, §2.3, trigger replacement |
+| `COST_PAID` | the body charges four pots after the shout charged one | §7.1 |
+| the schedule on the mover | the settle lands on the controller, on the controller's tile, at the controller's turn end | §4.2 |
+| the single `HALF_PRICE` latch | the charge quarters (two filters) or is lost after `MoveResolved` | §4.4 |
+| the `USED_THIS_MOVE` read in the shout | the skill runs twice on one landing | §4.5 |
+| the body's own teleport | the caller and the body both teleport | §4.4 / R10 |
+
+The minimum version is therefore the single-entry, paid, mover-scheduled,
+single-latch design. The draft's second entry adds state without removing any
+of the above, and the copy alternative removes none.
+
+### 13.6 What would make the group unnecessary
+
+* **A ruling that a borrowed use pays the borrowed card's own cost.** Then
+  `COST_PAID` goes; the body still has to be reached, so §13.2 stands.
+* **A universal "skill use" event** that carries the clause and runs it (a
+  larger surface than one entry identifier, and still needs the instance).
+* **A ruling that only a first Play is ever borrowable.** 灯's shout would
+  still fail because the poem has none; 七深's (3) would still recurse into
+  (3) instead of (2).
+* **Rejecting the group after G05.** G05 already ships calls to this surface;
+  rolling it back would re-break 七深 and 睦, and leaving it would leave the
+  poem's (2) reachable only by a copy — the outcome §13.4 rejects.
+
+## 14. Open questions
+
+1. **May the skill's own offer and the shout's both be accepted on one
+   landing?** §7.3 says no (the second stands down through `USED_THIS_MOVE`). The sheet
+   gives each card its own once-per-move wording and does not rank them; if a
+   ruling says a borrowed use is a *separate* use, the `POEM_USED_THIS_MOVE` term is
+   removed from `offer_open` and the two might chain.
+2. **Does the delayed settle halve?** The sheet writes 「在此技能影响下的支付」
+   after the semicolon and the owed settle is caused by the skill; §7.1 halves
+   it. A contrary reading halves only the forced settle.
+3. **「时机合适时」 (row 421).** The hook is narrowed to main moves. The
+   borrowed clause says 「[移动终点]」, which is any move endpoint. Keeping the
+   narrowing keeps the TODO; widening it is a timing decision outside G13.
+4. **Mutsumi's destination (row 426).** Should (2) leave the played card to the
+   engine default? §7.4 says yes, but the mark is `TODO(规则书)`-worthy and is
+   not needed for the invocation.
+5. **Unplaced target.** A persona skill is always placed; the shout path still
+   works if it is not (instance `-1`, the owed schedule captures `uid = -1`).
+   A card invoked from a hand or a pile reads `is_placed` false, which the half
+   filter no longer depends on. No transient instance is needed.
+6. **A missing persona skill.** §7.2 resolves it before the ask, so a missing
+   skill is a silent no-op and nothing is paid. A card-side warning message
+   could name it, but the shout's own admission already requires a MyGO band
+   skill and the persona is bound for the only player of the card.
+
+## 15. Clause match
+
+| card | clause | where it is implemented |
+|---|---|---|
+| 高松灯 (2) | 「当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐」 | guard `before_settle_applies` (dist arm, `mover != player_id`), cost `4` in `before_settle` |
+| 高松灯 (2) | 「在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子并[触发结算]」 | `teleport_to(mover, player_pos(owner))` inside `SettleBefore`; the redirect re-raises the window at the destination |
+| 高松灯 (2) | 「然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]」 | `roll` on the mover, `stay::add`, `OWED_SETTLE` on the mover, `at_next_turn_end(mover, "owed_settle")`, `owed_settle` |
+| 高松灯 (2) | 「在此技能影响下的支付价格变为原本的一半」 | `HALF_PRICE` latch around the forced settle and the owed settle, one `PaySplitMul` |
+| 内心的呐喊 (3) | 「你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能」 | the hook's `card.placed && dist(pos(owner), card.tile) <= 5`, one-pot `fire::spend`, `invoke_entry_paid(…, "2")` |
