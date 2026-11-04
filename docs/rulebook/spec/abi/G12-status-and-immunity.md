@@ -868,52 +868,128 @@ gate refusal; `guards.rs`'s own_stage row flips its expectation.
 
 ## 12. Necessity
 
+This section answers why each piece exists and why it could not be done
+smaller. It is written item by item (a reviewer can strike one without
+striking the group) and surface by surface (a reviewer can strike a field),
+and it names the shortest card-side alternative with the exact point where it
+breaks.
+
 ### 12.1 The group
 
-Five items, one hole: the engine has no vocabulary for "did this landing
-affect *this* move" and no vocabulary for "immune except the owner". Items 1
-and 2 are the two sides of blocked-ness — one reads it stably, one produces it
-correctly; item 3 reads the move span; item 4 is the missing immunity flavour
-and item 5 a per-turn protection for one class of play. Landing 1 alone leaves
-2's kind branch wrong; landing 2 alone leaves 1's replay drop.
+One hole with two ends: the engine has no vocabulary for "did this landing
+affect *this* move" and none for "immune except the owner". Items 1 and 2 are
+the two sides of one predicate — 1 reads it across a replay, 2 produces it
+instead of the kind; 3 reads the span; 4 is the missing immunity flavour; 5 a
+per-turn protection for one class of play. Landing 1 alone leaves 2's kind
+branch wrong (`own_stage` would still split on stay/stun); landing 2 alone
+leaves 1's replay drop. Neither is a complete answer to "the landing did or
+did not hold the move", and a reader needs both halves.
 
 ### 12.2 Per item
 
-* **1.** Nothing card-side can survive the replay: `played` holds ids,
-  `main_moved` is a turn bool. Necessity: one monotonically increasing number
-  and one comparison.
-* **2.** The engine cannot name `unstoppable`. A5 would put the key in the
-  engine. Necessity: one gate variant and one hit-test in `abnormal_gate`.
-* **3.** The turn counter has no span. A card-side counter could not see the
-  pre-roll landing either. Necessity: one frame bool and one turn latch.
-* **4.** One bool cannot express both flavours. Necessity: one field and one
-  reader.
-* **5.** No play-time turn flag exists. Necessity: one flag, two reads.
+* **1 (the replay-stable read).** Today's card-side alternative is the slot
+  marker tsugu and 迷茫的庭园 already carry. It is three lines per card, a
+  private key per card and a turn-key comparison — and it is **wrong on a
+  second play in the same turn**: the marker still holds this turn's key, so
+  the second play skips the gate, calls `run_planned_move` into a spent slot,
+  and then reaches its purchase prompt for a teleport that never happened.
+  `played` cannot stand in (ids, not occurrences) and `trigger.uid` cannot
+  either (allocation order, §5.2). Necessity: one counter bumped inside the
+  already-single routine entry, one stamped field, one comparison inside the
+  helper both readers share.
+* **2 (the landing gate).** Nothing card-side can decide it: the landing is
+  decided before any body of the affected card runs. A5 (an `unstoppable`
+  field the engine reads) needs an engine edit per future status and puts a
+  game key into `game-core`; [不可阻挡] happens to need **two** different
+  answers (refuse, and does-it-block), which a single field cannot give
+  without a second boolean in the same place. Necessity: one `Gate` variant,
+  one hit-test in the function that already runs the refusal pipeline, and
+  two CEL condition strings in the status host.
+* **3 (the span).** Today's snapshot-and-diff is card-side and already
+  implemented (`SLOT_AB_BEFORE`) — it is the failure, not the fix: the diff
+  spans the whole turn from `diceRollSettled` to `TurnEnd`, so it counts a
+  landing after the walk and misses one before the roll. Reading
+  `turn.abnormal` at the walk's end would need a walk-end hook the card has
+  no access to; a card cannot see the frame at all. Necessity: one frame bool
+  written where the landing already is, one turn latch copied at `end_plan`.
+* **4 (the causer).** `immune` is a bool read by two readers. The shortest
+  alternative is a second bool (`immune_from_others`), which duplicates both
+  readers and the placement stamp, and leaves `set_self_immune` ambiguous for
+  the next card author. A causer parameter is the same two readers collapsed
+  into one function with a three-term predicate.
+* **5 (the turn flag).** The shortest alternative is a slot set by the body —
+  one write, no ABI field. It fails on the card itself: the body runs *after*
+  the `card` window, so the playing card cannot protect its own play; the
+  window is also raised natively, so a body cannot influence it in time.
+  Necessity: one turn flag, one prop read at the play, one condition at the
+  raise.
 
-### 12.3 Surface, field by field
+### 12.3 Why the engine and not the ruleset
+
+Each item's decision has to exist **at a point no card body can reach**:
+before a routine snapshot (1), before a window opens (2, 5), inside the walk
+(3), and at every reader of a field (4). That is the same test G07 used to
+put the designation in the engine. The rulebook's own words stay in the
+status host: the engine still names neither `stay` nor `unstoppable`.
+
+### 12.4 Surface, field by field
 
 | surface | forced by | if removed |
 |---|---|---|
-| `Gate::Abnormal` | 2 | the host names `unstoppable` |
-| `AbnormalGate` / kind 134 | 2 | a guest import instead of a CEL condition |
-| `Trigger.activation_ordinal` | 1 | cards pass a value they cannot obtain |
-| `Trigger.abnormal_blocked` | 2 | 3's kind proxy stays |
-| `TriggerMove.abnormal` | 3 | 3's turn diff stays |
-| `turn.activation_ordinal` | 1 | nothing to stamp |
-| `turn.move_activation_ordinal` | 1 | the suppression cannot identify |
+| `Gate::Abnormal` | 2 | the engine names `unstoppable` |
+| `AbnormalGate` / kind 134 | 2 | a guest import and a body call per ask site |
+| `Trigger.activation_ordinal` | 1 | cards cannot obtain the value they must pass |
+| `Trigger.abnormal_blocked` | 2 | 3's kind proxy returns |
+| `TriggerMove.abnormal` | 3 | 3's turn-wide diff returns |
+| `turn.activation_ordinal` | 1 | nothing to stamp at the funnel |
+| `turn.move_activation_ordinal` | 1 | the suppression cannot identify the driver |
 | `turn.move_abnormal` | 3 | 3 breaks at `TurnEnd` |
-| `turn.dice_immune` | 5 | 5 has no span |
+| `turn.dice_immune` | 5 | 5 has no span and dies with the play |
 | `MoveCtx.abnormal` | 3 | the pre-roll landing is missed |
-| `FieldCard.immune_except_owner` | 4 | 4 falls back to `immune` |
-| three props | 4, 5 | literals repeat in card bodies |
+| `FieldCard.immune_except_owner` | 4 | 4 falls back to the cause-blind `immune` |
+| `trigger::activation_ordinal` | 1 | A2's hand-play-only count |
+| `cant_move_code_for_activation` | 1 | every reader re-writes the comparison |
+| `is_immune_from_at` | 4 | every reader re-writes the three terms |
+| `set_self_immune_except_owner` | 4 | a dynamic grant needs two setter calls |
+| `trigger::abnormal_blocked` | 2 | readers re-derive from the kind |
+| `trigger::move_abnormal` | 3 | the latch cannot be read |
+| `dice_immune` / `set_dice_immune` | 5 | dynamic grants cannot extend the flag |
+| three props | 4, 5 | their literals repeat in card bodies |
 
-### 12.4 What would argue against the group
+### 12.5 The breaks are the price, and it is small
 
-* *"Just keep the markers."* True for 1 until the next reader card; A1.
-* *"Put `unstoppable` in the engine."* Every status needs a rebuild; the gate
-  is already there.
+* **ABI 117.** Eight append-only imports and three wire fields; a module built
+  before the bump cannot instantiate, which is what the version is for.
+* **SAVE stays 18.** Every new field is `#[serde(default)]` in a struct that
+  already saves (or in the saved plan frame), so no old save is misread.
+* **No decision in an import.** The gate answers are CEL conditions; the
+  imports are readers and two flags. `cant_move_code_for_activation` returns a
+  code, never a choice.
+* **No new display text in the ABI.** Two log keys, both resolved in the i18n
+  tables.
+* **Three game-named prop keys reach the engine**, which G07 avoided by
+  passing its key as an argument. Here the engine must read them *before* a
+  body exists, so an argument has no caller; they sit in `state::prop` beside
+  `IMMUNE` / `DESIGNATES`, which are the same kind of key.
+* **Landing independence.** 1 and 2 compile and land separately, 3 needs only
+  `abnormal_gate`, and 4/5 are disjoint. The band in §8 is the only coupling.
+
+### 12.6 What would argue against the group
+
+* *"Just keep the markers."* True until the second play of the turn (12.2/1),
+  the next reader card, and 迷茫的庭园's own `to + 1` variant — three costs,
+  all already paid by two cards.
+* *"Put `unstoppable` in the engine."* A rebuild per status, and a second
+  boolean as soon as [不可阻挡] needs the blocked-ness answer too.
 * *"Fix 3 by reading `abnormal` at the settle."* The settle is after the walk;
-  the pre-roll landing is already lost.
+  the pre-roll landing is already lost, and the walk's own landing is counted
+  by the same turn-wide figure it was meant to replace.
+* *"Defer 4 and 5."* Legitimate: they are disjoint from 1–3. Striking them
+  keeps 再次闪耀 on the wrong flavour and CRUSH's clause unimplemented, and
+  costs the two fields the other cards do not read.
+* *"Defer the group."* The replay defect is a live high-severity bug with a
+  failing test in §1.1; every deferral keeps the two markers and the wrong
+  `own_stage` branch.
 
 ## 13. Clause match
 
