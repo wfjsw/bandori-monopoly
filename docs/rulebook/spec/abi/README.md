@@ -36,7 +36,7 @@ the whole table.
 | G10 | 114→115 | 16→17 | 131 | — |
 | G11 | 115→116 | 17→18 | 132–133 | — |
 | G12 | 116→117 | 18 | 107 | — |
-| G14 | 117→118 | 18 | — | — |
+| G14 | 117→118 | 18→19 | — | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -85,6 +85,18 @@ pre-G03 numbers (109→110 / 14→15), so the row is rewritten to **111→112 /
 move. G06's sixteen imports take the free **411–426**, leaving 427–430 free so
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
+
+**2026-11-04 amendment (G14).** The G14 review found that fixing the trim alone
+is not enough: `cant_act`'s `end` gate refuses an over-limit hand, so the very
+turn end the card's own scheduled discard hangs off would never be reached, and
+the formal `G-CARDS-01` clause would fail on the act. G14 therefore adds a
+durable per-player allowance (`overHandAllowed`, `serde(default)`) that exempts
+an allowed excess from the end gate and from the clause, is cleared when the
+hand fits again and swept at turn end, and the ABI row gains one `ruleset_draw`
+flag word. That makes the SAVE row **18→19**; the ABI row stays 117→118 (the
+arity break), and no later row moves because G14 is last. The group also adds
+one static card prop (`aiNever`), which changes no id: it rides the existing
+`props` map.
 
 Recommended landing order (foundation → dependent):
 
