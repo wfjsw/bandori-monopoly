@@ -709,6 +709,8 @@ action_kinds! {
     DeckBeforeGame;
     DeckAtGameStart;
     Drew;
+    Inspected;
+    DrawAfter;
     Reshuffled;
     Bought;
     SettleBody;
@@ -787,8 +789,9 @@ mod tests {
     fn action_kinds_registry_matches_table() {
         // 73 before `diceRollCast` / `diceRollSettled` (G03, ABI v109), plus
         // G01's `cardFired` / `markChanged` (ABI v105) = 76, plus G05's dual
-        // `diceRollPlan` (ABI v111) = 77.
-        assert_eq!(Action::KINDS.len(), 77);
+        // `diceRollPlan` (ABI v111) = 77, plus G11's `inspected` / `drawAfter`
+        // (ABI v114) = 79.
+        assert_eq!(Action::KINDS.len(), 79);
         // A dual kind is filter-shaped but still an action entry.
         assert!(Action::KINDS
             .iter()

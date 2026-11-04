@@ -217,6 +217,8 @@
   "log.discard": "{{who}}'s hand is over {{limit}} cards -- discarded \"{{card}}\"",
   "log.discard_skipped": "{{who}} has no card to discard",
   "log.draw": "{{who}} drew {{n}} cards{{over}}",
+  "log.inspection_reveal": "{{who}}'s deck turned up \"{{card}}\"",
+  "log.inspection_returned": "{{count}} cards went back to the deck",
   "log.dropped": "{{who}} disconnected -- the computer is taking over",
   "log.dropped_returnable": "{{who}} disconnected -- the computer holds the seat (back to you on reconnect)",
   "log.effect_applied": "{{card}}{{label}}'s effect applies: {{reason}}",

@@ -191,6 +191,43 @@ fn looking_at_one_leaves_the_second_on_the_deck() {
     );
 }
 
+/// 规则书（1）: 「剩余的卡放入弃牌堆…」 -- releasing a looked-at card into
+/// the discard must not refill the emptied deck while the look is open. Deck
+/// exactly two, discard empty: after the peek the deck stays 0 and the card
+/// stays in the discard.
+#[test]
+fn ako_flip_release_does_not_refill() {
+    let mut t = Table::new(&["宇田川亚子", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_money(0, 10_000);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+
+    pass_circle(&mut t, 0);
+
+    t.answer_one(1).unwrap(); // draw -- replaced by the peek
+    assert!(t.prompt_refers("ako_count"), "{}", t.dump_prompt());
+    t.answer_one(1).unwrap(); // look at both
+    assert!(t.prompt_refers("ako"), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // keep GREAT
+    assert!(t.prompt_refers("ako_place"), "{}", t.dump_prompt());
+    t.decline(); // the surplus card goes to the discard
+    drain(&mut t);
+
+    assert_eq!(t.hand(0), vec!["通用:GREAT".to_string()]);
+    assert!(
+        t.draw_pile(0).is_empty(),
+        "no refill mid-look: {:?}",
+        t.draw_pile(0)
+    );
+    assert_eq!(
+        t.discard(0),
+        vec!["通用:安可".to_string()],
+        "the surplus stayed in the discard"
+    );
+    assert_eq!(t.money(0), 10_000, "no money was spent");
+}
+
 // --------------------------------------------------------- clause (2)
 
 /// 规则书（2）: 「经过CiRCLE领取奖励时，若自己场上存在背面朝上的卡，则本次领取

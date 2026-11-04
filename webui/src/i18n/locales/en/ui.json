@@ -5,6 +5,8 @@
   "anim.buyOk": "Bought!",
   "anim.discard": "Discarded",
   "anim.draw": "Drew cards",
+  "anim.inspection": "Inspecting the deck",
+  "anim.reveal": "Revealed",
   "anim.effect": "Effect",
   "anim.event": "Event",
   "anim.eventEnd": "Event left",
@@ -89,6 +91,8 @@
   "anim.chainKind.drawn": "Drawn",
   "anim.chainKind.drew": "Drew",
   "anim.chainKind.drewBefore": "Before draw",
+  "anim.chainKind.drawAfter": "After draw",
+  "anim.chainKind.inspected": "Inspected",
   "anim.chainKind.endTurnAfter": "After end turn",
   "anim.chainKind.endTurnBefore": "Before end turn",
   "anim.chainKind.eventAfter": "After event",
@@ -846,5 +850,11 @@
   "install.why": "Launching from the home screen plays full screen",
   "install.action": "Add to home screen",
   "install.steps": "Safari: tap the share button, then “Add to Home Screen”",
-  "install.override": "Keep playing in the browser"
+  "install.override": "Keep playing in the browser",
+  "board.inspection": "Inspected: {{n}} cards",
+  "ui.inspection.public": "Public",
+  "board.revealTitle": "Revealed: {{who}}",
+  "board.revealHand": "Revealed hand",
+  "board.revealDeck": "Revealed deck",
+  "board.revealDiscard": "Revealed discard"
 }

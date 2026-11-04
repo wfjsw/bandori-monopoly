@@ -891,6 +891,22 @@ export class Animator {
         await wait(1400);
         break;
       case "vote": this.showBanner(tr("board.voteTitle"), body); if (!fast) sfx("prompt"); break;
+      case "inspection":
+        // A look turned cards face up (`inspected`); the frame itself rides
+        // the view (`MatchView.inspection` / the seat's `reveal`).
+        this.showBanner(tr("anim.inspection"), body);
+        if (!fast) sfx("draw");
+        await wait(300);
+        break;
+      case "reveal":
+        // `ctx::reveal_pile` / `ctx::reveal_card` published ids to the table
+        // (`reveal` event); the overlay rides the seat's `reveal`. A one-card
+        // reveal carries the id, a pile reveal only the count.
+        if (e.card) this.lastDiscard = e.card;
+        else this.showBanner(tr("anim.reveal"), body);
+        if (!fast) sfx("draw");
+        await wait(e.card ? 300 : 400);
+        break;
       case "draw": case "mulligan": case "discard": case "ai":
         this.showBanner(({ draw: tr("anim.draw"), discard: tr("anim.discard"), mulligan: tr("anim.redraw"), ai: tr("anim.aiTakeover") } as Record<string, string>)[e.type], body);
         if (e.type === "discard" && e.card) this.lastDiscard = e.card;

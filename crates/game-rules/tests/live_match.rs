@@ -599,6 +599,168 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
     );
 }
 
+/// The human's seat index in the two-player test match.
+fn human_seat(m: &Match) -> usize {
+    m.state()
+        .players
+        .iter()
+        .position(|p| p.member == 1)
+        .expect("the human seat")
+}
+
+/// G11 I7: `inspected` is raised per turned card, top-first, **before**
+/// `inspection_begin` returns.
+#[test]
+fn inspected_is_raised_top_first_before_inspection_begin_returns() {
+    let mut m = match_with_rules("TEST:lookAtTwo", rules_with_fixtures());
+    let me = human_seat(&m);
+    // Deck end is the top: the probe copies are turned in this order.
+    m.world_mut().hidden[me].deck = vec![
+        "TEST:inspectProbe".to_string(),
+        "TEST:inspectProbe".to_string(),
+    ];
+    m.act(1, &play("TEST:lookAtTwo")).expect("play");
+    let st = m.state();
+    let key = |k: &str| format!("cards:fixture-test-cards.{k}");
+    let probes: Vec<&game_core::state::MatchEvent> = st
+        .events
+        .iter()
+        .filter(|e| unadorned(&e.msg).key() == key("inspect_probe"))
+        .collect();
+    assert_eq!(probes.len(), 2, "one raise per turned card");
+    let positions: Vec<i64> = probes
+        .iter()
+        .map(|e| int_arg(unadorned(&e.msg), "position"))
+        .collect();
+    assert_eq!(positions, vec![1, 2], "top-first");
+    let returned = st
+        .events
+        .iter()
+        .position(|e| unadorned(&e.msg).key() == key("look_returned"))
+        .expect("the after-begin line");
+    let last_probe = st
+        .events
+        .iter()
+        .rposition(|e| unadorned(&e.msg).key() == key("inspect_probe"))
+        .expect("a raise");
+    assert!(
+        last_probe < returned,
+        "every raise is before inspection_begin returns (last {last_probe}, returned {returned})"
+    );
+    assert_eq!(
+        int_arg(unadorned(&st.events[returned].msg), "held"),
+        2,
+        "the begin returned both"
+    );
+}
+
+/// G11 I8: `drawAfter` is raised exactly once, after the last card of the
+/// batch and with the whole batch; `drew` stays per card.
+#[test]
+fn draw_after_is_raised_once_after_the_last_card_of_the_batch() {
+    let mut m = match_with_rules("TEST:drawTwo", rules_with_fixtures());
+    let me = human_seat(&m);
+    // A standing field probe hears both draw points.
+    m.world_mut().place_card(
+        &data(),
+        1,
+        "TEST:drawAfterProbe",
+        game_core::msg::Msg::default(),
+        Default::default(),
+    );
+    // Top-first is a, b, c (the end of the Vec is the top).
+    m.world_mut().hidden[me].deck = vec![
+        "TEST:c".to_string(),
+        "TEST:b".to_string(),
+        "TEST:a".to_string(),
+    ];
+    m.act(1, &play("TEST:drawTwo")).expect("play");
+    let st = m.state();
+    let key = |k: &str| format!("cards:fixture-test-cards.{k}");
+    let drew: Vec<usize> = st
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| unadorned(&e.msg).key() == key("drew_probe"))
+        .map(|(i, _)| i)
+        .collect();
+    let after: Vec<usize> = st
+        .events
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| unadorned(&e.msg).key() == key("draw_after_probe"))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(drew.len(), 2, "one `drew` per card");
+    assert_eq!(after.len(), 1, "one `drawAfter` per instruction");
+    assert!(
+        after[0] > *drew.iter().max().unwrap(),
+        "the after-point is after the last card"
+    );
+    let e = &st.events[after[0]];
+    assert_eq!(int_arg(unadorned(&e.msg), "value"), 2, "the batch length");
+    assert_eq!(
+        unadorned(&e.msg).args.get("first"),
+        Some(&Arg::Card("TEST:a".to_string()))
+    );
+    assert_eq!(
+        unadorned(&e.msg).args.get("second"),
+        Some(&Arg::Card("TEST:b".to_string()))
+    );
+}
+
+/// G11: a deck reveal made while a **public** look is still open names the
+/// held card already, so the view must not list it twice.
+#[test]
+fn a_deck_reveal_during_a_public_look_lists_each_card_once() {
+    let mut m = match_with_rules("TEST:lookReveal", rules_with_fixtures());
+    let me = human_seat(&m);
+    // The end of the Vec is the top: c is turned, then b, a stay face down.
+    m.world_mut().hidden[me].deck = vec![
+        "TEST:b".to_string(),
+        "TEST:a".to_string(),
+        "TEST:c".to_string(),
+    ];
+    m.act(1, &play("TEST:lookReveal")).expect("play");
+    let st = m.state();
+    assert_eq!(st.prompt.kind, "choice", "the body halts mid-look");
+    let reveal = st.players[me].reveal.as_ref().expect("the deck is published");
+    assert_eq!(
+        reveal.deck,
+        vec!["TEST:c", "TEST:a", "TEST:b"],
+        "top first, the turned card once"
+    );
+}
+
+/// G11 §5.4: a body that returns without `inspection_end` leaks its frame to
+/// the commit net, which releases it -- count logged, the cards back in order.
+#[test]
+fn a_leaked_frame_is_released_by_the_commit_net() {
+    let mut m = match_with_rules("TEST:lookLeak", rules_with_fixtures());
+    let me = human_seat(&m);
+    m.world_mut().hidden[me].deck = vec![
+        "TEST:a".to_string(),
+        "TEST:b".to_string(),
+        "TEST:c".to_string(),
+    ];
+    m.act(1, &play("TEST:lookLeak")).expect("play");
+    let st = m.state();
+    assert!(st.players[me].reveal.is_none(), "a private look publishes nothing");
+    assert_eq!(st.players[me].draw, 3, "both held cards are back");
+    assert_eq!(
+        m.world().hidden[me].deck,
+        vec!["TEST:a", "TEST:b", "TEST:c"],
+        "released in order"
+    );
+    let back: Vec<&game_core::state::MatchEvent> = st
+        .events
+        .iter()
+        .filter(|e| unadorned(&e.msg).key() == "log.inspection_returned")
+        .collect();
+    assert_eq!(back.len(), 1, "one release line");
+    assert_eq!(int_arg(unadorned(&back[0].msg), "count"), 2);
+}
+
 #[test]
 fn a_field_guard_blocks_an_abnormal_effect() {
     let mut m = match_with_rules("TEST:guard", rules_with_fixtures());

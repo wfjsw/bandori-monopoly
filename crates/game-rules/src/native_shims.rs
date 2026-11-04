@@ -152,6 +152,14 @@ pub trait HostOps {
     fn op_cards_in(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_to_discard`
     fn op_to_discard(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_inspection_begin` (v114; args = looker, owner, count, public)
+    fn op_inspection_begin(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_inspection_end` (v114; args = player_id, shuffle)
+    fn op_inspection_end(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_reveal_pile` (v114; args = player_id, pile, ptr, len)
+    fn op_reveal_pile(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_reveal_card` (v114; args = player_id, card_ptr, card_len, ptr, len)
+    fn op_reveal_card(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_hand_count`
     fn op_hand_count(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_hand_size`
@@ -1090,6 +1098,20 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_to_discard(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::to_discard(self, a[0], a[1], a[2])?;
+        Ok(0)
+    }
+    fn op_inspection_begin(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::inspection_begin(self, a[0], a[1], a[2], a[3])? as i64)
+    }
+    fn op_inspection_end(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::inspection_end(self, a[0], a[1])? as i64)
+    }
+    fn op_reveal_pile(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::reveal_pile(self, a[0], a[1], a[2], a[3])?;
+        Ok(0)
+    }
+    fn op_reveal_card(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        crate::hostfns::reveal_card(self, a[0], a[1], a[2], a[3], a[4])?;
         Ok(0)
     }
     fn op_hand_count(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
@@ -2875,6 +2897,49 @@ pub unsafe extern "C-unwind" fn ruleset_cards_in(
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_to_discard(player_id: i32, ptr: i32, len: i32) {
     with_host(|h| match h.op_to_discard([player_id, ptr, len, 0, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_inspection_begin(
+    looker: i32,
+    owner: i32,
+    count: i32,
+    public: i32,
+) -> i32 {
+    with_host(|h| match h.op_inspection_begin([looker, owner, count, public, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_inspection_end(player_id: i32, shuffle: i32) -> i32 {
+    with_host(|h| match h.op_inspection_end([player_id, shuffle, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_reveal_pile(player_id: i32, pile: i32, ptr: i32, len: i32) {
+    with_host(|h| match h.op_reveal_pile([player_id, pile, ptr, len, 0, 0]) {
+        Ok(_) => {}
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_reveal_card(
+    player_id: i32,
+    card_ptr: i32,
+    card_len: i32,
+    ptr: i32,
+    len: i32,
+) {
+    with_host(|h| match h.op_reveal_card([player_id, card_ptr, card_len, ptr, len, 0]) {
         Ok(_) => {}
         Err(e) => abort_host(e),
     })

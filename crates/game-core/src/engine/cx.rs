@@ -827,6 +827,23 @@ impl<'a> PlayCtx<'a> {
         self.w.recent = tail;
     }
 
+    /// Stamp the pile code on an event just posted (`play_post_value` leaves
+    /// `to` unset). `false` when the id is no longer in the tail -- harmless,
+    /// the reveal overlay still carries the pile.
+    pub fn set_event_to(&mut self, id: i32, to: i32) -> bool {
+        let mut evs: Vec<crate::state::MatchEvent> = self.w.recent.iter().cloned().collect();
+        let Some(e) = evs.iter_mut().find(|e| e.id == id) else {
+            return false;
+        };
+        e.to = to;
+        let mut tail = crate::engine::world::EventTail::default();
+        for e in evs {
+            tail.push_back(e);
+        }
+        self.w.recent = tail;
+        true
+    }
+
     /// Attach outcome lines to a `"card"` activation (and drop a negated
     /// activation's would-be results). No-op when the id is gone.
     pub fn set_event_results(&mut self, id: i32, results: Vec<Msg>) {

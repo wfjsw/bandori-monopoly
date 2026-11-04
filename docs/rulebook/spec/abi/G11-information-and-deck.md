@@ -1,6 +1,6 @@
 # ABI design G11 — Information and deck inspection
 
-**Status:** draft for user review · design only, no source touched.
+**Status:** implemented (ABI **114**, SAVE **17**, kinds 132–133, ops 451–454).
 **Worktree:** `.claude/worktrees/g11-design` (branch `worktree-g11-design`).
 **Group:** G11, family "Information and deck inspection".
 **Ground truth:** `docs/rulebook/cards.json`; every book fragment below is
@@ -12,7 +12,7 @@ Baseline: the tree's `ABI_VERSION 113`, `SAVE_VERSION 16`,
 `RECORD_VERSION 4`, engine kinds ending at 131, Kani `Op` ending at 442 (G07's
 declared band 441–450, two used). G09 and G10 are designed but not landed;
 under the README landing order this group lands twelfth, so its row is
-`ABI_VERSION` **115 → 116**, `SAVE_VERSION` **17 → 18**, engine kinds
+`ABI_VERSION` **113 → 114**, `SAVE_VERSION` **16 → 17**, engine kinds
 **132–133** (the README band, after G10's 131). Op: G09's row is still `—` and
 claims 411–430 in its document, G10 claims 431–449, and G07 holds up to 450,
 so this group takes **451–454** — four consecutive values after the highest
@@ -296,9 +296,12 @@ pub struct RevealView {
 
 The overlay is built in `World::public_state`
 (`crates/game-core/src/engine/world.rs:1544-1570`) from that player's
-`RevealRecord` plus the held cards of that player's **public** frames. It is
-cleared at the end of the outermost routine (§5.6), so it lives exactly as long
-as the clause that produced it.
+`RevealRecord` plus the held cards of that player's **public** frames. A deck
+reveal made while such a frame is open already lists the held cards, so the
+builder drops that copy (one occurrence per held id) before splicing the held
+cards in front: each card shows once, the frame still reads as the true top.
+It is cleared at the end of the outermost routine (§5.6), so it lives exactly
+as long as the clause that produced it.
 
 Client: the reveal overlay renders as a card row under the seat's name plate
 (the same `InspectCard` face the graveyard hover peek uses — those cards are
@@ -560,6 +563,12 @@ alone.
   deck.
 * `visible_host_request` (`wasm_rules.rs:108-133`) gains all three visible
   arms (`"inspection"` for begin/end, `"reveal"` for the reveal pair).
+* The three non-pausing routines do **not** build a request today: their
+  `hostfns` apply straight through `c.st_mut().w()` (`Run::inspection_end` /
+  `Run::reveal_pile` / `Run::reveal_card`), so a caller that ends on one of
+  them never loses the guest's call. The request arms above are the pause
+  fallback and are kept in step with the `Run` methods; a request is only
+  built if a future caller routes one through `request_or_pause`.
 
 ### 5.6 Reveal emission and lifetime
 
@@ -610,21 +619,22 @@ batch;
 after `drawn` / `drew` entries are pushed for it, push
 `(player_id, batch)` to `draw_after_log` when the batch is non-empty.
 
-`draw_cards_with_hooks` takes `let hand_before = self.w.hidden[i].hand.len();`
-before the loop and raises the point directly after the loop and the
-`log.draw` block, before the over-hand sweep (`play.rs:5563-5576`), with
-`batch = self.w.hidden[i].hand[hand_before..].to_vec()`:
+`draw_cards_with_hooks` collects the cards the instruction actually added in
+a local, in draw order, and raises the point after the loop and the `log.draw`
+block, before the over-hand sweep (`play.rs:5563-5580`):
 
 ```rust
-if hooks && !batch.is_empty() {
-    let count = batch.len() as i32;
-    raise!(self, "drawAfter", i, value = count, cards = batch)?;
+if hooks && !drawn.is_empty() {
+    let count = drawn.len() as i32;
+    raise!(self, "drawAfter", i, value = count, cards = drawn)?;
 }
 ```
 
-`hand_before` is the loop-top index of the hand, so a `drewBefore` replacement
-(a card the hook added) is inside `batch` and a hand card the hook *removed* is
-not.
+The local is used rather than `hand[hand_before..]`: a `drewBefore` hook that
+moves an **older** hand card shifts a positional slice, so the batch would
+name a card that was never drawn and omit the one that was. A `drewBefore`
+replacement (a card the hook added) is still recorded, since it goes through
+the same `drawn.push`.
 
 `drew` and `drawn` are untouched. A `drewBefore` replacement counts toward the
 same batch (the replacement *is* the draw, `abi.rs:2264-2271`); a cancelled
@@ -774,7 +784,7 @@ stay. The `infinite_possibility.rs:46` TODO goes.
 
 ## 7. Save / record / replay
 
-* **`SAVE_VERSION` 17 → 18** (last SAVE row in the landing order; take the
+* **`SAVE_VERSION` 16 → 17** (last SAVE row in the landing order; take the
   next free one at landing). A save may be taken while a look is paused: the
   frame holds cards in no pile, so dropping it loses them. `inspection_frames`,
   `next_inspection_id` and `reveals` are saved; `#[serde(default)]` is shape
@@ -794,11 +804,11 @@ stay. The `infinite_possibility.rs:46` TODO goes.
 
 ## 8. Versioning
 
-`ABI_VERSION` **115 → 116** (insert immediately below the constant and above
+`ABI_VERSION` **113 → 114** (insert immediately below the constant and above
 the newest note, matching the tree's newest-first block):
 
 ```
-/// v116: **deck inspection, public reveal, and the draw-action point**.
+/// v114: **deck inspection, public reveal, and the draw-action point**.
 ///    `CardPile::Inspection = 4` (cards an open look has turned over and not
 ///    yet released); `cards_in` / `take_card` accept it and the empty-deck
 ///    refill is suppressed on the pile writes while a look holds that seat's
@@ -813,7 +823,7 @@ the newest note, matching the tree's newest-first block):
 ///    continues) and `drawAfter` (one raise per draw instruction, `value` =
 ///    batch length, `cards` = the batch; `drew` stays per card). New public
 ///    `MatchPlayer.reveal` overlay, `MatchView.inspection` for the caller's
-///    own frame, and the `"reveal"` event type. SAVE_VERSION 17 -> 18 (open
+///    own frame, and the `"reveal"` event type. SAVE_VERSION 16 -> 17 (open
 ///    frames are saved); RECORD_VERSION unchanged.
 ```
 
@@ -852,6 +862,9 @@ invisible to `ruleset-tests`).
 | 3 | `pp.rs::possibility_grows_once_per_draw_action` — 0 crystals, draw 2: exactly 1 crystal; from 3 crystals the same action clears once (0 crystals, +1 band crystal) |
 | 3 | `pp.rs::draw_after_names_the_batch_and_drew_stays_per_card` — one `drawAfter` with `value == 2` and both ids; two `drew` |
 | 1/2 | `pp.rs::maya_rest_shuffle_returns_the_unpicked_cards` and `ako.rs::ako_flip_release_does_not_refill` — same-family migration (maya's tests live in `pp.rs`, ako's in `ako.rs`) |
+| 2 | `pp.rs::trainee_guide_publishes_the_deck_while_it_counts_colours` also asserts the overlay is gone after `drain` — it lives exactly as long as the clause |
+| 2 | `live_match.rs::a_deck_reveal_during_a_public_look_lists_each_card_once` — a deck reveal inside a public frame shows the held card once (the overlay drops the duplicate copy) |
+| 1 | `live_match.rs::a_leaked_frame_is_released_by_the_commit_net` — a body that returns without `inspection_end`: one `log.inspection_returned` with the count, the cards back in order, nothing published |
 
 ABI level: `crates/game-rules/tests/kind_table_pin.rs` (132/133 in its
 `named` list), `crates/game-rules/tests/live_match.rs` (`inspected` raised
@@ -861,12 +874,15 @@ dispatches to a deck card, not the field), `rules/kani/tests/on_parse.rs`
 (`Inspected` / `DrawAfter` parse as Action entries),
 `crates/rules-native/tests/abi_link_names.rs` (the four new link names).
 
-**Kani obligations** (`rules/kani/src/proofs/hhw.rs` / `pp.rs`):
+**Kani obligations** (`rules/kani/src/proofs/g11_inspection.rs` / `hhw.rs` /
+`pp.rs`):
 
 * `inspection_begin_holds_at_most_count_and_preserves_deck_order` — the held
   prefix equals the old top in order; the remainder is untouched.
-* `inspection_end_is_a_permutation` — begin(n) then end(false) restores the
-  deck multiset and order exactly; end(true) restores the multiset.
+* `inspection_end_restores_the_deck` — begin(n) then end(false) puts the deck
+  back exactly (order and all).
+* `inspection_end_shuffle_keeps_the_multiset` — end(true) restores the
+  multiset.
 * `peek_flip_leaves_the_card_in_the_discard` — a 2-card deck, empty discard:
   begin 2, discard one, the card is in the discard and the deck 0.
 * `refill_is_suppressed_iff_a_frame_holds_the_seat_open`.
@@ -948,7 +964,7 @@ dispatches to a deck card, not the field), `rules/kani/tests/on_parse.rs`
 
 | area | files |
 |---|---|
-| card-sdk | `abi.rs` (`CardPile`, `TriggerKind` / `ActionKind` consts, v116 note), `kinds.rs` (action list), `ctx.rs` (wrappers, one-call `draw`), `ctx/sys.rs` + `ctx/sys_kani.rs`, `kani_host.rs` (`Op` 451–454) |
+| card-sdk | `abi.rs` (`CardPile`, `TriggerKind` / `ActionKind` consts, v114 note), `kinds.rs` (action list), `ctx.rs` (wrappers, one-call `draw`), `ctx/sys.rs` + `ctx/sys_kani.rs`, `kani_host.rs` (`Op` 451–454) |
 | game-core | `state.rs` (`RevealView` / `InspectionView`, `MatchPlayer.reveal`), `engine/world.rs` (fields, helpers, `public_state`, initializer), `engine/mod.rs` (`Pending.outermost`, execute flag, `inspection_of`, reveal clear), `engine/play.rs` (`drawAfter` raise) |
 | game-rules | `host.rs` (`HostRequest` variants, linker registration, `CardWorld` default methods for the four imports, `NullWorld`), `hostfns.rs`, `world.rs` (trait methods), `wasm_rules.rs` (arms, run fields, apply/commit, own-card kind, refill sites, `check_silent_body` / `drive_should_flash`), `native_shims.rs` (regenerate with `target/scratch/gen_native_shims3.py`) |
 | game-kinds | `lib.rs` (rows 132–133, `wire` / `from_wire`, hook arrays) |

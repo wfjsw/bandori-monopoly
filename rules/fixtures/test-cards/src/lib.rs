@@ -2934,6 +2934,105 @@ const fn dual_action_body(_player_id: i32) -> card_sdk::Asked {
 }
 
 // ---------------------------------------------------------------------------
+// Inspection / draw points (G11)
+// ---------------------------------------------------------------------------
+
+/// Logs when it is turned up in a look. `placed` separates the deck instance
+/// from a field copy: an `inspected` raise goes to the turned card itself, so
+/// a field copy placed alongside must stay silent.
+const INSPECT_PROBE: CardDef = CardDef::new(
+    "TEST:inspectProbe",
+    &[On::Action(Action::Inspected("", None, inspect_probe))],
+);
+
+fn inspect_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("inspect_probe"))
+            .i("position", ctx::trigger::value() as i64)
+            .i("placed", ctx::is_placed() as i64)
+            .i("by", ctx::trigger::by_card().unwrap_or(-1) as i64),
+    );
+    Ok(())
+}
+
+/// Turns up the top two cards privately and logs how many it held **after**
+/// the begin returned -- the line proves the `inspected` raises ran inside the
+/// call.
+const LOOK_AT_TWO: CardDef = CardDef::new("TEST:lookAtTwo", &[On::Play("", None, look_at_two)]);
+
+fn look_at_two(player_id: i32) -> card_sdk::Asked {
+    let held = ctx::inspection_begin(player_id, player_id, 2, false)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("look_returned")).i("held", held as i64),
+    );
+    ctx::inspection_end(player_id, false);
+    Ok(())
+}
+
+/// Opens a **public** look, then publishes the deck while the frame is still
+/// open, and halts: the published list already names the held card, so the
+/// view must show it once, not twice.
+const LOOK_REVEAL: CardDef = CardDef::new("TEST:lookReveal", &[On::Play("", None, look_reveal)]);
+
+fn look_reveal(player_id: i32) -> card_sdk::Asked {
+    ctx::inspection_begin(player_id, player_id, 1, true)?;
+    ctx::reveal_pile(player_id, CardPile::Deck, &Msg::new(key!("look_reveal")));
+    // Keep the frame open past the commit net's reach.
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("look_reveal")),
+        &Msg::new(key!("look_reveal")),
+    )?;
+    Ok(())
+}
+
+/// Opens a private look and returns **without** ending it: the commit net must
+/// put the cards back (design G11 §5.4).
+const LOOK_LEAK: CardDef = CardDef::new("TEST:lookLeak", &[On::Play("", None, look_leak)]);
+
+fn look_leak(player_id: i32) -> card_sdk::Asked {
+    ctx::inspection_begin(player_id, player_id, 2, false)?;
+    Ok(())
+}
+
+/// Draws two cards in **one** draw instruction.
+const DRAW_TWO: CardDef = CardDef::new("TEST:drawTwo", &[On::Play("", None, draw_two)]);
+
+fn draw_two(player_id: i32) -> card_sdk::Asked {
+    ctx::draw(player_id, 2)?;
+    Ok(())
+}
+
+/// A field probe for both draw points: `drew` logs per card, `drawAfter` logs
+/// once with the batch length and its two first ids.
+const DRAW_AFTER_PROBE: CardDef = CardDef::new(
+    "TEST:drawAfterProbe",
+    &[
+        On::Action(Action::DrawAfter("", None, draw_after_probe)),
+        On::Action(Action::Drew("", None, drew_probe)),
+    ],
+);
+
+fn draw_after_probe(player_id: i32) -> card_sdk::Asked {
+    let cards = ctx::trigger::cards();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("draw_after_probe"))
+            .i("value", ctx::trigger::value() as i64)
+            .card("first", cards.first().map(|c| c.as_str()).unwrap_or(""))
+            .card("second", cards.get(1).map(|c| c.as_str()).unwrap_or("")),
+    );
+    Ok(())
+}
+
+fn drew_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("drew_probe")));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Invocation (G05 §6.1 adopts G13's surface)
 // ---------------------------------------------------------------------------
 
@@ -3108,5 +3207,11 @@ card_sdk::ruleset!(&[
     PLAN_DECLINE,
     DUAL_ACTION,
     INVOKED,
-    INVOKER
+    INVOKER,
+    INSPECT_PROBE,
+    LOOK_AT_TWO,
+    LOOK_REVEAL,
+    LOOK_LEAK,
+    DRAW_TWO,
+    DRAW_AFTER_PROBE
 ]);

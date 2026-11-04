@@ -21,7 +21,7 @@ import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
-import { borrowedBand, byTitle, cardKeys, showGraveyard, showPlayerInfo } from "./Popups";
+import { borrowedBand, byTitle, cardKeys, showGraveyard, showPlayerInfo, showReveal } from "./Popups";
 import { t as tr } from "../../i18n/t";
 import { stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
@@ -209,6 +209,17 @@ export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: 
                 return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
               })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
+              {/* The seat published a pile (`reveal` overlay, design G11):
+                  a badge while it lasts, the ids behind it on click. */}
+              {x.reveal && (
+                <span
+                  className={s.reveal}
+                  title={tr("board.revealTitle", { who: m.nameOf(i) })}
+                  onClick={(e) => { e.stopPropagation(); showReveal(m, i); }}
+                >
+                  <Icon name="visibility" /><b>{x.reveal.hand.length + x.reveal.deck.length + x.reveal.discard.length}</b>
+                </span>
+              )}
               <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{fireOf(x)}/{fireMaxOf(x)}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}

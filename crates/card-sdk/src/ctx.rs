@@ -877,11 +877,12 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 
 /// Draw `n` cards; returns how many were drawn.
 ///
-/// One **before-draw** point per single card (an N-card draw is N iterations):
-/// each card is adjudicated host-side (`drewBefore` may replace it), and the
-/// plain ones are moved here on the run's own world copy. The after points
-/// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
-/// does; the body must `?` the result.
+/// One draw **instruction**: `n` cards, one host call (v114 -- it used to be
+/// one call per card). The engine adjudicates each card (`drewBefore` may
+/// replace it) and moves the plain ones. The per-card after points
+/// (`drawn` / `drew`) fire once the run commits, and `drawAfter` fires **once**
+/// with the whole batch after the last of them. Pauses like [`pay`] does; the
+/// body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::draw");
     #[cfg(kani)]
@@ -909,11 +910,10 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     }
     #[cfg(not(kani))]
     {
-        let mut got = 0;
-        for _ in 0..n.max(0) {
-            got += asked(unsafe { sys::draw(player_id, 1) })?;
-        }
-        Ok(got)
+        // One host call for the whole instruction: the host draws the cards
+        // (replacements, refill and pausing included) and raises `drawAfter`
+        // once for the batch.
+        asked(unsafe { sys::draw(player_id, n.max(0)) })
     }
 }
 
@@ -952,6 +952,47 @@ pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
 pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
     let (p, l) = s(card);
     unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
+}
+
+/// Turn up to `count` cards of `owner`'s draw pile over into a new inspection
+/// frame for `looker`. The cards land in [`CardPile::Inspection`], top-first;
+/// `public` reveals each one to the table as it is turned. Returns how many
+/// were held (0 on an empty deck).
+///
+/// Raises `inspected` for every card **now**, dispatched to the card itself, so
+/// a card that places itself out of the frame is gone before the next
+/// statement. Pauses on a hook that prompts; the body must `?` it. Always
+/// close the frame with [`inspection_end`] when the body is done.
+#[must_use]
+#[cfg_attr(kani, inline(always))]
+pub fn inspection_begin(looker: i32, owner: i32, count: i32, public: bool) -> Result<i32, Prompt> {
+    asked(unsafe { sys::inspection_begin(looker, owner, count, public as i32) })
+}
+
+/// Close `player`'s own innermost inspection frame -- `player` is the
+/// **looker**, whatever seat owns the deck. The leftovers go back to the deck
+/// top in their original order, or shuffled in when `shuffle`. Returns how many
+/// were returned. No open frame is a no-op returning 0.
+#[cfg_attr(kani, inline(always))]
+pub fn inspection_end(player: i32, shuffle: bool) -> i32 {
+    unsafe { sys::inspection_end(player, shuffle as i32) }
+}
+
+/// 「公开…」 -- publish a pile's ids to the table (hand, draw pile or discard).
+/// A draw-pile reveal includes the open inspection frames on that seat,
+/// innermost first. Writes nothing to any pile. `reason` is the log line shown
+/// with the reveal.
+pub fn reveal_pile(player: i32, pile: CardPile, reason: &Msg) {
+    let (rp, rl) = msg_bytes(reason);
+    unsafe { sys::reveal_pile(player, pile as i32, rp, rl) }
+}
+
+/// 「展示给所有玩家」 -- publish one card id to the table. `reason` as in
+/// [`reveal_pile`].
+pub fn reveal_card(player: i32, card: &str, reason: &Msg) {
+    let (cp, cl) = s(card);
+    let (rp, rl) = msg_bytes(reason);
+    unsafe { sys::reveal_card(player, cp, cl, rp, rl) }
 }
 
 /// Corrupt-prefix guard for the decode-failure fallback below. Real piles are

@@ -32,9 +32,9 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 113→114 | 16 | 126–130 | — |
-| G10 | 114→115 | 16→17 | 131 | — |
-| G11 | 115→116 | 17→18 | 132–133 | 451–454 |
+| G11 | 113→114 | 16→17 | 132–133 | 451–454 |
+| G09 | 114→115 | 17 | 126–130 | — |
+| G10 | 115→116 | 17→18 | 131 | — |
 | G12 | 116→117 | 18 | 107 | — |
 | G14 | 117→118 | 18 | — | — |
 
@@ -91,7 +91,10 @@ two ops use 441 and 442 of the 441–450 band. G09's document claims 411–430 a
 G10's 431–449 in their own rows; the highest op claim today is 450, so G11's
 four imports take **451–454** — consecutive, after every existing claim, so no
 landed or pending row moves for them. The kind column stays 132–133 (after
-G10's 131); the group takes no other engine id.
+G10's 131); the group takes no other engine id. G11 has since **landed ahead
+of G09/G10**, so its row is the tree's next step (113→114 / 16→17) and every
+later pending row shifts one further: G09 114→115 / 17, G10 115→116 / 17→18,
+G12 116→117 / 18, G14 117→118 / 18.
 
 Recommended landing order (foundation → dependent):
 

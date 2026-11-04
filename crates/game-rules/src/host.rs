@@ -551,6 +551,30 @@ pub enum HostRequest {
     /// how many were actually drawn. The effect then replays past this call and
     /// does **not** move the cards again (they are already in the live world).
     Draw { player_id: i32, n: i32 },
+    /// Turn up to `count` cards of `owner`'s draw pile into an inspection frame
+    /// for `looker` (design G11). Runs like `Draw`: one host pass, answers the
+    /// held count, raises `inspected` per card and replays past the call.
+    InspectionBegin {
+        looker: i32,
+        owner: i32,
+        count: i32,
+        public: bool,
+    },
+    /// Close `player`'s innermost inspection frame; leftovers go back to the
+    /// deck top (or shuffled in). Inline; answers the returned count.
+    InspectionEnd { player_id: i32, shuffle: bool },
+    /// Publish a pile's ids to the table. Inline; touches no pile.
+    RevealPile {
+        player_id: i32,
+        pile: i32,
+        reason: crate::Msg,
+    },
+    /// Publish one card id to the table. Inline; touches no pile.
+    RevealCard {
+        player_id: i32,
+        card: String,
+        reason: crate::Msg,
+    },
     /// Draw the top event and settles it (「抽取一个事件卡」).
     /// The engine runs the whole event pipeline (public reveal, immediate
     /// effect, filing to the event discard, the reshuffle-when-empty half).
@@ -4731,6 +4755,35 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "to_discard",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
             hostfns::to_discard(&mut c, player_id, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "inspection_begin",
+        |mut c: C<W>, looker: i32, owner: i32, count: i32, public: i32| -> Result<i32, Error> {
+            hostfns::inspection_begin(&mut c, looker, owner, count, public)
+                .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "inspection_end",
+        |mut c: C<W>, player_id: i32, shuffle: i32| -> Result<i32, Error> {
+            hostfns::inspection_end(&mut c, player_id, shuffle).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "reveal_pile",
+        |mut c: C<W>, player_id: i32, pile: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::reveal_pile(&mut c, player_id, pile, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "reveal_card",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::reveal_card(&mut c, player_id, cp, cl, p, n).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(

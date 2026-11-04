@@ -5499,6 +5499,10 @@ impl PlayCtx<'_> {
             return Ok(0);
         }
         let mut got = 0;
+        // The batch this instruction actually added, in draw order. Collected
+        // here rather than sliced off the hand afterwards: a `drewBefore` hook
+        // may move an *older* hand card, which would shift a positional slice.
+        let mut drawn: Vec<String> = Vec::new();
         for _ in 0..n {
             self.refill_draw_pile(i, hooks)?;
             let top = self.w.hidden[i].deck.last().cloned().unwrap_or_default();
@@ -5533,6 +5537,7 @@ impl PlayCtx<'_> {
                 continue;
             };
             got += 1;
+            drawn.push(card.clone());
             // Empty-deck maintenance has priority over the card's own Drawn,
             // field Drew hooks, and any prompts those effects may open.
             self.refill_draw_pile(i, hooks)?;
@@ -5569,6 +5574,12 @@ impl PlayCtx<'_> {
                         .opt("over", over),
                 )
                 .value = got;
+        }
+        // `drawAfter` -- once per instruction, after the last card and before
+        // the over-hand sweep, with the whole batch.
+        if hooks && !drawn.is_empty() {
+            let count = drawn.len() as i32;
+            raise!(self, "drawAfter", i, value = count, cards = drawn)?;
         }
         // 「任何时刻若持有手卡超过上限则需要立刻将手卡弃至上限张」 -- discard
         // down immediately, bot and human alike (the human `discard` command
@@ -5731,6 +5742,10 @@ impl PlayCtx<'_> {
         self.w.turn.play_doubled = None;
         // Did this play place anything? (the copy-source record, G06 §5.6)
         self.w.turn.placed_during_play = false;
+        // A look an earlier play left closed must not hold this deck.
+        if let Some(held) = self.w.look_hold.get_mut(i) {
+            *held = false;
+        }
         self.w
             .log(
                 "play",
@@ -5790,7 +5805,16 @@ impl PlayCtx<'_> {
             Dest::Graveyard => {
                 if !self.out(i) {
                     self.w.hidden[i].graveyard.push(id.to_string());
-                    self.refill_draw_pile(i, true)?;
+                    // The played card's own filing is a pile write, not a draw:
+                    // an emptied deck stays empty while the play's look holds it
+                    // open (design G11 I2).
+                    if self.w.refill_after_pile_write(i) {
+                        raise!(self, "reshuffled", i)?;
+                    }
+                    // The look's hold ends with the play's own filing.
+                    if let Some(held) = self.w.look_hold.get_mut(i) {
+                        *held = false;
+                    }
                     // `discarded` -- before the `cardPlayed` announcement.
                     raise!(self, "discarded", i, card = Some(id.to_string()))?;
                 }

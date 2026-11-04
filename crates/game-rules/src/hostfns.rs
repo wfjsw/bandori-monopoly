@@ -1221,6 +1221,76 @@ pub fn to_discard<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Resu
     Ok(())
 }
 
+/// `inspection_begin(looker, owner, count, public) -> held` -- turn up to
+/// `count` of `owner`'s deck into a look for `looker`. Answers the held count;
+/// each newly turned card raises `inspected` (which may pause). Pause shape is
+/// [`crate::inline::Pause::Sentinel`] so the guest's `asked()` sees
+/// `Err(Prompt)`; the engine arm is idempotent (adoption, design G11 §5.2).
+pub fn inspection_begin<C: HostCtx>(
+    c: &mut C,
+    looker: i32,
+    owner: i32,
+    count: i32,
+    public: i32,
+) -> Result<i32, HostError> {
+    let req = HostRequest::InspectionBegin {
+        looker,
+        owner,
+        count,
+        public: public != 0,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// `inspection_end(player, shuffle) -> released` -- close the caller's
+/// innermost look, leftovers back on the deck top (or shuffled in). Never
+/// pauses.
+pub fn inspection_end<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    shuffle: i32,
+) -> Result<i32, HostError> {
+    // Applied at once: the SDK wrapper returns a bare `i32`, so a sentinel
+    // would be lost unless the body happened to end on this call.
+    Ok(c.st_mut().w().inspection_end(player_id, shuffle != 0))
+}
+
+/// `reveal_pile(player, pile, reason)` -- publish a pile's ids to the table.
+/// Never pauses; touches no pile.
+pub fn reveal_pile<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    pile: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostError> {
+    let pile = crate::CardPile::from_i32(pile)
+        .ok_or_else(|| HostError::trap(format!("bad card pile {pile}")))?;
+    let reason = guest_msg(c, p, n)?;
+    // A reveal is applied immediately: it is a view overlay, not a host
+    // request the run must resume from (design G11 §5.6). Routing it through
+    // `request_or_pause` lost the sentinel whenever the very next call opened
+    // an inspection frame.
+    c.st_mut().w().reveal_pile(player_id, pile, reason);
+    Ok(())
+}
+
+/// `reveal_card(player, card, reason)` -- publish one card id. Never pauses;
+/// touches no pile.
+pub fn reveal_card<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cp: i32,
+    cl: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostError> {
+    let card = guest_str(c, cp, cl)?;
+    let reason = guest_msg(c, p, n)?;
+    c.st_mut().w().reveal_card(player_id, &card, reason);
+    Ok(())
+}
+
 pub fn hand_count<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostError> {
     let card = guest_str(c, p, n)?;
     Ok(c.st().wr().hand_count(player_id, &card))

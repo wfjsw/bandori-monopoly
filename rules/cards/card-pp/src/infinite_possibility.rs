@@ -22,8 +22,16 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     &[
         // 规则书[持续]（2）: 「[共鸣]交换[拥有者]的抽卡区和弃卡区」 -- the one press.
         On::Play("", Some(can_swap), swap),
-        // 规则书[持续]（1）: 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4」
-        On::Action(Action::Drew("actor == owner && card.placed && value > 0", None, drew)),
+        // 规则书[特]: 「观看卡组并观看到此卡时…」 -- the turned card itself, in
+        // whatever look (own or an opponent's, private or public).
+        On::Action(Action::Inspected("", None, seen)),
+        // 规则书[持续]（1）: 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4」 --
+        // 「抽卡动作」 is the instruction, so the point is the batch's end.
+        On::Action(Action::DrawAfter(
+            "actor == owner && card.placed && value > 0",
+            None,
+            draw_after,
+        )),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可能性为∞"#)
@@ -43,10 +51,33 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
         // sheet cell D17
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"大和麻弥"#)]));
 
-// TODO(规则书): Nothing in the vocabulary observes a deck inspection.
+/// 规则书[特]: 「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]
+/// （次效果优先于其他后续效果，比如观看卡组后将一张牌加入手牌）」 -- the turn-up
+/// is what fires this, so the placement happens before the look continues: the
+/// card leaves the frame (it is no longer kingside the deck) and is shown on
+/// the way.
+pub fn seen(player_id: i32) -> card_sdk::Asked {
+    let Some(id) = ctx::trigger::cards().first().copied() else {
+        return Ok(());
+    };
+    ctx::reveal_card(
+        player_id,
+        id.as_str(),
+        &Msg::new(key!("infinite_possibility_seen")),
+    );
+    if ctx::take_card(player_id, id.as_str(), ctx::CardPile::Inspection) {
+        ctx::place_card(
+            player_id,
+            id.as_str(),
+            &Msg::new(key!("infinite_possibility_note")),
+        );
+    }
+    Ok(())
+}
+
 /// 规则书[持续]（1）: 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡
 /// 添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个 [奇迹水晶]」
-fn drew(player_id: i32) -> card_sdk::Asked {
+fn draw_after(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() < 4 {
         ctx::add_crystals(1, 4)?;
     } else {
@@ -113,6 +144,6 @@ pub fn swap_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
-    drew(player_id)
+pub fn draw_after_kani(player_id: i32) -> card_sdk::Asked {
+    draw_after(player_id)
 }

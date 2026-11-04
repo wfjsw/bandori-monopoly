@@ -284,6 +284,211 @@ fn backstage_looks_at_two_and_pays_1000_per_discarded() {
     );
 }
 
+/// 规则书: 「看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入
+/// 一张获得1000资金」 -- with exactly two cards and an empty discard, emptying
+/// the deck during the look must not shuffle the flipped cards straight back
+/// (design G11 I2). The next draw is the action that refills.
+#[test]
+fn backstage_flip_stays_in_the_discard_on_a_two_card_deck() {
+    let mut t = vanilla2();
+    t.set_draw(0, &["HHW:微笑巡逻队", "HHW:热气球演出"]);
+    t.give_play(0, "HHW:出发！后台之旅！").unwrap();
+    while let Some(p) = t.prompt() {
+        assert!(
+            p.title.key().contains("backstage_tour"),
+            "{}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
+    assert!(t.draw_pile(0).is_empty(), "deck {:?}", t.draw_pile(0));
+    let discard = t.discard(0);
+    assert!(
+        discard.contains(&"HHW:微笑巡逻队".to_string())
+            && discard.contains(&"HHW:热气球演出".to_string()),
+        "both flipped cards stay in the discard: {discard:?}"
+    );
+    assert_eq!(t.money(0), 12_000, "1000 per flipped card: {:?}", t.recent_keys(12));
+
+    // A following draw refills from the discard (a draw is not suppressed).
+    let mark = t.mark();
+    t.give_play(0, "通用:10次招募（1回限定）").unwrap();
+    drain(&mut t);
+    assert!(
+        t.keys_since(mark).iter().any(|k| k == "log.reshuffle"),
+        "the following draw reshuffles: {:?}",
+        t.keys_since(mark)
+    );
+    assert_eq!(
+        t.draw_pile(0).len(),
+        2,
+        "the three discarded cards refill, one is drawn"
+    );
+    assert_eq!(
+        t.discard(0),
+        vec!["通用:10次招募（1回限定）".to_string()],
+        "the refilled discard is empty; only the draw card's own filing is left"
+    );
+}
+
+/// 规则书 (design G11 §1.4): a flip is a move out of the frame, not a
+/// name-addressed hand write -- a same-named hand copy must survive and the
+/// peeked copy is the one filed.
+#[test]
+fn backstage_flip_does_not_consume_a_hand_copy() {
+    let mut t = vanilla2();
+    t.set_hand(0, &["HHW:出发！后台之旅！", "HHW:微笑巡逻队"]);
+    t.set_draw(0, &["HHW:微笑巡逻队", "HHW:热气球演出"]);
+    t.play(0, "HHW:出发！后台之旅！").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.hand(0),
+        vec!["HHW:微笑巡逻队".to_string()],
+        "the hand copy stays; the peeked copy is the one filed"
+    );
+    assert_eq!(
+        t.discard(0)
+            .iter()
+            .filter(|c| *c == "HHW:微笑巡逻队")
+            .count(),
+        1,
+        "exactly one copy (the peeked one) went to the discard: {:?}",
+        t.discard(0)
+    );
+    assert_eq!(t.money(0), 12_000, "events {:?}", t.recent_keys(12));
+}
+
+/// 规则书: 「选择0~2张以任意顺序放回」 -- the pick sets the order, and the
+/// picked card is the one on top.
+#[test]
+fn backstage_kept_cards_return_in_the_chosen_order() {
+    let mut t = vanilla2();
+    t.set_draw(0, &["HHW:微笑巡逻队", "HHW:热气球演出"]);
+    t.give_play(0, "HHW:出发！后台之旅！").unwrap();
+    // Keep both (yes to each keep ask).
+    for _ in 0..2 {
+        assert!(
+            t.prompt_refers("backstage_tour_ask_keep_both"),
+            "{}",
+            t.dump_prompt()
+        );
+        t.answer_one(0).unwrap();
+    }
+    assert!(
+        t.prompt_refers("backstage_tour_ask_top"),
+        "top pick: {}",
+        t.dump_prompt()
+    );
+    let p = t.expect_prompt();
+    assert!(
+        format!("{:?}", p.options[0]).contains("HHW:微笑巡逻队"),
+        "the peek order is offered: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.draw_pile(0),
+        vec!["HHW:微笑巡逻队".to_string(), "HHW:热气球演出".to_string()],
+        "the picked card is on top"
+    );
+}
+
+/// 规则书 (design G11 I2): a fat discard must not refill the deck mid-peek.
+#[test]
+fn backstage_does_not_refill_mid_peek_with_a_fat_discard() {
+    let mut t = vanilla2();
+    t.set_draw(0, &["HHW:微笑巡逻队", "HHW:热气球演出"]);
+    t.set_discard(
+        0,
+        &[
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+            "通用:GREAT",
+        ],
+    );
+    t.give_play(0, "HHW:出发！后台之旅！").unwrap();
+    drain(&mut t);
+    assert!(t.draw_pile(0).is_empty(), "deck {:?}", t.draw_pile(0));
+    assert_eq!(
+        t.discard(0).len(),
+        8,
+        "5 unused + both flipped + the played card: {:?}",
+        t.discard(0)
+    );
+    assert_eq!(t.money(0), 12_000, "events {:?}", t.recent_keys(12));
+}
+
+// ----- HHW:因为我一直相信着你 -- reveal output
+
+/// 规则书: 「公开你的卡组与手牌」 -- both piles are published, every seat
+/// sees the same public overlay, and the hand reveal names its size.
+#[test]
+fn believe_reveals_hand_and_deck_to_every_seat() {
+    let mut t = Table::vanilla(3);
+    t.set_hand(
+        0,
+        &[
+            "HHW:因为我一直相信着你",
+            "HHW:微笑巡逻队",
+            "HHW:热气球演出",
+        ],
+    );
+    t.set_draw(0, &["HHW:爱心义演", "HHW:运动的天赋", "通用:GREAT"]);
+    let hand_before = vec![
+        "HHW:微笑巡逻队".to_string(),
+        "HHW:热气球演出".to_string(),
+    ];
+    let deck_before = t.draw_pile(0);
+    let mark = t.mark();
+    t.play(0, "HHW:因为我一直相信着你").unwrap();
+    // The chooser prompt.
+    assert!(
+        t.prompt_refers("believe_you"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap(); // pick the first rival
+    // The rival's discard pick is open: the whole effect is published.
+    let p = t.expect_prompt();
+    assert!(
+        p.title.key().contains("believe_you"),
+        "{}",
+        t.dump_prompt()
+    );
+    let st = t.st();
+    let reveal = st.players[0]
+        .reveal
+        .as_ref()
+        .expect("the hand and deck are published");
+    assert_eq!(reveal.hand, hand_before, "the hand is published in order");
+    assert_eq!(reveal.deck, deck_before, "the deck is published top-first");
+    assert!(reveal.discard.is_empty(), "no discard involved");
+    // A third seat sees the same public state.
+    let again = t.st();
+    assert_eq!(
+        again.players[0].reveal, st.players[0].reveal,
+        "another seat reads the same overlay"
+    );
+    assert!(again.players[2].reveal.is_none(), "the rival seat reveals nothing");
+    // The hand reveal is one `reveal` event naming the count.
+    let hand_line = t
+        .events_since(mark)
+        .into_iter()
+        .find(|e| e.msg.key().contains("believe_you_reveal_hand"))
+        .expect("a hand reveal event");
+    assert_eq!(hand_line.r#type, "reveal");
+    assert_eq!(hand_line.value, 2, "the hand count");
+    assert_eq!(hand_line.to, 0, "the hand pile code");
+    // Finish: the rival discards, then two deck picks.
+    t.answer_one(0).unwrap();
+    t.answer_one(0).unwrap();
+    t.answer_one(0).unwrap();
+    drain(&mut t);
+}
+
 // ----- HHW:运动的天赋
 
 #[test]

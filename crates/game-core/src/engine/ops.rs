@@ -13,7 +13,7 @@ use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark
 
 use super::play::PayFactorScope;
 use super::world::World;
-use crate::engine::world::{Extreme, MarkLog};
+use crate::engine::world::{Extreme, InspectionCard, InspectionFrame, MarkLog, RevealRecord};
 
 impl World {
     // ------------------------------------------- move shaping
@@ -1163,6 +1163,140 @@ impl World {
         true
     }
 
+    /// The refill a **pile write** gets: skipped while an inspection frame
+    /// holds that seat's deck open (or a look just closed over it and the
+    /// activation is still filing, [`Self::finish_inspection_of`]), so a look
+    /// can empty the deck without the discard shuffling itself back in
+    /// (design G11 I2). A draw keeps calling [`Self::refill_draw_pile`]
+    /// directly -- a draw during a look must still find cards.
+    pub fn refill_after_pile_write(&mut self, i: usize) -> bool {
+        if self
+            .inspection_frames
+            .iter()
+            .any(|f| f.deck_owner as usize == i)
+            || self.look_hold.get(i).copied().unwrap_or(false)
+        {
+            return false;
+        }
+        self.refill_draw_pile(i)
+    }
+
+    /// Open an inspection frame over `owner`'s deck top for `looker`, returning
+    /// its id.
+    pub fn open_inspection(&mut self, looker: i32, owner: i32, count: i32, public: bool) -> i32 {
+        let Ok(i) = usize::try_from(owner) else {
+            return -1;
+        };
+        let Some(h) = self.hidden.get_mut(i) else {
+            return -1;
+        };
+        let take = (count.max(0) as usize).min(h.deck.len());
+        let mut cards = Vec::with_capacity(take);
+        for _ in 0..take {
+            if let Some(id) = h.deck.pop() {
+                cards.push(InspectionCard {
+                    id,
+                    revealed: false,
+                });
+            }
+        }
+        // `deck.pop` yields top-first already; the frame is top-first.
+        let id = self.next_inspection_id;
+        self.next_inspection_id += 1;
+        self.inspection_frames.push(InspectionFrame {
+            id,
+            looker,
+            deck_owner: owner,
+            public,
+            cards,
+            finished: false,
+        });
+        id
+    }
+
+    /// Release one frame's leftovers: back to the deck top in their original
+    /// order, or shuffled into the deck. Returns how many went back.
+    pub fn release_frame(&mut self, index: usize, shuffle: bool) -> i32 {
+        let Some(frame) = self.inspection_frames.get(index).cloned() else {
+            return 0;
+        };
+        self.inspection_frames.remove(index);
+        let Ok(owner) = usize::try_from(frame.deck_owner) else {
+            return 0;
+        };
+        let Some(h) = self.hidden.get_mut(owner) else {
+            return 0;
+        };
+        let count = frame.cards.len() as i32;
+        // `deck.push` is the top; reverse iteration puts the first card back
+        // on top.
+        for entry in frame.cards.into_iter().rev() {
+            h.deck.push(entry.id);
+        }
+        if shuffle {
+            let mut pile = std::mem::take(&mut h.deck);
+            self.rng.shuffle(&mut pile);
+            h.deck = pile;
+        }
+        count
+    }
+
+    /// Record a public reveal of one pile (`pile` = [`crate::state::RevealPile`])
+    /// for `player`. `reveal_pile` replaces that pile's vector so two reveals
+    /// show as one overlay; a `reveal_card` appends the one id.
+    pub fn push_reveal(
+        &mut self,
+        player: i32,
+        reason: Msg,
+        pile: crate::state::RevealPile,
+        ids: Vec<String>,
+    ) {
+        let record = match self.reveals.iter_mut().find(|r| r.player == player) {
+            Some(r) => {
+                r.reason = reason;
+                r
+            }
+            None => {
+                self.reveals.push(RevealRecord {
+                    player,
+                    reason,
+                    hand: Vec::new(),
+                    deck: Vec::new(),
+                    discard: Vec::new(),
+                });
+                self.reveals.last_mut().expect("just pushed")
+            }
+        };
+        match pile {
+            crate::state::RevealPile::Hand => record.hand = ids,
+            crate::state::RevealPile::Deck => record.deck = ids,
+            crate::state::RevealPile::Discard => record.discard = ids,
+            // A single shown card is appended to the revealed-card list.
+            crate::state::RevealPile::Card => record.deck.extend(ids),
+        }
+    }
+
+    /// End the innermost open frame `player` is looking through: release its
+    /// leftovers and mark the deck as still held for this activation
+    /// ([`Self::refill_after_pile_write`] keeps suppressing until the next
+    /// play's own card filing). The played card's filing is a pile write, and
+    /// a look that emptied the deck must not shuffle the flipped cards
+    /// straight back (design G11 I2). A draw still refills.
+    pub fn finish_inspection_of(&mut self, player: i32, shuffle: bool) -> i32 {
+        let Some(index) = self
+            .inspection_frames
+            .iter()
+            .rposition(|f| f.looker == player)
+        else {
+            return 0;
+        };
+        let owner = self.inspection_frames[index].deck_owner.max(0) as usize;
+        if let Some(held) = self.look_hold.get_mut(owner) {
+            *held = true;
+        }
+        self.release_frame(index, shuffle)
+    }
+
     /// Draw `n` cards, refilling as soon as the last card leaves.
     /// Returns how many were actually drawn.
     pub fn draw_cards(&mut self, player_id: i32, n: i32, over_hand_limit: bool) -> i32 {
@@ -1230,7 +1364,7 @@ impl World {
                     h.hand.remove(k);
                 }
                 h.graveyard.push(card.to_string());
-                return self.refill_draw_pile(i);
+                return self.refill_after_pile_write(i);
             }
         }
         false

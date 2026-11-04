@@ -728,6 +728,25 @@ pub trait CardWorld: Clone + 'static {
     /// Every card id in a player's `pile`, in pile order (the deck top first).
     fn cards_in(&self, player_id: i32, pile: crate::CardPile) -> Vec<String>;
     fn to_discard(&mut self, player_id: i32, card: &str);
+    /// Turn up to `count` cards of `owner`'s deck into an inspection frame for
+    /// `looker`; returns how many were held. Raises `inspected` per card.
+    fn inspection_begin(
+        &mut self,
+        _looker: i32,
+        _owner: i32,
+        _count: i32,
+        _public: bool,
+    ) -> i32 {
+        0
+    }
+    /// Close `player`'s innermost frame; returns what went back to the deck.
+    fn inspection_end(&mut self, _player: i32, _shuffle: bool) -> i32 {
+        0
+    }
+    /// Publish a pile to the table. `reason` is the log line shown with it.
+    fn reveal_pile(&mut self, _player: i32, _pile: crate::CardPile, _reason: Msg) {}
+    /// Publish one card to the table.
+    fn reveal_card(&mut self, _player: i32, _card: &str, _reason: Msg) {}
     /// Copies of `card` in hand.
     fn hand_count(&self, player_id: i32, card: &str) -> i32;
     /// Total cards in hand.

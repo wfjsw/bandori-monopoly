@@ -99,7 +99,15 @@ export interface MatchPlayer {
   state: Record<string, StateVar>;
   skillOwner: string; affiliations: string; tokens: Counter[];
   skillNote: Msg; field: FieldCard[];
+  /**
+   * The seat's public reveal overlay (`MatchPlayer.reveal`), while one is
+   * live: ids published by `ctx::reveal_pile` / `ctx::reveal_card` and by a
+   * public deck inspection. Absent once the routine ends.
+   */
+  reveal?: RevealView | null;
 }
+/** One seat's public reveal: the ids published, and the clause that did it. */
+export interface RevealView { reason: Msg; hand: string[]; deck: string[]; discard: string[] }
 /**
  * `Counter.cs` -- named units a player carries. Under the bound-counter model
  * these are units of some card instance's named counter, bound to a holder.
@@ -309,6 +317,12 @@ export interface MatchView {
    * engine bundle predates the field.
    */
   skills?: SkillAction[];
+  /**
+   * The viewer's own open deck inspection (`Match::inspection_of`): the
+   * revealed cards, top-first, and whether the look is public. `null` when no
+   * look is running. Never another seat's.
+   */
+  inspection?: { cards: string[]; public: boolean } | null;
   /**
    * Absolute turn-clock deadlines on the server's monotonic clock (ms), for
    * the acting seat. Absent while the clock is held (`state.clockPaused`), on

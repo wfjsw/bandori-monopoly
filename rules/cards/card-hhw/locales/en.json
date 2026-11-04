@@ -16,7 +16,7 @@
   "believe_you_kept": "\"{{card}}\" was added to the hand",
   "believe_you_no_hand": "You need at least one other hand card",
   "believe_you_pay": "Because I Always Believed in You (cost 800)",
-  "believe_you_reveal": "{{who}} revealed their hand ({{hand}} cards) and draw pile ({{deck}} cards)",
+  "believe_you_reveal_hand": "Revealed their hand",
   "believe_you_shuffled": "{{who}} shuffled their draw pile",
   "believe_you_title": "Because I Always Believed in You",
   "black_suits_attach": "The tile gains all of CiRCLE's effects while it has a miracle crystal",

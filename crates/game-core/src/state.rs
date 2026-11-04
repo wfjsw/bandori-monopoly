@@ -668,6 +668,47 @@ pub struct MatchPlayer {
     pub assets: i32,
     pub score: i32,
     pub rank: i32,
+    /// What this seat has publicly revealed right now (`reveal_pile` /
+    /// `reveal_card`). Cleared when the outermost routine ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reveal: Option<RevealView>,
+}
+
+/// A seat's public reveal overlay: ids published to every seat, with the
+/// clause that published them.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RevealView {
+    /// The reveal's reason (a `log.*` key plus args).
+    pub reason: Msg,
+    /// Publicly revealed hand ids, in hand order.
+    pub hand: Vec<String>,
+    /// Publicly revealed draw-pile ids, top-first. A public inspection's held
+    /// cards count as revealed draw-pile ids.
+    pub deck: Vec<String>,
+    /// Publicly revealed discard ids (that pile is already public in
+    /// [`MatchPlayer::discard`]; carried for the reveal's own emphasis).
+    pub discard: Vec<String>,
+}
+
+/// Which bucket a public reveal writes into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevealPile {
+    Hand,
+    Deck,
+    Discard,
+    /// One shown card (`reveal_card`); appended to the revealed-card list.
+    Card,
+}
+
+/// The caller's own open inspection frame, for `MatchView.inspection`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct InspectionView {
+    /// Held card ids, top-first, innermost frame first.
+    pub cards: Vec<String>,
+    /// The frame is public (every card was revealed as it was turned).
+    pub public: bool,
 }
 
 impl Default for MatchPlayer {
@@ -713,6 +754,7 @@ impl Default for MatchPlayer {
             assets: 0,
             score: 0,
             rank: 0,
+            reveal: None,
         }
     }
 }

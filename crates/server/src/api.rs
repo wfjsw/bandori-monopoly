@@ -598,6 +598,11 @@ pub struct MatchView {
     /// another seat's entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tile_quotes: Option<Vec<Option<game_core::state::TileQuote>>>,
+    /// The member's own open deck inspection, while one is running
+    /// ([`game_core::engine::Match::inspection_of`]). Only the looker sees it;
+    /// a public frame's ids also ride the owner's `state.players[].reveal`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inspection: Option<game_core::state::InspectionView>,
     /// Absolute turn-clock deadlines on the monotonic server clock (ms).
     /// Absent while the clock is held (`state.clockPaused`), on a machine
     /// seat, in solo, or outside the play phase -- the client then shows the

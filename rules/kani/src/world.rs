@@ -389,6 +389,22 @@ pub enum Effect {
         player: i32,
         n: i32,
     },
+    /// `inspection_begin` -- `n` cards turned from `owner`'s deck.
+    InspectionHold {
+        looker: i32,
+        owner: i32,
+        n: i32,
+    },
+    /// `inspection_end` -- `n` cards returned to `owner`'s deck.
+    InspectionReturn {
+        owner: i32,
+        n: i32,
+    },
+    /// `reveal_pile` / `reveal_card` -- a publication, no pile write.
+    Reveal {
+        player: i32,
+        pile: i32,
+    },
     GainMoney {
         player: i32,
         n: i32,
@@ -794,6 +810,16 @@ pub struct World {
     pub deck_n: u8,
     pub discard_pile: [u16; MAX_CARDS],
     pub discard_n: u8,
+    /// The open inspection frame (v114): cards turned over and not released,
+    /// front-first. One frame is modelled (`inspection_frame_n` is 0 or 1).
+    pub inspection_pile: [u16; MAX_CARDS],
+    pub inspection_n: u8,
+    /// Whose deck the open frame holds (index), or -1 for none. The refill
+    /// gate reads it.
+    pub inspection_deck_owner: i32,
+    pub inspection_public: bool,
+    pub inspection_revealed: [bool; MAX_CARDS],
+    pub inspection_frame_n: u8,
 
     // ---- field cards ----
     pub field: [FieldCard; MAX_FIELD],
@@ -1025,6 +1051,12 @@ impl World {
             deck_n: 0,
             discard_pile: [u16::MAX; MAX_CARDS],
             discard_n: 0,
+            inspection_pile: [u16::MAX; MAX_CARDS],
+            inspection_n: 0,
+            inspection_deck_owner: -1,
+            inspection_public: false,
+            inspection_revealed: [false; MAX_CARDS],
+            inspection_frame_n: 0,
             field: [FieldCard::EMPTY; MAX_FIELD],
             field_n: 0,
             next_uid: 1,
@@ -1481,6 +1513,50 @@ pub fn pile_push(pile: &mut [u16; MAX_CARDS], n: &mut u8, card: u16) {
         pile[*n as usize] = card;
         *n += 1;
     }
+}
+
+/// Push `card` onto the **front** of a bounded pile (the `arm_cards_in` deck
+/// order is front-first). Drops when full.
+pub fn pile_unshift(pile: &mut [u16; MAX_CARDS], n: &mut u8, card: u16) {
+    if (*n as usize) >= MAX_CARDS {
+        return;
+    }
+    let mut i = *n as usize;
+    while i > 0 {
+        pile[i] = pile[i - 1];
+        i -= 1;
+    }
+    pile[0] = card;
+    *n += 1;
+}
+
+/// Move up to `k` cards off the **front** of `src` onto the front of `dst`, in
+/// order. Returns how many moved.
+pub fn pile_shift_front(
+    src: &mut [u16; MAX_CARDS],
+    src_n: &mut u8,
+    k: usize,
+    dst: &mut [u16; MAX_CARDS],
+    dst_n: &mut u8,
+) -> usize {
+    let mut moved = 0usize;
+    while moved < k && moved < *src_n as usize {
+        moved += 1;
+    }
+    // Reverse so the first card stays first on `dst`.
+    let mut j = moved;
+    while j > 0 {
+        j -= 1;
+        pile_unshift(dst, dst_n, src[j]);
+    }
+    // Close the gap: shift the remainder down.
+    let mut i = moved;
+    while i < *src_n as usize {
+        src[i - moved] = src[i];
+        i += 1;
+    }
+    *src_n -= moved as u8;
+    moved
 }
 
 /// Remove the first `card` from a bounded pile. Returns whether it was present.

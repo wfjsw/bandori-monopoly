@@ -36,7 +36,7 @@ Sources (re-counted 2026-11-03 against master `fa158887`):
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `crates/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v112** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`). The body
+**Current ABI: v114** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`). The body
 still quotes older era names in places; where a kind has since been renamed
 (`HookKind`/`GateKind` → `ActionKind`/`FilterKind`; `MoveRoll` → `DiceRollResult`;
 the `Pay*` / `Roll*` families restructured; `ruleset-core` → `bandori-std`),
@@ -165,14 +165,6 @@ Design: `docs/rulebook/spec/abi/G10-effect-outcome.md`
 - **host01-journal** (medium, rows 724,728) — Nested-settle writes are invisible to the master re-run (HOST-01); `rules/cards/card-ras/src/be_strongest.rs`
 - **redirect-latch** (medium, rows 781,1465) — 「造成影响」 latches on any payee-equals-owner effect, not a landed redirect; `rules/cards/card-ras/src/exist.rs`
 - **world-snapshot** (medium, rows 782,1077) — No play-time world snapshot/restore for no_breakup; `rules/cards/card-sumimi/src/no_breakup.rs`
-
-## G11 — Information and deck inspection
-
-Design: `docs/rulebook/spec/abi/G11-information-and-deck.md`
-
-- **backstage-peek-refill** (medium, rows 1018) — backstage_tour: a peek empties the deck and the first flip triggers the refill; `rules/cards/card-hhw/src/backstage_tour.rs`
-- **reveal-deck-inspection** (medium, rows 165,170,171,537,612,615,1092,1400) — No public reveal output or deck-inspection hook; piles only log counts; `rules/cards/card-hhw/src/believe_you.rs`
-- **drew-batch** (medium, rows 1401,1480) — Drew fires per card; the sheet keys on a draw action; `rules/cards/card-pp/src/infinite_possibility.rs`
 
 ## G12 — Status, blocked and immunity gates
 

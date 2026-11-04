@@ -451,6 +451,11 @@ pub enum Op {
     // v113 (G07 designation/nearest surface). 441-450 is this group's band.
     nearest = 441,
     nearest_with_prop = 442,
+    // v114 (G11 inspection/reveal surface). 451-454 is this group's band.
+    inspection_begin = 451,
+    inspection_end = 452,
+    reveal_pile = 453,
+    reveal_card = 454,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.
