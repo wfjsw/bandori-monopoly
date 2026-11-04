@@ -240,6 +240,8 @@ export interface MatchState {
   timeLeft: number; baseTime: number; bonusTime: number;
   /** True while the acting seat's clock is held for an anim ack. */
   clockPaused?: boolean;
+  /** Per board slot, the tile standing there (a swap map; identity when absent). */
+  tileAt?: number[];
   players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];

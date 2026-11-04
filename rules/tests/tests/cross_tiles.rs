@@ -152,10 +152,6 @@ fn t02_anon_link_plus_fire_bird() {
     drain(&mut t);
     let base = rent(t1, 0) + rent(t2, 0) / 2;
     let low = rent(t1, 0) * 3 / 2;
-    eprintln!(
-        "t02 record (RULING: linked half boosted?): paid = {}, base = {base}, 1.5*R1 = {low}",
-        10_000 - t.money(1)
-    );
     assert!(10_000 - t.money(1) >= low, "at least 1.5 × R(1)");
 }
 
@@ -232,11 +228,6 @@ fn t04_anon_link_mortgaged_partner() {
     t.dice(&[1]);
     t.roll(1).unwrap();
     drain(&mut t);
-    eprintln!(
-        "t04 record (RULING: linked half when mortgaged): paid = {} (R1 = {})",
-        10_000 - t.money(1),
-        rent(t1, 0)
-    );
 }
 
 // =====================================================================
@@ -279,11 +270,6 @@ fn t05_one_of_us_shares() {
     t.roll(2).unwrap();
     drain(&mut t);
     let r = rent(t48, 0);
-    eprintln!(
-        "t05 record: P1 = {}, P0 = {}, R = {r}",
-        t.money(1),
-        t.money(0)
-    );
     assert_eq!(t.money(2), 10_000 - r, "P2 pays R");
     // 「先在原主人方结算完成」 -- P1 keeps the full rent, then shares half.
     // 「之后被分享方资金直接增加，不受其他任何效果影响」 -- P0's half is a raw
@@ -319,7 +305,6 @@ fn t06_tomorrows_door_surcharge() {
     drain(&mut t);
     let expected = rent(t44, 2) + 200;
     let paid = 10_000 - t.money(1);
-    eprintln!("t06 record: paid = {paid} (want {expected} = R + 2*100)");
     // 规则书: Tomorrow's Door (3): extra = (houses on 星之鼓动山丘)×100 = 2×100.
     assert_eq!(paid, expected, "R(星之鼓动,2) + 2×100 surcharge");
 }
@@ -342,10 +327,6 @@ fn t07_tomorrows_door_walks() {
     t.dice(&[8]);
     t.roll(0).unwrap();
     drain(&mut t);
-    eprintln!(
-        "t07 record: P0 field = {:?} (Door may have moved off 45)",
-        t.field_ids(0)
-    );
     // (2): 「每次[经过]此卡所在的格子时把此卡放置到…序列中的下一个」
     // 流星堂 → 花咲川女子学院.
     let field = t.field(0);
@@ -380,13 +361,12 @@ fn t08_practice_storm_remote_settle() {
     t.set_pos(1, t52 - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    drain(&mut t);
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    for e in t.st().events.iter().rev().take(20) {
+    }
     let scaled = rent(t50, 0) * (4 - 2) / 4;
-    eprintln!(
-        "t08 record: P1 paid = {} (R(50) = {}, scaled = {scaled})",
-        10_000 - t.money(1),
-        rent(t50, 0)
-    );
     // (2): 「那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的(4-X)/4倍」.
     assert_eq!(
         10_000 - t.money(1),
@@ -435,10 +415,6 @@ fn t09_change_the_world() {
     drain(&mut t);
     let extra = 50 * (3 + 1) * 1;
     let expected = rent(t50, 1) + extra;
-    eprintln!(
-        "t09 record: P1 paid = {} (want {expected}), P0 gained extra = {extra}",
-        10_000 - t.money(1)
-    );
     // 「下一次收费增加50*（y+1）*n且触发时获得等量资金」.
     assert_eq!(10_000 - t.money(1), expected, "R + 50*(y+1)*n");
 }
@@ -470,10 +446,6 @@ fn t10_ringing_bloom() {
     drain(&mut t);
     let expected = rent(t2, 3) / 2;
     let paid = 10_000 - t.money(1);
-    eprintln!(
-        "t10 record: P1 paid = {paid} (want R(2,3)/2 = {expected}), P0 = {} (+500*3)",
-        t.money(0)
-    );
     // (2): t2's houses count as the max (3) and the inflated ones charge half.
     assert_eq!(
         paid, expected,
@@ -610,10 +582,6 @@ fn t12_student_council_check() {
         }
     }
     let half_house = house_cost(t1) / 2;
-    eprintln!(
-        "t12 record: P0 paid H/2 = {half_house}, money = {}",
-        t.money(0)
-    );
     // 「可支付那格一层房屋的建造价格一半将此卡放于那个格子上」.
     assert_eq!(
         10_000 - t.money(0),
@@ -632,11 +600,6 @@ fn t12_student_council_check() {
     drain(&mut t);
     let half_rent = rent(t1, 0) / 2;
     let circle = 2000; // CIRCLE_MONEY: P1 passes tile 0 on this path
-    eprintln!(
-        "t12 record: P1 pos = {} (want {t1}), net paid = {} (want R/2 = {half_rent})",
-        t.pos(1),
-        money_before + circle - t.money(1)
-    );
     // 「下一个经过且移动终点不在此格的你以外的玩家强制停下并触发结算…地租价格为原价格一半」.
     assert_eq!(t.pos(1), t1, "P1 force-stopped on the card's tile");
     assert_eq!(
@@ -691,6 +654,11 @@ fn t13_smile_parade() {
         }
     }
     assert!(placed_with_three, "（1） counteract ran");
+    for e in t.st().events.iter() {
+        let k = log_key(e);
+        if k.contains("DBGCC") || k.contains("DBGMV") || k.contains("DBGG") || k.contains("DBGOR") || k.contains("DBGRD") || k.contains("DBGSA") {
+        }
+    }
     let field = t.field(0);
     let f = field
         .iter()
@@ -707,24 +675,48 @@ fn t13_smile_parade() {
         0,
         "(2) also clears the ⌛ marker with them"
     );
-    eprintln!(
-        "t13 swap record: card tile = {} (end {}), crystals = {}",
-        f.tile,
-        (t28 + 2) % 60,
-        f.counters.get("crystals").copied().unwrap_or(0)
+    // (2) drops the card on the [move endpoint] (26 + 4 = 30), carrying the
+    // swap record: the endpoint now displays 弦卷集团 and 弦卷集团's square
+    // displays the endpoint.
+    let end = (t28 - 2 + 4) % 60;
+    assert_eq!(f.tile, end as i32, "(2) moves it to the endpoint");
+    assert_eq!(
+        t.m.world().tile_standing_at(end as i32),
+        t28 as i32,
+        "the endpoint displays 弦卷集团"
     );
-    // （3）: any player settling on the card's tile discards it. P1 lands there.
+    assert_eq!(
+        t.m.world().tile_standing_at(t28 as i32),
+        end as i32,
+        "弦卷集团's square displays the endpoint"
+    );
+    // (1) 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」: 0 crystals and the
+    // card left the group's own square, so it stays in play across turn end.
     until_turn(&mut t, 1);
-    let at = f.tile.clamp(0, 59) as usize;
+    assert!(
+        t.on_field(0, "HHW:笑容大游行"),
+        "(2) moved it off the group's square, so 0 crystals do not discard it"
+    );
+    // (3) 「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」. P1 settles on
+    // that same endpoint slot (which runs as the agent through the swap).
+    let at = end;
     t.set_pos(1, (at + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(1).unwrap();
     drain(&mut t);
+    for e in t.st().events.iter().rev().take(200) {
+        let k = log_key(e);
+        if k.contains("DBG") {
+        }
+    }
     assert!(
         !t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
-        "（3） discards the card after a settle on its tile: {:?}",
+        "(3) discards the card after a settle on its square: {:?}",
         t.field_ids(0)
     );
+    // (3) drops the swap with the instance.
+    assert_eq!(t.m.world().tile_standing_at(end as i32), end as i32);
+    assert_eq!(t.m.world().tile_standing_at(t28 as i32), t28 as i32);
 }
 
 // =====================================================================
@@ -748,11 +740,6 @@ fn t14_black_clothes_supply() {
             t.decline();
         }
     }
-    eprintln!(
-        "t14 record: marks = {:?}, P0 hand = {:?}",
-        t.marks(),
-        t.hand(0)
-    );
 }
 
 // =====================================================================
@@ -784,10 +771,6 @@ fn t15_kkr_on_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    eprintln!(
-        "t15 record: P0 pos = {} (3 + 2 = 5 if CiRCLE counted)",
-        t.pos(0)
-    );
 }
 
 // =====================================================================
@@ -826,10 +809,6 @@ fn t16_soyo_mixed_colors() {
     // (user ruling 2026-10-15). `ceil10(R/2)` then `(x+1)/2` then `ceil10`.
     let agent_half = ceil10((rent(s, 0) + 1) / 2);
     let expected = ceil10((agent_half + 1) / 2);
-    eprintln!(
-        "t16 record: P1 paid = {} (want round10(agent_half/2) = {expected}, agent_half = {agent_half})",
-        10_000 - t.money(1)
-    );
     // 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半」.
     assert_eq!(
         10_000 - t.money(1),
@@ -850,13 +829,6 @@ fn t17_that_days_rain() {
     t.dice(&[1, 5]);
     t.play(0, "MyGO:那天的雨").unwrap();
     drain(&mut t);
-    eprintln!(
-        "t17 record: stays = {}, {}, {}; field = {:?}",
-        t.state(0, "stay"),
-        t.state(1, "stay"),
-        t.state(2, "stay"),
-        t.field_ids(0)
-    );
     // 1d10 = 1 → the 1st agent (主要街道) → colour #4682B7 (购物中心/偶像经纪公司/
     // 星空齿科/江户川公园) and their neighbours, which include CiRCLE (0) where
     // everyone sits. 「…相邻格子上的所有玩家获得一层[停留]」.
@@ -913,11 +885,6 @@ fn t18_rana_interesting_woman() {
             t.decline();
         }
     }
-    eprintln!(
-        "t18 record: P1 pos = {}, paid = {}",
-        t.pos(1),
-        10_000 - t.money(1)
-    );
     // (3)/(4): with no 抹茶芭菲 to lose the choice collapses to the force-stop,
     // which stops P1 on the card's tile and shuffles the card into the discard.
     assert_eq!(t.pos(1), yamabuki, "force-stopped on the card's tile");
@@ -960,15 +927,6 @@ fn t19_saaya_names_the_sky() {
     t.roll(0).unwrap();
     drain(&mut t);
     pass(&mut t, 0);
-    eprintln!(
-        "t19 record: fire = {}, field = {:?}, tiles = {:?} (3d20 = 5+5+5 -> tile #15 = index 14)",
-        t.charge(0),
-        t.field_ids(0),
-        t.field(0)
-            .iter()
-            .map(|f| (f.card.clone(), f.tile))
-            .collect::<Vec<_>>()
-    );
     // (2): 「[经过]此卡后在回合结束后获得1个[火罐]」.
     assert_eq!(t.charge(0), 1, "+1 fire at turn end after passing the card");
     // (2): 「然后投掷3d20将此卡放置在投掷结果的格子上」 → 5+5+5 = 15 → tile #15.
@@ -999,11 +957,6 @@ fn t20_clear_cp() {
             t.decline();
         }
     }
-    eprintln!(
-        "t20 record: marks = {:?}, field = {:?}",
-        t.marks(),
-        t.field_ids(0)
-    );
     // 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 — a CP mark lands on the
     // chosen tile. (The 「场上]6个[CP点]」 and the 800-on-settle halves are recorded
     // above; their representation is not pinned by the sheet.)
@@ -1061,10 +1014,6 @@ fn t21_riki_plus_anon_link() {
     let quoted = ceil10((rent(t2, 0) as f64 * 0.25) as i32);
     let full = rent(t1, 0) + quoted / 2;
     let quarter = ceil10((full as f64 * 0.25) as i32);
-    eprintln!(
-        "t21 record: P2 paid = {} (want round10((R1+R2/2)/4) = {quarter}, full = {full})",
-        10_000 - t.money(2)
-    );
     // 「本次结算导致的所有[支付]变为原价的四分之一」.
     assert_eq!(
         10_000 - t.money(2),
@@ -1092,12 +1041,6 @@ fn t22_hill_coownership() {
     t.roll(2).unwrap();
     drain(&mut t);
     let r = rent(t44, 0);
-    eprintln!(
-        "t22 record (RULING: Door surcharge on co-owned hill): P0 = {}, P1 = {}, P2 = {} (R = {r}, split)",
-        t.money(0),
-        t.money(1),
-        t.money(2)
-    );
 }
 
 // =====================================================================
@@ -1136,12 +1079,6 @@ fn t23_riot_hey_kids() {
             }
         }
     }
-    eprintln!(
-        "t23 record: houses t1 = {}, t2 = {}, money = {}",
-        t.houses(t1),
-        t.houses(t2),
-        t.money(0)
-    );
 }
 
 // =====================================================================
@@ -1173,7 +1110,6 @@ fn t24_parking_space() {
     t.skill(1, &sid).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        eprintln!("t24 prompt: {}", t.dump_prompt());
         let k = t.option("Space").or_else(|| t.option(&space.to_string()));
         if let Some(k) = k {
             t.answer(1, k).unwrap();
@@ -1196,14 +1132,7 @@ fn t24_parking_space() {
     );
     // Parking Space (1): 「[结算]改为回合结束后获得一层[停留]」 -- the stay
     // counter is deferred to `TurnEndAfter`.
-    eprintln!("t24 pre-pass stay = {}", t.state(1, "stay"));
     pass(&mut t, 1);
-    eprintln!(
-        "t24 record: P1 pos = {}, stay = {}, marks = {:?}",
-        t.pos(1),
-        t.state(1, "stay"),
-        t.marks()
-    );
     assert_eq!(
         t.state(1, "stay"),
         1,
@@ -1229,10 +1158,6 @@ fn t25_noble_blue_mark() {
     until_turn(&mut t, 1);
     t.give_play(1, "MyGO:无路矢").unwrap();
     let p = t.expect_prompt();
-    eprintln!(
-        "t25 record: prompt = {} (t = {t1} must not be offered)",
-        t.dump_prompt()
-    );
     assert!(
         !p.options
             .iter()
@@ -1265,11 +1190,6 @@ fn t26_cute_strong_flower() {
     t.dice(&[10]);
     t.roll(0).unwrap();
     drain(&mut t);
-    eprintln!(
-        "t26 record: P0 pos = {}, discard = {:?}",
-        t.pos(0),
-        t.discard(0)
-    );
 }
 
 // =====================================================================
@@ -1289,11 +1209,9 @@ fn t27_ikumi_marks() {
     // Choose one of the two results; take the first offered.
     loop {
         let Some(_) = t.prompt() else { break };
-        eprintln!("t27 play prompt: {}", t.dump_prompt());
         t.answer(0, 0).unwrap();
     }
     let marks = t.marks();
-    eprintln!("t27 marks after play: {marks:?}");
     let mark_tile = marks
         .first()
         .map(|m| m.tile as usize)
@@ -1309,7 +1227,6 @@ fn t27_ikumi_marks() {
         {
             saw_offer = true;
         }
-        eprintln!("t27 prompt: {}", t.dump_prompt());
         // Take the force-stop (ask.yes).
         let k = t
             .option("ask.yes")
@@ -1321,11 +1238,6 @@ fn t27_ikumi_marks() {
             t.decline();
         }
     }
-    eprintln!(
-        "t27 record: P0 money = {}, marks = {:?}",
-        t.money(0),
-        t.marks()
-    );
     // 「你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记」.
     assert!(saw_offer, "育美 mark: force-stop + 2000 must be offered");
     assert_eq!(t.pos(0), mark_tile, "force-stopped on the mark's tile");
@@ -1360,7 +1272,6 @@ fn t28_hanae_rabbits() {
     let mut took_reward = false;
     loop {
         let Some(_) = t.prompt() else { break };
-        eprintln!("t28 prompt: {}", t.dump_prompt());
         let k = t
             .option("2000")
             .or_else(|| t.option("抽"))
@@ -1373,11 +1284,6 @@ fn t28_hanae_rabbits() {
             t.decline();
         }
     }
-    eprintln!(
-        "t28 record: marks = {:?}, fire = {} (cap 4), took_reward = {took_reward}",
-        t.marks(),
-        t.charge(0)
-    );
     // The reward path must actually run, or the exclusion below is vacuous.
     assert!(took_reward, "the CiRCLE reward must be offered and taken");
     // 「如果结果对应的格子不是"星空齿科"则…放置一个[多惠兔子]」 — 3d20 = 2+2+3 = 7
@@ -1405,7 +1311,6 @@ fn t29_croquettes() {
     t.set_pos(1, 48);
     t.begin_turn(0);
     drain(&mut t);
-    eprintln!("t29 marks after begin_turn(0): {:?}", t.marks());
     until_turn(&mut t, 1);
     t.dice(&[3]);
     t.roll(1).unwrap();
@@ -1420,16 +1325,9 @@ fn t29_croquettes() {
             took = true;
             t.answer(1, k).unwrap();
         } else {
-            eprintln!("t29 prompt (declined): {}", t.dump_prompt());
             t.decline();
         }
     }
-    eprintln!(
-        "t29 record (RULING: X before/after the take): P1 pos = {}, money = {}, P0 money = {}",
-        t.pos(1),
-        t.money(1),
-        t.money(0)
-    );
     // 「其他角色经过格子上可乐饼时可以将其转移到自己场上」 — the take is offered
     // and moves the croquette off the board tile.
     assert!(took, "the croquette take must be offered");

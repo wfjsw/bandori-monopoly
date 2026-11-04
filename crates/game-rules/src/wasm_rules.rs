@@ -42,6 +42,85 @@ fn surface_card(w: &game_core::engine::World, uid: i32, raw: &str) -> String {
     w.effective_card_at(uid).unwrap_or_else(|| raw.to_string())
 }
 
+/// Is the extra instance `uid` suppressed for this raise?
+///
+/// The tag `tag::SUPPRESS_TILE_EFFECTS` names a tile; both the trigger's
+/// raise-time move snapshot and the live plan are read, because a counter
+/// writes the plan *after* the snapshot its own raise took -- the plan is what
+/// makes a tag armed inside the `tileEffectBefore` round visible to the hook
+/// round of the same window. Only an *extra* placed on the very tile is
+/// suppressed; the tile's own `tile:` rule always runs.
+fn extra_suppressed(
+    w: &game_core::engine::World,
+    tile: i32,
+    mv_tags: Option<&[(String, i32)]>,
+    uid: i32,
+) -> bool {
+    let tagged = |tags: &[(String, i32)]| {
+        tags.iter()
+            .any(|(k, v)| k == card_sdk::abi::tag::SUPPRESS_TILE_EFFECTS && *v == tile)
+    };
+    let set = mv_tags.is_some_and(tagged) || tagged(&w.turn.plan.tags);
+    if !set {
+        return false;
+    }
+    w.field_by_uid(uid)
+        .is_some_and(|f| f.tile == tile && !f.card.starts_with("tile:"))
+}
+
+/// Kinds that are a happening **of one tile** and that a listener only hears
+/// from *that* tile: the tile's own effect window and the house / owner /
+/// build writes. [`field_hears`] narrows these and nothing else.
+///
+/// Everything else (`pass*`, `card`, `pay*`, a settle, a counteraction, …) is
+/// a happening of the game, raised with whichever tile it concerns, and a
+/// listener anywhere may answer it after gating itself on `trigger.tile` /
+/// `trigger.position` -- 练习室里的风暴 (2) charges from a distance, the door
+/// surcharge taxes a settle across the board, marina answers an extra on
+/// another tile. Narrowing those would drop the listener, whose guard reads
+/// the trigger's own tile precisely because its tile is not it.
+fn tile_local_kind(kind: TriggerKind) -> bool {
+    matches!(
+        kind,
+        TriggerKind::TileEffectBefore
+            | TriggerKind::HouseAdded
+            | TriggerKind::HouseRemoved
+            | TriggerKind::HouseAdd
+            | TriggerKind::HouseRemove
+            | TriggerKind::OwnerSet
+            | TriggerKind::BuildBefore
+            | TriggerKind::BuildAfter
+    )
+}
+
+/// Does a **placed** field instance hear a trigger for tile `t.tile`? A card
+/// lying on a tile only hears its own tile (a swap moves that set with the
+/// tile); a card with its owner (`tile < 0`) and a tile-less trigger still
+/// reach everything, as before.
+fn field_hears(
+    w: &game_core::engine::World,
+    tile: i32,
+    position: i32,
+    uid: i32,
+    kind: TriggerKind,
+) -> bool {
+    if tile < 0 {
+        return true;
+    }
+    // `tileResolved` is answered by **slot**: after smile_parade (2) moved
+    // itself, the card's governing tile is the swapped-in one, so its own
+    // settle no longer matches on the tile.
+    if kind == TriggerKind::TileResolved {
+        return position < 0
+            || w.field_by_uid(uid).is_some_and(|f| f.tile < 0 || f.position() == position);
+    }
+    if !tile_local_kind(kind) {
+        return true;
+    }
+    w.field_by_uid(uid)
+        .is_some_and(|f| f.tile < 0 || w.tile_standing_at(f.position()) == tile)
+}
+
 // ------------------------------------------------- silent-entry debug guard
 
 thread_local! {
@@ -117,6 +196,7 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::TeleportAs { .. } => Some("move"),
         HostRequest::Draw { .. } | HostRequest::DrawEvent { .. } => Some("draw"),
         HostRequest::Build { .. }
+        | HostRequest::BuildAs { .. }
         | HostRequest::OfferBuild { .. }
         | HostRequest::OfferBuildOne { .. }
         | HostRequest::Mortgage { .. }
@@ -125,6 +205,7 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::Buy { .. }
         | HostRequest::Acquire { .. }
         | HostRequest::AgentOffer { .. } => Some("buy/build"),
+        HostRequest::TileWrite { .. } => Some("house"),
         HostRequest::SettleAt { .. } => Some("settle"),
         HostRequest::Roll { .. }
         | HostRequest::RollRecast { .. }
@@ -289,7 +370,10 @@ pub struct Run {
     /// payload; `charge` is one caller.
     marker_spent_log: Vec<(i32, i32, String)>,
     /// Houses added during the run, raised as kind 75 once it commits.
-    house_log: Vec<(i32, i32, i32)>,
+    /// House writes this run applied: `(owner, tile, now, delta)` -- the
+    /// owner at write time (design 5.5). `commit_after` raises `houseAdded`
+    /// for a rise and `houseRemoved` for a fall.
+    house_log: Vec<(i32, i32, i32, i32)>,
     /// Named-counter writes this run made, `(owner, card, name, change)` -- the
     /// engine raises `counterChanged` for each once the run commits. `change`
     /// is the signed delta the write applied (0 = a write that landed on the
@@ -1011,6 +1095,20 @@ impl CardWorld for Run {
     fn build_cost(&self, tile: i32) -> i32 {
         self.world.build_cost(&self.data, tile)
     }
+    fn build_price(&self, tile: i32) -> i32 {
+        self.world.build_price(&self.data, &self.world.turn, tile)
+    }
+    fn build_cost_percent(&self) -> i32 {
+        self.world.turn.build_cost_pct
+    }
+    fn build_discount(&self) -> i32 {
+        self.world.turn.build_discount
+    }
+    fn tile_buildable(&self, player_id: i32, tile: i32) -> bool {
+        self.world
+            .guard_buildable(&self.data, player_id, tile)
+            .is_none()
+    }
     fn mortgage_value(&self, tile: i32) -> i32 {
         self.world.mortgage_value(&self.data, tile)
     }
@@ -1351,7 +1449,10 @@ impl CardWorld for Run {
         if self.current_uid < 0 {
             return -2;
         }
-        self.world.tile_at(self.current_uid)
+        self.world.self_tile_of(self.current_uid)
+    }
+    fn self_position(&self) -> i32 {
+        self.world.self_position_of(self.current_uid)
     }
     fn set_self_tile(&mut self, tile: i32) -> bool {
         self.world.set_tile_at(self.current_uid, tile)
@@ -1535,6 +1636,18 @@ impl CardWorld for Run {
     }
     fn tile_at(&self, uid: i32) -> i32 {
         self.world.tile_at(uid)
+    }
+    fn tile_standing_at(&self, position: i32) -> i32 {
+        self.world.tile_standing_at(position)
+    }
+    fn position_of_tile(&self, tile: i32) -> i32 {
+        self.world.position_of_tile(tile)
+    }
+    fn tile_extra_count(&self, tile: i32) -> i32 {
+        self.world.tile_extra_count(tile)
+    }
+    fn instance_position(&self, uid: i32) -> i32 {
+        self.world.position_of_instance(uid)
     }
     fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
         self.world.set_tile_at(uid, tile)
@@ -2036,12 +2149,14 @@ impl CardWorld for Run {
             .unwrap_or(0)
     }
     fn houses_of(&self, tile: i32) -> i32 {
-        self.world
+        let v = self
+            .world
             .st
             .houses
             .get(tile.max(0) as usize)
             .copied()
-            .unwrap_or(0)
+            .unwrap_or(0);
+        v
     }
     fn rent_houses_of(&self, tile: i32) -> i32 {
         self.world.rent_houses(tile)
@@ -2065,9 +2180,11 @@ impl CardWorld for Run {
             .map(|t| t.rent.len().saturating_sub(1))
             .unwrap_or(0) as i32;
         if let Some(h) = self.world.st.houses.get_mut(tile.max(0) as usize) {
-            *h = (*h + n).clamp(0, cap);
+            let before = *h;
+            *h = (before + n).clamp(0, cap);
             let now = *h;
-            if n > 0 {
+            let delta = now - before;
+            if delta != 0 {
                 let owner = self
                     .world
                     .st
@@ -2076,9 +2193,10 @@ impl CardWorld for Run {
                     .copied()
                     .unwrap_or(-1);
                 if owner >= 0 {
-                    // Visible outcome: `commit_after` raises `houseAdded`.
+                    // Visible outcome: `commit_after` raises `houseAdded` /
+                    // `houseRemoved` (design 5.5).
                     self.flush_header();
-                    self.house_log.push((owner, tile, now));
+                    self.house_log.push((owner, tile, now, delta));
                 }
             }
             return now;
@@ -3201,7 +3319,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         cx.overlay_guest_plan_tags(&run.world);
         let linger = run.linger_props.clone();
         let live_before = cx.live_event_count();
-        match bridge.apply_host_request(cx, req, &linger, self.call.clone(), card_id) {
+        match bridge.apply_host_request(cx, run, req, &linger, self.call.clone(), card_id) {
             Ok(v) => {
                 cx.stamp_parent_since(live_before, run.parent);
                 self.answers.push(v);
@@ -4096,6 +4214,15 @@ impl<M: CardModules> RulesBridge<M> {
                     match outcome2 {
                         Ok(Outcome::Done(after2)) => {
                             let mut after2 = after2;
+                            // The commit pass answers the host requests from
+                            // `answers` instead of re-applying them, so the
+                            // learn pass's `house_log` (a tile write's
+                            // `houseAdded` / `houseRemoved`, a raze's
+                            // `houseRemoved`) is the only copy: carry it over
+                            // or the post-commit hooks never fire.
+                            // A tile write applied on either pass is owed here
+                            // (see `pending_house_log`), so the committed run
+                            // only needs its state writes.
                             posted_ids = std::mem::take(&mut after2.posted);
                             if after2.own_activation >= 0 {
                                 flushed_header = after2.own_activation;
@@ -4345,8 +4472,12 @@ impl<M: CardModules> RulesBridge<M> {
                                     }
                                 }),
                             });
-                            let mut fr =
-                                game_core::engine::SettleFrame::new(player_id, tile, frame_m);
+                            let mut fr = game_core::engine::SettleFrame::new(
+                                player_id,
+                                cx.position_of_tile(tile as i32) as usize,
+                                tile as i32,
+                                frame_m,
+                            );
                             fr.stage = game_core::engine::SettleStage::RaiseSettle;
                             cx.push_work(game_core::engine::SettleWork { frame: fr });
                             let _ = who;
@@ -4411,10 +4542,12 @@ impl<M: CardModules> RulesBridge<M> {
                             answers.len()
                         );
                     }
+                    let linger = run.linger_props.clone();
                     let v = match self.apply_host_request(
                         cx,
+                        &mut run,
                         req,
-                        &run.linger_props,
+                        &linger,
                         call.clone(),
                         card_id,
                     ) {
@@ -4561,6 +4694,7 @@ impl<M: CardModules> RulesBridge<M> {
     fn apply_host_request(
         &self,
         cx: &mut PlayCtx,
+        run: &mut Run,
         req: HostRequest,
         linger_props: &std::collections::BTreeMap<String, i32>,
         call: Call,
@@ -4927,6 +5061,7 @@ impl<M: CardModules> RulesBridge<M> {
                 kind,
                 value,
                 tile,
+                position,
                 card,
                 deal_owner,
                 deal_houses,
@@ -4938,6 +5073,7 @@ impl<M: CardModules> RulesBridge<M> {
                 let t = self.raise_core(cx, kind, player_id, |t| {
                     t.value = value;
                     t.tile = tile;
+                    t.position = position;
                     t.card = card;
                     // The acting seat is the raise's cause (`t.ByCard`), the
                     // same read every host-side raise answers. A hook guards
@@ -5071,6 +5207,59 @@ impl<M: CardModules> RulesBridge<M> {
                 let paid = cx.money(p)?;
                 return Ok(if paid.paid { paid.loss } else { -1 });
             }
+            // The build verb with a card-stated charge; no `On::Build` body
+            // re-dispatch (a card path is the body already).
+            HostRequest::BuildAs {
+                player_id,
+                tile,
+                charge,
+                amount,
+                numerator,
+                denominator,
+                owner_required,
+            } => {
+                let did = cx.card_build_as(
+                    player_id.max(0) as usize,
+                    tile.max(0) as usize,
+                    charge,
+                    amount,
+                    numerator,
+                    denominator,
+                    owner_required != 0,
+                )?;
+                return Ok(did as i32);
+            }
+            // A guest tile write (`set_houses` / `add_house` / `set_owner`):
+            // the engine declares the effect, then applies unless cancelled.
+            // `house_log` keeps the raised `houseAdded`/`houseRemoved` pair
+            // (`commit_after`) for a non-zero house delta on an owned tile.
+            HostRequest::TileWrite {
+                operation,
+                tile,
+                value,
+            } => {
+                let t = tile.max(0) as usize;
+                let by = call.player_id().max(0) as usize;
+                let before = *cx.state().houses.get(t).unwrap_or(&0);
+                let answer = match operation {
+                    crate::host::TileWriteOperation::SetHouses => {
+                        cx.write_houses(by, t, game_core::engine::HouseWrite::Set(value), Some(by as i32))?
+                    }
+                    crate::host::TileWriteOperation::AddHouses => {
+                        cx.write_houses(by, t, game_core::engine::HouseWrite::Add(value), Some(by as i32))?
+                    }
+                    crate::host::TileWriteOperation::SetOwner => cx.write_owner(by, t, value, Some(by as i32))?,
+                };
+                if operation != crate::host::TileWriteOperation::SetOwner {
+                    let delta = answer - before;
+                    let owner = cx.state().owners.get(t).copied().unwrap_or(-1);
+                    if delta != 0 && owner >= 0 {
+                        run.flush_header();
+                        cx.push_pending_house_log(owner, t as i32, answer, delta);
+                    }
+                }
+                return Ok(answer);
+            }
             // Write the deed after a buy (`purchase::assign_deed`).
             HostRequest::AssignDeed {
                 player_id: _,
@@ -5079,6 +5268,11 @@ impl<M: CardModules> RulesBridge<M> {
                 houses,
                 mortgaged,
             } => {
+                // A raze is the previous owner's `houseRemoved` (design 5.5);
+                // the write itself stays the direct `assign_deed` below.
+                let t = tile.max(0) as usize;
+                let before = *cx.state().houses.get(t).unwrap_or(&0);
+                let previous = cx.state().owners.get(t).copied().unwrap_or(-1);
                 let mut w = cx.world_copy();
                 game_core::engine::purchase::assign_deed(
                     &mut w,
@@ -5088,6 +5282,11 @@ impl<M: CardModules> RulesBridge<M> {
                     mortgaged != 0,
                 );
                 cx.swap_world(w);
+                let after = *cx.state().houses.get(t).unwrap_or(&0);
+                if after < before && previous >= 0 {
+                    run.flush_header();
+                    cx.push_pending_house_log(previous, t as i32, after, after - before);
+                }
                 return Ok(1);
             }
             // Which option the player's AI would take among agent-offer tiles.
@@ -5449,7 +5648,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// shipped card ids so debug CI trips on a mis-marked entry. `TEST:*`
     /// fixtures are exempt from the assert so a deliberate-violation fixture
     /// can exercise the recorder without aborting the test binary.
-    fn check_silent_body(&self, card_id: &str, after: &Run) {
+    fn check_silent_body(&self, card_id: &str, after: &Run, borrowed_house: usize) {
         let what = if !after.paid_log.is_empty() {
             Some("pay/gain/transfer")
         } else if !after.draw_log.is_empty() {
@@ -5458,7 +5657,7 @@ impl<M: CardModules> RulesBridge<M> {
             Some("discard")
         } else if !after.reshuffle_log.is_empty() {
             Some("reshuffle")
-        } else if !after.house_log.is_empty() {
+        } else if after.house_log.len() > borrowed_house {
             Some("house")
         } else if !after.marker_spent_log.is_empty() {
             Some("marker-spend")
@@ -5503,9 +5702,19 @@ impl<M: CardModules> RulesBridge<M> {
         activation_id: i32,
     ) -> Flow<i32> {
         let mut after = after;
+        // Tile writes apply on the live context; their owed raises belong to
+        // this commit.
+        let owed = cx.take_pending_house_log();
+        // Rows drained from the pending queue were written by a *different*
+        // drive's request (the build that just committed, an earlier body)
+        // and are only owed to this commit for the raise -- they are not this
+        // body's own effect. The silent guard and the emptiness test look past
+        // them; the body's own rows end up in front (`extend` appends).
+        let borrowed_house = owed.len();
         if silent {
-            self.check_silent_body(card_id, &after);
+            self.check_silent_body(card_id, &after, borrowed_house);
         }
+        after.house_log.extend(owed);
         let dest = after.dest;
         *trigger = after.trigger.clone();
         // Keep the live event tail (write-through order) over the guest
@@ -5585,7 +5794,7 @@ impl<M: CardModules> RulesBridge<M> {
                 && after.draw_log.is_empty()
                 && after.discard_log.is_empty()
                 && after.reshuffle_log.is_empty()
-                && after.house_log.is_empty()
+                && after.house_log.len() == borrowed_house
                 && after.state_log.is_empty()
                 && after.marker_spent_log.is_empty()
                 && after.counter_log.is_empty()
@@ -5714,10 +5923,11 @@ impl<M: CardModules> RulesBridge<M> {
                 t.name = Some(name.clone());
             })?;
         }
-        for (player_id, tile, nth) in after.house_log {
-            self.raise_core(cx, "houseAdded", player_id, |t| {
+        for (player_id, tile, now, delta) in after.house_log {
+            let kind = if delta > 0 { "houseAdded" } else { "houseRemoved" };
+            self.raise_core(cx, kind, player_id, |t| {
                 t.tile = tile;
-                t.value = nth;
+                t.value = now;
             })?;
         }
         // `counterChanged` (wire event name) -- 「when this card no longer
@@ -6001,6 +6211,19 @@ impl<M: CardModules> RulesBridge<M> {
                                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                                     continue;
                                 }
+                                // Only the tile's own cards hear a tile event
+                                // (they travel with the tile), and a suppressed
+                                // tile hides its extras.
+                                if !field_hears(&world, trigger.tile, trigger.position, uid, trigger.kind)
+                                    || extra_suppressed(
+                                        &world,
+                                        trigger.tile,
+                                        trigger.mv.as_ref().map(|m| m.tags.as_slice()),
+                                        uid,
+                                    )
+                                {
+                                    continue;
+                                }
                                 // A marked instance runs its effective card's surface.
                                 let id = surface_card(&world, uid, &raw);
                                 let Some(idx) = self.ruleset.card(&id) else {
@@ -6143,6 +6366,14 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                         for (uid, id) in board {
                             if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                                continue;
+                            }
+                            if extra_suppressed(
+                                &world,
+                                trigger.tile,
+                                trigger.mv.as_ref().map(|m| m.tags.as_slice()),
+                                uid,
+                            ) {
                                 continue;
                             }
                             if drove.contains(&uid) {
@@ -6360,6 +6591,16 @@ impl<M: CardModules> RulesBridge<M> {
                 if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                     continue;
                 }
+                if !field_hears(&world, t.tile, t.position, uid, kind)
+                    || extra_suppressed(
+                        &world,
+                        t.tile,
+                        t.mv.as_ref().map(|m| m.tags.as_slice()),
+                        uid,
+                    )
+                {
+                    continue;
+                }
                 // A marked instance runs its effective card's surface.
                 let id = surface_card(&world, uid, &raw);
                 let Some(idx) = self.ruleset.card(&id) else {
@@ -6467,6 +6708,9 @@ impl<M: CardModules> RulesBridge<M> {
         }
         for (uid, raw) in board {
             if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                continue;
+            }
+            if extra_suppressed(&world, t.tile, t.mv.as_ref().map(|m| m.tags.as_slice()), uid) {
                 continue;
             }
             let id = surface_card(&world, uid, &raw);
@@ -7022,10 +7266,40 @@ impl<M: CardModules> RulesBridge<M> {
         player_id: i32,
         set: impl FnOnce(&mut CoreTrigger),
     ) -> Flow<CoreTrigger> {
-        let mut t = CoreTrigger::new(kind, player_id.max(0) as usize);
+        let kind = kind.into();
+        let mut t = CoreTrigger::new(kind.clone(), player_id.max(0) as usize);
         t.player_id = player_id;
         t.step = cx.state().step;
         set(&mut t);
+        // A direct construction bypasses the `tile =` arm: derive the position
+        // from the tile unless the closure wrote one (设计 5.1).
+        if t.position < 0 && t.tile >= 0 {
+            t.position = cx.position_of_tile(t.tile);
+        }
+        // A raise inside an open settle inherits the settling move, like
+        // `PlayCtx::raise` (设计 5.6).
+        if t.mv.is_none() && matches!(kind.as_str(), "effect" | "pay" | "payAfter" | "paid") {
+            if let Some(mv) = cx.settle_stack().last().and_then(|e| e.move_context.clone()) {
+                t.mv = Some(game_core::engine::TriggerMove {
+                    kind: mv.kind,
+                    settles: mv.settles,
+                    tags: cx.plan_tags(),
+                    dir: match mv.dir() {
+                        -1 => game_core::engine::rules::Dir::Backward,
+                        _ => game_core::engine::rules::Dir::Forward,
+                    },
+                    from: mv.from,
+                    remaining: mv.remaining,
+                    total: mv.total,
+                    roll: None,
+                    by_skill: mv.by_skill,
+                    settle_redirect: mv.settle_redirect,
+                    rolled: mv.rolled,
+                    effective: mv.effective_steps(),
+                    path: mv.path,
+                });
+            }
+        }
         // A body returns from its guest call before what it caused is walked,
         // so its frame outlives the call and dies with the raise that carried
         // the walk. A suspended raise keeps its frames: it has not finished
@@ -8554,8 +8828,10 @@ impl<M: CardModules> RulesBridge<M> {
                 // the per-card kind bitmask -- no entry-table scan, no `Run`.
                 if std::env::var("DBG_OFFER").is_ok() {
                     eprintln!(
-                        "CAND seat={s} card={id} kind={:?} subj={:?} ctp={} entry={:?}",
+                        "CAND seat={s} card={id} kind={:?} tile={} pos={} subj={:?} ctp={} entry={:?}",
                         top.kind,
+                        top.tile,
+                        top.position,
                         top.subject_card,
                         self.counteracts_to_play(idx, top),
                         self.counteract_entry(idx, top, Self::copy_source(cx, s).as_deref())
@@ -9187,6 +9463,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         settle_redirect: m.settle_redirect,
         rolled: m.rolled,
         effective: m.effective,
+        path: m.path.clone(),
     });
     // The link's subject: the raised play's card, else the innermost resolving
     // frame (the card body this raise is part of). None from turn flow.
@@ -9209,6 +9486,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         player_id: t.player_id,
         target: t.target,
         tile: t.tile,
+        position: t.position,
         value: t.value,
         fold: t.fold,
         fold_input: t.fold_input,
@@ -10044,6 +10322,10 @@ impl crate::condition::SnapSrc for LiveSnap<'_> {
     fn trigger(&self) -> Trigger {
         self.trigger.clone()
     }
+    #[inline]
+    fn tile_standing_at(&self, position: i32) -> i32 {
+        self.world.tile_standing_at(position)
+    }
     fn subject_range_card(&self) -> bool {
         let (Some(rules), Some(subject)) = (self.rules, self.trigger.subject_card.as_deref())
         else {
@@ -10239,12 +10521,14 @@ impl crate::condition::SnapSrc for LiveSnap<'_> {
     }
     #[inline]
     fn houses_of(&self, tile: i32) -> i32 {
-        self.world
+        let v = self
+            .world
             .st
             .houses
             .get(tile.max(0) as usize)
             .copied()
-            .unwrap_or(0)
+            .unwrap_or(0);
+        v
     }
     #[inline]
     fn mortgaged_of(&self, tile: i32) -> i32 {
@@ -11252,13 +11536,15 @@ impl<M: CardModules> RulesBridge<M> {
         if instances.is_empty() {
             return standalone(cx, player_id, tile);
         }
-        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let position = cx.position_of_tile(tile as i32);
+        let owner = cx.state().owners.get(position as usize).copied().unwrap_or(-1);
         let before = snap(cx.state());
         let mut trigger = Trigger {
             kind: TriggerKind::None,
             player_id: player_id as i32,
             target: owner,
             tile: tile as i32,
+            position,
             value: reason,
             step: cx.state().step,
             ..Trigger::default()
@@ -11424,17 +11710,19 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         &self,
         cx: &mut PlayCtx,
         player_id: usize,
-        tile: usize,
+        position: usize,
+        tile: i32,
+        m: &game_core::engine::MoveCtx,
         is_main_move: bool,
     ) -> Flow<()> {
-        let instances = cx.world().tile_rule_instances(tile as i32);
+        let instances = cx.world().tile_rule_instances(tile);
         if instances.is_empty() {
-            return cx.land_at_built_in(player_id, tile, is_main_move);
+            return cx.land_at_built_in(player_id, position, tile, is_main_move);
         }
-        if !cx.prep_land(player_id, tile, is_main_move) {
+        if !cx.prep_land(player_id, position, is_main_move) {
             return Ok(());
         }
-        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let owner = cx.state().owners.get(position).copied().unwrap_or(-1);
         // `On::Settle` dispatches by entry kind (`Call::Settle`), not by a
         // trigger kind, so the link's kind is `None` -- it is the body of the
         // settle the engine already raised (`settle` / `settleBefore` /
@@ -11447,12 +11735,19 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             kind: TriggerKind::None,
             player_id: player_id as i32,
             target: owner,
-            tile: tile as i32,
+            tile,
+            position: position as i32,
             step: cx.state().step,
             is_main_move,
             ..Trigger::default()
         };
+        let world = cx.world_copy();
         for (uid, id) in instances {
+            // The tile's own rule always runs; a suppressed tile hides its
+            // (board-owned) extras.
+            if !id.starts_with("tile:") && extra_suppressed(&world, tile, Some(m.tags.as_slice()), uid) {
+                continue;
+            }
             let Some(idx) = self.ruleset.card(&id) else {
                 continue;
             };

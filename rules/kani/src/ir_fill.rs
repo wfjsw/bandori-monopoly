@@ -760,7 +760,7 @@ pub fn fill_from_world(
     c.tile_count = 60;
 
     // OptInt defaults: any negative reads as Null. Start there, then overwrite.
-    // 8×8 chunk walk over the 43-entry VARS table (unwind bound 8).
+    // 8×8 chunk walk over the 59-entry VARS table (unwind bound 8).
     {
         let mut outer = 0usize;
         while outer < 8 {
@@ -1018,7 +1018,7 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     c.n_players = w.n_players as i64;
     c.tile_count = 60;
     // OptInt slots that the PaySplitAdd guard family may read. No VARS walk —
-    // iterating the 43-entry table is a CBMC cliff inside a proof.
+    // iterating the 59-entry table is a CBMC cliff inside a proof.
     c.set_scalar(VarId::PlanFixedRoll, -1);
     c.set_scalar(VarId::MoveRoll, -1);
     c.set_scalar(VarId::MoveKind, -1);
@@ -1234,7 +1234,7 @@ pub fn fill_for_guard(
                 let i = outer * 8 + k;
                 if (needs.vars >> i) & 1 == 1 {
                     let id = i as u16;
-                    // Look up the type via the VARS table (43 entries; 8×8 walk).
+                    // Look up the type via the VARS table (59 entries; 8×8 walk).
                     let mut vo = 0usize;
                     while vo < 8 {
                         let mut vk = 0usize;

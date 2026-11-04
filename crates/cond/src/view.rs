@@ -30,6 +30,11 @@ pub trait CondView {
     fn target(&self) -> i64;
     /// The trigger's tile (`tile.id`), `-1` = none.
     fn tile_id(&self) -> i64;
+    /// `tile.position` -- the board slot the event happened at (`-1` where
+    /// there is none). Equal to `tile.id` without a swap.
+    fn tile_position(&self) -> i64 {
+        self.tile_id()
+    }
     fn tile_owner(&self) -> i64;
     fn tile_houses(&self) -> i64;
     fn tile_mortgaged(&self) -> i64;

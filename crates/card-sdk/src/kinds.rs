@@ -717,6 +717,8 @@ action_kinds! {
     MarkerSpent;
     CardUsed;
     HouseAdded;
+    TileEffectBefore;
+    HouseRemoved;
     CounterChanged;
     DrewBefore;
     Effect;

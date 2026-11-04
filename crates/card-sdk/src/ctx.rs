@@ -303,6 +303,30 @@ pub fn tile_owner(tile: i32) -> i32 {
     unsafe { sys::tile_owner(tile) }
 }
 
+/// The tile standing at board position `position` (`position` itself when
+/// nothing is bound there).
+pub fn tile_at(position: i32) -> i32 {
+    unsafe { sys::tile_at(position) }
+}
+
+/// The board position tile `tile` currently stands at (`tile` itself when
+/// nothing is bound to it).
+pub fn position_of_tile(tile: i32) -> i32 {
+    unsafe { sys::position_of_tile(tile) }
+}
+
+/// How many *extra* instances (non-`tile:` cards) lie on tile `tile`. The
+/// tile carries its extras, so the count is identity-keyed.
+pub fn tile_extra_count(tile: i32) -> i32 {
+    unsafe { sys::tile_extra_count(tile) }
+}
+
+/// The board position **this instance** sits at (its placement slot).
+/// [`self_tile`] is the tile standing there.
+pub fn self_position() -> i32 {
+    unsafe { sys::self_position() }
+}
+
 /// The player's tile on the ring.
 pub fn player_pos(player_id: i32) -> i32 {
     unsafe { sys::player_pos(player_id) }
@@ -1492,6 +1516,13 @@ pub fn prop_at(uid: i32, key: &str) -> i32 {
 pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
     let (p, l) = s(key);
     unsafe { sys::set_prop_at(uid, p, l, value) }
+}
+
+/// 「那格视为与…交换位置」 -- bind **this instance's** slot to `partner`, one
+/// level, both directions. `-1` clears. Sugar over
+/// [`set_prop`]`(prop::SWAPPED_TILE, …)`, so it dies with the instance.
+pub fn set_swapped_tile(partner: i32) -> i32 {
+    set_prop(crate::abi::prop::SWAPPED_TILE, partner)
 }
 
 // ------------------------------------------------------ counters & marks
@@ -2970,8 +3001,18 @@ pub fn ask_number(
         if options.is_empty() {
             return Ok(min);
         }
-        let i = ask_choice(player_id, title, text, &options)?;
-        Ok(min + i as i32)
+        for o in &options {
+            let (p, l) = msg_bytes(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        // Answered as an option *index*, but deliberately **not** clamped to
+        // the current list the way `ask_choice` is: a body re-runs after its
+        // own host writes, and those writes often shrink the range (a count
+        // bounded by houses the body has already moved). The logged index was
+        // taken against the longer list, so `min + index` recovers the value
+        // the player chose; clamping would collapse it to `min`.
+        let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+        Ok(min + i.max(0))
     }
 }
 
@@ -3738,12 +3779,31 @@ pub mod trigger {
         unsafe { sys::trig_target() }
     }
 
+    /// The board position of this event (the slot stepped onto / settled at),
+    /// `-1` where there is none. [`tile`](Self::tile) is the governing tile;
+    /// the two are equal with no swap. Use the position for co-location and
+    /// "was this physical slot the one settled"; identity readers take the tile.
+    pub fn position() -> i32 {
+        unsafe { sys::trig_position() }
+    }
+
     pub fn tile() -> i32 {
         unsafe { sys::trig_tile() }
     }
 
     pub fn value() -> i32 {
         unsafe { sys::trig_value() }
+    }
+
+    /// How many tiles this move has traversed so far (0 when the trigger
+    /// carries no move).
+    pub fn move_path_length() -> i32 {
+        unsafe { sys::trig_move_path_length() }
+    }
+
+    /// Index `index` of the move's path: the governing tile of that step.
+    pub fn move_path(index: i32) -> i32 {
+        unsafe { sys::trig_move_path(index) }
     }
 
     /// Empty otherwise.
@@ -4733,6 +4793,55 @@ pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
 }
 
+/// The price a house on `tile` would actually cost this turn:
+/// `max(0, build_cost * build_cost_percent / 100 - build_discount)`.
+pub fn build_price(tile: i32) -> i32 {
+    unsafe { sys::build_price(tile) }
+}
+
+/// This turn's build percentage (100 = full).
+pub fn build_cost_percent() -> i32 {
+    unsafe { sys::build_cost_percent() }
+}
+
+/// This turn's layered build cut (absolute money, applied after the percent).
+pub fn build_discount() -> i32 {
+    unsafe { sys::build_discount() }
+}
+
+/// `cant_build_on` minus the ownership test: does the tile take a house at
+/// all for `player_id`? For a free build on someone else's tile.
+pub fn tile_buildable(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::tile_buildable(player_id, tile) != 0 }
+}
+
+/// Run the full build pipeline on `tile`: gate, hooks, price, commit.
+/// `charge` chooses what is paid; `Fixed` uses `amount`, `Scaled` uses
+/// `numerator / denominator` of the effective price; `owner_required` adds
+/// the owner test to the gate. `true` iff a house committed.
+pub fn card_build_as(
+    player_id: i32,
+    tile: i32,
+    charge: crate::abi::BuildCharge,
+    amount: i32,
+    numerator: i32,
+    denominator: i32,
+    owner_required: bool,
+) -> bool {
+    unsafe {
+        sys::card_build_as(
+            player_id,
+            tile,
+            charge as i32,
+            amount,
+            numerator,
+            denominator,
+            owner_required as i32,
+        ) != 0
+    }
+}
+
+
 /// Where **this instance** sits, or -1 for "with its owner" / gone.
 /// [`placed_tile`] is the form for some *other* card.
 pub fn self_tile() -> Option<i32> {
@@ -4826,8 +4935,8 @@ pub fn unplace_at(uid: i32) -> i32 {
 }
 
 /// Where the instance at `uid` sits (`Some(-1)` = with its owner, `None` = gone).
-pub fn tile_at(uid: i32) -> Option<i32> {
-    let v = unsafe { sys::tile_at(uid) };
+pub fn tile_of(uid: i32) -> Option<i32> {
+    let v = unsafe { sys::tile_of(uid) };
     (v >= -1).then_some(v)
 }
 

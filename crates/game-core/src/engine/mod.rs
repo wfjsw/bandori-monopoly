@@ -44,6 +44,7 @@ pub use cx::{
     AnswerProvider, Answered, Ask, Flow, Halt, HeuristicProvider, PlayCtx, Reply, SettleOutcome,
     AI_UNSET,
 };
+pub use cx::HouseWrite;
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;

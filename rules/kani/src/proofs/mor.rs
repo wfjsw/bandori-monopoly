@@ -38,6 +38,8 @@ crate::host_subset!(rui_devil_dispatch {
     others_count => arm_others_count,
     others_at => arm_others_at,
     pay_to => arm_pay_to,
+    pay_command => arm_pay_command,
+    state_get => arm_state_get,
     state_set => arm_state_set,
     player_out => arm_player_out,
     player_count => arm_player_count,
@@ -186,9 +188,12 @@ pub fn rui_demon_02_x_set_to_5() {
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
-    // At least the trailing SetState(X=5) must be present.
-    let last = effects.last();
-    let ok = matches!(last, Some(Effect::SetState { player: p, n, .. }) if *p == user && *n == 5);
+    // The body closes with X=5 then the FIRED=1 flag: the second-to-last
+    // effect must be the X write, and the last must be the flag.
+    let n = effects.len();
+    let ok = n >= 2
+        && matches!(effects[n - 2], Effect::SetState { player: p, n: v, .. } if p == user && v == 5)
+        && matches!(effects[n - 1], Effect::SetState { player: p, n: v, .. } if p == user && v == 1);
     crate::kassert!(ok, "C-MOR-rui-demon-02: X must end at 5");
 }
 
@@ -204,6 +209,8 @@ crate::host_subset!(mashiro_dispatch {
     trig_value => arm_trig_value,
     trig_target => arm_trig_target,
     trig_set_pay_target => arm_trig_set_pay_target,
+    trig_set_pay_kind => arm_trig_set_pay_kind,
+    trig_set_pay_shape => arm_trig_set_pay_shape,
     log | effect => arm_log,
     pay => arm_pay,
 });
@@ -247,12 +254,14 @@ fn xiaobai_01_iff_at(user: i32) {
         spec::xiaobai_01_post_ok(&post, &condition, payee, amount),
         "C-MOR-xiaobai-01: payee loses amount/2"
     );
-    // The rewrite lands on the pending trigger target.
+    // The rewrite lands on the pending trigger target and kind.
     let trig_target = world::with_world(|w| w.trig_target);
     crate::kassert!(
         trig_target == -1,
         "C-MOR-xiaobai-01: payment becomes a pure loss (target = bank)"
     );
+    let trig_kind = world::with_world(|w| w.trig_pay_kind);
+    crate::kassert!(trig_kind == 4, "C-MOR-xiaobai-01: kind = Loss");
     // Frame: the counteruser's money is untouched by this body.
     crate::kassert!(
         post.money[user as usize] == condition.money[user as usize],
@@ -485,6 +494,12 @@ crate::host_subset!(garden_dispatch {
     roll => arm_roll,
     tile_count => arm_tile_count,
     tile_steps_ahead => arm_tile_steps_ahead,
+    player_pos => arm_player_pos,
+    // The MOVED slot only decides whether this pass re-runs the move; a
+    // constant 0 is the harshest case (the move always runs) and keeps the
+    // name-map scan out of the proof.
+    state_get => arm_stub_zero,
+    settle_tile_at => arm_protocol_stub,
     log | effect => arm_log,
     ask => arm_ask,
     set_steps => arm_stub_zero,
@@ -614,6 +629,7 @@ crate::host_subset!(courage_dispatch {
     tile_price => arm_tile_price,
     buy_price => arm_buy_price,
     pay_to => arm_pay_to,
+    pay_command => arm_pay_command,
 });
 
 /// Isolation for courage-03: every tile is unowned, and the player is not
@@ -881,7 +897,7 @@ crate::host_subset!(toko_dispatch {
     player_count => arm_player_count,
     player_out => arm_player_out,
     log | effect => arm_log,
-    opt_int | opt_str | opt_tile => arm_opt,
+    opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
     ask => arm_ask,
     target => arm_target,
     buy_price => arm_buy_price,
@@ -891,6 +907,8 @@ crate::host_subset!(toko_dispatch {
     tile_in => arm_tile_in,
     count_marks_f => arm_count_marks_f,
     pay_to => arm_pay_to,
+    pay_command => arm_pay_command,
+    state_set => arm_state_set,
 });
 
 /// No deeds anywhere ⇒ no swappable pair ⇒ the body early-returns.
@@ -958,23 +976,32 @@ fn toko_swap_iff_at(user: i32) {
     // Cover: a swap happened vs the body bailed.
     kani::cover!(log_n >= 3, "swap produced effects");
     kani::cover!(log_n == 0, "body bailed (index split / empty pairs)");
-    if log_n == 4 {
-        // Book multiset. Check the shape only (the tile ids are the seeded
-        // pair, but the spec predates pinning them here).
+    // Book multiset once the seeded pair has swapped: two SetOwner, the
+    // received deed's SetMortgaged(off), the 「本回合进行过赎回」 record, and
+    // the 差价 PayTo only when the two deed values differ.
+    if log_n >= 4 {
+        // Check the shape only (the tile ids are the seeded pair, but the spec
+        // predates pinning them here).
         let mut n_set_owner = 0;
         let mut n_pay = 0;
         let mut n_unmort = 0;
+        let mut n_state = 0;
         for e in effects {
             match e {
                 Effect::SetOwner { .. } => n_set_owner += 1,
                 Effect::PayTo { .. } => n_pay += 1,
                 Effect::SetMortgaged { on: false, .. } => n_unmort += 1,
+                Effect::SetState { n: 1, .. } => n_state += 1,
                 _ => {}
             }
         }
         crate::kassert!(
-            n_set_owner == 2 && n_pay == 1 && n_unmort == 1,
-            "C-MOR-toko-swap-01: swap multiset = 2 SetOwner + PayTo + SetMortgaged(off)"
+            n_set_owner == 2
+                && n_pay <= 1
+                && n_unmort == 1
+                && n_state == 1
+                && log_n as i32 == 4 + n_pay,
+            "C-MOR-toko-swap-01: swap multiset = 2 SetOwner + [PayTo] + SetMortgaged(off) + SetState"
         );
     }
     let _ = post;
@@ -1579,6 +1606,7 @@ crate::host_subset!(tritone_dispatch {
     counter_self => arm_counter_self,
     set_dest => arm_set_fate,
     place_card_at => arm_place_card_at,
+    self_prop => arm_stub_zero,
     state_set => arm_state_set,
     state_get => arm_state_get,
     pay => arm_pay,

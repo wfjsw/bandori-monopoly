@@ -214,6 +214,11 @@ pub struct MatchState {
     pub bans: Vec<String>,
     pub owners: Vec<i32>,
     pub houses: Vec<i32>,
+    /// Per board slot, the tile standing there (the swap map): a slot draws
+    /// the tile that answers here, and a field card renders at
+    /// `position_of_tile(tile)`. Identity with no swap. 设计 5.1.
+    #[serde(default)]
+    pub tile_at: Vec<i32>,
     pub mortgaged: Vec<bool>,
     pub embers: Vec<i32>,
     pub marks: Vec<TileMark>,
@@ -279,6 +284,7 @@ impl Default for MatchState {
             bans: vec![],
             owners: vec![],
             houses: vec![],
+            tile_at: vec![],
             mortgaged: vec![],
             embers: vec![],
             marks: vec![],
@@ -434,6 +440,11 @@ pub mod key {
 /// in step). Every key has a defined default of `0` when a card does not
 /// declare it.
 pub mod prop {
+    /// 「那格视为与…交换位置」 -- an instance prop on the placed instance. Value
+    /// = the partner tile; that instance's slot resolves to the partner tile
+    /// and back, one level. `-1` / absent = no binding. Mirrors
+    /// `card_sdk::abi::prop::SWAPPED_TILE`.
+    pub const SWAPPED_TILE: &str = "swappedTile";
     /// Continuous 「手卡上限数量减1」 while the card sits on the field. Stamped
     /// onto the field instance at placement and gone with the card. `-1` cuts
     /// the owner's hand limit.
@@ -1057,7 +1068,18 @@ fn is_zero(v: &i32) -> bool {
     *v == 0
 }
 
+fn is_negative(v: &i32) -> bool {
+    *v < 0
+}
+
 fn no_parent() -> i32 {
+    -1
+}
+
+/// `FieldCard.position`'s `-1` default (serde reads `Default::default`, not
+/// the struct's own [`Default`] impl, which is why the plain attribute is not
+/// enough).
+fn no_position() -> i32 {
     -1
 }
 
@@ -1177,7 +1199,25 @@ pub struct FieldCard {
     /// still names the copy, its counters and where it is filed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_card: Option<String>,
+    /// The board **position** this instance sits at. `-1` = the same as `tile`
+    /// (an unswapped placement). Written for a seat's placement only, never for
+    /// a board-owned rule instance. A swap binding is anchored here, and
+    /// [`Self::position`] is the slot readers take.
+    #[serde(default = "no_position", skip_serializing_if = "is_negative")]
+    pub position: i32,
     pub note: Msg,
+}
+
+impl FieldCard {
+    /// The slot this instance sits at: [`Self::position`], or [`Self::tile`]
+    /// when none was written.
+    pub fn position(&self) -> i32 {
+        if self.position >= 0 {
+            self.position
+        } else {
+            self.tile
+        }
+    }
 }
 
 impl Default for FieldCard {
@@ -1196,6 +1236,7 @@ impl Default for FieldCard {
             extra: false,
             counter_max: BTreeMap::new(),
             effective_card: None,
+            position: -1,
             note: Msg::default(),
         }
     }

@@ -165,6 +165,7 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Value {
                 33 => FnId::State,
                 34 => FnId::CandHas,
                 35 => FnId::CardIs,
+                36 => FnId::Resolving,
                 _ => return Value::Err,
             };
             let nargs = n.b as usize;

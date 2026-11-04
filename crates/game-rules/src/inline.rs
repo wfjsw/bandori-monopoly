@@ -221,7 +221,6 @@ pub fn request_or_pause<C: HostCtx>(
         let st = c.st_mut();
         if let Some(&x) = st.answers.get(st.next_answer) {
             let answer = st.next_answer;
-            st.w().after_host(answer);
             st.next_answer += 1;
             return Ok(x);
         }

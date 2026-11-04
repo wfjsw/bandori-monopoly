@@ -2078,10 +2078,20 @@ fn toko_swaps_same_color_mortgaged_deeds() {
         t.observe(CLAUSES);
         t.play(0, TOKO_SWAP)
             .map_err(|e| format!("play rejected: {e}"))?;
+        // One candidate on each side: one tile prompt per side.
         let p = t.expect_prompt();
         if p.options.len() != 1 {
             return Err(format!(
-                "C-MOR-toko-swap-01: expected 1 swap pair, got {}: {}",
+                "C-MOR-toko-swap-01: expected 1 deed of mine, got {}: {}",
+                p.options.len(),
+                t.dump_prompt()
+            ));
+        }
+        t.answer_one(0).unwrap();
+        let p = t.expect_prompt();
+        if p.options.len() != 1 {
+            return Err(format!(
+                "C-MOR-toko-swap-01: expected 1 same-colour deed of theirs, got {}: {}",
                 p.options.len(),
                 t.dump_prompt()
             ));

@@ -170,6 +170,28 @@ mod abi {
             link_name = "ruleset_tile_owner"
         )]
         pub fn tile_owner(tile: i32) -> i32;
+        // v114: tile/position conversion. `tile_at` / `position_of_tile` are
+        // the only conversions; `self_position` is the caller's own slot.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_tile_at"
+        )]
+        pub fn tile_at(position: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_position_of_tile"
+        )]
+        pub fn position_of_tile(tile: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_tile_extra_count"
+        )]
+        pub fn tile_extra_count(tile: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_self_position"
+        )]
+        pub fn self_position() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_player_pos"
@@ -195,6 +217,28 @@ mod abi {
             link_name = "ruleset_build_cost"
         )]
         pub fn build_cost(tile: i32) -> i32;
+        // v114: the effective build price and its two layers, plus the
+        // buildability gate read.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_build_price"
+        )]
+        pub fn build_price(tile: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_build_cost_percent"
+        )]
+        pub fn build_cost_percent() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_build_discount"
+        )]
+        pub fn build_discount() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_tile_buildable"
+        )]
+        pub fn tile_buildable(player_id: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_mortgage_value"
@@ -1183,6 +1227,22 @@ mod abi {
             link_name = "ruleset_trig_move_total"
         )]
         pub fn trig_move_total() -> i32;
+        // v114: the event's board position and the move's tile path.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_position"
+        )]
+        pub fn trig_position() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_move_path_length"
+        )]
+        pub fn trig_move_path_length() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_move_path"
+        )]
+        pub fn trig_move_path(index: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_cards"
@@ -1764,6 +1824,21 @@ mod abi {
             link_name = "ruleset_card_build"
         )]
         pub fn card_build(player_id: i32, tile: i32) -> i32;
+        /// v114: the general build verb. `charge` is an
+        /// `abi::BuildCharge` wire value; `owner_required` is 0/1.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_card_build_as"
+        )]
+        pub fn card_build_as(
+            player_id: i32,
+            tile: i32,
+            charge: i32,
+            amount: i32,
+            numerator: i32,
+            denominator: i32,
+            owner_required: i32,
+        ) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_can_build"
@@ -2078,9 +2153,9 @@ mod abi {
         pub fn unplace_at(uid: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
-            link_name = "ruleset_tile_at"
+            link_name = "ruleset_tile_of"
         )]
-        pub fn tile_at(uid: i32) -> i32;
+        pub fn tile_of(uid: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_tile_at"

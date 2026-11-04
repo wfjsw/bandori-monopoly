@@ -21,6 +21,7 @@ const ID: &str = "通用:[都筑诗船]Parking Space";
 
 const SLOT_STAY: &str = "parking_space_stay";
 
+
 pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[
@@ -86,11 +87,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
             card_sdk::abi::Stack::Fresh,
         );
     }
-    let mut num = if space >= 0 { ctx::houses_of(space) } else { 0 };
+    // Every write pauses the body and the body replays from the top (design
+    // G09 5.4), so the loop may not count with a local: only the *live* house
+    // count on Space survives a pass, and each pause applies its write once.
+    // The remaining houses are therefore the guard itself -- an answer already
+    // logged is a no-op on the replay, so a pass sees the tiles it still has
+    // work for and nothing is handed out twice.
     for t in ctx::owned_tiles(player_id) {
         // TODO(规则书)（将其上的房屋转移至其他你拥有的格子上）: 书要把其上的房屋
         //   全部转走 -- 目的地用完即停，剩下的房屋留在 Space（OPEN-GEN-parking-houses）。
-        if num <= 0 {
+        if space < 0 || ctx::houses_of(space) <= 0 {
             break;
         }
         if t == space {
@@ -100,9 +106,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // buildability condition: a mortgaged tile still receives, and a full
         // (or house-less) one still spends a house of Space: `add_house` clamps
         // the +1 away. The one-per-tile cap is the only limit the cell states.
-        ctx::add_house(space, -1);
+        // The gain first: a pass may break between the two, and the guard
+        // above reads the count *before* this destination's own removal, so
+        // the pair stays whole across the boundary.
         ctx::add_house(t, 1);
-        num -= 1;
+        ctx::add_house(space, -1);
     }
     // 规则书（1）[持续] runs in `counteract` at `settleBody` / `turnEndAfter`.
     Ok(())

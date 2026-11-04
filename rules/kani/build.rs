@@ -369,6 +369,19 @@ const ARRAY_OPS: &[&str] = &[
     "trig_move_effective_steps",
     "nearest_tile_on_axis",
     "farthest_tile_on_axis",
+    // v114 (G09): identity/position conversion, build reads and the build verb.
+    "tile_of",
+    "position_of_tile",
+    "tile_extra_count",
+    "self_position",
+    "trig_position",
+    "trig_move_path_length",
+    "trig_move_path",
+    "card_build_as",
+    "build_price",
+    "build_cost_percent",
+    "build_discount",
+    "tile_buildable",
 ];
 
 fn main() {

@@ -313,7 +313,7 @@ pub enum Op {
     placed_cards = 294,
     field_instances = 295,
     unplace_at = 296,
-    tile_at = 297,
+    tile_of = 297,
     set_tile_at = 298,
     is_face_down_at = 299,
     set_face_down_at = 300,
@@ -451,6 +451,19 @@ pub enum Op {
     // v113 (G07 designation/nearest surface). 441-450 is this group's band.
     nearest = 441,
     nearest_with_prop = 442,
+    // v114 (G09 tile/build/path surface). 452-463 is this group's band.
+    trig_position = 452,
+    position_of_tile = 453,
+    tile_at = 454,
+    tile_extra_count = 455,
+    self_position = 456,
+    build_price = 457,
+    build_cost_percent = 458,
+    build_discount = 459,
+    tile_buildable = 460,
+    card_build_as = 461,
+    trig_move_path_length = 462,
+    trig_move_path = 463,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

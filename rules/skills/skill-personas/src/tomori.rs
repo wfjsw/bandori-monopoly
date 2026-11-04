@@ -102,7 +102,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// so a 0-fire owner with a crystal can still press. [`before_settle`]'s
 /// `spend_charge` is what actually collects the cost (fire or the substitution).
 fn before_settle_applies(player_id: i32) -> bool {
-    let landing = ctx::trigger::tile();
+    let landing = ctx::trigger::position();
     if landing < 0 {
         return false;
     }
@@ -138,7 +138,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     // 「那名玩家」); （2） is someone else's landing near this player (cost 4,
     // teleport to *this* player's square). Same split as the guard.
     let (cost, theirs) = if mover == player_id {
-        let landing = ctx::trigger::tile();
+        let landing = ctx::trigger::position();
         // 「那名玩家所在的格子」 -- the other party within five tiles. Nearest
         // wins when several qualify (「前后五格内」 names one window).
         // TODO(ABI): nearest-within-5 over `ctx::dist`; `ctx::nearest(Shortest)`
@@ -181,7 +181,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("tomori_moved"))
             .player_id("who", mover)
-            .tile("tile", theirs),
+            .tile("tile", ctx::tile_at(theirs)),
     );
     if cost == 4 {
         // （2）「然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的

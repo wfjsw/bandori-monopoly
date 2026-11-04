@@ -67,6 +67,40 @@ pub const MAX_SETTLE_DEPTH: u32 = 64;
 /// Distinct from [`purchase::half_ceil10`] (half-rent 「向上取整10」) and from
 /// the kani `round10` twins: those take a half already taken; this one is the
 /// end-of-calc money round and is positive-only.
+/// How a build is charged (设计 5.3). Mirrors `card_sdk::abi::BuildCharge`;
+/// `game-core` does not depend on the SDK, so the wire value arrives as `i32`
+/// and converts here.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BuildCharge {
+    #[default]
+    Effective = 0,
+    Free = 1,
+    Fixed = 2,
+    Scaled = 3,
+}
+
+impl BuildCharge {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::Free,
+            2 => Self::Fixed,
+            3 => Self::Scaled,
+            _ => Self::Effective,
+        }
+    }
+}
+
+/// The charge shape of one build (设计 5.3): `Fixed`/`Scaled` exist for a card
+/// that states its own price; the step path and the plain verb use `Effective`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BuildPlan {
+    pub charge: BuildCharge,
+    pub amount: i32,
+    pub numerator: i32,
+    pub denominator: i32,
+}
+
 pub(crate) fn ceil10_money(x: i32) -> i32 {
     if x <= 0 {
         return x;
@@ -191,9 +225,9 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.cancelled != before.cancelled {
         m.cancelled = plan.cancelled;
     }
-    if plan.tags != before.tags {
-        m.tags = plan.tags.clone();
-    }
+    // Unconditionally: a card may arm a tag before the frame exists (the
+    // settle's move is shaped by the plan), and a diff would drop it.
+    m.tags = plan.tags.clone();
     if plan.by_skill != before.by_skill {
         m.by_skill = plan.by_skill;
     }
@@ -755,7 +789,7 @@ impl PlayCtx<'_> {
         // counteraction sees the turn exactly as it was left last turn. Status
         // hosts (e.g. the off-board host's layer tick) run as field hooks collected
         // last inside this raise (`docs/STATUS-HOSTS.md` §4).
-        raise!(self, "turnStartBefore", i, tile = self.w.st.players[i].pos)?;
+        raise!(self, "turnStartBefore", i, position = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
         }
@@ -789,7 +823,7 @@ impl PlayCtx<'_> {
                 mortgaged: self.w.st.mortgaged.clone(),
             })
             .collect();
-        raise!(self, "turnStart", i, tile = self.w.st.players[i].pos)?;
+        raise!(self, "turnStart", i, position = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
         }
@@ -1544,9 +1578,12 @@ impl PlayCtx<'_> {
         // Depth cap lives in `step_settle` (both this path and a work-stack
         // `SettleWork` go through it).
         let m = self.card_settle_move(player_id, tile, is_main_move);
+        // The named tile is an identity: the frame pins it and does not let a
+        // swap re-resolve it. The position is only the slot it stands at.
+        let at = self.w.position_of_tile(tile as i32).max(0) as usize;
         // A nested settle's counter writes must not shape the outer move.
         self.w.begin_plan(player_id, PlanKind::SideMove, m.clone());
-        let mut frame = crate::engine::work::SettleFrame::new(player_id, tile, m);
+        let mut frame = crate::engine::work::SettleFrame::new(player_id, at, tile as i32, m);
         frame.scoped = true;
         // Always go through the pump: nested jobs suspend and resume on the
         // work stack (the pump catches `Halt::Suspended` and keeps going).
@@ -1585,6 +1622,7 @@ impl PlayCtx<'_> {
         m.steps = Some(0);
         m.extra_steps = 0;
         m.start = Some(Tile(tile as i32));
+        m.path = vec![tile as i32];
         m
     }
 
@@ -1790,14 +1828,39 @@ impl PlayCtx<'_> {
     /// (with the engine's own reason) when the tile cannot take a house.
     /// `true` when a house was added. HOST-06.
     pub fn card_build(&mut self, player_id: usize, tile: usize) -> Flow<bool> {
-        if self.out(player_id) || !self.playing() {
-            return Ok(false);
-        }
-        if let Some(reason) = self.cant_build_on(player_id, tile) {
-            self.w.log("text", player_id as i32, reason);
-            return Ok(false);
-        }
-        self.deed_build(player_id, tile)
+        self.build_task(player_id, tile, BuildPlan::default(), true)
+    }
+
+    /// A card-stated build (设计 5.3): `charge` is a wire `BuildCharge`,
+    /// `amount` its `Fixed` price and `numerator`/`denominator` its `Scaled`
+    /// fraction. Does not dispatch the tile's `On::Build` body.
+    pub fn card_build_as(
+        &mut self,
+        player_id: usize,
+        tile: usize,
+        charge: i32,
+        amount: i32,
+        numerator: i32,
+        denominator: i32,
+        owner_required: bool,
+    ) -> Flow<bool> {
+        self.build_task(
+            player_id,
+            tile,
+            BuildPlan {
+                charge: BuildCharge::from_i32(charge),
+                amount,
+                numerator,
+                denominator,
+            },
+            owner_required,
+        )
+    }
+
+    /// The price a house on `t` would actually cost this turn -- no payer side
+    /// effects and no layer pop (设计 5.3); the offer paths quote with it.
+    pub fn build_price(&self, t: usize) -> i32 {
+        self.w.build_price(self.data, &self.w.turn, t as i32)
     }
 
     /// Prompt to build on one of `tiles`, then build there.
@@ -1820,7 +1883,7 @@ impl PlayCtx<'_> {
             .copied()
             .filter(|&t| {
                 self.cant_build_on(player_id, t).is_none()
-                    && self.w.st.players[player_id].money >= self.build_cost(t)
+                    && self.w.st.players[player_id].money >= self.build_price(t)
             })
             .collect();
         if options.is_empty() {
@@ -1832,7 +1895,7 @@ impl PlayCtx<'_> {
                 Msg::new("ask.build.tile")
                     .tile("tile", t)
                     .i("nth", self.w.st.houses[t] + 1)
-                    .n("cost", self.build_cost(t)),
+                    .n("cost", self.build_price(t)),
             );
         }
         let ask = Ask::tile(
@@ -1999,12 +2062,13 @@ impl PlayCtx<'_> {
         let base_steps = m.steps.unwrap_or(m.roll);
         m.total = base_steps.max(0) + m.extra_steps.max(0);
         m.remaining = m.total;
-        let t = raise!(self, "moveBefore", i, @m m, tile = m.from, value = base_steps)?;
+        let t = raise!(self, "moveBefore", i, @m m, position = m.from, value = base_steps)?;
         if t.is_cancelled() || self.out(i) || !self.playing() {
             // The move was cancelled before its first step: it never happened,
             // so there is no move tail (`moveAfter` / `moveResolved`) either.
             // Mark it so a shared main move does not replay for its followers.
             m.cancelled = t.is_cancelled();
+            self.clear_move_tags(m);
             return Ok(());
         }
         fold_plan_delta(m, &plan_before, &self.w.plan().clone());
@@ -2116,11 +2180,22 @@ impl PlayCtx<'_> {
             m.remaining = remaining as i32;
             let at = next as usize;
             let last = remaining == 0;
+            // The step's **governing tile**, resolved once: the whole step
+            // (window, pass, path, settle) uses it even if a binding is written
+            // inside the window.
+            let step_tile = self.w.tile_standing_at(next as i32);
+            // `tileEffectBefore` -- before every extra-effect point of the
+            // step, `passBefore` included, so a counter can arm suppression.
+            raise!(self, "tileEffectBefore", i, @m m, position = next, tile = step_tile)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            self.pull_plan_tags(m);
             // `passBefore` -- the glossary's 「[pass]X」 is any tile on the move
             // path, so this runs for every step (not just the end).
             // A hook that logs here flushes the segment covering steps up to
             // `cur` (the step onto `next` has not happened yet).
-            raise!(self, "passBefore", i, @m m, tile = next)?;
+            raise!(self, "passBefore", i, @m m, position = next, tile = step_tile)?;
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2129,14 +2204,15 @@ impl PlayCtx<'_> {
                 break; // moved by a passBefore counteraction
             }
             self.w.st.players[i].pos = next;
-            m.path.push(next);
+            self.pull_plan_tags(m);
+            m.path.push(step_tile);
             // The step is taken: extend the pending segment to `next`.
             if let Some(seg) = self.w.walk_seg_mut() {
                 seg.to = next;
                 seg.value += m.dir();
                 seg.ahead = remaining as i32;
             }
-            if last || self.w.tile_prop(at as i32, crate::state::prop::START) != 0 {
+            if last || self.w.tile_prop(step_tile, crate::state::prop::START) != 0 {
                 // Publish the approach before `passTile` on the start square
                 // (the pass-reward prompt) or the walk's last step. The client
                 // must walk to the tile before showing that choice, then
@@ -2146,7 +2222,7 @@ impl PlayCtx<'_> {
             }
             // `passTile` (hook) -- the player has stepped onto this tile. A hook
             // that logs here flushes the segment covering steps up to `next`.
-            raise!(self, "passTile", i, @m m, tile = next)?;
+            raise!(self, "passTile", i, @m m, position = next, tile = step_tile)?;
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2156,7 +2232,7 @@ impl PlayCtx<'_> {
             // `pass` -- every traversed tile, like `passBefore` / `passTile`
             // (glossary 「[pass]」). `passTile` is the hook kind for the same
             // walk; a card uses one or the other, never both.
-            raise!(self, "pass", i, @m m, tile = next)?;
+            raise!(self, "pass", i, @m m, position = next, tile = step_tile)?;
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2333,7 +2409,7 @@ impl PlayCtx<'_> {
         m.kind = MoveKind::Teleport;
         m.teleport_to = Some(Tile(to as i32));
         m.from = from;
-        m.path = vec![to as i32];
+        m.path = vec![self.w.tile_standing_at(to as i32)];
         m.total = 1;
         // Skill-source tag from the shared plan (stamped by the host when the
         // calling rule's id starts with `skill:`).
@@ -2344,9 +2420,10 @@ impl PlayCtx<'_> {
         // counteraction that cancels the move abandons it here; one that alters
         // it rewrites `teleport_to` on the plan and the teleport follows.
         let plan_before = self.w.plan().clone();
-        let t = raise!(self, "moveBefore", i, @m m, tile = from)?;
+        let t = raise!(self, "moveBefore", i, @m m, position = from)?;
         if t.is_cancelled() || self.out(i) || !self.playing() {
             m.cancelled = t.is_cancelled();
+            self.clear_move_tags(&mut m);
             return Ok(false);
         }
         fold_plan_delta(&mut m, &plan_before, &self.w.plan().clone());
@@ -2360,6 +2437,11 @@ impl PlayCtx<'_> {
         }
         let settles = m.settles;
         self.w.st.players[i].pos = to as i32;
+        self.pull_plan_tags(&mut m);
+        // The destination's governing tile, resolved once for the whole
+        // endpoint (window, pass, path, settle).
+        let to_tile = self.w.tile_standing_at(to as i32);
+        m.path = vec![to_tile];
         let text = Msg::new("log.teleport")
             .player_id("who", i)
             .tile("to", to)
@@ -2379,7 +2461,12 @@ impl PlayCtx<'_> {
         // ([pass]) and `passPlayer` (overlap) at its destination, never mid-route
         // squares. The old "a teleport with settles clear resolves nothing"
         // reading over-read 「是否settle」.
-        raise!(self, "passTile", i, @m m, tile = to as i32)?;
+        raise!(self, "tileEffectBefore", i, @m m, position = to as i32, tile = to_tile)?;
+        if self.out(i) || !self.playing() {
+            return Ok(true);
+        }
+        self.pull_plan_tags(&mut m);
+        raise!(self, "passTile", i, @m m, position = to as i32, tile = to_tile)?;
         if self.out(i) || !self.playing() {
             return Ok(true);
         }
@@ -2416,7 +2503,7 @@ impl PlayCtx<'_> {
         // the listener-facing move-end point is `moveAfter` (supersedes this
         // for card listeners; `Teleported` is hook-only).
         if !self.out(i) && self.playing() {
-            raise!(self, "teleported", i, @m m, tile = m.to)?;
+            raise!(self, "teleported", i, @m m, position = m.to)?;
         }
         // `moveResolved` (Q6) -- the move tail's terminal, strictly last
         // (`SETTLE-STAGES.md` §7: 「final, after any settle」). Runs for a
@@ -2424,7 +2511,7 @@ impl PlayCtx<'_> {
         // nothing. Not raised when the mover went out mid-walk (the move is
         // abandoned, not resolved).
         if !self.out(i) && self.playing() {
-            raise!(self, "moveResolved", i, @m m, tile = self.w.st.players[i].pos)?;
+            raise!(self, "moveResolved", i, @m m, position = self.w.st.players[i].pos)?;
         }
         Ok(true)
     }
@@ -2446,7 +2533,7 @@ impl PlayCtx<'_> {
                     .player_id("who", i)
                     .player_id("to", o),
             );
-            raise!(self, "passPlayer", i, @m m, tile = at as i32, target = o as i32)?;
+            raise!(self, "passPlayer", i, @m m, position = at as i32, target = o as i32)?;
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2468,7 +2555,7 @@ impl PlayCtx<'_> {
             return Ok(());
         }
         m.to = self.w.st.players[i].pos as i32;
-        raise!(self, "moveAfter", i, @m m, tile = m.to)?;
+        raise!(self, "moveAfter", i, @m m, position = m.to)?;
         Ok(())
     }
 
@@ -2482,7 +2569,8 @@ impl PlayCtx<'_> {
             self.w.turn.move_open = false;
             return Ok(());
         }
-        raise!(self, "moveResolved", i, @m m, tile = self.w.st.players[i].pos)?;
+        raise!(self, "moveResolved", i, @m m, position = self.w.st.players[i].pos)?;
+        self.clear_move_tags(&mut m.clone());
         // A `thisMove` factor dies with its move (the settle above already saw
         // it); a later landing pays full again.
         self.w.plan_mut().pay_factor = 1.0;
@@ -2511,7 +2599,10 @@ impl PlayCtx<'_> {
         let mut redirects = 0;
         loop {
             let at = self.w.st.players[i].pos as usize;
-            raise!(self, "settleBefore", i, @m m, tile = at as i32)?;
+            // `at` is re-read each redirect, so resolve with it (the move's
+            // last path entry is the pre-redirect landing).
+            let tile = self.w.tile_standing_at(at as i32);
+            raise!(self, "settleBefore", i, @m m, position = at as i32, tile = tile)?;
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
@@ -2554,7 +2645,16 @@ impl PlayCtx<'_> {
     /// (行动阶段 15 「触发地块/落点效果」).
     fn settle(&mut self, i: usize, m: &Move) -> Flow<()> {
         let at = self.w.st.players[i].pos as usize;
-        self.settle_at(i, at, m)
+        // The move's own landing entry is the tile, but a relocation inside
+        // `settleBefore` moved the player after that entry was written, so the
+        // slot the player now stands on decides. A swap bound at the slot does
+        // not hide the landing: it answers through `position_of_tile`.
+        let standing = self.w.tile_standing_at(at as i32);
+        let tile = match m.path.last() {
+            Some(&t) if self.w.position_of_tile(t) as usize == at => t,
+            _ => standing,
+        };
+        self.settle_at(i, at, tile, m)
     }
 
     /// The [触发结算] of an arbitrary tile. A card that resolves a
@@ -2564,8 +2664,8 @@ impl PlayCtx<'_> {
     /// STACK-01: implemented as a stage machine ([`Self::step_settle`]) so a
     /// nested settle suspends and resumes on the work stack instead of
     /// recursing. See `docs/ENGINE.md` "settle work stack".
-    fn settle_at(&mut self, i: usize, at: usize, m: &Move) -> Flow<()> {
-        let mut frame = crate::engine::work::SettleFrame::new(i, at, m.clone());
+    fn settle_at(&mut self, i: usize, at: usize, tile: i32, m: &Move) -> Flow<()> {
+        let mut frame = crate::engine::work::SettleFrame::new(i, at, tile, m.clone());
         self.step_settle(&mut frame)
     }
 
@@ -2605,12 +2705,13 @@ impl PlayCtx<'_> {
             let base = self.w.turn.settle_pay_factor;
             self.settle_stack.push(super::cx::SettleEntry {
                 player: frame.player,
-                tile: frame.at,
+                tile: frame.tile,
                 base,
                 base_rent: self.w.turn.settle_rent_factor,
                 base_add: self.w.turn.settle_pay_add,
                 base_rent_add: self.w.turn.settle_rent_add,
                 outcome: super::cx::SettleOutcome::Settled,
+                move_context: Some(frame.m.clone()),
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -2633,7 +2734,7 @@ impl PlayCtx<'_> {
         } else {
             // Completions nest LIFO, so the finished entry is the top: its
             // `base` is the product of every outer settle, which restores.
-            let finished = self.settle_stack[frame.stack_idx];
+            let finished = self.settle_stack[frame.stack_idx].clone();
             self.settle_stack.truncate(frame.stack_idx);
             self.w.turn.settle_open = self.settle_stack.len() as u32;
             self.w.turn.settle_pay_factor = finished.base;
@@ -2651,21 +2752,29 @@ impl PlayCtx<'_> {
         use crate::engine::work::SettleStage;
         loop {
             let more = match frame.stage {
+                SettleStage::RaiseTileEffect => {
+                    let (i, at, tl) = (frame.player, frame.at, frame.tile);
+                    let m = frame.m.clone();
+                    raise!(self, "tileEffectBefore", i, @m m, position = at as i32, tile = tl)?;
+                    self.pull_plan_tags(&mut frame.m);
+                    frame.stage = SettleStage::RaiseSettle;
+                    true
+                }
                 SettleStage::RaiseSettle => {
                     if frame.owner < 0 {
-                        frame.owner = self.w.st.owners.get(frame.at).copied().unwrap_or(-1);
+                        frame.owner = self.w.st.owners.get(frame.tile as usize).copied().unwrap_or(-1);
                     }
                     let owner = frame.owner;
-                    let (i, at) = (frame.player, frame.at);
+                    let (i, at, tl) = (frame.player, frame.at, frame.tile);
                     let m = frame.m.clone();
                     let t = raise!(
                         self,
                         "settle",
                         i,
                         @m m,
-                        tile = at as i32,
+                        position = at as i32, tile = tl,
                         target = owner,
-                        settle_tile = at as i32
+                        settle_tile = tl
                     )?;
                     if self.out(i) || t.is_cancelled() {
                         self.settle_stack[frame.stack_idx].outcome = if self.out(i) {
@@ -2688,10 +2797,10 @@ impl PlayCtx<'_> {
                 // the last one winning.
                 SettleStage::RaiseSettlePay => {
                     let owner = frame.owner;
-                    let (i, at) = (frame.player, frame.at);
+                    let (i, at, tl) = (frame.player, frame.at, frame.tile);
                     let m = frame.m.clone();
                     let t = raise!(
-                        self, "settleAdd", i, @m m, tile = at as i32, target = owner,
+                        self, "settleAdd", i, @m m, position = at as i32, tile = tl, target = owner,
                         value = 0, @f add
                     )?;
                     self.w.turn.settle_pay_add = self.w.turn.settle_pay_add.saturating_add(t.value);
@@ -2700,7 +2809,7 @@ impl PlayCtx<'_> {
                         "settleRentAdd",
                         i,
                         @m m,
-                        tile = at as i32,
+                        position = at as i32, tile = tl,
                         target = owner,
                         value = 0,
                         @f add
@@ -2708,13 +2817,13 @@ impl PlayCtx<'_> {
                     self.w.turn.settle_rent_add =
                         self.w.turn.settle_rent_add.saturating_add(t.value);
                     let t = raise!(
-                        self, "settleMul", i, @m m, tile = at as i32, target = owner,
+                        self, "settleMul", i, @m m, position = at as i32, tile = tl, target = owner,
                         value = 1_000_000, @f mul
                     )?;
                     let f = t.fold_milli as f64 / 1_000_000.0;
                     self.w.turn.settle_pay_factor *= f;
                     let t = raise!(
-                        self, "settleRentMul", i, @m m, tile = at as i32, target = owner,
+                        self, "settleRentMul", i, @m m, position = at as i32, tile = tl, target = owner,
                         value = 1_000_000, @f mul
                     )?;
                     self.w.turn.settle_rent_factor *= t.fold_milli as f64 / 1_000_000.0;
@@ -2727,16 +2836,16 @@ impl PlayCtx<'_> {
                 }
                 SettleStage::RaiseSettleBody => {
                     let owner = frame.owner;
-                    let (i, at) = (frame.player, frame.at);
+                    let (i, at, tl) = (frame.player, frame.at, frame.tile);
                     let m = frame.m.clone();
                     let si = raise!(
                         self,
                         "settleBody",
                         i,
                         @m m,
-                        tile = at as i32,
+                        position = at as i32, tile = tl,
                         target = owner,
-                        settle_tile = at as i32
+                        settle_tile = tl
                     )?;
                     if si.is_cancelled() {
                         self.settle_stack[frame.stack_idx].outcome =
@@ -2749,7 +2858,14 @@ impl PlayCtx<'_> {
                 }
                 SettleStage::SettleTile => {
                     let rules = self.rules;
-                    rules.settle_tile(self, frame.player, frame.at, frame.m.is_main_move)?;
+                    rules.settle_tile(
+                        self,
+                        frame.player,
+                        frame.at,
+                        frame.tile,
+                        &frame.m,
+                        frame.m.is_main_move,
+                    )?;
                     frame.stage = SettleStage::RaiseSettleAfter;
                     true
                 }
@@ -2763,16 +2879,16 @@ impl PlayCtx<'_> {
                         frame.stage = SettleStage::RaiseTileResolved;
                     } else {
                         let owner = frame.owner;
-                        let (i, at) = (frame.player, frame.at);
+                        let (i, at, tl) = (frame.player, frame.at, frame.tile);
                         let m = frame.m.clone();
                         raise!(
                             self,
                             "settleAfter",
                             i,
                             @m m,
-                            tile = at as i32,
+                            position = at as i32, tile = tl,
                             target = owner,
-                            settle_tile = at as i32
+                            settle_tile = tl
                         )?;
                         frame.stage = SettleStage::RaiseTileResolved;
                     }
@@ -2780,7 +2896,7 @@ impl PlayCtx<'_> {
                 }
                 SettleStage::RaiseTileResolved => {
                     let owner = frame.owner;
-                    let (i, at) = (frame.player, frame.at);
+                    let (i, at, tl) = (frame.player, frame.at, frame.tile);
                     let m = frame.m.clone();
                     // The terminal raise: the settle played out unless an
                     // earlier terminal branch already recorded otherwise.
@@ -2790,9 +2906,9 @@ impl PlayCtx<'_> {
                         "tileResolved",
                         i,
                         @m m,
-                        tile = at as i32,
+                        tile = tl, slot = at as i32,
                         target = owner,
-                        settle_tile = at as i32,
+                        settle_tile = tl,
                         outcome = Some(outcome)
                     )?;
                     frame.stage = SettleStage::Done;
@@ -2862,7 +2978,8 @@ impl PlayCtx<'_> {
     /// Resolve the tile a player stopped on.
     pub fn land(&mut self, i: usize, is_main_move: bool) -> Flow<()> {
         let at = self.w.st.players[i].pos as usize;
-        self.land_at_built_in(i, at, is_main_move)
+        let tile = self.w.tile_standing_at(at as i32);
+        self.land_at_built_in(i, at, tile, is_main_move)
     }
 
     /// The landing gates and bookkeeping both settle bodies share: nothing
@@ -2888,21 +3005,29 @@ impl PlayCtx<'_> {
     /// to when the ruleset has no rule instance for the tile (`StubRules`, or
     /// a kind not yet migrated -- `docs/TILES.md`). Also the whole of `land`
     /// for a card that resolves a tile directly.
-    pub fn land_at_built_in(&mut self, i: usize, at: usize, is_main_move: bool) -> Flow<()> {
+    pub fn land_at_built_in(
+        &mut self,
+        i: usize,
+        at: usize,
+        tile: i32,
+        is_main_move: bool,
+    ) -> Flow<()> {
         if !self.prep_land(i, at, is_main_move) {
             return Ok(());
         }
-        let tile = self.tile(at);
-        if tile.is_buyable() {
-            let owner = self.w.st.owners[at];
+        // The body is tile-keyed throughout; `at` is only the physical slot
+        // (`prep_land` / the landed highlight).
+        let t = tile.max(0) as usize;
+        if self.tile(t).is_buyable() {
+            let owner = self.w.st.owners.get(t).copied().unwrap_or(-1);
             if owner < 0 {
                 // The settle of an unowned buyable IS the optional buy
                 // (规则书 「可选择[消耗]…获得格子地契和拥有权」).
-                self.offer_buy(i, at)?;
+                self.offer_buy(i, t)?;
             } else if owner as usize != i {
-                self.pay_rent(i, at, false)?;
+                self.pay_rent(i, t, false)?;
             } else {
-                self.offer_build(i, at)?;
+                self.offer_build(i, t)?;
             }
             return Ok(());
         }
@@ -2912,7 +3037,7 @@ impl PlayCtx<'_> {
         self.w.log(
             "text",
             i as i32,
-            Msg::new("log.land").player_id("who", i).tile("tile", at),
+            Msg::new("log.land").player_id("who", i).tile("tile", tile),
         );
         Ok(())
     }
@@ -3375,7 +3500,7 @@ impl PlayCtx<'_> {
             15.0,
         )
         .with_ai(|_| if wants { 0 } else { 1 })
-        .with_tile(t);
+        .with_tile(self.w.position_of_tile(t as i32) as usize);
         ask.view.price = price;
         if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] < 0 && !self.out(i) {
             self.deed_buy(i, t, purchase::BuyKind::Land, 0)?;
@@ -3388,7 +3513,7 @@ impl PlayCtx<'_> {
     /// [结算]是：…可选择[消耗]…进行升级建造」).
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
         if self.cant_build_on(i, t).is_some()
-            || self.w.purchase_funds(self.data, i, Some(t)) < self.build_cost(t)
+            || self.w.purchase_funds(self.data, i, Some(t)) < self.build_price(t)
         {
             let note = self.w.st.mortgaged[t].then(|| Msg::new("log.part.mortgaged"));
             self.w.log(
@@ -3401,7 +3526,7 @@ impl PlayCtx<'_> {
             );
             return Ok(());
         }
-        let cost = self.build_cost(t);
+        let cost = self.build_price(t);
         let wants = self.ai_wants_build(i, t);
         let ask = Ask::choice(
             vec![i],
@@ -3651,8 +3776,37 @@ impl PlayCtx<'_> {
         Ok(true)
     }
 
+    /// [`Self::build_task`] with the effective charge and the owner test --
+    /// the step path's default and `standalone_build`'s fallback.
     pub fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
-        // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
+        self.build_task(i, t, BuildPlan::default(), true)
+    }
+
+    /// The one build pipeline (设计 5.3). The caller's gate is step 1:
+    /// `owner_required` picks `cant_build_on`, else `guard_buildable` (a free
+    /// foreign build). `buildBefore` follows, before any payment.
+    pub fn build_task(
+        &mut self,
+        i: usize,
+        t: usize,
+        plan: BuildPlan,
+        owner_required: bool,
+    ) -> Flow<bool> {
+        if self.out(i) || !self.playing() {
+            return Ok(false);
+        }
+        let gate = if owner_required {
+            self.cant_build_on(i, t)
+        } else {
+            self.w
+                .guard_buildable(self.data, i as i32, t as i32)
+                .or_else(|| (!self.can_pay(i)).then(|| Msg::new("err.cannot_spend")))
+        };
+        if let Some(reason) = gate {
+            self.w.log("text", i as i32, reason);
+            return Ok(false);
+        }
+        // `buildBefore` -- before any payment, so it is a real pre-hook.
         // A hook that claims it with `set_cancelled` vetoes the build outright
         // (卡池BUG 「不可在造价1500及以上的格子上加盖房屋」).
         let bt = raise!(self, "buildBefore", i, tile = t as i32)?;
@@ -3682,6 +3836,18 @@ impl PlayCtx<'_> {
             self.w.credit(i as i32, refund);
             cost = 0;
         }
+        // The charge shape. `Effective` keeps the figure; `Fixed`/`Scaled`
+        // replace it (a `Fixed` amount is already rounded by its caller; the
+        // `Scaled` result takes the one end-of-calc ceil-to-10).
+        cost = match plan.charge {
+            BuildCharge::Effective => cost,
+            BuildCharge::Free => 0,
+            BuildCharge::Fixed => plan.amount.max(0),
+            BuildCharge::Scaled => {
+                let denominator = plan.denominator.max(1);
+                ceil10_money(cost * plan.numerator.max(0) / denominator)
+            }
+        };
         if self.w.turn.build_discount_layers > 0 {
             self.w.turn.build_discount_layers -= 1;
             if self.w.turn.build_discount_layers == 0 {
@@ -3707,7 +3873,7 @@ impl PlayCtx<'_> {
             cost = paid.loss;
         }
         let full = self.tile(t).rent.len().saturating_sub(1) as i32;
-        if self.w.st.owners[t] != i as i32 || self.w.st.houses[t] >= full {
+        if (owner_required && self.w.st.owners[t] != i as i32) || self.w.st.houses[t] >= full {
             if cost > 0 && !self.out(i) {
                 self.w.credit(i as i32, cost);
                 let key = if self.w.st.owners[t] != i as i32 {
@@ -3726,25 +3892,32 @@ impl PlayCtx<'_> {
             }
             return Ok(false);
         }
-        self.w.st.houses[t] += 1;
-        let h = self.w.st.houses[t];
-        let text = Msg::new("log.build")
-            .player_id("who", i)
-            .tile("tile", t)
-            .i("nth", h)
-            .n("cost", cost);
-        let e = self.w.log("build", i as i32, text);
-        e.value = 0;
-        e.to = t as i32;
-        e.other = h;
+        // The write declares `houseAdd` on its own `effect` window (设计 5.4);
+        // `write_houses` answers the pre count when the window cancelled.
+        let before = self.w.st.houses[t];
+        let h = self.write_houses(i, t, super::cx::HouseWrite::Add(1), None)?;
+        if h != before {
+            let text = Msg::new("log.build")
+                .player_id("who", i)
+                .tile("tile", t)
+                .i("nth", h)
+                .n("cost", cost);
+            let e = self.w.log("build", i as i32, text);
+            e.value = 0;
+            e.to = t as i32;
+            e.other = h;
+        }
         // `houseAdded` -- 「你拥有格子上的房屋总数增加时」 (鳰原令王那 (2)) is
         // the post-commit point for *any* house increase, the same raise the
         // guest's `add_house` logs at its own commit (`wasm_rules.rs`
-        // `house_log`). The engine's build writes `houses[t]` directly and used
-        // to raise nothing here, so a real 盖房 never offered the skill.
-        // Raised before `buildAfter` (the hook point before the action hook,
-        // matching `buy()`'s `bought` → `buyAfter`).
-        raise!(self, "houseAdded", i, tile = t as i32, value = h)?;
+        // `house_log`). The tile's owner is the actor (`-1` → the payer,
+        // 设计 5.3). Raised before `buildAfter` (the hook point before the
+        // action hook, matching `buy()`'s `bought` → `buyAfter`).
+        if h != before {
+            let owner = self.w.st.owners[t];
+            let who = if owner >= 0 { owner } else { i as i32 };
+            raise!(self, "houseAdded", who.max(0) as usize, tile = t as i32, value = h)?;
+        }
         // `buildAfter` -- only after the house actually commits (not on the
         // refund path above).
         raise!(self, "buildAfter", i, tile = t as i32)?;
@@ -5969,8 +6142,37 @@ impl PlayCtx<'_> {
     /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     pub(crate) fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
+        // A raise inside an open settle inherits the settling move and its
+        // full path (`effect` / `pay` / `payAfter` / `paid`), so a card asked
+        // by the payment can tell which move's settle it belongs to.
+        if t.mv.is_none()
+            && matches!(t.kind.as_str(), "effect" | "pay" | "payAfter" | "paid")
+        {
+            if let Some(entry_move) = self.settle_stack.last().and_then(|e| e.move_context.clone())
+            {
+                t.with_move(&entry_move);
+                if let Some(mv) = t.mv.as_mut() {
+                    mv.tags = self.w.plan().tags.clone();
+                }
+            }
+        }
         self.counteract(&mut t)?;
         Ok(t)
+    }
+
+    /// Re-copy the plan's move tags onto the running move. Called after every
+    /// tile-carrying raise and settle stage, so a tag a counteraction just
+    /// armed rides the rest of the same move (`fold_plan_delta` only runs at
+    /// a raise that carries a move, and the plan is the live source).
+    pub(crate) fn pull_plan_tags(&mut self, m: &mut Move) {
+        m.tags = self.w.plan().tags.clone();
+    }
+
+    /// The move tag is one move: drop it at the move tail and on a cancelled
+    /// move, so the next move starts clean.
+    pub(crate) fn clear_move_tags(&mut self, m: &mut Move) {
+        m.tags.clear();
+        self.w.plan_mut().tags.clear();
     }
 
     // =============================================================== end

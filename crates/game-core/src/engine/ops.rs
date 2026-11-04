@@ -506,6 +506,15 @@ impl World {
         super::play::purchase::build_cost(data, t)
     }
 
+    /// The price a house on `tile` would actually cost this turn:
+    /// `max(0, build_cost * build_cost_percent / 100 - build_discount)`. No
+    /// payer side effects and no layer pop.
+    pub fn build_price(&self, data: &GameData, turn: &super::world::TurnCtx, tile: i32) -> i32 {
+        let base = self.build_cost(data, tile);
+        let pct = turn.build_cost_pct.clamp(0, 100);
+        (base * pct / 100 - turn.build_discount).max(0)
+    }
+
     /// [`super::play::purchase::mortgage_value`] is the single source.
     pub fn mortgage_value(&self, data: &GameData, tile: i32) -> i32 {
         let Ok(t) = usize::try_from(tile) else {
@@ -1241,7 +1250,31 @@ impl World {
     /// May this player build on this tile at all? The one
     /// build gate, asked both by the engine's build step and by a card choosing
     /// a destination. `None` = yes; otherwise the reason.
+    ///
+    /// This is [`Self::guard_buildable`] plus the ownership test; a free card
+    /// build on someone else's (or an unowned) tile asks the latter.
     pub fn cant_build_on(
+        &self,
+        data: &crate::data::GameData,
+        player_id: i32,
+        tile: i32,
+    ) -> Option<Msg> {
+        let Some(t) = usize::try_from(tile).ok().and_then(|t| data.tiles.get(t)) else {
+            return Some(Msg::new("err.build_not_own"));
+        };
+        if !t.is_buyable()
+            || self.st.owners.get(tile as usize).copied().unwrap_or(-1) != player_id
+            || self.player_id(player_id).is_none()
+        {
+            return Some(Msg::new("err.build_not_own"));
+        }
+        self.guard_buildable(data, player_id, tile)
+    }
+
+    /// [`Self::cant_build_on`] without the ownership test: every tile veto
+    /// (buyable flag, `NO_BUILD` placements and lingering, `NO_BUILD_ABOVE`,
+    /// ring, mortgage, upgrade table, full, out) still applies.
+    pub fn guard_buildable(
         &self,
         data: &crate::data::GameData,
         player_id: i32,
@@ -1253,8 +1286,7 @@ impl World {
         let Some(s) = self.player_id(player_id) else {
             return Some(Msg::new("err.build_not_own"));
         };
-        if !t.is_buyable() || self.st.owners.get(tile as usize).copied().unwrap_or(-1) != player_id
-        {
+        if !t.is_buyable() {
             return Some(Msg::new("err.build_not_own"));
         }
         // 「owner不可盖房」 -- `prop::NO_BUILD` on a rule instance
@@ -1405,6 +1437,15 @@ impl World {
         // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
         // side effect -- `place_raw` and engine placement must see it too.
         let immune = props.get(crate::state::prop::IMMUNE).copied().unwrap_or(0) != 0;
+        // A seat placement is anchored at the slot its tile currently stands
+        // at, so a swap binding written by this instance (or through it) keeps
+        // pointing at this physical spot. Board-owned rule instances keep `-1`.
+        let position = if player_id == crate::state::BOARD_OWNER {
+            -1
+        } else {
+            let p = self.position_of_tile(tile);
+            if p == tile { -1 } else { p }
+        };
         let inst = FieldCard {
             uid,
             card: card.to_string(),
@@ -1420,6 +1461,7 @@ impl World {
             counter_max: BTreeMap::new(),
             note,
             effective_card: None,
+            position,
         };
         if player_id == crate::state::BOARD_OWNER {
             self.st.board_field.push(inst);
@@ -1436,6 +1478,12 @@ impl World {
     /// board field. `uid` is what identifies a card in this match -- the *name*
     /// does not, because one player may hold several copies of the same card in
     /// play at once.
+    /// The board slot the instance at `uid` sits at (`-1` with its owner /
+    /// gone) -- [`FieldCard::position`]'s default resolves to the tile.
+    pub fn position_of_instance(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map(|f| f.position()).unwrap_or(-1)
+    }
+
     pub fn field_by_uid(&self, uid: i32) -> Option<&FieldCard> {
         self.st
             .board_field
@@ -1519,6 +1567,36 @@ impl World {
         self.player_id(player_id).map_or_else(Vec::new, |s| {
             s.field.iter().map(|f| (f.uid, f.card.clone())).collect()
         })
+    }
+
+    /// How many *extra* effects lie on `tile`: field instances whose card is
+    /// not the tile's own `tile:` rule, plus tile marks. The tile carries its
+    /// extras, so the count is keyed by the **governing** tile -- a player
+    /// card answers through the tile standing at its slot (design 5.2), and a
+    /// mark is bound to the tile identity outright.
+    pub fn tile_extra_count(&self, tile: i32) -> i32 {
+        // A board instance is never placed elsewhere than its own tile; a
+        // player-placed one sits at a slot and displays whatever tile stands
+        // there (design 5.2). The tile carries its extras, so the test is on
+        // the standing tile, not the slot the instance holds.
+        let on_board = |f: &crate::state::FieldCard| {
+            f.tile == tile && !f.card.starts_with("tile:")
+        };
+        let on_field = |f: &crate::state::FieldCard| {
+            self.tile_standing_at(f.position()) == tile && !f.card.starts_with("tile:")
+        };
+        // A mark is an extra effect too (the [CP点] guard's case): it is bound
+        // to the tile itself, so it needs no swap resolution.
+        let marks = self.st.marks.iter().filter(|m| m.tile == tile).count();
+        (self.st.board_field.iter().filter(|f| on_board(f)).count()
+            + self
+                .st
+                .players
+                .iter()
+                .flat_map(|p| p.field.iter())
+                .filter(|f| on_field(f))
+                .count()
+            + marks) as i32
     }
 
     /// The rule instances on board tile `tile`, in placement order -- what the
@@ -1655,19 +1733,122 @@ impl World {
     }
 
     /// Where the instance at `uid` sits, or -1 for "with its owner" / gone.
+    ///
+    /// (Named apart from the position conversion [`Self::tile_standing_at`] so
+    /// the two `i32` meanings cannot be confused at a call site.)
     pub fn tile_at(&self, uid: i32) -> i32 {
         self.field_by_uid(uid).map_or(-1, |f| f.tile)
     }
 
+    // ------------------------------------------------- tile / position
+
+    /// Every instance that can carry a swap binding: the board field and every
+    /// seat's field.
+    fn swap_records(&self) -> impl Iterator<Item = &FieldCard> {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|p| p.field.iter()))
+    }
+
+    /// The tile standing at board position `position`, and the instance binding
+    /// it. One level, both directions -- see [`Self::tile_standing_at`].
+    fn swap_binding_at(&self, position: i32) -> Option<(i32, i32)> {
+        let partner = |f: &FieldCard| {
+            f.props
+                .get(crate::state::prop::SWAPPED_TILE)
+                .copied()
+                .filter(|&q| q >= 0)
+        };
+        // (a) the binding instance sits at `position`: the tile standing there
+        // is the tile the instance names as its partner.
+        if let Some(f) = self
+            .swap_records()
+            .find(|f| f.position() == position && partner(f).is_some())
+        {
+            return Some((partner(f)?, f.uid));
+        }
+        // (b) the reverse: some instance names `position` as its partner, so
+        // tile `position` stands where that instance sits.
+        self.swap_records()
+            .find(|f| partner(f) == Some(position))
+            .map(|f| (f.position(), f.uid))
+    }
+
+    /// The tile standing at board position `position` (`position` itself when
+    /// nothing is bound there).
+    pub fn tile_standing_at(&self, position: i32) -> i32 {
+        self.swap_binding_at(position).map_or(position, |(s, _)| s)
+    }
+
+    /// The position tile `tile` currently stands at -- the inverse of
+    /// [`Self::tile_standing_at`], the same two cases mirrored.
+    pub fn position_of_tile(&self, tile: i32) -> i32 {
+        // (a') some instance names `tile` as its partner: the tile stands at
+        // that instance's slot.
+        if let Some(f) = self.swap_records().find(|f| {
+            f.props.get(crate::state::prop::SWAPPED_TILE).copied() == Some(tile)
+        }) {
+            return f.position();
+        }
+        // (b') some instance is on tile `tile`: the tile stands at that
+        // instance's partner.
+        self.swap_records()
+            .filter(|f| f.tile == tile)
+            .find_map(|f| {
+                f.props
+                    .get(crate::state::prop::SWAPPED_TILE)
+                    .copied()
+                    .filter(|&q| q >= 0)
+            })
+            .unwrap_or(tile)
+    }
+
     /// Move the instance at `uid` to `tile` (-1 = back with its owner).
+    ///
+    /// The placement slot is resolved **before** `tile` changes (so a swap
+    /// binding still points at the right spot) and cleared when it coincides
+    /// with the new tile.
     pub fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        let position = if tile >= 0 {
+            let p = self.position_of_tile(tile);
+            if p == tile { -1 } else { p }
+        } else {
+            -1
+        };
         match self.field_by_uid_mut(uid) {
             Some(f) => {
                 f.tile = tile;
+                f.position = position;
                 true
             }
             None => false,
         }
+    }
+
+    /// The **governing tile** of the instance at `uid` (`-1` = with its owner,
+    /// `-2` = no running instance), resolved through any swap bound at its
+    /// slot. [`Self::self_position_of`] is the slot itself.
+    pub fn self_tile_of(&self, uid: i32) -> i32 {
+        if uid < 0 {
+            return -2;
+        }
+        self.field_by_uid(uid).map_or(-1, |f| {
+            // A tile rule *is* its tile: it answers the identity even while a
+            // swap makes its slot display another tile (否则 a swapped slot's
+            // rule would compare itself against the partner). A player card
+            // displays the tile standing at its slot.
+            if f.owner == crate::state::BOARD_OWNER {
+                f.tile
+            } else {
+                self.tile_standing_at(f.position())
+            }
+        })
+    }
+
+    /// The slot the instance at `uid` sits at (`-1` = with its owner).
+    pub fn self_position_of(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.position())
     }
 
     /// Is the instance at `uid` face-down?

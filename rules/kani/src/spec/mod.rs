@@ -3,6 +3,7 @@
 //! Each unit owns only its own file; this `mod.rs` is written once.
 //! Authors never edit this file after the foundation lands.
 
+pub mod abi_g09;
 pub mod ag;
 pub mod crychic;
 pub mod events;

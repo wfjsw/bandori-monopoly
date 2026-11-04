@@ -81,6 +81,9 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn tile_id(&self) -> i64 {
         self.trigger.tile as i64
     }
+    fn tile_position(&self) -> i64 {
+        self.trigger.position as i64
+    }
     fn tile_owner(&self) -> i64 {
         if self.trigger.tile >= 0 {
             self.src.tile_owner(self.trigger.tile) as i64
@@ -707,6 +710,11 @@ pub trait SnapSrc {
     fn tile_named(&self, name: &str) -> i32;
     /// Board tile count (ids are `0..tile_count`).
     fn tile_count(&self) -> i32;
+    /// The tile standing at board slot `position` (`position` itself without
+    /// a swap). Fixture worlds answer the identity.
+    fn tile_standing_at(&self, position: i32) -> i32 {
+        position
+    }
     /// Board name of `tile` (the `tile_named` spelling, line breaks already
     /// stripped). Empty when the id is out of range. `fill_window` registers
     /// every name so a condition's `tile_named('…')` resolves.
@@ -855,6 +863,10 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn tile_named(&self, name: &str) -> i32 {
         CardWorld::tile_named(self, name)
+    }
+    #[inline]
+    fn tile_standing_at(&self, position: i32) -> i32 {
+        CardWorld::tile_standing_at(self, position)
     }
     #[inline]
     fn tile_count(&self) -> i32 {
@@ -1032,7 +1044,7 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::field_instances(self, player_id)
             .into_iter()
             .find(|(_, id)| id == card)
-            .map_or(-2, |(uid, _)| CardWorld::tile_at(self, uid))
+            .map_or(-2, |(uid, _)| CardWorld::governing_tile_at(self, uid))
     }
 }
 
@@ -1453,6 +1465,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
 
     let tile = TileSnap {
         id: t.tile as i64,
+        position: t.position as i64,
         owner: if t.tile >= 0 {
             world.tile_owner(t.tile) as i64
         } else {
@@ -1480,6 +1493,9 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         actor: t.player_id as i64,
         target: t.target as i64,
         tile,
+        tile_at: (0..world.tile_count())
+            .map(|p| world.tile_standing_at(p) as i64)
+            .collect(),
         value: t.value as i64,
         step: t.step as i64,
         by: t.by_card.map(|b| b as i64).unwrap_or(-1),
@@ -1582,6 +1598,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         target: -1,
         tile: TileSnap {
             id: world.player_pos(player_id) as i64,
+            position: world.player_pos(player_id) as i64,
             owner: {
                 let t = world.player_pos(player_id);
                 if t >= 0 {
@@ -1594,6 +1611,9 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             mortgaged: 0,
             price: 0,
         },
+        tile_at: (0..world.tile_count())
+            .map(|p| world.tile_standing_at(p) as i64)
+            .collect(),
         value: 0,
         step: 0,
         by: -1,

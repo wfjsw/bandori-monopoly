@@ -69,10 +69,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let houses = ctx::houses_of(from);
-    let max = houses.min(targets.len() as i32);
-    if max < 1 {
-        return Ok(());
-    }
+    // `max` only bounds the offer; a re-run sees the source already drained
+    // and so a shorter list. `ask_number` answers `min + index` off the logged
+    // index rather than clamping to the current list, so the pick survives.
+    let max = houses.min(targets.len() as i32).max(1);
     let k = ctx::ask_number(
         player_id,
         &Msg::new(key!("hey_kids_title")),
@@ -83,8 +83,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「转移的房屋与目标格子中，至少一方数量为1」 -- every target takes one
     // house and the moved count equals the target count, so the two sides are
     // always equal and only `k == 1` satisfies the clause.
-    let k = k.clamp(1, max);
-    // Pick `k` distinct targets (one house each).
+    let k = k.max(1);
+    // Pick `k` distinct targets (one house each). `ask_tiles` answers the tile
+    // id, so a re-run resolves the pick even though `buildable_targets` has
+    // changed under the houses this body already moved.
     let mut picked: Vec<i32> = Vec::new();
     for n in 0..k {
         let left: Vec<i32> = targets
@@ -92,32 +94,41 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .copied()
             .filter(|t| !picked.contains(t))
             .collect();
-        if left.is_empty() {
-            break;
+        let mut labels: Vec<Msg> = Vec::with_capacity(left.len());
+        let mut prices: Vec<i32> = Vec::with_capacity(left.len());
+        for &t in &left {
+            labels.push(Msg::new("ask.tileOption").tile("tile", t));
+            prices.push(0);
         }
-        let t = ctx::ask_tile(
+        let t = ctx::ask_tiles(
             player_id,
             &Msg::new(key!("hey_kids_title")),
             &Msg::new(key!("hey_kids_ask_target"))
                 .i("n", (n + 1) as i64)
                 .i("k", k as i64),
             &left,
+            &labels,
+            &prices,
+            -1,
         )?;
+        if t < 0 {
+            break;
+        }
         picked.push(t);
     }
     // Transfer: one house per picked target, source decrement capped at zero.
+    // The loop runs the whole `picked` list on every pass: each pair of
+    // `add_house` calls owns one answer slot, so an already-applied pair
+    // replays as a no-op and a fresh one applies -- breaking out on the
+    // (already drained) source count would skip the rest.
     let mut cost_out = 0i32; // source build cost consumed
     let mut cost_in = 0i32; // target build cost gained
-    let mut moved = 0i32;
+    let moved = picked.len() as i32;
     for &t in &picked {
-        if ctx::houses_of(from) <= 0 {
-            break;
-        }
         ctx::add_house(from, -1);
         cost_out += ctx::build_cost(from);
         ctx::add_house(t, 1);
         cost_in += ctx::build_cost(t);
-        moved += 1;
     }
     if moved == 0 {
         return Ok(());

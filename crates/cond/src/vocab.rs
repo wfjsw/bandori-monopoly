@@ -536,6 +536,18 @@ pub const VOCAB: &[Name] = &[
         doc: "the trigger's tile, -1 = none",
     },
     Name {
+        cel: "tile.position",
+        aliases: &[],
+        flat: "tile_position",
+        scope: Scope::Window,
+        ty: Type::Int,
+        get: |v| v.tile_position(),
+        get_str: NO_GET_STR,
+        func: NO_FUNC,
+        lower_as: crate::ext::LowerAs::Direct,
+        doc: "the board slot the event happened at, -1 = none; `tile.id` is the tile",
+    },
+    Name {
         cel: "tile.owner",
         aliases: &[],
         flat: "tile_owner",

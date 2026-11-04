@@ -54,6 +54,22 @@ pub fn tile_owner(tile: i32) -> i32 {
     kani_host::call_i32(Op::tile_owner, [tile, 0, 0, 0, 0, 0])
 }
 
+pub fn tile_at(position: i32) -> i32 {
+    kani_host::call_i32(Op::tile_at, [position, 0, 0, 0, 0, 0])
+}
+
+pub fn position_of_tile(tile: i32) -> i32 {
+    kani_host::call_i32(Op::position_of_tile, [tile, 0, 0, 0, 0, 0])
+}
+
+pub fn tile_extra_count(tile: i32) -> i32 {
+    kani_host::call_i32(Op::tile_extra_count, [tile, 0, 0, 0, 0, 0])
+}
+
+pub fn self_position() -> i32 {
+    kani_host::call_i32(Op::self_position, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn player_pos(player_id: i32) -> i32 {
     kani_host::call_i32(Op::player_pos, [player_id, 0, 0, 0, 0, 0])
 }
@@ -72,6 +88,22 @@ pub fn buy_price(tile: i32) -> i32 {
 
 pub fn build_cost(tile: i32) -> i32 {
     kani_host::call_i32(Op::build_cost, [tile, 0, 0, 0, 0, 0])
+}
+
+pub fn build_price(tile: i32) -> i32 {
+    kani_host::call_i32(Op::build_price, [tile, 0, 0, 0, 0, 0])
+}
+
+pub fn build_cost_percent() -> i32 {
+    kani_host::call_i32(Op::build_cost_percent, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn build_discount() -> i32 {
+    kani_host::call_i32(Op::build_discount, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn tile_buildable(player_id: i32, tile: i32) -> i32 {
+    kani_host::call_i32(Op::tile_buildable, [player_id, tile, 0, 0, 0, 0])
 }
 
 pub fn mortgage_value(tile: i32) -> i32 {
@@ -779,6 +811,18 @@ pub fn trig_tile() -> i32 {
     kani_host::call_i32(Op::trig_tile, [0, 0, 0, 0, 0, 0])
 }
 
+pub fn trig_position() -> i32 {
+    kani_host::call_i32(Op::trig_position, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_move_path_length() -> i32 {
+    kani_host::call_i32(Op::trig_move_path_length, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_move_path(index: i32) -> i32 {
+    kani_host::call_i32(Op::trig_move_path, [index, 0, 0, 0, 0, 0])
+}
+
 pub fn trig_value() -> i32 {
     kani_host::call_i32(Op::trig_value, [0, 0, 0, 0, 0, 0])
 }
@@ -1377,6 +1421,32 @@ pub fn card_build(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::card_build, [player_id, tile, 0, 0, 0, 0])
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn card_build_as(
+    player_id: i32,
+    tile: i32,
+    charge: i32,
+    amount: i32,
+    numerator: i32,
+    denominator: i32,
+    owner_required: i32,
+) -> i32 {
+    // Six call slots for seven arguments: the `Scaled` pair is packed (the
+    // stub answers a constant, so the halves only need to reach the model as
+    // one word).
+    kani_host::call_i32(
+        Op::card_build_as,
+        [
+            player_id,
+            tile,
+            charge,
+            amount,
+            (denominator << 16) | (numerator & 0xFFFF),
+            owner_required,
+        ],
+    )
+}
+
 pub fn set_can_build(on: i32) {
     kani_host::call_unit(Op::set_can_build, [on, 0, 0, 0, 0, 0]);
 }
@@ -1610,8 +1680,8 @@ pub fn unplace_at(uid: i32) -> i32 {
     kani_host::call_i32(Op::unplace_at, [uid, 0, 0, 0, 0, 0])
 }
 
-pub fn tile_at(uid: i32) -> i32 {
-    kani_host::call_i32(Op::tile_at, [uid, 0, 0, 0, 0, 0])
+pub fn tile_of(uid: i32) -> i32 {
+    kani_host::call_i32(Op::tile_of, [uid, 0, 0, 0, 0, 0])
 }
 
 pub fn set_tile_at(uid: i32, tile: i32) -> i32 {

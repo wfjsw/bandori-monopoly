@@ -299,6 +299,7 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Value {
         33 => FnId::State,
         34 => FnId::CandHas,
         35 => FnId::CardIs,
+        36 => FnId::Resolving,
         _ => return Value::Err,
     };
     let nargs = n.b as usize;
@@ -351,6 +352,13 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Value]) -> Value {
             };
             // `card_is('id')` ≡ `trigger_card == id_of(id)`.
             Value::Bool(ctx.scalar_val(vars_trigger_card_idx()) == Value::Int(want))
+        }
+        FnId::Resolving => {
+            let want = match int(0) {
+                Ok(v) => v,
+                Err(()) => return Value::Err,
+            };
+            Value::Bool(ctx.resolving_has(want))
         }
         // ABI v56 generic tile queries. String args lower to `id_of` hashes.
         FnId::TileIs => {

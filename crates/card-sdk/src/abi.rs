@@ -780,7 +780,7 @@ use crate::intern::NameId;
 ///    `invoke_entry(…, entry::PRESS)`; `play_card` keeps its import).
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 113;
+pub const ABI_VERSION: i32 = 114;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -873,6 +873,25 @@ pub const ABI_VERSION: i32 = 113;
 ///    `abi::DistanceKind::{Forward,Shortest}`); the prop key and the game layer
 ///    stay in the ruleset crate (`bandori_std::nearest`). SAVE_VERSION /
 ///    RECORD_VERSION unchanged.
+///
+/// v114: **tile events, one build pipeline, tile-write effects, house falls,
+///    move paths** (`spec/abi/G09-tile-build-pass.md`). A **tile** is an
+///    identity, a **position** is a slot: `Trigger` gains `position` and
+///    `TriggerMove` gains `path`, and every position-fed raise site converts
+///    through the new imports. New engine kinds `tileEffectBefore` (132,
+///    counteraction window and hook, before a tile's extra effects),
+///    `houseRemoved` (133) and the effect-only spellings `houseAdd` (134) /
+///    `houseRemove` (135) / `ownerSet` (136). New `prop::SWAPPED_TILE` (an
+///    instance prop binding its slot to a partner tile) and
+///    `tag::SUPPRESS_TILE_EFFECTS`. New imports
+///    `trigger::{position,move_path_length,move_path}`,
+///    `position_of_tile`, `tile_at`, `tile_extra_count`, `self_position`,
+///    `build_price`, `build_cost_percent`, `build_discount`,
+///    `tile_buildable`, `card_build_as`; new [`BuildCharge`]. Tile writes
+///    (`set_houses` / `add_house` / `set_owner`) declare an effect and open
+///    the `effect` window before applying. `Trigger` / `TriggerMove` are
+///    host-only; `FieldCard.position` is `serde(default) -1`, so
+///    SAVE_VERSION / RECORD_VERSION are unchanged.
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -1754,6 +1773,22 @@ pub mod prop {
     /// Per-player colour override prefix: `colorFor:<p>` = the group tile `p`
     /// treats this tile as (`-1` clears, `-2` = all colours).
     pub const COLOR_FOR_PREFIX: &str = "colorFor:";
+    /// 「那格视为与Kind格子交换位置」 -- an **instance** prop on the placed
+    /// instance. Value = the partner tile; that instance's slot resolves to
+    /// the partner tile and the partner tile resolves to the slot, one level,
+    /// both directions. `-1` / absent = no binding. Dies with the instance.
+    pub const SWAPPED_TILE: &str = "swappedTile";
+}
+
+/// Shared **move tags** -- the keys a move carries on
+/// [`TriggerMove::tags`](crate::abi::TriggerMove) and in `plan.tags`. Only
+/// names the engine and cards must agree on live here; a card's private tag
+/// may keep a local constant.
+pub mod tag {
+    /// Suppress the *extra* effects of tile `value` for the rest of this move.
+    /// The tile's own base rule still runs. Arms from a counteraction on
+    /// `TileEffectBefore`; dies with the move.
+    pub const SUPPRESS_TILE_EFFECTS: &str = "suppressTileEffects";
 }
 
 /// Read by 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `diceRollBefore` / `diceRollResult`
@@ -1996,6 +2031,33 @@ impl BuyKind {
             Self::Force => "force",
             Self::Acquire => "acquire",
             Self::Auction => "auction",
+        }
+    }
+}
+
+/// What a `card_build_as` charge is, on the wire. Mirrors the host's decode
+/// in `game-rules`; an unknown value falls back to [`Self::Effective`].
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BuildCharge {
+    /// Pay the pipeline price (percent and discount apply).
+    #[default]
+    Effective = 0,
+    /// Pay nothing; the hooks still run.
+    Free = 1,
+    /// Pay exactly `amount`; percent and discount do not apply again.
+    Fixed = 2,
+    /// Pay effective × `numerator` / `denominator`, one ceil-to-10.
+    Scaled = 3,
+}
+
+impl BuildCharge {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::Free,
+            2 => Self::Fixed,
+            3 => Self::Scaled,
+            _ => Self::Effective,
         }
     }
 }
@@ -2469,6 +2531,17 @@ impl ActionKind {
     /// Action / Counteraction window. A deed's house count has just been
     /// written. Payload: `tile` / `value`. A listener may emit effects.
     pub const HouseAdded: Self = Self(TriggerKind::HouseAdded);
+
+    /// Action / Counteraction window. Before one tile's *extra* effects run,
+    /// on a pass step and on a settle. Payload: the move, `tile` (the
+    /// governing tile), `position` (the board slot). A counter may arm
+    /// `tag::SUPPRESS_TILE_EFFECTS` for that tile; the tile's own base rule
+    /// always runs. Dual-role: also a counteraction-window selector.
+    pub const TileEffectBefore: Self = Self(TriggerKind::TileEffectBefore);
+
+    /// Action. A deed's house count has just fallen. Payload: `tile` /
+    /// `value` (the count after the fall); `player_id` is the tile's owner.
+    pub const HouseRemoved: Self = Self(TriggerKind::HouseRemoved);
 
     /// Action. A named on-card counter on a placed instance has just been written.
     /// Payload: card = the instance whose count moved, player_id = its owner,
@@ -3269,6 +3342,30 @@ impl TriggerKind {
 
     /// `diceRollAdd`
     pub const DiceRollAdd: Self = Self::engine(125);
+
+    /// `tileEffectBefore` -- one tile's extra effects are about to run, on a
+    /// pass step and on a settle. Payload: the move, `tile` (the governing
+    /// tile), `position` (the board slot). Dual-role: a counteraction window
+    /// and a hook. A counter may arm `tag::SUPPRESS_TILE_EFFECTS`; the tile's
+    /// own base rule always runs.
+    pub const TileEffectBefore: Self = Self::engine(132);
+
+    /// `houseRemoved` -- a tile's house count has just fallen.
+    /// Payload: `tile`, `value` (the count after the fall), `player_id` = the
+    /// tile's owner at the time of the write.
+    pub const HouseRemoved: Self = Self::engine(133);
+
+    /// `houseAdd` -- effect spelling of a positive house write.
+    /// Payload: `tile`, `value` (the delta), `target` = the owner.
+    pub const HouseAdd: Self = Self::engine(134);
+
+    /// `houseRemove` -- effect spelling of a negative house write.
+    /// Payload: `tile`, `value` (the delta, unsigned), `target` = the owner.
+    pub const HouseRemove: Self = Self::engine(135);
+
+    /// `ownerSet` -- effect spelling of an ownership write. Payload: `tile`,
+    /// `value` (the new owner); `target` = the previous owner.
+    pub const OwnerSet: Self = Self::engine(136);
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {

@@ -93,7 +93,23 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::by_card().is_some() {
         return false;
     }
-    // TODO(规则书)（当你经过属于其他玩家的livehouse格子后）: TODO(规则书)（传送至任意无主可购买的格子并[结算]，且必须购买）: an
+    // 「当你经过属于其他玩家的livehouse格子后」 -- the settle's own move path
+    // (tiles, in order). `Paid` now carries the settle's move, so an unrelated
+    // rent between settles has length 0 and stays closed (设计 6.7).
+    let n = trigger::move_path_length();
+    let mut passed = false;
+    for i in 0..n {
+        let t = trigger::move_path(i);
+        let owner = ctx::tile_owner(t);
+        if owner >= 0 && owner != player_id && ctx::is_live_house_for(owner, t) {
+            passed = true;
+            break;
+        }
+    }
+    if !passed {
+        return false;
+    }
+    // TODO(规则书)（传送至任意无主可购买的格子并[结算]，且必须购买）: an
     // unprinted availability precondition -- with no free tile the window stays shut
     // and the card never enters the discard, so its [特] revive is lost too.
     !free_tiles().is_empty()

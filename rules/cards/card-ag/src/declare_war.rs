@@ -41,9 +41,8 @@ fn can_counteract(player_id: i32) -> bool {
     //
 
     // TODO: Move some to CEL?
-    // TODO(规则书)（当你或你拥有的格子被其他玩家的卡效果影响时）: an effect that only
-    //   touches a tile you own (add_house / set_houses) declares no effect --
-    //   only effects that name the owner are reachable.
+    // A house write (ownerSet / houseAdd / houseRemove) declares an `effect`
+    // over the tile, so the tile half below reaches those too.
     let Some(by) = trigger::by_card().filter(|&by| by != player_id) else {
         return false;
     };

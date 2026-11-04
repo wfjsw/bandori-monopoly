@@ -13,6 +13,7 @@
 
 #[cfg(feature = "band-ag")]
 pub mod ag;
+pub mod abi_g09;
 pub mod cond_ops;
 #[cfg(feature = "band-crychic")]
 pub mod crychic;
@@ -22,6 +23,7 @@ pub mod events;
 pub mod g06_windows;
 #[cfg(feature = "band-general")]
 pub mod g07_targeting;
+#[cfg(feature = "band-general")]
 pub mod general;
 #[cfg(feature = "band-hhw")]
 pub mod hhw;

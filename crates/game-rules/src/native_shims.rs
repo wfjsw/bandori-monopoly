@@ -50,6 +50,16 @@ pub trait HostOps {
     fn op_tile_named(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_tile_owner`
     fn op_tile_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_tile_of`
+    fn op_tile_of(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_tile_at`
+    fn op_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_position_of_tile`
+    fn op_position_of_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_tile_extra_count`
+    fn op_tile_extra_count(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_self_position`
+    fn op_self_position(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_player_pos`
     fn op_player_pos(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_tile_steps_ahead`
@@ -306,6 +316,12 @@ pub trait HostOps {
     fn op_trig_target(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_tile`
     fn op_trig_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_position`
+    fn op_trig_position(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_move_path_length`
+    fn op_trig_move_path_length(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_move_path`
+    fn op_trig_move_path(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_value`
     fn op_trig_value(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_trig_step`
@@ -564,6 +580,16 @@ pub trait HostOps {
     fn op_turn_main_steps(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_card_build`
     fn op_card_build(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_card_build_as`
+    fn op_card_build_as(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_build_price`
+    fn op_build_price(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_build_cost_percent`
+    fn op_build_cost_percent(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_build_discount`
+    fn op_build_discount(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_tile_buildable`
+    fn op_tile_buildable(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_can_build`
     fn op_set_can_build(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_clear_dice`
@@ -676,8 +702,6 @@ pub trait HostOps {
     fn op_field_instances(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_unplace_at`
     fn op_unplace_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
-    /// `ruleset_tile_at`
-    fn op_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_set_tile_at`
     fn op_set_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_is_face_down_at`
@@ -933,6 +957,18 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_tile_owner(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::tile_owner(self, a[0])? as i64)
+    }
+    fn op_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::tile_at(self, a[0])? as i64)
+    }
+    fn op_position_of_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::position_of_tile(self, a[0])? as i64)
+    }
+    fn op_tile_extra_count(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::tile_extra_count(self, a[0])? as i64)
+    }
+    fn op_self_position(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::self_position(self)? as i64)
     }
     fn op_player_pos(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::player_pos(self, a[0])? as i64)
@@ -1351,6 +1387,15 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_trig_tile(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trig_tile(self)? as i64)
+    }
+    fn op_trig_position(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_position(self)? as i64)
+    }
+    fn op_trig_move_path_length(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_move_path_length(self)? as i64)
+    }
+    fn op_trig_move_path(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_move_path(self, a[0])? as i64)
     }
     fn op_trig_value(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::trig_value(self)? as i64)
@@ -1787,6 +1832,27 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_build(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::card_build(self, a[0], a[1])? as i64)
     }
+    fn op_card_build_as(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        // Slot 4 packs `(denominator << 16) | numerator`: six call slots for
+        // seven arguments.
+        let numerator = a[4] & 0xFFFF;
+        let denominator = a[4] >> 16;
+        Ok(crate::hostfns::card_build_as(
+            self, a[0], a[1], a[2], a[3], numerator, denominator, a[5],
+        )? as i64)
+    }
+    fn op_build_price(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::build_price(self, a[0])? as i64)
+    }
+    fn op_build_cost_percent(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::build_cost_percent(self)? as i64)
+    }
+    fn op_build_discount(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::build_discount(self)? as i64)
+    }
+    fn op_tile_buildable(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::tile_buildable(self, a[0], a[1])? as i64)
+    }
     fn op_set_can_build(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         crate::hostfns::set_can_build(self, a[0])?;
         Ok(0)
@@ -1963,8 +2029,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_unplace_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::unplace_at(self, a[0])? as i64)
     }
-    fn op_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
-        Ok(crate::hostfns::tile_at(self, a[0])? as i64)
+    fn op_tile_of(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::tile_of(self, a[0])? as i64)
     }
     fn op_set_tile_at(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::set_tile_at(self, a[0], a[1])? as i64)
@@ -2368,6 +2434,38 @@ pub unsafe extern "C-unwind" fn ruleset_tile_named(ptr: i32, len: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_tile_owner(tile: i32) -> i32 {
     with_host(|h| match h.op_tile_owner([tile, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_tile_at(position: i32) -> i32 {
+    with_host(|h| match h.op_tile_at([position, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_position_of_tile(tile: i32) -> i32 {
+    with_host(|h| match h.op_position_of_tile([tile, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_tile_extra_count(tile: i32) -> i32 {
+    with_host(|h| match h.op_tile_extra_count([tile, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_self_position() -> i32 {
+    with_host(|h| match h.op_self_position([0, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3636,6 +3734,30 @@ pub unsafe extern "C-unwind" fn ruleset_trig_tile() -> i32 {
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_position() -> i32 {
+    with_host(|h| match h.op_trig_position([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_move_path_length() -> i32 {
+    with_host(|h| match h.op_trig_move_path_length([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_move_path(index: i32) -> i32 {
+    with_host(|h| match h.op_trig_move_path([index, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_trig_value() -> i32 {
     with_host(|h| match h.op_trig_value([0, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -4708,6 +4830,58 @@ pub unsafe extern "C-unwind" fn ruleset_card_build(player_id: i32, tile: i32) ->
 }
 
 #[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C-unwind" fn ruleset_card_build_as(
+    player_id: i32,
+    tile: i32,
+    charge: i32,
+    amount: i32,
+    numerator: i32,
+    denominator: i32,
+    owner_required: i32,
+) -> i32 {
+    let packed = (denominator << 16) | (numerator & 0xFFFF);
+    with_host(
+        |h| match h.op_card_build_as([player_id, tile, charge, amount, packed, owner_required]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_build_price(tile: i32) -> i32 {
+    with_host(|h| match h.op_build_price([tile, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_build_cost_percent() -> i32 {
+    with_host(|h| match h.op_build_cost_percent([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_build_discount() -> i32 {
+    with_host(|h| match h.op_build_discount([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_tile_buildable(player_id: i32, tile: i32) -> i32 {
+    with_host(|h| match h.op_tile_buildable([player_id, tile, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_set_can_build(on: i32) {
     with_host(|h| match h.op_set_can_build([on, 0, 0, 0, 0, 0]) {
         Ok(_) => {}
@@ -5326,8 +5500,8 @@ pub unsafe extern "C-unwind" fn ruleset_unplace_at(uid: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_tile_at(uid: i32) -> i32 {
-    with_host(|h| match h.op_tile_at([uid, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_tile_of(uid: i32) -> i32 {
+    with_host(|h| match h.op_tile_of([uid, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

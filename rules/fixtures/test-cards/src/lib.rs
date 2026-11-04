@@ -8,7 +8,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use bandori_std::ctx::{self, trigger, CardPile};
 use card_sdk::abi::{
-    prop, roll_source, ActionKind, ChainKind, FilterKind, RollPurpose, TriggerKind,
+    prop, roll_source, ActionKind, BuildCharge, ChainKind, FilterKind, RollPurpose, TriggerKind,
 };
 use card_sdk::serde;
 use card_sdk::{
@@ -2984,6 +2984,311 @@ fn invoker_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A raw **house write** (+1) on the caller's current tile -- raises the
+/// `effect` window over the tile (`houseAdd`, G09 5.4).
+const HOUSE_ADD: CardDef = CardDef::new("TEST:house_add", &[On::Play("", None, house_add)]);
+
+fn house_add(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    let n = ctx::add_house(t, 1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("house_wrote")).tile("tile", t).i("n", n as i64),
+    );
+    Ok(())
+}
+
+/// A raw **house write** (-1) -- raises `houseRemove` and, on a fall,
+/// `houseRemoved` (G09 5.4/5.5).
+const HOUSE_REMOVE: CardDef =
+    CardDef::new("TEST:house_remove", &[On::Play("", None, house_remove)]);
+
+fn house_remove(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    let n = ctx::add_house(t, -1);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("house_wrote")).tile("tile", t).i("n", n as i64),
+    );
+    Ok(())
+}
+
+/// A raw **owner write** on the caller's current tile (owner -> seat 1).
+const OWNER_SET: CardDef = CardDef::new("TEST:owner_set", &[On::Play("", None, owner_set)]);
+
+fn owner_set(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    ctx::set_owner(t, 1);
+    ctx::log(player_id, &Msg::new(key!("owner_wrote")).tile("tile", t));
+    Ok(())
+}
+
+/// `card_build_as` with a `Free` charge and no owner test.
+const BUILD_FREE: CardDef = CardDef::new("TEST:build_free", &[On::Play("", None, build_free)]);
+
+fn build_free(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    let ok = ctx::card_build_as(player_id, t, BuildCharge::Free, 0, 0, 0, false);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("build_tried")).tile("tile", t).i("ok", ok as i64),
+    );
+    Ok(())
+}
+
+/// `card_build_as` with a `Fixed` charge of 100 and the owner test.
+const BUILD_FIXED: CardDef = CardDef::new("TEST:build_fixed", &[On::Play("", None, build_fixed)]);
+
+fn build_fixed(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    let ok = ctx::card_build_as(player_id, t, BuildCharge::Fixed, 100, 0, 0, true);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("build_tried")).tile("tile", t).i("ok", ok as i64),
+    );
+    Ok(())
+}
+
+/// `card_build_as` with a `Scaled` charge of 1/2 of the effective price.
+const BUILD_SCALED: CardDef =
+    CardDef::new("TEST:build_scaled", &[On::Play("", None, build_scaled)]);
+
+fn build_scaled(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    let ok = ctx::card_build_as(player_id, t, BuildCharge::Scaled, 0, 1, 2, true);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("build_tried")).tile("tile", t).i("ok", ok as i64),
+    );
+    Ok(())
+}
+
+/// Build-hook order probe: places itself, then logs at `buildBefore` /
+/// `houseAdded` / `buildAfter` so a test can pin the order.
+const BUILD_PROBE: CardDef = CardDef::new(
+    "TEST:build_probe",
+    &[
+        On::Play("", None, build_probe_play),
+        On::Action(Action::BuildBefore("card.placed", None, build_probe_before)),
+        On::Action(Action::HouseAdded("card.placed", None, build_probe_added)),
+        On::Action(Action::BuildAfter("card.placed", None, build_probe_after)),
+    ],
+);
+
+fn build_probe_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:build_probe", &Msg::new(key!("build_probe_note")));
+    Ok(())
+}
+
+fn build_probe_before(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("probe_build_before")));
+    Ok(())
+}
+
+fn build_probe_added(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("probe_house_added"))
+            .tile("tile", trigger::tile())
+            .i("value", trigger::value() as i64),
+    );
+    Ok(())
+}
+
+fn build_probe_after(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("probe_build_after")));
+    Ok(())
+}
+
+/// Logs every `houseRemoved` (`tile` / `value`).
+const HOUSE_REMOVED_PROBE: CardDef = CardDef::new(
+    "TEST:house_removed_probe",
+    &[
+        On::Play("", None, house_removed_probe_play),
+        On::Action(Action::HouseRemoved("card.placed", None, house_removed_probe)),
+    ],
+);
+
+fn house_removed_probe_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(
+        player_id,
+        "TEST:house_removed_probe",
+        &Msg::new(key!("house_removed_probe_note")),
+    );
+    Ok(())
+}
+
+fn house_removed_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("house_removed_seen"))
+            .tile("tile", trigger::tile())
+            .i("value", trigger::value() as i64),
+    );
+    Ok(())
+}
+
+/// A [反击] on the tile-effect window that arms `SUPPRESS_TILE_EFFECTS` for
+/// the governing tile (the marina gesture).
+const TILE_EFFECT_COUNTER: CardDef = CardDef::new(
+    "TEST:tile_effect_counter",
+    &[On::Counteract(
+        &[ChainKind::TileEffectBefore],
+        "",
+        None,
+        tile_effect_counter,
+    )],
+);
+
+fn tile_effect_counter(player_id: i32) -> card_sdk::Asked {
+    let t = trigger::tile();
+    ctx::plan::set_tag(card_sdk::abi::tag::SUPPRESS_TILE_EFFECTS, t);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tile_effect_suppressed")).tile("tile", t),
+    );
+    Ok(())
+}
+
+/// Places itself on the caller's current tile and binds the swap to
+/// 弦卷集团 (`set_swapped_tile`).
+const SWAP_PROBE: CardDef = CardDef::new("TEST:swap_probe", &[On::Play("", None, swap_probe)]);
+
+fn swap_probe(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    let group = ctx::tile_named("弦卷集团");
+    if here < 0 || group < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card_on(player_id, here, "TEST:swap_probe", &Msg::new(key!("swap_probe_note")));
+    ctx::set_swapped_tile(group);
+    Ok(())
+}
+
+/// Logs the settle's governing tile and physical slot (dispatch check).
+const TILE_ID_PROBE: CardDef = CardDef::new(
+    "TEST:tile_id_probe",
+    &[
+        On::Play("", None, tile_id_probe_play),
+        On::Action(Action::Settle("", None, tile_id_probe)),
+    ],
+);
+
+fn tile_id_probe_play(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    if here < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card_on(player_id, here, "TEST:tile_id_probe", &Msg::new(key!("tile_id_probe_note")));
+    Ok(())
+}
+
+fn tile_id_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tile_id_seen"))
+            .tile("tile", trigger::tile())
+            .i("position", trigger::position() as i64),
+    );
+    Ok(())
+}
+
+/// Logs the `Paid` settle's move path (length + every governed tile).
+const PATH_PROBE: CardDef = CardDef::new(
+    "TEST:path_probe",
+    &[
+        On::Play("", None, path_probe_play),
+        On::Action(Action::Paid("card.placed", None, path_probe)),
+    ],
+);
+
+fn path_probe_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:path_probe", &Msg::new(key!("path_probe_note")));
+    Ok(())
+}
+
+fn path_probe(player_id: i32) -> card_sdk::Asked {
+    let n = trigger::move_path_length();
+    let mut m = Msg::new(key!("path_seen")).i("n", n as i64);
+    for i in 0..n {
+        m = m.tile("tile", trigger::move_path(i));
+    }
+    ctx::log(player_id, &m);
+    Ok(())
+}
+
+/// A raw **house set** to 1 on the caller's current tile (`houseSet`, G09 5.4).
+const HOUSE_SET: CardDef = CardDef::new("TEST:house_set", &[On::Play("", None, house_set)]);
+
+fn house_set(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    ctx::set_houses(t, 1);
+    ctx::log(player_id, &Msg::new(key!("house_wrote")).tile("tile", t));
+    Ok(())
+}
+
+/// Vetoes any build at `buildBefore` (`set_cancelled`).
+const BUILD_VETO: CardDef = CardDef::new(
+    "TEST:build_veto",
+    &[
+        On::Play("", None, build_veto_play),
+        On::Action(Action::BuildBefore("card.placed", None, build_veto)),
+    ],
+);
+
+fn build_veto_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:build_veto", &Msg::new(key!("build_veto_note")));
+    Ok(())
+}
+
+fn build_veto(_player_id: i32) -> card_sdk::Asked {
+    ctx::trigger::set_cancelled();
+    Ok(())
+}
+
+/// Charges `who` a full rent on the caller's current tile without a settle --
+/// raises `Paid`, so a path probe can show a move-less rent has length 0.
+const RENT_CHARGE: CardDef =
+    CardDef::new("TEST:rent_charge", &[On::Play("", None, rent_charge)]);
+
+fn rent_charge(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    if t < 0 {
+        return Ok(());
+    }
+    // Charge the *other* seat -- a self-charge is not the shape a rent probe
+    // wants to see.
+    ctx::charge_rent(1 - player_id, t, 1_000)?;
+    Ok(())
+}
+
 card_sdk::ruleset!(&[
     RELAY,
     RECURSE,
@@ -3108,5 +3413,20 @@ card_sdk::ruleset!(&[
     PLAN_DECLINE,
     DUAL_ACTION,
     INVOKED,
-    INVOKER
+    INVOKER,
+    HOUSE_ADD,
+    HOUSE_REMOVE,
+    OWNER_SET,
+    BUILD_FREE,
+    BUILD_FIXED,
+    BUILD_SCALED,
+    BUILD_PROBE,
+    HOUSE_REMOVED_PROBE,
+    TILE_EFFECT_COUNTER,
+    SWAP_PROBE,
+    TILE_ID_PROBE,
+    PATH_PROBE,
+    HOUSE_SET,
+    BUILD_VETO,
+    RENT_CHARGE
 ]);

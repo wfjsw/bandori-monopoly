@@ -67,6 +67,9 @@ pub fn fill_named_layers(p: &mut PlayerSnap) {
 #[serde(default)]
 pub struct TileSnap {
     pub id: i64,
+    /// The board **slot** the event happened at (`-1` where there is none).
+    /// Equal to `id` with no swap; `tile.id` stays the governing tile.
+    pub position: i64,
     /// Owning seat (`-1` = unowned / bank).
     pub owner: i64,
     pub houses: i64,
@@ -138,6 +141,9 @@ pub struct WindowCtx {
     /// Trigger target seat (`-1` = none).
     pub target: i64,
     pub tile: TileSnap,
+    /// Per board slot, the tile standing there (the snapshot's `tile_at`);
+    /// `players_on` resolves a stander's slot through it.
+    pub tile_at: Vec<i64>,
     pub value: i64,
     pub step: i64,
     /// `by_card` owner seat (`-1` = none).
@@ -229,6 +235,7 @@ impl Default for WindowCtx {
             actor: -1,
             target: -1,
             tile: TileSnap::default(),
+            tile_at: Vec::new(),
             value: 0,
             step: 0,
             by: -1,

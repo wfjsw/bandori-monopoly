@@ -144,7 +144,7 @@ fn sync_circle_instance(group: i32) {
     // governs the CiRCLE square and is left alone).
     let borrowed = ctx::field_instances(-1)
         .into_iter()
-        .find(|(uid, id)| id == "tile:circle" && ctx::tile_at(*uid) == Some(group))
+        .find(|(uid, id)| id == "tile:circle" && ctx::tile_of(*uid) == Some(group))
         .map(|(uid, _)| uid);
     if has && borrowed.is_none() {
         ctx::place_card_on(

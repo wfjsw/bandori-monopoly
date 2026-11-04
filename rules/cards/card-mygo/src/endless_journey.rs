@@ -44,7 +44,7 @@ fn endless_journey(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card_on(
         player_id,
-        ctx::player_pos(player_id),
+        ctx::tile_at(ctx::player_pos(player_id)),
         ID,
         &Msg::new(key!("endless_journey_note")),
     );

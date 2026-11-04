@@ -500,6 +500,29 @@ pub enum HostRequest {
     Linger { player_id: i32, expires: i32 },
     /// Pay and raise one house on `tile`.
     Build { player_id: i32, tile: i32 },
+    /// v114: the general build verb. Runs the full pipeline (gate, hooks,
+    /// price, charge, commit). `charge` is a [`card_sdk::abi::BuildCharge`]
+    /// wire value: `Fixed` uses `amount`, `Scaled` uses `numerator` /
+    /// `denominator` of the effective price; `owner_required` adds the owner
+    /// test to the gate. Answers `1` iff a house committed.
+    BuildAs {
+        player_id: i32,
+        tile: i32,
+        charge: i32,
+        amount: i32,
+        numerator: i32,
+        denominator: i32,
+        owner_required: i32,
+    },
+    /// v114: a guest **tile write** (`set_houses` / `add_house` / `set_owner`).
+    /// Declares an effect and opens the `effect` window, then applies unless
+    /// cancelled. Answers the post value (owner for `SetOwner`), or the
+    /// pre-write value when cancelled.
+    TileWrite {
+        operation: TileWriteOperation,
+        tile: i32,
+        value: i32,
+    },
     /// Prompt to build on one of `tiles`, then build.
     OfferBuild { player_id: i32, tiles: Vec<i32> },
     /// Mortgage one of the player's deeds.
@@ -635,6 +658,8 @@ pub enum HostRequest {
         /// The tile the raise is about (`t.tile`) -- filter pres like
         /// `tile.id == tile_named('…')` read it.
         tile: i32,
+        /// The board position of the raise (`t.position`), `-1` when none.
+        position: i32,
         /// The raise's card provenance (`t.card`). Only the body wrapper's
         /// `cardFired` sets it, so a hook can answer `card_is('skill:…')` or
         /// `card.is_skill`. `player_id` is that raise's cause (`t.by_card`) --
@@ -690,6 +715,25 @@ pub enum HostRequest {
         /// gain (raises `markerGain`).
         delta: i32,
     },
+}
+
+/// Which tile field a [`HostRequest::TileWrite`] writes.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileWriteOperation {
+    SetHouses = 0,
+    AddHouses = 1,
+    SetOwner = 2,
+}
+
+impl TileWriteOperation {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::AddHouses,
+            2 => Self::SetOwner,
+            _ => Self::SetHouses,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -4468,9 +4512,95 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "tile_at",
+        "tile_of",
         |mut c: C<W>, uid: i32| -> Result<i32, Error> {
-            hostfns::tile_at(&mut c, uid).map_err(HostError::into_err)
+            hostfns::tile_of(&mut c, uid).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_at",
+        |mut c: C<W>, position: i32| -> Result<i32, Error> {
+            hostfns::tile_at(&mut c, position).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "position_of_tile",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::position_of_tile(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_extra_count",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_extra_count(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "self_position", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::self_position(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "build_price",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::build_price(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "build_cost_percent", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::build_cost_percent(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "build_discount", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::build_discount(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "tile_buildable",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_buildable(&mut c, player_id, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_build_as",
+        |mut c: C<W>,
+         player_id: i32,
+         tile: i32,
+         charge: i32,
+         amount: i32,
+         numerator: i32,
+         denominator: i32,
+         owner_required: i32|
+         -> Result<i32, Error> {
+            hostfns::card_build_as(
+                &mut c,
+                player_id,
+                tile,
+                charge,
+                amount,
+                numerator,
+                denominator,
+                owner_required,
+            )
+            .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "trig_position", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_position(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "trig_move_path_length",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_path_length(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_path",
+        |mut c: C<W>, index: i32| -> Result<i32, Error> {
+            hostfns::trig_move_path(&mut c, index).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(

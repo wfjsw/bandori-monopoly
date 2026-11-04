@@ -65,7 +65,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if bandori_std::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if ctx::player_pos(player_id) == shop() {
+    if ctx::tile_at(ctx::player_pos(player_id)) == shop() {
         return Some(Msg::new(key!("tomoe_at_shop")));
     }
     if bandori_std::fire::get(player_id) < 1 {
@@ -80,14 +80,15 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if shop < 0 {
         return Ok(());
     }
+    let shop_position = ctx::position_of_tile(shop);
     let here = ctx::player_pos(player_id);
-    if here == shop {
+    if ctx::tile_at(here) == shop {
         return Ok(());
     }
     // 「向绝对距离…更近的方向」 -- whichever way shortens `dist`.
     let fwd = ctx::tile_steps_ahead(player_id, 10);
     let back = ctx::tile_steps_ahead(player_id, -10);
-    let toward = if ctx::dist(fwd, shop) <= ctx::dist(back, shop) {
+    let toward = if ctx::dist(fwd, shop_position) <= ctx::dist(back, shop_position) {
         fwd
     } else {
         back
@@ -100,14 +101,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「若你因此效果导致起点向前移动并超过了"银河拉面馆"，你补充一个火罐」 --
     // the overshoot is the start landing strictly past the shop on the approach
     // side, which the direction pick makes a wrap. Refund when it wrapped past.
-    let before = ctx::dist(here, shop);
-    let after = ctx::dist(toward, shop);
+    let before = ctx::dist(here, shop_position);
+    let after = ctx::dist(toward, shop_position);
     if after > before {
         bandori_std::fire::gain(player_id, 1, &Msg::new(key!("tomoe_refund")))?;
     }
     ctx::log(
         player_id,
-        &Msg::new(key!("tomoe_moved")).tile("tile", toward),
+        &Msg::new(key!("tomoe_moved")).tile("tile", ctx::tile_at(toward)),
     );
     Ok(())
 }

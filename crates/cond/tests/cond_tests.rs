@@ -38,11 +38,13 @@ fn win() -> WindowCtx {
         target: -1,
         tile: TileSnap {
             id: 3,
+            position: 3,
             owner: 0,
             houses: 2,
             mortgaged: 0,
             price: 400,
         },
+        tile_at: (0..60).collect(),
         value: 6000,
         step: 4,
         by: 1,

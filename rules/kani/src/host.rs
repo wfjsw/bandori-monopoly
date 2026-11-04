@@ -365,6 +365,18 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 board::TILES[s as usize].house_cost as i64
             }
         }
+        // G09 §5.7: no percent / cut in the model, so the price is the base.
+        Op::build_price | Op::build_cost => {
+            let s = board::tile_slot(a0);
+            if s < 0 {
+                0
+            } else {
+                board::TILES[s as usize].house_cost as i64
+            }
+        }
+        Op::build_cost_percent => 100,
+        Op::build_discount => 0,
+        Op::tile_buildable => 1,
         Op::mortgage_value => {
             let s = board::tile_slot(a0);
             if s < 0 {
@@ -630,6 +642,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 w.field[0].tile
             }
         }) as i64,
+        // The model keeps no slot apart from the tile (§5.7).
+        Op::self_position => world::with_world(|w| {
+            if w.field_n == 0 {
+                w.pos[player_idx(w.trig_player)]
+            } else {
+                w.field[0].tile
+            }
+        }) as i64,
         Op::set_self_tile => world::with_world_mut(|w| {
             if w.field_n == 0 {
                 0
@@ -695,7 +715,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
         }),
         // `tile_at` / `set_tile_at` — field-instance placement (hostfns 535–543).
-        Op::tile_at => world::with_world(|w| w.tile_at(a0)) as i64,
+        // The ABI `tile_at(p)` is position -> standing tile (identity here; the
+        // swap itself is proved in `spec::abi_g09`). `tile_of(uid)` is the
+        // instance reader.
+        Op::tile_of => world::with_world(|w| w.tile_at(a0)) as i64,
+        Op::tile_at => a0 as i64,
+        Op::position_of_tile => a0 as i64,
+        Op::tile_extra_count => 0,
         Op::set_tile_at => world::with_world_mut(|w| {
             let ok = w.set_tile_at(a0, a1);
             if ok {
@@ -937,6 +963,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_value => arm_trig_value(a),
         Op::trig_target => arm_trig_target(a),
         Op::trig_tile => arm_trig_tile(a),
+        // No slot in the model: the position reads as the tile (§5.7).
+        Op::trig_position => arm_trig_tile(a),
         Op::trig_name => arm_trig_name(a),
         Op::trig_step => 0,
         Op::trig_by_card => 0,
@@ -982,6 +1010,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 1
             }
         }),
+        // No path in the model: length 0, every index 0 (§5.7).
+        Op::trig_move_path_length => 0,
+        Op::trig_move_path => 0,
         Op::trig_move_remaining => world::with_world(|w| {
             if w.move_snap.present() {
                 w.move_snap.remaining as i64
@@ -1184,6 +1215,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::offer_force_buy
         | Op::offer_build
         | Op::card_build
+        | Op::card_build_as
         | Op::card_buy
         | Op::card_offer_build
         | Op::settle_tile_at

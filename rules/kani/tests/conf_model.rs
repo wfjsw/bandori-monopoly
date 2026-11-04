@@ -959,6 +959,7 @@ impl CardWorld for ConfWorld {
                 settle_redirect: false,
                 rolled: self.move_roll >= 0,
                 effective: self.move_remaining,
+                path: Vec::new(),
             });
         }
         if self.trig_pay_kind >= 0 || self.trig_pay_is_rent {

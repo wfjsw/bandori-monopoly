@@ -346,19 +346,22 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   onTile: (i: number) => void;
 }) {
   const S = m.S;
-  const t = D.tiles[i];
+  // The slot draws the tile standing there (`MatchState.tileAt`); identity
+  // with no swap. `i` stays the slot, `ti` is the tile.
+  const ti = S.tileAt?.[i] ?? i;
+  const t = D.tiles[ti];
   const [col, row] = cell(i);
-  const owner = S.owners[i] ?? -1;
+  const owner = S.owners[ti] ?? -1;
   const cardFocus = useCardTileFocus(i);
   const seatFocus = useSeatFocus(owner);
   const focus = cardFocus || seatFocus;
-  const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.dest);
+  const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[ti] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.dest);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
-  const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
-  const marks = tileMarks.filter((x) => x.tile === i && x.category !== "designate").slice(0, 3);
-  const embers = S.embers?.[i] ?? 0;
-  const quote = m.v.tileQuotes?.[i] ?? null;
+  const designations = tileMarks.filter((x) => x.tile === ti && x.category === "designate");
+  const marks = tileMarks.filter((x) => x.tile === ti && x.category !== "designate").slice(0, 3);
+  const embers = S.embers?.[ti] ?? 0;
+  const quote = m.v.tileQuotes?.[ti] ?? null;
   const quoteTipLine = quote ? quoteTip(quote) : t.price > 0 ? `${tr("deed.price")} ${t.price}` : "";
   const markTip = (x: { category: string; owner: number; card: string; note?: Msg | null; count: number; kind: string }) => {
     const cp = x.category === "cp";
@@ -380,7 +383,7 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   };
   const extras = (
     <>
-      <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
+      <div className={s.houses}>{Array.from({ length: Math.min(S.houses[ti] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
       {designations.length > 0 && (
         <div className={s.desig}>
           {designations.slice(0, 1).map((x) => {
@@ -431,7 +434,7 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
           })}
           {embers > 0 && (
             <MarkPill
-              tipKey={`embers:${i}`}
+              tipKey={`embers:${ti}`}
               className={cx(s.mark, s.ember)}
               label={String(embers)}
               title={tr("board.embers", { n: embers })}
@@ -453,7 +456,7 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
       style={style}
       aria-label={`${t.index}. ${plain(t.name)}`}
       title={`${t.index}. ${plain(t.name)}${quoteTipLine ? ` · ${quoteTipLine}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
-      onClick={() => onTile(i)}
+      onClick={() => onTile(ti)}
       onMouseEnter={picked ? () => onHover(i) : undefined}
       onMouseLeave={picked ? () => onHover(null) : undefined}
     >
@@ -473,12 +476,16 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
 export const Ring = memo(function Ring({ m, animPos, animRoute, hop, pickable, walk, onTile, roll }: RingProps) {
   const S = m.S;
   const [hovered, setHovered] = useState<number | null>(null);
+  // Prompt picks are tiles; the board highlights slots.
+  const slotOf = new Map<number, number>();
+  (S.tileAt ?? []).forEach((tile, slot) => slotOf.set(tile, slot));
+  const pick = new Set(pickable.map((tile) => slotOf.get(tile) ?? tile));
   // The tiles stepped over on the shorter way round to the hovered pick.
   const trail = new Set<number>();
   const route = animRoute ?? [];
   const dest = route.length > 0 ? route[route.length - 1] : -1;
   for (const q of route.slice(0, -1)) trail.add(q);
-  if (walk && hovered !== null && pickable.includes(hovered)) {
+  if (walk && hovered !== null && pick.has(hovered)) {
     const n = D.tiles.length;
     const from = m.me.pos;
     const fwd = (((hovered - from) % n) + n) % n;
@@ -486,7 +493,6 @@ export const Ring = memo(function Ring({ m, animPos, animRoute, hop, pickable, w
     for (let k = 1, len = Math.min(fwd, n - fwd); k < len; k++) trail.add((((from + dir * k) % n) + n) % n);
   }
   const pos = animPos ?? S.players.map((x) => x.pos);
-  const pick = new Set(pickable);
   const vp = useBoardViewport();
   const hoverSeat = useHoverSeat();
   const wrapRef = vp.wrapRef;

@@ -848,6 +848,35 @@ pub fn build_cost<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().build_cost(tile) })
 }
 
+pub fn build_price<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
+    Ok({ c.st().wr().build_price(tile) })
+}
+
+pub fn build_cost_percent<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().build_cost_percent())
+}
+
+pub fn build_discount<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().build_discount())
+}
+
+pub fn tile_buildable<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().tile_buildable(player_id, tile) as i32)
+}
+
+pub fn tile_at<C: HostCtx>(c: &mut C, position: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().tile_standing_at(position))
+}
+
+pub fn position_of_tile<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
+    Ok(c.st().wr().position_of_tile(tile))
+}
+
+pub fn tile_extra_count<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
+    let v = c.st().wr().tile_extra_count(tile);
+    Ok(v)
+}
+
 pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
     Ok({ c.st().wr().mortgage_value(tile) })
 }
@@ -921,7 +950,7 @@ pub fn unplace_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
     Ok({ c.st_mut().w().unplace_at(uid) })
 }
 
-pub fn tile_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
+pub fn tile_of<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
     Ok(c.st().wr().tile_at(uid))
 }
 
@@ -984,12 +1013,22 @@ pub fn rent_houses_of<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 }
 
 pub fn set_houses<C: HostCtx>(c: &mut C, tile: i32, n: i32) -> Result<(), HostError> {
-    c.st_mut().w().set_houses(tile, n);
+    let req = HostRequest::TileWrite {
+        operation: crate::host::TileWriteOperation::SetHouses,
+        tile,
+        value: n,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)?;
     Ok(())
 }
 
 pub fn add_house<C: HostCtx>(c: &mut C, tile: i32, n: i32) -> Result<i32, HostError> {
-    Ok({ c.st_mut().w().add_house(tile, n) })
+    let req = HostRequest::TileWrite {
+        operation: crate::host::TileWriteOperation::AddHouses,
+        tile,
+        value: n,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
 }
 
 pub fn mortgaged_of<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
@@ -1002,7 +1041,12 @@ pub fn set_mortgaged<C: HostCtx>(c: &mut C, tile: i32, v: i32) -> Result<(), Hos
 }
 
 pub fn set_owner<C: HostCtx>(c: &mut C, tile: i32, player_id: i32) -> Result<(), HostError> {
-    c.st_mut().w().set_owner(tile, player_id);
+    let req = HostRequest::TileWrite {
+        operation: crate::host::TileWriteOperation::SetOwner,
+        tile,
+        value: player_id,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)?;
     Ok(())
 }
 
@@ -1361,6 +1405,10 @@ pub fn is_placed<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 
 pub fn self_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().self_tile())
+}
+
+pub fn self_position<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().self_position())
 }
 
 pub fn set_self_tile<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError> {
@@ -1826,6 +1874,7 @@ pub fn raise_as<C: HostCtx>(
         kind: kind.to_string(),
         value,
         tile,
+        position: trig.position,
         card: card.map(str::to_string),
         deal_owner,
         deal_houses,
@@ -2578,6 +2627,29 @@ pub fn card_build<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i3
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn card_build_as<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    charge: i32,
+    amount: i32,
+    numerator: i32,
+    denominator: i32,
+    owner_required: i32,
+) -> Result<i32, HostError> {
+    let req = HostRequest::BuildAs {
+        player_id,
+        tile,
+        charge,
+        amount,
+        numerator,
+        denominator,
+        owner_required,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)
+}
+
 pub fn card_offer_build<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -2773,7 +2845,13 @@ pub fn ask<C: HostCtx>(
     let (options, prices, ai_hint, count, answer_slot) = {
         let st = c.st_mut();
         let options = std::mem::take(&mut st.options);
-        if kind != PromptKind::YesNo && options.is_empty() {
+        // A replayed prompt answers from the log, so its option list need not
+        // be rebuilt: a body that re-runs after one of its own host writes may
+        // no longer derive any candidate (the write changed the world it read)
+        // and still resolves. Only a prompt about to be *shown* must offer
+        // something.
+        let replayed = st.answers.get(st.next_answer).is_some();
+        if kind != PromptKind::YesNo && options.is_empty() && !replayed {
             return Err(HostError::trap(format!(
                 "{} prompt with no options",
                 kind.as_str()
@@ -2788,7 +2866,7 @@ pub fn ask<C: HostCtx>(
     // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
     // In simulation mode the provider answers inline (or declines and
     // this pauses, tree-relevant prompts only).
-    crate::inline::prompt_or_pause(
+    let dbg = crate::inline::prompt_or_pause(
         c,
         Prompt {
             kind,
@@ -2801,7 +2879,8 @@ pub fn ask<C: HostCtx>(
             ai_hint,
             count,
         },
-    )
+    );
+    dbg
 }
 
 /// The raise's [`TriggerKind`] wire **spelling** (`TriggerKind::spelling`).
@@ -2821,6 +2900,24 @@ pub fn trig_target<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 
 pub fn trig_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st().wr().trigger().tile)
+}
+
+pub fn trig_position<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().position)
+}
+
+pub fn trig_move_path_length<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().mv.as_ref().map_or(0, |m| m.path.len() as i32))
+}
+
+pub fn trig_move_path<C: HostCtx>(c: &mut C, index: i32) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .mv
+        .as_ref()
+        .and_then(|m| m.path.get(index.max(0) as usize).copied())
+        .unwrap_or(-1))
 }
 
 pub fn trig_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {

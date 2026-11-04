@@ -349,11 +349,20 @@ entry arm forwards it (`raise!(@set $cx, __trigger …)`) and the arms bind
     $t.tile = $s;
     $t.position = $cx.position_of_tile($s);
 }};
+(@set $cx:expr, $t:ident, slot = $p:expr) => {{
+    $t.position = $p;
+}};
 ```
 
 `PlayCtx::tile_at` / `PlayCtx::position_of_tile` delegate to the world (§5.1).
 Arms assign in written order, so a site that already knows both writes
-`position = p, tile = s` and the explicit `tile` wins.
+`position = p, tile = s`; the explicit `tile` wins and derives the position.
+`slot = p` exists for the case the derivation gets wrong: one that knows both
+**independently**, because the position is not `tile`'s standing slot. The only
+such site is `tileResolved` (`play.rs`'s `settle_at`), which carries the
+governing tile yet whose "this physical slot" test must see the slot the settle
+ran at -- `tile = tl, slot = at` (the `tile` arm's derivation would rewrite it
+to `position_of_tile(tl)`).
 
 ### 4.4 Constants
 
@@ -394,9 +403,11 @@ pub fn position_of_tile(t: i32) -> i32;
 /// there) -- the value of the engine's `tile_at`.
 pub fn tile_at(p: i32) -> i32;
 
-/// How many *extra* instances (non-`tile:` cards) lie on tile `t`. The tile
-/// carries its extras, so this is identity-keyed and does not move when the
-/// tile's position does.
+/// How many *extra* effects lie on tile `t`: instances whose card is not the
+/// tile's own `tile:` rule (a player card through the tile standing at its
+/// slot, a board instance by its own tile) plus tile marks. The tile carries
+/// its extras, so the count is keyed by the **governing** tile and a swap
+/// moves it with the tile, not the slot.
 pub fn tile_extra_count(t: i32) -> i32;
 
 /// The board position **this instance** sits at (its placement slot). The
@@ -645,7 +656,25 @@ travel with it, they are not re-anchored). The board list (`:6083`), the job
 collector (`:6346`) and `settle_tile` keep filtering by `f.tile == t.tile` (board
 instances are never placed on a slot other than their tile). The **player-field
 loop** (`:5983`) and `tile_extra_count` filter by `tile_at(f.position()) ==
-t.tile`: a card standing on a swapped slot hears the tile it displays. Because
+t.tile`: a card standing on a swapped slot hears the tile it displays. One
+refinement of that narrowing:
+
+* **Only tile-local kinds narrow** (`tile_local_kind`,
+  `wasm_rules.rs:76`): the tile's effect window and the house / owner / build
+  writes -- `tileEffectBefore`, `houseAdded`, `houseRemoved`, `houseAdd`,
+  `houseRemove`, `ownerSet`, `buildBefore`, `buildAfter`. Every other kind is
+  raised with whichever tile it concerns and may be answered from anywhere, so
+  narrowing it would drop listeners whose guard reads `trigger.tile` precisely
+  *because* their own tile is not it: `passTile` (练习室里的风暴 (1) collects
+  from a distance), `paySplitAdd` (`PPP:Tomorrow's Door` (3) taxes a settle
+  from the owner's area), `effect` (a counteraction is answered from wherever
+  its card lies), and every settle raiser (`settleBody`, `rentAdd`, …).
+* **`tileResolved` compares the slot, not the narrow.** Its one question is
+  "was this physical slot the one settled", and the raiser stamps
+  `tile = tl, slot = at`, so the terminal matches `f.position() ==
+  trigger.position()` (falling back to `f.tile`, which a board instance
+  answers with its identity tile). This is also why the raiser cannot use the
+  `tile =` arm alone (§4.3). Because
 `self_tile()` returns that same governing tile and CEL `card.tile` is compiled
 to it, every existing guard (`trigger.tile == self_tile`, `card.tile ==
 tile.id`) keeps working -- no per-guard edit, and `World::card_tile` (the source of CEL `card.tile`) is
@@ -782,10 +811,11 @@ intended: "本次"). The tag dies with the move (5.6), so the next move is
 normal.
 
 `tile_extra_count(t)` implements the same classification for guards (counts
-board + player instances on `t` whose id is not `tile:`). It is the residual
-guard's 「受到其他效果影响」 test; the CEL condition keeps only
-`tile_is(tile.id, "circle")` (6.1), and `condition::MINE`'s text carries the
-「[使用者]」 half.
+board instances on `t`, player instances whose slot displays `t`, and tile
+marks on `t`; none of them a `tile:` base). It is the residual guard's
+「受到其他效果影响」 test -- a [CP点] is the case that is not an instance at
+all; the CEL condition keeps only `tile_is(tile.id, "circle")` (6.1), and
+`condition::MINE`'s text carries the 「[使用者]」 half.
 
 ### 5.3 The one build pipeline (item 3)
 
@@ -994,15 +1024,19 @@ card armed.
 Stubs in `rules/kani/src/host.rs`: `build_cost_percent` = 100,
 `build_discount` = 0, `build_price` = the tile's base cost (the stub's own
 `build_cost` table), `tile_buildable` = 1, `tile_extra_count` = 0,
-`card_build_as` = 1, `trigger_position` = the trigger tile, `position_of_tile` =
+`card_build_as` = 1, `trig_position` = the trigger tile, `position_of_tile` =
 the argument, `tile_at` = the argument, `self_position` = `self_tile`,
-`move_path_length` = 0, `move_path` = 0.
-The swap needs no op: `set_prop(prop::SWAPPED_TILE, …)` is the existing op.
+`trig_move_path_length` = 0, `trig_move_path` = 0, `tile_of` = the world's own
+`tile_at`. The swap needs no op: `set_prop(prop::SWAPPED_TILE, …)` is the
+existing op.
 
-The pure model lives in `rules/kani/src/spec/abi_g09.rs`: `price_of(base, percent,
-cut)`, `suppressed(tag_value, trigger_tile, trigger_position, instance_tile,
-is_base)`, `fall_raised(before, after)`, `pipeline_commits(...)`. Proofs are
-§9.4.
+The pure model lives in `rules/kani/src/spec/abi_g09.rs`:
+`price_of(base, percent, cut)`, `suppressed(tag_value, trigger_tile,
+trigger_position, instance_tile, is_base)`, `fall_raised(before, after)`,
+`pipeline_commits(gate, before_stands, payable, takes_house)`, the one-record
+`Swap` / `tile_at` / `position_of_tile` / `start_never_travels` pair, and
+`travel(start, steps)` / `start + i`. Each has a mutant beside it that
+disagrees where the hazard is. Proofs are §9.4.
 
 ---
 
@@ -1087,11 +1121,13 @@ through `settle_tile_at`, keyed `TAG_REDIRECT` / `TAG_AS_AGENT`; no pass half.
   at its slot, so re-slotting to the endpoint makes it `(endpoint, group)`: the endpoint position now resolves to the group (which is
   (1)'s point and lets the (1) settle run as agent), and the card, placed on the
   endpoint tile, stays drawn at that slot (the view draws the group's face
-  there, so the card sits on the group). Its 「卡仍位于弦卷集团」 condition is
-  `card.tile == tile_named('弦卷集团')` (unchanged -- the anchor is the tile),
-  plus `trigger::position() != ctx::self_position()`: after (2) the endpoint
-  slot displays the group, so `card.tile` alone would still read as "on the
-  group" and offer (2) a second time on the very next settle. A card-initiated
+  there, so the card sits on the group). Its 「卡仍位于弦卷集团」 condition is the **physical square**,
+  `self_position() == tile_named('弦卷集团')`, plus
+  `trigger::position() != ctx::self_position()`: after (2) the endpoint slot
+  displays the group, so a display-tile read (`card.tile`, equal to
+  `self_tile()`) would still say "on the group" and offer (2) a second time on
+  the very next settle. The qualifier is what keeps (2)'s
+  「移除其上全部晶体」 from discarding a card that has left the group's square. A card-initiated
   settle is still excluded by `settle_after_guard`.
 
 The endpoint tile *is* `trigger::tile()`: the mover's endpoint position resolves
@@ -1428,6 +1464,9 @@ in `rules/kani/src/proofs/abi_g09.rs`:
   unchanged for every `p` where the start prop is read.
 
 Card bodies stay PROTOCOL-LEVEL; the proofs sit on the pure SDK-side model.
+All seven run green (`tools/kani/run.sh --unit abi_g09`). Pillar 6's
+`houseRemoved` proofs sit beside the existing `ringing_bloom` suite; their
+hooks added `recompute_view_kani` / `on_discarded_kani` wrappers (9.1).
 
 ---
 

@@ -88,29 +88,36 @@ fn ceil10(num: i32, den: i32) -> i32 {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
+    let mut asked = 0;
     let mut picked: Vec<i32> = Vec::new();
-    let mut pool: Vec<i32> = built(player_id);
-    if pool.is_empty() {
+    if ctx::owned_tiles(player_id).is_empty() {
         return Ok(());
     }
-    while picked.len() < 4 && !pool.is_empty() {
-        if pool.len() + picked.len() <= 4 {
-            // Designate the remainder in one pass. A tile a 「有标记时此地块不能
-            // 被指定」 mark refuses stays out of the designated set.
-            while let Some(t) = pool.pop() {
-                if ctx::target_tile(t) {
-                    picked.push(t);
-                }
-            }
-            break;
-        }
+    // The body replays from the top at every host request (a tile write
+    // pauses, 5.4) and the request answers are replayed **by position**. Two
+    // consequences, both handled here:
+    //
+    // * `askTile` answers an *index* into the option list, so the list has to
+    //   be the same on every pass. `built()` is not: step 1 strips its houses
+    //   as the pass goes. The options are therefore the player's owned tiles,
+    //   sorted, which nothing in this body changes.
+    // * Every pass must issue the same pauses. The designation runs a fixed
+    //   four times and the demolition below writes every pick, so a tile whose
+    //   house is already gone just takes a clamped, log-less write.
+    //
+    // TODO(规则书)（四个有房子的格子）: the options offer every owned tile, so a
+    // house-less one can be designated; the rule names tiles with houses.
+    let mut owned = ctx::owned_tiles(player_id);
+    owned.sort_unstable();
+    while picked.len() < 4 && asked < 4 {
+        asked += 1;
         let t = ctx::ask_tile(
             player_id,
             &Msg::new(key!("sunset_title")),
             &Msg::new(key!("sunset_pick")).i("n", picked.len() as i64 + 1),
-            &pool,
+            &owned,
         )?;
-        pool.retain(|&x| x != t);
+        owned.retain(|&x| x != t);
         if ctx::target_tile(t) {
             picked.push(t);
         }
@@ -122,10 +129,32 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if targets.is_empty() {
         return Ok(());
     }
+    // Step 1 goes before step 2's sum so the sum can be read back off the
+    // writes (see below); only `x`'s own log line moves behind the
+    // demolitions. A replay has already applied the prefix of them: a tile
+    // that is done answers its count unchanged (`left == before`), and since
+    // the write removes exactly one house, its pre-write count is
+    // `before + 1`. A first removal answers one less than it found, so its
+    // count is `before`. Guest state (a prop, a slot) would not do: only a
+    // host request lands in the world the next pass re-reads (design 5.4).
     let mut sum = 0;
     for &t in &picked {
-        sum += ctx::tile_price(t) + ctx::houses_of(t) * ctx::build_cost(t);
+        let before = ctx::houses_of(t);
+        let left = ctx::add_house(t, -1);
+        // 规则书[手]: 「被[指定]格子的地契价格和建造已有房屋的造价之和」 -- the
+        // houses standing before this card's own removal.
+        let had = if left < before { before } else { before + 1 };
+        sum += ctx::tile_price(t) + had * ctx::build_cost(t);
+        if left < before {
+            ctx::log(
+                player_id,
+                &Msg::new(key!("sunset_demolish"))
+                    .tile("tile", t)
+                    .i("left", left as i64),
+            );
+        }
     }
+    // 规则书[手]: 「将X设为…向上取整10」, halved before round 100.
     let n = targets.len() as i32;
     let mut x = ceil10(sum, n.max(1));
     if ctx::round_no() < 100 {
@@ -138,17 +167,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // Untargetable / the `target` [反击] window; no redirect on `TargetAll`) and `got`
     // keeps only the players actually hit.
     let got = ctx::target_all(&targets);
-    for &t in &picked {
-        if ctx::houses_of(t) > 0 {
-            let left = ctx::add_house(t, -1);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("sunset_demolish"))
-                    .tile("tile", t)
-                    .i("left", left as i64),
-            );
-        }
-    }
     let reason = Msg::new(key!("sunset_reason")).n("x", x as i64);
     for t in got {
         ctx::transfer(t, player_id, x, &reason)?;

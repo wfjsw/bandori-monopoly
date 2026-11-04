@@ -170,6 +170,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
             settle_redirect: false,
             rolled: true,
             effective: 12,
+            path: Vec::new(),
         }),
         ..Default::default()
     };

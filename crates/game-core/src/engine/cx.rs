@@ -18,7 +18,7 @@ use crate::data::{GameData, TileData};
 use crate::msg::Msg;
 use crate::state::MatchPrompt;
 
-use super::rules::{CardRules, ExclusiveAsk};
+use super::rules::{raise, CardRules, ExclusiveAsk, Trigger};
 use super::world::{Extreme, World};
 
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
@@ -480,10 +480,21 @@ impl SettleOutcome {
 /// the entry's own settle-scoped writes compose on top without re-reading the
 /// stack. `outcome` starts
 /// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
-#[derive(Debug, Clone, Copy)]
+///
+/// A card-issued **house write** (设计 5.4): the effective change is computed
+/// against the tile's cap first, and an unchanged count opens no window.
+#[derive(Clone, Copy, Debug)]
+pub enum HouseWrite {
+    Set(i32),
+    Add(i32),
+}
+
+/// A settle entry.
+#[derive(Debug, Clone)]
 pub struct SettleEntry {
     pub player: usize,
-    pub tile: usize,
+    /// The **governing tile** of the settle (the frame's `tile`).
+    pub tile: i32,
     /// Outer pay product / rent product and the outer `settleAdd` /
     /// `settleRentAdd` sums at push time. The entry's own settle-scoped writes
     /// compose on top, and a nested settle restores the outer figures on its
@@ -493,6 +504,9 @@ pub struct SettleEntry {
     pub base_add: i32,
     pub base_rent_add: i32,
     pub outcome: SettleOutcome,
+    /// The settle's move, stamped onto raises inside the settle so a payment
+    /// listener can see which move it belongs to (and its path).
+    pub move_context: Option<crate::engine::move_ctx::MoveCtx>,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -554,6 +568,12 @@ pub struct PlayCtx<'a> {
     /// duration (see [`Self::overlay_guest_state`]). A stack: nested drives push
     /// and pop their own. Transient (not serialized).
     pub(crate) guest_overlays: Vec<GuestOverlay>,
+    /// `houseAdded` / `houseRemoved` rows owed by host tile writes this drive
+    /// has applied (`(owner, tile, now, delta)`). A guest run is rebuilt on
+    /// every pause pass, so a write applied on the live context cannot live on
+    /// the guest `Run`; `commit_after` drains this into the committed run and
+    /// raises there (design G09 5.4/5.5). Transient.
+    pending_house_log: Vec<(i32, i32, i32, i32)>,
     /// Play-gate verdicts for the current world stamp (fix A,
     /// `docs/BOT.md` "engine efficiency A–C"). `rules.cant_play` is a pure
     /// query of the world; within one unchanged world state the same
@@ -1156,7 +1176,123 @@ impl<'a> PlayCtx<'a> {
 
     /// The innermost open settle's tile, `-1` when none is open.
     pub fn settle_tile(&self) -> i32 {
-        self.settle_stack.last().map_or(-1, |s| s.tile as i32)
+        self.settle_stack.last().map_or(-1, |s| s.tile)
+    }
+
+    /// The open settles, innermost last (the raise-time move stamping reads
+    /// the top entry's `move_context`).
+    pub fn settle_stack(&self) -> &[SettleEntry] {
+        &self.settle_stack
+    }
+
+    /// The live plan's move tags (copied onto a stamped move).
+    pub fn plan_tags(&self) -> Vec<(String, i32)> {
+        self.w.plan().tags.clone()
+    }
+
+    /// The tile standing at board position `position` (the raise macro's
+    /// `position =` arm converts through this).
+    pub fn tile_at(&self, position: i32) -> i32 {
+        self.w.tile_standing_at(position)
+    }
+
+    /// Declare `houseAdd` / `houseRemove` for tile `t` on a fresh `effect`
+    /// window, then apply unless cancelled. Answers the post count (the
+    /// pre-write count when cancelled). 设计 5.4.
+    pub fn write_houses(
+        &mut self,
+        by: usize,
+        t: usize,
+        w: HouseWrite,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
+        let cap = self.tile(t).rent.len().saturating_sub(1) as i32;
+        let before = self.w.st.houses[t];
+        let after = match w {
+            HouseWrite::Set(n) => n.clamp(0, cap),
+            HouseWrite::Add(d) => before.saturating_add(d).clamp(0, cap),
+        };
+        if after == before {
+            return Ok(before);
+        }
+        let delta = after - before;
+        let target = self.w.st.owners[t];
+        let t = t as i32;
+        // `value` is the size of the change, unsigned (135 is the removal
+        // spelling; the kind carries the direction).
+        let kind = if delta > 0 { "houseAdd" } else { "houseRemove" };
+        let trig = raise!(
+            self,
+            "effect",
+            by,
+            tile = t,
+            target = target,
+            by_card = by_card,
+            effects = vec![super::rules::Effect {
+                kind: kind.into(),
+                target,
+                from: -1,
+                tile: t,
+                value: delta.abs(),
+            }]
+        )?;
+        if trig.is_cancelled() {
+            return Ok(before);
+        }
+        self.w.st.houses[t as usize] = after;
+        Ok(after)
+    }
+
+    /// Declare `ownerSet` for tile `t`, then apply unless cancelled. Answers
+    /// the new owner (the old one when cancelled). 设计 5.4.
+    pub fn write_owner(
+        &mut self,
+        by: usize,
+        t: usize,
+        owner: i32,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
+        let before = self.w.st.owners[t];
+        if before == owner {
+            return Ok(before);
+        }
+        let t = t as i32;
+        let trig = raise!(
+            self,
+            "effect",
+            by,
+            tile = t,
+            target = before,
+            by_card = by_card,
+            effects = vec![super::rules::Effect {
+                kind: "ownerSet".into(),
+                target: owner,
+                from: -1,
+                tile: t,
+                value: owner,
+            }]
+        )?;
+        if trig.is_cancelled() {
+            return Ok(before);
+        }
+        self.w.st.owners[t as usize] = owner;
+        Ok(owner)
+    }
+
+    /// Owe one `houseAdded` / `houseRemoved` raise (`delta` signed) to the
+    /// drive's commit; see [`Self::pending_house_log`].
+    pub fn push_pending_house_log(&mut self, owner: i32, tile: i32, now: i32, delta: i32) {
+        self.pending_house_log.push((owner, tile, now, delta));
+    }
+
+    /// Take the owed house raises.
+    pub fn take_pending_house_log(&mut self) -> Vec<(i32, i32, i32, i32)> {
+        std::mem::take(&mut self.pending_house_log)
+    }
+
+    /// The position tile `tile` stands at (the raise macro's `tile =` arm).
+    pub fn position_of_tile(&self, tile: i32) -> i32 {
+        self.w.position_of_tile(tile)
     }
 
     pub fn new(
@@ -1183,6 +1319,7 @@ impl<'a> PlayCtx<'a> {
             move_start: -1,
             move_depth: 0,
             guest_overlays: Vec::new(),
+            pending_house_log: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),
             work_stack: Vec::new(),
             draining_work: false,

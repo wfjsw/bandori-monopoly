@@ -31,13 +31,15 @@ pub fn rui_demon_01_effects_ok(
             n_others += 1;
         }
     }
-    // Per other: PayTo(player→o, 100), SetState(X=5),
-    // then PayTo(o→player, 300), SetState(X=5). One extra trailing
-    // SetState(X=5) is allowed: the clause writes X 「每当你的技能被触发后」
-    // and nothing reports a skill fire yet (TODO(ABI)), so the body writes it
-    // unconditionally. X's key id is engine-side; match `{ player, n: 5 }`.
-    let want_len = n_others * 4;
-    if effects.len() != want_len && effects.len() != want_len + 1 {
+    // All the 100 legs first, then all the 300 legs (the body runs two
+    // passes). Then the 技能-fired tail: the FIRED flag reset (`n = 0`, only
+    // when the flag was already up) followed by X = 5, and the body's own
+    // closing X = 5 + FIRED = 1. X's key id is engine-side; match
+    // `{ player, n }` only, and keep the 100 / 300 amounts pinned -- a wrong
+    // leg is what the mutant checks.
+    let tail = 2; // closing X = 5 + FIRED = 1
+    let legs = n_others * 2;
+    if effects.len() < legs + tail || effects.len() > legs + tail + 2 {
         return false;
     }
     let mut i = 0usize;
@@ -45,11 +47,6 @@ pub fn rui_demon_01_effects_ok(
         let o = others[k];
         match effects[i] {
             Effect::PayTo { from, to, n } if from == player && to == o && n == 100 => {}
-            _ => return false,
-        }
-        i += 1;
-        match effects[i] {
-            Effect::SetState { player: p, n, .. } if p == player && n == 5 => {}
             _ => return false,
         }
         i += 1;
@@ -61,17 +58,27 @@ pub fn rui_demon_01_effects_ok(
             _ => return false,
         }
         i += 1;
+    }
+    if effects.len() == legs + tail + 2 {
+        match effects[i] {
+            Effect::SetState { player: p, n, .. } if p == player && n == 0 => {}
+            _ => return false,
+        }
+        i += 1;
         match effects[i] {
             Effect::SetState { player: p, n, .. } if p == player && n == 5 => {}
             _ => return false,
         }
         i += 1;
     }
-    if effects.len() == want_len + 1 {
-        match effects[i] {
-            Effect::SetState { player: p, n, .. } if p == player && n == 5 => {}
-            _ => return false,
-        }
+    match effects[i] {
+        Effect::SetState { player: p, n, .. } if p == player && n == 5 => {}
+        _ => return false,
+    }
+    i += 1;
+    match effects[i] {
+        Effect::SetState { player: p, n, .. } if p == player && n == 1 => {}
+        _ => return false,
     }
     true
 }
@@ -135,8 +142,7 @@ pub fn rui_demon_01_effects_ok_mutant(
             n_others += 1;
         }
     }
-    let want_len = n_others * 4 + 1;
-    if effects.len() != want_len || n_others == 0 {
+    if effects.len() < n_others * 2 + 2 || n_others == 0 {
         return false;
     }
     // First leg must be 200 (wrong).
@@ -151,28 +157,25 @@ pub fn rui_demon_01_effects_ok_mutant(
 // 「[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金」
 // ===========================================================================
 
-/// Body effect: the pending payment's target is rewritten to -1 (pure loss;
-/// recorded on the trigger, not the effect log) and the intended payee loses
-/// `amount / 2` (integer half). Exactly one effect: `PayMoney(payee, amount/2)`.
-pub fn xiaobai_01_effects_ok(effects: &[Effect], payee: i32, amount: i32) -> bool {
-    let half = amount / 2;
-    effects.len() == 1
-        && matches!(effects[0], Effect::PayMoney { player, n } if player == payee && n == half)
+/// Body effect: none. The clause rewrites the *pending* payment -- target to
+/// -1 (pure loss), kind `Loss`, shape `PayeeHalf` -- and the engine settles
+/// that rewritten leg afterwards. Only the trigger fields carry the change, so
+/// the effect log stays empty.
+pub fn xiaobai_01_effects_ok(effects: &[Effect], _payee: i32, _amount: i32) -> bool {
+    effects.is_empty()
 }
 
-/// Post: payee money decreased by `amount/2` (floored at 0); the counteruser's
-/// money is untouched by this body (the original payment rewrite is the
-/// engine's pending-pay leg, not this body).
-pub fn xiaobai_01_post_ok(post: &Snapshot, condition: &Snapshot, payee: i32, amount: i32) -> bool {
-    let half = amount / 2;
-    let p = payee as usize;
-    post.money[p] == (condition.money[p] - half).max(0)
+/// Post: money is untouched by this body (the half lands later, off the
+/// rewritten pending leg).
+pub fn xiaobai_01_post_ok(post: &Snapshot, condition: &Snapshot, _payee: i32, _amount: i32) -> bool {
+    crate::world::arr4_eq(post.money, condition.money)
 }
 
-/// MUTANT: demands the full amount, not the half.
+/// MUTANT: claims the body also pays the half itself -- one `PayMoney` effect
+/// (the older shape).
 pub fn xiaobai_01_effects_ok_mutant(effects: &[Effect], payee: i32, amount: i32) -> bool {
     effects.len() == 1
-        && matches!(effects[0], Effect::PayMoney { player, n } if player == payee && n == amount)
+        && matches!(effects[0], Effect::PayMoney { player, n } if player == payee && n == amount / 2)
 }
 
 // ===========================================================================

@@ -37,7 +37,11 @@ pub struct Trigger {
     pub player_id: i32,
     pub target: i32,
     /// The tile this trigger is about (settled on, passed, mortgaged, ...).
+    /// The **governing tile**: identity readers take it.
     pub tile: i32,
+    /// The board **position** of the event, `-1` where there is none
+    /// (`trigger::position`). Equal to `tile` with no swap.
+    pub position: i32,
     /// The amount (`t.Pay.amount` on pay triggers). On a fold stage this is
     /// the **composed** figure and `fold_input` is what bodies read.
     pub value: i32,
@@ -216,6 +220,8 @@ pub struct TriggerMove {
     pub rolled: bool,
     /// The length the move will take (`trigger::move_effective_steps()`).
     pub effective: i32,
+    /// The governing tiles walked so far (`trigger::move_path*`).
+    pub path: Vec<i32>,
 }
 
 /// The payment a `pay` / `paid` trigger is about.
@@ -254,6 +260,7 @@ impl Default for Trigger {
             player_id: 0,
             target: 0,
             tile: 0,
+            position: 0,
             value: 0,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
@@ -325,6 +332,7 @@ impl Trigger {
             player_id,
             target: player_id,
             tile: -1,
+            position: -1,
             value: 0,
             fold: game_core::engine::rules::Fold::Replace,
             fold_input: 0,
@@ -563,6 +571,22 @@ pub trait CardWorld: Clone + 'static {
             .collect()
     }
     fn build_cost(&self, tile: i32) -> i32;
+    /// The price a house on `tile` would actually cost this turn.
+    fn build_price(&self, tile: i32) -> i32 {
+        self.build_cost(tile)
+    }
+    /// The turn's build percentage (100 = full).
+    fn build_cost_percent(&self) -> i32 {
+        100
+    }
+    /// The turn's layered build cut.
+    fn build_discount(&self) -> i32 {
+        0
+    }
+    /// Does `tile` take a house for `player_id`, ignoring ownership?
+    fn tile_buildable(&self, _player_id: i32, _tile: i32) -> bool {
+        true
+    }
     fn mortgage_value(&self, tile: i32) -> i32;
     fn owned_count(&self, player_id: i32) -> i32;
     fn owned_at(&self, player_id: i32, index: i32) -> i32;
@@ -801,6 +825,42 @@ pub trait CardWorld: Clone + 'static {
     /// Where the *running* instance sits (-1 = with its owner / gone).
     fn self_tile(&self) -> i32 {
         -1
+    }
+    /// The board **slot** the running instance sits at (-1 = with its owner /
+    /// gone). [`Self::self_tile`] is the tile standing there.
+    fn self_position(&self) -> i32 {
+        -1
+    }
+    /// The tile standing at board **slot** `position` (`position` itself when
+    /// nothing is bound there) -- the engine's `tile_at` reader.
+    fn tile_standing_at(&self, position: i32) -> i32 {
+        position
+    }
+    /// The board slot tile `tile` currently stands at (`tile` itself when
+    /// nothing is bound to it) -- the engine's `position_of_tile` reader.
+    fn position_of_tile(&self, tile: i32) -> i32 {
+        tile
+    }
+    /// How many *extra* instances lie on `tile` (the tile carries them, so the
+    /// count is identity-keyed).
+    fn tile_extra_count(&self, _tile: i32) -> i32 {
+        0
+    }
+    /// The board slot instance `uid` sits at (`-1` with its owner / gone).
+    /// Fixture worlds fall back to the stored tile.
+    fn instance_position(&self, uid: i32) -> i32 {
+        self.tile_at(uid)
+    }
+    /// The **governing tile** of instance `uid` -- the tile standing at its
+    /// slot (`-1` with its owner, `-2` when gone). Source of CEL `card.tile`
+    /// and of the dispatch narrowing.
+    fn governing_tile_at(&self, uid: i32) -> i32 {
+        let t = self.tile_at(uid);
+        if t < 0 {
+            t
+        } else {
+            self.tile_standing_at(self.instance_position(uid))
+        }
     }
     fn set_self_tile(&mut self, _tile: i32) -> bool {
         false

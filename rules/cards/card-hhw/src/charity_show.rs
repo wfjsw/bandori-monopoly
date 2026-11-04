@@ -68,7 +68,7 @@ fn mine(player_id: i32, t: i32) -> bool {
     // tile it sits on; an unbound placement (tile `-1`) counts as on CiRCLE -- the
     // only circle tile the rule names.
     if ctx::is_start(t) {
-        return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_at) {
+        return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_of) {
             Some(pt) => pt == t || pt < 0,
             None => false,
         };

@@ -708,11 +708,21 @@ fn toko_swaps_same_color_mortgaged_deeds_and_pays_difference() {
     t.set_mortgaged(theirs, true);
     t.give(0, &["Mor:（toko）"]);
     t.play(0, "Mor:（toko）").unwrap();
+    // Two tile prompts: which of mine, then which of theirs. Each has exactly
+    // one candidate here.
     let p = t.expect_prompt();
     assert_eq!(
         p.options.len(),
         1,
-        "exactly one swap pair: {}",
+        "exactly one deed of mine to offer: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.options.len(),
+        1,
+        "exactly one same-colour deed of theirs to offer: {}",
         t.dump_prompt()
     );
     t.answer_one(0).unwrap();

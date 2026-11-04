@@ -40,8 +40,8 @@ const ID: &str = "RAS:练习室里的风暴";
 
 /// Is `player_id` standing on a livehouse they own?
 fn on_own_lh(player_id: i32) -> bool {
-    let pos = ctx::player_pos(player_id);
-    pos >= 0 && ctx::tile_owner(pos) == player_id && ctx::is_live_house_for(player_id, pos)
+    let t = ctx::tile_at(ctx::player_pos(player_id));
+    t >= 0 && ctx::tile_owner(t) == player_id && ctx::is_live_house_for(player_id, t)
 }
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -53,17 +53,17 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    let pos = ctx::player_pos(player_id);
+    let t = ctx::tile_at(ctx::player_pos(player_id));
     if !on_own_lh(player_id) {
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card_on(player_id, pos, ID, &Msg::new(key!("studio_storm_note")));
+    ctx::place_card_on(player_id, t, ID, &Msg::new(key!("studio_storm_note")));
     ctx::log(
         player_id,
         &Msg::new(key!("studio_storm_placed"))
             .player_id("who", player_id)
-            .tile("tile", pos),
+            .tile("tile", t),
     );
     // 规则书（1）: 「初始0」 -- the placement charges no crystal (the PassTile
     // hook adds them, cap 3).
@@ -97,7 +97,8 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     if tile < 0 {
         return Ok(());
     }
-    let a = trigger::tile();
+    // The settle's physical slot against the card's own tile's slot.
+    let a = trigger::position();
     let a = if a >= 0 {
         a
     } else {
@@ -107,7 +108,7 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（在距此卡所在格子X个格子处[结算]时）: the metric is open
     //   (OPEN-storm-distance; the spec note says clockwise) -- `ctx::dist` is the
     //   undirected ring minimum, not the clockwise distance.
-    let x = ctx::dist(a, tile);
+    let x = ctx::dist(a, ctx::position_of_tile(tile));
     let crystals = ctx::crystals();
     if x < 1 || x > crystals {
         return Ok(());

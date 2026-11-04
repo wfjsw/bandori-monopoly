@@ -87,7 +87,7 @@ fn pass_pays(_owner: i32) -> bool {
         return false;
     }
     let start = trigger::move_from();
-    if start >= 0 && ctx::is_start(start) && ctx::is_start(me) {
+    if start >= 0 && ctx::is_start(ctx::tile_at(start)) && ctx::is_start(me) {
         return false;
     }
     // A walk-scoped / per-player veto on one of the mover's own field
@@ -161,7 +161,16 @@ fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
     // The tile the reward is being paid for -- the mover's square. When
     // `event:协助CiRCLE重建` re-homes the reward onto 「CiRCLE咖啡厅」 this is
     // the cafe, not `self_tile` (the event instance sits on no tile).
-    let at = ctx::player_pos(mover);
+    let at = {
+        // `player_pos` is the physical slot; the props are read on the tile
+        // standing there (a swap keeps `prop::START` with the tile).
+        let position = ctx::player_pos(mover);
+        if position >= 0 {
+            ctx::tile_at(position)
+        } else {
+            position
+        }
+    };
     // `prop::NO_REWARD` on this tile's rule instance -- consumed here, so a
     // stale arm cannot veto the next player (`event:协助CiRCLE重建` re-arms).
     if at >= 0 && ctx::tile_prop(at, prop::NO_REWARD) > 0 {

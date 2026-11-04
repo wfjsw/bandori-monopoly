@@ -65,7 +65,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // [移动终点] at all, so [`settle_after_guard`] keeps those out -- the
         // (1)/(3) redirects among them (they would offer 移动终点 = 弦卷集团
         // and clear the crystals while the card is still there).
-        On::Action(Action::SettleAfter("card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0", Some(settle_after_guard), move_after)),
+        On::Action(Action::SettleAfter("card.placed && tile.id >= 0", Some(settle_after_guard), move_after)),
         // 规则书（1）[反击]: 「经过“弦卷集团”（#29格）时可将此卡放置在其上」
         On::Counteract(
             &[ChainKind::PassTile],
@@ -106,6 +106,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         ID,
         &Msg::new(key!("smile_parade_note")).tile("tile", group),
     );
+    // （3）「那格视为与"弦卷集团"格子交换位置」 -- one prop write. The binding
+    // is instance-owned and anchored at the instance's slot, so (2)'s
+    // `set_self_tile` carries it to the endpoint and the discard drops it
+    // (设计 6.2).
+    ctx::set_swapped_tile(group_tile());
     ctx::set_crystals(3);
     ctx::log(
         player_id,
@@ -131,13 +136,16 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Is the card still sitting on 「弦卷集团」?
+/// Is the card still sitting on 「弦卷集团」's own square?
+///
+/// 「仍位于」 is the physical square, not the displayed tile: （2） moves the
+/// card onto the [移动终点] and the swap rides along, so after （2） that square
+/// *displays* 弦卷集团 while the card has left the group's square. The
+/// qualifier exists exactly so （2）'s 「移除其上全部奇迹水晶」 does not discard;
+/// only a tick while the card still lies on the group's own square does.
 fn on_group() -> bool {
     let group = ctx::tile_named("弦卷集团");
-    match ctx::self_tile() {
-        Some(t) => group >= 0 && t == group,
-        None => false,
-    }
+    group >= 0 && ctx::self_position() == group
 }
 
 ///
@@ -148,7 +156,8 @@ fn on_group() -> bool {
 /// and the counter name stay here (the name is not yet in the condition
 /// vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS && on_group()
+    let g = on_group();
+    trigger::card_is(ID) && trigger::name() == bandori_std::counter::CRYSTALS && g
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
@@ -160,29 +169,15 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Combined (1)/(3) residual: either the one-shot `smile_as_agent` tag, or a
-/// real swap (card on a tile other than 弦卷集团, settle on one of the two).
-/// Bail once another field card claimed the body (`trigger::cancelled()` --
-/// Parking Space's (1)) or the settle is this card's own redirect
-/// (`TAG_REDIRECT` -- the nested settle of (1)/(3), which must not re-enter
-/// and hit the settle-depth cap). Another card's redirect settle is a real
-/// settle of the tile and does swap.
+/// (1)'s residual: the one-shot `smile_as_agent` tag must be armed. Bail once
+/// another field card claimed the body (`trigger::cancelled()` -- Parking
+/// Space's (1)) or the settle is this card's own redirect (`TAG_REDIRECT` --
+/// the nested settle of (1), which must not re-enter). (3) needs no branch:
+/// the swap already resolved the settle to the partner at dispatch.
 fn settle_body_guard(_owner: i32) -> bool {
-    if trigger::cancelled() {
-        return false;
-    }
-    if trigger::move_tag(TAG_REDIRECT) != 0 {
-        return false;
-    }
-    if trigger::move_tag(TAG_AS_AGENT) != 0 {
-        return true;
-    }
-    let group = ctx::tile_named("弦卷集团");
-    let Some(card_t) = ctx::self_tile() else {
-        return false;
-    };
-    let at = trigger::tile();
-    group >= 0 && card_t >= 0 && at >= 0 && card_t != group && (at == card_t || at == group)
+    !trigger::cancelled()
+        && trigger::move_tag(TAG_REDIRECT) == 0
+        && trigger::move_tag(TAG_AS_AGENT) != 0
 }
 
 /// （1）「当次移动的移动终点视为"弦卷集团"地产商」 then （3）「那格视为与
@@ -210,37 +205,6 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // （3）: 「那格视为与"弦卷集团"格子交换位置」 -- a two-way position
-    // exchange. A settle *on* the card's tile runs the agent body; a settle
-    // *on* 弦卷集团 (while the card sits elsewhere) runs as the card's tile.
-    // One level deep: the nested settle carries `TAG_REDIRECT`, so its body
-    // does not swap back (STACK-01 / SETTLE-01).
-    let card_t = ctx::self_tile().unwrap_or(-1);
-    let at = trigger::tile();
-    if card_t < 0 || at < 0 || card_t == group {
-        return Ok(());
-    }
-    let dest = if at == card_t {
-        group
-    } else if at == group {
-        card_t
-    } else {
-        return Ok(());
-    };
-    ctx::trigger::set_cancelled();
-    ctx::plan::set_settle_as_agent(true);
-    // The swap is the settler's settle, not the card owner's: the handler
-    // argument is the field instance's holder, so it stays the log seat only.
-    // 规则书（3）: 「任何玩家在此卡放置的格子上[触发结算]后」
-    ctx::plan::set_tag(TAG_REDIRECT, 1);
-    ctx::settle_tile_at(trigger::player_id(), dest, true);
-    ctx::plan::set_tag(TAG_REDIRECT, 0);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("smile_parade_swapped"))
-            .tile("a", at)
-            .tile("b", dest),
-    );
     Ok(())
 }
 
@@ -264,14 +228,11 @@ fn resolve_guard(_owner: i32) -> bool {
     if ctx::prop(PROP_ARRIVED) != 0 {
         return true;
     }
-    let at = trigger::tile();
-    if at < 0 {
-        return false;
-    }
-    match ctx::self_tile() {
-        Some(card_t) => card_t >= 0 && card_t == at,
-        None => false,
-    }
+    // 「在此卡放置的格子上」: the settle's *slot* against the slot this card
+    // was placed on (`self_position`). A settle at 弦卷集团's home slot runs
+    // this card's tile through the swap but must not discard (设计 6.2).
+    let at = ctx::trigger::position();
+    at >= 0 && ctx::self_position() == at
 }
 
 fn on_resolved(owner: i32) -> card_sdk::Asked {
@@ -289,11 +250,9 @@ fn on_resolved(owner: i32) -> card_sdk::Asked {
     }
     // （3）「任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 --
     // 「任何玩家」 includes the owner.
-    let Some(card_t) = ctx::self_tile() else {
-        return Ok(());
-    };
-    let at = trigger::tile();
-    if card_t >= 0 && card_t == at {
+    let at = ctx::trigger::position();
+    if at >= 0 && ctx::self_position() == at {
+        let card_t = ctx::self_tile().unwrap_or(-1);
         ctx::set_dest(ctx::Dest::Graveyard);
         ctx::log(
             owner,
@@ -307,7 +266,16 @@ fn on_resolved(owner: i32) -> card_sdk::Asked {
 /// no [移动终点] -- and there is no CEL binding for the flag, so it cannot ride
 /// the condition. A real teleport is a move and stays in.
 fn settle_after_guard(_owner: i32) -> bool {
-    !trigger::is_settle_redirect()
+    // A card-initiated settle (`settle_tile_at`) is not a move and has no
+    // [移动终点] (`is_settle_redirect`).
+    if trigger::is_settle_redirect() {
+        return false;
+    }
+    // 「“弦卷集团”格子上的此卡」: after (2) the card's own slot *displays* the
+    // group, so `card.tile` alone would still offer a second move on the very
+    // next settle. The slot the card was placed on is `self_position`; a
+    // settle there is the endpoint it already stands at.
+    trigger::position() != ctx::self_position()
 }
 
 /// （2）「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上并移除其上
@@ -317,6 +285,8 @@ fn settle_after_guard(_owner: i32) -> bool {
 /// ask is the 「可」 opt-in. `player_id` is the card owner (the field
 /// instance's holder), which is who gets the ask for any player's settle.
 fn move_after(player_id: i32) -> card_sdk::Asked {
+    // 「[移动终点]」 -- the endpoint's governing tile; the binding is anchored
+    // at the slot, so this leaves (endpoint, group) behind (设计 6.2).
     let to = ctx::trigger::tile();
     if !ctx::ask_yes(
         player_id,
@@ -325,7 +295,7 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::set_self_tile(to);
+    let ok = ctx::set_self_tile(to);
     // The card just arrived on this settle's tile. (3) 「任何玩家在此卡放置的格子上
     // [触发结算]后」 is for a settle *on* the card's tile -- not the settle whose
     // `settleAfter` placed it here. Park a one-shot card-instance latch so this
