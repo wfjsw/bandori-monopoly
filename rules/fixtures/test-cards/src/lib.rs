@@ -89,6 +89,45 @@ const TARGETED_PROBE: CardDef = CardDef::new(
     "TEST:targeted_probe",
     &[On::Action(Action::Targeted("", None, targeted_probe))],
 );
+/// G10 settle-outcome probe: `settleAfter` and `tileResolved` both log the
+/// three facts and the paid value, so a test reads what the pipeline stamped
+/// (`c` cancelled / `b` body replaced / `p` paid / `v` paid value).
+const SETTLE_PROBE: CardDef = CardDef::new(
+    "TEST:settle_probe",
+    &[
+        On::Action(Action::SettleAfter("", None, settle_probe)),
+        On::Action(Action::TileResolved("", None, settle_probe)),
+    ],
+);
+
+/// G10 world checkpoint: snapshot, change money, restore twice (idempotent),
+/// drop. Answers nothing.
+const SNAP_TWICE: CardDef = CardDef::new("TEST:snapTwice", &[On::Play("", None, snap_twice)]);
+fn snap_twice(player_id: i32) -> card_sdk::Asked {
+    let k = ctx::world_snapshot()?;
+    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_twice_change")));
+    ctx::world_restore(k)?;
+    ctx::world_restore(k)?;
+    ctx::world_snapshot_drop(k)?;
+    Ok(())
+}
+
+/// G10 world checkpoint across a prompt: snapshot, change money, ask, then
+/// restore -- the answer pass must still land the pre-prompt state.
+const SNAP_ASK: CardDef = CardDef::new("TEST:snapAsk", &[On::Play("", None, snap_ask)]);
+fn snap_ask(player_id: i32) -> card_sdk::Asked {
+    let k = ctx::world_snapshot()?;
+    ctx::adjust_money(player_id, 500, &Msg::new(key!("snap_ask_change")));
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("snap_ask_q")),
+        &Msg::new(key!("snap_ask_t")),
+    )?;
+    ctx::world_restore(k)?;
+    ctx::world_snapshot_drop(k)?;
+    Ok(())
+}
+
 /// A **resolution** gate: the effect names the player and the chain forms, and
 /// only what lands is voided.
 const SHIELD: CardDef = CardDef::new(
@@ -460,6 +499,19 @@ fn targeted_probe(player_id: i32) -> card_sdk::Asked {
             .player_id("who", trigger::target())
             .tile("tile", trigger::tile())
             .i("by", trigger::by_card().unwrap_or(-1) as i64),
+    );
+    Ok(())
+}
+
+fn settle_probe(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("settle_probe"))
+            .tile("tile", trigger::tile())
+            .i("c", trigger::settle_cancelled() as i64)
+            .i("b", trigger::settle_body_replaced() as i64)
+            .i("p", trigger::settle_paid() as i64)
+            .i("v", trigger::settle_paid_value() as i64),
     );
     Ok(())
 }
@@ -3000,6 +3052,9 @@ card_sdk::ruleset!(&[
     EXEMPTION_PROBE,
     TARGET_COUNTER,
     TARGETED_PROBE,
+    SETTLE_PROBE,
+    SNAP_TWICE,
+    SNAP_ASK,
     SHIELD,
     MOVER,
     DICE_MOVER,

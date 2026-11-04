@@ -556,7 +556,7 @@ fn run_on(
 /// Fold a finished run's state into an [`Outcome`], the native counterpart of
 /// `host::finish`.
 fn finish(
-    state: NativeHostState,
+    mut state: NativeHostState,
     res: Result<CallOut, HostError>,
 ) -> Result<Outcome<Run>, RuleError> {
     match res {
@@ -568,14 +568,16 @@ fn finish(
             }
             Ok(Outcome::Done(
                 state.world.expect("world is restored after nested calls"),
+                state.log,
             ))
         }
         Err(HostError::NeedInput) => {
+            let log = std::mem::take(&mut state.log);
             if let Some(req) = state.host_request {
                 let world = state.world.expect("world is restored after nested calls");
-                Ok(Outcome::NeedHost(req, world))
+                Ok(Outcome::NeedHost(req, world, log, state.host_journal_start))
             } else if let Some(p) = state.asked {
-                Ok(Outcome::NeedInput(p, state.world))
+                Ok(Outcome::NeedInput(p, state.world, log))
             } else {
                 Err(RuleError::Trap("need-input exit without a prompt".into()))
             }
@@ -640,7 +642,7 @@ impl NativeModules {
                 first_ungated.get_or_insert(entry);
                 continue;
             }
-            let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
+            let state = HostState::new(self.index.clone(), world.clone(), Default::default(), 0);
             let (res, _st, _fuel) = game_rules::inline::with_no_inline(|| {
                 run_on(
                     state,
@@ -677,7 +679,7 @@ impl NativeModules {
         player_id: i32,
         scope: &game_rules::condition::WindowScope,
         cand: &game_rules::condition::CandidateCtx,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
     ) -> bool {
         let condition = self.index.condition(card, entry);
         if self.entry_guard_is_none(card, entry) {
@@ -687,7 +689,7 @@ impl NativeModules {
         let mut state = Some(HostState::new(
             self.index.clone(),
             world.clone(),
-            answers.to_vec(),
+            log.clone(),
             0,
         ));
         let asked: Result<bool, ()> =
@@ -783,7 +785,7 @@ impl CardModules for NativeModules {
         &self,
         world: &Run,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
     ) -> Result<Outcome<Run>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
@@ -792,7 +794,7 @@ impl CardModules for NativeModules {
             .card(card)
             .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
         let Some(entry) = entry_of(info, &call, world.trigger().kind) else {
-            return Ok(Outcome::Done(world.clone()));
+            return Ok(Outcome::Done(world.clone(), log.clone()));
         };
         // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here
         // (mirrors `Ruleset::run`). A rejecting entry runs no body and so never
@@ -815,11 +817,11 @@ impl CardModules for NativeModules {
                 &info.id,
                 world.is_placed() != 0,
             );
-            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers) {
-                return Ok(Outcome::Done(world.clone()));
+            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, log) {
+                return Ok(Outcome::Done(world.clone(), log.clone()));
             }
         }
-        let mut state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);
+        let mut state = HostState::new(self.index.clone(), world.clone(), log.clone(), 0);
         // Body entry: the activation announcement goes here (mirrors
         // `Ruleset::run`), never for a bodyless drive.
         if let Some(cb) = on_body.as_deref_mut() {
@@ -842,7 +844,7 @@ impl CardModules for NativeModules {
         &self,
         world: &Run,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
@@ -874,10 +876,10 @@ impl CardModules for NativeModules {
             let mut state = Some(HostState::new(
                 self.index.clone(),
                 cur.clone(),
-                answers.to_vec(),
+                log.clone(),
                 0,
             ));
-            state.as_mut().expect("host state present").next_answer = next_answer;
+            state.as_mut().expect("host state present").log.cursor = next_answer;
             // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
             // flashes).
@@ -916,7 +918,7 @@ impl CardModules for NativeModules {
                 };
                 if !admitted {
                     if let Some(st) = state.as_ref() {
-                        next_answer = st.next_answer;
+                        next_answer = st.log.cursor;
                     }
                     continue;
                 }
@@ -937,10 +939,10 @@ impl CardModules for NativeModules {
                 DEFAULT_FUEL,
             );
             ran_any = true;
-            let after_body = state.next_answer;
+            let after_body = state.log.cursor;
             let outcome = finish(state, res)?;
             match outcome {
-                Outcome::Done(w) => {
+                Outcome::Done(w, _) => {
                     // Later entries see earlier writes and earlier answers.
                     cur = w;
                     next_answer = after_body;
@@ -958,7 +960,7 @@ impl CardModules for NativeModules {
         }
         Ok(Some(HookRun {
             announced,
-            outcome: Outcome::Done(cur),
+            outcome: Outcome::Done(cur, Default::default()),
         }))
     }
 
@@ -996,7 +998,7 @@ impl CardModules for NativeModules {
             ));
         }
         game_rules::condition::admits(condition, Some(scope), &cand, || {
-            let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
+            let state = HostState::new(self.index.clone(), world.clone(), Default::default(), 0);
             let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
                 run_on(
                     state,
@@ -1048,7 +1050,7 @@ impl CardModules for NativeModules {
             &cand,
             || Msg::new("err.play_pre"),
             || {
-                let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
+                let state = HostState::new(self.index.clone(), world.clone(), Default::default(), 0);
                 let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
                     run_on(
                         state,
@@ -1092,7 +1094,11 @@ impl CardModules for NativeModules {
         {
             return Ok(DeclareOut::Arg(Vec::new()));
         }
-        let state = HostState::new(self.index.clone(), world.clone(), answers.to_vec(), 0);
+        let log = game_core::engine::GuestLog {
+            answers: answers.to_vec(),
+            ..Default::default()
+        };
+        let state = HostState::new(self.index.clone(), world.clone(), log, 0);
         let (res, st, _fuel) = run_on(
             state,
             card,

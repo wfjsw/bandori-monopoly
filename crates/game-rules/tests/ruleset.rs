@@ -26,7 +26,7 @@ fn bad_handle_is_rejected() {
                 player_id: 0,
                 arg: Vec::new()
             },
-            &[],
+            &Default::default(),
             None
         ),
         Err(RuleError::NoSuchCard(_))
@@ -84,8 +84,9 @@ fn runaway_nesting_is_stopped() {
     // until the recursion hits the depth bound.
     let mut answers: Vec<i32> = Vec::new();
     let err = loop {
-        match r.run(&TestWorld::new(1), call(), &answers, None) {
-            Ok(Outcome::NeedHost(_, _)) => answers.push(1),
+        let log = game_core::engine::GuestLog { answers: answers.clone(), ..Default::default() };
+        match r.run(&TestWorld::new(1), call(), &log, None) {
+            Ok(Outcome::NeedHost(..)) => answers.push(1),
             Ok(other) => panic!("expected the nesting trap, got {other:?}"),
             Err(e) => break e,
         }

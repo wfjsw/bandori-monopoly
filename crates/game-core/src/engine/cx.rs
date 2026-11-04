@@ -54,6 +54,11 @@ impl Halt {
     pub fn is_suspended(&self) -> bool {
         matches!(self.0, HaltKind::Suspended)
     }
+
+    /// Is this a player prompt (as opposed to a suspension or the match end)?
+    pub fn is_ask(&self) -> bool {
+        matches!(self.0, HaltKind::Ask(_))
+    }
 }
 
 pub type Flow<T> = Result<T, Halt>;
@@ -484,6 +489,9 @@ impl SettleOutcome {
 pub struct SettleEntry {
     pub player: usize,
     pub tile: usize,
+    /// Owner of `tile` when the settle opened -- the payee a rent payment
+    /// must reach to count as this settle's `paid`.
+    pub target: i32,
     /// Outer pay product / rent product and the outer `settleAdd` /
     /// `settleRentAdd` sums at push time. The entry's own settle-scoped writes
     /// compose on top, and a nested settle restores the outer figures on its
@@ -493,6 +501,13 @@ pub struct SettleEntry {
     pub base_add: i32,
     pub base_rent_add: i32,
     pub outcome: SettleOutcome,
+    /// The `settleBody` link was negated: another card replaced the body
+    /// (`Cancelled` covers both, so the two are split here). G10 §6.1.
+    pub body_replaced: bool,
+    /// A rent payment to this settle's owner on this settle's tile committed,
+    /// and what it moved.
+    pub paid: bool,
+    pub paid_value: i32,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -503,6 +518,12 @@ pub struct PlayCtx<'a> {
     pub(crate) rules: &'a dyn CardRules,
     answers: &'a [Answered],
     cursor: usize,
+    /// The guest answer log (G10 §6.3.5). A parking spot between drive
+    /// starts: the running pass keeps the live copy on its guest store, the
+    /// drive takes this one at its start and puts it back on a halt, and
+    /// [`crate::engine::Match::execute`] hands it to `Pending`. Empty while a
+    /// drive runs.
+    pub guest_log: crate::engine::GuestLog,
     /// Simulation-mode answers (see [`AnswerProvider`]). `None` = halt/replay.
     provider: Option<&'a mut dyn AnswerProvider>,
     /// Seconds of presentation time requested since the last answered prompt; the
@@ -670,16 +691,37 @@ impl PlayMemo {
 /// the clear landing twice -- the body replays from the top, so a *persisted*
 /// clear would be re-applied on top of itself and an additive write would
 /// double-count. Only decreases cross; see [`PlayCtx::overlay_guest_state`].
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct GuestOverlay {
     /// `(player, key, base, wrote)` for each state item the guest decreased.
     /// `base` is `None` when the key was absent before the overlay.
-    state: Vec<(
+    pub state: Vec<(
         usize,
         String,
         Option<crate::state::StateVar>,
         crate::state::StateVar,
     )>,
+}
+
+impl GuestOverlay {
+    /// Re-apply the recorded decreases to `w` without recomputing them --
+    /// the restore twin of [`PlayCtx::overlay_guest_state`], for the journal's
+    /// re-application path. `w` is expected to be the request's pre-state
+    /// (`HostJournalEntry::condition`).
+    pub fn apply(&self, w: &mut World) {
+        for (i, k, _base, wrote) in &self.state {
+            let Some(p) = w.st.players.get_mut(*i) else {
+                continue;
+            };
+            if wrote.flags != 0 {
+                p.state_set_flags(k, wrote.flags);
+            }
+            if let Some(exp) = wrote.expires {
+                p.state_set_expires(k, Some(exp));
+            }
+            p.state_set(k, wrote.value);
+        }
+    }
 }
 
 impl<'a> PlayCtx<'a> {
@@ -692,6 +734,17 @@ impl<'a> PlayCtx<'a> {
     /// rule's `cant_play` and refused the press if it named a reason, which is
     /// the same shape as every other turn action.
     /// A copy of the replayable world (a rules host runs against one).
+    /// The innermost settle's facts, or `None` outside a settle (G10 §6.1).
+    /// Re-derived from the frame on every pass, like `settle_tile`.
+    pub(crate) fn settle_facts(&self) -> Option<crate::engine::SettleFacts> {
+        self.settle_stack.last().map(|e| crate::engine::SettleFacts {
+            cancelled: e.outcome == SettleOutcome::Cancelled && !e.body_replaced,
+            body_replaced: e.body_replaced,
+            paid: e.paid,
+            paid_value: e.paid_value,
+        })
+    }
+
     pub fn world_copy(&self) -> World {
         #[cfg(feature = "bot-cost")]
         crate::engine::bot_cost::WORLD_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1002,7 +1055,17 @@ impl<'a> PlayCtx<'a> {
         }
     }
 
-    pub fn overlay_guest_state(&mut self, from: &World) {
+    pub fn overlay_guest_state(&mut self, from: &World) -> GuestOverlay {
+        let o = self.capture_guest_state(from);
+        self.guest_overlays.push(o.clone());
+        o
+    }
+
+    /// Capture the guest's state decreases against `from` into `self.w` and
+    /// return them, without stacking an overlay (G10 §6.3.1: the journal keeps
+    /// them; the live boundary stacks its own copy through
+    /// [`Self::overlay_guest_state`]).
+    pub fn capture_guest_state(&mut self, from: &World) -> GuestOverlay {
         let mut o = GuestOverlay::default();
         let n = self.w.st.players.len().min(from.st.players.len());
         for i in 0..n {
@@ -1044,7 +1107,7 @@ impl<'a> PlayCtx<'a> {
                 o.state.push((i, k, base, wrote));
             }
         }
-        self.guest_overlays.push(o);
+        o
     }
 
     /// How many guest overlays are currently on the stack. A drive records
@@ -1171,6 +1234,7 @@ impl<'a> PlayCtx<'a> {
             rules,
             answers,
             cursor: 0,
+            guest_log: Default::default(),
             provider: None,
             delay: 0.0,
             money_depth: 0,

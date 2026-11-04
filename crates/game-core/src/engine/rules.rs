@@ -448,6 +448,14 @@ pub struct Trigger {
     pub settle_tile: i32,
     /// The settle's terminal outcome, only on `tileResolved`.
     pub outcome: Option<super::cx::SettleOutcome>,
+    /// The **instance** whose card caused this trigger, `None` otherwise.
+    /// `by_card` is the seat; this separates two copies of one card.
+    pub by_card_instance: Option<i32>,
+    /// The seat a `redirect` hook moved this designation from, only when the
+    /// rename landed. On `targeted` / `effect` / `target`.
+    pub redirected_from: Option<i32>,
+    /// The settle this trigger belongs to, from `settleBody` on.
+    pub settle_facts: Option<SettleFacts>,
     /// The `ChargePaying` window came from a skill cost (`raise_from(Skill)`).
     pub charge_skill: bool,
     /// The card whose effect this link *is*: the raised play's card on a root
@@ -503,6 +511,40 @@ impl From<&crate::engine::rules::JoinState> for JoinState {
     }
 }
 
+/// What a settle has done so far, built with its frame.
+///
+/// `SettleOutcome::Cancelled` covers both a negated `settle` and a negated
+/// `settleBody`, so the two are split here: `cancelled` excludes
+/// `body_replaced`, and a hook can tell which happened.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub struct SettleFacts {
+    /// The settle ended before any body: the `settle` link was negated.
+    pub cancelled: bool,
+    /// The `settleBody` link was negated -- another card replaced the body.
+    pub body_replaced: bool,
+    /// A rent payment to this settle's owner, on its own tile, committed.
+    pub paid: bool,
+    /// What that payment moved (0 without `paid`).
+    pub paid_value: i32,
+}
+
+impl SettleFacts {
+    /// The guest wire bitset (`card_sdk::abi::settle_fact`).
+    pub const fn bits(self) -> i32 {
+        let mut v = 0;
+        if self.cancelled {
+            v |= 1;
+        }
+        if self.body_replaced {
+            v |= 2;
+        }
+        if self.paid {
+            v |= 4;
+        }
+        v
+    }
+}
+
 impl Trigger {
     pub fn new(kind: impl Into<String>, player_id: usize) -> Self {
         Self {
@@ -535,6 +577,9 @@ impl Trigger {
             instance: -1,
             settle_tile: -1,
             outcome: None,
+            by_card_instance: None,
+            redirected_from: None,
+            settle_facts: None,
             charge_skill: false,
             subject_card: None,
             join: None,

@@ -8,8 +8,9 @@
 
 use alloc::vec::Vec;
 
+use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
@@ -20,7 +21,20 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         // surfaces (GUARDS.md §4.4).
         "",
         Some(cant_play),
-        no_breakup)],
+        no_breakup),
+        // 规则书: 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消
+        // 所有受到的效果」 -- the shot's own settle resolves and is judged here.
+        On::Action(Action::TileResolved(
+            "slot('nb_shot') > 0 && tile.id >= 0 && settle.tile == tile.id",
+            Some(failed_shot),
+            revert,
+        )),
+        On::Action(Action::TileResolved(
+            "slot('nb_shot') > 0 && tile.id >= 0 && settle.tile == tile.id",
+            Some(kept_shot),
+            settle_after,
+        )),
+    ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Sumimi不会解散哦"#)
         .raw_name(r#"Sumimi不会解散哦"#)
@@ -28,6 +42,11 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         .text(CardText::para(r#"当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果"#))
         // sheet cell L3
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
+
+/// The armed shot: the snapshot key of the play that is still unresolved
+/// (0 = none). A slot, not an instance prop: the `tileResolved` hook is a
+/// different body from the play.
+const SLOT_SHOT: &str = "nb_shot";
 
 /// 规则书: 「资金不含有相同数字」 (the gate); 「拥有相同数字」 reuses it though the target reading is
 /// open -- see the TODO at the `good` predicate.
@@ -77,6 +96,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn no_breakup(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「回到原处并取消所有受到的效果」 -- the checkpoint that the failure
+    // terminal restores. Taken before the ask; the key rides the slot so the
+    // `tileResolved` body can still name it.
+    let key = ctx::world_snapshot()?;
+    ctx::set_slot(player_id, SLOT_SHOT, key);
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);
     if n <= 0 {
@@ -117,10 +141,41 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", to),
     );
-    // TODO(规则书) R3 (`SETTLE-STAGES.md` §9) [judgement]: is 「触发结算后」 `settleAfter` or
-    // the `tileResolved` terminal? "取消所有受到的效果" (undo everything the settle did) is
-    // easier at `tileResolved` (complete-as-nothing) than after the body has run.
-    // Left as-is pending the ruling.
+    Ok(())
+}
+
+/// 「未能使资金变为拥有相同数字」 -- the shot failed on a live seat.
+fn failed_shot(player_id: i32) -> bool {
+    !ctx::player_out(player_id) && !repeated_digits(ctx::money_of(player_id))
+}
+
+/// The success terminal: the same predicate inverted.
+fn kept_shot(player_id: i32) -> bool {
+    !failed_shot(player_id)
+}
+
+/// Clear the slot and answer its key; only one terminal runs.
+fn take_key(player_id: i32) -> i32 {
+    let key = ctx::slot(player_id, SLOT_SHOT);
+    ctx::set_slot(player_id, SLOT_SHOT, 0);
+    key
+}
+
+/// 规则书: 「回到原处并取消所有受到的效果」 -- absolute restore, then drop the
+/// checkpoint.
+fn revert(player_id: i32) -> card_sdk::Asked {
+    let key = take_key(player_id);
+    ctx::world_restore(key)?;
+    ctx::world_snapshot_drop(key)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("no_breakup_reverted")).player_id("who", player_id),
+    );
+    Ok(())
+}
+
+fn settle_after(player_id: i32) -> card_sdk::Asked {
+    ctx::world_snapshot_drop(take_key(player_id))?;
     Ok(())
 }
 

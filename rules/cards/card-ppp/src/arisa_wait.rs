@@ -21,7 +21,20 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
         On::Play("", None, arisa_wait),
-        On::Action(Action::EventAfter("", Some(event_after_guard), event_after)),
+        // （2）「事件触发时…」 -- placement and count are the applicability.
+        On::Action(Action::Event(
+            "card.placed && card.counter('crystals') >= 3",
+            None,
+            defer,
+        )),
+        // （1）「任何非因为此卡导致的事件结算时…」
+        On::Action(Action::EventAfter("card.placed", Some(foreign), event_after)),
+        // release callback（「此后额外抽取…」）
+        On::Action(Action::EventResolved(
+            "card.placed",
+            Some(resolved_mine),
+            resolved,
+        )),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"等等等一下"#)
@@ -49,22 +62,49 @@ fn arisa_wait(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("arisa_wait_placed")).player_id("who", player_id),
     );
-    // TODO(规则书)[持续] When Defer lands, the `by != Title` filter of (1) must be
-    // restored so this card's own deferred releases do not bank a crystal.
     Ok(())
 }
 
-/// 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」 -- placed gate; `false` means the
-/// card is not activated at all. Pure guard for [`event_after`], the plain
-/// `eventAfter` body of (1).
-fn event_after_guard(player_id: i32) -> bool {
-    ctx::is_placed()
+/// 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时」 -- the event must not
+/// be this copy's doing. A board draw carries no cause (`None`), so it counts.
+fn foreign(_: i32) -> bool {
+    ctx::trigger::by_card_instance() != Some(ctx::self_uid())
+}
+
+/// 规则书[持续]（2）: 「事件触发时如果此卡拥有至少3个[奇迹水晶]则移除…」.
+/// Only the copy that wins the claim spends; a later copy on the same event
+/// gets `false` and leaves its crystals alone.
+fn defer(player_id: i32) -> card_sdk::Asked {
+    if !ctx::event_defer()? {
+        return Ok(());
+    }
+    let left = ctx::crystals() - 3;
+    ctx::set_crystals(left);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("arisa_wait_deferred"))
+            .player_id("who", player_id)
+            .i("n", left as i64),
+    );
+    Ok(())
+}
+
+/// Only the copy whose deferral this is hears the release callback.
+fn resolved_mine(_: i32) -> bool {
+    ctx::trigger::by_card_instance() == Some(ctx::self_uid())
+}
+
+/// 「此后额外抽取一个视为其他玩家在“流星堂”抽取的事件」 -- the next live
+/// seat after the owner draws, attributed to the station tile (Q1).
+fn resolved(player_id: i32) -> card_sdk::Asked {
+    let other = ctx::neighbor(player_id, 1);
+    if other >= 0 {
+        ctx::draw_event_as(other, ctx::tile_named("流星堂"))?;
+    }
+    Ok(())
 }
 
 fn event_after(player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（任何非因为此卡导致的事件结算时）: the book excludes events this card caused --
-    // `eventAfter` carries no cause, so every settle banks one (vacuous until the
-    // (2) deferral lands).
     ctx::add_crystals(1, 0)?;
     ctx::log(
         player_id,

@@ -2395,6 +2395,19 @@ impl World {
         for p in self.st.players.iter_mut() {
             p.tokens.retain(|t| t.instance != Some(uid));
         }
+        // `world_snapshot` checkpoints held by the instance die with it, or a
+        // stale key leaks the whole world clone into every later save
+        // (design G10 §6.5).
+        let held: Vec<i32> = self
+            .world_snapshot_owners
+            .iter()
+            .filter(|(_, owners)| owners.contains(&uid))
+            .map(|(k, _)| *k)
+            .collect();
+        for key in held {
+            self.world_snapshot_owners.remove(&key);
+            self.world_snapshots.remove(&key);
+        }
     }
 
     /// Record one mark mutation for the commit's `markChanged` drain. `delta`

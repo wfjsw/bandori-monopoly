@@ -103,6 +103,12 @@ pub struct Trigger {
     pub settle_tile: i32,
     /// The settle's terminal outcome (`settle.outcome`), only on `tileResolved`.
     pub outcome: Option<game_core::engine::SettleOutcome>,
+    /// The **instance** whose card caused this trigger, `None` otherwise.
+    pub by_card_instance: Option<i32>,
+    /// The seat a landed `redirect` moved this designation from.
+    pub redirected_from: Option<i32>,
+    /// The settle this trigger belongs to, from `settleBody` on.
+    pub settle_facts: Option<game_core::engine::rules::SettleFacts>,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_skill: bool,
     /// The card whose effect this link *is*: the raised play's card on a root
@@ -281,6 +287,9 @@ impl Default for Trigger {
             join_used: false,
             settle_tile: -1,
             outcome: None,
+            by_card_instance: None,
+            redirected_from: None,
+            settle_facts: None,
             charge_skill: false,
             subject_card: None,
             join: None,
@@ -337,6 +346,9 @@ impl Trigger {
             buy: None,
             roll_source: game_core::engine::rules::RollSource::Unattributed,
             roll: None,
+            by_card_instance: None,
+            redirected_from: None,
+            settle_facts: None,
             negation: game_core::engine::rules::Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -714,6 +726,11 @@ pub trait CardWorld: Clone + 'static {
     /// Adopt the recorded pile state of an already-applied host request.
     /// The default keeps standalone host fixtures independent of engine replay.
     fn after_host(&mut self, _answer: usize) {}
+    /// Write a `World` checkpoint back (`HostJournalEntry::condition`, the
+    /// request's pre-state). Worlds that carry no `World` keep the default.
+    fn restore_from_world(&mut self, _from: &game_core::engine::World) {}
+    /// Apply a recorded guest-state decrease (`GuestOverlay::apply`).
+    fn apply_state_overlay(&mut self, _overlay: &game_core::engine::GuestOverlay) {}
 
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.

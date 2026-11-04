@@ -116,6 +116,11 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::Teleport { .. }
         | HostRequest::TeleportAs { .. } => Some("move"),
         HostRequest::Draw { .. } | HostRequest::DrawEvent { .. } => Some("draw"),
+        HostRequest::DrawEventAs { .. }
+        | HostRequest::EventDefer { .. }
+        | HostRequest::WorldSnapshot
+        | HostRequest::WorldRestore { .. }
+        | HostRequest::WorldSnapshotDrop { .. } => None,
         HostRequest::Build { .. }
         | HostRequest::OfferBuild { .. }
         | HostRequest::OfferBuildOne { .. }
@@ -730,6 +735,12 @@ impl Run {
 }
 
 impl CardWorld for Run {
+    fn restore_from_world(&mut self, from: &game_core::engine::World) {
+        self.world = game_core::engine::SharedWorld::from(from.clone());
+    }
+    fn apply_state_overlay(&mut self, overlay: &game_core::engine::GuestOverlay) {
+        overlay.apply(&mut self.world);
+    }
     // ---- G03 roll surface -------------------------------------------------
     // The run's world is the write-through copy the guest reads (and the one
     // the commit pass hands back to the live world), so the roll queries read
@@ -3167,7 +3178,13 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
     /// then runs one commit pass with the answers pre-filled so the guest's
     /// writes land on top of the host effects, same as the replay's last pass.
     /// Two guest runs per body, not *k*+1.
-    fn apply(&mut self, any: &mut dyn std::any::Any, req: HostRequest) -> Option<i32> {
+    fn apply(
+        &mut self,
+        any: &mut dyn std::any::Any,
+        log: &mut game_core::engine::GuestLog,
+        start: game_core::engine::JournalStart,
+        req: HostRequest,
+    ) -> Option<i32> {
         // Draws mutate piles and run after-hooks immediately. Re-enter the
         // guest from the engine's resulting snapshot, so both execution modes
         // see those changes before subsequent guest reads and prompts.
@@ -3196,15 +3213,20 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         let cx = unsafe { &mut *self.cx };
         let bridge = unsafe { &*self.bridge };
         let card_id: &str = unsafe { &*self.card_id };
+        let seat = self.call.player_id();
+        let uid = run.current_uid;
         cx.adopt_turn_policy(&run.world);
-        cx.overlay_guest_state(&run.world);
+        let overlay = cx.overlay_guest_state(&run.world);
         cx.overlay_guest_plan_tags(&run.world);
         let linger = run.linger_props.clone();
         let live_before = cx.live_event_count();
-        match bridge.apply_host_request(cx, req, &linger, self.call.clone(), card_id) {
+        match bridge.apply_host_request(cx, req, start, log, overlay, &linger, self.call.clone(), uid, card_id)
+        {
             Ok(v) => {
                 cx.stamp_parent_since(live_before, run.parent);
-                self.answers.push(v);
+                // The apply completed the entry and wrote the answer into the
+                // log; the guest's own store continues from that cursor.
+                let _ = seat;
                 Some(v)
             }
             Err(h) => {
@@ -3526,7 +3548,16 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &mut Trigger,
         guarded: bool,
     ) -> Flow<i32> {
-        self.drive_inner_body_from(cx, call, card_id, uid, trigger, guarded, Vec::new(), false)
+        self.drive_inner_body_from(
+            cx,
+            call,
+            card_id,
+            uid,
+            trigger,
+            guarded,
+            Default::default(),
+            false,
+        )
     }
 
     /// [`Self::drive_inner_body`] with a pre-filled answer log (STACK-01
@@ -3550,7 +3581,7 @@ impl<M: CardModules> RulesBridge<M> {
         uid: i32,
         guarded: bool,
         trigger: &Trigger,
-        answers: Vec<i32>,
+        log: game_core::engine::GuestLog,
     ) {
         let bridge = self as *const RulesBridge<M>;
         let card_id_own = card_id.to_string();
@@ -3563,7 +3594,7 @@ impl<M: CardModules> RulesBridge<M> {
         cx.insert_work(game_core::engine::ResumeFnWork {
             f: Box::new(move |cx| {
                 if std::env::var("DBG_HOOK").is_ok() {
-                    eprintln!("BODY_RESUME card={card_id_own} call={call:?} answers={answers:?}");
+                    eprintln!("BODY_RESUME card={card_id_own} call={call:?} log={log:?}");
                 }
                 if uid >= 0 {
                     cx.reentrant_hooks.push(uid);
@@ -3591,7 +3622,7 @@ impl<M: CardModules> RulesBridge<M> {
                     uid,
                     &mut trigger_own,
                     guarded,
-                    answers,
+                    log,
                     true,
                 );
                 if uid >= 0 {
@@ -3624,11 +3655,11 @@ impl<M: CardModules> RulesBridge<M> {
         uid: i32,
         trigger: &mut Trigger,
         guarded: bool,
-        answers: Vec<i32>,
+        log: game_core::engine::GuestLog,
         resumed: bool,
     ) -> Flow<i32> {
         cx.world_mut().enter_plan_command(resumed);
-        let r = self.drive_inner_body_scoped(cx, call, card_id, uid, trigger, guarded, answers);
+        let r = self.drive_inner_body_scoped(cx, call, card_id, uid, trigger, guarded, log);
         cx.world_mut().leave_plan_command();
         r
     }
@@ -3641,13 +3672,24 @@ impl<M: CardModules> RulesBridge<M> {
         uid: i32,
         trigger: &mut Trigger,
         guarded: bool,
-        mut answers: Vec<i32>,
+        prefill: game_core::engine::GuestLog,
     ) -> Flow<i32> {
-        // A fresh execution (a resume pre-fills `answers`) gets a ledger id of
+        // A fresh execution (a resume pre-fills `log`) gets a ledger id of
         // its own, so the previous execution's writes cannot suppress this
         // one's. A resume keeps the id it was started with.
-        if answers.is_empty() {
+        if prefill.answers.is_empty() {
             cx.reset_factor_ledger();
+        }
+        // The parked log of a resume (a halt carried it on `Pending`, a
+        // suspension on the work item) becomes this pass's log (G10 §6.3.3).
+        // The journal is re-marked so each in-flight entry is re-applied at
+        // its own site.
+        let mut log = std::mem::take(&mut cx.guest_log);
+        if !prefill.answers.is_empty() {
+            log = prefill;
+        }
+        if !log.journal.is_empty() {
+            log.seed_reapply();
         }
         let ledger_exec = cx.ledger_exec();
         let mut pile_base: Option<PileCheckpoint> = None;
@@ -3662,8 +3704,8 @@ impl<M: CardModules> RulesBridge<M> {
                 call, card_id, uid, trigger.kind, trigger.player_id, trigger.tile, trigger.instance
             );
             eprintln!(
-                "DRIVE_SEAT player_id={} by_card={:?} target={} answers={} repl={:?}",
-                trigger.player_id, trigger.by_card, trigger.target, trigger.answers, answers
+                "DRIVE_SEAT player_id={} by_card={:?} target={} log={:?} repl={:?}",
+                trigger.player_id, trigger.by_card, trigger.target, trigger.answers, log
             );
         }
         let overlay_base = cx.guest_overlay_depth();
@@ -3712,6 +3754,16 @@ impl<M: CardModules> RulesBridge<M> {
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
+            if std::env::var("G10_DBG").is_ok() {
+                eprintln!(
+                    "PASS card={card_id} own0={} pos0={} money0={} stamp={} ptr={:?}",
+                    cx.world().st.owners.iter().filter(|&&o| o == 0).count(),
+                    cx.world().st.players.get(0).map(|p| p.pos).unwrap_or(-1),
+                    cx.world().st.players.get(0).map(|p| p.money).unwrap_or(-1),
+                    cx.world().recent.len(),
+                    &*cx.world() as *const game_core::engine::World
+                );
+            }
             cx.restore_guests_to(overlay_base);
             // Share the live world (fix B): the body's writes detach a private
             // copy; a body that never writes and has no pile base never clones.
@@ -3882,11 +3934,12 @@ impl<M: CardModules> RulesBridge<M> {
                     unsafe { (*cx_ptr).activation.push(id) };
                 }
             };
+            cx.guest_log = std::mem::take(&mut log);
             let mut guest = || -> Result<Option<Result<Outcome<Run>, RuleError>>, RuleError> {
                 if guarded {
                     match self
                         .ruleset
-                        .run_hook(&run, call.clone(), &answers, Some(&mut announce))
+                        .run_hook(&run, call.clone(), &cx.guest_log, Some(&mut announce))
                     {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
@@ -3898,7 +3951,7 @@ impl<M: CardModules> RulesBridge<M> {
                     Ok(Some(self.ruleset.run(
                         &run,
                         call.clone(),
-                        &answers,
+                        &cx.guest_log,
                         Some(&mut announce),
                     )))
                 }
@@ -3910,6 +3963,8 @@ impl<M: CardModules> RulesBridge<M> {
                 Some(h) => crate::inline::with_inline_host(h, guest),
                 None => guest(),
             };
+            // Harvest the log the guest pass left in the store.
+            log = std::mem::take(&mut cx.guest_log);
             // A nested prompt the provider declined parks a [`Halt`] on the
             // inline host; propagate it and drop the body (the engine routine
             // re-runs from its snapshot, as today).
@@ -3924,12 +3979,9 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 if h.is_suspended() {
                     // A counter walk inside the request suspended: re-drive
-                    // this body after the nested work, carrying the answers
+                    // this body after the nested work, carrying the log
                     // the inline pass already consumed.
-                    let mut answers_own = answers.clone();
-                    if let Some(h) = inline.as_mut() {
-                        answers_own.append(&mut h.answers);
-                    }
+                    let log_own = log.clone();
                     self.push_body_resume(
                         cx,
                         call.clone(),
@@ -3937,16 +3989,11 @@ impl<M: CardModules> RulesBridge<M> {
                         uid,
                         guarded,
                         trigger,
-                        answers_own,
+                        log_own,
                     );
                 }
+                cx.guest_log = log;
                 return Err(h);
-            }
-            // Prompts answered inline this run go on the drive's log **in
-            // consumption order**, before whatever pause ended the run appends
-            // its own answer -- the same bookkeeping the `NeedInput` arm does.
-            if let Some(h) = inline.as_mut() {
-                answers.append(&mut h.answers);
             }
             let outcome = match wrapped {
                 Ok(Some(outcome)) => outcome,
@@ -3955,7 +4002,8 @@ impl<M: CardModules> RulesBridge<M> {
                 Err(e) => Err(e),
             };
             match outcome {
-                Ok(Outcome::Done(mut after)) => {
+                Ok(Outcome::Done(mut after, done_log)) => {
+                    log = done_log;
                     // Simulation mode (`docs/BOT.md` §3.2): the learn pass
                     // above ran the body once with every pause answered
                     // inline against the **live** world, so the host effects
@@ -3964,9 +4012,9 @@ impl<M: CardModules> RulesBridge<M> {
                     // `guest_writes(live + host_effects)` -- the guest's writes
                     // *on top* of the host effects -- so when any pause was
                     // answered we run one commit pass with the collected
-                    // answers pre-filled and commit that instead. Two guest
+                    // log pre-filled and commit that instead. Two guest
                     // runs per body, not *k*+1, and the same final world.
-                    if answers.is_empty() {
+                    if log.answers.is_empty() {
                         let mut after = after;
                         posted_ids = std::mem::take(&mut after.posted);
                         if after.own_activation >= 0 {
@@ -4078,11 +4126,12 @@ impl<M: CardModules> RulesBridge<M> {
                         w.flash_policy = flash_policy_cell.get();
                         w.flash_cued = flash_cued_cell.get();
                     };
+                    cx.guest_log = std::mem::take(&mut log);
                     let outcome2 = if guarded {
                         match self.ruleset.run_hook(
                             &run,
                             call.clone(),
-                            &answers,
+                            &cx.guest_log,
                             Some(&mut announce),
                         ) {
                             Err(e) => Err(e),
@@ -4091,10 +4140,12 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     } else {
                         self.ruleset
-                            .run(&run, call.clone(), &answers, Some(&mut announce))
+                            .run(&run, call.clone(), &cx.guest_log, Some(&mut announce))
                     };
+                    log = std::mem::take(&mut cx.guest_log);
                     match outcome2 {
-                        Ok(Outcome::Done(after2)) => {
+                        Ok(Outcome::Done(after2, done_log)) => {
+                            log = done_log;
                             let mut after2 = after2;
                             posted_ids = std::mem::take(&mut after2.posted);
                             if after2.own_activation >= 0 {
@@ -4161,7 +4212,8 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                 }
-                Ok(Outcome::NeedInput(p, mut paused)) => {
+                Ok(Outcome::NeedInput(p, mut paused, input_log)) => {
+                    log = input_log;
                     let player_id = p.player_id;
                     let kind = p.kind;
                     let ask = prompt_to_ask(p);
@@ -4207,14 +4259,15 @@ impl<M: CardModules> RulesBridge<M> {
                         .copied()
                         .filter(|&x| x >= 0)
                         .unwrap_or(reply.fallback);
-                    answers.push(recorded_answer(kind, &items, v));
+                    log.answers.push(recorded_answer(kind, &items, v));
                     let _ = player_id;
                 }
                 // A card-driven payment: the same money pipeline as `money()`
                 // -- PaySplitAdd -> PaySplitMul -> PaySplitChoose -> PaySplitAt -> the `pay` counteraction
                 // window -- then replay the effect with the adjudicated amount
                 // (0 = cancelled, and PayAfter runs with 0).
-                Ok(Outcome::NeedHost(req, mut run)) => {
+                Ok(Outcome::NeedHost(req, mut run, host_log, journal_start)) => {
+                    log = host_log;
                     // Keep the write-through log across the re-run.
                     posted_ids = std::mem::take(&mut run.posted);
                     if run.own_activation >= 0 {
@@ -4233,7 +4286,8 @@ impl<M: CardModules> RulesBridge<M> {
                     // routine's duration -- `can_pay` must see it -- and dropped
                     // at the next iteration's top, so the replay re-applies it
                     // rather than double-counting. See `PlayCtx::overlay_guest_state`.
-                    cx.overlay_guest_state(&run.world);
+                    // The captured overlay also goes on the journal entry.
+                    let overlay = cx.overlay_guest_state(&run.world);
                     // A `plan::set_tag` made right before a `settleAt` (e.g.
                     // 微笑游行's redirect) must be on the live frame the nested
                     // settle reads (`spec/abi/G04-move-plan.md` §4.3).
@@ -4266,8 +4320,8 @@ impl<M: CardModules> RulesBridge<M> {
                         if cx.is_draining_work() {
                             let player_id = player_id.max(0) as usize;
                             let tile = tile.max(0) as usize;
-                            let mut answers2 = answers.clone();
-                            answers2.push(1);
+                            let mut log2 = log.clone();
+                            log2.answers.push(1);
                             let frame_m = cx.card_settle_move(player_id, tile, is_main_move);
                             cx.begin_suspend_group();
                             let bridge = self as *const RulesBridge<M>;
@@ -4315,7 +4369,7 @@ impl<M: CardModules> RulesBridge<M> {
                                         uid_own,
                                         &mut trigger_own,
                                         guarded_own,
-                                        answers2,
+                                        log2,
                                         true,
                                     );
                                     if uid_own >= 0 {
@@ -4374,8 +4428,8 @@ impl<M: CardModules> RulesBridge<M> {
                             .and_then(|c| c.downcast_ref::<CounteractChainCursor>())
                             .map(|c| (c.chain, c.index))
                         {
-                            let mut answers2 = answers.clone();
-                            answers2.push(1);
+                            let mut log2 = log.clone();
+                            log2.answers.push(1);
                             cx.begin_suspend_group();
                             cx.push_work(JoinWork {
                                 bridge: self as *const RulesBridge<M>,
@@ -4387,7 +4441,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 uid,
                                 guarded,
                                 trigger: trigger.clone(),
-                                answers: answers2,
+                                log: log2,
                             });
                             return Err(game_core::engine::Halt::suspended());
                         }
@@ -4406,37 +4460,41 @@ impl<M: CardModules> RulesBridge<M> {
                     let live_before = cx.live_event_count();
                     if std::env::var("DBG_HOOK").is_ok() {
                         eprintln!(
-                            "APPLY_REQ card={card_id} draining={} answers={} req={req:?}",
+                            "APPLY_REQ card={card_id} draining={} log={} req={req:?}",
                             cx.is_draining_work(),
-                            answers.len()
+                            log.answers.len()
                         );
                     }
                     let v = match self.apply_host_request(
                         cx,
                         req,
+                        journal_start.unwrap_or(game_core::engine::JournalStart::Push),
+                        &mut log,
+                        overlay,
                         &run.linger_props,
                         call.clone(),
+                        uid,
                         card_id,
                     ) {
                         Ok(v) => v,
                         Err(e) => {
-                            if !e.is_suspended() {
-                                return Err(e);
-                            }
                             // A counter walk inside the request suspended. The
                             // body has no Rust-stack continuation: re-drive it
                             // once the parked walk (and any join window) has
                             // run. The drive's host-answer log is carried, so
                             // the requests already applied are not repeated.
-                            self.push_body_resume(
-                                cx,
-                                call,
-                                card_id,
-                                uid,
-                                guarded,
-                                trigger,
-                                answers.clone(),
-                            );
+                            if e.is_suspended() {
+                                self.push_body_resume(
+                                    cx,
+                                    call,
+                                    card_id,
+                                    uid,
+                                    guarded,
+                                    trigger,
+                                    log.clone(),
+                                );
+                            }
+                            cx.guest_log = log;
                             return Err(e);
                         }
                     };
@@ -4460,9 +4518,11 @@ impl<M: CardModules> RulesBridge<M> {
                     cx.stamp_parent_since(live_before, activation_id);
                     if pile_base.is_some() {
                         pile_checkpoints
-                            .insert(answers.len(), PileCheckpoint::new(cx.world_copy()));
+                            .insert(log.answers.len(), PileCheckpoint::new(cx.world_copy()));
                     }
-                    answers.push(v);
+                    // The apply already wrote the answer at the entry's slot
+                    // and advanced the cursor; the re-run consumes it there.
+                    let _ = v;
                 }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
@@ -4558,13 +4618,118 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(answer)
     }
 
+    /// Apply one request and record it in the journal (design G10 §6.3.1).
+    ///
+    /// Every variant is effectful by construction, and any effectful call can
+    /// be followed by a prompt in a nested drive -- so the entry goes down
+    /// before the body runs and only comes off on its answer. `start` is the
+    /// relation the guest pause point harvested: a new entry, an in-flight one
+    /// re-applied, or a completed one whose arguments the body recomputed.
+    /// `overlay` is the guest state the boundary just applied (the entry keeps
+    /// it for the resume path).
+    #[allow(clippy::too_many_arguments)]
     fn apply_host_request(
         &self,
         cx: &mut PlayCtx,
         req: HostRequest,
+        start: game_core::engine::JournalStart,
+        log: &mut game_core::engine::GuestLog,
+        overlay: game_core::engine::GuestOverlay,
+        linger_props: &std::collections::BTreeMap<String, i32>,
+        call: Call,
+        uid: i32,
+        card_id: &str,
+    ) -> Flow<i32> {
+        let seat = call.player_id();
+        let request = game_core::engine::JournalRequest::from(&req);
+        let condition = Box::new(cx.world_copy());
+        if std::env::var("G10_DBG").is_ok() {
+            eprintln!("AHR entry start={start:?} req={request:?}");
+        }
+        let index = match start {
+            game_core::engine::JournalStart::Resume(index) => {
+                let e = &mut log.journal[index];
+                e.request = request;
+                e.card = card_id.to_string();
+                e.uid = uid;
+                e.player = seat;
+                e.condition = condition;
+                e.linger = linger_props.clone();
+                e.guest = overlay;
+                index
+            }
+            game_core::engine::JournalStart::Push
+            | game_core::engine::JournalStart::Replace(_) => {
+                let slot = match start {
+                    game_core::engine::JournalStart::Replace(slot) => slot,
+                    _ => log.cursor,
+                };
+                log.journal.push(game_core::engine::HostJournalEntry {
+                    slot,
+                    request,
+                    card: card_id.to_string(),
+                    uid,
+                    player: seat,
+                    condition,
+                    linger: linger_props.clone(),
+                    guest: overlay,
+                });
+                log.journal.len() - 1
+            }
+        };
+        let res = self.apply_host_request_body(cx, req, start, linger_props, call, card_id, uid, seat);
+        if std::env::var("G10_DBG").is_ok() {
+            eprintln!(
+                "AHR done start={start:?} idx={index} res={:?}",
+                res.as_ref().map_err(|e| format!("{e:?}"))
+            );
+        }
+        match res {
+            Ok(v) => {
+                // The slot is read *now*: a nested insertion during the body
+                // shifted it, and the enclosing answer must land after its
+                // nested answers.
+                let slot = log.journal[index].slot;
+                let entry = log.journal.remove(index);
+                let replace = matches!(start, game_core::engine::JournalStart::Replace(_));
+                if !replace {
+                    // Everything still in flight at or after this slot -- the
+                    // enclosing request, whose own answer is not written yet --
+                    // moves past the answer (design G10 §6.3.4).
+                    log.shift_slots(slot);
+                }
+                if replace {
+                    if slot < log.answers.len() {
+                        log.answers[slot] = v;
+                    } else {
+                        log.answers.push(v);
+                    }
+                } else {
+                    log.answers.insert(slot.min(log.answers.len()), v);
+                }
+                log.last.insert(slot, entry);
+                log.cursor = slot + 1;
+                Ok(v)
+            }
+            Err(e) => {
+                if e.is_ask() {
+                    *log.reapply.entry(log.journal[index].slot).or_default() += 1;
+                }
+                Err(e)
+            }
+        }
+    }
+
+    fn apply_host_request_body(
+        &self,
+        cx: &mut PlayCtx,
+        req: HostRequest,
+        start: game_core::engine::JournalStart,
         linger_props: &std::collections::BTreeMap<String, i32>,
         call: Call,
         card_id: &str,
+        uid: i32,
+        seat: i32,
     ) -> Flow<i32> {
         match req {
             HostRequest::Gate { player_id, kind } => {
@@ -4590,6 +4755,16 @@ impl<M: CardModules> RulesBridge<M> {
                 player_id,
                 mut plan,
             } => {
+                // A re-entered (Resume) or recomputed (Replace) move is the
+                // `condition` world's move re-run, not a second one: the first
+                // application already set the turn's main-move latch, and
+                // `run_planned_move` refuses a second main move (design G10
+                // §6.3.3).
+                if !matches!(start, game_core::engine::JournalStart::Push) {
+                    let mut w = cx.world_copy();
+                    w.turn.main_moved = false;
+                    cx.swap_world(w);
+                }
                 // An event-driven move is not a main move (`docs/EVENTS.md`):
                 // 「移动X」 / 「移动1d20」 go through even when the turn's
                 // main move is already spent. Mark it so `run_planned_move` does
@@ -4810,6 +4985,28 @@ impl<M: CardModules> RulesBridge<M> {
             }
             HostRequest::DrawEvent { player_id } => {
                 cx.card_draw_event(player_id.max(0) as usize)?;
+                return Ok(1);
+            }
+            HostRequest::DrawEventAs { player_id, tile } => {
+                cx.card_draw_event_as(player_id.max(0) as usize, tile)?;
+                return Ok(1);
+            }
+            HostRequest::EventDefer {
+                event,
+                player_id,
+                tile,
+            } => {
+                let v = cx.card_event_defer(event, player_id, tile, uid, seat, card_id);
+                return Ok(v);
+            }
+            HostRequest::WorldSnapshot => {
+                return Ok(cx.card_world_snapshot(uid));
+            }
+            HostRequest::WorldRestore { key } => {
+                return Ok(cx.card_world_restore(key, uid) as i32);
+            }
+            HostRequest::WorldSnapshotDrop { key } => {
+                cx.card_world_snapshot_drop(key, uid);
                 return Ok(1);
             }
             HostRequest::PayRent {
@@ -5503,6 +5700,25 @@ impl<M: CardModules> RulesBridge<M> {
         activation_id: i32,
     ) -> Flow<i32> {
         let mut after = after;
+        if std::env::var("G10_DBG").is_ok() {
+            let l = cx.world();
+            eprintln!(
+                "PRE_COMMIT card={card_id} after_owned={} live_owned={} after_ptr={:?} live_ptr={:?}",
+                after.owned_count(0),
+                l.st.owners.iter().filter(|&&o| o == 0).count(),
+                &*after.world as *const game_core::engine::World,
+                l as *const game_core::engine::World
+            );
+        }
+        if std::env::var("G10_DBG").is_ok() {
+            eprintln!(
+                "COMMIT card={card_id} pos0={} owned0={} stamp={} ptr={:?}",
+                after.world.st.players.get(0).map(|p| p.pos).unwrap_or(-1),
+                after.owned_count(0),
+                after.world.stamp(),
+                &*after.world as *const game_core::engine::World
+            );
+        }
         if silent {
             self.check_silent_body(card_id, &after);
         }
@@ -5659,7 +5875,38 @@ impl<M: CardModules> RulesBridge<M> {
             f.no_flash = false;
         }
         let mark_rows = std::mem::take(&mut after.world.mark_log);
-        cx.swap_shared(after.world);
+        // The completing copy predates every nested application made during
+        // this pass: a host effect lands on live only, so swapping the copy
+        // in would roll those effects back. Keep the live world as the base
+        // and cross what the guest itself wrote -- the same boundary the
+        // `NeedHost` arm uses before applying a request (design G10 §6.3.3).
+        let guest_overlay = cx.capture_guest_state(&after.world);
+        cx.adopt_turn_policy(&after.world);
+        cx.overlay_guest_plan_tags(&after.world);
+        let mut w = cx.world_copy();
+        for h in &after.world.hidden {
+            if !w.hidden.contains(h) {
+                w.hidden.push(h.clone());
+            }
+        }
+        guest_overlay.apply(&mut w);
+        // Counter writes are direct guest writes (`ctx::set_counter`), not
+        // requests; they ride the copy and must cross like the state.
+        for (gi, gl) in after.world.st.players.iter().enumerate() {
+            for (gj, gf) in gl.field.iter().enumerate() {
+                if let Some(lf) = w.st.players.get_mut(gi).and_then(|p| p.field.get_mut(gj)) {
+                    lf.counters = gf.counters.clone();
+                }
+            }
+        }
+        for (gj, gf) in after.world.st.board_field.iter().enumerate() {
+            if let Some(lf) = w.st.board_field.get_mut(gj) {
+                lf.counters = gf.counters.clone();
+            }
+        }
+        w.skip_log = false;
+        w.stub = Default::default();
+        cx.swap_shared(game_core::engine::SharedWorld::from(w));
         // Empty-deck maintenance precedes all settlement after-hooks.
         for player_id in after.reshuffle_log {
             self.raise_core(cx, "reshuffled", player_id, |_| {})?;
@@ -6313,6 +6560,9 @@ impl<M: CardModules> RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        t.by_card_instance = trigger.by_card_instance;
+        t.redirected_from = trigger.redirected_from;
+        t.settle_facts = trigger.settle_facts;
         // The subject / join block / pending answers / copy source are link
         // state, not body output: carry whatever the walk left on them.
         t.subject_card = trigger.subject_card.clone();
@@ -6683,6 +6933,7 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(false);
         };
         if s >= cx.state().players.len() || cx.world().out(s) {
+            if std::env::var("G10_DBG").is_ok() { eprintln!("GATE out/len"); }
             // The refusal comes first: a hook-only report that this abnormal
             // never landed, with no window (design G06 §6.7).
             self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
@@ -6720,6 +6971,7 @@ impl<M: CardModules> RulesBridge<M> {
             })?
             .is_cancelled()
         {
+            if std::env::var("G10_DBG").is_ok() { eprintln!("GATE untargetable"); }
             cx.log(
                 player_id,
                 Msg::new("log.untargetable").player_id("who", player_id),
@@ -6732,6 +6984,7 @@ impl<M: CardModules> RulesBridge<M> {
             .raise_core(cx, "abnormalGuard", by_player, on)?
             .is_cancelled()
         {
+            if std::env::var("G10_DBG").is_ok() { eprintln!("GATE abnormalGuard"); }
             self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
             return Ok(false);
         }
@@ -6739,6 +6992,7 @@ impl<M: CardModules> RulesBridge<M> {
         // name them and still land as nothing, so an immune recipient is not
         // offered (design G06 §2.13, §6.7).
         if by_player != player_id && self.immune(cx, player_id, by_player)? {
+            if std::env::var("G10_DBG").is_ok() { eprintln!("GATE immune"); }
             self.refuse_abnormal(cx, player_id, by_player, kind, on)?;
             return Ok(false);
         }
@@ -6746,6 +7000,7 @@ impl<M: CardModules> RulesBridge<M> {
         // Self-applied abnormals (「因任何原因」/「包括你的技能」) open the
         // window too; cards filter by their guards (`effect::has(Abnormal)`).
         {
+            if std::env::var("G10_DBG").is_ok() { eprintln!("GATE window"); }
             let declared = self.raise_core(cx, "effect", by_player, |t| {
                 on(t);
                 t.effects.push(game_core::engine::rules::Effect {
@@ -6757,6 +7012,7 @@ impl<M: CardModules> RulesBridge<M> {
                 });
             })?;
             if declared.is_cancelled() {
+                if std::env::var("G10_DBG").is_ok() { eprintln!("GATE cancelled"); }
                 return Ok(false);
             }
         }
@@ -6852,6 +7108,10 @@ impl<M: CardModules> RulesBridge<M> {
         // re-names first, and the gate then checks the *final* name -- naming a
         // 夏日合宿-shielded seat and having EXIST move it onto the EXIST holder
         // must still land (C12).
+        // The declared seat is kept: when a redirect lands, the designation's
+        // cause records where it was moved from (design G10 §6.4).
+        let declared = p;
+        let mut landed: Option<i32> = None;
         let mut p = p;
         if single_target {
             let r = self.raise_core(cx, "redirect", by_player, |t| {
@@ -6870,6 +7130,7 @@ impl<M: CardModules> RulesBridge<M> {
                         .player_id("from", p)
                         .player_id("to", to),
                 );
+                landed = Some(declared);
                 p = to;
             }
         }
@@ -6893,7 +7154,7 @@ impl<M: CardModules> RulesBridge<M> {
         self.note_designation(cx, p, by_player);
         // ---- chain ----------------------------------------------------
         // Counters answer the declaration; they may negate or spare it.
-        if !self.target_window(cx, p, -1, by_player, card)? {
+        if !self.target_window(cx, p, -1, by_player, card, landed)? {
             return Ok(-1);
         }
         // A counter inside the window may have cancelled this very
@@ -6952,7 +7213,7 @@ impl<M: CardModules> RulesBridge<M> {
             }
             self.note_designation(cx, owner, by_player);
             // Chain first: the owner answers the declaration. Then resolution.
-            if !self.target_window(cx, owner, tile, by_player, card)? {
+            if !self.target_window(cx, owner, tile, by_player, card, None)? {
                 return Ok(-1);
             }
             if cx.world().turn.cancelled_designations.contains(&owner) {
@@ -6980,18 +7241,21 @@ impl<M: CardModules> RulesBridge<M> {
         tile: i32,
         by: i32,
         card: &str,
+        redirected: Option<i32>,
     ) -> Flow<bool> {
         self.raise_core(cx, "targeted", by, |t| {
             t.target = p;
             t.tile = tile;
             t.card = Some(card.to_string());
             t.by_card = Some(by);
+            t.redirected_from = redirected;
         })?;
         let declared = self.raise_core(cx, "effect", by, |t| {
             t.target = p;
             t.tile = tile;
             t.card = Some(card.to_string());
             t.by_card = Some(by);
+            t.redirected_from = redirected;
             t.effects.push(game_core::engine::rules::Effect {
                 kind: "target".into(),
                 target: p,
@@ -7008,6 +7272,7 @@ impl<M: CardModules> RulesBridge<M> {
             t.tile = tile;
             t.card = Some(card.to_string());
             t.by_card = Some(by);
+            t.redirected_from = redirected;
         })?;
         Ok(true)
     }
@@ -8437,6 +8702,14 @@ impl<M: CardModules> RulesBridge<M> {
         field.iter().any(|(uid, id)| {
             // A marked instance offers its effective card's counteraction.
             let eff = surface_card(cx.world(), *uid, id);
+            if std::env::var("HFC_DBG").is_ok() {
+                let idx = self.ruleset.card(&eff);
+                eprintln!(
+                    "HFC seat={seat} uid={uid} id={id} eff={eff} prop={:?} ctp={:?}",
+                    idx.map(|i| self.field_counter_prop(i)),
+                    idx.map(|i| self.counteracts_to_play(i, top))
+                );
+            }
             let Some(idx) = self.ruleset.card(&eff) else {
                 return false;
             };
@@ -8835,7 +9108,15 @@ impl<M: CardModules> RulesBridge<M> {
                     let need_fresh = crate::condition::cond_reads_window_hand(&condition.cond);
                     let scope = memo.scope_for(&live, need_fresh);
                     let cand = crate::condition::fill_candidate(&live, s as i32, &card_id, false);
-                    if !crate::condition::condition_allows(Some(condition), Some(scope), &cand) {
+                    let allows =
+                        crate::condition::condition_allows(Some(condition), Some(scope), &cand);
+                    if std::env::var("HFC_DBG").is_ok() {
+                        eprintln!(
+                            "GUARD seat={s} card={card_id} actor={} verdict={allows}",
+                            top.player_id
+                        );
+                    }
+                    if !allows {
                         false
                     } else if guard_is_none {
                         // G4: the condition alone decides -- no `Run`, no world
@@ -9250,6 +9531,9 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         join_used: t.join.as_ref().is_some_and(|j| j.used.iter().any(|&x| x)),
         settle_tile: t.settle_tile,
         outcome: t.outcome,
+        by_card_instance: t.by_card_instance,
+        redirected_from: t.redirected_from,
+        settle_facts: t.settle_facts,
         charge_skill: t.charge_skill,
         subject_card: subject,
         join: t.join.as_ref().map(Into::into),
@@ -9744,7 +10028,7 @@ struct JoinWork<M: CardModules> {
     uid: i32,
     guarded: bool,
     trigger: Trigger,
-    answers: Vec<i32>,
+    log: game_core::engine::GuestLog,
 }
 
 impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
@@ -9816,7 +10100,7 @@ impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
                     this.uid,
                     &mut trigger,
                     this.guarded,
-                    this.answers,
+                    this.log,
                     true,
                 );
                 match r2 {
@@ -9892,7 +10176,7 @@ impl<M: CardModules> game_core::engine::WorkItem for JoinWork<M> {
                         uid: this.uid,
                         guarded: this.guarded,
                         trigger,
-                        answers: this.answers,
+                        log: this.log,
                     });
                 }
                 Err(e)
@@ -11223,10 +11507,10 @@ impl<M: CardModules> RulesBridge<M> {
                 kind,
                 player_id: owner,
             },
-            &[],
+            &Default::default(),
             None,
         ) {
-            if let Outcome::Done(after) = hr.outcome {
+            if let Outcome::Done(after, _) = hr.outcome {
                 *trig = after.trigger;
             }
         }
@@ -12334,6 +12618,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             t.spare(s);
         }
         t.target = trigger.target;
+        t.by_card_instance = trigger.by_card_instance;
+        t.redirected_from = trigger.redirected_from;
+        t.settle_facts = trigger.settle_facts;
         // The subject / join block / pending answers / copy source are link
         // state, not body output: carry whatever the walk left on them.
         t.subject_card = trigger.subject_card.clone();

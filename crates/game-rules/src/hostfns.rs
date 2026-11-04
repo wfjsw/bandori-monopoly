@@ -607,7 +607,11 @@ pub fn move_units<C: HostCtx>(
 }
 
 pub fn self_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok(c.st().wr().self_uid())
+    let v = c.st().wr().self_uid();
+    if std::env::var("G10_DBG").is_ok() {
+        eprintln!("SELF_UID -> {v}");
+    }
+    Ok(v)
 }
 
 pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
@@ -681,6 +685,7 @@ pub fn adjust_money<C: HostCtx>(
             delta,
             src: Some(src.clone()),
         },
+        game_core::engine::JournalStart::Push,
     )? {
         return Ok(v);
     }
@@ -853,7 +858,11 @@ pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 }
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    Ok({ c.st().wr().owned_count(player_id) })
+    let n = c.st().wr().owned_count(player_id);
+    if std::env::var("G10_DBG").is_ok() {
+        eprintln!("OWNED_COUNT p={player_id} -> {n}");
+    }
+    Ok(n)
 }
 
 pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32, HostError> {
@@ -885,7 +894,11 @@ pub fn tile_in<C: HostCtx>(
     cl: i32,
 ) -> Result<i32, HostError> {
     let class = guest_str(c, cptr, cl)?;
-    Ok(c.st().wr().tile_in(player_id, tile, &class) as i32)
+    let v = c.st().wr().tile_in(player_id, tile, &class) as i32;
+    if class == "livehouse" && std::env::var("G10_DBG").is_ok() {
+        eprintln!("TILE_IN livehouse p={player_id} t={tile} -> {v}");
+    }
+    Ok(v)
 }
 
 pub fn paid_in_settle<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
@@ -1082,20 +1095,15 @@ pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostEr
             c.st_mut().w().draw(player_id, reply.clamp(0, n.max(0)))
         }
     }
-    {
-        let st = c.st_mut();
-        if let Some(&reply) = st.answers.get(st.next_answer) {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(apply_reply(c, player_id, n, reply));
-        }
+    let reply = crate::inline::request_or_pause(
+        c,
+        HostRequest::Draw { player_id, n },
+        crate::inline::Pause::Sentinel,
+    )?;
+    if reply == abi::EXIT_NEED_INPUT {
+        return Ok(reply);
     }
-    if let Some(reply) = crate::inline::request_or_inline(c, HostRequest::Draw { player_id, n })? {
-        return Ok(apply_reply(c, player_id, n, reply));
-    }
-    c.st_mut().host_request = Some(HostRequest::Draw { player_id, n });
-    Ok(abi::EXIT_NEED_INPUT)
+    Ok(apply_reply(c, player_id, n, reply))
 }
 
 pub fn draw_event<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
@@ -1103,6 +1111,77 @@ pub fn draw_event<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErro
         let req = HostRequest::DrawEvent { player_id };
         return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
     }
+}
+
+/// Draw the top event attributed to `player_id` at `tile` (`-1` = its current
+/// position).
+pub fn draw_event_as<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostError> {
+    let req = HostRequest::DrawEventAs { player_id, tile };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// Suspend the `event` link this hook runs on. Reads the live trigger's
+/// mirror and answers 0 without a request on any other kind.
+pub fn event_defer<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    let (kind, event, player_id, tile) = {
+        let t = c.st().wr().trigger();
+        (t.kind.clone(), t.card.clone(), t.player_id, t.tile)
+    };
+    if kind != card_sdk::abi::TriggerKind::Event {
+        return Ok(0);
+    }
+    let Some(event) = event else { return Ok(0) };
+    let req = HostRequest::EventDefer {
+        event,
+        player_id,
+        tile,
+    };
+    if std::env::var("G10_DBG").is_ok() {
+        let st = c.st();
+        eprintln!(
+            "event_defer: cursor={} answers={:?} journal={:?} reapply={:?}",
+            st.log.cursor, st.log.answers, st.log.journal.iter().map(|e| e.slot).collect::<Vec<_>>(), st.log.reapply
+        );
+    }
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+pub fn trig_by_card_instance<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    let v = c.st().wr().trigger().by_card_instance.unwrap_or(-1);
+    if std::env::var("G10_DBG").is_ok() {
+        eprintln!("BY_CARD_INSTANCE -> {v}");
+    }
+    Ok(v)
+}
+
+pub fn trig_settle_facts<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .settle_facts
+        .map_or(0, |f| f.bits()))
+}
+
+pub fn trig_settle_paid_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().settle_facts.map_or(0, |f| f.paid_value))
+}
+
+pub fn trig_redirected_from<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().redirected_from.unwrap_or(-1))
+}
+
+pub fn world_snapshot<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    crate::inline::request_or_pause(c, HostRequest::WorldSnapshot, crate::inline::Pause::Sentinel)
+}
+
+pub fn world_restore<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> {
+    let req = HostRequest::WorldRestore { key };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+pub fn world_snapshot_drop<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> {
+    let req = HostRequest::WorldSnapshotDrop { key };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
 pub fn pay_rent<C: HostCtx>(
@@ -1670,10 +1749,9 @@ fn invoke_inner<C: HostCtx>(
     let mut nested = HostState::new(
         rules.clone(),
         st.world.take().expect("world present"),
-        std::mem::take(&mut st.answers),
+        std::mem::take(&mut st.log),
         st.depth + 1,
     );
-    nested.next_answer = st.next_answer;
     // The nested store carries the caller's stack so its body can read this
     // frame; the caller takes the stack back and pops it on return.
     nested.invoke_frames = std::mem::take(&mut st.invoke_frames);
@@ -1696,8 +1774,7 @@ fn invoke_inner<C: HostCtx>(
         w.set_play_from_hand(was_from_hand);
         w.set_placed_during_play(was_placed);
     }
-    st.answers = inner.answers;
-    st.next_answer = inner.next_answer;
+    st.log = inner.log;
     if inner.asked.is_some() {
         st.asked = inner.asked;
     }
@@ -1976,27 +2053,14 @@ pub fn teleport_as<C: HostCtx>(
     settles: i32,
     is_main_move: i32,
 ) -> Result<(), HostError> {
-    {
-        let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(());
-        }
-    }
-    let make = || HostRequest::TeleportAs {
+    let req = HostRequest::TeleportAs {
         player_id,
         tile,
         settles: settles != 0,
         is_main_move: is_main_move != 0,
     };
-    if crate::inline::request_or_inline(c, make())?.is_some() {
-        return Ok(());
-    }
-    let st = c.st_mut();
-    st.host_request = Some(make());
-    Err(HostError::NeedInput)
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)?;
+    Ok(())
 }
 
 /// [`log`] with an explicit event kind (the engine's own skip / over lines use
@@ -2331,21 +2395,12 @@ pub fn teleport_to<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<(
     // write once; the replay reads the logged answer and skips. In
     // simulation mode the engine applies it inline and the guest
     // continues on the same world.
-    {
-        let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(());
-        }
-    }
-    if crate::inline::request_or_inline(c, HostRequest::Teleport { player_id, tile })?.is_some() {
-        return Ok(());
-    }
-    let st = c.st_mut();
-    st.host_request = Some(HostRequest::Teleport { player_id, tile });
-    Err(HostError::NeedInput)
+    crate::inline::request_or_pause(
+        c,
+        HostRequest::Teleport { player_id, tile },
+        crate::inline::Pause::Trap,
+    )?;
+    Ok(())
 }
 
 pub fn gate<C: HostCtx>(c: &mut C, player_id: i32, kind: i32) -> Result<i32, HostError> {
@@ -2419,34 +2474,24 @@ pub fn run_planned_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, Ho
     // captured here because the run's world copy is discarded on pause
     // (in simulation mode it is not -- the engine runs the move against
     // the guest's own world and the body continues).
-    {
-        let st = c.st_mut();
-        if let Some(&ok) = st.answers.get(st.next_answer) {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            // A refused run (the abnormal gate answered 0) must re-arm the
-            // outer walk. The settled answer is replayed through this arm, so
-            // the body has just re-written every plan field *after* the gate
-            // call that `wasm_rules`' refusal cleanup cleared on the first
-            // pass; clear the teleport half again here so the caller's walk
-            // takes the roll (`spec/abi/G04-move-plan.md` §4.4, R16).
-            if ok == 0 {
-                let w = st.w();
-                w.set_teleport_to(None);
-                w.clear_void_walk();
-            }
-            st.next_answer += 1;
-            return Ok(ok);
-        }
-    }
     let plan = c.st().wr().move_plan();
-    let req = HostRequest::Move { player_id, plan };
-    if let Some(ok) = crate::inline::request_or_inline(c, req.clone())? {
-        return Ok(ok);
+    let ok = crate::inline::request_or_pause(
+        c,
+        HostRequest::Move { player_id, plan },
+        crate::inline::Pause::Trap,
+    )?;
+    // A refused run (the abnormal gate answered 0) must re-arm the outer
+    // walk. The settled answer is replayed through this arm, so the body has
+    // just re-written every plan field *after* the gate call that
+    // `wasm_rules`' refusal cleanup cleared on the first pass; clear the
+    // teleport half again here so the caller's walk takes the roll
+    // (`spec/abi/G04-move-plan.md` §4.4, R16).
+    if ok == 0 {
+        let w = c.st_mut().w();
+        w.set_teleport_to(None);
+        w.clear_void_walk();
     }
-    let st = c.st_mut();
-    st.host_request = Some(req);
-    Err(HostError::NeedInput)
+    Ok(ok)
 }
 
 pub fn settle_tile_at<C: HostCtx>(
@@ -2782,7 +2827,7 @@ pub fn ask<C: HostCtx>(
         let prices = std::mem::take(&mut st.prices);
         let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
         let count = std::mem::replace(&mut st.count, 0);
-        (options, prices, ai_hint, count, st.next_answer)
+        (options, prices, ai_hint, count, st.log.cursor)
     };
     // Like `pay`: the pause is the sentinel as the return value, so
     // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
@@ -3260,10 +3305,9 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     let mut nested = HostState::new(
         rules.clone(),
         st.world.take().expect("world present"),
-        std::mem::take(&mut st.answers),
+        std::mem::take(&mut st.log),
         st.depth + 1,
     );
-    nested.next_answer = st.next_answer;
     let entry = match rules.card(card).and_then(|ci| ci.entry(OnKind::Play, None)) {
         Some(e) => e,
         None => {
@@ -3272,8 +3316,8 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
             if let Some(w) = st.world.as_mut() {
                 w.set_play_from_hand(was_from_hand);
             }
-            st.answers = nested.answers;
-            st.next_answer = nested.next_answer;
+            st.log.answers = nested.log.answers;
+            st.log.cursor = nested.log.cursor;
             let dest = st.w().leave_card(saved);
             c.set_fuel(fuel)?;
             return Ok(dest);
@@ -3286,8 +3330,7 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     if let Some(w) = st.world.as_mut() {
         w.set_play_from_hand(was_from_hand);
     }
-    st.answers = inner.answers;
-    st.next_answer = inner.next_answer;
+    st.log = inner.log;
     if inner.asked.is_some() {
         st.asked = inner.asked;
     }
@@ -3427,7 +3470,7 @@ fn query_guard_entry<C: HostCtx>(
                 let mut world = c.st().wr().clone();
                 world.enter_invoke(id, instance);
                 let depth = c.st().depth + 1;
-                let nested = HostState::new(rules.clone(), world, vec![], depth);
+                let nested = HostState::new(rules.clone(), world, Default::default(), depth);
                 let (res, _inner, left) =
                     c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], true);
                 c.set_fuel(left)?;
@@ -3446,7 +3489,7 @@ fn query_guard_entry<C: HostCtx>(
         let mut world = c.st().wr().clone();
         world.enter_invoke(id, instance);
         let depth = c.st().depth + 1;
-        let nested = HostState::new(rules.clone(), world, vec![], depth);
+        let nested = HostState::new(rules.clone(), world, Default::default(), depth);
         let (res, _inner, left) =
             c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], false);
         let _ = c.set_fuel(left);
@@ -3950,10 +3993,9 @@ pub fn send<C: HostCtx>(
         let mut nested = HostState::new(
             rules.clone(),
             st.world.take().expect("world present"),
-            std::mem::take(&mut st.answers),
+            std::mem::take(&mut st.log),
             st.depth + 1,
         );
-        nested.next_answer = st.next_answer;
         // Stash the message context; the handler reads it via `ctx::message`.
         nested.msg_sender_uid = sender_uid;
         nested.msg_sender_seat = sender_seat;
@@ -3967,8 +4009,7 @@ pub fn send<C: HostCtx>(
         if let Some(w) = st.world.as_mut() {
             w.set_play_from_hand(was_from_hand);
         }
-        st.answers = inner.answers;
-        st.next_answer = inner.next_answer;
+        st.log = inner.log;
         if inner.asked.is_some() {
             st.asked = inner.asked;
         }
@@ -4115,16 +4156,16 @@ pub fn join_open<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
                 .wr()
                 .trigger_join()
                 .map(|j| (j.opened, j.seats.clone())),
-            c.st().next_answer
+            c.st().log.cursor
         );
     }
     if c.st().wr().trigger_join().is_some_and(|j| j.opened) {
         // Consume the logged answer for alignment with the replay.
         let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
+        if st.log.answers.get(st.log.cursor).is_some() {
+            let answer = st.log.cursor;
             st.w().after_host(answer);
-            st.next_answer += 1;
+            st.log.cursor += 1;
         }
         return Ok(1);
     }

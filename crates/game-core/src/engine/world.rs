@@ -856,6 +856,18 @@ pub struct World {
     pub event_deck: Vec<String>,
     pub event_discard: Vec<String>,
     pub event_removed: Vec<String>,
+    /// Events a deferral parked, awaiting a turn start (G10 §6.2).
+    #[serde(default)]
+    pub deferred_events: Vec<crate::engine::DeferredEvent>,
+    /// Board checkpoints by key (`world_snapshot`).
+    #[serde(default)]
+    pub world_snapshots: std::collections::BTreeMap<i32, crate::engine::WorldSnapshot>,
+    /// uid -> the snapshot keys its instance holds (drop cleanup).
+    #[serde(default)]
+    pub world_snapshot_owners: std::collections::BTreeMap<i32, Vec<i32>>,
+    /// Next allocated snapshot key (starts at 1; 0 means "none").
+    #[serde(default)]
+    pub next_world_snapshot_key: i32,
     /// The current turn is over; the host starts the next one.
     pub next_turn_pending: bool,
     /// Deeds of players who left, waiting to be auctioned.
@@ -1180,6 +1192,10 @@ impl World {
             event_deck: vec![],
             event_discard: vec![],
             event_removed: vec![],
+            deferred_events: vec![],
+            world_snapshots: Default::default(),
+            world_snapshot_owners: Default::default(),
+            next_world_snapshot_key: 1,
             next_turn_pending: false,
             end_turn_request: None,
             leftovers: VecDeque::new(),

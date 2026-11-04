@@ -471,6 +471,15 @@ fn move_roll_source(m: &Move) -> RollSource {
     }
 }
 
+/// What a draw of one event card did (design G10 §6.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventResolution {
+    /// A hook deferred it: parked, unfiled.
+    Deferred,
+    /// It resolved (or was negated) and is filed away.
+    Resolved,
+}
+
 impl PlayCtx<'_> {
     // =============================================================== turn flow
 
@@ -790,6 +799,8 @@ impl PlayCtx<'_> {
             })
             .collect();
         raise!(self, "turnStart", i, tile = self.w.st.players[i].pos)?;
+        // Deferred events due on this seat release here (design G10 §6.2).
+        self.release_deferred_events(i)?;
         if self.out(i) {
             return Ok(());
         }
@@ -2606,11 +2617,15 @@ impl PlayCtx<'_> {
             self.settle_stack.push(super::cx::SettleEntry {
                 player: frame.player,
                 tile: frame.at,
+                target: frame.owner,
                 base,
                 base_rent: self.w.turn.settle_rent_factor,
                 base_add: self.w.turn.settle_pay_add,
                 base_rent_add: self.w.turn.settle_rent_add,
                 outcome: super::cx::SettleOutcome::Settled,
+                body_replaced: false,
+                paid: false,
+                paid_value: 0,
             });
             frame.stack_idx = self.settle_stack.len() - 1;
             // The guest factor API reads the product and the innermost base
@@ -2729,6 +2744,7 @@ impl PlayCtx<'_> {
                     let owner = frame.owner;
                     let (i, at) = (frame.player, frame.at);
                     let m = frame.m.clone();
+                    let facts = self.settle_facts();
                     let si = raise!(
                         self,
                         "settleBody",
@@ -2736,11 +2752,13 @@ impl PlayCtx<'_> {
                         @m m,
                         tile = at as i32,
                         target = owner,
-                        settle_tile = at as i32
+                        settle_tile = at as i32,
+                        settle_facts = facts
                     )?;
                     if si.is_cancelled() {
                         self.settle_stack[frame.stack_idx].outcome =
                             super::cx::SettleOutcome::Cancelled;
+                        self.settle_stack[frame.stack_idx].body_replaced = true;
                         frame.stage = SettleStage::RaiseSettleAfter;
                     } else {
                         frame.stage = SettleStage::SettleTile;
@@ -2765,6 +2783,7 @@ impl PlayCtx<'_> {
                         let owner = frame.owner;
                         let (i, at) = (frame.player, frame.at);
                         let m = frame.m.clone();
+                        let facts = self.settle_facts();
                         raise!(
                             self,
                             "settleAfter",
@@ -2772,7 +2791,8 @@ impl PlayCtx<'_> {
                             @m m,
                             tile = at as i32,
                             target = owner,
-                            settle_tile = at as i32
+                            settle_tile = at as i32,
+                            settle_facts = facts
                         )?;
                         frame.stage = SettleStage::RaiseTileResolved;
                     }
@@ -2785,6 +2805,7 @@ impl PlayCtx<'_> {
                     // The terminal raise: the settle played out unless an
                     // earlier terminal branch already recorded otherwise.
                     let outcome = self.settle_stack[frame.stack_idx].outcome;
+                    let facts = self.settle_facts();
                     raise!(
                         self,
                         "tileResolved",
@@ -2793,7 +2814,8 @@ impl PlayCtx<'_> {
                         tile = at as i32,
                         target = owner,
                         settle_tile = at as i32,
-                        outcome = Some(outcome)
+                        outcome = Some(outcome),
+                        settle_facts = facts
                     )?;
                     frame.stage = SettleStage::Done;
                     false
@@ -4692,6 +4714,21 @@ impl PlayCtx<'_> {
         // `payAfter` (hook) -- every settled payment, then the `paid` counteraction
         // window only when the payer lost money.
         let moved = if p.from.is_some() { loss } else { gain };
+        // The settle's own record of a rent payment that reached its owner on
+        // its tile (design G10 §6.1). The raise's `settle_tile` and `to` are
+        // the test, not the payment's own tile: a redirect or a force-buy can
+        // make them differ.
+        {
+            let tile = self.settle_tile();
+            if rent && moved > 0 {
+                if let Some(e) = self.settle_stack.last_mut() {
+                    if tile == e.tile as i32 && e.target >= 0 && to == Some(e.target as usize) {
+                        e.paid = true;
+                        e.paid_value = e.paid_value.saturating_add(moved);
+                    }
+                }
+            }
+        }
         raise!(
             self,
             "payAfter",
@@ -5867,10 +5904,61 @@ impl PlayCtx<'_> {
     /// away. What the event *does* is its rule instance on the neutral board
     /// owner -- bound here before the body runs, unbound when it expires.
     pub fn card_draw_event(&mut self, i: usize) -> Flow<()> {
-        self.draw_event(i)
+        let tile = self.w.st.players[i].pos;
+        self.draw_event_at(i, tile)
     }
 
-    fn draw_event(&mut self, i: usize) -> Flow<()> {
+    /// `ctx::draw_event_as` -- the same draw attributed to another seat and
+    /// tile (`tile < 0` = the drawer's own position).
+    pub fn card_draw_event_as(&mut self, i: usize, tile: i32) -> Flow<()> {
+        let tile = if tile < 0 { self.w.st.players[i].pos } else { tile };
+        self.draw_event_at(i, tile)
+    }
+
+    /// The `event` link an `event_defer` claims (design G10 §6.2): while a
+    /// record for `(event, player)` exists the draw stays parked and the
+    /// re-run answers `Deferred` again. `Ok(1)` = claimed by this instance,
+    /// `Ok(0)` = already claimed by another one.
+    pub fn card_event_defer(
+        &mut self,
+        event: String,
+        player: i32,
+        tile: i32,
+        uid: i32,
+        seat: i32,
+        card: &str,
+    ) -> i32 {
+        let existing = self
+            .w
+            .deferred_events
+            .iter()
+            .find(|d| d.event == event && d.player == player);
+        if let Some(d) = existing {
+            return (d.deferrer_uid == uid) as i32;
+        }
+        let after_turn_key = self.turn_key();
+        if std::env::var("G10_DBG").is_ok() {
+            eprintln!("card_event_defer push ({event}, {player}) uid={uid}");
+        }
+        self.w.deferred_events.push(crate::engine::DeferredEvent {
+            event,
+            player,
+            tile,
+            due_owner: seat,
+            deferrer_uid: uid,
+            deferrer_card: card.to_string(),
+            by_card: seat,
+            after_turn_key,
+        });
+        1
+    }
+
+    /// The monotone turn counter a deferral waits on (design G10 §6.2).
+    fn turn_key(&self) -> i32 {
+        self.w.st.round as i32
+    }
+
+    fn draw_event_at(&mut self, i: usize, tile: i32) -> Flow<()> {
         // Fallback for a deck left empty outside a draw (an expiry or a raw
         // state write since the last one).
         self.w.refill_event_deck();
@@ -5890,17 +5978,61 @@ impl PlayCtx<'_> {
         self.wait(3.0);
         // Face-down slot on the public `eventTop` view: consumed by this draw.
         self.w.st.event_top.retain(|e| e != &id);
-        let t = raise!(self, "event", i, card = Some(id.clone()))?;
+        if self.resolve_event(id, i, tile, None, None, None)?
+            == EventResolution::Deferred
+        {
+            // The card is parked, not filed: the release does the tail.
+            return Ok(());
+        }
+        // Everything has resolved and the card is filed: only now does an
+        // emptied deck take the shuffled discard (this card included).
+        self.w.refill_event_deck();
+        self.wait(0.4);
+        Ok(())
+    }
+
+    /// The shared resolution of one event card (design G10 §6.2): the `event`
+    /// raise, the deferral check, the body (or the negation), the filing and
+    /// `eventAfter`. `cause` is the deferring instance on a release; it is
+    /// `None` on a draw.
+    fn resolve_event(
+        &mut self,
+        id: String,
+        i: usize,
+        tile: i32,
+        by: Option<i32>,
+        cause: Option<i32>,
+        deferrer_card: Option<&str>,
+    ) -> Flow<EventResolution> {
+        let t = raise!(
+            self,
+            "event",
+            i,
+            card = Some(id.clone()),
+            tile = tile,
+            by_card = by,
+            by_card_instance = cause
+        )?;
+        // The record is the whole "deferred" signal: a re-run of the very
+        // call that suspended finds it again (design G10 §6.2).
+        if std::env::var("G10_DBG").is_ok() {
+            eprintln!("resolve_event({id}, {i}): deferred={:?}", self.w.deferred_events.iter().map(|d| (&d.event, d.player)).collect::<Vec<_>>());
+        }
+        if self
+            .w
+            .deferred_events
+            .iter()
+            .any(|d| d.event == id && d.player == i as i32)
+        {
+            let _ = deferrer_card;
+            return Ok(EventResolution::Deferred);
+        }
         let rules = self.rules;
-        // A cancelled trigger (`is_cancelled`) -- the event's effect is negated; it is still
-        // filed away below but does not settles.
+        // A cancelled trigger (`is_cancelled`) -- the event's effect is
+        // negated; it is still filed away below but does not settle.
         //
-        // Bind the rule instance first so the body's `On::Play` and any hook it
-        // declares run against a live instance. `bind_event` is a no-op for
-        // `StubRules` (no `event:*` rule), which is the built-in fallback: the
-        // draw is logged and the card filed away, the same as before.
-        // Bind the rule instance first so the body's `On::Play` and any hook it
-        // declares run against a live instance. `bind_event` is a no-op for
+        // Bind the rule instance first so the body's `On::Play` and any hook
+        // it declares run against a live instance. `bind_event` is a no-op for
         // `StubRules` (no `event:*` rule), which is the built-in fallback: the
         // draw is logged and the card filed away, the same as before. A
         // negated draw binds nothing -- its effect never resolves. The event
@@ -5931,12 +6063,164 @@ impl PlayCtx<'_> {
                 .expire_event(&id, self.data.event(&id).is_some_and(|e| e.derived));
         }
         // `eventAfter` -- the event is fully resolved and filed away.
-        raise!(self, "eventAfter", i, card = Some(id))?;
-        // Everything has resolved and the card is filed: only now does an
-        // emptied deck take the shuffled discard (this card included).
-        self.w.refill_event_deck();
-        self.wait(0.4);
+        raise!(
+            self,
+            "eventAfter",
+            i,
+            card = Some(id),
+            tile = tile,
+            by_card = by,
+            by_card_instance = cause
+        )?;
+        Ok(EventResolution::Resolved)
+    }
+
+    /// Release every deferral due at `i`'s turn start (design G10 §6.2):
+    /// records whose owner is `i` with a strictly later turn, and records
+    /// whose owner is out.
+    fn release_deferred_events(&mut self, i: usize) -> Flow<()> {
+        if self.w.deferred_events.is_empty() {
+            return Ok(());
+        }
+        let now = self.turn_key();
+        let due: Vec<crate::engine::DeferredEvent> = self
+            .w
+            .deferred_events
+            .iter()
+            .filter(|d| {
+                (d.due_owner == i as i32 && now > d.after_turn_key)
+                    || self.out(d.due_owner.max(0) as usize)
+            })
+            .cloned()
+            .collect();
+        for rec in due {
+            self.w
+                .deferred_events
+                .retain(|d| !(d.event == rec.event && d.player == rec.player));
+            if self.out(i) {
+                return Ok(());
+            }
+            let r = self.resolve_event(
+                rec.event.clone(),
+                rec.player.max(0) as usize,
+                rec.tile,
+                Some(rec.by_card),
+                Some(rec.deferrer_uid),
+                Some(rec.deferrer_card.as_str()),
+            )?;
+            if r == EventResolution::Resolved {
+                // The release cause is the deferring instance; it must still
+                // be on the board for the `eventResolved` raise.
+                let seat = self.deferrer_seat(rec.deferrer_uid);
+                if let Some(seat) = seat {
+                    raise!(
+                        self,
+                        "eventResolved",
+                        seat.max(0) as usize,
+                        tile = rec.tile,
+                        card = Some(rec.deferrer_card.clone()),
+                        instance = rec.deferrer_uid,
+                        by_card = Some(rec.by_card),
+                        by_card_instance = Some(rec.deferrer_uid)
+                    )?;
+                }
+            }
+            self.w.refill_event_deck();
+            self.wait(0.4);
+        }
         Ok(())
+    }
+
+    /// The seat an instance sits on (`BOARD_OWNER` for the board field), or
+    /// `None` once it is gone.
+    fn deferrer_seat(&self, uid: i32) -> Option<i32> {
+        if uid < 0 {
+            return None;
+        }
+        if self.w.st.board_field.iter().any(|f| f.uid == uid) {
+            return Some(crate::state::BOARD_OWNER);
+        }
+        self.w
+            .st
+            .players
+            .iter()
+            .position(|s| s.field.iter().any(|f| f.uid == uid))
+            .map(|i| i as i32)
+    }
+
+    /// Checkpoint the whole board under a fresh key (`ctx::world_snapshot`).
+    pub fn card_world_snapshot(&mut self, uid: i32) -> i32 {
+        let key = self.w.next_world_snapshot_key.max(1);
+        self.w.next_world_snapshot_key = key + 1;
+        let snap = crate::engine::WorldSnapshot {
+            players: self
+                .w
+                .st
+                .players
+                .iter()
+                .map(|p| crate::engine::PlayerSnapshot {
+                    pos: p.pos,
+                    state: p.state.iter().map(|(k, v)| (k.clone(), v.value)).collect(),
+                    money: p.money,
+                })
+                .collect(),
+            owners: self.w.st.owners.clone(),
+            houses: self.w.st.houses.clone(),
+            mortgaged: self.w.st.mortgaged.clone(),
+        };
+        self.w.world_snapshots.insert(key, snap);
+        self.w
+            .world_snapshot_owners
+            .entry(key)
+            .or_default()
+            .push(uid);
+        key
+    }
+
+    /// Write a checkpoint back (`ctx::world_restore`). Absolute, so applying
+    /// it twice is the same as once; a position write is not a move.
+    pub fn card_world_restore(&mut self, key: i32, uid: i32) -> bool {
+        let Some(snap) = self.w.world_snapshots.get(&key).cloned() else {
+            return false;
+        };
+        if !self
+            .w
+            .world_snapshot_owners
+            .get(&key)
+            .is_some_and(|o| o.contains(&uid))
+        {
+            return false;
+        }
+        for (i, p) in snap.players.iter().enumerate() {
+            let Some(live) = self.w.st.players.get_mut(i) else {
+                continue;
+            };
+            live.pos = p.pos;
+            live.money = p.money;
+            let keys: Vec<String> = live.state.keys().cloned().collect();
+            for k in keys {
+                if !p.state.iter().any(|(sk, _)| *sk == k) {
+                    live.state.remove(&k);
+                }
+            }
+            for (k, v) in &p.state {
+                live.state_set(k, *v);
+            }
+        }
+        self.w.st.owners = snap.owners;
+        self.w.st.houses = snap.houses;
+        self.w.st.mortgaged = snap.mortgaged;
+        true
+    }
+
+    pub fn card_world_snapshot_drop(&mut self, key: i32, uid: i32) {
+        if let Some(owners) = self.w.world_snapshot_owners.get_mut(&key) {
+            owners.retain(|o| *o != uid);
+            if owners.is_empty() {
+                self.w.world_snapshot_owners.remove(&key);
+                self.w.world_snapshots.remove(&key);
+            }
+        }
     }
 
     /// Counteraction window, delegated to the card rules.

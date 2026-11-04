@@ -47,7 +47,13 @@ pub trait InlineHost {
     /// declined halted the engine routine mid-request, in which case the
     /// implementer also parks the [`crate::Halt`] for the drive to propagate
     /// (the partially-applied request is discarded with the body).
-    fn apply(&mut self, run: &mut dyn std::any::Any, req: HostRequest) -> Option<i32>;
+    fn apply(
+        &mut self,
+        run: &mut dyn std::any::Any,
+        log: &mut game_core::engine::GuestLog,
+        start: game_core::engine::JournalStart,
+        req: HostRequest,
+    ) -> Option<i32>;
 
     /// The engine-side [`game_core::engine::Halt`] a declined nested prompt
     /// raised, if any. The drive checks this right after the guest call and
@@ -103,7 +109,13 @@ impl InlineHost for Deny {
     fn answer(&mut self, _run: &mut dyn std::any::Any, _p: Prompt) -> Option<i32> {
         None
     }
-    fn apply(&mut self, _run: &mut dyn std::any::Any, _req: HostRequest) -> Option<i32> {
+    fn apply(
+        &mut self,
+        _run: &mut dyn std::any::Any,
+        _log: &mut game_core::engine::GuestLog,
+        _start: game_core::engine::JournalStart,
+        _req: HostRequest,
+    ) -> Option<i32> {
         None
     }
     fn take_halt(&mut self) -> Option<game_core::engine::Halt> {
@@ -136,6 +148,29 @@ fn with_run<C: HostCtx, T>(
     Ok(v)
 }
 
+/// [`with_run`] plus the guest answer log: the apply owns both for its
+/// duration (it completes the journal entry and writes the answer there).
+fn with_run_log<C: HostCtx, T>(
+    c: &mut C,
+    f: impl FnOnce(&mut dyn std::any::Any, &mut game_core::engine::GuestLog) -> T,
+) -> Result<T, HostError> {
+    let mut run = {
+        let st = c.st_mut();
+        st.world
+            .take()
+            .ok_or_else(|| HostError::trap("inline host with no world"))?
+    };
+    let mut log = {
+        let st = c.st_mut();
+        std::mem::take(&mut st.log)
+    };
+    let v = f(&mut run, &mut log);
+    let st = c.st_mut();
+    st.world = Some(run);
+    st.log = log;
+    Ok(v)
+}
+
 /// Answer `p` inline. `Ok(Some(v))` = the guest continues with `v` (recorded
 /// on the run's answer log so a nested `play_card` cursor remains aligned);
 /// `Ok(None)` = no inline host, or it declined -- the caller pauses as today.
@@ -145,14 +180,17 @@ pub fn prompt_or_inline<C: HostCtx>(c: &mut C, p: Prompt) -> Result<Option<i32>,
     record(c, v)
 }
 
-/// Apply `req` inline. Same result shape as [`prompt_or_inline`].
+/// Apply `req` inline with the journal start the pause point decided. Same
+/// result shape as [`prompt_or_inline`]; on an answer the apply itself has
+/// already completed the entry and written the answer, so there is no
+/// [`record`].
 pub fn request_or_inline<C: HostCtx>(
     c: &mut C,
     req: HostRequest,
+    start: game_core::engine::JournalStart,
 ) -> Result<Option<i32>, HostError> {
     let Some(h) = top() else { return Ok(None) };
-    let v = with_run(c, |run| unsafe { &mut *h }.apply(run, req))?;
-    record(c, v)
+    with_run_log(c, |run, log| unsafe { &mut *h }.apply(run, log, start, req))
 }
 
 /// Push an inline answer onto the run's answer log and advance the cursor --
@@ -160,8 +198,8 @@ pub fn request_or_inline<C: HostCtx>(
 fn record<C: HostCtx>(c: &mut C, v: Option<i32>) -> Result<Option<i32>, HostError> {
     if let Some(v) = v {
         let st = c.st_mut();
-        st.answers.push(v);
-        st.next_answer += 1;
+        st.log.answers.push(v);
+        st.log.cursor += 1;
     }
     Ok(v)
 }
@@ -190,15 +228,18 @@ pub fn request_always<C: HostCtx>(
 ) -> Result<i32, HostError> {
     {
         let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
+        if st.log.answers.get(st.log.cursor).is_some() {
+            let answer = st.log.cursor;
             st.w().after_host(answer);
-            st.next_answer += 1;
+            st.log.cursor += 1;
         }
     }
     // A simulation has no join routine of its own; answer through the inline
     // host when there is one.
-    if let Some(v) = request_or_inline(c, req.clone())? {
+    if let Some(v) = request_or_inline(c, req.clone(), game_core::engine::JournalStart::Push)? {
+        let st = c.st_mut();
+        st.host_request = None;
+        st.host_journal_start = None;
         return Ok(v);
     }
     let st = c.st_mut();
@@ -209,28 +250,113 @@ pub fn request_always<C: HostCtx>(
     }
 }
 
-/// The shared pause point for a host request: consume a logged answer, else
-/// answer inline (simulation mode), else park `req` on `host_request` and
-/// return the caller's pause shape.
+/// The shared pause point for a host request (design G10 §6.3.2): re-apply an
+/// in-flight entry, consume a logged answer (replacing it when the body
+/// recomputed the arguments), else answer inline (simulation mode), else park
+/// `req` on `host_request` with the start the drive must apply it under.
 pub fn request_or_pause<C: HostCtx>(
     c: &mut C,
     req: HostRequest,
     pause: Pause,
 ) -> Result<i32, HostError> {
+    let mirrored = game_core::engine::JournalRequest::from(&req);
+    let mut answer = None;
     {
         let st = c.st_mut();
-        if let Some(&x) = st.answers.get(st.next_answer) {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(x);
+        let at = st.log.cursor;
+        if std::env::var("G10_DBG").is_ok() {
+            eprintln!(
+                "ROP at={at} req={mirrored:?} answers={:?} journal={:?} reapply={:?} last={:?}",
+                st.log.answers,
+                st.log.journal.iter().map(|e| e.slot).collect::<Vec<_>>(),
+                st.log.reapply,
+                st.log.last.keys().collect::<Vec<_>>()
+            );
+        }
+        // 1. An in-flight entry is re-entered at its cursor. Several in-flight
+        //    entries can share a cursor (an enclosing request's own answer is
+        //    not written yet); the first entry still there is the outermost.
+        let outstanding = st.log.reapply.get(&at).copied().unwrap_or(0);
+        if outstanding > 0 {
+            let mark = st.log.reapply.get_mut(&at).expect("mark present");
+            *mark -= 1;
+            if *mark == 0 {
+                st.log.reapply.remove(&at);
+            }
+            if let Some(index) = st.log.journal.iter().position(|e| e.slot == at) {
+                let entry = st.log.journal[index].clone();
+                // The routine mutates live and has to start from the request's
+                // pre-state.
+                st.w().restore_from_world(&entry.condition);
+                st.w().apply_state_overlay(&entry.guest);
+                if entry.request != mirrored {
+                    // The body recomputed this call's arguments from the
+                    // post-request world: re-apply under the new ones, and drop
+                    // the deeper entries the restore just undid.
+                    st.log.journal[index].request = mirrored;
+                    st.log.journal.truncate(index + 1);
+                    st.log.reapply.retain(|&k, _| k <= at);
+                }
+                st.host_request = Some(req);
+                st.host_journal_start = Some(game_core::engine::JournalStart::Resume(index));
+                return pause_now(pause);
+            }
+            // A mark without an entry: fall through to the answer path.
+        }
+        // 2. A logged answer at this cursor.
+        if let Some(x) = st.log.answers.get(at).copied() {
+            match st.log.last.get(&at).cloned() {
+                Some(entry) if entry.request == mirrored => {
+                    st.w().after_host(at);
+                    st.log.cursor += 1;
+                    answer = Some(x);
+                }
+                Some(entry) => {
+                    // The body recomputed its arguments from the post-request
+                    // world. The cap bounds a pathological recompute: the
+                    // fourth hit restores the completed condition and consumes
+                    // the existing answer.
+                    let capped = st.log.replace_count.get(&at).copied().unwrap_or(0) >= 4;
+                    st.w().restore_from_world(&entry.condition);
+                    st.w().apply_state_overlay(&entry.guest);
+                    if capped {
+                        st.w().after_host(at);
+                        st.log.cursor += 1;
+                        answer = Some(x);
+                    } else {
+                        *st.log.replace_count.entry(at).or_default() += 1;
+                        st.host_request = Some(req);
+                        st.host_journal_start = Some(game_core::engine::JournalStart::Replace(at));
+                        return pause_now(pause);
+                    }
+                }
+                None => {
+                    // A dead nested answer (no completed row to compare with):
+                    // consume it for alignment.
+                    st.w().after_host(at);
+                    st.log.cursor += 1;
+                    answer = Some(x);
+                }
+            }
         }
     }
-    if let Some(v) = request_or_inline(c, req.clone())? {
-        return Ok(v);
-    }
-    let st = c.st_mut();
-    st.host_request = Some(req);
+    let Some(x) = answer else {
+        // 3. A brand-new request.
+        if let Some(v) = request_or_inline(c, req.clone(), game_core::engine::JournalStart::Push)? {
+            let st = c.st_mut();
+            st.host_request = None;
+            st.host_journal_start = None;
+            return Ok(v);
+        }
+        let st = c.st_mut();
+        st.host_request = Some(req);
+        st.host_journal_start = Some(game_core::engine::JournalStart::Push);
+        return pause_now(pause);
+    };
+    Ok(x)
+}
+
+fn pause_now(pause: Pause) -> Result<i32, HostError> {
     match pause {
         Pause::Sentinel => Ok(card_sdk::abi::EXIT_NEED_INPUT),
         Pause::Trap => Err(HostError::NeedInput),
@@ -243,8 +369,8 @@ pub fn request_or_pause<C: HostCtx>(
 pub fn prompt_or_pause<C: HostCtx>(c: &mut C, p: Prompt) -> Result<i32, HostError> {
     {
         let st = c.st_mut();
-        if let Some(&x) = st.answers.get(st.next_answer) {
-            st.next_answer += 1;
+        if let Some(&x) = st.log.answers.get(st.log.cursor) {
+            st.log.cursor += 1;
             return Ok(x);
         }
     }

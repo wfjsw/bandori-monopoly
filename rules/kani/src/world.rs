@@ -64,6 +64,12 @@ pub type InvokeRecord = (NameId, NameId, i32, i32, i32, bool, i32);
 pub const MAX_MARKS: usize = 16;
 /// Active event ids.
 pub const MAX_EVENTS: usize = 8;
+/// Deferred `event` records (`event_defer`).
+pub const MAX_DEFERRED: usize = 2;
+/// World snapshot slots (`world_snapshot`).
+pub const MAX_SNAPSHOTS: usize = 4;
+/// Owners allowed on one snapshot key.
+pub const MAX_SNAP_OWNERS: usize = 2;
 
 // ---------------------------------------------------------------------------
 // Interned vocabulary used by existing proofs (stable names)
@@ -648,6 +654,85 @@ impl FieldCard {
 // Tile runtime state
 // ---------------------------------------------------------------------------
 
+/// A deferred event record (design G10 §6.2). `event` is an interned card id
+/// (`u16::MAX` = none).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct DeferredEvent {
+    pub event: i32,
+    pub player: i32,
+    pub tile: i32,
+    pub due_owner: i32,
+    pub deferrer_uid: i32,
+    pub after_turn_key: i32,
+}
+
+impl DeferredEvent {
+    pub const fn empty() -> Self {
+        Self {
+            event: 0,
+            player: -1,
+            tile: -1,
+            due_owner: -1,
+            deferrer_uid: -1,
+            after_turn_key: 0,
+        }
+    }
+}
+
+/// The six families a snapshot checkpoints (design G10 §6.5): positions,
+/// keyed state, money, owners, houses, mortgage flags.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SnapData {
+    pub pos: [i32; MAX_PLAYERS],
+    pub money: [i32; MAX_PLAYERS],
+    pub state: [NameMap; MAX_PLAYERS],
+    pub owners: [i32; 60],
+    pub houses: [i32; 60],
+    pub mortgaged: [bool; 60],
+}
+
+impl SnapData {
+    pub fn empty() -> Self {
+        Self {
+            pos: [-1; MAX_PLAYERS],
+            money: [0; MAX_PLAYERS],
+            state: [NameMap::new(); MAX_PLAYERS],
+            owners: [-1; 60],
+            houses: [0; 60],
+            mortgaged: [false; 60],
+        }
+    }
+}
+
+/// One allocated snapshot key with its owners.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SnapshotEntry {
+    pub used: bool,
+    pub key: i32,
+    pub owners: [i32; MAX_SNAP_OWNERS],
+    pub owners_n: u8,
+    pub data: SnapData,
+}
+
+impl SnapshotEntry {
+    pub const fn empty() -> Self {
+        Self {
+            used: false,
+            key: 0,
+            owners: [-1; MAX_SNAP_OWNERS],
+            owners_n: 0,
+            data: SnapData {
+                pos: [-1; MAX_PLAYERS],
+                money: [0; MAX_PLAYERS],
+                state: [NameMap::new(); MAX_PLAYERS],
+                owners: [-1; 60],
+                houses: [0; 60],
+                mortgaged: [false; 60],
+            },
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TileState {
     pub owner: i32,
@@ -832,6 +917,14 @@ pub struct World {
     pub marks_n: u8,
     pub events: [u16; MAX_EVENTS],
     pub events_n: u8,
+    /// Parked `event` records (design G10 §6.2).
+    pub deferred: [DeferredEvent; MAX_DEFERRED],
+    pub deferred_n: u8,
+    /// The last `draw_event_as` attribution `(player, tile)`.
+    pub last_event_draw: (i32, i32),
+    /// World snapshot store; keys run from 1 (`0` = none) like the engine.
+    pub snapshots: [SnapshotEntry; MAX_SNAPSHOTS],
+    pub next_snapshot_key: i32,
     /// Pilot teleport world: whether 「江户川乐器店」 is present.
     pub tile_shop_present: bool,
 
@@ -871,6 +964,14 @@ pub struct World {
     pub trig_roll_source: i32,
     /// `Trigger::pay.is_rent` — pay-only fact (`hostfns::trig_pay_is_rent`).
     pub trig_pay_is_rent: bool,
+    /// `Trigger.by_card_instance` (`-1` = board raise).
+    pub trig_by_card_instance: i32,
+    /// `SettleFacts::bits()` (0 = none).
+    pub trig_settle_facts: i32,
+    /// `SettleFacts::paid_value` (0 = none).
+    pub trig_settle_paid_value: i32,
+    /// The seat a landed redirect moved a live target from (`-1` = none).
+    pub trig_redirected_from: i32,
     /// `TriggerPay.kind` wire code, `-1` = no payment (`pay_kind` pre).
     pub trig_pay_kind: i32,
     /// `TriggerPay.shape == Fixed` (`pay_is_fixed` pre).
@@ -1041,6 +1142,11 @@ impl World {
             marks_n: 0,
             events: [u16::MAX; MAX_EVENTS],
             events_n: 0,
+            deferred: [DeferredEvent::empty(); MAX_DEFERRED],
+            deferred_n: 0,
+            last_event_draw: (-1, -1),
+            snapshots: [SnapshotEntry::empty(); MAX_SNAPSHOTS],
+            next_snapshot_key: 1,
             tile_shop_present: true,
             turn_player: 0,
             round_no: 1,
@@ -1060,6 +1166,10 @@ impl World {
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,
             trig_pay_is_rent: false,
+            trig_by_card_instance: -1,
+            trig_settle_facts: 0,
+            trig_settle_paid_value: 0,
+            trig_redirected_from: -1,
             trig_pay_kind: -1,
             trig_pay_is_fixed: false,
             trig_pay_total_stage: true,

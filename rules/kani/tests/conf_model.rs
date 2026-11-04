@@ -1154,7 +1154,15 @@ pub struct ConfHost {
 impl ConfHost {
     pub fn new(world: ConfWorld, answers: Vec<i32>) -> Self {
         Self {
-            state: HostState::new(ConfRules, world, answers, 0),
+            state: HostState::new(
+                ConfRules,
+                world,
+                game_core::engine::GuestLog {
+                    answers,
+                    ..Default::default()
+                },
+                0,
+            ),
             fuel: 1_000_000,
         }
     }
@@ -1203,7 +1211,7 @@ impl HostCtx for ConfHost {
             Err(HostError::trap(
                 "conf_model: nested call_entry not supported",
             )),
-            HostState::new(ConfRules, ConfWorld::new(), vec![], 0),
+            HostState::new(ConfRules, ConfWorld::new(), Default::default(), 0),
             self.fuel,
         )
     }
@@ -1222,7 +1230,13 @@ impl InlineHost for ConfInline {
         // fixed 0 is the interesting branch, or the branch is side-effect-free.
         Some(0)
     }
-    fn apply(&mut self, run: &mut dyn std::any::Any, req: HostRequest) -> Option<i32> {
+    fn apply(
+        &mut self,
+        run: &mut dyn std::any::Any,
+        _log: &mut game_core::engine::GuestLog,
+        _start: game_core::engine::JournalStart,
+        req: HostRequest,
+    ) -> Option<i32> {
         let w = run.downcast_mut::<ConfWorld>()?;
         match req {
             HostRequest::Pay {

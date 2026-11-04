@@ -683,6 +683,7 @@ action_kinds! {
     BankruptBefore;
     CardAfter;
     EventAfter;
+    EventResolved;
     SettleAfter;
     BuyBefore;
     BuyAfter;

@@ -1553,3 +1553,29 @@ Three clauses were short and are now covered: the two `be_strongest`
 destination branches and the `no_breakup` revert. Every other clause maps to
 an existing behaviour plus one named design element, and every mapping has a
 test in §10.1 or an existing suite.
+
+## 15. Implementation note (as landed)
+
+`ff504fae`'s design assumes G09 lands first (ABI 114, kinds 132-136, ops
+451-470). G09 is not landed on `master`, so G10 shipped on top of ABI 113
+directly and took the ids **after master's**, leaving G09's reserved band
+sparse:
+
+* ABI **113 → 114** (not 114 → 115). SAVE **16 → 17**, RECORD unchanged.
+* engine kind / wire `eventResolved` **137**, as designed; the gap 132-136 is
+  left for G09.
+* Kani `Op` **471-479**, as designed; the gap 451-470 is left for G09.
+
+Two shapes differ from the text above and are the ones the code uses:
+
+* §5.7 draws `world_snapshot_owners` as `uid -> keys`. The landed type is
+  `BTreeMap<i32, Vec<i32>>` (`key -> owners`), so one snapshot can be held by
+  more than one instance and `destroy_instance_units` scans for the uid. The
+  semantics (last owner drops the key) are unchanged.
+* The `PlayCtx` side is one value, `PlayCtx.guest_log: GuestLog`, parked
+  between drive starts (never a second live copy alongside the store's own);
+  §6.3.4's "two copies" paragraph describes the split the single value
+  replaced.
+
+Everything else (§6, §7) landed as written. When G09 lands after this, it
+takes 115 and 132-136 / 451-470 with no renumbering here.

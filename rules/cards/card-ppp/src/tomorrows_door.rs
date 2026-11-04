@@ -31,11 +31,15 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // rent-shaped 收费 outside a settle no longer collects it; 梦开始的地方
         // is the unowned half of the clause.
         On::Filter(Filter::PaySplitAdd("card.placed && actor != owner && (settle.owner == owner || settle.tile == tile_named('梦开始的地方'))", Some(pay_add_guard), pay_add)),
-        // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
-        // -- an entry in the settle's effect list, for the shapes no rent
-        // payment carries (梦开始的地方, a mortgaged owner tile). A field card
-        // that replaces the body skips this entry.
-        On::Action(Action::SettleBody("card.placed && actor != owner && tile.id >= 0", Some(settle_body_guard), settle_body)),
+        // （3）「…[结算]时额外支付」 -- the settle's effect list entry for the
+        // shapes no rent payment carries (梦开始的地方, a mortgaged owner tile,
+        // a replaced body). A committed rent payment is `settle_paid`, which
+        // makes the two halves mutually exclusive.
+        On::Action(Action::SettleAfter(
+            "card.placed && actor != owner && tile.id >= 0 && (settle.owner == owner || settle.tile == tile_named('梦开始的地方'))",
+            Some(tax_due_guard),
+            settle_after,
+        )),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Tomorrow's Door"#)
@@ -179,46 +183,31 @@ fn pay_add(player_id: i32, mut v: PayAddValue) -> PayAddValue {
     }
 }
 
-/// 行动阶段 15 (`SETTLE-STAGES.md` §4 M2). The guard carries the applicability (route
-/// finished, someone else settling on 梦开始的地方 or a mortgaged owner tile, a
-/// surcharge due): the body is the transfer.
-fn settle_body_guard(player_id: i32) -> bool {
-    // `card.placed && actor != owner && tile.id >= 0` is the condition;
-    // `cancelled()` is resolution-time and stays.
-    // TODO(规则书)（[结算]时额外支付）: 书 pays on any settle over such a tile -- we
-    //   drop the whole surcharge when a body replacer (Parking Space) ran first,
-    //   although the settle still resolves. Needs a settle-scoped 「body replaced」
-    //   fact readable after the body stage.
-    if trigger::cancelled() {
-        return false;
-    }
+/// The settleAfter guard carries the applicability (route finished, someone
+/// else settling on the owner's tile or 梦开始的地方, a surcharge due, no
+/// committed rent payment): the body is the transfer.
+///
+/// `settle_paid` is the whole "did the rent already pay this" question: a
+/// committed rent payment carries the surcharge through `pay_add`, while a
+/// dream tile, a mortgaged owner tile, a replaced body and a cancelled rent
+/// are all not `paid` and charge here.
+fn tax_due_guard(player_id: i32) -> bool {
+    // `card.placed && actor != owner && tile.id >= 0 && (settle.owner == owner
+    // || settle.tile == tile_named('梦开始的地方'))` is the condition;
+    // player_out / tax_due / still-travelling are residuals.
     if !in_play_area() && ctx::prop(PROP_STEP) < ROUTE.len() as i32 {
         return false;
     }
     if ctx::player_out(trigger::player_id()) {
         return false;
     }
-    // 规则书（3）: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时
-    //   额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。」
-    let at = trigger::tile();
-    let dream = ctx::tile_named("梦开始的地方");
-    let is_dream = dream >= 0 && at == dream;
-    let is_owner_tile = ctx::tile_owner(at) == player_id;
-    if !is_dream && !is_owner_tile {
-        return false;
-    }
-    // Rent on an unmortgaged owner tile already carried the surcharge via
-    // `pay_add`; don't charge it twice.
-    // TODO(规则书)（[拥有者]拥有的格子或梦开始的地方[结算]时）: whether the rent
-    //   actually ran is only guessed from the mortgage bit, so a body-replaced
-    //   settle on a mortgaged tile charges or not by card-placement order.
-    if is_owner_tile && !is_dream && !ctx::mortgaged_of(at) {
+    if trigger::settle_paid() {
         return false;
     }
     tax_due() > 0
 }
 
-fn settle_body(player_id: i32) -> card_sdk::Asked {
+fn settle_after(player_id: i32) -> card_sdk::Asked {
     let due = tax_due();
     let payer = trigger::player_id();
     ctx::transfer(
@@ -258,6 +247,6 @@ pub fn pay_add_kani(player_id: i32, v: card_sdk::PayAddValue) -> card_sdk::PayAd
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
-    settle_body(player_id)
+pub fn settle_after_kani(player_id: i32) -> card_sdk::Asked {
+    settle_after(player_id)
 }

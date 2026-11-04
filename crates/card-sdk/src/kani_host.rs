@@ -451,6 +451,17 @@ pub enum Op {
     // v113 (G07 designation/nearest surface). 441-450 is this group's band.
     nearest = 441,
     nearest_with_prop = 442,
+    // v114 (G10 outcome/cause/world surface). G09 reserves 451-470; this
+    // group takes 471-479.
+    trig_by_card_instance = 471,
+    trig_settle_facts = 472,
+    trig_settle_paid_value = 473,
+    trig_redirected_from = 474,
+    draw_event_as = 475,
+    event_defer = 476,
+    world_snapshot = 477,
+    world_restore = 478,
+    world_snapshot_drop = 479,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

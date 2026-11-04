@@ -715,6 +715,12 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: true,
         hook_only: true,
     },
+    EngineKind {
+        id: 137,
+        wire: "eventResolved",
+        is_filter: false,
+        hook_only: true,
+    },
 ];
 
 /// The table row for `id`, or `None` when the id is retired / unknown.
@@ -857,6 +863,7 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "settleMul" => Some(129),
         "settleRentAdd" => Some(130),
         "settleRentMul" => Some(131),
+        "eventResolved" => Some(137),
         _ => None,
     };
     #[cfg(not(kani))]

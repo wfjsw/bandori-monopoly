@@ -178,6 +178,8 @@ fn typed_engine_consts_have_table_rows() {
         (129, "SettleMul"),
         (130, "SettleRentAdd"),
         (131, "SettleRentMul"),
+        // G09 reserves 132-136 (tile/build/pass) and has not landed.
+        (137, "EventResolved"),
     ];
     for (id, name) in named {
         let row =
@@ -196,10 +198,11 @@ fn typed_engine_consts_have_table_rows() {
 
 /// Kind ids are allocated by the ABI README groups and never reused. The
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
+/// The table may be sparse where an earlier group's band is reserved.
 #[test]
-fn kind_id_ceiling_is_131() {
+fn kind_id_ceiling_is_137() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 131, "highest engine kind id");
+    assert_eq!(max, 137, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the

@@ -15,6 +15,15 @@ use testworld::*;
 /// the first slot of every body's answer log.
 const FIRE: i32 = 1;
 
+/// A one-call guest log over `answers` (design G10 §6.3: the runner takes the
+/// log, not a bare slice).
+fn log(answers: &[i32]) -> game_core::engine::GuestLog {
+    game_core::engine::GuestLog {
+        answers: answers.to_vec(),
+        ..Default::default()
+    }
+}
+
 #[test]
 fn loads_and_validates() {
     let r = ruleset();
@@ -91,7 +100,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let faces = [FIRE, rolls[0], rolls[1]];
 
     // Pass 1: the rolls answered, the pick not -> blocked on the choice.
-    let Outcome::NeedInput(p, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
+    let Outcome::NeedInput(p, _, _) = r.run(&world, call.clone(), &log(&faces), None).unwrap() else {
         panic!("expected a prompt")
     };
     assert_eq!(p.kind, PromptKind::Tile);
@@ -103,7 +112,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     assert_eq!(p.options.len(), 2, "one option per roll: {:?}", p.options);
 
     // The prompt is reproducible: same rolls -> same options.
-    let Outcome::NeedInput(again, _) = r.run(&world, call.clone(), &faces, None).unwrap() else {
+    let Outcome::NeedInput(again, _, _) = r.run(&world, call.clone(), &log(&faces), None).unwrap() else {
         panic!()
     };
     assert_eq!(p, again);
@@ -118,7 +127,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let expected_tile = *tile;
     assert_eq!(expected_tile, 47, "the 48 roll maps to tile 47");
     let answers = [FIRE, rolls[0], rolls[1], pick];
-    let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
+    let Outcome::Done(after, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap() else {
         panic!("expected Done")
     };
     assert_eq!(
@@ -135,7 +144,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     );
 
     // Determinism: replaying the full answer log gives an identical world.
-    let Outcome::Done(after2) = r.run(&world, call.clone(), &answers, None).unwrap() else {
+    let Outcome::Done(after2, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap() else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -177,7 +186,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
 
     // The body entry's `cardFired` raise, then the 1d4 (a host request,
     // `roll_direct`): answer the fire and roll a 3.
-    let Outcome::Done(after) = r
+    let Outcome::Done(after, _) = r
         .run(
             &world,
             Call::Counteract {
@@ -186,7 +195,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
                 arg: Vec::new(),
                 entry: None,
             },
-            &[FIRE, 3],
+            &log(&[FIRE, 3]),
             None,
         )
         .unwrap()
@@ -222,7 +231,7 @@ fn runaway_effect_is_stopped_by_fuel() {
                 player_id: 0,
                 arg: Vec::new(),
             },
-            &[],
+            &log(&[]),
             None,
         )
         .unwrap_err();
@@ -252,8 +261,8 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     // Both bodies announce themselves first (outer, then inner `cardFired`),
     // then the inner card's two 4d20 rolls (15 -> tile 14, 48 -> tile 47); the
     // pick is the fifth slot.
-    let Outcome::NeedInput(p, _) = r
-        .run(&world, call.clone(), &[FIRE, FIRE, 15, 48], None)
+    let Outcome::NeedInput(p, _, _) = r
+        .run(&world, call.clone(), &log(&[FIRE, FIRE, 15, 48]), None)
         .unwrap()
     else {
         panic!("expected a prompt")
@@ -265,7 +274,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
 
     // Replay with the answer: outer and inner effects both complete, in order.
     let answers = [FIRE, FIRE, 15, 48, 0];
-    let Outcome::Done(after) = r.run(&world, call.clone(), &answers, None).unwrap() else {
+    let Outcome::Done(after, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap() else {
         panic!("expected Done")
     };
     let kinds: Vec<&str> = after
@@ -289,7 +298,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     assert_eq!(*t, 14, "the 15 roll maps to tile 14");
 
     // Determinism across modules: replaying the same answers gives an identical world.
-    let Outcome::Done(after2) = r.run(&world, call.clone(), &answers, None).unwrap() else {
+    let Outcome::Done(after2, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap() else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -328,14 +337,14 @@ fn fire_up_cost() {
     // `R:[衍生] 压` gains money, which is now a pipeline entry that pauses for the
     // host (`NeedHost`); any of Done / NeedInput / NeedHost proves the entry ran.
     assert!(matches!(
-        r.run(&world, call.clone(), &[], None),
-        Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_, _)) | Ok(Outcome::NeedHost(_, _))
+        r.run(&world, call.clone(), &log(&[]), None),
+        Ok(Outcome::Done(..)) | Ok(Outcome::NeedInput(..)) | Ok(Outcome::NeedHost(..))
     ));
 
     let n = 100;
     let t = Instant::now();
     for _ in 0..n {
-        let _ = r.run(&world, call.clone(), &[], None);
+        let _ = r.run(&world, call.clone(), &log(&[]), None);
     }
     let each = t.elapsed() / n;
 
@@ -367,12 +376,12 @@ fn fire_up_breakdown() {
         player_id: 0,
         arg: Vec::new(),
     };
-    let _ = r.run(&world, call.clone(), &[], None);
+    let _ = r.run(&world, call.clone(), &log(&[]), None);
     let n = 200;
 
     let t = Instant::now();
     for _ in 0..n {
-        let _ = r.run(&world, call.clone(), &[], None);
+        let _ = r.run(&world, call.clone(), &log(&[]), None);
     }
     println!("breakdown: full run {:?}/call", t.elapsed() / n);
 }
@@ -405,11 +414,11 @@ fn fire_up_reboot() {
         player_id: 0,
         arg: Vec::new(),
     };
-    let _ = r2.run(&world, call.clone(), &[], None);
+    let _ = r2.run(&world, call.clone(), &log(&[]), None);
     let n = 500;
     let t = Instant::now();
     for _ in 0..n {
-        let _ = r2.run(&world, call.clone(), &[], None);
+        let _ = r2.run(&world, call.clone(), &log(&[]), None);
     }
     println!("  small check on warm ruleset: {:?}/call", t.elapsed() / n);
 }

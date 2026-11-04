@@ -14,9 +14,15 @@ pub const EXIST: CardDef = CardDef::new(
     &[
         On::Play("", None, exist),
         On::Filter(Filter::Redirect("target != owner", None, redirect)),
-        // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- the latch is spent inside
-        // [`redirect`], where the influence actually happens (an effect merely
-        // aimed at the owner without passing this fold changes nothing).
+        // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- the latch is spent on
+        // the **landed** effect, not on the fold: an influence that never moved
+        // a target (a rent, a direct effect to the owner) is not one. A probe
+        // pass no longer latches either.
+        On::Action(Action::Effect(
+            "target == owner && actor != owner",
+            Some(landed_redirect),
+            mark_used,
+        )),
         // 规则书: 「你的下回合开始时将其翻入弃牌堆」
         On::Action(Action::TurnStart("", Some(turn_start_guard), turn_start)),
     ],
@@ -60,16 +66,23 @@ fn exist(player_id: i32) -> card_sdk::Asked {
 fn redirect(player_id: i32, v: RedirectValue) -> RedirectValue {
     // 规则书: 「场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你」
     // -- already aimed at us is the entry's condition (`target != owner`).
-    // `state::add` is the one write a filter body may make (not
-    // `refuse_if_filter`-guarded): the latch is per instance.
-    // TODO(规则书): 「若在此期间此卡没有造成影响」 -- the fold is counted before any
-    // counter settles (C-Q8 / WINDOW-03) and a probe pass may run it twice; the
-    // book asks whether the card had a final influence.
-    ctx::state::add(player_id, &used_key(), 1);
+    // The 「造成影响」 latch is not written here: it belongs to the settled
+    // declaration ([`mark_used`]).
     RedirectValue {
         payee: Some(Payee::Seat(Seat(player_id))),
         ..v
     }
+}
+
+/// Did a redirect land on this designation? Only a landed one is an influence.
+fn landed_redirect(_player_id: i32) -> bool {
+    ctx::trigger::redirected()
+}
+
+/// Spend the 「造成影响」 latch, once per settled declaration.
+fn mark_used(player_id: i32) -> card_sdk::Asked {
+    ctx::state::add(player_id, &used_key(), 1);
+    Ok(())
 }
 
 /// Pure guard for [`turn_start`] -- the activation gate. `false` means the card

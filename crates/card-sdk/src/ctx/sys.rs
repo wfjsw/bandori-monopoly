@@ -1135,6 +1135,51 @@ mod abi {
         pub fn trig_by_card() -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_by_card_instance"
+        )]
+        pub fn trig_by_card_instance() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_settle_facts"
+        )]
+        pub fn trig_settle_facts() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_settle_paid_value"
+        )]
+        pub fn trig_settle_paid_value() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_redirected_from"
+        )]
+        pub fn trig_redirected_from() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_draw_event_as"
+        )]
+        pub fn draw_event_as(player_id: i32, tile: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_event_defer"
+        )]
+        pub fn event_defer() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_world_snapshot"
+        )]
+        pub fn world_snapshot() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_world_restore"
+        )]
+        pub fn world_restore(key: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_world_snapshot_drop"
+        )]
+        pub fn world_snapshot_drop(key: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_trig_pay_is_rent"
         )]
         pub fn trig_pay_is_rent() -> i32;
