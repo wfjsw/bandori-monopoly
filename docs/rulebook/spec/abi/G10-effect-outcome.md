@@ -57,6 +57,7 @@ this one. What the draft got wrong:
 | R18 | The tests named behaviour but no file. | One new file `rules/tests/tests/g10_effect_outcome.rs` (§10.1), per G06/G07. |
 | R19 | The draft had no necessity section, no clause match and no naming section. | §4, §13 and §14 exist. |
 | R20 | §5.3's `last` cap of 4 applies per slot, but the recompute can also lower the slot count; a cap hit kept the "last application" without saying which one. | §6.3 keeps the **last completed** application (delete the fresh attempt's writes by restoring the entry's `condition`), so a cap hit is a clean skip, not a half apply. |
+| R21 | §13 argued necessity by size ("three bits on the frame") without eliminating a single existing surface, so a reviewer could not tell whether a card-side or in-engine shortcut existed. | §13 now states four necessity tests, lists every candidate surface with its failing engine reason, names what each field's removal breaks, and answers the counterarguments with the trace or the clause. |
 
 ## 1. Items
 
@@ -1339,81 +1340,140 @@ cannot answer silently.
 
 ## 13. Necessity
 
-### 13.1 The group
+### 13.1 What "necessary" means in this document
 
-The group is one hole with five faces: the engine has no way to say what an
-effect *did* (outcome, cause) or what a torn body was *doing*, and no
-card-scoped board memory. Item 2's `paid` and item 3's journal also sit on the
-same HostRequest boundary: a request is the unit both the settle facts and the
-tear/replay have to agree on.
+A surface element is necessary only if all four hold:
 
-Striking an item is possible and spelled below, but two pairs are genuinely
-coupled: item 1 needs both `by_card_instance` and `draw_event_as` (a cause
-without a re-draw cannot satisfy clause (2)); item 3 is the machinery that
-makes `draw_event_as` and every other nested request safe when they prompt.
+1. **A book clause requires the fact.** 「非因为此卡导致」, 「未能使资金变为拥有
+   相同数字」 and the others name the fact directly; nothing infers it.
+2. **No existing surface can express it.** Every candidate is enumerated in
+   §13.3 and fails for a named engine reason, not for taste.
+3. **The cheapest alternative fails concretely.** §13.4 names the observable
+   that breaks when the field is cut.
+4. **The set is minimal.** For each field, some reader in §7 / §10.1 reads it;
+   `body_replaced` is the only field without a card reader and is argued in
+   §13.4.
 
-### 13.2 Per item
+The burden is on the design because each item changes a wire format. "It
+would be nice to know" does not pass; a trace or a clause does.
 
-* **1 (defer).** Today the card is inert for both clauses. The smallest
-  alternative — a guest record — cannot survive a save or a leave (A1).
-  Necessity: one world vector, one kind, two imports; nothing card-side can
-  park an event.
-* **2 (settle facts).** Today the tax is wrong in both directions its own
-  TODOs name, and no hook can tell a replaced body from a cancelled one:
-  G02's `outcome` is `Cancelled` for both. Necessity: three bits on the
-  already-open frame; A3/A4 each lose a consumer.
-* **3 (journal).** Today a nested prompt through a request loses the request's
-  effect and corrupts the answer cursor. Necessity: `Pending` fields and one
-  restore/apply at a resume; A5/A6 each leave half the bug.
-* **4 (redirect fact).** Today every money movement and every direct effect
-  latches the card, so 「没有造成影响」 is almost never true. Necessity: one
-  transient field stamped where the rename is decided; the Filter cannot write
-  a prop (A8).
-* **5 (checkpoint).** Today nothing reverts. Necessity: three requests and one
-  world map; the turn-start snapshot is stale mid-turn (A9).
+### 13.2 The broken behaviour is already observable
 
-### 13.3 Surface, field by field
+None of the five is a hypothetical gap; each has a current failing or
+wrong-answer trace:
 
-| surface | forced by | if removed |
-|---|---|---|
-| `by_card_instance` | 1 (「非因为此卡」) | every `eventAfter` banks, including the card's own release |
-| `draw_event_as` | 1 (「视为其他玩家在流星堂」) | the extra draw has no seat and no tile; the arisa skill stays dead |
-| `event_defer` | 1 | no suspension point |
-| `EventResolved` | 1 (「此后」) | the callback has no point after the resolution |
-| `settle_facts` / `settle_paid_value` | 2 | the tax keeps guessing; `cancelled` conflates replaced |
-| `redirected_from` | 4 | the latch keeps counting rents and direct targets |
-| `world_snapshot` / `world_restore` / `world_snapshot_drop` | 5 | no revert point exists |
-| the journal fields and `JournalStart` | 3 | the request is skipped on resume and the settle is lost |
+* **1.** `arisa_wait` registers only `On::Play` + `EventAfter`, so the card
+  never suspends anything; and even a completed deferral could not be
+  attributed, because `Trigger.by_card` is a seat (`rules.rs:393`) and the
+  `event` raise carries `tile = -1`, so the persona's own 「在流星堂抽取」 hook
+  (`skill-personas/src/arisa.rs:27`) never matches. The card's two TODOs
+  (`arisa_wait.rs:64-66`, `:53-54`) are the admissions.
+* **2.** The Door tax is wrong in both directions its TODO names: a
+  body replacer drops the tax, a mortgaged tile charges by hook order, because
+  `settle_outcome()` is `Cancelled` for a replaced body too
+  (`play.rs:2741-2744`) and the card must otherwise read `mortgaged_of`.
+* **3.** The four-step trace in §1.3: the nested prompt is answered, the
+  re-run's `request_or_pause` finds the prompt's answer at the request's
+  cursor, returns it, and the settle — and the bought deed — never happen.
+* **4.** `exist` latches on any `effect` with `target == owner`, so a plain
+  rent, a bank print and a direct designation all count as 「造成影响」;
+  tuning it card-side cannot separate them, because the trigger carries no
+  origin and the `RedirectValue` payload is `{ payee }` alone
+  (`card-sdk/src/payload.rs:84`).
+* **5.** `no_breakup` reverts nothing. `turn_snapshot` exists, but it is
+  captured at turn start (`play.rs:778`) and is about to be restored by
+  「像往常一样」 as well, so mid-turn it is both stale and claimed.
 
-Nothing in §5 is speculative: every field is read by at least one item, and
-every item's test in §10.1 reads the field it exists for. `body_replaced` is
-the one bit with no card consumer: it is kept because it is the only way to
-separate "replaced" from "nothing ran", and the Door guard and the log tests
-read it.
+### 13.3 Every candidate surface, and why it fails
 
-### 13.4 The breaks are the price, and it is small
+| candidate | why it cannot carry the fact |
+|---|---|
+| a card body read of `PlayCtx` | the guest never sees `PlayCtx`; `settle_stack` / `SettleEntry.outcome` have no import |
+| the `settleBody` hook | it runs before its own link is answered, so it is `false` by construction (hence A4) |
+| `settle_outcome()` | guest-visible only at `tileResolved`, one value, `Cancelled` for both a negated `settle` and a negated `settleBody` |
+| a `settleAfter`-side `payAfter` hook for `paid` | a hook is a card body with its own store and runs before other cards' guards; the fact must pre-exist every guard (A4) |
+| an `eventAfter` slot read for the cause | the release is an `event` resolution; an `eventAfter` read cannot separate the card's own event from a foreign one, and carries no instance |
+| `On::Schedule` for deferral | card-owned, opens a card entry; an event release must re-enter the event pipeline (`bind_event`, filing, `eventAfter`), which a schedule does not |
+| the event discard / deck for deferral | filing resolves the card immediately on the ordinary path; leaving it in the deck loses "which drawer, which tile" and can reshuffle it before release (`ops.rs:1949`) |
+| `event_active` / `event_top` for parking | both describe a card that is mid-resolution and bound; a deferred one must be outside the pipeline until release |
+| an `On::TurnStart` entry on the deferring copy | it fires at every owner turn start and could not tell whether this copy deferred an event, which one, or that the turn key is later; still needs the record (and fires after the card left) |
+| `state` / `prop` for the checkpoint | `StateVar.value` is `i32` (`state.rs:375`); a snapshot is a board copy with a card-chosen count of them |
+| `turn_snapshot` for the checkpoint | turn-start capture, stale mid-turn (`no_road.rs:137` says so), and already restored by `ran_as_usual` (`ran_as_usual.rs:74`) (A9) |
+| a Filter-body write for the redirect latch | Filter bodies are pure and may not write an instance prop (`refuse_if_filter`); the declaration path cannot write (A8) |
+| `RedirectValue` for the redirect origin | it carries `payee` only, is consumed by the fold, and does not survive to the `effect` raise |
+| `Pending.answers: Vec<Answered>` for the journal | it stores prompt answers, not request answers, and the request's slot is exactly what the re-run misreads; a request answer and a prompt answer are indistinguishable |
+| the saved `World` alone for the journal | a world says what happened, not which request owned which answer slot, nor how to re-apply it |
+| archived engine bundles for compatibility | they replay, but they do not give a card a new capability; the surface still has to exist |
 
-* **ABI 115.** Nine append-only imports and one kind; a pre-bump module
-  cannot instantiate against the new host, which is the point of the version.
-* **SAVE 17.** Two world collections and two pending collections, all
-  defaulted; RECORD unchanged.
-* **No new display text, no decision in an import.** Every decision stays an
-  `ask_*` in a body.
-* **No game word in the SDK.** The kind's spelling is the manifest's own
-  `eventResolved`; the facts are generic.
-* **Landing independence.** Item 2 needs G02; item 3 needs G02's request
-  split; items 1, 4 and 5 are independent of each other. All land in one
-  group because the surface bump is shared.
+All five items have an entry in this table that no other item's surface
+closes, which is why the group is not reducible to a card edit.
 
-### 13.5 What would argue against the group
+### 13.4 The smallest complete set, and what each cut breaks
 
-* *"Fix the cards only."* The Door keep-guessing and the arisa inertness are
-  both surface holes; no card edit reaches them.
-* *"Do HOST-01 by serialising more of the pass instead of a journal."*
-  Serialising the whole torn stack is what the journal is; storing every
-  prompt answer is half of it and still misreads the request slot.
-* *"Defer item 5."* Legitimate: `no_breakup`'s revert is independent. Striking
-  it leaves the card's displayed note false and costs three imports.
+| cut | breaks |
+|---|---|
+| `by_card_instance` | every `eventAfter` banks, the card's own release included; two copies cannot exclude only themselves |
+| `draw_event_as` | the extra draw has neither seat nor tile; arisa (2) and the persona hook stay dead |
+| `event_defer` | there is no suspension point at all |
+| `EventResolved` | 「此后」 has no point after the resolution; the callback cannot run |
+| `settle_facts.cancelled` | the Door re-derives the outcome from `mortgaged_of` and hook order |
+| `settle_facts.body_replaced` | "replaced" and "nothing ran" collapse again; the Door guard and the log tests lose their only discriminator (no card reads it alone, which is why §13.1 test 4 is stated) |
+| `settle_facts.paid` / `paid_value` | the tax and the rent add double-charge (or both drop), because no hook can tell a committed rent |
+| `redirected_from` | the latch keeps counting rents, prints and direct designations |
+| `world_snapshot` / `world_restore` / `world_snapshot_drop` | no revert point exists; the card's printed text stays false |
+| the journal fields / `JournalStart` | the resumed pass skips the torn request and the settle is lost (the §1.3 trace repeats) |
+
+`world_snapshot_drop` is not a convenience: without it a placed card that
+leaves through a non-destroy path leaks its world clones into every later
+save (§6.5).
+
+### 13.5 Why one group, and what a split costs
+
+The five share one ABI bump and one review unit, but they are not one
+mechanism: 1, 4 and 5 are independent of each other. They stay together
+because:
+
+* the bump is the expensive part (rebuilt ruleset modules, a shared README
+  band, one Kani tail) and landing it once is cheaper than four times;
+* item 1 needs both the cause field and the deferred draw; splitting it would
+  land a cause with no consumer or a deferral with no attribution;
+* item 2's `paid` and item 3's journal are both pinned to the same
+  `HostRequest` boundary: a request is the unit a settle fact and a replay
+  must agree on, and tuning either alone re-opens the other.
+
+A split that is legitimate — deferring item 5 — is costed in §13.6.
+
+### 13.6 The counterarguments, answered
+
+* *"Fix the cards only."* Every failure in §13.2 is a surface hole: the
+  cards already do the best their surface allows (they read the only proxies
+  available). No card edit reaches the trigger payload, the answer cursor or
+  the pure Filter body.
+* *"Serialise the whole pass instead of a journal."* Serialising the torn
+  stack is what the journal is; storing prompt answers alone is the current
+  `Pending.answers`, which is exactly the structure that misreads the request
+  slot.
+* *"Rebase only, or roll back only."* Rebase-only leaves the torn request's
+  answer ptr wrong; rollback-only loses the request's effect entirely.
+* *"Give the card a world key."* A hand play has uid `-1` and two hand plays
+  would share a key; allocating the key in the host removes card-side
+  identity entirely.
+* *"Defer item 5."* Legitimate and cheap to decide: the card's own note goes
+  back to false and the revert still does not exist; with the surface
+  present, the card side is three calls.
+
+### 13.7 Cost of the group
+
+* Nine append-only imports, one hook-only kind, five host-request variants,
+  three transient `Trigger` fields (four on `SettleFacts`), three world
+  collections and the journal state.
+* ABI 115 and SAVE 17; no record change, no display text, no player decision
+  inside an import, no game word in the SDK.
+* Tests: 28 new cases, nine Kani obligations and the ordinary suites.
+
+There is no cheaper surface: every candidate in §13.3 was eliminated on an
+engine rule, so the only cheaper decision is to strike an item outright,
+which §13.4 costs.
 
 ## 14. Clause match
 
