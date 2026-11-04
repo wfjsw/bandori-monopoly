@@ -35,7 +35,7 @@ the whole table.
 | G09 | 113→114 | 16 | 126–130 | — |
 | G10 | 114→115 | 16→17 | 131 | — |
 | G11 | 115→116 | 17→18 | 132–133 | — |
-| G12 | 116→117 | 18 | 107 | — |
+| G12 | 116→117 | 18 | 134 | 443–450 |
 | G14 | 117→118 | 18 | — | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
@@ -85,6 +85,12 @@ pre-G03 numbers (109→110 / 14→15), so the row is rewritten to **111→112 /
 move. G06's sixteen imports take the free **411–426**, leaving 427–430 free so
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
+
+**2026-11-04 amendment (G12 review).** The G12 row's kind column read 107,
+which is the **ruleset** namespace's `fansFlip`; free **engine** ids resumed
+at 121 (G06) and G11's row already holds 132–133, so G12 takes **134**. Its
+eight imports take the unused tail of G07's Op band, **443–450** (G07 landed
+441–442 only). `ABI_VERSION` 116→117 and SAVE 18 in the row are unchanged.
 
 Recommended landing order (foundation → dependent):
 
