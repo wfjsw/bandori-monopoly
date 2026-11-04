@@ -226,6 +226,10 @@ fn ako_flip_release_does_not_refill() {
         "the surplus stayed in the discard"
     );
     assert_eq!(t.money(0), 10_000, "no money was spent");
+    assert!(
+        !t.m.world().look_hold[0],
+        "the look hold ends with the routine, not at the next play"
+    );
 }
 
 // --------------------------------------------------------- clause (2)

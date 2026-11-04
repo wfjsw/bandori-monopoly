@@ -217,7 +217,7 @@ export const Players = memo(function Players({ m, solo, at }: { m: Model; solo: 
                   title={tr("board.revealTitle", { who: m.nameOf(i) })}
                   onClick={(e) => { e.stopPropagation(); showReveal(m, i); }}
                 >
-                  <Icon name="visibility" /><b>{x.reveal.hand.length + x.reveal.deck.length + x.reveal.discard.length}</b>
+                  <Icon name="playing_cards" /><b>{x.reveal.hand.length + x.reveal.deck.length + x.reveal.discard.length}</b>
                 </span>
               )}
               <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{fireOf(x)}/{fireMaxOf(x)}</span>

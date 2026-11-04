@@ -892,8 +892,9 @@ export class Animator {
         break;
       case "vote": this.showBanner(tr("board.voteTitle"), body); if (!fast) sfx("prompt"); break;
       case "inspection":
-        // A look turned cards face up (`inspected`); the frame itself rides
-        // the view (`MatchView.inspection` / the seat's `reveal`).
+        // A look opened (`inspection` event, one per begin). The turned cards
+        // ride the view (`MatchView.inspection` / the seat's `reveal`); the
+        // event is only the banner cue.
         this.showBanner(tr("anim.inspection"), body);
         if (!fast) sfx("draw");
         await wait(300);

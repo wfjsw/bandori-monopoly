@@ -1176,6 +1176,9 @@ impl World {
             .any(|f| f.deck_owner as usize == i)
             || self.look_hold.get(i).copied().unwrap_or(false)
         {
+            // A look is (or just was) publishing this deck: keep the published
+            // pile in step with the write.
+            self.sync_public_reveal(i);
             return false;
         }
         self.refill_draw_pile(i)
@@ -1238,7 +1241,31 @@ impl World {
             self.rng.shuffle(&mut pile);
             h.deck = pile;
         }
+        // The released cards are back on top: re-list the published piles.
+        self.sync_public_reveal(owner);
         count
+    }
+
+    /// Keep a seat's published pile lists in step with the piles themselves.
+    /// Only the lists a reveal published as a whole pile are rewritten (the
+    /// frame's held cards show through `public_state`, the rest of the deck
+    /// must follow draws and keeps).
+    pub fn sync_public_reveal(&mut self, i: usize) {
+        let Some(record) = self.reveals.iter_mut().find(|r| r.player == i as i32) else {
+            return;
+        };
+        let Some(h) = self.hidden.get(i) else {
+            return;
+        };
+        if record.piles[0] {
+            record.hand = h.hand.clone();
+        }
+        if record.piles[1] {
+            record.deck = h.deck.iter().rev().cloned().collect();
+        }
+        if record.piles[2] {
+            record.discard = h.graveyard.clone();
+        }
     }
 
     /// Record a public reveal of one pile (`pile` = [`crate::state::RevealPile`])
@@ -1263,14 +1290,24 @@ impl World {
                     hand: Vec::new(),
                     deck: Vec::new(),
                     discard: Vec::new(),
+                    piles: [false; 3],
                 });
                 self.reveals.last_mut().expect("just pushed")
             }
         };
         match pile {
-            crate::state::RevealPile::Hand => record.hand = ids,
-            crate::state::RevealPile::Deck => record.deck = ids,
-            crate::state::RevealPile::Discard => record.discard = ids,
+            crate::state::RevealPile::Hand => {
+                record.hand = ids;
+                record.piles[0] = true;
+            }
+            crate::state::RevealPile::Deck => {
+                record.deck = ids;
+                record.piles[1] = true;
+            }
+            crate::state::RevealPile::Discard => {
+                record.discard = ids;
+                record.piles[2] = true;
+            }
             // A single shown card is appended to the revealed-card list.
             crate::state::RevealPile::Card => record.deck.extend(ids),
         }

@@ -2988,6 +2988,38 @@ fn look_reveal(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Opens a **public** look, publishes the deck, closes the look and only then
+/// keeps the top card into the hand, then halts: the published list must follow
+/// the pile (the kept card is no longer a deck entry), not stay frozen at the
+/// reveal.
+const LOOK_KEEP: CardDef = CardDef::new("TEST:lookKeep", &[On::Play("", None, look_keep)]);
+
+fn look_keep(player_id: i32) -> card_sdk::Asked {
+    ctx::inspection_begin(player_id, player_id, 2, true)?;
+    ctx::reveal_pile(player_id, CardPile::Deck, &Msg::new(key!("look_keep")));
+    ctx::inspection_end(player_id, false);
+    let top = ctx::cards_in(player_id, CardPile::Deck);
+    if let Some(card) = top.first() {
+        let id = card.as_str().to_string();
+        if ctx::take_card(player_id, &id, CardPile::Deck) {
+            ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
+        }
+    }
+    // Two halts: the first shows the begin (the only part applied live), the
+    // second the committed end + keep.
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("look_keep")),
+        &Msg::new(key!("look_keep")),
+    )?;
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("look_keep")),
+        &Msg::new(key!("look_keep")),
+    )?;
+    Ok(())
+}
+
 /// Opens a private look and returns **without** ending it: the commit net must
 /// put the cards back (design G11 §5.4).
 const LOOK_LEAK: CardDef = CardDef::new("TEST:lookLeak", &[On::Play("", None, look_leak)]);
@@ -3211,6 +3243,7 @@ card_sdk::ruleset!(&[
     INSPECT_PROBE,
     LOOK_AT_TWO,
     LOOK_REVEAL,
+    LOOK_KEEP,
     LOOK_LEAK,
     DRAW_TWO,
     DRAW_AFTER_PROBE

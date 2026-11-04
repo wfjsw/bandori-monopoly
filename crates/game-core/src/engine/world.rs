@@ -69,7 +69,10 @@ pub struct InspectionCard {
 }
 
 /// One seat's public reveal: the ids published, and the clause that published
-/// them.
+/// them. `piles` marks the lists that are a whole pile (`hand`, `deck`,
+/// `discard`): such a list is kept in step with the pile while the record
+/// lives, so a card that moves out mid-look leaves the published list too.
+/// Single shown cards are appended and never rewritten.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RevealRecord {
     pub player: i32,
@@ -77,6 +80,8 @@ pub struct RevealRecord {
     pub hand: Vec<String>,
     pub deck: Vec<String>,
     pub discard: Vec<String>,
+    #[serde(default)]
+    pub piles: [bool; 3],
 }
 
 fn full_build_cost() -> i32 {
@@ -1626,10 +1631,35 @@ impl World {
                         reason: record.map(|r| r.reason.clone()).unwrap_or_default(),
                         ..Default::default()
                     };
+                    // A list published as a whole pile follows the pile: the
+                    // overlay is the live view, not a snapshot of the reveal
+                    // (a card drawn or kept during the look leaves it).
                     if let Some(r) = record {
-                        view.hand = r.hand.clone();
-                        view.deck = r.deck.clone();
-                        view.discard = r.discard.clone();
+                        view.hand = if r.piles[0] {
+                            h.hand.clone()
+                        } else {
+                            r.hand.clone()
+                        };
+                        // A public look publishes the deck for as long as its
+                        // clause runs -- open frame, or the filing right after
+                        // it (`look_hold`) -- so the deck list follows the
+                        // pile, not the reveal moment.
+                        let published = r.piles[1]
+                            || self.look_hold.get(index).copied().unwrap_or(false)
+                            || self
+                                .inspection_frames
+                                .iter()
+                                .any(|f| f.deck_owner == seat && f.public);
+                        view.deck = if published {
+                            h.deck.iter().rev().cloned().collect()
+                        } else {
+                            r.deck.clone()
+                        };
+                        view.discard = if r.piles[2] {
+                            h.graveyard.clone()
+                        } else {
+                            r.discard.clone()
+                        };
                     }
                     // The frame is the true top; a deck reveal made while it
                     // was open already listed the held cards, so drop that

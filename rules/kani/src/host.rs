@@ -4145,6 +4145,11 @@ pub fn arm_inspection_begin(a: Args) -> i64 {
 }
 
 /// `inspection_end` -- return the frame to the deck front in order.
+///
+/// The `shuffle` flag is deliberately unmodelled: the proof model's stub keeps
+/// the order for it too (a real shuffle is a permutation the proofs compare by
+/// multiset, and no deterministic order is provable without the RNG). The
+/// engine's shuffle is exercised by the conformance suite and the card tests.
 pub fn arm_inspection_end(a: Args) -> i64 {
     let [a0, _a1, ..] = a;
     world::with_world_mut(|w| {

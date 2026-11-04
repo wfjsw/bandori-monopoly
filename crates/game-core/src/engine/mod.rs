@@ -1570,8 +1570,9 @@ impl Match {
         let r = f(&mut cx);
         self.world = cx.into_world();
         // Nothing is pending after a direct write, so the reveal overlay it
-        // produced is over.
+        // produced is over -- and with it any look hold (nothing will file).
         self.world.reveals.clear();
+        self.world.look_hold.iter_mut().for_each(|held| *held = false);
         self.changed = true;
         self.seq += 1;
         self.arm_clock_hold();
@@ -1661,6 +1662,10 @@ impl Match {
                 }
                 if outermost {
                     w.reveals.clear();
+                    // A look's hold only has to survive until its own play
+                    // files the card; a look from a hook or a skill press has
+                    // no filing of its own, so the routine end releases it.
+                    w.look_hold.iter_mut().for_each(|held| *held = false);
                 }
                 self.world = w;
                 self.pending = None;
@@ -1736,6 +1741,10 @@ impl Match {
             // rather than aborting the match (`changed` / `seq` are already
             // bumped above).
             Err(Halt(HaltKind::Suspended)) => {
+                // The routine is over, so its overlay and its look holds are
+                // too (same rule as the `Ended` arm above).
+                w.reveals.clear();
+                w.look_hold.iter_mut().for_each(|held| *held = false);
                 self.world = w;
                 self.pending = None;
                 if !self.flushing_deferred {

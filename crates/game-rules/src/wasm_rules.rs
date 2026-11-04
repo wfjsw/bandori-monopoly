@@ -292,7 +292,9 @@ pub struct Run {
     /// `draw_log`; a cancelled draw is in neither.
     draw_after_log: Vec<(i32, Vec<String>)>,
     /// Frame ids present when the `Run` was built -- the commit net (§5.4)
-    /// leaves those alone unless the run adopted them.
+    /// leaves those alone unless the run adopted them. The drive constructors
+    /// fill it; the pure query/probe runs leave it empty, which is safe only
+    /// because they never commit (if one ever gains a commit, fill it first).
     frames_at_drive_start: Vec<i32>,
     /// Frames this run adopted instead of creating (a replayed
     /// `inspection_begin`, §5.2). The commit net releases them even though
@@ -551,9 +553,13 @@ impl Run {
         card: &str,
         to: i32,
     ) {
+        // A reveal is a visible outcome: post the lazy 「效果适用」 header
+        // first (same rule as `post_log_value`), so the line and any state it
+        // shows group under the body that produced them.
+        self.flush_header();
         let count = ids.len() as i32;
-        // A reveal is a visible outcome: a reveal-only body is not 「无事发生」
-        // and a `silent` entry that reveals is a bug.
+        // A reveal-only body is not 「无事发生」 and a `silent` entry that
+        // reveals is a bug.
         self.logged = self.logged.saturating_add(1);
         // The overlay is live view state: write it straight to the live world
         // when there is one (a pass's pile checkpoint does not carry
@@ -1368,12 +1374,7 @@ impl CardWorld for Run {
     /// not a pause point.
     fn reveal_pile(&mut self, player: i32, pile: CardPile, reason: Msg) {
         let (view, ids) = {
-            // Read the live world when the guest runs on one: a host effect
-            // earlier in the same pass may already have changed the pile.
-            let world = match self.live {
-                Some(live) => unsafe { &*live }.world(),
-                None => &self.world,
-            };
+            let world = &self.world;
             match pile {
                 CardPile::Hand => (
                     game_core::state::RevealPile::Hand,
@@ -1401,10 +1402,7 @@ impl CardWorld for Run {
     /// look) is a no-op: one overlay entry and one line.
     fn reveal_card(&mut self, player: i32, card: &str, reason: Msg) {
         let seen = {
-            let world = match self.live {
-                Some(live) => unsafe { &*live }.world(),
-                None => &self.world,
-            };
+            let world = &self.world;
             world
                 .reveals
                 .iter()
@@ -1432,7 +1430,7 @@ impl CardWorld for Run {
             game_core::state::RevealPile::Card,
             vec![card.to_string()],
             card,
-            1,
+            CardPile::Inspection as i32,
         );
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
@@ -5592,6 +5590,17 @@ impl<M: CardModules> RulesBridge<M> {
                         None => 0,
                     }
                 };
+                // One `inspection` line per look: the banner names who looked
+                // and how many cards turned. The frame itself rides the view.
+                let id = cx.log_event(
+                    "inspection",
+                    owner,
+                    Msg::new("log.inspection_open").n("count", held as i64),
+                    parent,
+                    "",
+                    held,
+                );
+                cx.set_event_to(id, CardPile::Inspection as i32);
                 return Ok(held);
             }
             // Release the caller's innermost frame; a body that forgot to

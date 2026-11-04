@@ -2330,6 +2330,60 @@ fn trainee_guide_publishes_the_deck_while_it_counts_colours() {
     );
 }
 
+/// A look that ends, keeps a card and only then halts: the published list still
+/// names each looked card exactly once (the kept one through the frame), and
+/// the keep lands in the hand.
+#[test]
+fn a_card_kept_after_the_look_stays_listed_once() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    t.give_play(0, "TEST:lookKeep").unwrap();
+    // The frame is still the live state at the first halt; the second one is
+    // past the commit of the end + keep.
+    t.expect_prompt();
+    t.answer_one(0).unwrap();
+    t.expect_prompt();
+    let st = t.st();
+    let reveal = st.players[0]
+        .reveal
+        .as_ref()
+        .expect("the deck is published while the play runs");
+    let mut listed = reveal.deck.clone();
+    listed.sort();
+    assert_eq!(
+        listed,
+        vec!["通用:GREAT".to_string(), "通用:安可".to_string()],
+        "each looked card once: {:?}",
+        reveal.deck
+    );
+    t.decline();
+    drain(&mut t);
+    assert_eq!(t.hand(0).len(), 1, "the top was kept");
+}
+
+/// The published deck list is a live view of the pile, not a copy of the
+/// reveal moment: a card taken out after the reveal leaves the list, so a kept
+/// card never shows as a deck card as well.
+#[test]
+fn a_published_deck_list_follows_the_pile() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    let deck = t.draw_pile(0);
+    t.m.world_mut().push_reveal(
+        0,
+        Msg::new("test_look"),
+        game_core::state::RevealPile::Deck,
+        deck,
+    );
+    // A look is filing: the pile is published for the rest of the clause.
+    t.m.world_mut().look_hold[0] = true;
+    let kept = t.m.world_mut().hidden[0].deck.pop().expect("a card");
+    let st = t.st();
+    let listed = &st.players[0].reveal.as_ref().unwrap().deck;
+    assert!(!listed.contains(&kept), "taken card gone: {listed:?}");
+    assert_eq!(listed.len(), 1, "the rest stays");
+}
+
 /// 规则书[特]: 「观看卡组并观看到此卡时…将其放置在自己[场上]（次效果优先于
 /// 其他后续效果）」 -- the placement happens inside the look, so the body's
 /// next read no longer sees the card.

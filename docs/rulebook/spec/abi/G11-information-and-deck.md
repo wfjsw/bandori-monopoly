@@ -294,14 +294,21 @@ pub struct RevealView {
   `Match::inspection_of(member)`; `crates/server/src/api.rs:578` re-types it
   with `serde(default)`.
 
-The overlay is built in `World::public_state`
-(`crates/game-core/src/engine/world.rs:1544-1570`) from that player's
+The overlay is built in `World::public_state` from that player's
 `RevealRecord` plus the held cards of that player's **public** frames. A deck
 reveal made while such a frame is open already lists the held cards, so the
 builder drops that copy (one occurrence per held id) before splicing the held
 cards in front: each card shows once, the frame still reads as the true top.
 It is cleared at the end of the outermost routine (§5.6), so it lives exactly
 as long as the clause that produced it.
+
+A list the record published as a whole pile is a **live** view of that pile,
+not a copy of the reveal moment: `public_state` rebuilds it from `Hidden`, and
+`World::sync_public_reveal` re-lists it on every pile write and on release, so
+a card drawn, kept or played during the published window leaves the list (the
+common shape is 「公开…然后拿取一张」 -- the kept card must not also read as a
+deck card). The deck is published while a public frame is open **or** its
+clause is still filing (`look_hold`); a `Card` reveal keeps its snapshot list.
 
 Client: the reveal overlay renders as a card row under the seat's name plate
 (the same `InspectCard` face the graveyard hover peek uses — those cards are
@@ -427,6 +434,11 @@ pub struct RevealRecord {
     pub hand: Vec<String>,
     pub deck: Vec<String>,
     pub discard: Vec<String>,
+    /// `hand` / `deck` / `discard` was published as a **whole pile**; those
+    /// lists follow the pile (see §4.3). A `Card` reveal appends and never
+    /// sets a flag.
+    #[serde(default)]
+    pub piles: [bool; 3],
 }
 ```
 
@@ -865,6 +877,9 @@ invisible to `ruleset-tests`).
 | 2 | `pp.rs::trainee_guide_publishes_the_deck_while_it_counts_colours` also asserts the overlay is gone after `drain` — it lives exactly as long as the clause |
 | 2 | `live_match.rs::a_deck_reveal_during_a_public_look_lists_each_card_once` — a deck reveal inside a public frame shows the held card once (the overlay drops the duplicate copy) |
 | 1 | `live_match.rs::a_leaked_frame_is_released_by_the_commit_net` — a body that returns without `inspection_end`: one `log.inspection_returned` with the count, the cards back in order, nothing published |
+| 2 | `pp.rs::a_published_deck_list_follows_the_pile` — a card taken out after the reveal leaves `reveal.deck` (fixture `TEST:lookKeep`) |
+| 2 | `pp.rs::a_card_kept_after_the_look_stays_listed_once` — public look, end, keep, then halt: each looked card appears once in the overlay and the keep lands in the hand |
+| 1 | `ako.rs::ako_flip_release_does_not_refill` also asserts `look_hold` is clear after the routine — a skill-press look has no filing of its own |
 
 ABI level: `crates/game-rules/tests/kind_table_pin.rs` (132/133 in its
 `named` list), `crates/game-rules/tests/live_match.rs` (`inspected` raised
