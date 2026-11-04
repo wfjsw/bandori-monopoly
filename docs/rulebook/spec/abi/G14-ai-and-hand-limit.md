@@ -206,7 +206,9 @@ Derived obligations:
   gates, and the formal `G-CARDS-01` all read the same allowance fact.
 * **Bounded allowance.** The allowance is set only by an exempt draw that left
   the hand over, and is cleared at every hand-shrink site that brings the hand
-  within the limit, at turn end, and at turn start.
+  within the limit and by the turn-end sweep. No turn-start clear: the sweep
+  runs on every end, and one at turn start would drop an out-of-turn allowance
+  early (§5.6).
 * **Static facts only.** `aiNever` is readable from the manifest alone: no
   hidden zones, no prompt, no RNG. `aiPlayable` is therefore exact in the
   seat-view engine (new `docs/BOT.md` §1.1 row, "static card props, always
@@ -614,9 +616,13 @@ new log part. A human can always play an `aiNever` card.
 | advanced bot service (`legal_actions*`) | `view.playable` | `offerable()` |
 | browser 托管 (`autopilot.ts`) | `view.playable` | `playable && aiPlayable` (standard); `playable` (chaos) |
 | human manual play / glow | `playable` | unchanged |
+| hand UI second click (`Side.tsx`) | over the limit ⇒ discard popup | playable card plays; only a refused card opens the popup |
+| engine bot discard latch (`policy.rs`, `sim.rs` fallback) | raw `over_hand` | `over_hand_blocking` (the allowance keeps the cards) |
 
 `cant_play` is not consulted differently, so the server still accepts a manual
-夏日合宿 play on any seat.
+夏日合宿 play on any seat. The same split applies to the hand limit: a
+「可超过上限」 hand is `overAny` but not `overHand`, so its playable cards still
+play — the discard popup is for a blocking overflow, where play is refused.
 
 ### 6.2 Hand-limit gates (item 1)
 
@@ -640,6 +646,8 @@ Specific gate edits:
 * `discard` gate (`mod.rs:2987`): raw `over_hand` (discarding is legal while
   allowed).
 * trim loops: raw `over_hand`.
+* engine bot end/discard latch (`policy.rs`, `sim.rs` fallback): `over_hand_blocking`
+  — a bot would otherwise discard the cards the clause says may stay.
 
 ### 6.3 Kani model
 

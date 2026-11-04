@@ -5580,13 +5580,10 @@ impl PlayCtx<'_> {
         }
         if hooks && got > 0 {
             let over = self.over_hand(i).then(|| {
-                let key = if over_hand_limit {
-                    "log.part.over_hand_allowed"
-                } else {
-                    "log.part.over_hand"
-                };
-                Msg::new(key)
-                    .i("limit", i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()))
+                Msg::over_hand_part(
+                    self.w.st.players[i].hand_limit().unwrap_or_default(),
+                    over_hand_limit,
+                )
             });
             self.w
                 .log(

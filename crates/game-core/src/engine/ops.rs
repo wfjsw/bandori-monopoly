@@ -1189,12 +1189,10 @@ impl World {
                 self.st.players[i].over_hand_allowed = true;
             }
             let over = over_now.then(|| {
-                let key = if over_hand_limit {
-                    "log.part.over_hand_allowed"
-                } else {
-                    "log.part.over_hand"
-                };
-                Msg::new(key).i("limit", self.st.players[i].hand_limit().unwrap_or_default())
+                Msg::over_hand_part(
+                    self.st.players[i].hand_limit().unwrap_or_default(),
+                    over_hand_limit,
+                )
             });
             self.log(
                 "draw",

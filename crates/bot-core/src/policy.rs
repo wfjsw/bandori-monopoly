@@ -556,9 +556,10 @@ pub fn turn_action(cx: &mut PlayCtx<'_>, i: usize) -> Option<NetMessage> {
                 });
             }
         }
-        // Over the hand limit first: the end gate wants the hand down, and
-        // discard is legal in any step.
-        if cx.over_hand(i) {
+        // Blocking over the hand limit first: the end gate wants the hand
+        // down, and discard is legal in any step. A 「可超过上限」 excess is not
+        // blocking, so the seat ends and keeps the cards instead.
+        if cx.over_hand_blocking(i) {
             let hand_len = cx.world().hidden[i].hand.len();
             if hand_len > 0 {
                 let k = cx.world_mut().rng.below(hand_len);
@@ -590,7 +591,7 @@ pub fn turn_action(cx: &mut PlayCtx<'_>, i: usize) -> Option<NetMessage> {
             && !cx.state().busy
             && cx.state().step != stage::MOVE
             && !owes_roll
-            && !cx.over_hand(i);
+            && !cx.over_hand_blocking(i);
         if can_roll {
             return Some(NetMessage::act("roll"));
         }
@@ -607,7 +608,7 @@ pub fn turn_action(cx: &mut PlayCtx<'_>, i: usize) -> Option<NetMessage> {
     // Buy / build are settle-time offers only: the tile rule's
     // `ctx::offer_buy` / `ctx::offer_build` prompt already carried the
     // bot's `ai_wants_*` answer. END is discard / end-turn.
-    if cx.over_hand(i) {
+    if cx.over_hand_blocking(i) {
         let hand_len = cx.world().hidden[i].hand.len();
         if hand_len == 0 {
             return None;

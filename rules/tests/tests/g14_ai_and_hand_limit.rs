@@ -80,6 +80,11 @@ fn arm_hand(t: &mut Table, x: usize) {
 /// Play NNM for `x` marks, take branch (1) (draw x), and drain the play's
 /// remaining prompts. Returns the hand size right after the draw settled.
 fn play_nnm_branch_one(t: &mut Table, marks: i32, x: i32) -> usize {
+    assert_eq!(
+        t.p(0).token(MARK),
+        marks,
+        "the table must carry the marks the play spends"
+    );
     arm_hand(t, x.max(0) as usize);
     t.play(0, NNM).expect("NNM hand play");
     if x > 1 {
@@ -315,9 +320,14 @@ fn g14_over_limit_log_part() {
     let mark = t.mark();
     play_nnm_branch_one(&mut t, 2, 2);
     let seen: Vec<String> = t.events_since(mark).iter().map(|e| format!("{:?}", e.msg)).collect();
+    // The closing quote keeps `over_hand` from matching `over_hand_allowed`.
     assert!(
         seen.iter().any(|m| m.contains("log.part.over_hand_allowed")),
         "the exempt draw must log the allowed part: {seen:?}"
+    );
+    assert!(
+        !seen.iter().any(|m| m.contains("log.part.over_hand\"")),
+        "the exempt draw must not log the plain part: {seen:?}"
     );
 
     // The plain overflow logs the plain part.
@@ -331,8 +341,12 @@ fn g14_over_limit_log_part() {
     decline_all(&mut t);
     let seen: Vec<String> = t.events_since(mark).iter().map(|e| format!("{:?}", e.msg)).collect();
     assert!(
-        seen.iter().any(|m| m.contains("log.part.over_hand")),
+        seen.iter().any(|m| m.contains("log.part.over_hand\"")),
         "the plain overflow must log the plain part: {seen:?}"
+    );
+    assert!(
+        !seen.iter().any(|m| m.contains("log.part.over_hand_allowed")),
+        "a plain overflow must not log the allowed part: {seen:?}"
     );
 }
 
@@ -364,6 +378,24 @@ fn g14_standard_bot_skips_summer_camp() {
         "the bot must keep 夏日合宿: {:?}",
         t.hand(0)
     );
+}
+
+/// The shared bot policy (`Match::bot_action`'s body) honours the allowance:
+/// a blocking overflow gets a discard, an allowed excess gets the end.
+#[test]
+fn g14_standard_bot_keeps_an_allowed_excess() {
+    let mut t = nnm_table(0);
+    // 夏日合宿 is never offered to the standard policy, so the hand stays put.
+    t.set_hand(0, &[SUMMER, SUMMER, SUMMER, SUMMER, SUMMER, SUMMER]);
+    t.make_bot(0, game_core::state::BotMentality::Standard);
+    move_quiet(&mut t);
+    let member = t.p(0).member;
+    let cmd = bot_core::policy::act_for(&t.m, member).expect("a command");
+    assert_eq!(cmd.act, "discard", "a blocking overflow discards");
+
+    t.m.world_mut().st.players[0].over_hand_allowed = true;
+    let cmd = bot_core::policy::act_for(&t.m, member).expect("a command");
+    assert_eq!(cmd.act, "end", "an allowed excess keeps the cards");
 }
 
 /// Contrast: the same fixture plays a card without the prop. The standard

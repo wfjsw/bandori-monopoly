@@ -481,10 +481,15 @@ pub fn heuristic_message_view(_data: &GameData, view: &SeatView) -> NetMessage {
     }
     // Turn surface, ported from `ai_step` / autopilot.ts `turn` (standard).
     let me = player_id.max(0) as usize;
-    // Over the hand limit: `end` is refused (`err.over_hand`) until the hand
-    // is down to the limit -- `ai_step`'s discard branch.
+    // Blocking over the hand limit: `end` is refused (`err.over_hand`) until
+    // the hand is down to the limit -- `ai_step`'s discard branch. A
+    // 「可超过上限」 excess is not blocking, so the seat ends and keeps it.
     let hand = &view.hand;
-    if st.players.get(me).is_some_and(|p| p.over_hand(hand.len())) {
+    if st
+        .players
+        .get(me)
+        .is_some_and(|p| p.over_hand_blocking(hand.len()))
+    {
         if let Some(c) = hand.first() {
             return NetMessage {
                 act: "discard".into(),

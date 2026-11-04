@@ -371,8 +371,9 @@ export const Hand = memo(function Hand({ m, sess, busy, pulse }: { m: Model; ses
   const cardPlayable = (k: number) =>
     canPlay && !sess.readOnly && !sheet.open && !m.overHand && m.v.playable?.[k] !== false;
   // First click selects (highlighted border); clicking the selected card (or
-  // Enter) plays it directly; while over the limit at all it instead opens the
-  // detail popup, whose button discards (discarding needs that confirmation). Clicking
+  // Enter) plays it directly; a card the play gate refuses while the hand is
+  // over the limit instead opens the detail popup, whose button discards
+  // (discarding needs that confirmation). Clicking
   // anywhere else drops the pick again -- it is a lens, not a mode.
   const [picked, setPicked] = useState<string | null>(null);
   const unpick = useCallback(() => setPicked(null), []);
@@ -390,11 +391,15 @@ export const Hand = memo(function Hand({ m, sess, busy, pulse }: { m: Model; ses
     setPicked(null);
     setHover(null);
     if (sess.readOnly || sheet.open || auto) return;
+    // Play first: a 「可超过上限」 hand is `overAny` but not `overHand`, so the
+    // cards stay playable and the second click must play them, not offer only
+    // the discard. A blocking overflow falls through to the popup (play is
+    // refused there), and so does an unplayable card while over either form.
+    if (cardPlayable(k)) return void act(sess, { act: "play", card: id });
     if (m.overAny) {
       const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
       return void showCard(id, [{ label: tr("board.discardThis"), enabled: true, kind: "white", run: () => act(sess, { act: "discard", card: id }) }], note);
     }
-    if (cardPlayable(k)) void act(sess, { act: "play", card: id });
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);

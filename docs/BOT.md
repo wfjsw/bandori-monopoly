@@ -213,7 +213,7 @@ pick) may diverge from the server's own draw. The blast radius is the sent
 command, which the server applies verbatim -- a divergence is a different but
 legal play, never a desync.
 
-#### G. `cant_act` -- the other branches (not extras, listed for completeness)
+#### G2. `cant_act` -- the other branches (not extras, listed for completeness)
 
 Only `act:"skill"` and `act:"play"` feed the seat-view extras. The rest of
 `cant_act` is public throughout (phase / turn / step / `busy` /
