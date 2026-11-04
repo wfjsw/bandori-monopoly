@@ -32,9 +32,9 @@ the whole table.
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 113→114 | 16 | 126–130 | — |
-| G10 | 114→115 | 16→17 | 131 | — |
-| G11 | 115→116 | 17→18 | 132–133 | — |
+| G09 | 113→114 | 16 | 132–136 | 451–470 |
+| G10 | 114→115 | 16→17 | 137 | 471–479 |
+| G11 | 115→116 | 17→18 | 138–139 | — |
 | G12 | 116→117 | 18 | 107 | — |
 | G14 | 117→118 | 18 | — | — |
 
@@ -85,6 +85,15 @@ pre-G03 numbers (109→110 / 14→15), so the row is rewritten to **111→112 /
 move. G06's sixteen imports take the free **411–426**, leaving 427–430 free so
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
+
+**2026-11-04 amendment (G09, G10).** G07 has landed; `ABI_VERSION` is 113 and
+the kind table ends at **131** (`settleRentMul`) — 126–130 are the pay-stage
+kinds (RentAdd, RentMul, SettleAdd, SettleMul, SettleRentAdd), not G09's.
+The G09/G10/G11 kind column therefore shifts: G09 takes **132–136**, G10
+**137** (`eventResolved`, hook-only), G11 **138–139**. Ops likewise: the Kani
+`Op` enum currently ends at `nearest_with_prop = 442`, inside G07's landed
+band, so G09 takes **451–470** (its twenty imports) and G10 **471–479** (its
+nine), after G07's reservation. The ABI and SAVE columns are unchanged.
 
 Recommended landing order (foundation → dependent):
 

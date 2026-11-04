@@ -8,7 +8,7 @@ Baseline: the tree's `ABI_VERSION 104` (G06's turn-snapshot entry is already on
 disk, so the constant reads 104 before G03/G06 land their own entries). Sibling
 drafts G03/G06 are written against the same base; §8 fixes the landing order and
 the renumbering rule. In the README landing order this doc's own line is
-**114 → 115** — see §8.
+**115 → 116** — see §8.
 
 Closed slugs and their review rows (`CARD-REVIEW-2026-10-27.md` line ids). The
 review rows are holistic ids; the authoritative sheet line in
@@ -261,10 +261,10 @@ produced it.
 
 | id | wire | class | filter | hook-only | meaning |
 |---:|---|---|---|---|---|
-| 132 | `inspected` | Action | no | yes | a card entered an inspection frame. Payload: `player_id` = deck owner, `target` = owner, `card` = the revealed card, `cards` = `[that card]`, `value` = reveal index, `by_card` = looker. Dispatched to the revealed card itself. |
-| 133 | `drawAfter` | Action | no | yes | one draw action finished. Payload: `player_id` = drawer, `value` = cards drawn, `cards` = the batch. |
+| 138 | `inspected` | Action | no | yes | a card entered an inspection frame. Payload: `player_id` = deck owner, `target` = owner, `card` = the revealed card, `cards` = `[that card]`, `value` = reveal index, `by_card` = looker. Dispatched to the revealed card itself. |
+| 139 | `drawAfter` | Action | no | yes | one draw action finished. Payload: `player_id` = drawer, `value` = cards drawn, `cards` = the batch. |
 
-These are this group's **README band** (132/133). Every draft group has its own
+These are this group's **README band** (138/139). Every draft group has its own
 consecutive band in landing order instead of all reaching for 111; both kinds
 move with the band if the order changes. Retired 104 is unrelated to
 `ABI_VERSION`.
@@ -599,7 +599,7 @@ nothing.
   exact-version check makes the bump the honest marker).
   `MatchPlayer.reveal` itself is a `public_state` projection (below), not saved
   state; the saved inputs are the frames and the reveal records.
-* **RECORD_VERSION stays 3.** No input shape changes: prompts opened from an
+* **RECORD_VERSION stays 4.** No input shape changes: prompts opened from an
   `inspected` hook are recorded as ordinary answers, the frame is rebuilt by
   the re-run, and `inspect_begin` uses no RNG (only `inspect_end(shuffle)`
   does, and its draw is on the recorded RNG stream like every other shuffle).
@@ -614,12 +614,12 @@ nothing.
 
 ## 8. Versioning
 
-`ABI_VERSION` **114 → 115** (entry inserted immediately below the `ABI_VERSION`
+`ABI_VERSION` **115 → 116** (entry inserted immediately below the `ABI_VERSION`
 constant and above the newest note, following the tree's existing newest-first
 block):
 
 ```
-/// v115: **deck inspection, public reveal, and the draw-action point**.
+/// v116: **deck inspection, public reveal, and the draw-action point**.
 ///    `CardPile::Inspect = 4` (the cards a look has turned over and not yet
 ///    released); `cards_in` / `take_card` accept it and the empty-deck refill
 ///    is suppressed on the pile writes while a look holds that seat's deck
@@ -639,7 +639,7 @@ block):
 
 **Renumbering rule.** Several sibling drafts are written against the same base
 and each proposes its own entry. Under the README order this group lands eleventh, so the
-constant reads 114 before it and this doc's paragraph is written as 114 → 115. If G11 lands earlier, take the next free
+constant reads 115 before it and this doc's paragraph is written as 115 → 116. If G11 lands earlier, take the next free
 number and renumber the groups after it; if it lands last, the number is
 higher still. The constant and each doc's line move, text unchanged.
 

@@ -259,12 +259,13 @@ made inside an import: `card_build_as` charges, hooks and the card decide.
 
 ### 4.1 New engine kinds — `crates/card-sdk/src/abi.rs`, `crates/game-kinds`
 
-Wire ids 126–130 (this group's README band; 104 is retired, 107 was never
+Wire ids 132–136 (this group's README band; master ends at 131
+`settleRentMul`, 104 is retired, 107 was never
 used). All get an `EngineKind` row in `crates/game-kinds/src/lib.rs` beside 75,
 with `is_filter: false` / `hook_only: false` like their rise sibling
-`houseAdded`. 126–127 are dual-role: a `TriggerKind` const
+`houseAdded`. 132–133 are dual-role: a `TriggerKind` const
 (raise site, `ChainKind`) **and** an `ActionKind` const (the same id, the
-`Self(TriggerKind::X)` alias form `HouseAdded` uses). 128–130 are
+`Self(TriggerKind::X)` alias form `HouseAdded` uses). 134–136 are
 `Effect.kind` spellings only -- never raised, so they get a `TriggerKind` const
 for `effect::kind`/`effect::has` and the wire name, but no raise site.
 
@@ -274,17 +275,17 @@ for `effect::kind`/`effect::has` and the wire name, but no raise site.
 /// on a settle. Payload: `tile` (the governing square), `square` (the board
 /// position), `mv` (the move/step). Dual-role: a counteraction window and a
 /// hook.
-pub const TileEffectBefore: Self = Self::engine(126);
+pub const TileEffectBefore: Self = Self::engine(132);
 
 /// `houseRemoved` -- a tile's house count has just fallen.
 /// Payload: `tile` (the square), `value` (the count after the fall).
 /// `player_id` is the tile's owner at the time of the write.
-pub const HouseRemoved: Self = Self::engine(127);
+pub const HouseRemoved: Self = Self::engine(133);
 
 // effect-only spellings (`Effect.kind`), one per write:
-pub const HouseAdd: Self = Self::engine(128);    // value = delta, target = owner
-pub const HouseRemove: Self = Self::engine(129); // value = -delta, target = owner
-pub const OwnerSet: Self = Self::engine(130);    // value = new owner
+pub const HouseAdd: Self = Self::engine(134);    // value = delta, target = owner
+pub const HouseRemove: Self = Self::engine(135); // value = -delta, target = owner
+pub const OwnerSet: Self = Self::engine(136);    // value = new owner
 
 // ActionKind — same ids, the `Self(TriggerKind::X)` alias form:
 pub const TileEffectBefore: Self = Self(TriggerKind::TileEffectBefore);
@@ -451,7 +452,7 @@ The import passes the enum as `i32`; an unknown value falls back to
 
 | change | class |
 |---|---|
-| five new engine kind ids 126–130 | wire (kind table + `from_wire`) |
+| five new engine kind ids 132–136 | wire (kind table + `from_wire`) |
 | new imports above | wire (import table, `sys.rs`, `sys_kani.rs`, `native_shims.rs`) |
 | `HostRequest::BuildAs { player_id, tile, charge, num, den, require_owner }` | host-internal (the new verb's request) |
 | `HostRequest::TileWrite { op, tile, value }` (see §5.4) | host-internal (`set_houses` / `add_house` / `set_owner` become round-trips) |
@@ -887,8 +888,8 @@ card armed.
 
 ### 5.7 Kani model
 
-`crates/card-sdk/src/kani_host.rs` gains `Op` rows 411–430 (the enum ends at
-`remove_mark` 340; G02/G04/G06/G05/G07 take 341-410 ahead of this group), one
+`crates/card-sdk/src/kani_host.rs` gains `Op` rows 451–470 (the enum ends at
+`nearest_with_prop` 442, after G07's landed band), one
 per new import, and `sys_kani.rs` (`set_tag` at 1066,
 `card_build` at 1166, `trig_move_tag` at 786) / `native_shims.rs` / the host
 trait register each beside its neighbours.
@@ -1137,7 +1138,7 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
   no new saved field exists. `HostRequest` is host-internal (not serialized;
   `#[derive(Debug, Clone, PartialEq)]` only), so variants and fields added to
   it move no version.
-* **RECORD_VERSION stays 3.** The input stream is unchanged; the record's
+* **RECORD_VERSION stays 4.** The input stream is unchanged; the record's
   `EngineStamp.save_version` does not move.
 * **Replay.** Old `.bdrec` files replay on their archived engine bundle, so
   the behavioural changes to `add_house` / `set_houses` / `set_owner` /
@@ -1149,14 +1150,14 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
 
 ## 8. Versioning
 
-`ABI_VERSION` 112 → **113** (tenth group in landing order), entry inserted immediately below the constant
+`ABI_VERSION` 113 → **114** (tenth group in landing order), entry inserted immediately below the constant
 (newest first):
 
 ```
-/// v113: **tile events, one build pipeline, tile-write effects, house falls,
-///    move paths.** New engine kinds `tileEffectBefore` (126),
-///    `houseRemoved` (127) and the effect-only spellings `houseAdd` (128) /
-///    `houseRemove` (129) / `ownerSet` (130). `Trigger` gains `square` (the
+/// v114: **tile events, one build pipeline, tile-write effects, house falls,
+///    move paths.** New engine kinds `tileEffectBefore` (132),
+///    `houseRemoved` (133) and the effect-only spellings `houseAdd` (134) /
+///    `houseRemove` (135) / `ownerSet` (136). `Trigger` gains `square` (the
 ///    board position; `tile` is the square, and a square's rule instances,
 ///    extras, owner, houses, mortgage and props all travel with it) and
 ///    `TriggerMove` gains `path`; `prop::TILE_SWAP` (SDK sugar
@@ -1175,7 +1176,7 @@ TODO that a removal path other than `pay_after` leaves the tile props armed.
 ///    `set_owner` now open an `effect` window with a declared tile effect
 ///    before applying and may be cancelled there; `add_house` / `set_houses`
 ///    raise `houseRemoved` on a fall, and `assign_deed` contributes a fall for
-///    the previous owner. SAVE_VERSION 16 and RECORD_VERSION 3 unchanged.
+///    the previous owner. SAVE_VERSION 16 and RECORD_VERSION 4 unchanged.
 ```
 
 The old two-argument import is a real alias, not sugar in the guest: an
