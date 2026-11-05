@@ -710,9 +710,10 @@ pub async fn events(
     Ok(Json(evs))
 }
 
-/// `POST /api/rooms/{id}/anim-done` -- the acting seat's animation queue has
-/// drained for state version `seq`. Releases the turn-clock hold (10s cap
-/// applies if this never arrives). Recorded as `Input::AnimDone`.
+/// `POST /api/rooms/{id}/anim-done` -- the seat's animation queue has drained
+/// for state version `seq`. Clears that seat from the turn-clock hold, which
+/// releases once every pending human seat has acked (10s cap applies if one
+/// never arrives). Recorded as `Input::AnimDone`.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnimationDoneRequest {

@@ -318,8 +318,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let seq = req.get("seq").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let released = m.anim_done(member, seq);
-                    // Report whether this ack released a hold (a stale one is
-                    // a no-op). Carried as `released`, not `error`.
+                    // Report whether this ack was accepted (it clears that
+                    // seat from the hold; a stale one is a no-op). Carried as
+                    // `released`, not `error`.
                     let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "released": released});
                     if let Some(ckpt) = checkpoint(&m, before) {
                         v["ckpt"] = ckpt;

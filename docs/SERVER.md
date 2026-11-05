@@ -367,13 +367,16 @@ that is still animating late events does not lose clock time to the lag:
   refresh periodically / on reconnect / on `visibilitychange` to visible.
   Remaining = `deadline - (performance.now() + offset)`, repainted on each
   whole-second boundary.
-* **Anim hold.** When the acting human's turn / prompt / events commit, the
-  engine holds their clock (`state.clockPaused`, no deadline) until that
-  seat's client posts `POST /api/rooms/{id}/anim-done {seq}` -- sent once per
-  state version when the Animator queue has drained. A hard cap of 10 s of
-  ticks releases the hold anyway (hidden tab / disconnected actor). Bots and
-  Solo never hold. The ack is recorded as `Input::AnimDone` so replays
-  reproduce the same pauses (`docs/REPLAY.md`).
+* **Anim hold.** When a human seat's presentation is pending -- their turn /
+  events commit, or a prompt / end-match vote they still owe an answer on --
+  the engine holds every pending human seat's clock and the shared prompt /
+  vote window (`state.clockPaused`, no deadline) until each held seat's client
+  posts `POST /api/rooms/{id}/anim-done {seq}`, sent once per state version
+  when that client's Animator queue has drained. The hold releases when the
+  last held seat acks. A hard cap of 10 s of ticks releases it anyway (hidden
+  tab / disconnected actor). Bots and Solo never hold. The acks are recorded
+  as `Input::AnimDone` so replays reproduce the same pauses
+  (`docs/REPLAY.md`).
 
 ### Order roll (`/order-ready`)
 

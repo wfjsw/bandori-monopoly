@@ -74,7 +74,13 @@ const PromptTimer = memo(function PromptTimer({ sess }: { sess: GameSession }) {
   // advances until every seat answers), and this window is what decides for a
   // seat that never does.
   if (sess.kind !== "online" || !view || !p) return null;
-  const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
+  // The server holds the window while the seat's animation queue catches up
+  // (`clockPaused`): the published remaining time is frozen, so do not run
+  // the local interpolation through it.
+  const left = Math.max(
+    0,
+    Math.ceil(view.state.clockPaused ? p.timeLeft : p.timeLeft - (performance.now() - at) / 1000),
+  );
   if (!total.current) total.current = Math.max(1, left);
   return (
     <div className={s.timerRow}>

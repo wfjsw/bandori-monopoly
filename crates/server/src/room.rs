@@ -398,8 +398,8 @@ impl MatchHandle {
 
     /// The acting seat's animation queue drained for state version `seq`.
     /// Recorded as [`Input::AnimDone`] so replays reproduce the clock hold.
-    /// Returns whether the ack released a hold (a stale / foreign ack is
-    /// still recorded, but changes nothing).
+    /// Returns whether the ack was accepted (it clears that seat from the
+    /// hold; a stale / foreign ack is still recorded, but changes nothing).
     pub fn anim_done(&self, member: i32, seq: i32) -> Result<bool, String> {
         self.run(
             |_| Input::AnimDone { m: member, seq },

@@ -252,15 +252,18 @@ enum Routine {
     Ai(Box<Ask>),
 }
 
-/// The acting seat's clock is held until this seat acks `anim_done` for
-/// `seq` (or [`ANIM_HOLD_CAP`] seconds of ticks elapse). Only the acting
-/// seat's ack matters; bots and Solo never hold. Recorded as
-/// [`crate::record::Input::AnimDone`] so replays reproduce the same pauses.
+/// The clock is held until **every** human seat with presentation pending
+/// acks `anim_done` for `seq` (or [`ANIM_HOLD_CAP`] seconds of ticks elapse).
+/// That is the acting seat on a turn surface, or every human seat the table
+/// is still waiting on for a prompt / end-match vote -- their clients are all
+/// animating the same commit. Only human seats are held; bots and Solo never
+/// hold. Recorded as [`crate::record::Input::AnimDone`] so replays reproduce
+/// the same pauses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ClockHold {
-    /// Room member id of the seat that must ack (the acting human).
-    member: i32,
-    /// State version the ack must name. A lower `seq` is stale and ignored.
+    /// Room member ids that must ack (the acting / prompted humans).
+    members: Vec<i32>,
+    /// State version the acks must name. A lower `seq` is stale and ignored.
     seq: i32,
     /// Seconds held so far (tick-fed; [`ANIM_HOLD_CAP`] releases).
     elapsed: f32,
@@ -424,7 +427,10 @@ struct Saved {
 /// save may be taken while a look is paused and the frame holds cards in no
 /// pile, so dropping it loses them; the reveal overlay would otherwise
 /// vanish mid-routine (design G11).
-pub const SAVE_VERSION: u32 = 18;
+/// v19: `ClockHold.member` became `members` -- every human seat whose
+/// presentation is pending holds the clock (a multi-human prompt / vote),
+/// not only the acting seat.
+pub const SAVE_VERSION: u32 = 19;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -922,6 +928,9 @@ impl Match {
         } else {
             st.prompt = Default::default();
         }
+        // Not gated on a turn: the opening mulligan is a pre-turn prompt that
+        // still holds the table (`arm_clock_hold`).
+        st.clock_paused = self.clock_hold.is_some();
         if st.phase == "play" && st.turn >= 0 {
             // Buy / build are settle-time offers only (`tile:property` /
             // `tile:ring` → `ctx::offer_buy` / `ctx::offer_build`). There is
@@ -935,7 +944,6 @@ impl Match {
             st.base_time = base;
             st.bonus_time = bonus;
             st.time_left = base + bonus;
-            st.clock_paused = self.clock_hold.is_some();
             // `cant_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
@@ -1055,7 +1063,14 @@ impl Match {
             .st
             .players
             .get(seat)
-            .is_some_and(|p| p.member == hold.member)
+            .is_some_and(|p| hold.members.contains(&p.member))
+    }
+
+    /// True while any of `seats` has presentation pending. A live window
+    /// (prompt soft window, end-match vote) is shared table-wide, so one held
+    /// seat freezes it for everyone until every held seat has caught up.
+    fn clock_hold_covers_any(&self, seats: &[usize]) -> bool {
+        self.clock_hold.is_some() && seats.iter().any(|&s| self.clock_hold_covers(s))
     }
 
     /// AUCTION_EXTEND is a **grant**, not a borrow: a bid tops every
@@ -1675,11 +1690,11 @@ impl Match {
         self.provider = prov;
         self.changed = true;
         self.seq += 1;
-        // Anim hold for the acting human: every commit that leaves the seat
-        // something to watch (this one) re-arms against the new seq. The hold
-        // release path (`anim_done` / cap) never comes through here, so it
-        // cannot re-arm itself.
-        self.arm_clock_hold();
+        // The anim hold is armed at the end of each arm below, once the new
+        // world and any pending prompt / vote are in place: it has to see the
+        // *new* participants, and a prompt can be raised before the first turn
+        // (`turn` = -1). The hold release path (`anim_done` / cap) never comes
+        // through here, so it cannot re-arm itself.
         match res {
             Ok(()) | Err(Halt(HaltKind::Ended)) => {
                 let signals = std::mem::take(&mut w.signals);
@@ -1715,6 +1730,7 @@ impl Match {
                 self.world = w;
                 self.pending = None;
                 self.wait = delay.min(MAX_WAIT);
+                self.arm_clock_hold();
                 for s in signals {
                     match s {
                         Signal::StartTimer(i, refill, base_refill) => {
@@ -1778,6 +1794,7 @@ impl Match {
                     live: Live::new(*ask),
                     outermost,
                 });
+                self.arm_clock_hold();
             }
             // STACK-01 fallback only: the pump above swallows suspensions, so
             // this arm is a guard against one escaping it. The work stack does
@@ -1792,6 +1809,7 @@ impl Match {
                 w.look_hold.iter_mut().for_each(|held| *held = false);
                 self.world = w;
                 self.pending = None;
+                self.arm_clock_hold();
                 if !self.flushing_deferred {
                     self.flush_deferred();
                 }
@@ -1903,19 +1921,28 @@ impl Match {
     /// Feed an animation-done ack from seat `member` for state version `seq`.
     ///
     /// A matching ack (or one naming a newer seq -- the client is already
-    /// current) releases the hold so the turn clock starts consuming. A stale
-    /// ack (`seq` older than the hold) is ignored and returns `false`. Recorded
-    /// as [`crate::record::Input::AnimDone`] so replays reproduce the pause.
+    /// current) clears that seat from the hold; the hold releases (and the
+    /// clock starts consuming) once every held seat has acked. A stale ack
+    /// (`seq` older than the hold) or one from a seat not held is ignored and
+    /// returns `false`. Recorded as [`crate::record::Input::AnimDone`] so
+    /// replays reproduce the pause.
     pub fn anim_done(&mut self, member: i32, seq: i32) -> bool {
-        let Some(hold) = &self.clock_hold else {
+        let Some(hold) = &mut self.clock_hold else {
             return false;
         };
-        if hold.member != member || seq < hold.seq {
+        if seq < hold.seq {
             return false;
         }
-        self.clock_hold = None;
-        self.changed = true;
-        self.seq += 1;
+        let before = hold.members.len();
+        hold.members.retain(|m| *m != member);
+        if hold.members.len() == before {
+            return false;
+        }
+        if hold.members.is_empty() {
+            self.clock_hold = None;
+            self.changed = true;
+            self.seq += 1;
+        }
         true
     }
 
@@ -1925,43 +1952,74 @@ impl Match {
         self.clock_hold.is_some()
     }
 
-    /// Arm (or clear) the anim hold after a game commit. Only the acting
-    /// human's client is waited on; Solo and machine seats never hold. The
-    /// hold is keyed to the just-bumped [`Self::seq`] so a stale ack is
-    /// ignored. Not called from [`Self::anim_done`] -- a hold release must
-    /// not re-arm itself.
+    /// Arm (or clear) the anim hold after a game commit.
+    ///
+    /// Every **human** seat whose presentation is now pending is waited on:
+    /// the pending human seats of an open prompt or end-match vote (their
+    /// clients are all animating the same commit), otherwise the acting seat.
+    /// Bots have no client to ack, and Solo never holds. The hold is keyed to
+    /// the just-bumped [`Self::seq`] so a stale ack is ignored. Not called from
+    /// [`Self::anim_done`] -- a hold release must not re-arm itself.
+    ///
+    /// A prompt can be raised before the first turn (`turn` is -1), so this
+    /// cannot key on the turn seat alone; it arms once the new world (and
+    /// pending prompt / vote) is in place.
     fn arm_clock_hold(&mut self) {
         if self.mode == MatchMode::Solo {
             self.clock_hold = None;
             return;
         }
         let st = &self.world.st;
-        if st.phase != "play" || st.turn < 0 {
+        if st.phase != "play" {
             self.clock_hold = None;
             return;
         }
-        let turn = st.turn as usize;
-        let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
-            st.roller as usize
+        let human = |seat: usize| {
+            st.players
+                .get(seat)
+                .filter(|p| !p.ai && !p.bot && !p.out())
+                .map(|p| p.member)
+        };
+        let mut members: Vec<i32> = Vec::new();
+        if let Some(p) = &self.pending {
+            for (k, &seat) in p.live.ask.view.players.iter().enumerate() {
+                if p.live.answers.get(k).copied().unwrap_or(0) >= 0 {
+                    continue;
+                }
+                if let Some(member) = human(seat as usize) {
+                    members.push(member);
+                }
+            }
+        } else if self.vote.id != 0 {
+            for (k, &seat) in self.vote.players.iter().enumerate() {
+                if self.vote.answers.get(k).copied().unwrap_or(0) >= 0 {
+                    continue;
+                }
+                if let Some(member) = human(seat as usize) {
+                    members.push(member);
+                }
+            }
+        } else if st.turn >= 0 {
+            let turn = st.turn as usize;
+            let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
+                st.roller as usize
+            } else {
+                turn
+            };
+            if let Some(member) = human(actor) {
+                members.push(member);
+            }
+        }
+        if members.is_empty() {
+            self.clock_hold = None;
         } else {
-            turn
-        };
-        let Some(p) = st.players.get(actor) else {
-            self.clock_hold = None;
-            return;
-        };
-        // A bot has no client to ack: arming a hold against it would stall the
-        // clock until its turn is taken over.
-        if p.ai || p.bot {
-            self.clock_hold = None;
-            return;
+            self.clock_hold = Some(ClockHold {
+                // Room member ids (what the ack route sends), not seat indexes.
+                members,
+                seq: self.seq,
+                elapsed: 0.0,
+            });
         }
-        self.clock_hold = Some(ClockHold {
-            // The room member id (what the ack route sends), not the seat index.
-            member: p.member,
-            seq: self.seq,
-            elapsed: 0.0,
-        });
     }
 
     /// Feed a "this seat has the rolled order on screen" ack from room
@@ -2310,6 +2368,9 @@ impl Match {
         // driver that stalls is still covered -- such a seat is force-defaulted
         // onto the prefill once the prompt's own soft window runs out.
         let auto: Vec<bool> = players.iter().map(|&s| self.auto_player(s)).collect();
+        // Anim-ack hold per pending seat. A held seat loses no time to the
+        // presentation it is waiting for.
+        let held: Vec<bool> = players.iter().map(|&s| self.clock_hold_covers(s)).collect();
         // Prompt pool drain (post-settings ordinary prompts only). Each
         // pending seat spends its own pool; the anim-ack hold pauses
         // consumption for the held seat so presentation never costs clock.
@@ -2319,7 +2380,6 @@ impl Match {
                 .as_ref()
                 .map(|p| (0..players.len()).map(|k| p.live.answers[k] < 0).collect())
                 .unwrap_or_default();
-            let held: Vec<bool> = players.iter().map(|&s| self.clock_hold_covers(s)).collect();
             for k in 0..players.len() {
                 if pending[k] && !auto[k] && !held[k] {
                     self.drain_pool(players[k], dt);
@@ -2335,7 +2395,16 @@ impl Match {
         };
         let p = self.pending.as_mut().expect("checked above");
         let l = &mut p.live;
-        l.time_left -= dt;
+        // The prompt's own soft window is shared by every pending seat (and is
+        // the real deadline for dedicated-window prompts: the opening mulligan,
+        // the bankruptcy leftover auction, legacy-clock prompts). It freezes
+        // while any held seat is still animating the commit that raised it --
+        // including one raised before the first turn, when there is no turn
+        // clock to speak of.
+        let anim_held = held.iter().any(|&h| h);
+        if !anim_held {
+            l.time_left -= dt;
+        }
         let before = (l.answers.clone(), l.bid);
         // A solo match never forces a *local* player's answer -- nobody is
         // waiting on them. The countdown still runs, because the prompt's
@@ -2806,6 +2875,7 @@ impl Match {
         self.changed = true;
         self.seq += 1;
         self.check_vote();
+        self.arm_clock_hold();
         Ok(())
     }
 
@@ -2840,12 +2910,18 @@ impl Match {
         // Solo never expires a vote -- see `tick_choice`. The mode is the
         // predicate, not the human count: an online room with one human still
         // owes its table an answer.
-        if self.mode != MatchMode::Solo {
+        //
+        // The window is presentation too: a held voter still animating the
+        // vote commit does not lose the answer window to it.
+        let voters: Vec<usize> = self.vote.players.iter().map(|&s| s as usize).collect();
+        if self.mode != MatchMode::Solo && !self.clock_hold_covers_any(&voters) {
             self.vote.time_left -= dt;
         }
         if self.fill_auto_votes() {
             self.changed = true;
             self.seq += 1;
+            // The machine-held seats no longer need waiting on.
+            self.arm_clock_hold();
         }
         if self.mode != MatchMode::Solo && self.vote.time_left <= 0.0 {
             self.end_vote(false, Msg::new("vote.timeout"));
@@ -2880,6 +2956,7 @@ impl Match {
                 Msg::new("log.vote_failed").msg("reason", reason),
             );
         }
+        self.arm_clock_hold();
     }
 
     // ---------------------------------------------------------------- lifecycle
