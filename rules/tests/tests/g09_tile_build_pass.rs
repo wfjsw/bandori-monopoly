@@ -598,6 +598,55 @@ fn g09_to_the_peak_charges_one_and_a_half_and_runs_hooks() {
     assert!(at("probe_house_added") < at("probe_build_after"));
 }
 
+/// The affordability filter must use the same ceil-to-10 figure the charge
+/// uses. A half-price build turn on a 500 house tile makes the effective
+/// price 250: 1.5x is 375, charged 380. At 375 the play has to take the
+/// no-money branch; the old truncated filter accepted it and then aborted
+/// after both asks with nothing built and no log.
+#[test]
+fn g09_to_the_peak_affordability_uses_the_ceiled_charge() {
+    let mut t = Table::vanilla(2);
+    let all: Vec<usize> = [
+        "RiNG 1",
+        "RiNG 2",
+        "DUB MUSIC EXPERIMENT",
+        "RiNG 3",
+        "武道馆",
+        "Space",
+        "Live House Galaxy",
+        "RiNG 4",
+    ]
+    .iter()
+    .map(|n| tile(n))
+    .collect();
+    let space = tile("Space");
+    t.own(0, &[space]);
+    let rest: Vec<usize> = all.into_iter().filter(|&x| x != space).collect();
+    t.own(1, &rest);
+    t.m.world_mut().turn.build_cost_pct = 50;
+    t.set_pos(0, space);
+
+    t.set_money(0, 375);
+    let mark = t.mark();
+    t.give_play(0, "R:向着顶点").unwrap();
+    drain(&mut t);
+    assert_eq!(t.houses(space), 0, "375 is short of the 380 charge");
+    let k = t.keys_since(mark);
+    assert!(
+        k.iter().any(|x| x.contains("to_the_peak_no_money")),
+        "the no-money branch logged: {k:?}"
+    );
+
+    // One step up: the build goes through and charges the ceiled amount.
+    t.set_money(0, 380);
+    t.give_play(0, "R:向着顶点").unwrap();
+    let _ = t.answer_one(0); // the 「可」 (yes)
+    let _ = t.answer_tile(0, space);
+    drain(&mut t);
+    assert_eq!(t.houses(space), 1);
+    assert_eq!(t.money(0), 0, "the whole 380 was charged");
+}
+
 #[test]
 fn g09_card_build_house_added_precedes_buildAfter() {
     let mut t = Table::vanilla(2);

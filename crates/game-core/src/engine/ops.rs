@@ -1928,7 +1928,7 @@ impl World {
 
     /// Every instance that can carry a swap binding: the board field and every
     /// seat's field.
-    fn swap_records(&self) -> impl Iterator<Item = &FieldCard> {
+    pub(crate) fn swap_records(&self) -> impl Iterator<Item = &FieldCard> {
         self.st
             .board_field
             .iter()

@@ -3494,6 +3494,61 @@ fn tile_effect_counter(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Places itself on the caller's current tile, and counteracts a
+/// `tileEffectBefore` window to bind its own slot to 弦卷集团 -- the swap lands
+/// *inside* the window, after the settle frame has already pinned its tile, so
+/// the tile now stands where this counter sits.
+const TILE_SWAP_COUNTER: CardDef = CardDef::new(
+    "TEST:tile_swap_counter",
+    &[
+        On::Play("", None, tile_swap_counter_play),
+        On::Counteract(&[ChainKind::TileEffectBefore], "", None, tile_swap_counter),
+    ],
+)
+.props(&[(card_sdk::abi::prop::COUNTERACT_FROM_FIELD, 1)]);
+
+fn tile_swap_counter_play(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    if here < 0 {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card_on(
+        player_id,
+        here,
+        "TEST:tile_swap_counter",
+        &Msg::new(key!("tile_swap_counter_note")),
+    );
+    Ok(())
+}
+
+fn tile_swap_counter(player_id: i32) -> card_sdk::Asked {
+    let group = ctx::tile_named("弦卷集团");
+    if group < 0 {
+        return Ok(());
+    }
+    ctx::set_swapped_tile(group);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tile_swap_counter_done")).tile("to", group),
+    );
+    Ok(())
+}
+
+/// Settles the caller's current tile without moving (`settle_tile_at`). Unlike
+/// a roll landing there is no walk `tileEffectBefore` window before the settle
+/// frame, so a counter answering the window answers the frame's own.
+const SETTLE_HERE: CardDef = CardDef::new("TEST:settle_here", &[On::Play("", None, settle_here)]);
+
+fn settle_here(player_id: i32) -> card_sdk::Asked {
+    let here = ctx::tile_at(ctx::player_pos(player_id));
+    if here < 0 {
+        return Ok(());
+    }
+    ctx::settle_tile_at(player_id, here, false);
+    Ok(())
+}
+
 /// Places itself on the caller's current tile and binds the swap to
 /// 弦卷集团 (`set_swapped_tile`).
 const SWAP_PROBE: CardDef = CardDef::new("TEST:swap_probe", &[On::Play("", None, swap_probe)]);
@@ -3869,6 +3924,8 @@ card_sdk::ruleset!(&[
     BUILD_PROBE,
     HOUSE_REMOVED_PROBE,
     TILE_EFFECT_COUNTER,
+    TILE_SWAP_COUNTER,
+    SETTLE_HERE,
     SWAP_PROBE,
     TILE_ID_PROBE,
     PATH_PROBE,

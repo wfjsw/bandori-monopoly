@@ -1253,6 +1253,22 @@ impl Match {
         &mut self.world
     }
 
+    /// Edit the world **while a routine is suspended**: the write lands on the
+    /// pending snapshot too, which is what the routine re-runs from -- a live
+    /// write alone would be overwritten by the next step. Note the re-run
+    /// starts over from the snapshot, so the edit reads as *pre*-routine
+    /// state; a change that must land mid-routine (after a frame pinned its
+    /// tile) needs a card body instead.
+    #[doc(hidden)]
+    pub fn edit_world(&mut self, edit: impl Fn(&mut World)) {
+        self.changed = true;
+        self.seq += 1;
+        edit(&mut self.world);
+        if let Some(p) = self.pending.as_mut() {
+            edit(&mut p.snapshot);
+        }
+    }
+
     #[doc(hidden)]
     pub fn world(&self) -> &World {
         &self.world

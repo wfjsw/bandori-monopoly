@@ -64,8 +64,12 @@ fn extra_suppressed(
     if !set {
         return false;
     }
+    // Same governing-tile read as `field_hears`: a player placement answers
+    // through the tile standing at its slot, not the `tile` it was placed on
+    // (a swap moves that set with the tile); a board instance keeps its own
+    // tile.
     w.field_by_uid(uid)
-        .is_some_and(|f| f.tile == tile && !f.card.starts_with("tile:"))
+        .is_some_and(|f| on_tile(w, f, tile) && !f.card.starts_with("tile:"))
 }
 
 /// Kinds that are a happening **of one tile** and that a listener only hears
@@ -112,13 +116,37 @@ fn field_hears(
     // settle no longer matches on the tile.
     if kind == TriggerKind::TileResolved {
         return position < 0
-            || w.field_by_uid(uid).is_some_and(|f| f.tile < 0 || f.position() == position);
+            || w.field_by_uid(uid).is_some_and(|f| {
+                f.tile < 0
+                    || if f.owner == game_core::state::BOARD_OWNER {
+                        f.tile == tile
+                    } else {
+                        f.position() == position
+                    }
+            });
     }
     if !tile_local_kind(kind) {
         return true;
     }
     w.field_by_uid(uid)
-        .is_some_and(|f| f.tile < 0 || w.tile_standing_at(f.position()) == tile)
+        .is_some_and(|f| f.tile < 0 || on_tile(w, f, tile))
+}
+
+/// Is field instance `f` **on** `tile`? A board instance is anchored to the
+/// tile identity it was put on (it keeps `position = -1`, so `f.position()`
+/// is `f.tile` and would resolve through the wrong slot after a swap); a
+/// player instance answers through the tile standing at its slot.
+///
+/// A `tile = -1` instance (owner-held / board-wide) is on no tile: callers
+/// that want it to reach every tile test `f.tile < 0` themselves.
+fn on_tile(w: &game_core::engine::World, f: &game_core::state::FieldCard, tile: i32) -> bool {
+    if f.tile < 0 {
+        return false;
+    }
+    if f.owner == game_core::state::BOARD_OWNER {
+        return f.tile == tile;
+    }
+    w.tile_standing_at(f.position()) == tile
 }
 
 // ------------------------------------------------- silent-entry debug guard
@@ -9486,8 +9514,10 @@ impl<M: CardModules> RulesBridge<M> {
         let top = &chain[timing].link;
         if std::env::var("DBG_OFFER").is_ok() {
             eprintln!(
-                "DECLARE_ONE seat={s} kind={:?} card={:?} target={} designates={} hand={:?}",
+                "DECLARE_ONE seat={s} kind={:?} tile={} pos={} card={:?} target={} designates={} hand={:?}",
                 top.kind,
+                top.tile,
+                top.position,
                 top.card,
                 top.target,
                 self.ruleset.trigger_designates(top),

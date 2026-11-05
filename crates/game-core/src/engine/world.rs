@@ -1719,12 +1719,37 @@ impl World {
         }
         // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
         // only when something was logged since the last read.
-        st.tile_at = if self.has_swaps() {
-            (0..self.st.owners.len())
-                .map(|p| self.tile_standing_at(p as i32))
-                .collect()
-        } else {
-            (0..self.st.owners.len() as i32).collect()
+        // Slot -> standing tile. Walked as bindings instead of calling
+        // [`Self::tile_standing_at`] per slot (each call re-scans every field;
+        // a frame is built on every action). The per-slot answer is kept: the
+        // first binding **at** a slot wins over any binding **naming** it.
+        st.tile_at = {
+            let mut at: Vec<i32> = (0..self.st.owners.len() as i32).collect();
+            let binding = |f: &crate::state::FieldCard| {
+                f.props
+                    .get(crate::state::prop::SWAPPED_TILE)
+                    .copied()
+                    .filter(|&q| q >= 0)
+                    .map(|q| (f.position(), q, f.tile))
+            };
+            let mut claimed = vec![false; at.len()];
+            for (pos, partner, _) in self.swap_records().filter_map(binding) {
+                if let Some(slot) = claimed.get_mut(pos as usize).filter(|c| !**c) {
+                    *slot = true;
+                    if let Some(x) = at.get_mut(pos as usize) {
+                        *x = partner;
+                    }
+                }
+            }
+            for (_, partner, tile) in self.swap_records().filter_map(binding) {
+                if let Some(slot) = claimed.get_mut(partner as usize).filter(|c| !**c) {
+                    *slot = true;
+                    if let Some(x) = at.get_mut(partner as usize) {
+                        *x = tile;
+                    }
+                }
+            }
+            at
         };
         st.events = self.recent.window();
         st.event_deck = self.event_deck.len() as i32;

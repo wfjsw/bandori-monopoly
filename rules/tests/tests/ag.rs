@@ -29,6 +29,15 @@ fn accept_buy(t: &mut Table) {
     skip_all(t);
 }
 
+/// Answer the next `n` tile asks with these tile ids (a tile ask answers with
+/// the id; declining would pick none), then skip anything else.
+fn pick_tiles(t: &mut Table, who: usize, tiles: &[usize]) {
+    for &tile in tiles {
+        t.answer_tile(who, tile).unwrap();
+    }
+    skip_all(t);
+}
+
 // =====================================================================
 // AG:宣战布告
 // =====================================================================
@@ -169,7 +178,7 @@ fn sunset_x_halved_before_round_100() {
     // (600+500)+(600+500)+(1400+1000)+(1800+1000) = 7400, ÷1 = 7400,
     // 向上取整10 = 7400, halved = 3700.
     t.give_play(0, "AG:即使夕阳落山").unwrap();
-    skip_all(&mut t);
+    pick_tiles(&mut t, 0, &[HILL, FUJIMI, 7, 9]);
     // 规则书: 「所有被[指定]的玩家[支付][使用者]X资金」
     assert_eq!(t.money(0), 13_700, "events {:?}", t.recent_keys(8));
     assert_eq!(t.money(1), 6_300);
@@ -1146,7 +1155,7 @@ fn ix_band_house_then_sunset_demolish() {
         t.set_houses(tile, 1);
     }
     t.give_play(0, "AG:即使夕阳落山").unwrap();
-    skip_all(&mut t);
+    pick_tiles(&mut t, 0, &[FUJIMI, HILL, 7, 9]);
     assert_eq!(t.houses(FUJIMI), 0, "demolished");
 }
 

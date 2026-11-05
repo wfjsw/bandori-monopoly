@@ -286,6 +286,11 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         // contradict the `can_roll_here = true` below once the determinizer
         // rebuilt the world from it.
         s.main_moved = false;
+        // The play history is turn-scoped too (`next_turn` rebuilds
+        // `TurnCtx`): the predicted surface must not carry the outgoing
+        // turn's cards into the fork's max-plays / de-dup gates or the
+        // decision key.
+        s.played_count = 0;
         s.prompt = MatchPrompt::default();
         s.plan = MovePlan::default();
         // Roll is owed, so `end` is gated off (`cant_act`). No settle
@@ -314,6 +319,8 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
     // real `cant_play` on each fork and only branches on what the engine
     // accepts. `estimated_cost` is a static card property and remains.
     next.playable = vec![true; next.hand.len()];
+    next.played.clear();
+    next.cards_played = 0;
     next.ai_answer = None;
     Some(next)
 }

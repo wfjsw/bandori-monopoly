@@ -2785,12 +2785,17 @@ impl PlayCtx<'_> {
                     let owner = frame.owner;
                     let (i, at, tl) = (frame.player, frame.at, frame.tile);
                     let m = frame.m.clone();
+                    // `tile` first, then `slot`: a counter in the
+                    // `tileEffectBefore` window may have swapped `tl`, so
+                    // `position_of_tile(tl)` is stale -- the player is still
+                    // standing at the frame's pinned slot `at`, and every
+                    // `trigger.position` reader must see that slot.
                     let t = raise!(
                         self,
                         "settle",
                         i,
                         @m m,
-                        position = at as i32, tile = tl,
+                        tile = tl, slot = at as i32,
                         target = owner,
                         settle_tile = tl
                     )?;

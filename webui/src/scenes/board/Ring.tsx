@@ -352,7 +352,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   const t = D.tiles[ti];
   const [col, row] = cell(i);
   const owner = S.owners[ti] ?? -1;
-  const cardFocus = useCardTileFocus(i);
+  // The hover set holds tile ids; `i` is the slot.
+  const cardFocus = useCardTileFocus(ti);
   const seatFocus = useSeatFocus(owner);
   const focus = cardFocus || seatFocus;
   const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[ti] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.dest);

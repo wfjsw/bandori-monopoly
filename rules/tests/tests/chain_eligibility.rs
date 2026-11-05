@@ -232,3 +232,79 @@ fn g09_suppression_matrix() {
         }
     }
 }
+
+/// The extra is placed on GROUP, **then** the slot is bound to CiRCLE (the
+/// order the matrix above does not exercise: it binds before placing, so the
+/// instance already carries the governing tile). The extra now governs the
+/// tile standing at its slot, so the tag (raised with that tile) suppresses
+/// it. `extra_suppressed` used to read the placement `tile` and let it run.
+#[test]
+fn g09_suppression_follows_the_standing_tile() {
+    let mut t = Table::vanilla(2);
+    place_on_tile(&mut t, 0, "TEST:tile_id_probe", GROUP as i32);
+    place_on_tile(&mut t, 0, "TEST:swap_probe", GROUP as i32);
+    {
+        let w = t.m.world_mut();
+        let f = w.st.players[0]
+            .field
+            .iter_mut()
+            .find(|f| f.card == "TEST:swap_probe")
+            .expect("binding card");
+        f.props.insert(SWAPPED_TILE.into(), CIRCLE as i32);
+    }
+    t.give(1, &[SUPPRESSER]);
+    t.set_pos(0, (GROUP + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    let offered = walk_answering(&mut t, 1, true);
+    assert!(offered, "the window opened: {:?}", t.recent_keys(30));
+    assert_eq!(
+        events(&t, "tile_id_seen").len(),
+        0,
+        "the extra governs the standing tile and is suppressed: {:?}",
+        t.recent_keys(30)
+    );
+}
+
+/// The settle trigger reports the slot the player stands on even when a
+/// `tileEffectBefore` counter swaps the tile out from under them. The frame
+/// pins the tile identity, but `position` is physical: `trigger.position`
+/// readers (smile_parade's own-slot check) must see the slot, not the tile's
+/// new home.
+///
+/// A card-driven settle opens the frame outright, so the window answered below
+/// is the frame's own `tileEffectBefore` -- a roll landing raises a walk
+/// window first, and the settle re-resolves its tile after that one.
+#[test]
+fn g09_settle_position_survives_a_mid_window_swap() {
+    let mut t = Table::vanilla(2);
+    place_on_tile(&mut t, 0, "TEST:tile_id_probe", GROUP as i32);
+    // The counter sits elsewhere and names GROUP: once declared, GROUP stands
+    // at its slot, away from the player.
+    place_on_tile(&mut t, 1, "TEST:tile_swap_counter", 40);
+    t.set_pos(0, GROUP);
+    t.give(0, &["TEST:settle_here"]);
+    t.play(0, "TEST:settle_here").unwrap();
+    assert!(
+        t.counteract_offered("TEST:tile_swap_counter"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(1, "TEST:tile_swap_counter").unwrap();
+    // A field counter stays offered on every re-opened window; decline it and
+    // everything else to the end of the turn.
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert_eq!(
+        ev_args(&t, "tile_id_seen", "position"),
+        vec![GROUP as i64],
+        "the physical slot, not the tile's new home: {:?}",
+        t.recent_keys(30)
+    );
+    assert_eq!(
+        ev_args(&t, "tile_id_seen", "tile"),
+        vec![GROUP as i64],
+        "the frame's pinned tile identity"
+    );
+}

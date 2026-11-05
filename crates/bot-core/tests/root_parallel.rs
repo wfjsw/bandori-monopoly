@@ -406,11 +406,21 @@ fn predict_upcoming_view_is_a_turn_start_ops_surface() {
     idle.state.step = stage::END;
     idle.state.prompt.id = 0;
     idle.state.busy = false;
+    // The outgoing turn played a card and spent its main move: a turn start
+    // owes both again.
+    idle.state.played_count = 1;
+    idle.state.main_moved = true;
+    idle.played = vec!["some-card".into()];
+    idle.cards_played = 1;
     assert!(
         next_turn_near(&idle.state, idle.player_id),
         "the current player's turn is ending, so ours is next"
     );
     let pred = predict_upcoming_view(&idle).expect("a predictable turn start");
+    assert!(!pred.state.main_moved, "a new turn owes its main move");
+    assert_eq!(pred.state.played_count, 0, "the play history is turn-scoped");
+    assert!(pred.played.is_empty(), "as is the fork's played history");
+    assert_eq!(pred.cards_played, 0);
     assert_eq!(pred.state.turn, idle.player_id);
     assert_eq!(pred.state.step, stage::OPS);
     assert!(!pred.state.busy);

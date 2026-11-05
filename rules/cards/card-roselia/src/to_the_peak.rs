@@ -101,7 +101,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if cant_build_on(player_id, t).is_some() {
             continue;
         }
-        if ctx::money_of(player_id) >= ctx::build_price(t) * 3 / 2 {
+        // The same figure the charge below uses -- `build_price * 3 / 2` is
+        // truncated, the charge is ceil-to-10, so they differ off a multiple
+        // of 20 and a truncated filter would let the play abort after both
+        // asks.
+        if ctx::money_of(player_id) >= ceil_to(ctx::build_price(t) as i64 * 3 / 2, 10) {
             mine.push(t);
         }
     }
