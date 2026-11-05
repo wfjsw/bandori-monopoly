@@ -5833,6 +5833,9 @@ impl PlayCtx<'_> {
             } else {
                 let card = self.w.hidden[i].deck.pop();
                 if let Some(c) = &card {
+                    if c.starts_with("tile:") {
+                        eprintln!("PUSH hook_draw seat={i} card={c}");
+                    }
                     self.w.hidden[i].hand.push(c.clone());
                 }
                 card
@@ -6207,6 +6210,9 @@ impl PlayCtx<'_> {
                 }
             }
             Dest::Hand => {
+                if id.starts_with("tile:") {
+                    eprintln!("PUSH play_dest seat={i} card={id}");
+                }
                 self.w.hidden[i].hand.push(id.to_string());
                 raise!(
                     self,

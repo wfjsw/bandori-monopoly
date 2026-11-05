@@ -1682,6 +1682,12 @@ impl CardWorld for Run {
                 }
             }
             1 => {
+                if card.starts_with("tile:") {
+                    eprintln!(
+                        "ADD_TO_HAND pid={player_id} card={card} hands={:?}",
+                        self.world.hidden.iter().map(|h| h.hand.len()).collect::<Vec<_>>()
+                    );
+                }
                 self.world.add_to_hand(player_id, card);
                 // 「…加入手牌时」 -- raised once the run commits unless the
                 // caller was the draw routine (`counted`).
@@ -5536,7 +5542,16 @@ impl<M: CardModules> RulesBridge<M> {
                 card,
                 cause,
                 face_down,
-            } => return cx.zone_attach(call.player_id(), host, &card, cause, face_down != 0),
+            } => {
+                let r = cx.zone_attach(call.player_id(), host, &card, cause, face_down != 0);
+                if card.starts_with("tile:") {
+                    eprintln!(
+                        "ATTACH pid={} host={host} card={card} card_id={card_id} ans={r:?}",
+                        call.player_id()
+                    );
+                }
+                return r;
+            }
             HostRequest::Detach {
                 uid,
                 destination,
@@ -9302,7 +9317,12 @@ impl<M: CardModules> RulesBridge<M> {
                     refilled = w.refill_after_pile_write(seat);
                 }
             }
-            Dest::Hand => w.hidden[seat].hand.push(id.clone()),
+            Dest::Hand => {
+                if id.starts_with("tile:") {
+                    eprintln!("PUSH counteract_tail seat={seat} card={id}");
+                }
+                w.hidden[seat].hand.push(id.clone())
+            }
             Dest::Banished => {}
             Dest::Field => {}
         }
@@ -9609,7 +9629,12 @@ impl<M: CardModules> RulesBridge<M> {
                     refilled = w.refill_after_pile_write(seat);
                 }
             }
-            Dest::Hand => w.hidden[seat].hand.push(id.to_string()),
+            Dest::Hand => {
+                if id.starts_with("tile:") {
+                    eprintln!("PUSH settle_tail seat={seat} card={id} uid={uid}");
+                }
+                w.hidden[seat].hand.push(id.to_string())
+            }
             Dest::Banished => {}
             Dest::Field => {}
         }

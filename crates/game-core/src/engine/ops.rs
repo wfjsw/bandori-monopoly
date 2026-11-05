@@ -1358,6 +1358,9 @@ impl World {
             let Some(card) = self.hidden[i].deck.pop() else {
                 break;
             };
+            if card.starts_with("tile:") {
+                eprintln!("PUSH draw seat={i} card={card}");
+            }
             self.hidden[i].hand.push(card);
             self.refill_draw_pile(i);
             got += 1;
@@ -2438,6 +2441,9 @@ impl World {
         use game_kinds::Zone;
         let holder = t.holder.max(0) as usize;
         let name = row.card.clone();
+        if name.starts_with("tile:") {
+            eprintln!("PUSH file_row holder={} card={name} to={:?}", t.holder, t.to);
+        }
         // An event rule instance leaving the field unbinds its active row.
         if let Some(id) = name.strip_prefix("event:") {
             self.st.event_active.retain(|e| e.id != id);

@@ -425,6 +425,17 @@ fn try_one_act(t: &mut Table, rng: &mut Rng, tr: &mut Trace) -> Result<(), Strin
             }
         }
         _ => {
+            if std::env::var_os("FUZZ_NO_GIVE").is_some() {
+                // PROBE: no injected card -- only what the game itself put in
+                // the hands.
+                let hand = t.hand(who);
+                if let Some(c) = rng.pick(&hand) {
+                    let c = c.clone();
+                    let _ = t.play(who, &c);
+                    tr.cards_touched.push(c);
+                }
+                return Ok(());
+            }
             // Inject a surface-biased card and try to play it.
             let all = super::gen::all_card_ids();
             if let Some(c) = rng.pick(all) {
