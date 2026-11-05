@@ -2780,6 +2780,13 @@ pub fn arm_opt_price(a: Args) -> i64 {
     }
 }
 
+/// `opt_count(want)` before a multi-select `ask`: the select count rides on the
+/// prompt, so it must not bump `opt_n` (see the dispatch entry).
+pub fn arm_opt_count(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
 pub fn arm_others_at(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     world::with_world(|w| {
@@ -3757,6 +3764,22 @@ pub fn arm_set_self_immune(a: Args) -> i64 {
             1
         }
     })
+}
+
+/// `self_prop(kp, kl)` -- read the running instance's prop (the reader half of
+/// [`arm_set_self_prop`]).
+pub fn arm_self_prop(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a2, a3, a4, a5);
+    let key = name_id(a0, a1);
+    world::with_world(|w| {
+        if w.field_n > 0 {
+            let i = (w.field_n as usize) - 1;
+            w.field[i].props.get(key)
+        } else {
+            0
+        }
+    }) as i64
 }
 
 pub fn arm_set_self_prop(a: Args) -> i64 {

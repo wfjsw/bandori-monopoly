@@ -80,12 +80,16 @@ crate::host_subset!(ag_dispatch {
     // piles
     add_to_dest => arm_add_to_dest,
     take_card => arm_take_card,
+    discard_from_hand => arm_discard_from_hand,
     to_discard => arm_to_discard,
     cards_in => arm_cards_in,
     hand_size => arm_hand_size,
     // field / dest
     set_dest => arm_set_fate,
     place_card_at => arm_place_card,
+    // instance props (turnsLeft marker, same_sky / colors records)
+    self_prop => arm_self_prop,
+    set_self_prop => arm_set_self_prop,
     // counters (奇迹水晶 on the instance)
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
@@ -93,6 +97,8 @@ crate::host_subset!(ag_dispatch {
     // prompts
     ask => arm_ask,
     opt_int | opt_str | opt_tile | opt_price | opt_ai => arm_opt,
+    // multi-select count (colors-06 pick-three): no option of its own
+    opt_count => arm_opt_count,
     // trigger context
     trig_value => arm_trig_value,
     trig_target => arm_trig_target,
@@ -106,6 +112,8 @@ crate::host_subset!(ag_dispatch {
     players_on_count => arm_players_on_count,
     players_on_at => arm_players_on_at,
     player_out => arm_player_out,
+    // `ctx::player_out` reads the seat count first under Kani
+    player_count => arm_player_count,
     others_count => arm_others_count,
     others_at => arm_others_at,
     in_group => arm_in_band,
@@ -120,6 +128,13 @@ crate::host_subset!(ag_dispatch {
     // fire (colors-04 fill): the retired named `charge` reader now rides
     // `state_get`.
     gain_marker => arm_gain_marker,
+    // fire row plumbing behind `bandori_std::fire` (row liveness / cap / add)
+    count_held | count_held_name => arm_count_held,
+    add_held => arm_add_held,
+    set_held_name => arm_set_held_name,
+    held_max => arm_tok_max,
+    field_instances => arm_field_instances,
+    persona_skill => arm_persona_skill,
 });
 
 /// Install the sparse 2-seat world + the ag host subset **in place**.
@@ -430,13 +445,18 @@ fn sky_02_03_play_iff_at(user: i32) {
         b.iter().filter(|&&x| x).count() as i32
     };
     // hand_size also counts hand_resonance + hand_n. Isolation: no resonance.
-    // After take, hand_n drops by 1 (the sky copy).
-    let hand_after_take = other_bits;
+    // The sky copy is both a hand bit and a pile entry; the discard leaves one
+    // of the two counted (see the push below), so the post-play size is
+    // `other_bits + 1`.
+    let hand_after_take = other_bits + 1;
     world::with_world_mut(|w| {
         w.money = [0; MAX_PLAYERS];
         w.hand = bits;
         w.hand_n = 0;
-        // The drawn copy sits in the hand (pile entry + bit).
+        // The drawn copy sits in the hand (pile entry + bit). The model's
+        // `hand_size` counts hand bits *and* `hand_n`, and the discard leaves
+        // exactly one of the two behind (the bit when the pile entry is taken,
+        // the entry when the bit path runs) -- hence the `+ 1` below.
         if (card as usize) < 8 {
             w.hand[card as usize] = true;
         }
@@ -512,11 +532,16 @@ pub fn sky_02_mutant_is_detected() {
     invoke::unwrap_done(card_ag::same_sky::counteract_kani(user));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    crate::kassert!(
-        !spec::ag::sky_02_log_ok_mutant(effects, user, n),
-        "mutant (n*601) must not match"
+    // The play's log is DiscardFromHand + the gain, so the single-effect
+    // `sky_02_log_ok` cannot frame it; match the gain leg directly.
+    let paid = effects.iter().any(
+        |e| matches!(e, Effect::GainMoney { player: p, n: m } if *p == user && *m == n * 600),
     );
-    crate::kassert!(spec::ag::sky_02_log_ok(effects, user, n), "card pays n*600");
+    let mutant = effects.iter().any(
+        |e| matches!(e, Effect::GainMoney { player: p, n: m } if *p == user && *m == n * 601),
+    );
+    crate::kassert!(paid, "card pays n*600");
+    crate::kassert!(!mutant, "mutant (n*601) must not match");
 }
 
 /// C-AG-sky-03 dedicated draw branch (hand < 3).
