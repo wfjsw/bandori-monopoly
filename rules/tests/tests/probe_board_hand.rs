@@ -20,6 +20,16 @@ fn dump(t: &Table, tag: &str) {
 }
 
 #[test]
+fn probe_play_tile_from_hand() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["tile:circle"]);
+    eprintln!("before hand0={:?}", t.hand(0));
+    let r = t.play(0, "tile:circle");
+    eprintln!("play -> {r:?}");
+    dump(&t, "AFTER");
+}
+
+#[test]
 fn probe_one_of_us_leaves_a_deed_name() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "美竹兰");
