@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 
 use game_core::state::MatchState;
 
-/// Hard cap on how long the acting seat's clock may remain held waiting for an
-/// animation ack, in seconds. Fed by engine ticks, not wall time -- this
-/// constant is what the engine enforces; the server only publishes deadlines.
+/// Hard cap on how long a held clock may remain held waiting for an animation
+/// ack, in seconds. Fed by engine ticks, not wall time -- this constant is what
+/// the engine enforces; the server only publishes deadlines.
 pub const ANIM_HOLD_CAP_S: f32 = 10.0;
 
 static START: OnceLock<Instant> = OnceLock::new();

@@ -1,7 +1,7 @@
-//! Turn-clock anim hold: pause until the acting seat acks `anim_done`,
-//! the 10s cap, stale-ack rejection, and Solo / AI skipping the hold.
-//! The hold is tick-fed and recorded as `Input::AnimDone`, so these tests
-//! pin the deterministic inputs the replay stream depends on.
+//! Turn-clock anim hold: pause until every pending human seat acks
+//! `anim_done`, the 10s cap, stale-ack rejection, and Solo / AI skipping the
+//! hold. The hold is tick-fed and recorded as `Input::AnimDone`, so these
+//! tests pin the deterministic inputs the replay stream depends on.
 
 use std::sync::Arc;
 
@@ -261,4 +261,157 @@ fn anim_done_replay_input_is_recorded() {
     assert!(!m2.clock_paused());
     // A second ack with nothing held is a no-op.
     assert!(!m2.anim_done(me, seq));
+}
+
+/// Drive to the opening re-roll with every bot answered (they answer through
+/// the same drive list a host uses), leaving only the human seats pending.
+fn to_mulligan(m: &mut Match) {
+    for _ in 0..1_000 {
+        m.pump_tick(0.1);
+        if m.state().prompt.kind == "mulligan" {
+            // The bots take a tick or two to answer; settle them.
+            for _ in 0..5 {
+                m.pump_tick(0.1);
+            }
+            return;
+        }
+    }
+    panic!("never reached the mulligan");
+}
+
+#[test]
+fn the_mulligan_window_freezes_during_the_animation_wait() {
+    // The opening re-roll runs before the first turn (`turn` = -1) on its own
+    // fixed window. It must still hold: the seat cannot answer until the
+    // opening deal has animated, so that presentation may not eat the window.
+    let members = [member(1, false), member(2, true), member(3, true)];
+    let mut m = new_match(&members, 7, MatchMode::Casual);
+    m.quick_start();
+    to_mulligan(&mut m);
+    let st = m.state();
+    assert_eq!(st.phase, "play");
+    assert!(
+        st.clock_paused,
+        "a prompt before the first turn still holds"
+    );
+    let left = st.prompt.time_left;
+    assert!(
+        left > 10.0,
+        "the window is intact at the prompt (got {left})"
+    );
+
+    for _ in 0..30 {
+        m.pump_tick(0.1);
+    }
+    let st = m.state();
+    assert!(st.clock_paused, "still held without an ack");
+    assert_eq!(st.prompt.time_left, left, "the held window does not move");
+
+    // The ack releases; the window runs again. (Take the current seq: a bot
+    // answering late would have re-keyed the hold.)
+    let seq = st.seq;
+    assert!(m.anim_done(1, seq));
+    assert!(!m.state().clock_paused);
+    for _ in 0..10 {
+        m.pump_tick(0.1);
+    }
+    assert!(
+        m.state().prompt.time_left < left,
+        "a released window consumes time"
+    );
+}
+
+#[test]
+fn a_multi_human_prompt_waits_for_every_held_seat() {
+    let members = [member(1, false), member(2, false), member(3, true)];
+    let mut m = new_match(&members, 7, MatchMode::Casual);
+    m.quick_start();
+    to_mulligan(&mut m);
+    let seq = m.state().seq;
+    assert!(m.state().clock_paused);
+    assert!(m.anim_done(1, seq), "one human's ack registers");
+    assert!(
+        m.state().clock_paused,
+        "the window still waits on the other human"
+    );
+    let left = m.state().prompt.time_left;
+    for _ in 0..10 {
+        m.pump_tick(0.1);
+    }
+    assert_eq!(m.state().prompt.time_left, left, "still frozen");
+    let seq = m.state().seq;
+    assert!(m.anim_done(2, seq));
+    assert!(!m.state().clock_paused, "the last ack releases");
+}
+
+/// Play until an idle human turn surface (answering every prompt for `humans`).
+fn to_play(m: &mut Match, humans: &[i32]) {
+    for _ in 0..2_000 {
+        for &h in humans {
+            answer_first(m, h);
+        }
+        let st = m.state();
+        if st.phase == "play" && st.prompt.id == 0 && !st.busy && st.turn >= 0 {
+            return;
+        }
+        m.pump_tick(0.1);
+    }
+    panic!("never reached play");
+}
+
+#[test]
+fn the_vote_window_freezes_during_the_animation_wait() {
+    let members = [member(1, false), member(2, false), member(3, true)];
+    let mut m = new_match(&members, 7, MatchMode::Casual);
+    m.quick_start();
+    to_play(&mut m, &[1, 2]);
+    // Clear whatever hold the live turn is under, then open the vote off-turn.
+    if m.state().clock_paused {
+        let seq = m.state().seq;
+        let holder = m
+            .state()
+            .players
+            .iter()
+            .find(|p| !p.bot && !p.ai)
+            .unwrap()
+            .member;
+        m.anim_done(holder, seq);
+    }
+    m.act(
+        1,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    assert!(m.state().vote.id != 0);
+    // Let the bot's auto vote land (it re-arms against the new seq).
+    m.pump_tick(0.1);
+    let st = m.state();
+    assert!(st.vote.id != 0, "the human seat is still pending");
+    assert!(st.clock_paused, "the vote holds");
+    let left = st.vote.time_left;
+
+    let bot_answered = st.vote.answers[2] >= 0;
+    assert!(bot_answered, "the machine seat already voted");
+    for _ in 0..30 {
+        m.pump_tick(0.1);
+    }
+    let st = m.state();
+    assert!(st.vote.id != 0, "the held window did not run out");
+    assert_eq!(st.vote.time_left, left, "the vote window stays frozen");
+
+    // The held voter's ack releases; the window runs again. (Bots keep acting
+    // during the ticks, re-keying the hold, so take the current seq.)
+    let seq = st.seq;
+    assert!(m.anim_done(2, seq));
+    assert!(!m.state().clock_paused);
+    for _ in 0..10 {
+        m.pump_tick(0.1);
+    }
+    assert!(
+        m.state().vote.time_left < left || m.state().vote.id == 0,
+        "a released vote window consumes time"
+    );
 }

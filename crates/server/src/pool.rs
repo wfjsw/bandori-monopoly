@@ -361,7 +361,8 @@ impl Pool {
         Out::unit(v)
     }
 
-    /// `value` is whether the ack released a clock hold.
+    /// `value` is whether the ack was accepted (it clears that seat from the
+    /// clock hold).
     pub fn anim_done(&self, state: &str, member: i32, seq: i32) -> Result<Out<bool>, String> {
         let v =
             self.call(json!({"op": "anim_done", "state": state, "member": member, "seq": seq}))?;
