@@ -18,6 +18,12 @@
 #
 # The branch this worktree sits on is local and is never pushed. Master is only
 # read (merged in); nothing is merged into master here.
+#
+# The engine archive is append-only and is written by every deploy, so before
+# merging this script parks the worktree's uncommitted archive entries, merges
+# master on a clean tree, unions them back (tools/merge-engine-archive.mjs), and
+# commits the result at the end. An interrupted merge keeps the parked entries
+# in target/scratch/archive-park for the rerun.
 
 set -euo pipefail
 
@@ -51,12 +57,64 @@ if [ "$(cd "$common" && pwd)" = "$(cd "$here" && pwd)" ]; then
 fi
 
 # ---------------------------------------------------------------- 1. master
+# `archive/engine/index.json` and its reference records are an append-only
+# catalog: this worktree writes them on every deploy, and master receives
+# entries the same way. git refuses to merge over those uncommitted files, so
+# park them, merge on a clean tree, and union the parked entries back in. Both
+# sides may also have sealed different bundles; that conflict is resolved by
+# taking master's index verbatim (the parked entries are unioned back, so
+# nothing of ours is lost). Entries are keyed by immutable bundle id.
+park="$ROOT/target/scratch/archive-park"
 if [ "$DO_MERGE" = 1 ]; then
+  log "reconcile the engine archive before merging"
+  # An earlier attempt may have stopped in the merge with only the index
+  # conflicted. Rewind it; the parked entries below are the complete record.
+  if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    pending="$(git diff --name-only --diff-filter=U)"
+    if [ -z "$pending" ] || [ "$pending" = "archive/engine/index.json" ]; then
+      step "rewinding the interrupted merge"
+      git merge --abort
+    else
+      die "a merge with real conflicts is in progress -- resolve it in $ROOT and rerun"
+    fi
+  fi
+  mkdir -p "$park/refs"
+  # A previous run that died after parking left its entries here; fold them
+  # into the worktree index first so an interrupted deploy can be rerun.
+  if [ -f "$park/index.json" ]; then
+    step "recovering entries parked by an interrupted run"
+    node tools/merge-engine-archive.mjs --into archive/engine/index.json --from "$park/index.json"
+  fi
+  cp archive/engine/index.json "$park/index.json"
+  git ls-files --others --exclude-standard -z -- archive/engine/refs |
+    xargs -0 -r cp -t "$park/refs/"
+  step "parked $(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).bundles.length))' "$park/index.json") archive entries"
+  git restore --worktree --staged -- archive/engine
+  git ls-files --others --exclude-standard -z -- archive/engine/refs | xargs -0 -r rm -f
+
   log "merge master"
   if ! git merge master --no-edit; then
-    die "merge of master failed -- resolve it in $ROOT and rerun"
+    if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+      die "merge of master did not start -- uncommitted changes outside the archive block it; deal with them and rerun (parked archive: $park)"
+    fi
+    pending="$(git diff --name-only --diff-filter=U)"
+    if [ "$pending" = "archive/engine/index.json" ]; then
+      # Both sides sealed bundles. Master's entry list wins here; ours arrive
+      # through the union below.
+      git checkout --theirs -- archive/engine/index.json
+      git add -- archive/engine/index.json
+      git commit -q --no-edit
+    else
+      # the parked archive is the only copy of this worktree's uncommitted
+      # entries; a rerun picks it up, so keep it.
+      die "merge of master failed -- resolve it in $ROOT and rerun (parked archive: $park)"
+    fi
   fi
   git log --oneline -1 | sed 's/^/   /'
+
+  log "restore the parked archive entries"
+  node tools/merge-engine-archive.mjs --into archive/engine/index.json --from "$park/index.json" --refs-from "$park/refs"
+  rm -rf "$park"
 else
   log "merge master (skipped: --no-merge)"
   git log --oneline -1 | sed 's/^/   /'
@@ -201,6 +259,24 @@ if command -v valkey-cli >/dev/null 2>&1 && valkey-cli ping >/dev/null 2>&1; the
   step "valkey: $(valkey-cli dbsize) key(s)"
 fi
 
+# ---------------------------------------------------------------- 4b. record
+# The entry sealed above is what makes this deploy replayable later. Commit it
+# (and any entry the merge left uncommitted) so the catalog is not left
+# floating in this worktree for the next merge to trip over.
+log "record the sealed archive entry"
+if [ -n "$(git status --porcelain -- archive/engine)" ]; then
+  source_id="$(node -e '
+    const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const e = (j.bundles || []).find((b) => b.id === process.argv[2]);
+    process.stdout.write(e ? (e.source_id || "") : "");
+  ' archive/engine/index.json "$bundle")"
+  git add -A -- archive/engine
+  git commit -q -m "Archive: seal ${source_id:0:8} (deployed $(git rev-parse --short HEAD))" -- archive/engine
+  step "$(git log --oneline -1)"
+else
+  step "archive unchanged"
+fi
+
 # ---------------------------------------------------------------- 5. report
 log "done"
 printf '   site          http://%s/\n' "$SITE"
@@ -210,7 +286,6 @@ printf '   commit        %s\n' "$(git log --oneline -1)"
 
 archive_dirty="$(git status --porcelain -- archive)"
 if [ -n "$archive_dirty" ]; then
-  printf '\n   note: the engine archive changed under this worktree and is not committed:\n'
+  printf '\n   note: the engine archive still has uncommitted changes:\n'
   printf '%s\n' "$archive_dirty" | sed 's/^/     /'
-  printf '   These record the bundles sealed here. Master does not list them yet.\n'
 fi
