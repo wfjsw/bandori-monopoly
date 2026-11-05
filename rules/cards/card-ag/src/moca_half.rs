@@ -9,6 +9,7 @@
 //! Reviewed 10/24/2026
 
 use bandori_std::ctx;
+use card_sdk::abi::ZoneChangeCause;
 use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Filter, Msg, On, RollValue};
 
@@ -76,7 +77,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(1): 「将此卡放置在场上」 -- the place-now + dest-later fold
     // (`place_card` creates the instance, `Dest::Field` stops the commit from
     // also spending the hand card); see `ctx::place_self_to_field`.
-    ctx::place_self_to_field(player_id, ID, &Msg::new(key!("moca_half_note")));
+    ctx::place_self_to_field(
+        player_id,
+        ID,
+        &Msg::new(key!("moca_half_note")),
+        ZoneChangeCause::Play,
+    );
     // 规则书(1): 「并获得3个奇迹水晶」
     ctx::set_crystals(3);
     ctx::log(
@@ -97,7 +103,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_decayed")).player_id("who", player_id),

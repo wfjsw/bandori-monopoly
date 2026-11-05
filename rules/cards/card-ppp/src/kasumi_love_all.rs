@@ -43,7 +43,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::tile_named("星之鼓动山丘");
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     // 规则书: 「将此卡放置在“星之鼓动山丘”上」 -- bound to that tile, so the
     // `PassTile` hook below can ask 「此卡所在格子」.
     ctx::place_card_on(
@@ -81,7 +81,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
             .player_id("who", mover)
             .tile("tile", tile),
     );
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     if !ctx::player_out(player_id) {
         ctx::add_group_crystals(player_id, 1, i32::MAX);
     }

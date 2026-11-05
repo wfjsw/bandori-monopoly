@@ -247,17 +247,17 @@ impl CardWorld for TestWorld {
     fn draw(&mut self, _: i32, _: i32) -> i32 {
         0
     }
-    fn add_to_dest(&mut self, _: i32, _: &str, _: i32) {}
+    fn add_to_dest(&mut self, _: i32, _: &str, _: i32, _: bool) {}
     fn to_discard(&mut self, _: i32, _: &str) {}
     fn place_card(&mut self, _: i32, _: &str, _: game_core::msg::Msg) -> i32 {
         -1
     }
-    fn set_dest(&mut self, _: i32) {}
-    fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
-    fn send_to_dest(&mut self, _: i32) -> Option<i32> {
+    fn set_dest(&mut self, _: i32, _: i32) {}
+    fn set_transfer_to_dest(&mut self, _: i32, _: i32, _: i32) {}
+    fn send_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
         None
     }
-    fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
+    fn transfer_to_dest(&mut self, _: i32, _: i32, _: i32) -> Option<i32> {
         None
     }
     fn rent_unit_mult(&self) -> i32 {

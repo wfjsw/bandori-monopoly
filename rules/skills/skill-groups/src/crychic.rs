@@ -163,19 +163,31 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     for (uid, c) in ctx::field_instances(player_id) {
         // The field copy (3) places: unplace it into the draw pile below.
         if shout_at(player_id, c) {
-            if ctx::unplace_at(uid) >= 0 {
-                ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
-            }
+            // `unplace_at` is the one writer and files the copy itself (G08),
+            // so the destination is the draw pile, not a discard the sweep
+            // below would pick back up.
+            ctx::unplace_at(
+                uid,
+                ctx::Dest::DeckRandom,
+                card_sdk::abi::ZoneChangeCause::Effect,
+            );
             continue;
         }
         if c == ID || c.as_str().starts_with("CRYCHIC:") {
-            ctx::unplace_at(uid);
+            // 「移除」 is the out-of-game keyword, not a discard: the card must
+            // not be swept back into the draw pile below (`sweep_to_deck` picks
+            // the discard up).
+            ctx::unplace_at(
+                uid,
+                ctx::Dest::Banished,
+                card_sdk::abi::ZoneChangeCause::Effect,
+            );
         }
     }
     for c in ctx::cards_in(player_id, CardPile::Hand) {
         if shout_at(player_id, c) {
             ctx::take_card(player_id, c.as_str(), CardPile::Hand);
-            ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
+            ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom, false);
             continue;
         }
         if c.as_str().starts_with("CRYCHIC:") {
@@ -187,7 +199,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             if shout_at(player_id, c) {
                 if pile != CardPile::Deck {
                     ctx::take_card(player_id, c.as_str(), pile);
-                    ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom);
+                    ctx::add_to_dest(player_id, SHOUT, ctx::Dest::DeckRandom, false);
                 }
                 continue;
             }
@@ -214,6 +226,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             player_id,
             if mygo { "MyGO" } else { "Ave Mujica" },
             ctx::Dest::DeckTop,
+            false,
         );
     }
     ctx::shuffle_into_deck(player_id, false, true);
@@ -277,9 +290,11 @@ fn can_transform(player_id: i32) -> Option<Msg> {
 
 fn transform_now(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
-    if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
-        return Ok(());
-    }
+    // No pile re-check: `can_transform` already gated the play on the same
+    // condition, and mutsumi's 「立即执行…（2）效果」 runs the effect
+    // unconditionally. Re-checking here would re-evaluate a guard inside a
+    // re-run, where the world the previous pass left (the skill it removed is
+    // in the discard by now) would fail it.
     at_turn_end(player_id)?;
     Ok(())
 }

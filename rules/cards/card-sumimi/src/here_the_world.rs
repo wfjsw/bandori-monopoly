@@ -7,10 +7,8 @@
 //!
 //! [反击] onto the field of whoever played two cards this turn.
 
-use alloc::string::String;
-use alloc::vec::Vec;
-
 use bandori_std::ctx::{self, trigger};
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::{ActionKind, ChainKind};
 use card_sdk::{it, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -21,62 +19,19 @@ const ID: &str = "Sumimi:Here the world";
 /// A **prop of this instance**, so two copies on one field keep their own user.
 const USER_PROP: &str = "here_user";
 
-/// The length is an on-card counter (`here_held_len`) so a `condition` or the body can
-/// read it; both live on the **instance**, not the player.
-const HELD_LEN: &str = "here_held_len";
-/// Up to 64 bytes -- every `the roster` id fits (max 52 bytes today).
-const HELD_PROPS: usize = 16;
+/// The held card's instance uid (`+1`). The held card is a real attached
+/// instance (「放置于此卡上」); the crystals that time the hold sit on **this**
+/// host instance (「为其放置3个奇迹水晶」 -- 其 is 此卡), so they die with it.
+const HELD: &str = "here_held";
 
-/// Prop key for packed byte-chunk `i` (0..HELD_PROPS).
-fn held_key(i: usize) -> String {
-    // "here_held_b0" .. "here_held_b15" without `format!` (keeps wasm32 lean).
-    let mut s = String::from("here_held_b");
-    if i >= 10 {
-        s.push(char::from(b'0' + (i / 10) as u8));
-    }
-    s.push(char::from(b'0' + (i % 10) as u8));
-    s
+/// The held instance, `-1` when there is none.
+fn held_uid() -> i32 {
+    ctx::prop(HELD) - 1
 }
 
-fn store_held(id: &str) {
-    let b = id.as_bytes();
-    let n = b.len().min(HELD_PROPS * 4);
-    ctx::set_counter(HELD_LEN, n as i32);
-    for i in 0..HELD_PROPS {
-        let mut v: i32 = 0;
-        for j in 0..4 {
-            let k = i * 4 + j;
-            if k < n {
-                v |= i32::from(b[k]) << (8 * j);
-            }
-        }
-        ctx::set_prop(&held_key(i), v);
-    }
-}
-
-fn load_held() -> Option<String> {
-    let n = ctx::counter(HELD_LEN);
-    if n <= 0 {
-        return None;
-    }
-    let n = n as usize;
-    let mut b: Vec<u8> = Vec::with_capacity(n);
-    for i in 0..HELD_PROPS {
-        let v = ctx::prop(&held_key(i));
-        for j in 0..4 {
-            if b.len() < n {
-                b.push(((v >> (8 * j)) & 0xff) as u8);
-            }
-        }
-    }
-    String::from_utf8(b).ok()
-}
-
-fn clear_held() {
-    ctx::set_counter(HELD_LEN, 0);
-    for i in 0..HELD_PROPS {
-        ctx::set_prop(&held_key(i), 0);
-    }
+/// Is `uid` still this copy's held card?
+fn holds(uid: i32) -> bool {
+    uid >= 0 && ctx::attachment_host(uid) == ctx::self_uid()
 }
 
 pub const HERE_THE_WORLD: CardDef = CardDef::new(
@@ -94,9 +49,10 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         // field would share.
         On::Action(Action::Drew("actor == owner && card.placed", None, drew)),
         On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
-        // TODO(规则书)（场上有此卡的玩家下次抽卡时）: 被扣住的卡只记在本卡的
-        // 计数/属性上，此卡在完成前离场就没人把它送回任何堆 -- 场上卡还没有“离场”
-        // 钩子（只有玩家离场的 `leaveAfter`），cleanup 无处可挂。
+        // 规则书（2）: 「那名玩家将那张卡加入手牌」 -- the host leaving before the
+        // crystals run out still returns the held card. Its own leave also sets
+        // the destination (Q49).
+        On::Action(Action::ZoneLeft("card.placed", None, on_leave)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Here the world"#)
@@ -119,7 +75,7 @@ fn can_counteract(player_id: i32) -> bool {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let them = trigger::player_id();
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, ZoneChangeCause::Effect);
     ctx::place_card(them, ID, &Msg::new(key!("here_the_world_note")));
     // Written on the instance `place_card` just bound (not on the player).
     ctx::set_prop(USER_PROP, player_id + 1);
@@ -133,8 +89,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 fn drew(player_id: i32) -> card_sdk::Asked {
-    // The instance's own hold latch (`card.counter` in the `condition` is name-keyed).
-    if ctx::counter(HELD_LEN) > 0 {
+    // Only this instance's own hold latches (`card.placed` is name-keyed).
+    if ctx::prop(HELD) > 0 {
         return Ok(());
     }
     let got = trigger::value();
@@ -145,16 +101,19 @@ fn drew(player_id: i32) -> card_sdk::Asked {
     let Some(&id) = cards.first() else {
         return Ok(());
     };
-    // TODO(规则书)（将那张卡背面朝上放置于此卡上）: 书里把它背面朝上放在此卡上 -- 我们只把它从手牌取出、把 id 记在本卡上，卡本身不入场也不翻面。
-    if !ctx::take_card(player_id, id.as_str(), ctx::CardPile::Hand) {
+    // 规则书（2）: 「将那张卡背面朝上放置于此卡上」 -- a real attached
+    // instance, face-down, taken out of the hand.
+    let held = ctx::attach_card(ctx::self_uid(), id.as_str(), ZoneChangeCause::Effect, true);
+    if held < 0 {
         return Ok(());
     }
-    store_held(id.as_str());
+    ctx::set_prop(HELD, held + 1);
     // 规则书（2）: 「那名玩家的每个回合开始时移除一个」 -- 3 own turn starts
     // before the return.
     ctx::set_turns_left(3);
-    // 规则书（2）: 「并为其放置3个奇迹水晶」
-    ctx::set_crystals(3);
+    // 规则书（2）: 「并为其放置3个奇迹水晶」 -- the hold's own timer, on this
+    // host instance.
+    ctx::add_counter_at(ctx::self_uid(), bandori_std::counter::CRYSTALS, 3, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("here_the_world_held")).player_id("who", player_id),
@@ -163,33 +122,61 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 }
 
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // Only this instance's own hold ticks (`card.counter` in the `condition` is
-    // name-keyed, so two copies would read each other's latch).
-    if ctx::counter(HELD_LEN) <= 0 {
+    // Only this instance's own hold ticks (`card.placed` is name-keyed, so two
+    // copies would read each other's latch).
+    // The latch is the prop, not the attachment: the commit re-run starts from
+    // the world the learn pass left, where a completed return is already
+    // detached.
+    let held = held_uid();
+    if held < 0 {
         return Ok(());
     }
-    // 「那名玩家的每个回合开始时移除一个」 -- the tick.
+    // 「那名玩家的每个回合开始时移除一个」 -- the tick, on the host instance.
     ctx::dec_turns_left();
-    let left = ctx::add_crystals(-1, 0)?;
+    let left = ctx::add_counter_at(ctx::self_uid(), bandori_std::counter::CRYSTALS, -1, 0);
     if left > 0 {
         return Ok(());
     }
     let user = ctx::prop(USER_PROP) - 1;
-    if let Some(id) = load_held() {
-        ctx::add_to_dest(player_id, &id, ctx::Dest::Hand);
-    }
-    clear_held();
+    // 规则书（2）: 「那名玩家将那张卡加入手牌」 -- the held card returns as a
+    // real hand card.
+    ctx::detach_card(held, ctx::Dest::Hand, ZoneChangeCause::Effect);
+    ctx::set_prop(HELD, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("here_the_world_returned")).player_id("who", player_id),
     );
-    // TODO(规则书)（当奇迹水晶数为0时，那名玩家将那张卡加入手牌）: 书里不说此卡 何时离场 -- 我们完成时把它弃置（W3-HERE-01 /
-    // C-Q49）。
-    ctx::set_dest(ctx::Dest::Graveyard);
+    // 规则书（2）: the hold is done -- the host leaves (the book does not say
+    // when; Q49).
+    ctx::set_dest(ctx::Dest::Graveyard, ZoneChangeCause::Effect);
     ctx::set_prop(USER_PROP, 0);
+    // 规则书（2）: 「并使此卡使用者抽一张卡」.
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1)?;
     }
+    Ok(())
+}
+
+/// The host leaves: return the held card (「那名玩家将那张卡加入手牌」) and file
+/// the host to the Graveyard -- unless the hold already completed.
+fn on_leave(player_id: i32) -> card_sdk::Asked {
+    // Instance kind: another copy sees this raise too.
+    if trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
+    let held = held_uid();
+    if held >= 0 {
+        // 规则书（2）: 「那名玩家将那张卡加入手牌」 (a no-op when it is already
+        // back in hand).
+        ctx::detach_card(held, ctx::Dest::Hand, ZoneChangeCause::Effect);
+        ctx::set_prop(HELD, 0);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("here_the_world_returned")).player_id("who", player_id),
+        );
+    }
+    // 规则书（2）: the host sits in its owner's discard.
+    bandori_std::zones::set_leave_destination(ctx::Dest::Graveyard);
     Ok(())
 }
 
@@ -214,4 +201,10 @@ pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_leave_kani(player_id: i32) -> card_sdk::Asked {
+    on_leave(player_id)
 }

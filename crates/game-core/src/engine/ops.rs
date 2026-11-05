@@ -1646,6 +1646,9 @@ impl World {
             note,
             effective_card: None,
             position,
+            on: -1,
+            created_by: -1,
+            effective: true,
         };
         if player_id == crate::state::BOARD_OWNER {
             self.st.board_field.push(inst);
@@ -1674,6 +1677,16 @@ impl World {
             .iter()
             .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
             .find(|f| f.uid == uid)
+    }
+
+    /// The first live instance of `card` held by `player_id` (attached or
+    /// not), skipping `except`. `None` when the name is only in a pile.
+    pub fn live_instance_of(&self, player_id: i32, card: &str, except: i32) -> Option<i32> {
+        self.player_id(player_id)?
+            .field
+            .iter()
+            .find(|f| f.card == card && f.uid != except)
+            .map(|f| f.uid)
     }
 
     /// The seat whose field the instance at `uid` sits on (`BOARD_OWNER` for
@@ -1724,7 +1737,9 @@ impl World {
         }
     }
 
-    fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
+    /// The live row `uid` names, for field-by-field writes. Public for the
+    /// guest-view replay of a logged zone request (`CardWorld::replay_host`).
+    pub fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
         if let Some(f) = self.st.board_field.iter_mut().find(|f| f.uid == uid) {
             return Some(f);
         }
@@ -1735,21 +1750,28 @@ impl World {
             .find(|f| f.uid == uid)
     }
 
-    /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
-    /// order. The dispatch walks this rather than the names, so two copies of
-    /// the same card are two hooks. `BOARD_OWNER` lists the board field (the
-    /// tile rule instances).
+    /// Every **unattached** card instance on `player_id`'s field, as
+    /// `(uid, id)` in placement order. The dispatch walks this rather than the
+    /// names, so two copies of the same card are two hooks. `BOARD_OWNER` lists
+    /// the board field. An attachment (`on >= 0`) is reachable through its host
+
+    /// instead, so it is not listed twice.
     pub fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
         if player_id == crate::state::BOARD_OWNER {
             return self
                 .st
                 .board_field
                 .iter()
+                .filter(|f| f.on < 0)
                 .map(|f| (f.uid, f.card.clone()))
                 .collect();
         }
         self.player_id(player_id).map_or_else(Vec::new, |s| {
-            s.field.iter().map(|f| (f.uid, f.card.clone())).collect()
+            s.field
+                .iter()
+                .filter(|f| f.on < 0)
+                .map(|f| (f.uid, f.card.clone()))
+                .collect()
         })
     }
 
@@ -1791,7 +1813,7 @@ impl World {
         self.st
             .board_field
             .iter()
-            .filter(|f| f.tile == tile)
+            .filter(|f| f.tile == tile && f.on < 0)
             .map(|f| (f.uid, f.card.clone()))
             .collect()
     }
@@ -2002,6 +2024,14 @@ impl World {
     /// binding still points at the right spot) and cleared when it coincides
     /// with the new tile.
     pub fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        // Idempotent: a re-run replays a body's direct write on a world that
+        // already carries it (the commit pass's staging overlay keeps the
+        // guest's rows), and re-deriving the slot from a row that already
+        // shows `tile` would drop the swap binding the first application
+        // resolved (2)'s 「放置于[移动终点]」 is one such write.
+        if self.field_by_uid(uid).is_some_and(|f| f.tile == tile) {
+            return true;
+        }
         let position = if tile >= 0 {
             let p = self.position_of_tile(tile);
             if p == tile { -1 } else { p }
@@ -2121,6 +2151,386 @@ impl World {
             }
         }
         -1
+    }
+
+    // ------------------------------------------------------ zone writer (G08)
+
+    /// The zone of an instance: `Attached` while it sits on a host, `Field`
+    /// while its row is on a field, `Nowhere` when dead.
+    pub fn zone_of(&self, uid: i32) -> game_kinds::Zone {
+        let Some(f) = self.field_by_uid(uid) else {
+            return game_kinds::Zone::Nowhere;
+        };
+        if f.on >= 0 {
+            game_kinds::Zone::Attached
+        } else {
+            game_kinds::Zone::Field
+        }
+    }
+
+    /// The instance `uid` sits on, `-1` when it is not attached.
+    pub fn attachment_host(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.on)
+    }
+
+    /// The instances attached to `host`, in filing order.
+    pub fn attached_cards(&self, host: i32) -> Vec<i32> {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
+            .filter(|f| f.on == host)
+            .map(|f| f.uid)
+            .collect()
+    }
+
+    /// The instances `creator` made, in creation order.
+    pub fn created_cards(&self, creator: i32) -> Vec<i32> {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
+            .filter(|f| f.created_by == creator)
+            .map(|f| f.uid)
+            .collect()
+    }
+
+    /// The instance's real owner, `-1` when dead.
+    pub fn instance_owner(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.owner)
+    }
+
+    /// Set the real owner without moving the row (「视为拥有」); `false` when
+    /// the instance is dead.
+    pub fn set_instance_owner(&mut self, uid: i32, owner: i32) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.owner = owner;
+                f.user = owner;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Record that `uid` was made by `creator` (`-1` clears); `false` when
+    /// `uid` is dead.
+    pub fn set_created_by_at(&mut self, uid: i32, creator: i32) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.created_by = creator;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Mark the instance as not having taken effect (or clear the mark).
+    pub fn set_ineffective_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.effective = !on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn is_ineffective_at(&self, uid: i32) -> bool {
+        self.field_by_uid(uid).is_some_and(|f| !f.effective)
+    }
+
+    /// Would filing `uid` onto `host` make a cycle? Walks the host's `on`
+    /// chain; the depth guard is the live row count.
+    fn attach_cycles(&self, uid: i32, host: i32) -> bool {
+        if uid == host {
+            return true;
+        }
+        let mut cursor = host;
+        let mut guard = 0usize;
+        while cursor >= 0 && guard < 4096 {
+            if cursor == uid {
+                return true;
+            }
+            cursor = self.attachment_host(cursor);
+            guard += 1;
+        }
+        false
+    }
+
+    /// Resolve a transition against the row: fill `from` / `holder` and refuse
+    /// a dead instance, a dead host or a cycle. `None` = refused.
+    pub fn resolve_zone_transition(
+        &self,
+        mut t: crate::engine::world::ZoneTransition,
+    ) -> Option<crate::engine::world::ZoneTransition> {
+        let row = self.field_by_uid(t.uid)?;
+        // A cascade edge named its real `from` before `drop_instance_edges`
+        // detached it (the attachment must still report `Attached`); an
+        // ordinary caller re-reads the zone.
+        if !t.cascaded {
+            t.from = self.zone_of(t.uid);
+        }
+        if !t.from.is_played() {
+            return None;
+        }
+        if t.to == game_kinds::Zone::Attached {
+            if t.host < 0 || !self.zone_of(t.host).is_played() {
+                return None;
+            }
+            if self.attach_cycles(t.uid, t.host) {
+                return None;
+            }
+            t.holder = self.holder_of(t.host);
+        } else if t.holder < 0 {
+            t.holder = row.owner;
+        }
+        Some(t)
+    }
+
+    /// Detach every edge of `uid` and hand back the cascade transitions:
+    /// attachments first (each toward its own leave destination, cause
+    /// `HostLeft`), then created children (cause `CreatorLeft`), depth first.
+    ///
+    /// The rows keep their edges while they die. A dead row is re-staged by
+    /// the replay's overlays before the re-run takes it out again, and the
+    /// edge is what tells the replay that the row is part of this cascade at
+    /// all; clearing it here would leave the re-run a field of orphans.
+    pub fn drop_instance_edges(&mut self, uid: i32) -> Vec<crate::engine::world::ZoneTransition> {
+        use crate::engine::world::ZoneTransition;
+        use game_kinds::{Zone, ZoneChangeCause};
+        let mut out = Vec::new();
+        for a in self.attached_cards(uid) {
+            let (dest, deck) = self.dest_of_leave(a);
+            let mut t = ZoneTransition::new(a, Zone::Attached, dest);
+            t.deck = deck;
+            t.cause = ZoneChangeCause::HostLeft;
+            t.cascaded = true;
+            out.push(t);
+        }
+        for c in self.created_cards(uid) {
+            let mut t = ZoneTransition::new(c, Zone::Field, Zone::Graveyard);
+            t.cause = ZoneChangeCause::CreatorLeft;
+            t.cascaded = true;
+            out.push(t);
+        }
+        out
+    }
+
+    /// The destination a leaving attachment takes: its own `prop::LEAVE_DEST`,
+    /// else the Graveyard.
+    fn dest_of_leave(&self, uid: i32) -> (game_kinds::Zone, crate::engine::DeckPlacement) {
+        use crate::engine::DeckPlacement;
+        let dest = self
+            .field_by_uid(uid)
+            .and_then(|f| f.props.get(crate::state::prop::LEAVE_DEST))
+            .copied()
+            .unwrap_or(0);
+        // The guest `Dest` wire: 0 graveyard, 1 hand, 2 field, 3 banished,
+        // 4-6 the draw-pile fates.
+        match dest {
+            1 => (game_kinds::Zone::Hand, DeckPlacement::default()),
+            2 => (game_kinds::Zone::Field, DeckPlacement::default()),
+            3 => (game_kinds::Zone::Banished, DeckPlacement::default()),
+            4 => (game_kinds::Zone::Deck, DeckPlacement::Top),
+            5 => (game_kinds::Zone::Deck, DeckPlacement::Bottom),
+            6 => (game_kinds::Zone::Deck, DeckPlacement::Random),
+            _ => (game_kinds::Zone::Graveyard, DeckPlacement::default()),
+        }
+    }
+
+    /// Apply a resolved transition to the rows. Returns the landing holder
+    /// (or the owner a `Nowhere` landing left), `-1` when the row is gone.
+    ///
+    /// The row's `on` / `tile` / `face_down` / `effective` are settled here:
+    /// an attachment takes its host's tile, an ordinary landing clears the
+    /// host and `face_down`, and a Graveyard landing clears `effective`.
+    pub fn apply_zone_row(&mut self, t: &crate::engine::world::ZoneTransition) -> Option<i32> {
+        use game_kinds::Zone;
+        if t.from == Zone::Nowhere {
+            return None;
+        }
+        let holder_now = self.holder_of(t.uid);
+        let row = self.take_row(t.uid)?;
+        // Every bound counter unit and edge dies with the row.
+        self.destroy_instance_units(t.uid);
+        match t.to {
+            Zone::Attached => {
+                let (host, host_tile) = self.field_by_uid(t.host).map(|h| (h.uid, h.tile))?;
+                let mut moved = row;
+                moved.on = host;
+                moved.tile = host_tile;
+                moved.face_down = t.face_down;
+                self.push_field_row(moved, self.holder_of(host));
+                Some(self.holder_of(host))
+            }
+            Zone::Field => {
+                // A `Field` **re-home** (a leave rewritten to the field, see
+                // `zone_commit`) lands with the transition's holder; an
+                // ordinary field arrival keeps the row where it is.
+                let holder = if t.holder >= 0 && t.holder != holder_now {
+                    t.holder
+                } else {
+                    holder_now
+                };
+                let mut moved = row;
+                moved.on = -1;
+                self.push_field_row(moved, holder);
+                Some(holder)
+            }
+            _ => {
+                self.file_row(row, t);
+                Some(t.holder.max(0))
+            }
+        }
+    }
+
+    /// Remove the row at `uid` from wherever it sits.
+    fn take_row(&mut self, uid: i32) -> Option<crate::state::FieldCard> {
+        if let Some(i) = self.st.board_field.iter().position(|f| f.uid == uid) {
+            return Some(self.st.board_field.remove(i));
+        }
+        for s in self.st.players.iter_mut() {
+            if let Some(i) = s.field.iter().position(|f| f.uid == uid) {
+                return Some(s.field.remove(i));
+            }
+        }
+        None
+    }
+
+    /// Move `uid` and everything attached under it to `holder`'s field, keeping
+    /// the rows intact. A 「视为拥有」 re-home takes the whole subtree with it:
+    /// the card never left the field, so no edge cascades.
+    pub fn rehold_subtree(&mut self, uid: i32, holder: i32) {
+        for child in self.attached_cards(uid) {
+            self.rehold_subtree(child, holder);
+        }
+        if let Some(row) = self.take_row(uid) {
+            self.push_field_row(row, holder);
+        }
+    }
+
+    /// Put a row back on a field: the board field for the board owner, else
+    /// that seat's field.
+    fn push_field_row(&mut self, row: crate::state::FieldCard, holder: i32) {
+        if holder == crate::state::BOARD_OWNER {
+            self.st.board_field.push(row);
+            return;
+        }
+        if let Some(s) = self.player_mut(holder) {
+            s.field.push(row);
+        } else {
+            self.st.board_field.push(row);
+        }
+    }
+
+    /// File a removed row into a pile. The name joins the pile; the row dies.
+    fn file_row(&mut self, row: crate::state::FieldCard, t: &crate::engine::world::ZoneTransition) {
+        use game_kinds::Zone;
+        let holder = t.holder.max(0) as usize;
+        let name = row.card.clone();
+        // An event rule instance leaving the field unbinds its active row.
+        if let Some(id) = name.strip_prefix("event:") {
+            self.st.event_active.retain(|e| e.id != id);
+        }
+        match t.to {
+            Zone::Graveyard => {
+                if let Some(h) = self.hidden.get_mut(holder) {
+                    h.graveyard.push(name);
+                }
+            }
+            Zone::Hand => {
+                if let Some(h) = self.hidden.get_mut(holder) {
+                    h.hand.push(name);
+                }
+            }
+            Zone::Deck => {
+                if let Some(h) = self.hidden.get_mut(holder) {
+                    match t.deck {
+                        crate::engine::DeckPlacement::Top => h.deck.push(name),
+                        crate::engine::DeckPlacement::Bottom => h.deck.insert(0, name),
+                        crate::engine::DeckPlacement::Random => {
+                            h.deck.push(name);
+                            let mut draw = std::mem::take(&mut h.deck);
+                            self.rng.shuffle(&mut draw);
+                            if let Some(h) = self.hidden.get_mut(holder) {
+                                h.deck = draw;
+                            }
+                        }
+                    }
+                }
+            }
+            Zone::EventDeck => self.st.event_top.push(name),
+            Zone::EventDiscard => self.st.event_discard.push(name),
+            Zone::EventRemoved => self.st.event_removed.push(name),
+            _ => {}
+        }
+    }
+
+    /// Write a tile's owner and the acquisition sequence that goes with it.
+    /// A release (`-1`) clears the sequence; a re-acquisition takes a fresh
+    /// one. The previous owner's `firstTile` slot is rebuilt from
+    /// [`Self::earliest_owned_tile`].
+    pub fn set_tile_owner(&mut self, tile: i32, owner: i32) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        let Some(cur) = self.st.owners.get(t).copied() else {
+            return;
+        };
+        if cur == owner {
+            return;
+        }
+        self.st.owners[t] = owner;
+        if self.st.owned_seq.len() <= t {
+            self.st.owned_seq.resize(t + 1, -1);
+        }
+        self.st.owned_seq[t] = if owner >= 0 {
+            let s = self.st.next_owned_seq;
+            self.st.next_owned_seq = s.saturating_add(1);
+            s
+        } else {
+            -1
+        };
+        if cur >= 0 {
+            let first = self.earliest_owned_tile(cur);
+            if let Some(p) = self.player_mut(cur) {
+                p.state_set(crate::state::key::FIRST_TILE, first + 1);
+            }
+        }
+        if owner >= 0 {
+            // The acquisition mirror: 「最早获得」 reads the ledger, so a first
+            // acquisition (no previous owner) must arm it too.
+            let first = self.earliest_owned_tile(owner);
+            if let Some(p) = self.player_mut(owner) {
+                p.state_set(crate::state::key::FIRST_TILE, first + 1);
+            }
+        }
+    }
+
+    /// The player's earliest-owned tile under the acquisition order, `-1` if
+    /// none.
+    pub fn earliest_owned_tile(&self, player_id: i32) -> i32 {
+        let mut best: Option<(i32, i32)> = None;
+        for (tile, &owner) in self.st.owners.iter().enumerate() {
+            if owner != player_id {
+                continue;
+            }
+            let Some(&seq) = self.st.owned_seq.get(tile) else {
+                continue;
+            };
+            if seq < 0 {
+                continue;
+            }
+            let better = match best {
+                Some((s, _)) => seq < s,
+                None => true,
+            };
+            if better {
+                best = Some((seq, tile as i32));
+            }
+        }
+        best.map_or(-1, |(_, t)| t)
     }
 
     /// Place the player's skill rules on their field. This is the binding:
@@ -2773,6 +3183,9 @@ impl World {
         if uid < 0 {
             return;
         }
+        // A dead instance is never a host or a creator: its edges go first, so
+        // no live row keeps naming it.
+        let _ = self.drop_instance_edges(uid);
         let gone: Vec<TileMark> = self
             .st
             .marks

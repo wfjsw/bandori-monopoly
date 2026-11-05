@@ -65,7 +65,7 @@ fn pool(player_id: i32) -> Vec<NameId> {
 fn l12(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上）: 书里先选卡加入手牌、再把此卡放场上 --
     // 我们先放置再询问（询问会暂停，结算顺序 因此与所写相反）。
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("l12_note")));
     ctx::log(
         player_id,
@@ -90,7 +90,7 @@ fn l12(player_id: i32) -> card_sdk::Asked {
         // TODO(规则书)（从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌）:
         ctx::shuffle_into_deck(player_id, false, false);
     }
-    ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
+    ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand, false);
     ctx::log(
         player_id,
         &Msg::new(key!("l12_taken"))
@@ -139,7 +139,7 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
 /// 规则书[持续]（3）: 「当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。」 -- run by
 /// the `counterChanged` entry above.
 fn back(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Hand);
+    ctx::set_dest(ctx::Dest::Hand, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("l12_back")).player_id("who", player_id),

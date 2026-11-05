@@ -75,7 +75,11 @@ fn swap(player_id: i32) {
     //   persona's skill was already removed) leaves it on the field beside the
     //   new one, and `persona_skill_uid` keeps answering the stale entry.
     if let Some(uid) = ctx::find_card(player_id, from.1) {
-        ctx::unplace_at(uid);
+        ctx::unplace_at(
+            uid,
+            ctx::Dest::Graveyard,
+            card_sdk::abi::ZoneChangeCause::Effect,
+        );
     }
     ctx::place_card(player_id, to.1, &Msg::new(key!("two_in_one_note")));
     // Re-declare the new face's 「初始火罐数」 from its `CardDef` props.

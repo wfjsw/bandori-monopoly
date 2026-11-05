@@ -49,7 +49,7 @@ const PASSED: &str = "saaya_sky_passed";
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::tile_named("山吹面包房");
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     // A pass from a previous time on the instance must not fire again.
     ctx::set_counter(PASSED, 0);
     // 规则书（1）: 「将此卡放置在山吹面包房」 -- bound to that tile; the hop in

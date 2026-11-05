@@ -463,7 +463,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_add_to_dest"
         )]
-        pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32);
+        pub fn add_to_dest(player_id: i32, ptr: i32, len: i32, dest: i32, counted: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_take_card"
@@ -544,22 +544,22 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_dest"
         )]
-        pub fn set_dest(dest: i32);
+        pub fn set_dest(dest: i32, cause: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_transfer_to_dest"
         )]
-        pub fn set_transfer_to_dest(to: i32, dest: i32);
+        pub fn set_transfer_to_dest(to: i32, dest: i32, cause: i32);
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_send_to_dest"
         )]
-        pub fn send_to_dest(dest: i32) -> i32;
+        pub fn send_to_dest(dest: i32, cause: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_transfer_to_dest"
         )]
-        pub fn transfer_to_dest(to: i32, dest: i32) -> i32;
+        pub fn transfer_to_dest(to: i32, dest: i32, cause: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_rent_unit_mult"
@@ -620,7 +620,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_self_face_down"
         )]
-        pub fn set_self_face_down(on: i32) -> i32;
+        pub fn set_self_face_down(on: i32, cause: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_self_immune"
@@ -1169,6 +1169,24 @@ mod abi {
             link_name = "ruleset_trig_instance"
         )]
         pub fn trig_instance() -> i32;
+        // v114: the zone payload (postcard `Option<ZoneChange>`; `&[]` outside
+        // the zone family), the play outcome (`-1` elsewhere) and the out
+        // cause (`-1` elsewhere).
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trigger_zone"
+        )]
+        pub fn trigger_zone(buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_play_outcome"
+        )]
+        pub fn trig_play_outcome() -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_trig_out_cause"
+        )]
+        pub fn trig_out_cause() -> i32;
         // v105: resolution frame. `body_enter` reports 1 (run the body), 0
         // (the fire was cancelled) or the pause sentinel (the fire asked).
         // The frame is the host's: it stays up past `body_leave` and dies
@@ -2205,7 +2223,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_unplace_at"
         )]
-        pub fn unplace_at(uid: i32) -> i32;
+        pub fn unplace_at(uid: i32, destination: i32, cause: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_tile_of"
@@ -2218,6 +2236,11 @@ mod abi {
         pub fn set_tile_at(uid: i32, tile: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_is_own_placement"
+        )]
+        pub fn is_own_placement(uid: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_is_face_down_at"
         )]
         pub fn is_face_down_at(uid: i32) -> i32;
@@ -2225,7 +2248,7 @@ mod abi {
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_set_face_down_at"
         )]
-        pub fn set_face_down_at(uid: i32, on: i32) -> i32;
+        pub fn set_face_down_at(uid: i32, on: i32, cause: i32) -> i32;
         #[cfg_attr(
             any(not(target_arch = "wasm32"), feature = "native-rules"),
             link_name = "ruleset_is_immune_at"
@@ -2256,6 +2279,85 @@ mod abi {
             link_name = "ruleset_card_face_down"
         )]
         pub fn card_face_down(player_id: i32, cp: i32, cl: i32) -> i32;
+        // v114 (G08): the zone family. Fifteen imports, 451-465 of the README
+        // band. `attach_card` / `detach_card` / `rehome_card` /
+        // `play_hand_card` pause (`Pause::Trap`); the rest are plain queries /
+        // writes.
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_zone_of"
+        )]
+        pub fn zone_of(instance: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_attachment_host"
+        )]
+        pub fn attachment_host(instance: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_attached_cards"
+        )]
+        pub fn attached_cards(host: i32, buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_created_cards"
+        )]
+        pub fn created_cards(creator: i32, buf: i32, cap: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_earliest_owned_tile"
+        )]
+        pub fn earliest_owned_tile(player_id: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_instance_owner"
+        )]
+        pub fn instance_owner(instance: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_attach_card"
+        )]
+        pub fn attach_card(host: i32, ptr: i32, len: i32, cause: i32, face_down: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_detach_card"
+        )]
+        pub fn detach_card(instance: i32, dest: i32, cause: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_instance_owner"
+        )]
+        pub fn set_instance_owner(instance: i32, owner: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_created_by_at"
+        )]
+        pub fn set_created_by_at(instance: i32, creator: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_ineffective_at"
+        )]
+        pub fn set_ineffective_at(instance: i32, on: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_is_ineffective_at"
+        )]
+        pub fn is_ineffective_at(instance: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_rehome_card"
+        )]
+        pub fn rehome_card(tile: i32, owner: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_play_hand_card"
+        )]
+        pub fn play_hand_card(player_id: i32, ptr: i32, len: i32) -> i32;
+        #[cfg_attr(
+            any(not(target_arch = "wasm32"), feature = "native-rules"),
+            link_name = "ruleset_set_dest_unwatched"
+        )]
+        pub fn set_dest_unwatched(dest: i32);
     }
 } // mod abi
 

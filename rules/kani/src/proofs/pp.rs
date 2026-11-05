@@ -48,6 +48,11 @@ fn place_band_skill(owner: i32) -> i32 {
                 crystals: 0,
                 props: world::NameMap::new(),
                 effective_card: u16::MAX,
+                owner: owner,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: false,
             };
             w.field_n += 1;
         }
@@ -1090,6 +1095,11 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1129,6 +1139,11 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1174,6 +1189,11 @@ pub fn guide_04_turn_end_crystal_iff() {
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1223,6 +1243,11 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1357,6 +1382,11 @@ fn ranger_01_05_steps_by_count_iff_at(others: i32) {
                 crystals: 0,
                 props: world::NameMap::new(),
                 effective_card: u16::MAX,
+                owner: user,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: false,
             };
             ww.field_n += 1;
         });
@@ -1557,6 +1587,11 @@ pub fn shine_again_01_rescue_iff() {
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
     });
@@ -1837,6 +1872,7 @@ fn plant_self(user: i32, crystals: i32) {
             uid,
             card,
             player: user,
+            owner: user,
             tile: 0,
             face_down: false,
             immune: false,
@@ -1844,6 +1880,10 @@ fn plant_self(user: i32, crystals: i32) {
             crystals,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         w.field_n += 1;
         w.last_uid = uid;

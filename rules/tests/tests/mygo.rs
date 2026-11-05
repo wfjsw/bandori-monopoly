@@ -1287,6 +1287,38 @@ fn miracle_ineffective_if_discarded_with_crystals() {
     assert!(t.on_field(0, "MyGO:难以复刻的奇迹"));
 }
 
+// 规则书（3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效」 -- the
+// waste bit rides the discard, so the band-skill （3） crystal row fires.
+#[test]
+fn miracle_discarded_with_crystals_is_wasted() {
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    let band = t.skill_id(0, "迷途之星");
+    assert_eq!(t.crystals(0, &band), Some(0));
+    // A stocked draw pile keeps the discard from being reshuffled away.
+    t.set_draw(0, &["R:[衍生] 压"]);
+    t.give(0, &["MyGO:难以复刻的奇迹", "TEST:dumper"]);
+    t.give_play(0, "MyGO:难以复刻的奇迹").unwrap();
+    set_crystals(&mut t, 0, "MyGO:难以复刻的奇迹", 2);
+    t.play(0, "TEST:dumper").unwrap();
+    drain(&mut t);
+    assert!(t.discard(0).contains(&"MyGO:难以复刻的奇迹".to_string()));
+    assert!(
+        t.recent_keys(30)
+            .iter()
+            .any(|k| k.ends_with("miracle_wasted")),
+        "{:?}",
+        t.recent_keys(15)
+    );
+    assert!(
+        t.crystals(0, &band).unwrap_or(0) >= 1,
+        "the band skill gained a crystal for the ineffective discard {:?} {:?}",
+        t.recent_keys(20),
+        t.field(0)
+    );
+}
+
 // ================================================================ character skills
 
 // ---------------------------------------------------------------- 高松灯 诗超绊

@@ -34,7 +34,7 @@ pub const RANDOM_STAR: CardDef = CardDef::new(
 
 fn random_star(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置自身场上」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "PPP:仓库里的Random Star",
@@ -45,7 +45,12 @@ fn random_star(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("random_star_placed")).player_id("who", player_id),
     );
     ctx::sweep_to_deck(player_id);
-    ctx::add_to_dest(player_id, "PPP:[衍生]拍卖撤下来了", ctx::Dest::DeckBottom);
+    ctx::add_to_dest(
+        player_id,
+        "PPP:[衍生]拍卖撤下来了",
+        ctx::Dest::DeckBottom,
+        false,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("random_star_swept")).player_id("who", player_id),

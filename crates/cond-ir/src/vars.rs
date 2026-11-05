@@ -33,8 +33,11 @@ pub enum VarId {
     PayKind,
     PayIsFixed,
     PayTotalStage,
+    /// The answered subject card declares `RANGE_CARD` (G06 interval).
     SubjectRangeCard,
+    /// An extreme is armed on this play or declared on the link (G06).
     ExtremeArmed,
+    /// Declared, unresolved answers on the link that declare a negation (G06).
     PendingNegation,
     ChainDepth,
     ChargeIsSkill,
@@ -81,6 +84,8 @@ pub enum VarId {
     CardId,
     CardPlaced,
     CardTile,
+    /// The trigger's card id starts with `skill:` (`card.is_skill`) -- the
+    /// 「技能」 precondition of a `cardFired` hook.
     CardIsSkill,
 }
 

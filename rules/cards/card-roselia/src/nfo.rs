@@ -150,7 +150,7 @@ fn apply(player_id: i32, k: i32, placed: bool) -> card_sdk::Asked {
         }
         // 规则书: 「若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」
         3 => {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
             ctx::place_card(player_id, ID, &Msg::new(key!("nfo_note")));
             ctx::log(
                 player_id,
@@ -240,7 +240,7 @@ fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
         ctx::Dest::Graveyard => ctx::to_discard(player_id, id),
         ctx::Dest::Field | ctx::Dest::Banished => {}
         ctx::Dest::Hand | ctx::Dest::DeckTop | ctx::Dest::DeckBottom | ctx::Dest::DeckRandom => {
-            ctx::add_to_dest(player_id, id, dest)
+            ctx::add_to_dest(player_id, id, dest, false)
         }
     }
 }
@@ -270,7 +270,7 @@ fn pay_shave(player_id: i32, value: i32) -> i32 {
 /// Action half of [`pay_shave`]: 「并将此卡置入弃牌堆」 -- the card is used up.
 /// Rides PayAfter (Filter cannot `set_dest`); see the TODO on the entry.
 fn pay_unplace(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     let _ = player_id;
     Ok(())
 }

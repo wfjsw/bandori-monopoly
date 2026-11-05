@@ -7,7 +7,7 @@
 //!
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{MoveKind, ZoneChangeCause};
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 use card_sdk::{para, sec, steps, CardText};
 
@@ -80,11 +80,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::inc_slot(player_id, "star_beat.layers", 1);
     // 规则书: 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房」 --
     // the card must ride the field as the offer's carrier.
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, ZoneChangeCause::Play);
     ctx::place_self_to_field(
         player_id,
         "PPP:STAR BEAT!",
         &Msg::new(key!("star_beat_title")),
+        ZoneChangeCause::Play,
     );
     // 规则书: 「(45×“资金数包含5的玩家数量+1”) mod 60格」 / 「(2×“资金数包含5的玩家数量+1”)d10」
     let n = (0..ctx::player_count())

@@ -18,7 +18,7 @@
 //! at every `ctx::*` site — the dominant SSA cost on band proofs. Declare
 //! the subset instead:
 //!
-//! ```ignore
+//! ```text
 //! crate::host_subset!(same_dream_dispatch,
 //!     arm_add_band_crystals, arm_count_held, arm_add_held,
 //!     arm_log, arm_gain, arm_player_count, arm_hand_count,
@@ -41,7 +41,7 @@
 //!
 //! ## Standard proof shape
 //!
-//! ```ignore
+//! ```text
 //! let id = guard_id!("actor == owner && value > 0");
 //! let w = symbolic_world();
 //! let ctx = ir_fill::fill_from_world(&w, owner, card, placed, tile, &ov);
@@ -59,7 +59,7 @@
 
 /// Emit a named proof harness with the standard attributes.
 ///
-/// ```ignore
+/// ```text
 /// clause_proof! {
 ///     /// C-PP-aya-haruka-01 iff
 ///     #[kani::unwind(32)]
@@ -111,7 +111,7 @@ macro_rules! unit_mod {
 
 /// Frame assertion: every listed snapshot field is unchanged.
 ///
-/// ```ignore
+/// ```text
 /// assert_frame!(condition, post, money, pos, fire);
 /// ```
 #[macro_export]
@@ -186,7 +186,7 @@ macro_rules! kassert {
 /// CBMC constant-folds it per `ctx::*` call site instead of building the
 /// full ~300-op `dispatch` (TRIAGE-LOG `op-subset`).
 ///
-/// ```ignore
+/// ```text
 /// crate::host_subset!(my_dispatch {
 ///     log | effect => arm_log,
 ///     gain | gain_typed | gain_fixed => arm_gain,

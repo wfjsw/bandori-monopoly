@@ -610,6 +610,11 @@ fn ifonly_02_iff_at(user: i32) {
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: user,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         w.next_uid = 8;
         w.last_uid = 7;

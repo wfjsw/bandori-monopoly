@@ -30,12 +30,12 @@ pub const MYGO: CardDef = CardDef::new(
             None,
             after_roll,
         )),
-        // TODO(规则书)（每次你的卡在未生效的情况下进入弃牌堆时）: only cards that entered the discard without
-        // taking effect -- `condition::MINE` is just `actor == owner`, so every owner discard
-        // counts and an effective card (羽丘 at face 10) also grants a crystal.
+        // 规则书（3）: 「每次你的卡在未生效的情况下进入弃牌堆时」 -- only a
+        // discard raised with the waste bit (`set_ineffective_at`, MIRACLE's own
+        // 「视为此卡未生效」 included); a plain discard does not count.
         On::Action(Action::Discarded(
             card_sdk::condition::MINE,
-            None,
+            Some(wasted),
             on_discarded,
         )),
         // One Play entry for both press effects (the engine dispatches only
@@ -73,7 +73,20 @@ fn after_roll(player_id: i32) -> card_sdk::Asked {
 
 /// （3）「每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的
 /// [奇迹水晶]（最多超出2个）」.
+/// 规则书（3）: 「未生效的情况下进入弃牌堆」 -- the `discarded` raise's waste bit.
+fn wasted(_player_id: i32) -> bool {
+    let v = ctx::trigger::zone();
+    ctx::log(
+        _player_id,
+        &Msg::new("dbg.mygo_guard")
+            .n("w", v.map_or(-1, |z| z.wasted as i64))
+            .n("z", v.is_some() as i64),
+    );
+    v.is_some_and(|z| z.wasted)
+}
+
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new("dbg.mygo_body"));
     // 「上限1」 + 「最多超出2个」 -- held total never exceeds 3. Each ineffective
     // discard adds one uncapped crystal while under that ceiling. The `OVER`
     // counter records how many over-cap grants have landed (audit / display).

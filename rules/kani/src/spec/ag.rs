@@ -159,11 +159,7 @@ pub fn sky_play_log_ok(
         effects.len() == 2
             && matches!(
                 effects[0],
-                Effect::TakeFromPile {
-                    player: p,
-                    pile: 0,
-                    card
-                } if p == player && card == this_card
+                Effect::DiscardFromHand { player: p, card } if p == player && card == this_card
             )
             && matches!(
                 effects[1],
@@ -173,11 +169,7 @@ pub fn sky_play_log_ok(
         effects.len() == 2
             && matches!(
                 effects[0],
-                Effect::TakeFromPile {
-                    player: p,
-                    pile: 0,
-                    card
-                } if p == player && card == this_card
+                Effect::DiscardFromHand { player: p, card } if p == player && card == this_card
             )
             && matches!(
                 effects[1],

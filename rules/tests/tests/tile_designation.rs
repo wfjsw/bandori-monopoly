@@ -4,7 +4,8 @@
 //! Spec: `docs/CARDS.md` 「Tile designations」 -- each pick is a mark of
 //! `mark_category::DESIGNATE` / `mark_kind::DESIGNATE` owned by the designating
 //! instance; `destroy_instance_units` clears it when that instance leaves the
-//! field.
+//! field. ONE OF US parks its pair as attached deed rows instead (G08 §8.2,
+//! 「放置在该卡上」), so its records are the attachments.
 //!
 //! Naming: `<slug>_<what>`. Each assertion block carries the clause it checks
 //! as `// 规则书: 「…」`.
@@ -13,7 +14,7 @@ mod common;
 use common::*;
 
 use game_core::msg::Arg;
-use game_core::state::{mark_category, mark_kind, FieldCard, TileMark};
+use game_core::state::{mark_category, FieldCard, TileMark};
 
 const FUJIMI: usize = 11; // 富士见坂, price 600
 const HILL: usize = 44; // 星之鼓动山丘, price 600
@@ -51,6 +52,16 @@ fn mark_by_uid(t: &Table, uid: i32) -> Option<TileMark> {
     t.marks().into_iter().find(|m| m.uid == uid)
 }
 
+/// Remove a host the way the zone writer's leave does: apply the instance
+/// edges (the host-left cascade) first, then drop the row itself.
+fn unplace_host(t: &mut Table, uid: i32) {
+    let edges = t.m.world_mut().drop_instance_edges(uid);
+    for edge in &edges {
+        t.m.world_mut().apply_zone_row(edge);
+    }
+    assert!(t.m.world_mut().unplace_at(uid) >= 0, "unplace the host");
+}
+
 /// Play `AG:ONE OF US` the standard way (HILL mine / FUJIMI theirs).
 fn play_one_of_us(t: &mut Table) -> i32 {
     t.set_character_raw(0, "美竹兰");
@@ -73,10 +84,11 @@ fn play_one_of_us(t: &mut Table) -> i32 {
 // =====================================================================
 
 // 规则书: 「将此卡放置在场上…指定双方各一块地契…」 -- the pair of deeds is the
-// lasting [指定] while the card is in play. The `one_of_us_mine` /
-// `one_of_us_theirs` handles ride the instance's props, not per-player state.
+// lasting [指定] while the card is in play, parked on the card as attached deed
+// rows (「放置在该卡上」). The `one_of_us_mine` / `one_of_us_theirs` handles
+// ride the instance's props, not per-player state.
 #[test]
-fn one_of_us_designation_marks_appear_and_die_with_the_card() {
+fn one_of_us_designated_deeds_appear_and_die_with_the_card() {
     // 规则书: 「选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方
     // 各一块地契」
     let mut t = Table::vanilla(2);
@@ -96,85 +108,63 @@ fn one_of_us_designation_marks_appear_and_die_with_the_card() {
         .expect("field instance")
         .uid;
     assert!(uid > 0, "field uid {uid}");
-    // One [指定] mark per deed, owned by the field card's instance.
-    let mine = designates_on(&t, HILL, uid);
-    assert_eq!(mine.len(), 1, "mine designates: {:?}", t.marks());
-    assert_eq!(mine[0].category, mark_category::DESIGNATE);
-    assert_eq!(mine[0].kind, mark_kind::DESIGNATE);
-    assert_eq!(
-        mine[0].instance,
-        Some(uid),
-        "instance = the field card: {:?}",
-        mine[0]
-    );
-    assert_eq!(
-        mine[0].owner, 0,
-        "label colour = the designating seat: {:?}",
-        mine[0]
-    );
-    let theirs = designates_on(&t, FUJIMI, uid);
-    assert_eq!(theirs.len(), 1, "theirs designates: {:?}", t.marks());
-    assert_eq!(theirs[0].instance, Some(uid), "{:?}", theirs[0]);
-    // No stray designations anywhere else.
-    let all: Vec<i32> = t
-        .marks()
+    // Both designated deeds are parked on the card, each recording its tile.
+    let parked = t.m.world().attached_cards(uid);
+    assert_eq!(parked.len(), 2, "the pair is parked on the card");
+    let mut tiles: Vec<i32> = parked
         .iter()
-        .filter(|m| m.category == mark_category::DESIGNATE)
-        .map(|m| m.tile)
+        .map(|&u| t.m.world().prop_at(u, "one_of_us_tile") - 1)
         .collect();
-    let mut sorted = all.clone();
-    sorted.sort_unstable();
-    assert_eq!(
-        sorted,
-        vec![FUJIMI as i32, HILL as i32],
-        "exactly the pair: {all:?}"
+    tiles.sort_unstable();
+    assert_eq!(tiles, vec![FUJIMI as i32, HILL as i32], "exactly the pair");
+    assert!(
+        parked.iter().all(|&u| t.m.world().holder_of(u) == 0),
+        "the parked deeds are the player's"
     );
     // 规则书: the designation lasts while the card is in play -- leaving the
-    // field destroys the instance's units (`destroy_instance_units`).
-    assert!(
-        t.m.world_mut().unplace_card(0, "AG:ONE OF US").is_some(),
-        "unplace the field card"
-    );
+    // field takes the attachments with it (the host-left cascade).
+    unplace_host(&mut t, uid);
     assert!(!t.on_field(0, "AG:ONE OF US"), "field {:?}", t.field_ids(0));
     assert!(
-        designates_on(&t, HILL, uid).is_empty(),
-        "mine designation died with the card: {:?}",
-        t.marks()
+        t.m.world().attached_cards(uid).is_empty(),
+        "the pair died with the card"
     );
     assert!(
-        designates_on(&t, FUJIMI, uid).is_empty(),
-        "theirs designation died with the card: {:?}",
-        t.marks()
+        parked
+            .iter()
+            .all(|&u| t.m.world().field_by_uid(u).is_none()),
+        "the parked rows are dead"
     );
 }
 
-// 规则书: 「指定双方各一块地契」 -- the two picks are stored as `MarkRef`s on
-// the card instance and retrieve to exactly those two deeds.
+// 规则书: 「指定双方各一块地契」 -- the two parked deeds are stored as uids
+// (`+1`) on the card instance's props and retrieve to exactly those two rows.
 #[test]
-fn one_of_us_refs_store_and_retrieve_the_pair() {
+fn one_of_us_props_store_and_retrieve_the_pair() {
     let mut t = Table::vanilla(2);
     let uid = play_one_of_us(&mut t);
     assert!(uid > 0, "field uid {uid}");
-    // `play` stores the two designation handles as packed `MarkRef`s on the
-    // placed instance.
+    // `play` stores the two parked uids on the placed instance, `+1` so the
+    // first uid survives an unset read.
     let mine_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine");
     let theirs_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs");
-    assert!(mine_ref > 0, "mine MarkRef packed uid: {mine_ref}");
-    assert!(theirs_ref > 0, "theirs MarkRef packed uid: {theirs_ref}");
+    assert!(mine_ref > 0, "mine stored uid: {mine_ref}");
+    assert!(theirs_ref > 0, "theirs stored uid: {theirs_ref}");
     assert_ne!(mine_ref, theirs_ref, "distinct handles");
     // Retrieving the refs resolves to exactly the two designated deeds.
-    let mine = mark_by_uid(&t, mine_ref).expect("mine mark live");
-    let theirs = mark_by_uid(&t, theirs_ref).expect("theirs mark live");
-    assert_eq!(mine.tile, HILL as i32, "mine resolves to HILL: {mine:?}");
+    let mine = mine_ref - 1;
+    let theirs = theirs_ref - 1;
     assert_eq!(
-        theirs.tile, FUJIMI as i32,
-        "theirs resolves to FUJIMI: {theirs:?}"
+        t.m.world().attachment_host(mine),
+        uid,
+        "mine is parked on the card"
     );
-    assert_ne!(mine.tile, theirs.tile, "distinct tiles");
-    assert_eq!(mine.category, mark_category::DESIGNATE, "{mine:?}");
-    assert_eq!(theirs.category, mark_category::DESIGNATE, "{theirs:?}");
-    assert_eq!(mine.instance, Some(uid), "{mine:?}");
-    assert_eq!(theirs.instance, Some(uid), "{theirs:?}");
+    assert_eq!(t.m.world().attachment_host(theirs), uid, "theirs too");
+    let mine_tile = t.m.world().prop_at(mine, "one_of_us_tile") - 1;
+    let theirs_tile = t.m.world().prop_at(theirs, "one_of_us_tile") - 1;
+    assert_eq!(mine_tile, HILL as i32, "mine resolves to HILL");
+    assert_eq!(theirs_tile, FUJIMI as i32, "theirs resolves to FUJIMI");
+    assert_ne!(mine_tile, theirs_tile, "distinct tiles");
     // An **unset** prop reads back 0. Uid 0 is never issued (allocation starts
     // at 1), so unpacking it must yield `MarkRef::NONE`, never a live handle.
     let unset = field_prop(&t, 0, "AG:ONE OF US", "no_such_ref");
@@ -189,44 +179,21 @@ fn one_of_us_refs_store_and_retrieve_the_pair() {
     );
 }
 
-// Pure API: a stored mark handle dies with its creating instance and is never
-// recycled onto a later mark (monotonic uid allocation).
+// Pure API: a stored deed uid dies with its creating instance and is never
+// recycled onto a later row (monotonic uid allocation).
 #[test]
-fn mark_ref_dies_with_the_card_and_does_not_alias() {
+fn parked_deed_dies_with_the_card_and_does_not_alias() {
     let mut t = Table::vanilla(2);
-    let _uid = play_one_of_us(&mut t);
-    let mine_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine");
-    let theirs_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs");
-    assert!(
-        mark_by_uid(&t, mine_ref).is_some(),
-        "mine live before unplace"
-    );
-    assert!(
-        mark_by_uid(&t, theirs_ref).is_some(),
-        "theirs live before unplace"
-    );
+    let uid = play_one_of_us(&mut t);
+    let mine = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine") - 1;
+    let theirs = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs") - 1;
+    assert!(t.m.world().field_by_uid(mine).is_some(), "mine live");
+    assert!(t.m.world().field_by_uid(theirs).is_some(), "theirs live");
     // 规则书: the designation lasts while the card is in play -- leaving the
-    // field destroys the instance's units (`destroy_instance_units`).
-    assert!(
-        t.m.world_mut().unplace_card(0, "AG:ONE OF US").is_some(),
-        "unplace the field card"
-    );
-    assert!(mark_by_uid(&t, mine_ref).is_none(), "mine handle is dead");
-    assert!(
-        mark_by_uid(&t, theirs_ref).is_none(),
-        "theirs handle is dead"
-    );
-    assert_eq!(
-        t.m.world()
-            .st
-            .marks
-            .iter()
-            .find(|m| m.uid == mine_ref)
-            .map(|m| m.tile)
-            .unwrap_or(-1),
-        -1,
-        "dead handle reports tile -1"
-    );
+    // field takes the parked rows with it.
+    unplace_host(&mut t, uid);
+    assert!(t.m.world().field_by_uid(mine).is_none(), "mine is dead");
+    assert!(t.m.world().field_by_uid(theirs).is_none(), "theirs is dead");
     // A new mark must not recycle the old uids.
     let new_uid = t.m.world_mut().place_mark(
         -1,
@@ -240,58 +207,38 @@ fn mark_ref_dies_with_the_card_and_does_not_alias() {
         true,
     );
     assert!(new_uid > 0, "new mark uid {new_uid}");
-    assert_ne!(new_uid, mine_ref, "new mark did not recycle mine's uid");
-    assert_ne!(new_uid, theirs_ref, "new mark did not recycle theirs' uid");
-    // The old stored refs still report dead -- the new mark did not alias.
+    assert_ne!(new_uid, mine, "new mark did not recycle mine's uid");
+    assert_ne!(new_uid, theirs, "new mark did not recycle theirs' uid");
     assert!(
-        mark_by_uid(&t, mine_ref).is_none(),
+        t.m.world().field_by_uid(mine).is_none(),
         "mine still dead after new mark"
     );
     assert!(
-        mark_by_uid(&t, theirs_ref).is_none(),
+        t.m.world().field_by_uid(theirs).is_none(),
         "theirs still dead after new mark"
     );
     assert!(mark_by_uid(&t, new_uid).is_some(), "the new mark is live");
 }
 
-// Pure API: `undesignate` (drop that one designation row) removes only the
-// named row; the other designation of the same instance stays on the board.
+// Pure API: dropping one parked deed removes only that row; the other deed of
+// the same instance stays on the board.
 #[test]
-fn undesignate_drops_that_one_row() {
+fn dropping_one_parked_deed_leaves_the_other() {
     let mut t = Table::vanilla(2);
     let uid = play_one_of_us(&mut t);
-    let mine_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine");
-    let theirs_ref = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs");
-    assert_eq!(designates_on(&t, HILL, uid).len(), 1);
-    assert_eq!(designates_on(&t, FUJIMI, uid).len(), 1);
-    // `ctx::undesignate(r)` is `remove_mark(r)` on that exact row.
+    let mine = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_mine") - 1;
+    let theirs = field_prop(&t, 0, "AG:ONE OF US", "one_of_us_theirs") - 1;
+    assert_eq!(t.m.world().attached_cards(uid).len(), 2);
+    assert!(t.m.world_mut().unplace_at(mine) >= 0, "drop the mine row");
+    assert!(t.m.world().field_by_uid(mine).is_none(), "mine row gone");
     assert!(
-        t.m.world_mut().remove_mark_by_uid(mine_ref),
-        "undesignate(mine) removes that row"
+        t.m.world().field_by_uid(theirs).is_some(),
+        "theirs row still live"
     );
-    // Only that one row: the other ref stays live and its mark is still on the board.
-    assert!(mark_by_uid(&t, mine_ref).is_none(), "mine row gone");
-    assert!(
-        mark_by_uid(&t, theirs_ref).is_some(),
-        "theirs row still live: {:?}",
-        t.marks()
-    );
-    assert!(
-        designates_on(&t, HILL, uid).is_empty(),
-        "HILL designation gone"
-    );
-    assert_eq!(
-        designates_on(&t, FUJIMI, uid).len(),
-        1,
-        "FUJIMI designation stays"
-    );
+    assert_eq!(t.m.world().attached_cards(uid), vec![theirs], "only theirs");
     // Dropping the other row is also exact.
-    assert!(t.m.world_mut().remove_mark_by_uid(theirs_ref));
-    assert!(mark_by_uid(&t, theirs_ref).is_none());
-    assert!(t
-        .marks()
-        .iter()
-        .all(|m| m.category != mark_category::DESIGNATE));
+    assert!(t.m.world_mut().unplace_at(theirs) >= 0);
+    assert!(t.m.world().attached_cards(uid).is_empty());
 }
 
 // =====================================================================
@@ -345,17 +292,12 @@ fn no_road_designation_mark_appears_and_dies_with_the_card() {
 /// view resolves (or a display name like 「育美标记」).
 #[test]
 fn placement_logs_never_speak_a_raw_mark_key() {
-    let mut t = Table::vanilla(2);
-    t.set_character_raw(0, "美竹兰");
-    t.set_character_raw(1, "青叶摩卡");
-    t.own(0, &[HILL]);
-    t.own(1, &[FUJIMI]);
-    t.give_play(0, "AG:ONE OF US").unwrap();
-    let k = t.option("PlayerId(1)").expect("partner prompt");
+    // 无路矢 places a [指定] mark (ONE OF US parks attachments instead).
+    let mut t = Table::vanilla(3);
+    t.set_pos(1, 10);
+    t.give_play(0, "MyGO:无路矢").unwrap();
+    let k = t.option("PlayerId(1)").expect("player-choice prompt");
     t.answer(0, k).unwrap();
-    t.answer_tile(0, HILL).unwrap();
-    t.answer_tile(0, FUJIMI).unwrap();
-    skip_all(&mut t);
 
     let mut saw_designate = false;
     for e in t.events_since(0) {

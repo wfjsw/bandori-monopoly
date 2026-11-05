@@ -65,7 +65,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[反击]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(player_id, ID, &Msg::new(key!("hold_hands_again_note")));
     ctx::log(
         player_id,
@@ -94,7 +94,7 @@ fn pay_at(player_id: i32, _value: i32) -> i32 {
 /// `payAfter`, so it also runs when `paySplitAt` never did (the Filter half did
 /// not log): see the TODO on the `PayAfter` registration.
 fn pay_after(_player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 

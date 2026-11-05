@@ -25,7 +25,7 @@ the whole table.
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
 | G01 | 104→105 | 12 | 111–112 | 341–346 |
-| G08 | 105→106 | 12→13 | 113–120 | 351–370 |
+| G08 | 117→118 | 19→20 | 113–119, 140 | 467–486 |
 | G02 | 106→107 | 13 | 122 | 370–378 |
 | G04 | 110→111 | 13 | — | 378–391 |
 | G03 | 108→109 | 13→14 | 123–125 | 398–410 |
@@ -36,7 +36,7 @@ the whole table.
 | G14 | 114→115 | 16→17 | — | — |
 | G11 | 115→116 | 17→18 | 132–133 | 451–454 |
 | G09 | 116→117 | 18 | 135–139 | 455–466 |
-| G10 | 117→118 | 18→19 | 140 | — |
+| G10 | 118→119 | 20→21 | 141 | — |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -135,6 +135,26 @@ free numbers, **115→116** / **17→18**, and the not-yet-landed G09/G10 rows
 shift one more step (ABI and SAVE both). `ABI_VERSION` is 116 and
 `SAVE_VERSION` 18.
 
+**2026-11-05 landing note (G08).** G08 landed after G09, so it takes the next
+free numbers: **117→118** / **19→20**. G11's and G09's imports consumed the
+row's original op band, so G08's nineteen imports take **467–485** and leave
+**486** free; `openingHandDealt` takes the next free kind above G09's 139,
+**140**, and G10's row shifts to 118→119 / 20→21 / kind 141. `ABI_VERSION` is
+118 and `SAVE_VERSION` 20.
+
+**2026-11-03 amendment (G08).** The G08 row still carried the original base
+(105→106 / 12→13 / 351–370) although every group up to G06 has landed and G07
+is the next pending owner of 112→113. The row is rewritten to **113→114 /
+16→17 / 451–470**, and the G08 review settles the kind band: the draft's
+unread `zoneRoundTripped` is dropped and `openingHandDealt` is added, so seven
+band ids (113–119) are used and **120 stays free**. Every pending row after G08 shifts one ABI
+and one SAVE step and one kind slot where it had one: G09 114→115 / 17, G10
+115→116 / 17→18, G11 116→117 / 18→19 / 133–134, G12 117→118 / 19, G14
+118→119 / 19. Six existing
+exports are re-signed (`unplace_at`, `set_face_down_at`, `add_to_dest`,
+`set_dest`, `send_to_dest`, `transfer_to_dest`) and consume no id, and the
+draft's `add_to_hand` duplicate is gone.
+
 Recommended landing order (foundation → dependent):
 
 1. **G15** Kani host — model-only, no version change.
@@ -145,7 +165,9 @@ Recommended landing order (foundation → dependent):
 6. **G03** roll pipeline — the cast ladder over G04's frame; kinds 123–125.
 7. **G06** counteraction/join — depends on G01 payload and G03 kinds.
 8. **G05 + G13** offer/invoke — must land together (one `invoke_entry` shape).
-9. **G07** targeting — depends on G01 identity and G06 window.
+9. **G07** targeting — depends on G01 identity and G06 window. **G08**
+   zone lifecycle is now pending immediately behind it (it was written early
+   but not landed); its band above assumes G07's 112→113 has landed.
 10. **G09** tile/build/pass — depends on G02 header and G08 zone writer.
 11. **G10** effect outcome — settle facts and defer depend on G02/G09.
 12. **G11** information/deck — drawAfter, inspection frames. *(landed early, at ABI 116)*

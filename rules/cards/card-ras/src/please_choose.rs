@@ -137,7 +137,7 @@ fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
         ctx::Dest::Graveyard => ctx::to_discard(player_id, id),
         ctx::Dest::Field | ctx::Dest::Banished => {}
         ctx::Dest::Hand | ctx::Dest::DeckTop | ctx::Dest::DeckBottom | ctx::Dest::DeckRandom => {
-            ctx::add_to_dest(player_id, id, dest)
+            ctx::add_to_dest(player_id, id, dest, false)
         }
     }
 }

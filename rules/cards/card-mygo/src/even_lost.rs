@@ -50,7 +50,7 @@ const fn unused_body(_player_id: i32) -> card_sdk::Asked {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(
         player_id,
         "MyGO:即使迷茫着",
@@ -100,7 +100,7 @@ fn ask_use(player_id: i32) -> Declared<i32> {
 fn use_it(player_id: i32, n: i32) -> card_sdk::Asked {
     ctx::plan::claim();
     // 「将此卡置入弃牌堆」 -- this instance, through the run's bound uid.
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     // 「使你的此次主要移动格数为你当前手牌张数」 -- the face *is* the hand size
     // (no die is thrown), and the step count is pinned to it so a 掷骰值
     // modifier cannot change the printed 格数.

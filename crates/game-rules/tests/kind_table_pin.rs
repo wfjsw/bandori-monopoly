@@ -167,6 +167,13 @@ fn typed_engine_consts_have_table_rows() {
         (110, "PaySplitMulBefore"),
         (111, "CardFired"),
         (112, "MarkChanged"),
+        (113, "ZoneLeft"),
+        (114, "ZoneLeftAfter"),
+        (115, "HandChanged"),
+        (116, "CardFaceFlipped"),
+        (117, "CardFaceFlippedAfter"),
+        (118, "CardAttached"),
+        (119, "CardDetached"),
         (121, "AbnormalRefused"),
         (122, "SpendBefore"),
         (123, "DiceRollCast"),
@@ -186,6 +193,7 @@ fn typed_engine_consts_have_table_rows() {
         (137, "HouseAdd"),
         (138, "HouseRemove"),
         (139, "OwnerSet"),
+        (140, "OpeningHandDealt"),
     ];
     for (id, name) in named {
         let row =
@@ -204,10 +212,12 @@ fn typed_engine_consts_have_table_rows() {
 
 /// Kind ids are allocated by the ABI README groups and never reused. The
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
+/// G08 took the free band 113–119 and the next free id above the table
+/// (`openingHandDealt` = 140, design §6.2), hence the new ceiling.
 #[test]
-fn kind_id_ceiling_is_139() {
+fn kind_id_ceiling_is_140() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 139, "highest engine kind id");
+    assert_eq!(max, 140, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the

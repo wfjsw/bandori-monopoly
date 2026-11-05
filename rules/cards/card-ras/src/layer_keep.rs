@@ -91,7 +91,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if ctx::is_placed() {
         return use_die(player_id);
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(
         player_id,
@@ -107,7 +107,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// after the pick has recorded the unchosen face.
 fn counter_fire(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
-        ctx::set_dest(ctx::Dest::Field);
+        ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
         ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
         ctx::log(
             player_id,

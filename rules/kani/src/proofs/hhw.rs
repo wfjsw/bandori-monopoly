@@ -201,6 +201,11 @@ fn athletic_world_placed(user: i32, crystals: i32) {
             crystals,
             props: NameMap::new(),
             effective_card: u16::MAX,
+            owner: user,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         w.next_uid = 2;
         w.last_uid = 1;

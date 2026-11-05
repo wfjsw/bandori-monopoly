@@ -120,6 +120,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::TurnKey => f.win.turn_key = raw,
         VarId::PlanFixedRoll => f.win.plan_fixed_roll = if raw == -1 { None } else { Some(raw) },
         VarId::TriggerCard => f.win.trigger_card = raw,
+        VarId::CardIsSkill => f.win.trigger_card_is_skill = raw != 0,
         VarId::CounterName => {
             // Bind both sides to 0 (empty `Trigger.name` → 0 on the view).
             f.ir.set_scalar(VarId::CounterName, 0);

@@ -182,7 +182,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
                 % pool.len()
         };
         let id = pool.remove(index);
-        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckRandom, false);
         added += 1;
     }
     ctx::log(
@@ -203,7 +203,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     {
         return Ok(());
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(player_id, ID, &Msg::new(key!("returns_note")));
     // -1 = no borrow yet (the prop's defined default is 0, which is a valid
     // `SKILLS` index -- Poppin' Party -- so it cannot serve as the sentinel).
@@ -410,7 +410,11 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     if prev >= 0 {
         let prev_uid = ctx::held_count(player_id, "returns.borrow_uid");
         if prev_uid > 0 {
-            ctx::unplace_at(prev_uid);
+            ctx::unplace_at(
+                prev_uid,
+                ctx::Dest::Graveyard,
+                card_sdk::abi::ZoneChangeCause::Effect,
+            );
         }
     }
     let borrowed = ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));

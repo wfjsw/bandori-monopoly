@@ -478,6 +478,28 @@ pub enum Op {
     card_build_as = 464,
     trig_move_path_length = 465,
     trig_move_path = 466,
+    // v118 (G08): the zone family (467-485 of the README band).
+    zone_of = 467,
+    attachment_host = 468,
+    attached_cards = 469,
+    created_cards = 470,
+    earliest_owned_tile = 471,
+    instance_owner = 472,
+    attach_card = 473,
+    detach_card = 474,
+    set_instance_owner = 475,
+    set_created_by_at = 476,
+    set_ineffective_at = 477,
+    is_ineffective_at = 478,
+    rehome_card = 479,
+    play_hand_card = 480,
+    set_dest_unwatched = 481,
+    // The trigger readers lose their own ids to the fifteen imports; they take
+    // the ids after them.
+    trigger_zone = 482,
+    trig_play_outcome = 483,
+    trig_out_cause = 484,
+    is_own_placement = 485,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

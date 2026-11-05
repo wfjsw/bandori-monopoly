@@ -105,7 +105,7 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     if ctx::take_card(player_id, keep.as_str(), CardPile::Inspection) {
-        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
+        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand, false);
         trigger::set_cancelled();
     }
     // 「剩余观看的牌洗回卡组」 -- the leftover stays in the frame, so `shuffle`

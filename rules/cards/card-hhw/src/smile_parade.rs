@@ -99,7 +99,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // is the condition; no residual guard (`tile_named` is -1 when unknown and
     // `tile.id == -1` is false).
     let group = group_tile();
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card_on(
         player_id,
         group,
@@ -161,7 +161,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_parade_decayed")).player_id("who", player_id),
@@ -253,7 +253,7 @@ fn on_resolved(owner: i32) -> card_sdk::Asked {
     let at = ctx::trigger::position();
     if at >= 0 && ctx::self_position() == at {
         let card_t = ctx::self_tile().unwrap_or(-1);
-        ctx::set_dest(ctx::Dest::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
         ctx::log(
             owner,
             &Msg::new(key!("smile_parade_swap_discard")).tile("tile", card_t),

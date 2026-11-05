@@ -99,7 +99,7 @@ fn raised_tiles(player_id: i32, max_h: i32) -> alloc::vec::Vec<i32> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("ringing_bloom_note")));
     ctx::log(
         player_id,
@@ -186,7 +186,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
         }
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
     }
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("ringing_bloom_done"))

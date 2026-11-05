@@ -105,16 +105,8 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「此卡不会被你乐队技能的（2）效果移除」 -- see the band skill's (2) sweep, which spares
     // this card.
     //
-    // TODO(规则书)（3）「最早拥有的格子」 (LOY-TOMORI-03) -- **class B**. The engine
-    //   has no tile-acquisition order: `owners` is tile→owner only,
-    //   `ctx::owned_tiles` walks board indices (so `.min()` is the lowest
-    //   board index, not the earliest acquisition), and `ctx::slot` is a single
-    //   integer per key -- there is no ordered accumulator to push onto. A
-    //   correct 「最早拥有」 needs a per-player list written by a deed-acquisition
-    //   hook (`bought` / `buyAfter`), running from game start so tiles taken
-    //   before this card was played are already ordered. Until that lands, the
-    //   lowest board index stands in for "earliest owned", and `firstTile` is
-    //   honoured if anything ever writes it.
+    // 规则书（3）: 「最早拥有的格子」 -- the deed-acquisition ledger answers the
+    // order (`earliest_owned_tile`), not the board index.
     // 「你的乐队技能为“MyGO!!!!!”」 is about the band skill held, not the persona
     // group: the only player of this card is 高松灯（CRYCHIC）, whose persona group
     // stays CRYCHIC even after the band (2) transform attaches a MyGO!!!!! skill.
@@ -122,15 +114,9 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         .iter()
         .any(|(_, id, _)| id.as_str().starts_with("skill:MyGO!!!!!:"))
     {
-        let owned = ctx::owned_tiles(player_id);
-        if let Some(&first) = owned.iter().min() {
-            let remembered = ctx::slot(player_id, "firstTile") - 1;
-            let tile = if owned.contains(&remembered) {
-                remembered
-            } else {
-                first
-            };
-            ctx::set_dest(ctx::Dest::Field);
+        let tile = ctx::earliest_owned_tile(player_id);
+        if tile >= 0 {
+            ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
             ctx::place_card_on(
                 player_id,
                 tile,

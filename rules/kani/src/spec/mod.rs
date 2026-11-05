@@ -9,6 +9,7 @@ pub mod crychic;
 pub mod events;
 pub mod g06_windows;
 pub mod g07_targeting;
+pub mod g08_zone_lifecycle;
 pub mod g12_status;
 #[cfg(feature = "band-morfonica")]
 pub mod g14_ai_and_hand_limit;

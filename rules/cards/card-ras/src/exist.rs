@@ -43,7 +43,7 @@ fn used_key() -> alloc::string::String {
 }
 
 fn exist(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
     // 规则书: 「直到自己的下一回合开始…你的下回合开始时将其翻入弃牌堆」 -- one
     // turn start away (the `⌛1` face marker is the static `TURNS_LEFT` prop).
@@ -83,7 +83,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     // deferred dest would leave the card on the field while the draw reshuffles the
     // (empty) deck without it.
     let used = ctx::state::get(player_id, &used_key());
-    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     if used == 0 {
         ctx::draw(player_id, 1)?;
     }

@@ -843,6 +843,7 @@ impl CardModules for NativeModules {
         world: &Run,
         call: Call,
         answers: &[i32],
+        already_admitted: &[i32],
         mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
@@ -884,7 +885,13 @@ impl CardModules for NativeModules {
             {
                 // docs/GUARDS.md §4.4: every guard call goes through `admits`.
                 let condition = self.index.condition(card, entry);
-                let admitted = if self.entry_guard_is_none(card, entry) {
+                // Re-entered after a pause: the condition and guard cleared on
+                // the earlier pass and this pass's own body writes may now
+                // refuse them, so only the declare replays (`OP_RUN` carries
+                // it). Mirrors `Ruleset::run_hook`.
+                let admitted = if already_admitted.contains(&entry) {
+                    true
+                } else if self.entry_guard_is_none(card, entry) {
                     // G4 deleted the residual: the condition alone decides.
                     game_rules::condition::admits_condition(condition, Some(&scope), &cand)
                 } else {

@@ -31,7 +31,7 @@ pub const L11: CardDef = CardDef::new(
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 fn l11(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, "Sumimi:#L11", &Msg::new(key!("l11_note")));
     ctx::set_crystals(2);
     ctx::log(
@@ -47,7 +47,7 @@ fn l11(player_id: i32) -> card_sdk::Asked {
 /// entry above: the card is placed and its `crystals` counter was just written
 /// to 0 (or below).
 fn sweep(_player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 

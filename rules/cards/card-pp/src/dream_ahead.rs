@@ -99,7 +99,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[特]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(
         player_id,
         "PP:梦在前方，结彩当下",

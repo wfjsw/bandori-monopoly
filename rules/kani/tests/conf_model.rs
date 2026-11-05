@@ -108,6 +108,23 @@ fn big(f: impl FnOnce() + Send + 'static) {
 // Real-side world: a thin `CardWorld` that stores exactly the state we diff
 // ---------------------------------------------------------------------------
 
+/// One field row of the real-side world (the fields the zone family moves).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConfRow {
+    pub uid: i32,
+    pub card: String,
+    /// The field holder (whose field vector the row would sit in).
+    pub player: i32,
+    pub owner: i32,
+    pub tile: i32,
+    pub on: i32,
+    pub created_by: i32,
+    pub effective: bool,
+    pub face_down: bool,
+    /// `prop::LEAVE_DEST`, `-1` = unset.
+    pub leave_dest: i32,
+}
+
 #[derive(Clone, Debug)]
 pub struct ConfWorld {
     pub n_players: i32,
@@ -138,11 +155,16 @@ pub struct ConfWorld {
     pub dest: i32,
     pub trig_value: i32,
     pub trig_target: i32,
+    /// The trigger's actor seat (the calling player of host requests).
+    pub trig_player: i32,
     pub trig_cancelled: bool,
     pub turn_player: i32,
     pub events: Vec<String>,
     pub rng: u64,
     pub next_uid: i32,
+    /// `Run::current_uid` -- what `self_uid` answers (the model's
+    /// `bound_uid`).
+    pub self_uid: i32,
     // ---- trigger payload (mirrors model `MoveSnap` / `BuySnap`) ----
     pub trig_main: bool,
     pub trig_roll_source: i32,
@@ -186,9 +208,15 @@ pub struct ConfWorld {
     /// Houses after the deal. `None` = as standing.
     pub buy_deal_houses: Option<i32>,
     pub buy_deal_mortgaged: bool,
-    // ---- field instances (uid → tile) for `tile_at` / `set_tile_at` ----
-    pub field_uid: Vec<i32>,
-    pub field_tile: Vec<i32>,
+    // ---- field instances (`tile_at` / `set_tile_at` / the zone family) ----
+    pub field: Vec<ConfRow>,
+    /// Acquisition sequence per tile (`-1` = nobody) and the next to hand
+    /// out, plus the `firstTile` cache per seat (G08 I13).
+    pub owned_seq: [i32; 60],
+    pub next_owned_seq: i32,
+    pub first_tile: [i32; 4],
+    /// The last zone transition (`Trigger.zone` would carry it).
+    pub trig_zone: Option<(i32, i32, i32, i32, bool, bool)>,
     /// The move-plan staging (G04) -- the model keeps its own copy.
     pub plan: game_core::engine::MoveCtx,
 }
@@ -217,12 +245,14 @@ impl ConfWorld {
             held: BTreeMap::new(),
             dest: 0,
             trig_value: 0,
+            trig_player: 0,
             trig_target: -1,
             trig_cancelled: false,
             turn_player: 0,
             events: Vec::new(),
             rng: 0x1234_5678_9abc_def0,
             next_uid: 1,
+            self_uid: 1,
             trig_main: false,
             trig_roll_source: 0,
             trig_pay_is_rent: false,
@@ -258,8 +288,11 @@ impl ConfWorld {
             buy_deal_owner: None,
             buy_deal_houses: None,
             buy_deal_mortgaged: false,
-            field_uid: Vec::new(),
-            field_tile: Vec::new(),
+            field: Vec::new(),
+            owned_seq: [-1; 60],
+            next_owned_seq: 0,
+            first_tile: [-1; 4],
+            trig_zone: None,
             plan: game_core::engine::MoveCtx::default(),
         }
     }
@@ -603,12 +636,19 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("draw {player_id} {n}"));
         n
     }
-    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32) {
+    fn add_to_dest(&mut self, player_id: i32, card: &str, dest: i32, _counted: bool) {
         let p = player_id.max(0) as usize % 4;
         match dest {
             0 => {
                 self.discards[p].push(card.to_string());
                 self.events.push(format!("to_discard {player_id} {card}"));
+                // Same pile-write refill as [`Self::to_discard`].
+                if self.inspection[p].is_empty()
+                    && self.decks[p].is_empty()
+                    && !self.discards[p].is_empty()
+                {
+                    self.decks[p] = std::mem::take(&mut self.discards[p]);
+                }
             }
             1 => {
                 self.hands[p].push(card.to_string());
@@ -663,6 +703,14 @@ impl CardWorld for ConfWorld {
         let p = player_id.max(0) as usize % 4;
         self.discards[p].push(card.to_string());
         self.events.push(format!("to_discard {player_id} {card}"));
+        // The pile write's refill (`World::refill_after_pile_write` -> the
+        // graveyard back into an emptied deck); the model does the same.
+        if self.inspection[p].is_empty()
+            && self.decks[p].is_empty()
+            && !self.discards[p].is_empty()
+        {
+            self.decks[p] = std::mem::take(&mut self.discards[p]);
+        }
     }
     fn hand_count(&self, player_id: i32, card: &str) -> i32 {
         let p = player_id.max(0) as usize % 4;
@@ -711,32 +759,47 @@ impl CardWorld for ConfWorld {
         n as i32
     }
     fn place_card(&mut self, player_id: i32, card: &str, _note: EngineMsg) -> i32 {
-        self.events.push(format!("place_card {player_id} {card}"));
-        let uid = self.next_uid;
-        self.next_uid += 1;
-        uid
+        let tile = self.pos[player_id.max(0) as usize % 4];
+        self.place_card_on(player_id, tile, card, _note)
     }
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, _note: EngineMsg) -> i32 {
         self.events
             .push(format!("place_card_on {player_id} {tile} {card}"));
         let uid = self.next_uid;
         self.next_uid += 1;
+        self.field.push(ConfRow {
+            uid,
+            card: card.to_string(),
+            player: player_id,
+            owner: player_id,
+            tile,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            face_down: false,
+            leave_dest: -1,
+        });
         uid
     }
-    fn set_dest(&mut self, dest: i32) {
+    fn self_uid(&self) -> i32 {
+        self.self_uid
+    }
+    fn set_self_uid(&mut self, uid: i32) {
+        self.self_uid = uid;
+    }
+    fn set_dest(&mut self, dest: i32, _cause: i32) {
         self.dest = dest;
     }
-    fn set_transfer_to_dest(&mut self, _to: i32, dest: i32) {
+    fn set_transfer_to_dest(&mut self, _to: i32, dest: i32, _cause: i32) {
         self.dest = dest;
     }
-    fn send_to_dest(&mut self, dest: i32) -> Option<i32> {
-        let p = self.turn_player.max(0) as usize % 4;
-        self.pos[p] = dest;
-        self.events.push(format!("send_to_dest {dest}"));
-        Some(1)
+    fn send_to_dest(&mut self, dest: i32, cause: i32) -> Option<i32> {
+        let got = self.zone_leave(self.self_uid, dest, -1, cause);
+        (got >= 0).then_some(got)
     }
-    fn transfer_to_dest(&mut self, _to: i32, dest: i32) -> Option<i32> {
-        self.send_to_dest(dest)
+    fn transfer_to_dest(&mut self, to: i32, dest: i32, cause: i32) -> Option<i32> {
+        let got = self.zone_leave(self.self_uid, dest, to, cause);
+        (got >= 0).then_some(got)
     }
     fn rent_unit_mult(&self) -> i32 {
         10
@@ -748,9 +811,6 @@ impl CardWorld for ConfWorld {
         let p = player_id.max(0) as usize % 4;
         self.pos[p] = tile;
         self.events.push(format!("teleport_to {player_id} {tile}"));
-    }
-    fn unplace_card(&mut self) -> i32 {
-        0
     }
     fn is_placed(&self) -> i32 {
         0
@@ -1027,6 +1087,18 @@ impl CardWorld for ConfWorld {
         if self.trig_cancelled {
             t.negate_activation();
         }
+        t.zone = self
+            .trig_zone
+            .map(
+                |(from, to, cause, holder, wasted, counted)| game_kinds::ZoneChange {
+                    from: game_kinds::Zone::from_i32(from),
+                    to: game_kinds::Zone::from_i32(to),
+                    cause: game_kinds::ZoneChangeCause::from_i32(cause),
+                    holder,
+                    wasted,
+                    counted,
+                },
+            );
         t
     }
     fn set_trigger_value(&mut self, value: i32) {
@@ -1149,24 +1221,324 @@ impl CardWorld for ConfWorld {
             0
         }
     }
-    fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
-        Vec::new()
+    fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
+        // An attachment is reachable through its host (G08 I6).
+        self.field
+            .iter()
+            .filter(|r| r.player == player_id && r.on < 0)
+            .map(|r| (r.uid, r.card.clone()))
+            .collect()
     }
     fn tile_at(&self, uid: i32) -> i32 {
-        self.field_uid
-            .iter()
-            .position(|&u| u == uid)
-            .map(|i| self.field_tile[i])
-            .unwrap_or(-1)
+        self.row(uid).map_or(-1, |i| self.field[i].tile)
     }
     fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
-        match self.field_uid.iter().position(|&u| u == uid) {
+        match self.row(uid) {
             Some(i) => {
-                self.field_tile[i] = tile;
+                self.field[i].tile = tile;
                 self.events.push(format!("set_tile_at {uid} {tile}"));
                 true
             }
             None => false,
+        }
+    }
+
+    // ---- G08 zone family ---------------------------------------------------
+
+    fn zone_of(&self, uid: i32) -> i32 {
+        let Some(i) = self.row(uid) else { return 0 };
+        if self.field[i].on >= 0 {
+            9
+        } else {
+            3
+        }
+    }
+    fn attachment_host(&self, uid: i32) -> i32 {
+        self.row(uid).map_or(-1, |i| self.field[i].on)
+    }
+    fn attached_cards(&self, host: i32) -> Vec<i32> {
+        self.field
+            .iter()
+            .filter(|r| r.on == host)
+            .map(|r| r.uid)
+            .collect()
+    }
+    fn created_cards(&self, creator: i32) -> Vec<i32> {
+        self.field
+            .iter()
+            .filter(|r| r.created_by == creator)
+            .map(|r| r.uid)
+            .collect()
+    }
+    fn earliest_owned_tile(&self, player_id: i32) -> i32 {
+        let mut best_seq = i32::MAX;
+        let mut best_tile = -1;
+        for t in 0..60 {
+            if self.tiles_owner[t] == player_id && self.owned_seq[t] >= 0 {
+                if self.owned_seq[t] < best_seq {
+                    best_seq = self.owned_seq[t];
+                    best_tile = t as i32;
+                }
+            }
+        }
+        best_tile
+    }
+    fn instance_owner(&self, uid: i32) -> i32 {
+        self.row(uid).map_or(-1, |i| self.field[i].owner)
+    }
+    fn set_instance_owner(&mut self, uid: i32, owner: i32) -> bool {
+        match self.row(uid) {
+            Some(i) => {
+                self.field[i].owner = owner;
+                true
+            }
+            None => false,
+        }
+    }
+    fn set_created_by_at(&mut self, uid: i32, creator: i32) -> bool {
+        match self.row(uid) {
+            Some(i) => {
+                self.field[i].created_by = creator;
+                true
+            }
+            None => false,
+        }
+    }
+    fn set_ineffective_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.row(uid) {
+            Some(i) => {
+                self.field[i].effective = !on;
+                true
+            }
+            None => false,
+        }
+    }
+    fn is_ineffective_at(&self, uid: i32) -> bool {
+        self.row(uid).is_some_and(|i| !self.field[i].effective)
+    }
+    fn attach_card(&mut self, host: i32, card: &str, cause: i32, face_down: bool) -> i32 {
+        let Some(hi) = self.row(host) else { return -1 };
+        let caller = self.trig_player;
+        let tile = self.field[hi].tile;
+        let host_holder = self.field[hi].player;
+        // A hand copy is taken first; with none, the caller's first live
+        // instance is re-targeted (cycle-guarded) -- `zone_attach`'s order.
+        let p = caller.max(0) as usize % 4;
+        if let Some(k) = self.hands[p].iter().position(|c| c == card) {
+            self.hands[p].remove(k);
+        } else {
+            let live = self
+                .field
+                .iter()
+                .find(|r| r.player == caller && r.card == card && r.uid != host)
+                .map(|r| r.uid);
+            let Some(uid) = live else { return -1 };
+            let from = self.zone_of(uid);
+            if from != 3 && from != 9 {
+                return -1;
+            }
+            let mut cursor = host;
+            let mut guard = 0;
+            while cursor >= 0 && guard < 4096 {
+                if cursor == uid {
+                    return -1;
+                }
+                cursor = self.attachment_host(cursor);
+                guard += 1;
+            }
+            let ri = self.row(uid).unwrap();
+            self.field[ri].on = host;
+            self.field[ri].face_down = face_down;
+            self.field[ri].tile = tile;
+            self.events.push(format!("attach_card {host} {card}"));
+            self.trig_zone = Some((from, 9, cause, host_holder, false, false));
+            return uid;
+        }
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        self.events.push(format!("attach_card {host} {card}"));
+        self.trig_zone = Some((0, 9, cause, host_holder, false, false));
+        self.field.push(ConfRow {
+            uid,
+            card: card.to_string(),
+            player: caller,
+            owner: caller,
+            tile,
+            on: host,
+            created_by: -1,
+            effective: true,
+            face_down,
+            leave_dest: -1,
+        });
+        uid
+    }
+    fn detach_card(&mut self, uid: i32, destination: i32, cause: i32) -> i32 {
+        if self.attachment_host(uid) < 0 {
+            return -1;
+        }
+        self.zone_leave(uid, destination, -1, cause)
+    }
+    fn rehome_card(&mut self, tile: i32, owner: i32) -> bool {
+        self.set_tile_owner(tile, owner);
+        self.events.push(format!("set_owner {tile} {owner}"));
+        true
+    }
+    fn play_hand_card(&mut self, player_id: i32, card: &str) -> bool {
+        let p = player_id.max(0) as usize % 4;
+        let Some(k) = self.hands[p].iter().position(|c| c == card) else {
+            return false;
+        };
+        self.hands[p].remove(k);
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        let tile = self.pos[p];
+        self.events
+            .push(format!("play_hand_card {player_id} {card}"));
+        self.field.push(ConfRow {
+            uid,
+            card: card.to_string(),
+            player: player_id,
+            owner: player_id,
+            tile,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            face_down: false,
+            leave_dest: -1,
+        });
+        true
+    }
+    fn unplace_at(&mut self, uid: i32, destination: i32, cause: i32) -> i32 {
+        self.zone_leave(uid, destination, -1, cause)
+    }
+    fn set_face_down_at(&mut self, uid: i32, on: bool, _cause: i32) -> bool {
+        match self.row(uid) {
+            Some(i) => {
+                self.field[i].face_down = on;
+                true
+            }
+            None => false,
+        }
+    }
+    fn set_self_face_down(&mut self, on: bool, _cause: i32) -> bool {
+        let uid = self.self_uid;
+        self.set_face_down_at(uid, on, 0)
+    }
+    fn unplace_card(&mut self) -> i32 {
+        let uid = self.self_uid;
+        self.zone_leave(uid, -1, -1, 3)
+    }
+}
+
+impl ConfWorld {
+    /// Row index of `uid`.
+    fn row(&self, uid: i32) -> Option<usize> {
+        self.field.iter().position(|r| r.uid == uid)
+    }
+
+    /// `set_tile_owner` -- write the deed and its sequence, rebuild the
+    /// previous owner's `firstTile` (G08 I13).
+    fn set_tile_owner(&mut self, tile: i32, owner: i32) {
+        let Ok(t) = usize::try_from(tile) else { return };
+        if t >= 60 {
+            return;
+        }
+        let cur = self.tiles_owner[t];
+        if cur == owner {
+            return;
+        }
+        self.tiles_owner[t] = owner;
+        self.owned_seq[t] = if owner >= 0 {
+            let s = self.next_owned_seq;
+            self.next_owned_seq = s.saturating_add(1);
+            s
+        } else {
+            -1
+        };
+        if cur >= 0 {
+            let first = self.earliest_owned_tile(cur);
+            self.first_tile[cur as usize % 4] = first;
+        }
+    }
+
+    /// The zone writer minus hooks (`PlayCtx::zone_leave` / `zone_commit`).
+    fn zone_leave(&mut self, uid: i32, destination: i32, to_seat: i32, cause: i32) -> i32 {
+        let Some(ri) = self.row(uid) else { return -1 };
+        let from = self.zone_of(uid);
+        if from != 3 && from != 9 {
+            return -1;
+        }
+        let mut to = if destination < 0 {
+            4
+        } else {
+            match destination {
+                1 => 2,
+                2 => 3,
+                3 => 5,
+                4..=6 => 1,
+                _ => 4,
+            }
+        };
+        let rewrite = match self.field[ri].leave_dest {
+            1 => 2,
+            2 => 3,
+            3 => 5,
+            4..=6 => 1,
+            _ => 4,
+        };
+        if rewrite != to && to != 9 {
+            to = rewrite;
+        }
+        let row = self.field[ri].clone();
+        let holder = if to == 3 || to_seat < 0 {
+            row.owner
+        } else {
+            to_seat
+        };
+        let wasted = !row.effective;
+        self.events
+            .push(format!("zone_leave {uid} {from} {to} {cause}"));
+
+        // Attachments, then children, then the leaver.
+        let atts: Vec<i32> = self.attached_cards(uid);
+        for a in atts {
+            if let Some(i) = self.row(a) {
+                self.field[i].on = -1;
+            }
+            let d = self.field[self.row(a).unwrap()].leave_dest;
+            self.zone_leave(a, d, -1, 8);
+        }
+        let kids: Vec<i32> = self.created_cards(uid);
+        for c in kids {
+            if let Some(i) = self.row(c) {
+                self.field[i].created_by = -1;
+            }
+            self.zone_leave(c, 0, -1, 9);
+        }
+
+        self.trig_zone = Some((from, to, cause, holder, wasted, false));
+        let holder_now = self.field[ri].player;
+        self.field.remove(ri);
+        match to {
+            3 => {
+                self.field.push(ConfRow { on: -1, ..row });
+                holder_now
+            }
+            4 => {
+                let p = holder.max(0) as usize % 4;
+                self.discards[p].push(row.card.clone());
+                self.events
+                    .push(format!("to_discard {} {}", holder, row.card));
+                holder.max(0)
+            }
+            2 => {
+                let p = holder.max(0) as usize % 4;
+                self.hands[p].push(row.card.clone());
+                self.events
+                    .push(format!("add_to_dest {} {}", holder, row.card));
+                holder.max(0)
+            }
+            _ => holder.max(0),
         }
     }
 }
@@ -1418,6 +1790,37 @@ impl InlineHost for ConfInline {
                     Some(player_id)
                 }
             }
+            // ---- G08 zone family: the writer, immediately ----
+            HostRequest::Leave {
+                uid,
+                destination,
+                to,
+                cause,
+            } => Some(w.zone_leave(uid, destination, to, cause)),
+            HostRequest::Flip {
+                uid,
+                face_down,
+                cause,
+            } => Some(w.set_face_down_at(uid, face_down != 0, cause) as i32),
+            HostRequest::Attach {
+                host,
+                card,
+                cause,
+                face_down,
+            } => Some(w.attach_card(host, &card, cause, face_down != 0) as i32),
+            HostRequest::Detach {
+                uid,
+                destination,
+                cause,
+            } => Some(w.detach_card(uid, destination, cause)),
+            HostRequest::Rehome { tile, owner } => {
+                w.set_tile_owner(tile, owner);
+                w.events.push(format!("set_owner {tile} {owner}"));
+                Some(1)
+            }
+            HostRequest::PlayHand { player_id, card } => {
+                Some(w.play_hand_card(player_id, &card) as i32)
+            }
             // Other engine-protocol requests: allow / no-op.
             _ => Some(1),
         }
@@ -1445,6 +1848,14 @@ pub struct Snap {
     pub dest: i32,
     pub trig_value: i32,
     pub trig_target: i32,
+    /// Field rows (uid / owner / on / effective / face / tile / creator).
+    pub field: Vec<ConfRow>,
+    pub owned_seq: [i32; 60],
+    pub first_tile: [i32; 4],
+    pub trig_zone: Option<(i32, i32, i32, i32, bool, bool)>,
+    pub hands: Vec<Vec<String>>,
+    pub discards: Vec<Vec<String>>,
+    pub decks: Vec<Vec<String>>,
     /// Normalized effect lines: `gain p n`, `pay p n`, `teleport p t`, ...
     pub effects: Vec<String>,
 }
@@ -1463,6 +1874,15 @@ fn snap_real(w: &ConfWorld) -> Snap {
         dest: w.dest,
         trig_value: w.trig_value,
         trig_target: w.trig_target,
+        field: w.field.clone(),
+        owned_seq: w.owned_seq,
+        first_tile: w.first_tile,
+        trig_zone: w.trig_zone,
+        // The model keeps one global pile; flatten the real seats the same
+        // way so the two sides are comparable.
+        hands: vec![w.hands.iter().flatten().cloned().collect()],
+        discards: vec![w.discards.iter().flatten().cloned().collect()],
+        decks: vec![w.decks.iter().flatten().cloned().collect()],
         effects: w.events.clone(),
     }
 }
@@ -1486,9 +1906,61 @@ fn snap_model() -> Snap {
             dest: w.dest,
             trig_value: w.pay_amount,
             trig_target: w.trig_target,
+            field: {
+                let leave_key = rules_kani::intern::intern(rules_kani::world::PROP_LEAVE_DEST);
+                let mut rows = Vec::new();
+                for f in w.field.iter() {
+                    if f.card == u16::MAX {
+                        continue;
+                    }
+                    rows.push(ConfRow {
+                        uid: f.uid,
+                        card: rules_kani::intern::resolve_str(rules_kani::intern::NameId(f.card))
+                            .to_string(),
+                        player: f.player,
+                        owner: f.owner,
+                        tile: f.tile,
+                        on: f.on,
+                        created_by: f.created_by,
+                        effective: f.effective,
+                        face_down: f.face_down,
+                        leave_dest: f.props.get_opt(leave_key).unwrap_or(-1),
+                    });
+                }
+                rows
+            },
+            owned_seq: w.owned_seq,
+            first_tile: w.first_tile,
+            trig_zone: w.trig_zone_present.then_some((
+                w.trig_zone_from,
+                w.trig_zone_to,
+                w.trig_zone_cause,
+                w.trig_zone_holder,
+                w.trig_zone_wasted,
+                w.trig_zone_counted,
+            )),
+            // The model's piles are global; the diffs read seat 0.
+            hands: vec![resolve_pile(&w.hand_pile, w.hand_n as usize)],
+            discards: vec![resolve_pile(&w.discard_pile, w.discard_n as usize)],
+            decks: vec![resolve_pile(&w.deck_pile, w.deck_n as usize)],
             effects,
         }
     })
+}
+
+fn resolve_pile(pile: &[u16; rules_kani::world::MAX_CARDS], n: usize) -> Vec<String> {
+    pile[..n.min(pile.len())]
+        .iter()
+        .map(|&id| {
+            if id == u16::MAX {
+                // The model's generic drawn card; the engine names it the
+                // same way in this test double.
+                "<draw>".to_string()
+            } else {
+                rules_kani::intern::resolve_str(rules_kani::intern::NameId(id)).to_string()
+            }
+        })
+        .collect()
 }
 
 fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
@@ -1548,6 +2020,45 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
             real.trig_target, model.trig_target
         ));
     }
+    if real.field != model.field {
+        diffs.push(format!(
+            "field rows real={:?} model={:?}",
+            real.field, model.field
+        ));
+    }
+    if real.owned_seq != model.owned_seq {
+        diffs.push("owned_seq diverged".into());
+    }
+    if real.first_tile != model.first_tile {
+        diffs.push(format!(
+            "first_tile real={:?} model={:?}",
+            real.first_tile, model.first_tile
+        ));
+    }
+    if real.hands != model.hands {
+        diffs.push(format!(
+            "hands real={:?} model={:?}",
+            real.hands, model.hands
+        ));
+    }
+    if real.discards != model.discards {
+        diffs.push(format!(
+            "discards real={:?} model={:?}",
+            real.discards, model.discards
+        ));
+    }
+    if real.decks != model.decks {
+        diffs.push(format!(
+            "decks real={:?} model={:?}",
+            real.decks, model.decks
+        ));
+    }
+    if real.trig_zone != model.trig_zone {
+        diffs.push(format!(
+            "trig_zone real={:?} model={:?}",
+            real.trig_zone, model.trig_zone
+        ));
+    }
     // Effect-log comparison is structural on the model's typed Effect vs the
     // real side's string events. We compare the *counts of money-moving
     // effects* so a missing gain/pay/teleport fails closed.
@@ -1600,6 +2111,113 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
 // ---------------------------------------------------------------------------
 // Shared pre-state
 // ---------------------------------------------------------------------------
+
+fn base_conf_with_zone() -> ConfWorld {
+    let mut w = base_conf();
+    // 1 host (player 0, tile 3), 2 attached to 1, 3 created by 1.
+    w.field = vec![
+        ConfRow {
+            uid: 1,
+            card: zone_card(0).to_string(),
+            player: 0,
+            owner: 0,
+            tile: 3,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            face_down: false,
+            leave_dest: -1,
+        },
+        ConfRow {
+            uid: 2,
+            card: zone_card(1).to_string(),
+            player: 0,
+            owner: 0,
+            tile: 3,
+            on: 1,
+            created_by: -1,
+            effective: true,
+            face_down: false,
+            leave_dest: -1,
+        },
+        ConfRow {
+            uid: 3,
+            card: zone_card(2).to_string(),
+            player: 0,
+            owner: 0,
+            tile: 3,
+            on: -1,
+            created_by: 1,
+            effective: true,
+            face_down: false,
+            leave_dest: -1,
+        },
+    ];
+    w.next_uid = 4;
+    w.hands[0].push(zone_card(1).to_string());
+    w
+}
+
+fn base_model_with_zone() -> KWorld {
+    let mut w = base_model();
+    w.field[0] = zone_row(1, zone_card(0), -1, -1, -1, 3);
+    w.field[1] = zone_row(2, zone_card(1), 1, -1, -1, 3);
+    w.field[2] = zone_row(3, zone_card(2), -1, 1, -1, 3);
+    w.field_n = 3;
+    w.next_uid = 4;
+    w.bound_uid = 1;
+    w.hand_pile[0] = rules_kani::intern::intern(zone_card(1)).0;
+    w.hand_n = 1;
+    w
+}
+
+fn zone_card(i: usize) -> &'static str {
+    ["PP:[G08]host", "PP:[G08]att", "PP:[G08]child"][i]
+}
+
+fn zone_row(
+    uid: i32,
+    card: &str,
+    on: i32,
+    created_by: i32,
+    owner: i32,
+    tile: i32,
+) -> kworld::FieldCard {
+    let mut f = kworld::FieldCard::EMPTY;
+    f.uid = uid;
+    f.card = rules_kani::intern::intern(card).0;
+    f.player = 0;
+    f.owner = if owner < 0 { 0 } else { owner };
+    f.tile = tile;
+    f.on = on;
+    f.created_by = created_by;
+    f
+}
+
+/// Run one op on both sides from an explicit pre-state and compare returns +
+/// state.
+fn diff_with(
+    label: &str,
+    conf: ConfWorld,
+    model: KWorld,
+    real: impl FnOnce(&mut ConfHost) -> i64,
+    model_fn: impl FnOnce() -> i64,
+) {
+    let _g = model_lock();
+    install_model_world_with(model, &[]);
+    let model_ret = model_fn();
+    let model_snap = snap_model();
+    let mut conf_h = ConfHost::new(conf, Vec::new());
+    let mut inline = ConfInline;
+    let real_ret = with_inline_host(&mut inline, || real(&mut conf_h));
+    let real_snap = snap_real(&conf_h.st().wr());
+    if real_ret != model_ret {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [{label}]: return real={real_ret} model={model_ret} (BUG IN THE MODEL unless engine)"
+        );
+    }
+    assert_state_eq(label, &real_snap, &model_snap);
+}
 
 fn base_conf() -> ConfWorld {
     let mut w = ConfWorld::new();
@@ -1915,7 +2533,7 @@ fn op_add_to_dest_take_card_cards_in_hand_size_match() {
             "add_to_dest+take_card+cards_in",
             &[],
             |c| {
-                game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1).unwrap();
+                game_rules::hostfns::add_to_dest(c, 0, cp, cl, 1, 0).unwrap();
                 let ok = game_rules::hostfns::take_card(c, 0, cp, cl, 0).unwrap();
                 let (buf, cap) = card_sdk::native::reserve(64);
                 let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
@@ -2206,13 +2824,24 @@ fn op_set_dest_place_card_at_match() {
             "set_dest+place_card_at",
             &[],
             |c| {
-                game_rules::hostfns::set_dest(c, 12).unwrap();
+                game_rules::hostfns::set_dest(c, 12, 3).unwrap();
                 game_rules::hostfns::place_card_at(c, 0, cp, cl, mp, ml).unwrap() as i64
             },
             || {
                 rules_kani::host::dispatch(Op::set_dest, [12, 0, 0, 0, 0, 0]);
                 rules_kani::host::dispatch(Op::place_card_at, [0, cp, cl, mp, ml, 0])
             },
+        );
+        // The `counted` bit rides after the dest (position a4, not a3).
+        diff_op(
+            "add_to_dest counted",
+            &[],
+            |c| {
+                game_rules::hostfns::add_to_dest(c, 0, cp, cl, 0, 1).unwrap();
+                0
+            },
+            [0, cp, cl, 0, 1, 0],
+            Op::add_to_dest,
         );
     });
 }
@@ -2546,13 +3175,24 @@ fn op_tile_at_set_tile_at_match_engine() {
     big(|| {
         let _g = model_lock();
         let mut conf = base_conf();
-        conf.field_uid.push(7);
-        conf.field_tile.push(3);
+        conf.field.push(ConfRow {
+            uid: 7,
+            card: "PP:[标题偶像]".into(),
+            player: 0,
+            owner: 0,
+            tile: 3,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            face_down: false,
+            leave_dest: -1,
+        });
         let mut model = base_model();
         model.field[0] = kworld::FieldCard {
             uid: 7,
-            card: 0,
+            card: 2,
             player: 0,
+            owner: 0,
             tile: 3,
             face_down: false,
             immune: false,
@@ -2560,6 +3200,10 @@ fn op_tile_at_set_tile_at_match_engine() {
             crystals: 0,
             props: kworld::NameMap::new(),
             effective_card: u16::MAX,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         model.field_n = 1;
 
@@ -3136,6 +3780,409 @@ fn world_size_needs_the_big_stack() {
             "KWorld={} ConfWorld={}",
             std::mem::size_of::<KWorld>(),
             std::mem::size_of::<ConfWorld>()
+        );
+    });
+}
+
+// ---------------------------------------------------------------------------
+// G08 zone family (v114)
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_zone_family_reads() {
+    big(|| {
+        let _g = model_lock();
+        diff_with(
+            "zone_of attached",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::zone_of(c, 2).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::zone_of, [2, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "zone_of dead",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::zone_of(c, 99).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::zone_of, [99, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "attachment_host",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::attachment_host(c, 2).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::attachment_host, [2, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "attached_cards",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::attached_cards(c, 1, 0, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::attached_cards, [1, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "created_cards",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::created_cards(c, 1, 0, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::created_cards, [1, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "instance_owner",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::instance_owner(c, 2).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::instance_owner, [2, 0, 0, 0, 0, 0]),
+        );
+    });
+}
+
+/// `field_instances` is the postcard list on the real side and the compact
+/// `[uid, name]` pair list under Kani, so compare the *content*, not the
+/// return value (a byte length vs a count).
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_field_instances_skips_attached() {
+    big(|| {
+        let _g = model_lock();
+        let mut conf_h = ConfHost::new(base_conf_with_zone(), Vec::new());
+        let mut inline = ConfInline;
+        let real = with_inline_host(&mut inline, || conf_h.st().wr().field_instances(0));
+        let real_uids: Vec<i32> = real.iter().map(|(uid, _)| *uid).collect();
+        assert_eq!(real_uids, vec![1, 3], "attached row 2 is not listed");
+
+        install_model_world_with(base_model_with_zone(), &[]);
+        let mut out = [0i32; 8];
+        let n = kworld::with_world(|w| w.field_instances_into(0, &mut out));
+        assert_eq!(&out[..n], &[1, 3], "the model lists the same uids");
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_zone_family_writes() {
+    big(|| {
+        let _g = model_lock();
+        diff_with(
+            "set_instance_owner",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::set_instance_owner(c, 2, 1).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::set_instance_owner, [2, 1, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "set_created_by_at",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::set_created_by_at(c, 2, 3).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::set_created_by_at, [2, 3, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "set_ineffective_at + is_ineffective_at",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| {
+                game_rules::hostfns::set_ineffective_at(c, 2, 1).unwrap();
+                game_rules::hostfns::is_ineffective_at(c, 2).unwrap() as i64
+            },
+            || {
+                rules_kani::host::dispatch(Op::set_ineffective_at, [2, 1, 0, 0, 0, 0]);
+                rules_kani::host::dispatch(Op::is_ineffective_at, [2, 0, 0, 0, 0, 0])
+            },
+        );
+        diff_with(
+            "set_ineffective_at dead",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::set_ineffective_at(c, 99, 1).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::set_ineffective_at, [99, 1, 0, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_set_face_down_at_and_self() {
+    big(|| {
+        let _g = model_lock();
+        diff_with(
+            "set_face_down_at live",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::set_face_down_at(c, 2, 1, 14).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::set_face_down_at, [2, 1, 14, 0, 0, 0]),
+        );
+        diff_with(
+            "set_face_down_at dead",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::set_face_down_at(c, 99, 1, 14).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::set_face_down_at, [99, 1, 14, 0, 0, 0]),
+        );
+        diff_with(
+            "set_self_face_down",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::set_self_face_down(c, 1, 14).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::set_self_face_down, [1, 14, 0, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_attach_and_detach_card() {
+    big(|| {
+        let _g = model_lock();
+        let (cp, cl) = intern_str(zone_card(1));
+        let (mp, ml) = intern_str("PP:[G08]missing");
+        diff_with(
+            "attach_card",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::attach_card(c, 1, cp, cl, 14, 1).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::attach_card, [1, cp, cl, 14, 1, 0]),
+        );
+        diff_with(
+            "attach_card dead host",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::attach_card(c, 99, cp, cl, 14, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::attach_card, [99, cp, cl, 14, 0, 0]),
+        );
+        diff_with(
+            "attach_card missing copy",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::attach_card(c, 1, mp, ml, 14, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::attach_card, [1, mp, ml, 14, 0, 0]),
+        );
+        // No hand copy: the caller's live instance is re-targeted.
+        {
+            let (hp, hl) = intern_str(zone_card(0));
+            let mut conf = base_conf_with_zone();
+            conf.hands[0].clear();
+            conf.next_uid = 4;
+            conf.field.push(ConfRow {
+                uid: 4,
+                card: zone_card(0).to_string(),
+                player: 0,
+                owner: 0,
+                tile: 3,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                face_down: false,
+                leave_dest: -1,
+            });
+            let mut model = base_model_with_zone();
+            model.hand_n = 0;
+            model.next_uid = 4;
+            model.field[3] = zone_row(4, zone_card(0), -1, -1, 0, 3);
+            model.field_n = 4;
+            diff_with(
+                "attach_card live fallback",
+                conf,
+                model,
+                |c| game_rules::hostfns::attach_card(c, 1, hp, hl, 14, 1).unwrap() as i64,
+                || rules_kani::host::dispatch(Op::attach_card, [1, hp, hl, 14, 1, 0]),
+            );
+        }
+        // Live fallback onto a descendant is a cycle.
+        {
+            let (hp, hl) = intern_str(zone_card(0));
+            diff_with(
+                "attach_card cycle refused",
+                base_conf_with_zone(),
+                base_model_with_zone(),
+                |c| game_rules::hostfns::attach_card(c, 2, hp, hl, 14, 0).unwrap() as i64,
+                || rules_kani::host::dispatch(Op::attach_card, [2, hp, hl, 14, 0, 0]),
+            );
+        }
+        diff_with(
+            "detach_card to hand",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::detach_card(c, 2, 1, 15).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::detach_card, [2, 1, 15, 0, 0, 0]),
+        );
+        diff_with(
+            "detach_card graveyard",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::detach_card(c, 2, 0, 15).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::detach_card, [2, 0, 15, 0, 0, 0]),
+        );
+        diff_with(
+            "detach_card not attached",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::detach_card(c, 1, 1, 15).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::detach_card, [1, 1, 15, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_unplace_at_cascades() {
+    big(|| {
+        let _g = model_lock();
+        diff_with(
+            "unplace_at cascade",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::unplace_at(c, 1, 0, 3).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::unplace_at, [1, 0, 3, 0, 0, 0]),
+        );
+        diff_with(
+            "unplace_at dead",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::unplace_at(c, 99, 0, 3).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::unplace_at, [99, 0, 3, 0, 0, 0]),
+        );
+        diff_with(
+            "unplace_card self",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::unplace_card(c).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::unplace_card, [0, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "send_to_dest",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::send_to_dest(c, 0, 3).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::send_to_dest, [0, 3, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "transfer_to_dest",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::transfer_to_dest(c, 1, 0, 3).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::transfer_to_dest, [1, 0, 3, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_earliest_owned_and_rehome() {
+    big(|| {
+        let _g = model_lock();
+        let mut conf = base_conf_with_zone();
+        conf.owned_seq[1] = 0;
+        conf.owned_seq[5] = 1;
+        conf.next_owned_seq = 2;
+        conf.first_tile[0] = 1;
+        conf.first_tile[1] = 5;
+        let mut model = base_model_with_zone();
+        model.owned_seq[1] = 0;
+        model.owned_seq[5] = 1;
+        model.next_owned_seq = 2;
+        model.first_tile[0] = 1;
+        model.first_tile[1] = 5;
+        diff_with(
+            "earliest_owned_tile",
+            conf.clone(),
+            model.clone(),
+            |c| game_rules::hostfns::earliest_owned_tile(c, 0).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::earliest_owned_tile, [0, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "earliest_owned_tile none",
+            conf.clone(),
+            model.clone(),
+            |c| game_rules::hostfns::earliest_owned_tile(c, 2).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::earliest_owned_tile, [2, 0, 0, 0, 0, 0]),
+        );
+        diff_with(
+            "rehome_card",
+            conf,
+            model,
+            |c| game_rules::hostfns::rehome_card(c, 1, 1).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::rehome_card, [1, 1, 0, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_play_hand_card() {
+    big(|| {
+        let _g = model_lock();
+        let (cp, cl) = intern_str(zone_card(1));
+        let (mp, ml) = intern_str("PP:[G08]missing");
+        diff_with(
+            "play_hand_card",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::play_hand_card(c, 0, cp, cl).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::play_hand_card, [0, cp, cl, 0, 0, 0]),
+        );
+        diff_with(
+            "play_hand_card missing",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| game_rules::hostfns::play_hand_card(c, 0, mp, ml).unwrap() as i64,
+            || rules_kani::host::dispatch(Op::play_hand_card, [0, mp, ml, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_set_dest_unwatched() {
+    big(|| {
+        let _g = model_lock();
+        diff_with(
+            "set_dest_unwatched",
+            base_conf_with_zone(),
+            base_model_with_zone(),
+            |c| {
+                game_rules::hostfns::set_dest_unwatched(c, 2).unwrap();
+                0
+            },
+            || rules_kani::host::dispatch(Op::set_dest_unwatched, [2, 0, 0, 0, 0, 0]),
+        );
+    });
+}
+
+#[test]
+#[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
+fn op_trigger_zone_payload() {
+    big(|| {
+        let _g = model_lock();
+        let mut conf = base_conf_with_zone();
+        conf.trig_zone = Some((9, 4, 8, 0, true, false));
+        let mut model = base_model_with_zone();
+        model.trig_zone_present = true;
+        model.trig_zone_from = 9;
+        model.trig_zone_to = 4;
+        model.trig_zone_cause = 8;
+        model.trig_zone_holder = 0;
+        model.trig_zone_wasted = true;
+        model.trig_zone_counted = false;
+        let model_bytes = std::cell::RefCell::new(Vec::new());
+        diff_with(
+            "trigger_zone",
+            conf,
+            model,
+            |c| {
+                let (buf, cap) = card_sdk::native::reserve(32);
+                let n = game_rules::hostfns::trigger_zone(c, buf, cap).unwrap();
+                let bytes = card_sdk::native::read(buf, n.max(0) as usize);
+                assert_eq!(bytes, *model_bytes.borrow(), "payload bytes");
+                n as i64
+            },
+            || {
+                let (buf, cap) = card_sdk::native::reserve(32);
+                let n = rules_kani::host::dispatch(Op::trigger_zone, [buf, cap, 0, 0, 0, 0]);
+                *model_bytes.borrow_mut() = card_sdk::native::read(buf, n.max(0) as usize);
+                n
+            },
         );
     });
 }

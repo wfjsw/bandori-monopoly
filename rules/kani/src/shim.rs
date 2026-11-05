@@ -7,7 +7,7 @@
 //! evaluate the **lowered IR** of that string against an [`IrCtx`] filled
 //! from the symbolic world — never `assume` the condition.
 //!
-//! ```ignore
+//! ```text
 //! let id = guard_id!("actor == owner && value > 0"); // const, compile-checked
 //! let admitted = guard!(id, &ctx);
 //! ```
@@ -30,7 +30,7 @@
 /// `const` via `cond_irs::const_id` over the build-generated `SRCS` table
 /// (see `rules_cond::gen_ir`, run from build.rs).
 ///
-/// ```ignore
+/// ```text
 /// let id = guard_id!("actor == owner && value > 0"); // compile-checked
 /// ```
 
@@ -38,7 +38,7 @@
 ///
 /// Returns `bool` — the host root rule (any evaluation error = false).
 ///
-/// ```ignore
+/// ```text
 /// let admitted = guard!(guard_id!("actor == owner && value > 0"), &ctx);
 /// let admitted = guard!(id, &ctx);
 /// ```

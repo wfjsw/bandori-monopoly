@@ -95,7 +95,11 @@ fn expire(player_id: i32) -> card_sdk::Asked {
     let k = state::get(player_id, BORROWED);
     if let Some(id) = POOL.get(k as usize) {
         if let Some(uid) = ctx::find_card(player_id, id) {
-            ctx::unplace_at(uid);
+            ctx::unplace_at(
+                uid,
+                ctx::Dest::Graveyard,
+                card_sdk::abi::ZoneChangeCause::Effect,
+            );
         }
     }
     state::set(player_id, BORROWED, -1);

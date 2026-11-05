@@ -119,13 +119,13 @@ pub(crate) fn swap(player_id: i32) -> card_sdk::Asked {
         ctx::take_card(player_id, c.as_str(), ctx::CardPile::Graveyard);
     }
     for c in &disc {
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckTop, false);
     }
     for c in &deck {
         ctx::take_card(player_id, c.as_str(), ctx::CardPile::Deck);
     }
     for c in &deck {
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Graveyard);
+        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Graveyard, false);
     }
     ctx::log(player_id, &Msg::new(key!("infinite_possibility_swapped")));
     Ok(())

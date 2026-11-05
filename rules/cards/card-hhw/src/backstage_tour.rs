@@ -42,7 +42,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let discard = ctx::cards_in(player_id, CardPile::Graveyard);
         for id in discard.iter().rev() {
             ctx::take_card(player_id, id.as_str(), CardPile::Graveyard);
-            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom, false);
         }
         ctx::log(
             player_id,
@@ -81,7 +81,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // 剩余的翻入弃牌堆 -- out of the frame first, so the flip lands in the
         // discard for good (a look holds the deck's refill, G11 I2).
         ctx::take_card(player_id, id.as_str(), CardPile::Inspection);
-        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Graveyard);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Graveyard, false);
         ctx::gain(
             player_id,
             1000,
@@ -102,11 +102,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let top_i = pick.min(1);
         let under = keep[1 - top_i];
         let over = keep[top_i];
-        ctx::add_to_dest(player_id, under.as_str(), ctx::Dest::DeckTop);
-        ctx::add_to_dest(player_id, over.as_str(), ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, under.as_str(), ctx::Dest::DeckTop, false);
+        ctx::add_to_dest(player_id, over.as_str(), ctx::Dest::DeckTop, false);
     } else {
         for id in keep {
-            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop, false);
         }
     }
     ctx::inspection_end(player_id, false);

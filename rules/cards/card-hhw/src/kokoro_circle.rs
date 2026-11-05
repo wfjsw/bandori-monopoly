@@ -50,7 +50,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // effective-flag side channel; BACKLOG CH-07 owns it.)
         return Ok(());
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::log(
         player_id,
         &Msg::new(key!("kokoro_circle_placed")).player_id("who", player_id),

@@ -460,6 +460,7 @@ pub fn host_arms_immunity() {
             uid,
             card: 0,
             player: owner,
+            owner,
             tile: 0,
             face_down: false,
             immune,
@@ -467,6 +468,10 @@ pub fn host_arms_immunity() {
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         w.field_n = 1;
     });

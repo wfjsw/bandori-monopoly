@@ -227,6 +227,81 @@ fn here_the_world_places_on_opponent() {
     assert!(t.hand(1).contains(&"Sumimi:Here the world".to_string()));
 }
 
+// 规则书（2）: 「场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为
+// 其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，
+// 那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡」
+#[test]
+fn here_the_world_holds_a_draw_and_returns_it() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["Sumimi:Here the world"]);
+    t.give(1, &["通用:GREAT", "通用:GREAT", "TEST:drawer"]);
+    t.set_draw(1, &["R:[衍生] 压", "R:[衍生] 压"]);
+    t.set_draw(0, &["R:[衍生] 压"]);
+    t.begin_turn(1);
+    t.play(1, "通用:GREAT").unwrap();
+    drain(&mut t);
+    t.play(1, "通用:GREAT").unwrap();
+    // 规则书（1）: 「当有人同一回合内打出两张卡时」 -- the second card opens it.
+    assert!(
+        t.counteract_offered("Sumimi:Here the world"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "Sumimi:Here the world").unwrap();
+    drain(&mut t);
+    // 规则书（1）: 「将此卡放置于对方场上」.
+    assert!(
+        t.on_field(1, "Sumimi:Here the world"),
+        "{:?}",
+        t.field_ids(1)
+    );
+    // p1's next draw is held face-down instead.
+    t.play(1, "TEST:drawer").unwrap();
+    drain(&mut t);
+    let (held, held_card) = t
+        .field(1)
+        .iter()
+        .find(|f| f.face_down)
+        .map(|f| (f.uid, f.card.clone()))
+        .expect("the draw is held");
+    let host = t.m.world().attachment_host(held);
+    assert!(host > 0, "placed on the card");
+    // 「并为其放置3个奇迹水晶」 -- the crystals time the hold and sit on the
+    // host (其 = 此卡), so they die with it.
+    assert_eq!(
+        t.m.world().counter_at(host, bandori_std::counter::CRYSTALS),
+        3
+    );
+    // 规则书（2）: 「那名玩家的每个回合开始时移除一个」 -- the tick is at each
+    // of p1's *next* turn starts, so every step ends the current turn first.
+    let mut next_p1_turn = |t: &mut Table| {
+        t.m.world_mut().st.skip_move = true;
+        t.end(t.turn()).unwrap();
+        drain(t);
+        until_turn(t, 1);
+    };
+    next_p1_turn(&mut t);
+    assert_eq!(
+        t.m.world().counter_at(host, bandori_std::counter::CRYSTALS),
+        2
+    );
+    next_p1_turn(&mut t);
+    assert_eq!(
+        t.m.world().counter_at(host, bandori_std::counter::CRYSTALS),
+        1
+    );
+    let user_hand = t.hand(0).len();
+    next_p1_turn(&mut t);
+    // 规则书（2）: 「那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡」.
+    assert!(t.hand(1).contains(&held_card), "{:?}", t.hand(1));
+    assert_eq!(t.hand(0).len(), user_hand + 1, "the user drew");
+    assert!(
+        !t.on_field(1, "Sumimi:Here the world"),
+        "{:?}",
+        t.field_ids(1)
+    );
+}
+
 // -- Sumimi:Sweet Escape ------------------------------------------------
 
 // 规则书: 「回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡」.

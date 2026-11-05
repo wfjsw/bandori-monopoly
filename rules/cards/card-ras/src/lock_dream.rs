@@ -54,7 +54,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     if !ctx::take_card(player_id, "RAS:（LOCK）追逐梦想的步伐", CardPile::Deck) {
         return Ok(());
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(
         player_id,
         "RAS:（LOCK）追逐梦想的步伐",
@@ -117,7 +117,7 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
                 .tile("tile", to),
         );
     }
-    ctx::send_to_dest(ctx::Dest::Banished);
+    ctx::send_to_dest(ctx::Dest::Banished, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("lock_dream_removed")).player_id("who", player_id),
