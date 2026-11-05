@@ -1416,6 +1416,8 @@ fn band_free_house_on_cheap_buy() {
                 "money:P0",
                 "owner:T11",
                 "houses:T11",
+                // The buy arms the acquisition ledger (G08 §7.7).
+                "state:P0",
                 "hand:P0",
                 "draw:P0",
                 "discard:P0",

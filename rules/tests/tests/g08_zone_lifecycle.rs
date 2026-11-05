@@ -230,9 +230,11 @@ fn creator_child_dies_with_creator() {
     assert_eq!(arg(e(child)[0], "from"), FIELD);
     assert_eq!(arg(e(child)[0], "to"), GRAVEYARD);
     assert!(!e(grandchild).is_empty(), "{:?}", keys(&t, mark));
-    assert!(e(grandchild)
-        .iter()
-        .all(|x| arg(x, "cause") == CREATOR_LEFT));
+    assert!(
+        e(grandchild)
+            .iter()
+            .all(|x| arg(x, "cause") == CREATOR_LEFT)
+    );
     assert_eq!(arg(e(root)[0], "cause"), EFFECT);
     // Preorder: the root's own leave, then the cascade down its children.
     let at = |uid: i32| ev.iter().position(|x| std::ptr::eq(x, e(uid)[0])).unwrap();
@@ -322,6 +324,36 @@ fn wasted_only_when_marked() {
     assert!(
         waste.contains(&1),
         "the waster is wasted: {:?}",
+        keys(&t, mark)
+    );
+}
+
+// A hand play has no instance (`self_uid()` is `-1`), so its waste bit lives
+// on the play; the setter and the getter must address the same store and the
+// bit must reach `discarded` (review finding 8).
+#[test]
+fn hand_play_waste_bit_is_readable() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    t.give(0, &["TEST:zoner", "TEST:handwaster"]);
+    t.play(0, "TEST:zoner").unwrap();
+    let mark = t.mark();
+    t.play(0, "TEST:handwaster").unwrap();
+    let ev = t.events_since(mark);
+    let read: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "hand_wasted_read")
+        .map(|e| arg(e, "read"))
+        .collect();
+    assert_eq!(read, vec![1], "the bit reads back: {:?}", keys(&t, mark));
+    let waste: Vec<i64> = ev
+        .iter()
+        .filter(|e| log_key(e) == "zoner_discarded" && arg(e, "uid") == -1)
+        .map(|e| arg(e, "wasted"))
+        .collect();
+    assert!(
+        waste.contains(&1),
+        "the discard carries the bit: {:?}",
         keys(&t, mark)
     );
 }
@@ -501,5 +533,179 @@ fn board_host_attachment_falls_to_graveyard() {
             .iter()
             .any(|(u, _)| *u == host),
         "the board rule is gone"
+    );
+    // The rule has no seat: its name goes to the neutral board discard, not
+    // player 0's graveyard (review finding 4).
+    assert!(
+        t.m.world()
+            .st
+            .board_discard
+            .contains(&"TEST:brd".to_string()),
+        "board discard: {:?}",
+        t.m.world().st.board_discard
+    );
+    assert!(
+        !t.discard(0).contains(&"TEST:brd".to_string()),
+        "player 0 kept the rule name: {:?}",
+        t.discard(0)
+    );
+}
+
+// A card attached to a *board* rule still leaves when its holder goes bankrupt:
+// the board host is not among the leaving rows, so the seat walk must list the
+// attachment itself (review finding 2).
+#[test]
+fn board_host_attachment_leaves_on_bankruptcy() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    t.give(0, &["TEST:brd", "TEST:zoner"]);
+    t.play(0, "TEST:brd").unwrap();
+    let board = t.m.world().field_instances(game_core::state::BOARD_OWNER);
+    let host = board.iter().find(|(_, c)| c == "TEST:brd").unwrap().0;
+    assert_eq!(t.m.world().attached_cards(host).len(), 1);
+    let mall = tile("购物中心");
+    t.own(1, &[mall]);
+    t.set_houses(mall, 5);
+    t.set_money(0, 0);
+    t.begin_turn(0);
+    t.set_pos(0, mall - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert!(t.p(0).bankrupt, "{:?}", t.recent_keys(20));
+    assert!(
+        t.field(0).is_empty(),
+        "the out player's field still holds {:?}",
+        t.field(0)
+            .iter()
+            .map(|f| f.card.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+// `attach_card` looks the hand copy up in the **caller's** hand. The host is an
+// instance uid far above the seat count, so a host uid used as a player id
+// finds nothing (review finding 5).
+#[test]
+fn attach_card_takes_the_callers_hand_copy() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    t.give(0, &["TEST:holder", "TEST:zoner"]);
+    t.play(0, "TEST:holder").unwrap();
+    let host = uid_of(&t, 0, "TEST:holder");
+    assert!(host > 1, "host uid above the player count: {host}");
+    let attached = t.m.world().attached_cards(host);
+    assert_eq!(attached.len(), 1, "nothing attached to host {host}");
+    assert_eq!(
+        t.m.world().instance_owner(attached[0]),
+        0,
+        "the row is filed from the caller's hand"
+    );
+    assert!(
+        !t.hand(0).contains(&"TEST:zoner".to_string()),
+        "the hand copy was consumed: {:?}",
+        t.hand(0)
+    );
+}
+
+// An ordinary buy arms the acquisition ledger: `assign_deed` goes through the
+// one ownership write (review finding 1).
+#[test]
+fn bought_tile_gets_acquisition_sequence() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    let f = tile("富士见坂");
+    t.set_pos(0, f - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    t.buy(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert_eq!(t.owner(f), Some(0), "{:?}", t.recent_keys(8));
+    assert_eq!(
+        t.m.world().earliest_owned_tile(0),
+        f as i32,
+        "earliest-owned answers the bought deed"
+    );
+}
+
+fn drain(t: &mut Table) {
+    for _ in 0..200 {
+        if t.prompt().is_none() {
+            return;
+        }
+        t.decline();
+    }
+}
+
+// A released deed clears its sequence, so a later re-buy takes a fresh one and
+// does not inherit the old owner's ordering.
+#[test]
+fn released_deed_sequence_is_cleared() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    let a = tile("富士见坂");
+    let b = tile("星之鼓动山丘");
+    t.m.world_mut().set_tile_owner(a as i32, 0);
+    t.m.world_mut().set_tile_owner(b as i32, 0);
+    t.m.world_mut().set_tile_owner(a as i32, -1);
+    assert_eq!(t.m.world().earliest_owned_tile(0), b as i32);
+    t.m.world_mut().set_tile_owner(a as i32, 0);
+    assert_eq!(
+        t.m.world().earliest_owned_tile(0),
+        b as i32,
+        "the re-bought tile sorts after the first acquisition"
+    );
+}
+
+// A destination the caller named beats the card's own `zoneLeft` write (the
+// write is a default): Here the world returns a held 觉悟 to the hand, and
+// 觉悟's own body names `Banished` (review finding 3).
+#[test]
+fn held_card_returns_to_hand() {
+    let mut t = Table::vanilla(2);
+    deep_decks(&mut t);
+    t.give(0, &["Sumimi:Here the world"]);
+    t.give(1, &["通用:GREAT", "通用:GREAT", "TEST:drawer"]);
+    t.begin_turn(1);
+    t.play(1, "通用:GREAT").unwrap();
+    drain(&mut t);
+    t.play(1, "通用:GREAT").unwrap();
+    assert!(
+        t.counteract_offered("Sumimi:Here the world"),
+        "{}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "Sumimi:Here the world").unwrap();
+    drain(&mut t);
+    t.set_draw(1, &["R:[衍生] 觉悟"]);
+    t.play(1, "TEST:drawer").unwrap();
+    drain(&mut t);
+    let (held, held_card) = t
+        .field(1)
+        .iter()
+        .find(|f| f.face_down)
+        .map(|f| (f.uid, f.card.clone()))
+        .expect("the draw is held");
+    assert_eq!(held_card, "R:[衍生] 觉悟");
+    assert!(held > 0);
+    // The host leaves the field: the hold returns the card to the hand.
+    let host = t.m.world().attachment_host(held);
+    t.set_state(1, "TEST.drop.uid", host);
+    t.give(1, &["TEST:drop"]);
+    t.play(1, "TEST:drop").unwrap();
+    drain(&mut t);
+    assert!(
+        !t.on_field(1, "Sumimi:Here the world"),
+        "{:?}",
+        t.field_ids(1)
+    );
+    assert!(
+        t.hand(1).contains(&held_card),
+        "the held card came back: {:?}",
+        t.hand(1)
     );
 }

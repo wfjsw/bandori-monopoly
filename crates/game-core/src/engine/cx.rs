@@ -1669,7 +1669,9 @@ impl<'a> PlayCtx<'a> {
         if trig.is_cancelled() {
             return Ok(before);
         }
-        self.w.st.owners[t as usize] = owner;
+        // The one ownership write, so the acquisition ledger follows the
+        // 「视为拥有」 / owner-set too (design G08 §7.7).
+        self.w.set_tile_owner(t, owner);
         Ok(owner)
     }
 

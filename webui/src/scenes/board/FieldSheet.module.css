@@ -223,6 +223,56 @@
   display: block;
 }
 
+/* Attachments riding a host: chip-width faces anchored at the host's lower
+   right, overlapping leftwards so a stack stays inside the slot. They hang
+   mostly below the host's own bottom (which carries its name and markers), so
+   the host stays readable; each chip is its own pointer target and opens its
+   own sheet, while the host face keeps the clicks on what it covers. */
+.attached {
+  position: absolute;
+  right: -4px;
+  bottom: -58px;
+  z-index: 2;
+  display: flex;
+  pointer-events: none;
+}
+
+.attach {
+  position: relative;
+  display: flex;
+  flex: none;
+  pointer-events: auto;
+}
+
+.attach+.attach {
+  margin-left: -22px;
+}
+
+.attachBack {
+  width: 54px;
+  min-height: 81px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
+}
+
+.attachBack img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 盖着 tag on a chip: the same corner as the row's, pulled in for the width. */
+.attachTag {
+  left: 0;
+  font-size: 9px;
+}
+
+.attachBlend {
+  inset: 0;
+}
+
 /* The owner's face-down treatment (back blend, 盖着 tag) is shared with the
    hand's parked stack: `FaceDown.module.css`. Only this row's tag corner
    differs. */

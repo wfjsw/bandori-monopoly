@@ -200,15 +200,10 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
             ctx::gain(player_id, purse, &msg)?;
         }
     }
-    // 规则书（3）: the waste bit itself is set by the `zoneLeft` body on the
-    // way out (`on_discard`); the log here is display only.
+    // 规则书（3）: the waste bit and its display line both come from the
+    // `zoneLeft` body on the way out (`on_discard`); logging here as well
+    // printed `miracle_wasted` twice for one waste (review finding 6).
     ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
-    if left {
-        ctx::log(
-            player_id,
-            &Msg::new(key!("miracle_wasted")).player_id("who", player_id),
-        );
-    }
     Ok(())
 }
 

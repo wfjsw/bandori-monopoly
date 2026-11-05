@@ -323,16 +323,21 @@ trace of the order.
   row changes, and exactly one `zoneLeftAfter` **after** it. A
   `Zone::Hand`-side `to` is the mirror: `handChanged` after only. A `from`
   with no rule surface (a pile) raises nothing per card.
-* **I4 (destination is a fact).** A `zoneLeft` responder may rewrite the
-  pending destination by writing `prop::LEAVE_DEST` (the
-  `bandori_std::zones::set_leave_destination` sugar); the writer re-reads it
-  after the window and uses the rewritten value. The prop is the *pending*
-  destination: the writer clears it before the window, so only a write made in
-  that window is a rewrite and a value left behind by an earlier leave can
-  never override a destination this caller named. The starting value is the
-  caller's explicit argument, else whatever `prop::LEAVE_DEST` already holds,
-  else the cause's default (`Graveyard`, except `Rehome`/`HostLeft`, which keep
-  the row's place).
+* **I4 (destination is a fact, the card's write is a default).** A `zoneLeft`
+  responder may rewrite the pending destination by writing `prop::LEAVE_DEST`
+  (the `bandori_std::zones::set_leave_destination` sugar); the writer re-reads
+  it after the window. The write stands only while the pending destination is
+  the ordinary `Graveyard` one, or when the body keeps the card on the field
+  (a re-home never really leaves: ONE OF US crosses to the survivor on a
+  bankruptcy `Banished`). A destination the caller named -- a bounce to the
+  hand (Here the world returning a held card), a bankruptcy `Banished` banish
+  -- wins over the card's hard-coded filing.
+  The prop is the *pending* destination: the writer clears it before the
+  window, so only a write made in that window is a rewrite and a value left
+  behind by an earlier leave can never override a destination this caller
+  named. The starting value is the caller's explicit argument, else whatever
+  `prop::LEAVE_DEST` already holds, else the cause's default (`Graveyard`,
+  except `Rehome`/`HostLeft`, which keep the row's place).
 * **I5 (cascade order).** A transition out of `Field`/`Attached` processes the
   leaver's attachments first (each as its own transition, cause `HostLeft`),
   then its created children (cause `CreatorLeft`), then the leaver. A child
@@ -802,6 +807,11 @@ Each is handled in `apply_host_request` (`wasm_rules.rs:4501`) exactly like
   host's attachments follow the host's destination; a **board-owned** host
   (a tile rule) does not leave, so its attachments fall to `Graveyard`
   (R12).
+* A board-owned row (`owner = BOARD_OWNER`) has no seat to file into: its
+  name, and a created child's, goes to the neutral `MatchState::board_discard`
+  instead of player 0's graveyard. Player 0 is not a part of the board, and its
+  reshuffle would otherwise deal rule names back as dead hand cards (review
+  finding 4).
 * Attachment chain depth is unbounded but cycle-free (I6); `attached_cards`
   answers direct children in creation order.
 
@@ -970,8 +980,10 @@ kind, `TEST:holder` with an attachment, `TEST:creator` with a child):
 
 1. `leave_raises_before_and_after_with_cause` — one `zoneLeft` then one
    `zoneLeftAfter`, the payload pair reversed on the second.
-2. `leave_destination_rewrite_wins` — the body sets `Hand`; the row lands in
-   the hand, not the graveyard.
+2. `leave_destination_rewrite_wins` — the body sets `Hand` and the caller
+   named the default `Graveyard`; the row lands in the hand, not the graveyard.
+   A caller that named `Hand`/`Banished` itself keeps it (I4: the write is a
+   default).
 2b. `stale_leave_destination_does_not_override_the_caller` — after an earlier
    `Hand` rewrite, a second leave whose body writes nothing and whose caller
    names `Banished` lands banished: the prop is pending, not persistent.

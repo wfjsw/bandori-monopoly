@@ -2283,7 +2283,14 @@ impl World {
             }
             t.holder = self.holder_of(t.host);
         } else if t.holder < 0 {
-            t.holder = row.owner;
+            // A board row has no seat even though the play that placed it
+            // stamped the placer as its owner: its landing area is the board,
+            // and `file_row` keeps its name out of any player's pile.
+            t.holder = if self.st.board_field.iter().any(|f| f.uid == t.uid) {
+                crate::state::BOARD_OWNER
+            } else {
+                row.owner
+            };
         }
         Some(t)
     }
@@ -2380,7 +2387,9 @@ impl World {
             }
             _ => {
                 self.file_row(row, t);
-                Some(t.holder.max(0))
+                // `-1` stays `-1`: a board row's landing seat is the board,
+                // and the payloads must not claim player 0 for it.
+                Some(t.holder)
             }
         }
     }
@@ -2434,6 +2443,10 @@ impl World {
             self.st.event_active.retain(|e| e.id != id);
         }
         match t.to {
+            // A board-owned row (no seat) files into the neutral board discard;
+            // `max(0)` would put the rule name into player 0's pile, where the
+            // reshuffle deals it back as a dead hand card (review finding 4).
+            Zone::Graveyard if t.holder < 0 => self.st.board_discard.push(name),
             Zone::Graveyard => {
                 if let Some(h) = self.hidden.get_mut(holder) {
                     h.graveyard.push(name);

@@ -4017,6 +4017,25 @@ fn waster_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Sets the waste bit on its own **hand play** (`self_uid()` is `-1` there),
+/// reads it back and leaves: the bit must be the play's, not a row's, and the
+/// `discarded` raise must carry it. Probes the setter/getter pair.
+const HAND_WASTER: CardDef =
+    CardDef::new("TEST:handwaster", &[On::Play("", None, hand_waster_play)]);
+
+fn hand_waster_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_ineffective_at(-1, true);
+    ctx::log(
+        player_id,
+        &Msg::new("hand_wasted_read").i("read", ctx::is_ineffective_at(-1) as i64),
+    );
+    ctx::set_dest(
+        ctx::Dest::Graveyard,
+        card_sdk::abi::ZoneChangeCause::Effect,
+    );
+    Ok(())
+}
+
 /// Inert filler for the cycle probe.
 const CYC: CardDef = CardDef::new("TEST:cyc", &[]);
 
@@ -4349,6 +4368,7 @@ card_sdk::ruleset!(&[
     CREATOR,
     DROP,
     WASTER,
+    HAND_WASTER,
     OUTCOMER,
     OBSERVER,
     CYC,

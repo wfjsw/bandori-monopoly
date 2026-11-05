@@ -1044,10 +1044,19 @@ pub fn attach_card<C: HostCtx>(
     face_down: i32,
 ) -> Result<i32, HostError> {
     let card = guest_str(c, p, n)?;
+    // The caller's **seat**, not the host's instance uid: the hand copy is in
+    // the caller's hand (Here the world holds its target's card, and the
+    // attach call runs in that target's draw hook, so the frame's `by` is the
+    // right seat). Falls back to the host's owner outside a body.
+    let caller = c
+        .st()
+        .invoke_frames
+        .last()
+        .map_or_else(|| c.st().wr().instance_owner(host), |frame| frame.by);
     // A live instance of the name is re-parented instead of a pile copy being
     // filed. The guest's own world holds the same view, so read it before the
     // pause: the pile copy, when there is one, is consumed.
-    let live_copy = c.st().wr().live_instance_of(host, &card, host);
+    let live_copy = c.st().wr().live_instance_of(caller, &card, host);
     let req = HostRequest::Attach {
         host,
         card: card.clone(),
@@ -1060,7 +1069,7 @@ pub fn attach_card<C: HostCtx>(
         // the body's own view too, or the committed world would keep it in
         // the hand beside the attachment. (On a pausing pass the view is
         // discarded with the pass, so only the consuming pass matters.)
-        c.st_mut().w().take_from_hand(host, &card);
+        c.st_mut().w().take_from_hand(caller, &card);
     }
     Ok(uid)
 }

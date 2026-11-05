@@ -140,6 +140,9 @@ export interface FieldCard {
   /** Named on-card counters of this instance (ruleset-defined keys). */
   counters: Record<string, number>;
   faceDown: boolean;
+  /** The instance this one sits on (`uid`), `-1` when it stands free. An
+   *  attachment renders on its host, not as its own face in the stack. */
+  on?: number;
   /** Continuous numeric props on the instance (e.g. `handLimitDelta`,
    *  「手卡上限数量减1」). Serde-defaulted `{}`. `turnsLeft` here is the
    *  display-only remaining-turn countdown (`⌛N`): 0/absent = none. */

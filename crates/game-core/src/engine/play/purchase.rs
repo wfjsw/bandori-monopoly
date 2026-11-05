@@ -319,7 +319,10 @@ pub fn assign_deed(w: &mut World, t: usize, owner: i32, houses: i32, mortgaged: 
     if t >= w.st.owners.len() {
         return;
     }
-    w.st.owners[t] = owner;
+    // The owner goes through the one ownership write: it keeps the acquisition
+    // ledger (`owned_seq`) and the 「最早获得」 mirror in step with the deed
+    // (design G08 §7.7). The houses / mortgage below ride along unchanged.
+    w.set_tile_owner(t as i32, owner);
     if t < w.st.houses.len() {
         w.st.houses[t] = houses.max(0);
     }

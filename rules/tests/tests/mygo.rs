@@ -1307,8 +1307,10 @@ fn miracle_discarded_with_crystals_is_wasted() {
     assert!(
         t.recent_keys(30)
             .iter()
-            .any(|k| k.ends_with("miracle_wasted")),
-        "{:?}",
+            .filter(|k| k.ends_with("miracle_wasted"))
+            .count()
+            == 1,
+        "keys: {:?}",
         t.recent_keys(15)
     );
     assert!(
@@ -1317,6 +1319,29 @@ fn miracle_discarded_with_crystals_is_wasted() {
         t.recent_keys(20),
         t.field(0)
     );
+}
+
+// The (2) pass-out with crystals left logs `miracle_wasted` once: the bit and
+// its line belong to the `zoneLeft` body alone (review finding 6).
+#[test]
+fn miracle_pass_out_with_crystals_logs_once() {
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_draw(0, &["R:[衍生] 压"]);
+    t.give_play(0, "MyGO:难以复刻的奇迹").unwrap();
+    set_crystals(&mut t, 0, "MyGO:难以复刻的奇迹", 2);
+    t.set_pos(0, 10);
+    t.set_pos(1, 12);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let n = t
+        .recent_keys(60)
+        .iter()
+        .filter(|k| k.ends_with("miracle_wasted"))
+        .count();
+    assert_eq!(n, 1, "{:?}", t.recent_keys(30));
 }
 
 // ================================================================ character skills

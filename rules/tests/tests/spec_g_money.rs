@@ -347,6 +347,10 @@ fn force_buy_is_double_price_plus_houses_and_stays_mortgaged() {
                 "money:P1",
                 &format!("owner:T{land}"),
                 &format!("mortgaged:T{land}"),
+                // The buy arms the buyer's / releases the seller's acquisition
+                // ledger (G08 §7.7).
+                "state:P0",
+                "state:P1",
                 "pos:P0",
                 "roll:P0",
             ],
@@ -570,6 +574,10 @@ fn buy_costs_price_plus_houses() {
                 "money:P0",
                 &format!("owner:T{land}"),
                 &format!("mortgaged:T{land}"),
+                // The buy arms the buyer's / releases the seller's acquisition
+                // ledger (G08 §7.7).
+                "state:P0",
+                "state:P1",
                 "pos:P0",
                 "roll:P0",
             ],

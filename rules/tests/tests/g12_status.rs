@@ -153,6 +153,9 @@ fn g12_tsugu_replays_its_own_teleport() {
                 "draw:P0",
                 "discard:P0",
                 "owner:T11",
+                // The buy arms the acquisition ledger; its 「最早获得」 mirror
+                // is the player's `firstTile` slot (G08 §7.7).
+                "state:P0:firstTile",
                 "turn.abnormal",
             ],
         )

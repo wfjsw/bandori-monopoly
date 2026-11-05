@@ -119,8 +119,16 @@ impl PlayCtx<'_> {
                 .field_by_uid(t.uid)
                 .and_then(|f| f.props.get(prop::LEAVE_DEST))
                 .copied();
+            // The card's own write is a **default**, not an override: it
+            // stands only while the pending destination is the ordinary
+            // Graveyard one, or when the body keeps the card on the field (a
+            // re-home never really leaves -- ONE OF US crossing to the
+            // survivor on a bankruptcy `Banished`). A destination the caller
+            // named -- a bounce to the hand (Here the world returning its held
+            // card), a bankruptcy banish -- wins over the card's hard-coded
+            // filing (design G08 I4 as a default, review finding 3).
             if let Some((to, deck)) = rewritten.map(dest_zone) {
-                if to != t.to && t.to != Zone::Attached {
+                if to != t.to && (t.to == Zone::Graveyard || to == Zone::Field) {
                     t.to = to;
                     t.deck = deck;
                     if !t.to.is_pile() || t.holder < 0 {

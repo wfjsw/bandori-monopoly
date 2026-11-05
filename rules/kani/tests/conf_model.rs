@@ -529,10 +529,9 @@ impl CardWorld for ConfWorld {
         }
     }
     fn set_owner(&mut self, tile: i32, player_id: i32) {
-        let t = tile.max(0) as usize;
-        if t < 60 {
-            self.tiles_owner[t] = player_id;
-        }
+        // The engine's ownership write is `World::set_tile_owner`, which also
+        // writes the acquisition ledger (G08 I13).
+        self.set_tile_owner(tile, player_id);
         self.events.push(format!("set_owner {tile} {player_id}"));
     }
     fn dist(&self, a: i32, b: i32) -> i32 {

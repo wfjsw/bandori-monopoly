@@ -1740,7 +1740,9 @@ impl PlayCtx<'_> {
         if tile >= self.w.st.owners.len() {
             return Ok(false);
         }
-        self.w.st.owners[tile] = player_id as i32;
+        // The one ownership write: the deed and its acquisition-ledger entry
+        // (design G08 §7.7).
+        self.w.set_tile_owner(tile as i32, player_id as i32);
         if tile < self.w.st.mortgaged.len() {
             self.w.st.mortgaged[tile] = false;
         }
@@ -5439,13 +5441,17 @@ impl PlayCtx<'_> {
         // each instance hears its own `zoneLeft` and its attachments / children
         // cascade (I11, I12). 「移出游戏」 is the `Banished` seat; the row
         // cleanup (bound units included) is the writer's.
-        // Attached rows are not listed: their host's transition cascades them
-        // (and a host that a leave body keeps on the field keeps them
-        // attached, e.g. ONE OF US's parked deeds riding the card across).
+        // Attached rows are normally not listed: their host's transition
+        // cascades them (and a host that a leave body keeps on the field keeps
+        // them attached, e.g. ONE OF US's parked deeds riding the card across).
+        // A row whose host is **not** on this field -- a board-owned rule, or
+        // another seat's card -- is never cascaded by this walk, so it is
+        // listed explicitly; its own attachments still cascade from it.
+        let own_uids: Vec<i32> = self.w.st.players[i].field.iter().map(|f| f.uid).collect();
         let leaving: Vec<i32> = self.w.st.players[i]
             .field
             .iter()
-            .filter(|f| f.on < 0)
+            .filter(|f| f.on < 0 || !own_uids.contains(&f.on))
             .map(|f| f.uid)
             .collect();
         // `OutCause` and `ZoneChangeCause` are separate vocabularies; the
@@ -5466,7 +5472,10 @@ impl PlayCtx<'_> {
             .filter(|&t| self.w.st.owners[t] == i as i32)
             .collect();
         for &t in &deeds {
-            self.w.st.owners[t] = -1;
+            // The one ownership write: it clears the tile's acquisition
+            // sequence too, so a later re-buy cannot inherit this seat's stale
+            // ordering (design G08 §7.7).
+            self.w.set_tile_owner(t as i32, -1);
             self.w.st.mortgaged[t] = false;
         }
         if !deeds.is_empty() {

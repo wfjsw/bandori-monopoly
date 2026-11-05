@@ -1260,6 +1260,11 @@ impl CardWorld for Run {
         self.world.set_ineffective_at(uid, on)
     }
     fn is_ineffective_at(&self, uid: i32) -> bool {
+        // Mirror the setter: a played copy with no instance (`-1`) keeps the
+        // bit on the play, not on a row (review finding 8).
+        if uid < 0 {
+            return self.world.turn.play_ineffective;
+        }
         self.world.is_ineffective_at(uid)
     }
     // ---- G03 roll surface -------------------------------------------------

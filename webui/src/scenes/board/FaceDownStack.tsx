@@ -53,7 +53,9 @@ export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Mode
   }, []);
   const dismiss = useCallback(() => setPicked(null), []);
   const mine = (ownerSeat: number) => ownerSeat >= 0 && ownerSeat === m.playerId;
-  const down = S.players.flatMap((x, seat) => (x.field ?? []).filter((fc) => fc.faceDown).map((fc) => ({ seat, fc })));
+  // An attachment (`on >= 0`) is shown on its host in the cards-in-play row,
+  // not here, even when it is face down.
+  const down = S.players.flatMap((x, seat) => (x.field ?? []).filter((fc) => fc.faceDown && (fc.on ?? -1) < 0).map((fc) => ({ seat, fc })));
   if (!down.length) return null;
   const step = downStep(down.length);
   return (

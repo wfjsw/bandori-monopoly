@@ -16,6 +16,7 @@
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
+use game_core::MatchMode;
 use game_core::data::{GameData, Roster};
 use game_core::engine::CardRules;
 use game_core::engine::Match;
@@ -23,10 +24,9 @@ use game_core::msg::{Arg, Msg};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{
-    key, prop, stage, ActiveEvent, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState,
-    StateVar, TileMark,
+    ActiveEvent, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState, StateVar, TileMark,
+    key, prop, stage,
 };
-use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
 
 pub const SEED: u64 = 20261006;
@@ -763,7 +763,7 @@ impl Table {
     pub fn set_state(&mut self, who: usize, key: &str, value: i32) {
         let p = who as i32;
         let w = self.m.world_mut();
-        use game_core::state::{state_flag, Tick};
+        use game_core::state::{Tick, state_flag};
         let (flags, tick): (u8, Option<Tick>) = match key {
             bandori_std::state_key::STAY | bandori_std::state_key::STUN => (
                 state_flag::NEVER_NEGATIVE | state_flag::ENGINE_OWNED,

@@ -241,6 +241,13 @@ pub struct MatchState {
     pub event_deck: i32,
     pub event_top: Vec<String>,
     pub event_discard: Vec<String>,
+    /// The neutral board's own discard: rule instances that sat on the board
+    /// field (owner [`BOARD_OWNER`]) and left it. A board row has no seat, so
+    /// its name must not fall into player 0's discard, where the reshuffle
+    /// would deal it back as a dead hand card. Serde-defaulted so older saves
+    /// and clients load.
+    #[serde(default)]
+    pub board_discard: Vec<String>,
     pub event_removed: Vec<String>,
     pub event_active: Vec<ActiveEvent>,
     pub prompt: MatchPrompt,
@@ -310,6 +317,7 @@ impl Default for MatchState {
             event_deck: 0,
             event_top: vec![],
             event_discard: vec![],
+            board_discard: vec![],
             event_removed: vec![],
             event_active: vec![],
             prompt: MatchPrompt::default(),
