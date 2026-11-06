@@ -33,7 +33,8 @@ pub const AKO: CardDef = CardDef::new(
         None,
         on_circle,
     ))],
-).rule()
+)
+.rule()
 .props(&[
     (card_sdk::abi::prop::EST_COST, 500),
     // （3）「可在符合条件时将其直接打出」 -- the seat may play a face-down

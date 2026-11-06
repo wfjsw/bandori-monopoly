@@ -849,6 +849,25 @@ use crate::intern::NameId;
 ///    `set_face_down_at` / `add_to_dest` / `set_dest` / `send_to_dest` /
 ///    `transfer_to_dest` gain a cause/flag argument. SAVE_VERSION 19 -> 20
 ///    (the edges and the held-card relation); RECORD_VERSION unchanged.
+///
+/// v119: **effect outcome, cause and world facts (G10,
+///    `spec/abi/G10-effect-outcome.md`).** `event_defer` suspends an `event`
+///    link; the record releases at the deferring instance's owner's next turn
+///    start (new hook kind `eventResolved`, own-instance filtered by
+///    `trigger::by_card_instance` against the copy's uid) and
+///    `draw_event_as(player, tile)` attributes an event draw to another seat
+///    and tile (`HostRequest::DrawEventAs`). `Trigger.by_card_instance` /
+///    `trigger_by_card_instance` add the causing **instance** beside
+///    `by_card`'s seat. `Trigger.settle_facts` / `trigger_settle_facts`
+///    (bitset) / `trigger_settle_paid_value` publish a settle's
+///    `cancelled` / `body_replaced` / `paid` outcome from the body stage on.
+///    `Trigger.redirected_from` / `trigger_redirected_from` name the seat a
+///    landed redirect moved a hit from. `world_snapshot` / `world_restore` /
+///    `world_snapshot_drop` checkpoint and restore
+///    pos/state/money/owners/houses/mortgaged. No id renumbered.
+///    SAVE_VERSION 20 -> 21 (deferred events, host journal, snapshots);
+///    RECORD_VERSION unchanged.
+///
 /// v119: **rule entities vs cards** (`CardDef::rule`). `ManifestEntry.rule`
 ///    tells the engine the def's name is a rule, not a card, so a card area
 ///    (hand / draw pile / discard) drops the name instead of filing it
@@ -1169,6 +1188,18 @@ impl SettleOutcome {
             _ => SettleOutcome::Settled,
         }
     }
+}
+
+/// `trigger::settle_facts()` bits. Read through `trigger_settle_facts`
+/// (`ctx::trigger::settle_cancelled` / `settle_body_replaced` / `settle_paid`).
+pub mod settle_fact {
+    /// The `settle` link was negated: no body could run.
+    pub const CANCELLED: i32 = 1;
+    /// The `settleBody` link was negated: another card replaced the body.
+    pub const BODY_REPLACED: i32 = 2;
+    /// A rent payment to the settle's owner, on the settle's own tile,
+    /// committed.
+    pub const PAID: i32 = 4;
 }
 
 /// The [`charge_source`] code of a raise: what opened a `ChargePaying` window.
@@ -2467,6 +2498,11 @@ impl ActionKind {
     /// and is filed away. Payload: card = the event id.
     pub const EventAfter: Self = Self(TriggerKind::EventAfter);
 
+    /// Action hook. A deferred event resolved at its owner's turn start.
+    /// Payload: card = the event, tile, by_card = the deferrer's owner,
+    /// by_card_instance = the deferring instance. Hook-only.
+    pub const EventResolved: Self = Self(TriggerKind::EventResolved);
+
     /// Action / Counteraction window. Post-half of SettleBefore / Settle, after
     /// the tile's land resolution (with or without the body). Payload: the
     /// move, tile = the tile, target = the tile's owner (-1 = the bank).
@@ -3539,6 +3575,14 @@ impl TriggerKind {
 
     /// `diceRollSettled`
     pub const DiceRollSettled: Self = Self::engine(124);
+
+    /// `eventResolved` -- a **deferred** event finally resolved at its
+    /// deferrer's owner's turn start. Hook-only (no counteraction window).
+    /// Payload: `card` = the event, `tile` = the tile it resolves on,
+    /// `by_card` = the deferrer's owner, `by_card_instance` = the deferring
+    /// instance. Raised after the resolution completed; the extra draw of
+    /// 「此后」 hangs here.
+    pub const EventResolved: Self = Self::engine(141);
 
     /// `diceRollAdd`
     pub const DiceRollAdd: Self = Self::engine(125);

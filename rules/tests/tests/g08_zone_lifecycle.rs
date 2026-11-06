@@ -230,11 +230,9 @@ fn creator_child_dies_with_creator() {
     assert_eq!(arg(e(child)[0], "from"), FIELD);
     assert_eq!(arg(e(child)[0], "to"), GRAVEYARD);
     assert!(!e(grandchild).is_empty(), "{:?}", keys(&t, mark));
-    assert!(
-        e(grandchild)
-            .iter()
-            .all(|x| arg(x, "cause") == CREATOR_LEFT)
-    );
+    assert!(e(grandchild)
+        .iter()
+        .all(|x| arg(x, "cause") == CREATOR_LEFT));
     assert_eq!(arg(e(root)[0], "cause"), EFFECT);
     // Preorder: the root's own leave, then the cascade down its children.
     let at = |uid: i32| ev.iter().position(|x| std::ptr::eq(x, e(uid)[0])).unwrap();

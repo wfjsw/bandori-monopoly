@@ -71,7 +71,8 @@ pub const NYAMU: CardDef = CardDef::new(
             at_turn_end_exit,
         )),
     ],
-).rule()
+)
+.rule()
 // 「（初始0，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

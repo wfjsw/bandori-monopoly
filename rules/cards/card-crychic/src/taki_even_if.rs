@@ -30,63 +30,80 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         // sheet cell M16
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
 
+/// 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- the per-roller cast
+/// history minus the current face itself. The history already holds the face
+/// (cast time), and the body replays over the same history after each prompt,
+/// so comparing against the raw list would always match.
+fn others(player_id: i32, x: i32) -> alloc::vec::Vec<i32> {
+    let mut seen: alloc::vec::Vec<i32> = ctx::rolls_by_player(player_id)
+        .into_iter()
+        .map(|r| r.abs())
+        .collect();
+    let x = x.abs();
+    if let Some(pos) = seen.iter().rposition(|&v| v == x) {
+        seen.remove(pos);
+    }
+    seen
+}
+
+/// Runaway guard -- 「你可重骰至…为止」 states no cap, and a constant dice table
+/// never reaches the exit. `latch:`-prefixed so the count crosses the ask
+/// prompt's pause (the body re-runs and cannot carry a local), keyed to the roll
+/// transaction so the next activation on another throw starts over.
+const GUARD_TX: &str = "latch:taki_guard_tx";
+const GUARD: &str = "latch:taki_guard";
+
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
     // 规则书[反击]: 「进行一次重骰」 -- a recast on the move's transaction, so the
     // new face inherits the shared producer (and a forced extreme).
-    // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- the per-roller cast
-    // history minus the current face itself. The history already holds the
-    // face (cast time), and the body replays over the same history after each
-    // prompt, so comparing against the raw list would always match.
-    fn others(player_id: i32, x: i32) -> alloc::vec::Vec<i32> {
-        let mut seen: alloc::vec::Vec<i32> = ctx::rolls_by_player(player_id)
-            .into_iter()
-            .map(|r| r.abs())
-            .collect();
-        let x = x.abs();
-        if let Some(pos) = seen.iter().rposition(|&v| v == x) {
-            seen.remove(pos);
-        }
-        seen
-    }
-    let mut x = ctx::roll_recast(trigger::roll_id(), roll_source::CARD)?;
+    let id = trigger::roll_id();
+    let x = ctx::roll_recast(id, roll_source::CARD)?;
     ctx::log(
         player_id,
         &Msg::new(key!("taki_reroll"))
             .player_id("who", player_id)
             .i("n", x as i64),
     );
-    // 规则书[反击]: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」
-    // -- keep offering the reroll while the face repeats one rolled this turn.
-    let mut guard = 0;
-    while others(player_id, x).contains(&x.abs()) {
-        let again = ctx::ask_yes(
-            player_id,
-            &Msg::new(key!("taki_again_title")),
-            &Msg::new(key!("taki_again_text")).i("n", x as i64),
-        )?;
-        if !again {
-            break;
-        }
-        // Same shape as the first reroll: another cast.
-        x = ctx::roll_recast(trigger::roll_id(), roll_source::CARD)?;
-        ctx::log(
-            player_id,
-            &Msg::new(key!("taki_reroll"))
-                .player_id("who", player_id)
-                .i("n", x as i64),
-        );
-        guard += 1;
-        // TODO(规则书)（你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止）: 无次数
-        //   上限 -- 100 次只是骰表恒定时防死循环的护栏。
-        if guard >= 100 {
-            break;
-        }
+    reroll_to_new(player_id, id, x)
+}
+
+/// 规则书[反击]: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」
+/// -- keep offering the reroll while the face repeats one rolled this turn.
+/// Tail-recursive: every pass restarts the body, so the face rides the call.
+fn reroll_to_new(player_id: i32, id: i32, x: i32) -> card_sdk::Asked {
+    if ctx::slot(player_id, GUARD_TX) != id {
+        ctx::set_slot(player_id, GUARD_TX, id);
+        ctx::set_slot(player_id, GUARD, 0);
     }
-    trigger::set_move_roll(x); // 规则书[反击]: 「进行一次重骰」-- the move uses the new face
-    Ok(())
+    let guard = ctx::slot(player_id, GUARD);
+    // TODO(规则书)（你可重骰至…为止）: 无次数上限 -- 100 次只是骰表恒定时
+    //   防死循环的护栏。
+    if guard >= 100 || !others(player_id, x).contains(&x.abs()) {
+        // 规则书[反击]: 「进行一次重骰」-- the move uses the new face.
+        trigger::set_move_roll(x);
+        return Ok(());
+    }
+    let again = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("taki_again_title")),
+        &Msg::new(key!("taki_again_text")).i("n", x as i64),
+    )?;
+    if !again {
+        trigger::set_move_roll(x);
+        return Ok(());
+    }
+    ctx::set_slot(player_id, GUARD, guard + 1);
+    let y = ctx::roll_recast(id, roll_source::CARD)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("taki_reroll"))
+            .player_id("who", player_id)
+            .i("n", y as i64),
+    );
+    reroll_to_new(player_id, id, y)
 }
 
 //

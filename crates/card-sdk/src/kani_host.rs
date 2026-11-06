@@ -500,6 +500,17 @@ pub enum Op {
     trig_play_outcome = 483,
     trig_out_cause = 484,
     is_own_placement = 485,
+    // v119 (G10 outcome/cause/world surface). G08's zone family ends at 485;
+    // this group takes 486-494.
+    trig_by_card_instance = 486,
+    trig_settle_facts = 487,
+    trig_settle_paid_value = 488,
+    trig_redirected_from = 489,
+    draw_event_as = 490,
+    event_defer = 491,
+    world_snapshot = 492,
+    world_restore = 493,
+    world_snapshot_drop = 494,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

@@ -588,10 +588,20 @@ fn invoke_binds_the_target_and_restores_the_outer_frame() {
     t.end(0).unwrap();
     drain(&mut t);
     let frame = invoked_frame(&t).expect("the body ran");
-    assert_eq!(int_arg(frame, "self"), Some(target), "target instance bound");
+    assert_eq!(
+        int_arg(frame, "self"),
+        Some(target),
+        "target instance bound"
+    );
     assert_eq!(int_arg(frame, "instance"), Some(target));
-    assert_eq!(int_arg(last_log(&t, "bind_before").unwrap(), "self"), Some(caller));
-    assert_eq!(int_arg(last_log(&t, "bind_after").unwrap(), "self"), Some(caller));
+    assert_eq!(
+        int_arg(last_log(&t, "bind_before").unwrap(), "self"),
+        Some(caller)
+    );
+    assert_eq!(
+        int_arg(last_log(&t, "bind_after").unwrap(), "self"),
+        Some(caller)
+    );
 }
 
 /// G13 §4.2: 「该技能」 inside the body resolves to the **target** card; the
@@ -653,7 +663,11 @@ fn invoke_unknown_card_traps() {
     let mark = t.mark();
     t.end(0).unwrap();
     drain(&mut t);
-    assert!(!traps_since(&t, mark).is_empty(), "unknown card traps: {:?}", t.recent_keys(24));
+    assert!(
+        !traps_since(&t, mark).is_empty(),
+        "unknown card traps: {:?}",
+        t.recent_keys(24)
+    );
 }
 
 /// A `Filter` entry is not one of the invocable kinds and traps.
@@ -667,7 +681,11 @@ fn invoke_filter_entry_traps() {
     let mark = t.mark();
     t.end(0).unwrap();
     drain(&mut t);
-    assert!(!traps_since(&t, mark).is_empty(), "a Filter entry traps: {:?}", t.recent_keys(24));
+    assert!(
+        !traps_since(&t, mark).is_empty(),
+        "a Filter entry traps: {:?}",
+        t.recent_keys(24)
+    );
 }
 
 /// `ctx::invoke_skill` is sugar for the press: it runs the card's Play, never a

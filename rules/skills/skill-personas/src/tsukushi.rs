@@ -44,7 +44,8 @@ pub const TSUKUSHI: CardDef = CardDef::new(
         On::Action(Action::PaySplitChooseBefore("", Some(mine), on_gain)),
         On::Action(Action::PaySplitChooseBefore("", Some(other), on_theirs)),
     ],
-).rule();
+)
+.rule();
 
 /// Residual guard for [`on_gain`]: the payee is the owner and some other
 /// survivor exists to redirect to. 「可以改为指定场上除你以外的一个角色」.

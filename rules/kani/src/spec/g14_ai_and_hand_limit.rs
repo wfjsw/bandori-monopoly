@@ -60,5 +60,7 @@ pub fn summer_ai_never_declared(props: &[(&str, i32)]) -> bool {
 
 /// MUTANT: a def with no such prop (or a zero value) fails.
 pub fn summer_ai_never_declared_mutant(props: &[(&str, i32)]) -> bool {
-    props.iter().all(|(k, _)| *k != card_sdk::abi::prop::AI_NEVER)
+    props
+        .iter()
+        .all(|(k, _)| *k != card_sdk::abi::prop::AI_NEVER)
 }

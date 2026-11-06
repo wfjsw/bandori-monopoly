@@ -33,7 +33,8 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         // player not standing on a square has nothing to settle.
         On::Schedule("settle_now", "owner.pos >= 0", None, settle_now),
     ],
-).rule()
+)
+.rule()
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

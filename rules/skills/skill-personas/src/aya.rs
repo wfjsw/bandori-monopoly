@@ -49,7 +49,8 @@ pub const AYA: CardDef = CardDef::new(
             on_pay,
         )),
     ],
-).rule();
+)
+.rule();
 
 fn mine(player_id: i32) -> bool {
     // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 (初次演出事故)

@@ -336,6 +336,7 @@
   "log.kind.cardDetached": "从卡片上离开",
   "log.kind.openingHandDealt": "开局抽牌",
   "log.kind.spendBefore": "消耗前",
+  "log.kind.eventResolved": "事件结算",
   "anim.chainKind.21": "获得状态层",
   "anim.chainKind.onBoardGate": "在场上",
   "anim.chainKind.targetableGate": "可被指定",

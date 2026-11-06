@@ -91,7 +91,8 @@ pub const TOMORI: CardDef = CardDef::new(
         // any settle), so the next move gets a fresh press.
         On::Action(Action::MoveResolved("", None, clear_used_this_move)),
     ],
-).rule()
+)
+.rule()
 // 「（初始4，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 4),

@@ -418,7 +418,10 @@ fn predict_upcoming_view_is_a_turn_start_ops_surface() {
     );
     let pred = predict_upcoming_view(&idle).expect("a predictable turn start");
     assert!(!pred.state.main_moved, "a new turn owes its main move");
-    assert_eq!(pred.state.played_count, 0, "the play history is turn-scoped");
+    assert_eq!(
+        pred.state.played_count, 0,
+        "the play history is turn-scoped"
+    );
     assert!(pred.played.is_empty(), "as is the fork's played history");
     assert_eq!(pred.cards_played, 0);
     assert_eq!(pred.state.turn, idle.player_id);

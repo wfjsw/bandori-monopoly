@@ -47,7 +47,13 @@ pub trait InlineHost {
     /// declined halted the engine routine mid-request, in which case the
     /// implementer also parks the [`crate::Halt`] for the drive to propagate
     /// (the partially-applied request is discarded with the body).
-    fn apply(&mut self, run: &mut dyn std::any::Any, req: HostRequest) -> Option<i32>;
+    fn apply(
+        &mut self,
+        run: &mut dyn std::any::Any,
+        log: &mut game_core::engine::GuestLog,
+        start: game_core::engine::JournalStart,
+        req: HostRequest,
+    ) -> Option<i32>;
 
     /// The engine-side [`game_core::engine::Halt`] a declined nested prompt
     /// raised, if any. The drive checks this right after the guest call and
@@ -103,7 +109,13 @@ impl InlineHost for Deny {
     fn answer(&mut self, _run: &mut dyn std::any::Any, _p: Prompt) -> Option<i32> {
         None
     }
-    fn apply(&mut self, _run: &mut dyn std::any::Any, _req: HostRequest) -> Option<i32> {
+    fn apply(
+        &mut self,
+        _run: &mut dyn std::any::Any,
+        _log: &mut game_core::engine::GuestLog,
+        _start: game_core::engine::JournalStart,
+        _req: HostRequest,
+    ) -> Option<i32> {
         None
     }
     fn take_halt(&mut self) -> Option<game_core::engine::Halt> {
@@ -136,6 +148,29 @@ fn with_run<C: HostCtx, T>(
     Ok(v)
 }
 
+/// [`with_run`] plus the guest answer log: the apply owns both for its
+/// duration (it completes the journal entry and writes the answer there).
+fn with_run_log<C: HostCtx, T>(
+    c: &mut C,
+    f: impl FnOnce(&mut dyn std::any::Any, &mut game_core::engine::GuestLog) -> T,
+) -> Result<T, HostError> {
+    let mut run = {
+        let st = c.st_mut();
+        st.world
+            .take()
+            .ok_or_else(|| HostError::trap("inline host with no world"))?
+    };
+    let mut log = {
+        let st = c.st_mut();
+        std::mem::take(&mut st.log)
+    };
+    let v = f(&mut run, &mut log);
+    let st = c.st_mut();
+    st.world = Some(run);
+    st.log = log;
+    Ok(v)
+}
+
 /// Answer `p` inline. `Ok(Some(v))` = the guest continues with `v` (recorded
 /// on the run's answer log so a nested `play_card` cursor remains aligned);
 /// `Ok(None)` = no inline host, or it declined -- the caller pauses as today.
@@ -145,14 +180,17 @@ pub fn prompt_or_inline<C: HostCtx>(c: &mut C, p: Prompt) -> Result<Option<i32>,
     record(c, v)
 }
 
-/// Apply `req` inline. Same result shape as [`prompt_or_inline`].
+/// Apply `req` inline with the journal start the pause point decided. Same
+/// result shape as [`prompt_or_inline`]; on an answer the apply itself has
+/// already completed the entry and written the answer, so there is no
+/// [`record`].
 pub fn request_or_inline<C: HostCtx>(
     c: &mut C,
     req: HostRequest,
+    start: game_core::engine::JournalStart,
 ) -> Result<Option<i32>, HostError> {
     let Some(h) = top() else { return Ok(None) };
-    let v = with_run(c, |run| unsafe { &mut *h }.apply(run, req))?;
-    record(c, v)
+    with_run_log(c, |run, log| unsafe { &mut *h }.apply(run, log, start, req))
 }
 
 /// Push an inline answer onto the run's answer log and advance the cursor --
@@ -160,8 +198,8 @@ pub fn request_or_inline<C: HostCtx>(
 fn record<C: HostCtx>(c: &mut C, v: Option<i32>) -> Result<Option<i32>, HostError> {
     if let Some(v) = v {
         let st = c.st_mut();
-        st.answers.push(v);
-        st.next_answer += 1;
+        st.log.answers.push(v);
+        st.log.cursor += 1;
     }
     Ok(v)
 }
@@ -190,15 +228,26 @@ pub fn request_always<C: HostCtx>(
 ) -> Result<i32, HostError> {
     {
         let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
+        if st.log.answers.get(st.log.cursor).is_some() {
+            let answer = st.log.cursor;
+            let condition = request_condition(&st.log, answer);
+            let after_money = request_after_money(&st.log, answer);
+            let after_pos = request_after_pos(&st.log, answer);
+            st.w().after_host(
+                answer,
+                condition.as_ref(),
+                after_money.as_deref(),
+                after_pos,
+            );
+            st.log.cursor += 1;
         }
     }
     // A simulation has no join routine of its own; answer through the inline
     // host when there is one.
-    if let Some(v) = request_or_inline(c, req.clone())? {
+    if let Some(v) = request_or_inline(c, req.clone(), game_core::engine::JournalStart::Push)? {
+        let st = c.st_mut();
+        st.host_request = None;
+        st.host_journal_start = None;
         return Ok(v);
     }
     let st = c.st_mut();
@@ -209,29 +258,215 @@ pub fn request_always<C: HostCtx>(
     }
 }
 
-/// The shared pause point for a host request: consume a logged answer, else
-/// answer inline (simulation mode), else park `req` on `host_request` and
-/// return the caller's pause shape.
+/// The shared pause point for a host request (design G10 §6.3.2): re-apply an
+/// in-flight entry, consume a logged answer (replacing it when the body
+/// recomputed the arguments), else answer inline (simulation mode), else park
+/// `req` on `host_request` with the start the drive must apply it under.
 pub fn request_or_pause<C: HostCtx>(
     c: &mut C,
     req: HostRequest,
     pause: Pause,
 ) -> Result<i32, HostError> {
+    let mirrored = game_core::engine::JournalRequest::from(&req);
+    let mut answer = None;
     {
         let st = c.st_mut();
-        if let Some(&x) = st.answers.get(st.next_answer) {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.w().replay_host(&req, x);
-            st.next_answer += 1;
-            return Ok(x);
+        let at = st.log.cursor;
+        // 1. An in-flight entry is re-entered at its cursor. Several in-flight
+        //    entries can share a cursor (an enclosing request's own answer is
+        //    not written yet); the first entry still there is the outermost.
+        let outstanding = st.log.reapply.get(&at).copied().unwrap_or(0);
+        if outstanding > 0 {
+            let mark = st.log.reapply.get_mut(&at).expect("mark present");
+            *mark -= 1;
+            if *mark == 0 {
+                st.log.reapply.remove(&at);
+            }
+            // A mark can also name a row the previous `Replace` already
+            // completed: the body recomputed its arguments against the rewound
+            // world, so the completed row goes back in flight and is applied
+            // under them (the stale ones were computed before the rewind).
+            let index = st
+                .log
+                .journal
+                .iter()
+                .position(|e| e.slot == at)
+                .or_else(|| {
+                    let row = st.log.last.remove(&at)?;
+                    let i = st.log.journal.len();
+                    st.log.journal.push(row);
+                    Some(i)
+                });
+            if let Some(index) = index {
+                let entry = st.log.journal[index].clone();
+                // The routine mutates live and has to start from the request's
+                // pre-state.
+                st.w().restore_from_world(&entry.condition);
+                st.w().apply_state_overlay(&entry.guest);
+                if entry.request != mirrored {
+                    // The body recomputed this call's arguments from the
+                    // post-request world: re-apply under the new ones, and drop
+                    // the deeper entries the restore just undid.
+                    st.log.journal[index].request = mirrored;
+                    st.log.journal.truncate(index + 1);
+                    st.log.reapply.retain(|&k, _| k <= at);
+                    st.log.reapplied.retain(|&k| k <= at);
+                }
+                // The entry is being applied now; a further re-run of this
+                // routine in the same drive must reuse the effects instead of
+                // applying a second time.
+                st.log.applied.insert(at);
+                st.host_request = Some(req);
+                st.host_journal_start = Some(game_core::engine::JournalStart::Resume(index));
+                return pause_now(pause);
+            }
+            // A mark without an entry: fall through to the answer path.
+        }
+        // 2. A logged answer at this cursor.
+        if let Some(x) = st.log.answers.get(at).copied() {
+            // The request completed. Reuse its answer. The one exception is
+            // a `Move` whose destination the body recomputed: the target
+            // effect moved (the owned set changed under the landing), so the
+            // stale application is re-applied under the new plan -- at most
+            // once per slot in a drive, because the body re-derives the
+            // destination from the world it just changed and the recomputation
+            // can keep differing; every later reach consumes. Every other kind
+            // consumes: its effect is already on live and is not a positional
+            // thing a fresh argument could supersede.
+            let row = st.log.last.get(&at).cloned();
+            let drifted = !st.log.reapplied.contains(&at)
+                && row
+                    .as_ref()
+                    .is_some_and(|e| recomputed(&e.request, &mirrored));
+            if let Some(entry) = row.as_ref().filter(|_| drifted) {
+                let mut req = req;
+                // The position is a move's whole effect and the plan states
+                // the new destination absolutely, so the re-run overwrites it;
+                // the nested pipeline it opened (a settle, the agent's deal)
+                // is kept rather than rewound, which is what the recomputed
+                // read saw. The old landing already settled -- only where the
+                // player ends up is corrected.
+                if let HostRequest::Move { plan, .. } = &mut req {
+                    plan.settles = false;
+                }
+                // Later answers stay: they were given at their own slots and
+                // the re-run reaches those slots again in order. Dropping them
+                // made the commit pass re-ask a prompt the player had already
+                // answered (tsukushi: the settle yes was lost and the re-ask
+                // took the provider's default no).
+                st.log.journal.retain(|e| e.slot < at);
+                // `last` rows stay for the same reason as the answers: their
+                // absolute results (the settle's money, above all) have to be
+                // re-imposed when the re-run reaches the slot again.
+
+                st.log.reapply.retain(|&k, _| k <= at);
+                st.log.reapplied.retain(|&k| k <= at);
+                st.log.reapplied.insert(at);
+                st.host_request = Some(req);
+                st.host_journal_start = Some(game_core::engine::JournalStart::Replace(at));
+                return pause_now(pause);
+            }
+            // The effect is already on live; the answer is reused. A row from
+            // an earlier drive is a dead answer whose effect went with that
+            // run -- it still answers positionally so the replay stays aligned.
+            let condition = request_condition(&st.log, at);
+            let after_money = request_after_money(&st.log, at);
+            let after_pos = request_after_pos(&st.log, at);
+            st.w()
+                .after_host(at, condition.as_ref(), after_money.as_deref(), after_pos);
+            // A zone request's row half is a live-side write: the re-run's
+            // earlier writes put the row back on the copy (`after_host` laid
+            // them over the adopted world), so re-apply what the request took
+            // away. Other kinds are idempotent/no-ops here.
+            st.w().replay_host(&req, x, condition.as_ref());
+            st.log.cursor += 1;
+            answer = Some(x);
         }
     }
-    if let Some(v) = request_or_inline(c, req.clone())? {
-        return Ok(v);
+    let Some(x) = answer else {
+        // 3. A brand-new request.
+        if let Some(v) = request_or_inline(c, req.clone(), game_core::engine::JournalStart::Push)? {
+            let st = c.st_mut();
+            st.host_request = None;
+            st.host_journal_start = None;
+            return Ok(v);
+        }
+        let st = c.st_mut();
+        // Applied once the drive answers it; a re-run in the same drive must
+        // reuse the effect (the world is live, not rebuilt). A move counts as
+        // its own first application: its nested routines ran to completion
+        // before the body restarted, so reaching it again reuses them.
+        st.log.applied.insert(st.log.cursor);
+        st.host_request = Some(req);
+        st.host_journal_start = Some(game_core::engine::JournalStart::Push);
+        return pause_now(pause);
+    };
+    Ok(x)
+}
+
+/// Did the body recompute this request's arguments? Only a move is compared:
+/// its plan is the body's own computation and a changed destination is the
+/// whole point of the re-application. Other requests carry values that
+/// oscillate between the restored pre-state and the settled one (an offer's
+/// candidate list gains back the tile just bought), so comparing them would
+/// re-apply in a loop while their positional answer stays valid.
+fn recomputed(
+    old: &game_core::engine::JournalRequest,
+    new: &game_core::engine::JournalRequest,
+) -> bool {
+    match (old, new) {
+        (
+            game_core::engine::JournalRequest::Move { plan: a, .. },
+            game_core::engine::JournalRequest::Move { plan: b, .. },
+        ) => {
+            // Shape only: the destination the body re-derived. The request
+            // standing for the replacement has `settles` cleared (the old
+            // landing already settled), so the whole plan never compares equal.
+            (
+                a.kind,
+                a.teleport_to,
+                a.steps,
+                a.extra_steps,
+                &a.stop_at,
+                a.forced,
+            ) != (
+                b.kind,
+                b.teleport_to,
+                b.steps,
+                b.extra_steps,
+                &b.stop_at,
+                b.forced,
+            )
+        }
+        _ => false,
     }
-    let st = c.st_mut();
-    st.host_request = Some(req);
+}
+
+/// The world a completed request was applied from (its journal `last` or
+/// still-journaled row), for the copy refresh's crossing base.
+fn request_condition(
+    log: &game_core::engine::GuestLog,
+    at: usize,
+) -> Option<game_core::engine::World> {
+    log.last
+        .get(&at)
+        .or_else(|| log.journal.iter().find(|e| e.slot == at))
+        .map(|e| (*e.condition).clone())
+}
+
+/// Every seat's money right after the request applied, from its completed row.
+fn request_after_money(log: &game_core::engine::GuestLog, at: usize) -> Option<Vec<i32>> {
+    log.last.get(&at).and_then(|e| e.after_money.clone())
+}
+
+/// The mover and its landing (`Move` only), from the completed row.
+fn request_after_pos(log: &game_core::engine::GuestLog, at: usize) -> Option<(i32, i32)> {
+    log.last
+        .get(&at)
+        .and_then(|e| e.after_pos.map(|pos| (e.player, pos)))
+}
+
+fn pause_now(pause: Pause) -> Result<i32, HostError> {
     match pause {
         Pause::Sentinel => Ok(card_sdk::abi::EXIT_NEED_INPUT),
         Pause::Trap => Err(HostError::NeedInput),
@@ -244,8 +479,8 @@ pub fn request_or_pause<C: HostCtx>(
 pub fn prompt_or_pause<C: HostCtx>(c: &mut C, p: Prompt) -> Result<i32, HostError> {
     {
         let st = c.st_mut();
-        if let Some(&x) = st.answers.get(st.next_answer) {
-            st.next_answer += 1;
+        if let Some(&x) = st.log.answers.get(st.log.cursor) {
+            st.log.cursor += 1;
             return Ok(x);
         }
     }

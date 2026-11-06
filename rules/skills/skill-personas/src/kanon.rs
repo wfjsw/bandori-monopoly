@@ -63,7 +63,8 @@ pub const KANON: CardDef = CardDef::new(
             on_plan,
         )),
     ],
-).rule();
+)
+.rule();
 
 /// (1) 「游戏开始起点为#30弦卷豪宅」.
 fn at_start(player_id: i32) -> card_sdk::Asked {

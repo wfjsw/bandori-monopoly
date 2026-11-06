@@ -724,7 +724,10 @@ fn a_deck_reveal_during_a_public_look_lists_each_card_once() {
     m.act(1, &play("TEST:lookReveal")).expect("play");
     let st = m.state();
     assert_eq!(st.prompt.kind, "choice", "the body halts mid-look");
-    let reveal = st.players[me].reveal.as_ref().expect("the deck is published");
+    let reveal = st.players[me]
+        .reveal
+        .as_ref()
+        .expect("the deck is published");
     assert_eq!(
         reveal.deck,
         vec!["TEST:c", "TEST:a", "TEST:b"],
@@ -745,7 +748,10 @@ fn a_leaked_frame_is_released_by_the_commit_net() {
     ];
     m.act(1, &play("TEST:lookLeak")).expect("play");
     let st = m.state();
-    assert!(st.players[me].reveal.is_none(), "a private look publishes nothing");
+    assert!(
+        st.players[me].reveal.is_none(),
+        "a private look publishes nothing"
+    );
     assert_eq!(st.players[me].draw, 3, "both held cards are back");
     assert_eq!(
         m.world().hidden[me].deck,

@@ -21,7 +21,6 @@ const ID: &str = "通用:[都筑诗船]Parking Space";
 
 const SLOT_STAY: &str = "parking_space_stay";
 
-
 pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[

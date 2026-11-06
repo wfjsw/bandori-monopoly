@@ -458,7 +458,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             .iter()
             .map(|n| {
                 let v = if self.owner_seat >= 0 {
-                    self.src.state_get(self.owner_seat, n) as i64
+                    slot_value(self.src, self.owner_seat, n)
                 } else {
                     0
                 };
@@ -1920,7 +1920,22 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.uikaImprisoned.bonus",
     // `star_beat` banked build layers (`ctx::inc_slot(player_id, "star_beat.layers", ±1)`).
     "star_beat.layers",
+    // `no_breakup` armed marker (`ctx::set_slot(player_id, "latch:nb_armed", 1)`,
+    // cleared by either `tileResolved` terminal).
+    "nb_armed",
 ];
+
+/// Read one [`SLOT_NAMES`] key off a player. A latch stored under the
+/// engine's `latch:` crossing prefix wins over the bare key, so a card may
+/// arm a latch under either convention and a condition's `slot('name')`
+/// still sees it.
+pub fn slot_value<S: SnapSrc>(world: &S, owner: i32, name: &str) -> i64 {
+    let v = world.state_get(owner, name);
+    if v != 0 {
+        return v as i64;
+    }
+    world.state_get(owner, &format!("latch:{name}")) as i64
+}
 
 /// Fill the per-candidate slot / token tables a condition may read
 /// (`slot('asUsualTurn')`, `held(kind)`). Only worth the copy when the
@@ -1936,8 +1951,11 @@ pub fn fill_candidate_extras<S: SnapSrc>(
         // The host stores latches as bare player-state keys -- the same key
         // `ctx::slot(player_id, name)` reads through `CardWorld::slot`.
         for name in SLOT_NAMES {
-            let v = world.state_get(owner, name);
-            cand.slots.insert(name.to_string(), v as i64);
+            let v = slot_value(world, owner, name);
+            // Register both spellings so a condition may write either the bare
+            // name or the `latch:`-prefixed key.
+            cand.slots.insert(name.to_string(), v);
+            cand.slots.insert(format!("latch:{name}"), v);
         }
     }
 }

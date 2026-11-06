@@ -336,6 +336,7 @@
   "log.kind.cardDetached": "Detached",
   "log.kind.openingHandDealt": "Opening hand",
   "log.kind.spendBefore": "Before spend",
+  "log.kind.eventResolved": "Event resolved",
   "anim.chainKind.21": "Layer grant",
   "anim.chainKind.onBoardGate": "On board",
   "anim.chainKind.targetableGate": "Targetable",

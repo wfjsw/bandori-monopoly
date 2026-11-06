@@ -65,8 +65,9 @@ fn action_at_a_filter_kind_runs() {
     }
     assert!(
         saw(&t, mark, "plan_offer_body"),
-        "the accepted body ran: {:?}",
-        t.keys_since(mark)
+        "the accepted body ran: {:?} tail={:?}",
+        t.keys_since(mark),
+        t.recent_keys(30)
     );
     assert_eq!(
         walked(&t, start),

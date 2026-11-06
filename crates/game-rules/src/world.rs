@@ -42,6 +42,9 @@ pub struct Trigger {
     /// The board **position** of the event, `-1` where there is none
     /// (`trigger::position`). Equal to `tile` with no swap.
     pub position: i32,
+    /// On an `event` raise: how many copies of the drawn card were still in
+    /// the deck when it was popped. `0` elsewhere.
+    pub ordinal: i32,
     /// The amount (`t.Pay.amount` on pay triggers). On a fold stage this is
     /// the **composed** figure and `fold_input` is what bodies read.
     pub value: i32,
@@ -113,6 +116,12 @@ pub struct Trigger {
     pub settle_tile: i32,
     /// The settle's terminal outcome (`settle.outcome`), only on `tileResolved`.
     pub outcome: Option<game_core::engine::SettleOutcome>,
+    /// The **instance** whose card caused this trigger, `None` otherwise.
+    pub by_card_instance: Option<i32>,
+    /// The seat a landed `redirect` moved this designation from.
+    pub redirected_from: Option<i32>,
+    /// The settle this trigger belongs to, from `settleBody` on.
+    pub settle_facts: Option<game_core::engine::rules::SettleFacts>,
     /// The `ChargePaying` window came from a skill cost (`charge_is_skill`).
     pub charge_skill: bool,
     /// The card whose effect this link *is*: the raised play's card on a root
@@ -301,11 +310,15 @@ impl Default for Trigger {
             name: None,
             uid: 0,
             instance: -1,
+            ordinal: 0,
             reason: None,
             join_redirect: None,
             join_used: false,
             settle_tile: -1,
             outcome: None,
+            by_card_instance: None,
+            redirected_from: None,
+            settle_facts: None,
             zone: None,
             play_outcome: None,
             out_cause: None,
@@ -368,6 +381,9 @@ impl Trigger {
             buy: None,
             roll_source: game_core::engine::rules::RollSource::Unattributed,
             roll: None,
+            by_card_instance: None,
+            redirected_from: None,
+            settle_facts: None,
             negation: game_core::engine::rules::Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -378,6 +394,7 @@ impl Trigger {
             name: None,
             uid: 0,
             instance: -1,
+            ordinal: 0,
             reason: None,
             join_redirect: None,
             join_used: false,
@@ -777,7 +794,19 @@ pub trait CardWorld: Clone + 'static {
 
     /// Adopt the recorded pile state of an already-applied host request.
     /// The default keeps standalone host fixtures independent of engine replay.
-    fn after_host(&mut self, _answer: usize) {}
+    fn after_host(
+        &mut self,
+        _answer: usize,
+        _condition: Option<&game_core::engine::World>,
+        _after_money: Option<&[i32]>,
+        _after_pos: Option<(i32, i32)>,
+    ) {
+    }
+    /// Write a `World` checkpoint back (`HostJournalEntry::condition`, the
+    /// request's pre-state). Worlds that carry no `World` keep the default.
+    fn restore_from_world(&mut self, _from: &game_core::engine::World) {}
+    /// Apply a recorded guest-state decrease (`GuestOverlay::apply`).
+    fn apply_state_overlay(&mut self, _overlay: &game_core::engine::GuestOverlay) {}
 
     // ------------------------------------------------------------ hand/deck
     /// Draw `n` cards (reshuffles when needed). Returns drawn count.
@@ -800,13 +829,7 @@ pub trait CardWorld: Clone + 'static {
     fn to_discard(&mut self, player_id: i32, card: &str);
     /// Turn up to `count` cards of `owner`'s deck into an inspection frame for
     /// `looker`; returns how many were held. Raises `inspected` per card.
-    fn inspection_begin(
-        &mut self,
-        _looker: i32,
-        _owner: i32,
-        _count: i32,
-        _public: bool,
-    ) -> i32 {
+    fn inspection_begin(&mut self, _looker: i32, _owner: i32, _count: i32, _public: bool) -> i32 {
         0
     }
     /// Close `player`'s innermost frame; returns what went back to the deck.
@@ -879,7 +902,13 @@ pub trait CardWorld: Clone + 'static {
     /// run diverges from the pass that paused. `answer` is the logged return
     /// value. Only zone requests need it -- a plain answer carries no world
     /// change.
-    fn replay_host(&mut self, _req: &crate::host::HostRequest, _answer: i32) {}
+    fn replay_host(
+        &mut self,
+        _req: &crate::host::HostRequest,
+        _answer: i32,
+        _condition: Option<&game_core::engine::World>,
+    ) {
+    }
     /// Take the *running* instance off the field; returns the owner it left
     /// (or -1). No locator: the instance is the one the run was dispatched for.
     fn unplace_card(&mut self) -> i32;
@@ -1308,6 +1337,16 @@ pub trait CardWorld: Clone + 'static {
     fn self_uid(&self) -> i32 {
         -1
     }
+    /// The world-snapshot keys and the uids that took them (`-1` = no instance:
+    /// a hand play). World-snapshot ownership is cleanup bookkeeping, so a
+    /// world implementation that has no snapshots may leave it empty.
+    fn snapshot_owners(&self) -> Vec<(i32, Vec<i32>)> {
+        Vec::new()
+    }
+    /// Record `uid` as a further owner of snapshot `key` (the instance a hand
+    /// play placed, which its own hooks run as -- design G10 §7.6).
+    fn add_snapshot_owner(&mut self, _key: i32, _uid: i32) {}
+
     /// Pin the running instance's uid (message dispatch: the handler runs as
     /// the receiver, not as a fresh nested card).
     fn set_self_uid(&mut self, uid: i32) {
@@ -1367,7 +1406,8 @@ pub trait CardWorld: Clone + 'static {
     // -------------------------------------------------- per-player slots (V)
     /// A free-form counter. Sugar over the keyed state.
     fn slot(&self, player_id: i32, key: &str) -> i32 {
-        self.state_get(player_id, key)
+        let v = self.state_get(player_id, key);
+        v
     }
     fn set_slot(&mut self, player_id: i32, key: &str, value: i32) {
         self.state_set(player_id, key, value);

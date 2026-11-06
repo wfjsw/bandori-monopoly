@@ -34,13 +34,15 @@ fn file_board_rule(t: &mut Table, dest: i32) -> Result<(), String> {
     let uid = board_rule(t);
     t.set_state(0, "TEST.drop.uid", uid);
     t.set_state(0, "TEST.drop.dest", dest);
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| t.play(0, "TEST:drop").unwrap()))
-        .map_err(|p| {
-            p.downcast_ref::<String>()
-                .cloned()
-                .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_default()
-        })
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        t.play(0, "TEST:drop").unwrap()
+    }))
+    .map_err(|p| {
+        p.downcast_ref::<String>()
+            .cloned()
+            .or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default()
+    })
 }
 
 #[test]

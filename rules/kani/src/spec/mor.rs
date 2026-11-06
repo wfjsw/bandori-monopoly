@@ -167,7 +167,12 @@ pub fn xiaobai_01_effects_ok(effects: &[Effect], _payee: i32, _amount: i32) -> b
 
 /// Post: money is untouched by this body (the half lands later, off the
 /// rewritten pending leg).
-pub fn xiaobai_01_post_ok(post: &Snapshot, condition: &Snapshot, _payee: i32, _amount: i32) -> bool {
+pub fn xiaobai_01_post_ok(
+    post: &Snapshot,
+    condition: &Snapshot,
+    _payee: i32,
+    _amount: i32,
+) -> bool {
     crate::world::arr4_eq(post.money, condition.money)
 }
 

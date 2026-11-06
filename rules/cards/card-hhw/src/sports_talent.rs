@@ -117,16 +117,22 @@ fn roll_plan(_player_id: i32, v: PlanValue) -> PlanValue {
 }
 
 /// Called from [`on_roll_after`].
+///
+/// The body re-runs from its top after every host request (G10), so a loop
+/// cannot carry its local across the reroll's pause: the face is put on the
+/// trigger and the routine re-enters itself, which re-reads it. (A `loop` here
+/// restarted at the original main-move face and re-rolled without end.) The
+/// recast's face already carries the plan's `min_roll` floor (`run_direct_roll`
+/// floors what it hands back), so the re-entry sees 10 and stops even when the
+/// die comes up short — 「直至结果至少为10为止」.
 fn reroll_to_ten(player_id: i32) -> card_sdk::Asked {
-    let mut x = trigger::move_roll().unwrap_or(trigger::value());
-    loop {
-        if x >= 10 || ctx::player_out(player_id) {
-            break;
-        }
+    let x = trigger::move_roll().unwrap_or(trigger::value());
+    if x < 10 && !ctx::player_out(player_id) {
         // The recast raises `diceRollCast`, so the Cast entry pays it -- no
         // `reward()` call here.
-        x = ctx::do_move_roll(player_id)?.max(0);
-        trigger::set_move_roll(x);
+        let y = ctx::do_move_roll(player_id)?.max(0);
+        trigger::set_move_roll(y);
+        return reroll_to_ten(player_id);
     }
     ctx::log(
         player_id,

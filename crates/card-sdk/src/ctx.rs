@@ -965,6 +965,44 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
+/// Draw the top event and attribute it to `player_id` at `tile`, instead of to
+/// the drawing card's own owner and square (「视为其他玩家在“流星堂”抽取」).
+/// `tile = -1` means the drawer's current position. Runs the whole event
+/// pipeline like [`draw_event`] (including a deferral, if one is claimed).
+/// Answers nothing; the body must `?` it.
+pub fn draw_event_as(player_id: i32, tile: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::draw_event_as(player_id, tile) })?;
+    Ok(())
+}
+
+/// Suspend the `event` link this hook runs on: the event card is parked and
+/// resolves at the deferring instance's owner's next turn start.
+/// `true` = this instance claimed it (the record now exists), `false` = not an
+/// `event` trigger or another instance already claimed it. The caller spends
+/// its cost for the claim. Pauses like every request.
+pub fn event_defer() -> Result<bool, Prompt> {
+    Ok(asked(unsafe { sys::event_defer() })? != 0)
+}
+
+/// Checkpoint the board and answer the key (1-based; `0` = no world).
+/// Covers every player's position, keyed state and money and the board's
+/// owners, houses and mortgage flags. Pauses.
+pub fn world_snapshot() -> Result<i32, Prompt> {
+    asked(unsafe { sys::world_snapshot() })
+}
+
+/// Write a snapshot back (absolute, idempotent). `false` = no such key.
+/// Not a move: no abnormal gate, no move bookkeeping. Pauses.
+pub fn world_restore(key: i32) -> Result<bool, Prompt> {
+    Ok(asked(unsafe { sys::world_restore(key) })? != 0)
+}
+
+/// Drop a snapshot and forget its key. Pauses.
+pub fn world_snapshot_drop(key: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::world_snapshot_drop(key) })?;
+    Ok(())
+}
+
 /// Put one copy of `card` into `player_id`'s pile at `dest`.
 ///
 /// The named-card counterpart of [`send_to_dest`] / [`transfer_to_dest`], which
@@ -2582,6 +2620,11 @@ fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<
 
 /// Returns the chosen **tile**, not the index.
 /// Falls back to the first option if the answer is out of range.
+///
+/// The answer is logged as the **tile id** (`PromptKind::TileId`), like
+/// [`ask_tiles`]: a re-run recomputes the option list from the world the
+/// body's own landing changed (a nearest-tile list walks with the position),
+/// so a recorded index would slide to a different tile.
 pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
     #[cfg(kani)]
     {
@@ -2601,16 +2644,24 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
         if tiles.len() > 4 {
             kani::assert(false, "ask_tile: more than 4 tiles under Kani");
         }
-        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
-        return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
+        let t = ask_raw(PromptKind::TileId, player_id, title, text)?;
+        return Ok(if t < 0 {
+            tiles.first().copied().unwrap_or(-1)
+        } else {
+            t
+        });
     }
     #[cfg(not(kani))]
     {
         for &t in tiles {
             unsafe { sys::opt_int(t) }
         }
-        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
-        Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+        let t = ask_raw(PromptKind::TileId, player_id, title, text)?;
+        Ok(if t < 0 {
+            tiles.first().copied().unwrap_or(-1)
+        } else {
+            t
+        })
     }
 }
 
@@ -3957,6 +4008,49 @@ pub mod trigger {
         (v >= 0).then_some(v)
     }
 
+    /// The **instance** whose card caused this trigger, `None` on a board
+    /// raise. `by_card` is the seat; this is the identity that separates two
+    /// copies of one card (a copy excludes only its own release).
+    pub fn by_card_instance() -> Option<i32> {
+        let v = unsafe { sys::trig_by_card_instance() };
+        (v >= 0).then_some(v)
+    }
+
+    /// The `settle` link was negated: no body could run.
+    pub fn settle_cancelled() -> bool {
+        let facts = unsafe { sys::trig_settle_facts() };
+        facts & crate::abi::settle_fact::CANCELLED != 0
+    }
+
+    /// The `settleBody` link was negated: another card replaced the body.
+    pub fn settle_body_replaced() -> bool {
+        let facts = unsafe { sys::trig_settle_facts() };
+        facts & crate::abi::settle_fact::BODY_REPLACED != 0
+    }
+
+    /// A rent payment to this settle's owner, on the settle's own tile,
+    /// committed.
+    pub fn settle_paid() -> bool {
+        let facts = unsafe { sys::trig_settle_facts() };
+        facts & crate::abi::settle_fact::PAID != 0
+    }
+
+    /// What that payment moved (0 without [`settle_paid`]).
+    pub fn settle_paid_value() -> i32 {
+        unsafe { sys::trig_settle_paid_value() }
+    }
+
+    /// The seat a landed `redirect` moved this designation from, else `None`.
+    pub fn redirected_from() -> Option<i32> {
+        let v = unsafe { sys::trig_redirected_from() };
+        (v >= 0).then_some(v)
+    }
+
+    /// Did a redirect land on this designation?
+    pub fn redirected() -> bool {
+        redirected_from().is_some()
+    }
+
     /// Always false on a card-driven payment.
     pub fn pay_is_rent() -> bool {
         unsafe { sys::trig_pay_is_rent() != 0 }
@@ -4983,7 +5077,6 @@ pub fn card_build_as(
         ) != 0
     }
 }
-
 
 /// Where **this instance** sits, or -1 for "with its owner" / gone.
 /// [`placed_tile`] is the form for some *other* card.

@@ -971,6 +971,17 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::reveal_pile => arm_reveal_pile(a),
         Op::reveal_card => arm_reveal_card(a),
 
+        // ---- outcome / cause / world surface (G10) ----
+        Op::trig_by_card_instance => world::with_world(|w| w.trig_by_card_instance as i64),
+        Op::trig_redirected_from => world::with_world(|w| w.trig_redirected_from as i64),
+        Op::trig_settle_facts => world::with_world(|w| w.trig_settle_facts as i64),
+        Op::trig_settle_paid_value => world::with_world(|w| w.trig_settle_paid_value as i64),
+        Op::draw_event_as => arm_draw_event_as(a),
+        Op::event_defer => arm_event_defer(a),
+        Op::world_snapshot => arm_world_snapshot(a),
+        Op::world_restore => arm_world_restore(a),
+        Op::world_snapshot_drop => arm_world_snapshot_drop(a),
+
         // ---- events ----
         Op::event_is_active => {
             let id = name_id(a0, a1);
@@ -4714,6 +4725,167 @@ pub fn arm_trig_kind(a: Args) -> i64 {
     }
     card_sdk::native::write(p, bytes);
     bytes.len() as i64
+}
+
+/// `ctx::draw_event_as` -- attribute an event draw to `player` at `tile`.
+/// The draw itself is not modelled; the attribution is recorded.
+pub fn arm_draw_event_as(a: Args) -> i64 {
+    let [player, tile, ..] = a;
+    world::with_world_mut(|w| w.last_event_draw = (player, tile));
+    1
+}
+
+/// `ctx::event_defer` -- claim the `(event, player, draw)` triple for the running
+/// instance (design G10 §6.2). Only on an `event` trigger with a card; an
+/// existing record answers 1 for its own claimer and 0 for anyone else, so a
+/// re-run of the same instance never pushes a second record.
+pub fn arm_event_defer(_a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        if w.trig_kind != "event" || w.trig_card == 0 {
+            return 0;
+        }
+        let event = w.trig_card;
+        let player = w.trig_player;
+        let mut i = 0;
+        while i < w.deferred_n as usize {
+            if w.deferred[i].event == event
+                && w.deferred[i].player == player
+                && w.deferred[i].ordinal == w.trig_ordinal
+            {
+                return (w.deferred[i].deferrer_uid == w.bound_uid) as i64;
+            }
+            i += 1;
+        }
+        if (w.deferred_n as usize) >= crate::world::MAX_DEFERRED {
+            return 0;
+        }
+        let n = w.deferred_n as usize;
+        w.deferred[n] = crate::world::DeferredEvent {
+            event,
+            player,
+            tile: w.trig_tile,
+            ordinal: w.trig_ordinal,
+            due_owner: w.turn_player,
+            deferrer_uid: w.bound_uid,
+            after_turn_key: w.turn_key,
+        };
+        w.deferred_n += 1;
+        1
+    })
+}
+
+/// `ctx::world_snapshot` -- allocate a key (1-based) and copy the six
+/// families. `0` when the store is full.
+pub fn arm_world_snapshot(_a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        let mut slot = usize::MAX;
+        let mut i = 0;
+        while i < crate::world::MAX_SNAPSHOTS {
+            if !w.snapshots[i].used {
+                slot = i;
+                break;
+            }
+            i += 1;
+        }
+        if slot == usize::MAX {
+            return 0;
+        }
+        let key = w.next_snapshot_key.max(1);
+        w.next_snapshot_key = key + 1;
+        let mut data = crate::world::SnapData::empty();
+        data.pos = w.pos;
+        data.money = w.money;
+        data.state = w.player_keys;
+        let mut t = 0;
+        while t < 60 {
+            data.owners[t] = w.tiles[t].owner;
+            data.houses[t] = w.tiles[t].houses;
+            data.mortgaged[t] = w.tiles[t].mortgaged;
+            t += 1;
+        }
+        let e = &mut w.snapshots[slot];
+        e.used = true;
+        e.key = key;
+        e.owners[0] = w.bound_uid;
+        e.owners_n = 1;
+        e.data = data;
+        key as i64
+    })
+}
+
+/// `ctx::world_restore` -- absolute, idempotent write-back; `1` on a key the
+/// running instance owns, `0` otherwise.
+pub fn arm_world_restore(a: Args) -> i64 {
+    let [key, ..] = a;
+    world::with_world_mut(|w| {
+        let mut slot = usize::MAX;
+        let mut i = 0;
+        while i < crate::world::MAX_SNAPSHOTS {
+            if w.snapshots[i].used && w.snapshots[i].key == key {
+                slot = i;
+                break;
+            }
+            i += 1;
+        }
+        if slot == usize::MAX {
+            return 0;
+        }
+        let own = w.bound_uid;
+        let mut owned = false;
+        let mut o = 0;
+        while o < w.snapshots[slot].owners_n as usize {
+            if w.snapshots[slot].owners[o] == own {
+                owned = true;
+            }
+            o += 1;
+        }
+        if !owned {
+            return 0;
+        }
+        let data = w.snapshots[slot].data;
+        w.pos = data.pos;
+        w.money = data.money;
+        w.player_keys = data.state;
+        let mut t = 0;
+        while t < 60 {
+            w.tiles[t].owner = data.owners[t];
+            w.tiles[t].houses = data.houses[t];
+            w.tiles[t].mortgaged = data.mortgaged[t];
+            t += 1;
+        }
+        1
+    })
+}
+
+/// `ctx::world_snapshot_drop` -- forget the instance's ownership; the last
+/// owner frees the key.
+pub fn arm_world_snapshot_drop(a: Args) -> i64 {
+    let [key, ..] = a;
+    world::with_world_mut(|w| {
+        let mut i = 0;
+        while i < crate::world::MAX_SNAPSHOTS {
+            if w.snapshots[i].used && w.snapshots[i].key == key {
+                let own = w.bound_uid;
+                let e = &mut w.snapshots[i];
+                let mut kept = 0u8;
+                let mut o = 0;
+                while o < e.owners_n as usize {
+                    if e.owners[o] != own {
+                        e.owners[kept as usize] = e.owners[o];
+                        kept += 1;
+                    }
+                    o += 1;
+                }
+                e.owners_n = kept;
+                if kept == 0 {
+                    e.used = false;
+                }
+                break;
+            }
+            i += 1;
+        }
+        1
+    })
 }
 
 pub fn arm_trig_move_main(a: Args) -> i64 {

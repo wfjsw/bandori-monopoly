@@ -24,6 +24,7 @@
   "mana_champion_title": "歌唱大赛5连冠",
   "mana_champion_when": "你或你的格子即将受到来自你以外的效果影响",
   "no_breakup_ask": "[传送] 到哪一格？（结算后资金要变成有相同数字，否则回到原处并取消受到的效果）",
+  "no_breakup_same_digits": "资金会变成有相同数字",
   "no_breakup_mortgaged": "你本回合已经抵押/赎回过。",
   "no_breakup_moved": "Sumimi不会解散哦 的效果：{{who}} [传送] 到 {{tile}}",
   "no_breakup_repeated": "资金里有相同的数字",

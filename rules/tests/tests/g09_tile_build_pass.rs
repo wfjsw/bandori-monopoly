@@ -989,8 +989,13 @@ fn g09_no_add_house_build_path_left_raw() {
                 // documented pure move (`parking_space` / `hey_kids` /
                 // `sunset` / `pareo_far`).
                 let name = p.file_name().unwrap().to_string_lossy().into_owned();
-                let pure_move = ["parking_space.rs", "hey_kids.rs", "sunset.rs", "pareo_far.rs"]
-                    .contains(&name.as_str());
+                let pure_move = [
+                    "parking_space.rs",
+                    "hey_kids.rs",
+                    "sunset.rs",
+                    "pareo_far.rs",
+                ]
+                .contains(&name.as_str());
                 assert!(
                     pure_move,
                     "{}: raw add_house build path -- use card_build_as: {line}",
@@ -1007,8 +1012,8 @@ fn g09_no_add_house_build_path_left_raw() {
 fn g09_new_imports_are_wired() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
     let sys = std::fs::read_to_string(root.join("crates/card-sdk/src/ctx/sys.rs")).expect("sys");
-    let shims = std::fs::read_to_string(root.join("crates/game-rules/src/native_shims.rs"))
-        .expect("shims");
+    let shims =
+        std::fs::read_to_string(root.join("crates/game-rules/src/native_shims.rs")).expect("shims");
     for name in [
         "tile_at",
         "position_of_tile",

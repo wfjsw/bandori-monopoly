@@ -50,7 +50,8 @@ pub const RAS: CardDef = CardDef::new(
             at_turn_start_offer,
         )),
     ],
-).rule();
+)
+.rule();
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.
@@ -85,7 +86,9 @@ fn owned_livehouses(player_id: i32) -> alloc::vec::Vec<i32> {
 /// offer can name, so the entry must not activate (no prompt, no flash, no log).
 fn still_on_remembered(player_id: i32) -> bool {
     let t = state::get(player_id, ON_HOUSE);
-    t >= 0 && ctx::tile_at(ctx::player_pos(player_id)) == t && owned_livehouses(player_id).first().is_some()
+    t >= 0
+        && ctx::tile_at(ctx::player_pos(player_id)) == t
+        && owned_livehouses(player_id).first().is_some()
 }
 
 /// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.

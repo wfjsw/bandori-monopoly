@@ -45,7 +45,8 @@ pub const HINA: CardDef = CardDef::new(
             roll,
         )),
     ],
-).rule();
+)
+.rule();
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得冰川日菜
 /// 的（2）技能」.

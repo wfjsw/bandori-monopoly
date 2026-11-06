@@ -704,9 +704,7 @@ impl CardWorld for ConfWorld {
         self.events.push(format!("to_discard {player_id} {card}"));
         // The pile write's refill (`World::refill_after_pile_write` -> the
         // graveyard back into an emptied deck); the model does the same.
-        if self.inspection[p].is_empty()
-            && self.decks[p].is_empty()
-            && !self.discards[p].is_empty()
+        if self.inspection[p].is_empty() && self.decks[p].is_empty() && !self.discards[p].is_empty()
         {
             self.decks[p] = std::mem::take(&mut self.discards[p]);
         }
@@ -1566,7 +1564,15 @@ pub struct ConfHost {
 impl ConfHost {
     pub fn new(world: ConfWorld, answers: Vec<i32>) -> Self {
         Self {
-            state: HostState::new(ConfRules, world, answers, 0),
+            state: HostState::new(
+                ConfRules,
+                world,
+                game_core::engine::GuestLog {
+                    answers,
+                    ..Default::default()
+                },
+                0,
+            ),
             fuel: 1_000_000,
         }
     }
@@ -1615,7 +1621,7 @@ impl HostCtx for ConfHost {
             Err(HostError::trap(
                 "conf_model: nested call_entry not supported",
             )),
-            HostState::new(ConfRules, ConfWorld::new(), vec![], 0),
+            HostState::new(ConfRules, ConfWorld::new(), Default::default(), 0),
             self.fuel,
         )
     }
@@ -1634,7 +1640,13 @@ impl InlineHost for ConfInline {
         // fixed 0 is the interesting branch, or the branch is side-effect-free.
         Some(0)
     }
-    fn apply(&mut self, run: &mut dyn std::any::Any, req: HostRequest) -> Option<i32> {
+    fn apply(
+        &mut self,
+        run: &mut dyn std::any::Any,
+        _log: &mut game_core::engine::GuestLog,
+        _start: game_core::engine::JournalStart,
+        req: HostRequest,
+    ) -> Option<i32> {
         let w = run.downcast_mut::<ConfWorld>()?;
         match req {
             HostRequest::Pay {
@@ -1757,7 +1769,9 @@ impl InlineHost for ConfInline {
                 (0..count.max(0)).map(|_| (sides.max(1) + 1) / 2).sum()
             }),
             HostRequest::Marker { .. } => Some(1),
-            HostRequest::Draw { player_id: _, n, .. } => Some(n),
+            HostRequest::Draw {
+                player_id: _, n, ..
+            } => Some(n),
             // G11: the frame move is the answer, front-first, clamped to the
             // deck. The `inspected` raises are hook-side and not modelled.
             HostRequest::InspectionBegin {
@@ -1772,7 +1786,8 @@ impl InlineHost for ConfInline {
                 let held: Vec<String> = w.decks[o].drain(..n).collect();
                 w.inspection[o].extend(held);
                 w.inspection_public[o] = public;
-                w.events.push(format!("inspection_hold {looker} {owner} {n}"));
+                w.events
+                    .push(format!("inspection_hold {looker} {owner} {n}"));
                 Some(n as i32)
             }
             // `inspection_end` / `reveal_*` are applied by the engine directly
@@ -2642,8 +2657,11 @@ fn real_piles(c: &ConfHost) -> (Vec<String>, Vec<String>) {
 /// `(deck[1], frame[1])` from the model world, as names.
 fn model_piles() -> (Vec<String>, Vec<String>) {
     kworld::with_world(|w| {
-        let name = |id: u16| card_sdk::intern::resolve_str(card_sdk::intern::NameId(id)).to_string();
-        let deck = (0..w.deck_n as usize).map(|i| name(w.deck_pile[i])).collect();
+        let name =
+            |id: u16| card_sdk::intern::resolve_str(card_sdk::intern::NameId(id)).to_string();
+        let deck = (0..w.deck_n as usize)
+            .map(|i| name(w.deck_pile[i]))
+            .collect();
         let held = (0..w.inspection_n as usize)
             .map(|i| name(w.inspection_pile[i]))
             .collect();

@@ -123,7 +123,10 @@ fn g14_nnm_draw_over_cap_is_not_trimmed() {
         !t.p(0).over_hand_blocking(6),
         "「可超过上限」: the excess must not block"
     );
-    assert!(t.p(0).over_hand_allowed, "the exempt draw sets the allowance");
+    assert!(
+        t.p(0).over_hand_allowed,
+        "the exempt draw sets the allowance"
+    );
 }
 
 /// With the allowance set the end branch is open: `can_end_here` is true and
@@ -167,7 +170,12 @@ fn g14_turn_end_sweeps_a_lowered_cap() {
     t.end(0).expect("end");
     t.settle();
     decline_all(&mut t);
-    assert_eq!(t.hand(0).len(), 4, "swept to the lowered cap: {:?}", t.hand(0));
+    assert_eq!(
+        t.hand(0).len(),
+        4,
+        "swept to the lowered cap: {:?}",
+        t.hand(0)
+    );
     assert!(!t.p(0).over_hand_allowed);
 }
 
@@ -193,7 +201,8 @@ fn g14_discard_clears_the_allowance() {
     t.give(0, &["通用:THANKS PARTY!"]);
     assert_eq!(t.hand(0).len(), 6);
     assert!(t.p(0).over_hand_blocking(6), "an unallowed overflow blocks");
-    t.discard_card(0, "通用:THANKS PARTY!").expect("discard again");
+    t.discard_card(0, "通用:THANKS PARTY!")
+        .expect("discard again");
     move_quiet(&mut t);
     assert!(!t.p(0).over_hand_blocking(5));
 }
@@ -232,20 +241,28 @@ fn g14_draw_over_hand_limit_reaches_the_host() {
     // Drive the answer log like `rules/tests/tests/ruleset.rs`: the marker
     // window stands (1), the x ask is answered with option index 1 (= x 2),
     // the branch with 0 (draw x) -- appended at the slot the run names.
-    let mut answers: Vec<i32> = Vec::new();
+    let mut log: game_core::engine::GuestLog = Default::default();
     let out = loop {
-        match r.run(&w, call(NNM), &answers, None).unwrap() {
-            Outcome::NeedHost(HostRequest::Raise { .. }, _) => answers.push(1),
-            Outcome::NeedHost(HostRequest::Marker { .. }, _) => answers.push(1),
-            Outcome::NeedHost(HostRequest::Draw { over_hand_limit, .. }, _) => {
+        match r.run(&w, call(NNM), &log, None).unwrap() {
+            Outcome::NeedHost(HostRequest::Raise { .. }, _, _, _) => log.answers.push(1),
+            Outcome::NeedHost(HostRequest::Marker { .. }, _, _, _) => log.answers.push(1),
+            Outcome::NeedHost(
+                HostRequest::Draw {
+                    over_hand_limit, ..
+                },
+                _,
+                _,
+                _,
+            ) => {
                 assert!(over_hand_limit, "「可超过上限」 must reach the host");
                 break;
             }
-            Outcome::NeedInput(p, _) => {
-                while answers.len() < p.answer_slot as usize {
-                    answers.push(0);
+            Outcome::NeedInput(p, _, _) => {
+                while log.answers.len() < p.answer_slot as usize {
+                    log.answers.push(0);
                 }
-                answers.push(i32::from(p.title.key().contains("how_many")));
+                log.answers
+                    .push(i32::from(p.title.key().contains("how_many")));
             }
             other => panic!("expected the exempt draw request, got {other:?}"),
         }
@@ -253,16 +270,23 @@ fn g14_draw_over_hand_limit_reaches_the_host() {
     let _ = out;
 
     // Plain contrast: 10次招募 first pays (reply 0), then draws unexempt.
-    let mut answers: Vec<i32> = Vec::new();
+    let mut log: game_core::engine::GuestLog = Default::default();
     loop {
         match r
-            .run(&w, call("通用:10次招募（1回限定）"), &answers, None)
+            .run(&w, call("通用:10次招募（1回限定）"), &log, None)
             .unwrap()
         {
-            Outcome::NeedHost(HostRequest::Raise { .. }, _) => answers.push(1),
-            Outcome::NeedHost(HostRequest::Pay { .. }, _) => answers.push(0),
-            Outcome::NeedHost(HostRequest::PayCommand { .. }, _) => answers.push(0),
-            Outcome::NeedHost(HostRequest::Draw { over_hand_limit, .. }, _) => {
+            Outcome::NeedHost(HostRequest::Raise { .. }, _, _, _) => log.answers.push(1),
+            Outcome::NeedHost(HostRequest::Pay { .. }, _, _, _) => log.answers.push(0),
+            Outcome::NeedHost(HostRequest::PayCommand { .. }, _, _, _) => log.answers.push(0),
+            Outcome::NeedHost(
+                HostRequest::Draw {
+                    over_hand_limit, ..
+                },
+                _,
+                _,
+                _,
+            ) => {
                 assert!(!over_hand_limit, "a plain ctx::draw carries false");
                 break;
             }
@@ -277,13 +301,12 @@ fn g14_draw_over_hand_limit_reaches_the_host() {
 fn g14_effect_draw_schedules_the_discard() {
     let mut t = nnm_table(2);
     play_nnm_branch_one(&mut t, 2, 2);
-    let scheduled: Vec<_> = t
-        .m
-        .world()
-        .scheduled
-        .iter()
-        .filter(|s| s.entry == "discard_down_to_five")
-        .collect();
+    let scheduled: Vec<_> =
+        t.m.world()
+            .scheduled
+            .iter()
+            .filter(|s| s.entry == "discard_down_to_five")
+            .collect();
     assert_eq!(
         scheduled.len(),
         1,
@@ -319,10 +342,15 @@ fn g14_over_limit_log_part() {
     let mut t = nnm_table(2);
     let mark = t.mark();
     play_nnm_branch_one(&mut t, 2, 2);
-    let seen: Vec<String> = t.events_since(mark).iter().map(|e| format!("{:?}", e.msg)).collect();
+    let seen: Vec<String> = t
+        .events_since(mark)
+        .iter()
+        .map(|e| format!("{:?}", e.msg))
+        .collect();
     // The closing quote keeps `over_hand` from matching `over_hand_allowed`.
     assert!(
-        seen.iter().any(|m| m.contains("log.part.over_hand_allowed")),
+        seen.iter()
+            .any(|m| m.contains("log.part.over_hand_allowed")),
         "the exempt draw must log the allowed part: {seen:?}"
     );
     assert!(
@@ -339,13 +367,19 @@ fn g14_over_limit_log_part() {
     t.dice(&[1]);
     t.roll(0).expect("main move");
     decline_all(&mut t);
-    let seen: Vec<String> = t.events_since(mark).iter().map(|e| format!("{:?}", e.msg)).collect();
+    let seen: Vec<String> = t
+        .events_since(mark)
+        .iter()
+        .map(|e| format!("{:?}", e.msg))
+        .collect();
     assert!(
         seen.iter().any(|m| m.contains("log.part.over_hand\"")),
         "the plain overflow must log the plain part: {seen:?}"
     );
     assert!(
-        !seen.iter().any(|m| m.contains("log.part.over_hand_allowed")),
+        !seen
+            .iter()
+            .any(|m| m.contains("log.part.over_hand_allowed")),
         "a plain overflow must not log the allowed part: {seen:?}"
     );
 }
@@ -478,4 +512,3 @@ fn g_cards_01_allows_a_card_permitted_draw() {
 // (`ViewExtra::ai_playable` itself is pinned in
 // `crates/game-core/tests/view_extra.rs` -- its JSON twin is `aiPlayable` on
 // the frame, merged by both view builders.)
-

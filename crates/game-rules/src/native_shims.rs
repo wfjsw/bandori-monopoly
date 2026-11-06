@@ -108,6 +108,24 @@ pub trait HostOps {
     fn op_nearest(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_nearest_with_prop`
     fn op_nearest_with_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_by_card_instance`
+    fn op_trig_by_card_instance(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_settle_facts`
+    fn op_trig_settle_facts(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_settle_paid_value`
+    fn op_trig_settle_paid_value(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_trig_redirected_from`
+    fn op_trig_redirected_from(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_draw_event_as`
+    fn op_draw_event_as(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_event_defer`
+    fn op_event_defer(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_world_snapshot`
+    fn op_world_snapshot(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_world_restore`
+    fn op_world_restore(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_world_snapshot_drop`
+    fn op_world_snapshot_drop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_neighbor`
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_players_on_count`
@@ -1106,6 +1124,33 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_nearest_with_prop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::nearest_with_prop(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
     }
+    fn op_trig_by_card_instance(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_by_card_instance(self)? as i64)
+    }
+    fn op_trig_settle_facts(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_settle_facts(self)? as i64)
+    }
+    fn op_trig_settle_paid_value(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_settle_paid_value(self)? as i64)
+    }
+    fn op_trig_redirected_from(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::trig_redirected_from(self)? as i64)
+    }
+    fn op_draw_event_as(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::draw_event_as(self, a[0], a[1])? as i64)
+    }
+    fn op_event_defer(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::event_defer(self)? as i64)
+    }
+    fn op_world_snapshot(&mut self, _a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::world_snapshot(self)? as i64)
+    }
+    fn op_world_restore(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::world_restore(self, a[0])? as i64)
+    }
+    fn op_world_snapshot_drop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::world_snapshot_drop(self, a[0])? as i64)
+    }
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::neighbor(self, a[0], a[1])? as i64)
     }
@@ -1929,7 +1974,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
         let numerator = a[4] & 0xFFFF;
         let denominator = a[4] >> 16;
         Ok(crate::hostfns::card_build_as(
-            self, a[0], a[1], a[2], a[3], numerator, denominator, a[5],
+            self,
+            a[0],
+            a[1],
+            a[2],
+            a[3],
+            numerator,
+            denominator,
+            a[5],
         )? as i64)
     }
     fn op_build_price(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
@@ -2827,6 +2879,80 @@ pub unsafe extern "C-unwind" fn ruleset_nearest_with_prop(
 }
 
 #[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_by_card_instance() -> i32 {
+    with_host(|h| match h.op_trig_by_card_instance([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_settle_facts() -> i32 {
+    with_host(|h| match h.op_trig_settle_facts([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_settle_paid_value() -> i32 {
+    with_host(|h| match h.op_trig_settle_paid_value([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_trig_redirected_from() -> i32 {
+    with_host(|h| match h.op_trig_redirected_from([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_draw_event_as(player_id: i32, tile: i32) -> i32 {
+    with_host(
+        |h| match h.op_draw_event_as([player_id, tile, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_event_defer() -> i32 {
+    with_host(|h| match h.op_event_defer([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_world_snapshot() -> i32 {
+    with_host(|h| match h.op_world_snapshot([0; 6]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_world_restore(key: i32) -> i32 {
+    with_host(|h| match h.op_world_restore([key, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_world_snapshot_drop(key: i32) -> i32 {
+    with_host(|h| match h.op_world_snapshot_drop([key, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_dist(a: i32, b: i32) -> i32 {
     with_host(|h| match h.op_dist([a, b, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3148,26 +3274,32 @@ pub unsafe extern "C-unwind" fn ruleset_inspection_begin(
     count: i32,
     public: i32,
 ) -> i32 {
-    with_host(|h| match h.op_inspection_begin([looker, owner, count, public, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_inspection_begin([looker, owner, count, public, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_inspection_end(player_id: i32, shuffle: i32) -> i32 {
-    with_host(|h| match h.op_inspection_end([player_id, shuffle, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_inspection_end([player_id, shuffle, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_reveal_pile(player_id: i32, pile: i32, ptr: i32, len: i32) {
-    with_host(|h| match h.op_reveal_pile([player_id, pile, ptr, len, 0, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_reveal_pile([player_id, pile, ptr, len, 0, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -3178,10 +3310,12 @@ pub unsafe extern "C-unwind" fn ruleset_reveal_card(
     ptr: i32,
     len: i32,
 ) {
-    with_host(|h| match h.op_reveal_card([player_id, card_ptr, card_len, ptr, len, 0]) {
-        Ok(_) => {}
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_reveal_card([player_id, card_ptr, card_len, ptr, len, 0]) {
+            Ok(_) => {}
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]
@@ -5096,12 +5230,12 @@ pub unsafe extern "C-unwind" fn ruleset_card_build_as(
     owner_required: i32,
 ) -> i32 {
     let packed = (denominator << 16) | (numerator & 0xFFFF);
-    with_host(
-        |h| match h.op_card_build_as([player_id, tile, charge, amount, packed, owner_required]) {
+    with_host(|h| {
+        match h.op_card_build_as([player_id, tile, charge, amount, packed, owner_required]) {
             Ok(v) => v as i32,
             Err(e) => abort_host(e),
-        },
-    )
+        }
+    })
 }
 
 #[no_mangle]
@@ -5130,10 +5264,12 @@ pub unsafe extern "C-unwind" fn ruleset_build_discount() -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_tile_buildable(player_id: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_tile_buildable([player_id, tile, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_tile_buildable([player_id, tile, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]

@@ -391,7 +391,8 @@ fn filter_of(f: &card_sdk::abi::MarkFilter) -> game_core::state::MarkFilter<'_> 
 
 pub fn count_marks_f<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostError> {
     let raw = read_filter(c, fp, fl)?;
-    Ok(c.st().wr().count_marks(tile, &filter_of(&raw)))
+    let n = c.st().wr().count_marks(tile, &filter_of(&raw));
+    Ok(n)
 }
 
 pub fn bump_mark_f<C: HostCtx>(
@@ -459,11 +460,7 @@ pub fn add_counter_self<C: HostCtx>(
     max: i32,
 ) -> Result<i32, HostError> {
     let name = guest_str(c, np, nl)?;
-    let uid = c.st().wr().trigger().uid;
     let r = c.st_mut().w().add_counter(&name, n, max);
-    if std::env::var("DBG_HOOK").is_ok() && name == "crystals" {
-        eprintln!("ADDCOUNT n={} -> {} uid={}", n, r, uid);
-    }
     Ok(r)
 }
 
@@ -607,11 +604,13 @@ pub fn move_units<C: HostCtx>(
 }
 
 pub fn self_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok(c.st().wr().self_uid())
+    let v = c.st().wr().self_uid();
+    Ok(v)
 }
 
 pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    Ok({ c.st().wr().money(player_id) })
+    let v = c.st().wr().money(player_id);
+    Ok(v)
 }
 
 pub fn gain<C: HostCtx>(
@@ -681,6 +680,7 @@ pub fn adjust_money<C: HostCtx>(
             delta,
             src: Some(src.clone()),
         },
+        game_core::engine::JournalStart::Push,
     )? {
         return Ok(v);
     }
@@ -882,7 +882,8 @@ pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 }
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    Ok({ c.st().wr().owned_count(player_id) })
+    let n = c.st().wr().owned_count(player_id);
+    Ok(n)
 }
 
 pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32, HostError> {
@@ -914,7 +915,8 @@ pub fn tile_in<C: HostCtx>(
     cl: i32,
 ) -> Result<i32, HostError> {
     let class = guest_str(c, cptr, cl)?;
-    Ok(c.st().wr().tile_in(player_id, tile, &class) as i32)
+    let v = c.st().wr().tile_in(player_id, tile, &class) as i32;
+    Ok(v)
 }
 
 pub fn paid_in_settle<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
@@ -1315,12 +1317,7 @@ pub fn players_on_at<C: HostCtx>(
     Ok({ c.st().wr().players_on_at(tile, except, index) })
 }
 
-pub fn draw<C: HostCtx>(
-    c: &mut C,
-    player_id: i32,
-    n: i32,
-    flags: i32,
-) -> Result<i32, HostError> {
+pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32, flags: i32) -> Result<i32, HostError> {
     let over_hand_limit = flags & abi::draw_flag::OVER_HAND_LIMIT != 0;
     // Negative replies encode draws the engine already applied, including
     // replacements, refill and after-hooks. Guest replay only returns their
@@ -1344,31 +1341,19 @@ pub fn draw<C: HostCtx>(
             }
         }
     }
-    {
-        let st = c.st_mut();
-        if let Some(&reply) = st.answers.get(st.next_answer) {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(apply_reply(c, player_id, n, reply, over_hand_limit));
-        }
-    }
-    if let Some(reply) = crate::inline::request_or_inline(
+    let reply = crate::inline::request_or_pause(
         c,
         HostRequest::Draw {
             player_id,
             n,
             over_hand_limit,
         },
-    )? {
-        return Ok(apply_reply(c, player_id, n, reply, over_hand_limit));
+        crate::inline::Pause::Sentinel,
+    )?;
+    if reply == abi::EXIT_NEED_INPUT {
+        return Ok(reply);
     }
-    c.st_mut().host_request = Some(HostRequest::Draw {
-        player_id,
-        n,
-        over_hand_limit,
-    });
-    Ok(abi::EXIT_NEED_INPUT)
+    Ok(apply_reply(c, player_id, n, reply, over_hand_limit))
 }
 
 pub fn draw_event<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
@@ -1376,6 +1361,78 @@ pub fn draw_event<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErro
         let req = HostRequest::DrawEvent { player_id };
         return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
     }
+}
+
+/// Draw the top event attributed to `player_id` at `tile` (`-1` = its current
+/// position).
+pub fn draw_event_as<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostError> {
+    let req = HostRequest::DrawEventAs { player_id, tile };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+/// Suspend the `event` link this hook runs on. Reads the live trigger's
+/// mirror and answers 0 without a request on any other kind.
+pub fn event_defer<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    let (kind, event, player_id, tile, ordinal) = {
+        let t = c.st().wr().trigger();
+        (
+            t.kind.clone(),
+            t.card.clone(),
+            t.player_id,
+            t.tile,
+            t.ordinal,
+        )
+    };
+    if kind != card_sdk::abi::TriggerKind::Event {
+        return Ok(0);
+    }
+    let Some(event) = event else { return Ok(0) };
+    let req = HostRequest::EventDefer {
+        event,
+        player_id,
+        tile,
+        ordinal,
+    };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+pub fn trig_by_card_instance<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    let v = c.st().wr().trigger().by_card_instance.unwrap_or(-1);
+    Ok(v)
+}
+
+pub fn trig_settle_facts<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().settle_facts.map_or(0, |f| f.bits()))
+}
+
+pub fn trig_settle_paid_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .settle_facts
+        .map_or(0, |f| f.paid_value))
+}
+
+pub fn trig_redirected_from<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().redirected_from.unwrap_or(-1))
+}
+
+pub fn world_snapshot<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    crate::inline::request_or_pause(
+        c,
+        HostRequest::WorldSnapshot,
+        crate::inline::Pause::Sentinel,
+    )
+}
+
+pub fn world_restore<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> {
+    let req = HostRequest::WorldRestore { key };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
+pub fn world_snapshot_drop<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> {
+    let req = HostRequest::WorldSnapshotDrop { key };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
 pub fn pay_rent<C: HostCtx>(
@@ -1475,7 +1532,8 @@ pub fn take_card<C: HostCtx>(
     let src = crate::CardPile::from_i32(src)
         .ok_or_else(|| HostError::trap(format!("bad card pile {src}")))?;
     let id = guest_str(c, p, n)?;
-    Ok(c.st_mut().w().take_card(player_id, &id, src) as i32)
+    let r = c.st_mut().w().take_card(player_id, &id, src);
+    Ok(r as i32)
 }
 
 pub fn cards_in<C: HostCtx>(
@@ -1596,7 +1654,8 @@ pub fn hand_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError
 }
 
 pub fn deck_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    Ok({ c.st().wr().deck_count(player_id) })
+    let n = c.st().wr().deck_count(player_id);
+    Ok(n)
 }
 
 pub fn discard_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
@@ -1810,7 +1869,7 @@ pub fn state_get<C: HostCtx>(
     field: i32,
 ) -> Result<i32, HostError> {
     let key = guest_str(c, p, n)?;
-    Ok(match field {
+    let out = match field {
         1 => c.st().wr().state_min(player_id, &key),
         2 => c.st().wr().state_max(player_id, &key),
         3 => match c.st().wr().state_expires(player_id, &key) {
@@ -1819,8 +1878,9 @@ pub fn state_get<C: HostCtx>(
             Some(game_core::state::Tick::TurnEnd) => 2,
         },
         4 => c.st().wr().state_var(player_id, &key).flags as i32,
-        _ => c.st().wr().state_get(player_id, &key),
-    })
+        _ => c.st_mut().wr().state_get(player_id, &key),
+    };
+    Ok(out)
 }
 
 pub fn state_set<C: HostCtx>(
@@ -2047,10 +2107,9 @@ fn invoke_inner<C: HostCtx>(
     let mut nested = HostState::new(
         rules.clone(),
         st.world.take().expect("world present"),
-        std::mem::take(&mut st.answers),
+        std::mem::take(&mut st.log),
         st.depth + 1,
     );
-    nested.next_answer = st.next_answer;
     // The nested store carries the caller's stack so its body can read this
     // frame; the caller takes the stack back and pops it on return.
     nested.invoke_frames = std::mem::take(&mut st.invoke_frames);
@@ -2073,8 +2132,7 @@ fn invoke_inner<C: HostCtx>(
         w.set_play_from_hand(was_from_hand);
         w.set_placed_during_play(was_placed);
     }
-    st.answers = inner.answers;
-    st.next_answer = inner.next_answer;
+    st.log = inner.log;
     if inner.asked.is_some() {
         st.asked = inner.asked;
     }
@@ -2354,27 +2412,14 @@ pub fn teleport_as<C: HostCtx>(
     settles: i32,
     is_main_move: i32,
 ) -> Result<(), HostError> {
-    {
-        let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(());
-        }
-    }
-    let make = || HostRequest::TeleportAs {
+    let req = HostRequest::TeleportAs {
         player_id,
         tile,
         settles: settles != 0,
         is_main_move: is_main_move != 0,
     };
-    if crate::inline::request_or_inline(c, make())?.is_some() {
-        return Ok(());
-    }
-    let st = c.st_mut();
-    st.host_request = Some(make());
-    Err(HostError::NeedInput)
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)?;
+    Ok(())
 }
 
 /// [`log`] with an explicit event kind (the engine's own skip / over lines use
@@ -2644,8 +2689,42 @@ fn mark_placed_by_the_play<C: HostCtx>(c: &mut C) {
     let innermost = crate::wasm_rules::resolving_snapshot()
         .last()
         .map(|f| f.0.clone());
-    if play.is_some() && play == innermost && c.st_mut().w().play_from_hand() {
+    let from_hand = c.st_mut().w().play_from_hand();
+    let mark = play.is_some() && play == innermost && from_hand;
+    if mark {
         c.st_mut().w().set_placed_during_play(true);
+    }
+}
+
+/// A card a body places takes over that body's world-snapshot keys. A hand
+/// play's keys are owned by `-1` (the caller has no instance), while the
+/// `tileResolved` hook that restores on failure runs **as the placed copy** --
+/// without the copy on the owner row the hook's `world_restore` /
+/// `world_snapshot_drop` answer 0 and the revert silently does nothing
+/// (design G10 §6.5 / §7.6). The caller stays an owner: the play body may
+/// still use its own keys.
+///
+/// The caller is read **before** the placement: `place_card` makes the new
+/// instance the running body's own (`self_uid()` answers `uid` afterwards), so
+/// the row has to be looked up by the uid the body held at entry.
+fn adopt_snapshot_keys<C: HostCtx>(c: &mut C, caller: i32, uid: i32) {
+    if uid < 0 {
+        return;
+    }
+    let keys: Vec<i32> = c
+        .st()
+        .wr()
+        .snapshot_owners()
+        .into_iter()
+        .filter(|(_, owners)| owners.contains(&caller))
+        .map(|(key, _)| key)
+        .collect();
+    if keys.is_empty() {
+        return;
+    }
+    let w = c.st_mut().w();
+    for key in keys {
+        w.add_snapshot_owner(key, uid);
     }
 }
 
@@ -2664,9 +2743,13 @@ pub fn place_card_on<C: HostCtx>(
     // (design G06 §2.15): a counteraction's body runs with `play_from_hand`
     // off, so its placement must not mark the play being answered.
     mark_placed_by_the_play(c);
-    Ok(c.st_mut()
+    let caller = c.st().wr().self_uid();
+    let uid = c
+        .st_mut()
         .w()
-        .place_or(&card, |w| w.place_card_on(player_id, tile, &card, note)))
+        .place_or(&card, |w| w.place_card_on(player_id, tile, &card, note));
+    adopt_snapshot_keys(c, caller, uid);
+    Ok(uid)
 }
 
 pub fn place_card_at<C: HostCtx>(
@@ -2681,9 +2764,13 @@ pub fn place_card_at<C: HostCtx>(
     let note = guest_msg(c, p, n)?;
     // See `place_card_on`: only the play's own effect marks the play.
     mark_placed_by_the_play(c);
-    Ok(c.st_mut()
+    let caller = c.st().wr().self_uid();
+    let uid = c
+        .st_mut()
         .w()
-        .place_or(&card, |w| w.place_card(player_id, &card, note)))
+        .place_or(&card, |w| w.place_card(player_id, &card, note));
+    adopt_snapshot_keys(c, caller, uid);
+    Ok(uid)
 }
 
 pub fn set_dest<C: HostCtx>(c: &mut C, dest: i32, cause: i32) -> Result<(), HostError> {
@@ -2756,21 +2843,12 @@ pub fn teleport_to<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<(
     // write once; the replay reads the logged answer and skips. In
     // simulation mode the engine applies it inline and the guest
     // continues on the same world.
-    {
-        let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
-            return Ok(());
-        }
-    }
-    if crate::inline::request_or_inline(c, HostRequest::Teleport { player_id, tile })?.is_some() {
-        return Ok(());
-    }
-    let st = c.st_mut();
-    st.host_request = Some(HostRequest::Teleport { player_id, tile });
-    Err(HostError::NeedInput)
+    crate::inline::request_or_pause(
+        c,
+        HostRequest::Teleport { player_id, tile },
+        crate::inline::Pause::Trap,
+    )?;
+    Ok(())
 }
 
 pub fn gate<C: HostCtx>(c: &mut C, player_id: i32, kind: i32) -> Result<i32, HostError> {
@@ -2844,34 +2922,24 @@ pub fn run_planned_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, Ho
     // captured here because the run's world copy is discarded on pause
     // (in simulation mode it is not -- the engine runs the move against
     // the guest's own world and the body continues).
-    {
-        let st = c.st_mut();
-        if let Some(&ok) = st.answers.get(st.next_answer) {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            // A refused run (the abnormal gate answered 0) must re-arm the
-            // outer walk. The settled answer is replayed through this arm, so
-            // the body has just re-written every plan field *after* the gate
-            // call that `wasm_rules`' refusal cleanup cleared on the first
-            // pass; clear the teleport half again here so the caller's walk
-            // takes the roll (`spec/abi/G04-move-plan.md` §4.4, R16).
-            if ok == 0 {
-                let w = st.w();
-                w.set_teleport_to(None);
-                w.clear_void_walk();
-            }
-            st.next_answer += 1;
-            return Ok(ok);
-        }
-    }
     let plan = c.st().wr().move_plan();
-    let req = HostRequest::Move { player_id, plan };
-    if let Some(ok) = crate::inline::request_or_inline(c, req.clone())? {
-        return Ok(ok);
+    let ok = crate::inline::request_or_pause(
+        c,
+        HostRequest::Move { player_id, plan },
+        crate::inline::Pause::Trap,
+    )?;
+    // A refused run (the abnormal gate answered 0) must re-arm the outer
+    // walk. The settled answer is replayed through this arm, so the body has
+    // just re-written every plan field *after* the gate call that
+    // `wasm_rules`' refusal cleanup cleared on the first pass; clear the
+    // teleport half again here so the caller's walk takes the roll
+    // (`spec/abi/G04-move-plan.md` §4.4, R16).
+    if ok == 0 {
+        let w = c.st_mut().w();
+        w.set_teleport_to(None);
+        w.clear_void_walk();
     }
-    let st = c.st_mut();
-    st.host_request = Some(req);
-    Err(HostError::NeedInput)
+    Ok(ok)
 }
 
 pub fn settle_tile_at<C: HostCtx>(
@@ -3226,7 +3294,7 @@ pub fn ask<C: HostCtx>(
         // no longer derive any candidate (the write changed the world it read)
         // and still resolves. Only a prompt about to be *shown* must offer
         // something.
-        let replayed = st.answers.get(st.next_answer).is_some();
+        let replayed = st.log.answers.get(st.log.cursor).is_some();
         if kind != PromptKind::YesNo && options.is_empty() && !replayed {
             return Err(HostError::trap(format!(
                 "{} prompt with no options",
@@ -3236,7 +3304,7 @@ pub fn ask<C: HostCtx>(
         let prices = std::mem::take(&mut st.prices);
         let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
         let count = std::mem::replace(&mut st.count, 0);
-        (options, prices, ai_hint, count, st.next_answer)
+        (options, prices, ai_hint, count, st.log.cursor)
     };
     // Like `pay`: the pause is the sentinel as the return value, so
     // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
@@ -3283,7 +3351,12 @@ pub fn trig_position<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 }
 
 pub fn trig_move_path_length<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok(c.st().wr().trigger().mv.as_ref().map_or(0, |m| m.path.len() as i32))
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .mv
+        .as_ref()
+        .map_or(0, |m| m.path.len() as i32))
 }
 
 pub fn trig_move_path<C: HostCtx>(c: &mut C, index: i32) -> Result<i32, HostError> {
@@ -3729,10 +3802,9 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     let mut nested = HostState::new(
         rules.clone(),
         st.world.take().expect("world present"),
-        std::mem::take(&mut st.answers),
+        std::mem::take(&mut st.log),
         st.depth + 1,
     );
-    nested.next_answer = st.next_answer;
     let entry = match rules.card(card).and_then(|ci| ci.entry(OnKind::Play, None)) {
         Some(e) => e,
         None => {
@@ -3741,8 +3813,8 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
             if let Some(w) = st.world.as_mut() {
                 w.set_play_from_hand(was_from_hand);
             }
-            st.answers = nested.answers;
-            st.next_answer = nested.next_answer;
+            st.log.answers = nested.log.answers;
+            st.log.cursor = nested.log.cursor;
             let dest = st.w().leave_card(saved);
             c.set_fuel(fuel)?;
             return Ok(dest);
@@ -3755,8 +3827,7 @@ pub fn play_card<C: HostCtx>(c: &mut C, p: i32, n: i32, player_id: i32) -> Resul
     if let Some(w) = st.world.as_mut() {
         w.set_play_from_hand(was_from_hand);
     }
-    st.answers = inner.answers;
-    st.next_answer = inner.next_answer;
+    st.log = inner.log;
     if inner.asked.is_some() {
         st.asked = inner.asked;
     }
@@ -3896,7 +3967,7 @@ fn query_guard_entry<C: HostCtx>(
                 let mut world = c.st().wr().clone();
                 world.enter_invoke(id, instance);
                 let depth = c.st().depth + 1;
-                let nested = HostState::new(rules.clone(), world, vec![], depth);
+                let nested = HostState::new(rules.clone(), world, Default::default(), depth);
                 let (res, _inner, left) =
                     c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], true);
                 c.set_fuel(left)?;
@@ -3915,7 +3986,7 @@ fn query_guard_entry<C: HostCtx>(
         let mut world = c.st().wr().clone();
         world.enter_invoke(id, instance);
         let depth = c.st().depth + 1;
-        let nested = HostState::new(rules.clone(), world, vec![], depth);
+        let nested = HostState::new(rules.clone(), world, Default::default(), depth);
         let (res, _inner, left) =
             c.call_entry(nested, card, entry, export::OP_GUARD, player_id, &[], false);
         let _ = c.set_fuel(left);
@@ -4405,7 +4476,6 @@ pub fn send<C: HostCtx>(
                 "send nested deeper than {MAX_NESTING}"
             )));
         }
-        let fuel = c.fuel()?;
         let st = c.st_mut();
         // The handler runs **as the receiver instance** (user ruling
         // 2026-10-10: the tile-mark owner answers `"place"` and binds units to its own
@@ -4419,10 +4489,9 @@ pub fn send<C: HostCtx>(
         let mut nested = HostState::new(
             rules.clone(),
             st.world.take().expect("world present"),
-            std::mem::take(&mut st.answers),
+            std::mem::take(&mut st.log),
             st.depth + 1,
         );
-        nested.next_answer = st.next_answer;
         // Stash the message context; the handler reads it via `ctx::message`.
         nested.msg_sender_uid = sender_uid;
         nested.msg_sender_seat = sender_seat;
@@ -4436,8 +4505,7 @@ pub fn send<C: HostCtx>(
         if let Some(w) = st.world.as_mut() {
             w.set_play_from_hand(was_from_hand);
         }
-        st.answers = inner.answers;
-        st.next_answer = inner.next_answer;
+        st.log = inner.log;
         if inner.asked.is_some() {
             st.asked = inner.asked;
         }
@@ -4571,10 +4639,27 @@ pub fn join_open<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     if c.st().wr().trigger_join().is_some_and(|j| j.opened) {
         // Consume the logged answer for alignment with the replay.
         let st = c.st_mut();
-        if st.answers.get(st.next_answer).is_some() {
-            let answer = st.next_answer;
-            st.w().after_host(answer);
-            st.next_answer += 1;
+        if st.log.answers.get(st.log.cursor).is_some() {
+            let answer = st.log.cursor;
+            let condition = st
+                .log
+                .last
+                .get(&answer)
+                .or_else(|| st.log.journal.iter().find(|e| e.slot == answer))
+                .map(|e| (*e.condition).clone());
+            let after_money = st.log.last.get(&answer).and_then(|e| e.after_money.clone());
+            let after_pos = st
+                .log
+                .last
+                .get(&answer)
+                .and_then(|e| e.after_pos.map(|pos| (e.player, pos)));
+            st.w().after_host(
+                answer,
+                condition.as_ref(),
+                after_money.as_deref(),
+                after_pos,
+            );
+            st.log.cursor += 1;
         }
         return Ok(1);
     }

@@ -27,7 +27,8 @@ fn settle_chain_on_small_stack() {
     // original 512 KiB no longer fits at DEPTH on this toolchain (it aborts on
     // master too), and a debug drive frame costs ~280 KiB per settle, so two
     // live settles (the outermost one plus the first pumped one) need ~700 KiB
-    // on top of the harness. 1 MiB still fails the
+    // on top of the harness. G10's per-pause journal capture and overlay
+    // hand-off add about a third to each level's stack. 1 MiB still fails the
     // `settle_tile_at ↔ settle_tile_at` synchronous nest by an order of
     // magnitude -- 120 levels would need ~32 MiB -- so the work stack is what
     // carries the chain.

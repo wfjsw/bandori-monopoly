@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "sandbox")]
 use card_sdk::abi::{self, export, ABI_VERSION, IMPORT_MODULE};
+
 use card_sdk::abi::{AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -612,6 +613,24 @@ pub enum HostRequest {
     /// effect, filing to the event discard, the reshuffle-when-empty half).
     /// `docs/TILES.md`'s `ctx::draw_event`, what `tile:event`'s body calls.
     DrawEvent { player_id: i32 },
+    /// The same draw attributed to another seat and tile (`tile = -1` = the
+    /// drawer's current position). `ctx::draw_event_as`.
+    DrawEventAs { player_id: i32, tile: i32 },
+    /// Suspend the `event` link this hook runs on. The record releases at the
+    /// deferring instance's owner's next turn start. `ctx::event_defer`.
+    EventDefer {
+        event: String,
+        player_id: i32,
+        tile: i32,
+        /// The draw's ordinal -- two draws of one card differ by it.
+        ordinal: i32,
+    },
+    /// Checkpoint the board; answers the allocated key. `ctx::world_snapshot`.
+    WorldSnapshot,
+    /// Write a snapshot back (absolute, idempotent). `ctx::world_restore`.
+    WorldRestore { key: i32 },
+    /// Drop a snapshot. `ctx::world_snapshot_drop`.
+    WorldSnapshotDrop { key: i32 },
     /// 「pay拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
     /// pipeline (rent table / the flat deed dice / the agent's 「half-charge」 half-flag).
     /// `docs/TILES.md`'s `ctx::pay_rent`, what the deed tile rule / the flat-deed tile rule /
@@ -807,6 +826,443 @@ impl TileWriteOperation {
     }
 }
 
+/// The serializable journal mirror of one request (design G10 §6.3). Order and
+/// payload are the same; the journal outlives the store, so the enum it copies
+/// must be plain data.
+impl From<&HostRequest> for game_core::engine::JournalRequest {
+    fn from(req: &HostRequest) -> Self {
+        use game_core::engine::JournalRequest as J;
+        match req {
+            HostRequest::Pay {
+                from,
+                to,
+                amount,
+                src,
+                runs_total_stage,
+            } => J::Pay {
+                from: *from,
+                to: *to,
+                amount: *amount,
+                src: src.clone(),
+                runs_total_stage: *runs_total_stage,
+            },
+            HostRequest::PayCommand {
+                from,
+                to,
+                amount,
+                spec,
+                src,
+            } => J::PayCommand {
+                from: *from,
+                to: *to,
+                amount: *amount,
+                spec: *spec,
+                src: src.clone(),
+            },
+            HostRequest::PayTotal {
+                from,
+                to,
+                amount,
+                src,
+            } => J::PayTotal {
+                from: *from,
+                to: *to,
+                amount: *amount,
+                src: src.clone(),
+            },
+            HostRequest::Gate { player_id, kind } => J::Gate {
+                player_id: *player_id,
+                kind: kind.0,
+            },
+            HostRequest::Target {
+                player_id,
+                tile,
+                single_target,
+            } => J::Target {
+                player_id: *player_id,
+                tile: *tile,
+                single_target: *single_target,
+            },
+            HostRequest::Move { player_id, plan } => J::Move {
+                player_id: *player_id,
+                plan: plan.clone(),
+            },
+            HostRequest::Teleport { player_id, tile } => J::Teleport {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::TeleportAs {
+                player_id,
+                tile,
+                settles,
+                is_main_move,
+            } => J::TeleportAs {
+                player_id: *player_id,
+                tile: *tile,
+                settles: *settles,
+                is_main_move: *is_main_move,
+            },
+            HostRequest::SettleAt {
+                player_id,
+                tile,
+                is_main_move,
+            } => J::SettleAt {
+                player_id: *player_id,
+                tile: *tile,
+                is_main_move: *is_main_move,
+            },
+            HostRequest::JoinOpen { at } => J::JoinOpen { at: *at },
+            HostRequest::Buy {
+                player_id,
+                tile,
+                kind,
+            } => J::Buy {
+                player_id: *player_id,
+                tile: *tile,
+                kind: *kind,
+            },
+            HostRequest::Acquire {
+                player_id,
+                from,
+                tile,
+                price,
+            } => J::Acquire {
+                player_id: *player_id,
+                from: *from,
+                tile: *tile,
+                price: *price,
+            },
+            HostRequest::AgentOffer {
+                player_id,
+                agent,
+                tile,
+                kind,
+            } => J::AgentOffer {
+                player_id: *player_id,
+                agent: *agent,
+                tile: *tile,
+                kind: *kind,
+            },
+            HostRequest::Linger { player_id, expires } => J::Linger {
+                player_id: *player_id,
+                expires: *expires,
+            },
+            HostRequest::Build { player_id, tile } => J::Build {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::OfferBuild { player_id, tiles } => J::OfferBuild {
+                player_id: *player_id,
+                tiles: tiles.clone(),
+            },
+            HostRequest::Mortgage { player_id, tile } => J::Mortgage {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::ApplyMortgage {
+                player_id,
+                tile,
+                amount,
+            } => J::ApplyMortgage {
+                player_id: *player_id,
+                tile: *tile,
+                amount: *amount,
+            },
+            HostRequest::ApplyRedeem {
+                player_id,
+                tile,
+                amount,
+            } => J::ApplyRedeem {
+                player_id: *player_id,
+                tile: *tile,
+                amount: *amount,
+            },
+            HostRequest::PayBuy {
+                player_id,
+                tile,
+                amount,
+                kind,
+            } => J::PayBuy {
+                player_id: *player_id,
+                tile: *tile,
+                amount: *amount,
+                kind: *kind,
+            },
+            HostRequest::PayBuild {
+                player_id,
+                tile,
+                amount,
+            } => J::PayBuild {
+                player_id: *player_id,
+                tile: *tile,
+                amount: *amount,
+            },
+            HostRequest::AssignDeed {
+                player_id,
+                tile,
+                owner,
+                houses,
+                mortgaged,
+            } => J::AssignDeed {
+                player_id: *player_id,
+                tile: *tile,
+                owner: *owner,
+                houses: *houses,
+                mortgaged: *mortgaged,
+            },
+            HostRequest::Draw {
+                player_id,
+                n,
+                over_hand_limit: _,
+            } => J::Draw {
+                player_id: *player_id,
+                n: *n,
+            },
+            HostRequest::DrawEvent { player_id } => J::DrawEvent {
+                player_id: *player_id,
+            },
+            HostRequest::DrawEventAs { player_id, tile } => J::DrawEventAs {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::EventDefer {
+                event,
+                player_id,
+                tile,
+                ordinal,
+            } => J::EventDefer {
+                event: event.clone(),
+                player_id: *player_id,
+                tile: *tile,
+                ordinal: *ordinal,
+            },
+            HostRequest::WorldSnapshot => J::WorldSnapshot,
+            HostRequest::WorldRestore { key } => J::WorldRestore { key: *key },
+            HostRequest::WorldSnapshotDrop { key } => J::WorldSnapshotDrop { key: *key },
+            HostRequest::PayRent {
+                player_id,
+                tile,
+                half,
+            } => J::PayRent {
+                player_id: *player_id,
+                tile: *tile,
+                half: *half,
+            },
+            HostRequest::ChargeRent {
+                player_id,
+                tile,
+                milli_scale,
+            } => J::ChargeRent {
+                player_id: *player_id,
+                tile: *tile,
+                milli_scale: *milli_scale,
+            },
+            HostRequest::OfferBuy { player_id, tile } => J::OfferBuy {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::OfferForceBuy { player_id, tile } => J::OfferForceBuy {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::OfferBuildOne { player_id, tile } => J::OfferBuildOne {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::Roll {
+                player_id,
+                count,
+                sides,
+                purpose,
+                source,
+                window,
+            } => J::Roll {
+                player_id: *player_id,
+                count: *count,
+                sides: *sides,
+                purpose: *purpose,
+                source: *source,
+                window: *window,
+            },
+            HostRequest::RollRecast { roll_id, source } => J::RollRecast {
+                roll_id: *roll_id,
+                source: *source,
+            },
+            HostRequest::RollMove { player_id, source } => J::RollMove {
+                player_id: *player_id,
+                source: *source,
+            },
+            HostRequest::RaiseBought { player_id, tile } => J::RaiseBought {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::Raise {
+                player_id,
+                kind,
+                value,
+                tile,
+                position,
+                card,
+                deal_owner,
+                deal_houses,
+                deal_mortgaged,
+                charge_skill,
+            } => J::Raise {
+                player_id: *player_id,
+                kind: kind.clone(),
+                value: *value,
+                tile: *tile,
+                position: *position,
+                card: card.clone(),
+                deal_owner: *deal_owner,
+                deal_houses: *deal_houses,
+                deal_mortgaged: *deal_mortgaged,
+                charge_skill: *charge_skill,
+            },
+            HostRequest::AiAgentChoice { player_id, tiles } => J::AiAgentChoice {
+                player_id: *player_id,
+                tiles: tiles.clone(),
+            },
+            HostRequest::GainTyped {
+                player_id,
+                amount,
+                typ,
+                text,
+            } => J::GainTyped {
+                player_id: *player_id,
+                amount: *amount,
+                typ: typ.clone(),
+                text: text.clone(),
+            },
+            HostRequest::AdjustMoney {
+                player_id,
+                delta,
+                src,
+            } => J::AdjustMoney {
+                player_id: *player_id,
+                delta: *delta,
+                src: src.clone(),
+            },
+            HostRequest::Marker {
+                player_id,
+                name,
+                delta,
+            } => J::Marker {
+                player_id: *player_id,
+                name: name.clone(),
+                delta: *delta,
+            },
+            HostRequest::BuildAs {
+                player_id,
+                tile,
+                charge,
+                amount,
+                numerator,
+                denominator,
+                owner_required,
+            } => J::BuildAs {
+                player_id: *player_id,
+                tile: *tile,
+                charge: *charge,
+                amount: *amount,
+                numerator: *numerator,
+                denominator: *denominator,
+                owner_required: *owner_required,
+            },
+            HostRequest::TileWrite {
+                operation,
+                tile,
+                value,
+            } => J::TileWrite {
+                operation: *operation as i32,
+                tile: *tile,
+                value: *value,
+            },
+            HostRequest::InspectionBegin {
+                looker,
+                owner,
+                count,
+                public,
+            } => J::InspectionBegin {
+                looker: *looker,
+                owner: *owner,
+                count: *count,
+                public: *public,
+            },
+            HostRequest::InspectionEnd { player_id, shuffle } => J::InspectionEnd {
+                player_id: *player_id,
+                shuffle: *shuffle,
+            },
+            HostRequest::RevealPile {
+                player_id,
+                pile,
+                reason,
+            } => J::RevealPile {
+                player_id: *player_id,
+                pile: *pile,
+                reason: reason.clone(),
+            },
+            HostRequest::RevealCard {
+                player_id,
+                card,
+                reason,
+            } => J::RevealCard {
+                player_id: *player_id,
+                card: card.clone(),
+                reason: reason.clone(),
+            },
+            HostRequest::Leave {
+                uid,
+                destination,
+                to,
+                cause,
+            } => J::Leave {
+                uid: *uid,
+                destination: *destination,
+                to: *to,
+                cause: *cause,
+            },
+            HostRequest::Flip {
+                uid,
+                face_down,
+                cause,
+            } => J::Flip {
+                uid: *uid,
+                face_down: *face_down,
+                cause: *cause,
+            },
+            HostRequest::Attach {
+                host,
+                card,
+                cause,
+                face_down,
+            } => J::Attach {
+                host: *host,
+                card: card.clone(),
+                cause: *cause,
+                face_down: *face_down,
+            },
+            HostRequest::Detach {
+                uid,
+                destination,
+                cause,
+            } => J::Detach {
+                uid: *uid,
+                destination: *destination,
+                cause: *cause,
+            },
+            HostRequest::Rehome { tile, owner } => J::Rehome {
+                tile: *tile,
+                owner: *owner,
+            },
+            HostRequest::PlayHand { player_id, card } => J::PlayHand {
+                player_id: *player_id,
+                card: card.clone(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum RuleError {
     /// A module is not a valid card module (bad wasm, missing export, ABI mismatch, bad manifest).
@@ -857,19 +1313,25 @@ impl std::error::Error for RuleError {}
 /// Result of one effect run.
 #[derive(Debug)]
 pub enum Outcome<W> {
-    /// Finished: commit this world.
-    Done(W),
+    /// Finished: commit this world. The guest log rides along: the pass's
+    /// answers, the (now empty) journal and the completed-request rows.
+    Done(W, game_core::engine::GuestLog),
     /// Blocked on a prompt with no answer yet. Nothing was committed. The run's
     /// world rides along (when the backend has it) so the drive can recover the
     /// write-through lines the pass already posted: the re-run replaces them in
     /// place instead of appending a second copy.
-    NeedInput(Prompt, Option<W>),
+    NeedInput(Prompt, Option<W>, game_core::engine::GuestLog),
     /// Blocked on a host routine (buy/build/mortgage/move/pay/...) with no
     /// answer yet. The run's world rides along so the host can read the
     /// turn-ctx policy the card set up (`build_discount`, `lingering`, ...)
     /// before the routine runs against the live world -- the routine is not
     /// replayed, so those writes have to cross now.
-    NeedHost(HostRequest, W),
+    NeedHost(
+        HostRequest,
+        W,
+        game_core::engine::GuestLog,
+        Option<game_core::engine::JournalStart>,
+    ),
 }
 
 /// One card's answer to a hook point, from [`Ruleset::run_hook`].
@@ -1180,6 +1642,7 @@ impl RulesetBuilder {
             // (docs/ACTIVATION.md §3). Unique per card.
             let mut seen_ids = std::collections::BTreeSet::new();
             for (ei, o) in c.on.iter().enumerate() {
+                if c.id.contains("arisa_wait") || c.id.contains("等等等一下") {}
                 let ok = OnKind::from_i32(o.kind);
                 // ABI v73: kind/variant agreement -- a Filter may only list
                 // filter kinds and an Action only non-filter kinds. ABI v111
@@ -1740,7 +2203,7 @@ impl Ruleset {
         &self,
         world: &W,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
     ) -> Result<Outcome<W>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
@@ -1771,7 +2234,7 @@ impl Ruleset {
             Call::Build { .. } => info.entry(OnKind::Build, None),
         };
         let Some(entry) = entry else {
-            return Ok(Outcome::Done(world.clone()));
+            return Ok(Outcome::Done(world.clone(), log.clone()));
         };
         // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here.
         // (`Play`'s gate and `Counteract`'s `can_counteract` are their own
@@ -1782,7 +2245,9 @@ impl Ruleset {
             Call::Play { arg, .. } | Call::Counteract { arg, .. } => arg.clone(),
             _ => Vec::new(),
         };
-        let mut next_answer = 0;
+        // Start where the routine's answer log stands: a re-run resumes its
+        // own prefix instead of re-reading it from 0.
+        let mut next_answer = log.cursor;
         if matches!(
             call,
             Call::AtEnd { .. }
@@ -1820,11 +2285,11 @@ impl Ruleset {
                 player_id,
                 scope.as_ref(),
                 &cand,
-                answers,
+                log,
                 0,
                 false,
             )? {
-                Admitted::No { .. } => return Ok(Outcome::Done(world.clone())),
+                Admitted::No { .. } => return Ok(Outcome::Done(world.clone(), log.clone())),
                 Admitted::Paused(o) => return Ok(o),
                 Admitted::Yes {
                     next_answer: after,
@@ -1840,10 +2305,11 @@ impl Ruleset {
         // not be re-asked -- a body that unplaces its own instance would
         // otherwise refuse itself), but the entry's **declare** still has to
         // replay so the collected argument is served back and the answer
-        // cursor lines up with the body's own prompts.
+        // cursor lines up with the body's own prompts. The journal serves the
+        // recorded answers, so the replay is side-effect free.
         if matches!(call, Call::Hook { .. }) {
-            match self.declare_after(world, card, entry, player_id, answers, 0)? {
-                Admitted::No { .. } => return Ok(Outcome::Done(world.clone())),
+            match self.declare_after(world, card, entry, player_id, log, 0)? {
+                Admitted::No { .. } => return Ok(Outcome::Done(world.clone(), log.clone())),
                 Admitted::Paused(o) => return Ok(o),
                 Admitted::Yes {
                     next_answer: after,
@@ -1854,7 +2320,7 @@ impl Ruleset {
                 }
             }
         }
-        let mut store = self.store(world.clone(), answers, next_answer)?;
+        let mut store = self.store_logged(world.clone(), log, next_answer)?;
         if let Some(cb) = on_body.as_deref_mut() {
             cb(store.data_mut().w(), entry);
         }
@@ -1889,7 +2355,7 @@ impl Ruleset {
         player_id: i32,
         scope: Option<&rules_cond::WindowScope>,
         cand: &crate::condition::CandidateCtx,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         start_answer: usize,
         already_admitted: bool,
     ) -> Result<Admitted<W>, RuleError> {
@@ -1897,7 +2363,7 @@ impl Ruleset {
         // the earlier pass's body writes may now refuse them. Only the declare
         // has to replay (it owns the argument and the answer cursor).
         if already_admitted {
-            return self.declare_after(world, card, entry, player_id, answers, start_answer);
+            return self.declare_after(world, card, entry, player_id, log, start_answer);
         }
         let condition = self
             .inner
@@ -1905,11 +2371,10 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        if self.inner.cards[card as usize].id.contains("迷途之星") {}
         if self.guard_is_none(card, entry) {
             return Ok(
                 if crate::condition::admits_condition(condition, scope, cand) {
-                    self.declare_after(world, card, entry, player_id, answers, start_answer)?
+                    self.declare_after(world, card, entry, player_id, log, start_answer)?
                 } else {
                     Admitted::No {
                         next_answer: start_answer,
@@ -1921,7 +2386,7 @@ impl Ruleset {
         // cursor (not the world) is what crosses. Keep it in an `Option` so a
         // pause can `finish` the store away while the `admits` closure still
         // needs to hand it back on the verdict paths.
-        let mut store_for_guard = Some(self.store(world.clone(), answers, start_answer)?);
+        let mut store_for_guard = Some(self.store_logged(world.clone(), log, start_answer)?);
         // A pause is not a verdict: park the `Outcome` and short-circuit
         // `admits` with `Err`. A rejecting condition never reaches the closure,
         // so the cursor stays at `start_answer`.
@@ -1973,11 +2438,9 @@ impl Ruleset {
             ));
         }
         Ok(match asked {
-            Ok(true) => {
-                self.declare_after(world, card, entry, player_id, answers, st.next_answer)?
-            }
+            Ok(true) => self.declare_after(world, card, entry, player_id, log, st.log.cursor)?,
             _ => Admitted::No {
-                next_answer: st.next_answer,
+                next_answer: st.log.cursor,
             },
         })
     }
@@ -1995,7 +2458,7 @@ impl Ruleset {
         card: i32,
         entry: i32,
         player_id: i32,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         start_answer: usize,
     ) -> Result<Admitted<W>, RuleError> {
         if !self.has_declare(card, entry) {
@@ -2004,11 +2467,11 @@ impl Ruleset {
                 arg: Vec::new(),
             });
         }
-        let mut store = self.store(world.clone(), answers, start_answer)?;
+        let mut store = self.store_logged(world.clone(), log, start_answer)?;
         let res = crate::inline::with_no_inline(|| {
             call_card_declare(&self.inner, &mut store, card, entry, player_id)
         });
-        let after = store.data().next_answer;
+        let after = store.data().log.cursor;
         match res {
             // Decline: the entry does not fire. The cursor has already
             // advanced past any prompt the collector made.
@@ -2057,15 +2520,19 @@ impl Ruleset {
         player_id: i32,
         answers: &[i32],
     ) -> Result<DeclareOut, RuleError> {
+        let log = game_core::engine::GuestLog {
+            answers: answers.to_vec(),
+            ..Default::default()
+        };
         if !self.has_declare(card, entry) {
             return Ok(DeclareOut::Arg(Vec::new()));
         }
-        let mut store = self.store(world.clone(), answers, 0)?;
+        let mut store = self.store_logged(world.clone(), &log, 0)?;
         let res = crate::inline::with_no_inline(|| {
             call_card_declare(&self.inner, &mut store, card, entry, player_id)
         });
         match res {
-            Ok((code, bytes)) if code == abi::EXIT_DECLINED as i64 => {
+            Ok((code, _bytes)) if code == abi::EXIT_DECLINED as i64 => {
                 let _ = finish(store, Ok(0))?;
                 Ok(DeclareOut::Declined)
             }
@@ -2080,7 +2547,7 @@ impl Ruleset {
                 Ok(DeclareOut::Arg(bytes))
             }
             Err(e) => match finish(store, Err(e)) {
-                Ok(Outcome::NeedInput(p, _)) => Ok(DeclareOut::Paused(p)),
+                Ok(Outcome::NeedInput(p, _, _)) => Ok(DeclareOut::Paused(p)),
                 Ok(_) => Ok(DeclareOut::Arg(Vec::new())),
                 Err(e2) => Err(e2),
             },
@@ -2115,7 +2582,7 @@ impl Ruleset {
         &self,
         world: &W,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
     ) -> Result<Option<HookRun<W>>, RuleError> {
@@ -2145,7 +2612,9 @@ impl Ruleset {
         // One `next_answer` cursor threads the whole call: every guard, every
         // `OP_DECLARE` and every body reads the shared answer log in order, so
         // a prompt in entry 1 is never re-read by entry 2 (see [`Admitted`]).
-        let mut next_answer = 0;
+        // It starts at the log's own cursor, so a re-run resumes the routine's
+        // answered prefix rather than replaying it from the top.
+        let mut next_answer = log.cursor;
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
@@ -2171,7 +2640,7 @@ impl Ruleset {
                 player_id,
                 scope.as_ref(),
                 &cand,
-                answers,
+                log,
                 next_answer,
                 // This entry already cleared its condition and guard on an
                 // earlier pass of the same drive; the body's own writes may
@@ -2200,7 +2669,7 @@ impl Ruleset {
             };
             next_answer = after_admit;
             announced = true;
-            let mut store = self.store(cur, answers, next_answer)?;
+            let mut store = self.store_logged(cur, log, next_answer)?;
             if let Some(cb) = on_body.as_deref_mut() {
                 cb(store.data_mut().w(), entry);
             }
@@ -2213,11 +2682,11 @@ impl Ruleset {
                 export::OP_RUN,
                 player_id,
             );
-            let after_body = store.data().next_answer;
+            let after_body = store.data().log.cursor;
             let outcome = finish(store, res)?;
             ran_any = true;
             match outcome {
-                Outcome::Done(w) => {
+                Outcome::Done(w, _) => {
                     // Later entries see earlier writes and earlier answers.
                     cur = w;
                     next_answer = after_body;
@@ -2235,7 +2704,7 @@ impl Ruleset {
         }
         Ok(Some(HookRun {
             announced,
-            outcome: Outcome::Done(cur),
+            outcome: Outcome::Done(cur, Default::default()),
         }))
     }
 
@@ -2559,15 +3028,28 @@ impl Ruleset {
         answers: &[i32],
         start_answer: usize,
     ) -> Result<Store<HostState<W>>, RuleError> {
+        let log = game_core::engine::GuestLog {
+            answers: answers.to_vec(),
+            ..Default::default()
+        };
+        self.store_logged(world, &log, start_answer)
+    }
+
+    fn store_logged<W: CardWorld>(
+        &self,
+        world: W,
+        log: &game_core::engine::GuestLog,
+        start_answer: usize,
+    ) -> Result<Store<HostState<W>>, RuleError> {
         #[cfg(feature = "bot-cost")]
         let t0 = std::time::Instant::now();
         #[cfg(feature = "bot-cost")]
         bot_cost::HOST_WORLD_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut state = HostState::new(self.inner.clone(), world, answers.to_vec(), 0);
+        let mut state = HostState::new(self.inner.clone(), world, log.clone(), 0);
         // Resume the shared answer-log cursor where the previous guard /
         // declare / body left off (see [`Admitted`]). `HostState::new` always
         // starts at 0; only a nested `play_card` re-aligns it from its parent.
-        state.next_answer = start_answer;
+        state.log.cursor = start_answer;
         let mut store = new_store(&self.inner.engine, state);
         store.set_fuel(self.fuel).map_err(trap)?;
         #[cfg(feature = "bot-cost")]
@@ -2586,11 +3068,8 @@ fn trap(e: Error) -> RuleError {
 
 /// Fold one guest call's result into an [`Outcome`] against the store it ran in.
 #[cfg(feature = "sandbox")]
-fn finish<W: crate::world::CardWorld>(
-    store: Store<HostState<W>>,
-    res: Result<i64, Error>,
-) -> Result<Outcome<W>, RuleError> {
-    let state = store.into_data();
+fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outcome<W>, RuleError> {
+    let mut state = store.into_data();
     match res {
         Ok(_) => {
             // A prompt was published and the run kept going: the guest
@@ -2603,15 +3082,20 @@ fn finish<W: crate::world::CardWorld>(
                 ));
             }
             Ok(Outcome::Done(
-                state.world.expect("world is restored after nested calls"),
+                state
+                    .world
+                    .take()
+                    .expect("world is restored after nested calls"),
+                std::mem::take(&mut state.log),
             ))
         }
         Err(e) if needs_input(&e) => {
+            let log = std::mem::take(&mut state.log);
             if let Some(req) = state.host_request {
                 let world = state.world.expect("world is restored after nested calls");
-                Ok(Outcome::NeedHost(req, world))
+                Ok(Outcome::NeedHost(req, world, log, state.host_journal_start))
             } else if let Some(p) = state.asked {
-                Ok(Outcome::NeedInput(p, state.world))
+                Ok(Outcome::NeedInput(p, state.world, log))
             } else {
                 // `Prompt` is a unit struct, so a card can fabricate one
                 // without a host call having published a question. Refuse it
@@ -2967,14 +3451,14 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         &self,
         world: &crate::Run,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Outcome<crate::Run>, RuleError>;
     fn run_hook(
         &self,
         world: &crate::Run,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
@@ -3097,20 +3581,20 @@ impl CardModules for Ruleset {
         &self,
         world: &crate::Run,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Outcome<crate::Run>, RuleError> {
-        Ruleset::run::<crate::Run>(self, world, call, answers, on_body)
+        Ruleset::run::<crate::Run>(self, world, call, log, on_body)
     }
     fn run_hook(
         &self,
         world: &crate::Run,
         call: Call,
-        answers: &[i32],
+        log: &game_core::engine::GuestLog,
         already_admitted: &[i32],
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
-        Ruleset::run_hook::<crate::Run>(self, world, call, answers, already_admitted, on_body)
+        Ruleset::run_hook::<crate::Run>(self, world, call, log, already_admitted, on_body)
     }
     fn can_counteract(
         &self,
@@ -3303,8 +3787,13 @@ pub trait GuestMem {
 pub struct HostState<W, R = DefaultRules> {
     pub rules: Option<R>,
     pub world: Option<W>,
-    pub answers: Vec<i32>,
-    pub next_answer: usize,
+    /// The per-call guest answer log: answers, cursor, the in-flight host
+    /// request journal and its bookkeeping (design G10 §6.3.5). One value
+    /// because every part must move together.
+    pub log: game_core::engine::GuestLog,
+    /// How the next host request relates to the journal, set by the guest
+    /// pause point and harvested by the drive before it applies (G10 §6.3.2).
+    pub host_journal_start: Option<game_core::engine::JournalStart>,
     pub options: Vec<PromptOption>,
     /// Per-option prices for the next tile ask (`opt_price`).
     pub prices: Vec<i32>,
@@ -3374,13 +3863,13 @@ fn new_store<W>(engine: &Engine, state: HostState<W>) -> Store<HostState<W>> {
 }
 
 impl<W, R: RulesHandle> HostState<W, R> {
-    pub fn new(rules: R, world: W, answers: Vec<i32>, depth: u32) -> Self {
+    pub fn new(rules: R, world: W, log: game_core::engine::GuestLog, depth: u32) -> Self {
         Self {
             invoke_frames: Vec::new(),
             rules: Some(rules),
             world: Some(world),
-            answers,
-            next_answer: 0,
+            log,
+            host_journal_start: None,
             options: vec![],
             prices: vec![],
             ai_hint: -1,
@@ -3758,8 +4247,8 @@ fn gate<W: CardWorld>(
     kind: AbKind,
 ) -> Result<bool, Error> {
     let st = c.data_mut();
-    if let Some(&allowed) = st.answers.get(st.next_answer) {
-        st.next_answer += 1;
+    if let Some(&allowed) = st.log.answers.get(st.log.cursor) {
+        st.log.cursor += 1;
         return Ok(allowed != 0);
     }
     st.host_request = Some(HostRequest::Gate { player_id, kind });
@@ -4672,9 +5161,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::build_price(&mut c, tile).map_err(HostError::into_err)
         },
     )?;
-    l.func_wrap(m, "build_cost_percent", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::build_cost_percent(&mut c).map_err(HostError::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "build_cost_percent",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::build_cost_percent(&mut c).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(m, "build_discount", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::build_discount(&mut c).map_err(HostError::into_err)
     })?;
@@ -5006,6 +5499,61 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
          -> Result<i32, Error> {
             hostfns::nearest_with_prop(&mut c, by, kind, kp, kl, buf, cap)
                 .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_by_card_instance",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_by_card_instance(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_settle_facts",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_settle_facts(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_settle_paid_value",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_settle_paid_value(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_redirected_from",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_redirected_from(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "draw_event_as",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::draw_event_as(&mut c, player_id, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "event_defer", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::event_defer(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(m, "world_snapshot", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::world_snapshot(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "world_restore",
+        |mut c: C<W>, key: i32| -> Result<i32, Error> {
+            hostfns::world_restore(&mut c, key).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "world_snapshot_drop",
+        |mut c: C<W>, key: i32| -> Result<i32, Error> {
+            hostfns::world_snapshot_drop(&mut c, key).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -6778,8 +7326,8 @@ impl HostState<NullWorld> {
             world: Some(NullWorld {
                 plan: game_core::engine::MoveCtx::default(),
             }),
-            answers: vec![],
-            next_answer: 0,
+            log: Default::default(),
+            host_journal_start: None,
             options: vec![],
             prices: vec![],
             ai_hint: -1,

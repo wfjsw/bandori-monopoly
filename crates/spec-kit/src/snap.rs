@@ -338,10 +338,14 @@ pub fn frame(condition: &World, post: &World, allowed_prefixes: &[&str]) -> Resu
     let deltas = diff(&a, &b, false);
     // Named-counter pools (`pool:P<seat>:<card>`) are instance-scoped: they
     // appear and die with the field card. Always in-frame, like `mark:`.
+    // `latch:` state keys are the body's own frozen decisions (G10 §6.5): the
+    // drive writes them so a re-run takes the same branch, and no player sees
+    // them.
     let bad: Vec<String> = deltas
         .iter()
         .filter(|d| {
             !d.path.starts_with("pool:")
+                && !d.path.contains(":latch:")
                 && !allowed_prefixes
                     .iter()
                     .any(|p| d.path == *p || d.path.starts_with(p))

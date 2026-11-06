@@ -621,7 +621,7 @@ fn nanami_press_invokes_skill_two() {
     t.answer_one(2).unwrap(); // effect (3)
     assert!(t.prompt().is_some(), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // 发动: one crystal
-    // The invoked (2) body asks its own question; answer it too.
+                              // The invoked (2) body asks its own question; answer it too.
     assert!(t.prompt().is_some(), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // 发动 the (2)
     decline_all(&mut t);
@@ -631,7 +631,11 @@ fn nanami_press_invokes_skill_two() {
         1,
         "the (2) body minted the used skill's mark"
     );
-    assert_eq!(t.m.world().held_count(0, "charge"), 0, "the (2) paid one pot");
+    assert_eq!(
+        t.m.world().held_count(0, "charge"),
+        0,
+        "the (2) paid one pot"
+    );
     let keys = t.recent_keys(80);
     assert!(
         keys.iter().any(|k| k.contains("nanami_mark")),

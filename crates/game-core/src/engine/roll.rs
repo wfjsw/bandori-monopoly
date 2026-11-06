@@ -37,6 +37,15 @@ pub const PURPOSE_EFFECT: i32 = 0;
 /// `RollPurpose::Move` (the move plan's dice tables).
 pub const PURPOSE_MOVE: i32 = 1;
 
+/// Apply the plan's `min_roll` floor to a move face. A signed roll takes a
+/// direction and is never floored (`run_planned_roll`'s end clamp says so).
+fn floor_move_face(m: &Move, face: i32) -> i32 {
+    match m.min_roll {
+        Some(floor) if !m.signed => face.max(floor),
+        _ => face,
+    }
+}
+
 /// One cast of a transaction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RollCast {
@@ -743,7 +752,9 @@ impl PlayCtx<'_> {
     /// move it joins the open transaction when there is one and otherwise
     /// burns a throwaway preview; an effect cast does the same with a
     /// throwaway transaction, so the source still reaches a later
-    /// `diceRollSettled`.
+    /// `diceRollSettled`. The face handed back carries the plan's `min_roll`
+    /// floor on a move (`floor_move_face`): the body that asked sees the result
+    /// its reroll loop compares against, not the raw die the floor rescues.
     pub fn run_direct_roll(
         &mut self,
         roller: usize,
@@ -752,10 +763,17 @@ impl PlayCtx<'_> {
         sides: i32,
         source: RollSource,
     ) -> Flow<i32> {
+        // The plan's floor is part of the *result*, so it applies to the face
+        // handed back to the body as well as to the face the ladder ends on
+        // (`run_planned_roll`'s clamp). Without this a reroll routine that
+        // reads its own throw back (「重骰移动掷骰直至结果至少为10为止」,
+        // 运动的天赋) can never see the floor the same plan set and re-rolls
+        // against it forever.
         if purpose == PURPOSE_MOVE {
             if let Some(id) = (self.open_move_roll_id() >= 0).then(|| self.open_move_roll_id()) {
                 let view = self.roll_move_view(id, roller);
-                return self.cast(id, Some(&view), source, true);
+                let face = self.cast(id, Some(&view), source, true)?;
+                return Ok(floor_move_face(&view, face));
             }
         }
         let id = self.next_roll_id();
@@ -766,7 +784,8 @@ impl PlayCtx<'_> {
         self.w.open_rolls.push(r);
         let face = if purpose == PURPOSE_MOVE {
             let view = self.roll_move_view(id, roller);
-            self.cast(id, Some(&view), source, true)?
+            let face = self.cast(id, Some(&view), source, true)?;
+            floor_move_face(&view, face)
         } else {
             self.cast(id, None, source, false)?
         };

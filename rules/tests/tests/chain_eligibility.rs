@@ -117,11 +117,14 @@ fn place_on_tile(t: &mut Table, who: i32, card: &str, tile: i32) {
 /// `ActiveEvent` row -- what `event_rule_instances` walks.
 fn place_event(t: &mut Table, id: &str, driver: i32) {
     place_on_tile(t, BOARD_OWNER, &format!("event:{id}"), -1);
-    t.m.world_mut().st.event_active.push(game_core::state::ActiveEvent {
-        id: id.into(),
-        player_id: driver,
-        ..Default::default()
-    });
+    t.m.world_mut()
+        .st
+        .event_active
+        .push(game_core::state::ActiveEvent {
+            id: id.into(),
+            player_id: driver,
+            ..Default::default()
+        });
 }
 
 fn push_ember(t: &mut Table, tile: i32) {
@@ -173,7 +176,11 @@ fn g09_suppression_matrix() {
     for swapped in [false, true] {
         for tagged in [false, true] {
             let mut t = Table::vanilla(2);
-            let (g, x) = if swapped { (CIRCLE, GROUP) } else { (CIRCLE, CIRCLE) };
+            let (g, x) = if swapped {
+                (CIRCLE, GROUP)
+            } else {
+                (CIRCLE, CIRCLE)
+            };
             if swapped {
                 // The binding card sits on `x` and names `g`: `x` displays `g`.
                 place_on_tile(&mut t, 0, "TEST:swap_probe", GROUP as i32);

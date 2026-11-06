@@ -36,7 +36,8 @@ pub const SHIFUNE: CardDef = CardDef::new(
         On::Filter(Filter::PaySplitMul("", Some(paired), on_pay)),
         On::Action(Action::HouseAdded("", Some(partner), on_built)),
     ],
-).rule()
+)
+.rule()
 // 「（初始1，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

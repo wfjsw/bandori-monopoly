@@ -36,7 +36,7 @@ the whole table.
 | G14 | 114→115 | 16→17 | — | — |
 | G11 | 115→116 | 17→18 | 132–133 | 451–454 |
 | G09 | 116→117 | 18 | 135–139 | 455–466 |
-| G10 | 118→119 | 20→21 | 141 | — |
+| G10 | 118→119 | 20→21 | 141 | 486–494 |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -154,6 +154,11 @@ and one SAVE step and one kind slot where it had one: G09 114→115 / 17, G10
 exports are re-signed (`unplace_at`, `set_face_down_at`, `add_to_dest`,
 `set_dest`, `send_to_dest`, `transfer_to_dest`) and consume no id, and the
 draft's `add_to_hand` duplicate is gone.
+
+
+**2026-11-06 landing note (G10).** G10 lands after G08 and takes the next free
+numbers: **118→119** / **20→21** / kind **141**; its nine imports take the free
+**486–494** after G08's 485. `ABI_VERSION` is 119 and `SAVE_VERSION` 21.
 
 Recommended landing order (foundation → dependent):
 

@@ -308,7 +308,12 @@ fn backstage_flip_stays_in_the_discard_on_a_two_card_deck() {
             && discard.contains(&"HHW:热气球演出".to_string()),
         "both flipped cards stay in the discard: {discard:?}"
     );
-    assert_eq!(t.money(0), 12_000, "1000 per flipped card: {:?}", t.recent_keys(12));
+    assert_eq!(
+        t.money(0),
+        12_000,
+        "1000 per flipped card: {:?}",
+        t.recent_keys(12)
+    );
 
     // A following draw refills from the discard (a draw is not suppressed).
     let mark = t.mark();
@@ -430,34 +435,19 @@ fn believe_reveals_hand_and_deck_to_every_seat() {
     let mut t = Table::vanilla(3);
     t.set_hand(
         0,
-        &[
-            "HHW:因为我一直相信着你",
-            "HHW:微笑巡逻队",
-            "HHW:热气球演出",
-        ],
+        &["HHW:因为我一直相信着你", "HHW:微笑巡逻队", "HHW:热气球演出"],
     );
     t.set_draw(0, &["HHW:爱心义演", "HHW:运动的天赋", "通用:GREAT"]);
-    let hand_before = vec![
-        "HHW:微笑巡逻队".to_string(),
-        "HHW:热气球演出".to_string(),
-    ];
+    let hand_before = vec!["HHW:微笑巡逻队".to_string(), "HHW:热气球演出".to_string()];
     let deck_before = t.draw_pile(0);
     let mark = t.mark();
     t.play(0, "HHW:因为我一直相信着你").unwrap();
     // The chooser prompt.
-    assert!(
-        t.prompt_refers("believe_you"),
-        "{}",
-        t.dump_prompt()
-    );
+    assert!(t.prompt_refers("believe_you"), "{}", t.dump_prompt());
     t.answer_one(0).unwrap(); // pick the first rival
-    // The rival's discard pick is open: the whole effect is published.
+                              // The rival's discard pick is open: the whole effect is published.
     let p = t.expect_prompt();
-    assert!(
-        p.title.key().contains("believe_you"),
-        "{}",
-        t.dump_prompt()
-    );
+    assert!(p.title.key().contains("believe_you"), "{}", t.dump_prompt());
     let st = t.st();
     let reveal = st.players[0]
         .reveal
@@ -472,7 +462,10 @@ fn believe_reveals_hand_and_deck_to_every_seat() {
         again.players[0].reveal, st.players[0].reveal,
         "another seat reads the same overlay"
     );
-    assert!(again.players[2].reveal.is_none(), "the rival seat reveals nothing");
+    assert!(
+        again.players[2].reveal.is_none(),
+        "the rival seat reveals nothing"
+    );
     // The hand reveal is one `reveal` event naming the count.
     let hand_line = t
         .events_since(mark)

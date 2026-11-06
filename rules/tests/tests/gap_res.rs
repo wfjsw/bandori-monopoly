@@ -302,7 +302,8 @@ fn g30_smile_parade_swap_with_a_field_card_in_place() {
         .iter_mut()
         .find(|f| f.card.contains("笑容大游行"))
         .unwrap();
-    f.props.insert(card_sdk::abi::prop::SWAPPED_TILE.into(), group as i32);
+    f.props
+        .insert(card_sdk::abi::prop::SWAPPED_TILE.into(), group as i32);
     t.set_crystals(0, "HHW:笑容大游行", 5);
     // P1 settles on Space: Parking Space's (1) replaces the settle (a stay at
     // turn end), and (3) discards the parade after that settle.
@@ -367,7 +368,8 @@ fn g30b_smile_parade_reverse_swap_runs_as_card_tile() {
         .iter_mut()
         .find(|f| f.card.contains("笑容大游行"))
         .unwrap();
-    f.props.insert(card_sdk::abi::prop::SWAPPED_TILE.into(), group as i32);
+    f.props
+        .insert(card_sdk::abi::prop::SWAPPED_TILE.into(), group as i32);
     t.set_crystals(0, "HHW:笑容大游行", 5);
     // P1 settles on 弦卷集团. The swap runs the settle as the unowned Space
     // tile (no agent body, no rent). (3)'s discard does not fire -- the settle

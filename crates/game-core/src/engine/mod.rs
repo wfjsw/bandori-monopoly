@@ -22,6 +22,7 @@ mod cx;
 // unknown command there (`docs/SERVER.md`).
 #[cfg(debug_assertions)]
 mod debug;
+mod journal;
 mod move_ctx;
 mod ops;
 mod play;
@@ -45,14 +46,18 @@ pub use cx::{
     AnswerProvider, Answered, Ask, Flow, Halt, HeuristicProvider, PlayCtx, Reply, SettleOutcome,
     AI_UNSET,
 };
-pub use cx::HouseWrite;
+pub use cx::{FieldDelta, FieldWrite, GuestOverlay, HouseWrite, PassBase};
+pub use journal::{
+    DeferredEvent, GuestLog, HostJournalEntry, JournalRequest, JournalStart, PlayerSnapshot,
+    WorldSnapshot,
+};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;
 pub use play::{Paid, Pay, PayEvent, PayFactorScope, PayKind, PayShape};
 pub use rules::{
-    CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
-    TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
+    CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, SettleFacts,
+    StubRules, TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
 };
 pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
@@ -435,7 +440,12 @@ struct Saved {
 /// `created_by` / `effective`, `MatchState.owned_seq` / `next_owned_seq`). All
 /// `serde(default)`; the attachment relation is a persisted relation, not a
 /// repairable scalar, so the version moves (design G08 §9).
-pub const SAVE_VERSION: u32 = 20;
+/// v21: G10's durable effect-outcome state -- deferred events (with their
+/// draw ordinal), world checkpoints with their owners, the snapshot key
+/// counter, and the torn routine's host journal / guest answers on `Pending`.
+/// All are `serde(default)`; older saves are refused (replays ride archived
+/// engine bundles).
+pub const SAVE_VERSION: u32 = 21;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -1637,7 +1647,10 @@ impl Match {
         // Nothing is pending after a direct write, so the reveal overlay it
         // produced is over -- and with it any look hold (nothing will file).
         self.world.reveals.clear();
-        self.world.look_hold.iter_mut().for_each(|held| *held = false);
+        self.world
+            .look_hold
+            .iter_mut()
+            .for_each(|held| *held = false);
         self.changed = true;
         self.seq += 1;
         self.arm_clock_hold();
@@ -1668,14 +1681,7 @@ impl Match {
         // path, unchanged.
         let mut prov = self.provider.take();
         let (res, delay, mut w) = {
-            if std::env::var("DBG_HOOK").is_ok() {
-                eprintln!(
-                    "EXECUTE answers={} step={}",
-                    answers.len(),
-                    snapshot.st.step
-                );
-            }
-            let mut cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
+            let cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
             let mut cx = match prov.as_mut() {
                 Some(p) => cx.with_provider(&mut **p),
                 None => cx,
@@ -3085,7 +3091,6 @@ fn run(cx: &mut PlayCtx, r: &Routine) -> Flow<()> {
         }
         Routine::Act(i, m) => {
             let i = *i;
-            let pos = cx.w.st.players[i].pos.max(0) as usize;
             match m.act.as_str() {
                 "roll" => {
                     let turn = cx.w.st.turn as usize;
@@ -3117,10 +3122,6 @@ fn run(cx: &mut PlayCtx, r: &Routine) -> Flow<()> {
 fn cant_act(cx: &PlayCtx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
     let st = &cx.w.st;
     let my_turn = cx.playing() && st.turn == i as i32;
-    let pos = st.players[i].pos;
-    let moved_off = |key: &str| {
-        (m.value > 0 && m.value != pos).then(|| Msg::new(key).tile("was", m.value).tile("now", pos))
-    };
     match m.act.as_str() {
         "roll" => {
             if !cx.playing() || st.step != stage::OPS || busy {

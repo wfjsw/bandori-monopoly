@@ -74,7 +74,9 @@ impl CardRules for CountingRules {
     ) -> Flow<()> {
         self.counts.settle.fetch_add(1, Ordering::Relaxed);
         let t0 = Instant::now();
-        let r = self.inner.settle_tile(cx, player, position, tile, m, is_main_move);
+        let r = self
+            .inner
+            .settle_tile(cx, player, position, tile, m, is_main_move);
         self.counts
             .entry_ns
             .fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);

@@ -364,8 +364,7 @@ fn t08_practice_storm_remote_settle() {
     while t.prompt().is_some() {
         t.decline();
     }
-    for e in t.st().events.iter().rev().take(20) {
-    }
+    for e in t.st().events.iter().rev().take(20) {}
     let scaled = rent(t50, 0) * (4 - 2) / 4;
     // (2): 「那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的(4-X)/4倍」.
     assert_eq!(
@@ -600,7 +599,7 @@ fn t12_student_council_check() {
     drain(&mut t);
     let half_rent = rent(t1, 0) / 2;
     let circle = 2000; // CIRCLE_MONEY: P1 passes tile 0 on this path
-    // 「下一个经过且移动终点不在此格的你以外的玩家强制停下并触发结算…地租价格为原价格一半」.
+                       // 「下一个经过且移动终点不在此格的你以外的玩家强制停下并触发结算…地租价格为原价格一半」.
     assert_eq!(t.pos(1), t1, "P1 force-stopped on the card's tile");
     assert_eq!(
         money_before + circle - t.money(1),
@@ -656,8 +655,13 @@ fn t13_smile_parade() {
     assert!(placed_with_three, "（1） counteract ran");
     for e in t.st().events.iter() {
         let k = log_key(e);
-        if k.contains("DBGCC") || k.contains("DBGMV") || k.contains("DBGG") || k.contains("DBGOR") || k.contains("DBGRD") || k.contains("DBGSA") {
-        }
+        if k.contains("DBGCC")
+            || k.contains("DBGMV")
+            || k.contains("DBGG")
+            || k.contains("DBGOR")
+            || k.contains("DBGRD")
+            || k.contains("DBGSA")
+        {}
     }
     let field = t.field(0);
     let f = field
@@ -706,8 +710,7 @@ fn t13_smile_parade() {
     drain(&mut t);
     for e in t.st().events.iter().rev().take(200) {
         let k = log_key(e);
-        if k.contains("DBG") {
-        }
+        if k.contains("DBG") {}
     }
     assert!(
         !t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),

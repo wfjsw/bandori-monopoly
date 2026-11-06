@@ -55,7 +55,8 @@ pub const TAE: CardDef = CardDef::new(
             negate,
         ),
     ],
-).rule()
+)
+.rule()
 // 「（初始2，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

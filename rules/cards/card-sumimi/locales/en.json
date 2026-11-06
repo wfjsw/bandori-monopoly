@@ -24,6 +24,7 @@
   "mana_champion_title": "Singing Contest 5-Peat",
   "mana_champion_when": "when you or your tile is about to be hit by an effect from someone else",
   "no_breakup_ask": "[Teleport] to which tile? (money must end up with a repeated digit after settling, or you return and every effect is cancelled)",
+  "no_breakup_same_digits": "ends with a repeated digit",
   "no_breakup_mortgaged": "You have already mortgaged or redeemed this turn.",
   "no_breakup_moved": "Sumimi Won't Break Up's effect: {{who}} [teleported] to {{tile}}",
   "no_breakup_repeated": "your money has a repeated digit",

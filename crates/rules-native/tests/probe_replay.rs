@@ -42,7 +42,10 @@ fn probe() {
     );
     eprintln!("loaded ruleset {:?}", rules.ruleset_sha256());
     let mut rp = Replayer::new(data, rules, &rec, true).expect("open");
-    let dump_at: usize = std::env::var("DUMP_AT").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+    let dump_at: usize = std::env::var("DUMP_AT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(2);
     let mut dumped = false;
     let mut applied = 0usize;
     let total = rp.total_ticks();
@@ -82,8 +85,11 @@ fn probe() {
             dumped = true;
             if let Ok(out) = std::env::var("OUT") {
                 std::fs::create_dir_all(&out).unwrap();
-                std::fs::write(std::path::Path::new(&out).join("save.json"), rp.inner().save())
-                    .unwrap();
+                std::fs::write(
+                    std::path::Path::new(&out).join("save.json"),
+                    rp.inner().save(),
+                )
+                .unwrap();
                 eprintln!(
                     "dumped save after {applied} inputs at tick {}",
                     rp.status().tick
@@ -99,7 +105,11 @@ fn probe() {
                     h.deck
                 );
             }
-            eprintln!("  phase={} boardDiscard={:?}", m.state().phase, m.world().st.board_discard);
+            eprintln!(
+                "  phase={} boardDiscard={:?}",
+                m.state().phase,
+                m.world().st.board_discard
+            );
         }
         let mut hit = false;
         for (i, h) in rp.inner().world().hidden.iter().enumerate() {

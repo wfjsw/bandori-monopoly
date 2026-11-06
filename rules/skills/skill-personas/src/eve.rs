@@ -53,7 +53,8 @@ pub const EVE: CardDef = CardDef::new(
             on_before,
         )),
     ],
-).rule();
+)
+.rule();
 /// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).
 /// `actor == owner && slot('ppFansUp') >= 1` is the condition.

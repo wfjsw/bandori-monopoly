@@ -2463,10 +2463,7 @@ fn possibility_does_not_re_place_from_the_hand() {
     t.play(0, "HHW:出发！后台之旅！").unwrap();
     drain(&mut t);
     assert_eq!(
-        t.field_ids(0)
-            .iter()
-            .filter(|c| *c == POSSIBILITY)
-            .count(),
+        t.field_ids(0).iter().filter(|c| *c == POSSIBILITY).count(),
         1,
         "still one placed copy: {:?}",
         t.field_ids(0)

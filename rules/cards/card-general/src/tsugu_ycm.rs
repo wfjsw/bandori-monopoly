@@ -64,6 +64,15 @@ fn buy_add_1500(_player_id: i32, value: i32) -> i32 {
 
 const STATION: &str = "Bandori车站";
 
+/// `ctx::slot` marker: the `ctx::turn_key` of a play that already took its
+/// teleport. A replay re-runs the body with the move applied, so the main-move
+/// gate must not be re-read then (it would say "already moved") -- LOY-TSUGU-01.
+/// `latch:`-prefixed so the write crosses the pauses of the play and is kept
+/// by the replay's rewind (`PlayCtx::capture_guest_state_from`): the buy prompt
+/// after the teleport is another pause, and the pass that reaches it must still
+/// read the marker.
+const MOVED: &str = "latch:tsugu_ycm_moved";
+
 fn play(player_id: i32) -> card_sdk::Asked {
     let r = ctx::roll(player_id, 3, 10, RollPurpose::Effect, roll_source::CARD)?;
     let station = ctx::tile_named(STATION);
@@ -100,19 +109,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // TODO(规则书)（[手]：）: the book prints no [限]; the (4) move pick falls
         // back to the gain when the main move is already spent -- (2) here just
         // skips the teleport.
-        // A replay (for the buy prompt below) re-runs this body with the move
-        // already applied; a plain gate read would then answer "already moved"
-        // and drop it. The ordinal form suppresses that when the move was spent
-        // by *this* activation, so a replay reads the gate exactly as the first
-        // run did (LOY-TSUGU-01).
-        if station >= 0
-            && ctx::cant_move_code_for_activation(player_id, ctx::trigger::activation_ordinal())
-                == 0
-        {
-            plan::set_kind(MoveKind::Teleport);
-            plan::set_teleport_to(station);
-            plan::set_settles(false);
-            ctx::run_planned_move(player_id);
+        if station >= 0 {
+            // A replay (for the buy prompt below) re-runs this body with the
+            // move already applied; asking `move_blocked` then would answer
+            // "already moved" and drop it. The marker (or the staging still on
+            // the plan, or having arrived) says this play already teleported,
+            // so the gate is only read on the first run (LOY-TSUGU-01). The
+            // plan is a pass-carried write; the position alone is not enough
+            // because the re-run starts from the request's pre-position.
+            let moved_here = ctx::player_pos(player_id) == station
+                || plan::planned_teleport() == station
+                || ctx::slot(player_id, MOVED) == ctx::turn_key();
+            if moved_here || rules_status::move_blocked(player_id).is_none() {
+                ctx::set_slot(player_id, MOVED, ctx::turn_key());
+                plan::set_kind(MoveKind::Teleport);
+                plan::set_teleport_to(station);
+                plan::set_settles(false);
+                ctx::run_planned_move(player_id);
+            }
         }
         // Affordability is the hook-aware quote (`ctx::buy_quotes`, the figure
         // `card_buy` charges), so the −1500 above is already in it and a

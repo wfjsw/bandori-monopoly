@@ -52,9 +52,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「下次触发事件时将此卡放入事件弃牌」 -- the next event draw (which is
-/// the 修复公告 just seeded) files this one away. The `event` raise for our own
-/// draw happens before we are bound, so this hook sees only later draws.
+/// the 修复公告 just seeded) files this one away.
+///
+/// The raise that draws the card is dispatched before the card binds, so the
+/// card's own draw does not reach this hook; the `card_is` guard keeps that
+/// true if the binding order ever changes.
 fn on_event(_owner: i32) -> card_sdk::Asked {
+    if ctx::trigger::card_is(ID) {
+        return Ok(());
+    }
     expire(ID);
     Ok(())
 }

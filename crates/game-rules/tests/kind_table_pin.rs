@@ -194,6 +194,7 @@ fn typed_engine_consts_have_table_rows() {
         (138, "HouseRemove"),
         (139, "OwnerSet"),
         (140, "OpeningHandDealt"),
+        (141, "EventResolved"),
     ];
     for (id, name) in named {
         let row =
@@ -215,9 +216,9 @@ fn typed_engine_consts_have_table_rows() {
 /// G08 took the free band 113–119 and the next free id above the table
 /// (`openingHandDealt` = 140, design §6.2), hence the new ceiling.
 #[test]
-fn kind_id_ceiling_is_140() {
+fn kind_id_ceiling_is_141() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 140, "highest engine kind id");
+    assert_eq!(max, 141, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the

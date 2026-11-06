@@ -46,9 +46,8 @@ fn be_strongest(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「roll 1d10，…」 -- the die is cast first; the 若 clause only
     // redirects the destination, so the fallback rolls too (its face is ignored).
     let r = ctx::roll(player_id, 1, 10, RollPurpose::Effect, roll_source::CARD)?;
-    // TODO(ABI) 「游击演出」's designated one). HOST-01: a write inside a nested settle
-    // (the agent-tile offer buying a deed) may not be on live for the next pass, so
-    // this read can see the pre-buy deed; needs the write journal on `Run`.
+    // The read answers the livehouse face: a nested settle's deed (「游击演出」's
+    // designated one) is re-applied before this body re-runs (HOST-01, G10).
     let owns_livehouse = ctx::owned_tiles(player_id)
         .into_iter()
         .any(|t| ctx::is_live_house_for(player_id, t));

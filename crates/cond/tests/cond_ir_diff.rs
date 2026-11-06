@@ -106,6 +106,10 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::PendingNegation => f.win.pending_negation = raw,
         VarId::ChainDepth => f.win.chain_depth = raw,
         VarId::ChargeIsSkill => f.win.charge_is_skill = raw != 0,
+        VarId::SubjectRangeCard => f.win.subject_range_card = raw != 0,
+        VarId::ExtremeArmed => f.win.extreme_armed = raw != 0,
+        VarId::PendingNegation => f.win.pending_negation = raw,
+        VarId::ChainDepth => f.win.chain_depth = raw,
         VarId::SettleTile => f.win.settle_tile = raw,
         VarId::SettleOwner => f.win.settle_owner = raw,
         VarId::SettleHouses => f.win.settle_houses = raw,
@@ -619,8 +623,7 @@ fn diff_all_inventory_guards() {
         f.ir.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
         // The resolving set: one card body is running.
         f.win.resolving = vec![("r:bandori:21".to_string(), 1)];
-        f.ir
-            .resolving_insert(rules_cond_ir::ctx::id_of("r:bandori:21"));
+        f.ir.resolving_insert(rules_cond_ir::ctx::id_of("r:bandori:21"));
         // Mirror the function tables into the cel snapshot.
         f.win.tile_kinds = vec![String::new(), "circle".to_string()];
         f.win.tile_count = 2;

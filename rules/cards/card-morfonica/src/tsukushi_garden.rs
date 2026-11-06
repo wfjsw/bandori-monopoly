@@ -20,6 +20,13 @@ pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
         // sheet cell G16
         .fields(&[("group", r#"Morfonica"#), ("owner", r#"二叶筑紫"#)]));
 
+/// `ctx::slot` marker: the `to + 1` tile of the last hop this card ran for
+/// the seat. Written before the move so a replayed body can recognise its own
+/// landing even if a `moveBefore` counteraction redirected it. `latch:`-prefixed
+/// so the rewind at a pass top does not un-freeze it and the re-run still sees
+/// that this play already moved (G10, `taki_even_if` is the same rule).
+const MOVED: &str = "latch:tsukushi_garden_moved";
+
 fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 100, &Msg::new(key!("tsukushi_garden_reason")))?;
     let mut list: [i32; 10] = [0; 10];

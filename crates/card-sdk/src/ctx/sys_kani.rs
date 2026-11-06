@@ -293,7 +293,10 @@ pub fn reveal_pile(player_id: i32, pile: i32, ptr: i32, len: i32) {
 }
 
 pub fn reveal_card(player_id: i32, card_ptr: i32, card_len: i32, ptr: i32, len: i32) {
-    kani_host::call_unit(Op::reveal_card, [player_id, card_ptr, card_len, ptr, len, 0]);
+    kani_host::call_unit(
+        Op::reveal_card,
+        [player_id, card_ptr, card_len, ptr, len, 0],
+    );
 }
 
 pub fn to_discard(player_id: i32, ptr: i32, len: i32) {
@@ -920,6 +923,42 @@ pub fn trig_step() -> i32 {
 
 pub fn trig_by_card() -> i32 {
     kani_host::call_i32(Op::trig_by_card, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_by_card_instance() -> i32 {
+    kani_host::call_i32(Op::trig_by_card_instance, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_settle_facts() -> i32 {
+    kani_host::call_i32(Op::trig_settle_facts, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_settle_paid_value() -> i32 {
+    kani_host::call_i32(Op::trig_settle_paid_value, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn trig_redirected_from() -> i32 {
+    kani_host::call_i32(Op::trig_redirected_from, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn draw_event_as(player_id: i32, tile: i32) -> i32 {
+    kani_host::call_i32(Op::draw_event_as, [player_id, tile, 0, 0, 0, 0])
+}
+
+pub fn event_defer() -> i32 {
+    kani_host::call_i32(Op::event_defer, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn world_snapshot() -> i32 {
+    kani_host::call_i32(Op::world_snapshot, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn world_restore(key: i32) -> i32 {
+    kani_host::call_i32(Op::world_restore, [key, 0, 0, 0, 0, 0])
+}
+
+pub fn world_snapshot_drop(key: i32) -> i32 {
+    kani_host::call_i32(Op::world_snapshot_drop, [key, 0, 0, 0, 0, 0])
 }
 
 pub fn trig_pay_is_rent() -> i32 {

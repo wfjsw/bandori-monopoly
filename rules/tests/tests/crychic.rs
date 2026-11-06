@@ -566,7 +566,11 @@ fn elegant_shout_offered_on_out_of_turn_effect_draw() {
     drain(&mut t);
     // 规则书: 「你的下回合结束时抽一张卡」 -- P0's next turn end.
     assert_eq!(t.turn(), 0, "P0's next turn follows P1");
-    pass_cry(&mut t, 0);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
     assert_eq!(
         t.hand(0).len(),
         hand_before + 1,
@@ -1658,7 +1662,11 @@ fn tomori_shout_pull_rolls_once_and_leans_on_six_or_less() {
         assert!(run_shout_move_rolling(&mut t, (deed + 54) % 60, 8, face));
         let stay = if low { 1 } else { 0 };
         assert_eq!(t.state(1, "stay"), stay, "face {face}");
-        assert_eq!(t.state(1, "skill.tomoriPoem.owedSettle"), stay, "face {face}");
+        assert_eq!(
+            t.state(1, "skill.tomoriPoem.owedSettle"),
+            stay,
+            "face {face}"
+        );
         assert_eq!(
             t.m.world().scheduled.len(),
             stay as usize,
@@ -1761,7 +1769,11 @@ fn tomori_shout_does_not_offer_when_the_skill_already_ran() {
         }
     }
     assert!(skill_offered, "the skill's own offer came first");
-    assert!(!shout_offered, "the shout stands down: {:?}", t.recent_keys(24));
+    assert!(
+        !shout_offered,
+        "the shout stands down: {:?}",
+        t.recent_keys(24)
+    );
 }
 
 #[test]

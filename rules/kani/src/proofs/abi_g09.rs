@@ -102,11 +102,23 @@ pub fn suppressed_iff() {
     kani::assume(settled_tile != settled_slot);
     kani::cover!(true, "mutant: position-keyed read on a swapped settle");
     crate::kassert!(
-        m::suppressed(settled_tile, settled_tile, settled_slot, settled_tile, false),
+        m::suppressed(
+            settled_tile,
+            settled_tile,
+            settled_slot,
+            settled_tile,
+            false
+        ),
         "swapped settle: the tile's instance is hidden"
     );
     crate::kassert!(
-        !m::suppressed_mutant_position(settled_tile, settled_tile, settled_slot, settled_tile, false),
+        !m::suppressed_mutant_position(
+            settled_tile,
+            settled_tile,
+            settled_slot,
+            settled_tile,
+            false
+        ),
         "position mutant misses the tile's instance on a swap"
     );
 
@@ -128,11 +140,13 @@ pub fn fall_iff() {
     let after: u32 = kani::any();
     kani::assume(before <= 5 && after <= 5);
 
-    crate::kassert!(m::fall_raised(before, after) == (after < before), "fall: strict");
+    crate::kassert!(
+        m::fall_raised(before, after) == (after < before),
+        "fall: strict"
+    );
     kani::cover!(before == after, "mutant: unchanged count");
     crate::kassert!(
-        m::fall_raised(before, after) == m::fall_raised_mutant_le(before, after)
-            || before == after,
+        m::fall_raised(before, after) == m::fall_raised_mutant_le(before, after) || before == after,
         "<= mutant differs only on an unchanged count"
     );
 }
@@ -144,23 +158,38 @@ pub fn swap_involution() {
     let x: i64 = kani::any();
     kani::assume((0..60).contains(&a) && (0..60).contains(&b) && (0..60).contains(&x));
     kani::assume(a != b);
-    let swap = Some(m::Swap { slot: a, partner: b });
+    let swap = Some(m::Swap {
+        slot: a,
+        partner: b,
+    });
 
     crate::kassert!(m::tile_at(swap, a) == b, "swap: slot displays partner");
     crate::kassert!(m::tile_at(swap, b) == a, "swap: partner displays slot");
     crate::kassert!(m::position_of_tile(swap, b) == a, "inverse: position of b");
     crate::kassert!(m::position_of_tile(swap, a) == b, "inverse: position of a");
-    crate::kassert!(m::tile_at(swap, m::position_of_tile(swap, a)) == a, "round trip a");
-    crate::kassert!(m::tile_at(swap, m::position_of_tile(swap, b)) == b, "round trip b");
+    crate::kassert!(
+        m::tile_at(swap, m::position_of_tile(swap, a)) == a,
+        "round trip a"
+    );
+    crate::kassert!(
+        m::tile_at(swap, m::position_of_tile(swap, b)) == b,
+        "round trip b"
+    );
     if x != a && x != b {
         crate::kassert!(m::tile_at(swap, x) == x, "swap: unrelated is identity");
-        crate::kassert!(m::position_of_tile(swap, x) == x, "inverse: unrelated is identity");
+        crate::kassert!(
+            m::position_of_tile(swap, x) == x,
+            "inverse: unrelated is identity"
+        );
     } else {
         kani::cover!(x == a || x == b, "swap: pair reachable");
     }
 
     crate::kassert!(m::tile_at(None, a) == a, "no record: identity");
-    crate::kassert!(m::position_of_tile(None, a) == a, "no record: inverse identity");
+    crate::kassert!(
+        m::position_of_tile(None, a) == a,
+        "no record: inverse identity"
+    );
 }
 
 #[kani::proof]
@@ -173,7 +202,10 @@ pub fn path_is_every_step() {
     let (path, n) = m::travel(start, steps);
     crate::kassert!(n == steps, "path: one entry per step");
     for (i, tile) in path.iter().enumerate().take(steps) {
-        crate::kassert!(*tile == start + i as i64 + 1, "path: entry is the traversed tile");
+        crate::kassert!(
+            *tile == start + i as i64 + 1,
+            "path: entry is the traversed tile"
+        );
     }
 
     let (mutant, mn) = m::travel_mutant_endpoint_only(start, steps);
@@ -195,9 +227,15 @@ pub fn start_never_travels() {
     let start: i64 = kani::any();
     kani::assume((0..60).contains(&a) && (0..60).contains(&b) && (0..60).contains(&start));
     kani::assume(a != b);
-    let swap = Some(m::Swap { slot: a, partner: b });
+    let swap = Some(m::Swap {
+        slot: a,
+        partner: b,
+    });
 
-    crate::kassert!(m::start_never_travels(swap, start), "start stays at its position");
+    crate::kassert!(
+        m::start_never_travels(swap, start),
+        "start stays at its position"
+    );
     crate::kassert!(m::start_never_travels(None, start), "start with no record");
 
     // A card that just moved onto the start tile's slot is exactly the case

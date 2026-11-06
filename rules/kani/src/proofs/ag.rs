@@ -535,12 +535,12 @@ pub fn sky_02_mutant_is_detected() {
     let effects = effects_of(&logbuf, log_n);
     // The play's log is DiscardFromHand + the gain, so the single-effect
     // `sky_02_log_ok` cannot frame it; match the gain leg directly.
-    let paid = effects.iter().any(
-        |e| matches!(e, Effect::GainMoney { player: p, n: m } if *p == user && *m == n * 600),
-    );
-    let mutant = effects.iter().any(
-        |e| matches!(e, Effect::GainMoney { player: p, n: m } if *p == user && *m == n * 601),
-    );
+    let paid = effects
+        .iter()
+        .any(|e| matches!(e, Effect::GainMoney { player: p, n: m } if *p == user && *m == n * 600));
+    let mutant = effects
+        .iter()
+        .any(|e| matches!(e, Effect::GainMoney { player: p, n: m } if *p == user && *m == n * 601));
     crate::kassert!(paid, "card pays n*600");
     crate::kassert!(!mutant, "mutant (n*601) must not match");
 }

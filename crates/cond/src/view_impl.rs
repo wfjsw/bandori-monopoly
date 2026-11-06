@@ -390,10 +390,7 @@ impl CondView for SnapshotView<'_> {
         };
         (0..self.win.seat_count())
             .filter(|&s| {
-                s != except
-                    && self.out(s) == 0
-                    && self.exile(s) == 0
-                    && at(self.pos(s)) == tile
+                s != except && self.out(s) == 0 && self.exile(s) == 0 && at(self.pos(s)) == tile
             })
             .count() as i64
     }

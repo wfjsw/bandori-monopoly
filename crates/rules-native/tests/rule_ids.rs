@@ -34,10 +34,7 @@ fn every_rule_namespace_def_is_flagged_and_no_card_is() {
         cards.iter().any(|c| c.id == "Mor:夏日合宿" && !c.rule),
         "a real card is flagged"
     );
-    assert!(
-        cards.iter().any(|c| c.rule),
-        "no rule entity at all"
-    );
+    assert!(cards.iter().any(|c| c.rule), "no rule entity at all");
 }
 
 #[test]
@@ -50,7 +47,10 @@ fn the_roster_carries_cards_only() {
     .expect("game data");
     let rules = rules_native::NativeModules::new();
     for c in &data.cards {
-        let info = rules.handle().by_id(&c.id).map(|i| &rules.handle().cards()[i as usize]);
+        let info = rules
+            .handle()
+            .by_id(&c.id)
+            .map(|i| &rules.handle().cards()[i as usize]);
         match info {
             Some(info) => assert!(!info.rule, "rule entity in the roster: {}", c.id),
             None => panic!("roster id without a rule: {}", c.id),

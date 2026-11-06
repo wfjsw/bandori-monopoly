@@ -325,7 +325,7 @@ decision point: both are read-only.
 | 132 | `inspected` | Action | no | yes | `player_id` = deck owner, `target` = owner, `card` = the revealed id, `cards` = `[that id]`, `value` = reveal position (1-based), `by_card` = looker. Dispatched to the revealed card itself. |
 | 133 | `drawAfter` | Action | no | yes | `player_id` = drawer, `value` = batch length, `cards` = the batch. Field-card dispatch. |
 
-These are this group's **README band** (132/133). Every draft group has its own
+These are this group's **README band** (138/139). Every draft group has its own
 consecutive band in landing order instead of all reaching for 111; both kinds
 move with the band if the order changes. Retired 104 is unrelated to
 `ABI_VERSION`.
