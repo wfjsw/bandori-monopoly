@@ -1837,6 +1837,28 @@ fn band_start_tile_does_not_settle() {
 }
 
 #[test]
+fn band_start_tile_does_not_settle_with_bots() {
+    // Same start teleport, but answered by the bot policy instead of the
+    // default prompt answer -- the live report ("the bot still manages to
+    // buy that land") came from a bot seat. Seed 25 lands P0 on 星星小巷
+    // (43), the tile from that log; a fumbled `settles` flag lets the bot
+    // accept the buy it should never have been offered.
+    let mut t = Table::pending_seed_bots(&["椎名立希", "高松灯"], 25);
+    assert_eq!(t.pos(0), 43, "P0's opening 3d20 start tile (seed-pinned)");
+    assert_eq!(
+        data().tiles[43].kind.as_str(),
+        "property",
+        "the pinned start tile must be a purchasable property"
+    );
+    // Play past the opening deal and the whole first turn.
+    for _ in 0..240 {
+        bot_core::sim::pump_bots(&mut t.m);
+        t.m.tick(0.25);
+    }
+    assert_eq!(t.owner(43), None, "the bot bought the start tile");
+}
+
+#[test]
 fn band_roll_16_plus_adds_crystal() {
     // 规则书: 「（2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
