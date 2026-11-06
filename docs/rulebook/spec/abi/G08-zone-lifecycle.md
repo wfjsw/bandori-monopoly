@@ -1,7 +1,8 @@
 # G08 — Zone, attachment and creator lifecycle
 
-Status: **draft for review, design only** (2026-11-03 revision of the
-2026-10-28 draft). No source is edited by this document.
+Status: **implemented** (2026-11-03 revision of the 2026-10-28 draft; landed
+on master in `3deba227`, ABI v115). Nine of the ten items are closed; only
+`cardplayed-payload` remains partial (see BACKLOG G08).
 Worktree `/home/monopoly/web/.claude/worktrees/g08-design-review`, branch
 `worktree-g08-design-review`. Fits **on top of ABI v112** (G01 through G06 have
 landed; G07 is the next group and lands first). Group: **G08**. Family:

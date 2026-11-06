@@ -1,7 +1,7 @@
 # G10 — Effect outcome, cause and settle facts
 
-Status: **design revision** (2026-11-04 rewrite of the 2026-10-27 draft; no
-source touched by this document). Worktree
+Status: **implemented** (2026-11-04 rewrite of the 2026-10-27 draft; landed
+on master in `b2bcf409` / `ce76bc10`). All five items are closed. Worktree
 `/home/monopoly/web/.claude/worktrees/g10-design-review`, branch
 `worktree-g10-design-review`. Landed after G09, G11, G12, G14 and G08, so it
 sits on ABI **118** / SAVE **20** and takes the next free numbers at landing

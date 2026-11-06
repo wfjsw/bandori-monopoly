@@ -1,6 +1,7 @@
 # ABI design G09 — Tile, build, pass and house-removal hooks
 
-**Status: draft for user review. Design only — no source edits.**
+**Status: implemented** — landed on master in `fdce5ada` (review fixes
+`04dd2535`, `5f2386f7`). All six items are closed.
 Worktree `/home/monopoly/web/.claude/worktrees/worktree-g09-design-review`, branch
 `worktree-worktree-g09-design-review`.
 **Group:** G09, family "Tile, build, pass and house-removal hooks".
