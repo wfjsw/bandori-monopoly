@@ -7,7 +7,7 @@
 //! roll points at (a different tile, which need not be yours).
 
 use bandori_std::ctx;
-use card_sdk::abi::{roll_source, RollPurpose};
+use card_sdk::abi::{roll_source, BuildCharge, RollPurpose};
 use card_sdk::CardText;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,9 +25,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 加盖那一半其实单独打也有效。
     let money = ctx::money_of(player_id);
     for t in ctx::owned_tiles(player_id) {
-        // TODO(规则书)（付款）: 付款额就是该格房屋造价 -- 但半价/减免的回合
-        // 实际要付的更少，这里仍按原价判「付得起」.
-        if ctx::can_build_on(player_id, t) && money >= ctx::build_cost(t) {
+        // The amount is the *effective* price (percent / discount applied).
+        if ctx::can_build_on(player_id, t) && money >= ctx::build_price(t) {
             return None;
         }
     }
@@ -45,7 +44,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // TODO(规则书)（投掷3d20）: 三个面可读作各对应一格 -- 我们只取三面之和，
     // 用它的取模定位一格并只加盖一层 (OPEN-HHW-PATROL-3D20).
     let r = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
-    let tile = (r - 1).rem_euclid(n);
+    // The face is a **position**; every build read is tile-keyed.
+    let position = (r - 1).rem_euclid(n);
+    let tile = ctx::tile_at(position);
     ctx::log(
         player_id,
         &Msg::new(key!("smile_patrol_rolled"))
@@ -53,25 +54,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .tile("tile", tile)
             .i("roll", r as i64),
     );
-    // TODO(规则书)（若为可建造格子）: They are **not** the whole 可建造 test: the tile-level vetoes
-    // (`prop::NO_BUILD`, `prop::NO_BUILD_ABOVE`, `prop::BUILD_MAX`) are still
-    // unchecked here, so a house rises where the paid build would refuse.
-    // 不可盖房的格子不能加盖 -- 免费的这一层 只查买得起/抵押，NO_BUILD 与 NO_BUILD_ABOVE 一类否决没查.
+    // 「若为可建造格子」 -- the verb carries the whole guard: `Free` costs
+    // nothing and `owner_required = false` lets an unowned / foreign tile take
+    // the house, while `guard_buildable` still applies the tile-level vetoes
+    // (`prop::NO_BUILD`, `prop::NO_BUILD_ABOVE`, the cap, mortgage, ...).
     let before = ctx::houses_of(tile);
-    let can = ctx::is_buyable(tile) && !ctx::mortgaged_of(tile);
-    let after = if can { ctx::add_house(tile, 1) } else { before };
-    if after > before {
+    if ctx::card_build_as(player_id, tile, BuildCharge::Free, 0, 0, 0, false) {
         ctx::log(
             player_id,
             &Msg::new(key!("smile_patrol_built"))
                 .tile("tile", tile)
-                .i("n", after as i64),
+                .i("n", ctx::houses_of(tile) as i64),
         );
     } else {
         ctx::log(
             player_id,
             &Msg::new(key!("smile_patrol_cannot_build")).tile("tile", tile),
         );
+        let _ = before;
     }
     Ok(())
 }

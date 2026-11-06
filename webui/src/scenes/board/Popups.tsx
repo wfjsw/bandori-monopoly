@@ -330,6 +330,30 @@ export function showGraveyard(m: Model, playerId: number): void {
   ) : <div className={s.empty}>{tr("graveyard.empty")}</div>, { size: "wide" });
 }
 
+/** A seat's live public reveal (`MatchPlayer.reveal`): the ids the clause just
+ *  published, grouped by pile, top-first in the engine's order. A reveal only
+ *  lives while its routine runs, so the modal is a read, not a history. */
+export function showReveal(m: Model, playerId: number): void {
+  const r = m.S.players[playerId]?.reveal;
+  if (!r) return;
+  const group = (title: string, ids: readonly string[]) =>
+    ids.length ? (
+      <div className={s.pileRow}>
+        <div className={s.who}><span>{title}</span></div>
+        <div className={s.pileCards}>{ids.map((id, k) => <InspectCard key={`${id}#${k}`} id={id} />)}</div>
+      </div>
+    ) : null;
+  const body = (
+    <div className={s.pile}>
+      {fmtMsg(r.reason, namesOf(m.S))}
+      {group(tr("board.revealHand"), r.hand)}
+      {group(tr("board.revealDeck"), r.deck)}
+      {group(tr("board.revealDiscard"), r.discard)}
+    </div>
+  );
+  openModal(tr("board.revealTitle", { who: m.nameOf(playerId) }), body, { size: "wide" });
+}
+
 /** Every card in play (场上的卡), grouped by the player whose field it is on,
  *  drawn as card faces like the hand and graveyard. Skill rules (`skill:` ids) are bound on the field
  *  but are not cards, so they are left out. A face-down card stays face down,

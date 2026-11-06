@@ -31,6 +31,8 @@
   "hina_sound_title": "会发出怎样的声音呢？",
   "infinite_possibility_full": "「可能性为∞」的奇迹水晶满了：换成乐队卡上的 1 个",
   "infinite_possibility_not_placed": "此卡不在场上。",
+  "infinite_possibility_note": "因观看卡组而翻出放置",
+  "infinite_possibility_seen": "观看时翻出了「可能性为∞」：展示并放置",
   "infinite_possibility_swapped": "交换了抽卡区与弃卡区",
   "jennifer_ask": "把「找回珍妮弗」放到哪名玩家的场地上？",
   "jennifer_note": "经过偶像经纪公司时：{{who}} 付 400……",
@@ -82,5 +84,4 @@
   "trainee_guide_marks_added": "[共鸣] 添加了 2 个标记",
   "trainee_guide_note": "奇迹水晶与单色/双色标记；手牌上限 −1",
   "trainee_guide_resonance_cost": "[共鸣] 支付 500 资金",
-  "trainee_guide_reveal_card": "公开了「{{card}}」",
   "trainee_guide_revealed": "公开了抽卡区：{{n}}种颜色"}

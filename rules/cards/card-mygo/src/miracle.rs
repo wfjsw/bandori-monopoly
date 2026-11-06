@@ -30,6 +30,10 @@ pub const MIRACLE: CardDef = CardDef::new(
         // the bit this very step writes -- the payout would slip to the next pass,
         // possibly onto an empty tile.
         On::Action(Action::PassTile("actor == owner && card.placed && players_on(tile.id, owner) > 0", Some(record_pass_applies), pass_player)).quiet_when_empty(),
+        // （3）「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效」 -- the
+        // discard's waste bit, wherever the discard came from (its own pass
+        // clause, another card's dump, a cascade).
+        On::Action(Action::ZoneLeft("card.placed", None, on_discard)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
@@ -47,7 +51,7 @@ pub const MIRACLE: CardDef = CardDef::new(
 const ID: &str = "MyGO:难以复刻的奇迹";
 
 fn miracle(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("miracle_note")));
     // A fresh copy starts with an empty [经过] mask -- the slot is player-scoped
     // and would otherwise carry a previous copy's bits.
@@ -78,14 +82,32 @@ fn miracle(player_id: i32) -> card_sdk::Asked {
 
 fn before_build(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
-    ctx::set_build_discount(ctx::build_cost(t), 1);
+    if t < 0 {
+        ctx::set_slot(player_id, "miracle_used", 0);
+        return Ok(());
+    }
+    // The effective price, so a percent or an earlier card's cut is honoured.
+    let price = ctx::build_price(t);
+    if price <= 0 || ctx::crystals() < 1 {
+        // Nothing left for the crystal to replace -- do not spend it.
+        ctx::set_slot(player_id, "miracle_used", 0);
+        return Ok(());
+    }
+    ctx::set_slot(player_id, "miracle_used", 1);
+    // The cut is absolute and subtracted *after* the percent, so it must cover
+    // the whole post-percent figure, not just what is still due: add the cut
+    // already armed, or an earlier card's cut would still stand.
+    ctx::set_build_discount(price + ctx::build_discount(), 1);
     Ok(())
 }
 
 fn after_build(player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费）: 「可…代替资金花费」 is an owner choice and
-    // only bites when there is a 资金花费 to replace -- we always zero the cost and
-    // always spend a crystal.
+    // One crystal per build, even with two stacked copies (`miracle_used`
+    // is the one-shot latch the first copy's `before_build` set).
+    if ctx::slot(player_id, "miracle_used") != 1 {
+        return Ok(());
+    }
+    ctx::set_slot(player_id, "miracle_used", 0);
     ctx::add_crystals(-1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("miracle_built")));
     Ok(())
@@ -118,6 +140,19 @@ fn record_pass(player_id: i32) -> card_sdk::Asked {
         mask |= 1i32 << other;
     }
     ctx::set_slot(player_id, key, mask);
+    Ok(())
+}
+
+/// 规则书（3）: mark a discard that still carries crystals as 未生效.
+fn on_discard(_player_id: i32) -> card_sdk::Asked {
+    let to_discard = trigger::zone().is_some_and(|z| z.to == card_sdk::abi::Zone::Graveyard);
+    if to_discard && ctx::crystals() > 0 {
+        ctx::set_ineffective_at(ctx::self_uid(), true);
+        ctx::log(
+            _player_id,
+            &Msg::new(key!("miracle_wasted")).player_id("who", _player_id),
+        );
+    }
     Ok(())
 }
 
@@ -165,16 +200,10 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
             ctx::gain(player_id, purse, &msg)?;
         }
     }
-    // "上面还有奇迹水晶：视为没有生效" : "完成了")`.
-    ctx::set_dest(ctx::Dest::Graveyard);
-    if left {
-        // TODO(规则书)[judgement] （3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- we only log
-        // `miracle_wasted`; the card is not actually marked 未生效.
-        ctx::log(
-            player_id,
-            &Msg::new(key!("miracle_wasted")).player_id("who", player_id),
-        );
-    }
+    // 规则书（3）: the waste bit and its display line both come from the
+    // `zoneLeft` body on the way out (`on_discard`); logging here as well
+    // printed `miracle_wasted` twice for one waste (review finding 6).
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 
@@ -194,6 +223,12 @@ fn field_crystals(p: i32) -> i32 {
 #[inline(always)]
 pub fn miracle_kani(player_id: i32) -> card_sdk::Asked {
     miracle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_discard_kani(player_id: i32) -> card_sdk::Asked {
+    on_discard(player_id)
 }
 
 #[cfg(kani)]

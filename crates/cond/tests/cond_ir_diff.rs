@@ -101,6 +101,10 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::PayKind => f.win.pay_kind = raw,
         VarId::PayIsFixed => f.win.pay_is_fixed = raw,
         VarId::PayTotalStage => f.win.pay_total_stage = raw != 0,
+        VarId::SubjectRangeCard => f.win.subject_range_card = raw != 0,
+        VarId::ExtremeArmed => f.win.extreme_armed = raw != 0,
+        VarId::PendingNegation => f.win.pending_negation = raw,
+        VarId::ChainDepth => f.win.chain_depth = raw,
         VarId::ChargeIsSkill => f.win.charge_is_skill = raw != 0,
         VarId::SubjectRangeCard => f.win.subject_range_card = raw != 0,
         VarId::ExtremeArmed => f.win.extreme_armed = raw != 0,
@@ -120,12 +124,14 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::TurnKey => f.win.turn_key = raw,
         VarId::PlanFixedRoll => f.win.plan_fixed_roll = if raw == -1 { None } else { Some(raw) },
         VarId::TriggerCard => f.win.trigger_card = raw,
+        VarId::CardIsSkill => f.win.trigger_card_is_skill = raw != 0,
         VarId::CounterName => {
             // Bind both sides to 0 (empty `Trigger.name` → 0 on the view).
             f.ir.set_scalar(VarId::CounterName, 0);
             f.win.name = String::new();
         }
         VarId::TileId => f.win.tile.id = raw,
+        VarId::TilePosition => f.win.tile.position = raw,
         VarId::TileOwner => f.win.tile.owner = raw,
         VarId::TileHouses => f.win.tile.houses = raw,
         VarId::TileMortgaged => f.win.tile.mortgaged = raw,
@@ -615,6 +621,9 @@ fn diff_all_inventory_guards() {
         common::set_sugar_state(&mut f.win.players, &mut f.ir, 1, 1, 0, 0, 0, 0);
         f.ir.tile_kind_ids[1] = rules_cond_ir::ctx::id_of("circle");
         f.ir.set_insert(SetId::ChainKinds, rules_cond_ir::ctx::id_of("pay"));
+        // The resolving set: one card body is running.
+        f.win.resolving = vec![("r:bandori:21".to_string(), 1)];
+        f.ir.resolving_insert(rules_cond_ir::ctx::id_of("r:bandori:21"));
         // Mirror the function tables into the cel snapshot.
         f.win.tile_kinds = vec![String::new(), "circle".to_string()];
         f.win.tile_count = 2;

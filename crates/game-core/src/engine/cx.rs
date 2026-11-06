@@ -18,7 +18,7 @@ use crate::data::{GameData, TileData};
 use crate::msg::Msg;
 use crate::state::MatchPrompt;
 
-use super::rules::{CardRules, ExclusiveAsk};
+use super::rules::{raise, CardRules, ExclusiveAsk, Trigger};
 use super::world::{Extreme, World};
 
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
@@ -485,10 +485,21 @@ impl SettleOutcome {
 /// the entry's own settle-scoped writes compose on top without re-reading the
 /// stack. `outcome` starts
 /// [`SettleOutcome::Settled`] and is only lowered by a terminal branch.
-#[derive(Debug, Clone, Copy)]
+
+/// A card-issued **house write** (设计 5.4): the effective change is computed
+/// against the tile's cap first, and an unchanged count opens no window.
+#[derive(Clone, Copy, Debug)]
+pub enum HouseWrite {
+    Set(i32),
+    Add(i32),
+}
+
+/// A settle entry.
+#[derive(Debug, Clone)]
 pub struct SettleEntry {
     pub player: usize,
-    pub tile: usize,
+    /// The **governing tile** of the settle (the frame's `tile`).
+    pub tile: i32,
     /// Owner of `tile` when the settle opened -- the payee a rent payment
     /// must reach to count as this settle's `paid`.
     pub target: i32,
@@ -508,6 +519,16 @@ pub struct SettleEntry {
     /// and what it moved.
     pub paid: bool,
     pub paid_value: i32,
+    /// The settle's move, stamped onto raises inside the settle so a payment
+    /// listener can see which move it belongs to (and its path).
+    pub move_context: Option<crate::engine::move_ctx::MoveCtx>,
+    /// The settle's move view. A raise inside the settle inherits it when it
+    /// carries none of its own (see `PlayCtx::raise`), so a payment hook can
+    /// tell a card-forced settle (`settle_redirect`) from the walk's and reads
+    /// the main-move flag the settle belongs to.
+    pub mv: super::rules::TriggerMove,
+    /// The settle's main-move flag, stamped on inheriting raises.
+    pub is_main_move: bool,
 }
 
 /// Routine context: the world being mutated, read-only game data, card rules, and
@@ -579,6 +600,17 @@ pub struct PlayCtx<'a> {
     /// writes were not re-derived by the restart and must stay. Transient
     /// (not serialized).
     pub(crate) guest_overlays: Vec<(u32, GuestOverlay)>,
+    /// `houseAdded` / `houseRemoved` rows owed by host tile writes this drive
+    /// has applied (`(owner, tile, now, delta)`). A guest run is rebuilt on
+    /// every pause pass, so a write applied on the live context cannot live on
+    /// the guest `Run`; `commit_after` drains this into the committed run and
+    /// raises there (design G09 5.4/5.5). Transient.
+    pending_house_log: Vec<(i32, i32, i32, i32)>,
+    /// Uids a [`Self::restore_guests_to`] put back into the live world for a
+    /// re-run's reads. A drive drains the set at its loop top and hands it to
+    /// every pass; a uid its replay never takes out again must not survive the
+    /// commit (see `commit_after`).
+    pub(crate) reinserted: Vec<i32>,
     /// Play-gate verdicts for the current world stamp (fix A,
     /// `docs/BOT.md` "engine efficiency A–C"). `rules.cant_play` is a pure
     /// query of the world; within one unchanged world state the same
@@ -766,6 +798,26 @@ pub struct GuestOverlay {
     /// at this boundary, and the rows are not deduped.
     #[serde(default)]
     pub rule_bonus: Vec<(String, Option<i32>, Option<i32>)>,
+    /// Inspection-frame card lists the guest edited directly (`ctx::take_card`
+    /// / `ctx::add_to_dest` on `CardPile::Inspection`). Opening and closing a
+    /// frame are host requests, so only the listed cards cross -- the looker
+    /// takes a card out before placing or discarding it.
+    #[serde(default)]
+    pub frames: Vec<FrameDelta>,
+}
+
+/// One inspection frame's card list against the pass base. The frame itself
+/// (open/close) is host-owned; the body takes cards out of the look
+/// (`ctx::take_card` with `CardPile::Inspection`) before it places or discards
+/// them, and that take has to cross like any other guest write.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FrameDelta {
+    /// The frame id.
+    pub id: i32,
+    /// The list at the pass start.
+    pub base: Vec<crate::engine::world::InspectionCard>,
+    /// The list the body left.
+    pub wrote: Vec<crate::engine::world::InspectionCard>,
 }
 
 /// One open roll transaction's pick columns against the pass base (design G10
@@ -1637,7 +1689,9 @@ fn retain_unseen_overlay_rows(seen: &mut SeenRows, o: &mut GuestOverlay) {
 /// Used by the pass top (on live) and by [`PlayCtx::pass_base_for`] (on a
 /// clone, unwinding the overlay stack in reverse order), so the two see the
 /// same world after the same rows.
-fn revert_overlay_on(w: &mut World, o: GuestOverlay) {
+///
+/// Answers the field uids it put back, for the caller's `reinserted` set.
+fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
     let GuestOverlay {
         state,
         field,
@@ -1649,6 +1703,7 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) {
         board,
         events,
         rule_bonus,
+        frames,
         ..
     } = o;
     if let Some(d) = events {
@@ -1671,6 +1726,13 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) {
     for (i, d) in piles {
         if let Some(h) = w.hidden.get_mut(i) {
             d.restore(h);
+        }
+    }
+    for d in frames {
+        if let Some(f) = w.inspection_frames.iter_mut().find(|f| f.id == d.id) {
+            if f.cards == d.wrote {
+                f.cards = d.base;
+            }
         }
     }
     for d in roll_picks {
@@ -1747,10 +1809,11 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) {
             p.state_set(&k, v.value);
         }
     }
-    field.restore(w);
+    let reinserted = field.restore(w);
     for (i, name, base, wrote) in &tokens {
         write_token_row(w, *i, name, wrote.as_ref(), base.as_ref());
     }
+    reinserted
 }
 
 /// Mutable field list of a [`PassBase`] (the board's or a player's).
@@ -1771,10 +1834,29 @@ fn base_field_mut<'b>(
 pub struct FieldWrite {
     pub tile: i32,
     pub face_down: bool,
+    /// The row's attachment host (an attach/re-parent is a direct write to
+    /// `on`, `ctx::attach_card`'s settle). Without it a crossing put the row
+    /// back at `-1` and the next request's cycle guard saw a flat field.
+    #[serde(default)]
+    pub on: i32,
+    /// The row's owner (`ctx::set_instance_owner` -- 「视为拥有」, a rehome to
+    /// another seat). Without it a crossing dropped the transfer and left the
+    /// row with its old holder.
+    #[serde(default)]
+    pub owner: i32,
+    /// The row's 未生效 bit (`ctx::set_ineffective_at`). A leaving row's
+    /// `discarded` raise reads it (`wasted`), so it has to cross like the
+    /// rest of the row.
+    #[serde(default = "field_write_default_true")]
+    pub effective: bool,
     #[serde(default)]
     pub counters: std::collections::BTreeMap<String, i32>,
     #[serde(default)]
     pub props: std::collections::BTreeMap<String, i32>,
+}
+
+fn field_write_default_true() -> bool {
+    true
 }
 
 impl FieldWrite {
@@ -1782,6 +1864,9 @@ impl FieldWrite {
         FieldWrite {
             tile: f.tile,
             face_down: f.face_down,
+            on: f.on,
+            owner: f.owner,
+            effective: f.effective,
             counters: f.counters.clone(),
             props: f.props.clone(),
         }
@@ -1790,6 +1875,9 @@ impl FieldWrite {
     fn matches(&self, f: &crate::state::FieldCard) -> bool {
         self.tile == f.tile
             && self.face_down == f.face_down
+            && self.on == f.on
+            && self.owner == f.owner
+            && self.effective == f.effective
             && self.counters == f.counters
             && self.props == f.props
     }
@@ -1797,6 +1885,9 @@ impl FieldWrite {
     fn write_into(&self, f: &mut crate::state::FieldCard) {
         f.tile = self.tile;
         f.face_down = self.face_down;
+        f.on = self.on;
+        f.owner = self.owner;
+        f.effective = self.effective;
         f.counters = self.counters.clone();
         f.props = self.props.clone();
     }
@@ -1891,8 +1982,10 @@ impl FieldDelta {
     }
 
     /// The restore twin: put the pre-overlay field back, keeping a host write
-    /// that replaced the guest's.
-    pub fn restore(&self, w: &mut World) {
+    /// that replaced the guest's. Answers the uids it put back for a re-run's
+    /// reads: a replay that never takes one out again must not leave the row
+    /// behind at the commit (`PlayCtx::reinserted`).
+    pub fn restore(&self, w: &mut World) -> Vec<i32> {
         for (owner, _i, inst) in &self.added {
             if let Some(l) = field_list_mut(w, *owner) {
                 if let Some(j) = l.iter().position(|f| f.uid == inst.uid) {
@@ -1913,6 +2006,7 @@ impl FieldDelta {
                 }
             }
         }
+        let mut reinserted = Vec::new();
         for (owner, i, inst) in &self.removed {
             let Some(l) = field_list_mut(w, *owner) else {
                 continue;
@@ -1922,8 +2016,10 @@ impl FieldDelta {
             }
             let at = (*i).min(l.len());
             l.insert(at, inst.clone());
+            reinserted.push(inst.uid);
         }
         w.sync_active_event_mirrors();
+        reinserted
     }
 
     pub fn is_empty(&self) -> bool {
@@ -2044,6 +2140,13 @@ impl GuestOverlay {
         for d in &self.roll_picks {
             if let Some(r) = w.open_rolls.iter_mut().find(|r| r.id == d.id) {
                 d.apply(r);
+            }
+        }
+        for d in &self.frames {
+            if let Some(f) = w.inspection_frames.iter_mut().find(|f| f.id == d.id) {
+                if f.cards == d.base {
+                    f.cards = d.wrote.clone();
+                }
             }
         }
         for (key, uid) in &self.owners {
@@ -2221,6 +2324,23 @@ impl<'a> PlayCtx<'a> {
         self.w.recent = tail;
     }
 
+    /// Stamp the pile code on an event just posted (`play_post_value` leaves
+    /// `to` unset). `false` when the id is no longer in the tail -- harmless,
+    /// the reveal overlay still carries the pile.
+    pub fn set_event_to(&mut self, id: i32, to: i32) -> bool {
+        let mut evs: Vec<crate::state::MatchEvent> = self.w.recent.iter().cloned().collect();
+        let Some(e) = evs.iter_mut().find(|e| e.id == id) else {
+            return false;
+        };
+        e.to = to;
+        let mut tail = crate::engine::world::EventTail::default();
+        for e in evs {
+            tail.push_back(e);
+        }
+        self.w.recent = tail;
+        true
+    }
+
     /// Attach outcome lines to a `"card"` activation (and drop a negated
     /// activation's would-be results). No-op when the id is gone.
     pub fn set_event_results(&mut self, id: i32, results: Vec<Msg>) {
@@ -2317,6 +2437,10 @@ impl<'a> PlayCtx<'a> {
         // world, while the body's `place_card` wrote it on the copy and the
         // play may pause between the two (G06 §2.15).
         t.placed_during_play = f.placed_during_play;
+        // 规则书（3）: the waste bit rides the raise a `Leave` makes on the
+        // live world (`discarded`'s `wasted`), so it has to cross with the
+        // other turn policy rather than wait for the commit.
+        t.play_ineffective = f.play_ineffective;
         t.no_money_loss = f.no_money_loss.clone();
         // The movement plan a card shaped just before pausing for a host
         // routine (`plan::set_pay_factor` / `set_rent_factor` / `set_can_build`
@@ -2432,6 +2556,7 @@ impl<'a> PlayCtx<'a> {
             events: self.capture_guest_events_from(base, from),
             money: self.capture_guest_money_from(base, from),
             board: self.capture_guest_board_from(base, from),
+            frames: self.capture_guest_frames_from(from),
         }
     }
 
@@ -2723,6 +2848,29 @@ impl<'a> PlayCtx<'a> {
         out
     }
 
+    /// Capture the inspection-frame card lists the guest edited (`ctx::take_card`
+    /// / `ctx::add_to_dest` on `CardPile::Inspection`). The frame is matched by
+    /// id on live; a frame the body closed since is gone and skipped.
+    pub fn capture_guest_frames_from(&mut self, from: &World) -> Vec<FrameDelta> {
+        let mut out = Vec::new();
+        for g in &from.inspection_frames {
+            let Some(live) = self.w.inspection_frames.iter_mut().find(|f| f.id == g.id) else {
+                continue;
+            };
+            if live.cards == g.cards {
+                continue;
+            }
+            let base = live.cards.clone();
+            live.cards = g.cards.clone();
+            out.push(FrameDelta {
+                id: g.id,
+                base,
+                wrote: g.cards.clone(),
+            });
+        }
+        out
+    }
+
     /// Capture the roll pick columns the guest wrote against the pass base and
     /// carry them into `self.w` (`ctx::roll_pick`). A transaction the host
     /// opened after the pass start has no base row; its own columns are then
@@ -3002,6 +3150,18 @@ impl<'a> PlayCtx<'a> {
         self.guest_overlays.truncate(base);
     }
 
+    /// Re-anchor the overlays an enclosing drive left below `base` after a
+    /// nested commit replaced the live world. The rows that drive placed are
+    /// part of the committed world now, so its later revert must not take them
+    /// out again (`CardWorld::place_or` keeps a row it finds in place). Every
+    /// other delta surface restores only while live still matches what the
+    /// drive wrote, so a value the commit changed is kept already.
+    pub fn rebase_guest_overlays(&mut self, base: usize) {
+        for (_, o) in self.guest_overlays.iter_mut().take(base) {
+            o.field.added.clear();
+        }
+    }
+
     /// How many guest overlays are currently on the stack. A drive records
     /// this at entry and calls [`Self::restore_guests_to`] with it, so nested
     /// drives never pop an outer one.
@@ -3021,8 +3181,16 @@ impl<'a> PlayCtx<'a> {
         while self.guest_overlays.len() > base {
             let (_, mut o) = self.guest_overlays.pop().expect("len > base");
             retain_unseen_overlay_rows(&mut seen, &mut o);
-            revert_overlay_on(&mut self.w, o);
+            let reinserted = revert_overlay_on(&mut self.w, o);
+            self.reinserted.extend(reinserted);
         }
+    }
+
+    /// Drain the uids the restores so far put back for a re-run's reads: the
+    /// pass that starts now carries them, and drops the ones its replay does
+    /// not take out again (see `commit_after`).
+    pub fn take_reinserted(&mut self) -> Vec<i32> {
+        std::mem::take(&mut self.reinserted)
     }
 
     /// Drop every [`GuestOverlay`] this drive pushed (down to `base`), keeping
@@ -3039,6 +3207,7 @@ impl<'a> PlayCtx<'a> {
         let mut seen = SeenRows::new();
         while self.guest_overlays.len() > base {
             let (drive, mut o) = self.guest_overlays.pop().expect("len > base");
+            if o.state.iter().any(|(_, k, _, _, _)| k == "exile") {}
             if drive != own {
                 // A nested drive crossed this and is in flight; the restart
                 // above `base` re-runs this drive's body, not that one, so the
@@ -3052,7 +3221,8 @@ impl<'a> PlayCtx<'a> {
             // write again (the transferred stay layer in s08 went 2 to 4, the
             // PAREO counter here went 2 to 3).
             retain_unseen_overlay_rows(&mut seen, &mut o);
-            revert_overlay_on(&mut self.w, o);
+            let reinserted = revert_overlay_on(&mut self.w, o);
+            self.reinserted.extend(reinserted);
         }
     }
 
@@ -3119,7 +3289,125 @@ impl<'a> PlayCtx<'a> {
 
     /// The innermost open settle's tile, `-1` when none is open.
     pub fn settle_tile(&self) -> i32 {
-        self.settle_stack.last().map_or(-1, |s| s.tile as i32)
+        self.settle_stack.last().map_or(-1, |s| s.tile)
+    }
+
+    /// The open settles, innermost last (the raise-time move stamping reads
+    /// the top entry's `move_context`).
+    pub fn settle_stack(&self) -> &[SettleEntry] {
+        &self.settle_stack
+    }
+
+    /// The live plan's move tags (copied onto a stamped move).
+    pub fn plan_tags(&self) -> Vec<(String, i32)> {
+        self.w.plan().tags.clone()
+    }
+
+    /// The tile standing at board position `position` (the raise macro's
+    /// `position =` arm converts through this).
+    pub fn tile_at(&self, position: i32) -> i32 {
+        self.w.tile_standing_at(position)
+    }
+
+    /// Declare `houseAdd` / `houseRemove` for tile `t` on a fresh `effect`
+    /// window, then apply unless cancelled. Answers the post count (the
+    /// pre-write count when cancelled). 设计 5.4.
+    pub fn write_houses(
+        &mut self,
+        by: usize,
+        t: usize,
+        w: HouseWrite,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
+        let cap = self.tile(t).rent.len().saturating_sub(1) as i32;
+        let before = self.w.st.houses[t];
+        let after = match w {
+            HouseWrite::Set(n) => n.clamp(0, cap),
+            HouseWrite::Add(d) => before.saturating_add(d).clamp(0, cap),
+        };
+        if after == before {
+            return Ok(before);
+        }
+        let delta = after - before;
+        let target = self.w.st.owners[t];
+        let t = t as i32;
+        // `value` is the size of the change, unsigned (135 is the removal
+        // spelling; the kind carries the direction).
+        let kind = if delta > 0 { "houseAdd" } else { "houseRemove" };
+        let trig = raise!(
+            self,
+            "effect",
+            by,
+            tile = t,
+            target = target,
+            by_card = by_card,
+            effects = vec![super::rules::Effect {
+                kind: kind.into(),
+                target,
+                from: -1,
+                tile: t,
+                value: delta.abs(),
+            }]
+        )?;
+        if trig.is_cancelled() {
+            return Ok(before);
+        }
+        self.w.st.houses[t as usize] = after;
+        Ok(after)
+    }
+
+    /// Declare `ownerSet` for tile `t`, then apply unless cancelled. Answers
+    /// the new owner (the old one when cancelled). 设计 5.4.
+    pub fn write_owner(
+        &mut self,
+        by: usize,
+        t: usize,
+        owner: i32,
+        by_card: Option<i32>,
+    ) -> Flow<i32> {
+        let before = self.w.st.owners[t];
+        if before == owner {
+            return Ok(before);
+        }
+        let t = t as i32;
+        let trig = raise!(
+            self,
+            "effect",
+            by,
+            tile = t,
+            target = before,
+            by_card = by_card,
+            effects = vec![super::rules::Effect {
+                kind: "ownerSet".into(),
+                target: owner,
+                from: -1,
+                tile: t,
+                value: owner,
+            }]
+        )?;
+        if trig.is_cancelled() {
+            return Ok(before);
+        }
+        // The one ownership write, so the acquisition ledger follows the
+        // 「视为拥有」 / owner-set too (design G08 §7.7).
+        self.w.set_tile_owner(t, owner);
+        Ok(owner)
+    }
+
+    /// Owe one `houseAdded` / `houseRemoved` raise (`delta` signed) to the
+    /// drive's commit; see [`Self::pending_house_log`].
+    pub fn push_pending_house_log(&mut self, owner: i32, tile: i32, now: i32, delta: i32) {
+        self.pending_house_log.push((owner, tile, now, delta));
+    }
+
+    /// Take the owed house raises.
+    pub fn take_pending_house_log(&mut self) -> Vec<(i32, i32, i32, i32)> {
+        std::mem::take(&mut self.pending_house_log)
+    }
+
+    /// The position tile `tile` stands at (the raise macro's `tile =` arm).
+    pub fn position_of_tile(&self, tile: i32) -> i32 {
+        self.w.position_of_tile(tile)
     }
 
     pub fn new(
@@ -3147,6 +3435,8 @@ impl<'a> PlayCtx<'a> {
             move_start: -1,
             move_depth: 0,
             guest_overlays: Vec::new(),
+            pending_house_log: Vec::new(),
+            reinserted: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),
             work_stack: Vec::new(),
             draining_work: false,

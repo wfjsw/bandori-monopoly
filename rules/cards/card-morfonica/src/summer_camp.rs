@@ -6,6 +6,8 @@
 //! by others until your next turn, then draw if nothing was blocked.
 
 use bandori_std::ctx::{self, trigger};
+use bandori_std::zones::ZoneChangeCause;
+use card_sdk::abi::prop;
 use card_sdk::abi::{ActionKind, FilterKind};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Filter, GateValue, Msg, On};
@@ -22,12 +24,15 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         // skill's controller), so `by >= 0` is a defensive no-op; `by != owner` decides.
         // 规则书: 「你只会被自己发动的效果指定」
         On::Filter(Filter::Untargetable("actor == owner && by >= 0 && by != owner", None, untargetable)),
-        // TODO(ABI) leave-field hook: the end path is the owner's turn start only
-        //   -- if the card leaves the field earlier, 「当此卡效果结束」 never runs:
-        //   no draw, and the negation count is never reset.
         On::Action(Action::TurnStart("actor == owner && card.placed", None, turn_start)),
+        // 规则书: 「当此卡效果结束」 -- the end, whether the effect ran out at the
+        // owner's turn start or the card left the field earlier.
+        On::Action(Action::ZoneLeft("card.placed", None, on_leave)),
     ],
-).meta(&card_sdk::meta::CardMeta::new()
+)
+// Standard / advanced bots never offer it (human legality is untouched).
+.props(&[(prop::AI_NEVER, 1)])
+.meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)
         .raw_name(r#"夏日合宿"#)
         .tags(&[])
@@ -36,8 +41,8 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn summer_camp(player_id: i32) -> card_sdk::Asked {
-    // TODO(ABI)
-    ctx::set_dest(ctx::Dest::Field);
+    // Bot offer: `prop::AI_NEVER` on the def -- a human still plays it by hand.
+    ctx::set_dest(ctx::Dest::Field, ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("summer_camp_note")));
     ctx::log(
         player_id,
@@ -57,9 +62,22 @@ fn untargetable(player_id: i32, mut g: GateValue) -> GateValue {
     g
 }
 
-fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && card.placed` is the condition.
-    ctx::set_dest(ctx::Dest::Graveyard);
+fn turn_start(_player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && card.placed` is the condition. The effect runs out: the
+    // leave (expiry) passes through the `zoneLeft` body, which is also the path
+    // an earlier leave takes.
+    ctx::send_to_dest(ctx::Dest::Graveyard, ZoneChangeCause::Expire);
+    Ok(())
+}
+
+/// 规则书: 「当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌」 -- the
+/// end, drawn once however the effect ended.
+fn on_leave(player_id: i32) -> card_sdk::Asked {
+    // Instance kind: another copy sees this raise too.
+    if trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
+    bandori_std::zones::set_leave_destination(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("summer_camp_end")).player_id("who", player_id),
@@ -97,4 +115,10 @@ pub fn untargetable_kani(player_id: i32, v: card_sdk::GateValue) -> card_sdk::Ga
 #[inline(always)]
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_leave_kani(player_id: i32) -> card_sdk::Asked {
+    on_leave(player_id)
 }

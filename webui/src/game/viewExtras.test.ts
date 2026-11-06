@@ -146,6 +146,7 @@ function skill(id: string, enabled = true): SkillAction {
 function extrasBlob(over: Partial<ViewExtras> = {}): ViewExtras {
   return {
     playable: [true, false],
+    aiPlayable: [true, false],
     estCost: [100, 200],
     skills: [skill("skill:0:one")],
     aiAnswer: { answer: 1, picked: ["c1"], worth: 42 },

@@ -189,7 +189,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
             // TODO(规则书)（选择[获得]1000资金或进入移动阶段）: the book's 「或」 has no fallback -- choosing the
             // move silently pays 1000 instead when the main move is gone (latent until the
             // whole-card gate goes).
-            if station >= 0 && rules_status::move_blocked(player_id).is_none() {
+            // The same ordinal read as the (2) arm: a replay must see a move
+            // spent by this activation as still free, and only a first run
+            // reads the gate.
+            if station >= 0
+                && ctx::cant_move_code_for_activation(player_id, ctx::trigger::activation_ordinal())
+                    == 0
+            {
                 // 规则书（4）[手]: 「进入移动阶段并将本回合的[主要移动]改为[传送]到
                 // “bandori车站”并[结算]」 -- one move: the turn's main move, and it
                 // settles on arrival (the default).

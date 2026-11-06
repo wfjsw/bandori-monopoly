@@ -20,6 +20,7 @@ use card_sdk::kani_host::{self, Args, Op};
 
 use crate::board;
 use crate::intern::{self, NameId};
+use crate::spec::g12_status;
 use crate::world::{
     self, Effect, World, CARD_RESONANCE, MAX_PLAYERS, TILE_SHOP, TILE_SHOP_NAME, TOK_PP_NEG,
     TOK_PP_POS,
@@ -357,7 +358,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::tile_group => arm_tile_group(a),
         Op::tile_price => arm_tile_price(a),
         Op::buy_price => arm_buy_price(a),
-        Op::build_cost => {
+        // G09 §5.7: no percent / cut in the model, so the price is the base.
+        Op::build_price | Op::build_cost => {
             let s = board::tile_slot(a0);
             if s < 0 {
                 0
@@ -365,6 +367,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 board::TILES[s as usize].house_cost as i64
             }
         }
+        Op::build_cost_percent => 100,
+        Op::build_discount => 0,
+        Op::tile_buildable => 1,
         Op::mortgage_value => {
             let s = board::tile_slot(a0);
             if s < 0 {
@@ -585,12 +590,23 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::place_card_at => arm_place_card_at(a),
         Op::place_card_on => arm_place_card_on(a),
         Op::set_dest => arm_set_fate(a),
-        Op::set_transfer_to_dest => 0,
+        Op::set_dest_unwatched => arm_set_fate(a),
+        Op::set_transfer_to_dest => world::with_world_mut(|w| {
+            // Aims the *commit* at `to`; recorded until the dest is applied.
+            w.dest = a1;
+            w.dest_to = a0;
+            0
+        }),
         Op::send_to_dest => arm_send_to_dest(a),
-        Op::transfer_to_dest => 0,
+        Op::transfer_to_dest => arm_transfer_to_dest(a),
         Op::teleport_to => arm_teleport_to(a),
-        Op::unplace_card | Op::unplace_at | Op::unplace_card_named => arm_unplace_card(a),
+        Op::unplace_card => arm_unplace_card_self(a),
+        Op::unplace_at => arm_zone_leave(a),
+        Op::unplace_card_named => arm_unplace_card_named(a),
         Op::is_placed => arm_is_placed(a),
+        Op::is_own_placement => {
+            world::with_world(|w| w.field.iter().any(|f| f.uid == a[0] && f.mine) as i64)
+        }
         Op::field_instances => arm_field_instances(a),
         Op::placed_cards => arm_placed_cards(a),
         Op::placed_tile => {
@@ -630,6 +646,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 w.field[0].tile
             }
         }) as i64,
+        // The model keeps no slot apart from the tile (§5.7).
+        Op::self_position => world::with_world(|w| {
+            if w.field_n == 0 {
+                w.pos[player_idx(w.trig_player)]
+            } else {
+                w.field[0].tile
+            }
+        }) as i64,
         Op::set_self_tile => world::with_world_mut(|w| {
             if w.field_n == 0 {
                 0
@@ -650,11 +674,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
         }),
         Op::set_self_face_down => world::with_world_mut(|w| {
-            if w.field_n == 0 {
-                0
-            } else {
-                w.field[0].face_down = a0 != 0;
-                1
+            // `set_self_face_down(on, cause)` -- the flip addresses the run's
+            // own instance (`self_uid()`), never `field[0]`.
+            match w.field_by_uid_mut(w.bound_uid) {
+                Some(f) => {
+                    f.face_down = a0 != 0;
+                    1
+                }
+                None => 0,
             }
         }),
         Op::self_immune => world::with_world(|w| {
@@ -683,6 +710,28 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 0
             }
         }),
+        // ---- zone family (G08) ----
+        Op::zone_of => world::with_world(|w| w.zone_of(a0)) as i64,
+        Op::attachment_host => world::with_world(|w| w.attachment_host(a0)) as i64,
+        Op::attached_cards => arm_attached_cards(a),
+        Op::created_cards => arm_created_cards(a),
+        Op::earliest_owned_tile => world::with_world(|w| w.earliest_owned_tile(a0)) as i64,
+        Op::instance_owner => {
+            world::with_world(|w| w.field_by_uid(a0).map_or(-1, |f| f.owner)) as i64
+        }
+        Op::attach_card => arm_attach_card(a),
+        Op::detach_card => arm_detach_card(a),
+        Op::set_instance_owner => arm_set_instance_owner(a),
+        Op::set_created_by_at => arm_set_created_by_at(a),
+        Op::set_ineffective_at => arm_set_ineffective_at(a),
+        Op::is_ineffective_at => {
+            world::with_world(|w| w.field_by_uid(a0).is_some_and(|f| !f.effective) as i64)
+        }
+        Op::rehome_card => arm_rehome_card(a),
+        Op::play_hand_card => arm_play_hand_card(a),
+        Op::trigger_zone => arm_trigger_zone(a),
+        Op::trig_play_outcome => world::with_world(|w| w.trig_play_outcome) as i64,
+        Op::trig_out_cause => world::with_world(|w| w.trig_out_cause) as i64,
         Op::is_immune_at => {
             world::with_world(|w| w.field_by_uid(a0).map_or(0, |f| f.immune as i64))
         }
@@ -695,7 +744,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
         }),
         // `tile_at` / `set_tile_at` — field-instance placement (hostfns 535–543).
-        Op::tile_at => world::with_world(|w| w.tile_at(a0)) as i64,
+        // The ABI `tile_at(p)` is position -> standing tile (identity here; the
+        // swap itself is proved in `spec::abi_g09`). `tile_of(uid)` is the
+        // instance reader.
+        Op::tile_of => world::with_world(|w| w.tile_at(a0)) as i64,
+        Op::tile_at => a0 as i64,
+        Op::position_of_tile => a0 as i64,
+        Op::tile_extra_count => 0,
         Op::set_tile_at => world::with_world_mut(|w| {
             let ok = w.set_tile_at(a0, a1);
             if ok {
@@ -831,9 +886,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::apply_abnormal => arm_apply_abnormal(a),
-        // The stay move-latch is turn-flow; the kani world has no skip_move
-        // field (the model records the layer write only). Protocol-level.
-        Op::skip_main_move | Op::clear_move_skip => 0,
+        // The stay move-latch is turn-flow (`World.st.skip_move`); it is the
+        // `3` branch of `cant_move`. Packing: `(player, locked)`.
+        Op::skip_main_move => arm_skip_main_move(a),
+        Op::clear_move_skip => arm_clear_move_skip(a),
         Op::give_extra_turn => {
             // Recorded so the protocol can schedule it. Scheduling is
             // PROTOCOL-LEVEL (the turn engine owns the extra-turn queue).
@@ -865,11 +921,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::log_as => arm_log(a),
-        Op::cant_move => world::with_world(|w| {
-            (w.stay[player_idx(a0)] > 0
-                || w.stun[player_idx(a0)] > 0
-                || w.exile[player_idx(a0)] > 0) as i64
-        }),
+        // Same code space as the engine (§5.4), composed from the running
+        // activation: turn → skip → spent.
+        Op::cant_move => arm_cant_move(a),
         Op::abnormal_count => world::with_world(|w| {
             let mut n = 0;
             let mut p = 0;
@@ -897,6 +951,25 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- nearest selection (G07) ----
         Op::nearest => arm_nearest(a),
         Op::nearest_with_prop => arm_nearest_with_prop(a),
+
+        // ---- v114 (G12) status / blocked-ness / immunity ----
+        // The trigger readers expose the stamp the harness / engine put on
+        // the raise; the ordinal form runs the engine's exact `cant_move_from`
+        // predicate (`spec::g12_status`, shared with the plain read above).
+        Op::trigger_activation_ordinal => arm_trigger_activation_ordinal(a),
+        Op::trigger_abnormal_blocked => arm_trigger_abnormal_blocked(a),
+        Op::trigger_move_abnormal => arm_trigger_move_abnormal(a),
+        Op::cant_move_code_for_activation => arm_cant_move_code_for_activation(a),
+        Op::is_immune_from_at => arm_is_immune_from_at(a),
+        Op::set_self_immune_except_owner => arm_set_self_immune_except_owner(a),
+        Op::dice_immune => arm_dice_immune(a),
+        Op::set_dice_immune => arm_set_dice_immune(a),
+
+        // ---- inspection / reveal (G11) ----
+        Op::inspection_begin => arm_inspection_begin(a),
+        Op::inspection_end => arm_inspection_end(a),
+        Op::reveal_pile => arm_reveal_pile(a),
+        Op::reveal_card => arm_reveal_card(a),
 
         // ---- outcome / cause / world surface (G10) ----
         Op::trig_by_card_instance => world::with_world(|w| w.trig_by_card_instance as i64),
@@ -948,6 +1021,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_value => arm_trig_value(a),
         Op::trig_target => arm_trig_target(a),
         Op::trig_tile => arm_trig_tile(a),
+        // No slot in the model: the position reads as the tile (§5.7).
+        Op::trig_position => arm_trig_tile(a),
         Op::trig_name => arm_trig_name(a),
         Op::trig_step => 0,
         Op::trig_by_card => 0,
@@ -993,6 +1068,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 1
             }
         }),
+        // No path in the model: length 0, every index 0 (§5.7).
+        Op::trig_move_path_length => 0,
+        Op::trig_move_path => 0,
         Op::trig_move_remaining => world::with_world(|w| {
             if w.move_snap.present() {
                 w.move_snap.remaining as i64
@@ -1195,9 +1273,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::offer_force_buy
         | Op::offer_build
         | Op::card_build
+        | Op::card_build_as
         | Op::card_buy
         | Op::card_offer_build
-        | Op::settle_tile_at
         | Op::card_mortgage
         | Op::query_guard
         | Op::declared_arg
@@ -1221,6 +1299,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::flash_card
         | Op::flash_card_keyed
         | Op::flash_tile => arm_protocol_stub(a),
+
+        // A protocol stub, but recorded: a clause can still be held to "it
+        // settles here, and nowhere when it is on no square".
+        Op::settle_tile_at => arm_settle_tile_at(a),
 
         // ---- cross-card messages (`ctx::send` / `On::Message`) ----
         Op::send => arm_send(a),
@@ -1645,6 +1727,105 @@ pub fn arm_card_counter(a: Args) -> i64 {
     }) as i64
 }
 
+// ---- v114 (G12) status / blocked-ness / immunity -------------------------
+
+/// `trigger::activation_ordinal` — the running activation stamp.
+pub fn arm_trigger_activation_ordinal(_a: Args) -> i64 {
+    world::with_world(|w| w.turn_activation_ordinal) as i64
+}
+
+/// `trigger::abnormal_blocked` — the raise's blocked-ness bit.
+pub fn arm_trigger_abnormal_blocked(_a: Args) -> i64 {
+    world::with_world(|w| w.trig_abnormal_blocked as i64)
+}
+
+/// `trigger::move_abnormal` — the in-flight frame's span bit, OR the turn
+/// latch `end_plan` copies it into (`turn.move_abnormal`).
+pub fn arm_trigger_move_abnormal(_a: Args) -> i64 {
+    world::with_world(|w| (w.move_snap.abnormal || w.turn_move_abnormal) as i64)
+}
+
+/// `cant_move_code_for_activation(player, activation)` — the engine's order,
+/// turn → skip → spent, with "spent" suppressed for the asking activation.
+pub fn arm_cant_move_code_for_activation(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world(|w| {
+        g12_status::cant_move_code(
+            w.turn_player,
+            a0,
+            w.skip_move,
+            w.main_moved,
+            w.move_activation_ordinal,
+            a1,
+        ) as i64
+    })
+}
+
+/// `cant_move(player)` — the same code against the running activation.
+pub fn arm_cant_move(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        g12_status::cant_move_code(
+            w.turn_player,
+            a0,
+            w.skip_move,
+            w.main_moved,
+            w.move_activation_ordinal,
+            w.turn_activation_ordinal,
+        ) as i64
+    })
+}
+
+/// `skip_main_move(player, locked)` / `clear_move_skip(player)` — the turn's
+/// move latch (`World.st.skip_move`), the `3` branch of `cant_move`.
+pub fn arm_skip_main_move(a: Args) -> i64 {
+    world::with_world_mut(|w| w.skip_move = a[1] != 0);
+    0
+}
+
+pub fn arm_clear_move_skip(_a: Args) -> i64 {
+    world::with_world_mut(|w| w.skip_move = false);
+    0
+}
+
+/// `is_immune_from_at(uid, by)` — false without an instance, else the
+/// any-flavour flag or the except-owner flavour for a foreign causer.
+pub fn arm_is_immune_from_at(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world(|w| {
+        w.field_by_uid(a0).is_some_and(|f| {
+            g12_status::is_immune_from(f.immune, f.immune_except_owner, f.player, a1)
+        }) as i64
+    })
+}
+
+/// `set_self_immune_except_owner(on)` — mirrors `set_self_immune`: writes the
+/// model's running instance (slot 0) and answers whether it exists.
+pub fn arm_set_self_immune_except_owner(a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        if w.field_n == 0 {
+            0
+        } else {
+            w.field[0].immune_except_owner = a[0] != 0;
+            1
+        }
+    })
+}
+
+/// `dice_immune()` — the turn's flag.
+pub fn arm_dice_immune(_a: Args) -> i64 {
+    world::with_world(|w| w.dice_immune as i64)
+}
+
+/// `set_dice_immune(on)` — sets the turn flag and answers its previous value.
+pub fn arm_set_dice_immune(a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        let prev = w.dice_immune;
+        w.dice_immune = a[0] != 0;
+        prev as i64
+    })
+}
+
 /// `run_planned_move` — `1` ran, `0` refused.
 ///
 /// The engine's decision (`G04-move-plan` §4.10): a main move of the turn
@@ -1663,6 +1844,10 @@ pub fn arm_card_move(a: Args) -> i64 {
         } else {
             if is_main_move {
                 w.main_moved = true;
+                // The move is latched to the activation that spent it
+                // (`play.rs`, both the direct and the landing path), so a
+                // replay of the same routine re-reads it as its own.
+                w.move_activation_ordinal = w.turn_activation_ordinal;
             }
             1
         }
@@ -1746,6 +1931,16 @@ pub fn arm_cards_in(a: Args) -> i64 {
                 while i < w.deck_n as usize && n < world::MAX_CARDS {
                     ids[n] = card_slot_of_id(intern::NameId(w.deck_pile[i]));
                     n += 1;
+                    i += 1;
+                }
+            } else if a1 == 4 {
+                // Inspection frame: revealed entries only, front-first.
+                let mut i = 0usize;
+                while i < w.inspection_n as usize && n < world::MAX_CARDS {
+                    if w.inspection_revealed[i] {
+                        ids[n] = card_slot_of_id(intern::NameId(w.inspection_pile[i]));
+                        n += 1;
+                    }
                     i += 1;
                 }
             }
@@ -1907,7 +2102,9 @@ pub fn arm_roll(a: Args) -> i64 {
     if purpose == 1 {
         arm_do_move_roll(a)
     } else {
-        roll_dice(count, sides) as i64
+        let v = roll_dice(count, sides);
+        world::with_world_mut(|w| w.roll_calls = w.roll_calls.saturating_add(1));
+        v as i64
     }
 }
 
@@ -2201,7 +2398,11 @@ pub fn arm_draw(a: Args) -> i64 {
                 world::pile_push(&mut w.hand_pile, &mut w.hand_n, u16::MAX);
                 i += 1;
             }
-            w.push(Effect::Draw { player: a0, n });
+            if a2 & card_sdk::abi::draw_flag::OVER_HAND_LIMIT != 0 {
+                w.push(Effect::DrawOver { player: a0, n });
+            } else {
+                w.push(Effect::Draw { player: a0, n });
+            }
         });
         n as i64
     }
@@ -2226,7 +2427,9 @@ pub fn arm_field_instances(a: Args) -> i64 {
     world::with_world(|w| {
         let mut i = 0usize;
         while i < w.field_n as usize && n < MAX_F {
-            if w.field[i].player == a0 {
+            // An attachment (`on >= 0`) is reachable through its host, not
+            // listed twice (G08 I6).
+            if w.field[i].player == a0 && w.field[i].on < 0 {
                 uids[n] = w.field[i].uid;
                 names[n] = w.field[i].card;
                 n += 1;
@@ -2660,6 +2863,8 @@ fn arm_nearest_impl(a: Args, with_prop: bool) -> i64 {
     })
 }
 
+/// `is_own_placement` -- did the running body mint this row? The real host
+/// keeps a per-drive uid log; the model marks the row at `make_row`.
 pub fn arm_is_placed(a: Args) -> i64 {
     let _ = a;
     // Instance-bound: the *running* uid must have a slot. `field_n > 0` was
@@ -2749,6 +2954,13 @@ pub fn arm_opt_price(a: Args) -> i64 {
         world::with_world_mut(|w| w.opt_n += 1);
         0
     }
+}
+
+/// `opt_count(want)` before a multi-select `ask`: the select count rides on the
+/// prompt, so it must not bump `opt_n` (see the dispatch entry).
+pub fn arm_opt_count(a: Args) -> i64 {
+    let _ = a;
+    0
 }
 
 pub fn arm_others_at(a: Args) -> i64 {
@@ -2943,25 +3155,8 @@ pub fn arm_place_card(a: Args) -> i64 {
         // **placed** card = Field (2). (pipopa: `set_dest(Banished)` for
         // 「此卡[移除]」 then `place_card` a Popipapapipopa — the old arm
         // leaked `w.dest=3` into PlaceCard.dest.)
-        let uid = w.next_uid;
-        w.next_uid += 1;
-        w.last_uid = uid;
         let tile = w.pos[player_idx(a0)];
-        let fi = w.field_n as usize;
-        if fi < world::MAX_FIELD {
-            w.field[fi] = world::FieldCard {
-                uid,
-                card: id,
-                player: a0,
-                tile,
-                face_down: false,
-                immune: false,
-                crystals: 0,
-                props: world::NameMap::new(),
-                effective_card: u16::MAX,
-            };
-            w.field_n += 1;
-        }
+        let uid = w.make_row(id, a0, a0, tile);
         w.push(Effect::PlaceCard {
             player: a0,
             dest: 2,
@@ -2980,25 +3175,8 @@ pub fn arm_place_card_at(a: Args) -> i64 {
         let id = card_u16(a1, a2);
         let slot = card_slot(a1, a2);
         world::with_world_mut(|w| {
-            let uid = w.next_uid;
-            w.next_uid += 1;
-            w.last_uid = uid;
             let tile = w.pos[player_idx(a0)];
-            let fi = w.field_n as usize;
-            if fi < world::MAX_FIELD {
-                w.field[fi] = world::FieldCard {
-                    uid,
-                    card: id,
-                    player: a0,
-                    tile,
-                    face_down: false,
-                    immune: false,
-                    crystals: 0,
-                    props: world::NameMap::new(),
-                    effective_card: u16::MAX,
-                };
-                w.field_n += 1;
-            }
+            let uid = w.make_row(id, a0, a0, tile);
             w.push(Effect::PlaceCard {
                 player: a0,
                 dest: 2,
@@ -3019,24 +3197,7 @@ pub fn arm_place_card_on(a: Args) -> i64 {
         let id = card_u16(a2, a3);
         let slot = card_slot(a2, a3);
         world::with_world_mut(|w| {
-            let uid = w.next_uid;
-            w.next_uid += 1;
-            w.last_uid = uid;
-            let fi = w.field_n as usize;
-            if fi < world::MAX_FIELD {
-                w.field[fi] = world::FieldCard {
-                    uid,
-                    card: id,
-                    player: a0,
-                    tile,
-                    face_down: false,
-                    immune: false,
-                    crystals: 0,
-                    props: world::NameMap::new(),
-                    effective_card: u16::MAX,
-                };
-                w.field_n += 1;
-            }
+            let uid = w.make_row(id, a0, a0, tile);
             w.push(Effect::PlaceCard {
                 player: a0,
                 dest: tile,
@@ -3266,8 +3427,31 @@ pub fn arm_round_no(a: Args) -> i64 {
     world::with_world(|w| w.round_no) as i64
 }
 
-pub fn arm_schedule_turn_end(_a: Args) -> i64 {
+pub fn arm_schedule_turn_end(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.last_schedule = (a0, a1);
+        w.schedule_turn_end_n = w.schedule_turn_end_n.saturating_add(1);
+    });
     0
+}
+
+/// `settle_tile_at` — a protocol stub (the settle's real scheduling is
+/// PROTOCOL-LEVEL), but record the call so a clause can still be held to "it
+/// settles here, and nowhere when placed nowhere".
+pub fn arm_settle_tile_at(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.last_settle = (a0, a1);
+        w.settle_calls = w.settle_calls.saturating_add(1);
+    });
+    0
+}
+
+/// `trigger::is_settle_redirect()` — the pending settle was card-forced
+/// (`TriggerMove::settle_redirect`).
+pub fn arm_trig_settle_redirect(_a: Args) -> i64 {
+    world::with_world(|w| w.move_snap.settle_redirect as i64)
 }
 
 pub fn arm_self_tile(a: Args) -> i64 {
@@ -3329,6 +3513,7 @@ pub fn arm_set_fate(a: Args) -> i64 {
                 // advances the self slot, but `apply_dest` files
                 // `Run::current_uid`.
                 let uid = w.bound_uid;
+                let to = w.dest_to;
                 if let Some(card) = w.remove_field(uid) {
                     match a0 {
                         0 => world::pile_push(&mut w.discard_pile, &mut w.discard_n, card),
@@ -3337,35 +3522,313 @@ pub fn arm_set_fate(a: Args) -> i64 {
                         _ => {}
                     }
                 }
+                let _ = to;
             }
         });
         0
     }
 }
 
-/// `Op::send_to_dest` — apply the running instance's dest **now**
-/// (`ctx::send_to_dest`), not at the run commit. Same pile routing as
-/// [`arm_set_fate`]; returns the owner the card left, or -1 when it was
-/// not in play. The old inline arm mistook `w.dest` for a tile and
-/// teleported the player there (class C host-model defect).
+/// `Op::send_to_dest` — the run's own instance leaves into `dest` **now**
+/// (`ctx::send_to_dest`), `-1` = its own leave destination. Mirrors
+/// `hostfns::send_to_dest` → `HostRequest::Leave { uid: self_uid(), to: -1 }`.
 pub fn arm_send_to_dest(a: Args) -> i64 {
-    let [a0, ..] = a;
+    let [a0, a1, ..] = a;
     world::with_world_mut(|w| {
         w.dest = a0;
-        let uid = w.last_uid;
-        let owner = w.field_by_uid(uid).map(|c| c.player).unwrap_or(-1);
-        if a0 != 2 {
-            if let Some(card) = w.remove_field(uid) {
-                match a0 {
-                    0 => world::pile_push(&mut w.discard_pile, &mut w.discard_n, card),
-                    1 => world::pile_push(&mut w.hand_pile, &mut w.hand_n, card),
-                    // 3 = Banished 「[移除]」: left the field, goes nowhere.
-                    _ => {}
-                }
+        let uid = w.bound_uid;
+        w.zone_leave(uid, a0, -1, a1)
+    }) as i64
+}
+
+/// `Op::transfer_to_dest` — `send_to_dest` into another seat's area
+/// (`to` is whose; mirrors `hostfns::transfer_to_dest`).
+pub fn arm_transfer_to_dest(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    world::with_world_mut(|w| {
+        w.dest = a1;
+        let uid = w.bound_uid;
+        w.zone_leave(uid, a1, a0, a2)
+    }) as i64
+}
+
+/// `Op::unplace_card` — the run's own instance leaves into its own leave
+/// destination with cause `Effect` (mirrors `hostfns::unplace_card`).
+pub fn arm_unplace_card_self(_a: Args) -> i64 {
+    world::with_world_mut(|w| {
+        let uid = w.bound_uid;
+        w.zone_leave(uid, -1, -1, world::CAUSE_EFFECT)
+    }) as i64
+}
+
+/// `Op::unplace_at` — the leave writer (`unplace_at(uid, destination,
+/// cause)`; `-1` = the instance's own leave destination).
+pub fn arm_zone_leave(a: Args) -> i64 {
+    let [uid, destination, cause, ..] = a;
+    world::with_world_mut(|w| w.zone_leave(uid, destination, -1, cause)) as i64
+}
+
+/// `Op::unplace_card_named` — a name-addressed take-off that files nothing
+/// (mirrors `CardWorld::unplace_card_named` over `World::unplace_card`).
+pub fn arm_unplace_card_named(a: Args) -> i64 {
+    let [a0, cp, cl, ..] = a;
+    let id = card_u16(cp, cl);
+    world::with_world_mut(|w| {
+        let mut i = 0usize;
+        let mut idx = None;
+        while i < w.field_n as usize {
+            if w.field[i].player == a0 && w.field[i].card == id {
+                idx = Some(i);
+                break;
             }
+            i += 1;
         }
-        owner as i64
+        match idx {
+            Some(i) => {
+                let uid = w.field[i].uid;
+                w.remove_field(uid);
+                w.push(Effect::UnplaceCard { uid });
+                1
+            }
+            None => 0,
+        }
     })
+}
+
+/// Write a `Vec<i32>` as LE `i32`s; answers the byte length (mirrors
+/// `hostfns::write_uid_list`, including "too small a buffer still answers
+/// the length").
+fn write_uid_list(buf: i32, cap: i32, list: &[i32]) -> i64 {
+    let need = list.len() as i32 * 4;
+    if buf != 0 && need <= cap {
+        let mut bytes = [0u8; world::MAX_FIELD * 4];
+        let mut i = 0usize;
+        while i < list.len() {
+            let b = list[i].to_le_bytes();
+            let base = i * 4;
+            bytes[base] = b[0];
+            bytes[base + 1] = b[1];
+            bytes[base + 2] = b[2];
+            bytes[base + 3] = b[3];
+            i += 1;
+        }
+        card_sdk::native::write(buf, &bytes[..need as usize]);
+    }
+    need as i64
+}
+
+/// `Op::attached_cards` — the host's direct attachments in filing order.
+pub fn arm_attached_cards(a: Args) -> i64 {
+    let [host, buf, cap, ..] = a;
+    let list = world::with_world(|w| {
+        let mut out = [0i32; world::MAX_FIELD];
+        let n = w.attached_into(host, &mut out);
+        out[..n].to_vec()
+    });
+    write_uid_list(buf, cap, &list)
+}
+
+/// `Op::created_cards` — the creator's direct children in creation order.
+pub fn arm_created_cards(a: Args) -> i64 {
+    let [creator, buf, cap, ..] = a;
+    let list = world::with_world(|w| {
+        let mut out = [0i32; world::MAX_FIELD];
+        let n = w.created_into(creator, &mut out);
+        out[..n].to_vec()
+    });
+    write_uid_list(buf, cap, &list)
+}
+
+/// `Op::attach_card(host, ptr, len, cause, face_down)` — file a fresh
+/// instance of the named card from the player's hand onto `host`. Answers the
+/// new uid, `-1` when refused (dead host / card not in hand).
+pub fn arm_attach_card(a: Args) -> i64 {
+    let [host, cp, cl, cause, face_down, ..] = a;
+    let id = card_u16(cp, cl);
+    world::with_world_mut(|w| {
+        let Some(host_row) = w.field_by_uid(host).copied() else {
+            return -1;
+        };
+        let caller = w.trig_player;
+        // A copy in the caller's hand is taken first; a name with no hand copy
+        // falls back to re-targeting the caller's first live instance
+        // (cycle-guarded), exactly as `zone_attach` does.
+        let mut slot = None;
+        let mut i = 0usize;
+        while i < w.hand_n as usize {
+            if w.hand_pile[i] == id {
+                slot = Some(i);
+                break;
+            }
+            i += 1;
+        }
+        if slot.is_none() {
+            let mut live = None;
+            let mut li = 0usize;
+            while li < w.field_n as usize {
+                let f = w.field[li];
+                if f.card != u16::MAX && f.player == caller && f.card == id && f.uid != host {
+                    live = Some(f.uid);
+                    break;
+                }
+                li += 1;
+            }
+            if let Some(uid) = live {
+                let Some((from, holder)) = w.zone_prepare_attach(uid, host) else {
+                    return -1;
+                };
+                if let Some(f) = w.field_by_uid_mut(uid) {
+                    f.on = host;
+                    f.face_down = face_down != 0;
+                    f.tile = host_row.tile;
+                }
+                w.trig_zone_present = true;
+                w.trig_zone_from = from;
+                w.trig_zone_to = world::ZONE_ATTACHED;
+                w.trig_zone_cause = cause;
+                w.trig_zone_holder = holder;
+                w.trig_zone_wasted = false;
+                w.trig_zone_counted = false;
+                return uid;
+            }
+            return -1;
+        }
+        let Some(k) = slot else {
+            return -1;
+        };
+        // One copy leaves the hand.
+        let mut j = k;
+        while j + 1 < w.hand_n as usize {
+            w.hand_pile[j] = w.hand_pile[j + 1];
+            j += 1;
+        }
+        w.hand_n = w.hand_n.saturating_sub(1);
+        let uid = w.make_row(id, caller, caller, host_row.tile);
+        if let Some(f) = w.field_by_uid_mut(uid) {
+            f.on = host;
+            f.face_down = face_down != 0;
+        }
+        w.trig_zone_present = true;
+        w.trig_zone_from = world::ZONE_NOWHERE;
+        w.trig_zone_to = world::ZONE_ATTACHED;
+        w.trig_zone_cause = cause;
+        w.trig_zone_holder = w.holder_of(host);
+        w.trig_zone_wasted = false;
+        w.trig_zone_counted = false;
+        uid
+    }) as i64
+}
+
+/// `Op::detach_card(uid, dest, cause)` — take the instance off its host.
+pub fn arm_detach_card(a: Args) -> i64 {
+    let [uid, dest, cause, ..] = a;
+    world::with_world_mut(|w| {
+        if w.attachment_host(uid) < 0 {
+            return -1;
+        }
+        w.zone_leave(uid, dest, -1, cause)
+    }) as i64
+}
+
+pub fn arm_set_instance_owner(a: Args) -> i64 {
+    let [uid, owner, ..] = a;
+    world::with_world_mut(|w| match w.field_by_uid_mut(uid) {
+        Some(f) => {
+            f.owner = owner;
+            1
+        }
+        None => 0,
+    })
+}
+
+pub fn arm_set_created_by_at(a: Args) -> i64 {
+    let [uid, creator, ..] = a;
+    world::with_world_mut(|w| match w.field_by_uid_mut(uid) {
+        Some(f) => {
+            f.created_by = creator;
+            1
+        }
+        None => 0,
+    })
+}
+
+pub fn arm_set_ineffective_at(a: Args) -> i64 {
+    let [uid, on, ..] = a;
+    world::with_world_mut(|w| match w.field_by_uid_mut(uid) {
+        Some(f) => {
+            f.effective = on == 0;
+            1
+        }
+        None => 0,
+    })
+}
+
+/// `Op::rehome_card(tile, owner)` — the deed row moves seat unchanged; the
+/// acquisition ledger follows (`set_tile_owner`). Always answers 1.
+pub fn arm_rehome_card(a: Args) -> i64 {
+    let [tile, owner, ..] = a;
+    world::with_world_mut(|w| {
+        w.set_tile_owner(tile, owner);
+        w.push(Effect::SetOwner {
+            tile,
+            player: owner,
+        });
+    });
+    1
+}
+
+/// `Op::play_hand_card(player, ptr, len)` — remove one copy from the hand
+/// and file its instance as a play on the player's tile. Answers `1`, `0`
+/// when the copy is not in hand.
+pub fn arm_play_hand_card(a: Args) -> i64 {
+    let [player, cp, cl, ..] = a;
+    let id = card_u16(cp, cl);
+    world::with_world_mut(|w| {
+        let mut slot = None;
+        let mut i = 0usize;
+        while i < w.hand_n as usize {
+            if w.hand_pile[i] == id {
+                slot = Some(i);
+                break;
+            }
+            i += 1;
+        }
+        let Some(k) = slot else {
+            return 0;
+        };
+        let mut j = k;
+        while j + 1 < w.hand_n as usize {
+            w.hand_pile[j] = w.hand_pile[j + 1];
+            j += 1;
+        }
+        w.hand_n = w.hand_n.saturating_sub(1);
+        let tile = w.pos[player_idx(player)];
+        let uid = w.make_row(id, player, player, tile);
+        w.bound_uid = uid;
+        w.trig_play_outcome = 0;
+        1
+    })
+}
+
+/// `Op::trigger_zone` — the trigger's postcard `Option<ZoneChange>` payload,
+/// `&[]` outside the zone family.
+pub fn arm_trigger_zone(a: Args) -> i64 {
+    let [buf, cap, ..] = a;
+    let payload = world::with_world(|w| {
+        w.trig_zone_present.then(|| game_kinds::ZoneChange {
+            from: game_kinds::Zone::from_i32(w.trig_zone_from),
+            to: game_kinds::Zone::from_i32(w.trig_zone_to),
+            cause: game_kinds::ZoneChangeCause::from_i32(w.trig_zone_cause),
+            holder: w.trig_zone_holder,
+            wasted: w.trig_zone_wasted,
+            counted: w.trig_zone_counted,
+        })
+    });
+    let bytes = postcard::to_allocvec(&payload).unwrap_or_default();
+    if buf != 0 && bytes.len() as i32 <= cap {
+        card_sdk::native::write(buf, &bytes);
+    }
+    bytes.len() as i64
 }
 
 /// Live ceiling on the held row (`Counter.max`; 0 = uncapped / undeclared).
@@ -3500,6 +3963,22 @@ pub fn arm_set_self_immune(a: Args) -> i64 {
             1
         }
     })
+}
+
+/// `self_prop(kp, kl)` -- read the running instance's prop (the reader half of
+/// [`arm_set_self_prop`]).
+pub fn arm_self_prop(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a2, a3, a4, a5);
+    let key = name_id(a0, a1);
+    world::with_world(|w| {
+        if w.field_n > 0 {
+            let i = (w.field_n as usize) - 1;
+            w.field[i].props.get(key)
+        } else {
+            0
+        }
+    }) as i64
 }
 
 pub fn arm_set_self_prop(a: Args) -> i64 {
@@ -3858,6 +4337,14 @@ pub fn arm_take_card(a: Args) -> i64 {
                     }
                 }
             }
+        } else if pile == 2 {
+            let ok = world::pile_take(&mut w.deck_pile, &mut w.deck_n, id);
+            if ok {
+                refill_if_empty(w, player_id);
+            }
+            ok
+        } else if pile == 4 {
+            world::pile_take(&mut w.inspection_pile, &mut w.inspection_n, id)
         } else {
             false
         };
@@ -4068,9 +4555,26 @@ pub fn arm_tile_steps_ahead(a: Args) -> i64 {
     }
 }
 
+/// The minimal refill the model lacked (v114): an emptied deck takes the
+/// discard front back, unless an open inspection frame holds that seat's deck.
+fn refill_if_empty(w: &mut World, owner: i32) {
+    if w.inspection_deck_owner == player_idx(owner) as i32 || w.deck_n > 0 {
+        return;
+    }
+    while w.deck_n == 0 && w.discard_n > 0 {
+        let card = w.discard_pile[0];
+        let mut i = 1usize;
+        while i < w.discard_n as usize {
+            w.discard_pile[i - 1] = w.discard_pile[i];
+            i += 1;
+        }
+        w.discard_n -= 1;
+        world::pile_unshift(&mut w.deck_pile, &mut w.deck_n, card);
+    }
+}
+
 pub fn arm_to_discard(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
-    let _ = a0;
     let slot = card_slot(a1, a2);
     let id = card_u16(a1, a2);
     world::with_world_mut(|w| {
@@ -4078,6 +4582,88 @@ pub fn arm_to_discard(a: Args) -> i64 {
         if (slot as usize) < 4 {
             w.discard[slot as usize] = true;
         }
+        refill_if_empty(w, a0);
+    });
+    0
+}
+
+/// `inspection_begin` -- turn up to `count` cards off `owner`'s deck front into
+/// the frame. The `inspected` raises are not modelled (no hook dispatch under
+/// Kani); a proof asserts on the move.
+pub fn arm_inspection_begin(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let want = a2.max(0) as usize;
+    world::with_world_mut(|w| {
+        let moved = world::pile_shift_front(
+            &mut w.deck_pile,
+            &mut w.deck_n,
+            want,
+            &mut w.inspection_pile,
+            &mut w.inspection_n,
+        );
+        w.inspection_deck_owner = player_idx(a1) as i32;
+        w.inspection_public = a3 != 0;
+        w.inspection_frame_n = 1;
+        let mut i = 0usize;
+        while i < moved {
+            w.inspection_revealed[i] = true;
+            i += 1;
+        }
+        w.push(Effect::InspectionHold {
+            looker: a0,
+            owner: a1,
+            n: moved as i32,
+        });
+        moved as i64
+    })
+}
+
+/// `inspection_end` -- return the frame to the deck front in order.
+///
+/// The `shuffle` flag is deliberately unmodelled: the proof model's stub keeps
+/// the order for it too (a real shuffle is a permutation the proofs compare by
+/// multiset, and no deterministic order is provable without the RNG). The
+/// engine's shuffle is exercised by the conformance suite and the card tests.
+pub fn arm_inspection_end(a: Args) -> i64 {
+    let [a0, _a1, ..] = a;
+    world::with_world_mut(|w| {
+        let owner = w.inspection_deck_owner;
+        let mut n = 0i32;
+        let mut j = w.inspection_n;
+        while j > 0 {
+            j -= 1;
+            let card = w.inspection_pile[j as usize];
+            world::pile_unshift(&mut w.deck_pile, &mut w.deck_n, card);
+            n += 1;
+        }
+        w.inspection_n = 0;
+        w.inspection_frame_n = 0;
+        w.inspection_deck_owner = -1;
+        w.push(Effect::InspectionReturn { owner: a0, n });
+        n as i64
+    })
+}
+
+/// `reveal_pile` -- a publication; no pile moves.
+pub fn arm_reveal_pile(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        w.push(Effect::Reveal {
+            player: a0,
+            pile: a1,
+        });
+    });
+    0
+}
+
+/// `reveal_card` -- one card published (`pile = -1`, a single card).
+pub fn arm_reveal_card(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        w.push(Effect::Reveal {
+            player: a0,
+            pile: -1,
+        });
     });
     0
 }

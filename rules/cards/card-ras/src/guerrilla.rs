@@ -28,6 +28,9 @@ pub const GUERRILLA: CardDef = CardDef::new(
         // clear is the same entry's bookkeeping (the engine dispatches one
         // `AtEnd` body per entry), so the gate lives in the body.
         On::Schedule("at_end", "", None, at_end),
+        // 规则书[特]: 「使其对你视为live house格子」 lasts while this card is on
+        // the field -- the re-colour goes when the card leaves.
+        On::Action(Action::ZoneLeft("card.placed", None, on_leave)),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()
@@ -48,6 +51,8 @@ pub const GUERRILLA: CardDef = CardDef::new(
 const ID: &str = "RAS:游击演出";
 
 const SLOT_ARMED: &str = "guerrilla_armed";
+/// The deed this instance re-coloured, `tile + 1` (0 = none).
+const SLOT_TILE: &str = "guerrilla_tile";
 
 fn free_tiles() -> Vec<i32> {
     (0..ctx::tile_count())
@@ -93,7 +98,23 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::by_card().is_some() {
         return false;
     }
-    // TODO(规则书)（当你经过属于其他玩家的livehouse格子后）: TODO(规则书)（传送至任意无主可购买的格子并[结算]，且必须购买）: an
+    // 「当你经过属于其他玩家的livehouse格子后」 -- the settle's own move path
+    // (tiles, in order). `Paid` now carries the settle's move, so an unrelated
+    // rent between settles has length 0 and stays closed (设计 6.7).
+    let n = trigger::move_path_length();
+    let mut passed = false;
+    for i in 0..n {
+        let t = trigger::move_path(i);
+        let owner = ctx::tile_owner(t);
+        if owner >= 0 && owner != player_id && ctx::is_live_house_for(owner, t) {
+            passed = true;
+            break;
+        }
+    }
+    if !passed {
+        return false;
+    }
+    // TODO(规则书)（传送至任意无主可购买的格子并[结算]，且必须购买）: an
     // unprinted availability precondition -- with no free tile the window stays shut
     // and the card never enters the discard, so its [特] revive is lost too.
     !free_tiles().is_empty()
@@ -210,12 +231,11 @@ fn check(player_id: i32) -> card_sdk::Asked {
         .into_iter()
         .max_by_key(|&t| ctx::tile_price(t))
         .unwrap_or(-1);
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(player_id, ID, &Msg::new(key!("guerrilla_note")));
     // 规则书[特]: 「指定你拥有的一个最贵的地契」 -- the [指定] is a designation
-    // mark on that deed (owned by this field instance, so it dies with the card).
-    // The old `guerrilla_tile` slot was write-only (nothing read it); the
-    // functional effect is the `colorFor:<seat>` tile prop below.
+    // mark on that deed (owned by this field instance, so it dies with the card);
+    // the functional effect is the `colorFor:<seat>` tile prop below.
     if best >= 0 {
         ctx::designate_tile(
             best,
@@ -232,17 +252,36 @@ fn check(player_id: i32) -> card_sdk::Asked {
             .tile("tile", best),
     );
     // 规则书[特]: 「使其对你视为live house格子」 -- the `colorFor:<player_id>`
-    // tile prop on the deed's board instance: group 6 for this player only.
-    // TODO(规则书)（使其对你视为live house格子）: the status lasts while this
-    // card is on the field -- the prop is board-owned and outlives the card;
-    // nothing clears it when this copy leaves the field.
+    // tile prop on the deed's board instance: group 6 for this player only. The
+    // tile is remembered so the leave can clear it.
     if best >= 0 {
         ctx::set_tile_prop(
             best,
             &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
             6,
         );
+        ctx::set_prop(SLOT_TILE, best + 1);
     }
+    Ok(())
+}
+
+/// 规则书[特]: the re-colour lasts while the card is on the field; the card is
+/// filed to the discard (so its [特] can arm again).
+fn on_leave(player_id: i32) -> card_sdk::Asked {
+    // Instance kind: another copy sees this raise too.
+    if trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
+    let t = ctx::prop(SLOT_TILE) - 1;
+    if t >= 0 {
+        ctx::set_tile_prop(
+            t,
+            &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
+            0,
+        );
+        ctx::set_prop(SLOT_TILE, 0);
+    }
+    bandori_std::zones::set_leave_destination(ctx::Dest::Graveyard);
     Ok(())
 }
 
@@ -267,4 +306,10 @@ pub fn on_discarded_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
     at_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_leave_kani(player_id: i32) -> card_sdk::Asked {
+    on_leave(player_id)
 }

@@ -19,7 +19,7 @@ use game_core::deck;
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
-use game_core::state::{BotMentality, MatchState};
+use game_core::state::{stage, BotMentality, MatchPlayer, MatchState};
 use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
@@ -338,4 +338,52 @@ fn determinize_samples_opponent_hands_differently() {
             "opponent hand never varied across 32 samples: {hands:?}"
         );
     }
+}
+
+/// A turn whose main move was spent before the roll window (a card-run move or
+/// an off-board expiry teleport at turn start) is 运营 with `main_moved` set:
+/// the roll is refused (`err.roll_main_used`) and only `end` gets through.
+/// The determinizer used to drop the flag, so the rebuilt fork thought the
+/// roll was still owed and answered `roll` into the refusal for the rest of
+/// the turn (room 5FCRYP, 2026-11-04).
+#[test]
+fn determinize_keeps_the_spent_main_move() {
+    let data = data();
+    let rules: Arc<dyn game_core::engine::CardRules> = Arc::new(StubRules);
+    let mut st = MatchState::default();
+    st.phase = "play".into();
+    st.turn = 0;
+    st.step = stage::OPS;
+    st.roller = 0;
+    st.main_moved = true;
+    st.can_roll_here = false;
+    st.can_end_here = true;
+    st.players = vec![MatchPlayer {
+        member: 1,
+        money: 5_000,
+        ..Default::default()
+    }];
+    st.owners = vec![-1; data.tiles.len()];
+    st.houses = vec![0; data.tiles.len()];
+    st.mortgaged = vec![false; data.tiles.len()];
+    let view = SeatView {
+        state: st,
+        you: 1,
+        player_id: 0,
+        ..Default::default()
+    };
+
+    let mut rng = DeterminizerRng::new(3);
+    let (fork, _) = determinize(&view, &data, &rules, &mut rng).unwrap();
+    let fst = normalized(&fork.state());
+    assert!(fst.main_moved, "the spent main move survives the fork");
+    assert!(!fst.can_roll_here, "the fork refuses the roll");
+    assert!(fst.can_end_here, "and offers the end");
+
+    let answer = bot_core::policy::act_for_view(&data, &rules, &view, &mut DeterminizerRng::new(4))
+        .expect("a decision");
+    assert_eq!(
+        answer.act, "end",
+        "a spent main move ends the turn, never re-rolls"
+    );
 }

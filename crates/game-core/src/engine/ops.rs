@@ -13,7 +13,7 @@ use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark
 
 use super::play::PayFactorScope;
 use super::world::World;
-use crate::engine::world::{Extreme, MarkLog};
+use crate::engine::world::{Extreme, InspectionCard, InspectionFrame, MarkLog, RevealRecord};
 
 impl World {
     // ------------------------------------------- move shaping
@@ -504,6 +504,15 @@ impl World {
             return 0;
         };
         super::play::purchase::build_cost(data, t)
+    }
+
+    /// The price a house on `tile` would actually cost this turn:
+    /// `max(0, build_cost * build_cost_percent / 100 - build_discount)`. No
+    /// payer side effects and no layer pop.
+    pub fn build_price(&self, data: &GameData, turn: &super::world::TurnCtx, tile: i32) -> i32 {
+        let base = self.build_cost(data, tile);
+        let pct = turn.build_cost_pct.clamp(0, 100);
+        (base * pct / 100 - turn.build_discount).max(0)
     }
 
     /// [`super::play::purchase::mortgage_value`] is the single source.
@@ -1188,6 +1197,177 @@ impl World {
         true
     }
 
+    /// The refill a **pile write** gets: skipped while an inspection frame
+    /// holds that seat's deck open (or a look just closed over it and the
+    /// activation is still filing, [`Self::finish_inspection_of`]), so a look
+    /// can empty the deck without the discard shuffling itself back in
+    /// (design G11 I2). A draw keeps calling [`Self::refill_draw_pile`]
+    /// directly -- a draw during a look must still find cards.
+    pub fn refill_after_pile_write(&mut self, i: usize) -> bool {
+        if self
+            .inspection_frames
+            .iter()
+            .any(|f| f.deck_owner as usize == i)
+            || self.look_hold.get(i).copied().unwrap_or(false)
+        {
+            // A look is (or just was) publishing this deck: keep the published
+            // pile in step with the write.
+            self.sync_public_reveal(i);
+            return false;
+        }
+        self.refill_draw_pile(i)
+    }
+
+    /// Open an inspection frame over `owner`'s deck top for `looker`, returning
+    /// its id.
+    pub fn open_inspection(&mut self, looker: i32, owner: i32, count: i32, public: bool) -> i32 {
+        let Ok(i) = usize::try_from(owner) else {
+            return -1;
+        };
+        let Some(h) = self.hidden.get_mut(i) else {
+            return -1;
+        };
+        let take = (count.max(0) as usize).min(h.deck.len());
+        let mut cards = Vec::with_capacity(take);
+        for _ in 0..take {
+            if let Some(id) = h.deck.pop() {
+                cards.push(InspectionCard {
+                    id,
+                    revealed: false,
+                });
+            }
+        }
+        // `deck.pop` yields top-first already; the frame is top-first.
+        let id = self.next_inspection_id;
+        self.next_inspection_id += 1;
+        self.inspection_frames.push(InspectionFrame {
+            id,
+            looker,
+            deck_owner: owner,
+            public,
+            cards,
+            finished: false,
+        });
+        id
+    }
+
+    /// Release one frame's leftovers: back to the deck top in their original
+    /// order, or shuffled into the deck. Returns how many went back.
+    pub fn release_frame(&mut self, index: usize, shuffle: bool) -> i32 {
+        let Some(frame) = self.inspection_frames.get(index).cloned() else {
+            return 0;
+        };
+        self.inspection_frames.remove(index);
+        let Ok(owner) = usize::try_from(frame.deck_owner) else {
+            return 0;
+        };
+        let Some(h) = self.hidden.get_mut(owner) else {
+            return 0;
+        };
+        let count = frame.cards.len() as i32;
+        // `deck.push` is the top; reverse iteration puts the first card back
+        // on top.
+        for entry in frame.cards.into_iter().rev() {
+            h.deck.push(entry.id);
+        }
+        if shuffle {
+            let mut pile = std::mem::take(&mut h.deck);
+            self.rng.shuffle(&mut pile);
+            h.deck = pile;
+        }
+        // The released cards are back on top: re-list the published piles.
+        self.sync_public_reveal(owner);
+        count
+    }
+
+    /// Keep a seat's published pile lists in step with the piles themselves.
+    /// Only the lists a reveal published as a whole pile are rewritten (the
+    /// frame's held cards show through `public_state`, the rest of the deck
+    /// must follow draws and keeps).
+    pub fn sync_public_reveal(&mut self, i: usize) {
+        let Some(record) = self.reveals.iter_mut().find(|r| r.player == i as i32) else {
+            return;
+        };
+        let Some(h) = self.hidden.get(i) else {
+            return;
+        };
+        if record.piles[0] {
+            record.hand = h.hand.clone();
+        }
+        if record.piles[1] {
+            record.deck = h.deck.iter().rev().cloned().collect();
+        }
+        if record.piles[2] {
+            record.discard = h.graveyard.clone();
+        }
+    }
+
+    /// Record a public reveal of one pile (`pile` = [`crate::state::RevealPile`])
+    /// for `player`. `reveal_pile` replaces that pile's vector so two reveals
+    /// show as one overlay; a `reveal_card` appends the one id.
+    pub fn push_reveal(
+        &mut self,
+        player: i32,
+        reason: Msg,
+        pile: crate::state::RevealPile,
+        ids: Vec<String>,
+    ) {
+        let record = match self.reveals.iter_mut().find(|r| r.player == player) {
+            Some(r) => {
+                r.reason = reason;
+                r
+            }
+            None => {
+                self.reveals.push(RevealRecord {
+                    player,
+                    reason,
+                    hand: Vec::new(),
+                    deck: Vec::new(),
+                    discard: Vec::new(),
+                    piles: [false; 3],
+                });
+                self.reveals.last_mut().expect("just pushed")
+            }
+        };
+        match pile {
+            crate::state::RevealPile::Hand => {
+                record.hand = ids;
+                record.piles[0] = true;
+            }
+            crate::state::RevealPile::Deck => {
+                record.deck = ids;
+                record.piles[1] = true;
+            }
+            crate::state::RevealPile::Discard => {
+                record.discard = ids;
+                record.piles[2] = true;
+            }
+            // A single shown card is appended to the revealed-card list.
+            crate::state::RevealPile::Card => record.deck.extend(ids),
+        }
+    }
+
+    /// End the innermost open frame `player` is looking through: release its
+    /// leftovers and mark the deck as still held for this activation
+    /// ([`Self::refill_after_pile_write`] keeps suppressing until the next
+    /// play's own card filing). The played card's filing is a pile write, and
+    /// a look that emptied the deck must not shuffle the flipped cards
+    /// straight back (design G11 I2). A draw still refills.
+    pub fn finish_inspection_of(&mut self, player: i32, shuffle: bool) -> i32 {
+        let Some(index) = self
+            .inspection_frames
+            .iter()
+            .rposition(|f| f.looker == player)
+        else {
+            return 0;
+        };
+        let owner = self.inspection_frames[index].deck_owner.max(0) as usize;
+        if let Some(held) = self.look_hold.get_mut(owner) {
+            *held = true;
+        }
+        self.release_frame(index, shuffle)
+    }
+
     /// Draw `n` cards, refilling as soon as the last card leaves.
     /// Returns how many were actually drawn.
     pub fn draw_cards(&mut self, player_id: i32, n: i32, over_hand_limit: bool) -> i32 {
@@ -1208,12 +1388,17 @@ impl World {
             got += 1;
         }
         if got > 0 {
-            let over = self.st.players[i]
-                .over_hand(self.hidden[i].hand.len())
-                .then(|| {
-                    Msg::new("log.part.over_hand")
-                        .i("limit", self.st.players[i].hand_limit().unwrap_or_default())
-                });
+            let over_now = self.st.players[i].over_hand(self.hidden[i].hand.len());
+            if over_hand_limit && over_now {
+                // 「可超过上限」: the excess is allowed to the turn end.
+                self.st.players[i].over_hand_allowed = true;
+            }
+            let over = over_now.then(|| {
+                Msg::over_hand_part(
+                    self.st.players[i].hand_limit().unwrap_or_default(),
+                    over_hand_limit,
+                )
+            });
             self.log(
                 "draw",
                 player_id,
@@ -1224,7 +1409,6 @@ impl World {
             )
             .value = got;
         }
-        let _ = over_hand_limit;
         got
     }
 
@@ -1255,7 +1439,8 @@ impl World {
                     h.hand.remove(k);
                 }
                 h.graveyard.push(card.to_string());
-                return self.refill_draw_pile(i);
+                self.settle_over_hand_allowance(i);
+                return self.refill_after_pile_write(i);
             }
         }
         false
@@ -1266,7 +1451,31 @@ impl World {
     /// May this player build on this tile at all? The one
     /// build gate, asked both by the engine's build step and by a card choosing
     /// a destination. `None` = yes; otherwise the reason.
+    ///
+    /// This is [`Self::guard_buildable`] plus the ownership test; a free card
+    /// build on someone else's (or an unowned) tile asks the latter.
     pub fn cant_build_on(
+        &self,
+        data: &crate::data::GameData,
+        player_id: i32,
+        tile: i32,
+    ) -> Option<Msg> {
+        let Some(t) = usize::try_from(tile).ok().and_then(|t| data.tiles.get(t)) else {
+            return Some(Msg::new("err.build_not_own"));
+        };
+        if !t.is_buyable()
+            || self.st.owners.get(tile as usize).copied().unwrap_or(-1) != player_id
+            || self.player_id(player_id).is_none()
+        {
+            return Some(Msg::new("err.build_not_own"));
+        }
+        self.guard_buildable(data, player_id, tile)
+    }
+
+    /// [`Self::cant_build_on`] without the ownership test: every tile veto
+    /// (buyable flag, `NO_BUILD` placements and lingering, `NO_BUILD_ABOVE`,
+    /// ring, mortgage, upgrade table, full, out) still applies.
+    pub fn guard_buildable(
         &self,
         data: &crate::data::GameData,
         player_id: i32,
@@ -1278,8 +1487,7 @@ impl World {
         let Some(s) = self.player_id(player_id) else {
             return Some(Msg::new("err.build_not_own"));
         };
-        if !t.is_buyable() || self.st.owners.get(tile as usize).copied().unwrap_or(-1) != player_id
-        {
+        if !t.is_buyable() {
             return Some(Msg::new("err.build_not_own"));
         }
         // 「owner不可盖房」 -- `prop::NO_BUILD` on a rule instance
@@ -1430,6 +1638,26 @@ impl World {
         // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
         // side effect -- `place_raw` and engine placement must see it too.
         let immune = props.get(crate::state::prop::IMMUNE).copied().unwrap_or(0) != 0;
+        // A seat placement is anchored at the slot its tile currently stands
+        // at, so a swap binding written by this instance (or through it) keeps
+        // pointing at this physical spot. Board-owned rule instances keep `-1`.
+        let position = if player_id == crate::state::BOARD_OWNER {
+            -1
+        } else {
+            let p = self.position_of_tile(tile);
+            if p == tile {
+                -1
+            } else {
+                p
+            }
+        };
+        // 「不受除拥有此卡的玩家以外的玩家的效果影响」 is the same kind of static
+        // property, stamped per instance and causer-checked at the read.
+        let immune_except_owner = props
+            .get(crate::state::prop::IMMUNE_EXCEPT_OWNER)
+            .copied()
+            .unwrap_or(0)
+            != 0;
         let inst = FieldCard {
             uid,
             card: card.to_string(),
@@ -1439,12 +1667,17 @@ impl World {
             counters: BTreeMap::new(),
             face_down: false,
             immune,
+            immune_except_owner,
             props,
             group_skill,
             extra: false,
             counter_max: BTreeMap::new(),
             note,
             effective_card: None,
+            position,
+            on: -1,
+            created_by: -1,
+            effective: true,
         };
         if player_id == crate::state::BOARD_OWNER {
             self.st.board_field.push(inst);
@@ -1461,12 +1694,37 @@ impl World {
     /// board field. `uid` is what identifies a card in this match -- the *name*
     /// does not, because one player may hold several copies of the same card in
     /// play at once.
+    /// The board slot the instance at `uid` sits at (`-1` with its owner /
+    /// gone) -- [`FieldCard::position`]'s default resolves to the tile.
+    pub fn position_of_instance(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map(|f| f.position()).unwrap_or(-1)
+    }
+
     pub fn field_by_uid(&self, uid: i32) -> Option<&FieldCard> {
         self.st
             .board_field
             .iter()
             .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
             .find(|f| f.uid == uid)
+    }
+
+    /// Every on-field instance uid, board rows and seat rows alike.
+    pub fn field_uids(&self) -> impl Iterator<Item = i32> + '_ {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
+            .map(|f| f.uid)
+    }
+
+    /// The first live instance of `card` held by `player_id` (attached or
+    /// not), skipping `except`. `None` when the name is only in a pile.
+    pub fn live_instance_of(&self, player_id: i32, card: &str, except: i32) -> Option<i32> {
+        self.player_id(player_id)?
+            .field
+            .iter()
+            .find(|f| f.card == card && f.uid != except)
+            .map(|f| f.uid)
     }
 
     /// The seat whose field the instance at `uid` sits on (`BOARD_OWNER` for
@@ -1517,7 +1775,9 @@ impl World {
         }
     }
 
-    fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
+    /// The live row `uid` names, for field-by-field writes. Public for the
+    /// guest-view replay of a logged zone request (`CardWorld::replay_host`).
+    pub fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
         if let Some(f) = self.st.board_field.iter_mut().find(|f| f.uid == uid) {
             return Some(f);
         }
@@ -1528,22 +1788,57 @@ impl World {
             .find(|f| f.uid == uid)
     }
 
-    /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
-    /// order. The dispatch walks this rather than the names, so two copies of
-    /// the same card are two hooks. `BOARD_OWNER` lists the board field (the
-    /// tile rule instances).
+    /// Every **unattached** card instance on `player_id`'s field, as
+    /// `(uid, id)` in placement order. The dispatch walks this rather than the
+    /// names, so two copies of the same card are two hooks. `BOARD_OWNER` lists
+    /// the board field. An attachment (`on >= 0`) is reachable through its host
+
+    /// instead, so it is not listed twice.
     pub fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
         if player_id == crate::state::BOARD_OWNER {
             return self
                 .st
                 .board_field
                 .iter()
+                .filter(|f| f.on < 0)
                 .map(|f| (f.uid, f.card.clone()))
                 .collect();
         }
         self.player_id(player_id).map_or_else(Vec::new, |s| {
-            s.field.iter().map(|f| (f.uid, f.card.clone())).collect()
+            s.field
+                .iter()
+                .filter(|f| f.on < 0)
+                .map(|f| (f.uid, f.card.clone()))
+                .collect()
         })
+    }
+
+    /// How many *extra* effects lie on `tile`: field instances whose card is
+    /// not the tile's own `tile:` rule, plus tile marks. The tile carries its
+    /// extras, so the count is keyed by the **governing** tile -- a player
+    /// card answers through the tile standing at its slot (design 5.2), and a
+    /// mark is bound to the tile identity outright.
+    pub fn tile_extra_count(&self, tile: i32) -> i32 {
+        // A board instance is never placed elsewhere than its own tile; a
+        // player-placed one sits at a slot and displays whatever tile stands
+        // there (design 5.2). The tile carries its extras, so the test is on
+        // the standing tile, not the slot the instance holds.
+        let on_board = |f: &crate::state::FieldCard| f.tile == tile && !f.card.starts_with("tile:");
+        let on_field = |f: &crate::state::FieldCard| {
+            self.tile_standing_at(f.position()) == tile && !f.card.starts_with("tile:")
+        };
+        // A mark is an extra effect too (the [CP点] guard's case): it is bound
+        // to the tile itself, so it needs no swap resolution.
+        let marks = self.st.marks.iter().filter(|m| m.tile == tile).count();
+        (self.st.board_field.iter().filter(|f| on_board(f)).count()
+            + self
+                .st
+                .players
+                .iter()
+                .flat_map(|p| p.field.iter())
+                .filter(|f| on_field(f))
+                .count()
+            + marks) as i32
     }
 
     /// The rule instances on board tile `tile`, in placement order -- what the
@@ -1554,7 +1849,7 @@ impl World {
         self.st
             .board_field
             .iter()
-            .filter(|f| f.tile == tile)
+            .filter(|f| f.tile == tile && f.on < 0)
             .map(|f| (f.uid, f.card.clone()))
             .collect()
     }
@@ -1680,19 +1975,146 @@ impl World {
     }
 
     /// Where the instance at `uid` sits, or -1 for "with its owner" / gone.
+    ///
+    /// (Named apart from the position conversion [`Self::tile_standing_at`] so
+    /// the two `i32` meanings cannot be confused at a call site.)
     pub fn tile_at(&self, uid: i32) -> i32 {
         self.field_by_uid(uid).map_or(-1, |f| f.tile)
     }
 
+    // ------------------------------------------------- tile / position
+
+    /// Every instance that can carry a swap binding: the board field and every
+    /// seat's field.
+    pub(crate) fn swap_records(&self) -> impl Iterator<Item = &FieldCard> {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|p| p.field.iter()))
+    }
+
+    /// The tile standing at board position `position`, and the instance binding
+    /// it. One level, both directions -- see [`Self::tile_standing_at`].
+    fn swap_binding_at(&self, position: i32) -> Option<(i32, i32)> {
+        let partner = |f: &FieldCard| {
+            f.props
+                .get(crate::state::prop::SWAPPED_TILE)
+                .copied()
+                .filter(|&q| q >= 0)
+        };
+        // (a) the binding instance sits at `position`: the tile standing there
+        // is the tile the instance names as its partner.
+        if let Some(f) = self
+            .swap_records()
+            .find(|f| f.position() == position && partner(f).is_some())
+        {
+            return Some((partner(f)?, f.uid));
+        }
+        // (b) the reverse: some instance names `position` as its partner, so
+        // tile `position` stands where that instance sits.
+        self.swap_records()
+            .find(|f| partner(f) == Some(position))
+            .map(|f| (f.position(), f.uid))
+    }
+
+    /// Does any instance carry a swap binding? The tile/position converters
+    /// fall back to the identity without one, so bulk builders can skip their
+    /// per-slot walk on the ordinary board.
+    pub fn has_swaps(&self) -> bool {
+        self.swap_records().any(|f| {
+            f.props
+                .get(crate::state::prop::SWAPPED_TILE)
+                .is_some_and(|&q| q >= 0)
+        })
+    }
+
+    /// The tile standing at board position `position` (`position` itself when
+    /// nothing is bound there).
+    pub fn tile_standing_at(&self, position: i32) -> i32 {
+        self.swap_binding_at(position).map_or(position, |(s, _)| s)
+    }
+
+    /// The position tile `tile` currently stands at -- the inverse of
+    /// [`Self::tile_standing_at`], the same two cases mirrored.
+    pub fn position_of_tile(&self, tile: i32) -> i32 {
+        // (a') some instance names `tile` as its partner: the tile stands at
+        // that instance's slot.
+        if let Some(f) = self
+            .swap_records()
+            .find(|f| f.props.get(crate::state::prop::SWAPPED_TILE).copied() == Some(tile))
+        {
+            return f.position();
+        }
+        // (b') some instance is on tile `tile`: the tile stands at that
+        // instance's partner.
+        self.swap_records()
+            .filter(|f| f.tile == tile)
+            .find_map(|f| {
+                f.props
+                    .get(crate::state::prop::SWAPPED_TILE)
+                    .copied()
+                    .filter(|&q| q >= 0)
+            })
+            .unwrap_or(tile)
+    }
+
     /// Move the instance at `uid` to `tile` (-1 = back with its owner).
+    ///
+    /// The placement slot is resolved **before** `tile` changes (so a swap
+    /// binding still points at the right spot) and cleared when it coincides
+    /// with the new tile.
     pub fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        // Idempotent: a re-run replays a body's direct write on a world that
+        // already carries it (the commit pass's staging overlay keeps the
+        // guest's rows), and re-deriving the slot from a row that already
+        // shows `tile` would drop the swap binding the first application
+        // resolved (2)'s 「放置于[移动终点]」 is one such write.
+        if self.field_by_uid(uid).is_some_and(|f| f.tile == tile) {
+            return true;
+        }
+        let position = if tile >= 0 {
+            let p = self.position_of_tile(tile);
+            if p == tile {
+                -1
+            } else {
+                p
+            }
+        } else {
+            -1
+        };
         match self.field_by_uid_mut(uid) {
             Some(f) => {
                 f.tile = tile;
+                f.position = position;
                 true
             }
             None => false,
         }
+    }
+
+    /// The **governing tile** of the instance at `uid` (`-1` = with its owner,
+    /// `-2` = no running instance), resolved through any swap bound at its
+    /// slot. [`Self::self_position_of`] is the slot itself.
+    pub fn self_tile_of(&self, uid: i32) -> i32 {
+        if uid < 0 {
+            return -2;
+        }
+        self.field_by_uid(uid).map_or(-1, |f| {
+            // A tile rule *is* its tile: it answers the identity even while a
+            // swap makes its slot display another tile (否则 a swapped slot's
+            // rule would compare itself against the partner). A player card
+            // displays the tile standing at its slot.
+            if f.owner == crate::state::BOARD_OWNER {
+                f.tile
+            } else {
+                self.tile_standing_at(f.position())
+            }
+        })
+    }
+
+    /// The slot the instance at `uid` sits at (`-1` = with its owner).
+    pub fn self_position_of(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.position())
     }
 
     /// Is the instance at `uid` face-down?
@@ -1716,11 +2138,30 @@ impl World {
         self.field_by_uid(uid).is_some_and(|f| f.immune)
     }
 
+    /// Is the instance at `uid` immune to an effect from `by`? The any-flavour
+    /// flag, or the 「除拥有者以外」 flavour for a causer other than the owner.
+    pub fn is_immune_from_at(&self, uid: i32, by: i32) -> bool {
+        self.field_by_uid(uid)
+            .is_some_and(|f| f.immune || (f.immune_except_owner && by != f.owner))
+    }
+
     /// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.
     pub fn set_immune_at(&mut self, uid: i32, on: bool) -> bool {
         match self.field_by_uid_mut(uid) {
             Some(f) => {
                 f.immune = on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Mark the instance at `uid` 「不受除拥有者以外的效果影响」; returns
+    /// whether it exists.
+    pub fn set_immune_except_owner_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.immune_except_owner = on;
                 true
             }
             None => false,
@@ -1754,6 +2195,399 @@ impl World {
             }
         }
         -1
+    }
+
+    // ------------------------------------------------------ zone writer (G08)
+
+    /// The zone of an instance: `Attached` while it sits on a host, `Field`
+    /// while its row is on a field, `Nowhere` when dead.
+    pub fn zone_of(&self, uid: i32) -> game_kinds::Zone {
+        let Some(f) = self.field_by_uid(uid) else {
+            return game_kinds::Zone::Nowhere;
+        };
+        if f.on >= 0 {
+            game_kinds::Zone::Attached
+        } else {
+            game_kinds::Zone::Field
+        }
+    }
+
+    /// The instance `uid` sits on, `-1` when it is not attached.
+    pub fn attachment_host(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.on)
+    }
+
+    /// The instances attached to `host`, in filing order.
+    pub fn attached_cards(&self, host: i32) -> Vec<i32> {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
+            .filter(|f| f.on == host)
+            .map(|f| f.uid)
+            .collect()
+    }
+
+    /// The instances `creator` made, in creation order.
+    pub fn created_cards(&self, creator: i32) -> Vec<i32> {
+        self.st
+            .board_field
+            .iter()
+            .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
+            .filter(|f| f.created_by == creator)
+            .map(|f| f.uid)
+            .collect()
+    }
+
+    /// The instance's real owner, `-1` when dead.
+    pub fn instance_owner(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.owner)
+    }
+
+    /// Set the real owner without moving the row (「视为拥有」); `false` when
+    /// the instance is dead.
+    pub fn set_instance_owner(&mut self, uid: i32, owner: i32) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.owner = owner;
+                f.user = owner;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Record that `uid` was made by `creator` (`-1` clears); `false` when
+    /// `uid` is dead.
+    pub fn set_created_by_at(&mut self, uid: i32, creator: i32) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.created_by = creator;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Mark the instance as not having taken effect (or clear the mark).
+    pub fn set_ineffective_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.effective = !on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn is_ineffective_at(&self, uid: i32) -> bool {
+        self.field_by_uid(uid).is_some_and(|f| !f.effective)
+    }
+
+    /// Would filing `uid` onto `host` make a cycle? Walks the host's `on`
+    /// chain; the depth guard is the live row count.
+    fn attach_cycles(&self, uid: i32, host: i32) -> bool {
+        if uid == host {
+            return true;
+        }
+        let mut cursor = host;
+        let mut guard = 0usize;
+        while cursor >= 0 && guard < 4096 {
+            if cursor == uid {
+                return true;
+            }
+            cursor = self.attachment_host(cursor);
+            guard += 1;
+        }
+        false
+    }
+
+    /// Resolve a transition against the row: fill `from` / `holder` and refuse
+    /// a dead instance, a dead host or a cycle. `None` = refused.
+    pub fn resolve_zone_transition(
+        &self,
+        mut t: crate::engine::world::ZoneTransition,
+    ) -> Option<crate::engine::world::ZoneTransition> {
+        let row = self.field_by_uid(t.uid)?;
+        // A cascade edge named its real `from` before `drop_instance_edges`
+        // detached it (the attachment must still report `Attached`); an
+        // ordinary caller re-reads the zone.
+        if !t.cascaded {
+            t.from = self.zone_of(t.uid);
+        }
+        if !t.from.is_played() {
+            return None;
+        }
+        if t.to == game_kinds::Zone::Attached {
+            if t.host < 0 || !self.zone_of(t.host).is_played() {
+                return None;
+            }
+            if self.attach_cycles(t.uid, t.host) {
+                return None;
+            }
+            t.holder = self.holder_of(t.host);
+        } else if t.holder < 0 {
+            // A board row has no seat even though the play that placed it
+            // stamped the placer as its owner: its landing area is the board,
+            // and `file_row` keeps its name out of any player's pile.
+            t.holder = if self.st.board_field.iter().any(|f| f.uid == t.uid) {
+                crate::state::BOARD_OWNER
+            } else {
+                row.owner
+            };
+        }
+        Some(t)
+    }
+
+    /// Detach every edge of `uid` and hand back the cascade transitions:
+    /// attachments first (each toward its own leave destination, cause
+    /// `HostLeft`), then created children (cause `CreatorLeft`), depth first.
+    ///
+    /// The rows keep their edges while they die. A dead row is re-staged by
+    /// the replay's overlays before the re-run takes it out again, and the
+    /// edge is what tells the replay that the row is part of this cascade at
+    /// all; clearing it here would leave the re-run a field of orphans.
+    pub fn drop_instance_edges(&mut self, uid: i32) -> Vec<crate::engine::world::ZoneTransition> {
+        use crate::engine::world::ZoneTransition;
+        use game_kinds::{Zone, ZoneChangeCause};
+        let mut out = Vec::new();
+        for a in self.attached_cards(uid) {
+            let (dest, deck) = self.dest_of_leave(a);
+            let mut t = ZoneTransition::new(a, Zone::Attached, dest);
+            t.deck = deck;
+            t.cause = ZoneChangeCause::HostLeft;
+            t.cascaded = true;
+            out.push(t);
+        }
+        for c in self.created_cards(uid) {
+            let mut t = ZoneTransition::new(c, Zone::Field, Zone::Graveyard);
+            t.cause = ZoneChangeCause::CreatorLeft;
+            t.cascaded = true;
+            out.push(t);
+        }
+        out
+    }
+
+    /// The destination a leaving attachment takes: its own `prop::LEAVE_DEST`,
+    /// else the Graveyard.
+    fn dest_of_leave(&self, uid: i32) -> (game_kinds::Zone, crate::engine::DeckPlacement) {
+        use crate::engine::DeckPlacement;
+        let dest = self
+            .field_by_uid(uid)
+            .and_then(|f| f.props.get(crate::state::prop::LEAVE_DEST))
+            .copied()
+            .unwrap_or(0);
+        // The guest `Dest` wire: 0 graveyard, 1 hand, 2 field, 3 banished,
+        // 4-6 the draw-pile fates.
+        match dest {
+            1 => (game_kinds::Zone::Hand, DeckPlacement::default()),
+            2 => (game_kinds::Zone::Field, DeckPlacement::default()),
+            3 => (game_kinds::Zone::Banished, DeckPlacement::default()),
+            4 => (game_kinds::Zone::Deck, DeckPlacement::Top),
+            5 => (game_kinds::Zone::Deck, DeckPlacement::Bottom),
+            6 => (game_kinds::Zone::Deck, DeckPlacement::Random),
+            _ => (game_kinds::Zone::Graveyard, DeckPlacement::default()),
+        }
+    }
+
+    /// Apply a resolved transition to the rows. Returns the landing holder
+    /// (or the owner a `Nowhere` landing left), `-1` when the row is gone.
+    ///
+    /// The row's `on` / `tile` / `face_down` / `effective` are settled here:
+    /// an attachment takes its host's tile, an ordinary landing clears the
+    /// host and `face_down`, and a Graveyard landing clears `effective`.
+    pub fn apply_zone_row(&mut self, t: &crate::engine::world::ZoneTransition) -> Option<i32> {
+        use game_kinds::Zone;
+        if t.from == Zone::Nowhere {
+            return None;
+        }
+        let holder_now = self.holder_of(t.uid);
+        let row = self.take_row(t.uid)?;
+        // Every bound counter unit and edge dies with the row.
+        self.destroy_instance_units(t.uid);
+        match t.to {
+            Zone::Attached => {
+                let (host, host_tile) = self.field_by_uid(t.host).map(|h| (h.uid, h.tile))?;
+                let mut moved = row;
+                moved.on = host;
+                moved.tile = host_tile;
+                moved.face_down = t.face_down;
+                self.push_field_row(moved, self.holder_of(host));
+                Some(self.holder_of(host))
+            }
+            Zone::Field => {
+                // A `Field` **re-home** (a leave rewritten to the field, see
+                // `zone_commit`) lands with the transition's holder; an
+                // ordinary field arrival keeps the row where it is.
+                let holder = if t.holder >= 0 && t.holder != holder_now {
+                    t.holder
+                } else {
+                    holder_now
+                };
+                let mut moved = row;
+                moved.on = -1;
+                self.push_field_row(moved, holder);
+                Some(holder)
+            }
+            _ => {
+                self.file_row(row, t);
+                // `-1` stays `-1`: a board row's landing seat is the board,
+                // and the payloads must not claim player 0 for it.
+                Some(t.holder)
+            }
+        }
+    }
+
+    /// Remove the row at `uid` from wherever it sits.
+    fn take_row(&mut self, uid: i32) -> Option<crate::state::FieldCard> {
+        if let Some(i) = self.st.board_field.iter().position(|f| f.uid == uid) {
+            return Some(self.st.board_field.remove(i));
+        }
+        for s in self.st.players.iter_mut() {
+            if let Some(i) = s.field.iter().position(|f| f.uid == uid) {
+                return Some(s.field.remove(i));
+            }
+        }
+        None
+    }
+
+    /// Move `uid` and everything attached under it to `holder`'s field, keeping
+    /// the rows intact. A 「视为拥有」 re-home takes the whole subtree with it:
+    /// the card never left the field, so no edge cascades.
+    pub fn rehold_subtree(&mut self, uid: i32, holder: i32) {
+        for child in self.attached_cards(uid) {
+            self.rehold_subtree(child, holder);
+        }
+        if let Some(row) = self.take_row(uid) {
+            self.push_field_row(row, holder);
+        }
+    }
+
+    /// Put a row back on a field: the board field for the board owner, else
+    /// that seat's field.
+    fn push_field_row(&mut self, row: crate::state::FieldCard, holder: i32) {
+        if holder == crate::state::BOARD_OWNER {
+            self.st.board_field.push(row);
+            return;
+        }
+        if let Some(s) = self.player_mut(holder) {
+            s.field.push(row);
+        } else {
+            self.st.board_field.push(row);
+        }
+    }
+
+    /// File a removed row into a pile. The name joins the pile; the row dies.
+    fn file_row(&mut self, row: crate::state::FieldCard, t: &crate::engine::world::ZoneTransition) {
+        use game_kinds::Zone;
+        let holder = t.holder.max(0) as usize;
+        let name = row.card.clone();
+        // An event rule instance leaving the field unbinds its active row.
+        if let Some(id) = name.strip_prefix("event:") {
+            self.st.event_active.retain(|e| e.id != id);
+        }
+        match t.to {
+            // A board-owned row (no seat) files into the neutral board discard;
+            // `max(0)` would put the rule name into player 0's pile, where the
+            // reshuffle deals it back as a dead hand card (review finding 4).
+            Zone::Graveyard if t.holder < 0 => self.st.board_discard.push(name),
+            Zone::Graveyard => {
+                if let Some(h) = self.hidden.get_mut(holder) {
+                    h.graveyard.push(name);
+                }
+            }
+            Zone::Hand => {
+                if let Some(h) = self.hidden.get_mut(holder) {
+                    h.hand.push(name);
+                }
+            }
+            Zone::Deck => {
+                if let Some(h) = self.hidden.get_mut(holder) {
+                    match t.deck {
+                        crate::engine::DeckPlacement::Top => h.deck.push(name),
+                        crate::engine::DeckPlacement::Bottom => h.deck.insert(0, name),
+                        crate::engine::DeckPlacement::Random => {
+                            h.deck.push(name);
+                            let mut draw = std::mem::take(&mut h.deck);
+                            self.rng.shuffle(&mut draw);
+                            if let Some(h) = self.hidden.get_mut(holder) {
+                                h.deck = draw;
+                            }
+                        }
+                    }
+                }
+            }
+            Zone::EventDeck => self.st.event_top.push(name),
+            Zone::EventDiscard => self.st.event_discard.push(name),
+            Zone::EventRemoved => self.st.event_removed.push(name),
+            _ => {}
+        }
+    }
+
+    /// Write a tile's owner and the acquisition sequence that goes with it.
+    /// A release (`-1`) clears the sequence; a re-acquisition takes a fresh
+    /// one. The previous owner's `firstTile` slot is rebuilt from
+    /// [`Self::earliest_owned_tile`].
+    pub fn set_tile_owner(&mut self, tile: i32, owner: i32) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        let Some(cur) = self.st.owners.get(t).copied() else {
+            return;
+        };
+        if cur == owner {
+            return;
+        }
+        self.st.owners[t] = owner;
+        if self.st.owned_seq.len() <= t {
+            self.st.owned_seq.resize(t + 1, -1);
+        }
+        self.st.owned_seq[t] = if owner >= 0 {
+            let s = self.st.next_owned_seq;
+            self.st.next_owned_seq = s.saturating_add(1);
+            s
+        } else {
+            -1
+        };
+        if cur >= 0 {
+            let first = self.earliest_owned_tile(cur);
+            if let Some(p) = self.player_mut(cur) {
+                p.state_set(crate::state::key::FIRST_TILE, first + 1);
+            }
+        }
+        if owner >= 0 {
+            // The acquisition mirror: 「最早获得」 reads the ledger, so a first
+            // acquisition (no previous owner) must arm it too.
+            let first = self.earliest_owned_tile(owner);
+            if let Some(p) = self.player_mut(owner) {
+                p.state_set(crate::state::key::FIRST_TILE, first + 1);
+            }
+        }
+    }
+
+    /// The player's earliest-owned tile under the acquisition order, `-1` if
+    /// none.
+    pub fn earliest_owned_tile(&self, player_id: i32) -> i32 {
+        let mut best: Option<(i32, i32)> = None;
+        for (tile, &owner) in self.st.owners.iter().enumerate() {
+            if owner != player_id {
+                continue;
+            }
+            let Some(&seq) = self.st.owned_seq.get(tile) else {
+                continue;
+            };
+            if seq < 0 {
+                continue;
+            }
+            let better = match best {
+                Some((s, _)) => seq < s,
+                None => true,
+            };
+            if better {
+                best = Some((seq, tile as i32));
+            }
+        }
+        best.map_or(-1, |(_, t)| t)
     }
 
     /// Place the player's skill rules on their field. This is the binding:
@@ -2406,6 +3240,9 @@ impl World {
         if uid < 0 {
             return;
         }
+        // A dead instance is never a host or a creator: its edges go first, so
+        // no live row keeps naming it.
+        let _ = self.drop_instance_edges(uid);
         let gone: Vec<TileMark> = self
             .st
             .marks

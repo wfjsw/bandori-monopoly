@@ -30,6 +30,7 @@ import { D } from "../../core/data";
 import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
+import type { FieldCard } from "../../core/types";
 import { InspectCard, showCard, type CardAction } from "../../ui/Card";
 import { pickCard, type CardPill } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
@@ -77,7 +78,7 @@ export function rowSpread(n: number, width = 480 + CARD_W): Record<string, strin
  * (and their `<img>`s) alone. Pills are derived here; the note and marker
  * chips come pre-built (`markers.ts`) because several surfaces print them.
  */
-export const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers, owner, designee, m, on, present, dismiss }: {
+export const FieldFace = memo(function FieldFace({ slotKey, card, title, note, markers, owner, designee, m, on, present, dismiss, width }: {
   /** The row's pick identity (`e…` / `c…`), shared with the wrapper div. */
   slotKey: string;
   /** The card / event id whose art this face shows. */
@@ -93,6 +94,8 @@ export const FieldFace = memo(function FieldFace({ slotKey, card, title, note, m
   on: boolean;
   present: (key: string, id: string, note: string, pills?: CardPill[]) => void;
   dismiss: () => void;
+  /** Narrower face for an attachment riding its host, in px. */
+  width?: number;
 }) {
   const pills = useMemo((): CardPill[] => {
     const out: CardPill[] = [];
@@ -113,6 +116,7 @@ export const FieldFace = memo(function FieldFace({ slotKey, card, title, note, m
     <InspectCard
       id={card}
       size="mini"
+      width={width}
       field
       className={s.card}
       title={title}
@@ -169,11 +173,21 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const mine = (ownerSeat: number) => ownerSeat >= 0 && ownerSeat === m.playerId;
   // One stack, cards in play and events in effect alike. Skill rules (`skill:`)
   // are engine plumbing on the field, not cards in play; a face-down card is
-  // parked out of play by the hand instead.
+  // parked out of play by the hand instead. An **attachment** (`on >= 0`) is
+  // not a face of its own: it rides the host's face (review finding 7).
+  const attachedBy = new Map<number, { seat: number; fc: FieldCard }[]>();
+  S.players.forEach((x, seat) => {
+    for (const fc of x.field ?? []) {
+      if ((fc.on ?? -1) < 0) continue;
+      const list = attachedBy.get(fc.on as number);
+      if (list) list.push({ seat, fc });
+      else attachedBy.set(fc.on as number, [{ seat, fc }]);
+    }
+  });
   const stack = [
     ...S.players.flatMap((x, i) =>
       (x.field ?? [])
-        .filter((c) => !c.card.startsWith("skill:") && !c.faceDown)
+        .filter((c) => !c.card.startsWith("skill:") && !c.faceDown && (c.on ?? -1) < 0)
         .map((fc) => ({ kind: "card" as const, seat: i, fc })),
     ),
     ...(S.eventActive ?? []).map((e) => ({ kind: "event" as const, e })),
@@ -247,6 +261,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
           const key = `c${fc.uid}`;
           const name = D.card(fc.card)?.name;
+          const attached = attachedBy.get(fc.uid) ?? [];
           return (
             <div key={key} {...{ [PICK_ATTR]: key }} className={cx(s.slot, picked === key && s.picked, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} {...tileHold(tiles)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               <FieldFace
@@ -262,6 +277,47 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                 present={present}
                 dismiss={dismiss}
               />
+              {attached.length > 0 && (
+                <div className={s.attached}>
+                  {attached.map(({ seat: aSeat, fc: a }) => {
+                    // An attachment wears the host style at chip width; the
+                    // same face-down convention holds (only its owner sees it).
+                    const aOwner = a.owner >= 0 ? a.owner : aSeat;
+                    const aOwn = mine(aOwner);
+                    const aMarkers = fieldMarkers(a);
+                    const aNote = markerNote(a.note ? fmtMsg(a.note, names) : "", aMarkers);
+                    const aTiles = designatedTiles(S.marks, fieldCardTiles(a.uid));
+                    const aKey = `c${a.uid}`;
+                    const aName = D.card(a.card)?.name;
+                    return (
+                      <div key={aKey} {...{ [PICK_ATTR]: aKey }} className={cx(s.attach, picked === aKey && s.picked, hoverSeat >= 0 && s[aOwner === hoverSeat ? "hot" : "dim"])} {...tileHold(aTiles)} style={{ ["--own" as string]: m.colorOf(aOwner) }}>
+                        {a.faceDown && !aOwn ? (
+                          <div className={s.attachBack} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
+                        ) : (
+                          <>
+                            {a.faceDown && <span className={cx(fd.tag, s.attachTag)}>{tr("board.faceDownTag")}</span>}
+                            <FieldFace
+                              slotKey={aKey}
+                              card={a.card}
+                              title={a.faceDown ? `${aName ?? a.card} · ${tr("board.faceDown")}` : aName}
+                              note={aNote}
+                              markers={aMarkers}
+                              owner={aOwner}
+                              designee={aSeat !== aOwner ? aSeat : -1}
+                              m={m}
+                              on={picked === aKey}
+                              present={present}
+                              dismiss={dismiss}
+                              width={54}
+                            />
+                            {a.faceDown && <div className={cx(fd.blend, s.attachBlend)} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}
             </div>
           );

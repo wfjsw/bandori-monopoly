@@ -489,6 +489,7 @@ fn a_human_plays_a_turn_with_commands() {
         m.act(1, &NetMessage::act("fly")).unwrap_err().key(),
         "err.unknown_act"
     );
+    assert!(!m.state().main_moved, "the main move is still owed");
     let before = m.state().players[me as usize].pos;
     m.act(1, &NetMessage::act("roll")).unwrap();
     while m.state().busy {
@@ -497,6 +498,11 @@ fn a_human_plays_a_turn_with_commands() {
     }
     let st = m.state();
     assert_eq!(st.step, stage::END);
+    // The view must carry the spent slot, not just the gate that folds it:
+    // a rebuilt fork (bot-core's determinizer) restores from the view and
+    // otherwise answers `roll` into `err.roll_main_used` for the turn.
+    assert!(st.main_moved, "the view reports the spent main move");
+    assert!(!st.can_roll_here, "and the roll is no longer offered");
     assert_ne!(
         st.players[me as usize].pos, before,
         "the roll moved the token"
@@ -548,7 +554,9 @@ fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     assert_eq!(m.act(1, &redo).unwrap_err().key(), "err.answered");
     // Well past the 15 s 恢复时间 pool the prompt used to drain from (and that
     // used to force it after the 1.5 s grace), still short of the barrier's
-    // own 20 s window: player 2 is simply still deciding.
+    // own 20 s window: player 2 is simply still deciding. The 10 s anim-hold
+    // cap releases on its own (this harness sends no `anim_done`), so the
+    // window is 10 s + 20 s here.
     for _ in 0..180 {
         m.pump_tick(0.1);
     }
@@ -560,9 +568,11 @@ fn mulligan_waits_for_every_seat_and_replays_without_duplicate_events() {
     assert!(st.turn < 0, "no turn and no 游戏开始时 effect may run yet");
 
     // The absent seat is taken over: the machine answers it (keep), which is
-    // that seat's decision -- one way the barrier lifts without one.
+    // that seat's decision -- one way the barrier lifts without one. Tick past
+    // the rest of the held window (the takeover spends no pool, so the
+    // machine's answer lands when the window runs out).
     m.member_left(2, true);
-    for _ in 0..40 {
+    for _ in 0..160 {
         m.pump_tick(0.1);
     }
     let st = m.state();
@@ -590,9 +600,10 @@ fn mulligan_forces_keep_when_the_window_runs_out() {
     let members = [member(1, false), member(2, true)];
     let mut m = new_match(&members, 13, MatchMode::Casual);
     m.quick_start();
-    // The bot answers at once; the human never does. 26 s is past the 20 s
-    // window.
-    for _ in 0..260 {
+    // The bot answers at once; the human never does. An unacking client is
+    // released by the 10 s anim-hold cap, then the 20 s window runs: 34 s is
+    // past both.
+    for _ in 0..340 {
         m.pump_tick(0.1);
     }
     let st = m.state();

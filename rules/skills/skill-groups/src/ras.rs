@@ -57,7 +57,7 @@ pub const RAS: CardDef = CardDef::new(
 fn at_turn_start_reset(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, TAKEN, 0);
     let t = state::get(player_id, ON_HOUSE);
-    if t >= 0 && ctx::player_pos(player_id) != t {
+    if t >= 0 && ctx::tile_at(ctx::player_pos(player_id)) != t {
         state::set(player_id, ON_HOUSE, -1);
     }
     Ok(())
@@ -85,7 +85,9 @@ fn owned_livehouses(player_id: i32) -> alloc::vec::Vec<i32> {
 /// offer can name, so the entry must not activate (no prompt, no flash, no log).
 fn still_on_remembered(player_id: i32) -> bool {
     let t = state::get(player_id, ON_HOUSE);
-    t >= 0 && ctx::player_pos(player_id) == t && owned_livehouses(player_id).first().is_some()
+    t >= 0
+        && ctx::tile_at(ctx::player_pos(player_id)) == t
+        && owned_livehouses(player_id).first().is_some()
 }
 
 /// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
@@ -105,7 +107,7 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
-    plan::set_teleport_to(to);
+    plan::set_teleport_to(ctx::position_of_tile(to));
     plan::set_settles(true);
     state::set(player_id, ON_HOUSE, -1);
     ctx::log(player_id, &Msg::new(key!("ras_moved")).tile("tile", to));

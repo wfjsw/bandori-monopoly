@@ -347,6 +347,7 @@ pub enum JournalRequest {
         kind: String,
         value: i32,
         tile: i32,
+        position: i32,
         card: Option<String>,
         deal_owner: i32,
         deal_houses: i32,
@@ -372,6 +373,70 @@ pub enum JournalRequest {
         player_id: i32,
         name: String,
         delta: i32,
+    },
+    BuildAs {
+        player_id: i32,
+        tile: i32,
+        charge: i32,
+        amount: i32,
+        numerator: i32,
+        denominator: i32,
+        owner_required: i32,
+    },
+    TileWrite {
+        operation: i32,
+        tile: i32,
+        value: i32,
+    },
+    InspectionBegin {
+        looker: i32,
+        owner: i32,
+        count: i32,
+        public: bool,
+    },
+    InspectionEnd {
+        player_id: i32,
+        shuffle: bool,
+    },
+    RevealPile {
+        player_id: i32,
+        pile: i32,
+        reason: Msg,
+    },
+    RevealCard {
+        player_id: i32,
+        card: String,
+        reason: Msg,
+    },
+    Leave {
+        uid: i32,
+        destination: i32,
+        to: i32,
+        cause: i32,
+    },
+    Flip {
+        uid: i32,
+        face_down: i32,
+        cause: i32,
+    },
+    Attach {
+        host: i32,
+        card: String,
+        cause: i32,
+        face_down: i32,
+    },
+    Detach {
+        uid: i32,
+        destination: i32,
+        cause: i32,
+    },
+    Rehome {
+        tile: i32,
+        owner: i32,
+    },
+    PlayHand {
+        player_id: i32,
+        card: String,
     },
 }
 

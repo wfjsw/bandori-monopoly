@@ -4,12 +4,18 @@
 //! > [特]：此卡[移除]时获得1000资金。
 //! > [手]：[移除]此卡。
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use bandori_std::zones::ZoneChangeCause;
+use card_sdk::{ctx, key, Action, CardDef, Msg, On};
 use card_sdk::{para, sec, CardText};
 
 pub const RESOLVE: CardDef = CardDef::new(
     "R:[衍生] 觉悟",
-    &[On::Play("", None, resolve).quiet_when_empty()],
+    &[
+        On::Play("", None, resolve).quiet_when_empty(),
+        // 规则书[特]: 「此卡[移除]时获得1000资金」 -- a leave from the field; the
+        // card is [移除] rather than discarded.
+        On::Action(Action::ZoneLeft("card.placed", None, on_removed)),
+    ],
 )
 .meta(
     &card_sdk::meta::CardMeta::new()
@@ -26,11 +32,22 @@ pub const RESOLVE: CardDef = CardDef::new(
 );
 
 fn resolve(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「[手]：[移除]此卡。」
-    ctx::set_dest(ctx::Dest::Banished);
-    // TODO(规则书)（此卡[移除]时获得1000资金）: [特] pays on any [移除] (from any
-    //   zone) -- only this play pays; no removal event exists to key on.
+    // 规则书: 「[手]：[移除]此卡。」 -- the play's own removal is a hand card, so
+    // it pays here; a later field removal pays through `zoneLeft`.
     // 规则书: 「[特]：此卡[移除]时获得1000资金。」
+    ctx::gain(player_id, 1000, &Msg::new(key!("resolve_reason")))?;
+    ctx::set_dest(ctx::Dest::Banished, ZoneChangeCause::Effect);
+    Ok(())
+}
+
+/// 规则书[特]: 「此卡[移除]时获得1000资金」 -- any removal from the field pays
+/// and files the card out of the game.
+fn on_removed(player_id: i32) -> card_sdk::Asked {
+    // Instance kind: another copy sees this raise too.
+    if ctx::trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
+    bandori_std::zones::set_leave_destination(ctx::Dest::Banished);
     ctx::gain(player_id, 1000, &Msg::new(key!("resolve_reason")))?;
     Ok(())
 }
@@ -44,4 +61,10 @@ fn resolve(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn resolve_kani(player_id: i32) -> card_sdk::Asked {
     resolve(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_removed_kani(player_id: i32) -> card_sdk::Asked {
+    on_removed(player_id)
 }

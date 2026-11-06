@@ -40,10 +40,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if n <= 0 || pos < 0 {
         return Ok(());
     }
+    // The ask lists **tiles**, not slots: `ask` builds an `Ask::tile` out of
+    // the option values, so a swapped board needs the conversion here.
     let mut tiles: Vec<i32> = Vec::new();
     for i in -4i32..=4 {
         if i != 0 {
-            tiles.push((pos + i).rem_euclid(n));
+            tiles.push(ctx::tile_at((pos + i).rem_euclid(n)));
         }
     }
     if tiles.is_empty() {
@@ -74,7 +76,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // `set_settles(true)` states the landing settles: the shared `turn.plan`
     // outlives a move and can still carry a `false` from an earlier effect.
-    let steps = ctx::tile_forward(pos, to);
+    // `to` is a tile identity, `tile_forward` a slot difference.
+    let steps = ctx::tile_forward(pos, ctx::position_of_tile(to));
     let reverse = steps > 4;
     let len = if reverse { n - steps } else { steps };
     ctx::plan::set_steps(len);

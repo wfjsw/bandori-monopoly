@@ -226,8 +226,23 @@ fn rent_houses_id() -> NameId {
     }
 }
 
+/// Cached `NameId` for `PROP_LEAVE_DEST` (see [`World::leave_dest`]).
+fn leave_dest_id() -> NameId {
+    static mut ID: Option<NameId> = None;
+    unsafe {
+        if ID.is_none() {
+            ID = Some(intern::intern(PROP_LEAVE_DEST));
+        }
+        ID.unwrap()
+    }
+}
+
 /// `game_core::state::prop::RENT_HOUSES` — house-count override for rent.
 pub const RENT_HOUSES: &str = "rentHouses";
+
+/// `game_core::state::prop::LEAVE_DEST` — the destination an instance chose
+/// for its own leave (design G08 §7.1 step 2 / I4).
+pub const PROP_LEAVE_DEST: &str = "leaveDest";
 
 pub const TILE_SHOP_NAME: &str = "江户川乐器店";
 /// Named on-card counters (`game_core::state::counter`).
@@ -277,6 +292,9 @@ pub struct MoveSnap {
     /// The steps the move actually took (`move.effective`): the fixed count,
     /// else `next_steps`, else the roll.
     pub effective: i32,
+    /// An abnormal landed somewhere in this walk's span
+    /// (`trigger::move_abnormal`, `MoveCtx.abnormal`).
+    pub abnormal: bool,
 }
 
 impl MoveSnap {
@@ -292,6 +310,7 @@ impl MoveSnap {
         settle_redirect: false,
         rolled: false,
         effective: 0,
+        abnormal: false,
     };
 
     /// A move payload is present when kind is a real `MoveKind` (0/1).
@@ -395,6 +414,29 @@ pub enum Effect {
         player: i32,
         n: i32,
     },
+    /// `ctx::draw_over_hand_limit` -- `ruleset_draw` with
+    /// [`card_sdk::abi::draw_flag::OVER_HAND_LIMIT`]. The model has no hand
+    /// limit, so the flag is only observable here.
+    DrawOver {
+        player: i32,
+        n: i32,
+    },
+    /// `inspection_begin` -- `n` cards turned from `owner`'s deck.
+    InspectionHold {
+        looker: i32,
+        owner: i32,
+        n: i32,
+    },
+    /// `inspection_end` -- `n` cards returned to `owner`'s deck.
+    InspectionReturn {
+        owner: i32,
+        n: i32,
+    },
+    /// `reveal_pile` / `reveal_card` -- a publication, no pile write.
+    Reveal {
+        player: i32,
+        pile: i32,
+    },
     GainMoney {
         player: i32,
         n: i32,
@@ -461,6 +503,14 @@ pub enum Effect {
         to: i32,
         n: i32,
     },
+    /// One committed zone transition (`zone_leave`); the order of these
+    /// records is the cascade order (attachments, children, leaver).
+    ZoneLeave {
+        uid: i32,
+        from: i32,
+        to: i32,
+        cause: i32,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -504,8 +554,8 @@ impl NamedVal {
 /// overflows at slot 64 in the debug build.
 /// `NameId::INVALID` / out-of-range ids never alias a live key: `get_opt`
 /// is `None`, `set` is a documented no-op.
-/// Extra (key, value) slots for derived ids (`key + 0x2000/0x4000/0x8000`
-/// MIN/MAX/EXPIRES columns) that live outside the intern bucket range.
+/// Extra (key, value) slots for any remaining ids outside both the intern
+/// bucket range and the derived-column tags.
 const MAX_EXTRA: usize = 16;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -515,7 +565,9 @@ pub struct NameMap {
     /// `vals[i] == 0`). One word per 64 slots -- a single `u64` overflows at
     /// slot 64 in the debug build.
     present: [u64; (crate::intern::SLOTS + 63) / 64],
-    /// Linear fallback for `NameId.0 >= SLOTS` (derived MIN/MAX/EXPIRES).
+    /// Linear fallback for ids outside the intern range (derived columns on
+    /// field cards / tiles). Player state columns live on [`World`], not here:
+    /// a per-map column array would have to be paid by all 60 tile maps.
     extra: [(NameId, i32); MAX_EXTRA],
     extra_n: u8,
 }
@@ -625,15 +677,35 @@ impl NameMap {
 pub struct FieldCard {
     pub uid: i32,
     pub card: u16,
+    /// The **field holder** (whose field vector the row sits in; `-1` = the
+    /// board field).
     pub player: i32,
+    /// The instance's real `owner` (`FieldCard.owner`); moves with
+    /// `set_instance_owner` without moving the row.
+    pub owner: i32,
     pub tile: i32,
     pub face_down: bool,
     pub immune: bool,
+    /// 「不受除拥有者以外的效果影响」 (`immuneExceptOwner`), causer-aware
+    /// flavour read through `hostfns::is_immune_from_at`.
+    pub immune_except_owner: bool,
     pub crystals: i32,
     pub props: NameMap,
     /// The card whose printed surface this instance runs (`u16::MAX` = its
     /// own). Dies with the instance, like the row.
     pub effective_card: u16,
+    /// The instance this one sits on (zone `Attached`), `-1` when not
+    /// attached. Holds exactly while the row is attached (G08 I6).
+    pub on: i32,
+    /// The instance that made this one (`-1` = none). A child dies with its
+    /// creator (G08 I7).
+    pub created_by: i32,
+    /// Did this card take effect? Cleared by `set_ineffective_at` and read by
+    /// a Graveyard arrival (G08 I8).
+    pub effective: bool,
+    /// Did the running body mint this row (`ctx::is_own_placement`)? A row the
+    /// harness planted as pre-state is not the body's own placement.
+    pub mine: bool,
 }
 
 impl FieldCard {
@@ -641,13 +713,50 @@ impl FieldCard {
         uid: 0,
         card: u16::MAX,
         player: -1,
+        owner: -1,
         tile: -1,
         face_down: false,
         immune: false,
+        immune_except_owner: false,
         crystals: 0,
         props: NameMap::new(),
         effective_card: u16::MAX,
+        on: -1,
+        created_by: -1,
+        effective: true,
+        mine: false,
     };
+}
+
+/// `game_kinds::Zone` wire codes (the model stores the wire form).
+pub const ZONE_NOWHERE: i32 = 0;
+pub const ZONE_DECK: i32 = 1;
+pub const ZONE_HAND: i32 = 2;
+pub const ZONE_FIELD: i32 = 3;
+pub const ZONE_GRAVEYARD: i32 = 4;
+pub const ZONE_BANISHED: i32 = 5;
+pub const ZONE_ATTACHED: i32 = 9;
+
+/// `game_kinds::ZoneChangeCause` codes the writer itself produces.
+pub const CAUSE_HOST_LEFT: i32 = 8;
+pub const CAUSE_CREATOR_LEFT: i32 = 9;
+pub const CAUSE_EFFECT: i32 = 3;
+
+/// A guest `Dest` wire code → the zone it lands in (mirrors
+/// `game_core::engine::zone::dest_zone`).
+pub fn dest_zone(dest: i32) -> i32 {
+    match dest {
+        1 => ZONE_HAND,
+        2 => ZONE_FIELD,
+        3 => ZONE_BANISHED,
+        4 | 5 | 6 => ZONE_DECK,
+        _ => ZONE_GRAVEYARD,
+    }
+}
+
+/// Is `zone` a played zone (`Field` / `Attached`)?
+pub fn is_played(zone: i32) -> bool {
+    zone == ZONE_FIELD || zone == ZONE_ATTACHED
 }
 
 // ---------------------------------------------------------------------------
@@ -860,6 +969,11 @@ pub struct World {
     pub persona_skill: u16,
     /// Generic per-player named counters (tokens, held, state).
     pub player_keys: [NameMap; MAX_PLAYERS],
+    /// MIN / MAX / EXPIRES / FLAGS columns of `player_keys`, direct-indexed
+    /// `[player][column][base key]`. Off `NameMap` on purpose: the 60 tile
+    /// maps and 8 field maps would otherwise each carry four column arrays.
+    pub player_cols: [[[i32; crate::intern::SLOTS]; 4]; MAX_PLAYERS],
+    pub player_cols_present: [[[u64; (crate::intern::SLOTS + 63) / 64]; 4]; MAX_PLAYERS],
     /// Band crystals / skills (kept explicit; also mirrored in player_keys).
     pub group_pool: [i32; MAX_PLAYERS],
 
@@ -882,6 +996,16 @@ pub struct World {
     pub deck_n: u8,
     pub discard_pile: [u16; MAX_CARDS],
     pub discard_n: u8,
+    /// The open inspection frame (v114): cards turned over and not released,
+    /// front-first. One frame is modelled (`inspection_frame_n` is 0 or 1).
+    pub inspection_pile: [u16; MAX_CARDS],
+    pub inspection_n: u8,
+    /// Whose deck the open frame holds (index), or -1 for none. The refill
+    /// gate reads it.
+    pub inspection_deck_owner: i32,
+    pub inspection_public: bool,
+    pub inspection_revealed: [bool; MAX_CARDS],
+    pub inspection_frame_n: u8,
 
     // ---- field cards ----
     pub field: [FieldCard; MAX_FIELD],
@@ -889,6 +1013,9 @@ pub struct World {
     pub next_uid: i32,
     /// Pending `place_card` destination (`ctx::set_dest`).
     pub dest: i32,
+    /// The seat a pending `set_transfer_to_dest` aims the run's arrival at
+    /// (`-1` = its own owner).
+    pub dest_to: i32,
     /// The instance the **run** is for (`Run::current_uid`): what `set_dest` /
     /// `self_uid` answer. An inner `place_card` does not move it (the engine's
     /// `apply_dest` files `current_uid`), so it differs from `last_uid` after a
@@ -914,6 +1041,31 @@ pub struct World {
 
     // ---- tiles ----
     pub tiles: [TileState; 60],
+    /// Per tile: the acquisition sequence of its current owner (`-1` = nobody
+    /// / already released) and the next one to hand out (G08 I13).
+    pub owned_seq: [i32; 60],
+    pub next_owned_seq: i32,
+    /// `prop::FIRST_TILE` cache per seat, rebuilt on every ownership write
+    /// that can change the answer (`-1` = none).
+    pub first_tile: [i32; MAX_PLAYERS],
+
+    // ---- zone trigger payload (`Trigger.zone` / `play_outcome` / `out_cause`)
+    /// The last zone transition, as a raised `ZoneChange` would carry it.
+    pub trig_zone_present: bool,
+    pub trig_zone_from: i32,
+    pub trig_zone_to: i32,
+    pub trig_zone_cause: i32,
+    pub trig_zone_holder: i32,
+    pub trig_zone_wasted: bool,
+    pub trig_zone_counted: bool,
+    /// `Trigger.play_outcome` wire code, `-1` = none.
+    pub trig_play_outcome: i32,
+    /// `Trigger.out_cause` wire code, `-1` = none.
+    pub trig_out_cause: i32,
+    /// The `effective` value the last Graveyard landing left on the row after
+    /// the transition cleared it (`true` once a wasted entry lands). The row
+    /// itself dies, so this is how the read-then-clear is observable.
+    pub last_leave_effective_after: bool,
 
     // ---- marks / events ----
     pub marks: [Mark; MAX_MARKS],
@@ -951,12 +1103,26 @@ pub struct World {
     pub trig_ordinal: i32,
     pub trig_cancelled: bool,
     pub trig_negate: bool,
+    /// `Trigger.abnormal_blocked` — did the announced abnormal hold the move
+    /// (`trigger::abnormal_blocked`)?
+    pub trig_abnormal_blocked: bool,
     /// 真奈 join (CH-05): the seat a joiner's self-targeted effects are
     /// redirected to; `-1` outside a join (hostfns `join_redirect_target`).
     pub trig_join_redirect: i32,
     /// When non-zero, `roll_dice` returns this value instead of a symbolic
     /// face (harness control for dice-clause proofs; 0 = symbolic).
     pub forced_roll: i32,
+    /// Effect-roll calls (`arm_roll` non-move branch) — the roll itself is not
+    /// an `Effect`, so proofs that owe exactly one roll count it here.
+    pub roll_calls: u32,
+    /// `at_turn_end` / `at_next_turn_end` / `before_turn_end` calls, recorded
+    /// by `arm_schedule_turn_end` (`(player, mode)` of the last).
+    pub schedule_turn_end_n: u32,
+    pub last_schedule: (i32, i32),
+    /// `settle_tile_at` calls, recorded by `arm_settle_tile_at` (the settle
+    /// itself is a protocol stub with no effect-log entry).
+    pub settle_calls: u32,
+    pub last_settle: (i32, i32),
     /// A joiner used the redirect (hostfns `set_join_used`).
     pub trig_join_used: bool,
     /// `join::open` ran on this pass (the model has no join round beyond the
@@ -1007,6 +1173,22 @@ pub struct World {
     pub rent_quote: i32,
     /// The turn's main move is already taken (`run_planned_move` latch).
     pub main_moved: bool,
+    /// The move gate holds this turn (`skip_main_move` / `clear_move_skip`),
+    /// i.e. `World.st.skip_move`. A [停留] turn answers `3` from `cant_move`.
+    pub skip_move: bool,
+    /// The running activation (`turn.activation_ordinal`; 0 outside a
+    /// routine). Stamped from the single routine entry before the snapshot
+    /// (`trigger::activation_ordinal`).
+    pub turn_activation_ordinal: i32,
+    /// The activation that consumed this turn's main move
+    /// (`turn.move_activation_ordinal`; 0 = none).
+    pub move_activation_ordinal: i32,
+    /// A landed abnormal during this turn's main move, latched at the walk's
+    /// end (`turn.move_abnormal`, read by `trigger::move_abnormal`).
+    pub turn_move_abnormal: bool,
+    /// 「打出此卡的回合…」: the turn's dice-immunity flag
+    /// (`turn.dice_immune`).
+    pub dice_immune: bool,
     /// The next move is forced (`plan::set_forced`).
     pub forced: bool,
     /// A forced move counts as the main move anyway (`set_main_override`).
@@ -1100,8 +1282,21 @@ fn player_idx(player: i32) -> usize {
     }
 }
 
+/// Derived column tag (`NameId.0 >> 12`) → column slot. The engine's state
+/// columns are `key + 0x1000` (flags) / `+0x2000` (expires) / `+0x4000` (min)
+/// / `+0x8000` (max).
+fn column_of(tag: usize) -> Option<usize> {
+    match tag {
+        0x1 => Some(0),
+        0x2 => Some(1),
+        0x4 => Some(2),
+        0x8 => Some(3),
+        _ => None,
+    }
+}
+
 impl World {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             n_players: 2,
             money: [0; MAX_PLAYERS],
@@ -1119,6 +1314,8 @@ impl World {
             group_id: [u16::MAX; MAX_PLAYERS],
             persona_skill: 0,
             player_keys: [NameMap::new(); MAX_PLAYERS],
+            player_cols: [[[0; crate::intern::SLOTS]; 4]; MAX_PLAYERS],
+            player_cols_present: [[[0; (crate::intern::SLOTS + 63) / 64]; 4]; MAX_PLAYERS],
             group_pool: [0; MAX_PLAYERS],
             fans_pos: [0; MAX_PLAYERS],
             fans_neg: [0; MAX_PLAYERS],
@@ -1131,10 +1328,17 @@ impl World {
             deck_n: 0,
             discard_pile: [u16::MAX; MAX_CARDS],
             discard_n: 0,
+            inspection_pile: [u16::MAX; MAX_CARDS],
+            inspection_n: 0,
+            inspection_deck_owner: -1,
+            inspection_public: false,
+            inspection_revealed: [false; MAX_CARDS],
+            inspection_frame_n: 0,
             field: [FieldCard::EMPTY; MAX_FIELD],
             field_n: 0,
             next_uid: 1,
             dest: 0,
+            dest_to: -1,
             bound_uid: 1,
             last_uid: 1,
             plan_claimed: false,
@@ -1143,6 +1347,19 @@ impl World {
             last_invoke: (NameId::INVALID, NameId::INVALID, false, -1),
             self_crystals: 0,
             tiles: [TileState::new(); 60],
+            owned_seq: [-1; 60],
+            next_owned_seq: 0,
+            first_tile: [-1; MAX_PLAYERS],
+            trig_zone_present: false,
+            trig_zone_from: ZONE_NOWHERE,
+            trig_zone_to: ZONE_NOWHERE,
+            trig_zone_cause: 0,
+            trig_zone_holder: -1,
+            trig_zone_wasted: false,
+            trig_zone_counted: false,
+            trig_play_outcome: -1,
+            trig_out_cause: -1,
+            last_leave_effective_after: true,
             marks: [Mark::EMPTY; MAX_MARKS],
             marks_n: 0,
             events: [u16::MAX; MAX_EVENTS],
@@ -1165,8 +1382,14 @@ impl World {
             trig_ordinal: 0,
             trig_cancelled: false,
             trig_negate: false,
+            trig_abnormal_blocked: false,
             trig_join_redirect: -1,
             forced_roll: 0,
+            roll_calls: 0,
+            schedule_turn_end_n: 0,
+            last_schedule: (-1, 0),
+            settle_calls: 0,
+            last_settle: (-1, -1),
             trig_join_used: false,
             trig_join_opened: false,
             trig_main: false,
@@ -1192,6 +1415,11 @@ impl World {
             paid_in_settle_by: [0; MAX_PLAYERS],
             rent_quote: -1,
             main_moved: false,
+            skip_move: false,
+            turn_activation_ordinal: 0,
+            move_activation_ordinal: 0,
+            turn_move_abnormal: false,
+            dice_immune: false,
             forced: false,
             main_override: false,
             void_walk: false,
@@ -1314,20 +1542,68 @@ impl World {
     /// Flag byte declared for `key` (0 when none). Stored at `key + 0x1000`,
     /// beside the MIN/MAX/EXPIRES derived columns.
     pub fn key_flags(&self, player: i32, key: NameId) -> u8 {
-        if player < 0 || player as usize >= MAX_PLAYERS {
-            return 0;
-        }
-        let id = NameId(key.0.wrapping_add(0x1000));
-        self.player_keys[player as usize].get(id) as u8
+        self.col_get(player, key, 0x1000) as u8
     }
 
     /// Declare [`state_flag`] bits for `key` (`state_set` field `FLAGS`).
     pub fn key_set_flags(&mut self, player: i32, key: NameId, flags: u8) {
-        if player < 0 || player as usize >= MAX_PLAYERS {
+        self.col_set(player, key, 0x1000, flags as i32);
+    }
+
+    /// One derived column cell (`tag` = 0x1000 flags / 0x2000 expires /
+    /// 0x4000 min / 0x8000 max), direct-indexed.
+    fn col_get(&self, player: i32, key: NameId, tag: u16) -> i32 {
+        let Some(c) = column_of(tag as usize >> 12) else {
+            return 0;
+        };
+        self.player_cols[player_idx(player)][c][(key.0 as usize) & 0xfff]
+    }
+
+    fn col_set(&mut self, player: i32, key: NameId, tag: u16, v: i32) {
+        let Some(c) = column_of(tag as usize >> 12) else {
             return;
+        };
+        let p = player_idx(player);
+        let base = (key.0 as usize) & 0xfff;
+        self.player_cols[p][c][base] = v;
+        self.player_cols_present[p][c][base / 64] |= 1u64 << (base % 64);
+    }
+
+    /// A present column cell addressed by the **derived** id, for `ir_fill`'s
+    /// named probe (`Option` = present).
+    pub fn col_get_opt(&self, player: i32, key: NameId) -> Option<i32> {
+        let i = key.0 as usize;
+        if i < 0x1000 {
+            return None;
         }
-        let id = NameId(key.0.wrapping_add(0x1000));
-        self.player_keys[player as usize].set(id, flags as i32);
+        let c = column_of(i >> 12)?;
+        let base = i & 0xfff;
+        if base >= crate::intern::SLOTS {
+            return None;
+        }
+        let p = player_idx(player);
+        if ((self.player_cols_present[p][c][base / 64] >> (base % 64)) & 1) == 1 {
+            return Some(self.player_cols[p][c][base]);
+        }
+        None
+    }
+
+    /// Visit every present column cell of `player` as `base + tag` ids
+    /// (`ir_fill` copies them with the map).
+    pub fn for_each_col(&self, player: i32, mut f: impl FnMut(NameId, i32)) {
+        let p = player_idx(player);
+        for (c, tag) in [0x1000u16, 0x2000, 0x4000, 0x8000].into_iter().enumerate() {
+            let mut i = 0usize;
+            while i < crate::intern::SLOTS {
+                if ((self.player_cols_present[p][c][i / 64] >> (i % 64)) & 1) == 1 {
+                    f(
+                        NameId((i as u16).wrapping_add(tag)),
+                        self.player_cols[p][c][i],
+                    );
+                }
+                i += 1;
+            }
+        }
     }
 
     /// Mirror a fan-key write into the pilot `fans_pos` / `fans_neg` views.
@@ -1345,35 +1621,23 @@ impl World {
     // ---- state MIN / MAX / EXPIRES columns (hostfns `state_set` field 1/2/3) ----
     /// Declared MAX for `key` (0 = none). Stored beside the value.
     pub fn key_max(&self, player: i32, key: NameId) -> i32 {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x8000));
-        self.player_keys[p].get(id)
+        self.col_get(player, key, 0x8000)
     }
     pub fn key_min(&self, player: i32, key: NameId) -> i32 {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x4000));
-        self.player_keys[p].get(id)
+        self.col_get(player, key, 0x4000)
     }
     /// `Tick` code: 0 none / 1 TurnStart / 2 TurnEnd (hostfns field 3).
     pub fn key_expires(&self, player: i32, key: NameId) -> i32 {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x2000));
-        self.player_keys[p].get(id)
+        self.col_get(player, key, 0x2000)
     }
     pub fn key_set_max(&mut self, player: i32, key: NameId, v: i32) {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x8000));
-        self.player_keys[p].set(id, v);
+        self.col_set(player, key, 0x8000, v);
     }
     pub fn key_set_min(&mut self, player: i32, key: NameId, v: i32) {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x4000));
-        self.player_keys[p].set(id, v);
+        self.col_set(player, key, 0x4000, v);
     }
     pub fn key_set_expires(&mut self, player: i32, key: NameId, v: i32) {
-        let p = player_idx(player);
-        let id = NameId(key.0.wrapping_add(0x2000));
-        self.player_keys[p].set(id, v);
+        self.col_set(player, key, 0x2000, v);
     }
 
     // ---- field-instance counters (uid-addressed) ----
@@ -1445,6 +1709,37 @@ impl World {
         None
     }
 
+    /// Allocate a fresh uid and push a plain field row for `owner` on `tile`.
+    /// Answers the uid; the running-instance slot becomes it (`last_uid`).
+    /// The row is unattached, has no creator and is effective.
+    pub fn make_row(&mut self, card: u16, owner: i32, holder: i32, tile: i32) -> i32 {
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        self.last_uid = uid;
+        let fi = self.field_n as usize;
+        if fi < MAX_FIELD {
+            self.field[fi] = FieldCard {
+                uid,
+                card,
+                player: holder,
+                owner,
+                tile,
+                face_down: false,
+                immune: false,
+                immune_except_owner: false,
+                crystals: 0,
+                props: NameMap::new(),
+                effective_card: u16::MAX,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: true,
+            };
+            self.field_n += 1;
+        }
+        uid
+    }
+
     /// Plant a field instance as a harness pre-state -- the same row
     /// `arm_place_card` writes: a fresh uid, the running-instance slot and a
     /// `FieldCard` on the owner's tile. Returns the uid; `last_uid` becomes it,
@@ -1461,12 +1756,18 @@ impl World {
                 uid,
                 card: intern::intern(card).0,
                 player,
+                owner: player,
                 tile,
                 face_down: false,
                 immune: false,
+                immune_except_owner: false,
                 crystals: 0,
                 props: NameMap::new(),
                 effective_card: u16::MAX,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: false,
             };
             self.field_n += 1;
         }
@@ -1502,7 +1803,9 @@ impl World {
         let mut i = 0usize;
         let mut found: Option<&FieldCard> = None;
         while i < MAX_FIELD {
-            if self.field[i].uid == uid && self.field[i].player >= 0 {
+            // `card != u16::MAX` marks a live slot: an `EMPTY` slot also has
+            // `uid == 0`, and a board row has `player == -1`.
+            if self.field[i].uid == uid && self.field[i].card != u16::MAX {
                 found = Some(&self.field[i]);
             }
             i += 1;
@@ -1514,12 +1817,350 @@ impl World {
         let mut i = 0usize;
         let mut idx = None;
         while i < MAX_FIELD {
-            if self.field[i].uid == uid && self.field[i].player >= 0 {
+            if self.field[i].uid == uid && self.field[i].card != u16::MAX {
                 idx = Some(i);
             }
             i += 1;
         }
         idx.map(|i| &mut self.field[i])
+    }
+
+    // ------------------------------------------------- zone writer (G08)
+
+    /// The zone of an instance: `Attached` while it sits on a host, `Field`
+    /// while its row is on a field, `Nowhere` when dead (mirrors
+    /// `World::zone_of`).
+    pub fn zone_of(&self, uid: i32) -> i32 {
+        let Some(f) = self.field_by_uid(uid) else {
+            return ZONE_NOWHERE;
+        };
+        if f.on >= 0 {
+            ZONE_ATTACHED
+        } else {
+            ZONE_FIELD
+        }
+    }
+
+    /// The instance `uid` sits on, `-1` when it is not attached.
+    pub fn attachment_host(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.on)
+    }
+
+    pub fn holder_of(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.player)
+    }
+
+    /// The direct attachments of `host`, in filing (creation) order, into
+    /// `out`; answers the count.
+    pub fn attached_into(&self, host: i32, out: &mut [i32; MAX_FIELD]) -> usize {
+        let mut n = 0usize;
+        let mut i = 0usize;
+        while i < MAX_FIELD && n < MAX_FIELD {
+            if self.field[i].card != u16::MAX && self.field[i].on == host {
+                out[n] = self.field[i].uid;
+                n += 1;
+            }
+            i += 1;
+        }
+        n
+    }
+
+    /// The direct created children of `creator`, in creation order, into
+    /// `out`; answers the count.
+    pub fn created_into(&self, creator: i32, out: &mut [i32; MAX_FIELD]) -> usize {
+        let mut n = 0usize;
+        let mut i = 0usize;
+        while i < MAX_FIELD && n < MAX_FIELD {
+            if self.field[i].card != u16::MAX && self.field[i].created_by == creator {
+                out[n] = self.field[i].uid;
+                n += 1;
+            }
+            i += 1;
+        }
+        n
+    }
+
+    /// The row's own leave destination (`prop::LEAVE_DEST`), else the
+    /// Graveyard (mirrors `PlayCtx::leave_dest`).
+    pub fn leave_dest(&self, uid: i32) -> i32 {
+        let key = leave_dest_id();
+        let dest = self
+            .field_by_uid(uid)
+            .and_then(|f| f.props.get_opt(key))
+            .unwrap_or(0);
+        dest_zone(dest)
+    }
+
+    /// Would filing `uid` onto `host` make a cycle? (mirrors
+    /// `World::attach_cycles`; the depth guard is the row bound).
+    pub fn attach_cycles(&self, uid: i32, host: i32) -> bool {
+        if uid == host {
+            return true;
+        }
+        let mut cursor = host;
+        let mut guard = 0usize;
+        while cursor >= 0 && guard <= MAX_FIELD {
+            if cursor == uid {
+                return true;
+            }
+            cursor = self.attachment_host(cursor);
+            guard += 1;
+        }
+        false
+    }
+
+    /// Resolve an attach of the live row `uid` onto `host`: answers the real
+    /// `from` and the landing holder, `None` when refused (dead row, dead or
+    /// non-played host, cycle). Mirrors `World::resolve_zone_transition`.
+    pub fn zone_prepare_attach(&self, uid: i32, host: i32) -> Option<(i32, i32)> {
+        let row = self.field_by_uid(uid)?;
+        let from = self.zone_of(uid);
+        if !is_played(from) {
+            return None;
+        }
+        if host < 0 || !is_played(self.zone_of(host)) {
+            return None;
+        }
+        if self.attach_cycles(uid, host) {
+            return None;
+        }
+        Some((from, self.holder_of(host)))
+    }
+
+    /// Take the row `uid` out of play into `destination` (`-1` = its own
+    /// leave destination). Cascades attachments (cause `HostLeft`) then
+    /// created children (cause `CreatorLeft`) depth-first, then files the
+    /// leaver. Answers the landing holder, `-1` when it was not in play.
+    ///
+    /// Mirrors `PlayCtx::zone_leave` / `zone_commit` / `World::drop_instance_edges`
+    /// / `World::apply_zone_row` without the hook raise.
+    pub fn zone_leave(&mut self, uid: i32, destination: i32, to_seat: i32, cause: i32) -> i32 {
+        let from = self.zone_of(uid);
+        if self.field_by_uid(uid).is_none() {
+            return -1;
+        }
+        self.zone_leave_from(uid, from, destination, to_seat, cause)
+    }
+
+    /// [`Self::zone_leave`] with the `from` the caller already knows. A cascade
+    /// clears the edge before it recurses (as `drop_instance_edges` does), and
+    /// the transition it built keeps the row's real pair -- so the recursed
+    /// leaf must be told its `from` (`Attached` / `Field`), not re-read it.
+    fn zone_leave_from(
+        &mut self,
+        uid: i32,
+        from: i32,
+        destination: i32,
+        to_seat: i32,
+        cause: i32,
+    ) -> i32 {
+        let Some(row) = self.field_by_uid(uid).copied() else {
+            return -1;
+        };
+        if !is_played(from) {
+            return -1;
+        }
+        let mut to = if destination < 0 {
+            ZONE_GRAVEYARD
+        } else {
+            dest_zone(destination)
+        };
+        // The card's own rewrite wins, except into `Attached`. The engine
+        // clears the prop at the window start and re-reads it after the
+        // `zoneLeft` body, so only a write made there counts; the model has no
+        // hooks, and a seeded prop stands for exactly that write.
+        let rewrite = self.leave_dest(uid);
+        if rewrite != to && to != ZONE_ATTACHED {
+            to = rewrite;
+        }
+        // A non-pile landing (Field) or an unnamed seat falls back to the
+        // owner, exactly as `zone_commit`'s post-rewrite holder fix-up does.
+        let holder = if to == ZONE_FIELD || to_seat < 0 {
+            row.owner
+        } else {
+            to_seat
+        };
+        let wasted = !row.effective;
+
+        // Attachments first, then created children, then the leaver (I5).
+        // The edge is cleared before the cascade, as the engine does; the
+        // record keeps the row's real `from`, so the recursed leaf is told it.
+        let mut edges = [0i32; MAX_FIELD];
+        let atts = self.attached_into(uid, &mut edges);
+        let mut i = 0usize;
+        while i < atts {
+            let a = edges[i];
+            if let Some(f) = self.field_by_uid_mut(a) {
+                f.on = -1;
+            }
+            let d = self.leave_dest(a);
+            self.zone_leave_from(a, ZONE_ATTACHED, d, -1, CAUSE_HOST_LEFT);
+            i += 1;
+        }
+        let kids = self.created_into(uid, &mut edges);
+        let mut i = 0usize;
+        while i < kids {
+            let c = edges[i];
+            if let Some(f) = self.field_by_uid_mut(c) {
+                f.created_by = -1;
+            }
+            self.zone_leave_from(c, ZONE_FIELD, 0, -1, CAUSE_CREATOR_LEFT);
+            i += 1;
+        }
+
+        self.trig_zone_present = true;
+        self.trig_zone_from = from;
+        self.trig_zone_to = to;
+        self.trig_zone_cause = cause;
+        self.trig_zone_holder = holder;
+        self.trig_zone_wasted = wasted;
+        self.trig_zone_counted = false;
+        self.push(Effect::ZoneLeave {
+            uid,
+            from,
+            to,
+            cause,
+        });
+
+        if to == ZONE_ATTACHED {
+            // Only a prepared attach reaches here; the host's tile is taken.
+            let Some((host, tile)) = self
+                .field_by_uid(row.on)
+                .map(|h| (h.uid, h.tile))
+                .filter(|_| row.on >= 0)
+            else {
+                return -1;
+            };
+            let h = self.holder_of(host);
+            self.remove_field(uid);
+            let mut moved = row;
+            moved.on = host;
+            moved.tile = tile;
+            self.push_field_row(moved, h);
+            return h;
+        }
+        let holder_now = row.player;
+        self.remove_field(uid);
+        if to == ZONE_FIELD {
+            let mut moved = row;
+            moved.on = -1;
+            self.push_field_row(moved, holder_now);
+            return holder_now;
+        }
+        self.file_row(row, to, holder);
+        if to == ZONE_GRAVEYARD {
+            // The entry read the bit and the landing cleared it.
+            self.last_leave_effective_after = true;
+        }
+        holder.max(0)
+    }
+
+    /// Put a row back on a field, keyed by holder (`-1` = the board field).
+    fn push_field_row(&mut self, row: FieldCard, holder: i32) {
+        let fi = self.field_n as usize;
+        if fi < MAX_FIELD {
+            self.field[fi] = row;
+            let _ = holder;
+            self.field_n += 1;
+        }
+    }
+
+    /// File a removed row into a pile; the row dies. A Graveyard landing reads
+    /// and clears the `effective` bit (I8) and records the post-state.
+    pub fn file_row(&mut self, row: FieldCard, to: i32, _holder: i32) {
+        match to {
+            ZONE_GRAVEYARD => {
+                let mut row = row;
+                // Read-then-clear: the entry's `wasted` bit was taken before
+                // the row moved, and the bit dies with it (I8).
+                row.effective = true;
+                pile_push(&mut self.discard_pile, &mut self.discard_n, row.card);
+            }
+            ZONE_HAND => pile_push(&mut self.hand_pile, &mut self.hand_n, row.card),
+            ZONE_DECK => pile_push(&mut self.deck_pile, &mut self.deck_n, row.card),
+            _ => {}
+        }
+    }
+
+    /// `set_tile_owner` -- write the deed row and its acquisition sequence,
+    /// then rebuild the previous owner's `firstTile` slot (I13).
+    pub fn set_tile_owner(&mut self, tile: i32, owner: i32) {
+        let Ok(t) = usize::try_from(tile) else {
+            return;
+        };
+        if t >= 60 {
+            return;
+        }
+        let cur = self.tiles[t].owner;
+        if cur == owner {
+            return;
+        }
+        self.tiles[t].owner = owner;
+        self.owned_seq[t] = if owner >= 0 {
+            let s = self.next_owned_seq;
+            self.next_owned_seq = s.saturating_add(1);
+            s
+        } else {
+            -1
+        };
+        if cur >= 0 {
+            let first = self.earliest_owned_tile(cur);
+            let p = player_idx(cur);
+            self.first_tile[p] = first;
+        }
+        if owner >= 0 {
+            let first = self.earliest_owned_tile(owner);
+            let p = player_idx(owner);
+            self.first_tile[p] = first;
+        }
+    }
+
+    /// The player's earliest-owned tile by acquisition sequence, `-1` if none.
+    pub fn earliest_owned_tile(&self, player_id: i32) -> i32 {
+        let mut best_seq = i32::MAX;
+        let mut best_tile = -1;
+        let mut t = 0usize;
+        while t < 60 {
+            if self.tiles[t].owner == player_id && self.owned_seq[t] >= 0 {
+                if self.owned_seq[t] < best_seq {
+                    best_seq = self.owned_seq[t];
+                    best_tile = t as i32;
+                }
+            }
+            t += 1;
+        }
+        best_tile
+    }
+
+    /// Every **unattached** live row held by `player` (`-1` = board field),
+    /// in filing order, into `out`; answers the count (I6).
+    pub fn field_instances_into(&self, player: i32, out: &mut [i32; MAX_FIELD]) -> usize {
+        let mut n = 0usize;
+        let mut i = 0usize;
+        while i < MAX_FIELD && n < MAX_FIELD {
+            let f = &self.field[i];
+            if f.card != u16::MAX && f.player == player && f.on < 0 {
+                out[n] = f.uid;
+                n += 1;
+            }
+            i += 1;
+        }
+        n
+    }
+
+    /// Every unattached live board rule on `tile` (I6).
+    pub fn tile_rule_instances_into(&self, tile: i32, out: &mut [i32; MAX_FIELD]) -> usize {
+        let mut n = 0usize;
+        let mut i = 0usize;
+        while i < MAX_FIELD && n < MAX_FIELD {
+            let f = &self.field[i];
+            if f.card != u16::MAX && f.player == -1 && f.tile == tile && f.on < 0 {
+                out[n] = f.uid;
+                n += 1;
+            }
+            i += 1;
+        }
+        n
     }
 
     /// `hostfns::tile_at` — where the instance at `uid` sits, or -1.
@@ -1599,6 +2240,50 @@ pub fn pile_push(pile: &mut [u16; MAX_CARDS], n: &mut u8, card: u16) {
     }
 }
 
+/// Push `card` onto the **front** of a bounded pile (the `arm_cards_in` deck
+/// order is front-first). Drops when full.
+pub fn pile_unshift(pile: &mut [u16; MAX_CARDS], n: &mut u8, card: u16) {
+    if (*n as usize) >= MAX_CARDS {
+        return;
+    }
+    let mut i = *n as usize;
+    while i > 0 {
+        pile[i] = pile[i - 1];
+        i -= 1;
+    }
+    pile[0] = card;
+    *n += 1;
+}
+
+/// Move up to `k` cards off the **front** of `src` onto the front of `dst`, in
+/// order. Returns how many moved.
+pub fn pile_shift_front(
+    src: &mut [u16; MAX_CARDS],
+    src_n: &mut u8,
+    k: usize,
+    dst: &mut [u16; MAX_CARDS],
+    dst_n: &mut u8,
+) -> usize {
+    let mut moved = 0usize;
+    while moved < k && moved < *src_n as usize {
+        moved += 1;
+    }
+    // Reverse so the first card stays first on `dst`.
+    let mut j = moved;
+    while j > 0 {
+        j -= 1;
+        pile_unshift(dst, dst_n, src[j]);
+    }
+    // Close the gap: shift the remainder down.
+    let mut i = moved;
+    while i < *src_n as usize {
+        src[i - moved] = src[i];
+        i += 1;
+    }
+    *src_n -= moved as u8;
+    moved
+}
+
 /// Remove the first `card` from a bounded pile. Returns whether it was present.
 pub fn pile_take(pile: &mut [u16; MAX_CARDS], n: &mut u8, card: u16) -> bool {
     let mut i = 0usize;
@@ -1641,15 +2326,13 @@ pub fn pile_count(pile: &[u16; MAX_CARDS], n: u8, card: u16) -> i32 {
 // Single-threaded model. A `static mut` avoids `thread_local!`, which Kani
 // only partially models (and which contributed to an ICE in kani-compiler
 // 0.68.0 during the pilot).
-static mut WORLD: Option<World> = None;
+static mut WORLD: World = World::new();
 
 fn world_mut() -> &'static mut World {
-    unsafe {
-        if WORLD.is_none() {
-            WORLD = Some(World::new());
-        }
-        WORLD.as_mut().unwrap_unchecked()
-    }
+    // Const-initialized: no `Option` branch and no per-harness `World::new()`
+    // store sequence (that init emitted hundreds of bounds checks and was a
+    // large share of the CBMC property count).
+    unsafe { &mut *core::ptr::addr_of_mut!(WORLD) }
 }
 
 /// Read the global world. `inline(always)` so a host arm's closure is a
@@ -1667,6 +2350,13 @@ pub fn with_world_mut<R>(f: impl FnOnce(&mut World) -> R) -> R {
 
 pub fn reset_world(w: World) {
     *world_mut() = w;
+}
+
+/// Open a new activation, mirroring `Match::start`'s bump before the routine
+/// snapshot (`crates/game-core/src/engine/mod.rs`). A proof that models a
+/// second body landing after the first calls this between the two.
+pub fn begin_activation() {
+    with_world_mut(|w| w.turn_activation_ordinal += 1);
 }
 
 /// Snapshot for condition/post comparison. Effects and narration are the log.

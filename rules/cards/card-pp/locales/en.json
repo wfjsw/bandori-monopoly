@@ -31,6 +31,8 @@
   "hina_sound_title": "What Kind of Sound Will It Make?",
   "infinite_possibility_full": "“Infinite Possibility” crystals are full: traded for 1 band crystal",
   "infinite_possibility_not_placed": "This card is not in play.",
+  "infinite_possibility_note": "Turned up by an inspection and placed",
+  "infinite_possibility_seen": "An inspection turned up \"Possibility is ∞\": shown and placed",
   "infinite_possibility_swapped": "Swapped the deck and the discard pile",
   "jennifer_ask": "Which player's field should “Finding Jennifer” sit on?",
   "jennifer_note": "when the owner passes the Idol Agency: {{who}} pays 400…",
@@ -82,5 +84,4 @@
   "trainee_guide_marks_added": "[共鸣] added 2 marks",
   "trainee_guide_note": "miracle crystals and mono/dual marks; hand limit −1",
   "trainee_guide_resonance_cost": "[共鸣] pay 500",
-  "trainee_guide_reveal_card": "Revealed \"{{card}}\"",
   "trainee_guide_revealed": "Revealed the deck: {{n}} distinct colours"}

@@ -3,10 +3,9 @@
 Status: **design revision** (2026-11-04 rewrite of the 2026-10-27 draft; no
 source touched by this document). Worktree
 `/home/monopoly/web/.claude/worktrees/g10-design-review`, branch
-`worktree-g10-design-review`. Fits **on top of the G09 landing** (ABI 114);
-it starts from master's ABI 113 / SAVE 16 / RECORD 4 / highest engine kind 131
-(`settleRentMul`) / highest Kani `Op` 442 (`nearest_with_prop`). It does not redo
-any landed group.
+`worktree-g10-design-review`. Landed after G09, G11, G12, G14 and G08, so it
+sits on ABI **118** / SAVE **20** and takes the next free numbers at landing
+(kind **141**, ops **486-494**). It does not redo any landed group.
 
 Group: **G10**. Family: what an effect actually did — the outcome a settle
 reached, the instance that caused a raise, the host work a torn card body was
@@ -37,7 +36,7 @@ this one. What the draft got wrong:
 
 | # | Draft defect | Correction |
 |---|---|---|
-| R1 | The header put the draft in worktree `card-rulebook-review` and based it on ABI 114 with kind 131. Master is ABI 113, kind 131 is already `settleRentMul`, and G09 lands first at 114. | Header, §9 and §11 carry the real base and the landing numbers; G10 is ABI 115 and takes kind **137**, not 131. |
+| R1 | The header put the draft in worktree `card-rulebook-review` and based it on ABI 114 with kind 131. Master is ABI 113, kind 131 is already `settleRentMul`, and G09 lands first at 114. | Header, §9 and §11 carry the real base and the landing numbers; G10 lands last and takes kind **141**, not 131. |
 | R2 | Nearly every citation was stale (`play.rs:4943` for the event draw, `:2163-2230` for the settle stages, `:4045-4054` for the balance write, `hostfns.rs:860` for the request shims, `wasm_rules.rs:5654` for `target_player`). The G06/G07 landings moved all of them. | Every site is re-cited against master: `draw_event` 5873-5940, the settle stages 2654-2804 (cancel 2670, body 2729-2741), the balance write 4660, `target_player` 6825-6920, `bridge_trigger` 9159, `inline.rs:215`. |
 | R3 | Item 2's council half was designed as work. | G02 landed it: `council_check.rs` already runs `settle_after` on `Action::TileResolved` and `g02_council_cancelled_settle_refunds` pins it. §1.2.2 is now a **landed** note, not an item. |
 | R4 | The fields were `by_card_id` / `trig_*` / `set_settle_facts` / `world_snap`. | `by_card_instance` (an instance is a uid, not an id), `trigger_*` imports, `settle_facts` carries a typed record, and `world_snapshot` / `world_restore` / `world_snapshot_drop` say the noun. |
@@ -52,7 +51,7 @@ this one. What the draft got wrong:
 | R13 | §5.2's deferral record keyed the duplicate test on `(card, player)` with a *uid* exception but never said what a second copy does to its own crystals; the draft's `arisa_wait` spent crystals after the answer. | The claim is the record's existence for the pair; the losing copy answers 0 and spends nothing, the winner spends 3 (§6.2, §7.1). |
 | R14 | §5.4's `draw_event` halts and re-runs by the ordinary replay, but the release path was never given a return value. | `resolve_event` answers `Deferred` / `Resolved`; the release raises `eventResolved` only on `Resolved` (§6.2). |
 | R15 | §5.5 stamped `redirected_from` from a `landed` bool computed before the actor/self guards, so a self designation could stamp it. | `landed = live && to != p && to != by_player`, matching the fold's own condition (§6.4). |
-| R16 | §9.2's ops were 431-449; G09's block (and `invoke_frame`) came after them. | §9 takes the nine ids after G09's block, **471-479**; the kind is **137**. |
+| R16 | §9.2's ops were 431-449; G09's block (and `invoke_frame`) came after them. | §9 takes the nine ids after G08's block, **486-494**; the kind is **141**. |
 | R17 | §4.1 called the cause field "not a save field" without saying why it needs no default-carrying reader. | `by_card_instance` is transient like `settle_tile` / `outcome`: every reader is a live raise, and a re-run re-raises (§8). |
 | R18 | The tests named behaviour but no file. | One new file `rules/tests/tests/g10_effect_outcome.rs` (§10.1), per G06/G07. |
 | R19 | The draft had no necessity section, no clause match and no naming section. | §4, §13 and §14 exist. |
@@ -426,12 +425,11 @@ pub mod trigger {
 
 ### 5.4 Kinds and entries
 
-* `TriggerKind::EventResolved = Self::engine(137)` — **the first id after
-  G09's block** (master ends at 131 `SettleRentMul`; G09 reserves 132-136, so 137 is
-  reserved here and pinned at landing, §9).
-* `ActionKind::EventResolved = Self::engine(137)`, an `action_kinds!` row
+* `TriggerKind::EventResolved = Self::engine(141)` — **the first id after
+  G08's block** (the table ends at `openingHandDealt` 140, §9).
+* `ActionKind::EventResolved = Self::engine(141)`, an `action_kinds!` row
   after `EventAfter` (`crates/card-sdk/src/kinds.rs:685`), and an
-  `EngineKind { id: 137, wire: "eventResolved", is_filter: false,
+  `EngineKind { id: 141, wire: "eventResolved", is_filter: false,
   hook_only: true }` row in `crates/game-kinds/src/lib.rs:718`.
 * `EventResolved` is a plain field-walk action kind. The dispatch stamps
   `tile = rec.tile`, `card = Some(rec.deferrer_card)`,
@@ -442,7 +440,19 @@ pub mod trigger {
   a hand copy is not `card.placed`).
 * `EventResolved` is hook-only, never a counteraction window.
 
-### 5.5 Host requests (`crates/game-rules/src/host.rs:389`)
+* `TriggerKind::EventResolved = Self::engine(141)` (README band; 110 is
+  `PaySplitMulBefore`, 94 retired).
+* `ActionKind::EventResolved = Self::engine(141)` with the doc line and an
+  `action_kinds!` entry (`crates/card-sdk/src/kinds.rs`, `EventAfter;` +
+  `EventResolved;`).
+* The release dispatches **own-instance**, like `Drawn`
+  (`wasm_rules.rs:5021-5040`): `t.card = deferrer_card`,
+  `t.cards = [deferrer_card]`, uid-filtered to `deferrer_uid`, via
+  `drive_hook(..., deferrer_uid, ...)`.
+* `EventResolved` is hook-only (`kind_flags::hook_only`), never a
+  counteraction window.
+
+### 5.5 Host requests (`crates/game-rules/src/host.rs:390`)
 
 ```rust
 DrawEventAs { player_id: i32, tile: i32 }   // draw_event_as
@@ -501,7 +511,7 @@ live in `game-rules`; the replay site rehydrates and calls
 |---|---|
 | 9 new imports (§5.2) | new wire |
 | `Trigger` + `SettleFacts` fields (§5.1) | new guest-visible payload, read through the new imports |
-| `TriggerKind` / `ActionKind` 137, spelling `eventResolved` | new wire value (manifest trigger spelling) |
+| `TriggerKind` / `ActionKind` 141, spelling `eventResolved` | new wire value (manifest trigger spelling) |
 | 5 new `HostRequest` variants | new request variants; reach a save only through their `JournalRequest` mirror |
 | renumbered ids | none |
 | `Outcome::NeedHost` / `Outcome::NeedInput` carry the guest log | host-internal |
@@ -1084,8 +1094,8 @@ different (non-crossing) variable in every other context.
 ### 6.6 Kani model (`crates/card-sdk/src/kani_host.rs`, `ctx/sys_kani.rs`,
 `rules/kani/src/host.rs`)
 
-Nine new `Op` rows, 471–479 (§9; the enum currently ends at
-`nearest_with_prop = 442` and G09 reserves 451–470); models:
+Nine new `Op` rows, 486–494 (§9; the enum ends at `is_own_placement = 485`);
+models:
 
 * `event_defer` → 1 when the modelled trigger kind is `event` and the modelled
   instance has not claimed it, else 0; sets the claim.
@@ -1349,25 +1359,24 @@ arrival without the trigger's own card).
 
 ## 9. Versioning and band arithmetic
 
-Base: master ABI **113**, SAVE **16**, RECORD **4**, highest kind **131**,
-highest `Op` **442**. G09 lands first at ABI **114** and takes the band
-README.md now reserves for it: kinds **132–136**, ops **451–470**. G10:
+Base: ABI **118**, SAVE **20**, RECORD **4**, highest kind **140**, highest
+`Op` **485** (all earlier groups landed). G10:
 
-* ABI **114 → 115** — the import table, the trigger payload and the manifest
+* ABI **118 → 119** — the import table, the trigger payload and the manifest
   kind spelling all change; the host refuses a different version, so an
   additive change is still a bump.
-* SAVE **16 → 17** (§8).
-* kind **137** — the exact id is pinned at landing in
-  `kind_table_pin.rs:168-181` and `game-kinds/src/lib.rs:710-718`.
-* Kani `Op` **471–479**, after G09's reservation.
+* SAVE **20 → 21** (§8).
+* kind **141** — the exact id is pinned at landing in
+  `kind_table_pin.rs` and `game-kinds/src/lib.rs`.
+* Kani `Op` **486–494**, after G08's block.
 * RECORD unchanged.
 
 Entry inserted immediately below the constant, above the newest note (newest
 first); the v104 turn-snapshot entry stays below:
 
 ```rust
-pub const ABI_VERSION: i32 = 115;   // was 114 (eleventh group)
-/// v115: **outcome, cause and world facts** (G10).
+pub const ABI_VERSION: i32 = 119;   // was 118 (twelfth group)
+/// v119: **outcome, cause and world facts** (G10).
 ///    `event_defer` suspends an `event` link; the record releases at the
 ///    deferring instance's owner's next turn start (new hook
 ///    `TriggerKind::EventResolved`, its residual guard comparing
@@ -1391,6 +1400,11 @@ pub const ABI_VERSION: i32 = 115;   // was 114 (eleventh group)
 window. The `Trigger` change is a field-by-field addition on top of G06's
 shape; do not paste a whole struct over it. The entry blocks are disjoint and
 only the number moves in the ordinary case.
+
+`ABI_VERSION` is bumped because the import table, the trigger payload and the
+manifest kind spelling all change; the host refuses a different version, so
+additive is still a bump. `TriggerKind::EventResolved = 141`;
+`kind_table_pin.rs` gains `(141, "EventResolved")`.
 
 ## 10. Tests and Kani obligations
 
@@ -1665,7 +1679,7 @@ A split that is legitimate — deferring item 5 — is costed in §13.6.
 * Nine append-only imports, one hook-only kind, five host-request variants,
   three transient `Trigger` fields (four on `SettleFacts`), three world
   collections and the journal state.
-* ABI 115 and SAVE 17; no record change, no display text, no player decision
+* ABI 119 and SAVE 21; no record change, no display text, no player decision
   inside an import, no game word in the SDK.
 * Tests: 28 new cases, nine Kani obligations and the ordinary suites.
 
@@ -1754,15 +1768,14 @@ test in §10.1 or an existing suite.
 
 ## 15. Implementation note (as landed)
 
-`ff504fae`'s design assumes G09 lands first (ABI 114, kinds 132-136, ops
-451-470). G09 is not landed on `master`, so G10 shipped on top of ABI 113
-directly and took the ids **after master's**, leaving G09's reserved band
-sparse:
+`ff504fae`'s design assumed G09 would land first (ABI 114, kinds 132-136, ops
+451-470). It did, followed by G11, G12, G14 and G08, so G10 merged last and
+took the ids after every landed block instead of its original draft numbers:
 
-* ABI **113 → 114** (not 114 → 115). SAVE **16 → 17**, RECORD unchanged.
-* engine kind / wire `eventResolved` **137**, as designed; the gap 132-136 is
-  left for G09.
-* Kani `Op` **471-479**, as designed; the gap 451-470 is left for G09.
+* ABI **118 → 119**. SAVE **20 → 21**, RECORD unchanged.
+* engine kind / wire `eventResolved` **141** (after G08's `openingHandDealt`
+  140).
+* Kani `Op` **486-494** (after G08's 485).
 
 Two shapes differ from the text above and are the ones the code uses:
 
@@ -1946,5 +1959,4 @@ Two shapes differ from the text above and are the ones the code uses:
   asked again (the join counter drew twice, `c22_manas_counter_nobody_joins`).
   `start` moves along only when an enclosing answer lands strictly before it.
 
-Everything else (§6, §7) landed as written. When G09 lands after this, it
-takes 115 and 132-136 / 451-470 with no renumbering here.
+Everything else (§6, §7) landed as written.

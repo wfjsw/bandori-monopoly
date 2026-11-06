@@ -236,11 +236,13 @@
   white-space: nowrap;
 }
 /* The face-down stack owns the bar's right end: the pill clears its peek strip,
-   and the raised card entirely. */
+   the raised card entirely, and a card pulsing out of the stack (it would
+   otherwise draw over the very card the pulse is showing). */
 .dock[data-down] .thinkingSlot {
   bottom: calc(100% + var(--hand-peek) + var(--sp-2));
 }
-.dock[data-down][data-state="raised"] .thinkingSlot {
+.dock[data-down][data-state="raised"] .thinkingSlot,
+.dock[data-down]:not([data-state="raised"]):has(.downSlot.pulse) .thinkingSlot {
   bottom: calc(100% + 200px + var(--sp-2));
 }
 .bar > span:first-child {
@@ -522,8 +524,10 @@
   opacity: 0.35;
   filter: grayscale(0.7);
 }
-/* 「效果适用」 on a parked card: it lifts out of the stack and blinks (the
-   field row's pulse, in this stack's upward direction). */
+/* 「效果适用」 on a parked card: the field row's pulse in this stack's upward
+   direction. The stack is retracted, so the card has to come the whole way out
+   of the dock -- a few px of lift would leave it behind the peek strip -- and
+   blinks in the owner's colour on the way. */
 .downSlot.pulse {
   z-index: 3;
   animation: down-pulse var(--pulse-ms, 1500ms) ease-in-out both;
@@ -531,13 +535,35 @@
 @keyframes down-pulse {
   0% {
     transform: translateY(0) scale(1);
+    filter: brightness(1);
   }
   18%,
   82% {
-    transform: translateY(-18px) scale(1.08);
+    transform: translateY(calc(-100% + var(--hand-peek) - 14px)) scale(1.08);
+    filter: brightness(1.4) drop-shadow(0 0 14px var(--own, #fff));
   }
   100% {
     transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+}
+/* Raised by the hand: the whole card is already in view, so it only lifts. */
+.dock[data-state="raised"] .downSlot.pulse {
+  animation-name: down-pulse-lift;
+}
+@keyframes down-pulse-lift {
+  0% {
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+  18%,
+  82% {
+    transform: translateY(-24px) scale(1.08);
+    filter: brightness(1.4) drop-shadow(0 0 14px var(--own, #fff));
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
   }
 }
 /* The owner's colour on the frame, like every field instance's. */
@@ -630,8 +656,14 @@
     transition: none;
   }
 
-  .downSlot.pulse {
+  /* No slide or blink: the card still comes out for the cue, and snaps back. */
+  .downSlot.pulse,
+  .dock[data-state="raised"] .downSlot.pulse {
     animation: none;
+    transform: translateY(calc(-100% + var(--hand-peek) - 14px));
+  }
+  .dock[data-state="raised"] .downSlot.pulse {
+    transform: translateY(-24px);
   }
 }
 /* Phone canvas: the hand strip's controls are the thing pressed all game -- bigger. */

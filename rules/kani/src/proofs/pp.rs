@@ -44,9 +44,15 @@ fn place_band_skill(owner: i32) -> i32 {
                 tile: 0,
                 face_down: false,
                 immune: false,
+                immune_except_owner: false,
                 crystals: 0,
                 props: world::NameMap::new(),
                 effective_card: u16::MAX,
+                owner: owner,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: false,
             };
             w.field_n += 1;
         }
@@ -1085,9 +1091,15 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1123,9 +1135,15 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1167,9 +1185,15 @@ pub fn guide_04_turn_end_crystal_iff() {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1215,9 +1239,15 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: condition,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.last_uid = 1;
@@ -1348,9 +1378,15 @@ fn ranger_01_05_steps_by_count_iff_at(others: i32) {
                 tile: 0,
                 face_down: false,
                 immune: false,
+                immune_except_owner: false,
                 crystals: 0,
                 props: world::NameMap::new(),
                 effective_card: u16::MAX,
+                owner: user,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: false,
             };
             ww.field_n += 1;
         });
@@ -1547,9 +1583,15 @@ pub fn shine_again_01_rescue_iff() {
             tile: 3,
             face_down: false,
             immune: true,
+            immune_except_owner: false,
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
     });
@@ -1795,5 +1837,126 @@ pub fn hina_mark_without_resonance_noop_mutant() {
     crate::kassert!(
         hina_marked_at(sub),
         "mutant: the decline was treated as a yes"
+    );
+}
+
+// ===========================================================================
+// C-PP-possibility-01 (design G11: the `drewBatch` / `drawAfter` point)
+// 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，
+//  否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]」
+//
+// The batch point raises `drawAfter` once per DRAW instruction (pinned engine-
+// side in `live_match.rs`); here the body is called directly, since Kani
+// dispatches no hooks. The threshold is strictly below 4 and the two branches
+// are exhaustive, so exactly one crystal write lands per call.
+// ===========================================================================
+
+crate::host_subset!(possibility_draw_after_dispatch {
+    counter_self => arm_counter_self,
+    add_counter_self => arm_add_counter_self,
+    set_counter_self => arm_set_counter_self,
+    group_pool => arm_band_crystals,
+    add_group_pool => arm_add_band_crystals,
+    log | effect => arm_log,
+});
+
+/// Plant the card's own instance with `crystals` and point `last_uid` at it
+/// (`ctx::crystals` / `ctx::add_crystals` address the running instance).
+fn plant_self(user: i32, crystals: i32) {
+    let card = crate::intern::intern("PP:[大和麻弥]可能性为∞").0;
+    world::with_world_mut(|w| {
+        let uid = w.next_uid;
+        w.next_uid += 1;
+        let fi = w.field_n as usize;
+        w.field[fi] = world::FieldCard {
+            uid,
+            card,
+            player: user,
+            owner: user,
+            tile: 0,
+            face_down: false,
+            immune: false,
+            immune_except_owner: false,
+            crystals,
+            props: world::NameMap::new(),
+            effective_card: u16::MAX,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
+        };
+        w.field_n += 1;
+        w.last_uid = uid;
+    });
+}
+
+fn possibility_draw_after_world(user: i32, crystals: i32) {
+    host::install_backend(possibility_draw_after_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.symbolic_answers = false;
+    });
+    plant_self(user, crystals);
+}
+
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn possibility_grows_exactly_once_per_action_iff_below_cap() {
+    let user = 0;
+    let crystals: i32 = kani::any();
+    kani::assume(crystals >= 0 && crystals <= 6);
+    let pre_band: i32 = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    possibility_draw_after_world(user, crystals);
+    set_band_crystals(user, pre_band);
+    let pre_narration = world::with_world(|w| w.narration_n);
+
+    invoke::unwrap_done(card_pp::infinite_possibility::draw_after_kani(user));
+
+    let post_crystals = self_crystals();
+    let post_band = band_crystals_of(user);
+    let narration = world::with_world(|w| w.narration_n);
+    kani::cover!(crystals < 4, "below the cap: grows");
+    kani::cover!(crystals >= 4, "at/over the cap: clears and pays the band");
+    kani::cover!(crystals == 4, "exactly at the cap is the second branch");
+    if crystals < 4 {
+        crate::kassert!(
+            post_crystals == crystals + 1,
+            "below cap: exactly one crystal added"
+        );
+        crate::kassert!(post_band == pre_band, "below cap: the band is untouched");
+        crate::kassert!(narration == pre_narration, "below cap: no log");
+    } else {
+        crate::kassert!(post_crystals == 0, "at cap: every crystal is removed");
+        crate::kassert!(
+            post_band == pre_band + 1,
+            "at cap: exactly one crystal to the band"
+        );
+        crate::kassert!(
+            narration == pre_narration + 1,
+            "at cap: exactly one log line"
+        );
+    }
+}
+
+/// MUTANT: `<= 4` instead of `< 4` -- at exactly four crystals the card would
+/// keep growing instead of clearing.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(40)]
+pub fn possibility_boundary_mutant_is_detected() {
+    let user = 0;
+    possibility_draw_after_world(user, 4);
+    set_band_crystals(user, 0);
+    invoke::unwrap_done(card_pp::infinite_possibility::draw_after_kani(user));
+    crate::kassert!(
+        self_crystals() == 0 && band_crystals_of(user) == 1,
+        "mutant: four crystals must clear, not grow"
     );
 }

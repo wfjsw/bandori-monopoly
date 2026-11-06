@@ -18,6 +18,7 @@ use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use game_rules::WasmRules;
 use serde_json::{json, Value};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Immutable content loaded once: game tables and card modules. Read-only
@@ -126,6 +127,25 @@ impl Ctx {
     }
 }
 
+/// Where the glue identity file is looked for when neither env var names it,
+/// most specific first:
+///
+/// 1. `engine_id.json` beside this worker binary -- what a production deploy
+///    ships (`tools/deploy-production.sh`); the live working directory has no
+///    source tree, so the repo path alone never resolved there;
+/// 2. `webui/src/wasm/engine_id.json` in the repo -- a dev or in-repo server,
+///    and the in-process backend started from the checkout.
+fn default_identity_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            paths.push(dir.join("engine_id.json"));
+        }
+    }
+    paths.push(PathBuf::from("webui/src/wasm/engine_id.json"));
+    paths
+}
+
 /// The deployed build's glue identity (see [`Ctx::stamp`]). Cached: the
 /// environment and the file do not move under a running server.
 fn deployed_glue_sha() -> String {
@@ -138,25 +158,39 @@ fn deployed_glue_sha() -> String {
                 return s;
             }
         }
-        let path = std::env::var("BD_ENGINE_ID")
-            .unwrap_or_else(|_| "webui/src/wasm/engine_id.json".to_string());
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            eprintln!(
-                "no BD_GLUE_SHA and cannot read {path} -- records get an empty engine bundle id"
-            );
-            return String::new();
+        // An explicit path is authoritative: do not silently fall back to
+        // another file when the operator named one.
+        let candidates = match std::env::var("BD_ENGINE_ID") {
+            Ok(p) if !p.trim().is_empty() => vec![PathBuf::from(p.trim())],
+            _ => default_identity_paths(),
         };
-        let v: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
-            Err(e) => {
-                eprintln!("{path}: {e} -- records get an empty engine bundle id");
-                return String::new();
-            }
-        };
-        v.get("glueSha256")
-            .and_then(|x| x.as_str())
-            .unwrap_or_default()
-            .to_string()
+        let mut problems = Vec::new();
+        for path in candidates {
+            let text = match std::fs::read_to_string(&path) {
+                Ok(t) => t,
+                Err(e) => {
+                    problems.push(format!("{}: {e}", path.display()));
+                    continue;
+                }
+            };
+            let v: serde_json::Value = match serde_json::from_str(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    problems.push(format!("{}: {e}", path.display()));
+                    continue;
+                }
+            };
+            return v
+                .get("glueSha256")
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .to_string();
+        }
+        eprintln!(
+            "no BD_GLUE_SHA and no readable engine identity ({}) -- records get an empty engine bundle id",
+            problems.join("; ")
+        );
+        String::new()
     })
     .clone()
 }
@@ -284,8 +318,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let seq = req.get("seq").and_then(Value::as_i64).unwrap_or(0) as i32;
                     let released = m.anim_done(member, seq);
-                    // Report whether this ack released a hold (a stale one is
-                    // a no-op). Carried as `released`, not `error`.
+                    // Report whether this ack was accepted (it clears that
+                    // seat from the hold; a stale one is a no-op). Carried as
+                    // `released`, not `error`.
                     let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "released": released});
                     if let Some(ckpt) = checkpoint(&m, before) {
                         v["ckpt"] = ckpt;
@@ -341,7 +376,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
 
         // Read-only ops: the blob comes back unchanged, so it is not echoed.
         // `needExtras` (default false): compute the per-viewer `view_extras`
-        // fields (`aiAnswer` / `playable` / `estCost` / `skills`). A human
+        // fields (`aiAnswer` / `playable` / `aiPlayable` / `estCost` /
+        // `skills`). A human
         // client derives those itself from the seat view (the seat-view
         // engine, `docs/BOT.md` §1) -- skipping here is pure saved work. The
         // bot service asks for them.
@@ -376,10 +412,13 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 "played": played,
                 "cardsPlayed": cards_played,
                 "tileQuotes": m.tile_quotes(member),
+                // The viewer's own open look (design G11); nobody else's.
+                "inspection": m.inspection_of(member),
             });
             if need_extras {
                 view["aiAnswer"] = extra.get("aiAnswer").cloned().unwrap_or(Value::Null);
                 view["playable"] = extra.get("playable").cloned().unwrap_or(Value::Null);
+                view["aiPlayable"] = extra.get("aiPlayable").cloned().unwrap_or(Value::Null);
                 view["estCost"] = extra.get("estCost").cloned().unwrap_or(Value::Null);
                 view["skills"] = extra.get("skills").cloned().unwrap_or(Value::Null);
             }
@@ -512,4 +551,24 @@ fn replay(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         "diverged": diverged,
         "tick": rp.status().tick,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identity_paths_try_the_deployed_file_first() {
+        let paths = default_identity_paths();
+        assert!(paths.len() >= 2, "the repo path must stay as the fallback");
+        assert_eq!(
+            paths[0].file_name().and_then(|n| n.to_str()),
+            Some("engine_id.json"),
+            "the deployed identity sits beside the worker binary"
+        );
+        assert_eq!(
+            paths.last().unwrap(),
+            &PathBuf::from("webui/src/wasm/engine_id.json")
+        );
+    }
 }

@@ -1,6 +1,7 @@
 //! The CEL-only gates' window (`docs/STATUS-HOSTS.md` / `docs/GUARDS.md`):
 //! the cheapest possible CEL window for the `ActGate` / `PayGate` / `MoveGate`
-//! / `OnBoardGate` / `TargetableGate` / `ExclusiveUse` / `PlayGate` conditions.
+//! / `OnBoardGate` / `TargetableGate` / `ExclusiveUse` / `PlayGate` /
+//! `AbnormalGate` conditions.
 //!
 //! Gate conditions read per-seat keyed state via `state(p, 'key')`, so that
 //! window is `actor` plus one [`PlayerSnap`] per seat -- no tile tables. Built
@@ -32,6 +33,7 @@ pub fn kind_of(gate: Gate) -> TriggerKind {
         Gate::Targetable => TriggerKind::TargetableGate,
         Gate::Exclusive => TriggerKind::ExclusiveUse,
         Gate::Play => TriggerKind::PlayGate,
+        Gate::Abnormal { .. } => TriggerKind::AbnormalGate,
     }
 }
 
@@ -82,6 +84,24 @@ pub fn window_of_world(w: &World, actor: usize) -> WindowCtx {
             hand: w.hidden.get(i).map(|h| h.hand.len() as i64).unwrap_or(0),
         }),
     )
+}
+
+/// The [`Gate::Abnormal`] window: the seat's own status keys plus the asked
+/// kind (`value`), the causer (`by`), and the read flavour (`step = 1` on the
+/// blocked-ness / exemption read).
+pub fn window_of_abnormal(
+    w: &World,
+    actor: usize,
+    kind: i32,
+    by: i32,
+    exemption: bool,
+) -> WindowCtx {
+    let mut win = window_of_world(w, actor);
+    win.kind = TriggerKind::AbnormalGate.spelling().into_owned();
+    win.value = kind as i64;
+    win.by = by as i64;
+    win.step = exemption as i64;
+    win
 }
 
 /// The window over a card run's world (the guest-import path).

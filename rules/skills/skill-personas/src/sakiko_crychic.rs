@@ -52,7 +52,7 @@ pub const SAKIKO_CRYCHIC: CardDef = CardDef::new(
 /// Residual guard for 「若在你的前后5格内」 -- `dist` stays here (not yet in
 /// the condition vocabulary). `move.is_main_move && tile.id >= 0` is the condition.
 fn within5(player_id: i32) -> bool {
-    let landing = ctx::trigger::tile();
+    let landing = ctx::trigger::position();
     let at = ctx::player_pos(player_id);
     landing >= 0 && ctx::dist(landing, at) <= 5
 }
@@ -115,7 +115,7 @@ fn before_settle_other(player_id: i32) -> card_sdk::Asked {
 
 /// 「使自己的移动终点沿最短路径向…靠近1格」 -- one step toward `goal`.
 fn nudge(who: i32, goal: i32) {
-    let landing = ctx::trigger::tile();
+    let landing = ctx::trigger::position();
     if landing < 0 {
         return;
     }
@@ -134,7 +134,7 @@ fn nudge(who: i32, goal: i32) {
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     ctx::log(
         who,
-        &Msg::new(key!("sakiko_crychic_nudged")).tile("tile", toward),
+        &Msg::new(key!("sakiko_crychic_nudged")).tile("tile", ctx::tile_at(toward)),
     );
 }
 

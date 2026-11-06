@@ -93,13 +93,24 @@ export interface MatchPlayer {
   persona: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
   discard: string[]; mulligan: boolean; bankrupt: boolean; left: boolean; outOrder: number;
   assets: number; score: number; rank: number;
+  /** The over-limit hand was created by a draw that permits it
+   * (「可超过上限」); absent reads `false`. */
+  overHandAllowed?: boolean;
   /** Bot decision policy (`"standard"` / `"chaos"`). Ignored on a human seat. */
   mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
   skillOwner: string; affiliations: string; tokens: Counter[];
   skillNote: Msg; field: FieldCard[];
+  /**
+   * The seat's public reveal overlay (`MatchPlayer.reveal`), while one is
+   * live: ids published by `ctx::reveal_pile` / `ctx::reveal_card` and by a
+   * public deck inspection. Absent once the routine ends.
+   */
+  reveal?: RevealView | null;
 }
+/** One seat's public reveal: the ids published, and the clause that did it. */
+export interface RevealView { reason: Msg; hand: string[]; deck: string[]; discard: string[] }
 /**
  * `Counter.cs` -- named units a player carries. Under the bound-counter model
  * these are units of some card instance's named counter, bound to a holder.
@@ -129,6 +140,9 @@ export interface FieldCard {
   /** Named on-card counters of this instance (ruleset-defined keys). */
   counters: Record<string, number>;
   faceDown: boolean;
+  /** The instance this one sits on (`uid`), `-1` when it stands free. An
+   *  attachment renders on its host, not as its own face in the stack. */
+  on?: number;
   /** Continuous numeric props on the instance (e.g. `handLimitDelta`,
    *  「手卡上限数量减1」). Serde-defaulted `{}`. `turnsLeft` here is the
    *  display-only remaining-turn countdown (`⌛N`): 0/absent = none. */
@@ -229,6 +243,9 @@ export interface MatchState {
   phase: string; matchId: number; seq: number; mode: number; turn: number; round: number; step: number;
   debugOpen: boolean;
   roller: number; busy: boolean; skipMove: boolean; landed: number;
+  /** The turn's main move is already spent, so the roll is refused and only
+   *  `end` gets through. Optional: absent on an engine before the field. */
+  mainMoved?: boolean;
   /** ThinkTime room setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited. */
   thinkTime: number;
   /** Would `act {act:"roll"}` be accepted now (`cant_act`'s roll branch). */
@@ -240,6 +257,8 @@ export interface MatchState {
   timeLeft: number; baseTime: number; bonusTime: number;
   /** True while the acting seat's clock is held for an anim ack. */
   clockPaused?: boolean;
+  /** Per board slot, the tile standing there (a swap map; identity when absent). */
+  tileAt?: number[];
   players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
@@ -290,6 +309,11 @@ export interface MatchView {
   /** Parallel to `hand`: would the engine allow each card right now? */
   playable?: boolean[];
   /**
+   * Parallel to `hand`: would a bot offer it (static `prop::AI_NEVER`)?
+   * Combine with `playable`; never legality -- a human can still play it.
+   */
+  aiPlayable?: boolean[];
+  /**
    * Parallel to `hand`: the card's bot-only **estimated execution cost**
    * (`prop::EST_COST`, user ruling 2026-10-07). Only bots / autopilot read it,
    * as a reserve check -- never legality. `0` = unknown / assume free.
@@ -309,6 +333,12 @@ export interface MatchView {
    * engine bundle predates the field.
    */
   skills?: SkillAction[];
+  /**
+   * The viewer's own open deck inspection (`Match::inspection_of`): the
+   * revealed cards, top-first, and whether the look is public. `null` when no
+   * look is running. Never another seat's.
+   */
+  inspection?: { cards: string[]; public: boolean } | null;
   /**
    * Absolute turn-clock deadlines on the server's monotonic clock (ms), for
    * the acting seat. Absent while the clock is held (`state.clockPaused`), on

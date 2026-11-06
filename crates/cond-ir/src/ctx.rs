@@ -60,9 +60,8 @@ pub enum FnId {
     /// `card_is('id')` -- the trigger's card id hash equals `id_of(id)`.
     /// Pair of [`FnId::CounterIs`]; compared against `VarId::TriggerCard`.
     CardIs = 35,
-    /// `resolving('card:id')` -- that card's body is running now. The id
-    /// argument hashes to `id_of(id)` and is looked up in the resolving set
-    /// (`named_get`, `1` = present), the same table shape `IntHas` uses.
+    /// `resolving('card:id')` -- membership of `id_of(id)` in the running
+    /// cards' hash list ([`IrCtx::resolving`]).
     Resolving = 36,
 }
 
@@ -129,6 +128,9 @@ pub const BIN_CAP: usize = 64;
 pub const STATE_CAP: usize = 80;
 /// `cand_has(key, member)` pair table: `(id_of(set_name), member)`.
 pub const CAND_CAP: usize = 16;
+/// `resolving('card:id')` list: `id_of(card id)` per card whose body is
+/// running. The chain is short; the same cap as the chain kinds.
+pub const RESOLVING_CAP: usize = CHAIN_KIND_CAP;
 
 #[derive(Copy, Clone, Debug)]
 pub struct IrCtx {
@@ -158,6 +160,10 @@ pub struct IrCtx {
     /// `(id_of(set_name), member)` pairs backing `cand_has`.
     pub cand_pairs: [(i64, i64); CAND_CAP],
     pub cand_pair_n: u8,
+    /// `id_of(card id)` per resolving card backing `resolving`; `resolving_n`
+    /// live entries.
+    pub resolving: [i64; RESOLVING_CAP],
+    pub resolving_n: u8,
     /// Packed `(a,b) -> v` geometry.
     pub bin: [(i64, i64); BIN_CAP],
     pub bin_n: u8,
@@ -180,6 +186,8 @@ impl Default for IrCtx {
             tile_kind_ids: [0; MAX_TILES],
             cand_pairs: [(0, 0); CAND_CAP],
             cand_pair_n: 0,
+            resolving: [0; RESOLVING_CAP],
+            resolving_n: 0,
             bin: [(0, 0); BIN_CAP],
             bin_n: 0,
         }
@@ -594,6 +602,37 @@ impl IrCtx {
         if n < CAND_CAP {
             self.cand_pairs[n] = (key_id, member);
             self.cand_pair_n = (n + 1) as u8;
+        }
+    }
+
+    /// `resolving('card:id')` membership. Linear scan over
+    /// [`Self::resolving`].
+    pub fn resolving_has(&self, card_id: i64) -> bool {
+        let n = self.resolving_n as usize;
+        let mut i = 0usize;
+        while i < n && i < RESOLVING_CAP {
+            if self.resolving[i] == card_id {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Insert a resolving card hash (deduped). Silently drops past
+    /// [`RESOLVING_CAP`].
+    pub fn resolving_insert(&mut self, card_id: i64) {
+        let n = self.resolving_n as usize;
+        let mut i = 0usize;
+        while i < n && i < RESOLVING_CAP {
+            if self.resolving[i] == card_id {
+                return;
+            }
+            i += 1;
+        }
+        if n < RESOLVING_CAP {
+            self.resolving[n] = card_id;
+            self.resolving_n = (n + 1) as u8;
         }
     }
 

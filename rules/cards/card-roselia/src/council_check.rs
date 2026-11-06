@@ -70,7 +70,7 @@ fn near(player_id: i32) -> Vec<i32> {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    ctx::add_to_dest(player_id, "R:[衍生] 觉悟", ctx::Dest::DeckRandom);
+    ctx::add_to_dest(player_id, "R:[衍生] 觉悟", ctx::Dest::DeckRandom, false);
     ctx::log(
         player_id,
         &Msg::new(key!("council_check_added"))
@@ -111,7 +111,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if !receipt.settled() {
         return Ok(());
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card_on(
         player_id,
         tile,
@@ -210,7 +210,7 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     let paid = ctx::slot(player_id, SLOT_PAID);
     let got = ctx::slot(player_id, SLOT_GOT);
     let expect = ctx::slot(player_id, SLOT_EXPECT);
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     // 规则书[反击]: 「若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金」
     // -- 「或未结算」 makes the refund independent of `got`; only a settle that
     // ran is compared against the halved rent.

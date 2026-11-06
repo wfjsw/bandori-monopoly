@@ -50,6 +50,10 @@ pub struct SeatView {
     pub cards_played: usize,
     /// Parallel to [`Self::hand`]: would `cant_play` allow each card right now?
     pub playable: Vec<bool>,
+    /// Parallel to [`Self::hand`]: would a bot offer it -- the bare static
+    /// `ai_play` answer (`prop::AI_NEVER`). Combine with `playable` via
+    /// [`Self::offerable`]; never legality.
+    pub ai_playable: Vec<bool>,
     /// Parallel to [`Self::hand`]: the card's bot-only **estimated execution
     /// cost** (`prop::EST_COST`, user ruling 2026-10-07). Reserve check only,
     /// never legality. `0` = unknown / assume free.
@@ -68,12 +72,23 @@ impl Default for SeatView {
             played: Vec::new(),
             cards_played: 0,
             playable: Vec::new(),
+            ai_playable: Vec::new(),
             estimated_cost: Vec::new(),
         }
     }
 }
 
 impl SeatView {
+    /// Per hand card: `cant_play` allows it **and** a bot would offer it. A
+    /// missing `ai_playable` entry (an older frame) counts as `true`.
+    pub fn offerable(&self) -> Vec<bool> {
+        self.playable
+            .iter()
+            .enumerate()
+            .map(|(k, &p)| p && self.ai_playable.get(k).copied().unwrap_or(true))
+            .collect()
+    }
+
     /// The view frame for `member`, from the public [`Match`] accessors only
     /// (`state` / `hand_of` / `draw_of` / `view_extras`). This is what a remote
     /// bot service would be sent; nothing else is read.
@@ -97,6 +112,7 @@ impl SeatView {
             played: played.to_vec(),
             cards_played,
             playable: extra.playable,
+            ai_playable: extra.ai_playable,
             estimated_cost: extra.estimated_cost,
         }
     }
@@ -265,6 +281,16 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         s.busy = false;
         s.landed = -1;
         s.skip_move = false;
+        // A new turn starts with its main move unspent. Without this the
+        // cloned frame's `main_moved` (true after this turn's roll) would
+        // contradict the `can_roll_here = true` below once the determinizer
+        // rebuilt the world from it.
+        s.main_moved = false;
+        // The play history is turn-scoped too (`next_turn` rebuilds
+        // `TurnCtx`): the predicted surface must not carry the outgoing
+        // turn's cards into the fork's max-plays / de-dup gates or the
+        // decision key.
+        s.played_count = 0;
         s.prompt = MatchPrompt::default();
         s.plan = MovePlan::default();
         // Roll is owed, so `end` is gated off (`cant_act`). No settle
@@ -293,6 +319,8 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
     // real `cant_play` on each fork and only branches on what the engine
     // accepts. `estimated_cost` is a static card property and remains.
     next.playable = vec![true; next.hand.len()];
+    next.played.clear();
+    next.cards_played = 0;
     next.ai_answer = None;
     Some(next)
 }

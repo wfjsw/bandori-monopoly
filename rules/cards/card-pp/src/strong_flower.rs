@@ -86,7 +86,7 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("strong_flower_at")).tile("tile", tile),
         );
     }
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card_on(
         player_id,
         tile,
@@ -125,7 +125,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
         ctx::gain(player_id, 1500, &Msg::new(key!("strong_flower_gain")))?;
     }
     // 3. 「此卡放入[使用者]弃卡区」
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 

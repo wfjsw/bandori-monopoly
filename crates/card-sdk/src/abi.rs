@@ -781,7 +781,76 @@ use crate::intern::NameId;
 ///    **SAVE_VERSION 14 -> 15** (`FieldCard.effective_card`,
 ///    `TurnCtx.plan.claimed`; both `serde(default)`). RECORD_VERSION unchanged.
 ///
-/// v114: **effect outcome, cause and world facts (G10,
+/// v115: **an over-limit draw and a card's static bot-avoid flag** (G14).
+///    `ruleset_draw` gains a `flags` word: [`draw_flag::OVER_HAND_LIMIT`] (1)
+///    makes the draw skip the immediate hand-limit discard-down while still
+///    moving the cards; the excess is *allowed*
+///    (`MatchPlayer.over_hand_allowed`, wire `overHandAllowed`) until the hand
+///    fits again or the turn ends, so `end` is accepted and the card's
+///    scheduled dispose runs; the over-limit warning part is replaced by
+///    `log.part.over_hand_allowed` for that draw. `ctx::draw` passes 0, the
+///    sugar `ctx::draw_over_hand_limit` passes the bit, and the limit state
+///    itself is untouched. **SAVE_VERSION 16 -> 17** (the allowance bit,
+///    `serde(default)`). RECORD_VERSION unchanged. `ManifestEntry` is
+///    unchanged: the prop `aiNever` (nonzero = standard / advanced policies do
+///    not offer the card; absent/0 = offer; never legality) rides the
+///    existing `props` map and the existing host `CardRules::ai_play` seam;
+///    `ViewExtra.ai_playable` (wire `aiPlayable`) lets the client-side
+///    seat-view engine read the same static fact with no hidden read.
+///
+/// v116: **deck inspection, public reveal, and the draw-action point** (G11).
+///    `CardPile::Inspection = 4` (cards an open look has turned over and not
+///    yet released); `cards_in` / `take_card` accept it and the empty-deck
+///    refill is suppressed on the pile writes while a look holds that seat's
+///    deck open. New imports `ruleset_inspection_begin(looker, owner, count,
+///    public)`, `ruleset_inspection_end(player, shuffle)`,
+///    `ruleset_reveal_pile(player, pile, reason)` and
+///    `ruleset_reveal_card(player, card, reason)`; guest wrappers
+///    `ctx::inspection_begin` / `inspection_end` / `reveal_pile` /
+///    `reveal_card`. New hook-only Action kinds `inspected` (a card entered a
+///    look; dispatched to the revealed card, raised before the look continues)
+///    and `drawAfter` (one raise per draw instruction, `value` = batch length,
+///    `cards` = the batch; `drew` stays per card). New public
+///    `MatchPlayer.reveal` overlay, `MatchView.inspection` for the caller's own
+///    frame, and the `"reveal"` event type. SAVE_VERSION 17 -> 18 (open frames
+///    are saved); RECORD_VERSION unchanged.
+///
+/// v117: **tile events, one build pipeline, tile-write effects, house falls,
+///    move paths** (`spec/abi/G09-tile-build-pass.md`). A **tile** is an
+///    identity, a **position** is a slot: `Trigger` gains `position` and
+///    `TriggerMove` gains `path`, and every position-fed raise site converts
+///    through the new imports. New engine kinds `tileEffectBefore` (135,
+///    counteraction window and hook, before a tile's extra effects),
+///    `houseRemoved` (136) and the effect-only spellings `houseAdd` (137) /
+///    `houseRemove` (138) / `ownerSet` (139). New `prop::SWAPPED_TILE` (an
+///    instance prop binding its slot to a partner tile) and
+///    `tag::SUPPRESS_TILE_EFFECTS`. New imports
+///    `trigger::{position,move_path_length,move_path}`,
+///    `position_of_tile`, `tile_at`, `tile_extra_count`, `self_position`,
+///    `build_price`, `build_cost_percent`, `build_discount`,
+///    `tile_buildable`, `card_build_as`; new [`BuildCharge`]. Tile writes
+///    (`set_houses` / `add_house` / `set_owner`) declare an effect and open
+///    the `effect` window before applying. `Trigger` / `TriggerMove` are
+///    host-only; `FieldCard.position` is `serde(default) -1`, so
+///    SAVE_VERSION / RECORD_VERSION are unchanged.
+/// v118: **zone, attachment and creator lifecycle** (design G08). Every card move
+///    between zones is one `ZoneTransition` through one writer; `zoneLeft` /
+///    `zoneLeftAfter` fire on the leaving instance, `handChanged` on a hand
+///    arrival (`counted` only from the draw routine), `discarded` carries
+///    `wasted`, `card`/`cardAfter` carry `play_outcome`, `beforeOut` carries
+///    `out_cause`. New kinds 113-119 and `openingHandDealt` (140); new payload
+///    `abi::ZoneChange` through `ctx::trigger::zone()`. `FieldCard.on` /
+///    `created_by` / `effective`; `ctx::attach_card` / `detach_card` /
+///    `attached_cards` / `attachment_host` / `rehome_card` / `play_hand_card`
+///    / `zone_of` / `instance_owner` / `set_instance_owner` /
+///    `set_created_by_at` / `set_ineffective_at` / `is_ineffective_at` /
+///    `set_dest_unwatched` / `earliest_owned_tile` / `is_own_placement` (did
+///    this body mint the row it is looking at); `unplace_at` /
+///    `set_face_down_at` / `add_to_dest` / `set_dest` / `send_to_dest` /
+///    `transfer_to_dest` gain a cause/flag argument. SAVE_VERSION 19 -> 20
+///    (the edges and the held-card relation); RECORD_VERSION unchanged.
+///
+/// v119: **effect outcome, cause and world facts (G10,
 ///    `spec/abi/G10-effect-outcome.md`).** `event_defer` suspends an `event`
 ///    link; the record releases at the deferring instance's owner's next turn
 ///    start (new hook kind `eventResolved`, own-instance filtered by
@@ -796,9 +865,9 @@ use crate::intern::NameId;
 ///    landed redirect moved a hit from. `world_snapshot` / `world_restore` /
 ///    `world_snapshot_drop` checkpoint and restore
 ///    pos/state/money/owners/houses/mortgaged. No id renumbered.
-///    SAVE_VERSION 16 -> 17 (deferred events, host journal, snapshots);
+///    SAVE_VERSION 20 -> 21 (deferred events, host journal, snapshots);
 ///    RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 114;
+pub const ABI_VERSION: i32 = 119;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -877,7 +946,6 @@ pub const ABI_VERSION: i32 = 114;
 ///    refused; no window opens on it). SAVE_VERSION 15 -> 16
 ///    (`World.countered_this_turn`, `World.played_cards`); RECORD_VERSION
 ///    unchanged.
-///
 /// v113: **designation pipeline and nearest queries**. `ctx::target` now runs
 ///    a self-designation (`p == by`) through `Untargetable`, the between-turns
 ///    count and the `target` [反击] window, and skips only the count and
@@ -891,6 +959,26 @@ pub const ABI_VERSION: i32 = 114;
 ///    `abi::DistanceKind::{Forward,Shortest}`); the prop key and the game layer
 ///    stay in the ruleset crate (`bandori_std::nearest`). SAVE_VERSION /
 ///    RECORD_VERSION unchanged.
+///
+/// v114: **G12 status, blocked-ness and immunity gates.** New trigger readers
+///    `ctx::trigger::{activation_ordinal, abnormal_blocked, move_abnormal}` and
+///    the activated-move read `ctx::cant_move_code_for_activation` (same code
+///    space as `cant_move_code`, except "already moved" is suppressed when the
+///    move was driven by the asking activation). New immunity readers /
+///    writers `ctx::is_immune_from_at`, `ctx::set_self_immune_except_owner` for
+///    the 「除拥有者以外」 flavour, and the turn flag
+///    `ctx::dice_immune` / `ctx::set_dice_immune` (「打出此卡的回合…」). The
+///    trigger wire gains `Trigger.activation_ordinal` / `Trigger.abnormal_blocked`
+///    and `TriggerMove.abnormal`. New CEL-only filter kind `AbnormalGate = 134`
+///    (payload: seat, kind, causer; `step = 1` on the blocked-ness read) and the
+///    three prop keys `IMMUNE_EXCEPT_OWNER` / `ADDS_DICE` /
+///    `GRANTS_DICE_IMMUNITY`. SAVE_VERSION / RECORD_VERSION unchanged (every
+///    new persisted field is `serde(default)`).
+/// v117: **tile events, one build pipeline, tile-write effects, house falls,
+///    move paths** (`spec/abi/G09-tile-build-pass.md`). See the v117 entry at
+///    the release marker; the kinds are `tileEffectBefore` (135),
+///    `houseRemoved` (136) and `houseAdd` / `houseRemove` / `ownerSet`
+///    (137-139).
 
 /// Board axis codes for `nearest_tile_on_axis` / `farthest_tile_on_axis`.
 pub mod axis {
@@ -928,6 +1016,14 @@ pub mod pay_flag {
     pub const ALLOW_MORTGAGE: i32 = 1 << 1;
     /// Run the command-wide pre-split stages (cleared by `pay_leg`).
     pub const TOTAL_STAGE: i32 = 1 << 2;
+}
+
+/// `ruleset_draw` flags.
+pub mod draw_flag {
+    /// Bit 0: this draw is exempt from the immediate hand-limit discard-down
+    /// (「可超过上限」). The limit itself is untouched; the hand may stay over
+    /// until it fits again or the turn ends.
+    pub const OVER_HAND_LIMIT: i32 = 1 << 0;
 }
 
 /// The packed `pay_command` answer.
@@ -1613,6 +1709,10 @@ pub enum Target {
 ///
 /// Every key has a defined default of `0` when a card does not declare it.
 pub mod prop {
+    /// A `Dest` code the card wants when it leaves the field, read at
+    /// `zoneLeft` commit time. Absent = `Graveyard`. Mirrored in
+    /// `game_core::state::prop`.
+    pub const LEAVE_DEST: &str = "leaveDest";
     /// Offer this placed source in the hand-counteraction window. Default 0.
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     /// `1` on a source on the owner's field: the owner's **face-down** field
@@ -1634,6 +1734,11 @@ pub mod prop {
     /// Constant for now; an X-dependent cost may later become a `rules-cond`
     /// expression. `0` (the default) means "unknown / assume free".
     pub const EST_COST: &str = "estCost";
+    /// Bot-only: nonzero = standard / advanced bot policies must not offer
+    /// this card. Absent or `0` = offer. A static card fact, never legality --
+    /// a human can still play the card. Read by `CardRules::ai_play`; rides
+    /// the existing `ManifestEntry.props`.
+    pub const AI_NEVER: &str = "aiNever";
     /// 「有[指定]目标」: `1` = this play names
     /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
     /// 所有的效果」. The named set is the play's **other living players** (the
@@ -1655,6 +1760,17 @@ pub mod prop {
     /// so a `place_raw` / engine placement sees it without running the play
     /// body. Mirrors `game_core::state::prop::IMMUNE`.
     pub const IMMUNE: &str = "immune";
+    /// 「不受除拥有此卡的玩家以外的玩家的效果影响」: `1` = the placed instance
+    /// gets `FieldCard.immune_except_owner` stamped at placement, read through
+    /// `is_immune_from_at`. Mirrors `game_core::state::prop::IMMUNE_EXCEPT_OWNER`.
+    pub const IMMUNE_EXCEPT_OWNER: &str = "immuneExceptOwner";
+    /// 「卡包含添加骰效果」: `1` = the card's effect adds dice to a move
+    /// (`plan::add_extra_dice`). Read at the play to test the dice immunity.
+    /// Mirrors `game_core::state::prop::ADDS_DICE`.
+    pub const ADDS_DICE: &str = "addsDice";
+    /// 「打出此卡的回合…」: `1` = playing the card raises `turn.dice_immune` for
+    /// the rest of its turn. Mirrors `game_core::state::prop::GRANTS_DICE_IMMUNITY`.
+    pub const GRANTS_DICE_IMMUNITY: &str = "grantsDiceImmunity";
     /// Song-title card marker (「卡名为歌名的卡」, Kizuna Music's X): `1` =
     /// this card's printed name is a song title. A ruleset-level fact other
     /// rules read back via `ctx::card_prop` (`card_prop` host import); the
@@ -1784,6 +1900,22 @@ pub mod prop {
     /// Per-player colour override prefix: `colorFor:<p>` = the group tile `p`
     /// treats this tile as (`-1` clears, `-2` = all colours).
     pub const COLOR_FOR_PREFIX: &str = "colorFor:";
+    /// 「那格视为与Kind格子交换位置」 -- an **instance** prop on the placed
+    /// instance. Value = the partner tile; that instance's slot resolves to
+    /// the partner tile and the partner tile resolves to the slot, one level,
+    /// both directions. `-1` / absent = no binding. Dies with the instance.
+    pub const SWAPPED_TILE: &str = "swappedTile";
+}
+
+/// Shared **move tags** -- the keys a move carries on
+/// [`TriggerMove::tags`](crate::abi::TriggerMove) and in `plan.tags`. Only
+/// names the engine and cards must agree on live here; a card's private tag
+/// may keep a local constant.
+pub mod tag {
+    /// Suppress the *extra* effects of tile `value` for the rest of this move.
+    /// The tile's own base rule still runs. Arms from a counteraction on
+    /// `TileEffectBefore`; dies with the move.
+    pub const SUPPRESS_TILE_EFFECTS: &str = "suppressTileEffects";
 }
 
 /// Read by 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `diceRollBefore` / `diceRollResult`
@@ -1964,7 +2096,10 @@ impl PromptKind {
 /// How the player gets there -- a move is exactly one of these (walk the path
 /// vs jump to the destination). One definition in `game-kinds`, shared with the
 /// engine; re-exported here so guest call sites keep their path.
-pub use game_kinds::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
+pub use game_kinds::{
+    Dice, Dir, MoveKind, MsgKey, OutCause, Payee, PlayOutcome, Seat, Tile, Zone, ZoneChange,
+    ZoneChangeCause,
+};
 
 bitflags::bitflags! {
     /// What a move resolves as it goes -- the settle axis, its own category
@@ -2030,6 +2165,33 @@ impl BuyKind {
     }
 }
 
+/// What a `card_build_as` charge is, on the wire. Mirrors the host's decode
+/// in `game-rules`; an unknown value falls back to [`Self::Effective`].
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BuildCharge {
+    /// Pay the pipeline price (percent and discount apply).
+    #[default]
+    Effective = 0,
+    /// Pay nothing; the hooks still run.
+    Free = 1,
+    /// Pay exactly `amount`; percent and discount do not apply again.
+    Fixed = 2,
+    /// Pay effective × `numerator` / `denominator`, one ceil-to-10.
+    Scaled = 3,
+}
+
+impl BuildCharge {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::Free,
+            2 => Self::Fixed,
+            3 => Self::Scaled,
+            _ => Self::Effective,
+        }
+    }
+}
+
 /// An abnormal effect kind id (wire `i32`), carried on `abnormalGuard` /
 /// `abnormal` triggers.
 ///
@@ -2066,6 +2228,10 @@ pub enum CardPile {
     Deck = 2,
     /// Cards placed on the player's field, in placement order.
     Field = 3,
+    /// The cards open inspections have turned over, in reveal order
+    /// (top-first). Not a pile: only `inspection_begin` fills it, and a
+    /// leftover returns to the deck. Addressed by **deck owner**.
+    Inspection = 4,
 }
 
 impl CardPile {
@@ -2075,6 +2241,7 @@ impl CardPile {
             1 => Self::Graveyard,
             2 => Self::Deck,
             3 => Self::Field,
+            4 => Self::Inspection,
             _ => return None,
         })
     }
@@ -2434,8 +2601,42 @@ impl ActionKind {
     pub const TurnEndAfter: Self = Self(TriggerKind::TurnEndAfter);
 
     /// Action. This card just reached the discard pile. Payload: card = the card
-    /// id.
+    /// id, `trigger::zone()` with `wasted` set when it never took effect.
     pub const Discarded: Self = Self(TriggerKind::Discarded);
+
+    /// Action. The instance is about to leave a played zone (`Field` /
+    /// `Attached`), **before** the row changes. Payload: `trigger::zone()`
+    /// (from/to/cause/holder). A body may rewrite the destination with
+    /// `bandori_std::zones::set_leave_destination`.
+    pub const ZoneLeft: Self = Self(TriggerKind::ZoneLeft);
+
+    /// Action. The instance left; the row change is done. Payload:
+    /// `trigger::zone()` with the pair reversed. Hook-only.
+    pub const ZoneLeftAfter: Self = Self(TriggerKind::ZoneLeftAfter);
+
+    /// Action. A card entered a hand (any card, instance-less). Payload:
+    /// `trigger::zone()`; `counted` is true only for a draw. Hook-only.
+    pub const HandChanged: Self = Self(TriggerKind::HandChanged);
+
+    /// Action. The instance is about to flip face-down / face-up, before the
+    /// face changes. Payload: `value` = the face it turns to (1 = down).
+    pub const CardFaceFlipped: Self = Self(TriggerKind::CardFaceFlipped);
+
+    /// Action. The flip landed. Payload: `value`. Hook-only.
+    pub const CardFaceFlippedAfter: Self = Self(TriggerKind::CardFaceFlippedAfter);
+
+    /// Action. A card was filed onto another instance. Payload:
+    /// `trigger::zone()` (`to = Attached`), the attached card on `instance`.
+    pub const CardAttached: Self = Self(TriggerKind::CardAttached);
+
+    /// Action. A card came off its host. Payload: `trigger::zone()`
+    /// (`from = Attached`). Hook-only.
+    pub const CardDetached: Self = Self(TriggerKind::CardDetached);
+
+    /// Action. One card of the opening deal entered its owner's hand, in deal
+    /// order. Payload: `card`, `value` = deal order. Hook-only; the mulligan
+    /// redraw is `HandChanged` instead.
+    pub const OpeningHandDealt: Self = Self(TriggerKind::OpeningHandDealt);
 
     /// Action. Before match start (游戏开始前) -- raised once per player before
     /// the opening hands are drawn, and dispatched to every effect source: field
@@ -2458,6 +2659,19 @@ impl ActionKind {
     /// Action. A player's discard pile has been shuffled back into its deck.
     /// Payload: none beyond the raise seat.
     pub const Reshuffled: Self = Self(TriggerKind::Reshuffled);
+
+    /// Action, hook-only (no window). One card of a draw pile was turned over
+    /// into an inspection frame. Payload: player_id = target = the deck owner,
+    /// card = the revealed id, cards = that id, value = reveal position
+    /// (1-based), by_card = the looker. Dispatched to the revealed card itself;
+    /// raised before the look body's next statement.
+    pub const Inspected: Self = Self(TriggerKind::Inspected);
+
+    /// Action, hook-only (no window). One draw instruction finished -- after the
+    /// last card, before the over-hand sweep. Payload: player_id = the drawer,
+    /// value = the batch length, cards = the batch. At most one per draw
+    /// instruction; the per-card point is Drew.
+    pub const DrawAfter: Self = Self(TriggerKind::DrawAfter);
 
     /// Action. A player became the owner of the tile (buy or auction).
     /// Payload: tile; some paths also set by_card or the buy record.
@@ -2504,6 +2718,17 @@ impl ActionKind {
     /// Action / Counteraction window. A deed's house count has just been
     /// written. Payload: `tile` / `value`. A listener may emit effects.
     pub const HouseAdded: Self = Self(TriggerKind::HouseAdded);
+
+    /// Action / Counteraction window. Before one tile's *extra* effects run,
+    /// on a pass step and on a settle. Payload: the move, `tile` (the
+    /// governing tile), `position` (the board slot). A counter may arm
+    /// `tag::SUPPRESS_TILE_EFFECTS` for that tile; the tile's own base rule
+    /// always runs. Dual-role: also a counteraction-window selector.
+    pub const TileEffectBefore: Self = Self(TriggerKind::TileEffectBefore);
+
+    /// Action. A deed's house count has just fallen. Payload: `tile` /
+    /// `value` (the count after the fall); `player_id` is the tile's owner.
+    pub const HouseRemoved: Self = Self(TriggerKind::HouseRemoved);
 
     /// Action. A named on-card counter on a placed instance has just been written.
     /// Payload: card = the instance whose count moved, player_id = its owner,
@@ -2820,6 +3045,11 @@ impl FilterKind {
     /// the host folds the answers into one decision.
     pub const MoveGate: Self = Self(TriggerKind::MoveGate);
 
+    /// Filter. May an abnormal of this kind from `by` land on the seat?
+    /// CEL-only, hook-only. Payload: the seat on `player_id`, `value` = the
+    /// kind, `by_card` = the causer, `step = 1` on the blocked-ness read.
+    pub const AbnormalGate: Self = Self(TriggerKind::AbnormalGate);
+
     /// Filter. May the player use this exclusive resource? Payload: the
     /// exclusive card on the window, name = the owner, value / step as owner
     /// flags. Body true = allowed, false = denied; the host folds the answers
@@ -3089,6 +3319,30 @@ impl TriggerKind {
     /// `paySplitAt`
     pub const PaySplitAt: Self = Self::engine(57);
 
+    /// `zoneLeft`
+    pub const ZoneLeft: Self = Self::engine(113);
+
+    /// `zoneLeftAfter`
+    pub const ZoneLeftAfter: Self = Self::engine(114);
+
+    /// `handChanged`
+    pub const HandChanged: Self = Self::engine(115);
+
+    /// `cardFaceFlipped`
+    pub const CardFaceFlipped: Self = Self::engine(116);
+
+    /// `cardFaceFlippedAfter`
+    pub const CardFaceFlippedAfter: Self = Self::engine(117);
+
+    /// `cardAttached`
+    pub const CardAttached: Self = Self::engine(118);
+
+    /// `cardDetached`
+    pub const CardDetached: Self = Self::engine(119);
+
+    /// `openingHandDealt`
+    pub const OpeningHandDealt: Self = Self::engine(140);
+
     /// `rentAdd`
     pub const RentAdd: Self = Self::engine(126);
 
@@ -3106,6 +3360,12 @@ impl TriggerKind {
 
     /// `settleRentMul`
     pub const SettleRentMul: Self = Self::engine(131);
+
+    /// `inspected` (hook-only)
+    pub const Inspected: Self = Self::engine(132);
+
+    /// `drawAfter` (hook-only)
+    pub const DrawAfter: Self = Self::engine(133);
 
     /// `discarded`
     pub const Discarded: Self = Self::engine(58);
@@ -3230,6 +3490,14 @@ impl TriggerKind {
     /// `moveGate`
     pub const MoveGate: Self = Self::engine(97);
 
+    /// `abnormalGate` — may an abnormal of this kind from `by` land on the
+    /// seat? Filter, CEL-only, hook-only. Payload: the seat on `player_id`,
+    /// `value` = the `AbKind` wire code, `by_card` = the causer, `step = 1` on
+    /// the blocked-ness read. Distinct from `abnormalGuard`: the guard is a
+    /// placed card's pre-declaration block; the gate is a turn-flow capability
+    /// the engine asks natively before a window opens.
+    pub const AbnormalGate: Self = Self::engine(134);
+
     /// `exclusiveUse`
     pub const ExclusiveUse: Self = Self::engine(98);
 
@@ -3278,7 +3546,8 @@ impl TriggerKind {
     pub const AbnormalRefused: Self = Self::engine(121);
 
     // Ids 104 and 107 stay retired (104 was "flipAfter", 107 is
-    // ruleset-declared "fansFlip"); the next free **engine** id was 121.
+    // ruleset-declared "fansFlip"); the next free **engine** id was 121, and
+    // the highest engine id is now 134 (abnormalGate).
 
     /// `cardFired` -- a card's body entered its resolution frame: every
     /// body, a play, a hook or a counteraction alike. Hook-only: no
@@ -3308,10 +3577,34 @@ impl TriggerKind {
     /// `by_card` = the deferrer's owner, `by_card_instance` = the deferring
     /// instance. Raised after the resolution completed; the extra draw of
     /// 「此后」 hangs here.
-    pub const EventResolved: Self = Self::engine(137);
+    pub const EventResolved: Self = Self::engine(141);
 
     /// `diceRollAdd`
     pub const DiceRollAdd: Self = Self::engine(125);
+
+    /// `tileEffectBefore` -- one tile's extra effects are about to run, on a
+    /// pass step and on a settle. Payload: the move, `tile` (the governing
+    /// tile), `position` (the board slot). Dual-role: a counteraction window
+    /// and a hook. A counter may arm `tag::SUPPRESS_TILE_EFFECTS`; the tile's
+    /// own base rule always runs.
+    pub const TileEffectBefore: Self = Self::engine(135);
+
+    /// `houseRemoved` -- a tile's house count has just fallen.
+    /// Payload: `tile`, `value` (the count after the fall), `player_id` = the
+    /// tile's owner at the time of the write.
+    pub const HouseRemoved: Self = Self::engine(136);
+
+    /// `houseAdd` -- effect spelling of a positive house write.
+    /// Payload: `tile`, `value` (the delta), `target` = the owner.
+    pub const HouseAdd: Self = Self::engine(137);
+
+    /// `houseRemove` -- effect spelling of a negative house write.
+    /// Payload: `tile`, `value` (the delta, unsigned), `target` = the owner.
+    pub const HouseRemove: Self = Self::engine(138);
+
+    /// `ownerSet` -- effect spelling of an ownership write. Payload: `tile`,
+    /// `value` (the new owner); `target` = the previous owner.
+    pub const OwnerSet: Self = Self::engine(139);
 
     /// Engine-namespace kind. The fixed generic raise points.
     pub const fn engine(id: i32) -> Self {

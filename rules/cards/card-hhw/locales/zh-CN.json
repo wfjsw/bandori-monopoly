@@ -16,7 +16,7 @@
   "believe_you_kept": "「{{card}}」加入了手牌",
   "believe_you_no_hand": "至少要有另一张手牌",
   "believe_you_pay": "因为我一直相信着你（消耗 800）",
-  "believe_you_reveal": "{{who}} 公开了手牌（{{hand}} 张）和抽卡区（{{deck}} 张）",
+  "believe_you_reveal_hand": "公开了手牌",
   "believe_you_shuffled": "{{who}} 洗切了抽卡区",
   "believe_you_title": "因为我一直相信着你",
   "black_suits_attach": "有奇迹水晶时这格获得 CiRCLE 的全部效果",

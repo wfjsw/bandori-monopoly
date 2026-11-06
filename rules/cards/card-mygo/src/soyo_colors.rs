@@ -6,8 +6,9 @@
 //! place this card on one of your deeds; that tile gains every colour, and an
 //! agent settle that charges rent there is halved again.
 
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::CardText;
-use card_sdk::{ctx, key, CardDef, Filter, Msg, On};
+use card_sdk::{ctx, key, Action, CardDef, Filter, Msg, On};
 
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
@@ -15,6 +16,9 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
         On::Play("", Some(cant_play), soyo_colors),
         // 规则书: 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半」
         On::Filter(Filter::PaySplitMul("", Some(on_rent), half_again)),
+        // 规则书: 「将此卡放置于你拥有地契的一个格子，该格获得所有颜色」 -- the
+        // colour grant lasts while the card is placed.
+        On::Action(Action::ZoneLeft("card.placed", None, on_leave)),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"混合的颜色"#)
@@ -84,7 +88,7 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("soyo_colors_ask")),
         &mine,
     )?;
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- bound to the chosen tile.
     ctx::place_card_on(
         player_id,
@@ -99,14 +103,27 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id),
     );
     // 规则书: 「该格获得所有颜色」 -- the `anyColor` tile prop is exactly that:
-    // `is_color` answers true for every group.
-    // TODO(规则书)（该格获得所有颜色）: 颜色授予随卡结束 -- 实例离开场上时没有把
-    //   ANY_COLOR 写回 0 的钩子（`destroy_instance_units` 只清标记），全色留在格子上。
+    // `is_color` answers true for every group. It ends with the card
+    // (`on_leave`).
     ctx::set_tile_prop(tile, card_sdk::abi::prop::ANY_COLOR, 1);
     // 规则书: 「该格本身不可因自有以外的颜色的地产商盖房」 -- the parenthetical:
     // the tile may only be built through a matching-colour agent, which is
     // `agent_colour_set`'s `buildable = tg == g` reading the tile's *own* group,
     // so the build branch already refuses.
+    Ok(())
+}
+
+/// 规则书: 「该格获得所有颜色」 -- the grant goes when the card leaves; the card
+/// is filed to the discard.
+fn on_leave(_player_id: i32) -> card_sdk::Asked {
+    // Instance kind: another copy sees this raise too.
+    if ctx::trigger::instance() != ctx::self_uid() {
+        return Ok(());
+    }
+    if let Some(tile) = ctx::self_tile() {
+        ctx::set_tile_prop(tile, card_sdk::abi::prop::ANY_COLOR, 0);
+    }
+    bandori_std::zones::set_leave_destination(ctx::Dest::Graveyard);
     Ok(())
 }
 
@@ -125,4 +142,10 @@ pub fn soyo_colors_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn half_again_kani(player_id: i32, value: i32) -> i32 {
     half_again(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_leave_kani(player_id: i32) -> card_sdk::Asked {
+    on_leave(player_id)
 }

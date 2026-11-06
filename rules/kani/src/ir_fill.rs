@@ -735,6 +735,13 @@ fn fill_named(c: &mut IrCtx, w: &World, owner: i32) {
             filled += 1;
         }
     });
+    // Derived state columns (MIN / MAX / EXPIRES / FLAGS) live outside the map.
+    w.for_each_col(owner, |key, value| {
+        if filled < NAMED_CAP {
+            c.named_set(id_of_name_id(key), value as i64);
+            filled += 1;
+        }
+    });
     // Pilot fan views (same keys, guaranteed present even if the map is empty).
     c.named_set(ID_TOK_PP_POS, w.fans_pos[owner as usize] as i64);
     c.named_set(ID_TOK_PP_NEG, w.fans_neg[owner as usize] as i64);
@@ -760,7 +767,7 @@ pub fn fill_from_world(
     c.tile_count = 60;
 
     // OptInt defaults: any negative reads as Null. Start there, then overwrite.
-    // 8×8 chunk walk over the 43-entry VARS table (unwind bound 8).
+    // 8×8 chunk walk over the 59-entry VARS table (unwind bound 8).
     {
         let mut outer = 0usize;
         while outer < 8 {
@@ -802,6 +809,12 @@ pub fn fill_from_world(
     c.set_scalar(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
     c.set_scalar(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
     c.set_scalar(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
+    // The world models no chain cursor, so the G06 window readers stay at
+    // their neutral values (the host reads them as 0 too).
+    c.set_scalar(VarId::SubjectRangeCard, 0);
+    c.set_scalar(VarId::ExtremeArmed, 0);
+    c.set_scalar(VarId::PendingNegation, 0);
+    c.set_scalar(VarId::ChainDepth, 0);
     let settle = w.trig_settle_tile;
     c.set_scalar(VarId::SettleTile, settle as i64);
     c.set_scalar(VarId::SettleOutcome, w.trig_settle_outcome as i64);
@@ -889,14 +902,14 @@ pub fn fill_from_world(
         (-1, -1, 0, w.trig_main as i64, 1)
     };
     // Overlay still wins when it left its documented default behind.
-    c.set_scalar(
-        VarId::MoveRoll,
-        if ov.move_roll != -1 {
-            ov.move_roll
-        } else {
-            move_roll
-        },
-    );
+    let roll = if ov.move_roll != -1 {
+        ov.move_roll
+    } else {
+        move_roll
+    };
+    c.set_scalar(VarId::MoveRoll, roll);
+    // `move.rolled`: a roll is present (`-1` = none).
+    c.set_scalar(VarId::MoveRolled, (roll >= 0) as i64);
     c.set_scalar(
         VarId::MoveKind,
         if ov.move_kind != -1 {
@@ -920,6 +933,18 @@ pub fn fill_from_world(
             ov.move_dir
         } else {
             move_dir
+        },
+    );
+    // Production's `move.rolled` is `m.roll.is_some()`: the overlay's roll is
+    // the fixture's move face, else the world's own frame bit.
+    c.set_scalar(
+        VarId::MoveRolled,
+        if ov.move_roll != -1 {
+            1
+        } else if mv.present() {
+            mv.rolled as i64
+        } else {
+            0
         },
     );
     // No World/overlay field yet; `move.by_skill` reads false (absent move).
@@ -1018,9 +1043,10 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     c.n_players = w.n_players as i64;
     c.tile_count = 60;
     // OptInt slots that the PaySplitAdd guard family may read. No VARS walk —
-    // iterating the 43-entry table is a CBMC cliff inside a proof.
+    // iterating the 59-entry table is a CBMC cliff inside a proof.
     c.set_scalar(VarId::PlanFixedRoll, -1);
     c.set_scalar(VarId::MoveRoll, -1);
+    c.set_scalar(VarId::MoveRolled, 0);
     c.set_scalar(VarId::MoveKind, -1);
     c.set_scalar(VarId::Actor, w.trig_player as i64);
     c.set_scalar(VarId::Owner, owner as i64);
@@ -1234,7 +1260,7 @@ pub fn fill_for_guard(
                 let i = outer * 8 + k;
                 if (needs.vars >> i) & 1 == 1 {
                     let id = i as u16;
-                    // Look up the type via the VARS table (43 entries; 8×8 walk).
+                    // Look up the type via the VARS table (59 entries; 8×8 walk).
                     let mut vo = 0usize;
                     while vo < 8 {
                         let mut vk = 0usize;
@@ -1283,6 +1309,10 @@ pub fn fill_for_guard(
     set_if!(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
     set_if!(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
     set_if!(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
+    set_if!(VarId::SubjectRangeCard, 0);
+    set_if!(VarId::ExtremeArmed, 0);
+    set_if!(VarId::PendingNegation, 0);
+    set_if!(VarId::ChainDepth, 0);
     let settle = w.trig_settle_tile;
     set_if!(VarId::SettleTile, settle as i64);
     set_if!(VarId::SettleOutcome, w.trig_settle_outcome as i64);
@@ -1380,14 +1410,13 @@ pub fn fill_for_guard(
     } else {
         (-1, -1, 0, w.trig_main as i64, 1)
     };
-    set_if!(
-        VarId::MoveRoll,
-        if ov.move_roll != -1 {
-            ov.move_roll
-        } else {
-            move_roll
-        }
-    );
+    let roll = if ov.move_roll != -1 {
+        ov.move_roll
+    } else {
+        move_roll
+    };
+    set_if!(VarId::MoveRoll, roll);
+    set_if!(VarId::MoveRolled, (roll >= 0) as i64);
     set_if!(
         VarId::MoveKind,
         if ov.move_kind != -1 {
@@ -1411,6 +1440,16 @@ pub fn fill_for_guard(
             ov.move_dir
         } else {
             move_dir
+        }
+    );
+    set_if!(
+        VarId::MoveRolled,
+        if ov.move_roll != -1 {
+            1
+        } else if mv.present() {
+            mv.rolled as i64
+        } else {
+            0
         }
     );
     set_if!(VarId::MoveBySkill, 0);
@@ -1547,6 +1586,11 @@ pub fn fill_for_guard(
                 // the 8×8 walk.)
                 let map = &w.player_keys[op];
                 map.for_each(|key, value| {
+                    if id_of_name_id(key) == name_id {
+                        c.named_set(name_id, value as i64);
+                    }
+                });
+                w.for_each_col(op as i32, |key, value| {
                     if id_of_name_id(key) == name_id {
                         c.named_set(name_id, value as i64);
                     }

@@ -79,11 +79,13 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
     }
     let mut y = y;
     let _ = fans::flip_down(player_id, y)?;
-    // 「观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组）」
-    let deck = ctx::cards_in(player_id, CardPile::Deck);
-    let n = deck.len().min((y + 1) as usize);
-    let look: alloc::vec::Vec<NameId> = deck[..n].to_vec();
+    // 「观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组）」 -- the count is
+    // clamped to the deck, and the look holds the cards out of the deck so the
+    // take below cannot trip the refill.
+    ctx::inspection_begin(player_id, player_id, y + 1, false)?;
+    let look: alloc::vec::Vec<NameId> = ctx::cards_in(player_id, CardPile::Inspection);
     if look.is_empty() {
+        ctx::inspection_end(player_id, true);
         return Ok(());
     }
     let pick = ctx::ask_choice(
@@ -99,17 +101,16 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
     // the draw: it replaces the plain draw (`set_cancelled`) and the engine's
     // after-draw points fire for the card that entered the hand.
     let Some(&keep) = look.get(pick) else {
+        ctx::inspection_end(player_id, true);
         return Ok(());
     };
-    if ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
-        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
+    if ctx::take_card(player_id, keep.as_str(), CardPile::Inspection) {
+        ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand, false);
         trigger::set_cancelled();
     }
-    // 「剩余观看的牌洗回卡组」
-    for c in look.iter().filter(|c| **c != keep) {
-        ctx::take_card(player_id, c.as_str(), CardPile::Deck);
-        ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::DeckRandom);
-    }
+    // 「剩余观看的牌洗回卡组」 -- the leftover stays in the frame, so `shuffle`
+    // returns exactly the unpicked remainder into the deck.
+    ctx::inspection_end(player_id, true);
     // The fan tail, identical to the other three.
     if ctx::in_group(player_id, "Pastel✽Palettes") {
         for p in 0..ctx::player_count() {

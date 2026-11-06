@@ -47,20 +47,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if paid < 800 {
         return Ok(());
     }
-    let hand = ctx::cards_in(player_id, CardPile::Hand);
-    let deck = ctx::cards_in(player_id, CardPile::Deck);
-    // TODO(ABI)（公开你的卡组与手牌）: no reveal/publish-pile hostcall -- only the
-    //   counts reach the table; the card identities stay with the prompt's seat.
-    // TODO(规则书)（公开你的卡组与手牌）: the sizes are sampled before the rival
-    //   acts, so an empty deck can log 0 here and the picks below then draw from
-    //   a discard refill.
-    ctx::log(
+    // 公开你的卡组与手牌: the hand is published once, the whole deck turns face
+    // up in a public frame (每个 turned card is a public reveal of its own).
+    ctx::reveal_pile(
         player_id,
-        &Msg::new(key!("believe_you_reveal"))
-            .player_id("who", player_id)
-            .i("hand", hand.len() as i64)
-            .i("deck", deck.len() as i64),
+        CardPile::Hand,
+        &Msg::new(key!("believe_you_reveal_hand")),
     );
+    let count = ctx::deck_count(player_id);
+    ctx::inspection_begin(player_id, player_id, count, true)?;
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("believe_you_title")),
@@ -88,7 +83,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         );
     }
     for k in 0..2 {
-        let deck = ctx::cards_in(player_id, CardPile::Deck);
+        let deck = ctx::cards_in(player_id, CardPile::Inspection);
         if deck.is_empty() {
             break;
         }
@@ -100,14 +95,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
             &ids,
         )?;
         let id = ids[pick.min(ids.len() - 1)];
-        if ctx::take_card(player_id, id, CardPile::Deck) {
-            ctx::add_to_dest(player_id, id, ctx::Dest::Hand);
+        if ctx::take_card(player_id, id, CardPile::Inspection) {
+            ctx::add_to_dest(player_id, id, ctx::Dest::Hand, false);
             ctx::log(
                 player_id,
                 &Msg::new(key!("believe_you_kept")).card("card", id),
             );
         }
     }
+    // The leftovers go back in their revealed order, then the whole pile is
+    // reshuffled (重洗你的抽牌堆).
+    ctx::inspection_end(player_id, false);
     // `shuffle_into_deck` (both flags off) shuffles the pile in place and raises
     // `reshuffled` on commit; the old take/`DeckRandom` loop let an emptied deck
     // refill from the discard and raised no hook at all on an empty pile.

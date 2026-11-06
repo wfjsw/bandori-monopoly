@@ -15,6 +15,7 @@
 use alloc::vec::Vec;
 
 use bandori_std::counter;
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 use card_sdk::{it, items, sec, CardText};
 
@@ -116,17 +117,17 @@ fn hina_sound(player_id: i32) -> card_sdk::Asked {
     // A decline leaves the substitute running its own effect.
     if crate::resonance::try_resonance(player_id)? {
         ctx::set_effective_card_at(instance, ID);
-        // TODO(G08)（`created_by`）: the substitute is no longer the stand-in's
-        // child -- `ctx::set_created_by_at` is not in yet, so the mark is the
-        // only record and the edge keeps pointing at the banished stand-in.
-        // ctx::set_created_by_at(instance, -1);
+        // The stand-in banishes itself below, so the substitute is adopted, not
+        // its child: clear the creator edge so it does not drop with the
+        // banished stand-in.
+        ctx::set_created_by_at(instance, -1);
         // The changed effect itself (OPEN-substitution-effect): re-pick the
         // substitute, carrying the crystals across.
         hina_change(player_id, instance)?;
     }
     // The run's bound uid is the stand-in; `hina_change` already unplaced it, so
     // the substitute it placed stays.
-    ctx::set_dest(ctx::Dest::Banished);
+    ctx::set_dest(ctx::Dest::Banished, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 
@@ -151,7 +152,7 @@ fn hina_change(player_id: i32, instance: i32) -> card_sdk::Asked {
         .card("card", ID)
         .card("sub", sub);
     ctx::log(player_id, &as_msg);
-    ctx::unplace_at(instance);
+    ctx::unplace_at(instance, ctx::Dest::Graveyard, ZoneChangeCause::Effect);
     let before = instance_floor(player_id);
     if sub == MAMI {
         ctx::place_card(player_id, sub, &as_msg); // 大和麻弥 has no [手]

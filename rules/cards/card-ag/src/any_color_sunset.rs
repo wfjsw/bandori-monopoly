@@ -87,7 +87,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         2 => {
             // TODO: Rename discard => graveyard
             if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_deck_ask"))? {
-                ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
+                ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop, false);
             }
         }
         // 规则书: 「若为3则抽一张牌」
@@ -125,7 +125,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         // 规则书: 「若为5则从弃牌堆中选择一张牌加入手牌」
         5 => {
             if let Some(id) = pick_from_graveyard(player_id, key!("any_color_sunset_hand_ask"))? {
-                ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand);
+                ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Hand, false);
             }
         }
         _ => unreachable!(),

@@ -88,29 +88,59 @@ fn ceil10(num: i32, den: i32) -> i32 {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
+    let mut asked = 0;
     let mut picked: Vec<i32> = Vec::new();
-    let mut pool: Vec<i32> = built(player_id);
-    if pool.is_empty() {
+    // `owned`, not `built`: on the pass that consumes the last demolition the
+    // houses are all gone again and the body still has to reach its tail.
+    if ctx::owned_tiles(player_id).is_empty() {
         return Ok(());
     }
-    while picked.len() < 4 && !pool.is_empty() {
-        if pool.len() + picked.len() <= 4 {
-            // Designate the remainder in one pass. A tile a 「有标记时此地块不能
-            // 被指定」 mark refuses stays out of the designated set.
-            while let Some(t) = pool.pop() {
-                if ctx::target_tile(t) {
-                    picked.push(t);
-                }
-            }
-            break;
+    // The body replays from the top at every host request (a tile write
+    // pauses, 5.4) and the request answers are replayed from the log. Two
+    // consequences:
+    //
+    // * A re-run happens only *after* a demolition, so an option list of
+    //   houseless tiles shrinks under the replay. The pick is therefore asked
+    //   as a **tile id** (`ask_tiles`), which lands the logged answer on the
+    //   same tile however short the current list has become.
+    // * 规则书[手] designates 「有房子的格子」. Offering only those also
+    //   settles the sum below: every pick carries at least one house when the
+    //   demolition reaches it, so an already-applied re-run answers a count one
+    //   below its pre-removal figure and `before + 1` restores it.
+    //
+    // TODO(规则书)（删除所有被[指定]格子上的1栋房）: a cancelled `houseRemove`
+    //   leaves the house standing and answers its pre count, which the re-run
+    //   cannot tell from an applied removal -- `before + 1` then counts one
+    //   house too many for that tile.
+    //
+    // The list must never be empty (an empty tile ask upsets the pass), and
+    // once every house is gone `built()` is empty again -- fall back to the
+    // whole owned list there; the answers are ids, so the content may change.
+    let mut owned = built(player_id);
+    if owned.is_empty() {
+        owned = ctx::owned_tiles(player_id);
+    }
+    owned.sort_unstable();
+    while picked.len() < 4 && asked < 4 {
+        asked += 1;
+        let mut labels: Vec<Msg> = Vec::with_capacity(owned.len());
+        for &t in &owned {
+            labels.push(Msg::new("ask.tileOption").tile("tile", t));
         }
-        let t = ctx::ask_tile(
+        let t = ctx::ask_tiles(
             player_id,
             &Msg::new(key!("sunset_title")),
             &Msg::new(key!("sunset_pick")).i("n", picked.len() as i64 + 1),
-            &pool,
+            &owned,
+            &labels,
+            &[],
+            -1,
         )?;
-        pool.retain(|&x| x != t);
+        // 「不选」, or (on a re-run) a pick the log already supplied.
+        if t < 0 || picked.contains(&t) {
+            continue;
+        }
+        owned.retain(|&x| x != t);
         if ctx::target_tile(t) {
             picked.push(t);
         }
@@ -122,10 +152,32 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if targets.is_empty() {
         return Ok(());
     }
+    // Step 1 goes before step 2's sum so the sum can be read back off the
+    // writes (see below); only `x`'s own log line moves behind the
+    // demolitions. A replay has already applied the prefix of them: a tile
+    // that is done answers its count unchanged (`left == before`), and since
+    // the write removes exactly one house, its pre-write count is
+    // `before + 1`. A first removal answers one less than it found, so its
+    // count is `before`. Guest state (a prop, a state key) would not do: only a
+    // host request lands in the world the next pass re-reads (design 5.4).
     let mut sum = 0;
     for &t in &picked {
-        sum += ctx::tile_price(t) + ctx::houses_of(t) * ctx::build_cost(t);
+        let before = ctx::houses_of(t);
+        let left = ctx::add_house(t, -1);
+        // 规则书[手]: 「被[指定]格子的地契价格和建造已有房屋的造价之和」 -- the
+        // houses standing before this card's own removal.
+        let had = if left < before { before } else { before + 1 };
+        sum += ctx::tile_price(t) + had * ctx::build_cost(t);
+        if left < before {
+            ctx::log(
+                player_id,
+                &Msg::new(key!("sunset_demolish"))
+                    .tile("tile", t)
+                    .i("left", left as i64),
+            );
+        }
     }
+    // 规则书[手]: 「将X设为…向上取整10」, halved before round 100.
     let n = targets.len() as i32;
     let mut x = ceil10(sum, n.max(1));
     if ctx::round_no() < 100 {
@@ -138,17 +190,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // Untargetable / the `target` [反击] window; no redirect on `TargetAll`) and `got`
     // keeps only the players actually hit.
     let got = ctx::target_all(&targets);
-    for &t in &picked {
-        if ctx::houses_of(t) > 0 {
-            let left = ctx::add_house(t, -1);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("sunset_demolish"))
-                    .tile("tile", t)
-                    .i("left", left as i64),
-            );
-        }
-    }
     let reason = Msg::new(key!("sunset_reason")).n("x", x as i64);
     for t in got {
         ctx::transfer(t, player_id, x, &reason)?;

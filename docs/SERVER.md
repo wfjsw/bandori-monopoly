@@ -138,10 +138,11 @@ bounces moves on instead of looping. Online it always moves well inside the
 turn timer.
 
 Limitations: auto-play is client-only, so other players do not see the
-`board.afk` tag on the seat. The command is computed against the *frame* the
-page holds, so a pressed command can be a beat stale if another seat acted
-meanwhile; the driver keeps its ordered candidates and moves on when the
-server refuses one.
+`board.afk` tag on the seat. It reads `aiPlayable` like a standard bot and so
+skips a card a bot would skip; a chaos takeover does not, matching the engine.
+The command is computed against the *frame* the page holds, so a pressed
+command can be a beat stale if another seat acted meanwhile; the driver keeps
+its ordered candidates and moves on when the server refuses one.
 
 ### Bot mentality (engine bots)
 
@@ -366,13 +367,16 @@ that is still animating late events does not lose clock time to the lag:
   refresh periodically / on reconnect / on `visibilitychange` to visible.
   Remaining = `deadline - (performance.now() + offset)`, repainted on each
   whole-second boundary.
-* **Anim hold.** When the acting human's turn / prompt / events commit, the
-  engine holds their clock (`state.clockPaused`, no deadline) until that
-  seat's client posts `POST /api/rooms/{id}/anim-done {seq}` -- sent once per
-  state version when the Animator queue has drained. A hard cap of 10 s of
-  ticks releases the hold anyway (hidden tab / disconnected actor). Bots and
-  Solo never hold. The ack is recorded as `Input::AnimDone` so replays
-  reproduce the same pauses (`docs/REPLAY.md`).
+* **Anim hold.** When a human seat's presentation is pending -- their turn /
+  events commit, or a prompt / end-match vote they still owe an answer on --
+  the engine holds every pending human seat's clock and the shared prompt /
+  vote window (`state.clockPaused`, no deadline) until each held seat's client
+  posts `POST /api/rooms/{id}/anim-done {seq}`, sent once per state version
+  when that client's Animator queue has drained. The hold releases when the
+  last held seat acks. A hard cap of 10 s of ticks releases it anyway (hidden
+  tab / disconnected actor). Bots and Solo never hold. The acks are recorded
+  as `Input::AnimDone` so replays reproduce the same pauses
+  (`docs/REPLAY.md`).
 
 ### Order roll (`/order-ready`)
 

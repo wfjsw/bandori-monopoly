@@ -11,6 +11,7 @@
 //!    effects (no less, no more);
 //! 4. includes a MUTANT whose disagreement is shown reachable.
 
+pub mod abi_g09;
 #[cfg(feature = "band-ag")]
 pub mod ag;
 pub mod cond_ops;
@@ -22,7 +23,16 @@ pub mod events;
 pub mod g06_windows;
 #[cfg(feature = "band-general")]
 pub mod g07_targeting;
+pub mod g08_zone_lifecycle;
 pub mod g10_outcome;
+#[cfg(feature = "band-general")]
+pub mod g11_inspection;
+#[cfg(feature = "band-general")]
+pub mod g12_status;
+// Its harnesses reach both a Morfonica effect and the general gacha tile.
+#[cfg(all(feature = "band-morfonica", feature = "band-general"))]
+pub mod g14_ai_and_hand_limit;
+#[cfg(feature = "band-general")]
 pub mod general;
 #[cfg(feature = "band-hhw")]
 pub mod hhw;
@@ -64,7 +74,11 @@ pub mod skills_hhw;
 pub mod skills_mor;
 #[cfg(all(feature = "band-mujica", feature = "skills-groups"))]
 pub mod skills_mujica;
-#[cfg(all(feature = "band-mygo", feature = "skills-groups"))]
+#[cfg(all(
+    feature = "band-mygo",
+    feature = "skills-groups",
+    feature = "skills-personas"
+))]
 pub mod skills_mygo;
 #[cfg(all(feature = "band-pp", feature = "skills-personas"))]
 pub mod skills_pp;

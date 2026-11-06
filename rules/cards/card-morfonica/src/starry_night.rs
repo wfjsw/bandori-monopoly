@@ -67,7 +67,7 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
     // TODO(规则书)（将此卡放置在场地中央）: 「场地中央」 is not a board slot -- the
     //   card is a field card of the owner (OPEN-场地中央).
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         ID,
@@ -122,7 +122,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
     if ctx::crystals() == 0 && trigger::value() <= 0 {
-        ctx::set_dest(ctx::Dest::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
         ctx::log(
             player_id,
             &Msg::new(key!("starry_night_empty")).player_id("who", player_id),

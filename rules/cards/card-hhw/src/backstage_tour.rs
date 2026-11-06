@@ -42,7 +42,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let discard = ctx::cards_in(player_id, CardPile::Graveyard);
         for id in discard.iter().rev() {
             ctx::take_card(player_id, id.as_str(), CardPile::Graveyard);
-            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckBottom, false);
         }
         ctx::log(
             player_id,
@@ -53,16 +53,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // change the peek order; cf. `card-roselia`'s 曲奇时间).
         ctx::raise(player_id, card_sdk::abi::ActionKind::Reshuffled, 0)?;
     }
-    let top: Vec<NameId> = ctx::cards_in(player_id, CardPile::Deck)
-        .into_iter()
-        .take(2)
-        .collect();
-    if top.is_empty() {
-        return Ok(());
-    }
-    for id in &top {
-        ctx::take_card(player_id, id.as_str(), CardPile::Deck);
-    }
+    // The peek holds the deck-top two in a frame, so a flip does not empty the
+    // draw pile and the base-rule refill cannot shuffle it straight back.
+    ctx::inspection_begin(player_id, player_id, 2, false)?;
+    let top: Vec<NameId> = ctx::cards_in(player_id, CardPile::Inspection);
     let mut keep: Vec<NameId> = Vec::new();
     for (i, id) in top.iter().enumerate() {
         // 规则书: 「看牌堆顶2张牌，选择0~2张以任意顺序放回」 -- both peeked cards
@@ -84,15 +78,18 @@ fn play(player_id: i32) -> card_sdk::Asked {
             keep.push(*id);
             continue;
         }
-        // TODO(规则书)（剩余的翻入弃牌堆）: the peek can empty the draw pile, so `to_discard` fires
-        // the base-rule refill and shuffles the flipped card straight back -- it never
-        // stays in the discard (defer the flips).
-        ctx::to_discard(player_id, id.as_str());
+        // 剩余的翻入弃牌堆 -- out of the frame first, so the flip lands in the
+        // discard for good (a look holds the deck's refill, G11 I2).
+        ctx::take_card(player_id, id.as_str(), CardPile::Inspection);
+        ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::Graveyard, false);
         ctx::gain(
             player_id,
             1000,
             &Msg::new(key!("backstage_tour_flip")).card("card", id.as_str()),
         )?;
+    }
+    for id in &keep {
+        ctx::take_card(player_id, id.as_str(), CardPile::Inspection);
     }
     if keep.len() == 2 {
         let refs: Vec<&str> = keep.iter().map(|c| c.as_str()).collect();
@@ -105,13 +102,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let top_i = pick.min(1);
         let under = keep[1 - top_i];
         let over = keep[top_i];
-        ctx::add_to_dest(player_id, under.as_str(), ctx::Dest::DeckTop);
-        ctx::add_to_dest(player_id, over.as_str(), ctx::Dest::DeckTop);
+        ctx::add_to_dest(player_id, under.as_str(), ctx::Dest::DeckTop, false);
+        ctx::add_to_dest(player_id, over.as_str(), ctx::Dest::DeckTop, false);
     } else {
         for id in keep {
-            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop);
+            ctx::add_to_dest(player_id, id.as_str(), ctx::Dest::DeckTop, false);
         }
     }
+    ctx::inspection_end(player_id, false);
     Ok(())
 }
 

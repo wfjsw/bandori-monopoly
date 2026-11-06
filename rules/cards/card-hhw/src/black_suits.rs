@@ -12,6 +12,7 @@
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
 use bandori_std::ctx::{self, trigger};
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::{ActionKind, ChainKind, MarkFilter};
 use card_sdk::CardText;
 use card_sdk::{key, Action, CardDef, Msg, On};
@@ -30,7 +31,6 @@ const CLAIM: &str = "black.claimed";
 /// instance this run attached, `0` when none. Latched so it survives the pauses
 /// of the body and so a nested `resync` can tell "already attached" from
 /// "attach now" before the placement crosses onto the live board.
-const BORROWED: &str = "latch:black_suits_circle";
 
 pub const BLACK_SUITS: CardDef = CardDef::new(
     "HHW:黑衣人的补给",
@@ -86,7 +86,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // (`place_mark` stamps `instance = ctx::self_uid()`) and the
         // `MarkChanged` guard can name it.
         if !ctx::is_placed() {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
             ctx::place_card(
                 player_id,
                 "HHW:黑衣人的补给",
@@ -139,67 +139,37 @@ fn own_crystals(tile: i32, owner: i32) -> i32 {
 
 /// Attach or drop the borrowed `tile:circle` instance so it exists exactly
 /// while 弦卷集团 carries a crystal.
-fn sync_circle_instance(player_id: i32, group: i32) {
+fn sync_circle_instance(_player_id: i32, group: i32) {
     // The book keys the borrow on the crystal's presence. The `MarkChanged`
     // entry above (and the `counterChanged` path of a purge) is what keeps this
     // true outside this card's own bodies; the direct calls here stay too.
-    // TODO(G08) created_by: the borrowed instance outlives the stand-in until
-    //   G08's `created_by` edge lands -- its own `unplace_at` is the
-    //   interim cleanup, not a replacement.
     let has = ctx::count_marks(group, &MarkFilter::any().kind(MARK)) > 0;
-    // The instance this run already attached, remembered on a latch. The
-    // placement is a guest write; a nested `resync` (the placement itself
-    // fires one) runs against the live world before the write has crossed, so
-    // rescanned alone the field never shows it and every nested drive would
-    // attach another copy -- unbounded.
-    let recorded = ctx::slot(player_id, BORROWED);
-    if has {
-        // Only a latch whose instance is still on the tile counts: an effect
-        // can destroy the borrowed board card while the crystal (and so
-        // `has`) stays, and returning on the bare uid would leave the tile
-        // without a CiRCLE until some later change resets the latch.
-        if recorded > 0 && ctx::tile_at(recorded) == Some(group) {
-            return;
-        }
-        // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a
-        // tile" gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The
-        // board field is `field_instances(-1)`; a borrowed `tile:circle` on
-        // *this* tile is one whose `tile_at` is the group (the real CiRCLE's
-        // own instance governs the CiRCLE square and is left alone). A copy
-        // another stand-in attached (it may not be this player's) is adopted.
-        if let Some(uid) = ctx::field_instances(-1)
-            .into_iter()
-            .find(|(uid, id)| id == "tile:circle" && ctx::tile_at(*uid) == Some(group))
-            .map(|(uid, _)| uid)
-        {
-            ctx::set_slot(player_id, BORROWED, uid);
-            return;
-        }
+    // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a tile"
+    // gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The board
+    // field is `field_instances(-1)`; a borrowed `tile:circle` on *this* tile
+    // is one whose `tile_at` is the group (the real CiRCLE's own instance
+    // governs the CiRCLE square and is left alone).
+    let borrowed = ctx::field_instances(-1)
+        .into_iter()
+        .find(|(uid, id)| id == "tile:circle" && ctx::tile_of(*uid) == Some(group))
+        .map(|(uid, _)| uid);
+    if has && borrowed.is_none() {
+        // 规则书: 「该格获得"CiRCLE"格子的全部效果」 -- the borrowed instance is
+        // this stand-in's child, so it drops with the card.
         let uid = ctx::place_card_on(
             -1,
             group,
             "tile:circle",
             &Msg::new(key!("black_suits_attach")),
         );
-        ctx::set_slot(player_id, BORROWED, uid);
-    } else {
-        // Still on the tile: a destroyed instance would read `None` here, so a
-        // stale uid is not unplaced onto whatever reused it. The latch can
-        // also be gone with the stand-in's owner (a bankruptcy purge clears
-        // the seat's state), so fall back to the board scan.
-        let uid = if recorded > 0 && ctx::tile_at(recorded) == Some(group) {
-            Some(recorded)
-        } else {
-            ctx::field_instances(-1)
-                .into_iter()
-                .find(|(uid, id)| id == "tile:circle" && ctx::tile_at(*uid) == Some(group))
-                .map(|(uid, _)| uid)
-        };
-        if let Some(uid) = uid {
-            ctx::unplace_at(uid);
+        if uid >= 0 {
+            ctx::set_created_by_at(uid, ctx::self_uid());
         }
-        if recorded > 0 {
-            ctx::set_slot(player_id, BORROWED, 0);
+    } else if !has {
+        if let Some(uid) = borrowed {
+            // The glow is gone before the stand-in leaves (an external clear):
+            // drop the child now, from this body (not a creator cascade).
+            ctx::unplace_at(uid, ctx::Dest::Graveyard, ZoneChangeCause::Effect);
         }
     }
 }
@@ -224,7 +194,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     sync_circle_instance(player_id, t);
     // Stand-in cleanup: nothing left to remove, so file the card away.
     if own_crystals(t, player_id) == 0 {
-        ctx::set_dest(ctx::Dest::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     }
     Ok(())
 }

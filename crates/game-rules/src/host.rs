@@ -501,6 +501,29 @@ pub enum HostRequest {
     Linger { player_id: i32, expires: i32 },
     /// Pay and raise one house on `tile`.
     Build { player_id: i32, tile: i32 },
+    /// v114: the general build verb. Runs the full pipeline (gate, hooks,
+    /// price, charge, commit). `charge` is a [`card_sdk::abi::BuildCharge`]
+    /// wire value: `Fixed` uses `amount`, `Scaled` uses `numerator` /
+    /// `denominator` of the effective price; `owner_required` adds the owner
+    /// test to the gate. Answers `1` iff a house committed.
+    BuildAs {
+        player_id: i32,
+        tile: i32,
+        charge: i32,
+        amount: i32,
+        numerator: i32,
+        denominator: i32,
+        owner_required: i32,
+    },
+    /// v114: a guest **tile write** (`set_houses` / `add_house` / `set_owner`).
+    /// Declares an effect and opens the `effect` window, then applies unless
+    /// cancelled. Answers the post value (owner for `SetOwner`), or the
+    /// pre-write value when cancelled.
+    TileWrite {
+        operation: TileWriteOperation,
+        tile: i32,
+        value: i32,
+    },
     /// Prompt to build on one of `tiles`, then build.
     OfferBuild { player_id: i32, tiles: Vec<i32> },
     /// Mortgage one of the player's deeds.
@@ -551,7 +574,37 @@ pub enum HostRequest {
     /// each, so a `drewBefore` hook may replace a card of it -- and answers with
     /// how many were actually drawn. The effect then replays past this call and
     /// does **not** move the cards again (they are already in the live world).
-    Draw { player_id: i32, n: i32 },
+    Draw {
+        player_id: i32,
+        n: i32,
+        /// Skip the immediate hand-limit discard-down and allow the excess to
+        /// reach turn end (「可超过上限」). The limit state is untouched.
+        over_hand_limit: bool,
+    },
+    /// Turn up to `count` cards of `owner`'s draw pile into an inspection frame
+    /// for `looker` (design G11). Runs like `Draw`: one host pass, answers the
+    /// held count, raises `inspected` per card and replays past the call.
+    InspectionBegin {
+        looker: i32,
+        owner: i32,
+        count: i32,
+        public: bool,
+    },
+    /// Close `player`'s innermost inspection frame; leftovers go back to the
+    /// deck top (or shuffled in). Inline; answers the returned count.
+    InspectionEnd { player_id: i32, shuffle: bool },
+    /// Publish a pile's ids to the table. Inline; touches no pile.
+    RevealPile {
+        player_id: i32,
+        pile: i32,
+        reason: crate::Msg,
+    },
+    /// Publish one card id to the table. Inline; touches no pile.
+    RevealCard {
+        player_id: i32,
+        card: String,
+        reason: crate::Msg,
+    },
     /// Draw the top event and settles it (「抽取一个事件卡」).
     /// The engine runs the whole event pipeline (public reveal, immediate
     /// effect, filing to the event discard, the reshuffle-when-empty half).
@@ -654,6 +707,8 @@ pub enum HostRequest {
         /// The tile the raise is about (`t.tile`) -- filter pres like
         /// `tile.id == tile_named('…')` read it.
         tile: i32,
+        /// The board position of the raise (`t.position`), `-1` when none.
+        position: i32,
         /// The raise's card provenance (`t.card`). Only the body wrapper's
         /// `cardFired` sets it, so a hook can answer `card_is('skill:…')` or
         /// `card.is_skill`. `player_id` is that raise's cause (`t.by_card`) --
@@ -709,6 +764,63 @@ pub enum HostRequest {
         /// gain (raises `markerGain`).
         delta: i32,
     },
+    /// Take the instance off play (`unplace_at` / `send_to_dest` /
+    /// `transfer_to_dest`). `destination` is a guest `Dest` code (`-1` = the
+    /// card's own leave destination); `to` is whose area it lands in (`-1` =
+    /// the owner). Answers the departed owner, `-1` when it was not in play.
+    Leave {
+        uid: i32,
+        destination: i32,
+        to: i32,
+        cause: i32,
+    },
+    /// Flip the instance (`set_face_down_at` / `set_self_face_down`).
+    /// `face_down` is the target face. Answers `1` on a live row, else `0`.
+    Flip {
+        uid: i32,
+        face_down: i32,
+        cause: i32,
+    },
+    /// File a new instance of `card` onto `host` (`attach_card`). Answers the
+    /// new uid, `-1` when refused.
+    Attach {
+        host: i32,
+        card: String,
+        cause: i32,
+        face_down: i32,
+    },
+    /// Take the instance off its host (`detach_card`). Answers the owner,
+    /// `-1` when it was not attached.
+    Detach {
+        uid: i32,
+        destination: i32,
+        cause: i32,
+    },
+    /// Move the deed row on `tile` to `owner` unchanged (`rehome_card`).
+    /// Answers `1` on success, `0` when the tile has no row.
+    Rehome { tile: i32, owner: i32 },
+    /// Remove `card` from `player`'s hand and run its play (`play_hand_card`).
+    /// Answers `1` on success, `0` when the card was not in that hand.
+    PlayHand { player_id: i32, card: String },
+}
+
+/// Which tile field a [`HostRequest::TileWrite`] writes.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileWriteOperation {
+    SetHouses = 0,
+    AddHouses = 1,
+    SetOwner = 2,
+}
+
+impl TileWriteOperation {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::AddHouses,
+            2 => Self::SetOwner,
+            _ => Self::SetHouses,
+        }
+    }
 }
 
 /// The serializable journal mirror of one request (design G10 §6.3). Order and
@@ -895,7 +1007,11 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 houses: *houses,
                 mortgaged: *mortgaged,
             },
-            HostRequest::Draw { player_id, n } => J::Draw {
+            HostRequest::Draw {
+                player_id,
+                n,
+                over_hand_limit: _,
+            } => J::Draw {
                 player_id: *player_id,
                 n: *n,
             },
@@ -982,6 +1098,7 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 kind,
                 value,
                 tile,
+                position,
                 card,
                 deal_owner,
                 deal_houses,
@@ -992,6 +1109,7 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 kind: kind.clone(),
                 value: *value,
                 tile: *tile,
+                position: *position,
                 card: card.clone(),
                 deal_owner: *deal_owner,
                 deal_houses: *deal_houses,
@@ -1030,6 +1148,113 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 name: name.clone(),
                 delta: *delta,
+            },
+            HostRequest::BuildAs {
+                player_id,
+                tile,
+                charge,
+                amount,
+                numerator,
+                denominator,
+                owner_required,
+            } => J::BuildAs {
+                player_id: *player_id,
+                tile: *tile,
+                charge: *charge,
+                amount: *amount,
+                numerator: *numerator,
+                denominator: *denominator,
+                owner_required: *owner_required,
+            },
+            HostRequest::TileWrite {
+                operation,
+                tile,
+                value,
+            } => J::TileWrite {
+                operation: *operation as i32,
+                tile: *tile,
+                value: *value,
+            },
+            HostRequest::InspectionBegin {
+                looker,
+                owner,
+                count,
+                public,
+            } => J::InspectionBegin {
+                looker: *looker,
+                owner: *owner,
+                count: *count,
+                public: *public,
+            },
+            HostRequest::InspectionEnd { player_id, shuffle } => J::InspectionEnd {
+                player_id: *player_id,
+                shuffle: *shuffle,
+            },
+            HostRequest::RevealPile {
+                player_id,
+                pile,
+                reason,
+            } => J::RevealPile {
+                player_id: *player_id,
+                pile: *pile,
+                reason: reason.clone(),
+            },
+            HostRequest::RevealCard {
+                player_id,
+                card,
+                reason,
+            } => J::RevealCard {
+                player_id: *player_id,
+                card: card.clone(),
+                reason: reason.clone(),
+            },
+            HostRequest::Leave {
+                uid,
+                destination,
+                to,
+                cause,
+            } => J::Leave {
+                uid: *uid,
+                destination: *destination,
+                to: *to,
+                cause: *cause,
+            },
+            HostRequest::Flip {
+                uid,
+                face_down,
+                cause,
+            } => J::Flip {
+                uid: *uid,
+                face_down: *face_down,
+                cause: *cause,
+            },
+            HostRequest::Attach {
+                host,
+                card,
+                cause,
+                face_down,
+            } => J::Attach {
+                host: *host,
+                card: card.clone(),
+                cause: *cause,
+                face_down: *face_down,
+            },
+            HostRequest::Detach {
+                uid,
+                destination,
+                cause,
+            } => J::Detach {
+                uid: *uid,
+                destination: *destination,
+                cause: *cause,
+            },
+            HostRequest::Rehome { tile, owner } => J::Rehome {
+                tile: *tile,
+                owner: *owner,
+            },
+            HostRequest::PlayHand { player_id, card } => J::PlayHand {
+                player_id: *player_id,
+                card: card.clone(),
             },
         }
     }
@@ -1257,7 +1482,7 @@ impl KindMask {
 
 /// The gate kinds answered natively from conditions alone (see
 /// [`gate_open_over`]). Index = position in this array.
-pub const GATE_KINDS: [crate::TriggerKind; 7] = [
+pub const GATE_KINDS: [crate::TriggerKind; 8] = [
     crate::TriggerKind::ActGate,
     crate::TriggerKind::PayGate,
     crate::TriggerKind::MoveGate,
@@ -1265,6 +1490,7 @@ pub const GATE_KINDS: [crate::TriggerKind; 7] = [
     crate::TriggerKind::TargetableGate,
     crate::TriggerKind::ExclusiveUse,
     crate::TriggerKind::PlayGate,
+    crate::TriggerKind::AbnormalGate,
 ];
 
 fn gate_index(kind: crate::TriggerKind) -> Option<usize> {
@@ -1303,7 +1529,7 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             }
             if o.has_guard || o.condition.is_none() {
                 return Err(RuleError::Load(format!(
-                    "{}/{ei}: an ActGate/PayGate/MoveGate/ExclusiveUse entry must be CEL-only (a condition, no residual guard)",
+                    "{}/{ei}: an ActGate/PayGate/MoveGate/ExclusiveUse/AbnormalGate entry must be CEL-only (a condition, no residual guard)",
                     c.id
                 )));
             }
@@ -1413,6 +1639,7 @@ impl RulesetBuilder {
             // (docs/ACTIVATION.md §3). Unique per card.
             let mut seen_ids = std::collections::BTreeSet::new();
             for (ei, o) in c.on.iter().enumerate() {
+                if c.id.contains("arisa_wait") || c.id.contains("等等等一下") {}
                 let ok = OnKind::from_i32(o.kind);
                 // ABI v73: kind/variant agreement -- a Filter may only list
                 // filter kinds and an Action only non-filter kinds. ABI v111
@@ -2046,7 +2273,28 @@ impl Ruleset {
                 &cand,
                 log,
                 0,
+                false,
             )? {
+                Admitted::No { .. } => return Ok(Outcome::Done(world.clone(), log.clone())),
+                Admitted::Paused(o) => return Ok(o),
+                Admitted::Yes {
+                    next_answer: after,
+                    arg: declared,
+                } => {
+                    next_answer = after;
+                    arg = declared;
+                }
+            }
+        }
+        // A hook body re-run after its own yes: the drive already asked the
+        // condition and the residual guard on the pass that paused (they must
+        // not be re-asked -- a body that unplaces its own instance would
+        // otherwise refuse itself), but the entry's **declare** still has to
+        // replay so the collected argument is served back and the answer
+        // cursor lines up with the body's own prompts. The journal serves the
+        // recorded answers, so the replay is side-effect free.
+        if matches!(call, Call::Hook { .. }) {
+            match self.declare_after(world, card, entry, player_id, log, 0)? {
                 Admitted::No { .. } => return Ok(Outcome::Done(world.clone(), log.clone())),
                 Admitted::Paused(o) => return Ok(o),
                 Admitted::Yes {
@@ -2095,7 +2343,14 @@ impl Ruleset {
         cand: &crate::condition::CandidateCtx,
         log: &game_core::engine::GuestLog,
         start_answer: usize,
+        already_admitted: bool,
     ) -> Result<Admitted<W>, RuleError> {
+        // Re-entered after a pause: condition and guard already cleared, and
+        // the earlier pass's body writes may now refuse them. Only the declare
+        // has to replay (it owns the argument and the answer cursor).
+        if already_admitted {
+            return self.declare_after(world, card, entry, player_id, log, start_answer);
+        }
         let condition = self
             .inner
             .condition
@@ -2314,6 +2569,7 @@ impl Ruleset {
         world: &W,
         call: Call,
         log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
         mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
     ) -> Result<Option<HookRun<W>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
@@ -2372,6 +2628,11 @@ impl Ruleset {
                 &cand,
                 log,
                 next_answer,
+                // This entry already cleared its condition and guard on an
+                // earlier pass of the same drive; the body's own writes may
+                // have moved what they read (`card.placed` after an
+                // `unplace_self`), so only the declare replays.
+                already_admitted.contains(&entry),
             )?;
             let (arg, after_admit) = match admitted {
                 // A guard / declare prompt is still applicability: the body
@@ -3176,6 +3437,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         world: &crate::Run,
         call: Call,
         log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
     fn can_counteract(
@@ -3307,9 +3569,10 @@ impl CardModules for Ruleset {
         world: &crate::Run,
         call: Call,
         log: &game_core::engine::GuestLog,
+        already_admitted: &[i32],
         on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
-        Ruleset::run_hook::<crate::Run>(self, world, call, log, on_body)
+        Ruleset::run_hook::<crate::Run>(self, world, call, log, already_admitted, on_body)
     }
     fn can_counteract(
         &self,
@@ -4779,6 +5042,23 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "trigger_zone",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::trigger_zone(&mut c, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_play_outcome",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_play_outcome(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "trig_out_cause", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_out_cause(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
         "set_move_settle_answer",
         |mut c: C<W>, player_id: i32, answer: i32| -> Result<(), Error> {
             hostfns::set_move_settle_answer(&mut c, player_id, answer).map_err(HostError::into_err)
@@ -4816,15 +5096,105 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "unplace_at",
+        |mut c: C<W>, uid: i32, destination: i32, cause: i32| -> Result<i32, Error> {
+            hostfns::unplace_at(&mut c, uid, destination, cause).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_of",
         |mut c: C<W>, uid: i32| -> Result<i32, Error> {
-            hostfns::unplace_at(&mut c, uid).map_err(HostError::into_err)
+            hostfns::tile_of(&mut c, uid).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "tile_at",
-        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
-            hostfns::tile_at(&mut c, uid).map_err(HostError::into_err)
+        |mut c: C<W>, position: i32| -> Result<i32, Error> {
+            hostfns::tile_at(&mut c, position).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "position_of_tile",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::position_of_tile(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_extra_count",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_extra_count(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "self_position", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::self_position(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "build_price",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::build_price(&mut c, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "build_cost_percent",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::build_cost_percent(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "build_discount", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::build_discount(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "tile_buildable",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_buildable(&mut c, player_id, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_build_as",
+        |mut c: C<W>,
+         player_id: i32,
+         tile: i32,
+         charge: i32,
+         amount: i32,
+         numerator: i32,
+         denominator: i32,
+         owner_required: i32|
+         -> Result<i32, Error> {
+            hostfns::card_build_as(
+                &mut c,
+                player_id,
+                tile,
+                charge,
+                amount,
+                numerator,
+                denominator,
+                owner_required,
+            )
+            .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(m, "trig_position", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::trig_position(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "trig_move_path_length",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_path_length(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_path",
+        |mut c: C<W>, index: i32| -> Result<i32, Error> {
+            hostfns::trig_move_path(&mut c, index).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -4832,6 +5202,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "set_tile_at",
         |mut c: C<W>, uid: i32, tile: i32| -> Result<i32, Error> {
             hostfns::set_tile_at(&mut c, uid, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_own_placement",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::is_own_placement(&mut c, uid).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -4844,8 +5221,113 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_face_down_at",
+        |mut c: C<W>, uid: i32, on: i32, cause: i32| -> Result<i32, Error> {
+            hostfns::set_face_down_at(&mut c, uid, on, cause).map_err(HostError::into_err)
+        },
+    )?;
+    // v114 (G08): the zone family.
+    l.func_wrap(
+        m,
+        "zone_of",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::zone_of(&mut c, uid).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "attachment_host",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::attachment_host(&mut c, uid).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "attached_cards",
+        |mut c: C<W>, host: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::attached_cards(&mut c, host, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "created_cards",
+        |mut c: C<W>, creator: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::created_cards(&mut c, creator, buf, cap).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "earliest_owned_tile",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::earliest_owned_tile(&mut c, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "instance_owner",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::instance_owner(&mut c, uid).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "attach_card",
+        |mut c: C<W>,
+         host: i32,
+         p: i32,
+         n: i32,
+         cause: i32,
+         face_down: i32|
+         -> Result<i32, Error> {
+            hostfns::attach_card(&mut c, host, p, n, cause, face_down).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "detach_card",
+        |mut c: C<W>, uid: i32, destination: i32, cause: i32| -> Result<i32, Error> {
+            hostfns::detach_card(&mut c, uid, destination, cause).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_instance_owner",
+        |mut c: C<W>, uid: i32, owner: i32| -> Result<i32, Error> {
+            hostfns::set_instance_owner(&mut c, uid, owner).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_created_by_at",
+        |mut c: C<W>, uid: i32, creator: i32| -> Result<i32, Error> {
+            hostfns::set_created_by_at(&mut c, uid, creator).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_ineffective_at",
         |mut c: C<W>, uid: i32, on: i32| -> Result<i32, Error> {
-            hostfns::set_face_down_at(&mut c, uid, on).map_err(HostError::into_err)
+            hostfns::set_ineffective_at(&mut c, uid, on).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_ineffective_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::is_ineffective_at(&mut c, uid).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "rehome_card",
+        |mut c: C<W>, tile: i32, owner: i32| -> Result<i32, Error> {
+            hostfns::rehome_card(&mut c, tile, owner).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "play_hand_card",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::play_hand_card(&mut c, player_id, p, n).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -4853,6 +5335,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "is_immune_at",
         |mut c: C<W>, uid: i32| -> Result<i32, Error> {
             hostfns::is_immune_at(&mut c, uid).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_immune_from_at",
+        |mut c: C<W>, uid: i32, by: i32| -> Result<i32, Error> {
+            hostfns::is_immune_from_at(&mut c, uid, by).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5068,8 +5557,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "draw",
-        |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            hostfns::draw(&mut c, player_id, n).map_err(HostError::into_err)
+        |mut c: C<W>, player_id: i32, n: i32, flags: i32| -> Result<i32, Error> {
+            hostfns::draw(&mut c, player_id, n, flags).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5117,8 +5606,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "add_to_dest",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, dest: i32| -> Result<(), Error> {
-            hostfns::add_to_dest(&mut c, player_id, p, n, dest).map_err(HostError::into_err)
+        |mut c: C<W>,
+         player_id: i32,
+         p: i32,
+         n: i32,
+         dest: i32,
+         counted: i32|
+         -> Result<(), Error> {
+            hostfns::add_to_dest(&mut c, player_id, p, n, dest, counted)
+                .map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5140,6 +5636,35 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "to_discard",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
             hostfns::to_discard(&mut c, player_id, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "inspection_begin",
+        |mut c: C<W>, looker: i32, owner: i32, count: i32, public: i32| -> Result<i32, Error> {
+            hostfns::inspection_begin(&mut c, looker, owner, count, public)
+                .map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "inspection_end",
+        |mut c: C<W>, player_id: i32, shuffle: i32| -> Result<i32, Error> {
+            hostfns::inspection_end(&mut c, player_id, shuffle).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "reveal_pile",
+        |mut c: C<W>, player_id: i32, pile: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::reveal_pile(&mut c, player_id, pile, p, n).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "reveal_card",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::reveal_card(&mut c, player_id, cp, cl, p, n).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5263,8 +5788,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_self_face_down",
-        |mut c: C<W>, on: i32| -> Result<i32, Error> {
-            hostfns::set_self_face_down(&mut c, on).map_err(HostError::into_err)
+        |mut c: C<W>, on: i32, cause: i32| -> Result<i32, Error> {
+            hostfns::set_self_face_down(&mut c, on, cause).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(m, "self_immune", |mut c: C<W>| -> Result<i32, Error> {
@@ -5275,6 +5800,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "set_self_immune",
         |mut c: C<W>, on: i32| -> Result<i32, Error> {
             hostfns::set_self_immune(&mut c, on).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_self_immune_except_owner",
+        |mut c: C<W>, on: i32| -> Result<i32, Error> {
+            hostfns::set_self_immune_except_owner(&mut c, on).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
@@ -5552,6 +6084,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::cant_move(&mut c, player_id).map_err(HostError::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "cant_move_code_for_activation",
+        |mut c: C<W>, player_id: i32, activation_ordinal: i32| -> Result<i32, Error> {
+            hostfns::cant_move_code_for_activation(&mut c, player_id, activation_ordinal)
+                .map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(m, "turn_player", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::turn_player(&mut c).map_err(HostError::into_err)
     })?;
@@ -5561,6 +6101,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "turn_key", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::turn_key(&mut c).map_err(HostError::into_err)
     })?;
+    l.func_wrap(m, "dice_immune", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::dice_immune(&mut c).map_err(HostError::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "set_dice_immune",
+        |mut c: C<W>, on: i32| -> Result<i32, Error> {
+            hostfns::set_dice_immune(&mut c, on).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "persona_is",
@@ -5684,29 +6234,36 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_dest",
+        |mut c: C<W>, dest: i32, cause: i32| -> Result<(), Error> {
+            hostfns::set_dest(&mut c, dest, cause).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_dest_unwatched",
         |mut c: C<W>, dest: i32| -> Result<(), Error> {
-            hostfns::set_dest(&mut c, dest).map_err(HostError::into_err)
+            hostfns::set_dest_unwatched(&mut c, dest).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_transfer_to_dest",
-        |mut c: C<W>, to: i32, dest: i32| -> Result<(), Error> {
-            hostfns::set_transfer_to_dest(&mut c, to, dest).map_err(HostError::into_err)
+        |mut c: C<W>, to: i32, dest: i32, cause: i32| -> Result<(), Error> {
+            hostfns::set_transfer_to_dest(&mut c, to, dest, cause).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "send_to_dest",
-        |mut c: C<W>, dest: i32| -> Result<i32, Error> {
-            hostfns::send_to_dest(&mut c, dest).map_err(HostError::into_err)
+        |mut c: C<W>, dest: i32, cause: i32| -> Result<i32, Error> {
+            hostfns::send_to_dest(&mut c, dest, cause).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "transfer_to_dest",
-        |mut c: C<W>, to: i32, dest: i32| -> Result<i32, Error> {
-            hostfns::transfer_to_dest(&mut c, to, dest).map_err(HostError::into_err)
+        |mut c: C<W>, to: i32, dest: i32, cause: i32| -> Result<i32, Error> {
+            hostfns::transfer_to_dest(&mut c, to, dest, cause).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(m, "rent_unit_mult", |mut c: C<W>| -> Result<i32, Error> {
@@ -6673,6 +7230,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "trigger_activation_ordinal",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_activation_ordinal(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_abnormal_blocked",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_abnormal_blocked(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trigger_move_abnormal",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trigger_move_abnormal(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "trigger_extreme_armed",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::trigger_extreme_armed(&mut c).map_err(HostError::into_err)
@@ -6865,7 +7443,7 @@ impl CardWorld for NullWorld {
     fn draw(&mut self, _: i32, _: i32) -> i32 {
         0
     }
-    fn add_to_dest(&mut self, _: i32, _: &str, _: i32) {}
+    fn add_to_dest(&mut self, _: i32, _: &str, _: i32, _: bool) {}
     fn take_card(&mut self, _: i32, _: &str, _: crate::CardPile) -> bool {
         false
     }
@@ -6956,12 +7534,12 @@ impl CardWorld for NullWorld {
     fn end_turn_now(&mut self, _: i32) {}
     fn teleport_as(&mut self, _: i32, _: i32, _: i32, _: i32) {}
     fn log_as(&mut self, _: i32, _: &str, _: crate::Msg) {}
-    fn set_dest(&mut self, _: i32) {}
-    fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
-    fn send_to_dest(&mut self, _: i32) -> Option<i32> {
+    fn set_dest(&mut self, _: i32, _: i32) {}
+    fn set_transfer_to_dest(&mut self, _: i32, _: i32, _: i32) {}
+    fn send_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
         None
     }
-    fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
+    fn transfer_to_dest(&mut self, _: i32, _: i32, _: i32) -> Option<i32> {
         None
     }
     fn rent_unit_mult(&self) -> i32 {
@@ -7053,6 +7631,9 @@ impl CardWorld for NullWorld {
         0
     }
     fn cant_move(&self, _: i32) -> i32 {
+        1
+    }
+    fn cant_move_from(&self, _: i32, _: i32) -> i32 {
         1
     }
     fn spend_marker(&mut self, _: i32, _: &str, _: i32, _: crate::Msg) -> i32 {

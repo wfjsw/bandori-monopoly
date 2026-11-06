@@ -32,6 +32,7 @@ mod setup;
 mod tile_text;
 mod work;
 mod world;
+mod zone;
 
 pub use tile_text::compose as compose_tile_texts;
 
@@ -45,7 +46,7 @@ pub use cx::{
     AnswerProvider, Answered, Ask, Flow, Halt, HeuristicProvider, PlayCtx, Reply, SettleOutcome,
     AI_UNSET,
 };
-pub use cx::{FieldDelta, FieldWrite, GuestOverlay, PassBase};
+pub use cx::{FieldDelta, FieldWrite, GuestOverlay, HouseWrite, PassBase};
 pub use journal::{
     DeferredEvent, GuestLog, HostJournalEntry, JournalRequest, JournalStart, PlayerSnapshot,
     WorldSnapshot,
@@ -63,8 +64,8 @@ pub use work::{
     WorkItem,
 };
 pub use world::{
-    CounteractRecord, Extreme, FixedFace, Hidden, Lingering, PlayRecord, Scheduled, SettleAnswer,
-    SharedWorld, TurnCtx, TurnSnapshot, World,
+    CounteractRecord, DeckPlacement, Extreme, FixedFace, Hidden, Lingering, PlayRecord, Scheduled,
+    SettleAnswer, SharedWorld, TurnCtx, TurnSnapshot, World, ZoneTransition,
 };
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
@@ -174,7 +175,12 @@ pub struct RawAiAnswer {
 #[derive(Debug, Clone, Default)]
 pub struct ViewExtra {
     pub ai_answer: Option<RawAiAnswer>,
+    /// Would `cant_play` allow it (human legality / glow)?
     pub playable: Vec<bool>,
+    /// Would a bot offer it: the bare static `ai_play` answer. Combine with
+    /// `playable`; never legality. Static facts only, so the seat-view engine
+    /// computes it exactly.
+    pub ai_playable: Vec<bool>,
     pub estimated_cost: Vec<i32>,
     /// The viewer's pressable skills (`skill:*` field instances with an
     /// `On::Play` entry), each gated through [`cant_act`].
@@ -252,15 +258,18 @@ enum Routine {
     Ai(Box<Ask>),
 }
 
-/// The acting seat's clock is held until this seat acks `anim_done` for
-/// `seq` (or [`ANIM_HOLD_CAP`] seconds of ticks elapse). Only the acting
-/// seat's ack matters; bots and Solo never hold. Recorded as
-/// [`crate::record::Input::AnimDone`] so replays reproduce the same pauses.
+/// The clock is held until **every** human seat with presentation pending
+/// acks `anim_done` for `seq` (or [`ANIM_HOLD_CAP`] seconds of ticks elapse).
+/// That is the acting seat on a turn surface, or every human seat the table
+/// is still waiting on for a prompt / end-match vote -- their clients are all
+/// animating the same commit. Only human seats are held; bots and Solo never
+/// hold. Recorded as [`crate::record::Input::AnimDone`] so replays reproduce
+/// the same pauses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ClockHold {
-    /// Room member id of the seat that must ack (the acting human).
-    member: i32,
-    /// State version the ack must name. A lower `seq` is stale and ignored.
+    /// Room member ids that must ack (the acting / prompted humans).
+    members: Vec<i32>,
+    /// State version the acks must name. A lower `seq` is stale and ignored.
     seq: i32,
     /// Seconds held so far (tick-fed; [`ANIM_HOLD_CAP`] releases).
     elapsed: f32,
@@ -319,6 +328,15 @@ struct Pending {
     snapshot: World,
     answers: Vec<Answered>,
     live: Live,
+    /// The routine is the outermost one: its end clears the reveal overlay.
+    /// Defaults to `true` on a save written before the field existed -- a
+    /// resumed routine then clears rather than letting the overlay stick.
+    #[serde(default = "outermost_by_default")]
+    outermost: bool,
+}
+
+fn outermost_by_default() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -407,12 +425,27 @@ struct Saved {
 /// v16: counteraction history (`World.countered_this_turn`, `World.played_cards`
 /// over `MAX_PLAY_LOG`). Both are durable facts a save taken mid-turn must
 /// carry (design G06 §7).
-/// v17: G10's durable effect-outcome state -- deferred events, world
-/// checkpoints with their owners, the snapshot key counter, and the torn
-/// routine's host journal / guest answers on `Pending`. All are
-/// `serde(default)`; older saves are refused (replays ride archived engine
-/// bundles).
-pub const SAVE_VERSION: u32 = 17;
+/// v17: the permitted over-limit hand (`MatchPlayer.over_hand_allowed`,
+/// `serde(default)`). A save taken over the limit must carry it -- the `end`
+/// gate reads it (design G14 §8).
+/// v18: deck inspection frames (`World.inspection_frames`,
+/// `next_inspection_id`) and the public reveal records (`World.reveals`). A
+/// save may be taken while a look is paused and the frame holds cards in no
+/// pile, so dropping it loses them; the reveal overlay would otherwise
+/// vanish mid-routine (design G11).
+/// v19: `ClockHold.member` became `members` -- every human seat whose
+/// presentation is pending holds the clock (a multi-human prompt / vote),
+/// not only the acting seat.
+/// v20: the instance edges and the owner order (`FieldCard.on` /
+/// `created_by` / `effective`, `MatchState.owned_seq` / `next_owned_seq`). All
+/// `serde(default)`; the attachment relation is a persisted relation, not a
+/// repairable scalar, so the version moves (design G08 §9).
+/// v21: G10's durable effect-outcome state -- deferred events (with their
+/// draw ordinal), world checkpoints with their owners, the snapshot key
+/// counter, and the torn routine's host journal / guest answers on `Pending`.
+/// All are `serde(default)`; older saves are refused (replays ride archived
+/// engine bundles).
+pub const SAVE_VERSION: u32 = 21;
 
 /// Is the money-pipeline stage tracing on? `STAGE_DBG` is an environment
 /// variable, which wasm32 always answers `None` for: the browser build turns
@@ -885,6 +918,11 @@ impl Match {
         st.seq = self.seq;
         st.vote = self.vote.clone();
         st.busy = self.pending.is_some();
+        // The roll / end gates read this (`cant_act`), so it has to ride the
+        // view: a rebuilt fork (bot-core's determinizer) restores the world
+        // from the frame and would otherwise think the main move is still
+        // owed, answering `roll` into `err.roll_main_used` forever.
+        st.main_moved = self.world.turn.main_moved;
         if let Some(p) = &self.pending {
             let l = &p.live;
             st.prompt = l.ask.view.clone();
@@ -905,6 +943,9 @@ impl Match {
         } else {
             st.prompt = Default::default();
         }
+        // Not gated on a turn: the opening mulligan is a pre-turn prompt that
+        // still holds the table (`arm_clock_hold`).
+        st.clock_paused = self.clock_hold.is_some();
         if st.phase == "play" && st.turn >= 0 {
             // Buy / build are settle-time offers only (`tile:property` /
             // `tile:ring` → `ctx::offer_buy` / `ctx::offer_build`). There is
@@ -918,7 +959,6 @@ impl Match {
             st.base_time = base;
             st.bonus_time = bonus;
             st.time_left = base + bonus;
-            st.clock_paused = self.clock_hold.is_some();
             // `cant_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
@@ -931,7 +971,10 @@ impl Match {
                 let live_skip = self.world.st.skip_move;
                 let main_moved = self.world.turn.main_moved;
                 let held = self.world.hidden.get(ti).map_or(0, |h| h.hand.len());
-                let over_hand = st.players.get(ti).is_some_and(|p| p.over_hand(held));
+                let over_hand = st
+                    .players
+                    .get(ti)
+                    .is_some_and(|p| p.over_hand_blocking(held));
                 let my_turn = st.turn == ti as i32;
                 let owes_roll = st.step == stage::OPS && !live_skip && !main_moved;
                 let queued_end = my_turn && self.world.end_already_queued();
@@ -1035,7 +1078,14 @@ impl Match {
             .st
             .players
             .get(seat)
-            .is_some_and(|p| p.member == hold.member)
+            .is_some_and(|p| hold.members.contains(&p.member))
+    }
+
+    /// True while any of `seats` has presentation pending. A live window
+    /// (prompt soft window, end-match vote) is shared table-wide, so one held
+    /// seat freezes it for everyone until every held seat has caught up.
+    fn clock_hold_covers_any(&self, seats: &[usize]) -> bool {
+        self.clock_hold.is_some() && seats.iter().any(|&s| self.clock_hold_covers(s))
     }
 
     /// AUCTION_EXTEND is a **grant**, not a borrow: a bid tops every
@@ -1233,6 +1283,22 @@ impl Match {
         &mut self.world
     }
 
+    /// Edit the world **while a routine is suspended**: the write lands on the
+    /// pending snapshot too, which is what the routine re-runs from -- a live
+    /// write alone would be overwritten by the next step. Note the re-run
+    /// starts over from the snapshot, so the edit reads as *pre*-routine
+    /// state; a change that must land mid-routine (after a frame pinned its
+    /// tile) needs a card body instead.
+    #[doc(hidden)]
+    pub fn edit_world(&mut self, edit: impl Fn(&mut World)) {
+        self.changed = true;
+        self.seq += 1;
+        edit(&mut self.world);
+        if let Some(p) = self.pending.as_mut() {
+            edit(&mut p.snapshot);
+        }
+    }
+
     #[doc(hidden)]
     pub fn world(&self) -> &World {
         &self.world
@@ -1313,6 +1379,26 @@ impl Match {
     /// needs the play history for a fork reads it here.
     pub fn played_context(&self) -> (&[String], usize) {
         (&self.world.turn.played, self.world.turn.cards_played)
+    }
+
+    /// The caller's own innermost open inspection frame, for
+    /// `MatchView.inspection`: the cards they are looking at, top-first.
+    pub fn inspection_of(&self, member: i32) -> Option<crate::state::InspectionView> {
+        let seat = self.player_index(member)? as i32;
+        let frame = self
+            .world
+            .inspection_frames
+            .iter()
+            .rfind(|f| f.looker == seat)?;
+        Some(crate::state::InspectionView {
+            cards: frame
+                .cards
+                .iter()
+                .filter(|c| c.revealed)
+                .map(|c| c.id.clone())
+                .collect(),
+            public: frame.public,
+        })
     }
 
     pub fn draw_of(&self, member: i32) -> Vec<String> {
@@ -1398,6 +1484,7 @@ impl Match {
         serde_json::json!({
             "aiAnswer": ai_answer,
             "playable": p.playable,
+            "aiPlayable": p.ai_playable,
             "estCost": p.estimated_cost,
             "skills": p.skills,
         })
@@ -1421,15 +1508,22 @@ impl Match {
         });
         let cx = PlayCtx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         let mut playable = Vec::new();
+        let mut ai_playable = Vec::new();
         let mut estimated_cost = Vec::new();
-        // One `cant_play` per distinct card id: a hand may hold duplicates and
-        // the answer is a pure query of the (unchanged) state within this loop.
-        let mut memo: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
+        // One `cant_play` / `ai_play` per distinct card id: a hand may hold
+        // duplicates and both are pure queries of the (unchanged) state within
+        // this loop.
+        let mut memo: std::collections::HashMap<&str, (bool, bool)> =
+            std::collections::HashMap::new();
         for c in &self.world.hidden[i].hand {
-            let ok = *memo
-                .entry(c.as_str())
-                .or_insert_with(|| cx.cant_play(i, c, false).is_none());
+            let (ok, ai_ok) = *memo.entry(c.as_str()).or_insert_with(|| {
+                (
+                    cx.cant_play(i, c, false).is_none(),
+                    self.rules.ai_play(&cx, i, c),
+                )
+            });
             playable.push(ok);
+            ai_playable.push(ai_ok);
             estimated_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
         // The viewer's pressable skills: every `skill:*` field instance with an
@@ -1467,6 +1561,7 @@ impl Match {
         ViewExtra {
             ai_answer,
             playable,
+            ai_playable,
             estimated_cost,
             skills,
         }
@@ -1546,6 +1641,13 @@ impl Match {
         let mut cx = PlayCtx::new(self.world.clone(), &data, &*rules, &[]);
         let r = f(&mut cx);
         self.world = cx.into_world();
+        // Nothing is pending after a direct write, so the reveal overlay it
+        // produced is over -- and with it any look hold (nothing will file).
+        self.world.reveals.clear();
+        self.world
+            .look_hold
+            .iter_mut()
+            .for_each(|held| *held = false);
         self.changed = true;
         self.seq += 1;
         self.arm_clock_hold();
@@ -1553,11 +1655,23 @@ impl Match {
     }
 
     fn start(&mut self, r: Routine) {
+        // Bumped **before** the snapshot so a replay from it re-reads the same
+        // activation identity instead of allocating a new one.
+        self.world.turn.activation_ordinal += 1;
         let snapshot = self.world.clone();
-        self.execute(r, snapshot, vec![]);
+        // A start outside the deferred pump is the outermost routine: only it
+        // ends the public reveal overlay.
+        let outermost = !self.flushing_deferred;
+        self.execute(r, snapshot, vec![], outermost);
     }
 
-    fn execute(&mut self, routine: Routine, snapshot: World, answers: Vec<Answered>) {
+    fn execute(
+        &mut self,
+        routine: Routine,
+        snapshot: World,
+        answers: Vec<Answered>,
+        outermost: bool,
+    ) {
         let (data, rules) = (self.data.clone(), self.rules.clone());
         // Simulation mode: answer inline through the installed provider
         // (`docs/BOT.md` §3.2). With none installed this is the halt/replay
@@ -1587,11 +1701,11 @@ impl Match {
         self.provider = prov;
         self.changed = true;
         self.seq += 1;
-        // Anim hold for the acting human: every commit that leaves the seat
-        // something to watch (this one) re-arms against the new seq. The hold
-        // release path (`anim_done` / cap) never comes through here, so it
-        // cannot re-arm itself.
-        self.arm_clock_hold();
+        // The anim hold is armed at the end of each arm below, once the new
+        // world and any pending prompt / vote are in place: it has to see the
+        // *new* participants, and a prompt can be raised before the first turn
+        // (`turn` = -1). The hold release path (`anim_done` / cap) never comes
+        // through here, so it cannot re-arm itself.
         match res {
             Ok(()) | Err(Halt(HaltKind::Ended)) => {
                 let signals = std::mem::take(&mut w.signals);
@@ -1617,9 +1731,17 @@ impl Match {
                         }
                     }
                 }
+                if outermost {
+                    w.reveals.clear();
+                    // A look's hold only has to survive until its own play
+                    // files the card; a look from a hook or a skill press has
+                    // no filing of its own, so the routine end releases it.
+                    w.look_hold.iter_mut().for_each(|held| *held = false);
+                }
                 self.world = w;
                 self.pending = None;
                 self.wait = delay.min(MAX_WAIT);
+                self.arm_clock_hold();
                 for s in signals {
                     match s {
                         Signal::StartTimer(i, refill, base_refill) => {
@@ -1681,7 +1803,9 @@ impl Match {
                     snapshot,
                     answers,
                     live: Live::new(*ask),
+                    outermost,
                 });
+                self.arm_clock_hold();
             }
             // STACK-01 fallback only: the pump above swallows suspensions, so
             // this arm is a guard against one escaping it. The work stack does
@@ -1690,8 +1814,13 @@ impl Match {
             // rather than aborting the match (`changed` / `seq` are already
             // bumped above).
             Err(Halt(HaltKind::Suspended)) => {
+                // The routine is over, so its overlay and its look holds are
+                // too (same rule as the `Ended` arm above).
+                w.reveals.clear();
+                w.look_hold.iter_mut().for_each(|held| *held = false);
                 self.world = w;
                 self.pending = None;
+                self.arm_clock_hold();
                 if !self.flushing_deferred {
                     self.flush_deferred();
                 }
@@ -1716,7 +1845,7 @@ impl Match {
         self.prompt_log.push(a.clone());
         let mut answers = p.answers;
         answers.push(a);
-        self.execute(p.routine, p.snapshot, answers);
+        self.execute(p.routine, p.snapshot, answers, p.outermost);
     }
 
     /// Every [`Answered`] committed so far, in order (`docs/BOT.md` §3.2's
@@ -1803,19 +1932,28 @@ impl Match {
     /// Feed an animation-done ack from seat `member` for state version `seq`.
     ///
     /// A matching ack (or one naming a newer seq -- the client is already
-    /// current) releases the hold so the turn clock starts consuming. A stale
-    /// ack (`seq` older than the hold) is ignored and returns `false`. Recorded
-    /// as [`crate::record::Input::AnimDone`] so replays reproduce the pause.
+    /// current) clears that seat from the hold; the hold releases (and the
+    /// clock starts consuming) once every held seat has acked. A stale ack
+    /// (`seq` older than the hold) or one from a seat not held is ignored and
+    /// returns `false`. Recorded as [`crate::record::Input::AnimDone`] so
+    /// replays reproduce the pause.
     pub fn anim_done(&mut self, member: i32, seq: i32) -> bool {
-        let Some(hold) = &self.clock_hold else {
+        let Some(hold) = &mut self.clock_hold else {
             return false;
         };
-        if hold.member != member || seq < hold.seq {
+        if seq < hold.seq {
             return false;
         }
-        self.clock_hold = None;
-        self.changed = true;
-        self.seq += 1;
+        let before = hold.members.len();
+        hold.members.retain(|m| *m != member);
+        if hold.members.len() == before {
+            return false;
+        }
+        if hold.members.is_empty() {
+            self.clock_hold = None;
+            self.changed = true;
+            self.seq += 1;
+        }
         true
     }
 
@@ -1825,43 +1963,74 @@ impl Match {
         self.clock_hold.is_some()
     }
 
-    /// Arm (or clear) the anim hold after a game commit. Only the acting
-    /// human's client is waited on; Solo and machine seats never hold. The
-    /// hold is keyed to the just-bumped [`Self::seq`] so a stale ack is
-    /// ignored. Not called from [`Self::anim_done`] -- a hold release must
-    /// not re-arm itself.
+    /// Arm (or clear) the anim hold after a game commit.
+    ///
+    /// Every **human** seat whose presentation is now pending is waited on:
+    /// the pending human seats of an open prompt or end-match vote (their
+    /// clients are all animating the same commit), otherwise the acting seat.
+    /// Bots have no client to ack, and Solo never holds. The hold is keyed to
+    /// the just-bumped [`Self::seq`] so a stale ack is ignored. Not called from
+    /// [`Self::anim_done`] -- a hold release must not re-arm itself.
+    ///
+    /// A prompt can be raised before the first turn (`turn` is -1), so this
+    /// cannot key on the turn seat alone; it arms once the new world (and
+    /// pending prompt / vote) is in place.
     fn arm_clock_hold(&mut self) {
         if self.mode == MatchMode::Solo {
             self.clock_hold = None;
             return;
         }
         let st = &self.world.st;
-        if st.phase != "play" || st.turn < 0 {
+        if st.phase != "play" {
             self.clock_hold = None;
             return;
         }
-        let turn = st.turn as usize;
-        let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
-            st.roller as usize
+        let human = |seat: usize| {
+            st.players
+                .get(seat)
+                .filter(|p| !p.ai && !p.bot && !p.out())
+                .map(|p| p.member)
+        };
+        let mut members: Vec<i32> = Vec::new();
+        if let Some(p) = &self.pending {
+            for (k, &seat) in p.live.ask.view.players.iter().enumerate() {
+                if p.live.answers.get(k).copied().unwrap_or(0) >= 0 {
+                    continue;
+                }
+                if let Some(member) = human(seat as usize) {
+                    members.push(member);
+                }
+            }
+        } else if self.vote.id != 0 {
+            for (k, &seat) in self.vote.players.iter().enumerate() {
+                if self.vote.answers.get(k).copied().unwrap_or(0) >= 0 {
+                    continue;
+                }
+                if let Some(member) = human(seat as usize) {
+                    members.push(member);
+                }
+            }
+        } else if st.turn >= 0 {
+            let turn = st.turn as usize;
+            let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
+                st.roller as usize
+            } else {
+                turn
+            };
+            if let Some(member) = human(actor) {
+                members.push(member);
+            }
+        }
+        if members.is_empty() {
+            self.clock_hold = None;
         } else {
-            turn
-        };
-        let Some(p) = st.players.get(actor) else {
-            self.clock_hold = None;
-            return;
-        };
-        // A bot has no client to ack: arming a hold against it would stall the
-        // clock until its turn is taken over.
-        if p.ai || p.bot {
-            self.clock_hold = None;
-            return;
+            self.clock_hold = Some(ClockHold {
+                // Room member ids (what the ack route sends), not seat indexes.
+                members,
+                seq: self.seq,
+                elapsed: 0.0,
+            });
         }
-        self.clock_hold = Some(ClockHold {
-            // The room member id (what the ack route sends), not the seat index.
-            member: p.member,
-            seq: self.seq,
-            elapsed: 0.0,
-        });
     }
 
     /// Feed a "this seat has the rolled order on screen" ack from room
@@ -2210,6 +2379,9 @@ impl Match {
         // driver that stalls is still covered -- such a seat is force-defaulted
         // onto the prefill once the prompt's own soft window runs out.
         let auto: Vec<bool> = players.iter().map(|&s| self.auto_player(s)).collect();
+        // Anim-ack hold per pending seat. A held seat loses no time to the
+        // presentation it is waiting for.
+        let held: Vec<bool> = players.iter().map(|&s| self.clock_hold_covers(s)).collect();
         // Prompt pool drain (post-settings ordinary prompts only). Each
         // pending seat spends its own pool; the anim-ack hold pauses
         // consumption for the held seat so presentation never costs clock.
@@ -2219,7 +2391,6 @@ impl Match {
                 .as_ref()
                 .map(|p| (0..players.len()).map(|k| p.live.answers[k] < 0).collect())
                 .unwrap_or_default();
-            let held: Vec<bool> = players.iter().map(|&s| self.clock_hold_covers(s)).collect();
             for k in 0..players.len() {
                 if pending[k] && !auto[k] && !held[k] {
                     self.drain_pool(players[k], dt);
@@ -2235,7 +2406,16 @@ impl Match {
         };
         let p = self.pending.as_mut().expect("checked above");
         let l = &mut p.live;
-        l.time_left -= dt;
+        // The prompt's own soft window is shared by every pending seat (and is
+        // the real deadline for dedicated-window prompts: the opening mulligan,
+        // the bankruptcy leftover auction, legacy-clock prompts). It freezes
+        // while any held seat is still animating the commit that raised it --
+        // including one raised before the first turn, when there is no turn
+        // clock to speak of.
+        let anim_held = held.iter().any(|&h| h);
+        if !anim_held {
+            l.time_left -= dt;
+        }
         let before = (l.answers.clone(), l.bid);
         // A solo match never forces a *local* player's answer -- nobody is
         // waiting on them. The countdown still runs, because the prompt's
@@ -2706,6 +2886,7 @@ impl Match {
         self.changed = true;
         self.seq += 1;
         self.check_vote();
+        self.arm_clock_hold();
         Ok(())
     }
 
@@ -2740,12 +2921,18 @@ impl Match {
         // Solo never expires a vote -- see `tick_choice`. The mode is the
         // predicate, not the human count: an online room with one human still
         // owes its table an answer.
-        if self.mode != MatchMode::Solo {
+        //
+        // The window is presentation too: a held voter still animating the
+        // vote commit does not lose the answer window to it.
+        let voters: Vec<usize> = self.vote.players.iter().map(|&s| s as usize).collect();
+        if self.mode != MatchMode::Solo && !self.clock_hold_covers_any(&voters) {
             self.vote.time_left -= dt;
         }
         if self.fill_auto_votes() {
             self.changed = true;
             self.seq += 1;
+            // The machine-held seats no longer need waiting on.
+            self.arm_clock_hold();
         }
         if self.mode != MatchMode::Solo && self.vote.time_left <= 0.0 {
             self.end_vote(false, Msg::new("vote.timeout"));
@@ -2780,6 +2967,7 @@ impl Match {
                 Msg::new("log.vote_failed").msg("reason", reason),
             );
         }
+        self.arm_clock_hold();
     }
 
     // ---------------------------------------------------------------- lifecycle
@@ -3010,7 +3198,7 @@ fn cant_act(cx: &PlayCtx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if st.step == stage::MOVE {
                 return Some(Msg::new("err.moving"));
             }
-            if cx.over_hand(i) {
+            if cx.over_hand_blocking(i) {
                 return Some(Msg::new("err.over_hand").i(
                     "limit",
                     i64::from(cx.w.st.players[i].hand_limit().unwrap_or_default()),

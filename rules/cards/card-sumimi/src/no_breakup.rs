@@ -8,6 +8,7 @@
 
 use alloc::vec::Vec;
 
+use bandori_std::zones::ZoneChangeCause;
 use card_sdk::abi::ActionKind;
 use card_sdk::CardText;
 use card_sdk::{ctx, key, Action, CardDef, Msg, On};
@@ -150,7 +151,7 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     // The shot's own settle resolves while this body runs, so the card has to
     // be in play for its `tileResolved` terminals to be live; either terminal
     // sends it on (dest `Graveyard`).
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, ZoneChangeCause::Effect);
     // Only on the first pass: the body re-runs after every host request,
     // including the terminal's restore, and a second `place_card` would put a
     // second copy of the card on the field.
@@ -234,7 +235,7 @@ fn revert(player_id: i32) -> card_sdk::Asked {
     // same pair and the same checkpoint every pass.
     let base = ctx::slot(player_id, BASE);
     let checkpoint = base + 1;
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, ZoneChangeCause::Effect);
     ctx::world_restore(checkpoint)?;
     ctx::world_snapshot_drop(base)?;
     ctx::world_snapshot_drop(checkpoint)?;
@@ -249,7 +250,7 @@ fn revert(player_id: i32) -> card_sdk::Asked {
 fn settle_after(player_id: i32) -> card_sdk::Asked {
     let base = ctx::slot(player_id, BASE);
     let checkpoint = base + 1;
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, ZoneChangeCause::Effect);
     ctx::world_snapshot_drop(base)?;
     ctx::world_snapshot_drop(checkpoint)?;
     finish(player_id, checkpoint);

@@ -36,7 +36,11 @@ pub trait WorkItem {
 #[derive(Debug, Clone)]
 pub struct SettleFrame {
     pub player: usize,
+    /// The board **position** the settle runs at.
     pub at: usize,
+    /// The **governing tile** the settle is about (pinned when the frame
+    /// opens: a swap resolved after it must not turn the identity).
+    pub tile: i32,
     pub m: Move,
     pub stage: SettleStage,
     /// Owner of `at` when the settle opened (read once, as today).
@@ -51,6 +55,8 @@ pub struct SettleFrame {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettleStage {
+    /// Raise `tileEffectBefore` before the tile's extra effects run.
+    RaiseTileEffect,
     /// Raise `settle` (declaration + counteraction window).
     RaiseSettle,
     /// After `settle` returned: cancel check, then body or terminal.
@@ -71,12 +77,13 @@ pub enum SettleStage {
 }
 
 impl SettleFrame {
-    pub fn new(player: usize, at: usize, m: Move) -> Self {
+    pub fn new(player: usize, at: usize, tile: i32, m: Move) -> Self {
         Self {
             player,
             at,
+            tile,
             m,
-            stage: SettleStage::RaiseSettle,
+            stage: SettleStage::RaiseTileEffect,
             owner: -1,
             stack_idx: usize::MAX,
             scoped: false,

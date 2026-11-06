@@ -1,0 +1,68 @@
+/* The viewer's open look: a thin strip over the board's upper edge. */
+.strip {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(18, 16, 26, 0.82);
+  border: 1px solid rgba(237, 78, 118, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #e8e4f2;
+}
+.public {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #16121e;
+  background: #ed4e76;
+}
+.cards {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  pointer-events: auto;
+}
+.card {
+  flex: 0 0 auto;
+  width: 54px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: center;
+}
+.card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+}
+.card span {
+  display: block;
+  padding: 1px 2px;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card:hover,
+.card:focus-visible {
+  border-color: #ed4e76;
+}

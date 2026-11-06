@@ -40,6 +40,8 @@ const C: CardDef = CardDef::new("t", &[
     On::Filter(Filter::PaySplitAdd("", None, payadd_body)),
     On::Filter(Filter::Redirect("", None, redirect_body)),
     On::Action(Action::TurnStart("", None, on_turn_start).counter_reason("turn")),
+    On::Action(Action::Inspected("", None, seen)),
+    On::Action(Action::DrawAfter("", None, draw_after)),
     On::Filter(bandori_std::kind::Filters::MyRewrite("", None, my_rewrite)),
 ]);
 "#;
@@ -66,6 +68,8 @@ fn parse_on_bodies_one_per_shape() {
             ("Filter", "PaySplitAdd", BodyShape::PayAdd),
             ("Filter", "Redirect", BodyShape::Redirect),
             ("Action", "TurnStart", BodyShape::Action),
+            ("Action", "Inspected", BodyShape::Action),
+            ("Action", "DrawAfter", BodyShape::Action),
             ("Filter", "MyRewrite", BodyShape::Plan),
         ],
         "got {summary:?}"
@@ -333,7 +337,7 @@ fn every_registration_names_a_declared_kind() {
             "Action::KINDS has `{name}` but the action_kinds! table parse missed it"
         );
     }
-    assert_eq!(sdk_filter.len(), 28, "Filter::KINDS row count");
+    assert_eq!(sdk_filter.len(), 35, "Filter::KINDS row count");
 
     for f in &files {
         let Ok(src) = std::fs::read_to_string(f) else {

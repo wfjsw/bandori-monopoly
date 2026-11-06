@@ -73,7 +73,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     ctx::add_group_crystals(player_id, 3, i32::MAX);
     // 规则书[手]: 「并将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "PP:练习生解密指南",
@@ -83,14 +83,15 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // floor-divide.
     let fans = fans::up(player_id) + fans::down(player_id);
     ctx::set_crystals(fans / 3);
-    // TODO(规则书)（根据公开卡中的颜色数量添加一个单色/双色标记） 规则书[手]:
-    // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」 -- `cards_in(Deck)` only reads the
-    // deck; the reveal is logged card by card below and the distinct colour
-    // count drives the mark. One distinct colour -> 1 mono mark; two or more ->
-    // 1 dual mark.
+    // 规则书[手]: 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
+    // -- the whole deck turns face up in a public frame (each turned card is a
+    // public reveal of its own), and the distinct colour count drives the mark:
+    // one distinct colour -> 1 mono mark; two or more -> 1 dual mark.
     // OPEN-mark: the colour-count table and the 单色/双色标记 vocabulary are unprinted --
     // we guess 1 colour = mono, >=2 = dual.
-    let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
+    let count = ctx::deck_count(player_id);
+    ctx::inspection_begin(player_id, player_id, count, true)?;
+    let deck = ctx::cards_in(player_id, ctx::CardPile::Inspection);
     let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
     for c in deck.iter() {
         let band = c.as_str().split(':').next().unwrap_or("");
@@ -98,16 +99,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
             seen.push(band);
         }
     }
-    // 规则书[手]: 「公开[使用者]的抽卡区」 -- `cards_in` is a private guest read, so
-    // the log names every revealed card.
-    // TODO(ABI) 公开抽卡区: the reveal is log-only; there is no public zone the
-    //   other clients could inspect.
-    for c in deck.iter() {
-        ctx::log(
-            player_id,
-            &Msg::new(key!("trainee_guide_reveal_card")).card("card", c.as_str()),
-        );
-    }
+    ctx::inspection_end(player_id, false);
     ctx::log(
         player_id,
         &Msg::new(key!("trainee_guide_revealed")).i("n", seen.len() as i64),
@@ -204,7 +196,7 @@ fn cash_in(player_id: i32) -> card_sdk::Asked {
     // 「随后进入弃卡区」 -- `send_to_dest` leaves **now**, so a second crystal
     // write in the same raise batch cannot re-enter this body (a deferred
     // `set_dest` would still see `is_placed()` and need a latch).
-    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::send_to_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     Ok(())
 }
 

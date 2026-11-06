@@ -29,6 +29,15 @@ fn accept_buy(t: &mut Table) {
     skip_all(t);
 }
 
+/// Answer the next `n` tile asks with these tile ids (a tile ask answers with
+/// the id; declining would pick none), then skip anything else.
+fn pick_tiles(t: &mut Table, who: usize, tiles: &[usize]) {
+    for &tile in tiles {
+        t.answer_tile(who, tile).unwrap();
+    }
+    skip_all(t);
+}
+
 // =====================================================================
 // AG:宣战布告
 // =====================================================================
@@ -169,7 +178,7 @@ fn sunset_x_halved_before_round_100() {
     // (600+500)+(600+500)+(1400+1000)+(1800+1000) = 7400, ÷1 = 7400,
     // 向上取整10 = 7400, halved = 3700.
     t.give_play(0, "AG:即使夕阳落山").unwrap();
-    skip_all(&mut t);
+    pick_tiles(&mut t, 0, &[HILL, FUJIMI, 7, 9]);
     // 规则书: 「所有被[指定]的玩家[支付][使用者]X资金」
     assert_eq!(t.money(0), 13_700, "events {:?}", t.recent_keys(8));
     assert_eq!(t.money(1), 6_300);
@@ -818,6 +827,56 @@ fn one_of_us_places_on_field() {
     assert!(t.on_field(0, "AG:ONE OF US"), "field {:?}", t.field_ids(0));
 }
 
+// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契」
+#[test]
+fn one_of_us_deeds_and_card_follow_the_survivor() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "美竹兰");
+    t.set_character_raw(1, "青叶摩卡");
+    t.own(0, &[HILL]);
+    t.own(1, &[FUJIMI]);
+    t.give_play(0, "AG:ONE OF US").unwrap();
+    t.answer(0, 0).unwrap(); // the partner: the only candidate, P1
+    t.answer(0, 0).unwrap(); // P0's deed: 星之鼓动山丘
+    t.answer(0, 0).unwrap(); // P1's deed: 富士见坂
+    skip_all(&mut t);
+    let cards = t
+        .field(0)
+        .iter()
+        .find(|f| f.card == "AG:ONE OF US")
+        .unwrap()
+        .uid;
+    assert_eq!(
+        t.m.world().attached_cards(cards).len(),
+        2,
+        "both deeds parked"
+    );
+    // P0 goes bankrupt on P1's five-house 购物中心.
+    t.set_money(0, 0);
+    let mall = tile("购物中心");
+    t.own(1, &[mall]);
+    t.set_houses(mall, 5);
+    t.begin_turn(0);
+    t.set_pos(0, mall - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    assert!(t.p(0).bankrupt, "{:?}", t.recent_keys(20));
+    // 「转移到存活方的游戏区，该方视为拥有此地契」 -- the card and both deeds
+    // are the survivor's; the parked rows keep their identity.
+    assert!(t.on_field(1, "AG:ONE OF US"), "{:?}", t.field_ids(1));
+    let held = t.m.world().attached_cards(cards).to_vec();
+    assert_eq!(held.len(), 2, "the deeds stay parked");
+    assert!(
+        held.iter().all(|&u| t.m.world().holder_of(u) == 1),
+        "each deed is the survivor's"
+    );
+    assert_eq!(t.owner(HILL), Some(1), "the deed's tile follows");
+    assert_eq!(t.owner(FUJIMI), Some(1));
+}
+
 // =====================================================================
 // Character skills
 // =====================================================================
@@ -1146,7 +1205,7 @@ fn ix_band_house_then_sunset_demolish() {
         t.set_houses(tile, 1);
     }
     t.give_play(0, "AG:即使夕阳落山").unwrap();
-    skip_all(&mut t);
+    pick_tiles(&mut t, 0, &[FUJIMI, HILL, 7, 9]);
     assert_eq!(t.houses(FUJIMI), 0, "demolished");
 }
 

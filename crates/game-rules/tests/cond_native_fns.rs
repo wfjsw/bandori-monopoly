@@ -326,6 +326,8 @@ fn set_move(w: &mut TestWorld, roll: Option<i32>, dir: i32) {
         settle_redirect: false,
         rolled: roll.is_some(),
         effective: roll.map(|r| r.abs()).unwrap_or(0),
+        path: Vec::new(),
+        abnormal: false,
     });
 }
 

@@ -1,7 +1,7 @@
 # 1. ABI design G01 — Per-instance identity and state
 
-**Status:** revised design, 2026-10-31, against master `a0403648`. Design only;
-no engine, SDK or card source is changed by this document.
+**Status:** implemented — landed on master in `903bc012` (ABI v105). The design
+text below is the reviewed revision of 2026-10-31 against master `a0403648`.
 
 This revision came out of a full review of the 2026-10-28 draft. The review
 re-read every cited site against current master, traced the replay and suspend

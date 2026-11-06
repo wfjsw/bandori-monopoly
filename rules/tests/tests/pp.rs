@@ -11,7 +11,11 @@
 mod common;
 use common::*;
 
+use game_core::msg::{Arg, Msg};
+
 const BAND_SKILL: &str = "skill:Pastel✽Palettes:与偶像一起";
+const GUIDE: &str = "PP:练习生解密指南";
+const POSSIBILITY: &str = "PP:[大和麻弥]可能性为∞";
 /// Face-up fan counter (`skill_groups::fans::UP`).
 const FANS_UP: &str = "ppFansUp";
 /// Face-down fan counter (`skill_groups::fans::DOWN`).
@@ -2046,6 +2050,9 @@ fn ix_echo_chain_adds_crystals() {
 }
 
 /// 规则书: 再次闪耀 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」
+///
+/// G12 §5.7: the flavour is the causer-aware placement stamp, not the
+/// cause-blind `immune` flag.
 #[test]
 fn ix_shine_immunity_flag() {
     let mut t = Table::vanilla(2);
@@ -2055,7 +2062,8 @@ fn ix_shine_immunity_flag() {
         .into_iter()
         .find(|f| f.card == "PP:再次闪耀")
         .expect("placed");
-    assert!(f.immune, "immune flag");
+    assert!(f.immune_except_owner, "immuneExceptOwner flag");
+    assert!(!f.immune, "the any-flavour flag stays clear");
 }
 
 // ============================================================ discrepancies
@@ -2276,4 +2284,333 @@ fn hina_skill_2_borrows_skill() {
     drain(&mut t);
     assert_eq!(t.state(0, "skill.hinaLottery.borrowed"), 1);
     assert!(t.on_field(0, "skill:白鹭千圣:保持坦率的你"));
+}
+
+// ============================================================ G11: inspection / reveal / drawAfter
+
+/// Unwrap a field card's `log.card_effect` attribution.
+fn inner_msg(e: &game_core::state::MatchEvent) -> &Msg {
+    if e.msg.key() == "log.card_effect" {
+        if let Some(Arg::Msg(m)) = e.msg.args.get("what") {
+            return m;
+        }
+    }
+    &e.msg
+}
+
+fn fixture_key(key: &str) -> String {
+    format!("cards:fixture-test-cards.{key}")
+}
+
+/// 规则书[手]: 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/
+/// 双色标记」 (design G11 §6.3) -- the deck is a public overlay while the body
+/// is still running, not just a log line.
+#[test]
+fn trainee_guide_publishes_the_deck_while_it_counts_colours() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 0, 0);
+    t.set_draw(0, &["通用:GREAT", "通用:尽力后的收获"]);
+    let before = t.draw_pile(0);
+    // The resonance fuel pauses the body after the public look.
+    t.give(0, &["PP:[衍生]共鸣", GUIDE]);
+    t.play(0, GUIDE).unwrap();
+    let p = t.expect_prompt();
+    assert!(p.title.key().contains("resonance"), "{}", t.dump_prompt());
+    let st = t.st();
+    let reveal = st.players[0]
+        .reveal
+        .as_ref()
+        .expect("the deck is published during the play");
+    assert_eq!(
+        reveal.deck, before,
+        "the public overlay is the deck read before the play"
+    );
+    t.decline();
+    drain(&mut t);
+    // The overlay lives exactly as long as the clause that made it.
+    assert!(
+        t.st().players[0].reveal.is_none(),
+        "the reveal clears when the play ends"
+    );
+}
+
+/// A look that ends, keeps a card and only then halts: the published list still
+/// names each looked card exactly once (the kept one through the frame), and
+/// the keep lands in the hand.
+#[test]
+fn a_card_kept_after_the_look_stays_listed_once() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    t.give_play(0, "TEST:lookKeep").unwrap();
+    // The frame is still the live state at the first halt; the second one is
+    // past the commit of the end + keep.
+    t.expect_prompt();
+    t.answer_one(0).unwrap();
+    t.expect_prompt();
+    let st = t.st();
+    let reveal = st.players[0]
+        .reveal
+        .as_ref()
+        .expect("the deck is published while the play runs");
+    let mut listed = reveal.deck.clone();
+    listed.sort();
+    assert_eq!(
+        listed,
+        vec!["通用:GREAT".to_string(), "通用:安可".to_string()],
+        "each looked card once: {:?}",
+        reveal.deck
+    );
+    t.decline();
+    drain(&mut t);
+    assert_eq!(t.hand(0).len(), 1, "the top was kept");
+}
+
+/// The published deck list is a live view of the pile, not a copy of the
+/// reveal moment: a card taken out after the reveal leaves the list, so a kept
+/// card never shows as a deck card as well.
+#[test]
+fn a_published_deck_list_follows_the_pile() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    let deck = t.draw_pile(0);
+    t.m.world_mut().push_reveal(
+        0,
+        Msg::new("test_look"),
+        game_core::state::RevealPile::Deck,
+        deck,
+    );
+    // A look is filing: the pile is published for the rest of the clause.
+    t.m.world_mut().look_hold[0] = true;
+    let kept = t.m.world_mut().hidden[0].deck.pop().expect("a card");
+    let st = t.st();
+    let listed = &st.players[0].reveal.as_ref().unwrap().deck;
+    assert!(!listed.contains(&kept), "taken card gone: {listed:?}");
+    assert_eq!(listed.len(), 1, "the rest stays");
+}
+
+/// 规则书[特]: 「观看卡组并观看到此卡时…将其放置在自己[场上]（次效果优先于
+/// 其他后续效果）」 -- the placement happens inside the look, so the body's
+/// next read no longer sees the card.
+#[test]
+fn possibility_places_itself_the_moment_it_is_looked_at() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 0, 0);
+    t.set_draw(0, &[POSSIBILITY, "通用:GREAT"]);
+    let mark = t.mark();
+    t.give_play(0, GUIDE).unwrap();
+    drain(&mut t);
+    assert!(
+        t.on_field(0, POSSIBILITY),
+        "placed out of the look: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        !t.draw_pile(0).contains(&POSSIBILITY.to_string()),
+        "gone from the look list: {:?}",
+        t.draw_pile(0)
+    );
+    // The colour fold ran after the placement and saw only the remaining
+    // card: one colour -> one mono mark (two would be dual).
+    assert_eq!(
+        t.counter_on_card(0, GUIDE, "mono").unwrap_or(0),
+        1,
+        "only the remaining card was counted"
+    );
+    assert_eq!(t.counter_on_card(0, GUIDE, "dual").unwrap_or(0), 0);
+    let evs = t.events_since(mark);
+    let reveals: Vec<usize> = evs
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.r#type == "reveal" && e.card == POSSIBILITY)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(reveals.len(), 1, "one reveal event names it");
+    let line = evs
+        .iter()
+        .position(|e| log_key(e).contains("trainee_guide_revealed"))
+        .expect("the colour fold line");
+    assert!(
+        reveals[0] < line,
+        "the reveal is before the body's next statement"
+    );
+}
+
+/// 规则书[特]: the look point is the turn-up, private or public -- a private
+/// peek by the owner still places the card.
+#[test]
+fn possibility_fires_on_a_private_peek_by_its_owner() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &[POSSIBILITY, "通用:GREAT"]);
+    t.give_play(0, "HHW:出发！后台之旅！").unwrap();
+    drain(&mut t);
+    assert!(
+        t.on_field(0, POSSIBILITY),
+        "a private peek places it: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(t.money(0), 11_000, "the remaining card was still flipped");
+}
+
+/// 规则书[特]: a copy sitting in the hand is not a looked card -- it must not
+/// fire `inspected` (which would reveal itself).
+#[test]
+fn possibility_does_not_re_place_from_the_hand() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, POSSIBILITY);
+    t.set_hand(0, &["HHW:出发！后台之旅！", POSSIBILITY]);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    let mark = t.mark();
+    t.play(0, "HHW:出发！后台之旅！").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.field_ids(0).iter().filter(|c| *c == POSSIBILITY).count(),
+        1,
+        "still one placed copy: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.hand(0).contains(&POSSIBILITY.to_string()),
+        "the hand copy stays: {:?}",
+        t.hand(0)
+    );
+    let reveals = t
+        .events_since(mark)
+        .iter()
+        .filter(|e| e.r#type == "reveal" && e.card == POSSIBILITY)
+        .count();
+    assert_eq!(reveals, 0, "nothing fired from the hand");
+}
+
+/// 规则书[持续]（1）: 「[拥有者]进行抽卡动作后…」 -- one draw instruction is
+/// one decision. A two-card draw grows the card once; at the cap the same
+/// action clears once and pays the band once.
+#[test]
+fn possibility_grows_once_per_draw_action() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, POSSIBILITY);
+    place_band(&mut t, 0);
+    t.set_draw(0, &["通用:GREAT", "通用:安可", "通用:尽力后的收获"]);
+    t.give_play(0, "TEST:drawTwo").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.crystals(0, POSSIBILITY),
+        Some(1),
+        "one action, one crystal"
+    );
+    assert_eq!(band_xtal(&t, 0), 0);
+
+    // Per card this would grow twice (3 -> 4 then clear); per action it is
+    // one growth to 4.
+    t.set_crystals(0, POSSIBILITY, 3);
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    t.give_play(0, "TEST:drawTwo").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.crystals(0, POSSIBILITY),
+        Some(4),
+        "one growth, not a clear"
+    );
+
+    // At the cap the action clears once and pays the band exactly once.
+    t.set_draw(0, &["通用:GREAT", "通用:安可"]);
+    t.give_play(0, "TEST:drawTwo").unwrap();
+    drain(&mut t);
+    assert_eq!(t.crystals(0, POSSIBILITY), Some(0), "every crystal removed");
+    assert_eq!(band_xtal(&t, 0), 1, "exactly one band crystal");
+}
+
+/// Design G11 I8: `drawAfter` is one raise per action with the whole batch
+/// after the last card; `drew` stays per card.
+#[test]
+fn draw_after_names_the_batch_and_drew_stays_per_card() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "TEST:drawAfterProbe");
+    t.set_draw(0, &["通用:GREAT", "通用:安可", "通用:尽力后的收获"]);
+    let mark = t.mark();
+    t.give_play(0, "TEST:drawTwo").unwrap();
+    drain(&mut t);
+    let evs = t.events_since(mark);
+    let drew: Vec<usize> = evs
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| log_key(e) == fixture_key("drew_probe"))
+        .map(|(i, _)| i)
+        .collect();
+    let after: Vec<usize> = evs
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| log_key(e) == fixture_key("draw_after_probe"))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(drew.len(), 2, "one `drew` per card");
+    assert_eq!(after.len(), 1, "one `drawAfter` per instruction");
+    assert!(
+        after[0] > *drew.iter().max().unwrap(),
+        "drawAfter is after the last card"
+    );
+    let e = &evs[after[0]];
+    let m = inner_msg(e);
+    assert_eq!(
+        m.args.get("value"),
+        Some(&Arg::Integer(2)),
+        "the trigger names the batch length"
+    );
+    let first = match m.args.get("first") {
+        Some(Arg::Card(c)) => c.clone(),
+        other => panic!("first is not a card arg: {other:?}"),
+    };
+    let second = match m.args.get("second") {
+        Some(Arg::Card(c)) => c.clone(),
+        other => panic!("second is not a card arg: {other:?}"),
+    };
+    assert_eq!(
+        vec![first, second],
+        vec!["通用:GREAT".to_string(), "通用:安可".to_string()],
+        "the batch, in draw order"
+    );
+}
+
+/// 规则书 大和麻弥（2）: 「剩余观看的牌洗回卡组」 -- the unpicked cards return
+/// to the deck (shuffled), none lost.
+#[test]
+fn maya_rest_shuffle_returns_the_unpicked_cards() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "大和麻弥");
+    t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
+    set_fans(&mut t, 0, 2, 0);
+    t.set_draw(
+        0,
+        &[
+            "通用:GREAT",
+            "通用:安可",
+            "通用:尽力后的收获",
+            "通用:网络链接异常",
+        ],
+    );
+    // The band (4) spend-draw is the draw under maya's (2) watch.
+    place_band(&mut t, 0);
+    set_band_xtal(&mut t, 0, 5);
+    t.begin_turn(0);
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        let is_y = p
+            .options
+            .iter()
+            .any(|o| format!("{o:?}").contains("intOption"));
+        if is_y {
+            let _ = t.answer(0, 2); // Y=2 -> watch 3
+        } else if p.kind == "pick" || p.kind == "card" {
+            let _ = t.answer_items(0, &["通用:GREAT"]);
+        } else if p.title.key().contains("pastel") {
+            let _ = t.answer(0, 0);
+        } else {
+            t.decline();
+        }
+    }
+    assert_eq!(t.hand(0), vec!["通用:GREAT".to_string()]);
+    let deck = t.draw_pile(0);
+    assert_eq!(deck.len(), 3, "the two unpicked looked cards came back");
+    for c in ["通用:安可", "通用:尽力后的收获", "通用:网络链接异常"] {
+        assert!(deck.contains(&c.to_string()), "{c} missing: {deck:?}");
+    }
 }

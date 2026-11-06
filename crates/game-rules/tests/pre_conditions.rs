@@ -115,7 +115,9 @@ fn pre_hook_does_not_fire() {
         kind: TriggerKind::PaySplitAdd,
         player_id: 0,
     };
-    let ran = r.run_hook(&w, call, &Default::default(), None).unwrap();
+    let ran = r
+        .run_hook(&w, call, &Default::default(), &[], None)
+        .unwrap();
     assert!(
         ran.is_none(),
         "condition `false` must keep the hook from firing"
@@ -147,7 +149,7 @@ fn pre_gate_does_not_answer() {
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let ran = r
-        .run_hook(&w, call, &Default::default(), Some(&mut on_body))
+        .run_hook(&w, call, &Default::default(), &[], Some(&mut on_body))
         .unwrap();
     assert!(
         ran.is_none(),

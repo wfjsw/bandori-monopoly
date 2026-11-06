@@ -1019,6 +1019,8 @@ pub fn c_gen_tsugu_frame(step: &Step<'_>) -> Result<(), String> {
         format!("pos:P{who}"),
         "owner:T".into(),
         "houses:T".into(),
+        // The buy arms the acquisition ledger (G08 §7.7).
+        "state:P".into(),
         "turn.lingering".into(),
         "turn.abnormal".into(),
         "targeted".into(),
@@ -1911,6 +1913,8 @@ pub fn c_gen_harvest_frame(step: &Step<'_>) -> Result<(), String> {
         format!("pos:P{who}"),
         "owner:T".into(),
         "houses:T".into(),
+        // The buy arms the acquisition ledger (G08 §7.7).
+        "state:P".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.condition, step.post, &allowed)
@@ -1969,6 +1973,8 @@ fn harvest_moves_and_settles() {
                 "pos:P0",
                 "owner:T",
                 "houses:T",
+                // The buy arms the acquisition ledger (G08 §7.7).
+                "state:P0",
                 "turn.abnormal",
             ],
         )

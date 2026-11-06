@@ -11,7 +11,9 @@
 #[cfg(target_arch = "wasm32")]
 use alloc::{string::String, vec::Vec};
 
-pub use crate::abi::{AbKind, CardPile, DistanceKind};
+pub use crate::abi::{
+    AbKind, CardPile, DistanceKind, OutCause, PlayOutcome, Zone, ZoneChange, ZoneChangeCause,
+};
 use crate::abi::{MoveKind, PromptKind, TriggerKind};
 use crate::msg::Msg;
 use crate::Prompt;
@@ -301,6 +303,30 @@ pub fn tile_named(name: &str) -> i32 {
 
 pub fn tile_owner(tile: i32) -> i32 {
     unsafe { sys::tile_owner(tile) }
+}
+
+/// The tile standing at board position `position` (`position` itself when
+/// nothing is bound there).
+pub fn tile_at(position: i32) -> i32 {
+    unsafe { sys::tile_at(position) }
+}
+
+/// The board position tile `tile` currently stands at (`tile` itself when
+/// nothing is bound to it).
+pub fn position_of_tile(tile: i32) -> i32 {
+    unsafe { sys::position_of_tile(tile) }
+}
+
+/// How many *extra* instances (non-`tile:` cards) lie on tile `tile`. The
+/// tile carries its extras, so the count is identity-keyed.
+pub fn tile_extra_count(tile: i32) -> i32 {
+    unsafe { sys::tile_extra_count(tile) }
+}
+
+/// The board position **this instance** sits at (its placement slot).
+/// [`self_tile`] is the tile standing there.
+pub fn self_position() -> i32 {
+    unsafe { sys::self_position() }
 }
 
 /// The player's tile on the ring.
@@ -877,12 +903,25 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 
 /// Draw `n` cards; returns how many were drawn.
 ///
-/// One **before-draw** point per single card (an N-card draw is N iterations):
-/// each card is adjudicated host-side (`drewBefore` may replace it), and the
-/// plain ones are moved here on the run's own world copy. The after points
-/// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
-/// does; the body must `?` the result.
+/// One draw **instruction**: `n` cards, one host call (v114 -- it used to be
+/// one call per card). The engine adjudicates each card (`drewBefore` may
+/// replace it) and moves the plain ones. The per-card after points
+/// (`drawn` / `drew`) fire once the run commits, and `drawAfter` fires **once**
+/// with the whole batch after the last of them. Pauses like [`pay`] does; the
+/// body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    draw_flags(player_id, n, 0)
+}
+
+/// Draw `n` cards **without** the immediate hand-limit trim (「可超过上限」).
+/// The excess is allowed until the hand fits again or the turn ends: the
+/// card's own scheduled discard is the usual disposer, and `end` is accepted
+/// meanwhile. The limit state itself is untouched. Pauses like [`draw`].
+pub fn draw_over_hand_limit(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    draw_flags(player_id, n, crate::abi::draw_flag::OVER_HAND_LIMIT)
+}
+
+fn draw_flags(player_id: i32, n: i32, flags: i32) -> Result<i32, Prompt> {
     crate::pure::refuse_if_filter("ctx::draw");
     #[cfg(kani)]
     {
@@ -893,7 +932,7 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
         macro_rules! draw1 {
             () => {
                 if taken < n.max(0) {
-                    got += asked(unsafe { sys::draw(player_id, 1) })?;
+                    got += asked(unsafe { sys::draw(player_id, 1, flags) })?;
                     taken += 1;
                 }
             };
@@ -909,11 +948,10 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     }
     #[cfg(not(kani))]
     {
-        let mut got = 0;
-        for _ in 0..n.max(0) {
-            got += asked(unsafe { sys::draw(player_id, 1) })?;
-        }
-        Ok(got)
+        // One host call for the whole instruction: the host draws the cards
+        // (replacements, refill, the over-limit flag and pausing included) and
+        // raises `drawAfter` once for the batch.
+        asked(unsafe { sys::draw(player_id, n.max(0), flags) })
     }
 }
 
@@ -975,10 +1013,13 @@ pub fn world_snapshot_drop(key: i32) -> Result<(), Prompt> {
 /// `Dest::Field` / `Dest::Banished` are not piles and trap.
 ///
 /// Replaces `add_to_hand` / `add_to_deck` / `add_to_deck_at`.
+///
+/// `counted` marks the arrival as a draw for the `handChanged` listener; only
+/// a draw routine passes `true`. Every other caller leaves it `false`.
 #[cfg_attr(kani, inline(always))]
-pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
+pub fn add_to_dest(player_id: i32, card: &str, dest: Dest, counted: bool) {
     let (p, l) = s(card);
-    unsafe { sys::add_to_dest(player_id, p, l, dest as i32) }
+    unsafe { sys::add_to_dest(player_id, p, l, dest as i32, counted as i32) }
 }
 
 /// Take one copy of `card` out of `player_id`'s `src` pile *without* sending it
@@ -990,6 +1031,47 @@ pub fn add_to_dest(player_id: i32, card: &str, dest: Dest) {
 pub fn take_card(player_id: i32, card: &str, src: CardPile) -> bool {
     let (p, l) = s(card);
     unsafe { sys::take_card(player_id, p, l, src as i32) != 0 }
+}
+
+/// Turn up to `count` cards of `owner`'s draw pile over into a new inspection
+/// frame for `looker`. The cards land in [`CardPile::Inspection`], top-first;
+/// `public` reveals each one to the table as it is turned. Returns how many
+/// were held (0 on an empty deck).
+///
+/// Raises `inspected` for every card **now**, dispatched to the card itself, so
+/// a card that places itself out of the frame is gone before the next
+/// statement. Pauses on a hook that prompts; the body must `?` it. Always
+/// close the frame with [`inspection_end`] when the body is done.
+#[must_use]
+#[cfg_attr(kani, inline(always))]
+pub fn inspection_begin(looker: i32, owner: i32, count: i32, public: bool) -> Result<i32, Prompt> {
+    asked(unsafe { sys::inspection_begin(looker, owner, count, public as i32) })
+}
+
+/// Close `player`'s own innermost inspection frame -- `player` is the
+/// **looker**, whatever seat owns the deck. The leftovers go back to the deck
+/// top in their original order, or shuffled in when `shuffle`. Returns how many
+/// were returned. No open frame is a no-op returning 0.
+#[cfg_attr(kani, inline(always))]
+pub fn inspection_end(player: i32, shuffle: bool) -> i32 {
+    unsafe { sys::inspection_end(player, shuffle as i32) }
+}
+
+/// 「公开…」 -- publish a pile's ids to the table (hand, draw pile or discard).
+/// A draw-pile reveal includes the open inspection frames on that seat,
+/// innermost first. Writes nothing to any pile. `reason` is the log line shown
+/// with the reveal.
+pub fn reveal_pile(player: i32, pile: CardPile, reason: &Msg) {
+    let (rp, rl) = msg_bytes(reason);
+    unsafe { sys::reveal_pile(player, pile as i32, rp, rl) }
+}
+
+/// 「展示给所有玩家」 -- publish one card id to the table. `reason` as in
+/// [`reveal_pile`].
+pub fn reveal_card(player: i32, card: &str, reason: &Msg) {
+    let (cp, cl) = s(card);
+    let (rp, rl) = msg_bytes(reason);
+    unsafe { sys::reveal_card(player, cp, cl, rp, rl) }
 }
 
 /// Corrupt-prefix guard for the decode-failure fallback below. Real piles are
@@ -1224,39 +1306,46 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
 /// the played hand card's dest -- and a play whose hand card retires elsewhere
 /// (「…然后此卡[移除]」) names its own [`Dest`].
 #[cfg_attr(kani, inline(always))]
-pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg) -> i32 {
+pub fn place_self_to_field(player_id: i32, card: &str, note: &Msg, cause: ZoneChangeCause) -> i32 {
     crate::pure::refuse_if_filter("ctx::place_self_to_field");
-    set_dest(Dest::Field);
+    set_dest(Dest::Field, cause);
     place_card(player_id, card, note)
 }
 
 /// Where this card goes afterwards (see [`Dest`]). For a
 /// play it is the hand card's dest; for a field effect, the instance's.
-pub fn set_dest(dest: Dest) {
+/// `cause` rides the transition's `ZoneChange` — say why it leaves
+/// (`Effect`, `Cost`, `Expire`, …), never `Other` where a real reason exists.
+pub fn set_dest(dest: Dest, cause: ZoneChangeCause) {
     crate::pure::refuse_if_filter("ctx::set_dest");
-    unsafe { sys::set_dest(dest as i32) }
+    unsafe { sys::set_dest(dest as i32, cause.as_i32()) }
 }
 
 /// [`set_dest`] aimed at another player's pile -- 「将此卡放入[使用者]弃卡区」
 /// when [使用者] is not the one holding the card. `to` is whose discard / hand
 /// / deck it lands in.
-pub fn set_transfer_to_dest(to: i32, dest: Dest) {
-    unsafe { sys::set_transfer_to_dest(to, dest as i32) }
+pub fn set_transfer_to_dest(to: i32, dest: Dest, cause: ZoneChangeCause) {
+    unsafe { sys::set_transfer_to_dest(to, dest as i32, cause.as_i32()) }
 }
 
 /// [`set_dest`] applied **now** rather than when this effect finishes: for a
 /// card that must be gone before the rest of the effect runs (a move or a
 /// settle follows). Lands in its own owner's pile. Returns the owner it left,
 /// or `None` when it was not in play.
-pub fn send_to_dest(dest: Dest) -> Option<i32> {
-    let v = unsafe { sys::send_to_dest(dest as i32) };
+pub fn send_to_dest(dest: Dest, cause: ZoneChangeCause) -> Option<i32> {
+    let v = unsafe { sys::send_to_dest(dest as i32, cause.as_i32()) };
     (v >= 0).then_some(v)
 }
 
 /// [`send_to_dest`] aimed at another player's pile: `to` is whose.
-pub fn transfer_to_dest(to: i32, dest: Dest) -> Option<i32> {
-    let v = unsafe { sys::transfer_to_dest(to, dest as i32) };
+pub fn transfer_to_dest(to: i32, dest: Dest, cause: ZoneChangeCause) -> Option<i32> {
+    let v = unsafe { sys::transfer_to_dest(to, dest as i32, cause.as_i32()) };
     (v >= 0).then_some(v)
+}
+
+/// Suppress the arrival hook for the next [`set_dest`] (a batch's own moves).
+pub fn set_dest_unwatched(dest: Dest) {
+    unsafe { sys::set_dest_unwatched(dest as i32) }
 }
 
 /// Move a player without settling (no [触发结算] at the landing).
@@ -1530,6 +1619,13 @@ pub fn prop_at(uid: i32, key: &str) -> i32 {
 pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
     let (p, l) = s(key);
     unsafe { sys::set_prop_at(uid, p, l, value) }
+}
+
+/// 「那格视为与…交换位置」 -- bind **this instance's** slot to `partner`, one
+/// level, both directions. `-1` clears. Sugar over
+/// [`set_prop`]`(prop::SWAPPED_TILE, …)`, so it dies with the instance.
+pub fn set_swapped_tile(partner: i32) -> i32 {
+    set_prop(crate::abi::prop::SWAPPED_TILE, partner)
 }
 
 // ------------------------------------------------------ counters & marks
@@ -2371,6 +2467,14 @@ pub fn cant_move_code(player_id: i32) -> i32 {
     unsafe { sys::cant_move(player_id) }
 }
 
+/// [`cant_move_code`] from the named activation: "already moved" is suppressed
+/// when that activation drove this turn's main move, so a re-run of a body
+/// reads back as "not spent".
+#[doc(hidden)]
+pub fn cant_move_code_for_activation(player_id: i32, activation_ordinal: i32) -> i32 {
+    unsafe { sys::cant_move_code_for_activation(player_id, activation_ordinal) }
+}
+
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
 #[doc(hidden)]
@@ -2434,6 +2538,18 @@ pub fn round_no() -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn turn_key() -> i32 {
     unsafe { sys::turn_key() }
+}
+
+/// Is the turn's dice immunity up (「打出此卡的回合…」)?
+#[doc(hidden)]
+pub fn dice_immune() -> bool {
+    unsafe { sys::dice_immune() != 0 }
+}
+
+/// Raise the turn's dice immunity (idempotent; for dynamic grants).
+#[doc(hidden)]
+pub fn set_dice_immune(on: bool) -> bool {
+    unsafe { sys::set_dice_immune(on as i32) != 0 }
 }
 
 /// Where a card goes when its effect finishes. Wire values 0..=3 are the
@@ -3021,8 +3137,18 @@ pub fn ask_number(
         if options.is_empty() {
             return Ok(min);
         }
-        let i = ask_choice(player_id, title, text, &options)?;
-        Ok(min + i as i32)
+        for o in &options {
+            let (p, l) = msg_bytes(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        // Answered as an option *index*, but deliberately **not** clamped to
+        // the current list the way `ask_choice` is: a body re-runs after its
+        // own host writes, and those writes often shrink the range (a count
+        // bounded by houses the body has already moved). The logged index was
+        // taken against the longer list, so `min + index` recovers the value
+        // the player chose; clamping would collapse it to `min`.
+        let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+        Ok(min + i.max(0))
     }
 }
 
@@ -3789,12 +3915,31 @@ pub mod trigger {
         unsafe { sys::trig_target() }
     }
 
+    /// The board position of this event (the slot stepped onto / settled at),
+    /// `-1` where there is none. [`tile`](Self::tile) is the governing tile;
+    /// the two are equal with no swap. Use the position for co-location and
+    /// "was this physical slot the one settled"; identity readers take the tile.
+    pub fn position() -> i32 {
+        unsafe { sys::trig_position() }
+    }
+
     pub fn tile() -> i32 {
         unsafe { sys::trig_tile() }
     }
 
     pub fn value() -> i32 {
         unsafe { sys::trig_value() }
+    }
+
+    /// How many tiles this move has traversed so far (0 when the trigger
+    /// carries no move).
+    pub fn move_path_length() -> i32 {
+        unsafe { sys::trig_move_path_length() }
+    }
+
+    /// Index `index` of the move's path: the governing tile of that step.
+    pub fn move_path(index: i32) -> i32 {
+        unsafe { sys::trig_move_path(index) }
     }
 
     /// Empty otherwise.
@@ -3816,6 +3961,36 @@ pub mod trigger {
     /// can ignore a raise about copy B (`trigger::instance() != ctx::self_uid()`).
     pub fn instance() -> i32 {
         unsafe { sys::trig_instance() }
+    }
+
+    /// The transition this raise is about, `None` outside the zone family.
+    pub fn zone() -> Option<ZoneChange> {
+        let n = unsafe { sys::trigger_zone(0, 0) };
+        if n <= 0 {
+            return None;
+        }
+        let (p, scratch) = out_buf(n as usize);
+        if unsafe { sys::trigger_zone(p, n) } != n {
+            return None;
+        }
+        let buf = out_read(p, n, scratch);
+        // The seam carries the `Option` as postcard wrote it (a `Some` tag
+        // byte precedes the payload; `None` is the single `0`).
+        postcard::from_bytes::<Option<ZoneChange>>(&buf[..n as usize])
+            .ok()
+            .flatten()
+    }
+
+    /// The play's outcome on `card` / `cardAfter`; `None` elsewhere.
+    pub fn play_outcome() -> Option<PlayOutcome> {
+        let v = unsafe { sys::trig_play_outcome() };
+        (v >= 0).then(|| PlayOutcome::from_i32(v))
+    }
+
+    /// Why the player left on `beforeOut`; `None` elsewhere.
+    pub fn out_cause() -> Option<OutCause> {
+        let v = unsafe { sys::trig_out_cause() };
+        (v >= 0).then(|| OutCause::from_i32(v))
     }
 
     /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
@@ -3958,6 +4133,25 @@ pub mod trigger {
     /// Was the triggering move a rolled walk?
     pub fn move_rolled() -> bool {
         unsafe { sys::trig_move_rolled() != 0 }
+    }
+
+    /// The running activation's ordinal; 0 outside a routine.
+    #[doc(hidden)]
+    pub fn activation_ordinal() -> i32 {
+        unsafe { sys::trigger_activation_ordinal() }
+    }
+
+    /// Did the abnormal this trigger announces hold the move? Meaningful only
+    /// on the `effect` and `abnormal` raises of an abnormal.
+    #[doc(hidden)]
+    pub fn abnormal_blocked() -> bool {
+        unsafe { sys::trigger_abnormal_blocked() != 0 }
+    }
+
+    /// Did an abnormal land during the triggering move?
+    #[doc(hidden)]
+    pub fn move_abnormal() -> bool {
+        unsafe { sys::trigger_move_abnormal() != 0 }
     }
 
     /// The triggering move's effective length.
@@ -4609,7 +4803,11 @@ pub fn linger(player_id: i32, expires: i32) -> bool {
     unsafe { sys::linger(player_id, expires) != 0 }
 }
 
-/// Is this placed field card immune to other effects?
+/// Is this placed field card immune to **any** effect?
+///
+/// The cause-blind read: the any-flavour flag only, so an 「除拥有者以外」
+/// card reads `false` here. A check that knows who is acting uses
+/// [`is_immune_from_at`] instead, which also honours the owner exemption.
 #[cfg_attr(kani, inline(always))]
 pub fn card_immune(player_id: i32, card: &str) -> bool {
     let (cp, cl) = s(card);
@@ -4734,6 +4932,11 @@ pub fn set_build_discount(n: i32, layers: i32) {
 
 /// 「此卡不受…效果影响」. Set it at play time; effects that
 /// would touch the card read [`card_immune`] and skip.
+///
+/// This writes the **any-flavour** flag. 「不受除拥有者以外的效果影响」 has no
+/// name-based setter -- the card's own body uses
+/// [`set_self_immune_except_owner`] -- and an effect from a given causer
+/// checks with [`is_immune_from_at`] rather than [`card_immune`].
 #[cfg_attr(kani, inline(always))]
 pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
     let (cp, cl) = s(card);
@@ -4827,6 +5030,54 @@ pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
 }
 
+/// The price a house on `tile` would actually cost this turn:
+/// `max(0, build_cost * build_cost_percent / 100 - build_discount)`.
+pub fn build_price(tile: i32) -> i32 {
+    unsafe { sys::build_price(tile) }
+}
+
+/// This turn's build percentage (100 = full).
+pub fn build_cost_percent() -> i32 {
+    unsafe { sys::build_cost_percent() }
+}
+
+/// This turn's layered build cut (absolute money, applied after the percent).
+pub fn build_discount() -> i32 {
+    unsafe { sys::build_discount() }
+}
+
+/// `cant_build_on` minus the ownership test: does the tile take a house at
+/// all for `player_id`? For a free build on someone else's tile.
+pub fn tile_buildable(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::tile_buildable(player_id, tile) != 0 }
+}
+
+/// Run the full build pipeline on `tile`: gate, hooks, price, commit.
+/// `charge` chooses what is paid; `Fixed` uses `amount`, `Scaled` uses
+/// `numerator / denominator` of the effective price; `owner_required` adds
+/// the owner test to the gate. `true` iff a house committed.
+pub fn card_build_as(
+    player_id: i32,
+    tile: i32,
+    charge: crate::abi::BuildCharge,
+    amount: i32,
+    numerator: i32,
+    denominator: i32,
+    owner_required: bool,
+) -> bool {
+    unsafe {
+        sys::card_build_as(
+            player_id,
+            tile,
+            charge as i32,
+            amount,
+            numerator,
+            denominator,
+            owner_required as i32,
+        ) != 0
+    }
+}
+
 /// Where **this instance** sits, or -1 for "with its owner" / gone.
 /// [`placed_tile`] is the form for some *other* card.
 pub fn self_tile() -> Option<i32> {
@@ -4845,8 +5096,8 @@ pub fn self_face_down() -> bool {
 }
 
 /// Flip **this instance**; returns whether it is on the field.
-pub fn set_self_face_down(on: bool) -> bool {
-    unsafe { sys::set_self_face_down(on as i32) != 0 }
+pub fn set_self_face_down(on: bool, cause: ZoneChangeCause) -> bool {
+    unsafe { sys::set_self_face_down(on as i32, cause.as_i32()) != 0 }
 }
 
 /// Is **this instance** marked 「不受任何效果影响」?
@@ -4857,6 +5108,12 @@ pub fn self_immune() -> bool {
 /// Mark **this instance** 「不受任何效果影响」; returns whether it is on the field.
 pub fn set_self_immune(on: bool) -> bool {
     unsafe { sys::set_self_immune(on as i32) != 0 }
+}
+
+/// Mark **this instance** 「不受除拥有者以外的效果影响」; returns whether it
+/// is on the field.
+pub fn set_self_immune_except_owner(on: bool) -> bool {
+    unsafe { sys::set_self_immune_except_owner(on as i32) != 0 }
 }
 
 /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
@@ -4914,14 +5171,124 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, NameId)> {
     decode_uid_name_list(&buf[..n as usize])
 }
 
-/// Take the instance at `uid` off the field; returns the owner it left.
-pub fn unplace_at(uid: i32) -> i32 {
-    unsafe { sys::unplace_at(uid) }
+/// Take the instance at `uid` off play into `destination`; returns the owner
+/// it left (`-1` when it was not in play). `destination` is a `Dest` code;
+/// `Dest::Field` keeps it in play (a no-op move).
+pub fn unplace_at(uid: i32, destination: Dest, cause: ZoneChangeCause) -> i32 {
+    unsafe { sys::unplace_at(uid, destination as i32, cause.as_i32()) }
+}
+
+/// The zone of an instance; [`Zone::Nowhere`] for an unknown `uid`.
+pub fn zone_of(instance: i32) -> Zone {
+    Zone::from_i32(unsafe { sys::zone_of(instance) })
+}
+
+/// The instance `instance` sits on, `-1` when it is not attached.
+pub fn attachment_host(instance: i32) -> i32 {
+    unsafe { sys::attachment_host(instance) }
+}
+
+/// The instances attached to `host`, in filing order.
+pub fn attached_cards(host: i32) -> Vec<i32> {
+    uid_list(|b, c| unsafe { sys::attached_cards(host, b, c) })
+}
+
+/// The instances `creator` made, in creation order.
+pub fn created_cards(creator: i32) -> Vec<i32> {
+    uid_list(|b, c| unsafe { sys::created_cards(creator, b, c) })
+}
+
+/// Decode an `i32`-per-entry host list.
+fn uid_list(call: impl Fn(i32, i32) -> i32) -> Vec<i32> {
+    let n = call(0, 0);
+    if n <= 0 {
+        return Vec::new();
+    }
+    // The host writes LE `i32`s; the cap only bounds a garbage length.
+    let need = ((n as usize) * 4).min(4096);
+    let (p, scratch) = out_buf(need);
+    if unsafe { call(p, need as i32) } != n {
+        return Vec::new();
+    }
+    let buf = out_read(p, need as i32, scratch);
+    let mut out = Vec::with_capacity(n as usize);
+    let mut i = 0usize;
+    while i < n as usize {
+        let base = i * 4;
+        out.push(i32::from_le_bytes([
+            buf.get(base).copied().unwrap_or(0),
+            buf.get(base + 1).copied().unwrap_or(0),
+            buf.get(base + 2).copied().unwrap_or(0),
+            buf.get(base + 3).copied().unwrap_or(0),
+        ]));
+        i += 1;
+    }
+    out
+}
+
+/// The instance's real owner (`FieldCard.owner`), `-1` when dead.
+pub fn instance_owner(instance: i32) -> i32 {
+    unsafe { sys::instance_owner(instance) }
+}
+
+/// Set the real owner without moving the row (「视为拥有」); `false` when dead.
+pub fn set_instance_owner(instance: i32, owner: i32) -> bool {
+    unsafe { sys::set_instance_owner(instance, owner) != 0 }
+}
+
+/// Record that `instance` was made by `creator` (`-1` clears); `false` when
+/// `instance` is dead.
+pub fn set_created_by_at(instance: i32, creator: i32) -> bool {
+    unsafe { sys::set_created_by_at(instance, creator) != 0 }
+}
+
+/// Mark the instance as not having taken effect (or clear the mark). The
+/// writer also reads the bit at the next Graveyard entry; `false` when dead.
+pub fn set_ineffective_at(instance: i32, ineffective: bool) -> bool {
+    unsafe { sys::set_ineffective_at(instance, ineffective as i32) != 0 }
+}
+
+/// Has the instance not taken effect?
+pub fn is_ineffective_at(instance: i32) -> bool {
+    unsafe { sys::is_ineffective_at(instance) != 0 }
+}
+
+/// The player's earliest-owned tile under the acquisition order, `-1` if none.
+pub fn earliest_owned_tile(player_id: i32) -> i32 {
+    unsafe { sys::earliest_owned_tile(player_id) }
+}
+
+/// Put a card (by name) onto `host`, face-down when `face_down`. A live
+/// instance of the name is re-parented; otherwise the name comes off the
+/// caller's hand into a fresh instance. Answers the attached uid, `-1` when
+/// refused (a cycle, a dead host, no copy).
+pub fn attach_card(host: i32, card: &str, cause: ZoneChangeCause, face_down: bool) -> i32 {
+    let (p, l) = s(card);
+    unsafe { sys::attach_card(host, p, l, cause.as_i32(), face_down as i32) }
+}
+
+/// Take `instance` off its host into `dest`; answers the instance's owner,
+/// `-1` when it was not attached.
+pub fn detach_card(instance: i32, dest: Dest, cause: ZoneChangeCause) -> i32 {
+    unsafe { sys::detach_card(instance, dest as i32, cause.as_i32()) }
+}
+
+/// Move the deed row on `tile` to `owner` unchanged (identity, counters and
+/// crystals stay). `false` when the tile has no row.
+pub fn rehome_card(tile: i32, owner: i32) -> bool {
+    unsafe { sys::rehome_card(tile, owner) != 0 }
+}
+
+/// Remove `card` from `player`'s hand and run its play now. `false` when the
+/// card is not in that hand.
+pub fn play_hand_card(player: i32, card: &str) -> bool {
+    let (p, l) = s(card);
+    unsafe { sys::play_hand_card(player, p, l) != 0 }
 }
 
 /// Where the instance at `uid` sits (`Some(-1)` = with its owner, `None` = gone).
-pub fn tile_at(uid: i32) -> Option<i32> {
-    let v = unsafe { sys::tile_at(uid) };
+pub fn tile_of(uid: i32) -> Option<i32> {
+    let v = unsafe { sys::tile_of(uid) };
     (v >= -1).then_some(v)
 }
 
@@ -4980,19 +5347,38 @@ pub fn set_effective_card_at(uid: i32, card: &str) -> bool {
     unsafe { sys::set_effective_card_at(uid, p, l) != 0 }
 }
 
+/// Did **this body** place the instance at `uid` in the current run? True for
+/// a row the body itself minted (or re-minted) this drive, false for one that
+/// was already on the field. A body that reacts to the field and also places
+/// into it reads this so its own card does not trip the reaction on a re-run
+/// (the replay re-executes the body against the world its own pass left).
+pub fn is_own_placement(uid: i32) -> bool {
+    unsafe { sys::is_own_placement(uid) != 0 }
+}
+
 /// Is the instance at `uid` face-down?
 pub fn is_face_down_at(uid: i32) -> bool {
     unsafe { sys::is_face_down_at(uid) != 0 }
 }
 
-/// Flip the instance at `uid`; returns whether it exists.
-pub fn set_face_down_at(uid: i32, on: bool) -> bool {
-    unsafe { sys::set_face_down_at(uid, on as i32) != 0 }
+/// Flip the instance at `uid`; returns whether it exists. `cause` says why
+/// (the flip's own `cardFaceFlipped` hooks may read it).
+pub fn set_face_down_at(uid: i32, on: bool, cause: ZoneChangeCause) -> bool {
+    unsafe { sys::set_face_down_at(uid, on as i32, cause.as_i32()) != 0 }
 }
 
 /// Is the instance at `uid` marked 「不受任何效果影响」?
+///
+/// The cause-blind read -- the any-flavour flag only. When the acting causer
+/// is known, [`is_immune_from_at`] is the correct question.
 pub fn is_immune_at(uid: i32) -> bool {
     unsafe { sys::is_immune_at(uid) != 0 }
+}
+
+/// Is the instance at `uid` immune to an effect from `by`? The any-flavour
+/// flag, or the 「除拥有者以外」 flavour for a causer other than the owner.
+pub fn is_immune_from_at(uid: i32, by: i32) -> bool {
+    unsafe { sys::is_immune_from_at(uid, by) != 0 }
 }
 
 /// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.

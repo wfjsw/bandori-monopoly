@@ -44,6 +44,46 @@ pub struct Hidden {
     pub pick_intent: String,
 }
 
+/// One open deck inspection: the cards a look has turned over and not yet
+/// released, top-first, and who may look at them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InspectionFrame {
+    pub id: i32,
+    pub looker: i32,
+    pub deck_owner: i32,
+    pub public: bool,
+    /// Top-first. `revealed` is false for entries a not-yet-finished
+    /// `inspection_begin` has moved but not raised `inspected` for.
+    pub cards: Vec<InspectionCard>,
+    /// The begin that owns the frame has returned. A resumed begin (its first
+    /// pass suspended on an `inspected` hook, so no answer was recorded)
+    /// adopts the innermost unfinished frame of its looker and deck instead of
+    /// moving a second prefix.
+    pub finished: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InspectionCard {
+    pub id: String,
+    pub revealed: bool,
+}
+
+/// One seat's public reveal: the ids published, and the clause that published
+/// them. `piles` marks the lists that are a whole pile (`hand`, `deck`,
+/// `discard`): such a list is kept in step with the pile while the record
+/// lives, so a card that moves out mid-look leaves the published list too.
+/// Single shown cards are appended and never rewritten.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RevealRecord {
+    pub player: i32,
+    pub reason: Msg,
+    pub hand: Vec<String>,
+    pub deck: Vec<String>,
+    pub discard: Vec<String>,
+    #[serde(default)]
+    pub piles: [bool; 3],
+}
+
 fn full_build_cost() -> i32 {
     100
 }
@@ -56,6 +96,62 @@ fn milli_one() -> i32 {
 /// Serde default for an `f64` pay factor (`1.0` = ×1).
 fn one() -> f64 {
     1.0
+}
+
+/// Where in a draw pile a `Deck` landing goes (the `Dest` codes 4/5/6).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DeckPlacement {
+    /// On top (`Dest::DeckTop`; the end of the vector is the top).
+    Top,
+    /// Underneath (`Dest::DeckBottom`).
+    Bottom,
+    /// Anywhere (`Dest::DeckRandom`, the default).
+    #[default]
+    Random,
+}
+
+/// One card move, fully described before any row changes (design G08 §7.1).
+///
+/// A transition is the single shape every zone change takes: the pair, the
+/// cause, the landing seat, and for an attachment its host and face. The
+/// engine's `Run::zone_prepare` resolves it and `Run::zone_commit` applies it;
+/// `World::apply_zone_row` is the pure row half.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ZoneTransition {
+    pub uid: i32,
+    pub from: game_kinds::Zone,
+    pub to: game_kinds::Zone,
+    pub cause: game_kinds::ZoneChangeCause,
+    /// The seat whose area it lands in; `-1` = the row's owner.
+    pub holder: i32,
+    /// The host for `to = Attached`.
+    pub host: i32,
+    /// Where in the pile a `to = Deck` landing goes.
+    pub deck: DeckPlacement,
+    /// The arrival face for `to = Attached` (the book puts held cards down).
+    pub face_down: bool,
+    /// Raised only when the caller is the draw routine.
+    pub counted: bool,
+    /// Already inside a cascade (the cycle guard).
+    pub cascaded: bool,
+}
+
+impl ZoneTransition {
+    /// A transition from `from` into `to` with a neutral holder.
+    pub fn new(uid: i32, from: game_kinds::Zone, to: game_kinds::Zone) -> Self {
+        Self {
+            uid,
+            from,
+            to,
+            cause: game_kinds::ZoneChangeCause::Other,
+            holder: -1,
+            host: -1,
+            deck: DeckPlacement::default(),
+            face_down: false,
+            counted: false,
+            cascaded: false,
+        }
+    }
 }
 
 /// How a play settles its number-range dice (「以理论最大值或最小值结算」).
@@ -220,6 +316,18 @@ pub struct TurnCtx {
     pub player_id: usize,
     pub extra: bool,
     pub main_moved: bool,
+    /// One higher per routine; stamped onto a trigger by `counteract`.
+    #[serde(default)]
+    pub activation_ordinal: i32,
+    /// The activation that consumed this turn's main move; 0 = none.
+    #[serde(default)]
+    pub move_activation_ordinal: i32,
+    /// A landed abnormal during this turn's main move (read at turn end).
+    #[serde(default)]
+    pub move_abnormal: bool,
+    /// 「打出此卡的回合」: hand plays of dice-adding cards skip the `card` window.
+    #[serde(default)]
+    pub dice_immune: bool,
     pub played: Vec<String>,
     /// Hand-card plays this turn (skills do not count). 「当有人同一回合内打出
     /// 两张卡时」 (TwoCards) reads this -- the second card play raises it.
@@ -270,6 +378,12 @@ pub struct TurnCtx {
     /// A copy skips a source that placed.
     #[serde(default)]
     pub placed_during_play: bool,
+    /// The play being resolved never took effect (`set_ineffective_at(-1)`,
+    /// i.e. on a hand card that has no instance; 「视为此卡未生效」). The
+    /// play's own arrival into the Graveyard carries it as the `wasted` bit.
+    /// Scoped to one play, like `play_from_hand`.
+    #[serde(default)]
+    pub play_ineffective: bool,
     /// The card id of the play being resolved (`play_from_hand` scope). The
     /// copy record's 「效果带有放置」 test tells the play's own effect from a
     /// counteraction's placement by comparing against the innermost resolving
@@ -417,6 +531,10 @@ impl Default for TurnCtx {
             player_id: 0,
             extra: false,
             main_moved: false,
+            activation_ordinal: 0,
+            move_activation_ordinal: 0,
+            move_abnormal: false,
+            dice_immune: false,
             played: Vec::new(),
             cards_played: 0,
             no_money_loss: Vec::new(),
@@ -427,6 +545,7 @@ impl Default for TurnCtx {
             play_drove_move: false,
             play_from_hand: false,
             placed_during_play: false,
+            play_ineffective: false,
             play_card: None,
             play_arg: Vec::new(),
             cancelled_designations: Vec::new(),
@@ -837,6 +956,22 @@ pub const MAX_PLAY_LOG: usize = 32;
 pub struct World {
     pub st: MatchState,
     pub hidden: Vec<Hidden>,
+    /// Open inspection frames, innermost last. Ids come from
+    /// `next_inspection_id` so the commit net can name what belongs to a
+    /// drive.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inspection_frames: Vec<InspectionFrame>,
+    #[serde(default)]
+    pub next_inspection_id: i32,
+    /// Seat whose deck a **just-closed** look still holds: set when the
+    /// drive's `inspection_end` closes a frame over that deck, cleared by the
+    /// next play's own card filing. Pile writes stay suppressed for the rest
+    /// of the activation, including that filing (design G11 I2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub look_hold: Vec<bool>,
+    /// Public reveal records, cleared at the outermost routine's end.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reveals: Vec<RevealRecord>,
     pub rng: Rng,
     pub next_event: i32,
     /// The event tail. See [`EventTail`]: a routine snapshot needs this only to
@@ -1020,6 +1155,21 @@ impl PartialEq for SharedFlash {
 }
 
 impl World {
+    // ------------------------------------------------ hand limit
+
+    /// Clear the permitted-over-limit state once the hand fits again
+    /// (「可超过上限」). Called from every hand-shrink site; a no-op while the
+    /// hand is still over.
+    pub fn settle_over_hand_allowance(&mut self, i: usize) {
+        let fits = self
+            .hidden
+            .get(i)
+            .is_some_and(|h| !self.st.players[i].over_hand(h.hand.len()));
+        if fits {
+            self.st.players[i].over_hand_allowed = false;
+        }
+    }
+
     // ------------------------------------------------ plan frames
 
     /// The plan the move currently reads: the innermost frame, else the
@@ -1105,6 +1255,17 @@ impl World {
         let Some(frame) = self.turn.plan_stack.pop() else {
             return;
         };
+        // The span is the whole walk: a landing inside a nested move belongs
+        // to the walk it sits in, so the bit climbs to the frame still open.
+        if let Some(parent) = self.turn.plan_stack.last_mut() {
+            parent.plan.abnormal |= frame.plan.abnormal;
+        }
+        // The move span outlives its frame: a later move does not clear the
+        // latch (only the turn start does), and 「该次移动过程中」 at the
+        // turn end still needs it.
+        if frame.kind == PlanKind::MainMove {
+            self.turn.move_abnormal |= frame.plan.abnormal;
+        }
         if self.turn.plan_stack.is_empty() {
             self.turn.plan = match (frame.kind, ran) {
                 (PlanKind::MainMove, true) => MoveCtx::default(),
@@ -1189,6 +1350,10 @@ impl World {
             blocked_settle: vec![SettleAnswer::Unanswered; players],
             extra_turns: vec![],
             out_count: 0,
+            inspection_frames: Vec::new(),
+            next_inspection_id: 1,
+            look_hold: vec![false; players],
+            reveals: Vec::new(),
             event_deck: vec![],
             event_discard: vec![],
             event_removed: vec![],
@@ -1559,13 +1724,112 @@ impl World {
     /// Public state: hidden-zone sizes and the event tail filled in.
     pub fn public_state(&self) -> MatchState {
         let mut st = self.st.clone();
-        for (player_id, h) in st.players.iter_mut().zip(&self.hidden) {
+        for (index, (player_id, h)) in st.players.iter_mut().zip(&self.hidden).enumerate() {
             player_id.hand = h.hand.len() as i32;
             player_id.draw = h.deck.len() as i32;
             player_id.discard = h.graveyard.clone();
+            let seat = index as i32;
+            let record = self.reveals.iter().rev().find(|r| r.player == seat);
+            // A public frame's held cards are published draw-pile ids: they
+            // are off the deck but visible. Innermost frame first.
+            let held: Vec<String> = self
+                .inspection_frames
+                .iter()
+                .rev()
+                .filter(|f| f.deck_owner == seat && f.public)
+                .flat_map(|f| {
+                    f.cards
+                        .iter()
+                        .filter(|c| c.revealed)
+                        .map(|c| c.id.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            player_id.reveal = match (record, held.is_empty()) {
+                (None, true) => None,
+                (record, _) => {
+                    let mut view = crate::state::RevealView {
+                        reason: record.map(|r| r.reason.clone()).unwrap_or_default(),
+                        ..Default::default()
+                    };
+                    // A list published as a whole pile follows the pile: the
+                    // overlay is the live view, not a snapshot of the reveal
+                    // (a card drawn or kept during the look leaves it).
+                    if let Some(r) = record {
+                        view.hand = if r.piles[0] {
+                            h.hand.clone()
+                        } else {
+                            r.hand.clone()
+                        };
+                        // A public look publishes the deck for as long as its
+                        // clause runs -- open frame, or the filing right after
+                        // it (`look_hold`) -- so the deck list follows the
+                        // pile, not the reveal moment.
+                        let published = r.piles[1]
+                            || self.look_hold.get(index).copied().unwrap_or(false)
+                            || self
+                                .inspection_frames
+                                .iter()
+                                .any(|f| f.deck_owner == seat && f.public);
+                        view.deck = if published {
+                            h.deck.iter().rev().cloned().collect()
+                        } else {
+                            r.deck.clone()
+                        };
+                        view.discard = if r.piles[2] {
+                            h.graveyard.clone()
+                        } else {
+                            r.discard.clone()
+                        };
+                    }
+                    // The frame is the true top; a deck reveal made while it
+                    // was open already listed the held cards, so drop that
+                    // copy (one occurrence each) before splicing them in
+                    // front, and each card shows exactly once.
+                    for id in &held {
+                        if let Some(pos) = view.deck.iter().position(|c| c == id) {
+                            view.deck.remove(pos);
+                        }
+                    }
+                    view.deck.splice(0..0, held);
+                    Some(view)
+                }
+            };
         }
         // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
         // only when something was logged since the last read.
+        // Slot -> standing tile. Walked as bindings instead of calling
+        // [`Self::tile_standing_at`] per slot (each call re-scans every field;
+        // a frame is built on every action). The per-slot answer is kept: the
+        // first binding **at** a slot wins over any binding **naming** it.
+        st.tile_at = {
+            let mut at: Vec<i32> = (0..self.st.owners.len() as i32).collect();
+            let binding = |f: &crate::state::FieldCard| {
+                f.props
+                    .get(crate::state::prop::SWAPPED_TILE)
+                    .copied()
+                    .filter(|&q| q >= 0)
+                    .map(|q| (f.position(), q, f.tile))
+            };
+            let mut claimed = vec![false; at.len()];
+            for (pos, partner, _) in self.swap_records().filter_map(binding) {
+                if let Some(slot) = claimed.get_mut(pos as usize).filter(|c| !**c) {
+                    *slot = true;
+                    if let Some(x) = at.get_mut(pos as usize) {
+                        *x = partner;
+                    }
+                }
+            }
+            for (_, partner, tile) in self.swap_records().filter_map(binding) {
+                if let Some(slot) = claimed.get_mut(partner as usize).filter(|c| !**c) {
+                    *slot = true;
+                    if let Some(x) = at.get_mut(partner as usize) {
+                        *x = tile;
+                    }
+                }
+            }
+            at
+        };
         st.events = self.recent.window();
         st.event_deck = self.event_deck.len() as i32;
         st.event_discard = self.event_discard.clone();

@@ -2,7 +2,7 @@
 //!
 //! A placed `TEST:settleNest` re-settles its tile while its named counter counter
 //! lasts -- a deep settle chain of depth N. The engine's work stack has to
-//! run that chain on a **small** thread (512 KiB): at a depth that overflows
+//! run that chain on a **small** thread (1 MiB): at a depth that overflows
 //! master's synchronous nest, this test must still complete.
 
 mod common;
@@ -23,12 +23,15 @@ fn settle_chain_on_small_stack() {
     place_on_tile(&mut t, 0, "TEST:settleNest", 5);
     t.set_counters(0, "TEST:settleNest", DEPTH);
 
-    // 1 MiB: an eighth of a `spawn_blocking` worker, a tenth of main. The
+    // 1 MiB: a third of a `spawn_blocking` worker, an eighth of main. The
     // original 512 KiB no longer fits at DEPTH on this toolchain (it aborts on
-    // master too); 768 KiB fitted before G10, whose per-pause journal capture
-    // and overlay hand-off add about a third to each level's stack. The
-    // `settle_tile_at ↔ settle_tile_at` synchronous nest needs far more at
-    // DEPTH, so the work stack is still what carries the chain.
+    // master too), and a debug drive frame costs ~280 KiB per settle, so two
+    // live settles (the outermost one plus the first pumped one) need ~700 KiB
+    // on top of the harness. G10's per-pause journal capture and overlay
+    // hand-off add about a third to each level's stack. 1 MiB still fails the
+    // `settle_tile_at ↔ settle_tile_at` synchronous nest by an order of
+    // magnitude -- 120 levels would need ~32 MiB -- so the work stack is what
+    // carries the chain.
     // `spawn_unchecked` because `Match` is single-threaded (not `Send`); the
     // closure exclusively owns it for the duration of the join.
     let ptr = &mut t as *mut Table as usize;
@@ -37,6 +40,7 @@ fn settle_chain_on_small_stack() {
             .stack_size(1024 * 1024)
             .spawn_unchecked(move || {
                 let t = &mut *(ptr as *mut Table);
+                eprintln!("rolling on 1 MiB");
                 t.roll(0).unwrap();
                 eprintln!("rolled; draining prompts");
                 let mut n = 0;
@@ -54,7 +58,7 @@ fn settle_chain_on_small_stack() {
                     "settle chain did not run (named counters still {left})"
                 );
             })
-            .expect("spawn 512 KiB thread")
+            .expect("spawn 1 MiB thread")
     };
     h.join().expect("settle chain panicked or overflowed");
 }

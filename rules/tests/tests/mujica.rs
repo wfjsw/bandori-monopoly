@@ -182,7 +182,7 @@ fn heart_rain_fallback_stun_and_money() {
     t.give_play(0, "Mujica:心の雨").unwrap();
     // 规则书: 「若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金」
     assert_eq!(t.state(0, "stun"), 1);
-    assert_eq!(t.money(0), 11_000);
+    assert_eq!(t.money(0), 11_000, "{:?}", t.recent_keys(40));
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn heart_rain_nobody_in_range_fallback() {
     t.give_play(0, "Mujica:心の雨").unwrap();
     // 规则书: 「若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金」
     assert_eq!(t.state(0, "stun"), 1);
-    assert_eq!(t.money(0), 11_000);
+    assert_eq!(t.money(0), 11_000, "{:?}", t.recent_keys(40));
 }
 
 // -- Mujica:骰子已经掷下 -----------------------------------------------
@@ -1289,6 +1289,70 @@ fn nyamu_card_places_on_field() {
     drain(&mut t);
     // 规则书: 「将此卡放置于场上」
     assert!(t.on_field(0, "Mujica:（喵梦）"), "card on field");
+}
+
+/// The uid of 喵梦's row.
+fn nyamu_uid(t: &Table) -> i32 {
+    t.field(0)
+        .iter()
+        .find(|f| f.card == "Mujica:（喵梦）")
+        .map(|f| f.uid)
+        .expect("喵梦 on field")
+}
+
+// 规则书: 「每当此卡将从正面翻至背面时可选择失去2个火罐」
+#[test]
+fn nyamu_flip_down_may_lose_two_fire() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "祐天寺若麦");
+    t.give(0, &["Mujica:（喵梦）", "TEST:flipDown"]);
+    t.give_play(0, "Mujica:（喵梦）").unwrap();
+    drain(&mut t);
+    t.set_fire(0, 3, 9);
+    t.play(0, "TEST:flipDown").unwrap();
+    // 「可选择」 -- take the loss.
+    answer_opt(&mut t, 0, "ask.yes");
+    drain(&mut t);
+    assert_eq!(t.charge(0), 1, "lost 2 fire of 3");
+    let uid = nyamu_uid(&t);
+    assert!(t.field(0).iter().any(|f| f.uid == uid && f.face_down));
+}
+
+// 规则书: 「每当此卡将从正面翻至背面时可选择失去2个火罐」 -- declining keeps the pots.
+#[test]
+fn nyamu_flip_down_may_refuse() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "祐天寺若麦");
+    t.give(0, &["Mujica:（喵梦）", "TEST:flipDown"]);
+    t.give_play(0, "Mujica:（喵梦）").unwrap();
+    drain(&mut t);
+    t.set_fire(0, 3, 9);
+    t.play(0, "TEST:flipDown").unwrap();
+    answer_opt(&mut t, 0, "ask.no");
+    drain(&mut t);
+    assert_eq!(t.charge(0), 3, "no loss");
+    assert!(nyamu_uid(&t) >= 0);
+    assert!(t.field(0).iter().any(|f| f.face_down));
+}
+
+// 规则书: 「每当此卡将从背面翻至正面时此卡拥有者抽一张卡」
+#[test]
+fn nyamu_flip_up_draws() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "祐天寺若麦");
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压"]);
+    t.give(0, &["TEST:flipDown", "TEST:flipUp"]);
+    t.give_play(0, "Mujica:（喵梦）").unwrap();
+    drain(&mut t);
+    // No fire: the down clause cannot fire, so the face just turns.
+    let before = t.hand(0).len();
+    t.play(0, "TEST:flipDown").unwrap();
+    drain(&mut t);
+    assert_eq!(t.hand(0).len(), before - 1, "nothing drawn on the way down");
+    t.play(0, "TEST:flipUp").unwrap();
+    drain(&mut t);
+    assert_eq!(t.hand(0).len(), before - 1, "drew one card");
+    assert!(t.hand(0).contains(&"R:[衍生] 压".to_string()));
 }
 
 // -- Mujica:（海铃） ----------------------------------------------------

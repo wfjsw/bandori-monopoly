@@ -24,7 +24,10 @@ pub mod move_plan;
 pub mod vocab;
 
 pub use move_plan::PlanKind;
-pub use vocab::{Dice, Dir, MoveKind, MsgKey, Payee, Seat, Tile};
+pub use vocab::{
+    Dice, Dir, MoveKind, MsgKey, OutCause, Payee, PlayOutcome, Seat, Tile, Zone, ZoneChange,
+    ZoneChangeCause,
+};
 
 /// One live engine trigger kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -650,6 +653,57 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: false,
         hook_only: true,
     },
+    // G08: the zone family. Raised by the single zone writer; 113-119 are the
+    // block between the live 112 and 121. `openingHandDealt` takes the next
+    // free id above the live table.
+    EngineKind {
+        id: 113,
+        wire: "zoneLeft",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 114,
+        wire: "zoneLeftAfter",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 115,
+        wire: "handChanged",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 116,
+        wire: "cardFaceFlipped",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 117,
+        wire: "cardFaceFlippedAfter",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 118,
+        wire: "cardAttached",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 119,
+        wire: "cardDetached",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 140,
+        wire: "openingHandDealt",
+        is_filter: false,
+        hook_only: true,
+    },
     EngineKind {
         id: 122,
         wire: "spendBefore",
@@ -716,7 +770,58 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         hook_only: true,
     },
     EngineKind {
+        id: 132,
+        wire: "inspected",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 133,
+        wire: "drawAfter",
+        is_filter: false,
+        hook_only: true,
+    },
+    EngineKind {
+        id: 134,
+        wire: "abnormalGate",
+        is_filter: true,
+        hook_only: true,
+    },
+    // G09: one tile's extra effects are about to run (a counteraction window
+    // and a hook), and the house fall. `houseAdd` / `houseRemove` / `ownerSet`
+    // are effect-only spellings the tile writers declare; they never raise.
+    EngineKind {
+        id: 135,
+        wire: "tileEffectBefore",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 136,
+        wire: "houseRemoved",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
         id: 137,
+        wire: "houseAdd",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 138,
+        wire: "houseRemove",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 139,
+        wire: "ownerSet",
+        is_filter: false,
+        hook_only: false,
+    },
+    EngineKind {
+        id: 141,
         wire: "eventResolved",
         is_filter: false,
         hook_only: true,
@@ -853,6 +958,14 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "paySplitMulBefore" => Some(110),
         "cardFired" => Some(111),
         "markChanged" => Some(112),
+        "zoneLeft" => Some(113),
+        "zoneLeftAfter" => Some(114),
+        "handChanged" => Some(115),
+        "cardFaceFlipped" => Some(116),
+        "cardFaceFlippedAfter" => Some(117),
+        "cardAttached" => Some(118),
+        "cardDetached" => Some(119),
+        "openingHandDealt" => Some(140),
         "spendBefore" => Some(122),
         "diceRollCast" => Some(123),
         "diceRollSettled" => Some(124),
@@ -863,7 +976,15 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "settleMul" => Some(129),
         "settleRentAdd" => Some(130),
         "settleRentMul" => Some(131),
-        "eventResolved" => Some(137),
+        "inspected" => Some(132),
+        "drawAfter" => Some(133),
+        "abnormalGate" => Some(134),
+        "tileEffectBefore" => Some(135),
+        "houseRemoved" => Some(136),
+        "houseAdd" => Some(137),
+        "houseRemove" => Some(138),
+        "ownerSet" => Some(139),
+        "eventResolved" => Some(141),
         _ => None,
     };
     #[cfg(not(kani))]
@@ -917,12 +1038,13 @@ mod tests {
     fn filter_and_hook_sets() {
         const FILTERS: &[i32] = &[
             52, 55, 56, 57, 67, 68, 69, 70, 71, 79, 80, 81, 82, 83, 84, 85, 86, 95, 96, 97, 98, 99,
-            100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131,
+            100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131, 134,
         ];
         const HOOKS: &[i32] = &[
             45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68,
             69, 70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106,
-            110, 111, 112, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131, 137,
+            110, 111, 112, 114, 115, 117, 119, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131,
+            132, 133, 134, 140, 141,
         ];
         for r in ENGINE_KINDS {
             assert_eq!(
@@ -933,7 +1055,7 @@ mod tests {
             );
             assert_eq!(r.hook_only, HOOKS.contains(&r.id), "hook_only id {}", r.id);
         }
-        assert_eq!(FILTERS.len(), 34);
-        assert_eq!(HOOKS.len(), 56);
+        assert_eq!(FILTERS.len(), 35);
+        assert_eq!(HOOKS.len(), 64);
     }
 }

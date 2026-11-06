@@ -42,10 +42,16 @@ pub const AKO: CardDef = CardDef::new(
 ]);
 
 /// Face-down cards this player has on the field.
+///
+/// The ones **(1) itself placed in this run are skipped**: the body is
+/// re-executed for every answer and once more for the commit pass, whose
+/// starting world already carries the card the previous pass placed; counted,
+/// the replacement would fire on the skill's own card and never let the peek
+/// land.
 fn face_down(player_id: i32) -> alloc::vec::Vec<(i32, NameId)> {
     ctx::field_instances(player_id)
         .into_iter()
-        .filter(|(uid, _)| ctx::is_face_down_at(*uid))
+        .filter(|(uid, _)| ctx::is_face_down_at(*uid) && !ctx::is_own_placement(*uid))
         .collect()
 }
 
@@ -58,8 +64,12 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     let down = face_down(player_id);
     if !down.is_empty() {
         for (uid, c) in down {
-            ctx::unplace_at(uid);
-            ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Hand);
+            ctx::unplace_at(
+                uid,
+                ctx::Dest::Graveyard,
+                card_sdk::abi::ZoneChangeCause::Effect,
+            );
+            ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Hand, false);
             ctx::log(
                 player_id,
                 &Msg::new(key!("ako_taken")).card("card", c.as_str()),
@@ -96,7 +106,10 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     } else {
         cap
     };
-    let look: alloc::vec::Vec<NameId> = deck[..n].to_vec();
+    // The peek holds the looked cards out of the deck, so taking one cannot
+    // trip the refill and the surplus below is released from the frame.
+    ctx::inspection_begin(player_id, player_id, n as i32, false)?;
+    let look: alloc::vec::Vec<NameId> = ctx::cards_in(player_id, CardPile::Inspection);
     let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("ako_title")),
@@ -107,41 +120,47 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
             .collect::<alloc::vec::Vec<_>>(),
     )?;
     let Some(&keep) = look.get(pick) else {
+        ctx::inspection_end(player_id, false);
         return Ok(());
     };
-    if !ctx::take_card(player_id, keep.as_str(), CardPile::Deck) {
+    if !ctx::take_card(player_id, keep.as_str(), CardPile::Inspection) {
+        ctx::inspection_end(player_id, false);
         return Ok(());
     }
-    ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand);
+    ctx::add_to_dest(player_id, keep.as_str(), ctx::Dest::Hand, false);
     // 「选择其中1张加入手牌」 *is* the reward now -- cancel the tile's own draw
     // so the peek replaces it instead of stacking on it.
     ctx::trigger::set_cancelled();
     // 「剩余的卡放入弃牌堆或花费500资金将其背面朝上放置在自己场上」
     for c in look.iter().filter(|c| **c != keep) {
-        // Take the card out of the pile first: `place_card` only creates a
-        // field instance, so without this the deck copy would stay behind and
-        // the card would exist twice.
-        ctx::take_card(player_id, c.as_str(), CardPile::Deck);
+        // Take the card out of the frame first: `place_card` only creates a
+        // field instance and `add_to_dest` only creates a copy, so without this
+        // the card would stay in the look as well.
+        ctx::take_card(player_id, c.as_str(), CardPile::Inspection);
         let paid = ctx::ask_yes(
             player_id,
             &Msg::new(key!("ako_place_title")),
             &Msg::new(key!("ako_place_ask")).card("card", c.as_str()),
         )?;
         if paid && ctx::pay(player_id, 500, &Msg::new(key!("ako_place_pay")))? > 0 {
-            ctx::set_dest(ctx::Dest::Field);
+            ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
             // Hold the uid `place_card` hands back: this is 「此卡」 -- the copy
             // just placed -- and re-resolving `c` by name would pick whichever
             // copy of that id is first on the field.
             let uid = ctx::place_card(player_id, c.as_str(), &Msg::new(key!("ako_note")));
-            ctx::set_face_down_at(uid, true);
+            ctx::set_face_down_at(uid, true, card_sdk::abi::ZoneChangeCause::Effect);
             ctx::log(
                 player_id,
                 &Msg::new(key!("ako_placed")).card("card", c.as_str()),
             );
         } else {
-            ctx::to_discard(player_id, c.as_str());
+            // 「放入弃牌堆」 -- the card is already out of the frame, so the
+            // create-only push is right (`to_discard` consumes a hand copy).
+            ctx::add_to_dest(player_id, c.as_str(), ctx::Dest::Graveyard, false);
         }
     }
+    // 「本次领取奖励被替换为」 -- the tile must not also pay the reward.
+    ctx::inspection_end(player_id, false);
     Ok(())
 }
 

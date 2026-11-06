@@ -110,13 +110,13 @@ mutant companions.
 
 | class | count | notes |
 |---|---:|---|
-| PROVEN (verdict recorded) | 2 | `half_speed_01_place_iff`, `colors_01_wrap_formula` |
-| harness written, verdict pending slot | 24 | shared-box 3-slot cap saturated (coordinator notice 2026-10-11); compile-checked |
+| PROVEN (verdict recorded) | 9 | see the run table below |
+| harness written, verdict pending slot | 17 | compile-checked |
 | FAILS | 0 | none found in the runs that completed |
 | PROTOCOL-LEVEL | 14 | multi-turn / [反击] / settle / move-plan / mortgage / opening deal |
 | BLOCKED-HOST | 12 | `trig_move_roll`, `tile_named`, `is_shop`, `trig_by_card`/`effect::*`/`target`, `card_build`/`acquire` |
 | OPEN | 11 | text undefined (OPEN-起始地点, OPEN-触发结算, OPEN-分摊, OPEN-@Tsugu, …) |
-| TIMEOUT/OOM | 0 | — |
+| TIMEOUT/OOM | 7 | colors / soul bodies, name-decode cost (run 2026-11-05) |
 | **total** | **60** | |
 
 ### Runner verdicts completed
@@ -132,6 +132,42 @@ mutant companions.
 | `firepot_01_tick_formula` | written, verdict pending | — | ditto |
 | `band_01_filter_formula` | written, verdict pending | — | ditto |
 | all other `*_iff` / `*_mutant_is_detected` | written, verdict pending | — | 18 body/mutant harnesses; compile-checked |
+
+### Run 2026-11-05 (`G08` review pass)
+
+The `ag` bodies had never run against the harness subsets: several ops the
+bodies reach were undeclared, so the unit failed on `outside subset` rather
+than on a spec. Declared now, with arms where the model lacked one:
+`discard_from_hand`, `self_prop`/`set_self_prop` (new `arm_self_prop`),
+`opt_count` (new `arm_opt_count`, no `opt_n` bump), `player_count` (reached by
+`ctx::player_out`'s kani pre-check), and the fire-row plumbing `count_held` /
+`count_held_name` / `add_held` / `set_held_name` / `held_max` /
+`field_instances` / `persona_skill`. Two harness assumptions also had to
+follow the model: the sky play's hand count (the copy is a bit *and* a pile
+entry) and the sky mutant framing (the play log is discard + gain, so the
+single-effect spec cannot frame it).
+
+| harness | verdict | time | notes |
+|---|---|---:|---|
+| `half_speed_02_decay_iff` | **SUCCESSFUL** | — | turn-end tick |
+| `half_speed_02_decay_user1_iff` | **SUCCESSFUL** | — | seat 1 |
+| `half_speed_02_mutant_is_detected` | **SUCCESSFUL** | — | — |
+| `sky_03_draws_one` | **SUCCESSFUL** | — | draw branch |
+| `sky_02_03_play_iff` | **SUCCESSFUL** | — | take + (gain | draw) |
+| `sky_02_03_play_user1_iff` | **SUCCESSFUL** | — | seat 1 |
+| `sky_02_mutant_is_detected` | **SUCCESSFUL** | 307 s | n*601 rejected |
+| `colors_01_02_03_04_play_iff` | TIMEOUT | >900 s | no assertion failure; CBMC still unwinding |
+| `colors_01_02_03_04_play_user1_iff` | TIMEOUT | >900 s | ditto |
+| `colors_06_pick_to_hand` | TIMEOUT | >900 s | ditto; forcing the die to 5 does not help |
+| `soul_01_place_and_load_iff` | TIMEOUT | >1200 s | ditto (k-loop) |
+| `soul_01_place_and_load_user1_iff` | TIMEOUT | >1200 s | ditto |
+| `soul_02_pay_choose_yes_iff` | TIMEOUT | >1500 s | ditto |
+| `soul_02_pay_choose_yes_user1_iff` | TIMEOUT | >1500 s | ditto |
+
+The timeouts are latency, not disagreement: every failing log before the cap
+shows the declared-subset assertion cleared with no spec check failed. The
+cost is the name-decode path (`core::str::validations`) the bodies walk through
+`Msg` / card-id handling, which path-splits under symbolic state.
 
 Note: `tools/kani/run.sh` before the origin/master fix labelled a successful
 run **UNMODELED** because the host's `unmodeled host op` assert string appears

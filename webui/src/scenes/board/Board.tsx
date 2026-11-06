@@ -27,6 +27,7 @@ import { openDeed, showLeave } from "./Popups";
 import { openPrompt, waitingOn } from "./Prompt";
 import { showResults } from "./Results";
 import { Ring } from "./Ring";
+import { Inspection } from "./Inspection";
 import { Hand, SettleVote, Side } from "./Side";
 import { shouldFinishTurn, movementControl } from "./turnFlow";
 import { FieldSheet } from "./FieldSheet";
@@ -264,6 +265,8 @@ export const Board = memo(function Board({ sess }: { sess: GameSession }) {
               upper edge (under the FX layer). The board's roll-zone die takes
               the roll action from the old side-column button. */}
           <FieldSheet m={m} pulse={anim.pulse} />
+          {/* The viewer's own open deck look, over the upper edge. */}
+          <Inspection m={m} />
           <div className={s.mapSlot}>
             <Ring
               m={shown ?? m}

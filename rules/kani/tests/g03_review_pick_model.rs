@@ -4,6 +4,12 @@
 use rules_kani::host::{arm_roll_move, arm_roll_pick, arm_roll_recast, arm_roll_unused_face};
 use rules_kani::world;
 
+/// The model world is process-global; the tests in this file share it.
+fn lock() -> std::sync::MutexGuard<'static, ()> {
+    static L: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    L.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn fresh() -> (i32, Vec<i32>) {
     world::reset_world(world::World::new());
     let id = world::with_world(|w| w.next_roll_id);
@@ -17,6 +23,7 @@ fn fresh() -> (i32, Vec<i32>) {
 #[test]
 #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_keep_new_records_nothing() {
+    let _g = lock();
     let (id, faces) = fresh();
     // Production: `kill the n-1 pick` re-keeps the cast the recast chose
     // (index 1) and still records the old face (cast 0).
@@ -37,6 +44,7 @@ fn model_keep_new_records_nothing() {
 #[test]
 #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_keep_old_records_the_chosen_cast() {
+    let _g = lock();
     let (id, faces) = fresh();
     arm_roll_pick([id, 0, 0, 0, 0, 0]);
     assert_eq!(
@@ -49,6 +57,7 @@ fn model_keep_old_records_the_chosen_cast() {
 #[test]
 #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_source_raise_compares_codes_not_ranks() {
+    let _g = lock();
     let (id, _) = fresh();
     // Production `cast` uses `RollSource::rank()`: code 1 (charge, rank 3)
     // outranks code 2 (card, rank 1), so source stays 1.
@@ -65,6 +74,7 @@ fn model_source_raise_compares_codes_not_ranks() {
 #[test]
 #[ignore = "opt-in: kani conformance suite; run with `-- --ignored`"]
 fn model_second_pick_uses_the_old_choice_not_the_latest_pair() {
+    let _g = lock();
     // I5: `unused_face` is the other of the *latest pair* on every pick.
     // Production with n=3, pick 0 then pick 1 records casts[2]; the model
     // records the previous chosen cast (casts[0]).

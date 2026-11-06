@@ -63,7 +63,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // t.index : -1`: out / exile / `ImmuneAll` / `Untargetable` / the `target` [反击]
     // window all fail the designation, and a `redirect` hook may move the hit.
     let hit = ctx::target(who);
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("kaoru_thief_note")));
     // TODO(规则书)（充能3，衰减1）: the book never names the counter -- we use the 奇迹水晶
     // `crystals` counter (spec OPEN-HHW-CHARGE); if 充能 is not 奇迹 水晶, other cards'
@@ -137,7 +137,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("kaoru_thief_decayed")).player_id("who", player_id),

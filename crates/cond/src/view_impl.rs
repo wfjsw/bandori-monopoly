@@ -26,6 +26,9 @@ impl CondView for SnapshotView<'_> {
     fn tile_id(&self) -> i64 {
         self.win.tile.id
     }
+    fn tile_position(&self) -> i64 {
+        self.win.tile.position
+    }
     fn tile_owner(&self) -> i64 {
         self.win.tile.owner
     }
@@ -376,9 +379,18 @@ impl CondView for SnapshotView<'_> {
     }
     fn players_on(&self, tile: i64, except: i64) -> i64 {
         // `ctx::players_on` counts present (`!out && exile == 0`) standers.
+        // The argument is a **tile**; a stander's slot resolves through the
+        // snapshot's `tile_at` so a swap moves the count with the tile.
+        let at = |position: i64| {
+            self.win
+                .tile_at
+                .get(position.max(0) as usize)
+                .copied()
+                .unwrap_or(position)
+        };
         (0..self.win.seat_count())
             .filter(|&s| {
-                s != except && self.out(s) == 0 && self.exile(s) == 0 && self.pos(s) == tile
+                s != except && self.out(s) == 0 && self.exile(s) == 0 && at(self.pos(s)) == tile
             })
             .count() as i64
     }

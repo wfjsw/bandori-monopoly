@@ -68,7 +68,7 @@ fn chisato_mask(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(
         player_id,
         "PP:[白鹭千圣]微笑的铁假面",

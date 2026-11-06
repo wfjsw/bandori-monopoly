@@ -142,6 +142,15 @@ pub struct MatchState {
     pub roller: i32,
     pub busy: bool,
     pub skip_move: bool,
+    /// The turn's main move is already spent (`world.turn.main_moved`): a
+    /// card ran it, or an off-board main-move expiry teleported the seat at
+    /// its turn start. The roll gate refuses such a roll (`err.roll_main_used`)
+    /// and `end` is the only turn command left. Public: a client that never
+    /// sees it cannot tell a spent main move from an owed roll (the seat
+    /// spamming `roll` into the refusal is how the 2026-11-04 room 5FCRYP
+    /// wedged).
+    #[serde(default)]
+    pub main_moved: bool,
     pub landed: i32,
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
@@ -175,10 +184,10 @@ pub struct MatchState {
     pub time_left: f32,
     pub base_time: f32,
     pub bonus_time: f32,
-    /// True while the acting seat's turn clock is held waiting for that seat's
-    /// `anim_done` ack (or the hold cap). The server publishes no deadline
-    /// while this is set; clients show the clock held at full. Solo and
-    /// machine seats never hold.
+    /// True while the turn clock -- and the open prompt's or vote's window --
+    /// is held waiting for each pending human seat's `anim_done` ack (or the
+    /// hold cap). The server publishes no deadline while this is set; clients
+    /// show the clock held at full. Solo and machine seats never hold.
     #[serde(default)]
     pub clock_paused: bool,
     /// Next uid to hand out for a card instance. **Global** across the match, not
@@ -213,13 +222,32 @@ pub struct MatchState {
     pub board_field: Vec<FieldCard>,
     pub bans: Vec<String>,
     pub owners: Vec<i32>,
+    /// Per tile: when the current owner took it (the acquisition order,
+    /// `-1` = nobody holds it). Written only by `World::set_tile_owner`.
+    #[serde(default)]
+    pub owned_seq: Vec<i32>,
+    /// Next acquisition sequence to hand out.
+    #[serde(default)]
+    pub next_owned_seq: i32,
     pub houses: Vec<i32>,
+    /// Per board slot, the tile standing there (the swap map): a slot draws
+    /// the tile that answers here, and a field card renders at
+    /// `position_of_tile(tile)`. Identity with no swap. 设计 5.1.
+    #[serde(default)]
+    pub tile_at: Vec<i32>,
     pub mortgaged: Vec<bool>,
     pub embers: Vec<i32>,
     pub marks: Vec<TileMark>,
     pub event_deck: i32,
     pub event_top: Vec<String>,
     pub event_discard: Vec<String>,
+    /// The neutral board's own discard: rule instances that sat on the board
+    /// field (owner [`BOARD_OWNER`]) and left it. A board row has no seat, so
+    /// its name must not fall into player 0's discard, where the reshuffle
+    /// would deal it back as a dead hand card. Serde-defaulted so older saves
+    /// and clients load.
+    #[serde(default)]
+    pub board_discard: Vec<String>,
     pub event_removed: Vec<String>,
     pub event_active: Vec<ActiveEvent>,
     pub prompt: MatchPrompt,
@@ -260,6 +288,7 @@ impl Default for MatchState {
             roller: -1,
             busy: false,
             skip_move: false,
+            main_moved: false,
             landed: -1,
             think_time: 0,
             can_roll_here: false,
@@ -278,13 +307,17 @@ impl Default for MatchState {
             board_field: vec![],
             bans: vec![],
             owners: vec![],
+            owned_seq: vec![],
+            next_owned_seq: 0,
             houses: vec![],
+            tile_at: vec![],
             mortgaged: vec![],
             embers: vec![],
             marks: vec![],
             event_deck: 0,
             event_top: vec![],
             event_discard: vec![],
+            board_discard: vec![],
             event_removed: vec![],
             event_active: vec![],
             prompt: MatchPrompt::default(),
@@ -424,6 +457,10 @@ pub mod key {
     /// 移动效果影响」). The walk clamp skips while this is > 0; the turn-start
     /// move-gate skip is a different question and is not cancelled.
     pub const MOVE_EXEMPT: &str = "moveExempt";
+    /// The player's earliest-owned tile + 1 (`-1` = none), a cache rebuilt by
+    /// [`crate::engine::ops::World::set_tile_owner`]. 灯's card reads the slot;
+    /// `ctx::earliest_owned_tile` is the authority.
+    pub const FIRST_TILE: &str = "firstTile";
 }
 
 /// Named **card properties** -- the keys of a card rule's declared property
@@ -434,6 +471,16 @@ pub mod key {
 /// in step). Every key has a defined default of `0` when a card does not
 /// declare it.
 pub mod prop {
+    /// 「那格视为与…交换位置」 -- an instance prop on the placed instance. Value
+    /// = the partner tile; that instance's slot resolves to the partner tile
+    /// and back, one level. `-1` / absent = no binding. Mirrors
+    /// `card_sdk::abi::prop::SWAPPED_TILE`.
+    pub const SWAPPED_TILE: &str = "swappedTile";
+
+    /// A `Dest` wire code the card wants when it leaves play, read at the
+    /// `zoneLeft` commit. Absent = the Graveyard. Mirrors
+    /// `card_sdk::abi::prop::LEAVE_DEST`.
+    pub const LEAVE_DEST: &str = "leaveDest";
     /// Continuous 「手卡上限数量减1」 while the card sits on the field. Stamped
     /// onto the field instance at placement and gone with the card. `-1` cuts
     /// the owner's hand limit.
@@ -442,6 +489,10 @@ pub mod prop {
     /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
     /// reserve check -- never by legality. `0` = unknown / assume free.
     pub const EST_COST: &str = "estCost";
+    /// Bot-only: nonzero = standard / advanced bot policies must not offer this
+    /// card. Absent or `0` = offer. A static card fact, never legality -- a
+    /// human can still play the card. Mirrors `card_sdk::abi::prop::AI_NEVER`.
+    pub const AI_NEVER: &str = "aiNever";
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     /// `1` on a source on the owner's field: the owner may play their
@@ -458,6 +509,16 @@ pub mod prop {
     /// so a `place_raw` / engine placement sees it without running the play
     /// body. Mirrors `card_sdk::abi::prop::IMMUNE`.
     pub const IMMUNE: &str = "immune";
+    /// 「不受除拥有此卡的玩家以外的玩家的效果影响」: `1` = the placed instance
+    /// gets `FieldCard.immune_except_owner` stamped at placement, read through
+    /// `is_immune_from_at`. Mirrors `card_sdk::abi::prop::IMMUNE_EXCEPT_OWNER`.
+    pub const IMMUNE_EXCEPT_OWNER: &str = "immuneExceptOwner";
+    /// 「卡包含添加骰效果」: `1` = the card's effect adds dice to a move
+    /// (`plan::add_extra_dice`). Read at the play to test the dice immunity.
+    pub const ADDS_DICE: &str = "addsDice";
+    /// 「打出此卡的回合…」: `1` = playing the card raises `turn.dice_immune` for
+    /// the rest of its turn. Mirrors `card_sdk::abi::prop::GRANTS_DICE_IMMUNITY`.
+    pub const GRANTS_DICE_IMMUNITY: &str = "grantsDiceImmunity";
     /// Virtual **rent** house count (「房屋数视为…」). Presence is the override
     /// (a count of `0` is legitimate); real `st.houses` is untouched. On a
     /// placed card of the tile's owner (`ctx::set_prop`, gone with the card) or
@@ -668,6 +729,54 @@ pub struct MatchPlayer {
     pub assets: i32,
     pub score: i32,
     pub rank: i32,
+    /// What this seat has publicly revealed right now (`reveal_pile` /
+    /// `reveal_card`). Cleared when the outermost routine ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reveal: Option<RevealView>,
+    /// The current over-limit hand was created by a draw that permits it
+    /// (「可超过上限」). While set, the excess does not block `end`; it is
+    /// cleared as soon as the hand fits again and after the turn-end sweep.
+    /// `[serde(default)]` so a pre-v17 save restores with it unset. Wire:
+    /// `overHandAllowed`.
+    #[serde(default)]
+    pub over_hand_allowed: bool,
+}
+
+/// A seat's public reveal overlay: ids published to every seat, with the
+/// clause that published them.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RevealView {
+    /// The reveal's reason (a `log.*` key plus args).
+    pub reason: Msg,
+    /// Publicly revealed hand ids, in hand order.
+    pub hand: Vec<String>,
+    /// Publicly revealed draw-pile ids, top-first. A public inspection's held
+    /// cards count as revealed draw-pile ids.
+    pub deck: Vec<String>,
+    /// Publicly revealed discard ids (that pile is already public in
+    /// [`MatchPlayer::discard`]; carried for the reveal's own emphasis).
+    pub discard: Vec<String>,
+}
+
+/// Which bucket a public reveal writes into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevealPile {
+    Hand,
+    Deck,
+    Discard,
+    /// One shown card (`reveal_card`); appended to the revealed-card list.
+    Card,
+}
+
+/// The caller's own open inspection frame, for `MatchView.inspection`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct InspectionView {
+    /// Held card ids, top-first, innermost frame first.
+    pub cards: Vec<String>,
+    /// The frame is public (every card was revealed as it was turned).
+    pub public: bool,
 }
 
 impl Default for MatchPlayer {
@@ -713,6 +822,8 @@ impl Default for MatchPlayer {
             assets: 0,
             score: 0,
             rank: 0,
+            reveal: None,
+            over_hand_allowed: false,
         }
     }
 }
@@ -841,6 +952,11 @@ impl MatchPlayer {
     pub fn over_hand(&self, held: usize) -> bool {
         self.hand_limit()
             .is_some_and(|limit| held > usize::try_from(limit).unwrap_or(0))
+    }
+
+    /// Over the limit **and** not permitted to stay there (「可超过上限」).
+    pub fn over_hand_blocking(&self, held: usize) -> bool {
+        self.over_hand(held) && !self.over_hand_allowed
     }
 
     pub fn skill_state(&self) -> i32 {
@@ -1057,7 +1173,18 @@ fn is_zero(v: &i32) -> bool {
     *v == 0
 }
 
+fn is_negative(v: &i32) -> bool {
+    *v < 0
+}
+
 fn no_parent() -> i32 {
+    -1
+}
+
+/// `FieldCard.position`'s `-1` default (serde reads `Default::default`, not
+/// the struct's own [`Default`] impl, which is why the plain attribute is not
+/// enough).
+fn no_position() -> i32 {
     -1
 }
 
@@ -1147,6 +1274,9 @@ pub struct FieldCard {
     /// 「此卡不受…效果影响」. A value on the card, not a subclass override:
     /// effects that would touch it read this and skip.
     pub immune: bool,
+    /// 「不受除拥有者以外的效果影响」; read through `is_immune_from_at`.
+    #[serde(default)]
+    pub immune_except_owner: bool,
     /// The card rule's declared static **properties** (see [`prop`]), stamped
     /// onto the instance at placement and gone with it. A continuous effect
     /// like 「手卡上限数量减1」 (`prop::HAND_LIMIT_DELTA`) rides here, so a
@@ -1177,7 +1307,45 @@ pub struct FieldCard {
     /// still names the copy, its counters and where it is filed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_card: Option<String>,
+    /// The board **position** this instance sits at. `-1` = the same as `tile`
+    /// (an unswapped placement). Written for a seat's placement only, never for
+    /// a board-owned rule instance. A swap binding is anchored here, and
+    /// [`Self::position`] is the slot readers take.
+    #[serde(default = "no_position", skip_serializing_if = "is_negative")]
+    pub position: i32,
+    /// The instance this one sits on (`Zone::Attached`), `-1` when not
+    /// attached. Holds exactly while the row is attached.
+    #[serde(default = "minus_one")]
+    pub on: i32,
+    /// The instance that made this one, `-1` when none. A child dies with its
+    /// creator.
+    #[serde(default = "minus_one")]
+    pub created_by: i32,
+    /// Did this card take effect? Cleared by `set_ineffective_at`; read by a
+    /// Graveyard arrival and cleared there.
+    #[serde(default = "truth")]
+    pub effective: bool,
     pub note: Msg,
+}
+
+fn minus_one() -> i32 {
+    -1
+}
+
+fn truth() -> bool {
+    true
+}
+
+impl FieldCard {
+    /// The slot this instance sits at: [`Self::position`], or [`Self::tile`]
+    /// when none was written.
+    pub fn position(&self) -> i32 {
+        if self.position >= 0 {
+            self.position
+        } else {
+            self.tile
+        }
+    }
 }
 
 impl Default for FieldCard {
@@ -1191,11 +1359,16 @@ impl Default for FieldCard {
             counters: BTreeMap::new(),
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             props: BTreeMap::new(),
             group_skill: false,
             extra: false,
             counter_max: BTreeMap::new(),
             effective_card: None,
+            position: -1,
+            on: -1,
+            created_by: -1,
+            effective: true,
             note: Msg::default(),
         }
     }

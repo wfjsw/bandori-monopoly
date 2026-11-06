@@ -53,7 +53,9 @@ export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Mode
   }, []);
   const dismiss = useCallback(() => setPicked(null), []);
   const mine = (ownerSeat: number) => ownerSeat >= 0 && ownerSeat === m.playerId;
-  const down = S.players.flatMap((x, seat) => (x.field ?? []).filter((fc) => fc.faceDown).map((fc) => ({ seat, fc })));
+  // An attachment (`on >= 0`) is shown on its host in the cards-in-play row,
+  // not here, even when it is face down.
+  const down = S.players.flatMap((x, seat) => (x.field ?? []).filter((fc) => fc.faceDown && (fc.on ?? -1) < 0).map((fc) => ({ seat, fc })));
   if (!down.length) return null;
   const step = downStep(down.length);
   return (
@@ -69,13 +71,17 @@ export const FaceDownStack = memo(function FaceDownStack({ m, pulse }: { m: Mode
         const tiles = designatedTiles(S.marks, fieldCardTiles(fc.uid));
         const key = `c${fc.uid}`;
         const name = D.card(fc.card)?.name;
+        // Only the viewer's own parked card can be lit: everyone else's is the
+        // back, and the engine flashes those in the centre instead.
+        const lit = own && pulse?.uid === fc.uid;
+        const litStyle = lit && pulse ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {};
         return (
           <div
             key={key}
             {...{ [PICK_ATTR]: key }}
-            className={cx(s.downSlot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])}
+            className={cx(s.downSlot, lit && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])}
             {...(tiles.length ? holdPeek(() => setHoverCardTiles(new Set(tiles)), () => setHoverCardTiles(null)) : {})}
-            style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) } as CSSProperties}
+            style={{ ["--own" as string]: m.colorOf(owner), ...litStyle } as CSSProperties}
           >
             {own ? (
               <>

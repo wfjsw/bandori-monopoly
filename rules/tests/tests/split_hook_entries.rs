@@ -9,6 +9,7 @@ mod common;
 
 use bandori_std::kind as rk;
 use common::*;
+use game_core::msg::Arg;
 
 /// Manifest shape of the three split cards: one Filter + one Action half,
 /// same body, same condition, and no later entry-index drift beyond the known shift.
@@ -292,4 +293,55 @@ fn custom_kind_filter_classification() {
     assert_eq!(rk::PassRewardAffected.spelling(), "r:bandori:26");
     assert_eq!(rk::ChargePaying.spelling(), "r:bandori:78");
     assert_eq!(rk::FansFlip.spelling(), "r:bandori:107");
+}
+
+/// `Inspected` is an own-card point: it goes to the turned-up deck card, not
+/// through the field walk. A field copy with the same hook must stay silent.
+#[test]
+fn inspected_dispatches_to_the_deck_card_not_the_field() {
+    let mut t = Table::vanilla(2);
+    // A field copy carrying the same hook.
+    t.place_raw(0, "TEST:inspectProbe");
+    t.set_draw(0, &["TEST:inspectProbe", "通用:GREAT"]);
+    let mark = t.mark();
+    t.give_play(0, "TEST:lookAtTwo").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let evs = t.events_since(mark);
+    let probes: Vec<usize> = evs
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| log_key(e).contains("inspect_probe"))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        probes.len(),
+        1,
+        "only the turned deck card hears it: {:?}",
+        t.keys_since(mark)
+    );
+    let e = &evs[probes[0]];
+    let m = if e.msg.key() == "log.card_effect" {
+        match e.msg.args.get("what") {
+            Some(Arg::Msg(m)) => m.as_ref(),
+            _ => &e.msg,
+        }
+    } else {
+        &e.msg
+    };
+    assert_eq!(
+        m.args.get("placed"),
+        Some(&Arg::Integer(0)),
+        "the deck instance, not the placed copy"
+    );
+    assert_eq!(m.args.get("position"), Some(&Arg::Integer(1)));
+    let returned = evs
+        .iter()
+        .position(|e| log_key(e).contains("look_returned"))
+        .expect("the after-begin line");
+    assert!(
+        probes[0] < returned,
+        "inspected is raised before inspection_begin returns"
+    );
 }

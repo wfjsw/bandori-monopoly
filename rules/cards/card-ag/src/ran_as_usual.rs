@@ -117,7 +117,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("ran_as_usual_undo"))
             .player_id("who", player_id)
-            .tile("tile", snap.pos),
+            .tile("tile", ctx::tile_at(snap.pos)),
     );
     Ok(())
 }

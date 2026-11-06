@@ -374,6 +374,11 @@ pub fn request_or_pause<C: HostCtx>(
             let after_pos = request_after_pos(&st.log, at);
             st.w()
                 .after_host(at, condition.as_ref(), after_money.as_deref(), after_pos);
+            // A zone request's row half is a live-side write: the re-run's
+            // earlier writes put the row back on the copy (`after_host` laid
+            // them over the adopted world), so re-apply what the request took
+            // away. Other kinds are idempotent/no-ops here.
+            st.w().replay_host(&req, x, condition.as_ref());
             st.log.cursor += 1;
             answer = Some(x);
         }

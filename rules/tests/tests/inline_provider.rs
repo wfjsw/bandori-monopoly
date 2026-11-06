@@ -325,10 +325,12 @@ impl CardRules for AskingStub {
         &self,
         cx: &mut PlayCtx,
         player_id: usize,
-        tile: usize,
+        position: usize,
+        tile: i32,
+        _m: &game_core::engine::MoveCtx,
         is_main_move: bool,
     ) -> Flow<()> {
-        cx.land_at_built_in(player_id, tile, is_main_move)?;
+        cx.land_at_built_in(player_id, position, tile, is_main_move)?;
         if is_main_move {
             let ask = Ask::choice(
                 vec![player_id],

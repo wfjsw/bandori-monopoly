@@ -24,20 +24,26 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
             "card.placed && pay_is_rent && target == owner",
             None,
             pay_after)),
-        // 规则书（2）: 「视为」 is continuous -- it tracks the max as houses move.
-        // `HouseAdded` covers the rise path; there is no `HouseRemoved` kind yet,
-        // so a raze of the max tile is not tracked (see the TODO on `apply_view`).
+        // 规则书（2）: 「视为」 is continuous -- it tracks the max as houses move,
+        // so the fall re-runs the same view as the rise.
         On::Action(Action::HouseAdded(
             "card.placed && actor == owner",
             None,
-            on_house_added)),
+            recompute_view)),
+        On::Action(Action::HouseRemoved(
+            "card.placed && actor == owner",
+            None,
+            recompute_view)),
         // 规则书（2）: 「你的所有格子」 -- a tile acquired while the card is placed
         // is lifted by the owner-wide `RENT_HOUSES` view too, so its half-charge
         // is armed like a rise (`bought` carries the buyer as actor).
         On::Action(Action::Bought(
             "card.placed && actor == owner",
             None,
-            on_house_added)),
+            recompute_view)),
+        // Any removal route disarms what the card armed (the raise names the
+        // discarded card; `card.placed` is already false here). Silent.
+        On::Action(Action::Discarded("trigger_card == card.id", None, on_discarded)).silent(),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)])
@@ -93,7 +99,7 @@ fn raised_tiles(player_id: i32, max_h: i32) -> alloc::vec::Vec<i32> {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Play);
     ctx::place_card(player_id, ID, &Msg::new(key!("ringing_bloom_note")));
     ctx::log(
         player_id,
@@ -109,20 +115,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// half-charge set. Called at play, on every `HouseAdded` and on a `Bought`, so
 /// the 「视为」 tracks the max as houses rise and reaches newly acquired tiles.
 ///
-/// TODO(规则书)（2）: the **fall** path is still open. There is no `HouseRemoved`
-///   kind, so a raze of the max tile (or a sale) leaves the view at the old max
-///   until the next build, and a sold tile keeps its half (`RENT_FACTOR` is a
-///   board-tile prop, not a per-owner one). Only `Bought` arms a gained tile --
-///   an ownership change that raises no `bought` (`ctx::set_owner`: gift/swap)
-///   leaves it un-halved until the next build, though the owner-wide
-///   `RENT_HOUSES` view already lifts it. A hand/banish/deck removal of this
-///   card has no disarm hook either -- only [`pay_after`]'s discard path does;
-///   `Action::Discarded` would cover the other discard routes.
+/// TODO(规则书)（2）: `HouseRemoved` now re-runs the view, but a half-charge on a
+///   tile that **leaves** its owner keeps standing (`RENT_FACTOR` is a
+///   board-tile prop, not a per-owner one), and the removal's owner is the
+///   tile's owner at write time -- a razed tile of another seat re-runs the
+///   card owner's view, which is harmless but does not clear the old tile.
+///   An ownership change that raises no `bought` (`ctx::set_owner`: gift/swap)
+///   leaves a gained tile un-halved until the next build, though the
+///   owner-wide `RENT_HOUSES` view already lifts it.
 fn apply_view(player_id: i32) {
     let max_h = counted_max(player_id);
-    if max_h > 0 {
-        ctx::set_prop(prop::RENT_HOUSES, max_h);
-    }
+    // Written unconditionally: a max that drops back to 0 (every house razed)
+    // must clear the view too, not leave the last count standing.
+    ctx::set_prop(prop::RENT_HOUSES, max_h);
     // Reconcile the whole set, not just the rise: a tile that has caught up with
     // the max is no longer 「受此效果影响获得额外房屋数」 and must charge in full.
     for &t in &ctx::owned_tiles(player_id) {
@@ -136,10 +141,20 @@ fn apply_view(player_id: i32) {
     }
 }
 
-/// 规则书（2）: the 「视为」 tracks the max as houses move (rise path) and covers
-/// a tile acquired mid-life.
-fn on_house_added(player_id: i32) -> card_sdk::Asked {
+/// 规则书（2）: 「视为」 tracks the max as houses move (either direction) and
+/// covers a tile acquired mid-life.
+fn recompute_view(player_id: i32) -> card_sdk::Asked {
     apply_view(player_id);
+    Ok(())
+}
+
+/// The card left play: clear the counted max and every half-charge it armed.
+/// Nothing is recomputed -- the card is gone.
+fn on_discarded(player_id: i32) -> card_sdk::Asked {
+    ctx::set_prop(prop::RENT_HOUSES, 0);
+    for &t in &ctx::owned_tiles(player_id) {
+        ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
+    }
     Ok(())
 }
 
@@ -171,7 +186,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
         }
         ctx::set_tile_prop(t, prop::RENT_FACTOR, 0);
     }
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("ringing_bloom_done"))
@@ -211,5 +226,17 @@ pub fn pay_after_kani(player_id: i32) -> card_sdk::Asked {
 #[cfg(kani)]
 #[inline(always)]
 pub fn on_house_added_kani(player_id: i32) -> card_sdk::Asked {
-    on_house_added(player_id)
+    recompute_view(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn recompute_view_kani(player_id: i32) -> card_sdk::Asked {
+    recompute_view(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_discarded_kani(player_id: i32) -> card_sdk::Asked {
+    on_discarded(player_id)
 }

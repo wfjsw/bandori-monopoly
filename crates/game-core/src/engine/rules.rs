@@ -80,6 +80,14 @@ pub struct TriggerMove {
     pub rolled: bool,
     /// The length the move will actually take.
     pub effective: i32,
+    /// Every governing tile this move has stepped on so far, in order. Pushed
+    /// at the same point as [`MoveCtx::path`](super::move_ctx::MoveCtx::path)
+    /// (so a `passBefore` of the step not yet taken does not see it; its
+    /// `passTile` and settle do). Tiles, not positions.
+    pub path: Vec<i32>,
+    /// Did an abnormal land during this move? Set on the move's frame as it
+    /// lands, readable from every trigger raised later in the walk.
+    pub abnormal: bool,
 }
 
 /// The roll a `DiceRoll*` trigger belongs to. [`Trigger::roll`] is `None` on
@@ -368,7 +376,13 @@ pub struct Trigger {
     pub kind: String,
     pub player_id: i32,
     pub target: i32,
+    /// The **governing tile** of this event. Identity: rule instances, extras,
+    /// ownership, houses, mortgage, props and identity readers all key on it.
     pub tile: i32,
+    /// The **board position** of this event (the slot stepped onto / settled
+    /// at), `-1` on kinds with no position. `tile` is resolved from it; the
+    /// two are equal when no swap is bound there.
+    pub position: i32,
     pub card: Option<String>,
     pub value: i32,
     /// How this stage composes its responders' rewrites ([`Fold`]).
@@ -397,6 +411,12 @@ pub struct Trigger {
     /// the tile `On::Settle` body needs the flag (a main landing only
     /// announces; the offers come at the end step) and has no `mv`.
     pub is_main_move: bool,
+    /// The activation this raise belongs to; stamped by `counteract` from
+    /// `turn.activation_ordinal`. 0 outside a routine.
+    pub activation_ordinal: i32,
+    /// Did the abnormal this trigger announces hold the move? Meaningful only on
+    /// the `effect` and `abnormal` raises of an abnormal; false elsewhere.
+    pub abnormal_blocked: bool,
     /// The move that caused this trigger, when one did. `None` = no move.
     pub mv: Option<TriggerMove>,
     /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
@@ -447,6 +467,12 @@ pub struct Trigger {
     /// record carries it so a re-run of the same draw matches while a second
     /// draw of the same card for the same seat does not.
     pub ordinal: i32,
+    /// The transition this raise is about. `None` outside the zone family.
+    pub zone: Option<game_kinds::ZoneChange>,
+    /// The playing card's outcome on `card` / `cardAfter`; `None` elsewhere.
+    pub play_outcome: Option<game_kinds::PlayOutcome>,
+    /// Why the player left on `beforeOut`; `None` elsewhere.
+    pub out_cause: Option<game_kinds::OutCause>,
     /// The tile of the innermost open settle, or `-1` when none is open. Not a
     /// pay-only fact -- `settleBody` / `settleAfter` / `tileResolved` carry it
     /// with no `pay` payload, and `settleAfter` raises after the entry popped.
@@ -557,6 +583,7 @@ impl Trigger {
             player_id: player_id as i32,
             target: player_id as i32,
             tile: -1,
+            position: -1,
             card: None,
             value: 0,
             fold: Fold::Replace,
@@ -565,6 +592,8 @@ impl Trigger {
             step: 0,
             by_card: None,
             is_main_move: false,
+            activation_ordinal: 0,
+            abnormal_blocked: false,
             mv: None,
             pay: None,
             buy: None,
@@ -581,6 +610,9 @@ impl Trigger {
             uid: 0,
             instance: -1,
             ordinal: 0,
+            zone: None,
+            play_outcome: None,
+            out_cause: None,
             settle_tile: -1,
             outcome: None,
             by_card_instance: None,
@@ -703,6 +735,8 @@ impl Trigger {
             settle_redirect: m.settle_redirect,
             rolled: m.rolled,
             effective: m.effective_steps(),
+            path: m.path.clone(),
+            abnormal: m.abnormal,
         });
         self.is_main_move = m.is_main_move;
         self
@@ -731,74 +765,118 @@ impl Trigger {
 macro_rules! raise {
     ($cx:expr, $kind:expr, $player_id:expr $(, $($rest:tt)*)?) => {{
         let mut __trigger = Trigger::new($kind, $player_id);
-        raise!(@set __trigger $(, $($rest)*)?);
+        raise!(@set $cx, __trigger $(, $($rest)*)?);
         $cx.raise(__trigger)
     }};
-    (@set $t:ident) => {};
-    (@set $t:ident,) => {};
-    (@set $t:ident, @m $m:expr) => {
+    (@set $cx:expr, $t:ident) => {};
+    (@set $cx:expr, $t:ident,) => {};
+    (@set $cx:expr, $t:ident, @m $m:expr) => {
         $t.with_move(&$m);
     };
-    (@set $t:ident, @m $m:expr,) => {
+    (@set $cx:expr, $t:ident, @m $m:expr,) => {
         $t.with_move(&$m);
     };
-    (@set $t:ident, @m $m:expr, $($rest:tt)+) => {
+    (@set $cx:expr, $t:ident, @m $m:expr, $($rest:tt)+) => {
         $t.with_move(&$m);
-        raise!(@set $t, $($rest)+);
+        raise!(@set $cx, $t, $($rest)+);
     };
-    (@set $t:ident, @b $b:expr) => {
+    (@set $cx:expr, $t:ident, @b $b:expr) => {
         $t.buy = Some($b);
     };
-    (@set $t:ident, @b $b:expr,) => {
+    (@set $cx:expr, $t:ident, @b $b:expr,) => {
         $t.buy = Some($b);
     };
-    (@set $t:ident, @b $b:expr, $($rest:tt)+) => {
+    (@set $cx:expr, $t:ident, @b $b:expr, $($rest:tt)+) => {
         $t.buy = Some($b);
-        raise!(@set $t, $($rest)+);
+        raise!(@set $cx, $t, $($rest)+);
     };
-    (@set $t:ident, @p $p:expr) => {
+    (@set $cx:expr, $t:ident, @p $p:expr) => {
         $t.pay = Some($p);
     };
-    (@set $t:ident, @p $p:expr,) => {
+    (@set $cx:expr, $t:ident, @p $p:expr,) => {
         $t.pay = Some($p);
     };
-    (@set $t:ident, @p $p:expr, $($rest:tt)+) => {
+    (@set $cx:expr, $t:ident, @p $p:expr, $($rest:tt)+) => {
         $t.pay = Some($p);
-        raise!(@set $t, $($rest)+);
+        raise!(@set $cx, $t, $($rest)+);
     };
-    (@set $t:ident, $field:ident = $value:expr) => {
+    // A **position** is converted to its governing tile; a **tile** gets its
+    // position derived. Arms assign in written order, so a site that knows
+    // both writes `position = p, tile = t` and the explicit tile wins.
+    (@set $cx:expr, $t:ident, position = $p:expr) => {
+        $t.position = $p;
+        $t.tile = $cx.tile_at($p);
+    };
+    (@set $cx:expr, $t:ident, position = $p:expr,) => {
+        $t.position = $p;
+        $t.tile = $cx.tile_at($p);
+    };
+    (@set $cx:expr, $t:ident, position = $p:expr, $($rest:tt)+) => {
+        $t.position = $p;
+        $t.tile = $cx.tile_at($p);
+        raise!(@set $cx, $t, $($rest)+);
+    };
+    // `slot = p` likewise writes the **position** but leaves an explicit
+    // `tile` alone: the settle's terminal raise happens *after* a body may have
+    // relocated the card, so `position_of_tile(tile)` is stale there and the
+    // settle's own slot must be written, not re-derived from the tile.
+    (@set $cx:expr, $t:ident, slot = $p:expr) => {
+        $t.position = $p;
+    };
+    (@set $cx:expr, $t:ident, slot = $p:expr,) => {
+        $t.position = $p;
+    };
+    (@set $cx:expr, $t:ident, slot = $p:expr, $($rest:tt)+) => {
+        $t.position = $p;
+        raise!(@set $cx, $t, $($rest)+);
+    };
+    (@set $cx:expr, $t:ident, tile = $s:expr) => {
+        $t.tile = $s;
+        $t.position = $cx.position_of_tile($s);
+    };
+    (@set $cx:expr, $t:ident, tile = $s:expr,) => {
+        $t.tile = $s;
+        $t.position = $cx.position_of_tile($s);
+    };
+    (@set $cx:expr, $t:ident, tile = $s:expr, $($rest:tt)+) => {
+        $t.tile = $s;
+        $t.position = $cx.position_of_tile($s);
+        raise!(@set $cx, $t, $($rest)+);
+    };
+    (@set $cx:expr, $t:ident, $field:ident = $value:expr) => {
         $t.$field = $value;
     };
-    (@set $t:ident, $field:ident = $value:expr,) => {
+    (@set $cx:expr, $t:ident, $field:ident = $value:expr,) => {
         $t.$field = $value;
     };
-    (@set $t:ident, $field:ident = $value:expr, $($rest:tt)+) => {
+    (@set $cx:expr, $t:ident, $field:ident = $value:expr, $($rest:tt)+) => {
         $t.$field = $value;
-        raise!(@set $t, $($rest)+);
+        raise!(@set $cx, $t, $($rest)+);
     };
     // `@f add` / `@f mul` open an amount fold on the value written so far --
     // write it after the `value = ...` override it should fold.
-    (@set $t:ident, @f add) => {
+    (@set $cx:expr, $t:ident, @f add) => {
         $t.begin_fold(Fold::Add);
     };
-    (@set $t:ident, @f add,) => {
+    (@set $cx:expr, $t:ident, @f add,) => {
         $t.begin_fold(Fold::Add);
     };
-    (@set $t:ident, @f add, $($rest:tt)+) => {
+    (@set $cx:expr, $t:ident, @f add, $($rest:tt)+) => {
         $t.begin_fold(Fold::Add);
-        raise!(@set $t, $($rest)+);
+        raise!(@set $cx, $t, $($rest)+);
     };
-    (@set $t:ident, @f mul) => {
+    (@set $cx:expr, $t:ident, @f mul) => {
         $t.begin_fold(Fold::Mul);
     };
-    (@set $t:ident, @f mul,) => {
+    (@set $cx:expr, $t:ident, @f mul,) => {
         $t.begin_fold(Fold::Mul);
     };
-    (@set $t:ident, @f mul, $($rest:tt)+) => {
+    (@set $cx:expr, $t:ident, @f mul, $($rest:tt)+) => {
         $t.begin_fold(Fold::Mul);
-        raise!(@set $t, $($rest)+);
+        raise!(@set $cx, $t, $($rest)+);
     };
 }
+
 pub(crate) use raise;
 
 /// One declared **tile text** (`CardRules::card_texts`): the deed-popup
@@ -970,13 +1048,19 @@ pub trait CardRules: Send + Sync {
         &self,
         cx: &mut PlayCtx,
         player_id: usize,
-        tile: usize,
+        position: usize,
+        tile: i32,
+        m: &super::move_ctx::MoveCtx,
         is_main_move: bool,
     ) -> Flow<()> {
-        cx.land_at_built_in(player_id, tile, is_main_move)
+        let _ = m;
+        cx.land_at_built_in(player_id, position, tile, is_main_move)
     }
 
-    /// Would a bot play it now?
+    /// Would a bot offer it now? Standard / advanced policies consult this;
+    /// chaos ignores it by design (`bot-core/src/policy.rs`). The rule set
+    /// answers from the card's static `prop::AI_NEVER` -- never legality, so a
+    /// human can still play the card.
     fn ai_play(&self, _cx: &PlayCtx, _player: usize, _card: &str) -> bool {
         true
     }
@@ -1106,6 +1190,10 @@ pub enum Gate {
     /// May a hand card be played right now? Play-only (unlike [`Self::Act`],
     /// which also gates [主动] skills).
     Play,
+    /// May an abnormal of this kind (an `AbKind` wire code) from `by` land on the
+    /// seat? `exemption = false` asks the refusal; `true` asks "would this kind
+    /// hold this mover's move?" (blocked-ness). CEL-only.
+    Abnormal { kind: i32, by: i32, exemption: bool },
 }
 
 /// The card-side context of a [`Gate::Exclusive`] question.

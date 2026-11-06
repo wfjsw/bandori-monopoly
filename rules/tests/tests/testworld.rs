@@ -77,6 +77,10 @@ pub struct TestWorld {
     pub move_settle: Vec<i32>,
     /// The turn-end half, per seat (0 = unanswered).
     pub turn_end_settle: Vec<i32>,
+    /// Name-keyed held counters as `(player_id, name, value, max)` -- backs
+    /// `held_names` / `held_count` / `set_held` / `add_held` so a card body
+    /// that reads its 角色标记 can run.
+    pub held: Vec<(i32, String, i32, i32)>,
 }
 
 impl TestWorld {
@@ -98,7 +102,13 @@ impl TestWorld {
             plan: game_core::engine::MoveCtx::default(),
             move_settle: vec![],
             turn_end_settle: vec![],
+            held: vec![],
         }
+    }
+    fn held_row(&self, player_id: i32, name: &str) -> Option<usize> {
+        self.held
+            .iter()
+            .position(|(p, n, _, _)| *p == player_id && n == name)
     }
     pub fn d(&mut self, sides: i32) -> i32 {
         self.rng = self
@@ -112,6 +122,43 @@ impl TestWorld {
 impl CardWorld for TestWorld {
     fn place_card_on(&mut self, _: i32, _: i32, _: &str, _: Msg) -> i32 {
         -1
+    }
+    // held counters: a plain name-keyed row list (no instance stamping).
+    fn held_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .held
+            .iter()
+            .filter(|(p, n, v, _)| *p == player_id && *v != 0 && n.starts_with(prefix))
+            .map(|(_, n, _, _)| n.clone())
+            .collect();
+        names.dedup();
+        names
+    }
+    fn count_held(&self, name: &str, player_id: i32) -> i32 {
+        self.held_row(player_id, name)
+            .map(|k| self.held[k].2)
+            .unwrap_or(0)
+    }
+    fn held_max(&self, player_id: i32, name: &str) -> i32 {
+        self.held_row(player_id, name)
+            .map(|k| self.held[k].3)
+            .unwrap_or(0)
+    }
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32, max: i32, _: i32) {
+        match self.held_row(player_id, name) {
+            Some(k) => {
+                self.held[k].2 = v;
+                self.held[k].3 = max;
+            }
+            None => self.held.push((player_id, name.into(), v, max)),
+        }
+    }
+    fn add_held(&mut self, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+        let cur = self.held_count(player_id, name);
+        // `max` 0 = uncapped (the ceiling here is cosmetic).
+        let next = if max > 0 { (cur + n).min(max) } else { cur + n };
+        self.set_held_name(name, player_id, next, max, -1);
+        next - cur
     }
     // keyed state: the stub holds nothing, so every column reads 0 and writes
     // go nowhere. The real storage lives on `MatchPlayer::state`.
@@ -276,17 +323,17 @@ impl CardWorld for TestWorld {
     fn draw(&mut self, _: i32, _: i32) -> i32 {
         0
     }
-    fn add_to_dest(&mut self, _: i32, _: &str, _: i32) {}
+    fn add_to_dest(&mut self, _: i32, _: &str, _: i32, _: bool) {}
     fn to_discard(&mut self, _: i32, _: &str) {}
     fn place_card(&mut self, _: i32, _: &str, _: game_core::msg::Msg) -> i32 {
         -1
     }
-    fn set_dest(&mut self, _: i32) {}
-    fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
-    fn send_to_dest(&mut self, _: i32) -> Option<i32> {
+    fn set_dest(&mut self, _: i32, _: i32) {}
+    fn set_transfer_to_dest(&mut self, _: i32, _: i32, _: i32) {}
+    fn send_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
         None
     }
-    fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
+    fn transfer_to_dest(&mut self, _: i32, _: i32, _: i32) -> Option<i32> {
         None
     }
     fn rent_unit_mult(&self) -> i32 {
@@ -306,13 +353,6 @@ impl CardWorld for TestWorld {
         0
     }
     fn remove_marks(&mut self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
-        0
-    }
-    fn held_count(&self, _: i32, _: &str) -> i32 {
-        0
-    }
-    fn set_held(&mut self, _: i32, _: &str, _: i32, _: i32) {}
-    fn add_held_by_name(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
     fn group_pool(&self, _: i32, _: &str) -> i32 {
@@ -469,7 +509,7 @@ impl CardWorld for TestWorld {
     fn can_pay(&self, _: i32) -> i32 {
         1
     }
-    fn cant_move(&self, _: i32) -> i32 {
+    fn cant_move_from(&self, _: i32, _: i32) -> i32 {
         0
     }
     fn spend_marker(&mut self, _: i32, _: &str, _: i32, _: Msg) -> i32 {

@@ -138,6 +138,19 @@ impl Msg {
         }
     }
 
+    /// The 「over the hand limit」 part of a draw log, naming the limit: the
+    /// exempt part when the draw was permitted to exceed (「可超过上限」), the
+    /// plain one otherwise. Shared by both draw paths (`World::draw_cards` and
+    /// `PlayCtx::draw_cards_with_hooks`) so they cannot name different parts.
+    pub fn over_hand_part(limit: i32, over_hand_limit: bool) -> Msg {
+        let key = if over_hand_limit {
+            "log.part.over_hand_allowed"
+        } else {
+            "log.part.over_hand"
+        };
+        Msg::new(key).i("limit", i64::from(limit))
+    }
+
     pub fn list(self, name: &str, items: Vec<Arg>) -> Self {
         self.arg(name, Arg::List(items))
     }

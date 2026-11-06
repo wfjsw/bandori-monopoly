@@ -70,7 +70,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let to = free
             .into_iter()
             .min_by_key(|&t| {
-                let d = ctx::tile_forward(pos, t);
+                // `tile_forward` is a slot difference, `t` a tile identity.
+                let d = ctx::tile_forward(pos, ctx::position_of_tile(t));
                 if d == 0 {
                     ctx::tile_count()
                 } else {
@@ -80,7 +81,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .unwrap_or(-1);
         // `Forward` 0 (the only free tile is underfoot) is taken as a full lap, as in
         // the `min_by_key` above.
-        let num = ctx::tile_forward(pos, to);
+        let num = ctx::tile_forward(pos, ctx::position_of_tile(to));
         let num = if num == 0 { ctx::tile_count() } else { num };
         ctx::plan::set_steps(num);
         ctx::plan::set_settles(true);
@@ -100,7 +101,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if cant_build_on(player_id, t).is_some() {
             continue;
         }
-        if ctx::money_of(player_id) >= ctx::build_cost(t) * 3 / 2 {
+        // The same figure the charge below uses -- `build_price * 3 / 2` is
+        // truncated, the charge is ceil-to-10, so they differ off a multiple
+        // of 20 and a truncated filter would let the play abort after both
+        // asks.
+        if ctx::money_of(player_id) >= ceil_to(ctx::build_price(t) as i64 * 3 / 2, 10) {
             mine.push(t);
         }
     }
@@ -114,22 +119,23 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let tile = ctx::ask_tile(player_id, &title, &text, &mine)?;
-    let amount = ceil_to(ctx::build_cost(tile) as i64 * 3 / 2, 10);
-    let paid = ctx::pay(
-        player_id,
-        amount,
-        &Msg::new(key!("to_the_peak_reason")).tile("tile", tile),
-    )?;
-    if paid < amount {
+    // 1.5× the effective price, one ceil-to-10; `Fixed` tells the pipeline the
+    // amount is the whole charge, so no percent / discount applies a second
+    // time. The verb pays through `PayKind::Build` and runs
+    // `buildBefore` / `houseAdded` / `buildAfter` (设计 6.5).
+    let amount = ceil_to(ctx::build_price(tile) as i64 * 3 / 2, 10);
+    if ctx::money_of(player_id) < amount {
         return Ok(());
     }
-    // TODO(规则书)（加盖一层房屋）: a 加盖 is a build and goes through the build hooks -- the raw
-    // `ctx::add_house` below raises no `buildBefore` / `buildAfter`, so 卡池BUG's
-    // belt, 奇迹's crystal and 修复公告's halving never see it. `ctx::card_build` would
-    // run the build body but pays the table cost only (`set_build_cost_pct` clamps
-    // at 100, so no 1.5x).
-    if cant_build_on(player_id, tile).is_none() {
-        ctx::add_house(tile, 1);
+    if ctx::card_build_as(
+        player_id,
+        tile,
+        card_sdk::abi::BuildCharge::Fixed,
+        amount,
+        0,
+        0,
+        true,
+    ) {
         ctx::log(
             player_id,
             &Msg::new(key!("to_the_peak_build"))
@@ -137,8 +143,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
                 .tile("tile", tile),
         );
     }
-    // The raise above goes out as `houseAdded` once the run commits, so a
-    // persistent hook listening for 「加盖」 sees this build too.
     Ok(())
 }
 

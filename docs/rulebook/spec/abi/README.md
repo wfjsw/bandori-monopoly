@@ -25,18 +25,18 @@ the whole table.
 |---|---|---|---|---|
 | G15 | — | 12 | — | — |
 | G01 | 104→105 | 12 | 111–112 | 341–346 |
-| G08 | 105→106 | 12→13 | 113–120 | 351–370 |
+| G08 | 117→118 | 19→20 | 113–119, 140 | 467–486 |
 | G02 | 106→107 | 13 | 122 | 370–378 |
 | G04 | 110→111 | 13 | — | 378–391 |
 | G03 | 108→109 | 13→14 | 123–125 | 398–410 |
 | G06 | 111→112 | 15→16 | 121 | 411–426 |
 | G05 + G13 | 110→111 | 14→15 | — | 347–350, 431–440 |
 | G07 | 112→113 | 16 | — | 441–450 |
-| G09 | 113→114 | 16 | 132–136 | 451–470 |
-| G10 | 114→115 | 16→17 | 137 | 471–479 |
-| G11 | 115→116 | 17→18 | 138–139 | — |
-| G12 | 116→117 | 18 | 107 | — |
-| G14 | 117→118 | 18 | — | — |
+| G12 | 113→114 | 16 | 134 | 443–450 |
+| G14 | 114→115 | 16→17 | — | — |
+| G11 | 115→116 | 17→18 | 132–133 | 451–454 |
+| G09 | 116→117 | 18 | 135–139 | 455–466 |
+| G10 | 118→119 | 20→21 | 141 | 486–494 |
 
 A group that lands changes the numbers for all later ones. Re-run the full
 suites after each landing.
@@ -86,14 +86,79 @@ move. G06's sixteen imports take the free **411–426**, leaving 427–430 free 
 G05+G13's landed 431–440 and every later op band keep their numbers. G06 also
 takes the one engine kind that stayed free, 121 (`abnormalRefused`, hook-only).
 
-**2026-11-04 amendment (G09, G10).** G07 has landed; `ABI_VERSION` is 113 and
-the kind table ends at **131** (`settleRentMul`) — 126–130 are the pay-stage
-kinds (RentAdd, RentMul, SettleAdd, SettleMul, SettleRentAdd), not G09's.
-The G09/G10/G11 kind column therefore shifts: G09 takes **132–136**, G10
-**137** (`eventResolved`, hook-only), G11 **138–139**. Ops likewise: the Kani
-`Op` enum currently ends at `nearest_with_prop = 442`, inside G07's landed
-band, so G09 takes **451–470** (its twenty imports) and G10 **471–479** (its
-nine), after G07's reservation. The ABI and SAVE columns are unchanged.
+**2026-11-04 amendment (G09).** G02's landed rent/settle arithmetic took kinds
+126–131, which had swallowed this group's allocated 126–130 *and* G10's 131;
+G08's row band 113–120 went unused. Kind ids are wire-stable, so the allocation
+moves, not the landed ids: G09 takes **132–136** (five: two hand-window kinds
+and three effect-only spellings), G10 **137**, G11 **138–139**. G12 keeps the
+still-free 107 and G14 the empty row; 113–120 stay spare. G09's twelve imports
+(the position/tile conversion, the build reads and verb, the move-path reads)
+take **452–463**, right after G07's landed 441–450.
+
+**2026-11-04 amendment (G12 review and landing).** The G12 row's kind column
+read 107, which is the **ruleset** namespace's `fansFlip`; free **engine** ids
+resumed at 121 (G06) and G11's row holds 132–133, so G12 takes **134**. Its
+eight imports take the unused tail of G07's Op band, **443–450** (G07 landed
+441–442 only). G12 then landed **ahead of G09–G11**, so its row is the real
+113→114 with SAVE unchanged at 16, and every later ABI row shifts one step.
+
+**2026-11-04 amendment (G14).** The G14 review found that fixing the trim alone
+is not enough: `cant_act`'s `end` gate refuses an over-limit hand, so the very
+turn end the card's own scheduled discard hangs off would never be reached, and
+the formal `G-CARDS-01` clause would fail on the act. G14 therefore adds a
+durable per-player allowance (`overHandAllowed`, `serde(default)`) that exempts
+an allowed excess from the end gate and from the clause, is cleared when the
+hand fits again and swept at turn end, and the ABI row gains one `ruleset_draw`
+flag word (an arity break for that import). The group also adds one static
+card prop (`aiNever`), which changes no id: it rides the existing `props` map.
+
+**2026-11-04 landing note (G14).** G14 landed after G12, so it takes the next
+free numbers, **114→115** / **16→17**, and the not-yet-landed G09–G11 rows
+shift one more step (ABI and SAVE both).
+
+**2026-11-04 landing note (G09).** G09 lands after G12, G14 and G11 and takes
+the next free numbers: **116→117** / SAVE stays at 18. G12's landed 134
+swallowed the amended kind block's first id, so G09's five kinds move to
+**135–139**; G11's 451–454 push its imports to the next free band,
+**455–466**. G10 shifts to 117→118 / 18→19 / kind 140. `ABI_VERSION` is 117
+and `SAVE_VERSION` 18.
+
+**2026-11-04 amendment (G11).** G07 has landed; its two ops use 441 and 442 of
+the 441–450 band and G12's tail takes 443–450. G09's document claims 411–430
+and G10's 431–449 in their own rows; the highest op claim today is 450, so
+G11's four imports take **451–454** — consecutive, after every existing claim,
+so no landed or pending row moves for them. The kind column stays 132–133
+(after G10's 131); the group takes no other engine id.
+
+**2026-11-04 landing note (G11).** G11 landed after G14, so it takes the next
+free numbers, **115→116** / **17→18**, and the not-yet-landed G09/G10 rows
+shift one more step (ABI and SAVE both). `ABI_VERSION` is 116 and
+`SAVE_VERSION` 18.
+
+**2026-11-05 landing note (G08).** G08 landed after G09, so it takes the next
+free numbers: **117→118** / **19→20**. G11's and G09's imports consumed the
+row's original op band, so G08's nineteen imports take **467–485** and leave
+**486** free; `openingHandDealt` takes the next free kind above G09's 139,
+**140**, and G10's row shifts to 118→119 / 20→21 / kind 141. `ABI_VERSION` is
+118 and `SAVE_VERSION` 20.
+
+**2026-11-03 amendment (G08).** The G08 row still carried the original base
+(105→106 / 12→13 / 351–370) although every group up to G06 has landed and G07
+is the next pending owner of 112→113. The row is rewritten to **113→114 /
+16→17 / 451–470**, and the G08 review settles the kind band: the draft's
+unread `zoneRoundTripped` is dropped and `openingHandDealt` is added, so seven
+band ids (113–119) are used and **120 stays free**. Every pending row after G08 shifts one ABI
+and one SAVE step and one kind slot where it had one: G09 114→115 / 17, G10
+115→116 / 17→18, G11 116→117 / 18→19 / 133–134, G12 117→118 / 19, G14
+118→119 / 19. Six existing
+exports are re-signed (`unplace_at`, `set_face_down_at`, `add_to_dest`,
+`set_dest`, `send_to_dest`, `transfer_to_dest`) and consume no id, and the
+draft's `add_to_hand` duplicate is gone.
+
+
+**2026-11-06 landing note (G10).** G10 lands after G08 and takes the next free
+numbers: **118→119** / **20→21** / kind **141**; its nine imports take the free
+**486–494** after G08's 485. `ABI_VERSION` is 119 and `SAVE_VERSION` 21.
 
 Recommended landing order (foundation → dependent):
 
@@ -105,12 +170,14 @@ Recommended landing order (foundation → dependent):
 6. **G03** roll pipeline — the cast ladder over G04's frame; kinds 123–125.
 7. **G06** counteraction/join — depends on G01 payload and G03 kinds.
 8. **G05 + G13** offer/invoke — must land together (one `invoke_entry` shape).
-9. **G07** targeting — depends on G01 identity and G06 window.
+9. **G07** targeting — depends on G01 identity and G06 window. **G08**
+   zone lifecycle is now pending immediately behind it (it was written early
+   but not landed); its band above assumes G07's 112→113 has landed.
 10. **G09** tile/build/pass — depends on G02 header and G08 zone writer.
 11. **G10** effect outcome — settle facts and defer depend on G02/G09.
-12. **G11** information/deck — drawAfter, inspection frames.
-13. **G12** status/immunity — depends on G04 blocked-ness and G06 pending.
-14. **G14** AI/hand limit — smallest consumer surface, last.
+12. **G11** information/deck — drawAfter, inspection frames. *(landed early, at ABI 116)*
+13. **G12** status/immunity — depends on G04 blocked-ness and G06 pending. *(landed early, at ABI 114)*
+14. **G14** AI/hand limit — smallest consumer surface. *(landed early, at ABI 115, after G12)*
 
 Couplings a reviewer must keep in one head:
 
@@ -122,6 +189,9 @@ Couplings a reviewer must keep in one head:
 - **G02 ↔ G10** share the settle frame and its outcome facts: G02 owns the
   settle stack, the terminal outcome and the `settle_open` fix, G10 adds the
   `paid`/`body_replaced` facts on top (G02 §12).
+- **G02 ↔ G09** share the build payment: G09's pipeline is a `PayKind::Build`
+  leg over G02's header, priced by `build_price`, and G09's `TileWrite` effect
+  reuses G02's `effect` window shape.
 - **G03 ↔ G04** share the window raise point: G04 owns the plan snapshot/fold,
   G03 raises every roll window inside it and hands the plan-write item (G03
   item 7) to G04 §4.3.

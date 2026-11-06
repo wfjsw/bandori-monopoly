@@ -83,12 +83,11 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // main move spent or [停留] latched; only this move arm reads the gate. Whether it
     // should be gated at all is the same open question as LOY-TSUGU-01. The guard
     // must not be re-read on a replay: the body re-runs with the move already
-    // applied, so `move_blocked` would answer "already moved" and skip the settle
-    // prompt (LOY-TSUGU-01). The landed position or the `MOVED` marker says this
-    // play already moved; only a first run consults the gate.
-    let moved_here = ctx::player_pos(player_id) == to || ctx::slot(player_id, MOVED) == to + 1;
-    if moved_here || rules_status::move_blocked(player_id).is_none() {
-        ctx::set_slot(player_id, MOVED, to + 1);
+    // applied, so a plain gate read would answer "already moved" and skip the
+    // settle prompt. The ordinal form suppresses that when the move was spent by
+    // *this* activation, so a replay consults the gate exactly as the first run
+    // did.
+    if ctx::cant_move_code_for_activation(player_id, ctx::trigger::activation_ordinal()) == 0 {
         if who == player_id {
             ctx::plan::set_steps(1);
         } else {
@@ -118,10 +117,8 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- `expires: TurnStart`
     // is the 「直到下个你的回合开始时」 half (it wears off at the top of the next
     // turn); the clause is granted as [不可阻挡], whose other halves ([停留]
-    // bypass, no new [晕眩]/[除外] layers) come with the status.
-    // TODO(规则书)（你无法被异常移动）: the book refuses abnormal moves -- the engine's
-    // `abnormal_gate` never consults [不可阻挡], so a received teleport / forced
-    // move / forced stop (and a new [停留] layer) still land.
+    // bypass, no new [晕眩]/[除外] layers) come with the status, and whose
+    // refusal of received movement abnormals the engine's abnormal gate enforces.
     ctx::state::add(player_id, bandori_std::state_key::UNSTOPPABLE, 1);
     bandori_std::status::declare_companion(player_id, bandori_std::state_key::UNSTOPPABLE);
     ctx::state::set_expires(

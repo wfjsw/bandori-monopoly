@@ -106,7 +106,7 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     // below is the stop body. Place the stand-in *before* the mark so `self_uid()`
     // is its instance and the mark dies with it.
     if !ctx::is_placed() {
-        ctx::set_dest(ctx::Dest::Field);
+        ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
         ctx::place_card(player_id, ID, &Msg::new(key!("hagumi_marks_note")));
     }
     // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- one row per
@@ -185,7 +185,11 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             let mine = ctx::effective_card_at(me);
             for (uid, name) in ctx::field_instances(player_id) {
                 if uid != me && Some(name) == mine {
-                    ctx::unplace_at(uid);
+                    ctx::unplace_at(
+                        uid,
+                        ctx::Dest::Graveyard,
+                        card_sdk::abi::ZoneChangeCause::Effect,
+                    );
                 }
             }
         }
@@ -201,7 +205,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     // away). Outside the claim, so every stand-in files itself.
     // `set_dest` applies to the drive's own copy at `commit_after`.
     if !any_marks(player_id) {
-        ctx::set_dest(ctx::Dest::Graveyard);
+        ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     }
     // TODO(规则书)（1）[judgement]: Not in the rulebook text, so held.
     Ok(())

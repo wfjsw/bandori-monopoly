@@ -155,9 +155,15 @@ fn ppp_world_placed(user: i32, named_tile: i32, card_slot: u16) {
             tile: named_tile,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: user,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
     });
 }
@@ -798,9 +804,15 @@ fn popipapapipopa_c2_pay_reduce_iff_at(user: i32) {
         tile: -1,
         face_down: false,
         immune: false,
+        immune_except_owner: false,
         crystals: pre_crystals,
         props: world::NameMap::new(),
         effective_card: u16::MAX,
+        owner: player,
+        on: -1,
+        created_by: -1,
+        effective: true,
+        mine: false,
     };
     w.key_set(player, key, pre_crystals);
 
@@ -898,9 +910,15 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
         tile: -1,
         face_down: false,
         immune: false,
+        immune_except_owner: false,
         crystals: pre_crystals,
         props: world::NameMap::new(),
         effective_card: u16::MAX,
+        owner: player,
+        on: -1,
+        created_by: -1,
+        effective: true,
+        mine: false,
     };
     world::reset_world(w);
     invoke::unwrap_done(card_ppp::popipapapipopa::pay_choose_kani(user));

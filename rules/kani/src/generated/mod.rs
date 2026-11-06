@@ -25,7 +25,7 @@ pub use cond_irs::{
 /// Compile-time card string -> const id. Unknown / disabled cards are a
 /// **compile error** (const-eval panic in `card_id_const`).
 ///
-/// ```ignore
+/// ```text
 /// let id = card_id!("PP:同一个梦想");
 /// ```
 #[macro_export]
@@ -39,7 +39,7 @@ macro_rules! card_id {
 /// Compile-time guard string -> const id. Unknown strings are a **compile
 /// error** (const-eval panic in `cond_irs::const_id`).
 ///
-/// ```ignore
+/// ```text
 /// let id = guard_id!("actor == owner && value > 0");
 /// ```
 #[macro_export]

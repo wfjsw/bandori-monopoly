@@ -194,6 +194,26 @@ fn summer_plays_to_field_until_next_turn_then_draws() {
     assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one card");
 }
 
+// 规则书: 「当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌」 -- an
+// early leave is the same end, so the draw still happens (and it files to the
+// discard).
+#[test]
+fn summer_early_leave_still_draws() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压"]);
+    t.give(0, &["Mor:夏日合宿", "TEST:dumper"]);
+    t.play(0, "Mor:夏日合宿").unwrap();
+    t.play(0, "TEST:dumper").unwrap();
+    decline_all(&mut t);
+    assert!(!t.on_field(0, "Mor:夏日合宿"), "{:?}", t.field_ids(0));
+    assert!(
+        t.discard(0).contains(&"Mor:夏日合宿".to_string()),
+        "the card is in the discard: {:?}",
+        t.discard(0)
+    );
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one card");
+}
+
 // --------------------------------------------------- 你的光芒将照亮前路
 
 #[test]
@@ -585,6 +605,95 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     );
 }
 
+/// G13 §10.2: (3)'s yes invokes the persona skill's `2` entry -- the skill's
+/// own mark log appears, a pot is paid by the body, and the skill's (3) mark
+/// pick (`nanami_which`) is not asked.
+#[test]
+fn nanami_press_invokes_skill_two() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.set_fire(0, 1, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // 发动: one crystal
+                              // The invoked (2) body asks its own question; answer it too.
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // 发动 the (2)
+    decline_all(&mut t);
+    assert_eq!(
+        t.m.world()
+            .held_count(0, "角色标记:skill:广町七深:这是很普通的事吧？"),
+        1,
+        "the (2) body minted the used skill's mark"
+    );
+    assert_eq!(
+        t.m.world().held_count(0, "charge"),
+        0,
+        "the (2) paid one pot"
+    );
+    let keys = t.recent_keys(80);
+    assert!(
+        keys.iter().any(|k| k.contains("nanami_mark")),
+        "the (2) mark log: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|k| k.contains("nanami_which")),
+        "the invoked body is (2), not the (3) mark pick: {keys:?}"
+    );
+}
+
+/// G13 §10.2: exactly one crystal is removed, however many were placed.
+#[test]
+fn nanami_press_spends_one_crystal_only() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 2);
+    t.set_fire(0, 1, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(1).unwrap(); // x = 2
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+    t.answer_one(0).unwrap(); // 发动: one crystal
+    decline_all(&mut t);
+    assert_eq!(
+        last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"),
+        Some(1),
+        "2 placed, exactly 1 removed"
+    );
+}
+
+/// G13 §10.2: no pot, no offer -- and so no crystal leaves either.
+#[test]
+fn nanami_press_without_pot_refused() {
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    add_token(&mut t, 0, "角色标记:skill:户山香澄:非凡之星", 1);
+    t.set_fire(0, 0, 3);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    t.answer_one(0).unwrap(); // x = 1
+    t.answer_one(2).unwrap(); // effect (3)
+    assert!(
+        t.prompt().is_none(),
+        "no pot, no question: {}",
+        t.dump_prompt()
+    );
+    assert_eq!(
+        last_copy_crystals(&t, "Mor:（NNM）稍微努力了一下"),
+        Some(1),
+        "no crystal was removed"
+    );
+    assert!(!t.recent_keys(60).iter().any(|k| k.contains("nanami_ask")));
+}
+
 /// «你可以»: the question comes before the crystal leaves, so a 不发动 keeps
 /// it (and the card).
 #[test]
@@ -708,11 +817,21 @@ fn toko_swaps_same_color_mortgaged_deeds_and_pays_difference() {
     t.set_mortgaged(theirs, true);
     t.give(0, &["Mor:（toko）"]);
     t.play(0, "Mor:（toko）").unwrap();
+    // Two tile prompts: which of mine, then which of theirs. Each has exactly
+    // one candidate here.
     let p = t.expect_prompt();
     assert_eq!(
         p.options.len(),
         1,
-        "exactly one swap pair: {}",
+        "exactly one deed of mine to offer: {}",
+        t.dump_prompt()
+    );
+    t.answer_one(0).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.options.len(),
+        1,
+        "exactly one same-colour deed of theirs to offer: {}",
         t.dump_prompt()
     );
     t.answer_one(0).unwrap();

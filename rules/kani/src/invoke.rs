@@ -8,7 +8,7 @@
 //! only. **This is the path proofs must use.** The old `find` string scan over
 //! ~285 CJK ids is a CBMC unwinding / OOM cliff (see `KANI.md` §5).
 //!
-//! ```ignore
+//! ```text
 //! invoke::unwrap_done(invoke::play_idx(card_id!("MyGO:轮符雨"), player));
 //! ```
 //!

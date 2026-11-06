@@ -603,6 +603,23 @@ fn random_star_sweeps_and_stacks_auction_card() {
     );
 }
 
+// 规则书: 「此卡加入手牌时将此卡放置在自身场上」 -- an uncounted entry (a
+// tutor), not only a draw.
+#[test]
+fn auction_pulled_places_itself_on_an_uncounted_entry() {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["PPP:[衍生]拍卖撤下来了", "R:[衍生] 压"]);
+    t.give(0, &["TEST:tutorAuction"]);
+    t.play(0, "TEST:tutorAuction").unwrap();
+    skip_all(&mut t);
+    assert!(
+        t.on_field(0, "PPP:[衍生]拍卖撤下来了"),
+        "{:?}",
+        t.field_ids(0)
+    );
+    assert!(!t.hand(0).contains(&"PPP:[衍生]拍卖撤下来了".to_string()));
+}
+
 // =====================================================================
 // Exclusive cards
 // =====================================================================

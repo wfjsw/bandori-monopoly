@@ -142,7 +142,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
 /// 视为发动你的（2）技能」. The placement is unconditional; the charge is the
 /// offer's yes.
 fn place_with_offer(player_id: i32, x: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Field);
+    ctx::set_dest(ctx::Dest::Field, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
     ctx::add_crystals(x, 0)?;
     ctx::log(
@@ -209,7 +209,7 @@ fn crystals_changed_guard(_player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Graveyard, card_sdk::abi::ZoneChangeCause::Effect);
     ctx::log(
         player_id,
         &Msg::new(key!("nanami_effort_exhausted")).player_id("who", player_id),
@@ -218,21 +218,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「抽x张卡（可超过上限）」 -- 「可超过上限」 is the hand limit
-    // itself, so lift it for the draw and put it back (the limit is keyed state,
-    // which is what `NoLimitFx` was an attachment for).
-    // TODO(ABI): a guest state *increase* does not cross onto the live world for a
-    //   host routine (docs/ENGINE.md 「Only decreases cross」), so the draw still
-    //   trims to the old cap -- 「可超过上限」 needs a draw that skips the over-hand
-    //   trim (or increases the host can see).
-    let cap = ctx::state::get(player_id, card_sdk::abi::state_key::HAND_LIMIT);
-    ctx::state::set(
-        player_id,
-        card_sdk::abi::state_key::HAND_LIMIT,
-        card_sdk::abi::state_key::NO_HAND_LIMIT,
-    );
-    ctx::draw(player_id, x)?;
-    ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
+    // 规则书（1）: 「抽x张卡（可超过上限）」 -- this draw is exempt from the
+    // immediate hand-limit trim; 「回合结束后将手牌弃置到五张」 below is the
+    // scheduled dispose that gets back under it.
+    ctx::draw_over_hand_limit(player_id, x)?;
     ctx::before_turn_end(player_id, "discard_down_to_five");
     Ok(())
 }
@@ -283,6 +272,14 @@ pub fn nanami_effort_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn place_with_offer_kani(player_id: i32, x: i32) -> card_sdk::Asked {
     place_with_offer(player_id, x)
+}
+
+/// (1)'s draw alone: the token spend, the `x` pick and the effect pick are
+/// outside, and the full `play` cannot reach branch (1) under Kani.
+#[cfg(kani)]
+#[inline(always)]
+pub fn effect_draw_kani(player_id: i32, x: i32) -> card_sdk::Asked {
+    effect_draw(player_id, x)
 }
 
 #[cfg(kani)]

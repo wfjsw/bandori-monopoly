@@ -33,9 +33,15 @@ fn place_band_skill(owner: i32) -> i32 {
                 tile: 0,
                 face_down: false,
                 immune: false,
+                immune_except_owner: false,
                 crystals: 0,
                 props: world::NameMap::new(),
                 effective_card: u16::MAX,
+                owner: owner,
+                on: -1,
+                created_by: -1,
+                effective: true,
+                mine: false,
             };
             w.field_n += 1;
         }
@@ -614,9 +620,15 @@ fn band_idol_01_start_grant_iff_at(user: i32) {
             tile: 0,
             face_down: false,
             immune: false,
+            immune_except_owner: false,
             crystals: 0,
             props: world::NameMap::new(),
             effective_card: u16::MAX,
+            owner: me,
+            on: -1,
+            created_by: -1,
+            effective: true,
+            mine: false,
         };
         ww.field_n = 1;
         ww.next_uid = 2;

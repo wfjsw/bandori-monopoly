@@ -33,8 +33,11 @@ pub enum VarId {
     PayKind,
     PayIsFixed,
     PayTotalStage,
+    /// The answered subject card declares `RANGE_CARD` (G06 interval).
     SubjectRangeCard,
+    /// An extreme is armed on this play or declared on the link (G06).
     ExtremeArmed,
+    /// Declared, unresolved answers on the link that declare a negation (G06).
     PendingNegation,
     ChainDepth,
     ChargeIsSkill,
@@ -54,6 +57,7 @@ pub enum VarId {
     TriggerCard,
     CounterName,
     TileId,
+    TilePosition,
     TileOwner,
     TileHouses,
     TileMortgaged,
@@ -80,6 +84,8 @@ pub enum VarId {
     CardId,
     CardPlaced,
     CardTile,
+    /// The trigger's card id starts with `skill:` (`card.is_skill`) -- the
+    /// 「技能」 precondition of a `cardFired` hook.
     CardIsSkill,
 }
 
@@ -121,6 +127,7 @@ pub const VARS: &[(VarId, &str, VarType)] = &[
     (VarId::TriggerCard, "trigger_card", VarType::Int),
     (VarId::CounterName, "counter_name", VarType::Int),
     (VarId::TileId, "tile_id", VarType::Int),
+    (VarId::TilePosition, "tile_position", VarType::Int),
     (VarId::TileOwner, "tile_owner", VarType::Int),
     (VarId::TileHouses, "tile_houses", VarType::Int),
     (VarId::TileMortgaged, "tile_mortgaged", VarType::Int),

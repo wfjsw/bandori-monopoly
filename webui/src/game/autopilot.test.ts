@@ -709,3 +709,24 @@ test("strategyFor is asked for the seat's public table key", () => {
   // in seat order -- never an opponent's hand or the deck.
   assert.deepEqual(got, ["B", 1, ["A"]]);
 });
+
+test("the standard policy skips a card flagged aiNever even when playable", () => {
+  const v = view({
+    hand: ["c1", "c2"],
+    playable: [true, true],
+    aiPlayable: [false, true],
+    state: state({ step: 2, canRollHere: true, canEndHere: false }),
+  });
+  const cmd = suggest(v, ctx({ random: rng(0, 0) }), "bot");
+  assert.deepEqual(cmd, { act: "play", card: "c2" });
+});
+
+test("chaos plays an aiNever card", () => {
+  const v = view({
+    hand: ["c1"],
+    playable: [true],
+    aiPlayable: [false],
+    state: state({ step: 2 }),
+  });
+  assert.deepEqual(suggest(v, ctx({ random: rng(0.9) }), "chaos"), { act: "play", card: "c1" });
+});

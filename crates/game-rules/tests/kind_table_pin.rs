@@ -167,6 +167,13 @@ fn typed_engine_consts_have_table_rows() {
         (110, "PaySplitMulBefore"),
         (111, "CardFired"),
         (112, "MarkChanged"),
+        (113, "ZoneLeft"),
+        (114, "ZoneLeftAfter"),
+        (115, "HandChanged"),
+        (116, "CardFaceFlipped"),
+        (117, "CardFaceFlippedAfter"),
+        (118, "CardAttached"),
+        (119, "CardDetached"),
         (121, "AbnormalRefused"),
         (122, "SpendBefore"),
         (123, "DiceRollCast"),
@@ -178,8 +185,16 @@ fn typed_engine_consts_have_table_rows() {
         (129, "SettleMul"),
         (130, "SettleRentAdd"),
         (131, "SettleRentMul"),
-        // G09 reserves 132-136 (tile/build/pass) and has not landed.
-        (137, "EventResolved"),
+        (132, "Inspected"),
+        (133, "DrawAfter"),
+        (134, "AbnormalGate"),
+        (135, "TileEffectBefore"),
+        (136, "HouseRemoved"),
+        (137, "HouseAdd"),
+        (138, "HouseRemove"),
+        (139, "OwnerSet"),
+        (140, "OpeningHandDealt"),
+        (141, "EventResolved"),
     ];
     for (id, name) in named {
         let row =
@@ -198,11 +213,12 @@ fn typed_engine_consts_have_table_rows() {
 
 /// Kind ids are allocated by the ABI README groups and never reused. The
 /// highest id in the table is the ceiling; the next group takes `ceiling + 1`.
-/// The table may be sparse where an earlier group's band is reserved.
+/// G08 took the free band 113–119 and the next free id above the table
+/// (`openingHandDealt` = 140, design §6.2), hence the new ceiling.
 #[test]
-fn kind_id_ceiling_is_137() {
+fn kind_id_ceiling_is_141() {
     let max = ENGINE_KINDS.iter().map(|r| r.id).max().unwrap_or(0);
-    assert_eq!(max, 137, "highest engine kind id");
+    assert_eq!(max, 141, "highest engine kind id");
 }
 
 /// Payload-shape mapping: every engine filter kind's `FilterShape` (from the
@@ -252,6 +268,7 @@ fn filter_payload_shape_mapping() {
         ("TargetableGate", FilterShape::Gate),
         ("SettleRentAdd", FilterShape::Value),
         ("SettleRentMul", FilterShape::Value),
+        ("AbnormalGate", FilterShape::Gate),
     ];
     assert_eq!(expect.len(), Filter::KINDS.len(), "shape table size");
     for k in Filter::KINDS {

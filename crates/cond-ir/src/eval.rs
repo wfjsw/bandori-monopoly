@@ -358,9 +358,7 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Value]) -> Value {
                 Ok(v) => v,
                 Err(()) => return Value::Err,
             };
-            // `resolving('id')` ≡ `id_of(id)` is in the resolving set, which
-            // the host fills into `named` with the value `1`.
-            Value::Bool(ctx.named_get(want) == Some(1))
+            Value::Bool(ctx.resolving_has(want))
         }
         // ABI v56 generic tile queries. String args lower to `id_of` hashes.
         FnId::TileIs => {

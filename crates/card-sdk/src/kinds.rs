@@ -644,6 +644,7 @@ filter_kinds! {
     ActGate => gate;
     PayGate => gate;
     MoveGate => gate;
+    AbnormalGate => gate;
     ExclusiveUse => gate;
     TurnBonusTime => value;
     TurnBaseTime => value;
@@ -710,6 +711,8 @@ action_kinds! {
     DeckBeforeGame;
     DeckAtGameStart;
     Drew;
+    Inspected;
+    DrawAfter;
     Reshuffled;
     Bought;
     SettleBody;
@@ -718,6 +721,8 @@ action_kinds! {
     MarkerSpent;
     CardUsed;
     HouseAdded;
+    TileEffectBefore;
+    HouseRemoved;
     CounterChanged;
     DrewBefore;
     Effect;
@@ -734,6 +739,14 @@ action_kinds! {
     CardFired;
     MarkChanged;
     SpendBefore;
+    ZoneLeft;
+    ZoneLeftAfter;
+    HandChanged;
+    CardFaceFlipped;
+    CardFaceFlippedAfter;
+    CardAttached;
+    CardDetached;
+    OpeningHandDealt;
     DiceRollPlan @ dual;
 }
 
@@ -757,7 +770,7 @@ mod tests {
 
     #[test]
     fn filter_kinds_registry_matches_table() {
-        assert_eq!(Filter::KINDS.len(), 34);
+        assert_eq!(Filter::KINDS.len(), 35);
         assert!(Filter::KINDS.iter().all(|k| k.is_filter));
         for k in Filter::KINDS {
             assert_eq!(k.kind.is_filter(), true, "{}", k.name);
@@ -788,9 +801,12 @@ mod tests {
     fn action_kinds_registry_matches_table() {
         // 73 before `diceRollCast` / `diceRollSettled` (G03, ABI v109), plus
         // G01's `cardFired` / `markChanged` (ABI v105) = 76, plus G05's dual
-        // `diceRollPlan` (ABI v111) = 77, plus G10's `eventResolved` (v114)
-        // = 78.
-        assert_eq!(Action::KINDS.len(), 78);
+        // `diceRollPlan` (ABI v111) = 77, plus G11's `inspected` / `drawAfter`
+        // (ABI v114) = 79, plus G08's zone / attachment family (ABI v118)
+        // = 89, plus G10's `eventResolved` (ABI v119) = 90. The marker row
+        // `on Action;` is part of `KINDS`, so the pin sits one above the
+        // entry count.
+        assert_eq!(Action::KINDS.len(), 90);
         // A dual kind is filter-shaped but still an action entry.
         assert!(Action::KINDS
             .iter()

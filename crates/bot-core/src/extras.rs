@@ -30,6 +30,8 @@ use crate::view::{AiAnswer, SeatView};
 pub struct ViewExtras {
     /// Parallel to [`SeatView::hand`]: would `cant_play` allow each card now?
     pub playable: Vec<bool>,
+    /// Parallel to `playable`: would a bot offer it (static `prop::AI_NEVER`).
+    pub ai_playable: Vec<bool>,
     /// Parallel to `playable`: the card's bot-only estimated execution cost
     /// (`prop::EST_COST`). Reserve check only, never legality.
     pub estimated_cost: Vec<i32>,
@@ -52,6 +54,7 @@ impl ViewExtras {
         });
         serde_json::json!({
             "playable": self.playable,
+            "aiPlayable": self.ai_playable,
             "estCost": self.estimated_cost,
             "skills": self.skills,
             "aiAnswer": ai,
@@ -83,6 +86,7 @@ pub fn view_extras(
     let extra = m.view_extras_typed(member);
     Ok(ViewExtras {
         playable: extra.playable,
+        ai_playable: extra.ai_playable,
         estimated_cost: extra.estimated_cost,
         skills: extra.skills,
         ai_answer: extra.ai_answer.map(|a| AiAnswer {
