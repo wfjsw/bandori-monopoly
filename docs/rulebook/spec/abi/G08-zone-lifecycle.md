@@ -812,6 +812,16 @@ Each is handled in `apply_host_request` (`wasm_rules.rs:4501`) exactly like
   instead of player 0's graveyard. Player 0 is not a part of the board, and its
   reshuffle would otherwise deal rule names back as dead hand cards (review
   finding 4).
+* A **card area** (`Graveyard` / `Hand` / draw pile) stores card ids only. A
+  row whose name is a **rule entity** (`CardDef::rule`, on the ruleset's
+  `CardRules::rule_ids` table) is removed: the row is gone either way, but the
+  name stops at the pile and `World::note_non_card` reports
+  `err.non_card_in_graveyard` / `_in_hand` / `_in_deck` (the row itself is
+  removed either way; nothing is filed, not even the neutral `board_discard`).
+  A hand or draw-pile landing is a `debug_assert!` too (every hand card must
+  be playable). A name a card **injects** through `add_to_hand` /
+  `add_to_deck` / `to_discard` is kept (it is borrowed for an immediate
+  attach, e.g. AG:「ONE OF US」) and only logged.
 * Attachment chain depth is unbounded but cycle-free (I6); `attached_cards`
   answers direct children in creation order.
 

@@ -23,7 +23,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollValue("roll_purpose == 1", None, halve)),
         On::Schedule("expire", "", None, expire),
     ],
-)
+).rule()
 // 「直到你的下个回合结束」: the `⌛1` marker the client shows.
 .props(&[(bandori_std::marker::TURNS_LEFT, 1)])
 .meta(

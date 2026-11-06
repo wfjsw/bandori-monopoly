@@ -48,7 +48,7 @@ pub const ROSELIA: CardDef = CardDef::new(
             at_turn_start,
         )),
     ],
-);
+).rule();
 
 /// Residual guard for [`half_price`]: a Live House (always halves) or the
 /// first not-yet-taken non-Live-House buy. `is_live_house_for` is a

@@ -36,7 +36,7 @@ pub const TOKO: CardDef = CardDef::new(
         ))
         .silent(),
     ],
-)
+).rule()
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

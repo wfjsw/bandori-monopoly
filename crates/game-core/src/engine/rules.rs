@@ -974,6 +974,12 @@ pub trait CardRules: Send + Sync {
         String::new()
     }
 
+    /// Every **rule entity** id (`CardInfo::rule`, ABI v119): names that are
+    /// rules, not cards. A card area drops them (`World::note_non_card`).
+    fn rule_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Board-wide **mark-owner** rule ids (`board_role == "mark"`): one
     /// standing instance each on the neutral board owner.
     fn mark_rule_ids(&self) -> Vec<String> {

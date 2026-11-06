@@ -573,6 +573,8 @@ impl Match {
         // creation time. No re-attach runs here: rewriting live v6 state
         // would break save → restore identity (fuzz_save_restore).
         let mut world = s.world;
+        // Serde-skipped: re-derive the rule-entity ids from the ruleset.
+        world.rule_ids = std::sync::Arc::new(rules.rule_ids().into_iter().collect());
         // Same-version saves could predate the field (a hand-built v13 blob);
         // a short vector would index-panic on the first ack.
         let mut order_ready = s.order_ready;
@@ -834,6 +836,7 @@ impl Match {
         };
         let n = st.players.len();
         let mut world = World::new(st, n, world_rng);
+        world.rule_ids = std::sync::Arc::new(rules.rule_ids().into_iter().collect());
         world.clock = clock;
         world.legacy_clock = legacy_clock;
         let mut m = Self {

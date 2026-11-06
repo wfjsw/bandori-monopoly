@@ -11,7 +11,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play("", None, play)])
+pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play("", None, play)]).rule()
         // 规则书: 「投掷1d4」 -- a pure number interval, so a numeric-shape
         // counter (tsugumi) may answer the event (design G06 §6.6).
         .props(&[(card_sdk::abi::prop::RANGE_CARD, 1)])

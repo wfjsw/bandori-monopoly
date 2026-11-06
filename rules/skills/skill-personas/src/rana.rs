@@ -69,7 +69,7 @@ pub const RANA: CardDef = CardDef::new(
         ))
         .label("（3）"),
     ],
-)
+).rule()
 // 「（初始3，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 3),

@@ -60,7 +60,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Filter(Filter::ExclusiveUse(EXCLUSIVE_USE_DENIED, None, refuse)),
         On::Play("", Some(can_transform), transform_now),
     ],
-);
+).rule();
 
 /// The condition under which this band skill closes the exclusive-use gate.
 /// CRYCHIC variants may play their own exclusives (`step == 1`) but not the

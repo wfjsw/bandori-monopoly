@@ -26,7 +26,7 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollPlan("", None, on_plan)),
         On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
-)
+).rule()
 // 「抽到的玩家的下回合开始时」: the `⌛1` marker the client shows.
 .props(&[(bandori_std::marker::TURNS_LEFT, 1)])
         .meta(&card_sdk::meta::CardMeta::new()

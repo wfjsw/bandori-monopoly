@@ -36,7 +36,7 @@ pub const LOCK: CardDef = CardDef::new(
         On::Action(Action::Bought("actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')", Some(not_live_house_for_me), on_bought)),
         On::Action(Action::TurnStartBefore(card_sdk::condition::MINE, Some(owns_bath_with_lh), at_turn_start)),
     ],
-);
+).rule();
 
 /// Residual guard for [`on_bought`]: the tile is not already a Live House for
 /// this player (`ctx::is_live_house_for` -- per-player colour, not CEL's

@@ -1061,6 +1061,13 @@ pub struct World {
     /// ([tile marks], `owner == -1`) have no player-owned rule and remain.
     #[serde(default)]
     pub marker_owner: std::collections::BTreeMap<String, String>,
+    /// Rule-entity ids (`CardRules::rule_ids`, ABI v119): names that are
+    /// rules, not cards, so a card area drops them instead of filing them
+    /// ([`Self::note_non_card`]). Derived from the ruleset at build / restore,
+    /// so it is not state: skipped by serde (a save is byte-identical) and an
+    /// empty set simply files everything.
+    #[serde(skip)]
+    pub rule_ids: std::sync::Arc<std::collections::HashSet<String>>,
     /// Pending walk segments + flush pacing (see [`WalkSeg`]). Transient: not
     /// serialized, not compared.
     #[serde(skip)]
@@ -1362,6 +1369,7 @@ impl World {
             countered_this_turn: vec![],
             played_cards: vec![],
             marker_owner: std::collections::BTreeMap::new(),
+            rule_ids: Default::default(),
             walk_flush: WalkFlush::default(),
             mark_log: Vec::new(),
             skip_log: false,

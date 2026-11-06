@@ -25,7 +25,7 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
         Some(is_general_card),
         on_played,
     ))],
-);
+).rule();
 
 /// Residual guard for [`on_played`]: the played card is a 通用 one (a card's
 /// band is the prefix of its id). String match, outside the CEL schema.

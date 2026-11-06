@@ -34,7 +34,7 @@ pub const PASTEL: CardDef = CardDef::new(
         // 「你」 is this card's owner (`actor == owner`).
         On::Action(Actions::FansFlip("actor == owner", None, on_fans_flip)),
     ],
-);
+).rule();
 
 /// （1）「游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张
 /// Pastel✽Palettes乐队卡时此效果不重复发动）」 -- the band card's own game-start

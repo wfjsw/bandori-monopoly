@@ -30,7 +30,7 @@ pub const ANON: CardDef = CardDef::new(
             on_abnormal,
         )),
     ],
-)
+).rule()
 // 「（初始2，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

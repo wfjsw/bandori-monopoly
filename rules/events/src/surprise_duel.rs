@@ -27,7 +27,7 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollPlan("", Some(on_plan_others), on_plan)),
         On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
-)
+).rule()
 // 「抽到的玩家的下2回合开始时」: the `⌛2` marker the client shows.
 .props(&[(bandori_std::marker::TURNS_LEFT, 2)])
         .meta(&card_sdk::meta::CardMeta::new()

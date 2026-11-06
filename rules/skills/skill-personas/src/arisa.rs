@@ -30,7 +30,7 @@ pub const ARISA: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0", Some(station_exists), at_turn_end)),
         On::Action(Action::Pass("actor == owner && tile.id == tile_named('流星堂')", None, on_pass)),
     ],
-)
+).rule()
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 

@@ -66,7 +66,7 @@ pub const NANAMI: CardDef = CardDef::new(
         .id("2"),
         On::Action(Action::TurnEnd(card_sdk::condition::MINE, None, tick)).quiet_when_empty(),
     ],
-)
+).rule()
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

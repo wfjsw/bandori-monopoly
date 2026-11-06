@@ -50,7 +50,7 @@ pub const RAS: CardDef = CardDef::new(
             at_turn_start_offer,
         )),
     ],
-);
+).rule();
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.

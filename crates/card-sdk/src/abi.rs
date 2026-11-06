@@ -849,7 +849,11 @@ use crate::intern::NameId;
 ///    `set_face_down_at` / `add_to_dest` / `set_dest` / `send_to_dest` /
 ///    `transfer_to_dest` gain a cause/flag argument. SAVE_VERSION 19 -> 20
 ///    (the edges and the held-card relation); RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 118;
+/// v119: **rule entities vs cards** (`CardDef::rule`). `ManifestEntry.rule`
+///    tells the engine the def's name is a rule, not a card, so a card area
+///    (hand / draw pile / discard) drops the name instead of filing it
+///    (`CardRules::rule_ids`, `World::note_non_card`).
+pub const ABI_VERSION: i32 = 119;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -3696,6 +3700,10 @@ pub struct ManifestEntry {
     /// Trailing field.
     #[serde(default)]
     pub gate_skip_msgs: Vec<(i32, String)>,
+    /// This def is a **rule entity**, not a card (`CardDef::rule`, v119):
+    /// its name belongs in no card area. Trailing field.
+    #[serde(default)]
+    pub rule: bool,
 }
 
 /// One per-entry **tile text** declaration (`On::texts`, v59): the

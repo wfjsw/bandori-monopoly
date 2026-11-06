@@ -44,7 +44,7 @@ pub const MUTSUMI: CardDef = CardDef::new(
             at_turn_end,
         )),
     ],
-);
+).rule();
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // `slot('skillState') != 2` is the condition.

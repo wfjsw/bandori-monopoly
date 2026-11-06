@@ -58,7 +58,7 @@ pub const UIKA: CardDef = CardDef::new(
         // 4-shot cap is `slot('skill.uikaImprisoned.bonus') < 4`.
         On::Action(Action::SettleBefore("slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4", None, before_settle)),
     ],
-)
+).rule()
     // 「（火罐上限3）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 3)]);
 

@@ -43,7 +43,7 @@ pub const EMBERS: CardDef = CardDef::new(
         On::Action(Action::Bankrupt("", Some(on_out_applies), on_out)),
         On::Action(Action::Abnormal("", Some(on_out_applies), on_out)),
     ],
-)
+).rule()
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"火种燃尽之后会怎么样呢？"#)
             .text(CardText::items(&[

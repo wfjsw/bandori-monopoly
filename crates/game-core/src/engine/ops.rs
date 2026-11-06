@@ -1393,6 +1393,7 @@ impl World {
     /// Move a card id between zones (hand / draw pile / discard).
     pub fn add_to_hand(&mut self, player_id: i32, card: &str) {
         if let Ok(i) = usize::try_from(player_id) {
+            self.note_non_card(player_id, "hand", card, false);
             if let Some(h) = self.hidden.get_mut(i) {
                 h.hand.push(card.to_string());
             }
@@ -1401,6 +1402,7 @@ impl World {
 
     pub fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool) {
         if let Ok(i) = usize::try_from(player_id) {
+            self.note_non_card(player_id, "deck", card, false);
             if let Some(h) = self.hidden.get_mut(i) {
                 h.deck.push(card.to_string());
                 if shuffle {
@@ -1412,11 +1414,17 @@ impl World {
 
     pub fn to_discard(&mut self, player_id: i32, card: &str) -> bool {
         if let Ok(i) = usize::try_from(player_id) {
+            // A rule name is reported and then dropped (`note_non_card`); the
+            // pile keeps card ids only.
+            let keep = !self.is_rule(card);
+            self.note_non_card(player_id, "graveyard", card, false);
             if let Some(h) = self.hidden.get_mut(i) {
                 if let Some(k) = h.hand.iter().position(|c| c == card) {
                     h.hand.remove(k);
                 }
-                h.graveyard.push(card.to_string());
+                if keep {
+                    h.graveyard.push(card.to_string());
+                }
                 self.settle_over_hand_allowance(i);
                 return self.refill_after_pile_write(i);
             }
@@ -2436,33 +2444,85 @@ impl World {
         }
     }
 
+    /// Is `id` a **rule entity** rather than a card? The ruleset declares it
+    /// (`CardDef::rule` -> `CardRules::rule_ids`); the engine never parses the
+    /// id. An empty set (a hand-built world) says no to everything, so every
+    /// name is filed.
+    pub fn is_rule(&self, id: &str) -> bool {
+        self.rule_ids.contains(id)
+    }
+
+    /// Report `name` reaching a **card area** (a rule entity, [`Self::is_rule`])
+    /// and let the caller drop it.
+    ///
+    /// A card area stores card ids and everything downstream assumes it: the
+    /// draw deals the entry back, the client offers it to be played, the deck
+    /// tricks move it around. A rule entity filed there -- `tile:*`, `event:*`,
+    /// `skill:*`, `mark:*`, `status:*` -- is invisible dead weight in a hand for
+    /// the rest of the match (it is in no deck and `CardRules::normal` rejects
+    /// it), so it is not kept: the entity is **removed**, not exiled
+    /// (`Dest::Banished` is the book's 「[移除]」, a different thing) and not
+    /// filed as a pseudo-card.
+    ///
+    /// `hard` marks a destination a rule name can never mean anything in --
+    /// a hand (every hand card must be playable) or a draw pile, so those trip
+    /// `debug_assert!`. A Graveyard landing is the ordinary removal
+    /// destination and only reports.
+    ///
+    /// A name a card **injects** by hand (`add_to_hand` / `add_to_deck` /
+    /// `to_discard`) is a different case and is *kept*: `AG:ONE OF US` borrows
+    /// a `tile:property` name through the hand and attaches it in the same
+    /// body, so `add_to_dest` still writes the name and only reports here.
+    pub fn note_non_card(&mut self, seat: i32, zone: &str, name: &str, hard: bool) {
+        if !self.is_rule(name) {
+            return;
+        }
+        let key = match zone {
+            "hand" => "err.non_card_in_hand",
+            "deck" => "err.non_card_in_deck",
+            _ => "err.non_card_in_graveyard",
+        };
+        self.log(
+            "text",
+            seat,
+            Msg::new(key).card("card", name).player_id("who", seat),
+        );
+        // The key leads the message: a caught panic (test) still names what
+        // went wrong where the log cannot reach (the panicking world is
+        // dropped before it commits).
+        debug_assert!(!hard, "{key}: `{name}` filed into seat {seat}'s {zone}");
+    }
+
     /// File a removed row into a pile. The name joins the pile; the row dies.
     fn file_row(&mut self, row: crate::state::FieldCard, t: &crate::engine::world::ZoneTransition) {
         use game_kinds::Zone;
         let holder = t.holder.max(0) as usize;
         let name = row.card.clone();
-        if name.starts_with("tile:") {
-            eprintln!("PUSH file_row holder={} card={name} to={:?}", t.holder, t.to);
-        }
         // An event rule instance leaving the field unbinds its active row.
         if let Some(id) = name.strip_prefix("event:") {
             self.st.event_active.retain(|e| e.id != id);
         }
+        // A **card area** keeps card ids only, so a rule entity is dropped
+        // instead of filed -- see [`Self::note_non_card`]. The row itself is
+        // gone either way; only the name stops at the pile.
+        let card = !self.is_rule(&name);
         match t.to {
-            // A board-owned row (no seat) files into the neutral board discard;
-            // `max(0)` would put the rule name into player 0's pile, where the
-            // reshuffle deals it back as a dead hand card (review finding 4).
+            Zone::Graveyard if !card => self.note_non_card(t.holder, "graveyard", &name, false),
+            // A board-owned **card** row (no seat) files into the neutral board
+            // discard; `max(0)` would put it into player 0's pile.
             Zone::Graveyard if t.holder < 0 => self.st.board_discard.push(name),
             Zone::Graveyard => {
                 if let Some(h) = self.hidden.get_mut(holder) {
                     h.graveyard.push(name);
                 }
             }
+            Zone::Hand if !card => self.note_non_card(t.holder, "hand", &name, true),
             Zone::Hand => {
                 if let Some(h) = self.hidden.get_mut(holder) {
                     h.hand.push(name);
                 }
             }
+            Zone::Deck if !card => self.note_non_card(t.holder, "deck", &name, true),
             Zone::Deck => {
                 if let Some(h) = self.hidden.get_mut(holder) {
                     match t.deck {

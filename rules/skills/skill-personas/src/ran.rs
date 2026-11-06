@@ -31,7 +31,7 @@ pub const RAN: CardDef = CardDef::new(
         On::Action(Action::DeckAtGameStart("", None, declare_cap)).silent(),
         On::Action(Action::TurnEnd("", Some(afterglow), tick)),
     ],
-)
+).rule()
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

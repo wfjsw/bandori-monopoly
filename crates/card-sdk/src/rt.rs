@@ -121,6 +121,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 .iter()
                 .map(|(g, k)| (*g, String::from(*k)))
                 .collect(),
+            rule: c.rule,
         })
         .collect();
     // Leak justified by [`leak`]: the host reads the manifest bytes after this

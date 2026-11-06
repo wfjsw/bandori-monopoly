@@ -39,7 +39,7 @@ pub const CHISATO: CardDef = CardDef::new(
             on_gain,
         )),
     ],
-);
+).rule();
 
 fn mine(player_id: i32) -> bool {
     // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 -- residual.

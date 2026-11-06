@@ -45,7 +45,7 @@ pub const TSUGUMI: CardDef = CardDef::new(
             on_plan_after,
         )),
     ],
-)
+).rule()
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

@@ -17,7 +17,7 @@ pub const AFTERGLOW: CardDef = CardDef::new(
         None,
         on_bought,
     ))],
-);
+).rule();
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.
 fn on_bought(player_id: i32) -> card_sdk::Asked {

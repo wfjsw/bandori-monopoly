@@ -28,7 +28,7 @@ pub const MARINA: CardDef = CardDef::new(
         None,
         on_pass,
     ))],
-);
+).rule();
 
 /// The cost of the offer, named in the clause.
 const COST: i32 = 500;

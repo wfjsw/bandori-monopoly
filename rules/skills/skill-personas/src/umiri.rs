@@ -82,7 +82,7 @@ pub const UMIRI: CardDef = CardDef::new(
             split_rent_gain,
         )),
     ],
-)
+).rule()
 // 「（初始0，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

@@ -1,7 +1,8 @@
-//! Throwaway probe: replay a `.bdrec` and print every event naming a `tile:`
-//! card, so the moment a tile rule reaches a hand can be read off.
+//! Diagnostic probe: replay a `.bdrec` and print every event naming a `tile:`
+//! card, so the moment a tile rule reaches a hand can be read off. Skips
+//! (passes) when `FILE` is unset.
 //!
-//!   FILE=/tmp/a.bdrec cargo test -p rules-native --test probe_replay -- --nocapture
+//!   FILE=/tmp/a.bdrec OUT=/tmp/dump cargo test -p rules-native --test probe_replay -- --nocapture
 
 use std::path::Path;
 use std::sync::Arc;
@@ -29,7 +30,11 @@ fn probe() {
             .expect("cards")
             .expect("built"),
     ) as Arc<dyn CardRules>;
-    let bytes = std::fs::read(std::env::var("FILE").unwrap()).unwrap();
+    let Ok(file) = std::env::var("FILE") else {
+        eprintln!("FILE unset -- skipping");
+        return;
+    };
+    let bytes = std::fs::read(file).unwrap();
     let rec = decode_record(&bytes).expect("decode");
     eprintln!(
         "recorded ruleset {} abi {} bundle {}",
@@ -75,13 +80,15 @@ fn probe() {
         applied += 1;
         if !dumped && applied >= dump_at {
             dumped = true;
-            let out = std::env::var("OUT").unwrap();
-            std::fs::create_dir_all(&out).unwrap();
-            std::fs::write(std::path::Path::new(&out).join("save.json"), rp.inner().save()).unwrap();
-            eprintln!(
-                "dumped save after {applied} inputs at tick {}",
-                rp.status().tick
-            );
+            if let Ok(out) = std::env::var("OUT") {
+                std::fs::create_dir_all(&out).unwrap();
+                std::fs::write(std::path::Path::new(&out).join("save.json"), rp.inner().save())
+                    .unwrap();
+                eprintln!(
+                    "dumped save after {applied} inputs at tick {}",
+                    rp.status().tick
+                );
+            }
             let m = rp.inner();
             for (i, p) in m.state().players.iter().enumerate() {
                 let h = &m.world().hidden[i];

@@ -45,7 +45,7 @@ pub const KASUMI: CardDef = CardDef::new(
         // happening and the player should see the clause fire. `Always` beats Auto.
         On::Action(Action::Settle("", Some(on_settle_applies), on_settle)).flash(Flash::Always),
     ],
-)
+).rule()
 // 「（初始0，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

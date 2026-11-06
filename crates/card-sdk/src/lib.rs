@@ -285,6 +285,12 @@ pub struct CardDef {
     /// (board-wide mark owner), `"status"` (board-wide status host), or `""`
     /// for an ordinary card. The engine never names the roles' contents.
     pub board_role: &'static str,
+    /// Is this a **rule entity** rather than a card (`CardDef::rule`, ABI
+    /// v119)? A rule name belongs in no card area: it is in no deck and
+    /// `CardRules::normal` rejects it, so the engine removes a row that a body
+    /// files into a hand / draw pile / discard (`World::note_non_card`).
+    /// [`Self::board_role`] implies it. `false` (default) = an ordinary card.
+    pub rule: bool,
     /// Tile kinds this rule governs (`CardDef::governs`, ABI v66) when
     /// [`Self::board_role`] is `"tile"`. Empty = derive the single kind from
     /// the id's `tile:` suffix. Multi-kind rules list every kind.
@@ -318,6 +324,7 @@ impl CardDef {
             props: &[],
             meta: None,
             board_role: "",
+            rule: false,
             governs: &[],
             gate_msgs: &[],
             gate_skip_msgs: &[],
@@ -334,6 +341,7 @@ impl CardDef {
             props,
             meta: self.meta,
             board_role: self.board_role,
+            rule: self.rule,
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
@@ -381,6 +389,32 @@ impl CardDef {
             props: self.props,
             meta: Some(meta),
             board_role: self.board_role,
+            rule: self.rule,
+            governs: self.governs,
+            gate_msgs: self.gate_msgs,
+            gate_skip_msgs: self.gate_skip_msgs,
+            exemption_prop: self.exemption_prop,
+        }
+    }
+
+    /// Mark this def as a **rule entity** rather than a card (ABI v119): its
+    /// id names a rule (`tile:*` / `mark:*` / `status:*` / `skill:*` /
+    /// `event:*`), never a deck card, so the engine drops it from a card area
+    /// instead of filing it (`World::note_non_card`). [`Self::board_role`]
+    /// already implies it; declare it explicitly for a rule with no board
+    /// role (a skill, an event).
+    ///
+    /// ```ignore
+    /// pub const SKILL: CardDef = CardDef::new("skill:...", &[...]).rule();
+    /// ```
+    pub const fn rule(self) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            meta: self.meta,
+            board_role: self.board_role,
+            rule: true,
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
@@ -402,6 +436,7 @@ impl CardDef {
             props: self.props,
             meta: self.meta,
             board_role: role,
+            rule: true,
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
@@ -425,6 +460,7 @@ impl CardDef {
             props: self.props,
             meta: self.meta,
             board_role: self.board_role,
+            rule: self.rule,
             governs: kinds,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,
@@ -442,6 +478,7 @@ impl CardDef {
             props: self.props,
             meta: self.meta,
             board_role: self.board_role,
+            rule: self.rule,
             governs: self.governs,
             gate_msgs: msgs,
             gate_skip_msgs: self.gate_skip_msgs,
@@ -459,6 +496,7 @@ impl CardDef {
             props: self.props,
             meta: self.meta,
             board_role: self.board_role,
+            rule: self.rule,
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: msgs,
@@ -475,6 +513,7 @@ impl CardDef {
             props: self.props,
             meta: self.meta,
             board_role: self.board_role,
+            rule: self.rule,
             governs: self.governs,
             gate_msgs: self.gate_msgs,
             gate_skip_msgs: self.gate_skip_msgs,

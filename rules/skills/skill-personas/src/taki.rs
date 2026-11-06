@@ -32,7 +32,7 @@ pub const TAKI: CardDef = CardDef::new(
         ))
         .silent(),
     ],
-)
+).rule()
 // 「（初始0，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

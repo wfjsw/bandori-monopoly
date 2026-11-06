@@ -12917,6 +12917,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.tile_rule_id(kind)
     }
 
+    fn rule_ids(&self) -> Vec<String> {
+        self.ruleset.rule_ids()
+    }
+
     fn mark_rule_ids(&self) -> Vec<String> {
         self.ruleset.mark_rule_ids()
     }

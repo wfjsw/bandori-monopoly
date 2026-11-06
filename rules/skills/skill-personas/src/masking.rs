@@ -27,7 +27,7 @@ pub const MASKING: CardDef = CardDef::new(
         // vocabulary).
         On::Action(Action::Pass("actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))", None, on_pass)),
     ],
-)
+).rule()
     // 「（初始0，上限2）」
     .props(&[(bandori_std::fire::FIRE_INITIAL, 0), (bandori_std::fire::FIRE_CAP, 2)]);
 
