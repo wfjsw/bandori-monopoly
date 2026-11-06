@@ -46,6 +46,7 @@ pub const KASUMI: CardDef = CardDef::new(
         On::Action(Action::Settle("", Some(on_settle_applies), on_settle)).flash(Flash::Always),
     ],
 )
+.rule()
 // 「（初始0，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

@@ -83,6 +83,7 @@ pub const UMIRI: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始0，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

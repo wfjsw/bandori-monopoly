@@ -95,6 +95,22 @@ impl PlayCtx<'_> {
             }
             // `zoneLeft` runs on the live row. A body may rewrite the pending
             // destination; the re-read below is authoritative.
+            eprintln!(
+                "BEFORE_RAISE uid={} card={} from={:?} to={:?} holder={} cause={:?} uids={:?}",
+                t.uid,
+                row.card,
+                t.from,
+                t.to,
+                t.holder,
+                t.cause,
+                self.w
+                    .st
+                    .players
+                    .iter()
+                    .flat_map(|p| p.field.iter())
+                    .map(|f| f.uid)
+                    .collect::<Vec<_>>()
+            );
             self.zone_raise(
                 "zoneLeft",
                 seat,
@@ -329,6 +345,7 @@ impl PlayCtx<'_> {
         face_down: bool,
     ) -> Flow<i32> {
         let Some(host_row) = self.w.field_by_uid(host).cloned() else {
+            eprintln!("ZONE_ATTACH pid={player_id} host={host} card={card} -> no host row");
             return Ok(-1);
         };
         let in_hand = self
@@ -369,6 +386,19 @@ impl PlayCtx<'_> {
             return Ok(-1);
         };
         let Some(k) = h.hand.iter().position(|c| c == card) else {
+            if card.starts_with("tile:") {
+                let seats: Vec<usize> = self
+                    .w
+                    .hidden
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, h)| h.hand.iter().any(|c| c == card))
+                    .map(|(i, _)| i)
+                    .collect();
+                eprintln!(
+                    "ZONE_ATTACH pid={player_id} host={host} card={card} -> no hand copy (held by {seats:?})"
+                );
+            }
             return Ok(-1);
         };
         h.hand.remove(k);

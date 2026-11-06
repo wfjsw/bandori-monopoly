@@ -128,6 +128,9 @@ pub struct CardInfo {
     /// Card prop that exempts a play from this rule's act gate (`CardDef::exemption_prop`).
     #[serde(default)]
     pub exemption_prop: String,
+    /// The def is a **rule entity**, not a card (`CardDef::rule`, ABI v119).
+    #[serde(default)]
+    pub rule: bool,
 }
 
 impl CardInfo {
@@ -2150,6 +2153,17 @@ impl Ruleset {
         String::new()
     }
 
+    /// Every **rule entity** id (`CardInfo::rule`, ABI v119): names that are
+    /// rules, not cards, so a card area drops them instead of filing them.
+    pub fn rule_ids(&self) -> Vec<String> {
+        self.inner
+            .cards
+            .iter()
+            .filter(|c| c.rule)
+            .map(|c| c.id.clone())
+            .collect()
+    }
+
     /// Standing **mark-owner** rule ids (`board_role == "mark"`).
     pub fn mark_rule_ids(&self) -> Vec<String> {
         self.inner
@@ -3166,6 +3180,14 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         }
         String::new()
     }
+    /// Every rule-entity id (`CardInfo::rule`): default scans [`Self::cards`].
+    fn rule_ids(&self) -> Vec<String> {
+        self.cards()
+            .iter()
+            .filter(|c| c.rule)
+            .map(|c| c.id.clone())
+            .collect()
+    }
     /// Standing mark-owner rule ids (`board_role == "mark"`).
     fn mark_rule_ids(&self) -> Vec<String> {
         self.cards()
@@ -4149,6 +4171,7 @@ fn inspect(
             gate_msgs: e.gate_msgs,
             gate_skip_msgs: e.gate_skip_msgs,
             exemption_prop: e.exemption_prop,
+            rule: e.rule,
         })
         .collect();
     if cards.is_empty() {
@@ -7678,6 +7701,7 @@ mod gate_tests {
             gate_msgs: Default::default(),
             gate_skip_msgs: Default::default(),
             exemption_prop: Default::default(),
+            rule: Default::default(),
         }
     }
 

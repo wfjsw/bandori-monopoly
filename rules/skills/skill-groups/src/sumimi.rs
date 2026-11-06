@@ -43,7 +43,8 @@ pub const SUMIMI: CardDef = CardDef::new(
         // clear branch (FINDINGS C-SUMIMI-band-01).
         On::Action(Action::TurnEndBefore("actor == owner", None, at_turn_end)),
     ],
-);
+)
+.rule();
 
 /// （1）'s latch -- 「若你在一回合内从其他玩家处获得过资金」.
 fn after_pay(player_id: i32) -> card_sdk::Asked {

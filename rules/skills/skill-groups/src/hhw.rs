@@ -50,7 +50,8 @@ pub const HHW: CardDef = CardDef::new(
             before_build,
         )),
     ],
-);
+)
+.rule();
 
 /// Residual guard for [`after_pay`]: a recorded player collected a rent and
 /// this card has a crystal to spend. Dynamic keys (`skill.hhw.*`), not CEL.

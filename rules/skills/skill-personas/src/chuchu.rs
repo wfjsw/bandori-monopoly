@@ -46,7 +46,8 @@ pub const CHUCHU: CardDef = CardDef::new(
         ))
         .silent(),
     ],
-);
+)
+.rule();
 
 /// 「加盖房屋时半价」, or 「本回合加盖房屋变为免费」 when last turn built.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {

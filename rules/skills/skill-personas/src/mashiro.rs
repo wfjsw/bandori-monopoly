@@ -22,7 +22,8 @@ pub const MASHIRO: CardDef = CardDef::new(
         None,
         roll_plan,
     ))],
-);
+)
+.rule();
 
 /// （1）「[主动移动]时移动掷骰变为2d20」, （2）「反方向移动」.
 fn roll_plan(player_id: i32, v: PlanValue) -> PlanValue {

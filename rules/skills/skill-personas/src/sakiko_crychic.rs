@@ -43,6 +43,7 @@ pub const SAKIKO_CRYCHIC: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始1，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

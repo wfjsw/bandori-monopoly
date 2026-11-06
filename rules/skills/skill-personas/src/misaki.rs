@@ -45,6 +45,7 @@ pub const MISAKI: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始0，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

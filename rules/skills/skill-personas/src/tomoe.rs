@@ -39,6 +39,7 @@ pub const TOMOE: CardDef = CardDef::new(
         On::Action(Action::TurnEnd("", Some(afterglow), tick)),
     ],
 )
+.rule()
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

@@ -48,7 +48,7 @@ pub const SAYO: CardDef = CardDef::new(
             Some(can_offer),
             offer),
     ],
-)
+).rule()
     // 「（初始10，上限10）」
     .props(&[
         (bandori_std::fire::FIRE_INITIAL, 10), (bandori_std::fire::FIRE_CAP, 10),

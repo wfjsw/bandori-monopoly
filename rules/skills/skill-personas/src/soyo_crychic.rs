@@ -62,7 +62,8 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
             on_plan_after,
         )),
     ],
-);
+)
+.rule();
 
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
 /// Applicability is the entry's condition (`actor != owner && tile.owner ==

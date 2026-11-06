@@ -33,6 +33,7 @@ pub const LAYER: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始1，上限1）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

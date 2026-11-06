@@ -31,7 +31,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         On::Filter(Filter::DiceRollAdd("roll_purpose == 1", None, sub_die_filter)),
         On::Schedule("phase_end", "", None, phase_end),
     ],
-)
+).rule()
 // 「抽到的玩家的下回合结束前…此后…下回合结束前」: the `⌛2` marker the client
 // shows.
 .props(&[(bandori_std::marker::TURNS_LEFT, 2)])

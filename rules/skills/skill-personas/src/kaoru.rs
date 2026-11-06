@@ -60,6 +60,7 @@ pub const KAORU: CardDef = CardDef::new(
         .quiet_when_empty(),
     ],
 )
+.rule()
 // 「（上限7）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

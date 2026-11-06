@@ -32,7 +32,8 @@ pub const KOKORO: CardDef = CardDef::new(
         )),
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
     ],
-);
+)
+.rule();
 
 /// （1）「开局时获得1000资金」.
 fn at_start(player_id: i32) -> card_sdk::Asked {

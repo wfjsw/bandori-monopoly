@@ -92,6 +92,7 @@ pub const TOMORI: CardDef = CardDef::new(
         On::Action(Action::MoveResolved("", None, clear_used_this_move)),
     ],
 )
+.rule()
 // 「（初始4，上限4）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 4),

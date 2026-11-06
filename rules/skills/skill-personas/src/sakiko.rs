@@ -57,6 +57,7 @@ pub const SAKIKO: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始0，上限3）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 0),

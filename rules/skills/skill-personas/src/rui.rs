@@ -41,7 +41,8 @@ pub const RUI: CardDef = CardDef::new(
         // 「无需失去资金」. PayAfter is too late to rewrite.
         On::Action(Action::Pay("", Some(mine), on_pay)),
     ],
-);
+)
+.rule();
 
 fn mine(player_id: i32) -> bool {
     // 「获得或失去资金」 -- the skill fires on either side of a money move:

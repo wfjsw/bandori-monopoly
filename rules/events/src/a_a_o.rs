@@ -21,7 +21,7 @@ pub const A_A_O: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Schedule("expire_at_end", "", None, expire_at_end),
     ],
-)
+).rule()
 // 「抽到的玩家的下回合结束时」: the `⌛1` marker the client shows.
 .props(&[(bandori_std::marker::TURNS_LEFT, 1)])
         .meta(&card_sdk::meta::CardMeta::new()

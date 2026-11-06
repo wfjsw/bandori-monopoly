@@ -27,7 +27,7 @@ pub const FIX_NOTE: CardDef = CardDef::new(
         On::Action(Action::BuildBefore("", Some(always), before_build)),
         On::Action(Action::BuildAfter("", Some(always), after_build)),
     ],
-)
+).rule()
         .meta(&card_sdk::meta::CardMeta::new()
             .name(r#"修复公告"#)
             .text(CardText::para(r#"前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。"#))

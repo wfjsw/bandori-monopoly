@@ -72,7 +72,8 @@ pub const POPPIN: CardDef = CardDef::new(
             lock_hill,
         )),
     ],
-);
+)
+.rule();
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].

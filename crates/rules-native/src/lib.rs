@@ -225,6 +225,7 @@ impl NativeRulesHandle {
                         .map(|(k, v)| (*k, (*v).to_string()))
                         .collect(),
                     exemption_prop: card.exemption_prop.to_string(),
+                    rule: card.rule,
                 });
             }
         }

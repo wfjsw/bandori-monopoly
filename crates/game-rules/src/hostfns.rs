@@ -1066,6 +1066,12 @@ pub fn attach_card<C: HostCtx>(
         face_down,
     };
     let uid = crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap)?;
+    if card.starts_with("tile:") {
+        eprintln!(
+            "ATTACH caller={caller} card={card} host={host} live={live_copy:?} uid={uid} by={:?}",
+            c.st().invoke_frames.last().map(|f| f.by)
+        );
+    }
     if uid >= 0 && live_copy.is_none() {
         // The routine removed the pile copy on the live world. Take it out of
         // the body's own view too, or the committed world would keep it in
@@ -1501,6 +1507,15 @@ pub fn add_to_dest<C: HostCtx>(
         )));
     }
     let card = guest_str(c, p, n)?;
+    if card.starts_with("tile:") {
+        eprintln!(
+            "ADD_TO_DEST seat={} card={} dest={} by={:?}",
+            player_id,
+            card,
+            dest,
+            c.st().invoke_frames.last().map(|f| f.by)
+        );
+    }
     c.st_mut()
         .w()
         .add_to_dest(player_id, &card, dest, counted != 0);

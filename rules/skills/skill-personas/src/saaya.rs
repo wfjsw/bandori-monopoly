@@ -45,6 +45,7 @@ pub const SAAYA: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始3，上限5）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 3),

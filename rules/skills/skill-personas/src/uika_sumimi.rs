@@ -43,6 +43,7 @@ pub const UIKA_SUMIMI: CardDef = CardDef::new(
         )),
     ],
 )
+.rule()
 // 「（初始2，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 2),

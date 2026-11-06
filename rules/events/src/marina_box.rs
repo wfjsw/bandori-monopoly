@@ -28,7 +28,7 @@ pub const MARINA_BOX: CardDef = CardDef::new(
         On::Action(Action::PassTile("tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500", None, on_pass)),
         On::Action(Action::TurnStartBefore("", None, on_turn_start)),
     ],
-)
+).rule()
 // 「抽到的玩家的第3回合开始时」: the `⌛2` marker the client shows (the draw is
 // mid-turn 1, so two more drawer turn starts remain).
 .props(&[(bandori_std::marker::TURNS_LEFT, 2)])

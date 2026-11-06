@@ -35,7 +35,8 @@ pub const MORFONICA: CardDef = CardDef::new(
             on_circle,
         )),
     ],
-);
+)
+.rule();
 
 /// （1）「当你一次性失去2000以上资金时，抽一张卡」. Applicability is the `condition`;
 /// this side only draws.

@@ -23,7 +23,7 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Action(Action::TurnStartBefore("", Some(always), on_turn_start)),
     ],
-)
+).rule()
 // 「抽到的玩家的第3回合开始时」: the `⌛2` marker the client shows (the draw is
 // mid-turn 1, so two more drawer turn starts remain).
 .props(&[(bandori_std::marker::TURNS_LEFT, 2)])

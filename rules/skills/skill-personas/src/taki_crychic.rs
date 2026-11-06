@@ -43,7 +43,8 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
         ))
         .silent(),
     ],
-);
+)
+.rule();
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 0);

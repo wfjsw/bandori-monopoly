@@ -69,7 +69,8 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
             at_turn_end,
         )),
     ],
-);
+)
+.rule();
 
 /// 「你在状态2时…」 -- the bends only apply in 状态2.
 fn in_two(player_id: i32) -> bool {

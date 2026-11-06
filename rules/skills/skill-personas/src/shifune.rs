@@ -37,6 +37,7 @@ pub const SHIFUNE: CardDef = CardDef::new(
         On::Action(Action::HouseAdded("", Some(partner), on_built)),
     ],
 )
+.rule()
 // 「（初始1，上限2）」
 .props(&[
     (bandori_std::fire::FIRE_INITIAL, 1),

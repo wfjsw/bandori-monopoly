@@ -31,6 +31,7 @@ pub const RINKO: CardDef = CardDef::new(
         On::Action(Action::Pass(bandori_std::guards::OWN_START, None, on_pass)),
     ],
 )
+.rule()
 // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate
 // (`bandori_std::prop::PLAYABLE_STUNNED`, the same waiver 壱雫空 carries).
 // 「（初始3，上限3）」

@@ -61,7 +61,8 @@ pub const HAGUMI: CardDef = CardDef::new(
         On::Play("", Some(can_cash), cash),
         On::Filter(Filter::DiceRollPlan("", None, on_plan)),
     ],
-);
+)
+.rule();
 
 /// Residual guard for 「经过格子上的可乐饼时」 -- `count_marks` stays here
 /// (not yet in the condition vocabulary).
