@@ -1863,6 +1863,11 @@ impl Replayer {
 
     // ------------------------------------------------------------ queries
 
+    /// The live match at the current tick (diagnostics / probes).
+    pub fn inner(&self) -> &crate::engine::Match {
+        &self.m
+    }
+
     pub fn status(&self) -> Status {
         Status {
             tick: self.tick,
