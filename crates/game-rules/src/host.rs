@@ -566,6 +566,8 @@ pub enum HostRequest {
         event: String,
         player_id: i32,
         tile: i32,
+        /// The draw's ordinal -- two draws of one card differ by it.
+        ordinal: i32,
     },
     /// Checkpoint the board; answers the allocated key. `ctx::world_snapshot`.
     WorldSnapshot,
@@ -908,10 +910,12 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 event,
                 player_id,
                 tile,
+                ordinal,
             } => J::EventDefer {
                 event: event.clone(),
                 player_id: *player_id,
                 tile: *tile,
+                ordinal: *ordinal,
             },
             HostRequest::WorldSnapshot => J::WorldSnapshot,
             HostRequest::WorldRestore { key } => J::WorldRestore { key: *key },

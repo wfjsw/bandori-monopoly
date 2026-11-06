@@ -290,6 +290,8 @@ pub enum JournalRequest {
         event: String,
         player_id: i32,
         tile: i32,
+        #[serde(default)]
+        ordinal: i32,
     },
     WorldSnapshot,
     WorldRestore {
@@ -382,6 +384,9 @@ pub struct DeferredEvent {
     pub player: i32,
     /// The tile the draw stood on; the release resolves there.
     pub tile: i32,
+    /// The draw this record parked (see [`super::rules::Trigger::ordinal`]);
+    /// two draws of the same card for the same seat stay two separate records.
+    pub ordinal: i32,
     /// The deferring instance's owner; only that seat's turn start is due.
     pub due_owner: i32,
     /// The deferring instance: release cause and the `eventResolved` subject.
@@ -406,6 +411,9 @@ pub struct WorldSnapshot {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PlayerSnapshot {
     pub pos: i32,
-    pub state: Vec<(String, i32)>,
+    /// Whole items, not bare values: a restore has to put the declaration
+    /// (`NEVER_NEGATIVE`, an expiry) back with the number, or a status that
+    /// happened to be removed in between comes back without its floor.
+    pub state: Vec<(String, crate::state::StateVar)>,
     pub money: i32,
 }

@@ -363,20 +363,27 @@ pub fn presence_g10_event_defer_is_once() {
         w.trig_card = 5;
         w.trig_player = 0;
         w.trig_tile = 12;
+        w.trig_ordinal = 0;
         w.bound_uid = 1;
     });
     crate::kassert!(call(Op::event_defer, [0; 6]) == 1, "first claim");
     crate::kassert!(call(Op::event_defer, [0; 6]) == 1, "own re-run");
     world::with_world_mut(|w| w.bound_uid = 2);
     crate::kassert!(call(Op::event_defer, [0; 6]) == 0, "another instance");
+    // Another draw of the same card (a different ordinal) is not this record
+    // either -- it claims one of its own.
+    world::with_world_mut(|w| w.trig_ordinal = 1);
+    crate::kassert!(call(Op::event_defer, [0; 6]) == 1, "another draw");
+    world::with_world_mut(|w| w.trig_ordinal = 0);
     world::with_world(|w| {
-        crate::kassert!(w.deferred_n == 1, "one record");
+        crate::kassert!(w.deferred_n == 2, "one record per draw");
         crate::kassert!(w.deferred[0].deferrer_uid == 1, "owner");
+        crate::kassert!(w.deferred[1].ordinal == 1, "the second draw");
     });
     // Outside an `event` raise: 0, nothing pushed.
     world::with_world_mut(|w| w.trig_kind = "turnStart");
     crate::kassert!(call(Op::event_defer, [0; 6]) == 0, "not an event");
-    world::with_world(|w| crate::kassert!(w.deferred_n == 1, "still one"));
+    world::with_world(|w| crate::kassert!(w.deferred_n == 2, "still two"));
     kani::cover!(true, "once");
 }
 

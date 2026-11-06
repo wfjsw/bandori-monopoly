@@ -698,12 +698,18 @@ impl PlayMemo {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct GuestOverlay {
     /// `(player, key, base, wrote)` for each state item the guest decreased.
-    /// `base` is `None` when the key was absent before the overlay.
+    /// `base` is `None` when the key was absent before the overlay. `wrote` is
+    /// always the value the replay's copy wants (a routine's own move
+    /// composed on it); `crossed` says whether it also landed on **live**. A
+    /// non-crossing increase at a pause boundary did not, so the revert must
+    /// leave live to the routine instead of subtracting a delta it never
+    /// carried.
     pub state: Vec<(
         usize,
         String,
         Option<crate::state::StateVar>,
         crate::state::StateVar,
+        bool,
     )>,
     /// Field instances the guest placed, rewrote or took off the field in the
     /// same body ([`FieldDelta`]).
@@ -826,6 +832,10 @@ pub struct EventDelta {
 /// Merge one append/remove list: a row the body removed goes, a row it added
 /// comes, and a row only the live world has stays. Idempotent -- a replayed
 /// delta whose live already equals the write is a no-op.
+///
+/// Counts, not membership: a deck legitimately holds the same row twice
+/// (`event_deck_push` appends what it is handed), and a `contains` would read
+/// the second copy's add (or removal) as one the base already carries.
 fn merge_list<T: PartialEq + Clone>(live: &mut Vec<T>, base: &[T], wrote: &[T]) {
     if *live == *wrote {
         return;
@@ -834,16 +844,32 @@ fn merge_list<T: PartialEq + Clone>(live: &mut Vec<T>, base: &[T], wrote: &[T]) 
         *live = wrote.to_vec();
         return;
     }
-    for b in base {
-        if !wrote.contains(b) {
-            if let Some(i) = live.iter().position(|x| x == b) {
-                live.remove(i);
-            }
+    let count = |list: &[T], x: &T| list.iter().filter(|y| *y == x).count();
+    let mut handled: Vec<&T> = Vec::new();
+    for x in base.iter().chain(wrote.iter()) {
+        if handled.contains(&x) {
+            continue;
         }
-    }
-    for w in wrote {
-        if !base.contains(w) {
-            live.push(w.clone());
+        handled.push(x);
+        let base_n = count(base, x);
+        let wrote_n = count(wrote, x);
+        let mut live_n = count(live, x);
+        // The removal: take it off live, but only as far down as the write --
+        // a row the routine already removed, or a delta applied a second time,
+        // must not take another copy.
+        let mut doomed = base_n.saturating_sub(wrote_n);
+        while doomed > 0 && live_n > wrote_n {
+            let Some(i) = live.iter().position(|y| y == x) else {
+                break;
+            };
+            live.remove(i);
+            live_n -= 1;
+            doomed -= 1;
+        }
+        // The addition: bring live up to the written count.
+        while live_n < wrote_n {
+            live.push((*x).clone());
+            live_n += 1;
         }
     }
 }
@@ -1259,9 +1285,6 @@ impl PileDelta {
             apply_pile_edit(&mut h.hand, base, wrote);
         }
         if let Some((base, wrote)) = &self.deck {
-            if wrote.iter().any(|c| c.contains("共鸣")) || base.iter().any(|c| c.contains("共鸣"))
-            {
-            }
             apply_pile_edit(&mut h.deck, base, wrote);
         }
         if let Some((base, wrote)) = &self.grave {
@@ -1283,9 +1306,6 @@ impl PileDelta {
             }
         }
         if let Some((base, wrote)) = &self.deck {
-            if wrote.iter().any(|c| c.contains("共鸣")) || base.iter().any(|c| c.contains("共鸣"))
-            {
-            }
             if &h.deck == wrote {
                 h.deck = base.clone();
             } else {
@@ -1358,7 +1378,12 @@ impl PassBase {
     /// [`PlayCtx::restore_guests_to`]). Snapshot owners are additive and stay
     /// on the row.
     pub fn revert_guest_overlay(&mut self, own: &GuestOverlay, live: &World) {
-        for (i, k, base_v, wrote_v) in &own.state {
+        for (i, k, base_v, wrote_v, crossed) in &own.state {
+            // A non-crossing increase never sat on live; overriding the
+            // routine's value with the base would undo the routine too.
+            if !*crossed {
+                continue;
+            }
             let now = live
                 .st
                 .players
@@ -1557,7 +1582,7 @@ type SeenRows = std::collections::BTreeSet<(u8, usize, String, i32)>;
 /// turn-end list) drop entirely when an earlier row already carried them.
 fn retain_unseen_overlay_rows(seen: &mut SeenRows, o: &mut GuestOverlay) {
     o.state
-        .retain(|(i, k, _, _)| seen.insert((0, *i, k.clone(), 0)));
+        .retain(|(i, k, _, _, _)| seen.insert((0, *i, k.clone(), 0)));
     o.field
         .added
         .retain(|(ow, _, f)| seen.insert((1, 0, format!("{ow:?}"), f.uid)));
@@ -1653,7 +1678,13 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) {
             d.restore(r);
         }
     }
-    for (i, k, base_v, wrote_v) in state {
+    for (i, k, base_v, wrote_v, crossed) in state {
+        // A boundary increase the routine also moved never landed on live: the
+        // routine's own value there is already the whole truth, and the delta
+        // arithmetic below would subtract an increase live never carried.
+        if !crossed {
+            continue;
+        }
         let now =
             w.st.players
                 .get(i)
@@ -1670,7 +1701,6 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) {
             // An absent key reads as its `0` default.
             None => now.value == 0,
         };
-        if k == "stay" {}
         if now == wrote_v || back_at_base {
             // The routine left it: restore the base.
             match base_v {
@@ -1941,8 +1971,7 @@ impl GuestOverlay {
     /// request comes from live, which never carried the non-crossing
     /// increases, and the body reads them back.
     pub fn apply_state(&self, w: &mut World) {
-        for (i, k, _base, wrote) in &self.state {
-            if k == "stay" {}
+        for (i, k, _base, wrote, _) in &self.state {
             let Some(p) = w.st.players.get_mut(*i) else {
                 continue;
             };
@@ -1970,7 +1999,7 @@ impl GuestOverlay {
         for (i, name, base, wrote) in &self.tokens {
             write_token_row(w, *i, name, base.as_ref(), wrote.as_ref());
         }
-        for (i, k, _base, wrote) in &self.state {
+        for (i, k, _base, wrote, _) in &self.state {
             let Some(p) = w.st.players.get_mut(*i) else {
                 continue;
             };
@@ -1984,6 +2013,9 @@ impl GuestOverlay {
         }
         self.field.apply(w);
         self.board.apply(w);
+        if let Some(d) = &self.events {
+            d.apply(w);
+        }
         for (i, base, wrote) in &self.money {
             if let Some(p) = w.st.players.get_mut(*i) {
                 // A host move since the crossing is kept and the guest's own
@@ -2023,15 +2055,11 @@ impl GuestOverlay {
     }
 
     /// The restore twin of [`Self::apply`] (host routines may have written the
-    /// same surfaces meanwhile; those writes stay).
+    /// same surfaces meanwhile; those writes stay). Delegates to the one
+    /// revert implementation so the two twins cannot drift; `owners` stay,
+    /// as they do on `apply`.
     pub fn restore(&self, w: &mut World) {
-        self.field.restore(w);
-        for (i, name, base, wrote) in &self.tokens {
-            write_token_row(w, *i, name, wrote.as_ref(), base.as_ref());
-        }
-        for (name, base, wrote) in &self.rule_bonus {
-            set_rule_bonus(w, name, *wrote, *base);
-        }
+        revert_overlay_on(w, self.clone());
     }
 }
 
@@ -2932,7 +2960,6 @@ impl<'a> PlayCtx<'a> {
                 // routine moved it too -- keep only the guest's delta, on the
                 // pass-start base.
                 let now = live.map(|v| v.value);
-                if k == "stay" {}
                 if live != base_v && now != Some(wrote.value) {
                     wrote.value =
                         now.unwrap_or(0) + (wrote.value - base_v.map(|b| b.value).unwrap_or(0));
@@ -2963,7 +2990,7 @@ impl<'a> PlayCtx<'a> {
                         wrote.value = p.state_set(&k, wrote.value);
                     }
                 }
-                o.state.push((i, k, base_v, wrote));
+                o.state.push((i, k, base_v, wrote, crosses));
             }
         }
         o

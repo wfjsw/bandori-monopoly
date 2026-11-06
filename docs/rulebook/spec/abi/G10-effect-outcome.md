@@ -80,6 +80,14 @@ this one. What the draft got wrong:
 | R42 | A skill that teleports *after* its ask re-derived the farthest set from the landing on every re-run, and the recorded pick index then named a different tile （里美的决心 teleported 28 instead of 59）. | The pick is a `latch:` slot and the body reuses it while the seat stands on the landing — the `tsukushi_garden` marker rule (R28) for a post-ask move. |
 | R43 | A move that completed cleanly and was followed by a *later* request's pause was not rewound at the pass top (`pending_move` armed only for a paused `Move` row), so the re-run derived its destination from the landing and walked a second time (`nfo_face2_jump_and_share` gained 3000 instead of 1000). | The pass top rewinds the pre-position of every `Move` row this run applied, oldest first per mover (§6.3.1). |
 | R44 | The mark uid allocator (`next_mark_uid`) rode neither the board delta nor the commit, so a pass-top revert removed the rows but handed the allocator back and the re-run reused their uids (`mark_ref_dies_with_the_card_and_does_not_alias`). | `BoardDelta::apply` / `restore` raise `next_mark_uid` to one past the highest row, the way `FieldDelta` does for `next_card_uid`. |
+| R45 | A state row recorded a non-crossing increase against live and the revert subtracted its delta from live anyway, wiping a host write the guest never sat on (`1` raised by `2`, host set `5` → live came back `-1`). | The row carries `crossed`; a non-crossing row keeps live's value and the revert leaves it (§6.3.1). |
+| R46 | `merge_list` decided added/removed with `contains`, so appending a row the base already held (an event deck carries duplicates) was dropped, and the reverse lost a removal. | Counts per value; the removal only goes down to the written count and the addition brings live up to it. |
+| R47 | The `paid` fact compared `settle_tile()` with `entry.tile` -- the same number by definition -- so a rent an effect charged for a *different* tile while the settle was open counted as the settle's. | The test is the payment's own `p.tile` and the final payee (§6.1). |
+| R48 | A deferral record was keyed on `(event, player)` only, so a second draw of the same card for the same seat read the first draw's record as its own: the card was popped and filed nowhere and the release dropped the single record. | The `event` raise carries the draw's `ordinal` (copies of the card left in the deck after the pop) and the record, the claim and the release match on it (§6.2). |
+| R49 | `world_restore` rewrote state values bare, so a status removed between snapshot and restore came back with neither its `NEVER_NEGATIVE` floor nor its expiry. | `PlayerSnapshot` keeps whole `StateVar`s and the restore installs flags and expiry with the value (§6.5). |
+| R50 | `GuestOverlay::apply` (the journal's re-application path) skipped the `events` family the revert already restores. | `apply` applies the event delta too. |
+| R51 | `black_suits`' crystal latch returned on the bare uid without checking the borrowed instance still stood, so a destroyed CiRCLE instance left the borrow dead. | The latch only short-circuits while its instance is on the tile. |
+| R52 | `no_breakup`'s terminals derived the checkpoint as `BASE + 1` with nothing asserting it. | The body asserts the adjacency (`debug_assert`); the terminals keep the derivation because a latch written after the checkpoint is not inside it (§10.1 row 4). |
 | R35 | Every restore of the pass world (`Run::restore_from_world`, `restore_condition`, `restore_run_point`) dropped the body's `latch:` rows with it, so a cross-pass guard (`taki`'s reroll cap, stored under `latch:` keys as §6.5.1 requires) read `0` after each pause and the constant-die loop never reached it. | A restore is an undo of what the body derived; the latches are its frozen decisions, so each of the three paths re-lays the live `latch:` rows over the restored world (`World::latches` / `put_latches`, §6.5). |
 
 ## 1. Items
@@ -105,7 +113,7 @@ Book (`PPP:（有咲）等等等一下`):
 
 Current (`rules/cards/card-ppp/src/arisa_wait.rs`): the card registers only
 `On::Play` and `On::Action(Action::EventAfter(…))`. Nothing suspends an event.
-`draw_event` (`crates/game-core/src/engine/play.rs:5873`) pops, logs, waits,
+`draw_event` (`crates/game-core/src/engine/play.rs:5969`) pops, logs, waits,
 raises `event` (the public reveal), binds, runs the body, files the card and
 raises `eventAfter` — one synchronous pass with no suspension point and no second
 resolution path.
@@ -163,7 +171,7 @@ The settle-body stage cannot see a fact decided *after* it, and `settleAfter`
 cannot see whether rent was paid. The card needs the settle's own outcome
 bits. G02's `settle_outcome()` answers only `Settled` vs not and cannot say
 "body replaced" — it is `Cancelled` for a replaced body too
-(`play.rs:2741-2744`).
+(`play.rs:2758-2762`).
 
 #### 1.2.2 Student council check (rows 1428, 1449) — **landed by G02**
 
@@ -219,7 +227,7 @@ Book (`RAS:EXIST`):
 
 Current (`rules/cards/card-ras/src/exist.rs:65-72`): the latch is
 `On::Action(Action::Effect("target == owner && actor != owner", …))`. But
-`effect` is raised for **every** money movement too (`play.rs:4136-4140`) and
+`effect` is raised for **every** money movement too (`play.rs:4160`) and
 for any direct targeting, so:
 
 * a plain rent payment to the owner — `target == owner`, `actor != owner` —
@@ -255,7 +263,7 @@ also fires on a cancelled settle.
 ## 2. Shared root causes
 
 1. **A settle is a stage machine but its outcome is not state.** Branch points
-   (`play.rs:2654-2804`) read the return of each raise and throw the
+   (`play.rs:2669-2802`) read the return of each raise and throw the
    information away; later stages and terminal hooks see only the tile. Every
    consumer re-derives the outcome from proxies (mortgage bit, slot arms, hook
    order) and gets it wrong in a different way.
@@ -275,7 +283,7 @@ also fires on a cancelled settle.
 ## 3. Capability as an invariant
 
 **I-1 (deferral).** A deferred event card is neither lost nor duplicated:
-exactly one record exists per event, it resolves exactly once — at the
+exactly one record exists per drawn card, it resolves exactly once — at the
 deferring instance's owner's next turn start, or at the first turn start after
 that owner leaves the game — and its resolution names the deferring **instance**
 as the cause. The extra draw is an event draw attributed to a seat that is not
@@ -550,6 +558,9 @@ pub struct DeferredEvent {
     pub player: i32,
     /// The tile the draw stood on; the release resolves there.
     pub tile: i32,
+    /// The draw this record parked (the copies of the card the deck still
+    /// held after the pop); two draws of one card stay separate records.
+    pub ordinal: i32,
     /// The deferring instance's owner; only that seat's turn start is due.
     pub due_owner: i32,
     /// The deferring instance: release cause and `eventResolved` subject.
@@ -570,8 +581,14 @@ pub struct WorldSnapshot {
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub struct PlayerSnapshot { pub pos: i32, pub state: Vec<(String, i32)>, pub money: i32 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlayerSnapshot {
+    pub pos: i32,
+    /// Whole items: a restore puts the declaration (a floor, an expiry) back
+    /// with the number.
+    pub state: Vec<(String, StateVar)>,
+    pub money: i32,
+}
 ```
 
 `DeferredEvent` / `HostJournalEntry` / `WorldSnapshot` live in
@@ -581,7 +598,7 @@ Deserialize`. They sit inside `World` / `Pending`. `World` derives
 / `PlayerSnapshot` must derive the same or the container stops compiling;
 `Pending` derives `Debug, Clone, Serialize, Deserialize` (`mod.rs:310`), so
 `HostJournalEntry` needs `Debug` and `Clone` (it also derives `PartialEq` for
-the tests). `PlayerSnapshot` is `Copy` as well.
+the tests). `PlayerSnapshot` holds `Vec`s and is not `Copy`.
 
 ## 6. Engine wiring
 
@@ -593,20 +610,24 @@ the entry its terminal `outcome`. This group does not re-fix the counter; it
 extends the entry with the facts the body stage cannot see:
 
 * `SettleEntry` gains `body_replaced: bool`, `paid: bool`, `paid_value: i32`.
-* `SettleStage::RaiseSettleBody` (`play.rs:2729`): on `si.is_cancelled()`
-  (`:2741`), besides the existing `outcome = Cancelled`, set
+* `SettleStage::RaiseSettleBody` (`play.rs:2744`): on `si.is_cancelled()`
+  (`:2758`), besides the existing `outcome = Cancelled`, set
   `settle_stack[frame.stack_idx].body_replaced = true`. `RaiseSettle`'s cancel
-  branch (`:2670`) does **not** set it.
-* In `money_inner`, between the balance write (`play.rs:4662`) and the
-  `payAfter` raise (`:4695`), with the innermost entry (none open → skip):
-  `if p.rent && loss > 0 && self.settle_tile() == entry.tile as i32
-  && to == Some(entry.player as usize)` → `entry.paid = true; entry.paid_value =
-  entry.paid_value.saturating_add(loss);` (saturating: one settle can carry
-  several rent legs). A payment cancelled or reduced to 0 never reaches here.
-  The test uses the raise's `settle_tile` (`:4706`) and `to`, not the
-  payment's own `tile` — a redirect or a force-buy can make them differ.
-* `RaiseSettleBody` and `RaiseSettleAfter` / `RaiseTileResolved` (`:2729`,
-  `:2767`, `:2795`): the facts are built from the entry **before** the raise
+  branch (`:2669`) does **not** set it.
+* In `money_inner`, between the balance write (`play.rs:4685`) and the
+  `payAfter` raise (`:4733`), with the innermost entry (none open → skip):
+  `if rent && moved > 0` and the payment's own `p.tile == Some(e.tile)` and it
+  reached the entry's payee (`e.target >= 0 && to == Some(e.target as usize)`)
+  → `e.paid = true; e.paid_value = e.paid_value.saturating_add(moved);`
+  (saturating: one settle can carry several rent legs, and `moved` is the
+  figure actually transferred). A payment cancelled or reduced to 0 never
+  reaches here.
+  The test is the payment's own `tile` (a rent states it) and the final payee
+  -- `settle_tile()` is the entry's tile by definition and cannot tell a rent
+  an effect charged for a different tile, nor one a redirect carried
+  elsewhere.
+* `RaiseSettleBody` and `RaiseSettleAfter` / `RaiseTileResolved` (`:2744`,
+  `:2775`, `:2802`): the facts are built from the entry **before** the raise
   and passed as a field (`settle_facts = Some(SettleFacts { cancelled:
   entry.outcome == Cancelled && !entry.body_replaced, body_replaced:
   entry.body_replaced, paid: entry.paid, paid_value: entry.paid_value })`)
@@ -622,15 +643,25 @@ extends the entry with the facts the body stage cannot see:
 `event_defer` is a request. Its shim reads the live trigger's mirror
 (`st.wr().trigger()`) and answers 0 without a request when
 `kind != "event"`; otherwise it sends `EventDefer { event: trigger.card,
-player_id: trigger.player_id, tile: trigger.tile }`. At the apply:
+player_id: trigger.player_id, tile: trigger.tile, ordinal:
+trigger.ordinal }`. At the apply:
 
-* If a record for `(event, player_id)` exists: `deferrer_uid == uid` answers
-  **1** (the re-run of this same call) without pushing; any other uid answers
-  **0**. The record's existence is the claim, so two copies both at ≥3
-  crystals produce one record and one spend.
-* Otherwise push `DeferredEvent { event, player, tile, due_owner: seat,
-  deferrer_uid: uid, deferrer_card: card, by_card: seat, after_turn_key:
-  turn_key() }` onto `world.deferred_events` and answer 1.
+* If a record for the same **draw** (`event`, `player_id`, `ordinal`) exists:
+  `deferrer_uid == uid` answers **1** (the re-run of this same call) without
+  pushing; any other uid answers **0**. The record's existence is the claim,
+  so two copies both at ≥3 crystals produce one record and one spend.
+* Otherwise push `DeferredEvent { event, player, tile, ordinal, due_owner:
+  seat, deferrer_uid: uid, deferrer_card: card, by_card: seat,
+  after_turn_key: turn_key() }` onto `world.deferred_events` and answer 1.
+
+The `event` raise carries the draw's `ordinal`: the copies of the drawn card
+the deck still holds right after the pop. It is stable across a re-run (the
+deck rewinds with the pass, so the same pop happens again) but differs
+between two draws of the same card, so the second draw does not read the
+first one's record as its own — without it that card was popped off the deck
+and filed nowhere, and the release dropped the one record, losing an effect.
+The release passes the record's own `ordinal` back through `resolve_event`,
+and the record-retain matches it.
 
 The record is the "deferred" signal — no trigger flag, which would be lost
 when the hook drive halts and re-runs with the call skipped.
@@ -640,15 +671,18 @@ when the hook drive halts and re-runs with the call skipped.
 ```rust
 enum EventResolution { Deferred, Resolved }
 fn resolve_event(&mut self, card: String, player: usize, tile: i32,
-                 by: Option<i32>, cause: Option<i32>) -> Flow<EventResolution>
+                 ordinal: i32, by: Option<i32>, cause: Option<i32>)
+    -> Flow<EventResolution>
 ```
 
-1. `raise!(event, player, card = Some(card), tile = tile, by_card = by,
-   by_card_instance = cause)`.
-2. If a record now exists for `(card, player)` — a fresh deferral, including
-   the one that suspended this very call — answer `Deferred`: no bind, no
-   body, no filing, no `eventAfter`. The record is the whole signal, so the
-   re-run after a prompt finds it again and stays deferred.
+1. `raise!(event, player, card = Some(card), tile = tile, ordinal = ordinal,
+   by_card = by, by_card_instance = cause)`.
+2. If a record now exists for `(card, player, ordinal)` — a fresh deferral,
+   including the one that suspended this very call — answer `Deferred`: no
+   bind, no body, no filing, no `eventAfter`. The record is the whole signal,
+   so the re-run after a prompt finds it again and stays deferred; the
+   ordinal keeps a second draw of the same card from reading the first
+   draw's record and resolving nowhere.
 3. Otherwise run the existing resolution half verbatim: the `is_cancelled`
    branch (no bind, the activation flash marked negated), or `bind_event` +
    the body (including its expire/file paths); then file when neither the
@@ -661,7 +695,7 @@ it **returns without the refill** — the card is parked, not filed, so the
 refill waits for the release. On `Resolved` it does the existing
 eventAfter/refill/wait tail.
 
-The release (`turn_start`, `play.rs:793`, immediately after the `turnStart`
+The release (`turn_start`, `play.rs:803`, immediately after the `turnStart`
 raise and before the `out(i)` return) drains records where `due_owner == i &&
 turn_key() > after_turn_key`, plus records whose `due_owner` is out (any seat,
 the first turn start after the leave). For each: re-check `out(i)`; remove the
@@ -937,7 +971,7 @@ therefore consistent: the guest's own edits are harvested before the drive
 applies anything.
 
 Nested `play_card` moves the log into the nested store and adopts it back at
-the same places `next_answer` moves today (`hostfns.rs:3261-3296`), and
+the same places `next_answer` moves today (`host.rs:2009`, `:2347`), and
 `Admitted::Yes { next_answer }` becomes the log's advanced cursor.
 
 #### 6.3.6 The pile prefix
@@ -968,17 +1002,17 @@ whole body. `drive_inner_body_from` snapshots `cx.share_world()` at entry --
 free, a refcount bump -- and deep-clones it only at the first pile request, so
 pile-free drives pay nothing.
 
-### 6.4 Redirect fact (`wasm_rules.rs:6825-6920`)
+### 6.4 Redirect fact (`wasm_rules.rs:7599-7800`)
 
 In `target_player`, the fold reassigns `let mut p = p` in place, so the
 declared seat must be copied **before** the loop (`let declared = p`). Inside
 the loop the fold already requires `to != p && to != by_player && live`; on
 each accepted mutation set `landed = Some(declared);` (idempotent — a
 second redirect still reports the declared seat, not the intermediate one).
-Pass `landed` into `target_window` (`:6896`), which stamps `t.redirected_from`
+Pass `landed` into `target_window` (`:7755`), which stamps `t.redirected_from`
 on `targeted`, `effect` and `target`; a self pick (`p == by_player`) leaves it
 `None` because the fold's own condition excludes it. The money-raised `effect`
-(`play.rs:4136-4140`) leaves it `None`; `target_tile` has no redirect fold and
+(`play.rs:4160`) leaves it `None`; `target_tile` has no redirect fold and
 passes `None`.
 
 A redirect link whose mutation applied but which a counter then cancelled is
@@ -989,8 +1023,9 @@ the link's negation. Recorded as Q3.
 
 * `world_snapshot()`: `key = world.next_world_snapshot_key; ++` (the counter
   starts at `1`, so `0` means "no snapshot" to a caller); store
-  `WorldSnapshot` of `players[*].pos`, `players[*].state` (key/value pairs, the
-  projection `TurnSnapshot` uses), `players[*].money`, `st.owners`,
+  `WorldSnapshot` of `players[*].pos`, `players[*].state` (whole items, not the
+  bare values of the `TurnSnapshot` projection: a restore has to bring a
+  floor or an expiry back with the number), `players[*].money`, `st.owners`,
   `st.houses`, `st.mortgaged`; record `world_snapshot_owners[uid]` for cleanup;
   answer the key.
 * `world_restore(key)`: write them back, absolute (idempotent). Positions are
@@ -1000,7 +1035,7 @@ the link's negation. Recorded as Q3.
 * `world_snapshot_drop(key)`: remove the snapshot and the owner row.
 * All three are requests (§5.5), so they land on live and are not lost when
   the calling hook prompts; a restore is a plain value write, never a move.
-* `destroy_instance_units` (`ops.rs:2380`) additionally drops every key under
+* `destroy_instance_units` (`ops.rs:2405`) additionally drops every key under
   `world_snapshot_owners[uid]` (a stale key otherwise leaks the world clone
   into every later save). Hand plays have uid `-1` and no cleanup; the card
   drops its key itself (§7.6). A placement (`place_card_on` / `place_card_at`)
@@ -1020,6 +1055,9 @@ and the terminal's re-run still finds it (§7.6). The mirror-image constraint is
 that a value the terminal needs after its request can only be written through a
 key that is *inside* the restored snapshot; the recorded checkpoint key is
 therefore produced by a second snapshot, not by a card-chosen string (§6.5.1).
+Because that key cannot be stored by the body it is derived as `BASE + 1` by
+the terminals, which is why nothing may allocate a snapshot between the two
+calls (`no_breakup` asserts the adjacency).
 
 The opposite direction holds too when the restore is not a card's own snapshot
 but the engine's pass rebuild: the guest copy restore (`Run::restore_from_world`),
@@ -1365,11 +1403,13 @@ only the number moves in the ordinary case.
 | 1 | `g10_deferred_release_banks_no_crystal` | the card's own release adds 0 crystals (`by_card_instance`) |
 | 1 | `g10_foreign_event_banks_one_crystal` | any non-self `eventAfter` adds exactly 1 |
 | 1 | `g10_two_copies_defer_once` | both at ≥3 → one record, 3 crystals spent total, the loser spends nothing |
+| 1 | `g10_two_draws_of_one_event_both_park` | the same card drawn twice for one seat → two records, both resolve at the turn start |
 | 1 | `g10_deferred_extra_draw_is_an_event_at_the_station` | after the release an `event` is drawn for another seat with `tile == 流星堂`; bonsai gains a fire pot |
 | 1 | `g10_deferred_record_survives_save_restore` | save mid-deferral, restore, the turn start releases |
 | 2 | `g10_settle_facts_carry_cancelled_to_tile_resolved` | counter-cancelled settle → `tileResolved` reads cancelled, no `settleAfter` |
 | 2 | `g10_settle_facts_split_cancelled_and_replaced` | a replaced body reads `body_replaced` and not `cancelled` |
 | 2 | `g10_settle_facts_carry_paid_and_value` | rent settle → `paid` true, `paid_value` is the moved figure |
+| 2 | `g10_settle_facts_ignore_another_tiles_rent` | a rent an effect pays for another tile inside the settle → `paid` false |
 | 2 | `g10_door_tax_runs_after_a_body_replace` | Parking Space replaced the body → the tax still transfers |
 | 2 | `g10_door_tax_skips_after_a_paid_rent` | ordinary rent → exactly one surcharge |
 | 2 | `g10_door_tax_on_the_start_tile` | settle on 梦开始的地方 → tax due, no rent |
@@ -1529,7 +1569,7 @@ wrong-answer trace:
 * **2.** The Door tax is wrong in both directions its TODO names: a
   body replacer drops the tax, a mortgaged tile charges by hook order, because
   `settle_outcome()` is `Cancelled` for a replaced body too
-  (`play.rs:2741-2744`) and the card must otherwise read `mortgaged_of`.
+  (`play.rs:2758-2762`) and the card must otherwise read `mortgaged_of`.
 * **3.** The four-step trace in §1.3: the nested prompt is answered, the
   re-run's `request_or_pause` finds the prompt's answer at the request's
   cursor, returns it, and the settle — and the bought deed — never happen.
@@ -1539,7 +1579,7 @@ wrong-answer trace:
   origin and the `RedirectValue` payload is `{ payee }` alone
   (`card-sdk/src/payload.rs:84`).
 * **5.** `no_breakup` reverts nothing. `turn_snapshot` exists, but it is
-  captured at turn start (`play.rs:778`) and is about to be restored by
+  captured at turn start (`play.rs:787`) and is about to be restored by
   「像往常一样」 as well, so mid-turn it is both stale and claimed.
 
 ### 13.3 Every candidate surface, and why it fails
@@ -1552,7 +1592,7 @@ wrong-answer trace:
 | a `settleAfter`-side `payAfter` hook for `paid` | a hook is a card body with its own store and runs before other cards' guards; the fact must pre-exist every guard (A4) |
 | an `eventAfter` slot read for the cause | the release is an `event` resolution; an `eventAfter` read cannot separate the card's own event from a foreign one, and carries no instance |
 | `On::Schedule` for deferral | card-owned, opens a card entry; an event release must re-enter the event pipeline (`bind_event`, filing, `eventAfter`), which a schedule does not |
-| the event discard / deck for deferral | filing resolves the card immediately on the ordinary path; leaving it in the deck loses "which drawer, which tile" and can reshuffle it before release (`ops.rs:1949`) |
+| the event discard / deck for deferral | filing resolves the card immediately on the ordinary path; leaving it in the deck loses "which drawer, which tile" and can reshuffle it before release (`ops.rs:1975`) |
 | `event_active` / `event_top` for parking | both describe a card that is mid-resolution and bound; a deferred one must be outside the pipeline until release |
 | an `On::TurnStart` entry on the deferring copy | it fires at every owner turn start and could not tell whether this copy deferred an event, which one, or that the turn key is later; still needs the record (and fires after the card left) |
 | `state` / `prop` for the checkpoint | `StateVar.value` is `i32` (`state.rs:375`); a snapshot is a board copy with a card-chosen count of them |
@@ -1748,6 +1788,14 @@ Two shapes differ from the text above and are the ones the code uses:
   under it. Every crossing guard is three-way -- `live == base` takes the guest
   value, `live == wrote` leaves it, otherwise the delta `wrote - base` is added
   -- so an effect that already moved the value is never doubled.
+  * **A state row says whether it crossed.** An increase at a pause boundary
+    stays on the run copy (a status the body just applied must not gate its own
+    follow-on money), so live never carried it. The row keeps the run copy's
+    value (`wrote`) but is marked `crossed: false`, and the revert leaves live
+    to the routine: the three-way delta would otherwise subtract an increase
+    live never held (`1` raised by `2`, then set to `5` by the routine, came
+    back as `base + (5 - 7)`). The commit pass and a routine that moved the key
+    before the pause still cross and revert normally.
   * **A surface is reverted once, not once per row.** Several pauses of one
     drive can record the same surface against the same base, and the rows are
     not dropped at a pause -- a later pause has no stable point to re-capture

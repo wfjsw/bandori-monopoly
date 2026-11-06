@@ -64,32 +64,36 @@ pub fn cause_on_event_after(record_cause: i32) -> i32 {
     record_cause
 }
 
-const MAX_DEFERRED: usize = 2;
+const MAX_DEFERRED: usize = 3;
 
 /// One parked event record.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Rec {
     pub event: i32,
     pub player: i32,
+    /// The draw this record parked; two draws of one card stay separate.
+    pub ordinal: i32,
     pub due_owner: i32,
     pub deferrer_uid: i32,
     pub after_turn_key: i32,
 }
 
-/// §6.2's claim. `1` = the running instance owns the record (a fresh pair
+/// §6.2's claim. `1` = the running instance owns the record (a fresh draw
 /// pushes one); `0` = someone else already has it or the store is full. A
-/// re-run of the same instance answers `1` and pushes nothing.
+/// re-run of the same instance on the same draw answers `1` and pushes
+/// nothing; another draw of the same card claims a record of its own.
 pub fn defer(
     recs: &mut [Rec; MAX_DEFERRED],
     n: &mut usize,
     event: i32,
     player: i32,
+    ordinal: i32,
     uid: i32,
     due_owner: i32,
     turn_key: i32,
 ) -> i64 {
     for r in recs.iter().take(*n) {
-        if r.event == event && r.player == player {
+        if r.event == event && r.player == player && r.ordinal == ordinal {
             return (r.deferrer_uid == uid) as i64;
         }
     }
@@ -99,6 +103,7 @@ pub fn defer(
     recs[*n] = Rec {
         event,
         player,
+        ordinal,
         due_owner,
         deferrer_uid: uid,
         after_turn_key: turn_key,

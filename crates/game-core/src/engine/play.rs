@@ -4716,17 +4716,15 @@ impl PlayCtx<'_> {
         // window only when the payer lost money.
         let moved = if p.from.is_some() { loss } else { gain };
         // The settle's own record of a rent payment that reached its owner on
-        // its tile (design G10 §6.1). The raise's `settle_tile` and `to` are
-        // the test, not the payment's own tile: a redirect or a force-buy can
-        // make them differ.
-        {
-            let tile = self.settle_tile();
-            if rent && moved > 0 {
-                if let Some(e) = self.settle_stack.last_mut() {
-                    if tile == e.tile as i32 && e.target >= 0 && to == Some(e.target as usize) {
-                        e.paid = true;
-                        e.paid_value = e.paid_value.saturating_add(moved);
-                    }
+        // its tile (design G10 §6.1). The payment's own `tile` (rent states
+        // it) and the final payee are the test -- `settle_tile()` alone is the
+        // settle's tile by definition, so it cannot tell a rent an effect
+        // charged for a *different* tile, or one a redirect carried elsewhere.
+        if rent && moved > 0 {
+            if let (Some(pt), Some(e)) = (p.tile, self.settle_stack.last_mut()) {
+                if pt == e.tile && e.target >= 0 && to == Some(e.target as usize) {
+                    e.paid = true;
+                    e.paid_value = e.paid_value.saturating_add(moved);
                 }
             }
         }
@@ -5927,14 +5925,16 @@ impl PlayCtx<'_> {
     }
 
     /// The `event` link an `event_defer` claims (design G10 §6.2): while a
-    /// record for `(event, player)` exists the draw stays parked and the
-    /// re-run answers `Deferred` again. `Ok(1)` = claimed by this instance,
-    /// `Ok(0)` = already claimed by another one.
+    /// record for this draw (`event`, `player`, `ordinal`) exists the draw
+    /// stays parked and the re-run answers `Deferred` again. `Ok(1)` =
+    /// claimed by this instance, `Ok(0)` = already claimed by another one.
+    #[allow(clippy::too_many_arguments)]
     pub fn card_event_defer(
         &mut self,
         event: String,
         player: i32,
         tile: i32,
+        ordinal: i32,
         uid: i32,
         seat: i32,
         card: &str,
@@ -5943,7 +5943,7 @@ impl PlayCtx<'_> {
             .w
             .deferred_events
             .iter()
-            .find(|d| d.event == event && d.player == player);
+            .find(|d| d.event == event && d.player == player && d.ordinal == ordinal);
         if let Some(d) = existing {
             return (d.deferrer_uid == uid) as i32;
         }
@@ -5952,6 +5952,7 @@ impl PlayCtx<'_> {
             event,
             player,
             tile,
+            ordinal,
             due_owner: seat,
             deferrer_uid: uid,
             deferrer_card: card.to_string(),
@@ -5974,6 +5975,11 @@ impl PlayCtx<'_> {
             self.w.log("text", i as i32, Msg::new("log.no_events"));
             return Ok(());
         };
+        // The draw's identity: the copies of this card the deck still holds
+        // right after the pop. Stable across a re-run (the deck rewinds with
+        // the pass, so the same pop happens again) and distinct between two
+        // draws of the same card, which is what the deferral record needs.
+        let ordinal = self.w.event_deck.iter().filter(|e| *e == &id).count() as i32;
         self.w
             .log(
                 "event",
@@ -5986,7 +5992,8 @@ impl PlayCtx<'_> {
         self.wait(3.0);
         // Face-down slot on the public `eventTop` view: consumed by this draw.
         self.w.st.event_top.retain(|e| e != &id);
-        if self.resolve_event(id, i, tile, None, cause, None)? == EventResolution::Deferred {
+        if self.resolve_event(id, i, tile, ordinal, None, cause, None)? == EventResolution::Deferred
+        {
             // The card is parked, not filed: the release does the tail.
             return Ok(());
         }
@@ -6001,11 +6008,13 @@ impl PlayCtx<'_> {
     /// raise, the deferral check, the body (or the negation), the filing and
     /// `eventAfter`. `cause` is the deferring instance on a release; it is
     /// `None` on a draw.
+    #[allow(clippy::too_many_arguments)]
     fn resolve_event(
         &mut self,
         id: String,
         i: usize,
         tile: i32,
+        ordinal: i32,
         by: Option<i32>,
         cause: Option<i32>,
         deferrer_card: Option<&str>,
@@ -6016,16 +6025,19 @@ impl PlayCtx<'_> {
             i,
             card = Some(id.clone()),
             tile = tile,
+            ordinal = ordinal,
             by_card = by,
             by_card_instance = cause
         )?;
         // The record is the whole "deferred" signal: a re-run of the very
-        // call that suspended finds it again (design G10 §6.2).
+        // call that suspended finds it again (design G10 §6.2). The ordinal
+        // keeps a second draw of the same card for the same seat from reading
+        // the first draw's record as its own.
         if self
             .w
             .deferred_events
             .iter()
-            .any(|d| d.event == id && d.player == i as i32)
+            .any(|d| d.event == id && d.player == i as i32 && d.ordinal == ordinal)
         {
             let _ = deferrer_card;
             return Ok(EventResolution::Deferred);
@@ -6097,9 +6109,9 @@ impl PlayCtx<'_> {
             .cloned()
             .collect();
         for rec in due {
-            self.w
-                .deferred_events
-                .retain(|d| !(d.event == rec.event && d.player == rec.player));
+            self.w.deferred_events.retain(|d| {
+                !(d.event == rec.event && d.player == rec.player && d.ordinal == rec.ordinal)
+            });
             if self.out(i) {
                 return Ok(());
             }
@@ -6107,6 +6119,7 @@ impl PlayCtx<'_> {
                 rec.event.clone(),
                 rec.player.max(0) as usize,
                 rec.tile,
+                rec.ordinal,
                 Some(rec.by_card),
                 Some(rec.deferrer_uid),
                 Some(rec.deferrer_card.as_str()),
@@ -6163,7 +6176,7 @@ impl PlayCtx<'_> {
                 .iter()
                 .map(|p| crate::engine::PlayerSnapshot {
                     pos: p.pos,
-                    state: p.state.iter().map(|(k, v)| (k.clone(), v.value)).collect(),
+                    state: p.state.iter().map(|(k, v)| (k.clone(), *v)).collect(),
                     money: p.money,
                 })
                 .collect(),
@@ -6207,7 +6220,14 @@ impl PlayCtx<'_> {
                 }
             }
             for (k, v) in &p.state {
-                live.state_set(k, *v);
+                // The declaration travels with the value: a key the snapshot
+                // carried a floor or an expiry for must come back floored and
+                // expiring, not as a fresh bare counter, and one the snapshot
+                // had without a flag loses the one a later write gave it
+                // (`state_set` refills the key's own default on a `0`).
+                live.state_set_flags(k, v.flags);
+                live.state_set_expires(k, v.expires);
+                live.state_set(k, v.value);
             }
         }
         self.w.st.owners = snap.owners;

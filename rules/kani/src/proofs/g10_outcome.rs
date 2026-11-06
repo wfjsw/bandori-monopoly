@@ -195,6 +195,7 @@ fn any_rec() -> Rec {
     Rec {
         event: 0,
         player: 0,
+        ordinal: 0,
         due_owner: 1,
         deferrer_uid: 0,
         after_turn_key: 0,
@@ -202,31 +203,38 @@ fn any_rec() -> Rec {
 }
 
 /// A second instance's claim answers 0 and pushes nothing; the same instance's
-/// re-run answers 1 and pushes nothing.
+/// re-run answers 1 and pushes nothing; a second draw claims its own record.
 #[kani::proof]
 pub fn g10_defer_is_once() {
-    let mut recs = [any_rec(); 2];
+    let mut recs = [any_rec(); 3];
     let mut n = 0usize;
-    let first = defer(&mut recs, &mut n, 7, 0, 3, 1, 0);
+    let first = defer(&mut recs, &mut n, 7, 0, 0, 3, 1, 0);
     kassert!(first == 1, "the first claim wins");
     kassert!(n == 1, "one record");
 
     // The same instance's re-run.
-    let again = defer(&mut recs, &mut n, 7, 0, 3, 1, 0);
+    let again = defer(&mut recs, &mut n, 7, 0, 0, 3, 1, 0);
     kassert!(again == 1, "the owner's re-run still answers 1");
     kassert!(n == 1, "and pushes nothing");
 
     // Another instance.
-    let other = defer(&mut recs, &mut n, 7, 0, 4, 1, 0);
+    let other = defer(&mut recs, &mut n, 7, 0, 0, 4, 1, 0);
     kassert!(other == 0, "a second instance loses");
     kassert!(n == 1, "and pushes nothing");
 
-    // Another pair claims its own record.
-    let pair = defer(&mut recs, &mut n, 7, 1, 5, 1, 0);
-    kassert!(pair == 1, "a fresh pair claims");
+    // Another draw of the same card for the same seat claims its own record
+    // (without the ordinal it read the first draw's record as its own and the
+    // card resolved nowhere).
+    let redraw = defer(&mut recs, &mut n, 7, 0, 1, 4, 1, 0);
+    kassert!(redraw == 1, "a second draw claims");
     kassert!(n == 2, "its own record");
+
+    // Another pair claims its own record.
+    let pair = defer(&mut recs, &mut n, 7, 1, 0, 5, 1, 0);
+    kassert!(pair == 1, "a fresh pair claims");
+    kassert!(n == 3, "a third record");
     kassert!(
-        recs[0].deferrer_uid == 3 && recs[1].deferrer_uid == 5,
+        recs[0].deferrer_uid == 3 && recs[1].deferrer_uid == 4 && recs[2].deferrer_uid == 5,
         "owners"
     );
 }
@@ -236,11 +244,11 @@ pub fn g10_defer_is_once() {
 #[kani::proof]
 #[kani::should_panic]
 pub fn g10_defer_any_claims_mutant() {
-    let mut recs = [any_rec(); 2];
+    let mut recs = [any_rec(); 3];
     let mut n = 0usize;
-    defer(&mut recs, &mut n, 7, 0, 3, 1, 0);
+    defer(&mut recs, &mut n, 7, 0, 0, 3, 1, 0);
     kassert!(
-        defer(&mut recs, &mut n, 7, 0, 4, 1, 0) == 1,
+        defer(&mut recs, &mut n, 7, 0, 0, 4, 1, 0) == 1,
         "anyone claims"
     );
 }
@@ -249,10 +257,10 @@ pub fn g10_defer_any_claims_mutant() {
 #[kani::proof]
 #[kani::should_panic]
 pub fn g10_defer_repushes_mutant() {
-    let mut recs = [any_rec(); 2];
+    let mut recs = [any_rec(); 3];
     let mut n = 0usize;
-    defer(&mut recs, &mut n, 7, 0, 3, 1, 0);
-    defer(&mut recs, &mut n, 7, 0, 3, 1, 0);
+    defer(&mut recs, &mut n, 7, 0, 0, 3, 1, 0);
+    defer(&mut recs, &mut n, 7, 0, 0, 3, 1, 0);
     kassert!(n == 2, "the re-run pushed");
 }
 

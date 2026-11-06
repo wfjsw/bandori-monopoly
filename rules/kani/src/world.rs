@@ -661,6 +661,8 @@ pub struct DeferredEvent {
     pub event: i32,
     pub player: i32,
     pub tile: i32,
+    /// The draw this record parked; two draws of one card differ by it.
+    pub ordinal: i32,
     pub due_owner: i32,
     pub deferrer_uid: i32,
     pub after_turn_key: i32,
@@ -672,6 +674,7 @@ impl DeferredEvent {
             event: 0,
             player: -1,
             tile: -1,
+            ordinal: 0,
             due_owner: -1,
             deferrer_uid: -1,
             after_turn_key: 0,
@@ -944,6 +947,8 @@ pub struct World {
     pub trig_kind: &'static str,
     pub trig_target: i32,
     pub trig_tile: i32,
+    /// The `event` draw's ordinal (copies of the card still in the deck).
+    pub trig_ordinal: i32,
     pub trig_cancelled: bool,
     pub trig_negate: bool,
     /// 真奈 join (CH-05): the seat a joiner's self-targeted effects are
@@ -1157,6 +1162,7 @@ impl World {
             trig_kind: "",
             trig_target: -1,
             trig_tile: -1,
+            trig_ordinal: 0,
             trig_cancelled: false,
             trig_negate: false,
             trig_join_redirect: -1,

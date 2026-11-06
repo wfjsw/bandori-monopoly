@@ -1112,9 +1112,15 @@ pub fn draw_event_as<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result
 /// Suspend the `event` link this hook runs on. Reads the live trigger's
 /// mirror and answers 0 without a request on any other kind.
 pub fn event_defer<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    let (kind, event, player_id, tile) = {
+    let (kind, event, player_id, tile, ordinal) = {
         let t = c.st().wr().trigger();
-        (t.kind.clone(), t.card.clone(), t.player_id, t.tile)
+        (
+            t.kind.clone(),
+            t.card.clone(),
+            t.player_id,
+            t.tile,
+            t.ordinal,
+        )
     };
     if kind != card_sdk::abi::TriggerKind::Event {
         return Ok(0);
@@ -1124,6 +1130,7 @@ pub fn event_defer<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
         event,
         player_id,
         tile,
+        ordinal,
     };
     crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }

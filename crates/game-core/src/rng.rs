@@ -276,8 +276,6 @@ impl Rng {
     }
 
     pub fn next_u64(&mut self) -> u64 {
-        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let seq = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         match &mut self.algo {
             Algo::Xoshiro { s } => {
                 let result = s[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
@@ -314,12 +312,7 @@ impl Rng {
         if let Some(face) = self.loaded.pop_front() {
             return face.clamp(1, sides.max(1));
         }
-        let st = match &self.algo {
-            Algo::Xoshiro { s } => s[0],
-            _ => 0,
-        };
-        let v = self.below(sides.max(1) as usize) as i32 + 1;
-        v
+        self.below(sides.max(1) as usize) as i32 + 1
     }
 
     /// Uniform in `[0, 1)`.

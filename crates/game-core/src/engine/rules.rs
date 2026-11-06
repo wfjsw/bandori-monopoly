@@ -442,6 +442,11 @@ pub struct Trigger {
     /// creating instance); never restamped per hook job -- the job's own
     /// instance is `self_uid()`.
     pub instance: i32,
+    /// The draw's ordinal on an `event` raise (how many copies of the drawn
+    /// card were still in the deck when it was popped), else `0`. A deferral
+    /// record carries it so a re-run of the same draw matches while a second
+    /// draw of the same card for the same seat does not.
+    pub ordinal: i32,
     /// The tile of the innermost open settle, or `-1` when none is open. Not a
     /// pay-only fact -- `settleBody` / `settleAfter` / `tileResolved` carry it
     /// with no `pay` payload, and `settleAfter` raises after the entry popped.
@@ -575,6 +580,7 @@ impl Trigger {
             name: None,
             uid: 0,
             instance: -1,
+            ordinal: 0,
             settle_tile: -1,
             outcome: None,
             by_card_instance: None,

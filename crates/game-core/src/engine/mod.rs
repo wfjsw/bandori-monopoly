@@ -2900,7 +2900,6 @@ fn run(cx: &mut PlayCtx, r: &Routine) -> Flow<()> {
         }
         Routine::Act(i, m) => {
             let i = *i;
-            let pos = cx.w.st.players[i].pos.max(0) as usize;
             match m.act.as_str() {
                 "roll" => {
                     let turn = cx.w.st.turn as usize;
@@ -2932,10 +2931,6 @@ fn run(cx: &mut PlayCtx, r: &Routine) -> Flow<()> {
 fn cant_act(cx: &PlayCtx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
     let st = &cx.w.st;
     let my_turn = cx.playing() && st.turn == i as i32;
-    let pos = st.players[i].pos;
-    let moved_off = |key: &str| {
-        (m.value > 0 && m.value != pos).then(|| Msg::new(key).tile("was", m.value).tile("now", pos))
-    };
     match m.act.as_str() {
         "roll" => {
             if !cx.playing() || st.step != stage::OPS || busy {

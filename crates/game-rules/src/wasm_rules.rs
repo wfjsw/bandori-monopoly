@@ -3393,10 +3393,6 @@ struct DriveInline<M: CardModules> {
     call: Call,
     card_id: *const str,
     halt: Option<Halt>,
-    /// Prompts this run answered inline, in consumption order -- appended to
-    /// the drive's answer log when the guest call returns, so the next run
-    /// (there is one per `HostRequest`) finds them instead of asking again.
-    answers: Vec<i32>,
 }
 
 impl<M: CardModules> DriveInline<M> {
@@ -3429,9 +3425,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
                     .copied()
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback);
-                let v = recorded_answer(kind, &items, v);
-                self.answers.push(v);
-                Some(v)
+                Some(recorded_answer(kind, &items, v))
             }
             Err(h) => {
                 self.halt = Some(h);
@@ -4195,7 +4189,6 @@ impl<M: CardModules> RulesBridge<M> {
                 call: call.clone(),
                 card_id: card_id as *const str,
                 halt: None,
-                answers: Vec::new(),
             });
             let cx_ptr = cx as *mut PlayCtx<'_>;
             let mut announce = |w: &mut crate::Run, entry: i32| {
@@ -5476,8 +5469,9 @@ impl<M: CardModules> RulesBridge<M> {
                 event,
                 player_id,
                 tile,
+                ordinal,
             } => {
-                let v = cx.card_event_defer(event, player_id, tile, uid, seat, card_id);
+                let v = cx.card_event_defer(event, player_id, tile, ordinal, uid, seat, card_id);
                 return Ok(v);
             }
             HostRequest::WorldSnapshot => {
@@ -9989,6 +9983,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         player_id: t.player_id,
         target: t.target,
         tile: t.tile,
+        ordinal: t.ordinal,
         value: t.value,
         fold: t.fold,
         fold_input: t.fold_input,

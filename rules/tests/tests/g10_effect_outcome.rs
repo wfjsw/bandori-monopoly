@@ -210,6 +210,33 @@ fn g10_foreign_event_banks_one_crystal() {
     assert_eq!(t.crystals(0, ARISA), Some(1), "another card's event banks");
 }
 
+/// Two draws of the *same* card for the same seat are two records and both
+/// resolve. Keyed only on `(event, player)` the second draw read the first
+/// draw's record as its own: the card was popped and filed nowhere, and the
+/// release dropped the single record.
+#[test]
+fn g10_two_draws_of_one_event_both_park() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, ARISA);
+    t.set_crystals(0, ARISA, 6);
+    t.set_event_deck(&["A！A！O！", "A！A！O！"]);
+    until_turn(&mut t, 0);
+    t.give_play(0, "TEST:drawTwice").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        deferred(&t),
+        2,
+        "one record per draw: {:?}",
+        t.recent_keys(30)
+    );
+    assert_eq!(t.crystals(0, ARISA), Some(0), "both claims spent");
+    pass(&mut t, 0);
+    until_turn(&mut t, 0);
+    drain(&mut t);
+    assert_eq!(deferred(&t), 0, "both released: {:?}", t.recent_keys(30));
+    assert!(t.event_in_play("A！A！O！"), "the released event resolved");
+}
+
 #[test]
 fn g10_two_copies_defer_once() {
     let mut t = Table::vanilla(2);
@@ -400,6 +427,33 @@ fn g10_settle_facts_carry_paid_and_value() {
     assert_eq!(c, 0);
     assert_eq!(b, 0);
     assert_eq!(t.money(0), 10_000 - rent);
+}
+
+/// `paid` is the settle's **own** rent: a rent an effect charges for another
+/// tile while the settle is open is not it. Used to compare `settle_tile()`
+/// with itself, so the tile half was vacuous and this counted.
+#[test]
+fn g10_settle_facts_ignore_another_tiles_rent() {
+    let tile_at = tile("Space");
+    let other = 6usize;
+    let mut t = Table::vanilla(3);
+    t.place_raw(0, PROBE);
+    t.own(0, &[tile_at, other]);
+    // The Parking body replaces the settle's own, so its rent never commits.
+    place_on_tile(&mut t, 0, PARKING, tile_at);
+    place_on_tile(&mut t, 0, "TEST:payOtherTile", tile_at);
+    land_on(&mut t, 1, tile_at);
+    drain(&mut t);
+    let (c, b, p, _) = last_facts(&t);
+    assert_eq!(b, 1, "the body was replaced: {:?}", t.recent_keys(20));
+    assert_eq!(
+        p,
+        0,
+        "another tile's rent is not the settle's: {:?}",
+        t.recent_keys(20)
+    );
+    assert!(t.money(1) < 10_000, "the other rent did move money");
+    assert_eq!(c, 0);
 }
 
 #[test]

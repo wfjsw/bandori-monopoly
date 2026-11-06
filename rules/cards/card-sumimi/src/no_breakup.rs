@@ -133,6 +133,13 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     let base = ctx::world_snapshot()?;
     ctx::set_slot(player_id, BASE, base);
     let checkpoint = ctx::world_snapshot()?;
+    // The terminals re-read the pair from `BASE` after a restore has put the
+    // slot back, so the checkpoint is carried as `BASE + 1` rather than in a
+    // latch of its own (a latch written *after* the checkpoint is not inside
+    // it and the restore would clear it). Nothing may allocate a snapshot
+    // between the two calls for that to hold -- `world_snapshot` is the only
+    // allocator and the two are adjacent.
+    debug_assert_eq!(checkpoint, base + 1);
     if ctx::slot(player_id, JUDGED) != checkpoint {
         // Not this shot yet. A re-run after the terminal already judged and
         // restored it re-consumes the same answers and leaves the marker down,

@@ -4149,7 +4149,7 @@ pub fn arm_draw_event_as(a: Args) -> i64 {
     1
 }
 
-/// `ctx::event_defer` -- claim the `(event, player)` pair for the running
+/// `ctx::event_defer` -- claim the `(event, player, draw)` triple for the running
 /// instance (design G10 §6.2). Only on an `event` trigger with a card; an
 /// existing record answers 1 for its own claimer and 0 for anyone else, so a
 /// re-run of the same instance never pushes a second record.
@@ -4162,7 +4162,10 @@ pub fn arm_event_defer(_a: Args) -> i64 {
         let player = w.trig_player;
         let mut i = 0;
         while i < w.deferred_n as usize {
-            if w.deferred[i].event == event && w.deferred[i].player == player {
+            if w.deferred[i].event == event
+                && w.deferred[i].player == player
+                && w.deferred[i].ordinal == w.trig_ordinal
+            {
                 return (w.deferred[i].deferrer_uid == w.bound_uid) as i64;
             }
             i += 1;
@@ -4175,6 +4178,7 @@ pub fn arm_event_defer(_a: Args) -> i64 {
             event,
             player,
             tile: w.trig_tile,
+            ordinal: w.trig_ordinal,
             due_owner: w.turn_player,
             deferrer_uid: w.bound_uid,
             after_turn_key: w.turn_key,

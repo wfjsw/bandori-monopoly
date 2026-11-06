@@ -38,6 +38,9 @@ pub struct Trigger {
     pub target: i32,
     /// The tile this trigger is about (settled on, passed, mortgaged, ...).
     pub tile: i32,
+    /// On an `event` raise: how many copies of the drawn card were still in
+    /// the deck when it was popped. `0` elsewhere.
+    pub ordinal: i32,
     /// The amount (`t.Pay.amount` on pay triggers). On a fold stage this is
     /// the **composed** figure and `fold_input` is what bodies read.
     pub value: i32,
@@ -282,6 +285,7 @@ impl Default for Trigger {
             name: None,
             uid: 0,
             instance: -1,
+            ordinal: 0,
             reason: None,
             join_redirect: None,
             join_used: false,
@@ -359,6 +363,7 @@ impl Trigger {
             name: None,
             uid: 0,
             instance: -1,
+            ordinal: 0,
             reason: None,
             join_redirect: None,
             join_used: false,

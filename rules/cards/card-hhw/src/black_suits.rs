@@ -154,7 +154,11 @@ fn sync_circle_instance(player_id: i32, group: i32) {
     // attach another copy -- unbounded.
     let recorded = ctx::slot(player_id, BORROWED);
     if has {
-        if recorded > 0 {
+        // Only a latch whose instance is still on the tile counts: an effect
+        // can destroy the borrowed board card while the crystal (and so
+        // `has`) stays, and returning on the bare uid would leave the tile
+        // without a CiRCLE until some later change resets the latch.
+        if recorded > 0 && ctx::tile_at(recorded) == Some(group) {
             return;
         }
         // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a
