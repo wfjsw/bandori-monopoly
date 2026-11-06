@@ -1811,6 +1811,32 @@ fn band_start_tile_is_the_opening_3d20() {
 }
 
 #[test]
+fn band_start_tile_does_not_settle() {
+    // 规则书: 「（1）开局时投掷3d20，并取出目作为你本局游戏的起始点」
+    // The start point is a position write (专名词 9 `teleport_to` is
+    // 「不[结算]」), not a settle: the opening deal follows it, so any buy or
+    // rent offer here is one prompt too early. Seed 1 lands P0 on 瑟罗希亚
+    // 国际学校 (20), a purchasable property -- a settle would offer its buy
+    // before the mulligan window.
+    let mut t = Table::pending_seed(&["椎名立希", "高松灯"], 1);
+    assert_eq!(t.pos(0), 20, "P0's opening 3d20 start tile (seed-pinned)");
+    assert_eq!(
+        data().tiles[20].kind.as_str(),
+        "property",
+        "the pinned start tile must be a purchasable property"
+    );
+    let p = t.expect_prompt();
+    assert!(
+        !p.title.key().contains("ask.buy"),
+        "the start teleport must not settle: {}",
+        t.dump_prompt()
+    );
+    t.settle_answering_defaults();
+    assert_eq!(t.money(0), 10_000, "no price / rent was paid at the start");
+    assert_eq!(t.owner(20), None, "no deed was bought at the start");
+}
+
+#[test]
 fn band_roll_16_plus_adds_crystal() {
     // 规则书: 「（2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）」
     let mut t = Table::new(&["高松灯", "千早爱音"]);

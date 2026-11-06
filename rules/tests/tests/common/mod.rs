@@ -234,6 +234,56 @@ impl Table {
         t
     }
 
+    /// [`Self::new`] stopped at the **first open prompt** instead of answering
+    /// the opening with the defaults -- for asserting what a match-start effect
+    /// raised (e.g. a start-tile buy offer).
+    pub fn pending(chars: &[&str]) -> Self {
+        Self::pending_seed(chars, SEED)
+    }
+
+    /// [`Self::pending`] on a chosen seed.
+    pub fn pending_seed(chars: &[&str], seed: u64) -> Self {
+        let n = chars.len();
+        let members: Vec<RoomMember> = (1..=n as i32)
+            .map(|id| RoomMember {
+                id,
+                player: format!("P{}", id - 1),
+                bot: false,
+                ..Default::default()
+            })
+            .collect();
+        let mut m = Match::new(
+            data(),
+            rules(),
+            &members,
+            seed,
+            MatchMode::Solo,
+            ScoreWeights::default(),
+        );
+        {
+            let w = m.world_mut();
+            w.st.players.sort_by_key(|p| p.member);
+        }
+        for (k, c) in chars.iter().enumerate() {
+            if !c.is_empty() {
+                m.set_persona(k as i32 + 1, c);
+            }
+        }
+        {
+            let w = m.world_mut();
+            for h in w.hidden.iter_mut() {
+                h.hand.clear();
+                h.deck.clear();
+                h.graveyard.clear();
+            }
+            for p in w.st.players.iter_mut() {
+                p.deck_ready = true;
+            }
+        }
+        m.quick_start();
+        Table { m, n }
+    }
+
     /// Mark `who` as a bot seat under `mentality`. Standard / chaos flip `ai`
     /// on (a machine seat: the pump drives it and `PlayCtx::fill_ai` prefills its
     /// prompts); Advanced

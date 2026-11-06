@@ -324,6 +324,33 @@ fn m6a_no_settle_teleport_fires_overlap_at_the_destination() {
     );
 }
 
+// The same gate, on the **bare** `ctx::teleport_to` request
+// (`TEST:teleporter`). A bare write is 「不[结算]」 by contract, but the
+// teleport frame is seeded from the ambient plan, whose `settles` defaults to
+// `true`; the pass window's re-read used to compare the plan against the
+// move's own flag and revive that stale `true`, so the landing settled (and
+// bought / paid rent). The landing here is a tile owned by the card player: a
+// settle would charge the mover.
+#[test]
+fn m6b_bare_teleport_card_does_not_settle() {
+    let mut t = Table::vanilla(2);
+    drain(&mut t);
+    // Put the forced passenger three tiles short of P0's tile 9 (a property):
+    // the bare teleport must jump them there without a settle.
+    t.set_pos(1, 6);
+    t.own(0, &[9]);
+    let money = t.money(1);
+    t.give_play(0, "TEST:teleporter").unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(1), 9, "P1 was teleported 3 ahead: pos={}", t.pos(1));
+    assert_eq!(
+        t.money(1),
+        money,
+        "a bare teleport does not settle on its landing: {:?}",
+        t.recent_keys(20)
+    );
+}
+
 // =====================================================================
 // Q7 -- a settleBefore relocation redirects the settle and re-runs the
 // window at the new tile (user ruling 2026-10-07).

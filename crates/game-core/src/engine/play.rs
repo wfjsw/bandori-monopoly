@@ -2525,6 +2525,11 @@ impl PlayCtx<'_> {
         // ([pass]) and `passPlayer` (overlap) at its destination, never mid-route
         // squares. The old "a teleport with settles clear resolves nothing"
         // reading over-read 「是否settle」.
+        //
+        // `settles_before_pass` is the destination-window baseline the re-read
+        // below compares against (it already includes a `moveBefore` write,
+        // folded onto `m`).
+        let settles_before_pass = self.w.plan().settles;
         raise!(self, "tileEffectBefore", i, @m m, position = to as i32, tile = to_tile)?;
         if self.out(i) || !self.playing() {
             return Ok(true);
@@ -2538,7 +2543,15 @@ impl PlayCtx<'_> {
         // 准备) may arm the settle this teleport skipped. The walk syncs that
         // plan write at each step; the teleport's `settles` capture is from
         // before the window, so re-read it here.
-        if self.w.plan().settles != m.settles {
+        //
+        // Only a write the window made counts. The frame is seeded from the
+        // ambient plan, whose `settles` defaults to `true` and has nothing to
+        // do with a bare `ctx::teleport_to` (`card_teleport` passes
+        // `settles = false` precisely so it does not settle). Comparing the
+        // plan against `m.settles` rather than against the window's own entry
+        // value revived the settle on every bare teleport (MyGO's 「迷途之星」
+        // start tile bought the landing).
+        if self.w.plan().settles != settles_before_pass {
             m.settles = self.w.plan().settles;
         }
         self.take_resolve_override(i, &mut m);
