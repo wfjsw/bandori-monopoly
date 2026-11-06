@@ -321,6 +321,7 @@
   "log.kind.cardFired": "卡牌发动",
   "log.kind.markChanged": "标记变化",
   "log.kind.spendBefore": "消耗前",
+  "log.kind.eventResolved": "事件结算",
   "anim.chainKind.21": "获得状态层",
   "anim.chainKind.onBoardGate": "在场上",
   "anim.chainKind.targetableGate": "可被指定",

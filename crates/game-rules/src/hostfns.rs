@@ -391,7 +391,8 @@ fn filter_of(f: &card_sdk::abi::MarkFilter) -> game_core::state::MarkFilter<'_> 
 
 pub fn count_marks_f<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostError> {
     let raw = read_filter(c, fp, fl)?;
-    Ok(c.st().wr().count_marks(tile, &filter_of(&raw)))
+    let n = c.st().wr().count_marks(tile, &filter_of(&raw));
+    Ok(n)
 }
 
 pub fn bump_mark_f<C: HostCtx>(
@@ -459,11 +460,7 @@ pub fn add_counter_self<C: HostCtx>(
     max: i32,
 ) -> Result<i32, HostError> {
     let name = guest_str(c, np, nl)?;
-    let uid = c.st().wr().trigger().uid;
     let r = c.st_mut().w().add_counter(&name, n, max);
-    if std::env::var("DBG_HOOK").is_ok() && name == "crystals" {
-        eprintln!("ADDCOUNT n={} -> {} uid={}", n, r, uid);
-    }
     Ok(r)
 }
 
@@ -608,14 +605,12 @@ pub fn move_units<C: HostCtx>(
 
 pub fn self_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     let v = c.st().wr().self_uid();
-    if std::env::var("G10_DBG").is_ok() {
-        eprintln!("SELF_UID -> {v}");
-    }
     Ok(v)
 }
 
 pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    Ok({ c.st().wr().money(player_id) })
+    let v = c.st().wr().money(player_id);
+    Ok(v)
 }
 
 pub fn gain<C: HostCtx>(
@@ -859,9 +854,6 @@ pub fn mortgage_value<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostError
 
 pub fn owned_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
     let n = c.st().wr().owned_count(player_id);
-    if std::env::var("G10_DBG").is_ok() {
-        eprintln!("OWNED_COUNT p={player_id} -> {n}");
-    }
     Ok(n)
 }
 
@@ -895,9 +887,6 @@ pub fn tile_in<C: HostCtx>(
 ) -> Result<i32, HostError> {
     let class = guest_str(c, cptr, cl)?;
     let v = c.st().wr().tile_in(player_id, tile, &class) as i32;
-    if class == "livehouse" && std::env::var("G10_DBG").is_ok() {
-        eprintln!("TILE_IN livehouse p={player_id} t={tile} -> {v}");
-    }
     Ok(v)
 }
 
@@ -931,7 +920,7 @@ pub fn field_instances<C: HostCtx>(
 }
 
 pub fn unplace_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
-    Ok({ c.st_mut().w().unplace_at(uid) })
+    Ok(c.st_mut().w().unplace_at(uid))
 }
 
 pub fn tile_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostError> {
@@ -1136,34 +1125,24 @@ pub fn event_defer<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
         player_id,
         tile,
     };
-    if std::env::var("G10_DBG").is_ok() {
-        let st = c.st();
-        eprintln!(
-            "event_defer: cursor={} answers={:?} journal={:?} reapply={:?}",
-            st.log.cursor, st.log.answers, st.log.journal.iter().map(|e| e.slot).collect::<Vec<_>>(), st.log.reapply
-        );
-    }
     crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
 pub fn trig_by_card_instance<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     let v = c.st().wr().trigger().by_card_instance.unwrap_or(-1);
-    if std::env::var("G10_DBG").is_ok() {
-        eprintln!("BY_CARD_INSTANCE -> {v}");
-    }
     Ok(v)
 }
 
 pub fn trig_settle_facts<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
+    Ok(c.st().wr().trigger().settle_facts.map_or(0, |f| f.bits()))
+}
+
+pub fn trig_settle_paid_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
     Ok(c.st()
         .wr()
         .trigger()
         .settle_facts
-        .map_or(0, |f| f.bits()))
-}
-
-pub fn trig_settle_paid_value<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok(c.st().wr().trigger().settle_facts.map_or(0, |f| f.paid_value))
+        .map_or(0, |f| f.paid_value))
 }
 
 pub fn trig_redirected_from<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
@@ -1171,7 +1150,11 @@ pub fn trig_redirected_from<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 }
 
 pub fn world_snapshot<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    crate::inline::request_or_pause(c, HostRequest::WorldSnapshot, crate::inline::Pause::Sentinel)
+    crate::inline::request_or_pause(
+        c,
+        HostRequest::WorldSnapshot,
+        crate::inline::Pause::Sentinel,
+    )
 }
 
 pub fn world_restore<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostError> {
@@ -1269,7 +1252,8 @@ pub fn take_card<C: HostCtx>(
     let src = crate::CardPile::from_i32(src)
         .ok_or_else(|| HostError::trap(format!("bad card pile {src}")))?;
     let id = guest_str(c, p, n)?;
-    Ok(c.st_mut().w().take_card(player_id, &id, src) as i32)
+    let r = c.st_mut().w().take_card(player_id, &id, src);
+    Ok(r as i32)
 }
 
 pub fn cards_in<C: HostCtx>(
@@ -1320,7 +1304,8 @@ pub fn hand_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError
 }
 
 pub fn deck_count<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
-    Ok({ c.st().wr().deck_count(player_id) })
+    let n = c.st().wr().deck_count(player_id);
+    Ok(n)
 }
 
 pub fn discard_size<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
@@ -1512,7 +1497,7 @@ pub fn state_get<C: HostCtx>(
     field: i32,
 ) -> Result<i32, HostError> {
     let key = guest_str(c, p, n)?;
-    Ok(match field {
+    let out = match field {
         1 => c.st().wr().state_min(player_id, &key),
         2 => c.st().wr().state_max(player_id, &key),
         3 => match c.st().wr().state_expires(player_id, &key) {
@@ -1521,8 +1506,9 @@ pub fn state_get<C: HostCtx>(
             Some(game_core::state::Tick::TurnEnd) => 2,
         },
         4 => c.st().wr().state_var(player_id, &key).flags as i32,
-        _ => c.st().wr().state_get(player_id, &key),
-    })
+        _ => c.st_mut().wr().state_get(player_id, &key),
+    };
+    Ok(out)
 }
 
 pub fn state_set<C: HostCtx>(
@@ -2320,8 +2306,42 @@ fn mark_placed_by_the_play<C: HostCtx>(c: &mut C) {
     let innermost = crate::wasm_rules::resolving_snapshot()
         .last()
         .map(|f| f.0.clone());
-    if play.is_some() && play == innermost && c.st_mut().w().play_from_hand() {
+    let from_hand = c.st_mut().w().play_from_hand();
+    let mark = play.is_some() && play == innermost && from_hand;
+    if mark {
         c.st_mut().w().set_placed_during_play(true);
+    }
+}
+
+/// A card a body places takes over that body's world-snapshot keys. A hand
+/// play's keys are owned by `-1` (the caller has no instance), while the
+/// `tileResolved` hook that restores on failure runs **as the placed copy** --
+/// without the copy on the owner row the hook's `world_restore` /
+/// `world_snapshot_drop` answer 0 and the revert silently does nothing
+/// (design G10 §6.5 / §7.6). The caller stays an owner: the play body may
+/// still use its own keys.
+///
+/// The caller is read **before** the placement: `place_card` makes the new
+/// instance the running body's own (`self_uid()` answers `uid` afterwards), so
+/// the row has to be looked up by the uid the body held at entry.
+fn adopt_snapshot_keys<C: HostCtx>(c: &mut C, caller: i32, uid: i32) {
+    if uid < 0 {
+        return;
+    }
+    let keys: Vec<i32> = c
+        .st()
+        .wr()
+        .snapshot_owners()
+        .into_iter()
+        .filter(|(_, owners)| owners.contains(&caller))
+        .map(|(key, _)| key)
+        .collect();
+    if keys.is_empty() {
+        return;
+    }
+    let w = c.st_mut().w();
+    for key in keys {
+        w.add_snapshot_owner(key, uid);
     }
 }
 
@@ -2340,7 +2360,10 @@ pub fn place_card_on<C: HostCtx>(
     // (design G06 §2.15): a counteraction's body runs with `play_from_hand`
     // off, so its placement must not mark the play being answered.
     mark_placed_by_the_play(c);
-    Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
+    let caller = c.st().wr().self_uid();
+    let uid = c.st_mut().w().place_card_on(player_id, tile, &card, note);
+    adopt_snapshot_keys(c, caller, uid);
+    Ok(uid)
 }
 
 pub fn place_card_at<C: HostCtx>(
@@ -2355,7 +2378,10 @@ pub fn place_card_at<C: HostCtx>(
     let note = guest_msg(c, p, n)?;
     // See `place_card_on`: only the play's own effect marks the play.
     mark_placed_by_the_play(c);
-    Ok(c.st_mut().w().place_card(player_id, &card, note))
+    let caller = c.st().wr().self_uid();
+    let uid = c.st_mut().w().place_card(player_id, &card, note);
+    adopt_snapshot_keys(c, caller, uid);
+    Ok(uid)
 }
 
 pub fn set_dest<C: HostCtx>(c: &mut C, dest: i32) -> Result<(), HostError> {
@@ -2935,11 +2961,7 @@ pub fn body_enter<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErro
 /// Leave the body. The frame deliberately stays up: the hooks the body's own
 /// money moves raised are walked *after* the guest call returns, so the host
 /// drops the frame when the raise behind it finishes (`raise_core`), not here.
-pub fn body_leave<C: HostCtx>(c: &mut C) -> Result<(), HostError> {
-    if std::env::var("DBG_HOOK").is_ok() {
-        let card = c.st().wr().current_card().to_string();
-        eprintln!("LEAVE card={} kind={:?}", card, c.st().wr().trigger().kind);
-    }
+pub fn body_leave<C: HostCtx>(_c: &mut C) -> Result<(), HostError> {
     Ok(())
 }
 
@@ -3979,7 +4001,6 @@ pub fn send<C: HostCtx>(
                 "send nested deeper than {MAX_NESTING}"
             )));
         }
-        let fuel = c.fuel()?;
         let st = c.st_mut();
         // The handler runs **as the receiver instance** (user ruling
         // 2026-10-10: the tile-mark owner answers `"place"` and binds units to its own
@@ -4132,15 +4153,6 @@ pub fn join_shield<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
         return Ok(0);
     }
     c.st_mut().w().set_trigger_join_shield();
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOIN_SHIELD used={:?}",
-            c.st()
-                .wr()
-                .trigger_join()
-                .map(|j| (j.declared.clone(), j.used.clone()))
-        );
-    }
     Ok(1)
 }
 
@@ -4149,32 +4161,32 @@ pub fn join_shield<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 /// open the call answers from the flag -- the body re-run past a join must not
 /// rebuild the round.
 pub fn join_open<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOIN_OPEN join={:?} next_answer={}",
-            c.st()
-                .wr()
-                .trigger_join()
-                .map(|j| (j.opened, j.seats.clone())),
-            c.st().log.cursor
-        );
-    }
     if c.st().wr().trigger_join().is_some_and(|j| j.opened) {
         // Consume the logged answer for alignment with the replay.
         let st = c.st_mut();
         if st.log.answers.get(st.log.cursor).is_some() {
             let answer = st.log.cursor;
-            st.w().after_host(answer);
+            let condition = st
+                .log
+                .last
+                .get(&answer)
+                .or_else(|| st.log.journal.iter().find(|e| e.slot == answer))
+                .map(|e| (*e.condition).clone());
+            let after_money = st.log.last.get(&answer).and_then(|e| e.after_money.clone());
+            let after_pos = st
+                .log
+                .last
+                .get(&answer)
+                .and_then(|e| e.after_pos.map(|pos| (e.player, pos)));
+            st.w().after_host(
+                answer,
+                condition.as_ref(),
+                after_money.as_deref(),
+                after_pos,
+            );
             st.log.cursor += 1;
         }
         return Ok(1);
-    }
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOIN_OPEN_CHK joined={} block={}",
-            c.st().wr().trigger().joined_in_window,
-            c.st().wr().trigger().join.is_some()
-        );
     }
     if c.st().wr().trigger().joined_in_window {
         // Declared inside the window it is answering: one window per link.
@@ -4198,17 +4210,6 @@ pub fn join_opened<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
 
 /// Opener side: how many seats declared (bars the fallback).
 pub fn join_joiner_count<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    if std::env::var("DBG_HOOK").is_ok() {
-        eprintln!(
-            "JOINER_COUNT join={:?}",
-            c.st().wr().trigger_join().map(|j| (
-                j.opened,
-                j.seats.clone(),
-                j.declared.clone(),
-                j.used.clone()
-            ))
-        );
-    }
     Ok(c.st()
         .wr()
         .trigger_join()

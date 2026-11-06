@@ -2504,6 +2504,11 @@ fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<
 
 /// Returns the chosen **tile**, not the index.
 /// Falls back to the first option if the answer is out of range.
+///
+/// The answer is logged as the **tile id** (`PromptKind::TileId`), like
+/// [`ask_tiles`]: a re-run recomputes the option list from the world the
+/// body's own landing changed (a nearest-tile list walks with the position),
+/// so a recorded index would slide to a different tile.
 pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
     #[cfg(kani)]
     {
@@ -2523,16 +2528,24 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
         if tiles.len() > 4 {
             kani::assert(false, "ask_tile: more than 4 tiles under Kani");
         }
-        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
-        return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
+        let t = ask_raw(PromptKind::TileId, player_id, title, text)?;
+        return Ok(if t < 0 {
+            tiles.first().copied().unwrap_or(-1)
+        } else {
+            t
+        });
     }
     #[cfg(not(kani))]
     {
         for &t in tiles {
             unsafe { sys::opt_int(t) }
         }
-        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
-        Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+        let t = ask_raw(PromptKind::TileId, player_id, title, text)?;
+        Ok(if t < 0 {
+            tiles.first().copied().unwrap_or(-1)
+        } else {
+            t
+        })
     }
 }
 

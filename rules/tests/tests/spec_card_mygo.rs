@@ -1783,10 +1783,18 @@ fn normal_copies_last_main_move_steps() {
         drain(&mut t);
         // [停留] still blocks this turn's main move (glossary). The copy is
         // the **next** main move -- after the stay decays at P0's turn end.
-        t.begin_turn(0);
-        t.end(0).map_err(|e| format!("end (stay decay): {e}"))?;
-        rest(&mut t);
-        drain(&mut t);
+        // The stay decays at P0's turn end. 那天的雨 (on P1's field) rolls
+        // again at P1's turn start -- the next turn, begun inside the drain --
+        // and may re-apply a layer with the die: whether it does depends on the
+        // roll, so burn a second full turn to be sure the mover is clear
+        // (a P0 turn start never rolls it: the card is P1's).
+        for round in 0..2 {
+            t.begin_turn(0);
+            t.end(0)
+                .map_err(|e| format!("end {round} (stay decay): {e}"))?;
+            rest(&mut t);
+            drain(&mut t);
+        }
         t.begin_turn(0);
         if t.state(0, "stay") != 0 {
             return Err(format!(

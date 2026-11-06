@@ -91,6 +91,16 @@ fn can_use(player_id: i32) -> Option<Msg> {
     None
 }
 
+/// `latch:` slot: `to + 1` of this use's pick.
+///
+/// The teleport runs *after* the ask, so a re-run of the body already stands
+/// on the landing while the journal re-consumes the recorded pick. Deriving
+/// the farthest set from the landing again picks a different tile, and the
+/// pick index means nothing against it. The latch carries the first
+/// computation through the re-runs; `landed` (the seat stands on the latched
+/// tile) is the same rule `tsukushi_garden` uses for its landing marker.
+const TARGET: &str = "latch:skill.rimiResolve.target";
+
 /// （2）「[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房」.
 /// 「地产商」 is the agent tile class (`kind=agent`), not the buyable set --
 /// 可购买格子 explicitly excludes 地产商 (rulebook 「[可购买格子]」).
@@ -98,6 +108,8 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// is the nearest direction only.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
+    let latched = ctx::slot(player_id, TARGET);
+    let landed = latched > 0 && at == latched - 1;
     let mut best = 0;
     let mut far: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
     for t in 0..ctx::tile_count() {
@@ -113,9 +125,11 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             far.push(t);
         }
     }
-    if far.is_empty() {
+    if far.is_empty() && !landed {
         return Ok(());
     }
+    // Still issued when the latch answers: the journal consumes the slot by
+    // cursor, and the prompt is what the player saw.
     let pick = ctx::ask_choice(
         player_id,
         &Msg::new(key!("rimi_title")),
@@ -124,9 +138,15 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             .map(|&t| Msg::new(key!("rimi_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&to) = far.get(pick) else {
-        return Ok(());
+    let to = if landed {
+        latched - 1
+    } else {
+        match far.get(pick) {
+            Some(&t) => t,
+            None => return Ok(()),
+        }
     };
+    ctx::set_slot(player_id, TARGET, to + 1);
     if !bandori_std::fire::spend_skill(player_id, 3, &Msg::new(key!("rimi_spend")))? {
         return Ok(());
     }

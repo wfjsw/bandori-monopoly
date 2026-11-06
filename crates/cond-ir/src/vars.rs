@@ -33,6 +33,10 @@ pub enum VarId {
     PayKind,
     PayIsFixed,
     PayTotalStage,
+    SubjectRangeCard,
+    ExtremeArmed,
+    PendingNegation,
+    ChainDepth,
     ChargeIsSkill,
     SettleTile,
     SettleOwner,
@@ -40,6 +44,9 @@ pub enum VarId {
     SettleMortgaged,
     SettleOutcome,
     RollSource,
+    RollPurpose,
+    RollRerolled,
+    RollUnusedFace,
     Abnormal,
     TurnPlayer,
     TurnKey,
@@ -73,9 +80,7 @@ pub enum VarId {
     CardId,
     CardPlaced,
     CardTile,
-    RollPurpose,
-    RollRerolled,
-    RollUnusedFace,
+    CardIsSkill,
 }
 
 /// Always `VARS.len()` -- derived so adding a variable cannot leave the
@@ -95,6 +100,10 @@ pub const VARS: &[(VarId, &str, VarType)] = &[
     (VarId::PayKind, "pay_kind", VarType::Int),
     (VarId::PayIsFixed, "pay_is_fixed", VarType::Int),
     (VarId::PayTotalStage, "pay_total_stage", VarType::Bool),
+    (VarId::SubjectRangeCard, "subject_range_card", VarType::Bool),
+    (VarId::ExtremeArmed, "extreme_armed", VarType::Bool),
+    (VarId::PendingNegation, "pending_negation", VarType::Int),
+    (VarId::ChainDepth, "chain_depth", VarType::Int),
     (VarId::ChargeIsSkill, "charge_is_skill", VarType::Bool),
     (VarId::SettleTile, "settle_tile", VarType::Int),
     (VarId::SettleOwner, "settle_owner", VarType::Int),
@@ -102,6 +111,9 @@ pub const VARS: &[(VarId, &str, VarType)] = &[
     (VarId::SettleMortgaged, "settle_mortgaged", VarType::Bool),
     (VarId::SettleOutcome, "settle_outcome", VarType::Int),
     (VarId::RollSource, "roll_source", VarType::Int),
+    (VarId::RollPurpose, "roll_purpose", VarType::Int),
+    (VarId::RollRerolled, "roll_rerolled", VarType::Bool),
+    (VarId::RollUnusedFace, "roll_unused_face", VarType::Int),
     (VarId::Abnormal, "abnormal", VarType::Bool),
     (VarId::TurnPlayer, "turn_player", VarType::Int),
     (VarId::TurnKey, "turn_key", VarType::Int),
@@ -135,9 +147,7 @@ pub const VARS: &[(VarId, &str, VarType)] = &[
     (VarId::CardId, "card_id", VarType::Int),
     (VarId::CardPlaced, "card_placed", VarType::Bool),
     (VarId::CardTile, "card_tile", VarType::Int),
-    (VarId::RollPurpose, "roll_purpose", VarType::Int),
-    (VarId::RollRerolled, "roll_rerolled", VarType::Bool),
-    (VarId::RollUnusedFace, "roll_unused_face", VarType::Int),
+    (VarId::CardIsSkill, "card_is_skill", VarType::Bool),
 ];
 
 /// Look up a flat name (after `root.field` rewrite).

@@ -395,7 +395,11 @@ fn stub_rules_inline_matches_halt_replay_exactly() {
 /// through (see the `TODO(规则书)` in [`equivalence`]).
 #[test]
 fn real_rules_inline_matches_halt_replay() {
-    for seed in [7u64, 11, 23, 41] {
+    let seeds: Vec<u64> = std::env::var("INL_SEEDS")
+        .ok()
+        .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .unwrap_or_else(|| vec![7u64, 11, 23, 41]);
+    for seed in seeds {
         equivalence(seed, 4, rules());
     }
 }

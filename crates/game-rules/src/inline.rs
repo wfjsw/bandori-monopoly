@@ -230,7 +230,15 @@ pub fn request_always<C: HostCtx>(
         let st = c.st_mut();
         if st.log.answers.get(st.log.cursor).is_some() {
             let answer = st.log.cursor;
-            st.w().after_host(answer);
+            let condition = request_condition(&st.log, answer);
+            let after_money = request_after_money(&st.log, answer);
+            let after_pos = request_after_pos(&st.log, answer);
+            st.w().after_host(
+                answer,
+                condition.as_ref(),
+                after_money.as_deref(),
+                after_pos,
+            );
             st.log.cursor += 1;
         }
     }
@@ -264,15 +272,6 @@ pub fn request_or_pause<C: HostCtx>(
     {
         let st = c.st_mut();
         let at = st.log.cursor;
-        if std::env::var("G10_DBG").is_ok() {
-            eprintln!(
-                "ROP at={at} req={mirrored:?} answers={:?} journal={:?} reapply={:?} last={:?}",
-                st.log.answers,
-                st.log.journal.iter().map(|e| e.slot).collect::<Vec<_>>(),
-                st.log.reapply,
-                st.log.last.keys().collect::<Vec<_>>()
-            );
-        }
         // 1. An in-flight entry is re-entered at its cursor. Several in-flight
         //    entries can share a cursor (an enclosing request's own answer is
         //    not written yet); the first entry still there is the outermost.
@@ -283,7 +282,22 @@ pub fn request_or_pause<C: HostCtx>(
             if *mark == 0 {
                 st.log.reapply.remove(&at);
             }
-            if let Some(index) = st.log.journal.iter().position(|e| e.slot == at) {
+            // A mark can also name a row the previous `Replace` already
+            // completed: the body recomputed its arguments against the rewound
+            // world, so the completed row goes back in flight and is applied
+            // under them (the stale ones were computed before the rewind).
+            let index = st
+                .log
+                .journal
+                .iter()
+                .position(|e| e.slot == at)
+                .or_else(|| {
+                    let row = st.log.last.remove(&at)?;
+                    let i = st.log.journal.len();
+                    st.log.journal.push(row);
+                    Some(i)
+                });
+            if let Some(index) = index {
                 let entry = st.log.journal[index].clone();
                 // The routine mutates live and has to start from the request's
                 // pre-state.
@@ -296,7 +310,12 @@ pub fn request_or_pause<C: HostCtx>(
                     st.log.journal[index].request = mirrored;
                     st.log.journal.truncate(index + 1);
                     st.log.reapply.retain(|&k, _| k <= at);
+                    st.log.reapplied.retain(|&k| k <= at);
                 }
+                // The entry is being applied now; a further re-run of this
+                // routine in the same drive must reuse the effects instead of
+                // applying a second time.
+                st.log.applied.insert(at);
                 st.host_request = Some(req);
                 st.host_journal_start = Some(game_core::engine::JournalStart::Resume(index));
                 return pause_now(pause);
@@ -305,39 +324,58 @@ pub fn request_or_pause<C: HostCtx>(
         }
         // 2. A logged answer at this cursor.
         if let Some(x) = st.log.answers.get(at).copied() {
-            match st.log.last.get(&at).cloned() {
-                Some(entry) if entry.request == mirrored => {
-                    st.w().after_host(at);
-                    st.log.cursor += 1;
-                    answer = Some(x);
+            // The request completed. Reuse its answer. The one exception is
+            // a `Move` whose destination the body recomputed: the target
+            // effect moved (the owned set changed under the landing), so the
+            // stale application is re-applied under the new plan -- at most
+            // once per slot in a drive, because the body re-derives the
+            // destination from the world it just changed and the recomputation
+            // can keep differing; every later reach consumes. Every other kind
+            // consumes: its effect is already on live and is not a positional
+            // thing a fresh argument could supersede.
+            let row = st.log.last.get(&at).cloned();
+            let drifted = !st.log.reapplied.contains(&at)
+                && row
+                    .as_ref()
+                    .is_some_and(|e| recomputed(&e.request, &mirrored));
+            if let Some(entry) = row.as_ref().filter(|_| drifted) {
+                let mut req = req;
+                // The position is a move's whole effect and the plan states
+                // the new destination absolutely, so the re-run overwrites it;
+                // the nested pipeline it opened (a settle, the agent's deal)
+                // is kept rather than rewound, which is what the recomputed
+                // read saw. The old landing already settled -- only where the
+                // player ends up is corrected.
+                if let HostRequest::Move { plan, .. } = &mut req {
+                    plan.settles = false;
                 }
-                Some(entry) => {
-                    // The body recomputed its arguments from the post-request
-                    // world. The cap bounds a pathological recompute: the
-                    // fourth hit restores the completed condition and consumes
-                    // the existing answer.
-                    let capped = st.log.replace_count.get(&at).copied().unwrap_or(0) >= 4;
-                    st.w().restore_from_world(&entry.condition);
-                    st.w().apply_state_overlay(&entry.guest);
-                    if capped {
-                        st.w().after_host(at);
-                        st.log.cursor += 1;
-                        answer = Some(x);
-                    } else {
-                        *st.log.replace_count.entry(at).or_default() += 1;
-                        st.host_request = Some(req);
-                        st.host_journal_start = Some(game_core::engine::JournalStart::Replace(at));
-                        return pause_now(pause);
-                    }
-                }
-                None => {
-                    // A dead nested answer (no completed row to compare with):
-                    // consume it for alignment.
-                    st.w().after_host(at);
-                    st.log.cursor += 1;
-                    answer = Some(x);
-                }
+                // Later answers stay: they were given at their own slots and
+                // the re-run reaches those slots again in order. Dropping them
+                // made the commit pass re-ask a prompt the player had already
+                // answered (tsukushi: the settle yes was lost and the re-ask
+                // took the provider's default no).
+                st.log.journal.retain(|e| e.slot < at);
+                // `last` rows stay for the same reason as the answers: their
+                // absolute results (the settle's money, above all) have to be
+                // re-imposed when the re-run reaches the slot again.
+
+                st.log.reapply.retain(|&k, _| k <= at);
+                st.log.reapplied.retain(|&k| k <= at);
+                st.log.reapplied.insert(at);
+                st.host_request = Some(req);
+                st.host_journal_start = Some(game_core::engine::JournalStart::Replace(at));
+                return pause_now(pause);
             }
+            // The effect is already on live; the answer is reused. A row from
+            // an earlier drive is a dead answer whose effect went with that
+            // run -- it still answers positionally so the replay stays aligned.
+            let condition = request_condition(&st.log, at);
+            let after_money = request_after_money(&st.log, at);
+            let after_pos = request_after_pos(&st.log, at);
+            st.w()
+                .after_host(at, condition.as_ref(), after_money.as_deref(), after_pos);
+            st.log.cursor += 1;
+            answer = Some(x);
         }
     }
     let Some(x) = answer else {
@@ -349,11 +387,78 @@ pub fn request_or_pause<C: HostCtx>(
             return Ok(v);
         }
         let st = c.st_mut();
+        // Applied once the drive answers it; a re-run in the same drive must
+        // reuse the effect (the world is live, not rebuilt). A move counts as
+        // its own first application: its nested routines ran to completion
+        // before the body restarted, so reaching it again reuses them.
+        st.log.applied.insert(st.log.cursor);
         st.host_request = Some(req);
         st.host_journal_start = Some(game_core::engine::JournalStart::Push);
         return pause_now(pause);
     };
     Ok(x)
+}
+
+/// Did the body recompute this request's arguments? Only a move is compared:
+/// its plan is the body's own computation and a changed destination is the
+/// whole point of the re-application. Other requests carry values that
+/// oscillate between the restored pre-state and the settled one (an offer's
+/// candidate list gains back the tile just bought), so comparing them would
+/// re-apply in a loop while their positional answer stays valid.
+fn recomputed(
+    old: &game_core::engine::JournalRequest,
+    new: &game_core::engine::JournalRequest,
+) -> bool {
+    match (old, new) {
+        (
+            game_core::engine::JournalRequest::Move { plan: a, .. },
+            game_core::engine::JournalRequest::Move { plan: b, .. },
+        ) => {
+            // Shape only: the destination the body re-derived. The request
+            // standing for the replacement has `settles` cleared (the old
+            // landing already settled), so the whole plan never compares equal.
+            (
+                a.kind,
+                a.teleport_to,
+                a.steps,
+                a.extra_steps,
+                &a.stop_at,
+                a.forced,
+            ) != (
+                b.kind,
+                b.teleport_to,
+                b.steps,
+                b.extra_steps,
+                &b.stop_at,
+                b.forced,
+            )
+        }
+        _ => false,
+    }
+}
+
+/// The world a completed request was applied from (its journal `last` or
+/// still-journaled row), for the copy refresh's crossing base.
+fn request_condition(
+    log: &game_core::engine::GuestLog,
+    at: usize,
+) -> Option<game_core::engine::World> {
+    log.last
+        .get(&at)
+        .or_else(|| log.journal.iter().find(|e| e.slot == at))
+        .map(|e| (*e.condition).clone())
+}
+
+/// Every seat's money right after the request applied, from its completed row.
+fn request_after_money(log: &game_core::engine::GuestLog, at: usize) -> Option<Vec<i32>> {
+    log.last.get(&at).and_then(|e| e.after_money.clone())
+}
+
+/// The mover and its landing (`Move` only), from the completed row.
+fn request_after_pos(log: &game_core::engine::GuestLog, at: usize) -> Option<(i32, i32)> {
+    log.last
+        .get(&at)
+        .and_then(|e| e.after_pos.map(|pos| (e.player, pos)))
 }
 
 fn pause_now(pause: Pause) -> Result<i32, HostError> {

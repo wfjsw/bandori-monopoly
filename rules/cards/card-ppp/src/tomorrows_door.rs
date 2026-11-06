@@ -210,6 +210,16 @@ fn tax_due_guard(player_id: i32) -> bool {
 fn settle_after(player_id: i32) -> card_sdk::Asked {
     let due = tax_due();
     let payer = trigger::player_id();
+    // The transfer's reason names the payment; the clause gets its own line so
+    // the surcharge is observable without unpacking the pay event (the rent
+    // half logs the same key from `pay_add`).
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomorrows_door_tax"))
+            .player_id("who", player_id)
+            .player_id("target", payer)
+            .n("money", due as i64),
+    );
     ctx::transfer(
         payer,
         player_id,

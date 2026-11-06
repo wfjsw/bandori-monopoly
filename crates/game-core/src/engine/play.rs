@@ -1070,7 +1070,7 @@ impl PlayCtx<'_> {
         } else {
             PlanKind::SideMove
         };
-        self.w.begin_plan(owner, kind, target);
+        self.w.begin_plan(owner, kind, target.clone());
         let r = self.run_move_body(i, None, is_main_move);
         self.w.end_plan(r.as_ref().is_ok_and(|&ran| ran));
         r
@@ -1903,7 +1903,7 @@ impl PlayCtx<'_> {
         // that consumes it, so clear it from staging here rather than let it
         // stand the offers of every later move down too.
         let seed = {
-            let mut seed = self.w.turn.plan.clone();
+            let seed = self.w.turn.plan.clone();
             self.w.turn.plan.claimed = false;
             seed
         };
@@ -2671,6 +2671,7 @@ impl PlayCtx<'_> {
                         frame.owner = self.w.st.owners.get(frame.at).copied().unwrap_or(-1);
                     }
                     let owner = frame.owner;
+                    self.settle_stack[frame.stack_idx].target = owner;
                     let (i, at) = (frame.player, frame.at);
                     let m = frame.m.clone();
                     let t = raise!(
@@ -5904,15 +5905,25 @@ impl PlayCtx<'_> {
     /// away. What the event *does* is its rule instance on the neutral board
     /// owner -- bound here before the body runs, unbound when it expires.
     pub fn card_draw_event(&mut self, i: usize) -> Flow<()> {
+        self.card_draw_event_with_cause(i, -1)
+    }
+
+    /// `ctx::draw_event` from a card body: `cause` is the invoking instance, so
+    /// an event the card itself drew is 「因为此卡」 (`trigger.by_card_instance`).
+    pub fn card_draw_event_with_cause(&mut self, i: usize, cause: i32) -> Flow<()> {
         let tile = self.w.st.players[i].pos;
-        self.draw_event_at(i, tile)
+        self.draw_event_at(i, tile, if cause >= 0 { Some(cause) } else { None })
     }
 
     /// `ctx::draw_event_as` -- the same draw attributed to another seat and
     /// tile (`tile < 0` = the drawer's own position).
-    pub fn card_draw_event_as(&mut self, i: usize, tile: i32) -> Flow<()> {
-        let tile = if tile < 0 { self.w.st.players[i].pos } else { tile };
-        self.draw_event_at(i, tile)
+    pub fn card_draw_event_as(&mut self, i: usize, tile: i32, cause: i32) -> Flow<()> {
+        let tile = if tile < 0 {
+            self.w.st.players[i].pos
+        } else {
+            tile
+        };
+        self.draw_event_at(i, tile, if cause >= 0 { Some(cause) } else { None })
     }
 
     /// The `event` link an `event_defer` claims (design G10 §6.2): while a
@@ -5937,9 +5948,6 @@ impl PlayCtx<'_> {
             return (d.deferrer_uid == uid) as i32;
         }
         let after_turn_key = self.turn_key();
-        if std::env::var("G10_DBG").is_ok() {
-            eprintln!("card_event_defer push ({event}, {player}) uid={uid}");
-        }
         self.w.deferred_events.push(crate::engine::DeferredEvent {
             event,
             player,
@@ -5958,7 +5966,7 @@ impl PlayCtx<'_> {
         self.w.st.round as i32
     }
 
-    fn draw_event_at(&mut self, i: usize, tile: i32) -> Flow<()> {
+    fn draw_event_at(&mut self, i: usize, tile: i32, cause: Option<i32>) -> Flow<()> {
         // Fallback for a deck left empty outside a draw (an expiry or a raw
         // state write since the last one).
         self.w.refill_event_deck();
@@ -5978,9 +5986,7 @@ impl PlayCtx<'_> {
         self.wait(3.0);
         // Face-down slot on the public `eventTop` view: consumed by this draw.
         self.w.st.event_top.retain(|e| e != &id);
-        if self.resolve_event(id, i, tile, None, None, None)?
-            == EventResolution::Deferred
-        {
+        if self.resolve_event(id, i, tile, None, cause, None)? == EventResolution::Deferred {
             // The card is parked, not filed: the release does the tail.
             return Ok(());
         }
@@ -6015,9 +6021,6 @@ impl PlayCtx<'_> {
         )?;
         // The record is the whole "deferred" signal: a re-run of the very
         // call that suspended finds it again (design G10 §6.2).
-        if std::env::var("G10_DBG").is_ok() {
-            eprintln!("resolve_event({id}, {i}): deferred={:?}", self.w.deferred_events.iter().map(|d| (&d.event, d.player)).collect::<Vec<_>>());
-        }
         if self
             .w
             .deferred_events

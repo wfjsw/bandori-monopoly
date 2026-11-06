@@ -566,7 +566,11 @@ fn elegant_shout_offered_on_out_of_turn_effect_draw() {
     drain(&mut t);
     // 规则书: 「你的下回合结束时抽一张卡」 -- P0's next turn end.
     assert_eq!(t.turn(), 0, "P0's next turn follows P1");
-    pass_cry(&mut t, 0);
+    t.m.world_mut().st.skip_move = true;
+    t.end(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
     assert_eq!(
         t.hand(0).len(),
         hand_before + 1,

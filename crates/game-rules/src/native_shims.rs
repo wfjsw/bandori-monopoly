@@ -2650,10 +2650,12 @@ pub unsafe extern "C-unwind" fn ruleset_trig_redirected_from() -> i32 {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_draw_event_as(player_id: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_draw_event_as([player_id, tile, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
+    with_host(
+        |h| match h.op_draw_event_as([player_id, tile, 0, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]

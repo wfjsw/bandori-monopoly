@@ -1050,7 +1050,8 @@ impl CardModules for NativeModules {
             &cand,
             || Msg::new("err.play_pre"),
             || {
-                let state = HostState::new(self.index.clone(), world.clone(), Default::default(), 0);
+                let state =
+                    HostState::new(self.index.clone(), world.clone(), Default::default(), 0);
                 let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
                     run_on(
                         state,

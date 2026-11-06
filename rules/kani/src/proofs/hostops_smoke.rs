@@ -303,6 +303,127 @@ pub fn placed_instance_answers_with_its_effective_card() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// G10 outcome surface (§10.2) -- one presence proof per new op, so an
+// unmodeled op cannot answer a silent 0
+// ---------------------------------------------------------------------------
+
+/// `trigger_by_card_instance` / `trigger_redirected_from` /
+/// `trigger_settle_facts` / `trigger_settle_paid_value` answer the stored
+/// trigger facts verbatim (sentinels `-1` outside their raise).
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn presence_g10_trigger_reads() {
+    install_empty();
+    world::with_world_mut(|w| {
+        w.trig_by_card_instance = 7;
+        w.trig_redirected_from = 3;
+        w.trig_settle_facts = 4;
+        w.trig_settle_paid_value = 160;
+    });
+    crate::kassert!(call(Op::trig_by_card_instance, [0; 6]) == 7);
+    crate::kassert!(call(Op::trig_redirected_from, [0; 6]) == 3);
+    crate::kassert!(call(Op::trig_settle_facts, [0; 6]) == 4);
+    crate::kassert!(call(Op::trig_settle_paid_value, [0; 6]) == 160);
+    // A board raise: no cause, no redirect origin, no settle.
+    world::with_world_mut(|w| {
+        w.trig_by_card_instance = -1;
+        w.trig_redirected_from = -1;
+        w.trig_settle_facts = 0;
+    });
+    crate::kassert!(call(Op::trig_by_card_instance, [0; 6]) == -1);
+    crate::kassert!(call(Op::trig_redirected_from, [0; 6]) == -1);
+    crate::kassert!(call(Op::trig_settle_facts, [0; 6]) == 0);
+    kani::cover!(true, "sentinels");
+}
+
+/// `draw_event_as` answers 1 and records the `(player, tile)` attribution.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(8)]
+pub fn presence_g10_draw_event_as() {
+    install_empty();
+    crate::kassert!(call(Op::draw_event_as, [1, 42, 0, 0, 0, 0]) == 1);
+    world::with_world(|w| {
+        crate::kassert!(w.last_event_draw == (1, 42), "the attribution is stored");
+    });
+    kani::cover!(true, "attributed");
+}
+
+/// `event_defer` claims once per pair: the first claimant answers 1, its own
+/// re-run answers 1 without a second record, and another instance answers 0.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(16)]
+pub fn presence_g10_event_defer_is_once() {
+    install_empty();
+    world::with_world_mut(|w| {
+        w.trig_kind = "event";
+        w.trig_card = 5;
+        w.trig_player = 0;
+        w.trig_tile = 12;
+        w.bound_uid = 1;
+    });
+    crate::kassert!(call(Op::event_defer, [0; 6]) == 1, "first claim");
+    crate::kassert!(call(Op::event_defer, [0; 6]) == 1, "own re-run");
+    world::with_world_mut(|w| w.bound_uid = 2);
+    crate::kassert!(call(Op::event_defer, [0; 6]) == 0, "another instance");
+    world::with_world(|w| {
+        crate::kassert!(w.deferred_n == 1, "one record");
+        crate::kassert!(w.deferred[0].deferrer_uid == 1, "owner");
+    });
+    // Outside an `event` raise: 0, nothing pushed.
+    world::with_world_mut(|w| w.trig_kind = "turnStart");
+    crate::kassert!(call(Op::event_defer, [0; 6]) == 0, "not an event");
+    world::with_world(|w| crate::kassert!(w.deferred_n == 1, "still one"));
+    kani::cover!(true, "once");
+}
+
+/// `world_snapshot` / `world_restore` / `world_snapshot_drop`: a key from 1,
+/// an absolute idempotent restore for an owner, `0` for a stranger or a
+/// missing key, and the last owner frees the key.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(16)]
+pub fn presence_g10_world_snapshot() {
+    install_empty();
+    world::with_world_mut(|w| {
+        w.bound_uid = 1;
+        w.money[0] = 1_234;
+        w.pos[0] = 20;
+        w.tiles[5].owner = 1;
+    });
+    let key = call(Op::world_snapshot, [0; 6]) as i32;
+    crate::kassert!(key == 1, "first key is 1");
+    world::with_world_mut(|w| {
+        w.money[0] = 0;
+        w.pos[0] = 5;
+        w.tiles[5].owner = -1;
+    });
+    crate::kassert!(call(Op::world_restore, [key, 0, 0, 0, 0, 0]) == 1);
+    world::with_world(|w| {
+        crate::kassert!(w.money[0] == 1_234 && w.pos[0] == 20, "restored");
+        crate::kassert!(w.tiles[5].owner == 1, "owners restored");
+    });
+    crate::kassert!(call(Op::world_restore, [key, 0, 0, 0, 0, 0]) == 1);
+    // A stranger answers 0 and changes nothing.
+    world::with_world_mut(|w| {
+        w.bound_uid = 2;
+        w.money[0] = 7;
+    });
+    crate::kassert!(call(Op::world_restore, [key, 0, 0, 0, 0, 0]) == 0);
+    world::with_world(|w| crate::kassert!(w.money[0] == 7, "no write"));
+    // A missing key answers 0.
+    crate::kassert!(call(Op::world_restore, [key + 9, 0, 0, 0, 0, 0]) == 0);
+    // The owner's drop frees the key; a later restore answers 0.
+    world::with_world_mut(|w| w.bound_uid = 1);
+    crate::kassert!(call(Op::world_snapshot_drop, [key, 0, 0, 0, 0, 0]) == 1);
+    crate::kassert!(call(Op::world_restore, [key, 0, 0, 0, 0, 0]) == 0);
+    world::with_world(|w| crate::kassert!(!w.snapshots[0].used, "freed"));
+    kani::cover!(true, "snapshot cycle");
+}
+
 /// MUTANT: a marked instance keeps answering its row's card.
 #[kani::proof]
 #[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]

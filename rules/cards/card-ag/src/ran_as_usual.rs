@@ -73,6 +73,17 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     // we use the turn-start square.
     let snap = ctx::turn_snapshot(player_id);
     if snap.pos >= 0 {
+        // 规则书（2）: 「回到起始地点」 -- the return settles nothing but is not
+        // gate-free: `teleport_to` runs the abnormal gate, where the RAS band
+        // guard refuses it as a second abnormal of the turn. `teleport_as` is
+        // the card's own gate-free return.
+        //
+        // It goes **first**: landing on the start square fires its own pass
+        // event (the 2000 或 a card, 「不进行任何结算」 notwithstanding), and
+        // the money below is the "cancel everything" restore -- put back after
+        // the landing, it also swallows the reward, exactly as the turn-start
+        // figure would have.
+        ctx::teleport_as(player_id, snap.pos, false, false);
         // 规则书（2）: 「取消所有受到的效果（不进行任何结算）」 -- money goes back
         // to the turn-start figure as a raw move (no settle pipeline).
         let delta = snap.money - ctx::money_of(player_id);
@@ -98,11 +109,6 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
                 ctx::set_mortgaged(t as i32, mortgaged);
             }
         }
-        // 规则书（2）: 「回到起始地点」 -- the return settles nothing but is not
-        // gate-free: `teleport_to` runs the abnormal gate, where the RAS band
-        // guard refuses it as a second abnormal of the turn. `teleport_as` is
-        // the card's own gate-free return.
-        ctx::teleport_as(player_id, snap.pos, false, false);
     }
     ctx::state::set(player_id, bandori_std::state_key::STAY, snap.stay);
     ctx::state::set(player_id, bandori_std::state_key::STUN, snap.stun);

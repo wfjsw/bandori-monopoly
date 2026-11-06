@@ -174,6 +174,21 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         // happens to share the tile).
         ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
         ctx::bump_mark(t, &mark_filter(player_id), -1);
+        // The spent attachment takes every stand-in with it (`bump_mark` may
+        // just have spent the last row). A sibling copy's own drive can have
+        // run already -- while this one was paused at the ask, i.e. before the
+        // mark was gone -- and left its cleanup undone, so file the siblings
+        // here too. `unplace_at` is idempotent, so a later sibling drive
+        // unplacing itself is harmless.
+        if !any_marks(player_id) {
+            let me = ctx::self_uid();
+            let mine = ctx::effective_card_at(me);
+            for (uid, name) in ctx::field_instances(player_id) {
+                if uid != me && Some(name) == mine {
+                    ctx::unplace_at(uid);
+                }
+            }
+        }
         ctx::log(
             player_id,
             &Msg::new(key!("hagumi_marks_stop_done"))

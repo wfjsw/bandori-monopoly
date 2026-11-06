@@ -583,6 +583,31 @@ impl World {
             .unwrap_or_default()
     }
 
+    /// Every `latch:` row, `(seat, key, var)`. A latch is a decision a body
+    /// froze, not a write a re-run re-derives, so a world restore carries the
+    /// rows over rather than unfreezing them (`PlayCtx::take_latches` /
+    /// `Run::restore_from_world`).
+    pub fn latches(&self) -> Vec<(usize, String, StateVar)> {
+        let mut out = Vec::new();
+        for (i, p) in self.st.players.iter().enumerate() {
+            for (k, v) in &p.state {
+                if k.starts_with("latch:") {
+                    out.push((i, k.clone(), *v));
+                }
+            }
+        }
+        out
+    }
+
+    /// Lay [`Self::latches`] rows back over the (restored) state.
+    pub fn put_latches(&mut self, rows: Vec<(usize, String, StateVar)>) {
+        for (i, k, v) in rows {
+            if let Some(p) = self.st.players.get_mut(i) {
+                p.state.insert(k, v);
+            }
+        }
+    }
+
     /// Declare the generic [`crate::state::state_flag`] bits for a key.
     pub fn state_set_flags(&mut self, player_id: i32, key: &str, flags: u8) {
         if let Some(s) = self.player_mut(player_id) {
@@ -2440,6 +2465,33 @@ impl World {
 
     /// Adjust the on-card count of `name` on the instance at `uid` by `n`,
     /// clamped at 0 and at `max` (`0` = uncapped). Returns the new count.
+    /// Re-derive the [`crate::state::MatchState::event_active`] mirrors from
+    /// their rule instances (`docs/EVENTS.md`). [`Self::add_counter_at`] keeps
+    /// the row current for a direct write, but a counter reached a **guest
+    /// copy** crosses the boundary as a field delta, which carries the
+    /// instance and not the view row; the crossing re-syncs it here.
+    pub fn sync_active_event_mirrors(&mut self) {
+        for e in &mut self.st.event_active {
+            let rid = crate::data::event_rule_id(&e.id);
+            if let Some(f) = self
+                .st
+                .board_field
+                .iter()
+                .find(|f| f.card == rid && f.tile < 0)
+            {
+                e.counter = f.counters.values().sum();
+                e.counter2 = f.props.get("count2").copied().unwrap_or(0);
+                e.turns_left = f
+                    .props
+                    .get(crate::state::prop::TURNS_LEFT)
+                    .copied()
+                    .unwrap_or(0);
+                e.note = f.note.clone();
+                e.face_down = f.face_down;
+            }
+        }
+    }
+
     pub fn add_counter_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
         let Some(f) = self.field_by_uid_mut(uid) else {
             return 0;

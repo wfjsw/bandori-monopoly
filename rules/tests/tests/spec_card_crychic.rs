@@ -766,7 +766,10 @@ fn crychic_haruhikage_counter_uses_a_crychic_skill() {
         t.begin_turn(1);
         drain(&mut t);
         t.set_pos(1, (blue + 59) % 60);
-        t.dice(&[1]);
+        // Two faces: the drive re-runs from the top on the answered [反击], so
+        // the move rolls twice (and the reroll takes the next loaded face).
+        // 17 puts the rerolled walk off the rent tile.
+        t.dice(&[1, 17]);
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         if !t.counteract_offered(HARUHI) {
             drain(&mut t);

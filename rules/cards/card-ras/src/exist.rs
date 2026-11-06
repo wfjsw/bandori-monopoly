@@ -129,3 +129,9 @@ pub fn redirect_kani(player_id: i32, v: card_sdk::RedirectValue) -> card_sdk::Re
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn mark_used_kani(player_id: i32) -> card_sdk::Asked {
+    mark_used(player_id)
+}

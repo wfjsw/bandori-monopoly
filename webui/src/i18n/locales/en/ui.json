@@ -30,6 +30,7 @@
   "anim.chainKind.settleBefore": "Before settle",
   "anim.chainKind.spendBefore": "Before charge spend",
   "anim.chainKind.settle": "Settle",
+  "anim.chainKind.eventResolved": "Event resolved",
   "anim.chainKind.mortgage": "Mortgage",
   "anim.chainKind.pay": "Payment",
   "anim.chainKind.rent": "Rent",

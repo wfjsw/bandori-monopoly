@@ -60,6 +60,10 @@ pub enum FnId {
     /// `card_is('id')` -- the trigger's card id hash equals `id_of(id)`.
     /// Pair of [`FnId::CounterIs`]; compared against `VarId::TriggerCard`.
     CardIs = 35,
+    /// `resolving('card:id')` -- that card's body is running now. The id
+    /// argument hashes to `id_of(id)` and is looked up in the resolving set
+    /// (`named_get`, `1` = present), the same table shape `IntHas` uses.
+    Resolving = 36,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).

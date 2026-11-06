@@ -90,9 +90,12 @@ fn passed_here(_player_id: i32) -> bool {
 }
 
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
-    ctx::set_counter(PASSED, 0);
     bandori_std::fire::gain(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;
     let num = ctx::roll(player_id, 3, 20, RollPurpose::Effect, roll_source::CARD)?;
+    // Cleared **after** the requests: the schedule entry re-runs from its top
+    // after every pause, and `passed_here` is that entry's guard -- an early
+    // clear would skip the body on the very next pass.
+    ctx::set_counter(PASSED, 0);
     let n = ctx::tile_count();
     if n <= 0 {
         return Ok(());

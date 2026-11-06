@@ -102,6 +102,10 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::PayIsFixed => f.win.pay_is_fixed = raw,
         VarId::PayTotalStage => f.win.pay_total_stage = raw != 0,
         VarId::ChargeIsSkill => f.win.charge_is_skill = raw != 0,
+        VarId::SubjectRangeCard => f.win.subject_range_card = raw != 0,
+        VarId::ExtremeArmed => f.win.extreme_armed = raw != 0,
+        VarId::PendingNegation => f.win.pending_negation = raw,
+        VarId::ChainDepth => f.win.chain_depth = raw,
         VarId::SettleTile => f.win.settle_tile = raw,
         VarId::SettleOwner => f.win.settle_owner = raw,
         VarId::SettleHouses => f.win.settle_houses = raw,
@@ -161,6 +165,7 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarType, v: FillVal) {
         VarId::CardId => f.cand.card_id = raw,
         VarId::CardPlaced => f.cand.card_placed = raw != 0,
         VarId::CardTile => f.cand.card_tile = if raw == -1 { None } else { Some(raw) },
+        VarId::CardIsSkill => f.win.trigger_card_is_skill = raw != 0,
     }
     let _ = ty;
 }

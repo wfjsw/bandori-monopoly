@@ -100,7 +100,8 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let faces = [FIRE, rolls[0], rolls[1]];
 
     // Pass 1: the rolls answered, the pick not -> blocked on the choice.
-    let Outcome::NeedInput(p, _, _) = r.run(&world, call.clone(), &log(&faces), None).unwrap() else {
+    let Outcome::NeedInput(p, _, _) = r.run(&world, call.clone(), &log(&faces), None).unwrap()
+    else {
         panic!("expected a prompt")
     };
     assert_eq!(p.kind, PromptKind::Tile);
@@ -112,7 +113,8 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     assert_eq!(p.options.len(), 2, "one option per roll: {:?}", p.options);
 
     // The prompt is reproducible: same rolls -> same options.
-    let Outcome::NeedInput(again, _, _) = r.run(&world, call.clone(), &log(&faces), None).unwrap() else {
+    let Outcome::NeedInput(again, _, _) = r.run(&world, call.clone(), &log(&faces), None).unwrap()
+    else {
         panic!()
     };
     assert_eq!(p, again);
@@ -144,7 +146,8 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     );
 
     // Determinism: replaying the full answer log gives an identical world.
-    let Outcome::Done(after2, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap() else {
+    let Outcome::Done(after2, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap()
+    else {
         panic!()
     };
     assert_eq!(after, after2);
@@ -298,7 +301,8 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     assert_eq!(*t, 14, "the 15 roll maps to tile 14");
 
     // Determinism across modules: replaying the same answers gives an identical world.
-    let Outcome::Done(after2, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap() else {
+    let Outcome::Done(after2, _) = r.run(&world, call.clone(), &log(&answers), None).unwrap()
+    else {
         panic!()
     };
     assert_eq!(after, after2);

@@ -131,3 +131,15 @@ pub fn arisa_wait_kani(player_id: i32) -> card_sdk::Asked {
 pub fn event_after_kani(player_id: i32) -> card_sdk::Asked {
     event_after(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn defer_kani(player_id: i32) -> card_sdk::Asked {
+    defer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn resolved_kani(player_id: i32) -> card_sdk::Asked {
+    resolved(player_id)
+}

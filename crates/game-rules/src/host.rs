@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "sandbox")]
 use card_sdk::abi::{self, export, ABI_VERSION, IMPORT_MODULE};
+
 use card_sdk::abi::{AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -715,21 +716,38 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
     fn from(req: &HostRequest) -> Self {
         use game_core::engine::JournalRequest as J;
         match req {
-            HostRequest::Pay { from, to, amount, src, runs_total_stage } => J::Pay {
+            HostRequest::Pay {
+                from,
+                to,
+                amount,
+                src,
+                runs_total_stage,
+            } => J::Pay {
                 from: *from,
                 to: *to,
                 amount: *amount,
                 src: src.clone(),
                 runs_total_stage: *runs_total_stage,
             },
-            HostRequest::PayCommand { from, to, amount, spec, src } => J::PayCommand {
+            HostRequest::PayCommand {
+                from,
+                to,
+                amount,
+                spec,
+                src,
+            } => J::PayCommand {
                 from: *from,
                 to: *to,
                 amount: *amount,
                 spec: *spec,
                 src: src.clone(),
             },
-            HostRequest::PayTotal { from, to, amount, src } => J::PayTotal {
+            HostRequest::PayTotal {
+                from,
+                to,
+                amount,
+                src,
+            } => J::PayTotal {
                 from: *from,
                 to: *to,
                 amount: *amount,
@@ -739,7 +757,11 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 kind: kind.0,
             },
-            HostRequest::Target { player_id, tile, single_target } => J::Target {
+            HostRequest::Target {
+                player_id,
+                tile,
+                single_target,
+            } => J::Target {
                 player_id: *player_id,
                 tile: *tile,
                 single_target: *single_target,
@@ -752,30 +774,53 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 tile: *tile,
             },
-            HostRequest::TeleportAs { player_id, tile, settles, is_main_move } => J::TeleportAs {
+            HostRequest::TeleportAs {
+                player_id,
+                tile,
+                settles,
+                is_main_move,
+            } => J::TeleportAs {
                 player_id: *player_id,
                 tile: *tile,
                 settles: *settles,
                 is_main_move: *is_main_move,
             },
-            HostRequest::SettleAt { player_id, tile, is_main_move } => J::SettleAt {
+            HostRequest::SettleAt {
+                player_id,
+                tile,
+                is_main_move,
+            } => J::SettleAt {
                 player_id: *player_id,
                 tile: *tile,
                 is_main_move: *is_main_move,
             },
             HostRequest::JoinOpen { at } => J::JoinOpen { at: *at },
-            HostRequest::Buy { player_id, tile, kind } => J::Buy {
+            HostRequest::Buy {
+                player_id,
+                tile,
+                kind,
+            } => J::Buy {
                 player_id: *player_id,
                 tile: *tile,
                 kind: *kind,
             },
-            HostRequest::Acquire { player_id, from, tile, price } => J::Acquire {
+            HostRequest::Acquire {
+                player_id,
+                from,
+                tile,
+                price,
+            } => J::Acquire {
                 player_id: *player_id,
                 from: *from,
                 tile: *tile,
                 price: *price,
             },
-            HostRequest::AgentOffer { player_id, agent, tile, kind } => J::AgentOffer {
+            HostRequest::AgentOffer {
+                player_id,
+                agent,
+                tile,
+                kind,
+            } => J::AgentOffer {
                 player_id: *player_id,
                 agent: *agent,
                 tile: *tile,
@@ -797,36 +842,57 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 tile: *tile,
             },
-            HostRequest::ApplyMortgage { player_id, tile, amount } => J::ApplyMortgage {
+            HostRequest::ApplyMortgage {
+                player_id,
+                tile,
+                amount,
+            } => J::ApplyMortgage {
                 player_id: *player_id,
                 tile: *tile,
                 amount: *amount,
             },
-            HostRequest::ApplyRedeem { player_id, tile, amount } => J::ApplyRedeem {
+            HostRequest::ApplyRedeem {
+                player_id,
+                tile,
+                amount,
+            } => J::ApplyRedeem {
                 player_id: *player_id,
                 tile: *tile,
                 amount: *amount,
             },
-            HostRequest::PayBuy { player_id, tile, amount, kind } => J::PayBuy {
+            HostRequest::PayBuy {
+                player_id,
+                tile,
+                amount,
+                kind,
+            } => J::PayBuy {
                 player_id: *player_id,
                 tile: *tile,
                 amount: *amount,
                 kind: *kind,
             },
-            HostRequest::PayBuild { player_id, tile, amount } => J::PayBuild {
+            HostRequest::PayBuild {
+                player_id,
+                tile,
+                amount,
+            } => J::PayBuild {
                 player_id: *player_id,
                 tile: *tile,
                 amount: *amount,
             },
-            HostRequest::AssignDeed { player_id, tile, owner, houses, mortgaged } => {
-                J::AssignDeed {
-                    player_id: *player_id,
-                    tile: *tile,
-                    owner: *owner,
-                    houses: *houses,
-                    mortgaged: *mortgaged,
-                }
-            }
+            HostRequest::AssignDeed {
+                player_id,
+                tile,
+                owner,
+                houses,
+                mortgaged,
+            } => J::AssignDeed {
+                player_id: *player_id,
+                tile: *tile,
+                owner: *owner,
+                houses: *houses,
+                mortgaged: *mortgaged,
+            },
             HostRequest::Draw { player_id, n } => J::Draw {
                 player_id: *player_id,
                 n: *n,
@@ -838,7 +904,11 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 tile: *tile,
             },
-            HostRequest::EventDefer { event, player_id, tile } => J::EventDefer {
+            HostRequest::EventDefer {
+                event,
+                player_id,
+                tile,
+            } => J::EventDefer {
                 event: event.clone(),
                 player_id: *player_id,
                 tile: *tile,
@@ -846,12 +916,20 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
             HostRequest::WorldSnapshot => J::WorldSnapshot,
             HostRequest::WorldRestore { key } => J::WorldRestore { key: *key },
             HostRequest::WorldSnapshotDrop { key } => J::WorldSnapshotDrop { key: *key },
-            HostRequest::PayRent { player_id, tile, half } => J::PayRent {
+            HostRequest::PayRent {
+                player_id,
+                tile,
+                half,
+            } => J::PayRent {
                 player_id: *player_id,
                 tile: *tile,
                 half: *half,
             },
-            HostRequest::ChargeRent { player_id, tile, milli_scale } => J::ChargeRent {
+            HostRequest::ChargeRent {
+                player_id,
+                tile,
+                milli_scale,
+            } => J::ChargeRent {
                 player_id: *player_id,
                 tile: *tile,
                 milli_scale: *milli_scale,
@@ -868,7 +946,14 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 tile: *tile,
             },
-            HostRequest::Roll { player_id, count, sides, purpose, source, window } => J::Roll {
+            HostRequest::Roll {
+                player_id,
+                count,
+                sides,
+                purpose,
+                source,
+                window,
+            } => J::Roll {
                 player_id: *player_id,
                 count: *count,
                 sides: *sides,
@@ -913,18 +998,31 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 player_id: *player_id,
                 tiles: tiles.clone(),
             },
-            HostRequest::GainTyped { player_id, amount, typ, text } => J::GainTyped {
+            HostRequest::GainTyped {
+                player_id,
+                amount,
+                typ,
+                text,
+            } => J::GainTyped {
                 player_id: *player_id,
                 amount: *amount,
                 typ: typ.clone(),
                 text: text.clone(),
             },
-            HostRequest::AdjustMoney { player_id, delta, src } => J::AdjustMoney {
+            HostRequest::AdjustMoney {
+                player_id,
+                delta,
+                src,
+            } => J::AdjustMoney {
                 player_id: *player_id,
                 delta: *delta,
                 src: src.clone(),
             },
-            HostRequest::Marker { player_id, name, delta } => J::Marker {
+            HostRequest::Marker {
+                player_id,
+                name,
+                delta,
+            } => J::Marker {
                 player_id: *player_id,
                 name: name.clone(),
                 delta: *delta,
@@ -1902,7 +2000,9 @@ impl Ruleset {
             Call::Play { arg, .. } | Call::Counteract { arg, .. } => arg.clone(),
             _ => Vec::new(),
         };
-        let mut next_answer = 0;
+        // Start where the routine's answer log stands: a re-run resumes its
+        // own prefix instead of re-reading it from 0.
+        let mut next_answer = log.cursor;
         if matches!(
             call,
             Call::AtEnd { .. }
@@ -1998,21 +2098,6 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        let dbg = std::env::var("DBG_HOOK").is_ok()
-            && (self.inner.cards[card as usize].id.contains("蝴蝶")
-                || self.inner.cards[card as usize].id.contains("正论恶魔"));
-        if dbg {
-            eprintln!(
-                "PRE uid={} counters={:?} condition={:?}",
-                cand.uid,
-                cand.card_counters,
-                condition.is_some()
-            );
-        }
-        if dbg && condition.is_some() {
-            let v = crate::condition::admits_condition(condition, scope, cand);
-            eprintln!("PREV {v}");
-        }
         if self.guard_is_none(card, entry) {
             return Ok(
                 if crate::condition::admits_condition(condition, scope, cand) {
@@ -2046,15 +2131,6 @@ impl Ruleset {
                 )
             }) {
                 Ok(v) => {
-                    if std::env::var("DBG_HOOK").is_ok() {
-                        let su = store.data_mut().w().self_uid();
-                        let inst = store.data().wr().trigger().instance;
-                        let val = store.data().wr().trigger().value;
-                        eprintln!(
-                            "GUARD card={} entry={} v={} selfuid={} inst={} val={}",
-                            self.inner.cards[card as usize].id, entry, v, su, inst, val
-                        );
-                    }
                     store_for_guard = Some(store);
                     Ok(v != 0)
                 }
@@ -2089,9 +2165,7 @@ impl Ruleset {
             ));
         }
         Ok(match asked {
-            Ok(true) => {
-                self.declare_after(world, card, entry, player_id, log, st.log.cursor)?
-            }
+            Ok(true) => self.declare_after(world, card, entry, player_id, log, st.log.cursor)?,
             _ => Admitted::No {
                 next_answer: st.log.cursor,
             },
@@ -2185,7 +2259,7 @@ impl Ruleset {
             call_card_declare(&self.inner, &mut store, card, entry, player_id)
         });
         match res {
-            Ok((code, bytes)) if code == abi::EXIT_DECLINED as i64 => {
+            Ok((code, _bytes)) if code == abi::EXIT_DECLINED as i64 => {
                 let _ = finish(store, Ok(0))?;
                 Ok(DeclareOut::Declined)
             }
@@ -2264,7 +2338,9 @@ impl Ruleset {
         // One `next_answer` cursor threads the whole call: every guard, every
         // `OP_DECLARE` and every body reads the shared answer log in order, so
         // a prompt in entry 1 is never re-read by entry 2 (see [`Admitted`]).
-        let mut next_answer = 0;
+        // It starts at the log's own cursor, so a re-run resumes the routine's
+        // answered prefix rather than replaying it from the top.
+        let mut next_answer = log.cursor;
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
@@ -2727,7 +2803,10 @@ fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outc
                 ));
             }
             Ok(Outcome::Done(
-                state.world.take().expect("world is restored after nested calls"),
+                state
+                    .world
+                    .take()
+                    .expect("world is restored after nested calls"),
                 std::mem::take(&mut state.log),
             ))
         }
@@ -3495,12 +3574,7 @@ fn new_store<W>(engine: &Engine, state: HostState<W>) -> Store<HostState<W>> {
 }
 
 impl<W, R: RulesHandle> HostState<W, R> {
-    pub fn new(
-        rules: R,
-        world: W,
-        log: game_core::engine::GuestLog,
-        depth: u32,
-    ) -> Self {
+    pub fn new(rules: R, world: W, log: game_core::engine::GuestLog, depth: u32) -> Self {
         Self {
             invoke_frames: Vec::new(),
             rules: Some(rules),
@@ -4911,18 +4985,34 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 .map_err(HostError::into_err)
         },
     )?;
-    l.func_wrap(m, "trig_by_card_instance", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trig_by_card_instance(&mut c).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "trig_settle_facts", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trig_settle_facts(&mut c).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "trig_settle_paid_value", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trig_settle_paid_value(&mut c).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "trig_redirected_from", |mut c: C<W>| -> Result<i32, Error> {
-        hostfns::trig_redirected_from(&mut c).map_err(HostError::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "trig_by_card_instance",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_by_card_instance(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_settle_facts",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_settle_facts(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_settle_paid_value",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_settle_paid_value(&mut c).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_redirected_from",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_redirected_from(&mut c).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "draw_event_as",
@@ -4936,12 +5026,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "world_snapshot", |mut c: C<W>| -> Result<i32, Error> {
         hostfns::world_snapshot(&mut c).map_err(HostError::into_err)
     })?;
-    l.func_wrap(m, "world_restore", |mut c: C<W>, key: i32| -> Result<i32, Error> {
-        hostfns::world_restore(&mut c, key).map_err(HostError::into_err)
-    })?;
-    l.func_wrap(m, "world_snapshot_drop", |mut c: C<W>, key: i32| -> Result<i32, Error> {
-        hostfns::world_snapshot_drop(&mut c, key).map_err(HostError::into_err)
-    })?;
+    l.func_wrap(
+        m,
+        "world_restore",
+        |mut c: C<W>, key: i32| -> Result<i32, Error> {
+            hostfns::world_restore(&mut c, key).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "world_snapshot_drop",
+        |mut c: C<W>, key: i32| -> Result<i32, Error> {
+            hostfns::world_snapshot_drop(&mut c, key).map_err(HostError::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "neighbor",

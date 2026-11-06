@@ -84,7 +84,10 @@ fn runaway_nesting_is_stopped() {
     // until the recursion hits the depth bound.
     let mut answers: Vec<i32> = Vec::new();
     let err = loop {
-        let log = game_core::engine::GuestLog { answers: answers.clone(), ..Default::default() };
+        let log = game_core::engine::GuestLog {
+            answers: answers.clone(),
+            ..Default::default()
+        };
         match r.run(&TestWorld::new(1), call(), &log, None) {
             Ok(Outcome::NeedHost(..)) => answers.push(1),
             Ok(other) => panic!("expected the nesting trap, got {other:?}"),

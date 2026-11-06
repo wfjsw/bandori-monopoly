@@ -48,7 +48,7 @@ this one. What the draft got wrong:
 | R9 | §5.3 let the guest hosts decide a reapply "and continue the drive loop", but the guest store cannot call `apply_host_request` (no bridge handle). | The restore + overlay + apply is done by the **drive** in its `NeedHost` arm; the guest only parks the request and marks its `JournalStart`, and the resumed body re-reaches the same site (§6.3). |
 | R10 | §5.3's `Outcome::NeedHost` still pushed the answer, which is right only for a brand-new request; a resumed or recomputed one must insert or replace at its cursor. | `HostState` carries a `JournalStart` (`Push` / `Resume` / `Replace`) and the apply writes the answer at the entry's current slot; append is `Push` (§6.3). `Pending` carries the guest answer log, which the drive otherwise loses on a halt. |
 | R11 | §4.7 gave `world_snap` the key `self_uid()`. A hand play has uid **-1** (`wasm_rules.rs:11919`), so every hand play would share one key and the instance-drop cleanup could never see it. | `world_snapshot()` allocates the key and the request answer is its identity, so a hand play needs no uid; `World.world_snapshot_owners` lets an instance drop clean up a placed card's keys (§5.7). |
-| R12 | §6.6 made `no_breakup` restore a snapshot taken in its **play body** from a `tileResolved` hook and left the key to a local variable, which the hook cannot see. | The key rides a player slot, and the `settle_facts` reader must be a `tileResolved` entry on the same copy (§7.6). |
+| R12 | §6.6 made `no_breakup` restore a snapshot taken in its **play body** from a `tileResolved` hook and left the key to a local variable, which the hook cannot see. | The bookkeeping rides `latch:` slots (they cross inside the play body's own request, and the restore puts them back), the checkpoint is a second snapshot so its key sits inside it, and both readers are `tileResolved` entries on the same copy (§6.5.1, §7.6). |
 | R13 | §5.2's deferral record keyed the duplicate test on `(card, player)` with a *uid* exception but never said what a second copy does to its own crystals; the draft's `arisa_wait` spent crystals after the answer. | The claim is the record's existence for the pair; the losing copy answers 0 and spends nothing, the winner spends 3 (§6.2, §7.1). |
 | R14 | §5.4's `draw_event` halts and re-runs by the ordinary replay, but the release path was never given a return value. | `resolve_event` answers `Deferred` / `Resolved`; the release raises `eventResolved` only on `Resolved` (§6.2). |
 | R15 | §5.5 stamped `redirected_from` from a `landed` bool computed before the actor/self guards, so a self designation could stamp it. | `landed = live && to != p && to != by_player`, matching the fold's own condition (§6.4). |
@@ -58,6 +58,29 @@ this one. What the draft got wrong:
 | R19 | The draft had no necessity section, no clause match and no naming section. | §4, §13 and §14 exist. |
 | R20 | §5.3's `last` cap of 4 applies per slot, but the recompute can also lower the slot count; a cap hit kept the "last application" without saying which one. | §6.3 keeps the **last completed** application (delete the fresh attempt's writes by restoring the entry's `condition`), so a cap hit is a clean skip, not a half apply. |
 | R21 | §13 argued necessity by size ("three bits on the frame") without eliminating a single existing surface, so a reviewer could not tell whether a card-side or in-engine shortcut existed. | §13 now states four necessity tests, lists every candidate surface with its failing engine reason, names what each field's removal breaks, and answers the counterarguments with the trace or the clause. |
+| R22 | The draft's consume path only refreshed the copy; the request's own absolute results (money, and a move's landing) were left to be re-derived, so a stale copy crossed them back and undid the request (`world_restore`'s restored balance, `g04_play_staged_teleport_then_side_move`'s destination loop). | §6.3.1 records `after_money` / `after_pos` on the row and step 2 re-imposes both over live and the copy; the mover is also rewound to the request's pre-position at the next pass top so the re-run derives the same destination (`pending_move`). |
+| R23 | The draft rewound the pass to the pile base but not the RNG stream, so an effect roll the body threw was lost at the commit (`g03_no_expectation_shaves_effect_rolls` shaved nothing). | `commit_after` takes the copy's whole `rng`: the pass only consumes on the throw-away side, and the finished copy carries the consumption (§6; the pass-top stream rewind itself is gone, R33). |
+| R24 | The pile checkpoint rebuilt the copy but not `live`, so the copy's base kept the post-draw piles and the replayed draw found its card gone (tsugu's draw vanished). | The checkpoint is laid onto `live` (hidden information included) **before** the copy's crossing base (§6.3.6). |
+| R25 | `turn.placed_during_play` was not carried, so a placing play that paused before completing looked unplaced and was copied (`a_placing_play_is_not_copied`). | `adopt_turn_policy` carries it with the other staged turn fields (§6). |
+| R26 | `turn.play_doubled` was not carried, so the start square's doubling of a third party's played number was lost at the commit (both circle-staff tests). | `commit_after` carries it with `cancelled_designations` (§6). |
+| R27 | `commit_after` drained `mark_log` off the completing copy only; live kept a duplicate of the same row, the next pass inherited it, and `markChanged` re-entered the card every pass (`black_suits`'s `resync` re-placed its circle without bound — stack overflow). | `commit_after` clears live's `mark_log` with the drain; the copy's rows are the only copy raised (§6). |
+| R28 | Cards that mark "already done this drive" in ordinary player state lose it at the pass-top rewind, so the re-run repeats the step (tsugu's teleport re-fired, its post-move buy prompt never settled; 立希's 100-reroll guard reset every pass and the loop never ended). | Such a marker is a `latch:` slot, excluded from the rewind capture and crossing only at the commit (§6.3.1, `tsugu_ycm`, `taki_even_if` — whose guard is keyed to the roll transaction so the next activation starts over — and `tsukushi_garden`). |
+| R29 | A body that lands the mover **after** restoring money has its landing effect swallowed by the restore (CiRCLE's pass reward: 12000 instead of 10000), and the money reload then dragged the newer figure back. | Order the body teleport-first, restore-second (`ran_as_usual`), and re-impose the recorded post-request money only where the row's own `condition` still holds (§6.3.1). |
+| R30 | Mark-driven cards that clean up "while any mark remains" left their siblings placed when their own drive paused at the ask and another copy finished first (`hagumi`'s two stand-ins). | The body drops same-card siblings once no mark of its own is left (`hagumi_marks`). |
+| R31 | `black_suits` re-derived its borrowed `tile:circle` from the world alone. The placement is a guest write, so a nested `resync` ran before it crossed and attached another copy; and the `MarkChanged` entries also ran under the body's own `cardFired` raise. | The attached uid is a `latch:` slot (adopt-from-board on re-entry, drop by latch or by board scan), and the condition spells `kind == "markChanged"` (`black_suits`). |
+| R32 | The guest's trigger copy was dropped with the run when the body paused, so a `trigger::set_move_roll` a reroll wrote was gone by the next pass and the retry test the card had just failed re-fired on the original face (`sports_talent` re-rolled without end). | The engine's trigger is assigned back from the run's copy before the pass returns, as the commit path already carried it (§6). |
+| R33 | The pass top restored the RNG stream with the pile base, so every pass of a drive replayed the checkpoint's next faces and a threshold reroll could never leave its first face. | `PileCheckpoint::apply` / `PlayCtx::restore_pile_base` restore `hidden` only; a re-applied request redraws through its own restored `condition` (§6). |
+| R34 | The plan's `min_roll` floor reached the walk but not the face `do_move_roll` hands back, so 「直至结果至少为10为止」 compared the raw 1 the floor was about to rescue and re-rolled against it (`sports_talent` stormed for minutes). | `run_direct_roll` floors the face it returns (`floor_move_face`, unsigned only), like `run_planned_roll`'s end clamp (§6). |
+| R36 | The token rows were recorded against the pass base and deduped to the topmost row per counter. A re-run re-derives the same additive write, so the revert handed it back the pre-first-write value and the write landed twice or the dedupe dropped a real step (`kaoru`'s three-mark loop kept two). | Token, pile and field-counter rows record `(live, wrote)` at the boundary, are not deduped, and a boundary already at the guest's value records no row at all; `pre_landed` is retired (§15). |
+| R37 | Same for a pile: a `discard_from_hand` crossed at a pause came back to the hand at the next pass top and the re-run's second discard was deduped away (the 共鸣 fuel stayed in hand). | Pile rows chain against live like the token rows (§15). |
+| R38 | Same for a field counter: the `pre_landed` skip kept a crystal the crossing had already put on live, and the re-run added it again (Bang Dream! went to 2 crystals). | A field rewrite is measured against live; `added` is only an instance live does not carry at all (§15). |
+| R39 | The state revert only restored the base when `live == wrote`; where the re-run had already rebuilt the base value itself (`now == base`), the "routine moved it" branch re-applied the guest delta on top of it (the hand-limit cap went one over). | A world back at the base value (or at the absent key's `0` default) is put back to the base, not treated as a delta (§6.3.1). |
+| R40 | `restore_condition` / `restore_run_point` rewound `next_event` and `recent` with the world, so a re-run republished event ids already in the stream and the ids dropped below the test's `mark`. | Both are kept across the restore, like the latches (R35). |
+| R41 | `commit_after` did not carry the player's `persona`, so a persona the body set during the pass was lost when it completed. | The finished copy's persona is copied to live (§15). |
+| R42 | A skill that teleports *after* its ask re-derived the farthest set from the landing on every re-run, and the recorded pick index then named a different tile （里美的决心 teleported 28 instead of 59）. | The pick is a `latch:` slot and the body reuses it while the seat stands on the landing — the `tsukushi_garden` marker rule (R28) for a post-ask move. |
+| R43 | A move that completed cleanly and was followed by a *later* request's pause was not rewound at the pass top (`pending_move` armed only for a paused `Move` row), so the re-run derived its destination from the landing and walked a second time (`nfo_face2_jump_and_share` gained 3000 instead of 1000). | The pass top rewinds the pre-position of every `Move` row this run applied, oldest first per mover (§6.3.1). |
+| R44 | The mark uid allocator (`next_mark_uid`) rode neither the board delta nor the commit, so a pass-top revert removed the rows but handed the allocator back and the re-run reused their uids (`mark_ref_dies_with_the_card_and_does_not_alias`). | `BoardDelta::apply` / `restore` raise `next_mark_uid` to one past the highest row, the way `FieldDelta` does for `next_card_uid`. |
+| R35 | Every restore of the pass world (`Run::restore_from_world`, `restore_condition`, `restore_run_point`) dropped the body's `latch:` rows with it, so a cross-pass guard (`taki`'s reroll cap, stored under `latch:` keys as §6.5.1 requires) read `0` after each pause and the constant-die loop never reached it. | A restore is an undo of what the body derived; the latches are its frozen decisions, so each of the three paths re-lays the live `latch:` rows over the restored world (`World::latches` / `put_latches`, §6.5). |
 
 ## 1. Items
 
@@ -492,29 +515,28 @@ pub world_snapshot_owners: std::collections::BTreeMap<i32, i32>, // uid -> keys
 #[serde(default)]
 pub next_world_snapshot_key: i32,
 
-// Pending (the save's torn-routine slot), all `#[serde(default)]`
-pub host_journal: Vec<HostJournalEntry>,
-pub guest_answers: Vec<i32>,
-
-// PlayCtx, transient, a copy of the pending values while a pass runs
-pub host_journal: Vec<HostJournalEntry>,
-pub guest_answers: Vec<i32>,
-pub journal_resume: bool,
+// PlayCtx, transient: the drive whose body is running owns its `log` (§6.3.3)
+pub guest_log: GuestLog,
 // HostState, transient per drive: one GuestLog (folded into `answers` /
 // `next_answer`'s old fields, §6.3.5)
 pub log: GuestLog,
 // GuestLog
 pub answers: Vec<i32>,
 pub cursor: usize,
+pub start: usize,                                // the run's pass origin (§6.3.3)
 pub journal: Vec<HostJournalEntry>,
 pub reapply: std::collections::BTreeMap<usize, usize>,  // cursor -> outstanding count
 pub last: std::collections::BTreeMap<usize, HostJournalEntry>,
-pub replace_count: std::collections::BTreeMap<usize, u8>,  // cap per slot (§6.3.5)
+pub applied: std::collections::BTreeSet<usize>,  // slots whose effect is on live
+pub reapplied: std::collections::BTreeSet<usize>, // slots drift re-applied this drive
+pub fresh: u32,                                  // this drive run's id; not saved
 ```
 
-The journal is not world state: it exists only while a routine is torn, and a
-save is only taken at a prompt, so it rides `Pending` (which `Saved` already
-serializes) rather than `World`. `GuestOverlay`
+The journal is not world state: it exists only while a routine is torn, so it
+lives on the transient `PlayCtx.guest_log` rather than in `World`. A body resume
+(STACK-01) carries it in the suspended work item; an ordinary prompt halt drops
+it and the engine re-runs the routine from its snapshot, so no save has to
+carry it (§6.3.3). `GuestOverlay`
 (`crates/game-core/src/engine/cx.rs:674`) gains
 `#[derive(Clone, Serialize, Deserialize)]` and crate visibility for its
 fields; they are already save-shaped `StateVar`s.
@@ -719,11 +741,17 @@ effectful by construction; plain reads are separate imports):
   place until the new answer overwrites it (a halt before then must still find
   a `last` row).
 * on `Ok(v)`, insert `v` at the entry's **current** slot in the guest answer
-  log, call `st.w().after_host(entry.slot)`, advance the cursor past the answer
+  log, record the request's absolute result on the row where it has one
+  (`after_money`: every seat's balance; `after_pos`: the mover's landing, for
+  `Move` only), call `st.w().after_host(entry.slot, condition,
+  after_money, after_pos)`, advance the cursor past the answer
   (`Push` / `Resume` / `Replace` alike — the answer is the one this call now
   returns), move the entry into `cx`-side `last[slot]`, and shift every later
   slot (§6.3.4). `Replace` overwrites `answers[slot]` instead and does not
-  shift.
+  shift. The two result fields are `#[serde(default)]` and read back from the
+  row by the consume path (§6.3.2 step 2), which cannot recover them from the
+  world: the reload it would measure against has already been crossed by the
+  body.
 * on `Err` other than a suspension, leave the entry in flight; on `Err(Ask)`
   also seed its slot into the next pass's `reapply`.
 
@@ -758,19 +786,18 @@ st = c.st_mut(); at = st.next_answer;
        st.host_request = Some(req); st.host_journal_start = Resume(index);
        return pause
 2. if st.answers.get(at) is Some(x):
-       if st.last.get(&at) is Some(e):
-           if e.request == (&req).into() {
-               st.w().after_host(at); advance; return Ok(x) }
-           // the body recomputed its arguments from the post-request world
-           if the cap at `at` is reached (4, §6.3.5):
-               st.world = Some((*e.condition).clone()); e.guest.apply(st.w_mut())
-               st.w().after_host(at); advance; return Ok(x)   // clean skip
-           st.world = Some((*e.condition).clone()); e.guest.apply(st.w_mut())
-           bump st.replace_count[at]
-           st.host_request = Some(req); st.host_journal_start = Replace(at);
-           return pause
-       st.w().after_host(at)
-       advance; return Ok(x)          // a dead nested answer
+       // The request completed (a torn one was taken by step 1). Its effect is
+       // already on live, so the answer is reused -- even when the body
+       // recomputed the arguments, with one exception, the Move drift below.
+       if the row is a Move, the body recomputed it, and this slot is not in
+          st.reapplied:                                 // once per slot per drive
+           re-apply it under the new plan: Replace(at); the position is the
+           effect and the plan states it absolutely, so it is not rewound --
+           `plan.settles = false` (the old landing already settled) and the
+           deeper answers / entries are truncated; st.reapplied += at
+       else
+           st.w().after_host(at, row.condition, row.after_money, row.after_pos)
+           advance; return Ok(x)
 3. st.host_request = Some(req); st.host_journal_start = Push;
    return pause
 ```
@@ -799,28 +826,35 @@ on return instead of being written separately.
 
 #### 6.3.3 Resume
 
-The store is dropped when `finish` returns, so the log must cross on the halt
-itself: `Outcome::NeedHost` and `Outcome::NeedInput` gain the store's
-`GuestLog` (their `world` payload stays). On `Err(HaltKind::Ask)` from inside
-a request, or a prompt halt, the drive:
+The store is dropped when `finish` returns, but nothing has to cross on the
+halt: a resume re-runs the routine from its snapshot, so the torn pass's
+effects are gone from the world and every request it applied runs again.
+Prompts are re-asked and answered by the replay (`PlayCtx::ask`'s recorded
+`Answered` list), and a re-asked request is journaled afresh by step 3 of
+§6.3.2.
 
-* takes the returned log, moves its `journal` into `Pending.host_journal` and
-  its `answers` into `Pending.guest_answers`, and seeds every in-flight
-  entry's slot into `reapply`;
-* lets the halt propagate unchanged.
+That makes a drive's answer log **its own**. Step 1's journal restores
+in-flight entries *within* one drive's pass (a request is applied, the body
+re-runs from the top, and the site is re-entered), and the drive's cursor is
+resident over its own answer list from 0. A sibling drive of the same routine
+starts at 0 too: it re-asks its own prompts, which the replay answers in
+order, so the shared routine-wide sequence is rebuilt rather than read back.
+The one log that does cross is a **body resume** (STACK-01): the work item
+parks the drive's log itself, and `reapply` is seeded from its journal so the
+in-flight entry is re-entered at its slot.
 
-`complete_prompt` passes both pending fields to `execute`, which installs them
-on a fresh `PlayCtx` (`start` passes empty) and sets `journal_resume`. The
-first drive start consumes the flag:
-
-1. `answers = cx.guest_answers.take()`, `journal = cx.host_journal.take()`,
-   `reapply` seeded with the count of in-flight entries per slot.
-2. Run the body from the top. The prefix is ordinary replay: prompts before
-   the first torn request consume their logged answers (step 2 of §6.3.2).
-3. At the first request site that carries a reapply mark, step 1 of §6.3.2
-   takes the outermost in-flight entry, restores its `condition` and overlay
-   into the pass's world, and pauses with `Resume(index)`. The drive's
-   `NeedHost` arm applies it against live as for any other request.
+A resume is the *same* run, not a new one, so it restarts at the run's own
+pass origin — `GuestLog::start`, which every pass of the run has used — and
+not at the pause cursor. Restarting at the pause cursor put the body's entry
+announcement on the suspended request's own slot; the request behind it then
+reached the next pass one slot deeper, consumed the slot the run had written
+after the pause (the counter's own `draw`) and drew again
+(`c22_manas_counter_nobody_joins`, two cards where one is owed). From the
+origin the body re-consumes the completed prefix positionally, exactly as the
+pass before the pause did, and every slot keeps its meaning. An answer landing
+exactly on the origin does not move it (the origin *is* the run's first
+request); only an enclosing request's answer, which always lands before the
+run, pushes it along (§6.3.4).
 
 No special drive-start application is needed: the entry is re-applied exactly
 where the body reached it, and its answer lands at its own slot, so the call
@@ -830,17 +864,20 @@ this pass yet.
 
 This is what gives `be_strongest` its corrected ownership read: the body's
 first pass runs **after** the move was re-applied against live. When the
-recomputed destination differs, the later `Replace` branch re-applies from
-the entry's `condition` and the first application is gone.
+recomputed destination differs, step 1's mismatch branch restores the entry's
+`condition` and re-applies the move under the new arguments, and the first
+application is gone.
 
-A save between the halt and the resume is exactly a save inside `Pending`;
-both fields are `#[serde(default)]` so an older state loads empty.
+A save between the halt and the resume is exactly a save inside `Pending`; no
+guest-log field rides it, so the saved state is the snapshot plus the prompt.
 
 #### 6.3.4 Slots are dynamic
 
 `shift_slots(from)` bumps `slot` on every entry with `slot >= from`, the same
 keys in `reapply` (a cursor -> count map, because an enclosing and a nested
-entry can share a cursor), and the same keys in `last` and `replace_count`.
+entry can share a cursor), and the same keys in `last`. It also pushes the
+run's `start` origin along when that origin lies strictly after the insertion
+(the origin's own answer, at the origin, leaves it in place -- §6.3.3).
 It runs on every `Push` / `Resume` own-answer insertion, at that answer's
 slot; `Replace` writes over an existing slot and
 does not shift. Any entry still in flight at or after the insertion
@@ -855,14 +892,21 @@ R8) and the enclosing answer would land before its own nested answers.
 #### 6.3.5 Termination
 
 The journal holds **only in-flight entries**: a completed request pops its
-entry, so outside a torn stack it is empty. A per-slot cap of 4 `Replace`
-applications bounds a pathological recompute; the fourth hit is checked at
-the Replace branch before pausing, restores the completed `last[slot]`
-condition (dropping the pass's writes back to it), and consumes the existing
-answer — a clean skip, not a half apply.
+entry, so outside a torn stack it is empty, and §6.3.2 step 2 consumes a
+completed answer, so a body cannot loop on a request.
 
-`last` and `replace_count` survive only the drive's passes and are cleared
-when the drive returns.
+The one re-application is the **Move drift** (§6.3.2 step 2): a move whose
+destination the body recomputed from the world its own landing changed. It is
+bounded by `reapplied`, a per-slot set cleared at the drive's end, so a slot is
+re-applied at most once per drive even when the recomputation keeps differing;
+every later reach consumes. The other kinds never re-apply — an application
+they already crossed onto live is the correct one, and re-running it from the
+restored `condition` drops effects nested requests landed meanwhile (the
+Afterglow free-house build in the buy pipeline). `JournalStart::Replace` is
+the drift's plumbing; it is emitted only there.
+
+`last` survives only the drive's passes and is cleared when the drive
+returns.
 A frame abort (`Err` other than `Ask` / suspension) drops the entries it
 pushed.
 
@@ -878,9 +922,8 @@ prompt.
 tail and bounded by the effectful-request count in one body.
 
 The per-call guest log now travels as one value, because every part must
-move together: `GuestLog { answers: Vec<i32>, cursor: usize,
-journal: Vec<HostJournalEntry>, reapply: BTreeMap<usize, usize>, last:
-BTreeMap<usize, HostJournalEntry>, replace_count: BTreeMap<usize, u8> }`.
+move together: `GuestLog { answers, cursor, start, journal, reapply, last,
+reapplied, applied, fresh }` (the last three are drive-time only, not saved).
 `HostState` holds one instead of the bare `answers` / `next_answer`;
 `store()` / `HostState::new` take the log.
 
@@ -896,6 +939,34 @@ applies anything.
 Nested `play_card` moves the log into the nested store and adopts it back at
 the same places `next_answer` moves today (`hostfns.rs:3261-3296`), and
 `Admitted::Yes { next_answer }` becomes the log's advanced cursor.
+
+#### 6.3.6 The pile prefix
+
+Pile operations are not idempotent the way other host effects are: a draw
+advances the RNG, a reshuffle permutes the deck, an inspection reshuffles. The
+replay therefore does not re-run them. Instead the drive keeps a `PileCheckpoint`
+and, from the first `Draw` / `InspectionBegin` request on, every pass rebuilds
+the run world's piles from it (and raises the `reshuffled` lines the replay
+would otherwise lose).
+
+The checkpoint is also laid onto `live` *before* the copy's crossing base is
+taken: the copy was reloaded from the world the request left, so without it the
+piles keep the request's post-draw state as their base and the replayed draw
+finds the card already gone (the tsugu draw was dropped). The same holds for
+the builder's hidden information, which is taken from the checkpoint. The
+**stream** is not part of the rebuild, though: a draw replayed through step 1
+restores its own `condition` (RNG included), while cutting the drive's stream
+back at every pass top pinned every later cast to the checkpoint's next faces
+and a threshold reroll could never leave its first (§6).
+
+The checkpoint must be the **drive start** world, not the request site: the
+body may already have written piles in the pass that first reaches the request
+(a `ctx::draw` after a `ctx::add_to_dest` refill loop), and a request-site base
+captured then already contains those writes, so the commit pass would see a
+refilled pile and a guard reading it (`deck_count() == 0`) would skip the card's
+whole body. `drive_inner_body_from` snapshots `cx.share_world()` at entry --
+free, a refcount bump -- and deep-clones it only at the first pile request, so
+pile-free drives pay nothing.
 
 ### 6.4 Redirect fact (`wasm_rules.rs:6825-6920`)
 
@@ -932,11 +1003,45 @@ the link's negation. Recorded as Q3.
 * `destroy_instance_units` (`ops.rs:2380`) additionally drops every key under
   `world_snapshot_owners[uid]` (a stale key otherwise leaks the world clone
   into every later save). Hand plays have uid `-1` and no cleanup; the card
-  drops its key itself (§7.6).
+  drops its key itself (§7.6). A placement (`place_card_on` / `place_card_at`)
+  additionally **adopts** every key the placing body held onto the new
+  instance's uid (the caller uid is read before the placement, since the new
+  instance becomes the running body after it), so a hand play's key is owned
+  by the copy it puts on the field rather than orphaned at `-1`.
 
 The restore at `tileResolved` runs while the frame is still on the work stack;
 restoring `pos` does **not** retarget the settle (the frame's `at` is fixed,
 `docs/rulebook/SETTLE-STAGES.md` §7). The main-move latch is not restored (Q6).
+
+A restore writes keyed `state` back, and a latch slot is ordinary state, so it
+rewinds the card's own bookmarking too. That is what `no_breakup` relies on:
+the armed marker is set **before** the snapshot, so the restore puts it back
+and the terminal's re-run still finds it (§7.6). The mirror-image constraint is
+that a value the terminal needs after its request can only be written through a
+key that is *inside* the restored snapshot; the recorded checkpoint key is
+therefore produced by a second snapshot, not by a card-chosen string (§6.5.1).
+
+The opposite direction holds too when the restore is not a card's own snapshot
+but the engine's pass rebuild: the guest copy restore (`Run::restore_from_world`),
+the request replay (`restore_condition`) and the run-point restore all re-lay the
+live `latch:` rows over the world they build. Those rows are the body's frozen
+decisions, not something the world derives, and the pass top that follows would
+otherwise un-freeze them (`taki`'s reroll cap).
+
+#### 6.5.1 Latch reads in conditions
+
+Latch keys (`latch:<name>`) are excluded from a drive's state capture and cross
+to live only through `adopt_turn_policy`. A `tileResolved` terminal is collected
+from the world the play body's own request produced, i.e. before the parent's
+commit, so a condition there cannot read a latch through the ordinary state
+massage — it would see `0`.
+
+`slot(name)` is filled from the fixed `SLOT_NAMES` list through
+`condition::slot_value`, which reads `name` and falls back to `latch:name`
+(and registers both spellings in the candidate table). A card's `latch:`
+slot name therefore has to be listed in `SLOT_NAMES`; the spelling in the
+condition is the prefixed key, because the unprefixed one is a genuinely
+different (non-crossing) variable in every other context.
 
 ### 6.6 Kani model (`crates/card-sdk/src/kani_host.rs`, `ctx/sys_kani.rs`,
 `rules/kani/src/host.rs`)
@@ -1073,78 +1178,129 @@ no longer on probe passes. A rent or a direct effect to the owner has no
 
 ### 7.6 `no_breakup`
 
-`const SLOT_SHOT: &str = "nb_shot";`
+The shot's bookkeeping rides three `latch:` slots — `latch:nb_armed` (the
+terminal guard), `latch:nb_base` (the first snapshot key) and
+`latch:nb_judged` (the checkpoint a terminal finished). A latch, because the
+settle that collects the terminals runs **inside the play body's own host
+request**, and instance counters and placement do not cross before the parent's
+commit; the latch crosses through `adopt_turn_policy`.
 
-At the play's start, before the ask:
+Two `world_snapshot` requests, back to back, take the checkpoint (§6.5):
 
 ```rust
-let key = ctx::world_snapshot()?;
-ctx::set_slot(player_id, SLOT_SHOT, key);
+ctx::world_snapshot_drop(ctx::slot(player_id, JUDGED))?;
+ctx::set_slot(player_id, ARMED, 1);
+let base = ctx::world_snapshot()?;          // BASE
+ctx::set_slot(player_id, BASE, base);
+let checkpoint = ctx::world_snapshot()?;    // BASE + 1: the checkpoint
+if ctx::slot(player_id, JUDGED) != checkpoint {
+    // already judged and restored -- the marker stays down
+} else {
+    ctx::set_slot(player_id, ARMED, 0);     // this body is the pre-shot run
+}
 ```
+
+The second snapshot is the one the terminals restore. The bookkeeping has to
+be inside it (the restore writes state, so an outside marker would be rolled
+back and the terminal's re-run would fall through its guard), but the
+checkpoint key cannot be known before the request that produces it — hence the
+disposable first key, written to a slot, then covered. Nothing allocates
+between the two, so the checkpoint is `BASE + 1`.
 
 Add two `tileResolved` entries on the same copy -- the failure and the
 success terminal -- both keyed to this settle's own tile:
 
 ```rust
 On::Action(Action::TileResolved(
-    "slot('nb_shot') > 0 && tile.id >= 0 && settle.tile == tile.id",
+    "slot('latch:nb_armed') > 0 && settle.tile >= 0",
     Some(failed_shot), revert)),
 On::Action(Action::TileResolved(
-    "slot('nb_shot') > 0 && tile.id >= 0 && settle.tile == tile.id",
+    "slot('latch:nb_armed') > 0 && settle.tile >= 0",
     Some(kept_shot), settle_after)),
+On::Play("", Some(cant_play), no_breakup),   // and, in the body:
+ctx::set_dest(ctx::Dest::Field);
+if ctx::self_tile().is_none() { ctx::place_card(player_id, ID, &Msg::new(...)); }
 ```
 
 with
 
 ```rust
 fn failed_shot(player_id: i32) -> bool {
-    !ctx::player_out(player_id)
+    ctx::slot(player_id, ARMED) > 0
+        && !ctx::player_out(player_id)
         && !repeated_digits(ctx::money_of(player_id))
 }
-fn kept_shot(player_id: i32) -> bool { !failed_shot(player_id) }   // the same predicate, inverted
+fn kept_shot(player_id: i32) -> bool {
+    ctx::slot(player_id, ARMED) > 0 && !failed_shot(player_id)
+}
 
-fn take_key(player_id: i32) -> i32 {
-    let key = ctx::slot(player_id, SLOT_SHOT);
-    ctx::set_slot(player_id, SLOT_SHOT, 0);            // 0 = no shot armed
-    key
+fn finish(player_id: i32, checkpoint: i32) {
+    ctx::set_slot(player_id, ARMED, 0);
+    ctx::set_slot(player_id, JUDGED, checkpoint);
 }
 fn revert(player_id: i32) -> card_sdk::Asked {
-    let key = take_key(player_id);
-    ctx::world_restore(key)?;
-    ctx::world_snapshot_drop(key)?;
+    let base = ctx::slot(player_id, BASE);
+    let checkpoint = base + 1;
+    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::world_restore(checkpoint)?;
+    ctx::world_snapshot_drop(base)?;
+    ctx::world_snapshot_drop(checkpoint)?;
+    finish(player_id, checkpoint);
     ctx::log(player_id, &Msg::new(key!("no_breakup_reverted")));
     Ok(())
 }
-fn settle_after(player_id: i32) -> card_sdk::Asked {
-    ctx::world_snapshot_drop(take_key(player_id))?;
-    Ok(())
-}
+fn settle_after(player_id: i32) -> card_sdk::Asked { /* drops, finish, Graveyard */ }
 ```
 
-The key rides a slot because the `tileResolved` hook is a different body from
-the play body (review R12); the request answer keeps it stable across a
-re-run. The slot starts at `0` (its absent read) and `world_snapshot` keys
-start at `1`, so `> 0` is the armed test. Both entries clear the slot, so only
-one runs and a successful card does not leak a world clone.
-`destroy_instance_units` covers the placed case.
+Three ordering rules follow from the drive (§6.3.3: after every host request
+the body re-runs from the top):
+
+* the armed marker is set **before** the snapshot, so the restore re-arms it
+  and the entry condition still holds on the terminal's resume pass;
+* `finish` runs **after** the terminal's requests — disarming before the pause
+  would make the resume pass fall through its own entry;
+* the body disarms itself only when `JUDGED` does not already name this
+  checkpoint, and places the card only when `self_tile()` is `None`, because
+  the re-run re-encounters both.
+
+`JUDGED` also keeps a later settle of the match from firing the card again: the
+re-run re-consumes the same snapshot answers, so without the comparison the
+body would re-arm on top of the finished shot. Both entries clear the marker,
+so only one runs. `destroy_instance_units` covers the placed case.
+
+### 7.7 `pool_bug` — the self-file rule
+
+The card's 「下次触发事件时将此卡放入事件弃牌」 is an `On::Action(Action::Event)`
+hook. The raise that draws the card is dispatched **before** the card binds, so
+the card's own draw does not reach its own hook; the body opens with
+`if ctx::trigger::card_is(ID) { return Ok(()); }` to keep that true if the
+binding order ever changes. It is also what makes the G10 deferred extra draw
+observable: the extra event draws 卡池BUG, the card plays and seeds its
+修复公告, and the next event (the release's own follow-through) files it away —
+the `g10_deferred_extra_draw_is_an_event_at_the_station` assertion reads the
+event discard, not `event_in_play`.
+
+A one-shot `prop` marker was tried and rejected: a deferred release is itself a
+deferred event, so no "is this my arrival" flag set at `play` survives to the
+next raise; a `by_card_instance` comparison fails the same way (the next event
+is not caused by this card, but both raise shapes are indistinguishable from an
+arrival without the trigger's own card).
 
 ## 8. Save / record / replay
 
 * **SAVE_VERSION 16 → 17** (the next bump after G09's). `World.deferred_events`,
   `World.world_snapshots`, `World.world_snapshot_owners` and
-  `World.next_world_snapshot_key` (all outlive a pass),
-  `Pending.host_journal` and `Pending.guest_answers` (a save is taken
-  mid-prompt, with a torn routine) are all `#[serde(default)]`. Old saves are
-  refused by `restore_saved`'s exact-version check (`mod.rs:534`) anyway; the
-  defaults keep hand-edited or migrated state loading.
+  `World.next_world_snapshot_key` (all outlive a pass) are all
+  `#[serde(default)]`. Old saves are refused by `restore_saved`'s
+  exact-version check (`mod.rs:534`) anyway; the defaults keep hand-edited or
+  migrated state loading.
 * **RECORD_VERSION stays 4.** `Answered` is unchanged; the new fields ride
   world/pending state. A record replays through its archived engine bundle, so
   an older engine never sees a v115 key.
-* `SettleFacts`, `by_card_instance`, `redirected_from`, `last`, `reapply` and
-  `replace_count` are transient: all are re-derived on a re-run, exactly like
-  `settle_tile` / `outcome` / `settle_stack`. The journal is transient in the
-  same sense (it exists only while a routine is torn and is cleared when it
-  completes) but is saved on `Pending` because a resume needs it.
+* `SettleFacts`, `by_card_instance`, `redirected_from`, `last`, `reapply`,
+  `start` and `applied` are transient: all are re-derived on a re-run, exactly
+  like `settle_tile` / `outcome` / `settle_stack`. The journal lives with the
+  drive's log (§6.3.3) and is not saved: a resume re-applies the requests.
 * A save inside a settle re-runs the routine; the settle work stack
   (`ContinueSettleWork`) is not saved today either, so nothing new is lost.
 * Replay determinism: the deferral queue and the snapshot map are world
@@ -1327,7 +1483,9 @@ cannot answer silently.
    to today's behaviour?
 10. **Does `world_snapshot` need a card-chosen key at all?** The allocating
     form keeps the card free of identity; a card wanting two checkpoints holds
-    two answers. Confirm no caller wants an externally named key.
+    two answers, and consecutive keys are guaranteed while nothing else
+    allocates (the `no_breakup` `BASE + 1`). Confirm no caller wants an
+    externally named key.
 11. **The release's tile.** The record resolves at the tile the original draw
     stood on, where the event's body reads `trigger.tile`; the drawer may have
     moved since. The alternative — the drawer's position at release — moves
@@ -1576,6 +1734,169 @@ Two shapes differ from the text above and are the ones the code uses:
   between drive starts (never a second live copy alongside the store's own);
   §6.3.4's "two copies" paragraph describes the split the single value
   replaced.
+* Owner rows cross guest-write boundaries like every other boundary field
+  (`PassBase.owners`, `GuestOverlay.owners`, `commit_after`). Without that a
+  nested card drive's commit writes its own world clone's `owners` table back
+  over the live one and silently undoes the adoption (§6.5), leaving the revert
+  hook with a key its instance does not own.
+
+* The live world is the base for every drive. A guest write crosses onto live
+  as a revertible `GuestOverlay` push above a per-drive `overlay_floor`, and the
+  commit pass / `commit_after` revert to the floor before diffing. Each pass
+  keeps a `PassBase` snapshot of the pre-pass world, so the diff a pass that
+  itself crossed produces is still the guest's own delta, not the host effects
+  under it. Every crossing guard is three-way -- `live == base` takes the guest
+  value, `live == wrote` leaves it, otherwise the delta `wrote - base` is added
+  -- so an effect that already moved the value is never doubled.
+  * **A surface is reverted once, not once per row.** Several pauses of one
+    drive can record the same surface against the same base, and the rows are
+    not dropped at a pause -- a later pause has no stable point to re-capture
+    from until its pass top, and dropping there also lost the nested work the
+    enclosing body re-runs (a counteraction chain's nested draw, the invoked
+    band skill's effects). Instead the revert (`restore_guests_to`) keeps the
+    topmost row per state `(player, key)` and reverts that one only. Reverting a
+    duplicate row a second time puts the first row's base back, and its delta
+    guard then adds the write *again* (`s08_sakiko_absorbs_statuses` walked a
+    transferred `[停留]` from 2 to 4).
+  * **A restart re-derives the nested crossings.** The restart re-runs the body
+    *and the nested hooks its own host work fires*, so a nested crossing (a
+    `PassTile` hook's status grant) is reverted with the rest and lands once
+    when the restart gets there; keeping it landed it twice. The learn -> commit
+    transition and `commit_after` therefore revert **every** row above the
+    floor (`restore_guests_all_to`, by position, not by owning drive), and the
+    reload base (`pass_base_for`) does the same. The pass top after a prompt
+    answer keeps other drives' rows (`restore_guests_to`: its own, deduped as
+    above) because the enclosing drive's crossings stay valid there.
+  * The reload after a consumed request bases on `live` minus the drive's own
+    crossings, not on the request's pre-state: a surface the routine superseded
+    keeps the routine's value, and the guest write is re-recorded as a delta
+    over it, so the pass top puts the routine's value back rather than the
+    pre-request one. It is also the base the pass top will leave.
+  * **Additive rows chain, and are not deduped.** A token counter, a pile list
+    and a field instance are written by read-modify-write in the body, so a
+    row recorded against the pass base and re-derived on the re-run applies a
+    second time; the topmost-of-`(player, key)` dedupe above drops the earlier
+    row but keeps the pass base, so the revert puts back the pre-*first*-write
+    world and the re-run adds on top of its own result. Those three families
+    therefore record `(live, wrote)` at the boundary — live, not the pass
+    base — and keep **every** row (`retain_unseen_overlay_rows` does not
+    filter them). A boundary already at the guest's value records no row at
+    all. Reverting a chained row puts the world back exactly where that
+    boundary found it, so the reverse-order unwind composes and the commit's
+    re-apply lands each step once (a three-mark loop kept all three plants;
+    the 共鸣 fuel stayed discarded; a band crystal landed at 1, not 2).
+    A field instance counts as an addition only when `live` does not carry it
+    at all; one `live` carries is a rewrite against live, which also retires
+    the old `pre_landed` "a nested drive committed this" skip list.
+  * Two surfaces take their base from the reload point instead, because a
+    re-derived write must not be re-added over itself:
+    * **money** is an absolute total and the request's own effect is already
+      on `live`; measured against the pass base the effect reads as a guest
+      write and is crossed back (a `pay`'s debit undone by its own replay).
+      The reload therefore writes the recorded post-request figure over
+      **both** `live` and the copy instead of relying on a three-way guard:
+      the copy's own figure differs from `live` whenever the body wrote it in
+      an earlier pass, and a stale copy crossed back would undo the request
+      (a `world_restore` putting an old balance back, then the reload
+      re-imposing the pre-restore total). `Run::pass_base.money` keeps the
+      pass-start figure: the commit's row is the whole pass delta, or a write
+      made before the last request would be reverted by the pass top and
+      never re-applied.
+    * **position** has the same shape for a `Move`: the landing is the
+      request's effect and the reload writes the recorded `after_pos` over
+      both sides, while `after_host`'s copy refresh lays it down for the
+      body's own post-request reads. A replayed body derives a move's
+      destination from where the mover *is*, so the drive also rewinds the
+      mover to the request's pre-position at the next pass top (before the
+      body runs) and the re-run reaches the move once more; the re-imposed
+      landing then stands. Without the rewind a teleport that started from a
+      stale copy derived its destination from the landed position and walked
+      on (`g04_play_staged_teleport_then_side_move` looped). The rewind is
+      per **run**, not per paused request: a move that completed cleanly has
+      already left the mover on live by the time a *later* request pauses, so
+      the pass top gives back the recorded pre-position of every `Move` row
+      this body run applied (oldest first per mover, matched by the row's
+      generation). Nothing keeps the figure on the world -- an ordinary guest
+      write is the overlay, a landing is the request's -- the drive reads it
+      from the rows and rewinds the position only, so the re-run derives each
+      plan from where its own request started.
+    * **piles** are ordered lists replayed as an edit and take their base
+      from `live` (the chaining rule above): a card the body added already
+      crossed by an earlier pause, or one the request moved, would otherwise
+      be inserted a second time against the pass base. `apply_pile_edit` also
+      moves a card `live` already carries instead of inserting it again, one
+      occurrence per copy `live` really had, so a delta recorded twice over
+      the same write converges.
+  A copy refresh (`Run::after_host`, `DriveInline::apply`, the replay arm) also
+  carries `turn.plan` / `turn.plan_stack` and the plan tags, which are staged
+  writes the refresh must not drop. `commit_after` carries the same way `turn.plan` /
+  `turn.plan_stack`, `turn.cancelled_designations`, `turn.play_doubled` and
+  the guest-only top-level world fields (`extra_turns`, `end_turn_request`,
+  `blocked_settle`): the engine reads all of them off **live** right after the
+  body returns, so nothing replays them there and a live-base merge would drop
+  the write (`ctx::give_extra_turn`'s extra turn, `net_error`'s cancelled
+  designation, the start square's doubling of the played card's number all
+  did). `commit_after` also takes the copy's **RNG stream**: an effect roll the
+  body threw consumes on the throw-away side only -- the finished copy holds
+  the pass's whole consumption (`g03_no_expectation_shaves_effect_rolls` lost
+  its shave otherwise). The pass top rewinds the **piles** to the pile base so
+  a re-applied draw finds the same deck, but it does **not** rewind the RNG
+  stream with them: a stream cut back to the checkpoint pinned every pass to
+  the checkpoint's next faces, so a reroll that repeats until a threshold
+  (`ctx::do_move_roll` in 运动的天赋's 「重骰…直至结果至少为10」) drew the same
+  face on every pass and could never leave it. A re-*applied* request still
+  redraws its own card: step 1 restores that request's recorded `condition`,
+  RNG included (§6.3.2). `adopt_turn_policy` carries
+  `turn.placed_during_play` the same way: the placement record is read off
+  **live** when the play completes, and the body's `place_card` wrote it on the
+  copy a pause earlier (G06 §2.15).
+  `mark_log` is the **drain** (G01 §5.3): `commit_after` takes the rows off the
+  copy to raise them, and must clear live's copy of the same rows. A nested
+  drive's mark write lands on live and the next pass's copy inherits it from
+  there, so an uncleared live log re-raises the row on every pass — the raise
+  re-enters the card, which writes again (`black_suits`'s `resync` attached a
+  fresh circle per pass, unbounded).
+  The pass's **trigger copy** goes back the same way: `Run.trigger` is the
+  trigger object the pass hands to the body, and the engine reads the trigger
+  off the server side after the body returns. A body that rewrites the trigger
+  and then pauses (`ctx::set_move_roll` in that same reroll, `set_pay_amount`)
+  must find its write on the next pass, so the guest's copy is assigned back
+  onto the engine's before the pass returns; the commit path already carried
+  it and only the paused path did not.
+* The plan's `min_roll` floor is part of the **result**, not only of the walk:
+  `run_direct_roll` applies it to the face it hands back (`floor_move_face`,
+  unsigned rolls only, as `run_planned_roll`'s end clamp does). A reroll
+  routine reads its own throw back and compares it to the threshold
+  (「直至结果至少为10为止」); with the floor only on the final face the retry
+  saw the raw 1 the floor was about to rescue and re-rolled against it.
+* `GuestLog` gained `applied` (slots whose effect is already on live, so a
+  re-run in the same drive reuses them instead of applying twice) and `fresh`
+  (the drive's run id), paired with `HostJournalEntry.generation`.
+* §6.3.2 step 2 **consumes a logged answer**; re-applying is the exception,
+  not the rule. Two cases re-apply: a *torn* request (a raise or a move halted
+  at its nested prompt) is taken by step 1 with its recomputed arguments, and a
+  **Move drift** — a move whose destination the body recomputed from the world
+  its own landing changed — is re-applied under the new plan once per slot per
+  drive (`reapplied`), with `plan.settles = false` and without rewinding the
+  position. Every other kind consumes: the request already landed on live, and
+  re-running it from the restored `condition` drops effects nested requests
+  landed meanwhile — the Afterglow free-house build in the buy pipeline lost
+  its house that way.
+* The move drift replaces an earlier, broader attempt: re-running every
+  `Raise` whose body had prompted. `applied` is cleared at each pass top, so
+  the guard held on every restart and the card body re-ran forever
+  (`mutsumi_never`'s band-skill invoke). Consuming at the raise is enough —
+  the invoked body is re-entered by the enclosing body's own re-run.
+* A nested drive inherits the parent's log, so it also inherits its **cursor**
+  (`drive_start_cursor = log.cursor`); starting it at 0 made the nested body
+  re-consume the enclosing body's answers from the top and answer its own
+  requests with them. A fresh drive's log is empty, so it still starts at 0.
+* A **body resume** is not a new drive: it restarts at the run's own origin
+  (`log.start`), not at the pause cursor. At the pause cursor the body's entry
+  announcement overwrote the suspended request's slot, so each pass reached
+  the request one slot deeper, ate the answer the run had written after it and
+  asked again (the join counter drew twice, `c22_manas_counter_nobody_joins`).
+  `start` moves along only when an enclosing answer lands strictly before it.
 
 Everything else (§6, §7) landed as written. When G09 lands after this, it
 takes 115 and 132-136 / 451-470 with no renumbering here.

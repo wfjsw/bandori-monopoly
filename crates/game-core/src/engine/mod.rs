@@ -45,7 +45,7 @@ pub use cx::{
     AnswerProvider, Answered, Ask, Flow, Halt, HeuristicProvider, PlayCtx, Reply, SettleOutcome,
     AI_UNSET,
 };
-pub use cx::GuestOverlay;
+pub use cx::{FieldDelta, FieldWrite, GuestOverlay, PassBase};
 pub use journal::{
     DeferredEvent, GuestLog, HostJournalEntry, JournalRequest, JournalStart, PlayerSnapshot,
     WorldSnapshot,
@@ -55,8 +55,8 @@ pub use play::purchase;
 pub use play::MAX_SETTLE_DEPTH;
 pub use play::{Paid, Pay, PayEvent, PayFactorScope, PayKind, PayShape};
 pub use rules::{
-    CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
-    SettleFacts, TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
+    CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, SettleFacts,
+    StubRules, TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
 };
 pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
@@ -319,11 +319,6 @@ struct Pending {
     snapshot: World,
     answers: Vec<Answered>,
     live: Live,
-    /// The torn pass's in-flight host requests and guest answer log (G10).
-    #[serde(default)]
-    host_journal: Vec<HostJournalEntry>,
-    #[serde(default)]
-    guest_answers: Vec<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1559,35 +1554,17 @@ impl Match {
 
     fn start(&mut self, r: Routine) {
         let snapshot = self.world.clone();
-        self.execute(r, snapshot, vec![], None);
+        self.execute(r, snapshot, vec![]);
     }
 
-    fn execute(
-        &mut self,
-        routine: Routine,
-        snapshot: World,
-        answers: Vec<Answered>,
-        resume: Option<(Vec<HostJournalEntry>, Vec<i32>)>,
-    ) {
+    fn execute(&mut self, routine: Routine, snapshot: World, answers: Vec<Answered>) {
         let (data, rules) = (self.data.clone(), self.rules.clone());
         // Simulation mode: answer inline through the installed provider
         // (`docs/BOT.md` §3.2). With none installed this is the halt/replay
         // path, unchanged.
         let mut prov = self.provider.take();
-        let (res, delay, mut w, mut guest_log) = {
-            if std::env::var("DBG_HOOK").is_ok() {
-                eprintln!(
-                    "EXECUTE answers={} step={}",
-                    answers.len(),
-                    snapshot.st.step
-                );
-            }
-            let mut cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
-            if let Some((journal, guest_answers)) = &resume {
-                cx.guest_log.journal = journal.clone();
-                cx.guest_log.answers = guest_answers.clone();
-                cx.guest_log.cursor = guest_answers.len();
-            }
+        let (res, delay, mut w) = {
+            let cx = PlayCtx::new(snapshot.clone(), &data, &*rules, &answers);
             let mut cx = match prov.as_mut() {
                 Some(p) => cx.with_provider(&mut **p),
                 None => cx,
@@ -1605,8 +1582,7 @@ impl Match {
                 res = cx.drain_work();
             }
             let delay = cx.take_delay();
-            let guest_log = std::mem::take(&mut cx.guest_log);
-            (res, delay, cx.into_world(), guest_log)
+            (res, delay, cx.into_world())
         };
         self.provider = prov;
         self.changed = true;
@@ -1705,8 +1681,6 @@ impl Match {
                     snapshot,
                     answers,
                     live: Live::new(*ask),
-                    host_journal: std::mem::take(&mut guest_log.journal),
-                    guest_answers: std::mem::take(&mut guest_log.answers),
                 });
             }
             // STACK-01 fallback only: the pump above swallows suspensions, so
@@ -1742,12 +1716,7 @@ impl Match {
         self.prompt_log.push(a.clone());
         let mut answers = p.answers;
         answers.push(a);
-        self.execute(
-            p.routine,
-            p.snapshot,
-            answers,
-            Some((p.host_journal, p.guest_answers)),
-        );
+        self.execute(p.routine, p.snapshot, answers);
     }
 
     /// Every [`Answered`] committed so far, in order (`docs/BOT.md` §3.2's

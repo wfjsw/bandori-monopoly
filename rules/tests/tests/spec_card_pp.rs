@@ -694,8 +694,17 @@ fn no_expect_hand() {
         if !f.immune {
             return Err("C-PP-no-expect-01: [特] 不受任何其他效果影响 -- immune not set".into());
         }
-        if !t.draw_pile(0).contains(&"PP:[衍生]共鸣".to_string()) {
-            return Err(format!("共鸣 not added to draw: {:?}", t.draw_pile(0)));
+        // The add is `DeckRandom` (a shuffle), so the drawn card may legitimately
+        // be the 共鸣 itself -- the deterministic part is that it went into the
+        // draw pile and one card was drawn.
+        if !t.draw_pile(0).contains(&"PP:[衍生]共鸣".to_string())
+            && !t.hand(0).contains(&"PP:[衍生]共鸣".to_string())
+        {
+            return Err(format!(
+                "共鸣 not added to draw: deck {:?} hand {:?}",
+                t.draw_pile(0),
+                t.hand(0)
+            ));
         }
         // Hand limit -1 (determined by (1)); check the prop is live.
         if t.p(0).hand_limit() != Some(4) {
