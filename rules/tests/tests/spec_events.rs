@@ -451,11 +451,11 @@ fn estate_auction_grants_a_deed() {
         t.set_draw(0, &["通用:GREAT"]);
         t.observe(DRAW_CLAUSES);
         draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
-        // Sealed high-bid over a `choice` of 0, 1000, …, 10000.
+        // The engine auction: P0 bids 2000, P1 passes (`-1`).
         let mut estate = None;
         if let Some(p) = t.prompt() {
-            if let Some(Arg::Tile(n)) = p.text.args.get("tile") {
-                estate = Some(*n as usize);
+            if p.kind == "auction" && p.tile >= 0 {
+                estate = Some(p.tile as usize);
             }
         }
         if estate.is_none() {
@@ -464,13 +464,12 @@ fn estate_auction_grants_a_deed() {
                 t.dump_prompt()
             ));
         }
-        // P0 bids index 2 (=2000), P1 bids index 1 (=1000).
-        for bid_idx in [2, 1] {
+        for bid in [2_000, -1] {
             if t.prompt().is_none() {
                 break;
             }
             let who = t.asked()[0];
-            let _ = t.answer(who, bid_idx);
+            let _ = t.answer(who, bid);
         }
         drain(&mut t);
         // Exactly one new deed under P0, paid for out of P0's money.
@@ -498,20 +497,18 @@ fn estate_all_pass_leaves_no_new_deed() -> Result<(), String> {
     let mut t = Table::vanilla(2);
     t.set_draw(0, &["通用:GREAT"]);
     draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
-    // Every seat takes the 0 bid (index 0) -- a real bid of 0, not a decline.
+    // Every seat passes (`-1`): nobody bids.
     while let Some(p) = t.prompt() {
-        if p.kind == "choice" {
+        if p.kind == "auction" {
             for who in t.asked() {
-                let _ = t.answer(who, 0);
+                let _ = t.answer(who, -1);
             }
             t.settle();
         } else {
             t.decline();
         }
     }
-    // A 0-bid is still a bid; 「出价最大的玩家」 is then a (tied) max. The
-    // book does not break the tie (OPEN-estate-tie) -- only that no *higher*
-    // bid exists is determined. Assert the money stayed put for everyone.
+    // No winner, so no payment and no deed.
     for who in 0..2 {
         if t.money(who) != 10_000 {
             return Err(format!(
@@ -2587,16 +2584,17 @@ fn estate_grants_only_the_auctioned_tile() {
         t.set_draw(0, &["通用:GREAT"]);
         draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
         let p = t.expect_prompt();
-        let estate = match p.text.args.get("tile") {
-            Some(Arg::Tile(n)) => *n as usize,
-            _ => {
+        let estate = match p.tile >= 0 {
+            true => p.tile as usize,
+            false => {
                 return Err(format!(
                     "E-estate-03: prompt names no tile: {}",
                     t.dump_prompt()
                 ))
             }
         };
-        for bid_idx in [2, 1] {
+        // P0 bids 2000, P1 passes.
+        for bid_idx in [2_000, -1] {
             if t.prompt().is_none() {
                 break;
             }

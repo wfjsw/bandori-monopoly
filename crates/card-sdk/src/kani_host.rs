@@ -511,6 +511,11 @@ pub enum Op {
     world_snapshot = 492,
     world_restore = 493,
     world_snapshot_drop = 494,
+    // v121 (ABI-08): one-shot "discard the next drawn card".
+    discard_next_fx = 495,
+    // v122 (ABI-09): ordinary auction, cosmetic skin list.
+    auction = 496,
+    persona_skins = 497,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

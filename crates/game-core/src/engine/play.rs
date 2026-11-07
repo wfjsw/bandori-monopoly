@@ -5760,8 +5760,27 @@ impl PlayCtx<'_> {
         Ok(())
     }
 
-    /// Auction one deed among the players still in.
+    /// Auction one deed among the players still in (bankruptcy leftovers:
+    /// the dedicated auction timer, never a seat pool).
     fn auction_tile(&mut self, t: usize, from: usize) -> Flow<()> {
+        self.auction_deed(t, from, false, self.w.clock.bankrupt_auction_time)
+            .map(|_| ())
+    }
+
+    /// The ordinary auction on one tile, answerable from a card body
+    /// (`ctx::auction`, 弦卷集团地产开发's 「所有玩家进行竞价」): every present,
+    /// pay-gated seat from `from` may bid, the highest pays its bid and takes
+    /// the deed. Answers the winner seat (`-1` = nobody bid / the deal
+    /// voided). `use_pool` selects the per-seat time pool over
+    /// [`crate::clock::ClockSettings::bankrupt_auction_time`]; ordinary
+    /// auctions pass `true`.
+    pub fn auction_deed(
+        &mut self,
+        t: usize,
+        from: usize,
+        use_pool: bool,
+        time: f32,
+    ) -> Flow<i32> {
         // `BuyGate` filters bidders (`docs/PURCHASE.md` P4): a player the gate
         // refuses cannot bid.
         let mut players: Vec<usize> = Vec::new();
@@ -5783,7 +5802,7 @@ impl PlayCtx<'_> {
         if players.is_empty() {
             self.w
                 .log("text", -1, Msg::new("log.auction_nobody").tile("tile", t));
-            return Ok(());
+            return Ok(-1);
         }
         // The quote base sets AI worth (`docs/PURCHASE.md` P4).
         let base = purchase::quote_native(self.data, &self.w.st, t).max(0);
@@ -5806,18 +5825,14 @@ impl PlayCtx<'_> {
             Msg::new("ask.auction.title").tile("tile", t),
             text,
             worth,
-            // Bankruptcy leftover auction (`auction_leftovers`) is the only
-            // caller today and runs on its own dedicated timer -- never a
-            // seat pool. A future ordinary auction would pass `use_pool: true`
-            // and a pool-backed window instead.
-            self.w.clock.bankrupt_auction_time,
-            false,
+            time,
+            use_pool,
         );
         let r = self.ask(ask)?;
         if r.answered.bidder < 0 {
             self.w
                 .log("text", -1, Msg::new("log.auction_no_bid").tile("tile", t));
-            return Ok(());
+            return Ok(-1);
         }
         let (b, bid) = (r.answered.bidder as usize, r.answered.bid);
         if self.w.st.owners[t] >= 0 || !self.can_pay(b) {
@@ -5826,7 +5841,7 @@ impl PlayCtx<'_> {
                 b as i32,
                 Msg::new("log.auction_void").player_id("who", b),
             );
-            return Ok(());
+            return Ok(-1);
         }
         // `spendBefore` -- the raw-spend window runs before affordability, so a
         // reduction can prevent a shortfall. Only the affordability test and
@@ -5846,7 +5861,7 @@ impl PlayCtx<'_> {
                     b as i32,
                     Msg::new("log.auction_void").player_id("who", b),
                 );
-                return Ok(());
+                return Ok(-1);
             }
         }
         // Money remains direct until ruling 7 (TODO(规则书) ruling 7).
@@ -5909,7 +5924,7 @@ impl PlayCtx<'_> {
             @b TriggerBuy::new(purchase::BuyKind::Auction, -1, bid)
         )?;
         self.wait(1.0);
-        Ok(())
+        Ok(b as i32)
     }
 
     // =============================================================== cards
@@ -6054,8 +6069,18 @@ impl PlayCtx<'_> {
                     i,
                     card = Some(card.clone()),
                     value = 1,
-                    cards = vec![card]
+                    cards = vec![card.clone()]
                 )?;
+            }
+            // ABI-08 「若无手牌则弃掉下一张抽到的牌」: the armed one-shot eats
+            // this drawn card. Cleared on the draw either way -- it is a
+            // one-shot even if a `drawn`/`drew` hook already moved the card
+            // out of the hand.
+            if self.w.st.players[i].discard_next {
+                self.w.st.players[i].discard_next = false;
+                if self.w.hidden[i].hand.iter().any(|c| c == &card) {
+                    self.discard(i, &card)?;
+                }
             }
         }
         if hooks && got > 0 {

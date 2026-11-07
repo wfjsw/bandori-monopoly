@@ -884,7 +884,24 @@ use crate::intern::NameId;
 ///    the one command-total window of a 「[分摊]」 command so a responder can
 ///    answer the share instead. `ManifestOn` unchanged (an engine id).
 ///    SAVE_VERSION / RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 120;
+/// v121: **one-shot `DiscardNextFx` (ABI-08)**. New host request / import
+///    `discard_next_fx = 495` (`ctx::discard_next_fx(player_id)`): 「若无手牌
+///    则弃掉下一张抽到的牌」. It arms a per-seat flag; the draw loop discards
+///    the next drawn card and clears it. No PromptKind change.
+///    SAVE_VERSION 21 -> 22 (the flag is world state); RECORD_VERSION
+///    unchanged (the request rides the host journal).
+/// v122: **auction, `ask_money`, cosmetic skins (ABI-09 / HOST-05)**.
+///    New host request / import `auction = 496` (`ctx::auction(player_id,
+///    tile)`): 「所有玩家进行竞价，出价最大的玩家支付选择数量的资金并获得该
+///    格子的地契」 -- the engine's ordinary auction, answered with the winner.
+///    New `PromptKind::Money = 8` (wire `"money"`) and `ask_money`: a free
+///    amount in `0..=max`, no option list, the bound on `view.price` -- a
+///    money range is far too wide for `ask_choice`'s one-option-per-integer.
+///    New import `persona_skins = 497` (`ctx::persona_skins(player_id)`): the
+///    roster personas sharing the player's base character (`variant_of`),
+///    for 「更换角色皮肤（技能相同）」. SAVE_VERSION / RECORD_VERSION
+///    unchanged (the auction request rides the host journal; skins are data).
+pub const ABI_VERSION: i32 = 122;
 /// v108: **stage folds and rent / settle stages (MONEY-01)**. The amount
 ///    stages no longer apply one responder after the other: every responder of
 ///    an add stage reads the **stage input** and its deltas are summed, every
@@ -2077,6 +2094,12 @@ pub enum PromptKind {
     /// answer log and `ruleset_ask` already speak. Distinctness is the mask's
     /// own shape -- the same bit cannot be set twice.
     ChoiceMulti = 7,
+    /// Name a free amount of money (`ask_money`). No option list: the upper
+    /// bound rides `opt_count` and reaches the view as `view.price`; the
+    /// answer is the raw amount (`0..=max`). 「竞价」's 「支付选择数量的
+    /// 资金」 is what this exists for -- an `ask_choice` over every integer
+    /// would carry thousands of options.
+    Money = 8,
 }
 
 impl PromptKind {
@@ -2090,6 +2113,7 @@ impl PromptKind {
             5 => Self::TileId,
             6 => Self::TileWalk,
             7 => Self::ChoiceMulti,
+            8 => Self::Money,
             _ => return None,
         })
     }
@@ -2106,6 +2130,7 @@ impl PromptKind {
             Self::TileId => "tile",
             Self::TileWalk => "tile",
             Self::ChoiceMulti => "multi",
+            Self::Money => "money",
         }
     }
 }

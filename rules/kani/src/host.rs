@@ -981,6 +981,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::world_snapshot => arm_world_snapshot(a),
         Op::world_restore => arm_world_restore(a),
         Op::world_snapshot_drop => arm_world_snapshot_drop(a),
+        Op::discard_next_fx => arm_discard_next_fx(a),
+        Op::auction => arm_auction(a),
+        Op::persona_skins => arm_persona_skins(a),
 
         // ---- events ----
         Op::event_is_active => {
@@ -4864,6 +4867,25 @@ pub fn arm_world_restore(a: Args) -> i64 {
         }
         1
     })
+}
+
+/// `ctx::discard_next_fx` -- arm the seat's one-shot. The draw loop is
+/// engine-side and not modelled under Kani, so the arm only acknowledges.
+pub fn arm_discard_next_fx(_a: Args) -> i64 {
+    1
+}
+
+/// `ctx::auction` -- the bid loop is engine-side and not modelled under Kani.
+/// `0` is the pause sentinel (`EXIT_NEED_INPUT`), so the body returns through
+/// `Err(Prompt)` and the caller's continuation is untouched.
+pub fn arm_auction(_a: Args) -> i64 {
+    0
+}
+
+/// `ctx::persona_skins` -- an empty skin list under Kani (the roster is host
+/// data). The two-call shape sees length 0 and stops.
+pub fn arm_persona_skins(_a: Args) -> i64 {
+    0
 }
 
 /// `ctx::world_snapshot_drop` -- forget the instance's ownership; the last

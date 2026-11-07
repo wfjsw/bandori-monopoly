@@ -63,7 +63,7 @@ this one. What the draft got wrong:
 | R25 | `turn.placed_during_play` was not carried, so a placing play that paused before completing looked unplaced and was copied (`a_placing_play_is_not_copied`). | `adopt_turn_policy` carries it with the other staged turn fields (§6). |
 | R26 | `turn.play_doubled` was not carried, so the start square's doubling of a third party's played number was lost at the commit (both circle-staff tests). | `commit_after` carries it with `cancelled_designations` (§6). |
 | R27 | `commit_after` drained `mark_log` off the completing copy only; live kept a duplicate of the same row, the next pass inherited it, and `markChanged` re-entered the card every pass (`black_suits`'s `resync` re-placed its circle without bound — stack overflow). | `commit_after` clears live's `mark_log` with the drain; the copy's rows are the only copy raised (§6). |
-| R28 | Cards that mark "already done this drive" in ordinary player state lose it at the pass-top rewind, so the re-run repeats the step (tsugu's teleport re-fired, its post-move buy prompt never settled; 立希's 100-reroll guard reset every pass and the loop never ended). | Such a marker is a `latch:` slot, excluded from the rewind capture and crossing only at the commit (§6.3.1, `tsugu_ycm`, `taki_even_if` — whose guard is keyed to the roll transaction so the next activation starts over — and `tsukushi_garden`). |
+| R28 | Cards that mark "already done this drive" in ordinary player state lose it at the pass-top rewind, so the re-run repeats the step (tsugu's teleport re-fired, its post-move buy prompt never settled; 立希's 100-reroll guard reset every pass and the loop never ended). | Such a marker is a `latch:` slot, excluded from the rewind capture and crossing only at the commit (§6.3.1, `taki_even_if` — whose guard is keyed to the roll transaction so the next activation starts over — and `tsukushi_garden`). Where the flip is a request **kind** the answered request itself carries it, and tsugu's latch is retired by the identity drift of §6.3.2 step 2 (LOY-TSUGU-01). |
 | R29 | A body that lands the mover **after** restoring money has its landing effect swallowed by the restore (CiRCLE's pass reward: 12000 instead of 10000), and the money reload then dragged the newer figure back. | Order the body teleport-first, restore-second (`ran_as_usual`), and re-impose the recorded post-request money only where the row's own `condition` still holds (§6.3.1). |
 | R30 | Mark-driven cards that clean up "while any mark remains" left their siblings placed when their own drive paused at the ask and another copy finished first (`hagumi`'s two stand-ins). | The body drops same-card siblings once no mark of its own is left (`hagumi_marks`). |
 | R31 | `black_suits` re-derived its borrowed `tile:circle` from the world alone. The placement is a guest write, so a nested `resync` ran before it crossed and attached another copy; and the `MarkChanged` entries also ran under the body's own `cardFired` raise. | The attached uid is a `latch:` slot (adopt-from-board on re-entry, drop by latch or by board scan), and the condition spells `kind == "markChanged"` (`black_suits`). |
@@ -832,13 +832,26 @@ st = c.st_mut(); at = st.next_answer;
 2. if st.answers.get(at) is Some(x):
        // The request completed (a torn one was taken by step 1). Its effect is
        // already on live, so the answer is reused -- even when the body
-       // recomputed the arguments, with one exception, the Move drift below.
-       if the row is a Move, the body recomputed it, and this slot is not in
-          st.reapplied:                                 // once per slot per drive
-           re-apply it under the new plan: Replace(at); the position is the
-           effect and the plan states it absolutely, so it is not rewound --
-           `plan.settles = false` (the old landing already settled) and the
-           deeper answers / entries are truncated; st.reapplied += at
+       // recomputed the arguments, with two exceptions, the identity drift and
+       // the Move drift below.
+       drifted = this slot is not in st.reapplied AND (
+           the row's request **variant** (discriminant) differs from `req`
+           OR the row is a Move the body recomputed)
+       if drifted:
+           re-apply under the new request: Replace(at); the deeper answers /
+           entries are truncated and st.reapplied += at
+           // The answer means what its request asked. A body whose gate read
+           // flipped and now makes a different **kind** of call must not eat
+           // the old answer (LOY-TSUGU-01: tsugu's post-move buy was answered
+           // by the consumed Move). Only the discriminant is compared: a
+           // same-kind value may oscillate between the restored pre-state and
+           // the settled one without changing what the answer means.
+           //
+           // Neither drift rewinds to the entry's `condition`: the swallowed
+           // answer's work already landed (an accepted buy offer ran the buy
+           // body; a move landed), so the new request applies on top. For a
+           // Move the plan states the position absolutely, so `plan.settles =
+           // false` (the old landing already settled) and the landing stays.
        else
            st.w().after_host(at, row.condition, row.after_money, row.after_pos)
            advance; return Ok(x)
@@ -939,15 +952,25 @@ The journal holds **only in-flight entries**: a completed request pops its
 entry, so outside a torn stack it is empty, and §6.3.2 step 2 consumes a
 completed answer, so a body cannot loop on a request.
 
-The one re-application is the **Move drift** (§6.3.2 step 2): a move whose
-destination the body recomputed from the world its own landing changed. It is
-bounded by `reapplied`, a per-slot set cleared at the drive's end, so a slot is
-re-applied at most once per drive even when the recomputation keeps differing;
-every later reach consumes. The other kinds never re-apply — an application
-they already crossed onto live is the correct one, and re-running it from the
-restored `condition` drops effects nested requests landed meanwhile (the
-Afterglow free-house build in the buy pipeline). `JournalStart::Replace` is
-the drift's plumbing; it is emitted only there.
+The re-applications are step 2's two **drifts**: the identity drift (the body
+now makes a different request kind) and the **Move drift** (a move whose
+destination the body recomputed from the world its own landing changed). Both
+are bounded by `reapplied`, a per-slot set cleared at the drive's end, so a
+slot is re-applied at most once per drive even when the recomputation keeps
+differing; every later reach consumes. The identity drift is what a body needs
+when a re-run gate flips (tsugu: the post-move buy was previously answered by
+the consumed Move, and the `latch:tsugu_ycm_moved` slot was its manual
+workaround). Neither drift restores the entry's `condition`: the swallowed
+answer's effect already landed (the accepted buy offer ran the buy body), and
+the new request applies on top of it — an identity drift on a buy offer
+therefore sees the now-owned tile rather than re-offering the buy
+(`rokka_first_deed_contract`). Same-kind requests otherwise never re-apply —
+an application they already crossed onto live is the correct one, and re-running
+it from the restored `condition` drops effects nested requests landed meanwhile
+(the Afterglow free-house build in the buy pipeline). Kind identity cannot
+oscillate (a body that flip-flops its kind at one slot is re-applied once and
+then consumes), so this terminates; `JournalStart::Replace` is the drifts'
+plumbing and is emitted only there.
 
 `last` survives only the drive's passes and is cleared when the drive
 returns.

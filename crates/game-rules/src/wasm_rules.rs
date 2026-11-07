@@ -265,7 +265,8 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::EventDefer { .. }
         | HostRequest::WorldSnapshot
         | HostRequest::WorldRestore { .. }
-        | HostRequest::WorldSnapshotDrop { .. } => None,
+        | HostRequest::WorldSnapshotDrop { .. }
+        | HostRequest::DiscardNextFx { .. } => None,
         HostRequest::InspectionBegin { .. } | HostRequest::InspectionEnd { .. } => {
             Some("inspection")
         }
@@ -279,6 +280,7 @@ fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
         | HostRequest::OfferForceBuy { .. }
         | HostRequest::Buy { .. }
         | HostRequest::Acquire { .. }
+        | HostRequest::Auction { .. }
         | HostRequest::AgentOffer { .. } => Some("buy/build"),
         HostRequest::TileWrite { .. } => Some("house"),
         HostRequest::SettleAt { .. } => Some("settle"),
@@ -394,10 +396,18 @@ impl PileCheckpoint {
 /// back on the entry's pre-request `condition` first, so the fresh application
 /// is the only one (design G10 §6.3.5). The guest copy was restored already at
 /// the pause site; this is the live side of the same undo.
+///
+/// Two drifts do **not** rewind. A `Move` states its destination absolutely
+/// (below). An **identity** drift (the body now makes a different request
+/// kind, LOY-TSUGU-01) is the same re-run-after-a-completed-effect shape: the
+/// swallowed answer's work already landed -- an accepted buy offer ran the buy
+/// body -- so the new request applies on top of it and the tile reads as owned
+/// (`rokka_first_deed_contract`).
 fn restore_condition(
     cx: &mut PlayCtx,
     log: &game_core::engine::GuestLog,
     start: game_core::engine::JournalStart,
+    req: &HostRequest,
 ) {
     let game_core::engine::JournalStart::Replace(slot) = start else {
         return;
@@ -411,6 +421,10 @@ fn restore_condition(
         // re-run overwrites the position, and whatever its old landing opened
         // (a settle, the agent's deal) is what the recomputed read saw.
         if matches!(e.request, game_core::engine::JournalRequest::Move { .. }) {
+            return;
+        }
+        let mirrored = game_core::engine::JournalRequest::from(req);
+        if std::mem::discriminant(&e.request) != std::mem::discriminant(&mirrored) {
             return;
         }
         // A `latch:` key is a decision the body froze and the condition
@@ -758,6 +772,9 @@ impl Run {
             if let Some(c) = checkpoint {
                 c.apply(&mut old);
             }
+            // (applied again after the re-share below: that hands a *fresh*
+            // live handle, whose turn is the outer play's)
+
             // The crossing below also applies the body's own writes to live,
             // so the reloaded copy already carries them. The copy was shared
             // with live *before* the crossing, which detaches live; re-share
@@ -828,6 +845,7 @@ impl Run {
             self.world.end_turn_request = old.end_turn_request;
             self.world.blocked_settle = old.blocked_settle.clone();
             self.world.st.skip_move = old.st.skip_move;
+            self.carry_play_scope(&old);
             self.world.skip_log = true;
             self.reshuffle_log.clear();
             // The reloaded copy is live: a later pause's diff must not
@@ -1427,8 +1445,14 @@ impl CardWorld for Run {
         // them (立希's rerun guard reset on every pass and never reached its
         // cap).
         let latched = self.world.latches();
+        let play_scope = (self.world.turn.play_from_hand, self.world.turn.placed_during_play);
         self.world = game_core::engine::SharedWorld::from(from.clone());
         self.world.put_latches(latched);
+        // The condition was captured on live, which still names the outer
+        // play; the nested body's own play scope has to stay (see
+        // `Run::carry_play_scope`).
+        self.world.turn.play_from_hand = play_scope.0;
+        self.world.turn.placed_during_play = play_scope.1;
     }
     fn snapshot_owners(&self) -> Vec<(i32, Vec<i32>)> {
         self.world
@@ -3530,6 +3554,9 @@ impl CardWorld for Run {
             s.persona = name.into();
         }
     }
+    fn persona_skins(&self, player_id: i32) -> Vec<String> {
+        Run::persona_skins(self, player_id)
+    }
     fn in_group(&self, player_id: i32, name: &str) -> i32 {
         // The persona's group.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
@@ -4116,6 +4143,44 @@ impl Run {
         self.trigger.fold_write(v);
     }
 
+    /// Carry the running body's play-origin scope across a reload of the world
+    /// copy.
+    ///
+    /// A reload adopts live, whose turn still names the **outer** play: the
+    /// scoped `play_from_hand(false)` (and `placed_during_play(false)`) a
+    /// nested `play_card` / `invoke_entry` writes live on the *copy* only, and
+    /// live is not written until a request site adopts it -- but a consumed
+    /// answer reloads the copy *before* that adopt. Without this the nested
+    /// body reads the outer hand play's origin, so a draw-pile auto-play looks
+    /// like a hand play at its first nested request (ABI-08's `FromDeck`
+    /// question was answered `true` that way).
+    fn carry_play_scope(&mut self, old: &game_core::engine::World) {
+        self.world.turn.play_from_hand = old.turn.play_from_hand;
+        self.world.turn.placed_during_play = old.turn.placed_during_play;
+    }
+
+    /// The cosmetic skins of `player_id`'s character (ABI-09, `ctx::persona_skins`):
+    /// every roster persona sharing their base character (`variant_of`), the
+    /// current one excluded. Cosmetic only -- a skin keeps the bound skills
+    /// (「技能相同」), so a swap is a `persona` name write.
+    pub fn persona_skins(&self, player_id: i32) -> Vec<String> {
+        let Some(p) = self.world.st.players.get(player_id.max(0) as usize) else {
+            return Vec::new();
+        };
+        let cur = p.persona.clone();
+        let base = self.data.base_persona(&cur).to_string();
+        let mut out: Vec<String> = Vec::new();
+        for persona in &self.data.personas {
+            if persona.name == cur {
+                continue;
+            }
+            if self.data.base_persona(&persona.name) == base {
+                out.push(persona.name.clone());
+            }
+        }
+        out
+    }
+
     /// The `(writer, ordinal)` key of the next factor write: the running
     /// instance when there is one, else the seat plus the card id (a hand play
     /// or a persona skill has no instance), plus this pass's counter. Stable
@@ -4365,7 +4430,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
             // ones the body keeps), then rewind, then re-base the diff.
             cx.restore_guests_to(run.overlay_floor, run.drive_id);
         }
-        restore_condition(cx, log, start);
+        restore_condition(cx, log, start, &req);
         if matches!(start, game_core::engine::JournalStart::Replace(_)) {
             // See the replay path: the restore re-bases the guest diff.
             run.pass_base = cx.pass_base();
@@ -4407,6 +4472,10 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
                         cx.world().st.owners.get(16)
                     );
                 }
+                let play_scope = (
+                    run.world.turn.play_from_hand,
+                    run.world.turn.placed_during_play,
+                );
                 if done {
                     // The frame is gone and its cards are back in the deck: the
                     // guest's next read must see that, not its own copy.
@@ -4420,6 +4489,11 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
                 // own writes on (same as the replay arm; no second apply, or a
                 // routine that restored over them would get them put back).
                 let old = std::mem::replace(&mut run.world, cx.share_world());
+                // Live names the outer play; `old` is this body's copy (or the
+                // inspection reload, which already lost it) -- take the scope
+                // this body entered with (see `Run::carry_play_scope`).
+                run.world.turn.play_from_hand = play_scope.0;
+                run.world.turn.placed_during_play = play_scope.1;
                 // The host effect (and a nested settle's writes) landed on live:
                 // the guest diff has to re-base on it, or the next pass's
                 // crossing puts the pre-effect row back (HOST-01).
@@ -5526,6 +5600,7 @@ impl<M: CardModules> RulesBridge<M> {
                         cx,
                         &log,
                         journal_start.unwrap_or(game_core::engine::JournalStart::Push),
+                        &req,
                     );
                     if matches!(
                         journal_start,
@@ -5791,6 +5866,7 @@ impl<M: CardModules> RulesBridge<M> {
                             // current. The pass base is untouched: the copy's
                             // writes stay in the commit's diff.
                             let old = std::mem::replace(&mut run.world, cx.share_world());
+                            run.carry_play_scope(&old);
                             overlay.apply(&mut run.world);
                             if let Some(uid) = zone_row {
                                 if let Some(cond) = log.last.get(&zone_slot).map(|e| &e.condition) {
@@ -6496,6 +6572,19 @@ impl<M: CardModules> RulesBridge<M> {
                 cx.card_world_snapshot_drop(key, uid);
                 return Ok(1);
             }
+            HostRequest::DiscardNextFx { player_id } => {
+                // 「若无手牌则弃掉下一张抽到的牌」 -- armed per seat; the draw
+                // loop consumes it (play.rs `draw_cards_with_hooks`).
+                if let Some(p) = cx
+                    .world_mut()
+                    .st
+                    .players
+                    .get_mut(player_id.max(0) as usize)
+                {
+                    p.discard_next = true;
+                }
+                return Ok(1);
+            }
             HostRequest::PayRent {
                 player_id,
                 tile,
@@ -6597,6 +6686,18 @@ impl<M: CardModules> RulesBridge<M> {
                     call.player_id().max(0) as usize,
                 )?;
                 return Ok(did as i32);
+            }
+            HostRequest::Auction { player_id, tile } => {
+                // The ordinary auction (「竞价」, ABI-09): the bids run on the
+                // seat time pools; the answer is the winner seat (-1 = none).
+                let winner = cx.auction_deed(
+                    tile.max(0) as usize,
+                    cx.world().st.turn.max(0) as usize,
+                    true,
+                    15.0,
+                )?;
+                let _ = player_id;
+                return Ok(winner);
             }
             // Guest-raised trigger points (`ctx::raise`): the pass-reward trigger from
             // the start-square tile rule and kin. The kind is the wire name
@@ -7672,6 +7773,7 @@ impl<M: CardModules> RulesBridge<M> {
         let roll_pick_writes = cx.capture_guest_roll_picks_from(&after.pass_base, &after.world);
         let scheduled_writes = cx.capture_guest_scheduled_from(&after.pass_base, &after.world);
         let money_writes = cx.capture_guest_money_from(&after.pass_base, &after.world);
+        let persona_writes = cx.capture_guest_persona_from(&after.pass_base, &after.world);
         let board_writes = cx.capture_guest_board_from(&after.pass_base, &after.world);
         let event_writes = cx.capture_guest_events_from(&after.pass_base, &after.world);
         let guest_overlay = game_core::engine::GuestOverlay {
@@ -7680,6 +7782,7 @@ impl<M: CardModules> RulesBridge<M> {
             tokens: token_writes,
             owners: owner_writes,
             money: money_writes,
+            persona: persona_writes,
             board: board_writes,
             piles: pile_writes,
             roll_picks: roll_pick_writes,
@@ -11808,6 +11911,17 @@ fn prompt_to_ask(p: Prompt) -> Ask {
             let mut ask = Ask::multi(players, title, text, labels, want, 15.0);
             if ai_hint >= 0 {
                 ask = ask.with_ai(|_| ai_hint);
+            }
+            ask
+        }
+        PromptKind::Money => {
+            // The bound rode `count` (`ctx::ask_money` -> `opt_count`); the
+            // fallback is the maximum, the answer is a raw amount. `ai_hint`
+            // is the card's preferred amount when it set one.
+            let max = count.max(0);
+            let mut ask = Ask::money(player_id.max(0) as usize, max, title, text, max, 15.0);
+            if ai_hint >= 0 {
+                ask = ask.with_ai(|_| ai_hint.clamp(0, max));
             }
             ask
         }

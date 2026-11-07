@@ -150,6 +150,23 @@ impl Ask {
         a
     }
 
+    /// `Money`: name a free amount in `0..=max`. No option list; the bound is
+    /// carried on `view.price`, the answer is the raw amount. `ai` is the
+    /// seat's preferred amount (`-1` = let the host fill from `fallback`).
+    pub fn money(
+        player_id: usize,
+        max: i32,
+        title: Msg,
+        text: Msg,
+        fallback: i32,
+        time: f32,
+    ) -> Self {
+        let mut a = Self::new("money", vec![player_id], title, text, time);
+        a.view.price = max.max(0);
+        a.view.fallback = fallback.clamp(0, max.max(0));
+        a
+    }
+
     /// `TileAsk`: pick one of `tiles` (answer == len means "none"). Same AI
     /// fill as [`Self::choice`]; chaos never takes "none" while a tile exists.
     pub fn tile(
@@ -356,6 +373,22 @@ pub fn heuristic_answer_with(
     let n = players.len();
     if ask.view.kind == "auction" {
         return heuristic_auction(ask, params);
+    }
+    if ask.view.kind == "money" {
+        // The bound is `view.price`, not an option index.
+        let max = ask.view.price.max(0);
+        let answers = (0..n)
+            .map(|k| match ask.ai.get(k).copied().unwrap_or(AI_UNSET) {
+                AI_UNSET => ask.view.fallback,
+                v => v.clamp(0, max),
+            })
+            .collect();
+        return Answered {
+            answers,
+            picked: Vec::new(),
+            bid: 0,
+            bidder: -1,
+        };
     }
     let picks = matches!(ask.view.kind.as_str(), "pick" | "mortgage");
     let multi = ask.view.kind == "multi";
@@ -761,6 +794,10 @@ pub struct GuestOverlay {
     /// pipeline applies on live instead and leaves no entry here.
     #[serde(default)]
     pub money: Vec<(usize, i32, i32)>,
+    /// `(player, base, wrote)` persona names the guest rewrote
+    /// (`ctx::set_persona`, a skin swap).
+    #[serde(default)]
+    pub persona: Vec<(usize, String, String)>,
     /// Board-row writes (`ctx::set_owner` / `ctx::set_houses` /
     /// `ctx::set_mortgaged`, embers, tile marks).
     #[serde(default)]
@@ -1393,6 +1430,9 @@ pub struct PassBase {
     pub owners: Vec<(i32, Vec<i32>)>,
     /// Every player's money.
     pub money: Vec<i32>,
+    /// Every player's persona name (a `ctx::set_persona` skin swap is a guest
+    /// write like any other).
+    pub persona: Vec<String>,
     /// Every player's private piles (hand / deck / graveyard).
     pub piles: Vec<(Vec<String>, Vec<String>, Vec<String>)>,
     /// Every player's stored next-main-move step count.
@@ -1513,6 +1553,13 @@ impl PassBase {
                     None => l.push(v.clone()),
                 },
                 None => l.retain(|c| c.name != *name),
+            }
+        }
+        for (i, base_v, wrote_v) in &own.persona {
+            if let (Some(v), Some(b)) = (live.st.players.get(*i), self.persona.get_mut(*i)) {
+                if v.persona == *wrote_v {
+                    *b = base_v.clone();
+                }
             }
         }
         for (i, base_v, wrote_v) in &own.money {
@@ -1703,6 +1750,7 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
         roll_picks,
         scheduled,
         money,
+        persona,
         board,
         events,
         rule_bonus,
@@ -1723,6 +1771,13 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
         if let Some(p) = w.st.players.get_mut(i) {
             if p.money == wrote {
                 p.money = b;
+            }
+        }
+    }
+    for (i, b, wrote) in persona {
+        if let Some(p) = w.st.players.get_mut(i) {
+            if p.persona == wrote {
+                p.persona = b;
             }
         }
     }
@@ -2114,6 +2169,13 @@ impl GuestOverlay {
         self.board.apply(w);
         if let Some(d) = &self.events {
             d.apply(w);
+        }
+        for (i, base, wrote) in &self.persona {
+            if let Some(p) = w.st.players.get_mut(*i) {
+                if p.persona == *base {
+                    p.persona = wrote.clone();
+                }
+            }
         }
         for (i, base, wrote) in &self.money {
             if let Some(p) = w.st.players.get_mut(*i) {
@@ -2558,6 +2620,7 @@ impl<'a> PlayCtx<'a> {
             scheduled: self.capture_guest_scheduled_from(base, from),
             events: self.capture_guest_events_from(base, from),
             money: self.capture_guest_money_from(base, from),
+            persona: self.capture_guest_persona_from(base, from),
             board: self.capture_guest_board_from(base, from),
             frames: self.capture_guest_frames_from(from),
         }
@@ -2641,6 +2704,7 @@ impl<'a> PlayCtx<'a> {
                 .map(|(key, owners)| (*key, owners.clone()))
                 .collect(),
             money: w.st.players.iter().map(|p| p.money).collect(),
+            persona: w.st.players.iter().map(|p| p.persona.clone()).collect(),
             piles: w
                 .hidden
                 .iter()
@@ -2723,6 +2787,31 @@ impl<'a> PlayCtx<'a> {
                 } else {
                     live + (wrote - b)
                 };
+            }
+            out.push((i, b, wrote));
+        }
+        out
+    }
+
+    /// Capture the guest's persona rewrites against the pass base and carry
+    /// them into `self.w`.
+    pub fn capture_guest_persona_from(
+        &mut self,
+        base: &PassBase,
+        from: &World,
+    ) -> Vec<(usize, String, String)> {
+        let mut out = Vec::new();
+        let n = base.persona.len().min(from.st.players.len());
+        for i in 0..n {
+            let b = base.persona[i].clone();
+            let wrote = from.st.players[i].persona.clone();
+            if b == wrote {
+                continue;
+            }
+            if let Some(p) = self.w.st.players.get_mut(i) {
+                if p.persona == b {
+                    p.persona = wrote.clone();
+                }
             }
             out.push((i, b, wrote));
         }

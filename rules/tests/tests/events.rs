@@ -105,6 +105,9 @@ fn draw_event_quiet(t: &mut Table, who: usize, event: &str, faces: &[i32]) {
 
 /// The `Tile` argument of the open prompt's text (the tile it is about).
 fn prompt_tile(p: &game_core::state::MatchPrompt) -> Option<usize> {
+    if p.tile >= 0 {
+        return Some(p.tile as usize);
+    }
     match p.text.args.get("tile") {
         Some(Arg::Tile(n)) => Some(*n as usize),
         _ => None,
@@ -217,26 +220,26 @@ fn duobang_sheet_example_18_vs_16_is_100() {
 fn tsurumaki_estate_auction_grants_a_deed() {
     let mut t = Table::vanilla(2);
     draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
-    // Sealed high-bid over a `choice` of 0, 1000, …, 10000 (ask.intOption).
+    // The engine's auction prompt: an amount in 0..=money, min 100 to open
+    // and +100 over the standing bid. P0 bids 2000, P1 outbids at 2500.
     let p = t.expect_prompt();
-    assert_eq!(p.kind, "choice", "the text says 竞价: {}", t.dump_prompt());
+    assert_eq!(p.kind, "auction", "the text says 竞价: {}", t.dump_prompt());
     let estate = prompt_tile(&p).expect("the prompt names the tile");
-    // P0 bids 2000 (index 2), P1 bids 1000 (index 1).
-    for bid_idx in [2, 1] {
+    for (who, bid) in [(0usize, 2_000), (1, 2_500)] {
         let p = t.expect_prompt();
-        assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
-        let who = t.asked()[0];
-        t.answer(who, bid_idx).unwrap();
+        assert_eq!(p.kind, "auction", "{}", t.dump_prompt());
+        assert!(t.asked().contains(&who), "the seat is still pending");
+        t.answer(who, bid).unwrap();
     }
     drain(&mut t);
     assert_eq!(
         t.owner(estate),
-        Some(0),
+        Some(1),
         "the high bidder gains the deed: {:?}",
         t.recent_keys(16)
     );
-    assert_eq!(t.money(0), 10_000 - 2_000, "the high bid is paid");
-    assert_eq!(t.money(1), 10_000, "the lower bid pays nothing");
+    assert_eq!(t.money(1), 10_000 - 2_500, "the high bid is paid");
+    assert_eq!(t.money(0), 10_000, "the lower bid pays nothing");
     assert!(!t.event_in_play("弦卷集团地产开发"), "one-shot");
 }
 
@@ -247,9 +250,9 @@ fn tsurumaki_estate_grants_only_the_auctioned_tile() {
     draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
     let p = t.expect_prompt();
     let estate = prompt_tile(&p).expect("the prompt names the tile");
-    for bid_idx in [2, 1] {
-        let who = t.asked()[0];
-        t.answer(who, bid_idx).unwrap();
+    for (who, bid) in [(0usize, 2_000), (1, 2_500)] {
+        let who = if t.asked().contains(&who) { who } else { t.asked()[0] };
+        t.answer(who, bid).unwrap();
     }
     drain(&mut t);
     let extra: Vec<usize> = (0..60)
@@ -262,20 +265,33 @@ fn tsurumaki_estate_grants_only_the_auctioned_tile() {
 }
 
 #[test]
-fn tsurumaki_estate_lowest_bid_does_not_win() {
+fn tsurumaki_estate_pass_keeps_the_standing_bid() {
     let mut t = Table::vanilla(2);
     draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
     let p = t.expect_prompt();
     let estate = prompt_tile(&p).expect("the prompt names the tile");
-    // P0 bids 0 (index 0), P1 bids 3000 (index 3).
-    for bid_idx in [0, 3] {
-        let who = t.asked()[0];
-        t.answer(who, bid_idx).unwrap();
+    // P0 bids 3000; P1 passes (`-1`).
+    for (who, bid) in [(0usize, 3_000), (1, -1)] {
+        let who = if t.asked().contains(&who) { who } else { t.asked()[0] };
+        t.answer(who, bid).unwrap();
     }
     drain(&mut t);
-    assert_eq!(t.owner(estate), Some(1), "the higher bid wins");
-    assert_eq!(t.money(1), 10_000 - 3_000);
-    assert_eq!(t.money(0), 10_000);
+    assert_eq!(t.owner(estate), Some(0), "the standing bid wins");
+    assert_eq!(t.money(0), 10_000 - 3_000);
+    assert_eq!(t.money(1), 10_000);
+}
+
+#[test]
+fn tsurumaki_estate_bid_below_the_minimum_is_rejected() {
+    let mut t = Table::vanilla(2);
+    draw_event_card(&mut t, 0, "弦卷集团地产开发", &[]);
+    let _ = t.expect_prompt();
+    assert!(t.answer(0, 50).is_err(), "the opening bid is at least 100");
+    t.answer(0, 100).unwrap();
+    let _ = t.expect_prompt();
+    assert!(t.answer(1, 150).is_err(), "a raise is at least +100");
+    t.answer(1, 200).unwrap();
+    drain(&mut t);
 }
 
 // =====================================================================
@@ -789,18 +805,56 @@ fn ex_quest_resolves_and_files_away() {
     );
 }
 
-// The skin swap itself is cosmetic (「技能相同」) -- there is no skin state in
-// the match. The most that is observable is the eligibility log on a high roll.
+// The skin swap is cosmetic (「技能相同」): an eligible player is offered the
+// other personas of their base character and swapping writes the persona name.
 #[test]
-fn ex_quest_high_roll_logs_the_eligibility() {
+fn ex_quest_eligible_player_may_change_skin() {
     let mut t = Table::vanilla(2);
-    draw_event_quiet(&mut t, 0, "EX任务挑战", &[4, 20, 20, 20, 10, 10, 10]);
-    let keys = t.recent_keys(20);
-    assert!(
-        keys.iter()
-            .any(|k| k.contains("skin") || k.contains("ex_quest")),
-        "the eligibility is at least logged: {keys:?}"
+    t.set_character_raw(0, "丰川祥子");
+    t.set_character_raw(1, "高松灯");
+    // X = 27 (1d4 = 1); P0 rolls 60 (eligible), P1 rolls 3 (not).
+    draw_event_card(&mut t, 0, "EX任务挑战", &[1, 20, 20, 20, 1, 1, 1]);
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    assert_eq!(t.asked(), vec![0], "only the eligible seat is asked");
+    assert_eq!(p.options.len(), 2, "「不换」 plus the one skin: {}", t.dump_prompt());
+    t.answer(0, 1).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.m.world().st.players[0].persona,
+        "丰川祥子（CRYCHIC）",
+        "the pick swaps the persona ({:?})",
+        t.recent_keys(20)
     );
+    assert!(t
+        .recent_keys(20)
+        .iter()
+        .any(|k| k.contains("ex_quest_skin")));
+    assert_eq!(
+        t.m.world().st.players[1].persona, "高松灯",
+        "an ineligible seat keeps its persona"
+    );
+}
+
+#[test]
+fn ex_quest_skin_ask_can_be_declined() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "高松灯");
+    draw_event_card(&mut t, 0, "EX任务挑战", &[1, 20, 20, 20, 1, 1, 1]);
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice");
+    t.answer(0, 0).unwrap(); // 「不换」
+    drain(&mut t);
+    assert_eq!(t.m.world().st.players[0].persona, "高松灯");
+}
+
+#[test]
+fn ex_quest_skips_the_ask_without_skins() {
+    // 千早爱音 has no variant row: an eligible seat with no skin is not asked.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "千早爱音");
+    draw_event_quiet(&mut t, 0, "EX任务挑战", &[1, 20, 20, 20, 1, 1, 1]);
+    assert_eq!(t.m.world().st.players[0].persona, "千早爱音");
 }
 
 // =====================================================================

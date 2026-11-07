@@ -1449,6 +1449,11 @@ pub fn world_snapshot_drop<C: HostCtx>(c: &mut C, key: i32) -> Result<i32, HostE
     crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
+pub fn discard_next_fx<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostError> {
+    let req = HostRequest::DiscardNextFx { player_id };
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
+}
+
 pub fn pay_rent<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -1999,6 +2004,30 @@ pub fn persona_skill<C: HostCtx>(
     Ok(bytes.len() as i32)
 }
 
+/// `ctx::persona_skins` -- the cosmetic skins of the player's character: every
+/// roster persona sharing their base character (`variant_of`), the current one
+/// excluded. Names are newline-joined UTF-8 (`\n` never occurs in a roster
+/// name); the two-call shape mirrors [`held_names`].
+pub fn persona_skins<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    buf: i32,
+    cap: i32,
+) -> Result<i32, HostError> {
+    let names = c.st().wr().persona_skins(player_id);
+    let mut bytes: Vec<u8> = Vec::new();
+    for (i, n) in names.iter().enumerate() {
+        if i > 0 {
+            bytes.push(b'\n');
+        }
+        bytes.extend_from_slice(n.as_bytes());
+    }
+    if bytes.len() as i32 <= cap {
+        c.write_guest(buf, &bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
 pub fn group_skills<C: HostCtx>(
     c: &mut C,
     player_id: i32,
@@ -2191,6 +2220,13 @@ pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
         let req = HostRequest::RaiseBought { player_id, tile };
         return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
     }
+}
+
+pub fn auction<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostError> {
+    let req = HostRequest::Auction { player_id, tile };
+    // Sentinel: the guest wrapper hands the card `Err(Prompt)`; the auction
+    // body must abort its remaining logging when the run is suspended.
+    crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)
 }
 
 /// Pack a `DealValue` (BuyAssign) raise result into the single answer log
@@ -2600,7 +2636,7 @@ pub fn set_extreme<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostError> {
 }
 
 pub fn play_from_hand<C: HostCtx>(c: &mut C) -> Result<i32, HostError> {
-    Ok({ c.st().wr().play_from_hand() as i32 })
+    Ok(c.st().wr().play_from_hand() as i32)
 }
 
 pub fn gain_fixed<C: HostCtx>(
@@ -3309,7 +3345,12 @@ pub fn ask<C: HostCtx>(
         // and still resolves. Only a prompt about to be *shown* must offer
         // something.
         let replayed = st.log.answers.get(st.log.cursor).is_some();
-        if kind != PromptKind::YesNo && options.is_empty() && !replayed {
+        // `YesNo` and `Money` carry no option list: one is implicit, the
+        // other is a free amount whose bound rides `count`.
+        if !matches!(kind, PromptKind::YesNo | PromptKind::Money)
+            && options.is_empty()
+            && !replayed
+        {
             return Err(HostError::trap(format!(
                 "{} prompt with no options",
                 kind.as_str()

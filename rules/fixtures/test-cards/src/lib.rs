@@ -137,6 +137,26 @@ fn draw_twice(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// LOY-TSUGU-01: a body that makes a **different request kind** at the same
+/// slot when it is re-run. The first pass freezes a `latch:` row (which
+/// survives the rewind) and draws; the re-run reads the latch and gains
+/// instead, so the logged `Draw` answer must not be eaten by the `Pay`.
+const IDENTITY_SWITCH: CardDef = CardDef::new(
+    "TEST:identitySwitch",
+    &[On::Play("", None, identity_switch)],
+);
+fn identity_switch(player_id: i32) -> card_sdk::Asked {
+    if ctx::slot(player_id, "latch:identity_switch") != 0 {
+        ctx::gain(player_id, 700, &Msg::new(key!("identity_switch_gain")))?;
+        ctx::log(player_id, &Msg::new(key!("identity_switch_gain_done")));
+    } else {
+        ctx::set_slot(player_id, "latch:identity_switch", 1);
+        ctx::draw(player_id, 1)?;
+        ctx::log(player_id, &Msg::new(key!("identity_switch_draw_done")));
+    }
+    Ok(())
+}
+
 /// A **resolution** gate: the effect names the player and the chain forms, and
 /// only what lands is voided.
 const SHIELD: CardDef = CardDef::new(
@@ -2819,6 +2839,39 @@ fn asking_guard_counter(player_id: i32) -> card_sdk::Asked {
 /// declaration commits. Declining there means **no counter is declared at
 /// all** -- the card stays in hand and the body never runs. The body has no
 /// decline path and logs unconditionally, so silence is proof it never ran.
+/// `TEST:askMoney` -- a free-amount ask (`ctx::ask_money`, HOST-05): the host
+/// answers a raw amount in `0..=5000` and the body logs it back.
+const ASK_MONEY: CardDef = CardDef::new("TEST:askMoney", &[On::Play("", None, ask_money)]);
+
+fn ask_money(player_id: i32) -> card_sdk::Asked {
+    let v = ctx::ask_money(
+        player_id,
+        &Msg::new(key!("ask_money_title")),
+        &Msg::new(key!("ask_money_ask")),
+        5_000,
+        1_000,
+    )?;
+    ctx::log(player_id, &Msg::new(key!("ask_money_value")).i("n", v as i64));
+    Ok(())
+}
+
+/// `TEST:personaSkins` -- log the player's cosmetic skins
+/// (`ctx::persona_skins`, ABI-09): a count line then one line per name.
+const PERSONA_SKINS: CardDef =
+    CardDef::new("TEST:personaSkins", &[On::Play("", None, persona_skins)]);
+
+fn persona_skins(player_id: i32) -> card_sdk::Asked {
+    let skins = ctx::persona_skins(player_id);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("persona_skins_n")).i("n", skins.len() as i64),
+    );
+    for s in &skins {
+        ctx::log(player_id, &Msg::new(key!("persona_skins_name")).chara("name", s));
+    }
+    Ok(())
+}
+
 const PICK_COUNTER: CardDef = CardDef::new(
     "TEST:pick_counter",
     &[
@@ -4291,6 +4344,18 @@ fn drawer_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Runs a named card from **outside a hand press** (`play_from_hand` false),
+/// the shape a draw-pile auto-play takes (ABI-08).
+const PLAY_SAKIKO: CardDef = CardDef::new(
+    "TEST:playSakiko",
+    &[On::Play("", None, play_sakiko)],
+);
+
+fn play_sakiko(player_id: i32) -> card_sdk::Asked {
+    ctx::play_card("Mujica:（祥子）斩断留恋，忘却一切", player_id)?;
+    Ok(())
+}
+
 /// Tutors `TEST:zoner` from the draw pile into the hand (an uncounted
 /// arrival).
 const TUTOR: CardDef = CardDef::new("TEST:tutor", &[On::Play("", None, tutor_play)]);
@@ -4374,6 +4439,7 @@ card_sdk::ruleset!(&[
     SNAP_TWICE,
     SNAP_ASK,
     DRAW_TWICE,
+    IDENTITY_SWITCH,
     SHIELD,
     MOVER,
     DICE_MOVER,
@@ -4471,6 +4537,8 @@ card_sdk::ruleset!(&[
     DECLINE_SIB,
     GATE_CLOSED,
     ASKING_GUARD,
+    ASK_MONEY,
+    PERSONA_SKINS,
     PICK_COUNTER,
     TRIGGER_SEEN,
     TRAP_DECLARE,
@@ -4533,6 +4601,7 @@ card_sdk::ruleset!(&[
     REHOMER,
     TILE_PROBE,
     DRAWER,
+    PLAY_SAKIKO,
     TUTOR,
     FLIP_DOWN,
     FLIP_UP,

@@ -961,6 +961,18 @@ pub fn world_snapshot_drop(key: i32) -> i32 {
     kani_host::call_i32(Op::world_snapshot_drop, [key, 0, 0, 0, 0, 0])
 }
 
+pub fn discard_next_fx(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::discard_next_fx, [player_id, 0, 0, 0, 0, 0])
+}
+
+pub fn auction(player_id: i32, tile: i32) -> i32 {
+    kani_host::call_i32(Op::auction, [player_id, tile, 0, 0, 0, 0])
+}
+
+pub fn persona_skins(player_id: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::persona_skins, [player_id, buf, cap, 0, 0, 0])
+}
+
 pub fn trig_pay_is_rent() -> i32 {
     kani_host::call_i32(Op::trig_pay_is_rent, [0, 0, 0, 0, 0, 0])
 }

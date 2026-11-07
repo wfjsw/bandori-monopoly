@@ -1574,6 +1574,13 @@ pub trait CardWorld: Clone + 'static {
     /// matches. Does not rebind skills; the caller swaps the persona skill
     /// separately (Two-in-One 「替换为sumimi的另一名角色」).
     fn set_persona(&mut self, player_id: i32, name: &str);
+    /// The cosmetic skins of the player's character (ABI-09): every roster
+    /// persona sharing their base character (`variant_of`), the current one
+    /// excluded. Empty on a world without roster data.
+    fn persona_skins(&self, player_id: i32) -> Vec<String> {
+        let _ = player_id;
+        Vec::new()
+    }
     /// Does this player's persona belong to group `name`?
     fn in_group(&self, player_id: i32, name: &str) -> i32;
 

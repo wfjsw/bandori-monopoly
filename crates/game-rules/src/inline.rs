@@ -342,14 +342,25 @@ pub fn request_or_pause<C: HostCtx>(
             // stale application is re-applied under the new plan -- at most
             // once per slot in a drive, because the body re-derives the
             // destination from the world it just changed and the recomputation
-            // can keep differing; every later reach consumes. Every other kind
-            // consumes: its effect is already on live and is not a positional
-            // thing a fresh argument could supersede.
+            // can keep differing; every later reach consumes. Same-kind
+            // requests otherwise consume: their effect is already on live and
+            // a fresh argument does not supersede the answer's **meaning**.
             let row = st.log.last.get(&at).cloned();
+            // Re-apply rather than reuse when the request the body now makes
+            // is not the one the answer was given to: a changed move
+            // destination (`recomputed`), or -- identity -- a different
+            // request **kind** at this slot. An answer means what its request
+            // asked, so a body whose gate read flipped and now makes a
+            // different call must not eat the old answer (LOY-TSUGU-01).
+            // Kinds never oscillate, so this cannot loop; the per-slot
+            // `reapplied` guard keeps it to one replacement per pass. Neither
+            // drift rewinds: the swallowed answer's effect already landed (the
+            // accepted offer ran the buy body), so the new request applies on
+            // top of it -- `restore_condition` skips both.
             let drifted = !st.log.reapplied.contains(&at)
-                && row
-                    .as_ref()
-                    .is_some_and(|e| recomputed(&e.request, &mirrored));
+                && row.as_ref().is_some_and(|e| {
+                    recomputed(&e.request, &mirrored)
+                });
             if let Some(entry) = row.as_ref().filter(|_| drifted) {
                 let mut req = req;
                 // The position is a move's whole effect and the plan states
@@ -414,6 +425,19 @@ pub fn request_or_pause<C: HostCtx>(
         return pause_now(pause);
     };
     Ok(x)
+}
+
+/// Is this the same **request** (kind) the logged answer was given to? Only
+/// the variant is compared, see the call site.
+fn same_request(
+    old: &game_core::engine::JournalRequest,
+    new: &game_core::engine::JournalRequest,
+) -> bool {
+    // The variant is the answer's meaning (a gate's 0/1 is not a tile pick).
+    // Only the discriminant is compared: same-kind values may legitimately
+    // oscillate between the restored pre-state and the settled one, and the
+    // answer stays valid across them.
+    std::mem::discriminant(old) == std::mem::discriminant(new)
 }
 
 /// Did the body recompute this request's arguments? Only a move is compared:

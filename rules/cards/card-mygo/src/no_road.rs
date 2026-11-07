@@ -7,7 +7,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{FilterKind, Payee, Seat};
+use card_sdk::abi::{prop, FilterKind, Payee, Seat};
 use card_sdk::CardText;
 use card_sdk::{ctx, key, Action, CardDef, Filter, Msg, On, PayAddValue};
 
@@ -30,7 +30,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         On::Action(Action::TurnStart("", Some(retire_guard), retire)),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(prop::SONG, 1), (prop::DESIGNATES, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"无路矢"#)
         .raw_name(r#"无路矢"#)
         .tags(&[])
@@ -59,7 +59,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
-    let picked = ctx::ask_player(
+    // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- a forced play names
+    // the target (`ctx::ask_player_target`), so no prompt re-asks it (ABI-04).
+    let picked = ctx::ask_player_target(
         player_id,
         &Msg::new(key!("no_road_title")),
         &Msg::new(key!("no_road_ask")),

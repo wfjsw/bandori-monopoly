@@ -631,6 +631,9 @@ pub enum HostRequest {
     WorldRestore { key: i32 },
     /// Drop a snapshot. `ctx::world_snapshot_drop`.
     WorldSnapshotDrop { key: i32 },
+    /// 「若无手牌则弃掉下一张抽到的牌」 -- arm the one-shot on `player_id`; the
+    /// next draw discards it and clears the flag. `ctx::discard_next_fx` (ABI-08).
+    DiscardNextFx { player_id: i32 },
     /// 「pay拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
     /// pipeline (rent table / the flat deed dice / the agent's 「half-charge」 half-flag).
     /// `docs/TILES.md`'s `ctx::pay_rent`, what the deed tile rule / the flat-deed tile rule /
@@ -690,6 +693,11 @@ pub enum HostRequest {
     /// player. `buy()` raises the same hook itself after an ordinary purchase;
     /// this is the card-driven half.
     RaiseBought { player_id: i32, tile: i32 },
+    /// 「所有玩家进行竞价」 (弦卷集团地产开发) -- run the engine's ordinary
+    /// auction over `tile` among every present, pay-gated seat, starting at
+    /// the current turn seat. The winner pays the winning bid and takes the
+    /// deed; answers the winner seat (`-1` = nobody bid). `ctx::auction`.
+    Auction { player_id: i32, tile: i32 },
     /// Raise a trigger point from a guest body (`ctx::raise`). `kind` is a
     /// [`TriggerKind`] as `i32` (mapped through `TriggerKind::as_str` for the
     /// wire name, e.g. `PassReward` → `"the pass-reward trigger"`); `value` is the
@@ -1044,6 +1052,9 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
             HostRequest::WorldSnapshot => J::WorldSnapshot,
             HostRequest::WorldRestore { key } => J::WorldRestore { key: *key },
             HostRequest::WorldSnapshotDrop { key } => J::WorldSnapshotDrop { key: *key },
+            HostRequest::DiscardNextFx { player_id } => J::DiscardNextFx {
+                player_id: *player_id,
+            },
             HostRequest::PayRent {
                 player_id,
                 tile,
@@ -1098,6 +1109,10 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 source: *source,
             },
             HostRequest::RaiseBought { player_id, tile } => J::RaiseBought {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::Auction { player_id, tile } => J::Auction {
                 player_id: *player_id,
                 tile: *tile,
             },
@@ -5559,6 +5574,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "world_snapshot_drop",
         |mut c: C<W>, key: i32| -> Result<i32, Error> {
             hostfns::world_snapshot_drop(&mut c, key).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "discard_next_fx",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::discard_next_fx(&mut c, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "auction",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::auction(&mut c, player_id, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "persona_skins",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::persona_skins(&mut c, player_id, buf, cap).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(

@@ -36,7 +36,7 @@ Sources (re-counted 2026-11-06 against master `698964fb`):
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`, `docs/MARKERS.md`, `docs/STATUS-HOSTS.md`, and the ambiguity backlog `docs/rulebook/spec/OPEN-QUESTIONS.md` (OPEN-* ids ↔ the C-Q list below)
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `crates/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
-**Current ABI: v119** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`). The body
+**Current ABI: v122** (`crates/card-sdk/src/abi.rs` `ABI_VERSION`). The body
 still quotes older era names in places; where a kind has since been renamed
 (`HookKind`/`GateKind` → `ActionKind`/`FilterKind`; `MoveRoll` → `DiceRollResult`;
 the `Pay*` / `Roll*` families restructured; `ruleset-core` → `bandori-std`),
@@ -49,7 +49,8 @@ pipeline (G07, v113), status/blocked/immunity gates (G12, v114), the zone and
 attachment lifecycle with leave hooks (G08), tile/build/pass ops (G09),
 settle facts and the effect-outcome surface (G10), inspection frames and
 public reveal (G11, v116), named-entry invocation (G13), and the hand-limit
-allowance with static bot-avoid (G14). `ctx::roll` is the windowed default and
+allowance with static bot-avoid (G14); v122 adds the engine auction request,
+the free-amount money ask and the persona-skin list.  `ctx::roll` is the windowed default and
 `ctx::roll_direct` the windowless variant, both returning
 `Result<i32, Prompt>`; findings written against the pre-v103 `ctx::roll` were
 rechecked in triage.
@@ -259,44 +260,38 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **expected**: decide declaration vs settlement (「nothing landed on me」).
 - **question**: C-Q8.
 
-## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects)
+## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects) — CLOSED
 - **kind**: ABI defect / implementation bug
 - **class**: B
 - **severity**: high (breaks inline guest equivalence under real rules)
 - **suggested batch**: host ABI: out-buffers / HostRequest handlers
 - **locations**
-  - `rules/tests/tests/inline_provider.rs:260-268` (B2 equivalence gap TODO), `:343` (cross-ref)
-  - `docs/BOT.md` §3.2; `docs/ENGINE.md:752-761`
+  - `rules/tests/tests/inline_provider.rs` (`strongest_inline_matches_halt_replay`; `equivalence` contract)
+  - `docs/BOT.md` §3.2; `docs/ENGINE.md` "Drive replay semantics"
 - **rulebook**: n/a — ABI contract: inline learn pass must see the same world as the replay model's last pass (`live + host_effects`).
-- **current**: PARTIAL (top-level done; nested-settle remainder). Each pass shares `live` after `NeedHost`, so the **landing** pass reads `live + host_effects`; write-through replace-on-rerun means the event stream carries that pass's lines (`docs/ENGINE.md` "Drive replay semantics"). Pinned for the top-level `pay` path by `effect_applied_log::reread_after_host_effect_sees_the_updated_value`. **Remaining gap:** a write inside a host routine's *nested settle* (the agent-tile offer buying a deed during `HostRequest::Move`) may not be on live before the next pass shares -- `RAS:成为最强`'s ownership check still sees the pre-buy deed (`be_strongest_always_rolls_and_ignores_the_face_on_the_fallback`).
-- **expected**: rebase onto the updated live world between passes, including nested settle writes (the write journal this item names).
-- **capability**: write journal on `Run` for nested settle writes. Top-level HostRequest sequencing is in.
+- **closed**: the commit pass is now an ordinary loop iteration (`in_commit`) with every answer pre-filled: the loop top restores the drive's guest writes off live, resets the cursor, rewinds move landings, re-shares the live world and rebuilds a fresh `Run`/`DriveInline`. A nested settle's writes cross onto live at the pause with the body's own (`overlay_guest_state` before `apply_host_request`) and the guest diff re-bases on the updated live world (`pass_base_for`), so the landing pass reads the post-buy deed. Pinned by `inline_provider::strongest_inline_matches_halt_replay` (the `RAS:成为最强` agent offer: the re-run's ownership check names RiNG 1) and the top-level `pay` path by `effect_applied_log::reread_after_host_effect_sees_the_updated_value`.
 
-## HOST-02 — guest world writes are not visible to the host routine that follows
+## HOST-02 — guest world writes are not visible to the host routine that follows — CLOSED
 - **kind**: ABI defect / implementation bug
 - **class**: B
 - **severity**: medium (silently no-ops a routine whose guard reads board state)
 - **suggested batch**: host ABI: `apply_host_request` world sync
 - **locations**
-  - `crates/game-rules/src/wasm_rules.rs:3597` (`adopt_turn_policy` / `overlay_guest_state` at the `NeedHost` boundary)
-  - `crates/game-core/src/engine/play.rs:3219` (`commit_redeem` owner guard)
-  - `rules/cards/card-morfonica/src/toko_swap.rs` (worked around 2026-10-28)
-  - `rules/cards/card-pp/src/first_live_accident.rs` (seal token vs the body's own draw hook, 2026-10-28)
+  - `crates/game-rules/src/wasm_rules.rs` (`adopt_turn_policy` / `overlay_guest_state` at the `NeedHost` boundary)
+  - `crates/game-core/src/engine/play.rs:4159` (`commit_redeem` owner guard)
+  - `rules/cards/card-morfonica/src/toko_swap.rs`
+  - `rules/cards/card-pp/src/first_live_accident.rs`
 - **rulebook**: n/a — ABI contract. A body's writes before a host request must be what the routine — and any hook the routine raises — sees.
-- **current**: **partially landed** (G10, `ce76bc10`) — the pause boundary now
-  crosses board owners / houses / mortgaged / tokens / money (`cx.rs:2563,2673`,
-  applied before `apply_host_request` at `wasm_rules.rs:4376`). Both named
-  workarounds were still in place at the 2026-11-06 sweep:
-  `Mor:（toko）`'s 「互换后将你得到的地契免费赎回」 still writes `set_mortgaged`
-  + the `redeemed` record by hand instead of `commit_redeem`
-  (`rules/cards/card-morfonica/src/toko_swap.rs:186-194`), and 「初次演出事故」
-  still cannot rely on its `skillBlock` token being visible to the hook its own
-  draw raises (`rules/cards/card-pp/src/first_live_accident.rs:50`; stale
-  assertion at `rules/tests/tests/spec_card_pp.rs:507`). No regression test.
-- **expected**: retire both workarounds on top of the overlay — `commit_redeem`
-  restored in toko (the `log.redeem` / `redeemed` record then come for free) and
-  the accident's own-draw hook asserted — plus the pinning test.
-- **capability**: landed (board-row crossing at the pause boundary).
+- **closed**: the pause boundary crosses board owners / houses / mortgaged /
+  tokens / money (`cx.rs:2563,2673`) before `apply_host_request` in both the
+  replay `NeedHost` arm and `DriveInline::apply`. Both workarounds are retired:
+  `Mor:（toko）` uses `commit_redeem` again (the `log.redeem` / `redeemed`
+  record come from the engine, cost 0) and 「初次演出事故」's seal is on live
+  before the hook its own draw raises (the `spec_card_pp` assertion no longer
+  exempts 大和麻弥). Pinned at the ABI level by
+  `g10_body_write_before_redeem_is_seen_by_the_owner_guard` and
+  `g10_seal_is_seen_by_the_body_own_draw_hook`. The crossing covers board rows
+  only; a guard reading a hand / pile write would still not see it.
 
 ---
 
@@ -307,12 +302,19 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **class**: B
 - **severity**: medium
 - **suggested batch**: HostRequest handlers
-- **status**: **partially landed** — the （2） no-settle + band-skill `PassTile`
-  fan-out landed (`please_choose.rs:108-118`, `teleport_as(false, false)`) and
-  `RangeCard` / `Extreme` are in the trigger vocabulary (`tsugumi_can.rs:27`,
-  `abi.rs:1762`). The **force-target play tag** is still missing.
+- **status**: **CLOSED** — the （2） no-settle + band-skill `PassTile` fan-out
+  landed earlier (`teleport_as(false, false)`), and the force-target play tag is
+  now in: `please_choose` writes the plan tag `"force"` = the PLEASE CHOOSE
+  holder **+ 1** around the forced play and clears it after (a missing tag
+  answers 0, so 0 cannot mean seat 0), and the played card reads it via
+  `ctx::forced_target()` / `ctx::ask_player_target()` (no target prompt, the
+  seat still goes through its targeting gate). `no_road` (with
+  `prop::DESIGNATES`) and `rain` consume it. Pinned by
+  `g03_please_choose_forced_play_designates_the_holder`.
 - **locations**
-  - `rules/cards/card-ras/src/please_choose.rs:95-96` (`TODO(ABI-04)`; forced play of a targeting card — `Tags["force"] = player_id` absent)
+  - `rules/cards/card-ras/src/please_choose.rs` (producer)
+  - `crates/card-sdk/src/ctx.rs` (`forced_target`, `ask_player_target`)
+  - `rules/cards/card-mygo/src/no_road.rs`, `rules/cards/card-general/src/rain.rs` (consumers)
 - **rulebook**: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」; 「（不触发结算但视为可触发乐队技能）」.
 
 ## ABI-08 — `FromDeck` play-source + one-shot `DiscardNextFx`
@@ -320,27 +322,59 @@ Deferred from the `card-std-split` / ABI v56 pass (bandori-std + `tile_is`/
 - **class**: B
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline
-- **status**: **partially landed** — the `FromDeck` play-source exists
-  (`ctx.rs:4922` `play_from_hand`, `abi.rs:2549`), but `sakiko_cut.rs:46`
-  hard-codes `skip_discard = false` and ignores it. The one-shot
-  `DiscardNextFx` half is still absent.
+- **status**: **CLOSED** — `sakiko_cut` reads the existing play origin
+  (`ctx::play_from_hand`): a draw-pile play first offers 「发动 / 不发动」,
+  activates without the hand discard on a yes, and spends the card on a no;
+  the empty-hand hand play arms the new one-shot `DiscardNextFx` (ABI v121,
+  new `HostRequest` variant + `MatchPlayer::discard_next`) and the next card
+  the player draws is discarded once. The nested-play scope survives host
+  request re-applies (below). Pinned by `sakiko_deck_play_offers_decline`,
+  `sakiko_deck_play_skips_the_discard`,
+  `sakiko_empty_hand_discards_the_next_draw_once` and
+  `sakiko_deck_play_replays_identically`.
+- **note**: a nested `play_card` / `invoke_entry` scopes `play_from_hand`
+  (and `placed_during_play`) on the guest copy only. A consumed request
+  answer reloads that copy from live, which still names the **outer** play,
+  so `Run::carry_play_scope` carries the scope back over both the
+  reload and `Run::restore_from_world` -- without it the draw-pile play read
+  `play_from_hand == true` at its first nested request.
 - **locations**
-  - `rules/cards/card-mujica/src/sakiko_cut.rs:42,46,116-125` (FromDeck 3-way prompt; `DiscardNextFx`)
+  - `rules/cards/card-mujica/src/sakiko_cut.rs` (FromDeck 3-way prompt; `DiscardNextFx`)
+  - `crates/game-core/src/engine/play.rs` (`draw_cards_with_hooks`), `crates/game-core/src/state.rs` (`discard_next`)
+  - `crates/game-rules/src/{host.rs,hostfns.rs,wasm_rules.rs,native_shims.rs}`, `crates/game-core/src/engine/journal.rs`
 
-## ABI-09 — event defer (`IEventDefer`) + host clocks
-- **status**: **partially landed** — (a) `IEventDefer` (`ctx::event_defer`,
-  `arisa_wait.rs:78`), (b) the host clock write (`bangdream_chan.rs:42-45`,
-  `abi.rs:1086-1108`) and (c) the `CantPlayHand` gate (`crychic.rs:54`) are in.
-  Still open: (d) auction primitive, (e) free-amount `ask_money`,
-  (f) cosmetic ask.
+## ABI-09 — event defer (`IEventDefer`) + host clocks — **CLOSED**
+- **status**: **closed** (2026-11-07). The earlier halves stayed: (a)
+  `IEventDefer` (`ctx::event_defer`, `arisa_wait.rs:78`), (b) the host clock
+  write (`bangdream_chan.rs:42-45`, `abi.rs:1086-1108`), (c) the
+  `CantPlayHand` gate (`crychic.rs:54`). This batch added the rest:
+  - (d) **auction** — `HostRequest::Auction` / `ctx::auction(player_id, tile)`
+    (v122, import 496) runs the engine's ordinary auction
+    (`PlayCtx::auction_deed`, the `auction_leftovers` machinery with
+    `use_pool: true`) and answers the winner; `tsurumaki_estate` now calls it
+    instead of the 1000-step `ask_choice` per-seat loop. The tie question is
+    moot: every raise is at least +100 over the standing bid.
+  - (e) **free-amount `ask_money`** — `PromptKind::Money = 8` (wire `money`),
+    `ctx::ask_money(player, title, text, max, ai)`, no option list, the bound
+    on `view.price`, the answer a raw amount (`Match::answer` `money` arm +
+    heuristic). Also closes HOST-05.
+  - (f) **cosmetic skin ask** — `ctx::persona_skins(player_id)` (v122,
+    import 497) lists the other personas of the player's base character
+    (`variant_of`); `ex_quest` offers them per eligible seat (「不换」 first)
+    and writes the pick through `ctx::set_persona`. The persona name is now a
+    guest-write overlay surface (`PassBase.persona`), so the swap commits.
+    A skin keeps the bound skills (「技能相同」); the roster's variant rows
+    carry their own printed skill text, but `set_persona` only rewrites the
+    name, so the bound `skill:` instance is what keeps playing.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: medium
-- **suggested batch**: HostRequest handlers
 - **locations**
-  - (d) `rules/events/src/tsurumaki_estate.rs:48-50` (「竞价」 auction primitive) — open
-  - (e) `rules/events/src/tsurumaki_estate.rs:63` (free-amount `ask_money`) — open (also HOST-05)
-  - (f) `rules/events/src/ex_quest.rs:44` (skin-change ask) — open
+  - `rules/events/src/tsurumaki_estate.rs` — auction + free amount
+  - `rules/events/src/ex_quest.rs` — skin ask
+  - tests: `rules/tests/tests/events.rs` (`tsurumaki_estate_*`,
+    `ex_quest_*`), `rules/tests/tests/spec_events.rs` (E-estate-*),
+    `rules/tests/tests/abi09_prompts.rs`
 - **capability**: auction primitive, `ask_money`, cosmetic ask.
 
 ## ABI-11 — lost-since-turn accumulator (NOW SUMIMI)
@@ -722,18 +756,22 @@ Contrast `starry_night` / `eve`, which refuse over a fixed face.
   - 支付阶段 windows: 1 `payCalcBefore`, 3 `paySplitMulBefore`, 5 `pay`, 7 `paid` (all landed, v120)
 - **expected**: sync the tables without rewording; raise the missing windows when a card hooks them.
 
-## HOST-05 — `ask_tile(allowNone: true)` / free-amount `ask_money`
-- **status**: **partial** (2026-10-13, `closeout-5-engine`) —
-  `pareo_far` now uses `ask_tiles` (TileId, 「不选」 → `-1`) so the optional
-  house-removal is one prompt. Free-amount `ask_money` is still missing;
-  `tsurumaki_estate`'s 「竞价」 still steps 1000-at-a-time through `ask_choice`.
+## HOST-05 — `ask_tile(allowNone: true)` / free-amount `ask_money` — **CLOSED**
+- **status**: **closed** (2026-11-07). `pareo_far` uses `ask_tiles` (TileId,
+  「不选」 → `-1`), one prompt for the optional house removal. The free-amount
+  half landed with ABI-09(e): `PromptKind::Money` + `ctx::ask_money` (v122),
+  no option list, the bound on `view.price`, raw amount answer. The estate bid
+  no longer steps 1000-at-a-time -- it is the engine auction
+  (`ctx::auction`), which is the real raise ladder.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: low
 - **suggested batch**: HostRequest handlers
 - **locations**
   - `rules/cards/card-ras/src/pareo_far.rs:56,69` (ask_tiles 「不选」 — landed)
-  - `rules/events/src/tsurumaki_estate.rs:62-66` (ask_money still open; still steps 1000-at-a-time)
+  - `rules/events/src/tsurumaki_estate.rs` (now `ctx::auction`)
+  - `crates/card-sdk/src/ctx.rs` (`ask_money`), `abi.rs` (`PromptKind::Money`)
+  - test: `rules/tests/tests/abi09_prompts.rs`
 
 ## LOW-03 — `Mujica:#J11` has no rulebook entry
 - **kind**: rulebook gap
@@ -1106,18 +1144,19 @@ or moves a 「…」 clause, and a “...” proper name that fails to resolve.
 
 ## Open
 
-### Replay host-answer matching by position (LOY-TSUGU-01 residual)
-- **class**: B. **severity**: low.
-- A guest body that re-runs after a `HostRequest` sees the answers replayed by
-  position, so a `cant_move` read inside the body flips on the re-run and a later
-  prompt disappears. Worked around in `tsugu_ycm.rs` by latching the destination
-  in a slot (2026-10-28 batch; pinned by
-  `tsugu_effects_land_when_the_move_is_spent`), not fixed at the root. v114's
-  activation-ordinal read (`ctx::cant_move_code_for_activation`,
-  `abi.rs:970`, used at `tsugu_ycm.rs:196`) covers the `cant_move` flip; the
-  latch at `tsugu_ycm.rs:69,117` and the root fix are still there.
-- **fix**: an arg-identity check in `request_or_pause` would let cards read the
-  gate plainly.
+### Replay host-answer matching by position (LOY-TSUGU-01 residual) — **CLOSED**
+- **status**: **closed** (2026-11-07). `request_or_pause`'s consume path now
+  re-applies (rather than reuses) a logged answer when the body's request at
+  that slot has a different **variant** (`inline::same_request`, discriminant
+  only) — the answer means what its request asked. The tsugu teleport's
+  activation-ordinal read already covered the `cant_move` flip; with identity
+  in place the `latch:tsugu_ycm_moved` slot (`tsugu_ycm.rs:69,117`) is gone and
+  both arms read `rules_status::move_blocked` plainly. A different kind
+  rewinds the entry's `condition`, so the superseded effect is undone, and the
+  per-slot `reapplied` guard bounds it. Pinned by
+  `g10_replay_reapplies_a_different_request_kind` (`TEST:identitySwitch`) plus
+  the existing `tsugu_effects_land_when_the_move_is_spent`; design in
+  `docs/rulebook/spec/abi/G10-effect-outcome.md` §6.3.2 / §6.3.5.
 
 ### LOY-DREAM-01 `PP:梦在前方，结彩当下`（4）is a turn-end [反击], not a hand press
 - **class**: A. **severity**: high.
