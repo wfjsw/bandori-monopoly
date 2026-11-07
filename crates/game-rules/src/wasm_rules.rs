@@ -4426,6 +4426,9 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
 
 impl<M: CardModules> RulesBridge<M> {
     pub fn new(ruleset: M, data: Arc<GameData>) -> Self {
+        // A fresh engine owns no resolving frames (the store is a
+        // thread-local; see [`reset_resolving`]).
+        reset_resolving();
         Self {
             ruleset,
             data,
@@ -7827,6 +7830,7 @@ impl<M: CardModules> RulesBridge<M> {
         let roll_pick_writes = cx.capture_guest_roll_picks_from(&after.pass_base, &after.world);
         let scheduled_writes = cx.capture_guest_scheduled_from(&after.pass_base, &after.world);
         let money_writes = cx.capture_guest_money_from(&after.pass_base, &after.world);
+        let persona_writes = cx.capture_guest_persona_from(&after.pass_base, &after.world);
         let board_writes = cx.capture_guest_board_from(&after.pass_base, &after.world);
         let event_writes = cx.capture_guest_events_from(&after.pass_base, &after.world);
         let guest_overlay = game_core::engine::GuestOverlay {
@@ -7835,6 +7839,7 @@ impl<M: CardModules> RulesBridge<M> {
             tokens: token_writes,
             owners: owner_writes,
             money: money_writes,
+            persona: persona_writes,
             board: board_writes,
             piles: pile_writes,
             roll_picks: roll_pick_writes,
@@ -15117,6 +15122,14 @@ thread_local! {
     /// behind. One host thread per match.
     static RESOLVING: std::cell::RefCell<Vec<(String, i32, i32, i32)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Drop every resolving frame. A new engine (a fresh match or replay worker)
+/// starts with none -- the frames are a thread-local, so a match that was torn
+/// down mid-body (a probe that stops on a paused drive) would otherwise hand
+/// its frames to the next engine on the same thread.
+pub fn reset_resolving() {
+    RESOLVING.with(|r| r.borrow_mut().clear());
 }
 
 /// Snapshot of [`RESOLVING`] for the walk: `(card, uid, owner seat)`.

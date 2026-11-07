@@ -56,29 +56,32 @@ pub fn data() -> Arc<GameData> {
 /// The shipped cards and skills plus the `TEST:*` fixtures, loaded once.
 pub fn rules() -> Arc<WasmRules> {
     static RULES: OnceLock<Arc<WasmRules>> = OnceLock::new();
-    RULES
-        .get_or_init(|| {
-            // Kind flags ride the `ruleset_kind_flags` export on a rebuilt
-            // module; older dist wasm may lack it, so seed from the ruleset
-            // declaration (`bandori-std` is a dep of this test crate).
-            game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
-            let mut b = Ruleset::builder();
-            for sub in ["cards", "fixtures"] {
-                let dir = root.join(sub);
-                let index: serde_json::Value = serde_json::from_str(
-                    &std::fs::read_to_string(dir.join("index.json"))
-                        .expect("run node tools/build-ruleset.mjs"),
-                )
+    RULES.get_or_init(fresh_rules).clone()
+}
+
+/// A ruleset of its own, like the one a fresh engine (a replay worker, another
+/// match) gets: some per-engine state is a thread-local, so a replay that runs
+/// in the same process as the match it records must not reuse the shared one.
+pub fn fresh_rules() -> Arc<WasmRules> {
+    // Kind flags ride the `ruleset_kind_flags` export on a rebuilt
+    // module; older dist wasm may lack it, so seed from the ruleset
+    // declaration (`bandori-std` is a dep of this test crate).
+    game_rules::set_kind_flags(bandori_std::kind::kind_hook_only());
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
+    let mut b = Ruleset::builder();
+    for sub in ["cards", "fixtures"] {
+        let dir = root.join(sub);
+        let index: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join("index.json"))
+                .expect("run node tools/build-ruleset.mjs"),
+        )
+        .unwrap();
+        for m in index["modules"].as_array().unwrap() {
+            b.add(&std::fs::read(dir.join(m["file"].as_str().unwrap())).unwrap())
                 .unwrap();
-                for m in index["modules"].as_array().unwrap() {
-                    b.add(&std::fs::read(dir.join(m["file"].as_str().unwrap())).unwrap())
-                        .unwrap();
-                }
-            }
-            Arc::new(WasmRules::new(b.build().unwrap(), data()))
-        })
-        .clone()
+        }
+    }
+    Arc::new(WasmRules::new(b.build().unwrap(), data()))
 }
 
 /// Board index of the tile with this exact name (`data/board.json`). The

@@ -1141,6 +1141,14 @@ impl RecordedMatch {
             return;
         }
         self.rec.push_ticks(k);
+        if let Ok(dir) = std::env::var("DBG_TICK") {
+            // Every tick's save, as `live-<tick>.json` -- pair with a replay
+            // dump (`replay-<tick>.json`) to find the first tick that forks.
+            let _ = std::fs::write(
+                format!("{dir}/live-{}.json", self.rec.total_ticks()),
+                self.m.save(),
+            );
+        }
         self.after_input();
     }
 
@@ -1214,6 +1222,11 @@ impl RecordedMatch {
             self.turn_key = key;
             let hash = hash_save(&self.m.save());
             let tick = self.rec.total_ticks();
+            if let Ok(dir) = std::env::var("DBG_CKPT") {
+                // The live save at every turn-boundary checkpoint, for a
+                // byte-diff against the replay's at the same tick.
+                let _ = std::fs::write(format!("{dir}/live-ckpt-{tick}.json"), self.m.save());
+            }
             self.rec.push_checkpoint(tick, key.0, key.1, hash);
         }
         if self.m.ended() {
@@ -1685,6 +1698,9 @@ impl Replayer {
             pump_machines(&mut self.m);
         }
         self.tick += 1;
+        if let Ok(dir) = std::env::var("DBG_TICK") {
+            let _ = std::fs::write(format!("{dir}/replay-{}.json", self.tick), self.m.save());
+        }
         self.time += k as f32 * self.step;
         self.sub += 1;
         self.drain_events();
@@ -1714,6 +1730,12 @@ impl Replayer {
             .cloned()
             .collect();
         for ckpt in due {
+            if let Ok(dir) = std::env::var("DBG_CKPT") {
+                let _ = std::fs::write(
+                    format!("{dir}/replay-ckpt-{}.json", ckpt.tick),
+                    self.m.save(),
+                );
+            }
             let h = hash_save(&self.m.save());
             if h != ckpt.hash {
                 self.flag(format!(

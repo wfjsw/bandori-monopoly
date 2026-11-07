@@ -761,6 +761,12 @@ pub struct GuestOverlay {
     /// pipeline applies on live instead and leaves no entry here.
     #[serde(default)]
     pub money: Vec<(usize, i32, i32)>,
+    /// `(player, base, wrote)` persona writes (`ctx::set_persona`, 二人一体's
+    /// swap). Absolute per-seat faces: `base` is the pass-start value and the
+    /// write crosses a pause like a money row, or a request between the write
+    /// and the body's end would rebuild the copy from live without it.
+    #[serde(default)]
+    pub persona: Vec<(usize, String, String)>,
     /// Board-row writes (`ctx::set_owner` / `ctx::set_houses` /
     /// `ctx::set_mortgaged`, embers, tile marks).
     #[serde(default)]
@@ -1390,6 +1396,8 @@ pub struct PassBase {
     pub owners: Vec<(i32, Vec<i32>)>,
     /// Every player's money.
     pub money: Vec<i32>,
+    /// Every player's persona face.
+    pub persona: Vec<String>,
     /// Every player's private piles (hand / deck / graveyard).
     pub piles: Vec<(Vec<String>, Vec<String>, Vec<String>)>,
     /// Every player's stored next-main-move step count.
@@ -1516,6 +1524,13 @@ impl PassBase {
             if let (Some(v), Some(b)) = (live.st.players.get(*i), self.money.get_mut(*i)) {
                 if v.money == *wrote_v {
                     *b = *base_v;
+                }
+            }
+        }
+        for (i, base_v, wrote_v) in &own.persona {
+            if let (Some(v), Some(b)) = (live.st.players.get(*i), self.persona.get_mut(*i)) {
+                if v.persona == *wrote_v {
+                    *b = base_v.clone();
                 }
             }
         }
@@ -1648,6 +1663,8 @@ fn retain_unseen_overlay_rows(seen: &mut SeenRows, o: &mut GuestOverlay) {
     // `capture_guest_tokens_from`), so every one of them is a real step.
     o.money
         .retain(|(i, _, _)| seen.insert((5, *i, String::new(), 0)));
+    o.persona
+        .retain(|(i, _, _)| seen.insert((16, *i, String::new(), 0)));
     o.board
         .owners
         .retain(|(t, _, _)| seen.insert((6, *t, String::new(), 0)));
@@ -1700,6 +1717,7 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
         roll_picks,
         scheduled,
         money,
+        persona,
         board,
         events,
         rule_bonus,
@@ -1720,6 +1738,13 @@ fn revert_overlay_on(w: &mut World, o: GuestOverlay) -> Vec<i32> {
         if let Some(p) = w.st.players.get_mut(i) {
             if p.money == wrote {
                 p.money = b;
+            }
+        }
+    }
+    for (i, b, wrote) in persona {
+        if let Some(p) = w.st.players.get_mut(i) {
+            if p.persona == wrote {
+                p.persona = b;
             }
         }
     }
@@ -2123,6 +2148,15 @@ impl GuestOverlay {
                 } else {
                     p.money + (*wrote - *base)
                 };
+            }
+        }
+        for (i, base, wrote) in &self.persona {
+            if let Some(p) = w.st.players.get_mut(*i) {
+                // Absolute: a face someone else moved to since the crossing is
+                // theirs, not the guest's.
+                if p.persona == *base {
+                    p.persona = wrote.clone();
+                }
             }
         }
         if let Some((base, wrote)) = &self.scheduled {
@@ -2555,6 +2589,7 @@ impl<'a> PlayCtx<'a> {
             scheduled: self.capture_guest_scheduled_from(base, from),
             events: self.capture_guest_events_from(base, from),
             money: self.capture_guest_money_from(base, from),
+            persona: self.capture_guest_persona_from(base, from),
             board: self.capture_guest_board_from(base, from),
             frames: self.capture_guest_frames_from(from),
         }
@@ -2638,6 +2673,7 @@ impl<'a> PlayCtx<'a> {
                 .map(|(key, owners)| (*key, owners.clone()))
                 .collect(),
             money: w.st.players.iter().map(|p| p.money).collect(),
+            persona: w.st.players.iter().map(|p| p.persona.clone()).collect(),
             piles: w
                 .hidden
                 .iter()
@@ -2720,6 +2756,33 @@ impl<'a> PlayCtx<'a> {
                 } else {
                     live + (wrote - b)
                 };
+            }
+            out.push((i, b, wrote));
+        }
+        out
+    }
+
+    /// Capture the guest's persona writes against the pass base and carry them
+    /// into `self.w`. Nothing when no face moved.
+    pub fn capture_guest_persona_from(
+        &mut self,
+        base: &PassBase,
+        from: &World,
+    ) -> Vec<(usize, String, String)> {
+        let mut out = Vec::new();
+        let n = base.persona.len().min(from.st.players.len());
+        for i in 0..n {
+            let b = base.persona[i].clone();
+            let wrote = from.st.players[i].persona.clone();
+            if b == wrote {
+                continue;
+            }
+            if let Some(p) = self.w.st.players.get_mut(i) {
+                // Absolute: the guest's face only lands on live while live
+                // still holds the pass-start one.
+                if p.persona == b {
+                    p.persona = wrote.clone();
+                }
             }
             out.push((i, b, wrote));
         }
