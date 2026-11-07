@@ -198,6 +198,12 @@ fn deployed_glue_sha() -> String {
 /// One request. `req` is trusted only to be JSON -- every field is validated
 /// here and a problem becomes an error response, never a panic.
 pub fn handle(ctx: &Ctx, req: Value) -> Value {
+    // Every request rebuilds its match from the blob (`new` / `restore` /
+    // `replay`), so the Rust stack that held a paused prompt's resolving
+    // frames is gone by now. The store is a thread-local on a process that
+    // round-robins rooms, so without this the next request -- possibly
+    // another room's -- inherits them.
+    game_rules::reset_resolving();
     let id = req.get("id").cloned().unwrap_or(Value::Null);
     let reply = match run(ctx, &req) {
         Ok(v) => v,

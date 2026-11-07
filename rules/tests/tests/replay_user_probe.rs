@@ -1,31 +1,53 @@
 //! Ad-hoc probe over a user-supplied `.bdrec` (`REC=<path>`): dump it, seek
-//! it, or inspect its replay stream.
+//! it, or inspect its replay stream. All three are `#[ignore]`d -- run them
+//! with `REC=<path> [DUMP=<path>] cargo test -p ruleset-tests --test
+//! replay_user_probe -- --ignored`.
 
 mod common;
 use common::*;
 
-use game_core::record::{decode_record, Replayer};
+use game_core::record::{decode_record, RecordFile, Replayer};
+
+/// A record only has to replay without divergence on the build that wrote it;
+/// these probes run the working tree, which usually moved on. Say which build
+/// it is instead and only assert when they match.
+fn assert_clean_on_own_build(rec: &RecordFile, rp: &Replayer) {
+    let here = dev_stamp().bundle;
+    if rec.header.engine.bundle != here {
+        eprintln!(
+            "note: record build {} != this build {here} -- divergence not asserted",
+            rec.header.engine.bundle
+        );
+        return;
+    }
+    assert!(
+        !rp.status().diverged,
+        "replay diverged at {:?}",
+        rp.first_mismatch()
+    );
+}
 
 #[test]
+#[ignore = "ad-hoc: set REC and run --ignored"]
 fn dump_user_record() {
-    // Ad-hoc: skipped by a plain run, driven with `REC=<path> DUMP=<path>`.
     let Ok(path) = std::env::var("REC") else {
         eprintln!("skipped: REC unset");
         return;
     };
     let bytes = std::fs::read(&path).unwrap();
     let rec = decode_record(&bytes).expect("decode");
+    let dump = std::env::var("DUMP").unwrap_or_else(|_| format!("{path}.dump"));
     let mut out = String::new();
     for (i, input) in rec.body.inputs.iter().enumerate() {
         out.push_str(&format!("{i}\t{}\n", serde_json::to_string(input).unwrap()));
     }
-    std::fs::write(std::env::var("DUMP").expect("DUMP"), out).unwrap();
+    std::fs::write(&dump, out).unwrap();
     if let Some(ev) = &rec.body.events {
         let s: Vec<String> = ev
             .iter()
             .map(|e| format!("{}\t{}", e.id, serde_json::to_string(e).unwrap()))
             .collect();
-        std::fs::write(std::env::var("DUMP").unwrap() + ".events", s.join("\n")).unwrap();
+        std::fs::write(dump + ".events", s.join("\n")).unwrap();
         eprintln!("event log: {}", ev.len());
     } else {
         eprintln!("no event log in record");
@@ -34,8 +56,8 @@ fn dump_user_record() {
 }
 
 #[test]
+#[ignore = "ad-hoc: set REC and run --ignored"]
 fn seek_user_record() {
-    // Ad-hoc: skipped by a plain run, driven with `REC=<path> DUMP=<path>`.
     let Ok(path) = std::env::var("REC") else {
         eprintln!("skipped: REC unset");
         return;
@@ -60,12 +82,16 @@ fn seek_user_record() {
             break;
         }
     }
+    let mut landed = 0;
     for tick in [2357u64, 11787, 21217, 23338, 0] {
         let r = rp.seek(tick);
+        if r.is_ok() {
+            landed += 1;
+        }
         let st = rp.match_ref().state();
         eprintln!(
             "seek {tick} -> {:?} players={} personas={:?} round={} turn={} ended={} diverged={}",
-            r.as_ref().map(|s| s.tick),
+            r.as_ref().ok().map(|s| s.tick),
             st.players.len(),
             st.players
                 .iter()
@@ -77,9 +103,12 @@ fn seek_user_record() {
             rp.status().diverged
         );
     }
+    assert!(landed > 0, "no seek landed");
+    assert_clean_on_own_build(&rec, &rp);
 }
 
 #[test]
+#[ignore = "ad-hoc: set REC and run --ignored"]
 fn inspect_user_record() {
     let Ok(path) = std::env::var("REC") else {
         eprintln!("skipped: REC unset");
@@ -186,4 +215,5 @@ fn inspect_user_record() {
         rp.status().diverged,
         rp.first_mismatch()
     );
+    assert_clean_on_own_build(&rec, &rp);
 }

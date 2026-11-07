@@ -6637,6 +6637,7 @@ impl PlayCtx<'_> {
                 .iter()
                 .map(|p| crate::engine::PlayerSnapshot {
                     pos: p.pos,
+                    persona: p.persona.clone(),
                     state: p.state.iter().map(|(k, v)| (k.clone(), *v)).collect(),
                     money: p.money,
                 })
@@ -6674,6 +6675,7 @@ impl PlayCtx<'_> {
             };
             live.pos = p.pos;
             live.money = p.money;
+            live.persona = p.persona.clone();
             let keys: Vec<String> = live.state.keys().cloned().collect();
             for k in keys {
                 if !p.state.iter().any(|(sk, _)| *sk == k) {
@@ -6690,6 +6692,12 @@ impl PlayCtx<'_> {
                 live.state_set_expires(k, v.expires);
                 live.state_set(k, v.value);
             }
+        }
+        // The face is back; re-place the skills the swap took away (idempotent,
+        // and a no-op when the face never moved). The old instance's counters
+        // do not come back -- the snapshot does not cover field lists.
+        for i in 0..self.w.st.players.len() {
+            self.w.bind_skills(self.data, self.rules, i as i32);
         }
         self.w.st.owners = snap.owners;
         self.w.st.houses = snap.houses;

@@ -3529,7 +3529,12 @@ impl CardWorld for Run {
         if let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) {
             s.persona = name.into();
         }
+        // The name brings its skill rules, like the `Match::set_persona` seam
+        // (`World::bind_skills`, idempotent): a body that only writes the name
+        // would otherwise leave `persona_skill` on the old face.
+        self.bind_persona_skills(player_id);
     }
+
     fn in_group(&self, player_id: i32, name: &str) -> i32 {
         // The persona's group.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
@@ -4087,6 +4092,31 @@ impl CardWorld for Run {
 }
 
 impl Run {
+    /// Place the skills of the seat's current face that are not on the field
+    /// yet -- `World::bind_skills` over the run's `props` snapshot. Silent, as
+    /// the match-start binding is; an explicit `ctx::place_card` of the same
+    /// rule afterwards finds it already placed.
+    fn bind_persona_skills(&mut self, player_id: i32) {
+        let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
+            return;
+        };
+        let persona = s.persona.clone();
+        let placed = self.world.placed_cards(player_id);
+        for id in self.data.skill_rules_of(&persona) {
+            if placed.contains(&id) {
+                continue;
+            }
+            let mut props = props_of(&self.props, &id);
+            let caps = split_counter_max(&mut props);
+            let uid = self
+                .world
+                .place_card(&self.data, player_id, &id, Msg::default(), props);
+            for (name, cap) in caps {
+                self.world.set_counter_max_at(uid, &name, cap);
+            }
+        }
+    }
+
     /// The one figure setter behind `set_trigger_value` / `_move_roll` /
     /// `_price`.
     ///
@@ -7891,9 +7921,9 @@ impl<M: CardModules> RulesBridge<M> {
         w.st.skip_move = after.world.st.skip_move;
         // `ctx::set_persona` (二人一体的 swap) is a guest write too, and only a
         // body makes one (the host never does): the identity carries from the
-        // finished copy. The pass top rebuilds the copy from `live`, so the
-        // write does not need a rewind of its own -- it is not on live before
-        // the commit.
+        // finished copy. A write made before a pause already crossed to live,
+        // but the copy's face is the drive's last word either way -- the commit
+        // takes it whole rather than diffing.
         for (to, from) in w.st.players.iter_mut().zip(after.world.st.players.iter()) {
             to.persona = from.persona.clone();
         }

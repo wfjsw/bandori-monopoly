@@ -1437,6 +1437,12 @@ impl PassBase {
     /// too, so it is the host's, not the guest's (same guard as
     /// [`PlayCtx::restore_guests_to`]). Snapshot owners are additive and stay
     /// on the row.
+    ///
+    /// Currently unwired: the pass top inlines these rules in
+    /// `Run::after_host_inner` (it needs the live base there, not a probe), and
+    /// no caller builds a base this way. Keep the arms here in step with
+    /// [`GuestOverlay::restore`] -- they are the documented revert for a new
+    /// surface either way.
     pub fn revert_guest_overlay(&mut self, own: &GuestOverlay, live: &World) {
         for (i, k, base_v, wrote_v, crossed) in &own.state {
             // A non-crossing increase never sat on live; overriding the
@@ -2763,7 +2769,17 @@ impl<'a> PlayCtx<'a> {
     }
 
     /// Capture the guest's persona writes against the pass base and carry them
-    /// into `self.w`. Nothing when no face moved.
+    /// into `self.w`. Nothing when the copy holds the face live already has.
+    ///
+    /// A face is an absolute name, so there is no delta to add: the guest's
+    /// newest word replaces live's, and the row records the value it replaced
+    /// as its base. The row is therefore measured against **live now**, not the
+    /// pass base -- a body that writes a face, pauses, and writes another
+    /// (`A -> B`, request, `A`) has a guest copy equal to the pass base at the
+    /// second pause, and the pass-base comparison would skip the write while
+    /// live still held `B`. No host routine ever writes a persona, so a live
+    /// face differing from the pass base is always this drive's own earlier
+    /// crossing.
     pub fn capture_guest_persona_from(
         &mut self,
         base: &PassBase,
@@ -2772,19 +2788,16 @@ impl<'a> PlayCtx<'a> {
         let mut out = Vec::new();
         let n = base.persona.len().min(from.st.players.len());
         for i in 0..n {
-            let b = base.persona[i].clone();
-            let wrote = from.st.players[i].persona.clone();
-            if b == wrote {
+            let wrote = &from.st.players[i].persona;
+            let Some(p) = self.w.st.players.get_mut(i) else {
+                continue;
+            };
+            // The unchanged case (most seats, most requests) clones nothing.
+            if p.persona == *wrote {
                 continue;
             }
-            if let Some(p) = self.w.st.players.get_mut(i) {
-                // Absolute: the guest's face only lands on live while live
-                // still holds the pass-start one.
-                if p.persona == b {
-                    p.persona = wrote.clone();
-                }
-            }
-            out.push((i, b, wrote));
+            let b = std::mem::replace(&mut p.persona, wrote.clone());
+            out.push((i, b, wrote.clone()));
         }
         out
     }

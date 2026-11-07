@@ -2365,6 +2365,8 @@ pub fn begin_activation() {
 pub struct Snapshot {
     pub n_players: i32,
     pub money: [i32; MAX_PLAYERS],
+    /// Interned face per seat -- the swap's own subject.
+    pub persona: [u16; MAX_PLAYERS],
     pub out: [bool; MAX_PLAYERS],
     pub pos: [i32; MAX_PLAYERS],
     pub charge: [i32; MAX_PLAYERS],
@@ -2386,6 +2388,7 @@ pub fn snapshot() -> Snapshot {
     with_world(|w| Snapshot {
         n_players: w.n_players,
         money: w.money,
+        persona: w.persona_id,
         out: w.out,
         pos: w.pos,
         charge: w.charge,

@@ -59,6 +59,36 @@ pub fn rules() -> Arc<WasmRules> {
     RULES.get_or_init(fresh_rules).clone()
 }
 
+/// The [`EngineStamp`] of this tree's build, for records a test exports: ABI
+/// and ruleset hash are read back from the built ruleset, the glue hash from
+/// `webui/src/wasm/engine_id.json` when `tools/build-glue.mjs` has run (the
+/// file is gitignored -- absent glue yields an empty hash and a bundle id the
+/// archive will not hold).
+pub fn dev_stamp() -> game_core::record::EngineStamp {
+    use game_core::record::{bundle_id, EngineStamp, RECORD_VERSION};
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let idx: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(root.join("dist/cards/index.json")).unwrap())
+            .unwrap();
+    let glue = std::fs::read_to_string(root.join("webui/src/wasm/engine_id.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|j| j["glueSha256"].as_str().map(str::to_string))
+        .unwrap_or_default();
+    let mut s = EngineStamp {
+        format: RECORD_VERSION,
+        save_version: game_core::engine::SAVE_VERSION,
+        abi: idx["abi"].as_u64().unwrap() as u32,
+        ruleset_sha256: idx["ruleset_sha256"].as_str().unwrap().into(),
+        data_sha256: String::new(),
+        engine: "game-core".into(),
+        build: "0.1.0".into(),
+        bundle: String::new(),
+    };
+    s.bundle = bundle_id(&glue, &s);
+    s
+}
+
 /// A ruleset of its own, like the one a fresh engine (a replay worker, another
 /// match) gets: some per-engine state is a thread-local, so a replay that runs
 /// in the same process as the match it records must not reuse the shared one.

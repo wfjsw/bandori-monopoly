@@ -476,6 +476,10 @@ pub struct WorldSnapshot {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PlayerSnapshot {
     pub pos: i32,
+    /// The face at the snapshot. A swap landing inside the window is undone
+    /// with everything else, or the restored statuses stay on the new face.
+    #[serde(default)]
+    pub persona: String,
     /// Whole items, not bare values: a restore has to put the declaration
     /// (`NEVER_NEGATIVE`, an expiry) back with the number, or a status that
     /// happened to be removed in between comes back without its floor.

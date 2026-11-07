@@ -6,24 +6,10 @@
 mod common;
 use common::*;
 
-use game_core::engine::SAVE_VERSION;
 use game_core::net::{NetMessage, RoomMember};
-use game_core::record::{seal, EngineStamp, MatchSetup, RecordedMatch, Replayer, RECORD_VERSION};
+use game_core::record::{seal, MatchSetup, RecordedMatch, Replayer};
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
-
-fn stamp() -> EngineStamp {
-    EngineStamp {
-        format: RECORD_VERSION,
-        save_version: SAVE_VERSION,
-        abi: 119,
-        ruleset_sha256: "cf6d9d31fb2ce03baa7797fd84b0d37f3d2cb009db9befcb8bba98782c5c70f3".into(),
-        data_sha256: String::new(),
-        engine: "game-core".into(),
-        build: "0.1.0".into(),
-        bundle: "b7111ec9c80d51098ec775be99dc6bffd0cf63a378e734280a8c2dce0bc57be8".into(),
-    }
-}
 
 fn act(rm: &mut RecordedMatch, member: i32, msg: NetMessage) -> Result<(), String> {
     rm.act(member, &msg).map_err(|e| e.key().to_string())
@@ -235,7 +221,7 @@ fn counter_swap_replays() {
     }
     assert!(swapped >= 1, "a counter swap happened live");
 
-    let mut rec = rm.export(stamp(), "test");
+    let mut rec = rm.export(dev_stamp(), "test");
     seal(&mut rec);
     if let Ok(out) = std::env::var("DUMP") {
         std::fs::write(out, game_core::record::encode_record_zst(&rec)).unwrap();
@@ -243,9 +229,9 @@ fn counter_swap_replays() {
 
     let mut rp = Replayer::from_body(data(), fresh_rules(), rec.header.clone(), rec.body.clone())
         .expect("open");
-    let total = rp.total_ticks();
     let mut seen = 0;
-    while !rp.status().ended && rp.status().tick < total {
+    // Drain the whole log, trailing non-tick inputs included.
+    while !rp.status().ended {
         let before = rp.match_ref().state().players[0].persona.clone();
         rp.next_input();
         let after = rp.match_ref().state().players[0].persona.clone();

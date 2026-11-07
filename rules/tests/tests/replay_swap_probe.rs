@@ -3,22 +3,8 @@
 mod common;
 use common::*;
 
-use game_core::engine::SAVE_VERSION;
 use game_core::net::NetMessage;
-use game_core::record::{seal, EngineStamp, RecordedMatch, Replayer, RECORD_VERSION};
-
-fn stamp() -> EngineStamp {
-    EngineStamp {
-        format: RECORD_VERSION,
-        save_version: SAVE_VERSION,
-        abi: 119,
-        ruleset_sha256: "cf6d9d31fb2ce03baa7797fd84b0d37f3d2cb009db9befcb8bba98782c5c70f3".into(),
-        data_sha256: String::new(),
-        engine: "game-core".into(),
-        build: "0.1.0".into(),
-        bundle: "b7111ec9c80d51098ec775be99dc6bffd0cf63a378e734280a8c2dce0bc57be8".into(),
-    }
-}
+use game_core::record::{seal, RecordedMatch, Replayer};
 
 #[test]
 fn counter_swap_survives_replay() {
@@ -43,8 +29,16 @@ fn counter_swap_survives_replay() {
     let after = rm.inner().state().players[0].persona.clone();
     eprintln!("live counter: {before:?} -> {after:?}");
     assert_ne!(before, after, "live counter swap happened");
+    // A host request after the swap: the next pause reloads the copy from
+    // live, so a face that did not cross is gone from here on.
+    let _ = rm.act(1, &NetMessage::act("end"));
+    assert_eq!(
+        rm.inner().state().players[0].persona,
+        after,
+        "the swap survives the next host request"
+    );
 
-    let mut rec = rm.export(stamp(), "test");
+    let mut rec = rm.export(dev_stamp(), "test");
     seal(&mut rec);
     if let Ok(out) = std::env::var("OUT") {
         std::fs::write(&out, game_core::record::encode_record_zst(&rec)).unwrap();
@@ -79,11 +73,13 @@ fn seek_keeps_the_swap() {
         },
     )
     .expect("play");
-    // A few ticks after the swap.
+    // A host request after the swap reloads the copy from live; a few ticks
+    // then carry the effect to its end.
+    rm.act(1, &NetMessage::act("roll")).ok();
     for _ in 0..40 {
         rm.tick_steps(1);
     }
-    let mut rec = rm.export(stamp(), "test");
+    let mut rec = rm.export(dev_stamp(), "test");
     seal(&mut rec);
 
     let mut rp = Replayer::from_body(data(), fresh_rules(), rec.header.clone(), rec.body.clone())
@@ -147,8 +143,16 @@ fn play_swap_survives_replay() {
     let after = rm.inner().state().players[0].persona.clone();
     eprintln!("live: {before:?} -> {after:?}");
     assert_ne!(before, after, "live swap happened");
+    // Pause once more before the record ends: the reloaded copy is built from
+    // live, so an uncrossed face would be gone here already.
+    rm.act(1, &NetMessage::act("roll")).ok();
+    assert_eq!(
+        rm.inner().state().players[0].persona,
+        after,
+        "the swap survives the next host request"
+    );
 
-    let mut rec = rm.export(stamp(), "test");
+    let mut rec = rm.export(dev_stamp(), "test");
     seal(&mut rec);
     if let Ok(out) = std::env::var("OUT") {
         std::fs::write(&out, game_core::record::encode_record_zst(&rec)).unwrap();
@@ -169,38 +173,11 @@ fn play_swap_survives_replay() {
     assert!(!seen.is_empty(), "replay reproduced the swap");
 }
 
+/// Print the stamp a record written by this tree carries (the probes' `OUT=`
+/// records get it). Read-only: with `--nocapture`.
 #[test]
 fn print_dev_bundle() {
-    let glue: String = serde_json::from_str::<serde_json::Value>(
-        &std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../webui/src/wasm/engine_id.json"
-        ))
-        .unwrap(),
-    )
-    .unwrap()["glueSha256"]
-        .as_str()
-        .unwrap()
-        .into();
-    let idx: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../dist/cards/index.json"
-        ))
-        .unwrap(),
-    )
-    .unwrap();
-    let s = EngineStamp {
-        format: RECORD_VERSION,
-        save_version: SAVE_VERSION,
-        abi: idx["abi"].as_u64().unwrap() as u32,
-        ruleset_sha256: idx["ruleset_sha256"].as_str().unwrap().into(),
-        data_sha256: String::new(),
-        engine: "game-core".into(),
-        build: "0.1.0".into(),
-        bundle: String::new(),
-    };
-    eprintln!("glue={glue}");
+    let s = dev_stamp();
     eprintln!("stamp={s:?}");
-    eprintln!("bundle={}", game_core::record::bundle_id(&glue, &s));
+    eprintln!("bundle={}", s.bundle);
 }

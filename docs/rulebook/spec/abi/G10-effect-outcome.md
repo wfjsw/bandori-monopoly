@@ -87,6 +87,8 @@ this one. What the draft got wrong:
 | R50 | `GuestOverlay::apply` (the journal's re-application path) skipped the `events` family the revert already restores. | `apply` applies the event delta too. |
 | R51 | `black_suits`' crystal latch returned on the bare uid without checking the borrowed instance still stood, so a destroyed CiRCLE instance left the borrow dead. | The latch only short-circuits while its instance is on the tile. |
 | R52 | `no_breakup`'s terminals derived the checkpoint as `BASE + 1` with nothing asserting it. | The body asserts the adjacency (`debug_assert`); the terminals keep the derivation because a latch written after the checkpoint is not inside it (§10.1 row 4). |
+| R53 | A persona write was not a crossing surface at all: `ctx::set_persona` wrote the run copy and the very next pause rebuilt that copy from live, so the face was gone before the commit and a replay never carried the swap. | `persona` is a `GuestOverlay` / `PassBase` surface, absolute and taken from the reload point: the guest's newest face replaces live's, and the row records the value it replaced as its base (§15). |
+| R54 | The persona crossing compared against the pass base, so a body writing a face, pausing, and writing another (`A -> B`, request, `A`) had a copy equal to the base at the second pause and the write was skipped while live still held `B`. | The row is measured against **live now** (`World` face vs copy), like the money and position reload points: no host routine writes a face, so a differing live face is always the drive's own earlier crossing (§15). |
 | R35 | Every restore of the pass world (`Run::restore_from_world`, `restore_condition`, `restore_run_point`) dropped the body's `latch:` rows with it, so a cross-pass guard (`taki`'s reroll cap, stored under `latch:` keys as §6.5.1 requires) read `0` after each pause and the constant-die loop never reached it. | A restore is an undo of what the body derived; the latches are its frozen decisions, so each of the three paths re-lays the live `latch:` rows over the restored world (`World::latches` / `put_latches`, §6.5). |
 
 ## 1. Items
@@ -586,7 +588,7 @@ pub struct DeferredEvent {
 ```rust
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorldSnapshot {
-    pub players: Vec<PlayerSnapshot>,   // pos / state / money, per seat
+    pub players: Vec<PlayerSnapshot>,   // pos / persona / state / money, per seat
     pub owners: Vec<i32>,
     pub houses: Vec<i32>,
     pub mortgaged: Vec<bool>,
@@ -594,6 +596,8 @@ pub struct WorldSnapshot {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PlayerSnapshot {
     pub pos: i32,
+    /// The face; a swap inside the window is undone with everything else.
+    pub persona: String,   // `serde(default)`, additive
     /// Whole items: a restore puts the declaration (a floor, an expiry) back
     /// with the number.
     pub state: Vec<(String, StateVar)>,
@@ -1800,7 +1804,10 @@ Two shapes differ from the text above and are the ones the code uses:
   itself crossed produces is still the guest's own delta, not the host effects
   under it. Every crossing guard is three-way -- `live == base` takes the guest
   value, `live == wrote` leaves it, otherwise the delta `wrote - base` is added
-  -- so an effect that already moved the value is never doubled.
+  -- so an effect that already moved the value is never doubled. A surface with
+  no arithmetic (a persona's name) has no delta: its guard is two-way
+  (`live == wrote` leaves it, anything else takes the guest value) and the row
+  records the value it replaced.
   * **A state row says whether it crossed.** An increase at a pause boundary
     stays on the run copy (a status the body just applied must not gate its own
     follow-on money), so live never carried it. The row keeps the run copy's
@@ -1849,8 +1856,16 @@ Two shapes differ from the text above and are the ones the code uses:
     A field instance counts as an addition only when `live` does not carry it
     at all; one `live` carries is a rewrite against live, which also retires
     the old `pre_landed` "a nested drive committed this" skip list.
-  * Two surfaces take their base from the reload point instead, because a
+  * Three surfaces take their base from the reload point instead, because a
     re-derived write must not be re-added over itself:
+    * **persona** is an absolute name (`ctx::set_persona`): a write made
+      before a pause is already on `live`, and a second write of the same pass
+      (a swap there and back) compares equal to the pass base. The row is
+      measured against live now; the copy's newest face replaces it, and no
+      host routine ever writes a face, so a differing live face is always the
+      drive's own earlier crossing. `commit_after` takes the finished copy's
+      face whole for the same reason -- it is the drive's last word, whatever
+      crossed before it.
     * **money** is an absolute total and the request's own effect is already
       on `live`; measured against the pass base the effect reads as a guest
       write and is crossed back (a `pay`'s debit undone by its own replay).

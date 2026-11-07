@@ -57,6 +57,14 @@ pub struct Known {
     pub card_resonance: NameId,
     pub card_other: NameId,
     pub card_extra: NameId,
+    /// The Sumimi persona pair and the skills they bind (Two-in-One pilot).
+    pub face_uika: NameId,
+    pub face_mana: NameId,
+    pub skill_uika: NameId,
+    pub skill_mana: NameId,
+    /// The two fire-bound prop keys (`fire::FIRE_INITIAL` / `FIRE_CAP`).
+    pub fire_initial: NameId,
+    pub fire_cap: NameId,
 }
 
 static mut KNOWN: Option<Known> = None;
@@ -75,6 +83,12 @@ fn known_init() -> Known {
         card_resonance: intern::intern(CARD_RESONANCE),
         card_other: intern::intern(world::CARD_OTHER),
         card_extra: intern::intern(world::CARD_EXTRA),
+        face_uika: intern::intern("三角初华（Sumimi）"),
+        face_mana: intern::intern("纯田真奈"),
+        skill_uika: intern::intern("skill:三角初华（Sumimi）:成为偶像"),
+        skill_mana: intern::intern("skill:纯田真奈:甜甜圈爱好者"),
+        fire_initial: intern::intern(bandori_std::fire::FIRE_INITIAL),
+        fire_cap: intern::intern(bandori_std::fire::FIRE_CAP),
     }
 }
 
@@ -113,6 +127,12 @@ pub fn install_backend(f: kani_host::Backend) {
         kani::assert(k.card_resonance.is_valid(), "known.card_resonance");
         kani::assert(k.card_other.is_valid(), "known.card_other");
         kani::assert(k.card_extra.is_valid(), "known.card_extra");
+        kani::assert(k.face_uika.is_valid(), "known.face_uika");
+        kani::assert(k.face_mana.is_valid(), "known.face_mana");
+        kani::assert(k.skill_uika.is_valid(), "known.skill_uika");
+        kani::assert(k.skill_mana.is_valid(), "known.skill_mana");
+        kani::assert(k.fire_initial.is_valid(), "known.fire_initial");
+        kani::assert(k.fire_cap.is_valid(), "known.fire_cap");
     }
     unsafe {
         KNOWN = Some(k);
@@ -1975,8 +1995,58 @@ pub fn arm_set_persona(a: Args) -> i64 {
     let name = name_id(a1, a2);
     world::with_world_mut(|w| {
         w.persona_id[player_idx(a0)] = name.0;
+        // The name brings its skill, like the real host's `bind_skills`. Only
+        // the two Sumimi faces are modelled; any other name answers "none".
+        w.persona_skill = persona_skill_id(name);
     });
     0
+}
+
+/// The persona skill a face binds. The pilot set holds the Sumimi pair the
+/// Two-in-One proofs swap between; every other name maps to 0 (none).
+fn persona_skill_id(name: intern::NameId) -> u16 {
+    let k = known();
+    if name == k.face_mana {
+        k.skill_mana.0
+    } else if name == k.face_uika {
+        k.skill_uika.0
+    } else {
+        0
+    }
+}
+
+/// `card_prop` -- one declared static prop of a card rule, read off the real
+/// [`card_sdk::CardDef::props`] (the authored number, not a copy in the host).
+/// Pilot set: the two Sumimi persona skills the swap reads its fire bounds
+/// from (`fire::FIRE_INITIAL` / `FIRE_CAP`); any other id answers 0. Every
+/// name is a pre-interned `u16` compare (no interning in the arm — the CBMC
+/// cost of hashing here showed up as a timeout).
+pub fn arm_card_prop(a: Args) -> i64 {
+    let [ip, il, kp, kl, ..] = a;
+    let id = name_id(ip, il);
+    let key = name_id(kp, kl);
+    let k = known();
+    let idx = if id == k.skill_uika {
+        crate::card_id!("skill:三角初华（Sumimi）:成为偶像")
+    } else if id == k.skill_mana {
+        crate::card_id!("skill:纯田真奈:甜甜圈爱好者")
+    } else {
+        return 0;
+    };
+    let want = if key == k.fire_initial {
+        bandori_std::fire::FIRE_INITIAL
+    } else if key == k.fire_cap {
+        bandori_std::fire::FIRE_CAP
+    } else {
+        return 0;
+    };
+    let mut v = 0;
+    for (name, n) in crate::invoke::by_idx(idx).props {
+        if *name == want {
+            v = *n;
+        }
+    }
+    v as i64
 }
 
 pub fn arm_count_held(a: Args) -> i64 {

@@ -128,6 +128,18 @@ pub fn hash_save(save: &str) -> String {
     fnv1a64_hex(save.as_bytes())
 }
 
+/// Debug dump: `dir_var` names a directory (created if need be) and the save
+/// goes to `<dir>/<kind>-<tick>.json`. Off unless the developer sets the env
+/// var; inert in the browser bundle, which has neither env nor fs. Errors are
+/// dropped -- a dump must never disturb the match.
+fn dbg_dump(dir_var: &str, kind: &str, tick: u64, save: &str) {
+    let Ok(dir) = std::env::var(dir_var) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(format!("{dir}/{kind}-{tick}.json"), save);
+}
+
 // ---------------------------------------------------------------- schema
 
 /// Who built the engine that wrote the record, and what format it speaks.
@@ -1141,14 +1153,10 @@ impl RecordedMatch {
             return;
         }
         self.rec.push_ticks(k);
-        if let Ok(dir) = std::env::var("DBG_TICK") {
-            // Every tick's save, as `live-<tick>.json` -- pair with a replay
-            // dump (`replay-<tick>.json`) to find the first tick that forks.
-            let _ = std::fs::write(
-                format!("{dir}/live-{}.json", self.rec.total_ticks()),
-                self.m.save(),
-            );
-        }
+        // Every batch's end state as `live-<tick>.json`, numbered by the
+        // cumulative tick -- the replay dumps its own batch ends under the
+        // same numbers, so a byte diff finds the first fork.
+        dbg_dump("DBG_TICK", "live", self.rec.total_ticks(), &self.m.save());
         self.after_input();
     }
 
@@ -1167,6 +1175,7 @@ impl RecordedMatch {
             return;
         }
         self.rec.push_ticks(k);
+        dbg_dump("DBG_TICK", "live", self.rec.total_ticks(), &self.m.save());
         self.after_input();
     }
 
@@ -1220,14 +1229,13 @@ impl RecordedMatch {
         let key = turn_key(&self.m);
         if key != self.turn_key {
             self.turn_key = key;
-            let hash = hash_save(&self.m.save());
+            let save = self.m.save();
             let tick = self.rec.total_ticks();
-            if let Ok(dir) = std::env::var("DBG_CKPT") {
-                // The live save at every turn-boundary checkpoint, for a
-                // byte-diff against the replay's at the same tick.
-                let _ = std::fs::write(format!("{dir}/live-ckpt-{tick}.json"), self.m.save());
-            }
-            self.rec.push_checkpoint(tick, key.0, key.1, hash);
+            // The live save at every turn-boundary checkpoint, for a byte
+            // diff against the replay's at the same tick.
+            dbg_dump("DBG_CKPT", "live-ckpt", tick, &save);
+            self.rec
+                .push_checkpoint(tick, key.0, key.1, hash_save(&save));
         }
         if self.m.ended() {
             self.rec_done = true;
@@ -1698,13 +1706,12 @@ impl Replayer {
             pump_machines(&mut self.m);
         }
         self.tick += 1;
-        if let Ok(dir) = std::env::var("DBG_TICK") {
-            let _ = std::fs::write(format!("{dir}/replay-{}.json", self.tick), self.m.save());
-        }
         self.time += k as f32 * self.step;
         self.sub += 1;
         self.drain_events();
         if self.sub >= n {
+            // Batch end, same numbering as the live dump.
+            dbg_dump("DBG_TICK", "replay", self.tick, &self.m.save());
             self.cursor += 1;
             self.sub = 0;
             self.check_checkpoint();
@@ -1730,13 +1737,9 @@ impl Replayer {
             .cloned()
             .collect();
         for ckpt in due {
-            if let Ok(dir) = std::env::var("DBG_CKPT") {
-                let _ = std::fs::write(
-                    format!("{dir}/replay-ckpt-{}.json", ckpt.tick),
-                    self.m.save(),
-                );
-            }
-            let h = hash_save(&self.m.save());
+            let save = self.m.save();
+            dbg_dump("DBG_CKPT", "replay-ckpt", ckpt.tick, &save);
+            let h = hash_save(&save);
             if h != ckpt.hash {
                 self.flag(format!(
                     "checkpoint at {} (round {}, turn {}, tick {}) hash {} != {}",
