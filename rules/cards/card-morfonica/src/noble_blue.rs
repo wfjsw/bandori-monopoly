@@ -31,11 +31,10 @@ fn noble_blue(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「如果此地块属于你」
     if ctx::tile_owner(pos) != player_id {
-        // TODO(规则书)（如果此地块属于你）[judgement]: 没有效果)`. the not-yours branch is the no-effect
-        // case. The spend looks settled -- haneoka 「放入弃牌堆且视为此卡未生效」 says yes and
-        // noble_blue / starry_night's "the card is spent anyway" says yes too (the
-        // engine's play-with-no-destination default agrees) -- but what else observes
-        // "not effective", and what counts a use it would suppress?
+        // 规则书（如果此地块属于你）: the not-yours branch is the 「视为此卡未生效」
+        // case. The card is spent anyway (C-Q5(a)); the waste bit carries it
+        // (CH-07).
+        bandori_std::zones::set_ineffective();
         ctx::log(
             player_id,
             &Msg::new(key!("noble_blue_not_yours")).tile("tile", pos),

@@ -779,12 +779,19 @@ to an index in `ask_tile` (`ctx.rs:2082-2110`); the wrapper simply does not map
 the index back to a tile. Hagumi builds one option per distinct `(tile, roll)`
 pair.
 
-### 5.6 Forced play (item 13, demoted)
+### 5.6 Forced play (item 13, closed)
 
-Only the prompt surface is fixed here; the owner stays ABI-04: filter the hand
-by `prop::DESIGNATES` and a `pre` that `cond_pre::admits` against the playing
-seat, offer option (1) only when the list is non-empty, and on pick 0 call the
-ABI-04 play verb. No roll-pipeline involvement.
+Filter the hand by `prop::DESIGNATES` and a `pre` that `cond_pre::admits`
+against the playing seat, offer option (1) only when the list is non-empty, and
+on pick 0 play the card. The 「将你指定为目标（之一）」 half is the **force
+plan tag**: the forcing card writes `plan::set_tag("force", holder + 1)` before
+the play and clears it (`set_tag("force", 0)`) after; the played card reads it
+through `ctx::forced_target()` / `ctx::ask_player_target()`, which returns the
+forced seat without a prompt when it is in the card's pool. The `+ 1` is
+needed because `trig_move_tag` answers 0 for a missing name and seat 0 is a
+valid holder. No roll-pipeline involvement. (The forced body still puts the
+seat through its targeting gate, so Immune / Untargetable / Redirect behave.)
+Pinned by `g03_please_choose_forced_play_designates_the_holder`.
 
 ### 5.7 Plan sync (item 7)
 

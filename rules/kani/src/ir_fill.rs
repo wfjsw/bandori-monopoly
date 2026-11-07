@@ -808,6 +808,7 @@ pub fn fill_from_world(
     c.set_scalar(VarId::PayKind, w.trig_pay_kind as i64);
     c.set_scalar(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
     c.set_scalar(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
+    c.set_scalar(VarId::PaySplitTotal, w.trig_pay_split_total as i64);
     c.set_scalar(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
     // The world models no chain cursor, so the G06 window readers stay at
     // their neutral values (the host reads them as 0 too).
@@ -1308,6 +1309,7 @@ pub fn fill_for_guard(
     set_if!(VarId::PayKind, w.trig_pay_kind as i64);
     set_if!(VarId::PayIsFixed, w.trig_pay_is_fixed as i64);
     set_if!(VarId::PayTotalStage, w.trig_pay_total_stage as i64);
+    set_if!(VarId::PaySplitTotal, w.trig_pay_split_total as i64);
     set_if!(VarId::ChargeIsSkill, w.trig_charge_skill as i64);
     set_if!(VarId::SubjectRangeCard, 0);
     set_if!(VarId::ExtremeArmed, 0);

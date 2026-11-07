@@ -41,7 +41,9 @@ fn rain(player_id: i32) -> card_sdk::Asked {
     }
     let mut pool: Vec<i32> = ctx::others(player_id);
     while (targets.len() as i32) < x && !pool.is_empty() {
-        let who = ctx::ask_player(
+        // A forced play names the target: `ask_player_target` returns it when
+        // it is still in the pool, so the designation is not re-asked (ABI-04).
+        let who = ctx::ask_player_target(
             player_id,
             &Msg::new(key!("rain_title")),
             &Msg::new(key!("rain_ask"))

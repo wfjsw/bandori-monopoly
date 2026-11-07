@@ -51,6 +51,11 @@ pub struct SettleFrame {
     pub stack_idx: usize,
     /// The frame was opened by `settle_tile_at` and owns a plan frame.
     pub scoped: bool,
+    /// 「必须购买」 for this settle only (LOY-MUSTBUY-02): a card-forced settle
+    /// that suppresses the ordinary optional buy. Read by `offer_buy` off the
+    /// live [`SettleEntry`](super::cx::SettleEntry), so a caller's later
+    /// `set_no_buy(false)` cannot clear it.
+    pub no_buy: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,6 +92,7 @@ impl SettleFrame {
             owner: -1,
             stack_idx: usize::MAX,
             scoped: false,
+            no_buy: false,
         }
     }
 }

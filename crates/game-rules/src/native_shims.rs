@@ -126,6 +126,12 @@ pub trait HostOps {
     fn op_world_restore(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_world_snapshot_drop`
     fn op_world_snapshot_drop(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_discard_next_fx`
+    fn op_discard_next_fx(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_auction`
+    fn op_auction(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
+    /// `ruleset_persona_skins`
+    fn op_persona_skins(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_neighbor`
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError>;
     /// `ruleset_players_on_count`
@@ -1150,6 +1156,15 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_world_snapshot_drop(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::world_snapshot_drop(self, a[0])? as i64)
+    }
+    fn op_discard_next_fx(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::discard_next_fx(self, a[0])? as i64)
+    }
+    fn op_auction(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::auction(self, a[0], a[1])? as i64)
+    }
+    fn op_persona_skins(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
+        Ok(crate::hostfns::persona_skins(self, a[0], a[1], a[2])? as i64)
     }
     fn op_neighbor(&mut self, a: [i32; 6]) -> Result<i64, HostError> {
         Ok(crate::hostfns::neighbor(self, a[0], a[1])? as i64)
@@ -2950,6 +2965,32 @@ pub unsafe extern "C-unwind" fn ruleset_world_snapshot_drop(key: i32) -> i32 {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_discard_next_fx(player_id: i32) -> i32 {
+    with_host(|h| match h.op_discard_next_fx([player_id, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_auction(player_id: i32, tile: i32) -> i32 {
+    with_host(|h| match h.op_auction([player_id, tile, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_persona_skins(player_id: i32, buf: i32, cap: i32) -> i32 {
+    with_host(
+        |h| match h.op_persona_skins([player_id, buf, cap, 0, 0, 0]) {
+            Ok(v) => v as i32,
+            Err(e) => abort_host(e),
+        },
+    )
 }
 
 #[no_mangle]

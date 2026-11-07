@@ -372,9 +372,10 @@ fn g06_expectations_floor_plus_100_on_a_split_leg() {
 // Doc error: the design picks 通用:安可, which only answers 「[异常移动效果]」 --
 // a card landing on a field is not one. 网络链接异常 cancels the (retargeted)
 // designation instead.
-// RULING: does a negated redirect count as "had an effect"? Assert EXIST still
-// draws 1 (it redirected nothing in the end).
-#[ignore = "RULING: does a negated EXIST redirect count as 「造成影响」? assert draws 1"]
+// RULING (C-Q8, settlement): 「造成影响」 is a settlement fact -- the latch is
+// spent on the `target` trigger, which is raised only after the effect chain
+// came back not-cancelled. A cancelled designation redirected nothing, so
+// EXIST still draws 1.
 #[test]
 fn g07_exist_redirect_then_negated_designation() {
     let mut t = Table::new(&["花园多惠", "仓田真白", "三角初华", "山吹沙绫"]);
@@ -403,10 +404,63 @@ fn g07_exist_redirect_then_negated_designation() {
         "the card does not land on P1 either: {:?}",
         t.field_ids(1)
     );
-    // EXIST's own check: 「若在此期间此卡没有造成影响，抽1张卡」.
+    // EXIST's own check: 「若在此期间此卡没有造成影响，抽1张卡」 -- the draw
+    // lands at the owner's next turn start, when EXIST flips itself.
+    let hand = t.hand(2).len();
+    t.begin_turn(2);
+    drain(&mut t);
     assert_eq!(
         t.hand(2).len(),
-        1,
+        hand + 1,
+        "EXIST draws 1 because it redirected nothing: {:?}",
+        t.hand(2)
+    );
+}
+
+// The same settlement reading via the other door: the play's own `card` link is
+// negated before the effect window, so `target` never fires and EXIST's latch
+// stays unspent. It must draw 1 too.
+#[test]
+fn g07_exist_relink_negated_does_not_latch() {
+    let mut t = Table::new(&["花园多惠", "仓田真白", "三角初华", "山吹沙绫"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    set_draw_n(&mut t, 2, 3);
+    t.place_raw(2, "RAS:EXIST");
+    t.give(2, &["TEST:negator"]);
+    t.give(0, &["PP:找回珍妮弗"]);
+    t.play(0, "PP:找回珍妮弗").unwrap();
+    if t.prompt().is_some() && offers_player(&t, 1) {
+        answer_player(&mut t, 0, 1);
+    }
+    // P2 negates the play's activation link.
+    for _ in 0..20 {
+        if t.counteract_offered("TEST:negator") {
+            break;
+        }
+        assert!(t.prompt().is_some(), "{}", t.dump_prompt());
+        t.decline();
+    }
+    assert!(t.counteract_offered("TEST:negator"), "{}", t.dump_prompt());
+    t.counteract(2, "TEST:negator").unwrap();
+    drain(&mut t);
+    assert!(
+        t.field_ids(2).iter().all(|c| c != "PP:找回珍妮弗"),
+        "the card does not land on P2: {:?}",
+        t.field_ids(2)
+    );
+    assert!(
+        t.field_ids(1).iter().all(|c| c != "PP:找回珍妮弗"),
+        "the card does not land on P1 either: {:?}",
+        t.field_ids(1)
+    );
+    let hand = t.hand(2).len();
+    t.begin_turn(2);
+    drain(&mut t);
+    assert_eq!(
+        t.hand(2).len(),
+        hand + 1,
         "EXIST draws 1 because it redirected nothing: {:?}",
         t.hand(2)
     );

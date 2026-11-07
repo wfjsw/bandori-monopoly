@@ -1732,13 +1732,13 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 
 | # | window | status | engine kind |
 |---|---|---|---|
-| 1 | 支付计算前 | **diff** | folded into `effect`, which also carries window 5's cancel/retarget power |
+| 1 | 支付计算前 | **ok** | `payCalcBefore` (hook-only, v120); window 5's cancel/retarget power stays on `effect` / `pay` |
 | 2 | 支付计算时 (flat add/sub) | **ok** | `paySplitAdd` |
 | 3 | 支付计算后 | **miss** | none between `paySplitAdd` and `paySplitMul` |
 | 4 | 支付前 (halve/double) | **ok** | `paySplitMul` + `scale_settle_payment` |
-| 5 | 支付时 (pay / 无需失去 / 取消 / 更改目标) | **diff** | split across `effect` + `paySplitChoose`/`paySplitAt` (unnamed) + `pay` |
+| 5 | 支付时 (pay / 无需失去 / 取消 / 更改目标) | **ok** | `pay` (cancel / retarget); 进行支付 shaping is `paySplitChoose` / `paySplitAt` |
 | 6 | 支付后 | **ok** | `payAfter` |
-| 7 | 资金变动 | **diff** | `paid`, payer-loss only; a distinct kind from `payAfter` despite the doc's 「合并到[支付后]?」 |
+| 7 | 资金变动 | **ok** | `paid`, on a settled loss and on a receipt (settled figure; `player_id` = -1 for a print), v120 |
 
 ### 标志物解释 (7)
 

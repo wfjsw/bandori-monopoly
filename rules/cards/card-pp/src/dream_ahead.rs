@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 
 use bandori_std::counter;
 use bandori_std::ctx::{self, trigger};
-use card_sdk::abi::{prop, ActionKind, CardPile, TriggerKind};
+use card_sdk::abi::{prop, ActionKind, CardPile, ChainKind, TriggerKind};
 use card_sdk::{it, items, para, sec, CardText};
 use card_sdk::{key, Action, CardDef, Msg, On};
 use skill_groups::fans;
@@ -30,20 +30,21 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
     &[
         // 规则书[持续]（4）: 「[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]」 --
         // a [持续] clause with a [反击] rider: `[反击]X：Y` = Y resolves before
-        // X, so the buy is a counteraction at the owner's turn-end timing.
-        //
-        // TODO(规则书) LOY-DREAM-01: the turn-end family (`TurnEnd` /
-        // `TurnEndBefore` / `TurnEndAfter`) is hook-only (`is_hook_only` in
-        // `wasm_rules.rs`) -- `hand_counteractions` never opens there, so
-        // `On::Counteract(&[ChainKind::TurnEndBefore], …)` is a dead entry.
-        // Missing shape: a counteraction window on turn-end (Class-B blocker).
-        // Wired as a field-card `On::Action` at `TurnEndBefore` (skill-personas:
-        // a field card answers settlement points automatically, no declaration)
-        // so the buy still settles before the turn end's own effects.
+        // X, so the buy is a declaration in the turn-end window, not a hook.
+        // `TurnEndBefore` is a real (non-hook-only) kind, so `hand_counteractions`
+        // opens the window there (LOY-DREAM-01); the placed instance answers it
+        // via `COUNTERACT_FROM_FIELD`. `COUNTERACT_GROUP` keeps the instance
+        // from re-offering itself after its own declaration.
         // The residual guard is the clause's third availability fact -- a free
         // unowned buyable tile within 3; without it the entry surfaces with no
         // legal target under the [反击] window.
-        On::Action(Action::TurnEndBefore("actor == owner && card.placed && card.counter('crystals') >= 3", Some(has_free_near), buy_one).counter_reason(key!("dream_ahead_when"))),
+        On::Counteract(
+            &[ChainKind::TurnEndBefore],
+            "actor == owner && card.counter('crystals') >= 3",
+            Some(has_free_near),
+            buy_one,
+        )
+        .counter_reason(key!("dream_ahead_when")),
         On::Action(Action::DeckBeforeGame("", None, deck_before_game)),
         On::Action(Action::Drew("actor == owner && card.placed", None, drew)),
         // 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」 --
@@ -61,7 +62,13 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         On::Action(Action::SettleBody("card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner", None, settle_body)),
     ],
 )
-.props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::NO_BUILD, 1)]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[
+    (prop::HAND_LIMIT_DELTA, -1),
+    (prop::NO_BUILD, 1),
+    // A placed copy answers its own (4) window; one declaration per window.
+    (prop::COUNTERACT_FROM_FIELD, 1),
+    (prop::COUNTERACT_GROUP, 1),
+]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"梦在前方，结彩当下"#)
         .raw_name(r#"梦在前方，结彩当下"#)
         .tags(&[r#"反击"#, r#"持续"#, r#"特"#])

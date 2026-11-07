@@ -313,7 +313,8 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         id: 53,
         wire: "turnEndBefore",
         is_filter: false,
-        hook_only: true,
+        // LOY-DREAM-01: a real [反击] timing (梦在前方（4）), so the window opens.
+        hook_only: false,
     },
     EngineKind {
         id: 54,
@@ -826,6 +827,12 @@ pub const ENGINE_KINDS: &[EngineKind] = &[
         is_filter: false,
         hook_only: true,
     },
+    EngineKind {
+        id: 142,
+        wire: "payCalcBefore",
+        is_filter: false,
+        hook_only: true,
+    },
 ];
 
 /// The table row for `id`, or `None` when the id is retired / unknown.
@@ -985,6 +992,7 @@ pub fn from_wire(s: &str) -> Option<i32> {
         "houseRemove" => Some(138),
         "ownerSet" => Some(139),
         "eventResolved" => Some(141),
+        "payCalcBefore" => Some(142),
         _ => None,
     };
     #[cfg(not(kani))]
@@ -1041,10 +1049,10 @@ mod tests {
             100, 101, 102, 108, 109, 125, 126, 127, 128, 129, 130, 131, 134,
         ];
         const HOOKS: &[i32] = &[
-            45, 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68,
-            69, 70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106,
-            110, 111, 112, 114, 115, 117, 119, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131,
-            132, 133, 134, 140, 141,
+            45, 46, 48, 49, 50, 51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69,
+            70, 71, 76, 77, 79, 80, 81, 82, 83, 95, 96, 97, 98, 99, 100, 102, 103, 105, 106, 110,
+            111, 112, 114, 115, 117, 119, 121, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132,
+            133, 134, 140, 141, 142,
         ];
         for r in ENGINE_KINDS {
             assert_eq!(

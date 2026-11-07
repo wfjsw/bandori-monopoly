@@ -72,6 +72,7 @@
   "anim.chainKind.cardFired": "Card fired",
   "anim.chainKind.markChanged": "Mark changed",
   "anim.chainKind.spendBefore": "Before spend",
+  "anim.chainKind.payCalcBefore": "Before pay calculation",
   "anim.chainKind.abnormalRefused": "Abnormal refused",
   "anim.chainKind.bankruptBefore": "Before bankruptcy",
   "anim.chainKind.bankruptResolved": "Bankruptcy resolved",

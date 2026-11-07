@@ -1267,7 +1267,6 @@ fn g02_kokoro_normal_settle_skips_6000() {
 // 「一次性」 excludes a 分摊 share: the window rides the command total only, so
 // the 4,000 legs never qualify and the 12,000 command does.
 #[test]
-#[ignore = "row 19 -- TODO(ABI): pay_total_stages raises no `effect` window, so a ChainKind::Effect counter with pay_total_stage never fires on a split command total"]
 fn g02_vocal_ignores_split_legs() {
     // The payers are the other seats; the first of them (P1) holds the card.
     let mut t = Table::vanilla(4);
@@ -1318,7 +1317,6 @@ fn g02_vocal_ignores_split_legs() {
 // with the full cost, and the card gains exactly that figure. A reduction
 // (`aya`) lowers the debit.
 #[test]
-#[ignore = "row 20 -- TODO(ABI): `ctx::adjust_money` answers inline instead of pausing, so a raw `lose_raw` never raises the `spendBefore` counter window (the redeem half works)"]
 fn g02_tritone_answers_raw_loss() {
     // (a) a raw loss.
     let mut t = Table::vanilla(2);
@@ -1349,6 +1347,7 @@ fn g02_tritone_answers_raw_loss() {
     t.own(0, &[deed]);
     t.set_mortgaged(deed, true);
     t.place_raw(0, AYA);
+    t.give(0, &[TRITONE]);
     t.give(0, &["PP:[衍生]共鸣"]);
     let cost = redeem_cost(deed);
     let before = t.money(0);

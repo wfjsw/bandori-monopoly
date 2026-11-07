@@ -631,6 +631,9 @@ pub enum HostRequest {
     WorldRestore { key: i32 },
     /// Drop a snapshot. `ctx::world_snapshot_drop`.
     WorldSnapshotDrop { key: i32 },
+    /// 「若无手牌则弃掉下一张抽到的牌」 -- arm the one-shot on `player_id`; the
+    /// next draw discards it and clears the flag. `ctx::discard_next_fx` (ABI-08).
+    DiscardNextFx { player_id: i32 },
     /// 「pay拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
     /// pipeline (rent table / the flat deed dice / the agent's 「half-charge」 half-flag).
     /// `docs/TILES.md`'s `ctx::pay_rent`, what the deed tile rule / the flat-deed tile rule /
@@ -690,6 +693,11 @@ pub enum HostRequest {
     /// player. `buy()` raises the same hook itself after an ordinary purchase;
     /// this is the card-driven half.
     RaiseBought { player_id: i32, tile: i32 },
+    /// 「所有玩家进行竞价」 (弦卷集团地产开发) -- run the engine's ordinary
+    /// auction over `tile` among every present, pay-gated seat, starting at
+    /// the current turn seat. The winner pays the winning bid and takes the
+    /// deed; answers the winner seat (`-1` = nobody bid). `ctx::auction`.
+    Auction { player_id: i32, tile: i32 },
     /// Raise a trigger point from a guest body (`ctx::raise`). `kind` is a
     /// [`TriggerKind`] as `i32` (mapped through `TriggerKind::as_str` for the
     /// wire name, e.g. `PassReward` → `"the pass-reward trigger"`); `value` is the
@@ -743,10 +751,15 @@ pub enum HostRequest {
     /// `ctx::lose_raw`. Positive `delta` is a gain, negative a loss. Moves the
     /// balance directly (`World::gain_money` / a raw decrement) with a
     /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
-    /// pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`, no `effect`
-    /// counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
-    /// amount a designate split moves to land as-is (ONE OF US's 「被分享方资金
-    /// 直接增加」). Answers the amount actually moved (0 = the seat was out).
+    /// pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`,
+    /// no `effect` counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」
+    /// wants the amount a designate split moves to land as-is (ONE OF US's
+    /// 「被分享方资金直接增加」).
+    ///
+    /// The one exception is a **loss**: it raises the `spendBefore`
+    /// counteraction window at the full cost before the debit (G02 §2.21,
+    /// I5) and therefore pauses. Answers the amount actually moved (0 = the
+    /// seat was out).
     AdjustMoney {
         player_id: i32,
         delta: i32,
@@ -1039,6 +1052,9 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
             HostRequest::WorldSnapshot => J::WorldSnapshot,
             HostRequest::WorldRestore { key } => J::WorldRestore { key: *key },
             HostRequest::WorldSnapshotDrop { key } => J::WorldSnapshotDrop { key: *key },
+            HostRequest::DiscardNextFx { player_id } => J::DiscardNextFx {
+                player_id: *player_id,
+            },
             HostRequest::PayRent {
                 player_id,
                 tile,
@@ -1093,6 +1109,10 @@ impl From<&HostRequest> for game_core::engine::JournalRequest {
                 source: *source,
             },
             HostRequest::RaiseBought { player_id, tile } => J::RaiseBought {
+                player_id: *player_id,
+                tile: *tile,
+            },
+            HostRequest::Auction { player_id, tile } => J::Auction {
                 player_id: *player_id,
                 tile: *tile,
             },
@@ -5554,6 +5574,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "world_snapshot_drop",
         |mut c: C<W>, key: i32| -> Result<i32, Error> {
             hostfns::world_snapshot_drop(&mut c, key).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "discard_next_fx",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::discard_next_fx(&mut c, player_id).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "auction",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::auction(&mut c, player_id, tile).map_err(HostError::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "persona_skins",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            hostfns::persona_skins(&mut c, player_id, buf, cap).map_err(HostError::into_err)
         },
     )?;
     l.func_wrap(

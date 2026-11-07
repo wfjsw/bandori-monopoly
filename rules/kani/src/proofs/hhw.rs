@@ -62,6 +62,8 @@ crate::host_subset!(kkr_dispatch {
     log | effect => arm_log,
     tile_named => arm_tile_named,
     place_card_on => arm_place_card_on,
+    set_ineffective_at => arm_set_ineffective_at,
+    self_uid => arm_self_uid,
 });
 
 /// `HHW:运动的天赋` entries the harnesses call: `play`, `at_turn_end`,
@@ -74,6 +76,11 @@ crate::host_subset!(athletic_dispatch {
     set_counter_self => arm_set_counter_self,
     add_counter_self => arm_add_counter_self,
     counter_self => arm_counter_self,
+    // `ctx::set_slot` is sugar over `state_set`; `dec_turns_left` reads and
+    // rewrites the marker's `turnsLeft` self-prop.
+    state_set => arm_state_set,
+    self_prop => arm_self_prop,
+    set_self_prop => arm_set_self_prop,
     log | effect => arm_log,
 });
 
@@ -380,6 +387,35 @@ pub fn kkr_place_on_circle_iff() {
 #[kani::unwind(32)]
 pub fn kkr_place_on_circle_user1_iff() {
     kkr_place_on_circle_iff_at(1);
+}
+
+/// A payer who cannot cover 10000 arms 「视为此卡未生效」 (CH-07, C-Q5(a)):
+/// no placement and the play's waste bit is set.
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(32)]
+pub fn kkr_shortfall_wasted_iff() {
+    let user = 0i32;
+    kkr_world(user);
+    world::with_world_mut(|w| {
+        // A hand play's `self_uid()` is `-1` (the waste bit rides the play).
+        w.bound_uid = -1;
+        w.money[user as usize] = 0;
+        w.pay_shortfall = true;
+    });
+    invoke::unwrap_done(card_hhw::kokoro_circle::play_kani(user));
+    let (logbuf, log_n) = log_slice();
+    let effects = effects_of(&logbuf, log_n);
+    crate::kassert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::PlaceCard { .. })),
+        "C-HHW-kkr: no placement on a shortfall"
+    );
+    crate::kassert!(
+        world::with_world(|w| w.play_ineffective),
+        "C-HHW-kkr: the waste bit is armed"
+    );
 }
 
 /// MUTANT companion: pay only 1000.

@@ -53,6 +53,7 @@
   "saki_move_ordered": "{{who}} 被命令移动 3 格",
   "saki_move_title": "祥，移动",
   "sakiko_cut_ask": "[传送] 到哪一格并结算？（无主的可购买格子或自己的地）",
+  "sakiko_cut_deck_ask": "从抽牌堆打出：不弃置手牌发动？（否＝不发动此卡）",
   "sakiko_cut_discard": "弃掉一张手牌",
   "sakiko_cut_moved": "{{who}} 传送到了 {{tile}}",
   "sakiko_cut_no_hand": "斩断留恋，忘却一切 的效果：{{who}} 没有手牌：下一张抽到的卡要弃掉",

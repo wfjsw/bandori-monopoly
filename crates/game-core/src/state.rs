@@ -740,6 +740,11 @@ pub struct MatchPlayer {
     /// `overHandAllowed`.
     #[serde(default)]
     pub over_hand_allowed: bool,
+    /// 「若无手牌则弃掉下一张抽到的牌」 -- the next card this seat draws is
+    /// discarded and the flag clears (ABI-08 `DiscardNextFx`). One-shot; per
+    /// seat so two armed cards discard two draws.
+    #[serde(default)]
+    pub discard_next: bool,
 }
 
 /// A seat's public reveal overlay: ids published to every seat, with the
@@ -824,6 +829,7 @@ impl Default for MatchPlayer {
             rank: 0,
             reveal: None,
             over_hand_allowed: false,
+            discard_next: false,
         }
     }
 }

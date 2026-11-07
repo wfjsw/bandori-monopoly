@@ -112,6 +112,8 @@ crate::host_subset!(ppp_dispatch {
     run_planned_move => arm_card_move,
     trig_card_is => arm_trig_card_is,
     trig_cards => arm_trig_cards,
+    // returns [持续](4) reads the play outcome (G08 §2.4).
+    trig_play_outcome => arm_trig_play_outcome,
     // popipapapipopa c1 reads `trigger::tile()`; c2 reads `trigger::value()`,
     // rewrites the pay amount and asks `ask_number` (whose `ask_choice` walks
     // the `opt_*` option list).
@@ -1447,6 +1449,35 @@ pub fn returns_c4_blocked_residual_noop() {
     );
     let _ = logbuf;
     crate::kassert!(log_n == 0, "returns-c4 (blocked): empty effect log");
+}
+
+// `cardPlayed`'s `play_outcome` = `Cancelled` (1): 「全部生效后」 fails, so the
+// body pays nothing (G08 §2.4).
+#[kani::proof]
+#[kani::use_stub_set(crate::kani_stubs::LIB_COST_NOFMT)]
+#[kani::unwind(24)]
+pub fn returns_c4_cancelled_play_no_sticker() {
+    let user = 0i32;
+    ppp_world(user);
+    let w = world::with_world(|ww| ww.clone());
+    let player = user;
+    let tok = crate::intern::intern(spec::ppp::TOK_STAR_STICKER);
+    let pre_tok = w.key_get(player, tok);
+
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    world::with_world_mut(|w| w.trig_play_outcome = 1);
+    invoke::unwrap_done(card_ppp::returns::on_played_kani(user));
+
+    let post_tok = world::with_world(|ww| ww.key_get(player, tok));
+    let (_logbuf, log_n) = log_slice();
+    crate::kassert!(
+        post_tok == pre_tok,
+        "returns-c4 (cancelled): no sticker for a negated play"
+    );
+    crate::kassert!(log_n == 0, "returns-c4 (cancelled): empty effect log");
 }
 
 // ===========================================================================

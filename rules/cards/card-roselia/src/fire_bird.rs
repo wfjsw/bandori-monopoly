@@ -46,9 +46,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let receipt =
         ctx::PayCommand::new(player_id, -1, 1600, &Msg::new(key!("fire_bird_reason"))).send()?;
     if !receipt.settled() {
-        // TODO(规则书)（支付1600资金）: 书中只说付出 1600 并放置此卡，没有定义「付不满」
-        //   时的状态（「视为此卡未生效」，CH-07 / C-Q5）-- 这里把付不满当无效返回。
-        //   `settled()` 是「支付成立」的信号，被打折到 1600 以下也算付出.
+        // 规则书: 「视为此卡未生效」 -- a shortfall on the 1600. Card spent anyway
+        // (C-Q5(a)); the waste bit carries the clause (CH-07).
+        bandori_std::zones::set_ineffective();
         return Ok(());
     }
     // TODO(规则书)（X（自选）

@@ -42,11 +42,22 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
-    // TODO(规则书)（若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡）: 规则书: 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」
-    // `ctx::play_from_hand()` names the play's origin (`false` when the card came
-    // off the draw pile, e.g. the 状态2 auto-play). 书 gives a deck play the
-    // skip-discard and the explicit decline -- we always discard when it fires
-    let skip_discard = false;
+    // 规则书: 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」 --
+    // `ctx::play_from_hand()` names the play's origin (`false` when the card
+    // came off the draw pile, e.g. the 状态2 auto-play). A deck play gets the
+    // explicit decline; a yes activates without a discard.
+    let mut skip_discard = false;
+    if !ctx::play_from_hand() {
+        let yes = ctx::ask_yes(
+            player_id,
+            &Msg::new(key!("sakiko_cut_title")),
+            &Msg::new(key!("sakiko_cut_deck_ask")),
+        )?;
+        if !yes {
+            return Ok(());
+        }
+        skip_discard = true;
+    }
     //
     // Replay note: `card_mortgage` is a host routine, so the body re-runs from
     // the top with the call's answer re-read from the log. The re-run has to
@@ -55,7 +66,9 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     // With one deed the list is empty on the re-run, so it falls back to the
     // most expensive *owned* deed -- the one just mortgaged. The replayed call
     // is answered from the log (the engine would refuse that tile), so it is a
-    // no-op that consumes the slot and keeps the prompts aligned.
+    // no-op that consumes the slot and keeps the prompts aligned. The deck
+    // play's yes/no is a prompt slot too; it re-reads the same answer and keeps
+    // the ordering.
     let mine = mortgageable(player_id);
     let best = mine.into_iter().reduce(|a, b| {
         if ctx::tile_price(b) > ctx::tile_price(a) {
@@ -113,15 +126,13 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
                 discard_names = hand;
             }
         } else {
-            // TODO(规则书)（若无手牌则弃掉下一张抽到的牌）: 书 discards the next card
-            //   drawn -- it is only logged here. The route exists: `place_self_to_field`
-            //   keeps this instance in play and a one-shot `On::Action(Action::Drew(..))`
-            //   discards that drawn card and retires the instance (`dream_ahead` pattern);
-            //   this branch would place instead of letting the card go to the discard.
+            // 规则书: 「若无手牌则弃掉下一张抽到的牌」 -- arm the engine's
+            // one-shot (`DiscardNextFx`); the next draw discards that card.
             ctx::log(
                 player_id,
                 &Msg::new(key!("sakiko_cut_no_hand")).player_id("who", player_id),
             );
+            ctx::discard_next_fx(player_id)?;
         }
     }
     let mut pool = alloc::vec::Vec::new();

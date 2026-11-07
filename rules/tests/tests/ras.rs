@@ -947,7 +947,17 @@ fn guerrilla_teleports_and_must_buy() {
     let mut t = guerrilla_table();
     t.counteract(0, "RAS:游击演出").unwrap();
     t.answer_tile(0, EDOGAWA_PARK).unwrap();
-    drain(&mut t);
+    // 「必须购买」 replaces the settle's *optional* offer (LOY-MUSTBUY-02):
+    // no `ask.buy.title` prompt may stand in for the forced buy.
+    let mut optional_buy = false;
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key() == "ask.buy.title" {
+            optional_buy = true;
+        }
+        t.decline();
+    }
+    assert!(!optional_buy, "the settle's optional buy is suppressed");
     assert_eq!(t.owner(EDOGAWA_PARK), Some(0), "must buy the chosen tile");
     // 20000 - 400 (rent) - 1400 (江户川公园 price) = 18200
     assert_eq!(t.money(0), 18_200, "paid rent 400 and the deed 1400");

@@ -145,6 +145,7 @@ struct Trig {
     pay_kind: i64,
     pay_is_fixed: bool,
     pay_total_stage: bool,
+    pay_split_total: bool,
     charge_skill: bool,
     /// `-1` = no settle.
     settle_tile: i64,
@@ -175,6 +176,7 @@ impl Default for Trig {
             pay_kind: -1,
             pay_is_fixed: false,
             pay_total_stage: true,
+            pay_split_total: false,
             charge_skill: false,
             settle_tile: -1,
             settle_outcome: -1,
@@ -306,6 +308,7 @@ impl SnapSrc for Fixture {
                     shape: game_core::engine::PayShape::from_i32(t.pay_is_fixed as i32),
                     is_rent: t.pay_is_rent,
                     total_stage: t.pay_total_stage,
+                    split_total: t.pay_split_total,
                 })
             } else if t.pay_is_rent {
                 Some(TriggerPay {

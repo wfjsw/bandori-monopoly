@@ -71,7 +71,7 @@ minority of written harnesses — the serial central pass is the bottleneck
 | `crychic` | 1 | 0 | 0 | 0 | 0 | 21 | `soyoreturn_02_hand_iff`; `ifonly_02_*` expected FAILS not run |
 | `events` | (unit doc TBD) | — | — | — | — | most of 55 | slot-starved; see central row below |
 | `general` | ~15 | 0 | 0 | 0 | 0 | ~10 | formulas + recruit/great mutants; body iff pending then landed centrally |
-| `hhw` | 7 | 0* | 1 | 0 | 0 | ~25 | *`athletic_place_three_crystals_iff` intern cliff (TIMEOUT class) |
+| `hhw` | 12 | 0 | 0 | 0 | 0 | ~25 | the athletic crystal / decay harnesses were misreported as an intern cliff: their sugar reaches `state_set` and `self_prop` / `set_self_prop`, which the body subset did not declare. Believe / backstage / balloon still miss a 384+ op (pre-existing) |
 | `mor` | 4 | 1† | 0 | 0 | 2‡ | ~50 | †`rainbow_01_half_iff` FAILED on spec CeilTo gap (CANDIDATE); ‡unwind-24 vacuous |
 | `mujica` | 0 | 0 | 0 | 0 | 0 | 37 | all pending (RAM / slot flood) |
 | `mygo` | 3 | 0 | 0 | 0 | 0 | ~13 | `rinpuu_01_*`, `journey_01_mutant` |

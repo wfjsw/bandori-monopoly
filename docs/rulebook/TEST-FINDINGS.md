@@ -1377,10 +1377,14 @@ Left as-is.
   in `abnormal_gate`. 无路矢's exile is its teleport cost, so a refused gain
   negates the card (CH-07 minimal: spent, no place / no designate / no later
   teleport). Un-ignored `g23_unstoppable_refuses_the_exile_cost`, green.
-* **WINDOW-03 / c12 (gate order):** `target_player` runs Redirect **before**
-  Untargetable, so EXIST 「目标将改为你」 re-names first and the gate checks the
-  final name. Un-ignored `c12_exist_vs_summer_camp`, green. (The 「造成影响」
-  declaration-vs-settlement latch, C-Q8, is still open.)
+* **WINDOW-03 / c12 (gate order + latch):** `target_player` runs Redirect
+  **before** Untargetable, so EXIST 「目标将改为你」 re-names first and the gate
+  checks the final name. Un-ignored `c12_exist_vs_summer_camp`, green. The
+  「造成影响」 latch is now a settlement fact (C-Q8, option (b)): the entry is
+  `Action::Target` and `landed_redirect` also rejects a cancelled designation,
+  so a negated or designation-cancelled redirect draws. Un-ignored
+  `g07_exist_redirect_then_negated_designation`, green, with the link-negate
+  twin.
 * **g21 (test fix + gate):** area status grants that never call `ctx::target`
   (那天的雨's 「所有玩家获得一层[停留]」) now consult Untargetable in
   `abnormal_gate`, so 夏日合宿 「你只会被自己发动的效果指定」 shields. The test's
