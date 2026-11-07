@@ -243,12 +243,22 @@ impl Table {
 
     /// [`Self::pending`] on a chosen seed.
     pub fn pending_seed(chars: &[&str], seed: u64) -> Self {
+        Self::pending_seed_seats(chars, seed, false)
+    }
+
+    /// [`Self::pending_seed`] with every seat a bot -- the pump answers the
+    /// prompts, so a test can assert what a machine seat would actually do.
+    pub fn pending_seed_bots(chars: &[&str], seed: u64) -> Self {
+        Self::pending_seed_seats(chars, seed, true)
+    }
+
+    fn pending_seed_seats(chars: &[&str], seed: u64, bots: bool) -> Self {
         let n = chars.len();
         let members: Vec<RoomMember> = (1..=n as i32)
             .map(|id| RoomMember {
                 id,
                 player: format!("P{}", id - 1),
-                bot: false,
+                bot: bots,
                 ..Default::default()
             })
             .collect();
