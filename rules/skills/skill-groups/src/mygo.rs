@@ -75,19 +75,20 @@ fn after_roll(player_id: i32) -> card_sdk::Asked {
 /// （3）「每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的
 /// [奇迹水晶]（最多超出2个）」.
 /// 规则书（3）: 「未生效的情况下进入弃牌堆」 -- the `discarded` raise's waste bit.
-fn wasted(_player_id: i32) -> bool {
-    let v = ctx::trigger::zone();
+fn wasted(player_id: i32) -> bool {
+    let zone = ctx::trigger::zone();
+    // Debug line: `z` = a zone was read at all, `w` = its waste bit (-1 when
+    // there is none). Only an ineffective discard should ever show `w=1`.
     ctx::log(
-        _player_id,
+        player_id,
         &Msg::new("dbg.mygo_guard")
-            .n("w", v.map_or(-1, |z| z.wasted as i64))
-            .n("z", v.is_some() as i64),
+            .i("z", zone.is_some() as i64)
+            .i("w", zone.map_or(-1, |z| z.wasted as i64)),
     );
-    v.is_some_and(|z| z.wasted)
+    zone.is_some_and(|z| z.wasted)
 }
 
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
-    ctx::log(player_id, &Msg::new("dbg.mygo_body"));
     // 「上限1」 + 「最多超出2个」 -- held total never exceeds 3. Each ineffective
     // discard adds one uncapped crystal while under that ceiling. The `OVER`
     // counter records how many over-cap grants have landed (audit / display).
@@ -99,6 +100,9 @@ fn on_discarded(player_id: i32) -> card_sdk::Asked {
     // `OVER` = how far above the base cap of 1 the post-add count sits.
     state::set(player_id, OVER, have.min(2));
     ctx::add_crystals(1, i32::MAX)?;
+    // Logged after the grant: at the ceiling the guard line still shows the
+    // ineffective discard, but no crystal was added.
+    ctx::log(player_id, &Msg::new("dbg.mygo_body"));
     Ok(())
 }
 

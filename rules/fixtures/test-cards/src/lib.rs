@@ -4251,7 +4251,7 @@ fn flip_up_play(player_id: i32) -> card_sdk::Asked {
 const DUMPER: CardDef = CardDef::new("TEST:dumper", &[On::Play("", None, dumper_play)]);
 
 fn dumper_play(player_id: i32) -> card_sdk::Asked {
-    ctx::log(player_id, &Msg::new("dbg.dumper").n("uids", ctx::field_instances(player_id).iter().map(|(u, _)| *u).len() as i64).n("pick", ctx::field_instances(player_id).last().map_or(-1, |(u, _)| *u) as i64));
+    ctx::log(player_id, &Msg::new("dbg.dumper").i("uids", ctx::field_instances(player_id).iter().map(|(u, _)| *u).len() as i64).i("pick", ctx::field_instances(player_id).last().map_or(-1, |(u, _)| *u) as i64));
     if let Some(&(uid, _)) = ctx::field_instances(player_id).last() {
         ctx::unplace_at(
             uid,

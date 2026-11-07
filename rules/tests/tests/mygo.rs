@@ -1321,6 +1321,44 @@ fn miracle_discarded_with_crystals_is_wasted() {
     );
 }
 
+// 规则书（3）: 「（最多超出2个）」 -- the held total stops at 3. A fourth
+// ineffective discard still shows the guard line but grants nothing, so the
+// body line stays at three (the debug pair is honest about the cap).
+#[test]
+fn band_crystal_overflow_stops_at_three() {
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    let band = t.skill_id(0, "迷途之星");
+    t.set_draw(0, &["R:[衍生] 压"]);
+    // Each round places a miracle (which drains the band, its (1)) and dumps it
+    // while ineffective, forcing the band's pre-discard count to `n` first so
+    // the (3) cap itself is what is under test.
+    for n in 0..4 {
+        t.give(0, &["MyGO:难以复刻的奇迹", "TEST:dumper"]);
+        // Let the empty-hand play gate lift before playing.
+        drain(&mut t);
+        t.play(0, "MyGO:难以复刻的奇迹").unwrap();
+        let w = t.m.world_mut();
+        let f = w.st.players[0]
+            .field
+            .iter_mut()
+            .find(|f| f.card == band)
+            .unwrap();
+        f.counters.insert("crystals".into(), n);
+        set_crystals(&mut t, 0, "MyGO:难以复刻的奇迹", 2);
+        t.play(0, "TEST:dumper").unwrap();
+        drain(&mut t);
+    }
+    assert_eq!(t.crystals(0, &band), Some(3), "held total is capped at 3");
+    let bodies = t
+        .recent_keys(200)
+        .iter()
+        .filter(|k| k.ends_with("dbg.mygo_body"))
+        .count();
+    assert_eq!(bodies, 3, "no grant past the cap: {:?}", t.recent_keys(40));
+}
+
 // The (2) pass-out with crystals left logs `miracle_wasted` once: the bit and
 // its line belong to the `zoneLeft` body alone (review finding 6).
 #[test]
